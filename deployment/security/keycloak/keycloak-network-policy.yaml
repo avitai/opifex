@@ -1,0 +1,55 @@
+# Network Policy for Keycloak
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-network-policy
+  namespace: opifex-security
+spec:
+  podSelector:
+    matchLabels:
+      app: keycloak
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-platform
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8443
+    - from:
+        - podSelector:
+            matchLabels:
+              app: keycloak
+      ports:
+        - protocol: TCP
+          port: 7600 # JGroups clustering
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: keycloak-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: keycloak
+      ports:
+        - protocol: TCP
+          port: 7600 # JGroups clustering
+    - to: [] # Allow DNS resolution
+      ports:
+        - protocol: UDP
+          port: 53

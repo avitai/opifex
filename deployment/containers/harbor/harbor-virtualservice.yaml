@@ -1,0 +1,52 @@
+# Istio Virtual Service for Harbor
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: harbor-virtualservice
+  namespace: harbor-system
+spec:
+  hosts:
+    - harbor.opifex.local
+  gateways:
+    - harbor-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/
+      route:
+        - destination:
+            host: harbor-core
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /service/
+      route:
+        - destination:
+            host: harbor-core
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /v2/
+      route:
+        - destination:
+            host: harbor-registry
+            port:
+              number: 5000
+    - match:
+        - uri:
+            prefix: /chartrepo/
+      route:
+        - destination:
+            host: harbor-core
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: harbor-core
+            port:
+              number: 80

@@ -1,0 +1,10 @@
+# Jupytext configuration for dual-format notebooks
+# Sync .ipynb and .py:percent files
+
+default_jupytext_formats = "ipynb,py:percent"
+
+# Keep essential metadata, exclude dynamic/noisy metadata
+notebook_metadata_filter = "kernelspec,language_info,-jupytext.text_representation.jupytext_version,-jupytext.notebook_metadata_filter,-jupytext.cell_metadata_filter"
+
+# Exclude all cell metadata for clean diffs
+cell_metadata_filter = "-all"

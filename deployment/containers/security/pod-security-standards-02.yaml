@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-gpu-pod-security-policy
+  labels:
+    app.kubernetes.io/name: gpu-psp-role
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: opifex-container-orchestration
+rules:
+  - apiGroups: ["policy"]
+    resources: ["podsecuritypolicies"]
+    verbs: ["use"]
+    resourceNames:
+      - opifex-gpu-security-policy

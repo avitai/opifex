@@ -1,0 +1,8 @@
+# Opifex namespace with Istio injection
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-system
+  labels:
+    name: opifex-system
+    istio-injection: enabled

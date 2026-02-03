@@ -1,0 +1,32 @@
+# Pod Security Policy for GPU workloads
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: opifex-gpu-workload
+  namespace: opifex-system
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - "configMap"
+    - "emptyDir"
+    - "projected"
+    - "secret"
+    - "downwardAPI"
+    - "persistentVolumeClaim"
+    - "hostPath" # Required for GPU device access
+  hostPaths:
+    - pathPrefix: "/dev/nvidia"
+      readOnly: false
+    - pathPrefix: "/usr/local/nvidia"
+      readOnly: true
+    - pathPrefix: "/var/lib/nvidia"
+      readOnly: true
+  runAsUser:
+    rule: "MustRunAsNonRoot"
+  seLinux:
+    rule: "RunAsAny"
+  fsGroup:
+    rule: "RunAsAny"

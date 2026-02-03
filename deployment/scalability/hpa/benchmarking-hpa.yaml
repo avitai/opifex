@@ -1,0 +1,59 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: opifex-benchmarking-hpa
+  namespace: opifex-system
+  labels:
+    app: opifex-benchmarking
+    component: scalability
+    managed-by: opifex-framework
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: opifex-benchmarking
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Resource
+      resource:
+        name: nvidia.com/gpu
+        target:
+          type: Utilization
+          averageUtilization: 85
+    - type: Pods
+      pods:
+        metric:
+          name: opifex_benchmark_queue_length
+        target:
+          type: AverageValue
+          averageValue: "3"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 900 # Long stabilization for benchmarks
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 180
+    scaleUp:
+      stabilizationWindowSeconds: 180
+      policies:
+        - type: Percent
+          value: 75
+          periodSeconds: 180
+        - type: Pods
+          value: 2
+          periodSeconds: 180
+      selectPolicy: Max

@@ -1,0 +1,25 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: opifex-telemetry
+  namespace: opifex-system
+  labels:
+    app: opifex-istio
+    component: observability
+spec:
+  metrics:
+    - providers:
+        - name: prometheus
+    - overrides:
+        - match:
+            metric: ALL_METRICS
+          tagOverrides:
+            destination_service_name:
+              operation: UPSERT
+              value: "destination_service_name | 'unknown'"
+  tracing:
+    - providers:
+        - name: jaeger
+  accessLogging:
+    - providers:
+        - name: otel

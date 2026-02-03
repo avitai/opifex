@@ -1,0 +1,21 @@
+# ClusterRole for Falco
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: falco
+rules:
+  - apiGroups: [""]
+    resources:
+      [
+        "events",
+        "pods",
+        "replicationcontrollers",
+        "services",
+        "daemonsets",
+        "deployments",
+        "replicasets",
+      ]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "apps"]
+    resources: ["daemonsets", "deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]

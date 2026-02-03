@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gdpr-compliance-config
+  namespace: security
+  labels:
+    app.kubernetes.io/name: gdpr-compliance
+    app.kubernetes.io/component: enterprise-security
+    app.kubernetes.io/part-of: opifex-enterprise-security
+    compliance.opifex.io/tier: gdpr
+data:
+  gdpr-policies.yaml: |
+    # GDPR Compliance Policies for Opifex Enterprise
+    gdpr_framework:
+      version: "2.0"
+      last_updated: "2025-02-08"
+
+      data_classification:
+        public:
+          retention_period: "unlimited"
+          processing_legal_basis: "legitimate_interest"
+          consent_required: false
+          erasure_applicable: false
+
+        research:
+          retention_period: "7_years"
+          processing_legal_basis: "scientific_research"
+          consent_required: true
+          erasure_applicable: true
+          special_category: true
+
+        sensitive:
+          retention_period: "5_years"
+          processing_legal_basis: "explicit_consent"
+          consent_required: true
+          erasure_applicable: true
+          special_category: true
+          encryption_required: true
+
+        confidential:
+          retention_period: "10_years"
+          processing_legal_basis: "contract"
+          consent_required: true
+          erasure_applicable: true
+          special_category: true
+          encryption_required: true
+          access_logging: true
+
+      consent_management:
+        withdrawal_grace_period: "30_days"
+        consent_refresh_period: "12_months"
+        granular_consent: true
+        opt_out_mechanisms:
+          - "web_interface"
+          - "email_request"
+          - "api_endpoint"
+
+      data_subject_rights:
+        right_of_access:
+          response_time: "30_days"
+          format: "structured_data"
+
+        right_to_rectification:
+          response_time: "30_days"
+          verification_required: true
+
+        right_to_erasure:
+          response_time: "30_days"
+          exceptions: ["legal_obligation", "scientific_research"]
+
+        right_to_portability:
+          response_time: "30_days"
+          format: "json"
+
+        right_to_object:
+          response_time: "30_days"
+          processing_halt: true
+
+  retention-policies.yaml: |
+    # Data Retention Policies by Classification Level
+    retention_policies:
+      research_data:
+        base_retention: "7_years"
+        active_research_extension: "2_years"
+        publication_dependency: true
+        anonymization_after: "5_years"
+
+      user_profiles:
+        authentication_data: "2_years_after_last_login"
+        preference_data: "1_year_after_account_deletion"
+        consent_records: "7_years"
+
+      audit_logs:
+        security_events: "7_years"
+        access_logs: "2_years"
+        system_logs: "1_year"
+
+      computational_results:
+        research_outputs: "10_years"
+        intermediate_results: "2_years"
+        cached_computations: "6_months"
+
+  dpo-configuration.yaml: |
+    # Data Protection Officer Configuration
+    dpo_settings:
+      contact_information:
+        name: "Opifex Data Protection Officer"
+        email: "dpo@opifex.enterprise.com"
+        phone: "+1-555-0123"
+        address: "Opifex Enterprise, Data Protection Office"
+
+      monitoring_thresholds:
+        consent_withdrawal_rate: 0.05  # 5% threshold
+        data_breach_response_time: "72_hours"
+        subject_request_backlog: 10
+
+      automated_alerts:
+        - "high_consent_withdrawal_rate"
+        - "data_retention_violation"
+        - "unauthorized_data_access"
+        - "cross_border_transfer_detected"
+
+      reporting:
+        monthly_compliance_report: true
+        quarterly_risk_assessment: true
+        annual_dpia_review: true

@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-generator
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: report-generator
+    app.kubernetes.io/component: reporting
+    app.kubernetes.io/part-of: opifex-benchmarking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: report-generator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: report-generator
+        app.kubernetes.io/component: reporting
+        app.kubernetes.io/part-of: opifex-benchmarking
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: report-generator-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: report-generator
+          image: opifex/report-generator:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http-api
+              protocol: TCP
+            - containerPort: 8080
+              name: http-metrics
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: benchmark-db-credentials
+                  key: connection_string
+            - name: REPORTS_OUTPUT_PATH
+              value: "/reports"
+            - name: TEMPLATES_PATH
+              value: "/templates"
+            - name: PYTHONPATH
+              value: "/app"
+            - name: MATPLOTLIB_BACKEND
+              value: "Agg"
+            - name: TEXLIVE_PATH
+              value: "/usr/local/texlive/2023/bin/x86_64-linux"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+              ephemeral-storage: "5Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+              ephemeral-storage: "20Gi"
+          volumeMounts:
+            - name: report-templates
+              mountPath: /templates
+              readOnly: true
+            - name: reports-storage
+              mountPath: /reports
+            - name: tmp-storage
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http-api
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http-api
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: report-templates
+          configMap:
+            name: report-templates
+        - name: reports-storage
+          persistentVolumeClaim:
+            claimName: benchmark-results
+        - name: tmp-storage
+          emptyDir:
+            sizeLimit: 5Gi
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        kubernetes.io/arch: amd64

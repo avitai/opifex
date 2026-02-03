@@ -1,0 +1,44 @@
+# Network Policy for GPU workloads
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opifex-gpu-workload-netpol
+  namespace: opifex-system
+spec:
+  podSelector:
+    matchLabels:
+      workload-type: gpu-intensive
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-system
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8443
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-system
+        - namespaceSelector:
+            matchLabels:
+              name: harbor-system
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+    # Allow external communication for model downloads
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

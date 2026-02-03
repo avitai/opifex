@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: community-platform-cluster-role-binding
+  labels:
+    app.kubernetes.io/name: community-platform-cluster-role-binding
+    app.kubernetes.io/part-of: opifex-community
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: community-platform-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: community-service-account
+    namespace: opifex-community

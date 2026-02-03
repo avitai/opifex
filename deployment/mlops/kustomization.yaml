@@ -1,0 +1,113 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-mlops
+  annotations:
+    description: "Opifex MLOps Platform - Unified experiment tracking and model lifecycle management"
+
+namespace: opifex-mlops
+
+resources:
+  # MLflow Tracking Server components (split from mlflow-tracking-server.yaml)
+  - mlflow/mlflow-tracking-server-serviceaccount.yaml
+  - mlflow/mlflow-tracking-server-deployment.yaml
+  - mlflow/mlflow-tracking-server-pdb.yaml
+
+  # MLflow PostgreSQL components (split from mlflow-postgresql.yaml)
+  - mlflow/mlflow-postgresql-serviceaccount.yaml
+  - mlflow/mlflow-postgresql-statefulset.yaml
+  - mlflow/mlflow-postgresql-service.yaml
+
+  # MLflow MinIO components (split from mlflow-minio.yaml)
+  - mlflow/mlflow-minio-serviceaccount.yaml
+  - mlflow/minio-config-configmap.yaml
+  - mlflow/mlflow-minio-statefulset.yaml
+  - mlflow/mlflow-minio-service.yaml
+  - mlflow/mlflow-minio-headless-service.yaml
+  - mlflow/minio-bucket-setup-job.yaml
+
+  # MLflow Services
+  - mlflow/mlflow-service-clusterip.yaml
+  - mlflow/mlflow-service-loadbalancer.yaml
+  - mlflow/mlflow-service-ingress.yaml
+
+  # Unified MLOps API (split from unified-mlops-api.yaml)
+  - api/unified-mlops-api-serviceaccount.yaml
+  - api/unified-mlops-config-configmap.yaml
+  - api/unified-mlops-api-deployment.yaml
+  - api/unified-mlops-api-pdb.yaml
+  - api/unified-mlops-secrets.yaml
+  - api/unified-mlops-service-only.yaml
+  - api/unified-mlops-service-ingress.yaml
+
+  # Unified MLOps Redis components
+  - api/unified-mlops-redis-config.yaml
+  - api/unified-mlops-redis-deployment.yaml
+  - api/unified-mlops-redis-service.yaml
+
+  # NOTE: The following components were referenced but directories don't exist:
+  # - registry/ (Scientific Model Registry)
+  # - router/ (Experiment Router)
+  # - security/ (Security & RBAC)
+  # - monitoring/ (Monitoring & Observability)
+  # These may need to be created separately or are deployed elsewhere
+
+commonLabels:
+  app.kubernetes.io/name: opifex-mlops
+  app.kubernetes.io/component: mlops-platform
+  app.kubernetes.io/part-of: opifex-framework
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  opifex.framework/version: "1.0.0"
+  opifex.framework/domain: "mlops"
+  opifex.framework/phase: "7.3"
+
+images:
+  - name: mlflow-server
+    newTag: "2.9.2"
+  - name: postgres
+    newTag: "15.5-alpine"
+  - name: minio/minio
+    newTag: "RELEASE.2024-01-16T16-07-38Z"
+
+configMapGenerator:
+  - name: mlops-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:password@mlflow-postgresql:5432/mlflow
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=s3://mlflow-artifacts/
+      - MLFLOW_S3_ENDPOINT_URL=http://mlflow-minio:9000
+      - OPIFEX_PHYSICS_DOMAINS=neural-operators,l2o,neural-dft,pinn,quantum-computing
+      - OPIFEX_FRAMEWORKS=jax,pytorch,tensorflow
+      - ENABLE_UNIFIED_API=true
+      - ENABLE_PHYSICS_METADATA=true
+      - ENABLE_GPU_TRACKING=true
+
+secretGenerator:
+  - name: mlops-secrets
+    literals:
+      - POSTGRES_PASSWORD=changeme-production-password
+      - MINIO_ROOT_USER=mlflow-admin
+      - MINIO_ROOT_PASSWORD=changeme-minio-password
+      - AWS_ACCESS_KEY_ID=mlflow-admin
+      - AWS_SECRET_ACCESS_KEY=changeme-minio-password
+
+# patchesStrategicMerge:
+# - patches/gpu-resources.yaml        # Directory doesn't exist
+# - patches/security-context.yaml     # Directory doesn't exist
+# - patches/monitoring-annotations.yaml # Directory doesn't exist
+
+patches:
+  - target:
+      kind: Deployment
+      name: mlflow-tracking-server
+    patch: |-
+      - op: add
+        path: /metadata/annotations/opifex.framework~1physics-enabled
+        value: "true"
+      - op: add
+        path: /metadata/annotations/opifex.framework~1gpu-optimization
+        value: "enabled"

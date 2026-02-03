@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opifex-keycloak-providers
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: providers
+data:
+  opifex-audit-provider.jar: |
+    # Base64 encoded JAR file would go here
+    # This represents a custom audit provider for scientific computing compliance
+
+  provider-config.json: |
+    {
+      "providers": [
+        {
+          "name": "opifex-audit-listener",
+          "displayName": "Opifex Scientific Audit Listener",
+          "description": "Enhanced audit logging for scientific computing compliance",
+          "className": "org.opifex.keycloak.audit.OpifexAuditEventListener",
+          "config": {
+            "auditLevel": "DETAILED",
+            "scientificDataAccess": true,
+            "gdprCompliance": true,
+            "soc2Controls": true,
+            "retentionPeriod": "7years",
+            "encryptionRequired": true
+          }
+        },
+        {
+          "name": "research-group-mapper",
+          "displayName": "Research Group Attribute Mapper",
+          "description": "Maps LDAP research groups to Keycloak user attributes",
+          "className": "org.opifex.keycloak.mappers.ResearchGroupMapper",
+          "config": {
+            "ldapAttribute": "departmentNumber",
+            "userAttribute": "research_groups",
+            "multivalue": true,
+            "hierarchicalGroups": true
+          }
+        },
+        {
+          "name": "institutional-validator",
+          "displayName": "Institutional Email Validator",
+          "description": "Validates institutional email domains for academic users",
+          "className": "org.opifex.keycloak.validators.InstitutionalEmailValidator",
+          "config": {
+            "allowedDomains": [
+              "*.edu",
+              "*.ac.uk",
+              "*.uni-*.de",
+              "*.ac.jp",
+              "*.edu.au"
+            ],
+            "strictValidation": false,
+            "allowCommercialDomains": true
+          }
+        },
+        {
+          "name": "gdpr-consent-provider",
+          "displayName": "GDPR Consent Management Provider",
+          "description": "Manages GDPR consent for scientific data processing",
+          "className": "org.opifex.keycloak.gdpr.GDPRConsentProvider",
+          "config": {
+            "consentTypes": [
+              "research_data_processing",
+              "computational_resources",
+              "publication_attribution",
+              "collaboration_sharing"
+            ],
+            "renewalPeriod": "365days",
+            "explicitConsent": true,
+            "dataRetention": "7years"
+          }
+        }
+      ],
+
+      "themes": [
+        {
+          "name": "opifex",
+          "types": ["login", "account", "admin", "email"],
+          "resources": {
+            "css": ["css/opifex-custom.css"],
+            "js": ["js/opifex-auth.js"],
+            "images": ["img/opifex-logo.svg", "img/favicon.png"]
+          }
+        }
+      ],
+
+      "eventListeners": [
+        {
+          "name": "opifex-audit-listener",
+          "priority": 100,
+          "events": [
+            "LOGIN", "LOGIN_ERROR", "LOGOUT", "REGISTER",
+            "UPDATE_PROFILE", "UPDATE_PASSWORD", "UPDATE_EMAIL",
+            "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR",
+            "IDENTITY_PROVIDER_LOGIN", "FEDERATED_IDENTITY_LINK",
+            "CUSTOM_REQUIRED_ACTION"
+          ],
+          "config": {
+            "includeRepresentation": true,
+            "includeClientInfo": true,
+            "includeUserInfo": true
+          }
+        }
+      ]
+    }

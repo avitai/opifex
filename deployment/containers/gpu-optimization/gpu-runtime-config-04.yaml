@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cuda-optimization-scripts
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: cuda-optimization
+    app.kubernetes.io/component: gpu-optimization
+    app.kubernetes.io/part-of: opifex-container-orchestration
+data:
+  gpu-setup.sh: |
+    #!/bin/bash
+    # GPU Setup and Optimization Script for Opifex Containers
+    set -e
+    echo "🎯 Initializing GPU optimization for Opifex workloads..."
+
+    # GPU availability check
+    if ! nvidia-smi &>/dev/null; then
+        echo "⚠️  No GPU detected, configuring for CPU-only mode"
+        export JAX_PLATFORMS=cpu
+        export CUDA_VISIBLE_DEVICES=""
+        exit 0
+    fi
+
+    # Get GPU information
+    GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
+    GPU_MEMORY=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+
+    # Set memory fraction based on available memory
+    if [ "$GPU_MEMORY" -gt 32000 ]; then
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.95
+    elif [ "$GPU_MEMORY" -gt 16000 ]; then
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.9
+    elif [ "$GPU_MEMORY" -gt 8000 ]; then
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.8
+    else
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.7
+    fi
+
+    # CUDA and JAX optimization flags
+    export JAX_PLATFORMS=gpu
+    export XLA_PYTHON_CLIENT_PREALLOCATE=false
+
+    # Warm up GPU kernels
+    python3 -c "
+    import jax
+    import jax.numpy as jnp
+    key = jax.random.PRNGKey(42)
+    x = jax.random.normal(key, (1024, 1024))
+    y = jnp.dot(x, x.T)
+    z = jnp.fft.fft2(x)
+    print('✅ GPU kernels warmed up')
+    " || echo "⚠️ GPU warm-up failed, continuing anyway"
+
+    echo "✅ GPU optimization complete"
+
+  monitor-gpu.sh: |
+    #!/bin/bash
+    # GPU Monitoring Script for Opifex Containers
+    while true; do
+        echo "$(date): GPU Status"
+        nvidia-smi --query-gpu=timestamp,name,temperature.gpu,utilization.gpu,utilization.memory,memory.used,memory.total --format=csv,noheader,nounits
+        sleep 30
+    done
+
+  gpu-health-check.sh: |
+    #!/bin/bash
+    # GPU Health Check for Opifex Containers
+    if ! nvidia-smi &>/dev/null; then
+        echo "❌ NVIDIA driver not accessible"
+        exit 1
+    fi
+
+    python3 -c "
+    import jax
+    import jax.numpy as jnp
+    try:
+        devices = jax.devices('gpu')
+        if len(devices) > 0:
+            print(f'✅ GPU accessible: {len(devices)} devices')
+            x = jax.random.normal(jax.random.PRNGKey(42), (100, 100))
+            y = jnp.dot(x, x.T)
+            print(f'✅ GPU computation successful')
+        else:
+            print('❌ No GPU devices available')
+            exit 1
+    except Exception as e:
+        print(f'❌ GPU test failed: {e}')
+        exit 1
+    " || exit 1
+
+    echo "✅ GPU health check passed"

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-system
+  labels:
+    name: opifex-system
+    app: opifex
+    version: "1.0.0"
+    component: production-deployment
+    opifex.io/framework-version: "1.0.0"
+    opifex.io/l2o-tests: "158-passing"
+    opifex.io/deployment-type: "production"
+  annotations:
+    opifex.io/description: "Opifex Framework Production Deployment Namespace"
+    opifex.io/foundation: "158/158 L2O tests passing, enterprise-grade architecture"
+    opifex.io/created-by: "opifex-deployment-infrastructure"
+    opifex.io/documentation: "https://github.com/opifex/framework/deployment"
+spec:
+  finalizers:
+    - kubernetes

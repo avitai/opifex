@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: neural-operators-quota
+  namespace: opifex-neural-operators
+  labels:
+    opifex.local/research-group: "neural-operators"
+spec:
+  hard:
+    requests.cpu: "50"
+    requests.memory: "200Gi"
+    requests.nvidia.com/gpu: "8"
+    limits.cpu: "100"
+    limits.memory: "400Gi"
+    limits.nvidia.com/gpu: "8"
+    persistentvolumeclaims: "20"
+    requests.storage: "2Ti"
+    pods: "50"
+    services: "10"

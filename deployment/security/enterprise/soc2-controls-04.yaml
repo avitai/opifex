@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: compliance-audit-job
+  namespace: security
+  labels:
+    app.kubernetes.io/name: compliance-audit
+    app.kubernetes.io/component: soc2-controls
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  schedule: "0 3 * * 1" # Weekly on Monday at 3 AM UTC
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200 # 2 hour timeout
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: compliance-audit
+            app.kubernetes.io/component: soc2-controls
+        spec:
+          serviceAccountName: compliance-audit-sa
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1007
+            runAsGroup: 1007
+            fsGroup: 1007
+          containers:
+            - name: compliance-auditor
+              image: harbor.opifex.enterprise.com/security/compliance-auditor:v1.2.0
+              env:
+                - name: ELASTICSEARCH_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: elasticsearch-secret
+                      key: connection-string
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: audit-database-secret
+                      key: connection-string
+                - name: REPORT_OUTPUT_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-bucket-secret
+                      key: compliance-reports-bucket
+                - name: COMPLIANCE_FRAMEWORK
+                  value: "soc2_type_ii"
+                - name: AUDIT_PERIOD
+                  value: "weekly"
+                - name: LOG_LEVEL
+                  value: "INFO"
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "200m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "500m"
+              volumeMounts:
+                - name: audit-config
+                  mountPath: /etc/audit
+                  readOnly: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+          volumes:
+            - name: audit-config
+              configMap:
+                name: soc2-compliance-config

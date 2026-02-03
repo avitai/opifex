@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-log-processor
+  namespace: security
+  labels:
+    app.kubernetes.io/name: audit-log-processor
+    app.kubernetes.io/component: soc2-controls
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: audit-log-processor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: audit-log-processor
+        app.kubernetes.io/component: soc2-controls
+    spec:
+      serviceAccountName: audit-processor-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1005
+        runAsGroup: 1005
+        fsGroup: 1005
+      containers:
+        - name: log-processor
+          image: harbor.opifex.enterprise.com/security/audit-processor:v1.5.0
+          env:
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-secret
+                  key: brokers
+            - name: ELASTICSEARCH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-secret
+                  key: connection-string
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: audit-encryption-secret
+                  key: encryption-key
+            - name: RETENTION_PERIOD
+              value: "7_years"
+            - name: PROCESSING_BATCH_SIZE
+              value: "1000"
+            - name: LOG_LEVEL
+              value: "INFO"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "300m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true

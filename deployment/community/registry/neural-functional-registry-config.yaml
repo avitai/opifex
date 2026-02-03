@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neural-functional-registry-config
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: neural-functional-registry-config
+    app.kubernetes.io/part-of: opifex-community
+data:
+  registry.yaml: |
+    storage:
+      backend: "minio"
+      minio:
+        endpoint: "minio-neural-functionals.opifex-community.svc.cluster.local:9000"
+        bucket: "opifex-neural-functionals"
+        secure: false
+        region: "us-east-1"
+
+    neural_functionals:
+      supported_types:
+        - "l2o"              # Learning to Optimize
+        - "neural_operator"  # Neural Operators (FNO, DeepONet, etc.)
+        - "pinn"            # Physics-Informed Neural Networks
+        - "neural_dft"      # Neural Density Functional Theory
+        - "bayesian_nn"     # Bayesian Neural Networks
+        - "gnn"             # Graph Neural Networks
+        - "transformer"     # Transformer architectures
+        - "cnn"             # Convolutional Neural Networks
+        - "autoencoder"     # Autoencoders and VAEs
+        - "gan"             # Generative Adversarial Networks
+
+      file_constraints:
+        max_file_size: "5GB"
+        allowed_extensions: [".pkl", ".joblib", ".h5", ".pt", ".pth", ".onnx", ".tar.gz", ".zip"]
+        required_metadata: ["name", "version", "type", "description", "author"]
+
+      versioning:
+        scheme: "semantic"  # semantic versioning (major.minor.patch)
+        auto_increment: true
+        branch_support: true
+
+    validation:
+      enabled: true
+      security_scan: true
+      format_validation: true
+      metadata_validation: true
+      dependency_check: true
+
+    search:
+      backend: "elasticsearch"
+      index_content: true
+      full_text_search: true
+      faceted_search: true
+
+    collaboration:
+      enable_sharing: true
+      enable_forking: true
+      enable_comments: true
+      enable_ratings: true
+      enable_collections: true
+
+    api:
+      rate_limits:
+        upload: "10/hour"
+        download: "1000/hour"
+        search: "100/minute"
+        metadata: "500/minute"

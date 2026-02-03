@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: plugin-service-monitor
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: plugin-service-monitor
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plugin-service
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      honorLabels: true

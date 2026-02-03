@@ -1,0 +1,72 @@
+# Opifex Training Service Communication Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opifex-training-communication
+  namespace: opifex-training
+  labels:
+    security.opifex.local/policy-type: "inter-namespace"
+    security.opifex.local/component: "training-service"
+spec:
+  podSelector:
+    matchLabels:
+      component: training-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from core API
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-core
+          podSelector:
+            matchLabels:
+              component: api-server
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow monitoring traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow access to data services
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-data
+          podSelector:
+            matchLabels:
+              component: data-service
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow GPU communication within training namespace
+    - to:
+        - podSelector:
+            matchLabels:
+              component: gpu-worker
+      ports:
+        - protocol: TCP
+          port: 22 # SSH for distributed training
+        - protocol: TCP
+          port: 12345 # Custom distributed training port
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53

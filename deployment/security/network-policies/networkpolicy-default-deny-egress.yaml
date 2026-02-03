@@ -1,0 +1,13 @@
+# Default Deny All Egress Traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: opifex-security
+  labels:
+    security.opifex.local/policy-type: "deny-all"
+    security.opifex.local/direction: "egress"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress

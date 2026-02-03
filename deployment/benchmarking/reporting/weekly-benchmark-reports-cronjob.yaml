@@ -1,0 +1,83 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-benchmark-reports
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: weekly-benchmark-reports
+    app.kubernetes.io/component: reporting
+    app.kubernetes.io/part-of: opifex-benchmarking
+spec:
+  schedule: "0 10 * * 3" # Weekly reports on Wednesday at 10 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: weekly-benchmark-reports
+            app.kubernetes.io/component: reporting
+        spec:
+          serviceAccountName: report-generator-service-account
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: report-generator
+              image: opifex/report-generator:latest
+              imagePullPolicy: Always
+              command:
+                ["python", "-m", "opifex.reporting.generate_weekly_reports"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: benchmark-db-credentials
+                      key: connection_string
+                - name: REPORTS_OUTPUT_PATH
+                  value: "/reports"
+                - name: TEMPLATES_PATH
+                  value: "/templates"
+                - name: REPORT_TYPE
+                  value: "weekly_comprehensive"
+                - name: PYTHONPATH
+                  value: "/app"
+                - name: MATPLOTLIB_BACKEND
+                  value: "Agg"
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "4Gi"
+                  ephemeral-storage: "10Gi"
+                limits:
+                  cpu: "4"
+                  memory: "8Gi"
+                  ephemeral-storage: "20Gi"
+              volumeMounts:
+                - name: report-templates
+                  mountPath: /templates
+                  readOnly: true
+                - name: reports-storage
+                  mountPath: /reports
+                - name: tmp-storage
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: report-templates
+              configMap:
+                name: report-templates
+            - name: reports-storage
+              persistentVolumeClaim:
+                claimName: benchmark-results
+            - name: tmp-storage
+              emptyDir:
+                sizeLimit: 10Gi

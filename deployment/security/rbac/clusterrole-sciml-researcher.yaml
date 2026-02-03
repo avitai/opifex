@@ -1,0 +1,42 @@
+# Opifex Researcher Role - Model development and training
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-researcher
+  labels:
+    opifex.local/role-type: "researcher"
+    opifex.local/access-level: "standard"
+rules:
+  # Pod and basic resource management
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["opifex-*"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # Training job management
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    resourceNames: ["training-*", "inference-*"]
+  # Model and data access
+  - apiGroups: ["opifex.local"]
+    resources: ["trainingjobs", "models", "datasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["opifex.local"]
+    resources: ["experiments", "benchmarks"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # GPU access (limited)
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]

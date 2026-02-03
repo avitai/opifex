@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-service
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: registry-service
+    app.kubernetes.io/component: registry
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry-service
+        app.kubernetes.io/component: registry
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: community-service-account
+      containers:
+        - name: registry-service
+          image: opifex/community-registry:latest
+          ports:
+            - containerPort: 8001
+              name: http
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: SERVICE_NAME
+              value: "registry-service"
+            - name: SERVICE_PORT
+              value: "8001"
+          envFrom:
+            - configMapRef:
+                name: community-platform-config
+            - secretRef:
+                name: community-platform-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: storage-temp
+              mountPath: /tmp/storage
+      volumes:
+        - name: storage-temp
+          emptyDir: {}

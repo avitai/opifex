@@ -1,0 +1,13 @@
+# Training Service Account Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opifex-training-service-binding
+subjects:
+  - kind: ServiceAccount
+    name: opifex-training-service
+    namespace: opifex-training
+roleRef:
+  kind: ClusterRole
+  name: opifex-training-service
+  apiGroup: rbac.authorization.k8s.io

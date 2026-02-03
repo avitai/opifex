@@ -1,0 +1,105 @@
+# Harbor Registry Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harbor-registry
+  namespace: harbor-system
+  labels:
+    app: harbor-registry
+    component: registry
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: harbor-registry
+  template:
+    metadata:
+      labels:
+        app: harbor-registry
+        component: registry
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: registry
+          image: goharbor/registry-photon:v2.10.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: http
+          env:
+            - name: REGISTRY_HTTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-registry-secret
+                  key: secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - name: registry-data
+              mountPath: /storage
+            - name: registry-config
+              mountPath: /etc/registry/config.yml
+              subPath: config.yml
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 300
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 1
+            periodSeconds: 5
+        - name: registryctl
+          image: goharbor/harbor-registryctl:v2.10.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: CORE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-core-secret
+                  key: secret
+            - name: JOBSERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-jobservice-secret
+                  key: secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: registry-data
+              mountPath: /storage
+            - name: registry-config
+              mountPath: /etc/registry/config.yml
+              subPath: config.yml
+            - name: registryctl-config
+              mountPath: /etc/registryctl/config.yml
+              subPath: config.yml
+      volumes:
+        - name: registry-data
+          persistentVolumeClaim:
+            claimName: harbor-registry-pvc
+        - name: registry-config
+          configMap:
+            name: harbor-registry-config
+        - name: registryctl-config
+          configMap:
+            name: harbor-registry-config

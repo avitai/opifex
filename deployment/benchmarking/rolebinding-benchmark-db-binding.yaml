@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: benchmark-db-binding
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmark-db-binding
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: opifex-benchmarking
+subjects:
+  - kind: ServiceAccount
+    name: benchmark-db-service-account
+    namespace: opifex-benchmarking
+roleRef:
+  kind: Role
+  name: benchmark-db-role
+  apiGroup: rbac.authorization.k8s.io

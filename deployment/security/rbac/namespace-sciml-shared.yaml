@@ -1,0 +1,9 @@
+# Cross-Group Shared Resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-shared
+  labels:
+    opifex.local/resource-type: "shared"
+    opifex.local/access-level: "multi-group"
+    name: opifex-shared

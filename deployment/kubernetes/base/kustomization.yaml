@@ -1,0 +1,146 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Opifex Production Deployment - Base Kubernetes Configuration
+# Version: 1.0.0
+# Foundation: 158/158 L2O tests passing, enterprise-grade architecture
+
+metadata:
+  name: opifex-base
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Namespace
+namespace: opifex-system
+
+# Common Labels
+commonLabels:
+  app: opifex
+  version: "1.0.0"
+  component: production-deployment
+
+# Common Annotations
+commonAnnotations:
+  opifex.io/version: "1.0.0"
+  opifex.io/foundation: "158-l2o-tests-passing"
+  opifex.io/deployment-type: "production"
+
+# Resources
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - serviceaccount-api.yaml
+  - serviceaccount-worker.yaml
+  - serviceaccount-l2o.yaml
+  - serviceaccount-admin.yaml
+  - deployment-api.yaml
+  - service-api.yaml
+
+# ConfigMap Generator
+configMapGenerator:
+  - name: opifex-config
+    files:
+      - config.yaml=../../config.yaml
+    options:
+      disableNameSuffixHash: true
+
+# Secret Generator
+secretGenerator:
+  - name: opifex-secrets
+    literals:
+      - database-password=change-me-in-production
+      - api-key=change-me-in-production
+      - jwt-secret=change-me-in-production
+    options:
+      disableNameSuffixHash: true
+
+# Images
+images:
+  - name: opifex-framework
+    newName: opifex/framework
+    newTag: "1.0.0"
+  - name: opifex-api
+    newName: opifex/api
+    newTag: "1.0.0"
+  - name: opifex-worker
+    newName: opifex/worker
+    newTag: "1.0.0"
+
+# Replicas
+replicas:
+  - name: opifex-api
+    count: 3
+  - name: opifex-worker
+    count: 2
+
+# Patches
+patches:
+  - target:
+      kind: Deployment
+      name: opifex-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "2000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "4Gi"
+
+  - target:
+      kind: Deployment
+      name: opifex-worker
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "1000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
+
+# Transformers
+transformers:
+  - |-
+    apiVersion: builtin
+    kind: PrefixSuffixTransformer
+    metadata:
+      name: prefix-transformer
+    prefix: opifex-
+    fieldSpecs:
+      - path: metadata/name
+        kind: Service
+      - path: metadata/name
+        kind: Deployment
+      - path: metadata/name
+        kind: ConfigMap
+      - path: metadata/name
+        kind: Secret
+
+# Generators
+generators:
+  - |-
+    apiVersion: builtin
+    kind: ConfigMapGenerator
+    metadata:
+      name: opifex-env-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - METRICS_ENABLED=true
+      - GPU_ENABLED=true
+      - L2O_ENABLED=true
+      - NEURAL_OPERATORS_ENABLED=true
+    options:
+      disableNameSuffixHash: true

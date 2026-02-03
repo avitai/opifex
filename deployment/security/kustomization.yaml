@@ -1,0 +1,139 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-security
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  # Keycloak Identity Management - Service Accounts
+  - keycloak/serviceaccount-keycloak.yaml
+  - keycloak/serviceaccount-keycloak-postgres.yaml
+
+  # Keycloak Identity Management - Secrets
+  - keycloak/secret-keycloak-admin.yaml
+  - keycloak/secret-keycloak-postgres.yaml
+  - keycloak/secret-keycloak-tls.yaml
+  - keycloak/secret-keycloak-jwt.yaml
+
+  # Keycloak Identity Management - ConfigMaps
+  - keycloak/configmap-keycloak-config.yaml
+  - keycloak/configmap-postgres-init-config.yaml
+
+  # Keycloak Identity Management - Storage
+  - keycloak/persistentvolumeclaim-keycloak-postgres-pvc.yaml
+
+  # Keycloak Identity Management - Deployments
+  - keycloak/keycloak-deployment.yaml
+  - keycloak/deployment-keycloak-postgres.yaml
+
+  # Keycloak Identity Management - Services
+  - keycloak/service-keycloak.yaml
+  - keycloak/service-keycloak-internal.yaml
+  - keycloak/service-keycloak-headless.yaml
+  - keycloak/service-keycloak-postgres.yaml
+
+  # Keycloak Identity Management - RBAC
+  - keycloak/role-keycloak-role.yaml
+  - keycloak/rolebinding-keycloak-rolebinding.yaml
+  - keycloak/role-keycloak-postgres-role.yaml
+  - keycloak/rolebinding-keycloak-postgres-rolebinding.yaml
+  - keycloak/clusterrole-keycloak-cluster-role.yaml
+  - keycloak/clusterrolebinding-keycloak-cluster-rolebinding.yaml
+
+  # Core RBAC - Service Accounts
+  - rbac/serviceaccount-opifex-api-server.yaml
+  - rbac/serviceaccount-opifex-training-service.yaml
+  - rbac/serviceaccount-opifex-data-service.yaml
+
+  # Core RBAC - ClusterRoles
+  - rbac/clusterrole-opifex-research-admin.yaml
+  - rbac/clusterrole-opifex-research-lead.yaml
+  - rbac/clusterrole-opifex-researcher.yaml
+  - rbac/clusterrole-opifex-data-scientist.yaml
+  - rbac/clusterrole-opifex-collaborator.yaml
+  - rbac/clusterrole-opifex-api-server.yaml
+  - rbac/clusterrole-opifex-training-service.yaml
+  - rbac/clusterrole-opifex-data-service.yaml
+  - rbac/clusterrole-opifex-shared-access.yaml
+  - rbac/clusterrole-opifex-gpu-access.yaml
+
+  # Core RBAC - ClusterRoleBindings
+  - rbac/clusterrolebinding-opifex-research-admin-binding.yaml
+  - rbac/clusterrolebinding-opifex-api-server-binding.yaml
+  - rbac/clusterrolebinding-opifex-training-service-binding.yaml
+  - rbac/clusterrolebinding-opifex-data-service-binding.yaml
+  - rbac/clusterrolebinding-opifex-shared-access-binding.yaml
+  - rbac/clusterrolebinding-opifex-gpu-access-binding.yaml
+  - rbac/clusterrolebinding-opifex-data-scientist-binding.yaml
+
+  # Research Group Namespaces
+  - rbac/namespace-opifex-neural-operators.yaml
+  - rbac/namespace-opifex-physics-informed.yaml
+  - rbac/namespace-opifex-fluid-dynamics.yaml
+  - rbac/namespace-opifex-materials.yaml
+  - rbac/namespace-opifex-collaborators.yaml
+  - rbac/namespace-opifex-shared.yaml
+
+  # Research Group Resource Quotas
+  - rbac/resourcequota-neural-operators-quota.yaml
+  - rbac/resourcequota-physics-informed-quota.yaml
+  - rbac/resourcequota-fluid-dynamics-quota.yaml
+  - rbac/resourcequota-materials-quota.yaml
+  - rbac/resourcequota-collaborators-quota.yaml
+
+  # Research Group Roles
+  - rbac/role-neural-operators-researcher.yaml
+  - rbac/role-physics-informed-researcher.yaml
+  - rbac/role-fluid-dynamics-researcher.yaml
+  - rbac/role-materials-researcher.yaml
+  - rbac/role-external-collaborator.yaml
+
+  # Research Group RoleBindings
+  - rbac/rolebinding-neural-operators-researchers-binding.yaml
+  - rbac/clusterrolebinding-neural-operators-lead-binding.yaml
+  - rbac/rolebinding-physics-informed-researchers-binding.yaml
+  - rbac/clusterrolebinding-physics-informed-lead-binding.yaml
+  - rbac/rolebinding-fluid-dynamics-researchers-binding.yaml
+  - rbac/clusterrolebinding-fluid-dynamics-lead-binding.yaml
+  - rbac/rolebinding-materials-researchers-binding.yaml
+  - rbac/clusterrolebinding-materials-lead-binding.yaml
+  - rbac/rolebinding-external-collaborators-binding.yaml
+
+  # Network Policies - Default Deny
+  - network-policies/networkpolicy-default-deny-ingress.yaml
+  - network-policies/networkpolicy-default-deny-egress.yaml
+  - network-policies/networkpolicy-default-deny-all-core.yaml
+  - network-policies/networkpolicy-default-deny-all-training.yaml
+  - network-policies/networkpolicy-default-deny-all-data.yaml
+  - network-policies/networkpolicy-default-deny-all-monitoring.yaml
+
+  # Network Policies - Keycloak
+  - network-policies/networkpolicy-keycloak-ingress.yaml
+  - network-policies/networkpolicy-keycloak-egress.yaml
+  - network-policies/networkpolicy-keycloak-postgres-ingress.yaml
+  - network-policies/networkpolicy-keycloak-postgres-egress.yaml
+
+  # Network Policies - Inter-Service Communication
+  - network-policies/networkpolicy-opifex-core-api-communication.yaml
+  - network-policies/networkpolicy-opifex-training-communication.yaml
+  - network-policies/networkpolicy-opifex-data-communication.yaml
+  - network-policies/networkpolicy-prometheus-scraping-policy.yaml
+  - network-policies/networkpolicy-gpu-distributed-training.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: opifex-security
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: quay.io/keycloak/keycloak
+    newTag: "24.0"
+  - name: postgres
+    newTag: "15"
+
+replicas:
+  - name: keycloak
+    count: 2
+  - name: keycloak-postgres
+    count: 1

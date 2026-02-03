@@ -1,0 +1,351 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-config
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: identity-management
+    tier: security
+data:
+  realm-export.json: |
+    {
+      "realm": "opifex-research",
+      "enabled": true,
+      "displayName": "Opifex Research Platform",
+      "displayNameHtml": "<strong>Opifex</strong> Research Platform",
+      "notBefore": 0,
+      "defaultSignatureAlgorithm": "RS256",
+      "revokeRefreshToken": false,
+      "refreshTokenMaxReuse": 0,
+      "accessTokenLifespan": 1800,
+      "accessTokenLifespanForImplicitFlow": 900,
+      "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
+      "ssoSessionIdleTimeoutRememberMe": 0,
+      "ssoSessionMaxLifespanRememberMe": 0,
+      "offlineSessionIdleTimeout": 2592000,
+      "offlineSessionMaxLifespanEnabled": false,
+      "offlineSessionMaxLifespan": 5184000,
+      "clientSessionIdleTimeout": 0,
+      "clientSessionMaxLifespan": 0,
+      "clientOfflineSessionIdleTimeout": 0,
+      "clientOfflineSessionMaxLifespan": 0,
+      "accessCodeLifespan": 60,
+      "accessCodeLifespanUserAction": 300,
+      "accessCodeLifespanLogin": 1800,
+      "actionTokenGeneratedByAdminLifespan": 43200,
+      "actionTokenGeneratedByUserLifespan": 300,
+      "oauth2DeviceCodeLifespan": 600,
+      "oauth2DevicePollingInterval": 5,
+      "attributes": {
+        "cibaBackchannelTokenDeliveryMode": "poll",
+        "cibaExpiresIn": "120",
+        "cibaInterval": "5",
+        "cibaAuthRequestedUserHint": "login_hint",
+        "parRequestUriLifespan": "60",
+        "frontendUrl": "https://keycloak.opifex.local",
+        "acr.loa.map": "{}"
+      },
+      "requiredCredentials": ["password"],
+      "passwordPolicy": "length(12) and digits(2) and lowerCase(2) and upperCase(2) and specialChars(1) and notUsername and blacklist",
+      "otpPolicyType": "totp",
+      "otpPolicyAlgorithm": "HmacSHA1",
+      "otpPolicyInitialCounter": 0,
+      "otpPolicyDigits": 6,
+      "otpPolicyLookAheadWindow": 1,
+      "otpPolicyPeriod": 30,
+      "otpSupportedApplications": ["FreeOTP", "Google Authenticator"],
+      "browserSecurityHeaders": {
+        "contentSecurityPolicyReportOnly": "",
+        "xContentTypeOptions": "nosniff",
+        "xRobotsTag": "none",
+        "xFrameOptions": "SAMEORIGIN",
+        "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+        "xXSSProtection": "1; mode=block",
+        "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+      },
+      "smtpServer": {},
+      "roles": {
+        "realm": [
+          {
+            "name": "default-roles-opifex-research",
+            "description": "Default role for realm Opifex Research",
+            "composite": true,
+            "composites": {
+              "realm": ["offline_access", "uma_authorization"],
+              "client": {
+                "account": ["view-profile", "manage-account"]
+              }
+            }
+          },
+          {
+            "name": "research_admin",
+            "description": "Research Administrator - Full platform access",
+            "composite": false,
+            "attributes": {
+              "permissions": ["platform.admin", "data.full_access", "compute.unlimited", "model.deploy"]
+            }
+          },
+          {
+            "name": "research_lead",
+            "description": "Research Group Leader - Group management and resource allocation",
+            "composite": false,
+            "attributes": {
+              "permissions": ["group.manage", "data.group_access", "compute.group_quota", "model.group_deploy"]
+            }
+          },
+          {
+            "name": "researcher",
+            "description": "Research Scientist - Model development and training",
+            "composite": false,
+            "attributes": {
+              "permissions": ["data.read", "compute.standard", "model.train", "model.validate"]
+            }
+          },
+          {
+            "name": "data_scientist",
+            "description": "Data Scientist - Data analysis and preprocessing",
+            "composite": false,
+            "attributes": {
+              "permissions": ["data.analyze", "data.preprocess", "compute.limited", "model.inference"]
+            }
+          },
+          {
+            "name": "collaborator",
+            "description": "External Collaborator - Limited access to shared resources",
+            "composite": false,
+            "attributes": {
+              "permissions": ["data.shared_read", "compute.basic", "model.inference"]
+            }
+          }
+        ]
+      },
+      "groups": [
+        {
+          "name": "Research Administrators",
+          "path": "/Research Administrators",
+          "realmRoles": ["research_admin"],
+          "attributes": {
+            "description": ["Platform administrators with full access"]
+          }
+        },
+        {
+          "name": "AI/ML Research",
+          "path": "/AI/ML Research",
+          "subGroups": [
+            {
+              "name": "Neural Operators",
+              "path": "/AI/ML Research/Neural Operators",
+              "realmRoles": ["researcher"],
+              "attributes": {
+                "department": ["AI/ML"],
+                "specialty": ["neural_operators"],
+                "gpu_quota": ["100"]
+              }
+            },
+            {
+              "name": "Physics-Informed ML",
+              "path": "/AI/ML Research/Physics-Informed ML",
+              "realmRoles": ["researcher"],
+              "attributes": {
+                "department": ["AI/ML"],
+                "specialty": ["physics_informed"],
+                "gpu_quota": ["150"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Computational Physics",
+          "path": "/Computational Physics",
+          "subGroups": [
+            {
+              "name": "Fluid Dynamics",
+              "path": "/Computational Physics/Fluid Dynamics",
+              "realmRoles": ["researcher"],
+              "attributes": {
+                "department": ["Physics"],
+                "specialty": ["fluid_dynamics"],
+                "gpu_quota": ["200"]
+              }
+            },
+            {
+              "name": "Materials Science",
+              "path": "/Computational Physics/Materials Science",
+              "realmRoles": ["researcher"],
+              "attributes": {
+                "department": ["Physics"],
+                "specialty": ["materials"],
+                "gpu_quota": ["150"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "External Collaborators",
+          "path": "/External Collaborators",
+          "realmRoles": ["collaborator"],
+          "attributes": {
+            "access_type": ["limited"],
+            "gpu_quota": ["20"]
+          }
+        }
+      ],
+      "clients": [
+        {
+          "clientId": "opifex-api",
+          "name": "Opifex API Client",
+          "description": "Main API client for Opifex platform",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "**********",
+          "redirectUris": [
+            "https://api.opifex.local/auth/callback",
+            "https://dashboard.opifex.local/auth/callback"
+          ],
+          "webOrigins": [
+            "https://api.opifex.local",
+            "https://dashboard.opifex.local"
+          ],
+          "protocol": "openid-connect",
+          "protocolMappers": [
+            {
+              "name": "research-group-mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-group-membership-mapper",
+              "config": {
+                "claim.name": "research_groups",
+                "full.path": "false",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "gpu-quota-mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "gpu_quota",
+                "claim.name": "gpu_quota",
+                "jsonType.label": "int",
+                "id.token.claim": "true",
+                "access.token.claim": "true"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "jupyter-hub",
+          "name": "Jupyter Hub Integration",
+          "description": "Integration with JupyterHub for notebook access",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "**********",
+          "redirectUris": [
+            "https://jupyter.opifex.local/hub/oauth-callback"
+          ],
+          "webOrigins": [
+            "https://jupyter.opifex.local"
+          ],
+          "protocol": "openid-connect"
+        }
+      ],
+      "identityProviders": [
+        {
+          "alias": "university-saml",
+          "displayName": "University SAML",
+          "providerId": "saml",
+          "enabled": true,
+          "config": {
+            "singleSignOnServiceUrl": "https://sso.university.edu/saml/sso",
+            "singleLogoutServiceUrl": "https://sso.university.edu/saml/slo",
+            "validateSignature": "true",
+            "wantAuthnRequestsSigned": "true",
+            "signatureAlgorithm": "RSA_SHA256",
+            "nameIDPolicyFormat": "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+            "postBindingResponse": "true",
+            "postBindingAuthnRequest": "true",
+            "forceAuthn": "false",
+            "guiOrder": "1"
+          },
+          "mappers": [
+            {
+              "name": "username-mapper",
+              "identityProviderMapper": "saml-username-idp-mapper",
+              "config": {
+                "template": "${ALIAS}.${ATTRIBUTE.uid}"
+              }
+            },
+            {
+              "name": "department-mapper",
+              "identityProviderMapper": "saml-user-attribute-idp-mapper",
+              "config": {
+                "attribute.name": "department",
+                "user.attribute": "department",
+                "attribute.friendly.name": "Department"
+              }
+            }
+          ]
+        },
+        {
+          "alias": "orcid",
+          "displayName": "ORCID",
+          "providerId": "oidc",
+          "enabled": true,
+          "config": {
+            "authorizationUrl": "https://orcid.org/oauth/authorize",
+            "tokenUrl": "https://orcid.org/oauth/token",
+            "userInfoUrl": "https://orcid.org/oauth/userinfo",
+            "clientId": "${ORCID_CLIENT_ID}",
+            "clientSecret": "${ORCID_CLIENT_SECRET}",
+            "defaultScope": "openid",
+            "guiOrder": "2"
+          }
+        }
+      ],
+      "authenticatorConfig": [
+        {
+          "alias": "research-institution-policy",
+          "config": {
+            "require.password.policy": "true",
+            "temporary.lockout.policy": "true",
+            "max.login.failures": "5",
+            "wait.increment.seconds": "60",
+            "quick.login.check.millis": "1000",
+            "minimum.quick.login.wait.seconds": "60",
+            "max.failure.wait.seconds": "900",
+            "failure.factor.seconds": "30"
+          }
+        }
+      ],
+      "userFederationProviders": [
+        {
+          "displayName": "University LDAP",
+          "providerName": "ldap",
+          "priority": 1,
+          "config": {
+            "enabled": "true",
+            "editMode": "READ_ONLY",
+            "syncRegistrations": "false",
+            "vendor": "other",
+            "usernameLDAPAttribute": "uid",
+            "rdnLDAPAttribute": "uid",
+            "uuidLDAPAttribute": "entryUUID",
+            "userObjectClasses": "inetOrgPerson, organizationalPerson",
+            "connectionUrl": "ldaps://ldap.university.edu:636",
+            "usersDn": "ou=people,dc=university,dc=edu",
+            "bindDn": "cn=keycloak,ou=service,dc=university,dc=edu",
+            "bindCredential": "**********",
+            "searchScope": "1",
+            "useTruststoreSpi": "ldapsOnly",
+            "connectionPooling": "true",
+            "pagination": "true",
+            "allowKerberosAuthentication": "false",
+            "debug": "false",
+            "useKerberosForPasswordAuthentication": "false"
+          }
+        }
+      ]
+    }

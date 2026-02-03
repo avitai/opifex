@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-system
+  labels:
+    name: opifex-system
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    app.kubernetes.io/name: opifex-system
+    app.kubernetes.io/component: system-namespace
+    app.kubernetes.io/part-of: opifex-container-orchestration

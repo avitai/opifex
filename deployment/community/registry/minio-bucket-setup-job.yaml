@@ -1,0 +1,85 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bucket-setup
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: minio-bucket-setup
+    app.kubernetes.io/component: storage-setup
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio-bucket-setup
+    spec:
+      serviceAccountName: community-service-account
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: minio/mc:latest
+          env:
+            - name: MC_HOST_opifex
+              value: "http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio-neural-functionals.opifex-community.svc.cluster.local:9000"
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: community-platform-secrets
+                  key: OBJECT_STORAGE_ACCESS_KEY
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: community-platform-secrets
+                  key: OBJECT_STORAGE_SECRET_KEY
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Setting up MinIO buckets for neural functionals..."
+
+              # Wait for MinIO to be ready
+              until mc ready opifex; do
+                echo "Waiting for MinIO to be ready..."
+                sleep 5
+              done
+
+              # Create buckets
+              mc mb --ignore-existing opifex/opifex-neural-functionals
+              mc mb --ignore-existing opifex/opifex-experiments
+              mc mb --ignore-existing opifex/opifex-plugins
+              mc mb --ignore-existing opifex/opifex-workspaces
+              mc mb --ignore-existing opifex/opifex-backups
+
+              # Set bucket policies for public read access (neural functionals marketplace)
+              mc anonymous set download opifex/opifex-neural-functionals/public/
+
+              # Set lifecycle policies for large files
+              cat > /tmp/lifecycle.json <<EOF
+              {
+                "Rules": [
+                  {
+                    "ID": "DeleteOldVersions",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": ""},
+                    "NoncurrentVersionExpiration": {"NoncurrentDays": 30}
+                  },
+                  {
+                    "ID": "DeleteIncompleteUploads",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": ""},
+                    "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 7}
+                  }
+                ]
+              }
+              EOF
+
+              mc ilm import opifex/opifex-neural-functionals < /tmp/lifecycle.json
+              mc ilm import opifex/opifex-experiments < /tmp/lifecycle.json
+              mc ilm import opifex/opifex-plugins < /tmp/lifecycle.json
+              mc ilm import opifex/opifex-workspaces < /tmp/lifecycle.json
+
+              # Set bucket notifications (optional - for advanced features)
+              # mc event add opifex/opifex-neural-functionals arn:aws:sqs::1:webhook --event put,delete
+
+              echo "MinIO bucket setup completed successfully!"

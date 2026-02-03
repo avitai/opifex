@@ -1,0 +1,16 @@
+# Physics-Informed Lead with elevated permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: physics-informed-lead-binding
+  labels:
+    opifex.local/research-group: "physics-informed"
+    opifex.local/role-type: "research-lead"
+subjects:
+  - kind: User
+    name: "university-saml.physics-lead@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: opifex-research-lead
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,15 @@
+# SciML Framework Configuration
+
+framework:
+  name: "SciML"
+  version: "0.1.0"
+  backend: "jax"
+
+computation:
+  precision: "float32"
+  jit_compile: true
+  enable_x64: false
+
+neural_networks:
+  framework: "flax_nnx"
+  mixed_precision: true

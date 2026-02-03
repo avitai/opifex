@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-minio-headless
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: object-storage
+    app.kubernetes.io/instance: mlflow-minio
+  annotations:
+    opifex.framework/description: "Headless service for MinIO StatefulSet clustering"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: minio-api
+      port: 9000
+      targetPort: minio-api
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/instance: mlflow-minio

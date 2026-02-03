@@ -1,0 +1,23 @@
+# External Collaborators Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: opifex-collaborators
+  name: external-collaborators-binding
+  labels:
+    opifex.local/research-group: "collaborators"
+subjects:
+  # External collaborators (from other institutions)
+  - kind: User
+    name: "orcid.0000-0000-0000-0005" # MIT collaborator
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "orcid.0000-0000-0000-0006" # Stanford collaborator
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "external-idp.collaborator@external.edu"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: external-collaborator
+  apiGroup: rbac.authorization.k8s.io

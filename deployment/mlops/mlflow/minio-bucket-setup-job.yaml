@@ -1,0 +1,101 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bucket-setup
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: minio-setup
+    app.kubernetes.io/component: initialization
+    app.kubernetes.io/instance: mlflow-minio
+  annotations:
+    opifex.framework/description: "Initialize MinIO buckets for MLflow and scientific computing"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio-setup
+        app.kubernetes.io/component: initialization
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: mlflow-minio
+      containers:
+        - name: mc
+          image: minio/mc:RELEASE.2024-01-13T07-56-33Z
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              set -e
+
+              # Wait for MinIO to be ready
+              until mc alias set minio http://mlflow-minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD; do
+                echo "Waiting for MinIO to be ready..."
+                sleep 5
+              done
+
+              echo "MinIO is ready. Creating buckets..."
+
+              # Create MLflow artifacts bucket
+              mc mb minio/mlflow-artifacts --ignore-existing
+              mc policy set public minio/mlflow-artifacts
+
+              # Create scientific computing buckets
+              mc mb minio/neural-operators --ignore-existing
+              mc mb minio/l2o-models --ignore-existing
+              mc mb minio/neural-dft --ignore-existing
+              mc mb minio/pinn-models --ignore-existing
+              mc mb minio/quantum-computing --ignore-existing
+              mc mb minio/datasets --ignore-existing
+              mc mb minio/benchmarks --ignore-existing
+
+              # Set lifecycle policies for automatic cleanup
+              cat > /tmp/lifecycle.json << 'EOF'
+              {
+                "Rules": [
+                  {
+                    "ID": "DeleteOldExperiments",
+                    "Status": "Enabled",
+                    "Filter": {
+                      "Prefix": "experiments/"
+                    },
+                    "Expiration": {
+                      "Days": 90
+                    }
+                  },
+                  {
+                    "ID": "DeleteOldLogs",
+                    "Status": "Enabled",
+                    "Filter": {
+                      "Prefix": "logs/"
+                    },
+                    "Expiration": {
+                      "Days": 30
+                    }
+                  }
+                ]
+              }
+              EOF
+
+              mc ilm set minio/mlflow-artifacts < /tmp/lifecycle.json
+
+              echo "Bucket setup completed successfully!"
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: MINIO_ROOT_PASSWORD
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

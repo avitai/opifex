@@ -1,0 +1,38 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: opifex-load-balancer-metrics
+  namespace: opifex-system
+  labels:
+    component: scalability
+    monitor: load-balancer
+    managed-by: opifex-framework
+spec:
+  selector:
+    matchLabels:
+      app: nginx-ingress
+      component: controller
+  endpoints:
+    - port: prometheus
+      interval: 30s
+      path: /metrics
+      scheme: http
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "nginx_ingress_controller_(request_duration_seconds|requests|bytes_sent|bytes_received|connections|ssl_certificate_expiry_seconds)"
+          action: keep
+        - sourceLabels: [host]
+          regex: '(opifex\.example\.com|api\.opifex\.example\.com|community\.opifex\.example\.com)'
+          action: keep
+  namespaceSelector:
+    matchNames:
+      - ingress-nginx
+      - opifex-system

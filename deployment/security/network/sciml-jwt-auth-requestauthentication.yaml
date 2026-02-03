@@ -1,0 +1,19 @@
+# RequestAuthentication - JWT Validation
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: opifex-jwt-auth
+  namespace: opifex-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: opifex-framework
+  jwtRules:
+    - issuer: "https://auth.opifex.io/auth/realms/opifex"
+      jwksUri: "https://auth.opifex.io/auth/realms/opifex/protocol/openid_connect/certs"
+      audiences:
+        - "opifex-platform"
+        - "harbor-registry"
+        - "grafana-monitoring"
+        - "jupyter-hub"
+      forwardOriginalToken: true

@@ -1,0 +1,54 @@
+# Custom resource for Opifex-specific proxy configuration
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: opifex-performance-optimization
+  namespace: opifex-system
+spec:
+  configPatches:
+    # Optimize HTTP/2 for scientific data transfer
+    - applyTo: HTTP_CONNECTION_MANAGER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+      patch:
+        operation: MERGE
+        value:
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+            http2_options:
+              # Optimize for large scientific data transfers
+              max_concurrent_streams: 1000
+              initial_stream_window_size: 1048576 # 1MB
+              initial_connection_window_size: 10485760 # 10MB
+
+            # Connection optimization for GPU workloads
+            stream_idle_timeout: 300s
+            request_timeout: 300s
+
+            # Compression for data efficiency
+            compression_config:
+              response_direction_config:
+                common_config:
+                  enabled:
+                    default_value: true
+                    runtime_key: response_compression_enabled
+                  disable_on_etag_header: true
+                  remove_accept_encoding_header: false
+                disable_on_etag_header: true
+
+    # Buffer optimization for large data transfers
+    - applyTo: HTTP_ROUTE
+      match:
+        context: SIDECAR_INBOUND
+      patch:
+        operation: MERGE
+        value:
+          route:
+            # Increase buffer limits for scientific data
+            max_stream_duration:
+              max_stream_duration: 600s
+            timeout: 300s

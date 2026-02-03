@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-community-registry
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: opifex-community
+
+resources:
+  # Neural Functional Storage Infrastructure
+  - neural-functional-storage-pvc.yaml
+  - minio-deployment.yaml
+  - minio-service.yaml
+  - minio-bucket-setup-job.yaml
+  - neural-functional-registry-config.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: opifex-community
+  app.kubernetes.io/component: registry
+  app.kubernetes.io/managed-by: kustomize
+
+patches:
+  # Production storage scaling
+  - target:
+      kind: PersistentVolumeClaim
+      name: neural-functional-storage-pvc
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: "2Ti"
+
+  # MinIO production resources
+  - target:
+      kind: Deployment
+      name: minio-neural-functionals
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"

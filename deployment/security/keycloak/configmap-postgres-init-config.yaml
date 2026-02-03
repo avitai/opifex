@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-config
+  namespace: opifex-security
+  labels:
+    app: keycloak-postgres
+    component: database
+    tier: security
+data:
+  init-keycloak-db.sql: |
+    -- Create Keycloak database and user
+    -- This script runs during PostgreSQL initialization
+
+    -- Set up database encoding and collation
+    ALTER DATABASE keycloak SET timezone TO 'UTC';
+
+    -- Create extensions for enhanced security and performance
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+    -- Grant necessary permissions to keycloak user
+    GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
+    GRANT ALL ON SCHEMA public TO keycloak;
+
+    -- Set up logging for security auditing
+    ALTER SYSTEM SET log_statement = 'all';
+    ALTER SYSTEM SET log_connections = 'on';
+    ALTER SYSTEM SET log_disconnections = 'on';
+    ALTER SYSTEM SET log_checkpoints = 'on';
+
+    -- Performance optimization for Keycloak workload
+    ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+    ALTER SYSTEM SET max_connections = '200';
+    ALTER SYSTEM SET shared_buffers = '256MB';
+    ALTER SYSTEM SET effective_cache_size = '1GB';
+    ALTER SYSTEM SET work_mem = '4MB';
+    ALTER SYSTEM SET maintenance_work_mem = '64MB';
+
+    -- Security hardening
+    ALTER SYSTEM SET ssl = 'on';
+    ALTER SYSTEM SET password_encryption = 'scram-sha-256';
+
+    SELECT pg_reload_conf();

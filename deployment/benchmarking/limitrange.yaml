@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: benchmarking-resource-limits
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmarking-resource-limits
+    app.kubernetes.io/component: resource-management
+    app.kubernetes.io/part-of: opifex-benchmarking
+spec:
+  limits:
+    # Container limits
+    - type: Container
+      default:
+        cpu: "2"
+        memory: "4Gi"
+        ephemeral-storage: "10Gi"
+      defaultRequest:
+        cpu: "500m"
+        memory: "1Gi"
+        ephemeral-storage: "5Gi"
+      max:
+        cpu: "16"
+        memory: "64Gi"
+        ephemeral-storage: "200Gi"
+        nvidia.com/gpu: "2"
+      min:
+        cpu: "100m"
+        memory: "128Mi"
+        ephemeral-storage: "1Gi"
+
+    # Pod limits
+    - type: Pod
+      max:
+        cpu: "32"
+        memory: "128Gi"
+        ephemeral-storage: "500Gi"
+        nvidia.com/gpu: "4"
+
+    # PVC limits
+    - type: PersistentVolumeClaim
+      max:
+        storage: "1Ti"
+      min:
+        storage: "1Gi"

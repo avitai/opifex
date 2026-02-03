@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-tracking-server-lb
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: mlflow-tracking-server
+    app.kubernetes.io/component: load-balancer
+    app.kubernetes.io/version: "2.9.2"
+  annotations:
+    opifex.framework/description: "Load balancer service for MLflow tracking server external access"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mlflow-tracking-server

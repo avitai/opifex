@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: registry-service-monitor
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: registry-service-monitor
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry-service
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      honorLabels: true

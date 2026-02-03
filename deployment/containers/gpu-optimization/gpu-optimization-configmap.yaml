@@ -1,0 +1,104 @@
+# GPU Resource Management for Opifex Container Orchestration
+# Phase 7.1: Container Orchestration Implementation
+# Features: Intelligent GPU allocation + Memory optimization + Multi-GPU support
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-optimization-config
+  namespace: opifex-system
+  labels:
+    app: opifex-gpu-optimization
+    component: resource-management
+data:
+  gpu-config.yaml: |
+    # Opifex GPU Resource Management Configuration
+    gpu_management:
+      # GPU allocation strategy
+      allocation_strategy: "balanced"  # balanced, performance, efficiency
+
+      # Memory management
+      memory:
+        # Default memory fraction for JAX
+        default_memory_fraction: 0.8
+        # Per-GPU type memory optimization
+        gpu_profiles:
+          "Tesla V100":
+            memory_fraction: 0.9
+            batch_size_multiplier: 1.5
+            optimal_batch_sizes: [32, 64, 128, 256]
+          "Tesla P100":
+            memory_fraction: 0.8
+            batch_size_multiplier: 1.0
+            optimal_batch_sizes: [16, 32, 64, 128]
+          "GeForce RTX 3090":
+            memory_fraction: 0.85
+            batch_size_multiplier: 1.3
+            optimal_batch_sizes: [32, 64, 128, 256]
+          "Tesla A100":
+            memory_fraction: 0.95
+            batch_size_multiplier: 2.0
+            optimal_batch_sizes: [64, 128, 256, 512]
+          "Tesla H100":
+            memory_fraction: 0.95
+            batch_size_multiplier: 2.5
+            optimal_batch_sizes: [128, 256, 512, 1024]
+
+      # Performance optimization
+      performance:
+        # JIT compilation settings
+        enable_jit: true
+        jit_cache_size: "2GB"
+
+        # XLA optimization flags
+        xla_flags:
+          - "xla_gpu_enable_async_collectives=true"
+          - "xla_gpu_enable_latency_hiding_scheduler=true"
+          - "xla_gpu_enable_triton_gemm=true"
+          - "xla_gpu_graph_level=0"
+
+        # CUDA optimization
+        cuda_flags:
+          - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+          - "CUDA_VISIBLE_DEVICES=all"
+
+        # NCCL optimization for multi-GPU
+        nccl_flags:
+          - "NCCL_DEBUG=INFO"
+          - "NCCL_ALGO=Ring"
+          - "NCCL_MAX_NCHANNELS=16"
+
+      # Resource monitoring
+      monitoring:
+        enabled: true
+        metrics_interval: 30s
+        alert_thresholds:
+          memory_usage: 90
+          temperature: 85
+          power_usage: 90
+
+      # Workload scheduling
+      scheduling:
+        # GPU affinity for different workload types
+        workload_affinity:
+          training:
+            preferred_gpu_types: ["A100", "H100", "V100"]
+            min_memory_gb: 16
+          inference:
+            preferred_gpu_types: ["RTX 3090", "V100", "A100"]
+            min_memory_gb: 8
+          benchmarking:
+            preferred_gpu_types: ["A100", "H100"]
+            min_memory_gb: 32
+
+        # Resource quotas per namespace
+        quotas:
+          opifex-development:
+            max_gpus: 4
+            max_memory_gb: 64
+          opifex-production:
+            max_gpus: 16
+            max_memory_gb: 256
+          opifex-benchmarking:
+            max_gpus: 8
+            max_memory_gb: 128

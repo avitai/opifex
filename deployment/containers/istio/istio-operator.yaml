@@ -1,0 +1,202 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: opifex-control-plane
+  namespace: istio-system
+spec:
+  # Performance-optimized configuration
+  revision: "1-21-0"
+
+  # Global settings for Opifex workloads
+  values:
+    global:
+      # Mesh settings optimized for scientific workloads
+      meshID: opifex-mesh
+      network: opifex-network
+
+      # Proxy settings for <5ms overhead
+      proxy:
+        # CPU and memory limits for efficiency
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+
+        # Optimized proxy settings
+        holdApplicationUntilProxyStarts: true
+        componentLogLevel: "misc:error"
+        logLevel: "warning"
+
+        # Performance tuning
+        concurrency: 2
+        proxyStatsMatcher:
+          exclusionRegexps:
+            - ".*osconfig_cache.*"
+            - ".*_cx_.*"
+
+        # Startup probe optimization
+        statusPort: 15020
+        readinessInitialDelaySeconds: 0
+        readinessPeriodSeconds: 15
+        readinessFailureThreshold: 4
+
+      # Pilot settings for control plane efficiency
+      istiodRemote:
+        enabled: false
+
+      # Image settings
+      hub: docker.io/istio
+      tag: 1.21.0
+
+      # Tracing disabled for performance (can be enabled per service)
+      tracer:
+        jaeger: {}
+        zipkin: {}
+
+      # Default proxy image type
+      proxy_init:
+        image: proxyv2
+
+  # Component configuration
+  components:
+    # Istiod (control plane) configuration
+    pilot:
+      enabled: true
+      k8s:
+        # Resource optimization for scientific workloads
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 2Gi
+
+        # Horizontal Pod Autoscaler
+        hpaSpec:
+          minReplicas: 2
+          maxReplicas: 5
+          metrics:
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: 80
+
+        # Pod settings
+        podDisruptionBudget:
+          minAvailable: 1
+
+        # Service configuration
+        service:
+          type: ClusterIP
+          ports:
+            - port: 15010
+              name: grpc-xds
+            - port: 15011
+              name: https-dns
+            - port: 15014
+              name: http-monitoring
+
+        # Environment variables for optimization
+        env:
+          # Discovery refresh rate (optimized for scientific workloads)
+          - name: PILOT_DISCOVERY_REFRESH_DELAY
+            value: "10s"
+          # Reduce config processing frequency
+          - name: PILOT_DEBOUNCE_AFTER
+            value: "100ms"
+          - name: PILOT_DEBOUNCE_MAX
+            value: "10s"
+          # Optimize proxy configuration distribution
+          - name: PILOT_PUSH_THROTTLE
+            value: "100"
+          # Memory optimization
+          - name: PILOT_MAX_REQUESTS_PER_SECOND
+            value: "1000"
+          # Enable proxy status cache for performance
+          - name: PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION
+            value: "true"
+
+    # Ingress Gateway for external traffic
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          # Resource allocation for gateway
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+
+          # HPA for traffic scaling
+          hpaSpec:
+            minReplicas: 2
+            maxReplicas: 10
+            metrics:
+              - type: Resource
+                resource:
+                  name: cpu
+                  target:
+                    type: Utilization
+                    averageUtilization: 80
+
+          # Service configuration
+          service:
+            type: LoadBalancer
+            ports:
+              - port: 15021
+                targetPort: 15021
+                name: status-port
+              - port: 80
+                targetPort: 8080
+                name: http2
+              - port: 443
+                targetPort: 8443
+                name: https
+              - port: 15443
+                targetPort: 15443
+                name: tls
+
+          # Pod settings
+          podDisruptionBudget:
+            minAvailable: 1
+
+          # Environment optimization
+          env:
+            # Connection pooling for scientific workloads
+            - name: ISTIO_META_HTTP10
+              value: "1"
+            # Optimize for GPU workload patterns
+            - name: PILOT_HTTP10
+              value: "true"
+
+    # Egress Gateway for outbound traffic control
+    egressGateways:
+      - name: istio-egressgateway
+        enabled: true
+        k8s:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+          hpaSpec:
+            minReplicas: 1
+            maxReplicas: 3
+
+          service:
+            type: ClusterIP
+
+          podDisruptionBudget:
+            minAvailable: 1

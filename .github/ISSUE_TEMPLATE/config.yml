@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://docs.sciml-framework.org
+    about: Please check our documentation first
+  - name: Discussions
+    url: https://github.com/yourusername/sciml/discussions
+    about: Ask questions and discuss ideas with the community

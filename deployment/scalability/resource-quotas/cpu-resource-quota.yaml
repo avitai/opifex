@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: cpu-resource-quota
+  namespace: opifex-system
+  labels:
+    component: scalability
+    resource-type: cpu
+    managed-by: opifex-framework
+spec:
+  hard:
+    requests.cpu: "500"
+    requests.memory: 2000Gi
+    limits.cpu: "1000"
+    limits.memory: 4000Gi
+    persistentvolumeclaims: "50"
+    pods: "200"
+    services: "50"
+    secrets: "100"
+    configmaps: "100"
+    jobs.batch: "20"
+    cronjobs.batch: "10"
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values: ["cpu-workload", "normal-priority", "low-priority"]

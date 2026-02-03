@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: fluid-dynamics-quota
+  namespace: opifex-fluid-dynamics
+  labels:
+    opifex.local/research-group: "fluid-dynamics"
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: "400Gi"
+    requests.nvidia.com/gpu: "16"
+    limits.cpu: "200"
+    limits.memory: "800Gi"
+    limits.nvidia.com/gpu: "16"
+    persistentvolumeclaims: "40"
+    requests.storage: "5Ti"
+    pods: "100"
+    services: "20"

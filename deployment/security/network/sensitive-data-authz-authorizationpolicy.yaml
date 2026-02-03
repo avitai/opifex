@@ -1,0 +1,25 @@
+# AuthorizationPolicy - Sensitive Data (GDPR)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: sensitive-data-authz
+  namespace: opifex-platform
+spec:
+  selector:
+    matchLabels:
+      opifex.io/data-classification: sensitive
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/opifex-platform/sa/opifex-admin"
+              - "cluster.local/ns/opifex-platform/sa/gdpr-authorized"
+    - to:
+        - operation:
+            methods: ["GET", "POST", "PUT"]
+            paths: ["/api/v1/data/sensitive/*"]
+    - when:
+        - key: custom.data_role
+          values: ["data-sensitive"]
+        - key: custom.gdpr_consent
+          values: ["granted"]

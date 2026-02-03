@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: hpa-scalability
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: opifex-system
+
+commonLabels:
+  component: scalability
+  scalability-type: hpa
+  managed-by: opifex-framework
+
+resources:
+  - l2o-optimizer-hpa.yaml
+  - neural-operator-hpa.yaml
+  - benchmarking-hpa.yaml
+  - community-platform-hpa.yaml
+
+patchesStrategicMerge:
+  - |-
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    metadata:
+      name: l2o-optimizer-hpa
+      annotations:
+        autoscaling.alpha.kubernetes.io/metrics: '[{"type":"Resource","resource":{"name":"nvidia.com/gpu","target":{"type":"Utilization","averageUtilization":85}}}]'

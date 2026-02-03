@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: unified-mlops-api
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: unified-mlops-api
+    app.kubernetes.io/component: api-gateway
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    opifex.framework/description: "Unified MLOps API service for scientific computing experiments"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+    - name: health
+      port: 8080
+      targetPort: health
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: unified-mlops-api

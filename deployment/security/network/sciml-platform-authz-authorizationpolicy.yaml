@@ -1,0 +1,22 @@
+# AuthorizationPolicy - Opifex Platform Access Control
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: opifex-platform-authz
+  namespace: opifex-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: opifex-framework
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/opifex-security/sa/keycloak"]
+        - source:
+            namespaces: ["istio-system"]
+    - to:
+        - operation:
+            methods: ["GET", "POST"]
+    - when:
+        - key: request.headers[authorization]
+          values: ["Bearer *"]

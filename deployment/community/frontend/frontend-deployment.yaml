@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-service
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: frontend-service
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend-service
+        app.kubernetes.io/component: frontend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: community-service-account
+      containers:
+        - name: frontend
+          image: opifex/community-frontend:latest
+          ports:
+            - containerPort: 3000
+              name: http
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: API_BASE_URL
+              value: "http://api-gateway.opifex-community.svc.cluster.local:8000"
+            - name: PUBLIC_API_URL
+              value: "https://community.opifex.io/api"
+            - name: NEXT_PUBLIC_API_URL
+              value: "https://community.opifex.io/api"
+          envFrom:
+            - configMapRef:
+                name: frontend-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+            - name: static-assets
+              mountPath: /app/public
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: frontend-nginx-config
+        - name: static-assets
+          emptyDir: {}

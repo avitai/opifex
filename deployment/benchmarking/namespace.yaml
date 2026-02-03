@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: opifex-benchmarking
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: opifex-platform
+    opifex.local/deployment-phase: "phase-6"
+    opifex.local/extension-component: "advanced-benchmarking"
+    pod-security.kubernetes.io/enforce: "restricted"
+    pod-security.kubernetes.io/audit: "restricted"
+    pod-security.kubernetes.io/warn: "restricted"
+  annotations:
+    description: "Opifex Advanced Benchmarking Infrastructure Namespace"
+    benchmarking.opifex.local/framework: "pdebench-kubernetes"
+    benchmarking.opifex.local/datasets: "darcy_flow,navier_stokes,shallow_water,diffusion_reaction,wave_equation,linear_elasticity"
+    benchmarking.opifex.local/algorithms: "fno,sfno,deeponet,gno,l2o_multi_objective,l2o_adaptive_lr,l2o_rl_optimization"
+    benchmarking.opifex.local/report-formats: "latex,html,json,pdf"
+    monitoring.opifex.local/enabled: "true"
+    security.opifex.local/rbac-enabled: "true"

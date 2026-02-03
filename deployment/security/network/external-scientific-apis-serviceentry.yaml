@@ -1,0 +1,25 @@
+# ServiceEntry - Allow External Scientific APIs
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-scientific-apis
+  namespace: opifex-platform
+spec:
+  hosts:
+    - "api.github.com"
+    - "huggingface.co"
+    - "pytorch.org"
+    - "pypi.org"
+    - "anaconda.org"
+    - "orcid.org"
+    - "crossref.org"
+    - "pubmed.ncbi.nlm.nih.gov"
+  ports:
+    - number: 443
+      name: https
+      protocol: HTTPS
+    - number: 80
+      name: http
+      protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS

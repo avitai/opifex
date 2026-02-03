@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mlflow-tracking-server-pdb
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: mlflow-tracking-server
+    app.kubernetes.io/component: tracking-server
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mlflow-tracking-server

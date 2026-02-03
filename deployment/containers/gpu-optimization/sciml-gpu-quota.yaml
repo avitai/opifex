@@ -1,0 +1,18 @@
+# ResourceQuota for GPU resources
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: opifex-gpu-quota
+  namespace: opifex-system
+spec:
+  hard:
+    requests.nvidia.com/gpu: "16"
+    limits.nvidia.com/gpu: "16"
+    requests.cpu: "32"
+    requests.memory: 128Gi
+    limits.cpu: "64"
+    limits.memory: 256Gi
+    persistentvolumeclaims: "20"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"

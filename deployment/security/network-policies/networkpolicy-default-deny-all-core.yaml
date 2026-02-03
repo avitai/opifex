@@ -1,0 +1,14 @@
+# Default Deny All for Opifex Core Namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all-core
+  namespace: opifex-core
+  labels:
+    security.opifex.local/policy-type: "deny-all"
+    security.opifex.local/direction: "all"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

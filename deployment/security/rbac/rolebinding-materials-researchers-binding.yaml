@@ -1,0 +1,27 @@
+# Materials Science Research Group Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: opifex-materials
+  name: materials-researchers-binding
+  labels:
+    opifex.local/research-group: "materials"
+subjects:
+  # Research lead
+  - kind: User
+    name: "university-saml.materials-lead@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  # Researchers
+  - kind: User
+    name: "university-saml.materials-researcher1@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "university-saml.materials-researcher2@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "orcid.0000-0000-0000-0004"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: materials-researcher
+  apiGroup: rbac.authorization.k8s.io

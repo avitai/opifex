@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: consent-management-sa
+  namespace: security
+  labels:
+    app.kubernetes.io/name: consent-management-sa
+    app.kubernetes.io/component: gdpr-compliance

@@ -1,0 +1,360 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opifex-enterprise-realm-config
+  namespace: security
+  labels:
+    app.kubernetes.io/name: identity-federation
+    app.kubernetes.io/component: enterprise-security
+    app.kubernetes.io/part-of: opifex-enterprise-security
+    compliance.opifex.io/tier: enterprise
+spec:
+data:
+  opifex-enterprise-realm.json: |
+    {
+      "realm": "opifex-enterprise",
+      "displayName": "Opifex Enterprise Platform",
+      "enabled": true,
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "verifyEmail": true,
+      "loginTheme": "opifex-enterprise",
+      "accountTheme": "opifex-enterprise",
+      "adminTheme": "opifex-enterprise",
+      "emailTheme": "opifex-enterprise",
+
+      "attributes": {
+        "frontendUrl": "https://auth.opifex.enterprise.com",
+        "bruteForceProtected": "true",
+        "permanentLockout": "false",
+        "maxFailureWaitSeconds": "900",
+        "minimumQuickLoginWaitSeconds": "60",
+        "waitIncrementSeconds": "60",
+        "quickLoginCheckMilliSeconds": "1000",
+        "maxDeltaTimeSeconds": "43200"
+      },
+
+      "identityProviders": [
+        {
+          "alias": "university-saml-provider",
+          "providerId": "saml",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "on",
+          "trustEmail": true,
+          "storeToken": false,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "postBrokerLoginFlowAlias": "opifex-post-broker-flow",
+          "config": {
+            "singleSignOnServiceUrl": "https://identity.university.edu/saml2/sso",
+            "singleLogoutServiceUrl": "https://identity.university.edu/saml2/slo",
+            "backchannelSupported": "true",
+            "nameIDPolicyFormat": "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+            "principalType": "SUBJECT",
+            "signatureAlgorithm": "RSA_SHA256",
+            "xmlSigKeyInfoKeyNameTransformer": "KEY_ID",
+            "validateSignature": "true",
+            "wantAuthnRequestsSigned": "true",
+            "wantAssertionsSigned": "true",
+            "wantAssertionsEncrypted": "false",
+            "forceAuthn": "false",
+            "signSpMetadata": "true",
+            "postBindingResponse": "true",
+            "postBindingAuthnRequest": "true",
+            "postBindingLogout": "true",
+            "entityId": "https://auth.opifex.enterprise.com/auth/realms/opifex-enterprise"
+          }
+        },
+        {
+          "alias": "enterprise-oidc-provider",
+          "providerId": "oidc",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "on",
+          "trustEmail": true,
+          "storeToken": false,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "postBrokerLoginFlowAlias": "opifex-post-broker-flow",
+          "config": {
+            "authorizationUrl": "https://enterprise.company.com/oauth2/v1/authorize",
+            "tokenUrl": "https://enterprise.company.com/oauth2/v1/token",
+            "userInfoUrl": "https://enterprise.company.com/oauth2/v1/userinfo",
+            "issuer": "https://enterprise.company.com",
+            "clientId": "${env.ENTERPRISE_OIDC_CLIENT_ID}",
+            "clientSecret": "${env.ENTERPRISE_OIDC_CLIENT_SECRET}",
+            "defaultScope": "openid profile email groups",
+            "validateSignature": "true",
+            "useJwksUrl": "true",
+            "jwksUrl": "https://enterprise.company.com/.well-known/jwks.json",
+            "pkceEnabled": "true",
+            "pkceMethod": "S256"
+          }
+        },
+        {
+          "alias": "research-ldap-provider",
+          "providerId": "ldap",
+          "enabled": true,
+          "config": {
+            "connectionUrl": "ldaps://research.ldap.university.edu:636",
+            "usersDn": "ou=People,dc=university,dc=edu",
+            "bindDn": "${env.LDAP_BIND_DN}",
+            "bindCredential": "${env.LDAP_BIND_PASSWORD}",
+            "usernameLDAPAttribute": "uid",
+            "rdnLDAPAttribute": "uid",
+            "uuidLDAPAttribute": "entryUUID",
+            "userObjectClasses": "inetOrgPerson, organizationalPerson",
+            "searchScope": "1",
+            "validatePasswordPolicy": "false",
+            "trustEmail": "true",
+            "useTruststoreSpi": "ldapsOnly",
+            "connectionPooling": "true",
+            "pagination": "true"
+          }
+        }
+      ],
+
+      "clients": [
+        {
+          "clientId": "opifex-api-gateway",
+          "enabled": true,
+          "protocol": "openid-connect",
+          "publicClient": false,
+          "bearerOnly": false,
+          "serviceAccountsEnabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "${env.OPIFEX_API_CLIENT_SECRET}",
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": true,
+          "redirectUris": [
+            "https://api.opifex.enterprise.com/*",
+            "https://api.opifex.enterprise.com/auth/callback"
+          ],
+          "webOrigins": [
+            "https://api.opifex.enterprise.com",
+            "https://community.opifex.enterprise.com"
+          ],
+          "protocolMappers": [
+            {
+              "name": "research-groups",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-group-membership-mapper",
+              "config": {
+                "claim.name": "research_groups",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "data-classification-level",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-hardcoded-claim-mapper",
+              "config": {
+                "claim.name": "data_classification",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.value": "research"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "opifex-community-platform",
+          "enabled": true,
+          "protocol": "openid-connect",
+          "publicClient": true,
+          "bearerOnly": false,
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "redirectUris": [
+            "https://community.opifex.enterprise.com/*",
+            "https://community.opifex.enterprise.com/auth/callback"
+          ],
+          "webOrigins": [
+            "https://community.opifex.enterprise.com"
+          ]
+        }
+      ],
+
+      "roles": {
+        "realm": [
+          {
+            "name": "opifex-user",
+            "description": "Basic Opifex platform user"
+          },
+          {
+            "name": "opifex-researcher",
+            "description": "Research group member with data access"
+          },
+          {
+            "name": "opifex-enterprise-user",
+            "description": "Enterprise user with advanced features"
+          },
+          {
+            "name": "opifex-admin",
+            "description": "Platform administrator"
+          },
+          {
+            "name": "gdpr-dpo",
+            "description": "Data Protection Officer"
+          }
+        ],
+        "client": {
+          "opifex-api-gateway": [
+            {
+              "name": "neural-operators-access",
+              "description": "Access to neural operator services"
+            },
+            {
+              "name": "l2o-optimization-access",
+              "description": "Access to L2O optimization services"
+            },
+            {
+              "name": "benchmarking-access",
+              "description": "Access to benchmarking infrastructure"
+            },
+            {
+              "name": "gpu-cluster-access",
+              "description": "Access to GPU computing resources"
+            },
+            {
+              "name": "data-research-access",
+              "description": "Access to research-level data"
+            },
+            {
+              "name": "data-sensitive-access",
+              "description": "Access to sensitive research data"
+            },
+            {
+              "name": "data-confidential-access",
+              "description": "Access to confidential enterprise data"
+            }
+          ]
+        }
+      },
+
+      "groups": [
+        {
+          "name": "computational-physics",
+          "attributes": {
+            "data_classification": ["research"],
+            "gpu_quota": ["standard"],
+            "research_domain": ["physics", "materials"]
+          },
+          "realmRoles": ["opifex-researcher"],
+          "clientRoles": {
+            "opifex-api-gateway": ["neural-operators-access", "l2o-optimization-access", "data-research-access"]
+          }
+        },
+        {
+          "name": "machine-learning",
+          "attributes": {
+            "data_classification": ["research", "sensitive"],
+            "gpu_quota": ["premium"],
+            "research_domain": ["ml", "ai", "neural-networks"]
+          },
+          "realmRoles": ["opifex-researcher"],
+          "clientRoles": {
+            "opifex-api-gateway": ["neural-operators-access", "benchmarking-access", "gpu-cluster-access", "data-sensitive-access"]
+          }
+        },
+        {
+          "name": "enterprise-partners",
+          "attributes": {
+            "data_classification": ["confidential"],
+            "gpu_quota": ["enterprise"],
+            "partner_tier": ["premium"]
+          },
+          "realmRoles": ["opifex-enterprise-user"],
+          "clientRoles": {
+            "opifex-api-gateway": ["neural-operators-access", "l2o-optimization-access", "benchmarking-access", "data-confidential-access"]
+          }
+        }
+      ],
+
+      "authenticationFlows": [
+        {
+          "alias": "opifex-enterprise-flow",
+          "description": "Enhanced authentication flow with MFA and risk assessment",
+          "providerId": "basic-flow",
+          "topLevel": true,
+          "builtIn": false,
+          "authenticationExecutions": [
+            {
+              "authenticator": "auth-cookie",
+              "requirement": "ALTERNATIVE",
+              "priority": 10
+            },
+            {
+              "authenticator": "auth-spnego",
+              "requirement": "DISABLED",
+              "priority": 20
+            },
+            {
+              "authenticator": "identity-provider-redirector",
+              "requirement": "ALTERNATIVE",
+              "priority": 25
+            },
+            {
+              "flowAlias": "opifex-enterprise-forms",
+              "requirement": "ALTERNATIVE",
+              "priority": 30
+            }
+          ]
+        }
+      ]
+    }
+
+  research-group-mappings.yaml: |
+    # Research Group to Role Mappings for Opifex Enterprise
+    research_groups:
+      computational-physics:
+        description: "Computational Physics Research Group"
+        data_classification: "research"
+        gpu_allocation: "standard"
+        roles:
+          - "opifex:neural-operators:user"
+          - "opifex:l2o:developer"
+          - "opifex:gpu-cluster:standard"
+        permissions:
+          - "read:research-data"
+          - "write:research-results"
+          - "execute:neural-operators"
+
+      machine-learning:
+        description: "Machine Learning Research Group"
+        data_classification: "research,sensitive"
+        gpu_allocation: "premium"
+        roles:
+          - "opifex:neural-operators:developer"
+          - "opifex:benchmarking:admin"
+          - "opifex:gpu-cluster:premium"
+        permissions:
+          - "read:research-data"
+          - "read:sensitive-data"
+          - "write:research-results"
+          - "admin:benchmarking"
+
+      enterprise-partners:
+        description: "Enterprise Partner Organizations"
+        data_classification: "confidential"
+        gpu_allocation: "enterprise"
+        roles:
+          - "opifex:api:enterprise-user"
+          - "opifex:community:verified"
+          - "opifex:data:confidential"
+        permissions:
+          - "read:confidential-data"
+          - "write:enterprise-results"
+          - "admin:partner-resources"

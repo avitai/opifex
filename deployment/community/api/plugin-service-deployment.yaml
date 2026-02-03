@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plugin-service
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: plugin-service
+    app.kubernetes.io/component: plugin-framework
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plugin-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plugin-service
+        app.kubernetes.io/component: plugin-framework
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: community-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: plugin-service
+          image: opifex/community-plugin:latest
+          ports:
+            - containerPort: 8004
+              name: http
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: SERVICE_NAME
+              value: "plugin-service"
+            - name: SERVICE_PORT
+              value: "8004"
+          envFrom:
+            - configMapRef:
+                name: community-platform-config
+            - secretRef:
+                name: community-platform-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: plugin-storage
+              mountPath: /app/plugin-storage
+            - name: tmp-dir
+              mountPath: /tmp
+            - name: plugin-signatures
+              mountPath: /app/signatures
+              readOnly: true
+      volumes:
+        - name: plugin-storage
+          persistentVolumeClaim:
+            claimName: plugin-storage-pvc
+        - name: tmp-dir
+          emptyDir: {}
+        - name: plugin-signatures
+          secret:
+            secretName: community-platform-secrets
+            items:
+              - key: PLUGIN_SIGNING_KEY
+                path: signing.key
+              - key: PLUGIN_VERIFICATION_KEY
+                path: verification.key

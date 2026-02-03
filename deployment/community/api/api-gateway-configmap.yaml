@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: api-gateway-config
+    app.kubernetes.io/part-of: opifex-community
+data:
+  gateway.yaml: |
+    server:
+      host: "0.0.0.0"
+      port: 8000
+      cors:
+        allowed_origins: ["http://localhost:3000", "https://community.opifex.io"]
+        allowed_methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+        allowed_headers: ["Authorization", "Content-Type", "X-Request-ID"]
+        expose_headers: ["X-Request-ID", "X-Rate-Limit-Remaining"]
+        allow_credentials: true
+
+    routes:
+      # Registry Service Routes
+      - path: "/api/v1/registry/*"
+        target: "http://registry-service.opifex-community.svc.cluster.local:8001"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 100
+
+      - path: "/api/v1/neural-functionals/*"
+        target: "http://registry-service.opifex-community.svc.cluster.local:8001"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 60
+
+      # User Service Routes
+      - path: "/api/v1/auth/*"
+        target: "http://user-service.opifex-community.svc.cluster.local:8002"
+        methods: ["POST"]
+        auth_required: false
+        rate_limit:
+          requests_per_minute: 20
+
+      - path: "/api/v1/users/*"
+        target: "http://user-service.opifex-community.svc.cluster.local:8002"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 50
+
+      # Workspace Service Routes
+      - path: "/api/v1/workspaces/*"
+        target: "http://workspace-service.opifex-community.svc.cluster.local:8003"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 30
+
+      - path: "/api/v1/experiments/*"
+        target: "http://workspace-service.opifex-community.svc.cluster.local:8003"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 100
+
+      # Plugin Service Routes
+      - path: "/api/v1/plugins/*"
+        target: "http://plugin-service.opifex-community.svc.cluster.local:8004"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 40
+
+      - path: "/api/v1/plugin-marketplace/*"
+        target: "http://plugin-service.opifex-community.svc.cluster.local:8004"
+        methods: ["GET"]
+        auth_required: false
+        rate_limit:
+          requests_per_minute: 200
+
+    security:
+      jwt:
+        secret_key_env: "JWT_SECRET_KEY"
+        algorithm: "RS256"
+        access_token_expire_minutes: 30
+        refresh_token_expire_days: 7
+
+      rate_limiting:
+        enabled: true
+        storage: "redis"
+        redis_url: "redis://redis-service.opifex-monitoring.svc.cluster.local:6379/1"
+
+      request_id:
+        enabled: true
+        header_name: "X-Request-ID"
+
+    monitoring:
+      metrics:
+        enabled: true
+        port: 9090
+        path: "/metrics"
+
+      health_check:
+        enabled: true
+        path: "/health"
+
+      tracing:
+        enabled: true
+        jaeger_endpoint: "jaeger-collector.opifex-monitoring.svc.cluster.local:14268"
+
+    logging:
+      level: "INFO"
+      format: "json"
+      access_log: true

@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: report-generator-binding
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: report-generator-binding
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: opifex-benchmarking
+subjects:
+  - kind: ServiceAccount
+    name: report-generator-service-account
+    namespace: opifex-benchmarking
+roleRef:
+  kind: Role
+  name: report-generator-role
+  apiGroup: rbac.authorization.k8s.io

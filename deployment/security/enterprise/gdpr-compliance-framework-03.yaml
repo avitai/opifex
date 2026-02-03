@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gdpr-data-retention-job
+  namespace: security
+  labels:
+    app.kubernetes.io/name: data-retention-job
+    app.kubernetes.io/component: gdpr-compliance
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  schedule: "0 2 * * 0" # Weekly on Sunday at 2 AM UTC
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600 # 1 hour timeout
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: data-retention-job
+            app.kubernetes.io/component: gdpr-compliance
+        spec:
+          serviceAccountName: data-retention-sa
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1003
+            runAsGroup: 1003
+            fsGroup: 1003
+          containers:
+            - name: data-retention-processor
+              image: harbor.opifex.enterprise.com/compliance/data-retention:v1.0.5
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: retention-database-secret
+                      key: connection-string
+                - name: ENCRYPTION_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: gdpr-encryption-secret
+                      key: retention-encryption-key
+                - name: AUDIT_ENDPOINT
+                  value: "https://audit.compliance.internal/api/v1/events"
+                - name: DRY_RUN
+                  value: "false"
+                - name: BATCH_SIZE
+                  value: "1000"
+                - name: LOG_LEVEL
+                  value: "INFO"
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "500m"
+              volumeMounts:
+                - name: retention-config
+                  mountPath: /etc/retention
+                  readOnly: true
+                - name: temp-processing
+                  mountPath: /tmp/processing
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+          volumes:
+            - name: retention-config
+              configMap:
+                name: gdpr-compliance-config
+            - name: temp-processing
+              emptyDir:
+                sizeLimit: "1Gi"

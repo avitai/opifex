@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: keycloak-cluster-rolebinding
+  labels:
+    app: keycloak
+    component: identity-management
+    tier: security
+subjects:
+  - kind: ServiceAccount
+    name: keycloak
+    namespace: opifex-security
+roleRef:
+  kind: ClusterRole
+  name: keycloak-cluster-role
+  apiGroup: rbac.authorization.k8s.io

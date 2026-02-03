@@ -1,0 +1,58 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Virtual environments & caches
+.venv
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.uv-cache
+.jax_cache
+.cache
+__pycache__
+
+# Build artifacts
+dist
+site
+*.egg-info
+
+# IDE
+.vscode
+.cursor
+.claude
+
+# Documentation & non-essential
+docs
+memory-bank
+documents
+custom_modes
+sandbox
+benchmark_results
+pdebench_results
+test_results
+temp
+examples_output
+logs
+
+# Large data directories
+data
+checkpoints
+
+# Misc
+*.pyc
+*.pyo
+.env
+.env.example
+.benchmarks
+.editorconfig
+.shellcheckrc
+.jupytext.toml
+.readthedocs.yaml
+.pre-commit-config.yaml
+CHANGELOG.md
+mkdocs.yml
+activate.sh
+setup.sh
+CLAUDE.md

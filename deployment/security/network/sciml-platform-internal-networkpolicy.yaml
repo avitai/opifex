@@ -1,0 +1,33 @@
+# Scientific Computing Network Policies
+
+# Allow Opifex Platform Inter-Service Communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opifex-platform-internal
+  namespace: opifex-platform
+  labels:
+    security.opifex.io/policy: platform-internal
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: opifex-framework
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: opifex-framework
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: opifex-framework
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: opifex-framework
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: opifex-framework

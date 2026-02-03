@@ -1,0 +1,37 @@
+# =============================================================================
+# Opifex Docker Compose — GPU Development & Testing
+# =============================================================================
+# Usage:
+#   docker compose up opifex-gpu    # GPU runtime
+#   docker compose up opifex-cpu    # CPU-only runtime
+#   docker compose run opifex-cpu pytest tests/ -x -q  # Run tests
+# =============================================================================
+
+services:
+  opifex-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - XLA_PYTHON_CLIENT_PREALLOCATE=false
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.75
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  opifex-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - JAX_PLATFORMS=cpu
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints

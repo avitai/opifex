@@ -1,0 +1,41 @@
+# GPU Computing Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gpu-computing-access
+  namespace: opifex-platform
+  labels:
+    security.opifex.io/policy: gpu-access
+    security.opifex.io/resource: gpu
+spec:
+  podSelector:
+    matchLabels:
+      opifex.io/gpu-enabled: "true"
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              opifex.io/user-role: opifex-developer
+        - podSelector:
+            matchLabels:
+              opifex.io/user-role: opifex-researcher
+        - podSelector:
+            matchLabels:
+              opifex.io/user-role: opifex-admin
+      ports:
+        - protocol: TCP
+          port: 8888 # Jupyter
+        - protocol: TCP
+          port: 6006 # TensorBoard
+        - protocol: TCP
+          port: 8080 # MLflow
+  egress:
+    - to: [] # Allow all egress for model downloads
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

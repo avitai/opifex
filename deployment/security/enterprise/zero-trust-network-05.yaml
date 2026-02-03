@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zero-trust-default-deny
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: zero-trust-netpol
+    app.kubernetes.io/component: zero-trust
+spec:
+  # Default deny all ingress and egress
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

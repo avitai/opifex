@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: plugin-service
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: plugin-service
+    app.kubernetes.io/component: plugin-framework
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  selector:
+    app.kubernetes.io/name: plugin-service
+  ports:
+    - name: http
+      port: 8004
+      targetPort: 8004
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  type: ClusterIP

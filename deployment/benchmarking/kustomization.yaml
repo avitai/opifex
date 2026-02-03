@@ -1,0 +1,80 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-benchmarking
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  # Base infrastructure
+  - namespace.yaml
+  - limitrange.yaml
+  - resourcequota.yaml
+
+  # RBAC - Service Accounts
+  - serviceaccount-pdebench-service-account.yaml
+  - serviceaccount-benchmark-executor-service-account.yaml
+  - serviceaccount-benchmark-db-service-account.yaml
+  - serviceaccount-report-generator-service-account.yaml
+
+  # RBAC - Roles
+  - role-pdebench-manager-role.yaml
+  - role-benchmark-executor-role.yaml
+  - role-benchmark-db-role.yaml
+  - role-report-generator-role.yaml
+
+  # RBAC - Role Bindings
+  - rolebinding-pdebench-manager-binding.yaml
+  - rolebinding-benchmark-executor-binding.yaml
+  - rolebinding-benchmark-db-binding.yaml
+  - rolebinding-report-generator-binding.yaml
+
+  # Cluster-level RBAC
+  - cluster-role.yaml
+  - cluster-role-binding.yaml
+
+  # PDEBench components
+  - pdebench/persistentvolumeclaim-pdebench-datasets-pvc.yaml
+  - pdebench/persistentvolumeclaim-pdebench-results-pvc.yaml
+  - pdebench/persistentvolumeclaim-pdebench-checkpoints-pvc.yaml
+  - pdebench/configmap-pdebench-dataset-config.yaml
+  - pdebench/deployment-pdebench-manager.yaml
+  - pdebench/service-pdebench-manager.yaml
+  - pdebench/cronjob-pdebench-execution.yaml
+  - pdebench/cronjob-darcy-benchmarks.yaml
+  - pdebench/cronjob-wave-benchmarks.yaml
+  - pdebench/configmap-benchmark-config.yaml
+
+  # Reporting components
+  - reporting/statefulset-benchmark-results-db.yaml
+  - reporting/service-benchmark-results-db.yaml
+  - reporting/configmap-postgres-config.yaml
+  - reporting/configmap-results-db-init.yaml
+  - reporting/secret-postgres-credentials.yaml
+  - reporting/deployment-report-generator.yaml
+  - reporting/service-report-generator.yaml
+  - reporting/cronjob-daily-reports.yaml
+  - reporting/configmap-report-config.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: opifex-benchmarking
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: opifex/pdebench
+    newTag: latest
+  - name: opifex/benchmark-executor
+    newTag: latest
+  - name: postgres
+    newTag: "15"
+  - name: opifex/report-generator
+    newTag: latest
+
+replicas:
+  - name: pdebench-manager
+    count: 1
+  - name: benchmark-results-db
+    count: 1
+  - name: report-generator
+    count: 1

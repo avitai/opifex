@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+    app.kubernetes.io/version: "v10.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opifex-grafana
+      app.kubernetes.io/component: monitoring
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opifex-grafana
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: opifex-framework
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: grafana
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: web
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-secret
+                  key: admin-password
+                  optional: true
+            - name: GF_PATHS_CONFIG
+              value: /etc/grafana/grafana.ini
+            - name: GF_PATHS_DATA
+              value: /var/lib/grafana
+            - name: GF_PATHS_LOGS
+              value: /var/log/grafana
+            - name: GF_PATHS_PLUGINS
+              value: /var/lib/grafana/plugins
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: web
+            initialDelaySeconds: 60
+            timeoutSeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: web
+            initialDelaySeconds: 10
+            timeoutSeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/grafana
+              readOnly: true
+            - name: datasources-volume
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: dashboards-volume
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboards-opifex-volume
+              mountPath: /etc/grafana/dashboards
+              readOnly: true
+            - name: storage-volume
+              mountPath: /var/lib/grafana
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config-volume
+          configMap:
+            name: grafana-config
+            defaultMode: 420
+        - name: datasources-volume
+          configMap:
+            name: grafana-datasources
+            defaultMode: 420
+        - name: dashboards-volume
+          configMap:
+            name: grafana-dashboards-config
+            defaultMode: 420
+        - name: dashboards-opifex-volume
+          configMap:
+            name: grafana-opifex-dashboards
+            defaultMode: 420
+        - name: storage-volume
+          emptyDir:
+            sizeLimit: 10Gi
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: "monitoring"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"

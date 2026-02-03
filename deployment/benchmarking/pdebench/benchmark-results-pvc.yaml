@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: benchmark-results
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmark-storage
+    app.kubernetes.io/component: results
+    app.kubernetes.io/part-of: opifex-benchmarking
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: shared-storage

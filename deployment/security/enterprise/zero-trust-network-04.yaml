@@ -1,0 +1,12 @@
+apiVersion: networking.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: zero-trust-mtls-strict
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: zero-trust-mtls
+    app.kubernetes.io/component: zero-trust
+spec:
+  # Require mTLS for all workloads in the mesh
+  mtls:
+    mode: STRICT

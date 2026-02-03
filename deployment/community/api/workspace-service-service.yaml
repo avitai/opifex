@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-service
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: workspace-service
+    app.kubernetes.io/component: workspace-management
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  selector:
+    app.kubernetes.io/name: workspace-service
+  ports:
+    - name: http
+      port: 8003
+      targetPort: 8003
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  type: ClusterIP

@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: confidential-data-access
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: confidential-data-netpol
+    app.kubernetes.io/component: zero-trust
+spec:
+  podSelector:
+    matchLabels:
+      opifex.io/data-classification: confidential
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              opifex.io/research-group: enterprise-partners
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gdpr-dpo-dashboard
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: secure-database
+      ports:
+        - protocol: TCP
+          port: 5432

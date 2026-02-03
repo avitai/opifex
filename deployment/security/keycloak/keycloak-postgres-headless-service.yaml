@@ -1,0 +1,13 @@
+# PostgreSQL Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-postgres-headless
+  namespace: opifex-security
+spec:
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: keycloak-postgres

@@ -1,0 +1,38 @@
+# Opifex Data Scientist Role - Data analysis and preprocessing
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-data-scientist
+  labels:
+    opifex.local/role-type: "data-scientist"
+    opifex.local/access-level: "limited"
+rules:
+  # Pod management for data processing
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+    resourceNames: ["data-*", "preprocessing-*"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["data-*"]
+  # Data processing jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    resourceNames: ["data-*", "preprocess-*"]
+  # Data and model access (read-only models, read-write data)
+  - apiGroups: ["opifex.local"]
+    resources: ["datasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["opifex.local"]
+    resources: ["models"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["opifex.local"]
+    resources: ["dataprocessingjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Limited compute access
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+    resourceNames: ["data-*"]

@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keycloak-rolebinding
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: identity-management
+    tier: security
+subjects:
+  - kind: ServiceAccount
+    name: keycloak
+    namespace: opifex-security
+roleRef:
+  kind: Role
+  name: keycloak-role
+  apiGroup: rbac.authorization.k8s.io

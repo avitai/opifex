@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: frontend-service
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  selector:
+    app.kubernetes.io/name: frontend-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  type: ClusterIP

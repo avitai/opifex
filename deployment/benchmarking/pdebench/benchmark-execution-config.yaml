@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benchmark-execution-config
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmark-execution-config
+    app.kubernetes.io/component: configuration
+    app.kubernetes.io/part-of: opifex-benchmarking
+data:
+  neural_operators_config.yaml: |
+    # Neural Operators Benchmark Configuration
+    neural_operators:
+      # Fourier Neural Operator variants
+      fno:
+        variants:
+          - name: "FNO-2D"
+            architecture: "fno_2d"
+            parameters:
+              modes: [12, 12]
+              width: 32
+              layers: 4
+          - name: "FNO-3D"
+            architecture: "fno_3d"
+            parameters:
+              modes: [8, 8, 8]
+              width: 20
+              layers: 4
+
+      # Spherical Fourier Neural Operator
+      sfno:
+        variants:
+          - name: "SFNO-Climate"
+            architecture: "sfno"
+            parameters:
+              spectral_transform: "spherical_harmonics"
+              max_degree: 85
+              width: 256
+              layers: 8
+
+      # DeepONet variants
+      deeponet:
+        variants:
+          - name: "DeepONet-Standard"
+            architecture: "deeponet"
+            parameters:
+              branch_layers: [100, 100, 100, 100]
+              trunk_layers: [100, 100, 100, 100]
+              activation: "tanh"
+          - name: "Multi-Physics-DeepONet"
+            architecture: "multiphysics_deeponet"
+            parameters:
+              physics_informed: true
+              branch_layers: [128, 128, 128]
+              trunk_layers: [128, 128, 128]
+
+      # Graph Neural Operators
+      gno:
+        variants:
+          - name: "GNO-MessagePassing"
+            architecture: "gno"
+            parameters:
+              message_passing_layers: 6
+              hidden_dim: 128
+              edge_features: 16
+
+    # Training Configuration
+    training:
+      epochs: 100
+      batch_size: 16
+      learning_rate: 0.001
+      optimizer: "adam"
+      scheduler: "cosine"
+      early_stopping:
+        patience: 15
+        min_delta: 1e-6
+
+    # Evaluation Metrics
+    metrics:
+      - name: "mse"
+        weight: 1.0
+      - name: "mae"
+        weight: 0.5
+      - name: "relative_l2_error"
+        weight: 0.5
+      - name: "execution_time"
+        weight: 0.0
+      - name: "memory_usage"
+        weight: 0.0
+      - name: "gpu_utilization"
+        weight: 0.0
+
+  l2o_config.yaml: |
+    # Learn-to-Optimize Benchmark Configuration
+    l2o_algorithms:
+      # Multi-Objective L2O
+      multi_objective:
+        variants:
+          - name: "Multi-Objective-Standard"
+            architecture: "multi_objective_l2o"
+            parameters:
+              hidden_dim: 128
+              num_layers: 4
+              objective_weights: [0.6, 0.3, 0.1]
+
+      # Adaptive Learning Rate Schedulers
+      adaptive_lr:
+        variants:
+          - name: "Physics-Aware-Scheduler"
+            architecture: "physics_aware_scheduler"
+            parameters:
+              physics_loss_weight: 0.3
+              data_loss_weight: 0.7
+              adaptation_rate: 0.01
+
+      # Reinforcement Learning Optimization
+      rl_optimization:
+        variants:
+          - name: "DQN-Optimizer"
+            architecture: "rl_optimization"
+            parameters:
+              dqn_hidden_dim: 256
+              dqn_layers: 3
+              experience_buffer_size: 10000
+              epsilon_decay: 0.995
+
+    # Optimization Problems
+    test_problems:
+      - name: "darcy_flow_optimization"
+        problem_type: "pde_optimization"
+        parameters:
+          equation: "darcy"
+          domain_size: [64, 64]
+          boundary_conditions: "dirichlet"
+
+      - name: "navier_stokes_control"
+        problem_type: "control_optimization"
+        parameters:
+          equation: "navier_stokes"
+          control_variables: ["velocity", "pressure"]
+          time_horizon: 1.0
+
+    # Training Configuration
+    training:
+      meta_epochs: 50
+      inner_steps: 10
+      outer_lr: 0.001
+      inner_lr: 0.01
+      task_batch_size: 8
+
+    # Performance Targets
+    performance_targets:
+      speedup_vs_traditional: 10.0  # 10x speedup target
+      convergence_tolerance: 1e-6
+      max_iterations: 1000

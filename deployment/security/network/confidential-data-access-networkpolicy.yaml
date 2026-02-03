@@ -1,0 +1,42 @@
+# Confidential Data Network Policy (SOC 2 Controlled)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: confidential-data-access
+  namespace: opifex-platform
+  labels:
+    security.opifex.io/policy: data-access
+    security.opifex.io/classification: confidential
+    security.opifex.io/soc2: "true"
+spec:
+  podSelector:
+    matchLabels:
+      opifex.io/data-classification: confidential
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              opifex.io/user-role: opifex-admin
+        - podSelector:
+            matchLabels:
+              opifex.io/soc2-authorized: "true"
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-security
+      ports:
+        - protocol: TCP
+          port: 8443 # HTTPS only
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-security
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-audit
+      ports:
+        - protocol: TCP
+          port: 8443

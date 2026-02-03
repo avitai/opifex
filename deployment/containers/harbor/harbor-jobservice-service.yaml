@@ -1,0 +1,16 @@
+# Harbor JobService Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-jobservice
+  namespace: harbor-system
+  labels:
+    app: harbor-jobservice
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: harbor-jobservice

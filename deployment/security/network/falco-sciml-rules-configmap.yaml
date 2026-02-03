@@ -1,0 +1,79 @@
+# Falco Security Rules for Scientific Computing
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-opifex-rules
+  namespace: opifex-network-security
+  labels:
+    app: falco
+    component: rules
+data:
+  opifex_rules.yaml: |
+    # Opifex-specific Falco security rules
+
+    - rule: Unauthorized GPU Access
+      desc: Detect unauthorized access to GPU resources
+      condition: >
+        k8s_audit and ka.verb in (create, update, patch) and
+        ka.target.resource=pods and
+        ka.target.subresource in (exec, attach) and
+        not ka.user.name in (opifex-admin, opifex-developer, opifex-researcher) and
+        ka.target.pod contains "gpu"
+      output: >
+        Unauthorized GPU access attempt
+        (user=%ka.user.name pod=%ka.target.pod verb=%ka.verb)
+      priority: CRITICAL
+      tags: [gpu, unauthorized_access, k8s_audit]
+
+    - rule: Sensitive Data Access Without GDPR Consent
+      desc: Detect access to sensitive data without GDPR consent
+      condition: >
+        k8s_audit and ka.verb in (get, list) and
+        ka.target.resource in (secrets, configmaps) and
+        ka.target.name contains "sensitive" and
+        not ka.user.name contains "gdpr-authorized"
+      output: >
+        Sensitive data access without GDPR authorization
+        (user=%ka.user.name resource=%ka.target.resource name=%ka.target.name)
+      priority: HIGH
+      tags: [gdpr, sensitive_data, compliance, k8s_audit]
+
+    - rule: Confidential Data Access Without SOC2 Clearance
+      desc: Detect access to confidential data without SOC2 clearance
+      condition: >
+        k8s_audit and ka.verb in (get, list, create, update) and
+        ka.target.resource in (secrets, configmaps) and
+        ka.target.name contains "confidential" and
+        not ka.user.name contains "soc2-authorized"
+      output: >
+        Confidential data access without SOC2 clearance
+        (user=%ka.user.name resource=%ka.target.resource name=%ka.target.name)
+      priority: HIGH
+      tags: [soc2, confidential_data, compliance, k8s_audit]
+
+    - rule: Scientific Computing Resource Abuse
+      desc: Detect potential abuse of scientific computing resources
+      condition: >
+        spawned_process and
+        proc.name in (python, julia, matlab, mathematica) and
+        proc.args contains "while True" and
+        proc.args contains "time.sleep(0)"
+      output: >
+        Potential resource abuse detected in scientific computing
+        (command=%proc.cmdline pid=%proc.pid user=%user.name)
+      priority: WARNING
+      tags: [resource_abuse, scientific_computing]
+
+    - rule: Unauthorized Neural DFT Model Access
+      desc: Detect unauthorized access to neural DFT models
+      condition: >
+        open_read and
+        fd.name contains "/models/neural-dft/" and
+        not proc.name in (python, jupyter, mlflow) and
+        not user.name in (opifex-admin, opifex-developer)
+      output: >
+        Unauthorized neural DFT model access
+        (file=%fd.name proc=%proc.name user=%user.name)
+      priority: HIGH
+      tags: [neural_dft, model_access, unauthorized]

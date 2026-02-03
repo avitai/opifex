@@ -1,0 +1,599 @@
+# Opifex Keycloak Realm Configuration
+# Hybrid Security Model + Federation + Multi-Tier Compliance
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opifex-keycloak-realm-config
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: realm-config
+data:
+  opifex-realm.json: |
+    {
+      "realm": "opifex",
+      "displayName": "Opifex Scientific Computing Platform",
+      "displayNameHtml": "<div class=\"kc-logo-text\"><span>Opifex</span></div>",
+      "enabled": true,
+      "sslRequired": "external",
+      "registrationAllowed": true,
+      "registrationEmailAsUsername": true,
+      "rememberMe": true,
+      "verifyEmail": true,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
+      "bruteForceProtected": true,
+      "permanentLockout": false,
+      "maxFailureWaitSeconds": 900,
+      "minimumQuickLoginWaitSeconds": 60,
+      "waitIncrementSeconds": 60,
+      "quickLoginCheckMilliSeconds": 1000,
+      "maxDeltaTimeSeconds": 43200,
+      "failureFactor": 30,
+      "
+      "loginTheme": "opifex",
+      "adminTheme": "opifex-admin",
+      "accountTheme": "opifex-account",
+      "emailTheme": "opifex",
+
+      "internationalizationEnabled": true,
+      "supportedLocales": ["en", "de", "fr", "es", "zh-CN", "ja"],
+      "defaultLocale": "en",
+
+      "attributes": {
+        "frontendUrl": "https://auth.opifex.io",
+        "userInfoEndpointAuthMethod": "client_secret_basic",
+        "oidcLoginProtocol": "openid-connect",
+        "samlLoginProtocol": "saml",
+        "_browser_header.contentSecurityPolicyReportOnly": "",
+        "_browser_header.contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+        "_browser_header.xContentTypeOptions": "nosniff",
+        "_browser_header.xRobotsTag": "none",
+        "_browser_header.xFrameOptions": "SAMEORIGIN",
+        "_browser_header.strictTransportSecurity": "max-age=31536000; includeSubDomains"
+      },
+
+      "roles": {
+        "realm": [
+          {
+            "name": "opifex-admin",
+            "description": "Opifex Platform Administrator - Full system access",
+            "composite": true,
+            "composites": {
+              "realm": ["opifex-developer", "opifex-researcher", "opifex-viewer"]
+            }
+          },
+          {
+            "name": "opifex-developer",
+            "description": "Scientific Computing Developer - Code and model development access",
+            "composite": true,
+            "composites": {
+              "realm": ["opifex-researcher", "opifex-viewer"]
+            }
+          },
+          {
+            "name": "opifex-researcher",
+            "description": "Scientific Researcher - Research data and computing access",
+            "composite": true,
+            "composites": {
+              "realm": ["opifex-viewer"]
+            }
+          },
+          {
+            "name": "opifex-viewer",
+            "description": "Scientific Computing Viewer - Read-only access to public resources"
+          },
+          {
+            "name": "gpu-user",
+            "description": "GPU Computing Access - Access to GPU resources"
+          },
+          {
+            "name": "quantum-computing",
+            "description": "Quantum Computing Access - Access to quantum computing resources"
+          },
+          {
+            "name": "molecular-dynamics",
+            "description": "Molecular Dynamics Access - Access to molecular simulation resources"
+          },
+          {
+            "name": "neural-dft",
+            "description": "Neural DFT Access - Access to neural density functional theory resources"
+          },
+          {
+            "name": "data-public",
+            "description": "Public Data Access - Access to public research datasets"
+          },
+          {
+            "name": "data-research",
+            "description": "Research Data Access - Access to institutional research data"
+          },
+          {
+            "name": "data-sensitive",
+            "description": "Sensitive Data Access - Access to GDPR-protected sensitive data"
+          },
+          {
+            "name": "data-confidential",
+            "description": "Confidential Data Access - Access to SOC 2-controlled confidential data"
+          }
+        ]
+      },
+
+      "groups": [
+        {
+          "name": "Opifex Administrators",
+          "path": "/Opifex Administrators",
+          "realmRoles": ["opifex-admin", "gpu-user", "quantum-computing", "molecular-dynamics", "neural-dft", "data-confidential"]
+        },
+        {
+          "name": "Computational Scientists",
+          "path": "/Computational Scientists",
+          "realmRoles": ["opifex-developer", "gpu-user", "quantum-computing", "molecular-dynamics", "neural-dft", "data-research"]
+        },
+        {
+          "name": "Research Scientists",
+          "path": "/Research Scientists",
+          "realmRoles": ["opifex-researcher", "gpu-user", "molecular-dynamics", "data-research"]
+        },
+        {
+          "name": "Graduate Students",
+          "path": "/Graduate Students",
+          "realmRoles": ["opifex-researcher", "gpu-user", "data-research"]
+        },
+        {
+          "name": "Undergraduate Students",
+          "path": "/Undergraduate Students",
+          "realmRoles": ["opifex-viewer", "data-public"]
+        },
+        {
+          "name": "External Collaborators",
+          "path": "/External Collaborators",
+          "realmRoles": ["opifex-viewer", "data-public"]
+        },
+        {
+          "name": "Industry Partners",
+          "path": "/Industry Partners",
+          "realmRoles": ["opifex-viewer", "data-public"]
+        }
+      ],
+
+      "clients": [
+        {
+          "clientId": "opifex-platform",
+          "name": "Opifex Platform Web Application",
+          "description": "Main Opifex platform web application client",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "opifex-platform-secret-2025",
+          "redirectUris": [
+            "https://platform.opifex.io/*",
+            "https://api.opifex.io/*",
+            "https://jupyter.opifex.io/*",
+            "https://dashboard.opifex.io/*"
+          ],
+          "webOrigins": [
+            "https://platform.opifex.io",
+            "https://api.opifex.io",
+            "https://jupyter.opifex.io",
+            "https://dashboard.opifex.io"
+          ],
+          "protocol": "openid-connect",
+          "fullScopeAllowed": false,
+          "nodeReRegistrationTimeout": -1,
+          "protocolMappers": [
+            {
+              "name": "opifex-roles",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-realm-role-mapper",
+              "consentRequired": false,
+              "config": {
+                "multivalued": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "realm_access.roles",
+                "jsonType.label": "String"
+              }
+            },
+            {
+              "name": "research-groups",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "multivalued": "true",
+                "userinfo.token.claim": "true",
+                "user.attribute": "research_groups",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "research_groups",
+                "jsonType.label": "String"
+              }
+            },
+            {
+              "name": "institution",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "userinfo.token.claim": "true",
+                "user.attribute": "institution",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "institution",
+                "jsonType.label": "String"
+              }
+            },
+            {
+              "name": "orcid",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "userinfo.token.claim": "true",
+                "user.attribute": "orcid",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "orcid",
+                "jsonType.label": "String"
+              }
+            }
+          ],
+          "defaultClientScopes": [
+            "web-origins",
+            "role_list",
+            "profile",
+            "roles",
+            "email"
+          ],
+          "optionalClientScopes": [
+            "address",
+            "phone",
+            "offline_access",
+            "microprofile-jwt"
+          ]
+        },
+        {
+          "clientId": "harbor-registry",
+          "name": "Harbor Container Registry",
+          "description": "Harbor container registry OIDC client",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "harbor-oidc-secret-2025",
+          "redirectUris": [
+            "https://harbor.opifex.io/c/oidc/callback"
+          ],
+          "webOrigins": [
+            "https://harbor.opifex.io"
+          ],
+          "protocol": "openid-connect",
+          "fullScopeAllowed": false
+        },
+        {
+          "clientId": "grafana-monitoring",
+          "name": "Grafana Monitoring Dashboard",
+          "description": "Grafana monitoring dashboard OIDC client",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "grafana-oidc-secret-2025",
+          "redirectUris": [
+            "https://monitoring.opifex.io/login/generic_oauth"
+          ],
+          "webOrigins": [
+            "https://monitoring.opifex.io"
+          ],
+          "protocol": "openid-connect",
+          "fullScopeAllowed": false
+        },
+        {
+          "clientId": "jupyter-hub",
+          "name": "JupyterHub Scientific Computing",
+          "description": "JupyterHub scientific computing environment OIDC client",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "jupyter-oidc-secret-2025",
+          "redirectUris": [
+            "https://jupyter.opifex.io/hub/oauth-callback"
+          ],
+          "webOrigins": [
+            "https://jupyter.opifex.io"
+          ],
+          "protocol": "openid-connect",
+          "fullScopeAllowed": false
+        }
+      ],
+
+      "identityProviders": [
+        {
+          "alias": "university-saml",
+          "displayName": "University SSO",
+          "providerId": "saml",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "on",
+          "trustEmail": true,
+          "storeToken": false,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "firstBrokerLoginFlowAlias": "first broker login",
+          "config": {
+            "hideOnLoginPage": "false",
+            "validateSignature": "true",
+            "samlXmlKeyNameTranformer": "KEY_ID",
+            "signingCertificate": "",
+            "postBindingResponse": "true",
+            "postBindingAuthnRequest": "true",
+            "postBindingLogout": "true",
+            "wantAuthnRequestsSigned": "true",
+            "wantAssertionsSigned": "true",
+            "wantAssertionsEncrypted": "false",
+            "forceAuthn": "false",
+            "signSpMetadata": "true",
+            "loginHint": "false",
+            "singleSignOnServiceUrl": "https://sso.university.edu/idp/profile/SAML2/Redirect/SSO",
+            "singleLogoutServiceUrl": "https://sso.university.edu/idp/profile/SAML2/Redirect/SLO",
+            "backchannelSupported": "false",
+            "nameIDPolicyFormat": "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+            "principalType": "SUBJECT",
+            "principalAttribute": "",
+            "allowCreate": "true",
+            "entityId": "https://auth.opifex.io/auth/realms/opifex"
+          }
+        },
+        {
+          "alias": "github-oidc",
+          "displayName": "GitHub",
+          "providerId": "github",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "on",
+          "trustEmail": false,
+          "storeToken": true,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "firstBrokerLoginFlowAlias": "first broker login",
+          "config": {
+            "hideOnLoginPage": "false",
+            "clientId": "opifex-github-app",
+            "disableUserInfo": "false",
+            "clientSecret": "github-client-secret",
+            "defaultScope": "user:email",
+            "allowedClockSkew": "0",
+            "forwardParameters": "false"
+          }
+        },
+        {
+          "alias": "orcid-oidc",
+          "displayName": "ORCID",
+          "providerId": "oidc",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "on",
+          "trustEmail": true,
+          "storeToken": true,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "firstBrokerLoginFlowAlias": "first broker login",
+          "config": {
+            "hideOnLoginPage": "false",
+            "clientId": "APP-ORCID-CLIENT-ID",
+            "clientSecret": "orcid-client-secret",
+            "disableUserInfo": "false",
+            "authorizationUrl": "https://orcid.org/oauth/authorize",
+            "tokenUrl": "https://orcid.org/oauth/token",
+            "userInfoUrl": "https://pub.orcid.org/v3.0/{orcid}/person",
+            "issuer": "https://orcid.org",
+            "defaultScope": "/authenticate",
+            "allowedClockSkew": "0",
+            "forwardParameters": "false",
+            "loginHint": "false",
+            "uiLocales": "false",
+            "backchannelSupported": "false"
+          }
+        }
+      ],
+
+      "userFederationProviders": [
+        {
+          "displayName": "University LDAP",
+          "providerName": "ldap",
+          "priority": 0,
+          "config": {
+            "pagination": ["true"],
+            "fullSyncPeriod": ["604800"],
+            "connectionPooling": ["true"],
+            "usersDn": ["ou=People,dc=university,dc=edu"],
+            "cachePolicy": ["DEFAULT"],
+            "useKerberosForPasswordAuthentication": ["false"],
+            "importEnabled": ["true"],
+            "enabled": ["true"],
+            "bindDn": ["cn=opifex-service,ou=Services,dc=university,dc=edu"],
+            "bindCredential": ["ldap-service-password"],
+            "changedSyncPeriod": ["86400"],
+            "usernameLDAPAttribute": ["uid"],
+            "lastNameLDAPAttribute": ["sn"],
+            "vendor": ["other"],
+            "uuidLDAPAttribute": ["entryUUID"],
+            "connectionUrl": ["ldaps://ldap.university.edu:636"],
+            "allowKerberosAuthentication": ["false"],
+            "syncRegistrations": ["false"],
+            "authType": ["simple"],
+            "debug": ["false"],
+            "searchScope": ["1"],
+            "useTruststoreSpi": ["ldapsOnly"],
+            "connectionTimeout": ["5000"],
+            "firstNameLDAPAttribute": ["givenName"],
+            "emailLDAPAttribute": ["mail"],
+            "readTimeout": ["10000"],
+            "editMode": ["READ_ONLY"]
+          }
+        }
+      ],
+
+      "userFederationMappers": [
+        {
+          "name": "institution-mapper",
+          "federationProviderDisplayName": "University LDAP",
+          "federationMapperType": "user-attribute-ldap-mapper",
+          "config": {
+            "ldap.attribute": "o",
+            "user.model.attribute": "institution",
+            "read.only": "true",
+            "always.read.value.from.ldap": "false",
+            "is.mandatory.in.ldap": "false"
+          }
+        },
+        {
+          "name": "research-group-mapper",
+          "federationProviderDisplayName": "University LDAP",
+          "federationMapperType": "user-attribute-ldap-mapper",
+          "config": {
+            "ldap.attribute": "departmentNumber",
+            "user.model.attribute": "research_groups",
+            "read.only": "true",
+            "always.read.value.from.ldap": "false",
+            "is.mandatory.in.ldap": "false"
+          }
+        }
+      ],
+
+      "authenticationFlows": [
+        {
+          "alias": "opifex-browser-flow",
+          "description": "Opifex enhanced browser flow with MFA and risk assessment",
+          "providerId": "basic-flow",
+          "topLevel": true,
+          "builtIn": false,
+          "authenticationExecutions": [
+            {
+              "authenticator": "auth-cookie",
+              "requirement": "ALTERNATIVE",
+              "priority": 10,
+              "userSetupAllowed": false,
+              "autheticatorFlow": false
+            },
+            {
+              "authenticator": "auth-spnego",
+              "requirement": "DISABLED",
+              "priority": 20,
+              "userSetupAllowed": false,
+              "autheticatorFlow": false
+            },
+            {
+              "authenticator": "identity-provider-redirector",
+              "requirement": "ALTERNATIVE",
+              "priority": 25,
+              "userSetupAllowed": false,
+              "autheticatorFlow": false
+            },
+            {
+              "flowAlias": "opifex-forms",
+              "requirement": "ALTERNATIVE",
+              "priority": 30,
+              "userSetupAllowed": false,
+              "autheticatorFlow": true
+            }
+          ]
+        }
+      ],
+
+      "browserSecurityHeaders": {
+        "contentSecurityPolicyReportOnly": "",
+        "xContentTypeOptions": "nosniff",
+        "xRobotsTag": "none",
+        "xFrameOptions": "SAMEORIGIN",
+        "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+        "xXSSProtection": "1; mode=block",
+        "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+      },
+
+      "smtpServer": {
+        "replyToDisplayName": "Opifex Platform",
+        "starttls": "true",
+        "auth": "true",
+        "port": "587",
+        "host": "smtp.opifex.io",
+        "replyTo": "noreply@opifex.io",
+        "from": "auth@opifex.io",
+        "fromDisplayName": "Opifex Authentication",
+        "envelopeFrom": "auth@opifex.io",
+        "ssl": "false",
+        "user": "auth@opifex.io",
+        "password": "smtp-password"
+      },
+
+      "eventsEnabled": true,
+      "eventsListeners": [
+        "jboss-logging",
+        "opifex-audit-listener"
+      ],
+      "enabledEventTypes": [
+        "SEND_VERIFY_EMAIL",
+        "SEND_RESET_PASSWORD",
+        "SEND_IDENTITY_PROVIDER_LINK",
+        "RESET_PASSWORD",
+        "VERIFY_EMAIL",
+        "REMOVE_TOTP",
+        "REVOKE_GRANT",
+        "UPDATE_TOTP",
+        "LOGIN_ERROR",
+        "CLIENT_LOGIN",
+        "RESET_PASSWORD_ERROR",
+        "IMPERSONATE_ERROR",
+        "CODE_TO_TOKEN_ERROR",
+        "CUSTOM_REQUIRED_ACTION",
+        "RESTART_AUTHENTICATION",
+        "IMPERSONATE",
+        "UPDATE_PROFILE_ERROR",
+        "LOGIN",
+        "UPDATE_PASSWORD_ERROR",
+        "CLIENT_INITIATED_ACCOUNT_LINKING",
+        "TOKEN_EXCHANGE",
+        "LOGOUT",
+        "REGISTER",
+        "CLIENT_REGISTER",
+        "IDENTITY_PROVIDER_LINK_ACCOUNT",
+        "UPDATE_PASSWORD",
+        "CLIENT_DELETE",
+        "FEDERATED_IDENTITY_LINK",
+        "IDENTITY_PROVIDER_FIRST_LOGIN",
+        "CLIENT_DELETE_ERROR",
+        "VERIFY_EMAIL_ERROR",
+        "CLIENT_LOGIN_ERROR",
+        "RESTART_AUTHENTICATION_ERROR",
+        "EXECUTE_ACTIONS",
+        "REMOVE_FEDERATED_IDENTITY_ERROR",
+        "TOKEN_EXCHANGE_ERROR",
+        "PERMISSION_TOKEN",
+        "SEND_IDENTITY_PROVIDER_LINK_ERROR",
+        "EXECUTE_ACTION_TOKEN_ERROR",
+        "SEND_VERIFY_EMAIL_ERROR",
+        "EXECUTE_ACTIONS_ERROR",
+        "REMOVE_FEDERATED_IDENTITY",
+        "IDENTITY_PROVIDER_POST_LOGIN",
+        "IDENTITY_PROVIDER_LINK_ACCOUNT_ERROR",
+        "UPDATE_EMAIL",
+        "REGISTER_ERROR",
+        "REVOKE_GRANT_ERROR",
+        "LOGOUT_ERROR",
+        "UPDATE_EMAIL_ERROR",
+        "CLIENT_UPDATE_ERROR",
+        "UPDATE_PROFILE",
+        "FEDERATED_IDENTITY_LINK_ERROR",
+        "CLIENT_REGISTER_ERROR",
+        "SEND_RESET_PASSWORD_ERROR",
+        "CLIENT_UPDATE",
+        "CUSTOM_REQUIRED_ACTION_ERROR",
+        "IDENTITY_PROVIDER_POST_LOGIN_ERROR",
+        "UPDATE_TOTP_ERROR",
+        "CODE_TO_TOKEN",
+        "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR",
+        "CLIENT_INITIATED_ACCOUNT_LINKING_ERROR",
+        "REMOVE_TOTP_ERROR"
+      ],
+
+      "adminEventsEnabled": true,
+      "adminEventsDetailsEnabled": true
+    }

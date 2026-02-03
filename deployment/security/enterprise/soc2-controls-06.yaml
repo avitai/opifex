@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: audit-processor-sa
+  namespace: security
+  labels:
+    app.kubernetes.io/name: audit-processor-sa
+    app.kubernetes.io/component: soc2-controls

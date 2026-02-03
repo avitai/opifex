@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: benchmark-results-db-service
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmark-results-db
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opifex-benchmarking
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9187"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgres
+      protocol: TCP
+      name: postgres
+    - port: 9187
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    app.kubernetes.io/name: benchmark-results-db

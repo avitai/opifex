@@ -1,0 +1,130 @@
+name: Bug Report
+description: File a bug report to help us improve SciML
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Import module '...'
+        2. Call function '....'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal-example
+    attributes:
+      label: Minimal Code Example
+      description: Provide a minimal, reproducible code example
+      render: python
+      placeholder: |
+        import jax.numpy as jnp
+        from sciml.neural.operators import FourierNeuralOperator
+
+        # Your code here
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-traceback
+    attributes:
+      label: Error Message/Traceback
+      description: Full error message and traceback
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - Neural Operators (FNO, DeepONet, etc.)
+        - Training Infrastructure
+        - Optimization (L2O, Meta-Optimization)
+        - Bayesian Methods
+        - Physics-Informed Neural Networks (PINNs)
+        - Quantum/DFT Modules
+        - Geometry/CSG
+        - Data Processing
+        - Deployment/Serving
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: sciml-version
+    attributes:
+      label: SciML Version
+      description: What version of SciML are you running?
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: jax-version
+    attributes:
+      label: JAX Version
+      description: What version of JAX are you using?
+      placeholder: "0.6.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      description: What device are you using?
+      options:
+        - CPU
+        - GPU (CUDA)
+        - GPU (ROCm)
+        - TPU
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      description: What version of Python are you using?
+      placeholder: "3.11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem
+    validations:
+      required: false

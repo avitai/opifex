@@ -1,0 +1,63 @@
+# Monitoring Communication Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-scraping-policy
+  namespace: opifex-monitoring
+  labels:
+    security.opifex.local/policy-type: "monitoring"
+    security.opifex.local/component: "prometheus"
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Egress
+  egress:
+    # Allow scraping metrics from all Opifex namespaces
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-core
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-training
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-data
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-security
+      ports:
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 9990 # Keycloak metrics
+    # Allow Kubernetes API access for service discovery
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 6443 # Kubernetes API
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53

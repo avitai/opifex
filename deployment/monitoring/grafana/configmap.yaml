@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+data:
+  grafana.ini: |
+    # Grafana Configuration for Opifex Framework
+    # Production monitoring dashboard configuration
+
+    [default]
+    instance_name = opifex-production
+
+    [paths]
+    data = /var/lib/grafana/
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+
+    [server]
+    protocol = http
+    http_port = 3000
+    domain = grafana.opifex-monitoring.svc.cluster.local
+    enforce_domain = false
+    root_url = http://grafana.opifex-monitoring.svc.cluster.local:3000/
+    serve_from_sub_path = false
+    enable_gzip = true
+
+    [database]
+    type = sqlite3
+    path = /var/lib/grafana/grafana.db
+
+    [security]
+    admin_user = admin
+    admin_password = opifex-admin-2025
+    secret_key = SW2YcwTIb9zpOOhoPsMm
+    login_remember_days = 7
+    cookie_username = grafana_user
+    cookie_remember_name = grafana_remember
+    disable_gravatar = true
+    allow_sign_up = false
+    allow_org_create = false
+    auto_assign_org = true
+    auto_assign_org_id = 1
+    auto_assign_org_role = Viewer
+
+    [users]
+    allow_sign_up = false
+    allow_org_create = false
+    auto_assign_org = true
+    auto_assign_org_role = Viewer
+    default_theme = dark
+
+    [auth.anonymous]
+    enabled = false
+    org_name = Opifex
+    org_role = Viewer
+
+    [dashboards]
+    versions_to_keep = 20
+    default_home_dashboard_path = /etc/grafana/dashboards/opifex-overview.json
+
+    [alerting]
+    enabled = true
+    execute_alerts = true
+
+    [log]
+    mode = console
+    level = info
+    format = console

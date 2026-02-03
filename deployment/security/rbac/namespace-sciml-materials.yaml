@@ -1,0 +1,10 @@
+# Materials Science Research Group
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-materials
+  labels:
+    opifex.local/research-group: "materials"
+    opifex.local/department: "physics"
+    opifex.local/gpu-quota: "150"
+    name: opifex-materials
