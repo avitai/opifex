@@ -1,0 +1,24 @@
+# AuthorizationPolicy - GPU Resource Access
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: gpu-resource-authz
+  namespace: opifex-platform
+spec:
+  selector:
+    matchLabels:
+      opifex.io/gpu-enabled: "true"
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/opifex-platform/sa/opifex-researcher"
+              - "cluster.local/ns/opifex-platform/sa/opifex-developer"
+              - "cluster.local/ns/opifex-platform/sa/opifex-admin"
+    - to:
+        - operation:
+            methods: ["GET", "POST", "PUT"]
+            paths: ["/api/v1/gpu/*", "/api/v1/compute/*"]
+    - when:
+        - key: custom.gpu_role
+          values: ["gpu-user", "quantum-computing", "neural-dft"]

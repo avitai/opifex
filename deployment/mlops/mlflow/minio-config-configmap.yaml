@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-config
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: object-storage
+    app.kubernetes.io/instance: mlflow-minio
+data:
+  config.json: |
+    {
+      "version": "33",
+      "credential": {
+        "accessKey": "mlflow-admin",
+        "secretKey": "changeme-minio-password"
+      },
+      "region": "us-east-1",
+      "browser": "on",
+      "logger": {
+        "console": {
+          "enable": true
+        },
+        "file": {
+          "enable": false
+        }
+      },
+      "notify": {
+        "webhook": {
+          "1": {
+            "enable": true,
+            "endpoint": "http://mlflow-tracking-server:5000/api/2.0/mlflow/artifacts/webhook",
+            "authToken": ""
+          }
+        }
+      },
+      "heal": {
+        "bitrotscan": "on",
+        "maxSleep": "1s",
+        "maxIO": 10
+      },
+      "scanner": {
+        "delay": "10s",
+        "maxWait": "15s",
+        "cycle": "1m"
+      }
+    }

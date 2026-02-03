@@ -1,0 +1,10 @@
+# External Collaborators Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-collaborators
+  labels:
+    opifex.local/research-group: "collaborators"
+    opifex.local/access-type: "limited"
+    opifex.local/gpu-quota: "20"
+    name: opifex-collaborators

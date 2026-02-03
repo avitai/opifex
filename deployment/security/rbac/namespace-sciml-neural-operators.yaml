@@ -1,0 +1,10 @@
+# Neural Operators Research Group
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-neural-operators
+  labels:
+    opifex.local/research-group: "neural-operators"
+    opifex.local/department: "ai-ml"
+    opifex.local/gpu-quota: "100"
+    name: opifex-neural-operators

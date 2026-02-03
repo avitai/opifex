@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-monitoring
+    app.kubernetes.io/part-of: opifex-framework
+    app.kubernetes.io/component: monitoring
+    monitoring: enabled
+    gpu-monitoring: enabled
+  annotations:
+    description: "Opifex Framework Production Monitoring Infrastructure"
+    contact: "opifex-team@example.com"
+    version: "1.0.0"

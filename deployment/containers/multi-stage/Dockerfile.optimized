@@ -1,0 +1,210 @@
+# Optimized Multi-Stage Dockerfile for SciML Framework
+# Phase 7.1: Container Orchestration - Maximum Optimization Implementation
+# Target: 54% image size reduction + <30s startup + Advanced GPU optimization
+
+# =============================================================================
+# Stage 1: Build Cache - Dependency Resolution and Caching
+# =============================================================================
+FROM nvidia/cuda:11.8-devel-ubuntu20.04 AS build-cache
+
+# Metadata for build optimization
+LABEL stage="build-cache" \
+      purpose="dependency-resolution-and-caching" \
+      optimization="layer-caching" \
+      target-size="minimal"
+
+# Environment setup for optimal caching
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies in order of change frequency (least to most)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Core system utilities (rarely change)
+    ca-certificates \
+    curl \
+    gnupg \
+    # Build essentials (change occasionally)
+    build-essential \
+    cmake \
+    pkg-config \
+    # Python and development tools (change more frequently)
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    # Scientific computing dependencies
+    libhdf5-dev \
+    libopenmpi-dev \
+    libblas-dev \
+    liblapack-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Setup Python environment with minimal overhead
+RUN python3.10 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# =============================================================================
+# Stage 2: Python Dependencies - Scientific Library Installation
+# =============================================================================
+FROM build-cache AS python-deps
+
+LABEL stage="python-deps" \
+      purpose="scientific-libraries-installation" \
+      optimization="dependency-caching"
+
+# Copy dependency files for caching
+WORKDIR /deps
+COPY requirements.txt pyproject.toml ./
+
+# Install Python dependencies with optimizations
+RUN pip install --no-cache-dir --compile --no-deps \
+    # Core dependencies first (JAX, NumPy, etc.)
+    jax[cuda11_local]==0.4.23 \
+    jaxlib==0.4.23 \
+    flax==0.8.0 \
+    optax==0.1.7 \
+    numpy==1.24.3 \
+    scipy==1.11.4 \
+    && pip install --no-cache-dir --compile -r requirements.txt \
+    && python3.10 -c "import jax; print('JAX version:', jax.__version__)" \
+    && find /usr/local/lib/python3.10 -name "*.pyc" -delete \
+    && find /usr/local/lib/python3.10 -name "__pycache__" -exec rm -rf {} +
+
+# =============================================================================
+# Stage 3: Application Build - SciML Framework Compilation
+# =============================================================================
+FROM python-deps AS app-builder
+
+LABEL stage="app-builder" \
+      purpose="sciml-framework-compilation" \
+      optimization="source-compilation"
+
+# Copy source code in order of change frequency
+WORKDIR /build
+COPY setup.py ./
+COPY sciml/ ./sciml/
+
+# Build the SciML package with optimizations
+RUN python setup.py bdist_wheel \
+    --plat-name linux_x86_64 \
+    && pip install --no-cache-dir --no-deps dist/*.whl \
+    && python -c "import sciml; print('SciML version loaded successfully')"
+
+# Pre-compile critical JAX kernels for faster startup
+RUN python3.10 -c "
+import jax
+import jax.numpy as jnp
+from sciml.neural.fno import FNO
+from sciml.optimization.l2o import L2OEngine
+print('🔥 Pre-compiling critical kernels...')
+# Compile common neural operator kernels
+key = jax.random.PRNGKey(42)
+x = jax.random.normal(key, (32, 64, 64, 1))
+fno = FNO(modes=[16, 16], width=32)
+_ = fno.init(key, x)
+print('✅ Neural operator kernels compiled')
+# Compile L2O optimization kernels
+l2o = L2OEngine()
+params = jax.random.normal(key, (100,))
+_ = l2o.optimize_step(params, lambda p: jnp.sum(p**2))
+print('✅ L2O optimization kernels compiled')
+print('🚀 Kernel pre-compilation complete')
+"
+
+# =============================================================================
+# Stage 4: GPU Runtime Preparation - CUDA Optimization
+# =============================================================================
+FROM nvidia/cuda:11.8-runtime-ubuntu20.04 AS gpu-runtime
+
+LABEL stage="gpu-runtime" \
+      purpose="cuda-runtime-optimization" \
+      optimization="gpu-acceleration"
+
+# GPU-optimized environment
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CUDA_HOME=/usr/local/cuda \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH} \
+    JAX_PLATFORMS=gpu \
+    XLA_PYTHON_CLIENT_PREALLOCATE=false \
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.8 \
+    XLA_FLAGS="--xla_gpu_enable_triton_softmax_fusion=true --xla_gpu_triton_gemm_any=True"
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    libhdf5-103 \
+    libopenmpi3 \
+    libblas3 \
+    liblapack3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy compiled Python environment
+COPY --from=python-deps /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+COPY --from=app-builder /usr/local/lib/python3.10/site-packages/sciml* /usr/local/lib/python3.10/site-packages/
+
+# =============================================================================
+# Stage 5: Production Runtime - Ultra-Minimal Final Image
+# =============================================================================
+FROM gpu-runtime AS production
+
+LABEL stage="production" \
+      purpose="ultra-minimal-runtime" \
+      optimization="maximum-size-reduction" \
+      version="1.0.0" \
+      maintainer="sciml-team" \
+      gpu-optimized="true" \
+      startup-time="<30s"
+
+# Production environment with security optimizations
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PATH=/opt/opifex/bin:${PATH}
+
+# Create non-root user for security
+RUN groupadd -g 1000 opifex && \
+    useradd -u 1000 -g opifex -m -s /bin/bash opifex && \
+    mkdir -p /app /opt/opifex/{bin,logs,data} && \
+    chown -R opifex:opifex /app /opt/opifex
+
+# Copy application assets
+WORKDIR /app
+COPY --from=app-builder --chown=opifex:opifex /build/opifex ./opifex
+
+# Create optimized startup script
+RUN cat > /opt/opifex/bin/start-opifex.sh << 'EOF' && \
+    chmod +x /opt/opifex/bin/start-opifex.sh && \
+    chown opifex:opifex /opt/opifex/bin/start-opifex.sh
+#!/bin/bash
+set -e
+
+echo "🚀 Starting SciML Framework (Optimized)"
+echo "📊 Container specs:"
+echo "  - Python: $(python3.10 --version)"
+echo "  - JAX: $(python3.10 -c 'import jax; print(jax.__version__)')"
+echo "  - GPU devices: $(python3.10 -c 'import jax; print(len(jax.devices()))')"
+
+# Quick GPU availability check
+if command -v nvidia-smi >/dev/null 2>&1; then
+    echo "🎮 GPU Status:"
+    nvidia-smi --query-gpu=name,memory.free --format=csv,noheader || echo "GPU info unavailable"
+fi
+
+# Start the application
+exec "$@"
+EOF
+
+# Switch to non-root user
+USER opifex:opifex
+
+# Health check for startup verification
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python3.10 -c "import sciml; import jax; print('✅ SciML healthy')" || exit 1
+
+# Default command optimized for container orchestration
+EXPOSE 8000
+ENTRYPOINT ["/opt/opifex/bin/start-opifex.sh"]
+CMD ["python3.10", "-m", "sciml.deployment.server"]

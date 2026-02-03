@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opifex-gpu-service-account
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: gpu-service-account
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: opifex-container-orchestration
+automountServiceAccountToken: true

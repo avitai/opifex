@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-shared-access
+  labels:
+    opifex.local/resource-type: "shared"
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["shared-*", "public-*"]
+  - apiGroups: ["opifex.local"]
+    resources: ["sharedmodels", "publicdatasets", "benchmarks"]
+    verbs: ["get", "list", "watch"]

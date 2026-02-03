@@ -1,0 +1,81 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-community-api
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: opifex-community
+
+resources:
+  # Namespace and Core Configuration
+  - namespace.yaml
+  - service-account.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - tls-secrets.yaml
+
+  # RBAC Configuration
+  - cluster-role.yaml
+  - cluster-role-binding.yaml
+  - role.yaml
+  - role-binding.yaml
+
+  # API Gateway
+  - api-gateway-deployment.yaml
+  - api-gateway-configmap.yaml
+  - api-gateway-service.yaml
+  - api-gateway-ingress.yaml
+  - api-gateway-monitor.yaml
+
+  # Registry Service
+  - registry-service-deployment.yaml
+  - registry-service-service.yaml
+  - registry-service-monitor.yaml
+
+  # User Service
+  - user-service-deployment.yaml
+  - user-service-service.yaml
+  - user-service-monitor.yaml
+
+  # Workspace Service
+  - workspace-service-deployment.yaml
+  - workspace-service-service.yaml
+  - workspace-storage-pvc.yaml
+  - workspace-service-monitor.yaml
+
+  # Plugin Service
+  - plugin-service-deployment.yaml
+  - plugin-service-service.yaml
+  - plugin-storage-pvc.yaml
+  - plugin-service-monitor.yaml
+
+  # Database
+  - database-setup-job.yaml
+  - database-migrations.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: opifex-community
+  app.kubernetes.io/managed-by: kustomize
+
+patches:
+  # Environment-specific resource scaling
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+  # Production resource limits
+  - target:
+      kind: Deployment
+      name: api-gateway
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "2000m"

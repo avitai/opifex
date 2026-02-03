@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gdpr-dpo-sa
+  namespace: security
+  labels:
+    app.kubernetes.io/name: gdpr-dpo-sa
+    app.kubernetes.io/component: gdpr-compliance

@@ -1,0 +1,79 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unified-mlops-api-ingress
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: unified-mlops-api
+    app.kubernetes.io/component: ingress
+  annotations:
+    opifex.framework/description: "Ingress for unified MLOps API with authentication and rate limiting"
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m" # Large model uploads
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600" # 10 minutes for large operations
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/client-max-body-size: "100m"
+
+    # CORS configuration for scientific computing frontends
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://*.opifex.io,http://localhost:*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization,Content-Type,Accept,Origin,User-Agent,DNT,Cache-Control,X-Mx-ReqToken,Keep-Alive,X-Requested-With,If-Modified-Since,X-CSRF-Token,X-Physics-Domain,X-Framework-Type"
+    nginx.ingress.kubernetes.io/cors-expose-headers: "X-Experiment-ID,X-Model-Version,X-Physics-Metadata"
+
+    # Rate limiting for API protection
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "50"
+
+    # Authentication (integrate with Keycloak)
+    nginx.ingress.kubernetes.io/auth-url: "http://keycloak.security.svc.cluster.local:8080/auth/realms/opifex/protocol/openid-connect/userinfo"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Groups,X-Auth-Request-Email,X-Auth-Request-Preferred-Username"
+
+    # Compression for large scientific data transfers
+    nginx.ingress.kubernetes.io/compression-level: "6"
+    nginx.ingress.kubernetes.io/compression-types: "application/json,application/octet-stream,text/plain,text/csv"
+spec:
+  tls:
+    - hosts:
+        - api.opifex.io
+        - mlops-api.opifex.io
+      secretName: unified-mlops-api-tls
+  rules:
+    - host: api.opifex.io
+      http:
+        paths:
+          - path: /mlops
+            pathType: Prefix
+            backend:
+              service:
+                name: unified-mlops-api
+                port:
+                  number: 8000
+          - path: /experiments
+            pathType: Prefix
+            backend:
+              service:
+                name: unified-mlops-api
+                port:
+                  number: 8000
+          - path: /models
+            pathType: Prefix
+            backend:
+              service:
+                name: unified-mlops-api
+                port:
+                  number: 8000
+    - host: mlops-api.opifex.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: unified-mlops-api
+                port:
+                  number: 8000

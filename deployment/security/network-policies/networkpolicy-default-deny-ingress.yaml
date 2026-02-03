@@ -1,0 +1,13 @@
+# Default Deny All Ingress Traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: opifex-security
+  labels:
+    security.opifex.local/policy-type: "deny-all"
+    security.opifex.local/direction: "ingress"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

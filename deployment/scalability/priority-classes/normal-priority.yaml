@@ -1,0 +1,12 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: normal-priority
+  labels:
+    component: scalability
+    priority-type: normal
+    managed-by: opifex-framework
+value: 100
+globalDefault: true
+description: "Normal priority class for standard Opifex workloads"
+preemptionPolicy: PreemptLowerPriority

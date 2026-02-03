@@ -1,0 +1,61 @@
+# Harbor RBAC Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harbor-rbac-config
+  namespace: harbor-system
+data:
+  rbac.yml: |
+    # Opifex Harbor RBAC Configuration
+    # Enterprise-grade role-based access control
+
+    # Project roles for Opifex framework
+    roles:
+      - name: opifex-admin
+        permissions:
+          - read
+          - write
+          - delete
+          - admin
+        description: "Full administrative access to Opifex projects"
+
+      - name: opifex-developer
+        permissions:
+          - read
+          - write
+        description: "Development access for Opifex contributors"
+
+      - name: opifex-viewer
+        permissions:
+          - read
+        description: "Read-only access for Opifex users"
+
+      - name: opifex-scanner
+        permissions:
+          - read
+          - scan
+        description: "Security scanning access"
+
+    # Default policies for scientific workloads
+    policies:
+      - name: "vulnerability-policy"
+        description: "Security vulnerability scanning policy"
+        enabled: true
+        rules:
+          - severity: "critical"
+            action: "block"
+          - severity: "high"
+            action: "warn"
+          - severity: "medium"
+            action: "allow"
+
+      - name: "retention-policy"
+        description: "Image retention policy for Opifex"
+        enabled: true
+        rules:
+          - tag_pattern: "latest"
+            retention_count: 5
+          - tag_pattern: "v*"
+            retention_count: 10
+          - tag_pattern: "dev-*"
+            retention_count: 3

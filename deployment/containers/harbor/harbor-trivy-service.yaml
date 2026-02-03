@@ -1,0 +1,16 @@
+# Harbor Trivy Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-trivy
+  namespace: harbor-system
+  labels:
+    app: harbor-trivy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: harbor-trivy

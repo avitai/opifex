@@ -1,0 +1,19 @@
+# Keycloak Headless Service (for clustering)
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-headless
+  namespace: opifex-security
+  labels:
+    app: keycloak
+spec:
+  clusterIP: None
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: jgroups
+      port: 7600
+      targetPort: 7600
+  selector:
+    app: keycloak

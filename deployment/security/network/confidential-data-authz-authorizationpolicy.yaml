@@ -1,0 +1,25 @@
+# AuthorizationPolicy - Confidential Data (SOC 2)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: confidential-data-authz
+  namespace: opifex-platform
+spec:
+  selector:
+    matchLabels:
+      opifex.io/data-classification: confidential
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/opifex-platform/sa/opifex-admin"
+              - "cluster.local/ns/opifex-platform/sa/soc2-authorized"
+    - to:
+        - operation:
+            methods: ["GET", "POST"]
+            paths: ["/api/v1/data/confidential/*"]
+    - when:
+        - key: custom.data_role
+          values: ["data-confidential"]
+        - key: custom.soc2_cleared
+          values: ["true"]

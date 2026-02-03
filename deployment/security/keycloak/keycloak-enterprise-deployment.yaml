@@ -1,0 +1,174 @@
+# Keycloak Enterprise Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-enterprise
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: identity-provider
+    security.opifex.io/tier: enterprise
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+        component: identity-provider
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/auth/realms/master/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:23.0
+          args:
+            - start
+            - --optimized
+            - --cache=ispn
+            - --cache-stack=kubernetes
+            - --health-enabled=true
+            - --metrics-enabled=true
+            - --features=hostname:v2,admin-fine-grained-authz,scripts,token-exchange,impersonation
+          env:
+            # Database Configuration
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://keycloak-postgres:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db-secret
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db-secret
+                  key: password
+
+            # Cluster Configuration
+            - name: KC_CACHE
+              value: ispn
+            - name: KC_CACHE_STACK
+              value: kubernetes
+            - name: jgroups.dns.query
+              value: keycloak-headless.opifex-security.svc.cluster.local
+
+            # Security Configuration
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME_STRICT_HTTPS
+              value: "false"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY
+              value: edge
+
+            # Enterprise Features
+            - name: KC_FEATURES
+              value: hostname:v2,admin-fine-grained-authz,scripts,token-exchange,impersonation,fips,recovery-codes,update-email
+
+            # Observability
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+
+            # Performance Tuning
+            - name: JAVA_OPTS_APPEND
+              value: >-
+                -Djava.awt.headless=true
+                -Djgroups.thread_pool.enabled=true
+                -Djgroups.thread_pool.min_threads=2
+                -Djgroups.thread_pool.max_threads=64
+                -Djgroups.thread_pool.keep_alive_time=5000
+                -Dkeycloak.profile.feature.scripts=enabled
+                -Dkeycloak.profile.feature.token_exchange=enabled
+                -Dkeycloak.profile.feature.admin_fine_grained_authz=enabled
+
+            # Admin User
+            - name: KEYCLOAK_ADMIN
+              value: admin
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: password
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: jgroups
+              containerPort: 7600
+              protocol: TCP
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+
+          volumeMounts:
+            - name: keycloak-themes
+              mountPath: /opt/keycloak/themes/opifex
+            - name: keycloak-providers
+              mountPath: /opt/keycloak/providers
+            - name: keycloak-cache
+              mountPath: /opt/keycloak/data
+
+      volumes:
+        - name: keycloak-themes
+          configMap:
+            name: opifex-keycloak-themes
+        - name: keycloak-providers
+          configMap:
+            name: opifex-keycloak-providers
+        - name: keycloak-cache
+          emptyDir: {}

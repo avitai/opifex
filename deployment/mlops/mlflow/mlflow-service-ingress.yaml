@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mlflow-tracking-server-ingress
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: mlflow-tracking-server
+    app.kubernetes.io/component: ingress
+  annotations:
+    opifex.framework/description: "Ingress for MLflow tracking server with SSL termination"
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m" # Large model artifacts
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/client-max-body-size: "50m"
+    # Rate limiting for API protection
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    # Authentication annotations (integrate with Keycloak)
+    nginx.ingress.kubernetes.io/auth-url: "http://keycloak.security.svc.cluster.local:8080/auth/realms/opifex/protocol/openid-connect/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.opifex.io/auth/realms/opifex/protocol/openid-connect/auth?client_id=mlflow&redirect_uri=https://mlflow.opifex.io"
+spec:
+  tls:
+    - hosts:
+        - mlflow.opifex.io
+        - mlflow-api.opifex.io
+      secretName: mlflow-tls-secret
+  rules:
+    - host: mlflow.opifex.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mlflow-tracking-server
+                port:
+                  number: 5000
+    - host: mlflow-api.opifex.io
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: mlflow-tracking-server
+                port:
+                  number: 5000
+          - path: /ajax-api
+            pathType: Prefix
+            backend:
+              service:
+                name: mlflow-tracking-server
+                port:
+                  number: 5000

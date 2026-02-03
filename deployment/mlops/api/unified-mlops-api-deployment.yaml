@@ -1,0 +1,262 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unified-mlops-api
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: unified-mlops-api
+    app.kubernetes.io/component: api-gateway
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    opifex.framework/description: "Unified MLOps API providing tool-agnostic interface for scientific computing"
+    opifex.framework/backends: "mlflow,wandb,neptune,opifex-tracker"
+    opifex.framework/optimization: "high-throughput,scientific-metadata,gpu-aware"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unified-mlops-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: unified-mlops-api
+        app.kubernetes.io/component: api-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+        opifex.framework/physics-metadata: "enabled"
+        opifex.framework/gpu-tracking: "enabled"
+    spec:
+      serviceAccountName: unified-mlops-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: api-server
+          image: ghcr.io/opifex/unified-mlops-api:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - -m
+            - opifex.mlops.api.server
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            - --workers
+            - "4"
+            - --log-level
+            - "info"
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # API Configuration
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: unified-mlops-config
+                  key: ENVIRONMENT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: unified-mlops-config
+                  key: LOG_LEVEL
+            - name: API_PREFIX
+              value: "/api/v1"
+            - name: DOCS_URL
+              value: "/docs"
+            - name: REDOC_URL
+              value: "/redoc"
+
+            # Backend Configurations
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow-tracking-server:5000"
+            - name: MLFLOW_S3_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: mlops-config
+                  key: MLFLOW_S3_ENDPOINT_URL
+            - name: MLFLOW_ARTIFACTS_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: mlops-config
+                  key: MLFLOW_DEFAULT_ARTIFACT_ROOT
+
+            # Scientific Computing Configuration
+            - name: OPIFEX_PHYSICS_DOMAINS
+              valueFrom:
+                configMapKeyRef:
+                  name: mlops-config
+                  key: OPIFEX_PHYSICS_DOMAINS
+            - name: OPIFEX_FRAMEWORKS
+              valueFrom:
+                configMapKeyRef:
+                  name: mlops-config
+                  key: OPIFEX_FRAMEWORKS
+            - name: ENABLE_PHYSICS_METADATA
+              valueFrom:
+                configMapKeyRef:
+                  name: mlops-config
+                  key: ENABLE_PHYSICS_METADATA
+            - name: ENABLE_GPU_TRACKING
+              valueFrom:
+                configMapKeyRef:
+                  name: mlops-config
+                  key: ENABLE_GPU_TRACKING
+
+            # Authentication and Security
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: KEYCLOAK_SERVER_URL
+              value: "http://keycloak.security.svc.cluster.local:8080"
+            - name: KEYCLOAK_REALM
+              value: "opifex"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "unified-mlops-api"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: unified-mlops-secrets
+                  key: KEYCLOAK_CLIENT_SECRET
+
+            # Database Configuration
+            - name: DATABASE_URL
+              value: "postgresql://unified_mlops:$(POSTGRES_PASSWORD)@mlflow-postgresql:5432/unified_mlops"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: POSTGRES_PASSWORD
+
+            # Redis Configuration for Caching
+            - name: REDIS_URL
+              value: "redis://unified-mlops-redis:6379/0"
+
+            # AWS/MinIO Configuration
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+
+            # Performance Configuration
+            - name: MAX_CONNECTIONS
+              value: "100"
+            - name: CONNECTION_TIMEOUT
+              value: "30"
+            - name: REQUEST_TIMEOUT
+              value: "300" # 5 minutes for large model uploads
+            - name: MAX_REQUEST_SIZE
+              value: "1073741824" # 1GB for large model files
+
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: health
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: health
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 12
+          volumeMounts:
+            - name: api-config
+              mountPath: /etc/mlops
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/mlops
+
+        # Metrics collector sidecar
+        - name: metrics-collector
+          image: ghcr.io/opifex/metrics-collector:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: TARGET_SERVICE
+              value: "localhost:8000"
+            - name: METRICS_PORT
+              value: "9090"
+            - name: COLLECT_API_METRICS
+              value: "true"
+            - name: COLLECT_BACKEND_METRICS
+              value: "true"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+      volumes:
+        - name: api-config
+          configMap:
+            name: unified-mlops-config
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir:
+            sizeLimit: 10Gi
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - unified-mlops-api
+                topologyKey: kubernetes.io/hostname

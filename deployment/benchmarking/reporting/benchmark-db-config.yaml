@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benchmark-db-config
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmark-db-config
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opifex-benchmarking
+data:
+  postgresql.conf: |
+    # PostgreSQL Configuration for Benchmark Results Database
+
+    # Connection Settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 100
+
+    # Memory Settings
+    shared_buffers = 1GB
+    effective_cache_size = 3GB
+    work_mem = 64MB
+    maintenance_work_mem = 256MB
+
+    # WAL Settings
+    wal_buffers = 16MB
+    checkpoint_completion_target = 0.9
+
+    # Query Planner
+    random_page_cost = 1.1  # SSD optimized
+    effective_io_concurrency = 200
+
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_age = 1d
+    log_rotation_size = 100MB
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+
+    # Performance Monitoring
+    track_activities = on
+    track_counts = on
+    track_io_timing = on
+    track_functions = all
+
+    # JSON Support for Benchmark Metadata
+    shared_preload_libraries = 'pg_stat_statements'

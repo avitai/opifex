@@ -1,0 +1,29 @@
+# Opifex Research Administrator ClusterRole - Full platform access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-research-admin
+  labels:
+    opifex.local/role-type: "research-admin"
+    opifex.local/access-level: "full"
+rules:
+  # Full access to Opifex namespaces
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+    resourceNames: []
+  - apiGroups:
+      ["apps", "extensions", "networking.k8s.io", "rbac.authorization.k8s.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  # GPU node management
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  # Custom Opifex resources
+  - apiGroups: ["opifex.local"]
+    resources: ["*"]
+    verbs: ["*"]

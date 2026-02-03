@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gdpr-dpo-dashboard
+  namespace: security
+  labels:
+    app.kubernetes.io/name: gdpr-dpo-dashboard
+    app.kubernetes.io/component: gdpr-compliance
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gdpr-dpo-dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gdpr-dpo-dashboard
+        app.kubernetes.io/component: gdpr-compliance
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: gdpr-dpo-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+        - name: dpo-dashboard
+          image: harbor.opifex.enterprise.com/compliance/dpo-dashboard:v1.2.0
+          env:
+            - name: GDPR_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gdpr-encryption-secret
+                  key: encryption-key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gdpr-database-secret
+                  key: connection-string
+            - name: AUDIT_STORAGE_ENDPOINT
+              value: "https://audit.compliance.internal"
+            - name: KEYCLOAK_BASE_URL
+              value: "https://auth.opifex.enterprise.com"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "gdpr-dpo-dashboard"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gdpr-keycloak-secret
+                  key: client-secret
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: METRICS_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: gdpr-config
+              mountPath: /etc/gdpr
+              readOnly: true
+            - name: audit-storage
+              mountPath: /var/audit
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: gdpr-config
+          configMap:
+            name: gdpr-compliance-config
+        - name: audit-storage
+          persistentVolumeClaim:
+            claimName: gdpr-audit-storage-pvc

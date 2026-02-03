@@ -1,0 +1,72 @@
+# GPU Node Communication Policy (for distributed training)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gpu-distributed-training
+  namespace: opifex-training
+  labels:
+    security.opifex.local/policy-type: "gpu-communication"
+    security.opifex.local/component: "distributed-training"
+spec:
+  podSelector:
+    matchLabels:
+      component: gpu-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow communication between GPU workers for distributed training
+    - from:
+        - podSelector:
+            matchLabels:
+              component: gpu-worker
+      ports:
+        - protocol: TCP
+          port: 22 # SSH for distributed training
+        - protocol: TCP
+          port: 12345 # Custom distributed training port
+        - protocol: TCP
+          port: 23456 # NCCL communication port
+    # Allow communication from training scheduler
+    - from:
+        - podSelector:
+            matchLabels:
+              component: training-scheduler
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow communication between GPU workers
+    - to:
+        - podSelector:
+            matchLabels:
+              component: gpu-worker
+      ports:
+        - protocol: TCP
+          port: 22 # SSH for distributed training
+        - protocol: TCP
+          port: 12345 # Custom distributed training port
+        - protocol: TCP
+          port: 23456 # NCCL communication port
+    # Allow data access
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-data
+          podSelector:
+            matchLabels:
+              component: data-service
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53

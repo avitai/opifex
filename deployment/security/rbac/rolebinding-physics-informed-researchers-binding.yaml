@@ -1,0 +1,27 @@
+# Physics-Informed ML Research Group Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: opifex-physics-informed
+  name: physics-informed-researchers-binding
+  labels:
+    opifex.local/research-group: "physics-informed"
+subjects:
+  # Research lead
+  - kind: User
+    name: "university-saml.physics-lead@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  # Researchers
+  - kind: User
+    name: "university-saml.physics-researcher1@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "university-saml.physics-researcher2@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "orcid.0000-0000-0000-0003"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: physics-informed-researcher
+  apiGroup: rbac.authorization.k8s.io
