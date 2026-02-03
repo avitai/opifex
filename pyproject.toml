@@ -47,7 +47,7 @@ dependencies = [
   # checkpointing
   "distrax>=0.1.0,<0.2.0",
   # probabilistic programming
-  "tfp-nightly==0.26.0.dev20251024",
+  "tfp-nightly==0.26.0.dev20260203",
   # probabilistic modeling and Bayesian inference - specific nightly for JAX 0.8.0 compatibility
   "tf-keras>=2.19.0",
   # Required by tensorflow-probability for variational inference
