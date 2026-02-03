@@ -1,0 +1,619 @@
+# Opifex Production Deployment Configuration
+# Version: 1.0.0
+# Foundation: 158/158 L2O tests passing, enterprise-grade architecture
+
+# Global Configuration
+global:
+  name: "opifex-framework"
+  version: "1.0.0"
+  namespace: "opifex-system"
+  labels:
+    app: "opifex"
+    version: "1.0.0"
+    component: "production-deployment"
+
+# Cluster Configuration
+cluster:
+  name: "opifex-cluster"
+  region: "us-west-2"
+  provider: "aws" # aws, gcp, azure, on-premise
+
+  # Node Configuration
+  nodes:
+    gpu:
+      instance_type: "p3.2xlarge"
+      min_nodes: 1
+      max_nodes: 20
+      gpu_type: "nvidia-tesla-v100"
+      gpu_count_per_node: 1
+
+    cpu:
+      instance_type: "c5.4xlarge"
+      min_nodes: 2
+      max_nodes: 50
+      cpu_cores: 16
+      memory_gb: 32
+
+    memory:
+      instance_type: "r5.2xlarge"
+      min_nodes: 1
+      max_nodes: 10
+      cpu_cores: 8
+      memory_gb: 64
+
+# Kubernetes Configuration
+kubernetes:
+  version: "1.28"
+
+  # GPU Operator
+  gpu_operator:
+    enabled: true
+    version: "v23.9.0"
+    namespace: "gpu-operator"
+
+  # Custom Resource Definitions
+  crds:
+    enabled: true
+    opifex_workloads: true
+    l2o_optimizers: true
+    neural_operators: true
+
+  # Resource Quotas
+  resource_quotas:
+    enabled: true
+    default_cpu_request: "100m"
+    default_memory_request: "128Mi"
+    default_cpu_limit: "1000m"
+    default_memory_limit: "1Gi"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  namespace: "monitoring"
+
+  # Prometheus
+  prometheus:
+    enabled: true
+    version: "v2.45.0"
+    retention: "30d"
+    storage_size: "100Gi"
+    storage_class: "gp3"
+
+    # Scrape Configs
+    scrape_configs:
+      - job_name: "opifex-l2o-metrics"
+        scrape_interval: "30s"
+        metrics_path: "/metrics"
+        static_configs:
+          - targets: ["opifex-l2o-service:8080"]
+
+      - job_name: "gpu-metrics"
+        scrape_interval: "15s"
+        metrics_path: "/metrics"
+        static_configs:
+          - targets: ["dcgm-exporter:9400"]
+
+    # Rules
+    rules:
+      - name: "opifex-l2o-alerts"
+        rules:
+          - alert: "L2OOptimizationSlow"
+            expr: "opifex_l2o_convergence_time > 300"
+            for: "5m"
+            labels:
+              severity: "warning"
+            annotations:
+              summary: "L2O optimization taking too long"
+              description: "L2O optimization has been running for {{ $value }} seconds"
+
+  # Grafana
+  grafana:
+    enabled: true
+    version: "10.1.0"
+    admin_password: "secure-password" # Change in production
+    storage_size: "10Gi"
+
+    # Dashboards
+    dashboards:
+      - name: "opifex-overview"
+        enabled: true
+        path: "/dashboards/opifex-overview.json"
+
+      - name: "l2o-optimization"
+        enabled: true
+        path: "/dashboards/l2o-optimization.json"
+
+      - name: "gpu-utilization"
+        enabled: true
+        path: "/dashboards/gpu-utilization.json"
+
+      - name: "kubernetes-cluster"
+        enabled: true
+        path: "/dashboards/kubernetes-cluster.json"
+
+  # Alertmanager
+  alertmanager:
+    enabled: true
+    version: "v0.25.0"
+
+    # Alert Routing
+    route:
+      group_by: ["alertname"]
+      group_wait: "10s"
+      group_interval: "10s"
+      repeat_interval: "1h"
+      receiver: "web.hook"
+
+    # Receivers
+    receivers:
+      - name: "web.hook"
+        webhook_configs:
+          - url: "http://opifex-alerting-service:5001/alerts"
+
+# Security Configuration
+security:
+  enabled: true
+  namespace: "security-system"
+
+  # Identity Provider (Keycloak)
+  identity_provider:
+    enabled: true
+    type: "keycloak"
+    version: "22.0.1"
+    admin_password: "secure-password" # Change in production
+
+    # Database
+    database:
+      type: "postgresql"
+      host: "keycloak-postgres"
+      port: 5432
+      database: "keycloak"
+      username: "keycloak"
+      password: "secure-password" # Change in production
+
+    # Realms
+    realms:
+      - name: "opifex"
+        enabled: true
+        display_name: "Opifex Framework"
+
+        # Identity Providers
+        identity_providers:
+          - name: "university-saml"
+            type: "saml"
+            enabled: true
+            config:
+              single_sign_on_service_url: "https://university.edu/saml/sso"
+              single_logout_service_url: "https://university.edu/saml/slo"
+
+          - name: "github-oidc"
+            type: "oidc"
+            enabled: true
+            config:
+              authorization_url: "https://github.com/login/oauth/authorize"
+              token_url: "https://github.com/login/oauth/access_token"
+              client_id: "your-github-client-id"
+              client_secret: "your-github-client-secret"
+
+  # RBAC Configuration
+  rbac:
+    enabled: true
+
+    # Roles
+    roles:
+      - name: "research-group-admin"
+        permissions:
+          - "pods:*"
+          - "services:*"
+          - "deployments:*"
+          - "opifex-workloads:*"
+
+      - name: "research-group-member"
+        permissions:
+          - "pods:get,list,watch"
+          - "services:get,list,watch"
+          - "deployments:get,list,watch"
+          - "opifex-workloads:get,list,watch,create"
+
+      - name: "guest-researcher"
+        permissions:
+          - "pods:get,list,watch"
+          - "opifex-workloads:get,list,watch"
+
+  # Network Policies
+  network_policies:
+    enabled: true
+    default_deny: true
+
+    # Policy Rules
+    policies:
+      - name: "allow-monitoring"
+        selector:
+          matchLabels:
+            app: "monitoring"
+        ingress:
+          - from:
+              - namespaceSelector:
+                  matchLabels:
+                    name: "monitoring"
+
+      - name: "allow-opifex-internal"
+        selector:
+          matchLabels:
+            app: "opifex"
+        ingress:
+          - from:
+              - namespaceSelector:
+                  matchLabels:
+                    name: "opifex-system"
+
+# Community Platform Configuration
+community:
+  enabled: true
+  namespace: "community-platform"
+
+  # Neural Functional Registry
+  registry:
+    enabled: true
+    storage_size: "100Gi"
+    storage_class: "gp3"
+
+    # Database
+    database:
+      type: "postgresql"
+      host: "registry-postgres"
+      port: 5432
+      database: "registry"
+      username: "registry"
+      password: "secure-password" # Change in production
+
+    # Storage Backend
+    storage:
+      type: "s3" # s3, gcs, azure, local
+      bucket: "opifex-registry"
+      region: "us-west-2"
+      access_key: "your-access-key"
+      secret_key: "your-secret-key"
+
+  # API Services
+  api:
+    enabled: true
+    replicas: 3
+
+    # Service Configuration
+    service:
+      type: "ClusterIP"
+      port: 8000
+      target_port: 8000
+
+    # Resources
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+
+  # Frontend
+  frontend:
+    enabled: true
+    replicas: 2
+
+    # Service Configuration
+    service:
+      type: "ClusterIP"
+      port: 3000
+      target_port: 3000
+
+    # Resources
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+
+# Benchmarking Configuration
+benchmarking:
+  enabled: true
+  namespace: "benchmarking-system"
+
+  # PDEBench Integration
+  pdebench:
+    enabled: true
+    version: "1.0.0"
+    storage_size: "500Gi"
+    storage_class: "gp3"
+
+    # Benchmark Datasets
+    datasets:
+      - name: "darcy-flow"
+        enabled: true
+        size: "10Gi"
+
+      - name: "navier-stokes"
+        enabled: true
+        size: "20Gi"
+
+      - name: "diffusion-reaction"
+        enabled: true
+        size: "15Gi"
+
+    # Benchmark Schedule
+    schedule:
+      daily: "0 2 * * *" # Run daily at 2 AM
+      weekly: "0 2 * * 0" # Run weekly on Sunday at 2 AM
+      monthly: "0 2 1 * *" # Run monthly on 1st at 2 AM
+
+  # Reporting System
+  reporting:
+    enabled: true
+
+    # Report Generation
+    generation:
+      format: "latex" # latex, html, pdf
+      template: "scientific-paper"
+      output_path: "/reports"
+
+    # Distribution
+    distribution:
+      email:
+        enabled: true
+        smtp_host: "smtp.university.edu"
+        smtp_port: 587
+        from: "opifex-benchmarks@university.edu"
+        to: ["research-team@university.edu"]
+
+      s3:
+        enabled: true
+        bucket: "opifex-benchmark-reports"
+        region: "us-west-2"
+
+# Scalability Configuration
+scalability:
+  enabled: true
+
+  # Horizontal Pod Autoscaler
+  hpa:
+    enabled: true
+
+    # Default HPA Configuration
+    default:
+      min_replicas: 1
+      max_replicas: 10
+      target_cpu_utilization: 70
+      target_memory_utilization: 80
+
+    # Custom Metrics
+    custom_metrics:
+      - name: "opifex_l2o_queue_length"
+        target_value: 10
+
+      - name: "opifex_gpu_utilization"
+        target_value: 85
+
+      - name: "opifex_training_queue_length"
+        target_value: 5
+
+  # Cluster Autoscaler
+  cluster_autoscaler:
+    enabled: true
+    version: "v1.28.0"
+
+    # Scaling Configuration
+    scaling:
+      scale_down_enabled: true
+      scale_down_delay_after_add: "10m"
+      scale_down_unneeded_time: "10m"
+      scale_down_utilization_threshold: 0.5
+
+      # Node Groups
+      node_groups:
+        - name: "gpu-nodes"
+          min_size: 1
+          max_size: 20
+          instance_type: "p3.2xlarge"
+
+        - name: "cpu-nodes"
+          min_size: 2
+          max_size: 50
+          instance_type: "c5.4xlarge"
+
+        - name: "memory-nodes"
+          min_size: 1
+          max_size: 10
+          instance_type: "r5.2xlarge"
+
+  # Load Balancing
+  load_balancing:
+    enabled: true
+    type: "istio" # istio, nginx, traefik
+
+    # Service Mesh (Istio)
+    service_mesh:
+      enabled: true
+      version: "1.19.0"
+
+      # Traffic Management
+      traffic_management:
+        timeout: "30s"
+        retries: 3
+        circuit_breaker:
+          consecutive_errors: 5
+          interval: "30s"
+          base_ejection_time: "30s"
+
+# Storage Configuration
+storage:
+  # Default Storage Class
+  default_storage_class: "gp3"
+
+  # Storage Classes
+  storage_classes:
+    - name: "gp3"
+      provisioner: "ebs.csi.aws.com"
+      parameters:
+        type: "gp3"
+        iops: "3000"
+        throughput: "125"
+
+    - name: "io2"
+      provisioner: "ebs.csi.aws.com"
+      parameters:
+        type: "io2"
+        iops: "10000"
+
+    - name: "efs"
+      provisioner: "efs.csi.aws.com"
+      parameters:
+        provisioningMode: "efs-ap"
+        fileSystemId: "fs-12345678"
+
+# Networking Configuration
+networking:
+  # CNI Plugin
+  cni: "aws-vpc-cni" # aws-vpc-cni, calico, flannel
+
+  # Service Mesh
+  service_mesh:
+    enabled: true
+    type: "istio"
+
+    # mTLS Configuration
+    mtls:
+      enabled: true
+      mode: "STRICT"
+
+  # Ingress
+  ingress:
+    enabled: true
+    class: "nginx"
+
+    # TLS Configuration
+    tls:
+      enabled: true
+      cert_manager: true
+      issuer: "letsencrypt-prod"
+
+  # DNS
+  dns:
+    cluster_dns: "10.100.0.10"
+    cluster_domain: "cluster.local"
+
+# Backup and Disaster Recovery
+backup:
+  enabled: true
+
+  # Velero Configuration
+  velero:
+    enabled: true
+    version: "v1.12.0"
+
+    # Backup Storage
+    storage:
+      provider: "aws"
+      bucket: "opifex-backups"
+      region: "us-west-2"
+
+    # Backup Schedule
+    schedules:
+      - name: "daily-backup"
+        schedule: "0 1 * * *" # Daily at 1 AM
+        ttl: "720h" # 30 days
+
+      - name: "weekly-backup"
+        schedule: "0 1 * * 0" # Weekly on Sunday at 1 AM
+        ttl: "2160h" # 90 days
+
+# Logging Configuration
+logging:
+  enabled: true
+
+  # Log Aggregation
+  aggregation:
+    type: "elasticsearch" # elasticsearch, loki, fluentd
+
+    # Elasticsearch
+    elasticsearch:
+      version: "8.10.0"
+      replicas: 3
+      storage_size: "100Gi"
+
+    # Kibana
+    kibana:
+      enabled: true
+      version: "8.10.0"
+
+  # Log Retention
+  retention:
+    application_logs: "30d"
+    audit_logs: "90d"
+    security_logs: "365d"
+
+# Environment-Specific Overrides
+environments:
+  development:
+    cluster:
+      nodes:
+        gpu:
+          min_nodes: 0
+          max_nodes: 2
+        cpu:
+          min_nodes: 1
+          max_nodes: 5
+
+    monitoring:
+      prometheus:
+        retention: "7d"
+        storage_size: "10Gi"
+
+    security:
+      rbac:
+        enabled: false
+      network_policies:
+        enabled: false
+
+  staging:
+    cluster:
+      nodes:
+        gpu:
+          min_nodes: 1
+          max_nodes: 5
+        cpu:
+          min_nodes: 2
+          max_nodes: 10
+
+    monitoring:
+      prometheus:
+        retention: "14d"
+        storage_size: "50Gi"
+
+  production:
+    cluster:
+      nodes:
+        gpu:
+          min_nodes: 2
+          max_nodes: 20
+        cpu:
+          min_nodes: 3
+          max_nodes: 50
+
+    monitoring:
+      prometheus:
+        retention: "30d"
+        storage_size: "100Gi"
+
+    security:
+      rbac:
+        enabled: true
+      network_policies:
+        enabled: true
+
+    backup:
+      enabled: true
+      schedules:
+        - name: "hourly-backup"
+          schedule: "0 * * * *" # Hourly
+          ttl: "168h" # 7 days

@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-alertmanager
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'localhost:587'
+      smtp_from: 'alerts@opifex.example.com'
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'default-receiver'
+      routes:
+      - match:
+          component: gpu
+        receiver: 'gpu-alerts'
+        group_wait: 10s
+        repeat_interval: 5m
+      - match:
+          component: l2o
+        receiver: 'l2o-alerts'
+        group_wait: 30s
+        repeat_interval: 10m
+      - match:
+          component: infrastructure
+        receiver: 'infrastructure-alerts'
+
+    receivers:
+    - name: 'default-receiver'
+      slack_configs:
+      - channel: '#opifex-alerts'
+        title: 'Opifex Alert: {{ .GroupLabels.alertname }}'
+    - name: 'gpu-alerts'
+      slack_configs:
+      - channel: '#opifex-gpu-alerts'
+        title: 'GPU Alert: {{ .GroupLabels.alertname }}'
+    - name: 'l2o-alerts'
+      slack_configs:
+      - channel: '#opifex-l2o-alerts'
+        title: 'L2O Alert: {{ .GroupLabels.alertname }}'
+    - name: 'infrastructure-alerts'
+      slack_configs:
+      - channel: '#opifex-infrastructure'
+        title: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'

@@ -1,0 +1,19 @@
+# Service for GPU Resource Manager
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-resource-manager
+  namespace: opifex-system
+  labels:
+    app: gpu-resource-manager
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: metrics
+    - port: 8081
+      targetPort: 8081
+      name: health
+  selector:
+    app: gpu-resource-manager

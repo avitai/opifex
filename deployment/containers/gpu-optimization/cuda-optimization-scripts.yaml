@@ -1,0 +1,122 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cuda-optimization-scripts
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: cuda-optimization
+    app.kubernetes.io/component: gpu-optimization
+    app.kubernetes.io/part-of: opifex-container-orchestration
+data:
+  gpu-setup.sh: |
+    #!/bin/bash
+    # GPU Setup and Optimization Script for Opifex Containers
+    # Phase 7.1: Container Orchestration - CUDA Runtime Optimization
+
+    set -e
+
+    echo "🎯 Initializing GPU optimization for Opifex workloads..."
+
+    # GPU availability check
+    if ! nvidia-smi &>/dev/null; then
+        echo "⚠️  No GPU detected, configuring for CPU-only mode"
+        export JAX_PLATFORMS=cpu
+        export CUDA_VISIBLE_DEVICES=""
+        exit 0
+    fi
+
+    # Get GPU information
+    GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
+    GPU_MEMORY=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+
+    echo "🎮 GPU Configuration:"
+    echo "  - GPU Count: $GPU_COUNT"
+    echo "  - GPU Model: $GPU_NAME"
+    echo "  - GPU Memory: ${GPU_MEMORY} MB"
+
+    # Set memory fraction based on available memory
+    if [ "$GPU_MEMORY" -gt 32000 ]; then
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.95
+        echo "🚀 High-memory GPU (>32GB): Using 95% memory fraction"
+    elif [ "$GPU_MEMORY" -gt 16000 ]; then
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.9
+        echo "💪 High-memory GPU (>16GB): Using 90% memory fraction"
+    elif [ "$GPU_MEMORY" -gt 8000 ]; then
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.8
+        echo "🎮 Standard GPU (>8GB): Using 80% memory fraction"
+    else
+        export XLA_PYTHON_CLIENT_MEM_FRACTION=0.7
+        echo "💾 Low-memory GPU (≤8GB): Using 70% memory fraction"
+    fi
+
+    # CUDA optimization flags
+    export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-all}"
+    export NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES:-all}"
+    export NVIDIA_DRIVER_CAPABILITIES="${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}"
+
+    # JAX optimization flags
+    export JAX_PLATFORMS=gpu
+    export XLA_PYTHON_CLIENT_PREALLOCATE=false
+    export XLA_FLAGS="--xla_gpu_enable_triton_softmax_fusion=true --xla_gpu_triton_gemm_any=True --xla_gpu_enable_async_all_reduce=true"
+
+    # Warm up GPU kernels for faster first execution
+    echo "🔥 Warming up GPU kernels..."
+    python3 -c "
+    import jax
+    import jax.numpy as jnp
+
+    # Basic kernel warm-up
+    key = jax.random.PRNGKey(42)
+    x = jax.random.normal(key, (1024, 1024))
+    y = jnp.dot(x, x.T)
+    z = jnp.fft.fft2(x)
+
+    print(f'✅ GPU kernels warmed up')
+    print(f'📊 JAX backend: {jax.default_backend()}')
+    print(f'🎯 Available devices: {len(jax.devices())}')
+    " || echo "⚠️ GPU warm-up failed, continuing anyway"
+
+    echo "✅ GPU optimization complete"
+
+  monitor-gpu.sh: |
+    #!/bin/bash
+    # GPU Monitoring Script for Opifex Containers
+
+    while true; do
+        echo "$(date): GPU Status"
+        nvidia-smi --query-gpu=timestamp,name,temperature.gpu,utilization.gpu,utilization.memory,memory.used,memory.total --format=csv,noheader,nounits
+        sleep 30
+    done
+
+  gpu-health-check.sh: |
+    #!/bin/bash
+    # GPU Health Check for Opifex Containers
+
+    # Check NVIDIA driver
+    if ! nvidia-smi &>/dev/null; then
+        echo "❌ NVIDIA driver not accessible"
+        exit 1
+    fi
+
+    # Check GPU accessibility from Python
+    python3 -c "
+    import jax
+    try:
+        devices = jax.devices('gpu')
+        if len(devices) > 0:
+            print(f'✅ GPU accessible: {len(devices)} devices')
+            # Test basic computation
+            x = jax.random.normal(jax.random.PRNGKey(42), (100, 100))
+            y = jnp.dot(x, x.T)
+            print(f'✅ GPU computation successful')
+        else:
+            print('❌ No GPU devices available')
+            exit 1
+    except Exception as e:
+        print(f'❌ GPU test failed: {e}')
+        exit 1
+    " || exit 1
+
+    echo "✅ GPU health check passed"

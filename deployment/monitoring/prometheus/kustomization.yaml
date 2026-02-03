@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-prometheus
+  labels:
+    app.kubernetes.io/name: opifex-prometheus
+    app.kubernetes.io/part-of: opifex-monitoring
+    app.kubernetes.io/version: "v2.45.0"
+
+namespace: opifex-monitoring
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - service-external.yaml
+  - servicemonitor.yaml
+  - servicemonitor-apps.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+  - serviceaccount.yaml
+  - prometheus-rules.yaml
+
+commonLabels:
+  app.kubernetes.io/name: opifex-prometheus
+  app.kubernetes.io/component: monitoring
+  app.kubernetes.io/part-of: opifex-framework
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml
+
+images:
+  - name: prometheus/prometheus
+    newTag: v2.45.0

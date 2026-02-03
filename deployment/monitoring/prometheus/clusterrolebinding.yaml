@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: opifex-prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: opifex-monitoring

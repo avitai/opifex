@@ -1,0 +1,25 @@
+# External API Access Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: external-api-access
+  namespace: opifex-platform
+  labels:
+    security.opifex.io/policy: external-access
+spec:
+  podSelector:
+    matchLabels:
+      opifex.io/external-access: "true"
+  policyTypes:
+    - Egress
+  egress:
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443 # HTTPS
+        - protocol: TCP
+          port: 22 # SSH for Git
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53 # DNS

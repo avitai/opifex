@@ -1,0 +1,20 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: community-platform-role
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: community-platform-role
+    app.kubernetes.io/part-of: opifex-community
+rules:
+  # Local namespace resource management
+  - apiGroups: [""]
+    resources:
+      ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]

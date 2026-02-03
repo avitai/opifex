@@ -1,0 +1,10 @@
+# Physics-Informed ML Research Group
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-physics-informed
+  labels:
+    opifex.local/research-group: "physics-informed"
+    opifex.local/department: "ai-ml"
+    opifex.local/gpu-quota: "150"
+    name: opifex-physics-informed

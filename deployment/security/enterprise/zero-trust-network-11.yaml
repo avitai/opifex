@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zero-trust-policy-sa
+  namespace: security
+  labels:
+    app.kubernetes.io/name: zero-trust-policy-sa
+    app.kubernetes.io/component: zero-trust

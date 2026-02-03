@@ -1,0 +1,153 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: identity-management
+    tier: security
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+        component: identity-management
+        tier: security
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:23.0.4
+          args:
+            - start
+            - --optimized
+            - --cache=ispn
+            - --cache-stack=kubernetes
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: username
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: password
+            - name: KC_DB
+              value: "postgres"
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://keycloak-postgres:5432/keycloak"
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-postgres
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-postgres
+                  key: password
+            - name: KC_HOSTNAME
+              value: "keycloak.opifex.local"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HTTPS_CERTIFICATE_FILE
+              value: "/opt/keycloak/conf/tls.crt"
+            - name: KC_HTTPS_CERTIFICATE_KEY_FILE
+              value: "/opt/keycloak/conf/tls.key"
+            - name: KC_HTTPS_PORT
+              value: "8443"
+            - name: KC_HTTP_PORT
+              value: "8080"
+            - name: KC_PROXY
+              value: "edge"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: JAVA_OPTS_APPEND
+              value: "-Djava.net.preferIPv4Stack=true -Djboss.modules.system.pkgs=org.jboss.byteman -Djava.awt.headless=true"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: admin
+              containerPort: 9990
+              protocol: TCP
+          volumeMounts:
+            - name: keycloak-tls
+              mountPath: /opt/keycloak/conf
+              readOnly: true
+            - name: keycloak-config
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 300
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: keycloak-tls
+          secret:
+            secretName: keycloak-tls
+            defaultMode: 0444
+        - name: keycloak-config
+          configMap:
+            name: keycloak-config
+            defaultMode: 0444
+      serviceAccountName: keycloak
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - keycloak
+                topologyKey: kubernetes.io/hostname

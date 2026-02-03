@@ -1,0 +1,30 @@
+# Opifex Collaborator Role - Limited access to shared resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-collaborator
+  labels:
+    opifex.local/role-type: "collaborator"
+    opifex.local/access-level: "read-only"
+rules:
+  # Read-only access to shared resources
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["shared-*", "public-*"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+    resourceNames: ["shared-*", "public-*"]
+  # Model inference only
+  - apiGroups: ["opifex.local"]
+    resources: ["models"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["opifex.local"]
+    resources: ["inferencejobs"]
+    verbs: ["get", "list", "watch", "create"]
+  # Shared datasets (read-only)
+  - apiGroups: ["opifex.local"]
+    resources: ["datasets"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["shared-*", "public-*"]

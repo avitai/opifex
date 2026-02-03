@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pdebench-datasets-config
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: pdebench-config
+    app.kubernetes.io/component: datasets
+    app.kubernetes.io/part-of: opifex-benchmarking
+data:
+  datasets.yaml: |
+    # PDEBench Dataset Configuration
+    datasets:
+      # Fluid Dynamics
+      darcy_flow:
+        name: "Darcy Flow"
+        description: "2D Darcy flow with random permeability fields"
+        size: "~50GB"
+        download_url: "https://darus.uni-stuttgart.de/api/access/dataset/:persistentId?persistentId=doi:10.18419/darus-2986"
+        local_path: "/datasets/darcy_flow"
+        preprocessing: true
+        cache_enabled: true
+
+      navier_stokes:
+        name: "Navier-Stokes"
+        description: "2D incompressible Navier-Stokes equations"
+        size: "~75GB"
+        download_url: "https://darus.uni-stuttgart.de/api/access/dataset/:persistentId?persistentId=doi:10.18419/darus-2987"
+        local_path: "/datasets/navier_stokes"
+        preprocessing: true
+        cache_enabled: true
+
+      shallow_water:
+        name: "Shallow Water"
+        description: "2D shallow water equations with various initial conditions"
+        size: "~40GB"
+        download_url: "https://darus.uni-stuttgart.de/api/access/dataset/:persistentId?persistentId=doi:10.18419/darus-2988"
+        local_path: "/datasets/shallow_water"
+        preprocessing: true
+        cache_enabled: true
+
+      # Heat Transfer
+      diffusion_reaction:
+        name: "Diffusion-Reaction"
+        description: "1D and 2D diffusion-reaction equations"
+        size: "~25GB"
+        download_url: "https://darus.uni-stuttgart.de/api/access/dataset/:persistentId?persistentId=doi:10.18419/darus-2989"
+        local_path: "/datasets/diffusion_reaction"
+        preprocessing: true
+        cache_enabled: true
+
+      # Wave Propagation
+      wave_equation:
+        name: "Wave Equation"
+        description: "1D and 2D wave equations with various boundary conditions"
+        size: "~30GB"
+        download_url: "https://darus.uni-stuttgart.de/api/access/dataset/:persistentId?persistentId=doi:10.18419/darus-2990"
+        local_path: "/datasets/wave_equation"
+        preprocessing: true
+        cache_enabled: true
+
+      # Elasticity
+      linear_elasticity:
+        name: "Linear Elasticity"
+        description: "2D linear elasticity with various materials"
+        size: "~35GB"
+        download_url: "https://darus.uni-stuttgart.de/api/access/dataset/:persistentId?persistentId=doi:10.18419/darus-2991"
+        local_path: "/datasets/linear_elasticity"
+        preprocessing: true
+        cache_enabled: true
+
+    # Benchmark Configuration
+    benchmark_config:
+      batch_sizes: [1, 4, 8, 16, 32]
+      time_horizons: [10, 20, 50, 100]
+      spatial_resolutions: [64, 128, 256, 512]
+      metrics:
+        - mse
+        - mae
+        - relative_l2_error
+        - execution_time
+        - memory_usage
+        - gpu_utilization
+      timeout_minutes: 120
+      max_retries: 3
+
+    # Resource Requirements
+    resource_requirements:
+      cpu: "4"
+      memory: "16Gi"
+      gpu: "1"
+      ephemeral_storage: "50Gi"
+
+  preprocessing.yaml: |
+    # Data Preprocessing Configuration
+    preprocessing:
+      normalization:
+        method: "standard"  # standard, minmax, robust
+        per_channel: true
+
+      augmentation:
+        enabled: true
+        methods:
+          - "rotation"
+          - "flip"
+          - "noise"
+        parameters:
+          rotation_angles: [0, 90, 180, 270]
+          noise_std: 0.01
+
+      train_val_split:
+        train_ratio: 0.8
+        validation_ratio: 0.1
+        test_ratio: 0.1
+        shuffle: true
+        random_seed: 42
+
+      caching:
+        enabled: true
+        cache_preprocessed: true
+        cache_augmented: false
+        compression: "lz4"

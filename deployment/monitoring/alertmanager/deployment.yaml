@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-alertmanager
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+    app.kubernetes.io/version: "v0.25.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opifex-alertmanager
+      app.kubernetes.io/component: monitoring
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opifex-alertmanager
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: opifex-framework
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: alertmanager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: alertmanager
+          image: prometheus/alertmanager:v0.25.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+            - "--storage.path=/alertmanager"
+            - "--web.external-url=http://alertmanager.opifex-monitoring.svc.cluster.local:9093"
+            - "--web.route-prefix=/"
+            - "--log.level=info"
+            - "--log.format=logfmt"
+          ports:
+            - name: web
+              containerPort: 9093
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: web
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: web
+            initialDelaySeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/alertmanager
+              readOnly: true
+            - name: storage-volume
+              mountPath: /alertmanager
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config-volume
+          configMap:
+            name: alertmanager-config
+            defaultMode: 420
+        - name: storage-volume
+          emptyDir:
+            sizeLimit: 2Gi
+      nodeSelector:
+        kubernetes.io/os: linux

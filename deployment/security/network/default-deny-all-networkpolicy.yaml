@@ -1,0 +1,11 @@
+# Zero Trust Network Policies - Default Deny All
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: opifex-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

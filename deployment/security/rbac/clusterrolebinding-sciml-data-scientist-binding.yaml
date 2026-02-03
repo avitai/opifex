@@ -1,0 +1,19 @@
+# Data Scientist Specific Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opifex-data-scientist-binding
+  labels:
+    opifex.local/role-type: "data-scientist"
+subjects:
+  # Dedicated data scientists
+  - kind: User
+    name: "university-saml.data-scientist1@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "university-saml.data-scientist2@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: opifex-data-scientist
+  apiGroup: rbac.authorization.k8s.io

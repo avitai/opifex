@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cpu-node-selector
+  namespace: opifex-system
+  labels:
+    component: scalability
+    node-type: cpu
+    managed-by: opifex-framework
+data:
+  # CPU Node Selection Rules
+  cpu-node-affinity.yaml: |
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-type
+              operator: In
+              values: ["cpu", "compute"]
+            - key: cpu-type
+              operator: In
+              values: ["intel-xeon", "amd-epyc"]
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+            - key: instance-type
+              operator: In
+              values: ["c5.4xlarge", "c5.9xlarge", "c5.18xlarge", "m5.8xlarge"]
+        - weight: 80
+          preference:
+            matchExpressions:
+            - key: cpu-cores
+              operator: In
+              values: ["16", "32", "64", "72"]
+        - weight: 60
+          preference:
+            matchExpressions:
+            - key: memory-size
+              operator: In
+              values: ["64gb", "128gb", "256gb"]
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: workload-type
+                operator: In
+                values: ["cpu-intensive"]
+            topologyKey: kubernetes.io/hostname
+
+  # CPU Tolerations
+  cpu-tolerations.yaml: |
+    tolerations:
+    - key: opifex.io/cpu-intensive
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+    - key: opifex.io/compute-node
+      operator: Exists
+      effect: NoSchedule

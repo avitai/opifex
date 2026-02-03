@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: opifex-applications
+  namespace: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+spec:
+  namespaceSelector:
+    matchNames:
+      - opifex-framework
+  selector:
+    matchLabels:
+      monitoring: enabled
+  endpoints:
+    - port: metrics
+      interval: 10s
+      path: /metrics

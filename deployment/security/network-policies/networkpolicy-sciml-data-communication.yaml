@@ -1,0 +1,69 @@
+# Opifex Data Service Communication Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opifex-data-communication
+  namespace: opifex-data
+  labels:
+    security.opifex.local/policy-type: "inter-namespace"
+    security.opifex.local/component: "data-service"
+spec:
+  podSelector:
+    matchLabels:
+      component: data-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from core API
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-core
+          podSelector:
+            matchLabels:
+              component: api-server
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow traffic from training services
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-training
+          podSelector:
+            matchLabels:
+              component: training-service
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow monitoring traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow access to external data sources
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443 # HTTPS for external APIs
+        - protocol: TCP
+          port: 80 # HTTP for external APIs
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53

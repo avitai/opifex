@@ -1,0 +1,14 @@
+apiVersion: networking.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: zero-trust-default-deny
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: zero-trust-authz
+    app.kubernetes.io/component: zero-trust
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  # Default deny all policy - must be explicitly allowed
+  action: DENY
+  rules:
+    - {} # Empty rule means deny all

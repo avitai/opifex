@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-internal
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: identity-management
+    tier: security
+    service-type: internal
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: https
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
+    - name: metrics
+      port: 9990
+      targetPort: 9990
+      protocol: TCP
+  selector:
+    app: keycloak

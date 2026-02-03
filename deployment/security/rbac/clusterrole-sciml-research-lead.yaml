@@ -1,0 +1,40 @@
+# Opifex Research Lead ClusterRole - Group management and resource allocation
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-research-lead
+  labels:
+    opifex.local/role-type: "research-lead"
+    opifex.local/access-level: "group"
+rules:
+  # Namespace-level access to assigned research groups
+  - apiGroups: [""]
+    resources:
+      ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Resource quota management
+  - apiGroups: [""]
+    resources: ["resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # GPU resource management
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: []
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  # Group member management
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    verbs: ["get", "list", "watch"]
+  # Custom Opifex training resources
+  - apiGroups: ["opifex.local"]
+    resources: ["trainingjobs", "models", "datasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

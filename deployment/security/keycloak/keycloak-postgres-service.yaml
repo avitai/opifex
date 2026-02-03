@@ -1,0 +1,16 @@
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-postgres
+  namespace: opifex-security
+  labels:
+    app: keycloak-postgres
+    component: database
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: keycloak-postgres

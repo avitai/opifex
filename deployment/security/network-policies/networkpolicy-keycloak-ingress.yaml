@@ -1,0 +1,70 @@
+# Keycloak Ingress Policy - Allow external access and internal communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-ingress
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    security.opifex.local/policy-type: "allow-ingress"
+    security.opifex.local/component: "identity-management"
+spec:
+  podSelector:
+    matchLabels:
+      app: keycloak
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow traffic from LoadBalancer/Ingress Controllers
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8443
+    # Allow traffic from Opifex Core services for authentication
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-core
+          podSelector:
+            matchLabels:
+              component: api-server
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-core
+          podSelector:
+            matchLabels:
+              component: dashboard
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8443
+    # Allow monitoring traffic from Prometheus
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9990
+    # Allow JGroups clustering between Keycloak instances
+    - from:
+        - podSelector:
+            matchLabels:
+              app: keycloak
+      ports:
+        - protocol: TCP
+          port: 7600
+        - protocol: UDP
+          port: 57600

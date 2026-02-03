@@ -1,0 +1,66 @@
+{
+  "python.defaultInterpreterPath": "./.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "editor.rulers": [
+    88
+  ],
+  "editor.wordWrap": "wordWrapColumn",
+  "editor.wordWrapColumn": 88,
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll.ruff": "explicit"
+  },
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll.ruff": "explicit"
+    },
+    "editor.rulers": [
+      88
+    ],
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+  "ruff.enable": true,
+  "ruff.organizeImports": true,
+  "ruff.fixAll": true,
+  "ruff.codeAction.fixViolation": {
+    "enable": true
+  },
+  "python.analysis.typeCheckingMode": "strict",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.autoSearchPaths": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "files.associations": {
+    "*.py": "python",
+    "pyproject.toml": "toml",
+    ".pre-commit-config.yaml": "yaml"
+  },
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "[jupyter]": {
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      88
+    ]
+  },
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "extensions.recommendations": [
+    "ms-python.python",
+    "charliermarsh.ruff",
+    "ms-python.vscode-pylance",
+    "ms-toolsai.jupyter",
+    "EditorConfig.EditorConfig"
+  ]
+}

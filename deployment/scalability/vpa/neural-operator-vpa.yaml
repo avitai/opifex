@@ -1,0 +1,39 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: neural-operator-vpa
+  namespace: opifex-system
+  labels:
+    app: neural-operator-trainer
+    component: scalability
+    managed-by: opifex-framework
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: neural-operator-trainer
+  updatePolicy:
+    updateMode: "Auto"
+    minReplicas: 1
+  resourcePolicy:
+    containerPolicies:
+      - containerName: neural-operator-trainer
+        minAllowed:
+          cpu: 200m
+          memory: 1Gi
+          nvidia.com/gpu: 1
+        maxAllowed:
+          cpu: 16
+          memory: 128Gi
+          nvidia.com/gpu: 8
+        controlledResources: ["cpu", "memory", "nvidia.com/gpu"]
+        controlledValues: RequestsAndLimits
+      - containerName: data-loader
+        minAllowed:
+          cpu: 50m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 2
+          memory: 8Gi
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsAndLimits

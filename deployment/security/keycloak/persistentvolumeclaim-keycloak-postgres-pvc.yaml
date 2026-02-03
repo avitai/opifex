@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-postgres-pvc
+  namespace: opifex-security
+  labels:
+    app: keycloak-postgres
+    component: database
+    tier: security
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd

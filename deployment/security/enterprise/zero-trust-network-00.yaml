@@ -1,0 +1,221 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zero-trust-config
+  namespace: security
+  labels:
+    app.kubernetes.io/name: zero-trust
+    app.kubernetes.io/component: enterprise-security
+    app.kubernetes.io/part-of: opifex-enterprise-security
+    compliance.opifex.io/tier: zero-trust
+data:
+  zero-trust-policies.yaml: |
+    # Zero Trust Network Security Policies for Opifex Enterprise
+    zero_trust_framework:
+      version: "2.0"
+      last_updated: "2025-02-08"
+
+      core_principles:
+        never_trust_always_verify: true
+        assume_breach: true
+        verify_explicitly: true
+        use_least_privilege: true
+
+      network_segmentation:
+        micro_segmentation:
+          enabled: true
+          granularity: "workload_level"
+          enforcement: "istio_service_mesh"
+          default_policy: "deny_all"
+
+        network_zones:
+          public_zone:
+            trust_level: "untrusted"
+            allowed_protocols: ["https", "ssh"]
+            inspection_level: "deep"
+
+          dmz_zone:
+            trust_level: "low"
+            allowed_protocols: ["https", "grpc"]
+            inspection_level: "moderate"
+
+          internal_zone:
+            trust_level: "medium"
+            allowed_protocols: ["http", "https", "grpc", "tcp"]
+            inspection_level: "basic"
+
+          secure_zone:
+            trust_level: "high"
+            allowed_protocols: ["secure_internal"]
+            inspection_level: "minimal"
+
+      identity_verification:
+        continuous_authentication:
+          enabled: true
+          verification_interval: "15_minutes"
+          risk_based_intervals: true
+
+        multi_factor_authentication:
+          required: true
+          methods: ["totp", "webauthn", "push_notification"]
+          adaptive_mfa: true
+
+        device_verification:
+          device_registration: "required"
+          device_compliance: "enforced"
+          device_trust_levels: ["unknown", "known", "managed", "trusted"]
+
+      contextual_authorization:
+        risk_scoring:
+          enabled: true
+          factors:
+            - "location_anomaly"
+            - "time_anomaly"
+            - "device_trust_level"
+            - "user_behavior_pattern"
+            - "network_location"
+            - "data_sensitivity"
+
+        adaptive_access:
+          risk_thresholds:
+            low: 0.3
+            medium: 0.6
+            high: 0.8
+            critical: 0.95
+
+          access_controls:
+            low_risk: "standard_access"
+            medium_risk: "additional_verification"
+            high_risk: "restricted_access"
+            critical_risk: "block_access"
+
+      data_protection:
+        encryption_in_transit:
+          minimum_tls_version: "1.3"
+          certificate_pinning: true
+          mutual_tls: "enforced"
+
+        encryption_at_rest:
+          encryption_standard: "AES_256_GCM"
+          key_rotation: "quarterly"
+          key_escrow: "enabled"
+
+        data_loss_prevention:
+          content_inspection: "enabled"
+          pattern_matching: "advanced"
+          machine_learning: "enabled"
+
+      monitoring_and_analytics:
+        behavioral_analytics:
+          user_behavior_profiling: true
+          anomaly_detection: "ml_based"
+          baseline_learning: "30_days"
+
+        security_analytics:
+          threat_intelligence: "integrated"
+          ioc_monitoring: "real_time"
+          attack_pattern_detection: "enabled"
+
+  network-policies.yaml: |
+    # Zero Trust Network Policies
+    network_policies:
+      default_deny_all:
+        description: "Default deny all traffic"
+        policy_type: "NetworkPolicy"
+        action: "deny"
+        priority: 1000
+
+      opifex_api_ingress:
+        description: "Allow ingress to Opifex API services"
+        source_namespaces: ["istio-system", "opifex-system"]
+        destination_ports: [8080, 8443]
+        protocols: ["TCP"]
+
+      opifex_internal_communication:
+        description: "Allow internal communication between Opifex services"
+        source_labels:
+          app.kubernetes.io/part-of: "opifex-platform"
+        destination_labels:
+          app.kubernetes.io/part-of: "opifex-platform"
+        protocols: ["TCP", "UDP"]
+
+      gpu_cluster_access:
+        description: "Restricted access to GPU cluster resources"
+        source_labels:
+          opifex.io/gpu-access: "authorized"
+        destination_labels:
+          opifex.io/resource-type: "gpu-node"
+        protocols: ["TCP"]
+        ports: [2379, 2380, 6443]
+
+      database_access:
+        description: "Database access from authorized services only"
+        source_labels:
+          opifex.io/database-client: "authorized"
+        destination_labels:
+          app.kubernetes.io/component: "database"
+        protocols: ["TCP"]
+        ports: [5432, 3306, 27017]
+
+      monitoring_ingress:
+        description: "Monitoring system access"
+        source_namespaces: ["monitoring"]
+        destination_ports: [9090, 3000, 9093]
+        protocols: ["TCP"]
+
+  micro-segmentation-rules.yaml: |
+    # Micro-segmentation Rules for Research Workloads
+    micro_segmentation:
+      research_groups:
+        computational_physics:
+          allowed_services:
+            - "neural-operators"
+            - "l2o-optimization"
+            - "shared-storage"
+          data_classification_access: ["public", "research"]
+          gpu_allocation: "standard"
+
+        machine_learning:
+          allowed_services:
+            - "neural-operators"
+            - "benchmarking"
+            - "ml-experiments"
+            - "gpu-cluster"
+          data_classification_access: ["public", "research", "sensitive"]
+          gpu_allocation: "premium"
+
+        enterprise_partners:
+          allowed_services:
+            - "enterprise-api"
+            - "partner-portal"
+            - "confidential-compute"
+          data_classification_access: ["public", "confidential"]
+          gpu_allocation: "enterprise"
+
+      service_dependencies:
+        neural_operators:
+          dependencies:
+            - "gpu-runtime"
+            - "model-storage"
+            - "experiment-tracking"
+          network_requirements:
+            bandwidth: "10Gbps"
+            latency: "<5ms"
+
+        l2o_optimization:
+          dependencies:
+            - "optimization-engine"
+            - "result-storage"
+            - "monitoring"
+          network_requirements:
+            bandwidth: "5Gbps"
+            latency: "<10ms"
+
+        benchmarking:
+          dependencies:
+            - "benchmark-data"
+            - "result-analysis"
+            - "reporting"
+          network_requirements:
+            bandwidth: "20Gbps"
+            latency: "<2ms"

@@ -1,0 +1,82 @@
+# Harbor Trivy Scanner Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harbor-trivy
+  namespace: harbor-system
+  labels:
+    app: harbor-trivy
+    component: trivy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: harbor-trivy
+  template:
+    metadata:
+      labels:
+        app: harbor-trivy
+        component: trivy
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: trivy
+          image: goharbor/trivy-adapter-photon:v2.10.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SCANNER_LOG_LEVEL
+              value: "info"
+            - name: SCANNER_TRIVY_CACHE_DIR
+              value: "/home/scanner/.cache/trivy"
+            - name: SCANNER_TRIVY_REPORTS_DIR
+              value: "/home/scanner/.cache/reports"
+            - name: SCANNER_TRIVY_DEBUG_MODE
+              value: "false"
+            - name: SCANNER_TRIVY_VULN_TYPE
+              value: "os,library"
+            - name: SCANNER_TRIVY_SEVERITY
+              value: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+            - name: SCANNER_TRIVY_IGNORE_UNFIXED
+              value: "false"
+            - name: SCANNER_TRIVY_SKIP_UPDATE
+              value: "false"
+            - name: SCANNER_TRIVY_OFFLINE_SCAN
+              value: "false"
+            - name: SCANNER_TRIVY_SECURITY_CHECKS
+              value: "vuln,secret"
+            - name: SCANNER_TRIVY_INSECURE
+              value: "false"
+            - name: SCANNER_TRIVY_TIMEOUT
+              value: "5m0s"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          volumeMounts:
+            - name: trivy-cache
+              mountPath: /home/scanner/.cache
+          livenessProbe:
+            httpGet:
+              path: /probe/healthy
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /probe/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: trivy-cache
+          persistentVolumeClaim:
+            claimName: harbor-trivy-pvc

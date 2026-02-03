@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-runtime-config
+  namespace: opifex-system
+  labels:
+    app: opifex-gpu-optimization
+    component: runtime-config
+data:
+  runtime-config.yaml: |
+    # GPU Runtime Configuration for Opifex Platform
+    runtime:
+      name: nvidia
+      path: /usr/bin/nvidia-container-runtime
+      runtimeArgs: []
+
+    # CUDA Configuration
+    cuda:
+      version: "12.0"
+      compatibilityMode: true
+
+    # Container Runtime Settings
+    container:
+      runtime: containerd
+      socketPath: /run/containerd/containerd.sock
+
+    # GPU Resource Management
+    resources:
+      defaultGpuMemory: "8Gi"
+      maxGpuMemory: "80Gi"
+      gpuSharingEnabled: true
+
+    # Performance Optimization
+    performance:
+      enableGpuMetrics: true
+      enableGpuProfiling: true
+      cudaVisibleDevices: "all"

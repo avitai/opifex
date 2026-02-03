@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-monitoring-dashboard
+  namespace: security
+  labels:
+    app.kubernetes.io/name: security-monitoring
+    app.kubernetes.io/component: soc2-controls
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: security-monitoring
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: security-monitoring
+        app.kubernetes.io/component: soc2-controls
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: security-monitoring-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1004
+        runAsGroup: 1004
+        fsGroup: 1004
+      containers:
+        - name: security-dashboard
+          image: harbor.opifex.enterprise.com/security/monitoring-dashboard:v2.1.0
+          env:
+            - name: ELASTICSEARCH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-secret
+                  key: connection-string
+            - name: KEYCLOAK_BASE_URL
+              value: "https://auth.opifex.enterprise.com"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "security-monitoring"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: security-monitoring-secret
+                  key: client-secret
+            - name: ALERT_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: alert-webhook-secret
+                  key: webhook-url
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: COMPLIANCE_TIER
+              value: "soc2"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: websocket
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: soc2-config
+              mountPath: /etc/soc2
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: soc2-config
+          configMap:
+            name: soc2-compliance-config

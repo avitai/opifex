@@ -1,0 +1,26 @@
+# Data Service ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opifex-data-service
+  labels:
+    opifex.local/service-type: "data-service"
+rules:
+  # Data processing jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Storage management
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  # Custom data resources
+  - apiGroups: ["opifex.local"]
+    resources: ["datasets", "dataprocessingjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

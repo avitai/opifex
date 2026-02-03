@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: opifex-neural-operators
+  name: neural-operators-researcher
+  labels:
+    opifex.local/research-group: "neural-operators"
+rules:
+  - apiGroups: [""]
+    resources:
+      [
+        "pods",
+        "pods/log",
+        "pods/status",
+        "configmaps",
+        "secrets",
+        "persistentvolumeclaims",
+        "services",
+      ]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["opifex.local"]
+    resources: ["neuraloperatorjobs", "fnotraining", "deeponets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

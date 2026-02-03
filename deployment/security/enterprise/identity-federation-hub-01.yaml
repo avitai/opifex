@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-enterprise
+  namespace: security
+  labels:
+    app.kubernetes.io/name: keycloak-enterprise
+    app.kubernetes.io/component: identity-federation
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak-enterprise
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak-enterprise
+        app.kubernetes.io/component: identity-federation
+    spec:
+      serviceAccountName: keycloak-enterprise-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:23.0.4
+          args:
+            - "start"
+            - "--optimized"
+            - "--hostname=auth.opifex.enterprise.com"
+            - "--hostname-strict=false"
+            - "--proxy=edge"
+            - "--http-enabled=true"
+            - "--import-realm"
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: username
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: password
+            - name: KC_DB
+              value: "postgres"
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://postgresql-keycloak:5432/keycloak"
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db-secret
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db-secret
+                  key: password
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: KC_LOG_LEVEL
+              value: "INFO"
+            - name: ENTERPRISE_OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: enterprise-oidc-secret
+                  key: client-id
+            - name: ENTERPRISE_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: enterprise-oidc-secret
+                  key: client-secret
+            - name: LDAP_BIND_DN
+              valueFrom:
+                secretKeyRef:
+                  name: ldap-bind-secret
+                  key: bind-dn
+            - name: LDAP_BIND_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ldap-bind-secret
+                  key: bind-password
+            - name: OPIFEX_API_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: opifex-api-secret
+                  key: client-secret
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: 9000
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 20
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+            - name: custom-themes
+              mountPath: /opt/keycloak/themes/opifex-enterprise
+              readOnly: true
+      volumes:
+        - name: realm-config
+          configMap:
+            name: opifex-enterprise-realm-config
+        - name: custom-themes
+          configMap:
+            name: opifex-enterprise-themes

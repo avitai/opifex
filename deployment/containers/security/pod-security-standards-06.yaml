@@ -1,0 +1,90 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opifex-container-network-policy
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: container-network-policy
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: opifex-container-orchestration
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: opifex-framework
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Ingress rules
+  ingress:
+    # Allow traffic from Istio sidecars
+    - from:
+        - podSelector:
+            matchLabels:
+              app: istio-proxy
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 15090 # Envoy admin
+
+    # Allow traffic from same namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-system
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-production
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 8080
+
+    # Allow monitoring traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080 # Metrics endpoint
+        - protocol: TCP
+          port: 15020 # Istio health check
+
+  # Egress rules
+  egress:
+    # Allow traffic to Istio sidecars
+    - to:
+        - podSelector:
+            matchLabels:
+              app: istio-proxy
+      ports:
+        - protocol: TCP
+          port: 15001 # Envoy outbound
+
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow HTTPS for external APIs
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Allow database access
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database
+      ports:
+        - protocol: TCP
+          port: 5432 # PostgreSQL
+        - protocol: TCP
+          port: 6379 # Redis

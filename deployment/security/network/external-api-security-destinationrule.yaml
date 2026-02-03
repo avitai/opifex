@@ -1,0 +1,13 @@
+# DestinationRule - External API Security
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: external-api-security
+  namespace: opifex-platform
+spec:
+  host: "*.opifex.io"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+  exportTo:
+    - "."

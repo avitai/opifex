@@ -1,0 +1,136 @@
+version: "3.8"
+
+services:
+  opifex-core:
+    build:
+      context: ../../../
+      dockerfile: deployment/containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex-core:latest
+    mem_limit: "16g"
+    memswap_limit: "32g"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.75
+      - JAX_PLATFORM_NAME=gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - pip-cache:/root/.cache/pip
+      - model-cache:/app/models
+
+  opifex-neural-ops:
+    build:
+      context: ../../../
+      dockerfile: deployment/containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex-neural-ops:latest
+    mem_limit: "16g"
+    memswap_limit: "32g"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.80
+      - JAX_PLATFORM_NAME=gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - pip-cache:/root/.cache/pip
+      - jax-cache:/tmp/jax_cache
+
+  opifex-l2o:
+    build:
+      context: ../../../
+      dockerfile: deployment/containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex-l2o:latest
+    mem_limit: "16g"
+    memswap_limit: "32g"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.70
+      - JAX_PLATFORM_NAME=gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - pip-cache:/root/.cache/pip
+      - data-cache:/app/data
+
+  opifex-benchmarks:
+    build:
+      context: ../../../
+      dockerfile: deployment/containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex-benchmarks:latest
+    mem_limit: "16g"
+    memswap_limit: "32g"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.75
+      - JAX_PLATFORM_NAME=gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - pip-cache:/root/.cache/pip
+      - benchmark-cache:/app/benchmarks
+
+  opifex-dev:
+    build:
+      context: ../../../
+      dockerfile: deployment/containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex-dev:latest
+    mem_limit: "16g"
+    memswap_limit: "32g"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.90
+      - JAX_PLATFORM_NAME=gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - pip-cache:/root/.cache/pip
+      - dev-cache:/app/.dev-cache
+
+volumes:
+  pip-cache:
+    driver: local
+  jax-cache:
+    driver: local
+  model-cache:
+    driver: local
+  data-cache:
+    driver: local
+  benchmark-cache:
+    driver: local
+  dev-cache:
+    driver: local

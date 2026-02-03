@@ -1,0 +1,27 @@
+# Fluid Dynamics Research Group Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: opifex-fluid-dynamics
+  name: fluid-dynamics-researchers-binding
+  labels:
+    opifex.local/research-group: "fluid-dynamics"
+subjects:
+  # Research lead
+  - kind: User
+    name: "university-saml.fluid-lead@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  # Researchers
+  - kind: User
+    name: "university-saml.fluid-researcher1@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "university-saml.fluid-researcher2@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "university-saml.fluid-researcher3@university.edu"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: fluid-dynamics-researcher
+  apiGroup: rbac.authorization.k8s.io
