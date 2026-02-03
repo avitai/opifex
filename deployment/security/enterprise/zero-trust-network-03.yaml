@@ -1,0 +1,59 @@
+apiVersion: networking.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: research-group-segregation
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: research-group-authz
+    app.kubernetes.io/component: zero-trust
+spec:
+  action: ALLOW
+  rules:
+    # Computational Physics Group
+    - from:
+        - source:
+            principals:
+              ["cluster.local/ns/opifex-system/sa/computational-physics-sa"]
+      to:
+        - operation:
+            methods: ["GET", "POST"]
+            paths: ["/api/neural-operators/*", "/api/l2o/*"]
+      when:
+        - key: custom.research_group
+          values: ["computational-physics"]
+        - key: custom.data_classification
+          values: ["public", "research"]
+
+    # Machine Learning Group
+    - from:
+        - source:
+            principals: ["cluster.local/ns/opifex-system/sa/machine-learning-sa"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT"]
+            paths:
+              [
+                "/api/neural-operators/*",
+                "/api/benchmarking/*",
+                "/api/gpu-cluster/*",
+              ]
+      when:
+        - key: custom.research_group
+          values: ["machine-learning"]
+        - key: custom.data_classification
+          values: ["public", "research", "sensitive"]
+
+    # Enterprise Partners
+    - from:
+        - source:
+            principals:
+              ["cluster.local/ns/opifex-system/sa/enterprise-partners-sa"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            paths: ["/api/enterprise/*", "/api/partner/*"]
+      when:
+        - key: custom.research_group
+          values: ["enterprise-partners"]
+        - key: custom.data_classification
+          values: ["public", "confidential"]

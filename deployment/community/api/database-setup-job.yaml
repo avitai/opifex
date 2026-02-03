@@ -1,0 +1,266 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: community-db-setup
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: community-db-setup
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opifex-community
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: community-db-setup
+        app.kubernetes.io/component: database
+    spec:
+      serviceAccountName: community-service-account
+      restartPolicy: OnFailure
+      containers:
+        - name: db-setup
+          image: postgres:15-alpine
+          env:
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: community-platform-config
+                  key: DATABASE_HOST
+            - name: PGPORT
+              valueFrom:
+                configMapKeyRef:
+                  name: community-platform-config
+                  key: DATABASE_PORT
+            - name: PGDATABASE
+              value: "postgres"
+            - name: PGUSER
+              value: "postgres"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: postgres-password
+            - name: COMMUNITY_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: community-platform-config
+                  key: DATABASE_NAME
+            - name: COMMUNITY_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: community-platform-secrets
+                  key: DATABASE_USERNAME
+            - name: COMMUNITY_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: community-platform-secrets
+                  key: DATABASE_PASSWORD
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Setting up community database..."
+
+              # Create database if it doesn't exist
+              psql -c "CREATE DATABASE \"$COMMUNITY_DB_NAME\";" || echo "Database already exists"
+
+              # Create user if it doesn't exist
+              psql -c "CREATE USER \"$COMMUNITY_DB_USER\" WITH PASSWORD '$COMMUNITY_DB_PASSWORD';" || echo "User already exists"
+
+              # Grant privileges
+              psql -c "GRANT ALL PRIVILEGES ON DATABASE \"$COMMUNITY_DB_NAME\" TO \"$COMMUNITY_DB_USER\";"
+
+              # Connect to community database and create schema
+              export PGDATABASE="$COMMUNITY_DB_NAME"
+              export PGUSER="$COMMUNITY_DB_USER"
+              export PGPASSWORD="$COMMUNITY_DB_PASSWORD"
+
+              echo "Creating database schema..."
+              psql <<'EOF'
+              -- Enable UUID extension
+              CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+              CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+              CREATE EXTENSION IF NOT EXISTS "btree_gin";
+
+              -- Neural Functional Registry Schema
+              CREATE TABLE IF NOT EXISTS neural_functionals (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  name VARCHAR(255) NOT NULL,
+                  type VARCHAR(100) NOT NULL, -- 'l2o', 'neural_operator', 'pinn', etc.
+                  description TEXT,
+                  version VARCHAR(50) NOT NULL,
+                  author_id UUID NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  storage_path VARCHAR(500) NOT NULL,
+                  metadata JSONB,
+                  tags TEXT[],
+                  is_public BOOLEAN DEFAULT false,
+                  download_count INTEGER DEFAULT 0,
+                  file_size BIGINT,
+                  checksum VARCHAR(128),
+                  UNIQUE(name, version, author_id)
+              );
+
+              -- User Management Schema
+              CREATE TABLE IF NOT EXISTS users (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  username VARCHAR(100) UNIQUE NOT NULL,
+                  email VARCHAR(255) UNIQUE NOT NULL,
+                  full_name VARCHAR(255),
+                  affiliation VARCHAR(255),
+                  orcid VARCHAR(50),
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  is_active BOOLEAN DEFAULT true,
+                  is_verified BOOLEAN DEFAULT false,
+                  last_login TIMESTAMP,
+                  profile_data JSONB
+              );
+
+              -- Workspace Management Schema
+              CREATE TABLE IF NOT EXISTS workspaces (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  name VARCHAR(255) NOT NULL,
+                  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                  description TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  status VARCHAR(50) DEFAULT 'active',
+                  resources JSONB, -- CPU, memory, GPU allocations
+                  configuration JSONB,
+                  is_shared BOOLEAN DEFAULT false,
+                  namespace_name VARCHAR(253) -- Kubernetes namespace
+              );
+
+              -- Collaboration Schema
+              CREATE TABLE IF NOT EXISTS experiments (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  name VARCHAR(255) NOT NULL,
+                  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                  creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                  description TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  status VARCHAR(50) DEFAULT 'active',
+                  configuration JSONB,
+                  results JSONB,
+                  is_public BOOLEAN DEFAULT false,
+                  tags TEXT[]
+              );
+
+              -- Plugin Management Schema
+              CREATE TABLE IF NOT EXISTS plugins (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  name VARCHAR(255) UNIQUE NOT NULL,
+                  version VARCHAR(50) NOT NULL,
+                  author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                  description TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  source_url VARCHAR(500),
+                  documentation_url VARCHAR(500),
+                  is_approved BOOLEAN DEFAULT false,
+                  download_count INTEGER DEFAULT 0,
+                  configuration_schema JSONB,
+                  security_sandbox JSONB,
+                  UNIQUE(name, version)
+              );
+
+              -- Collaboration Features
+              CREATE TABLE IF NOT EXISTS workspace_members (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                  role VARCHAR(50) NOT NULL DEFAULT 'member', -- 'owner', 'admin', 'member', 'viewer'
+                  permissions JSONB,
+                  invited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  joined_at TIMESTAMP,
+                  UNIQUE(workspace_id, user_id)
+              );
+
+              CREATE TABLE IF NOT EXISTS experiment_shares (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+                  shared_with_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                  shared_with_workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+                  permission_level VARCHAR(50) NOT NULL DEFAULT 'read', -- 'read', 'write', 'admin'
+                  shared_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                  shared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  expires_at TIMESTAMP,
+                  CONSTRAINT check_shared_target CHECK (
+                      (shared_with_user_id IS NOT NULL AND shared_with_workspace_id IS NULL) OR
+                      (shared_with_user_id IS NULL AND shared_with_workspace_id IS NOT NULL)
+                  )
+              );
+
+              -- Activity Logging
+              CREATE TABLE IF NOT EXISTS activity_logs (
+                  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                  action VARCHAR(100) NOT NULL,
+                  resource_type VARCHAR(50) NOT NULL,
+                  resource_id UUID,
+                  details JSONB,
+                  ip_address INET,
+                  user_agent TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+              );
+
+              -- Indexes for performance
+              CREATE INDEX IF NOT EXISTS idx_neural_functionals_type ON neural_functionals(type);
+              CREATE INDEX IF NOT EXISTS idx_neural_functionals_author ON neural_functionals(author_id);
+              CREATE INDEX IF NOT EXISTS idx_neural_functionals_tags ON neural_functionals USING GIN(tags);
+              CREATE INDEX IF NOT EXISTS idx_neural_functionals_metadata ON neural_functionals USING GIN(metadata);
+              CREATE INDEX IF NOT EXISTS idx_neural_functionals_public ON neural_functionals(is_public);
+              CREATE INDEX IF NOT EXISTS idx_neural_functionals_search ON neural_functionals USING GIN(to_tsvector('english', name || ' ' || COALESCE(description, '')));
+
+              CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
+              CREATE INDEX IF NOT EXISTS idx_workspaces_status ON workspaces(status);
+              CREATE INDEX IF NOT EXISTS idx_workspaces_shared ON workspaces(is_shared);
+
+              CREATE INDEX IF NOT EXISTS idx_experiments_workspace ON experiments(workspace_id);
+              CREATE INDEX IF NOT EXISTS idx_experiments_creator ON experiments(creator_id);
+              CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status);
+              CREATE INDEX IF NOT EXISTS idx_experiments_public ON experiments(is_public);
+              CREATE INDEX IF NOT EXISTS idx_experiments_tags ON experiments USING GIN(tags);
+
+              CREATE INDEX IF NOT EXISTS idx_plugins_name ON plugins(name);
+              CREATE INDEX IF NOT EXISTS idx_plugins_approved ON plugins(is_approved);
+              CREATE INDEX IF NOT EXISTS idx_plugins_author ON plugins(author_id);
+
+              CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace ON workspace_members(workspace_id);
+              CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
+              CREATE INDEX IF NOT EXISTS idx_workspace_members_role ON workspace_members(role);
+
+              CREATE INDEX IF NOT EXISTS idx_experiment_shares_experiment ON experiment_shares(experiment_id);
+              CREATE INDEX IF NOT EXISTS idx_experiment_shares_user ON experiment_shares(shared_with_user_id);
+              CREATE INDEX IF NOT EXISTS idx_experiment_shares_workspace ON experiment_shares(shared_with_workspace_id);
+
+              CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
+              CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action);
+              CREATE INDEX IF NOT EXISTS idx_activity_logs_resource ON activity_logs(resource_type, resource_id);
+              CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs(created_at);
+
+              -- Create default admin user (for initial setup)
+              INSERT INTO users (id, username, email, full_name, is_active, is_verified)
+              VALUES (
+                  uuid_generate_v4(),
+                  'admin',
+                  'admin@opifex.io',
+                  'Opifex Platform Administrator',
+                  true,
+                  true
+              ) ON CONFLICT (username) DO NOTHING;
+
+              -- Create sample data for testing
+              INSERT INTO users (username, email, full_name, affiliation)
+              VALUES
+                  ('researcher1', 'researcher1@example.org', 'Dr. Jane Smith', 'MIT'),
+                  ('developer1', 'dev1@example.org', 'John Doe', 'Stanford University')
+              ON CONFLICT (username) DO NOTHING;
+
+              COMMIT;
+              EOF
+
+              echo "Database setup completed successfully!"

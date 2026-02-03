@@ -1,0 +1,101 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for SciML
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please provide as much detail as possible.
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      description: What type of feature are you requesting?
+      options:
+        - New Neural Operator Architecture
+        - Training Enhancement
+        - Optimization Method
+        - Bayesian Method
+        - Physics-Informed Enhancement
+        - Quantum/DFT Feature
+        - Geometry/CSG Enhancement
+        - Data Processing
+        - Deployment/Serving
+        - Documentation
+        - Performance Improvement
+        - API Enhancement
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+      placeholder: I would like to see...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: example-api
+    attributes:
+      label: Example API (Optional)
+      description: Show us what the API might look like
+      render: python
+      placeholder: |
+        from sciml.neural.operators import MyNewOperator
+
+        # Example usage
+        model = MyNewOperator(...)
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to papers, implementations, or related work
+      placeholder: |
+        - Paper: https://arxiv.org/abs/...
+        - Implementation: https://github.com/...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: implementation
+    attributes:
+      label: Are you willing to contribute this feature?
+      options:
+        - "Yes, I can submit a PR"
+        - "Yes, with guidance"
+        - "No, I need someone else to implement it"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or examples
+    validations:
+      required: false

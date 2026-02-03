@@ -1,0 +1,531 @@
+# Opifex Keycloak Themes and Custom Providers Configuration
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opifex-keycloak-themes
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    component: themes
+data:
+  theme.properties: |
+    parent=keycloak
+    import=common/keycloak
+
+    locales=en,de,fr,es,zh-CN,ja
+
+    # Opifex Scientific Computing Theme
+    displayName=Opifex Scientific Computing Platform
+    displayNameHtml=<div class="kc-logo-text"><span>Opifex</span></div>
+
+    # Custom CSS and styling
+    styles=lib/patternfly/css/patternfly.css lib/zocial/zocial.css css/login.css css/opifex-custom.css
+
+    # Custom scripts for enhanced UX
+    scripts=js/opifex-auth.js js/institution-selector.js
+
+    # Email templates
+    emailDisplayName=Opifex Authentication Service
+    emailFrom=auth@opifex.io
+    emailReplyTo=support@opifex.io
+
+  login.ftl: |
+    <!DOCTYPE html>
+    <html class="${'rtl' : 'ltr'}">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="robots" content="noindex, nofollow">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>Opifex Scientific Computing Platform</title>
+
+        <link rel="icon" type="image/png" href="${url.resourcesPath}/img/favicon.png" />
+
+        <link href="${url.resourcesPath}/lib/patternfly/css/patternfly.css" rel="stylesheet" />
+        <link href="${url.resourcesPath}/lib/zocial/zocial.css" rel="stylesheet" />
+        <link href="${url.resourcesPath}/css/login.css" rel="stylesheet" />
+        <link href="${url.resourcesPath}/css/opifex-custom.css" rel="stylesheet" />
+    </head>
+
+    <body class="opifex-login">
+        <div class="login-pf-page">
+            <div class="login-pf-brand">
+                <div class="opifex-logo">
+                    <img src="${url.resourcesPath}/img/opifex-logo.svg" alt="Opifex" />
+                    <h1>Scientific Computing Platform</h1>
+                    <p>Advanced computational science and machine learning</p>
+                </div>
+            </div>
+
+            <div class="card-pf login-pf-accounts">
+                <header class="login-pf-header">
+                    <h1 id="kc-page-title">
+                        <#if message?has_content>
+                            ${kcSanitize(message.summary)?no_esc}
+                        <#else>
+                            Sign in to Opifex Platform
+                        </#if>
+                    </h1>
+                </header>
+
+                <div class="login-pf-social-section">
+                    <#if social.providers??>
+                        <div class="login-pf-social">
+                            <p>Quick access with your institutional account:</p>
+                            <ul class="opifex-identity-providers">
+                                <#list social.providers as p>
+                                    <li>
+                                        <a id="zocial-${p.alias}" class="zocial ${p.providerId} opifex-provider"
+                                           href="${p.loginUrl}">
+                                            <span class="text">${p.displayName!}</span>
+                                        </a>
+                                    </li>
+                                </#list>
+                            </ul>
+                        </div>
+                    </#if>
+                </div>
+
+                <div class="login-pf-form">
+                    <form id="kc-form-login" onsubmit="login.disabled = true; return true;"
+                          action="${url.loginAction}" method="post">
+
+                        <div class="form-group">
+                            <label for="username" class="sr-only">
+                                Username or Email
+                            </label>
+                            <input tabindex="1" id="username" class="form-control" name="username"
+                                   value="${(login.username!'')}" type="text" autofocus autocomplete="off"
+                                   placeholder="Username or Email" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password" class="sr-only">Password</label>
+                            <input tabindex="2" id="password" class="form-control" name="password"
+                                   type="password" autocomplete="off" placeholder="Password" />
+                        </div>
+
+                        <div class="form-group login-pf-settings">
+                            <div class="checkbox">
+                                <#if rememberMe?? && rememberMe.allowed == true>
+                                    <label>
+                                        <input tabindex="3" id="rememberMe" name="rememberMe" type="checkbox"
+                                               <#if login.rememberMe??> checked</#if>>
+                                        Remember me
+                                    </label>
+                                </#if>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div id="kc-form-buttons" class="col-md-12">
+                                <input type="hidden" id="id-hidden-input" name="credentialId"
+                                       <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>
+                                <input tabindex="4" class="btn btn-primary btn-block btn-lg" name="login"
+                                       id="kc-login" type="submit" value="Sign In"/>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="col-md-12">
+                                <#if realm.resetPasswordAllowed>
+                                    <span><a tabindex="5" href="${url.loginResetCredentialsUrl}">Forgot Password?</a></span>
+                                </#if>
+                                <#if realm.registrationAllowed>
+                                    <span class="pull-right">
+                                        <a tabindex="6" href="${url.registrationUrl}">Register</a>
+                                    </span>
+                                </#if>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="login-pf-signup">
+                    <p>New to scientific computing?
+                       <a href="https://docs.opifex.io/getting-started" target="_blank">
+                           Learn more about Opifex
+                       </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <script src="${url.resourcesPath}/js/opifex-auth.js"></script>
+    </body>
+    </html>
+
+  opifex-custom.css: |
+    /* Opifex Scientific Computing Platform Theme */
+
+    .opifex-login {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+        min-height: 100vh;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .login-pf-page {
+        background: none;
+    }
+
+    .login-pf-brand {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding: 2rem 0;
+    }
+
+    .opifex-logo {
+        color: white;
+        text-align: center;
+    }
+
+    .opifex-logo img {
+        height: 80px;
+        margin-bottom: 1rem;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+
+    .opifex-logo h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .opifex-logo p {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin: 0;
+        font-weight: 400;
+    }
+
+    .card-pf.login-pf-accounts {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .login-pf-header h1 {
+        color: #1e293b;
+        font-size: 1.8rem;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .login-pf-social-section {
+        margin-bottom: 2rem;
+    }
+
+    .login-pf-social p {
+        text-align: center;
+        color: #64748b;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    .opifex-identity-providers {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .opifex-provider {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        background: white;
+    }
+
+    .opifex-provider:hover {
+        border-color: #3b82f6;
+        background: #f8fafc;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    }
+
+    .opifex-provider.university {
+        border-color: #059669;
+        color: #059669;
+    }
+
+    .opifex-provider.github {
+        border-color: #24292f;
+        color: #24292f;
+    }
+
+    .opifex-provider.orcid {
+        border-color: #a6ce39;
+        color: #a6ce39;
+    }
+
+    .form-control {
+        height: 48px;
+        border-radius: 8px;
+        border: 2px solid #e2e8f0;
+        font-size: 1rem;
+        transition: border-color 0.2s ease;
+    }
+
+    .form-control:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        outline: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        height: 48px;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #2563eb, #1e40af);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+    }
+
+    .login-pf-signup {
+        text-align: center;
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .login-pf-signup p {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+    .login-pf-signup a {
+        color: #3b82f6;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .login-pf-signup a:hover {
+        text-decoration: underline;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .card-pf.login-pf-accounts {
+            margin: 1rem;
+            padding: 1.5rem;
+        }
+
+        .opifex-logo h1 {
+            font-size: 2rem;
+        }
+
+        .opifex-logo p {
+            font-size: 1rem;
+        }
+    }
+
+  opifex-auth.js: |
+    // Opifex Authentication Enhancement Script
+
+    (function() {
+        'use strict';
+
+        // Initialize Opifex authentication enhancements
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFormEnhancements();
+            initializeAccessibilityFeatures();
+            initializeSecurityFeatures();
+            initializeInstitutionDetection();
+        });
+
+        function initializeFormEnhancements() {
+            const form = document.getElementById('kc-form-login');
+            if (!form) return;
+
+            // Add loading state to login button
+            const loginButton = document.getElementById('kc-login');
+            if (loginButton) {
+                form.addEventListener('submit', function() {
+                    loginButton.innerHTML = 'Signing in...';
+                    loginButton.disabled = true;
+                });
+            }
+
+            // Enhanced input validation
+            const inputs = form.querySelectorAll('input[type="text"], input[type="password"]');
+            inputs.forEach(function(input) {
+                input.addEventListener('blur', validateInput);
+                input.addEventListener('input', clearValidationError);
+            });
+        }
+
+        function validateInput(event) {
+            const input = event.target;
+            const value = input.value.trim();
+
+            // Basic validation
+            if (input.name === 'username' && value) {
+                // Check if it's an email or username
+                const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                if (isEmail) {
+                    // Suggest institutional login if university email
+                    const domain = value.split('@')[1];
+                    checkInstitutionalDomain(domain);
+                }
+            }
+        }
+
+        function clearValidationError(event) {
+            const input = event.target;
+            input.classList.remove('error');
+
+            // Remove any error messages
+            const errorMsg = input.parentNode.querySelector('.error-message');
+            if (errorMsg) {
+                errorMsg.remove();
+            }
+        }
+
+        function initializeAccessibilityFeatures() {
+            // Add keyboard navigation improvements
+            const providers = document.querySelectorAll('.opifex-provider');
+            providers.forEach(function(provider, index) {
+                provider.setAttribute('tabindex', 10 + index);
+                provider.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        provider.click();
+                    }
+                });
+            });
+
+            // Add focus indicators
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    document.body.classList.add('keyboard-navigation');
+                }
+            });
+
+            document.addEventListener('mousedown', function() {
+                document.body.classList.remove('keyboard-navigation');
+            });
+        }
+
+        function initializeSecurityFeatures() {
+            // Prevent common attacks
+
+            // Disable autocomplete on sensitive fields in development
+            if (window.location.hostname === 'localhost' ||
+                window.location.hostname.includes('dev')) {
+                const passwordField = document.getElementById('password');
+                if (passwordField) {
+                    passwordField.setAttribute('autocomplete', 'new-password');
+                }
+            }
+
+            // Add CSRF protection awareness
+            const form = document.getElementById('kc-form-login');
+            if (form) {
+                form.addEventListener('submit', function() {
+                    // Ensure all hidden inputs are present
+                    const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
+                    console.log('Form submission with', hiddenInputs.length, 'hidden fields');
+                });
+            }
+        }
+
+        function initializeInstitutionDetection() {
+            const usernameField = document.getElementById('username');
+            if (!usernameField) return;
+
+            let institutionSuggestion = null;
+
+            usernameField.addEventListener('input', function(e) {
+                const value = e.target.value.trim();
+
+                // Clear previous suggestions
+                if (institutionSuggestion) {
+                    institutionSuggestion.remove();
+                    institutionSuggestion = null;
+                }
+
+                if (value.includes('@')) {
+                    const domain = value.split('@')[1];
+                    if (domain) {
+                        checkInstitutionalDomain(domain);
+                    }
+                }
+            });
+        }
+
+        function checkInstitutionalDomain(domain) {
+            // Common academic domains that might have SSO
+            const academicDomains = [
+                'edu', 'ac.uk', 'uni-', 'university', 'college',
+                'mit.edu', 'stanford.edu', 'berkeley.edu', 'caltech.edu',
+                'ox.ac.uk', 'cam.ac.uk', 'imperial.ac.uk'
+            ];
+
+            const isAcademic = academicDomains.some(function(acadDomain) {
+                return domain.includes(acadDomain);
+            });
+
+            if (isAcademic) {
+                showInstitutionalSuggestion(domain);
+            }
+        }
+
+        function showInstitutionalSuggestion(domain) {
+            const usernameField = document.getElementById('username');
+            if (!usernameField) return;
+
+            // Create suggestion element
+            const suggestion = document.createElement('div');
+            suggestion.className = 'institution-suggestion';
+            suggestion.innerHTML =
+                '<p><strong>Tip:</strong> Your institution (' + domain + ') may support single sign-on. ' +
+                'Try the "University SSO" option above for easier access.</p>';
+
+            suggestion.style.cssText =
+                'background: #e0f2fe; border: 1px solid #0277bd; border-radius: 4px; ' +
+                'padding: 10px; margin-top: 5px; font-size: 0.9em; color: #01579b;';
+
+            // Insert after username field
+            usernameField.parentNode.insertBefore(suggestion, usernameField.nextSibling);
+
+            // Store reference for cleanup
+            window.institutionSuggestion = suggestion;
+
+            // Auto-remove after 10 seconds
+            setTimeout(function() {
+                if (suggestion && suggestion.parentNode) {
+                    suggestion.remove();
+                }
+            }, 10000);
+        }
+
+        // Error handling
+        window.addEventListener('error', function(e) {
+            console.error('Opifex Auth Error:', e.error);
+        });
+
+    })();
+
+# Opifex Custom Authentication Providers

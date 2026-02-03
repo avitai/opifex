@@ -1,0 +1,78 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-scalability-infrastructure
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: opifex-system
+
+commonLabels:
+  component: scalability
+  infrastructure-type: horizontal-scaling
+  managed-by: opifex-framework
+  version: v1.0.0
+
+resources:
+  # Priority Classes (cluster-scoped)
+  - priority-classes/
+  # Cluster Autoscaler
+  - cluster-autoscaler/
+  # Horizontal Pod Autoscalers
+  - hpa/
+  # Vertical Pod Autoscalers
+  - vpa/l2o-optimizer-vpa.yaml
+  - vpa/neural-operator-vpa.yaml
+  # Resource Management
+  - resource-quotas/gpu-resource-quota.yaml
+  - resource-quotas/cpu-resource-quota.yaml
+  # Node Affinity and Scheduling
+  - node-affinity/gpu-node-selector.yaml
+  - node-affinity/cpu-node-selector.yaml
+  # Load Balancing
+  - load-balancing/ingress-controller.yaml
+  - load-balancing/service-monitor.yaml
+
+patchesStrategicMerge:
+  - |-
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: gpu-resource-quota
+      annotations:
+        quota.alpha.kubernetes.io/scopes: "PriorityClass=gpu-workload,PriorityClass=high-priority"
+
+configMapGenerator:
+  - name: scalability-config
+    literals:
+      - cluster-name=opifex-cluster
+      - max-nodes=100
+      - min-nodes=3
+      - gpu-nodes-max=50
+      - cpu-nodes-max=50
+      - auto-scaling-enabled=true
+      - load-balancing-enabled=true
+      - resource-quotas-enabled=true
+
+secretGenerator:
+  - name: scalability-secrets
+    literals:
+      - cloud-provider-access-key=REPLACE_WITH_ACTUAL_KEY
+      - cloud-provider-secret-key=REPLACE_WITH_ACTUAL_SECRET
+      - tls-cert-issuer=letsencrypt-prod
+
+images:
+  - name: registry.k8s.io/autoscaling/cluster-autoscaler
+    newTag: v1.28.0
+  - name: registry.k8s.io/autoscaling/vpa-recommender
+    newTag: 0.15.0
+  - name: registry.k8s.io/autoscaling/vpa-updater
+    newTag: 0.15.0
+
+replicas:
+  - name: cluster-autoscaler
+    count: 1
+
+namePrefix: opifex-
+nameSuffix: -v1

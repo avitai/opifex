@@ -1,0 +1,23 @@
+# ClusterRole for cross-namespace Keycloak integration (if needed)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: keycloak-cluster-role
+  labels:
+    app: keycloak
+    component: identity-management
+    tier: security
+rules:
+  # Read access to namespaces for multi-tenant setup
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  # Read access to users and groups for synchronization
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings", "roles", "clusterrolebindings", "clusterroles"]
+    verbs: ["get", "list", "watch"]
+  # Custom resource access for Keycloak operator (if used)
+  - apiGroups: ["keycloak.org"]
+    resources:
+      ["keycloaks", "keycloakrealms", "keycloakclients", "keycloakusers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

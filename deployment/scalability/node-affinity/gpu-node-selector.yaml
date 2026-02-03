@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-node-selector
+  namespace: opifex-system
+  labels:
+    component: scalability
+    node-type: gpu
+    managed-by: opifex-framework
+data:
+  # GPU Node Selection Rules
+  gpu-node-affinity.yaml: |
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-type
+              operator: In
+              values: ["gpu"]
+            - key: gpu-type
+              operator: In
+              values: ["nvidia-v100", "nvidia-a100", "nvidia-rtx"]
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+            - key: instance-type
+              operator: In
+              values: ["p3.8xlarge", "p3.16xlarge", "p4d.24xlarge"]
+        - weight: 80
+          preference:
+            matchExpressions:
+            - key: gpu-memory
+              operator: In
+              values: ["32gb", "40gb", "80gb"]
+        - weight: 60
+          preference:
+            matchExpressions:
+            - key: network-bandwidth
+              operator: In
+              values: ["25gbps", "100gbps"]
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: workload-type
+                operator: In
+                values: ["gpu-intensive"]
+            topologyKey: kubernetes.io/hostname
+
+  # GPU Tolerations
+  gpu-tolerations.yaml: |
+    tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+    - key: opifex.io/gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+    - key: opifex.io/high-memory
+      operator: Exists
+      effect: NoSchedule

@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-device-plugin-config
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: gpu-device-plugin
+    app.kubernetes.io/component: gpu-optimization
+    app.kubernetes.io/part-of: opifex-container-orchestration
+data:
+  config.yaml: |
+    version: v1
+    flags:
+      migStrategy: "none"
+      failOnInitError: true
+      passDeviceSpecs: false
+      deviceListStrategy: "envvar"
+      deviceIDStrategy: "uuid"
+      nvidiaDriverRoot: "/run/nvidia/driver"
+      gdsEnabled: false
+      mofedEnabled: false
+
+    # GPU resource management for scientific workloads
+    sharing:
+      timeSlicing:
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 4  # Allow time-slicing for smaller workloads
+
+    # Resource allocation strategies
+    resources:
+      gpu:
+        memory:
+          # Memory allocation strategy for scientific computing
+          allocation: "best-effort"
+          overcommit: 1.2
+        compute:
+          # Compute mode optimization
+          mode: "exclusive-process"
+          persistence: true

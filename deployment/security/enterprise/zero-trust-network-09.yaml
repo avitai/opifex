@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zero-trust-policy-engine
+  namespace: security
+  labels:
+    app.kubernetes.io/name: zero-trust-policy-engine
+    app.kubernetes.io/component: zero-trust
+    app.kubernetes.io/part-of: opifex-enterprise-security
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zero-trust-policy-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zero-trust-policy-engine
+        app.kubernetes.io/component: zero-trust
+    spec:
+      serviceAccountName: zero-trust-policy-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1008
+        runAsGroup: 1008
+        fsGroup: 1008
+      containers:
+        - name: policy-engine
+          image: harbor.opifex.enterprise.com/security/zero-trust-engine:v1.4.0
+          env:
+            - name: KEYCLOAK_BASE_URL
+              value: "https://auth.opifex.enterprise.com"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "zero-trust-policy-engine"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: zero-trust-secret
+                  key: client-secret
+            - name: RISK_SCORING_SERVICE_URL
+              value: "http://risk-scoring-service:8080"
+            - name: POLICY_REFRESH_INTERVAL
+              value: "30s"
+            - name: LOG_LEVEL
+              value: "INFO"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "300m"
+          volumeMounts:
+            - name: zero-trust-config
+              mountPath: /etc/zero-trust
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: zero-trust-config
+          configMap:
+            name: zero-trust-config

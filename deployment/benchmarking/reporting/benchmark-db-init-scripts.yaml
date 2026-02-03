@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benchmark-db-init-scripts
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmark-db-init-scripts
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opifex-benchmarking
+data:
+  01-create-extensions.sql: |
+    -- Create necessary extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For text search
+
+  02-create-schemas.sql: |
+    -- Create schemas for organizing benchmark data
+    CREATE SCHEMA IF NOT EXISTS benchmarks;
+    CREATE SCHEMA IF NOT EXISTS datasets;
+    CREATE SCHEMA IF NOT EXISTS results;
+    CREATE SCHEMA IF NOT EXISTS reports;
+
+  03-create-tables.sql: |
+    -- Benchmark Execution Results
+    CREATE TABLE benchmarks.execution_results (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        benchmark_id VARCHAR(255) NOT NULL,
+        dataset_name VARCHAR(255) NOT NULL,
+        method_name VARCHAR(255) NOT NULL,
+        method_variant VARCHAR(255),
+        execution_time FLOAT NOT NULL,
+        memory_usage FLOAT NOT NULL,
+        gpu_utilization FLOAT,
+        accuracy_metrics JSONB NOT NULL,
+        training_metrics JSONB,
+        configuration JSONB NOT NULL,
+        environment_info JSONB NOT NULL,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'completed',
+        error_message TEXT,
+        git_commit_hash VARCHAR(64),
+        framework_version VARCHAR(50),
+
+        -- Indexes for common queries
+        CONSTRAINT valid_status CHECK (status IN ('running', 'completed', 'failed', 'timeout'))
+    );
+
+    -- Dataset Information
+    CREATE TABLE datasets.dataset_info (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name VARCHAR(255) UNIQUE NOT NULL,
+        description TEXT,
+        source_url VARCHAR(500),
+        size_bytes BIGINT,
+        num_samples INTEGER,
+        spatial_resolution VARCHAR(50),
+        temporal_resolution VARCHAR(50),
+        physics_type VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        metadata JSONB,
+        download_status VARCHAR(50) DEFAULT 'pending',
+        preprocessing_status VARCHAR(50) DEFAULT 'pending'
+    );
+
+    -- Neural Operator Performance
+    CREATE TABLE results.neural_operator_performance (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        execution_result_id UUID REFERENCES benchmarks.execution_results(id),
+        operator_type VARCHAR(100) NOT NULL,  -- FNO, SFNO, DeepONet, GNO
+        architecture_params JSONB NOT NULL,
+        training_time FLOAT,
+        inference_time FLOAT,
+        model_size_mb FLOAT,
+        flops_per_inference BIGINT,
+        peak_memory_usage FLOAT,
+        convergence_epoch INTEGER,
+        final_loss FLOAT,
+        validation_metrics JSONB,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- L2O Algorithm Performance
+    CREATE TABLE results.l2o_performance (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        execution_result_id UUID REFERENCES benchmarks.execution_results(id),
+        algorithm_type VARCHAR(100) NOT NULL,  -- multi_objective, adaptive_lr, rl_optimization
+        optimization_problem VARCHAR(255) NOT NULL,
+        convergence_time FLOAT,
+        iterations_to_convergence INTEGER,
+        speedup_vs_traditional FLOAT,
+        solution_quality FLOAT,
+        meta_learning_epochs INTEGER,
+        inner_loop_steps INTEGER,
+        outer_loop_lr FLOAT,
+        performance_metrics JSONB,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Comparative Analysis Reports
+    CREATE TABLE reports.comparative_analysis (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        report_name VARCHAR(255) NOT NULL,
+        dataset_name VARCHAR(255) NOT NULL,
+        methods_compared TEXT[] NOT NULL,
+        analysis_type VARCHAR(100) NOT NULL,  -- performance, accuracy, efficiency
+        report_data JSONB NOT NULL,
+        generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        report_format VARCHAR(50) DEFAULT 'json',  -- json, latex, html
+        report_path VARCHAR(500),
+        status VARCHAR(50) DEFAULT 'generated',
+
+        CONSTRAINT valid_analysis_type CHECK (analysis_type IN ('performance', 'accuracy', 'efficiency', 'comprehensive')),
+        CONSTRAINT valid_report_format CHECK (report_format IN ('json', 'latex', 'html', 'pdf'))
+    );
+
+    -- Performance Baselines
+    CREATE TABLE benchmarks.performance_baselines (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        dataset_name VARCHAR(255) NOT NULL,
+        method_name VARCHAR(255) NOT NULL,
+        baseline_type VARCHAR(100) NOT NULL,  -- traditional_solver, previous_sota
+        baseline_metrics JSONB NOT NULL,
+        established_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        description TEXT,
+        reference_paper VARCHAR(500),
+
+        UNIQUE(dataset_name, method_name, baseline_type)
+    );
+
+  04-create-indexes.sql: |
+    -- Create indexes for efficient querying
+
+    -- Execution results indexes
+    CREATE INDEX idx_execution_results_dataset ON benchmarks.execution_results(dataset_name);
+    CREATE INDEX idx_execution_results_method ON benchmarks.execution_results(method_name);
+    CREATE INDEX idx_execution_results_timestamp ON benchmarks.execution_results(timestamp);
+    CREATE INDEX idx_execution_results_status ON benchmarks.execution_results(status);
+    CREATE INDEX idx_execution_results_composite ON benchmarks.execution_results(dataset_name, method_name, timestamp);
+
+    -- JSON indexes for metadata queries
+    CREATE INDEX idx_execution_results_accuracy_gin ON benchmarks.execution_results USING GIN (accuracy_metrics);
+    CREATE INDEX idx_execution_results_config_gin ON benchmarks.execution_results USING GIN (configuration);
+
+    -- Dataset indexes
+    CREATE INDEX idx_dataset_info_name ON datasets.dataset_info(name);
+    CREATE INDEX idx_dataset_info_physics_type ON datasets.dataset_info(physics_type);
+    CREATE INDEX idx_dataset_info_status ON datasets.dataset_info(download_status, preprocessing_status);
+
+    -- Performance indexes
+    CREATE INDEX idx_neural_operator_type ON results.neural_operator_performance(operator_type);
+    CREATE INDEX idx_neural_operator_timestamp ON results.neural_operator_performance(timestamp);
+    CREATE INDEX idx_l2o_algorithm_type ON results.l2o_performance(algorithm_type);
+    CREATE INDEX idx_l2o_timestamp ON results.l2o_performance(timestamp);
+
+    -- Report indexes
+    CREATE INDEX idx_reports_dataset ON reports.comparative_analysis(dataset_name);
+    CREATE INDEX idx_reports_analysis_type ON reports.comparative_analysis(analysis_type);
+    CREATE INDEX idx_reports_generated_at ON reports.comparative_analysis(generated_at);
+
+  05-create-functions.sql: |
+    -- Utility functions for benchmark analysis
+
+    -- Function to get latest results for a dataset
+    CREATE OR REPLACE FUNCTION get_latest_results(dataset_name_param VARCHAR)
+    RETURNS TABLE (
+        method_name VARCHAR,
+        execution_time FLOAT,
+        accuracy_mse FLOAT,
+        memory_usage FLOAT,
+        timestamp TIMESTAMP
+    ) AS $$
+    BEGIN
+        RETURN QUERY
+        SELECT DISTINCT ON (er.method_name)
+            er.method_name,
+            er.execution_time,
+            (er.accuracy_metrics->>'mse')::FLOAT as accuracy_mse,
+            er.memory_usage,
+            er.timestamp
+        FROM benchmarks.execution_results er
+        WHERE er.dataset_name = dataset_name_param
+          AND er.status = 'completed'
+        ORDER BY er.method_name, er.timestamp DESC;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Function to calculate performance improvements
+    CREATE OR REPLACE FUNCTION calculate_speedup(
+        dataset_name_param VARCHAR,
+        method_name_param VARCHAR,
+        baseline_method_param VARCHAR
+    )
+    RETURNS FLOAT AS $$
+    DECLARE
+        method_time FLOAT;
+        baseline_time FLOAT;
+    BEGIN
+        -- Get latest execution time for method
+        SELECT execution_time INTO method_time
+        FROM benchmarks.execution_results
+        WHERE dataset_name = dataset_name_param
+          AND method_name = method_name_param
+          AND status = 'completed'
+        ORDER BY timestamp DESC
+        LIMIT 1;
+
+        -- Get baseline time
+        SELECT execution_time INTO baseline_time
+        FROM benchmarks.execution_results
+        WHERE dataset_name = dataset_name_param
+          AND method_name = baseline_method_param
+          AND status = 'completed'
+        ORDER BY timestamp DESC
+        LIMIT 1;
+
+        -- Calculate speedup
+        IF baseline_time IS NOT NULL AND method_time IS NOT NULL AND method_time > 0 THEN
+            RETURN baseline_time / method_time;
+        ELSE
+            RETURN NULL;
+        END IF;
+    END;
+    $$ LANGUAGE plpgsql;
+
+  06-insert-sample-data.sql: |
+    -- Insert sample datasets
+    INSERT INTO datasets.dataset_info (name, description, physics_type, metadata) VALUES
+    ('darcy_flow', '2D Darcy flow with random permeability fields', 'fluid_dynamics', '{"dimensions": 2, "resolution": [64, 64], "samples": 1000}'),
+    ('navier_stokes', '2D incompressible Navier-Stokes equations', 'fluid_dynamics', '{"dimensions": 2, "resolution": [128, 128], "samples": 800}'),
+    ('shallow_water', '2D shallow water equations', 'fluid_dynamics', '{"dimensions": 2, "resolution": [256, 256], "samples": 600}'),
+    ('diffusion_reaction', '1D and 2D diffusion-reaction equations', 'heat_transfer', '{"dimensions": [1, 2], "resolution": [64, 128], "samples": 1200}'),
+    ('wave_equation', '1D and 2D wave equations', 'wave_propagation', '{"dimensions": [1, 2], "resolution": [128, 256], "samples": 1000}'),
+    ('linear_elasticity', '2D linear elasticity problems', 'mechanics', '{"dimensions": 2, "resolution": [128, 128], "samples": 900}');
+
+    -- Insert performance baselines
+    INSERT INTO benchmarks.performance_baselines (dataset_name, method_name, baseline_type, baseline_metrics, description) VALUES
+    ('darcy_flow', 'finite_difference', 'traditional_solver', '{"execution_time": 120.5, "accuracy_mse": 0.001, "memory_usage": 2.1}', 'Traditional finite difference solver'),
+    ('navier_stokes', 'finite_volume', 'traditional_solver', '{"execution_time": 450.2, "accuracy_mse": 0.0008, "memory_usage": 8.5}', 'Traditional finite volume solver'),
+    ('shallow_water', 'spectral_method', 'traditional_solver', '{"execution_time": 280.8, "accuracy_mse": 0.0012, "memory_usage": 4.2}', 'Traditional spectral method solver');

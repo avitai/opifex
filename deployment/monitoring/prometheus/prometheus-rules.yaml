@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: opifex-monitoring
+  labels:
+    app.kubernetes.io/name: opifex-prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: opifex-framework
+data:
+  opifex-alerts.yml: |
+    # Opifex Framework Alerting Rules
+    groups:
+    - name: opifex.rules
+      rules:
+      # GPU Monitoring Alerts
+      - alert: GPUMemoryHigh
+        expr: DCGM_FI_DEV_FB_USED / DCGM_FI_DEV_FB_TOTAL > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: gpu
+        annotations:
+          summary: "GPU memory usage is high"
+          description: "GPU {{$labels.gpu}} memory usage is above 90% ({{$value}}%)"
+          runbook_url: "https://opifex-docs.example.com/runbooks/gpu-memory-high"
+
+      - alert: GPUTemperatureHigh
+        expr: DCGM_FI_DEV_GPU_TEMP > 80
+        for: 3m
+        labels:
+          severity: critical
+          component: gpu
+        annotations:
+          summary: "GPU temperature is too high"
+          description: "GPU {{$labels.gpu}} temperature is {{$value}}°C, exceeding safe operating temperature"
+          runbook_url: "https://opifex-docs.example.com/runbooks/gpu-temperature-high"
+
+      - alert: GPUUtilizationLow
+        expr: DCGM_FI_DEV_GPU_UTIL < 10
+        for: 15m
+        labels:
+          severity: info
+          component: gpu
+        annotations:
+          summary: "GPU utilization is low"
+          description: "GPU {{$labels.gpu}} utilization is below 10% for 15 minutes"
+          runbook_url: "https://opifex-docs.example.com/runbooks/gpu-utilization-low"
+
+      # L2O Optimization Alerts
+      - alert: L2OOptimizationStalled
+        expr: increase(opifex_l2o_convergence_iterations[10m]) == 0
+        for: 15m
+        labels:
+          severity: critical
+          component: l2o
+        annotations:
+          summary: "L2O optimization appears stalled"
+          description: "No convergence progress for {{$labels.algorithm}} on {{$labels.problem_type}} for 15 minutes"
+          runbook_url: "https://opifex-docs.example.com/runbooks/l2o-stalled"
+
+      - alert: L2OOptimizationSlow
+        expr: rate(opifex_l2o_optimization_duration_seconds_sum[5m]) > 300
+        for: 10m
+        labels:
+          severity: warning
+          component: l2o
+        annotations:
+          summary: "L2O optimization is taking too long"
+          description: "Average optimization time for {{$labels.algorithm}} is {{$value}} seconds"
+          runbook_url: "https://opifex-docs.example.com/runbooks/l2o-slow"
+
+      # Neural Operator Alerts
+      - alert: NeuralOperatorTrainingDiverged
+        expr: increase(opifex_neural_operator_training_loss[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: neural-operator
+        annotations:
+          summary: "Neural operator training loss increasing"
+          description: "Training loss for {{$labels.model_type}} is diverging (increase: {{$value}})"
+          runbook_url: "https://opifex-docs.example.com/runbooks/neural-operator-diverged"
+
+      - alert: NeuralOperatorTrainingStuck
+        expr: increase(opifex_neural_operator_training_loss[30m]) == 0
+        for: 30m
+        labels:
+          severity: info
+          component: neural-operator
+        annotations:
+          summary: "Neural operator training appears stuck"
+          description: "No loss change for {{$labels.model_type}} in 30 minutes"
+          runbook_url: "https://opifex-docs.example.com/runbooks/neural-operator-stuck"
+
+      # Infrastructure Alerts
+      - alert: OpifexPodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total{namespace="opifex-framework"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Opifex pod is crash looping"
+          description: "Pod {{$labels.pod}} in namespace {{$labels.namespace}} is restarting frequently"
+          runbook_url: "https://opifex-docs.example.com/runbooks/pod-crash-looping"
+
+      - alert: OpifexPodOOMKilled
+        expr: increase(kube_pod_container_status_terminated_reason{namespace="opifex-framework", reason="OOMKilled"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Opifex pod killed due to OOM"
+          description: "Pod {{$labels.pod}} was killed due to out of memory"
+          runbook_url: "https://opifex-docs.example.com/runbooks/pod-oom-killed"
+
+      - alert: OpifexPodNotReady
+        expr: kube_pod_status_ready{namespace="opifex-framework", condition="false"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Opifex pod not ready"
+          description: "Pod {{$labels.pod}} in namespace {{$labels.namespace}} has been not ready for more than 10 minutes"
+          runbook_url: "https://opifex-docs.example.com/runbooks/pod-not-ready"
+
+      # Performance Alerts
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{namespace="opifex-framework"} / container_spec_memory_limit_bytes) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High memory usage detected"
+          description: "Container {{$labels.container}} in pod {{$labels.pod}} is using {{$value}}% of memory"
+          runbook_url: "https://opifex-docs.example.com/runbooks/high-memory-usage"
+
+      - alert: HighCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total{namespace="opifex-framework"}[5m]) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High CPU usage detected"
+          description: "Container {{$labels.container}} in pod {{$labels.pod}} is using {{$value}}% of CPU"
+          runbook_url: "https://opifex-docs.example.com/runbooks/high-cpu-usage"
+
+  kubernetes-alerts.yml: |
+    # Kubernetes Infrastructure Alerts
+    groups:
+    - name: kubernetes.rules
+      rules:
+      - alert: KubernetesNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes Node not ready"
+          description: "Node {{$labels.node}} has been not ready for more than 10 minutes"
+
+      - alert: KubernetesMemoryPressure
+        expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node memory pressure"
+          description: "Node {{$labels.node}} is under memory pressure"
+
+      - alert: KubernetesDiskPressure
+        expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node disk pressure"
+          description: "Node {{$labels.node}} is under disk pressure"
+
+      - alert: KubernetesOutOfDisk
+        expr: kube_node_status_condition{condition="OutOfDisk",status="true"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node out of disk space"
+          description: "Node {{$labels.node}} is out of disk space"

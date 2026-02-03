@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: community-platform-config
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: community-platform-config
+    app.kubernetes.io/part-of: opifex-community
+data:
+  # Database configuration
+  DATABASE_HOST: "postgresql-service.opifex-monitoring.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "opifex_community"
+  DATABASE_SSL_MODE: "require"
+
+  # Redis configuration
+  REDIS_HOST: "redis-service.opifex-monitoring.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "1"
+
+  # API Gateway configuration
+  API_GATEWAY_HOST: "0.0.0.0"
+  API_GATEWAY_PORT: "8000"
+  API_VERSION: "v1"
+
+  # Core services configuration
+  REGISTRY_SERVICE_HOST: "registry-service.opifex-community.svc.cluster.local"
+  REGISTRY_SERVICE_PORT: "8001"
+  USER_SERVICE_HOST: "user-service.opifex-community.svc.cluster.local"
+  USER_SERVICE_PORT: "8002"
+  WORKSPACE_SERVICE_HOST: "workspace-service.opifex-community.svc.cluster.local"
+  WORKSPACE_SERVICE_PORT: "8003"
+  PLUGIN_SERVICE_HOST: "plugin-service.opifex-community.svc.cluster.local"
+  PLUGIN_SERVICE_PORT: "8004"
+
+  # Storage configuration
+  OBJECT_STORAGE_ENDPOINT: "minio-service.opifex-monitoring.svc.cluster.local:9000"
+  OBJECT_STORAGE_BUCKET: "opifex-neural-functionals"
+  OBJECT_STORAGE_REGION: "us-east-1"
+
+  # Plugin framework configuration
+  PLUGIN_SANDBOX_ENABLED: "true"
+  PLUGIN_RESOURCE_LIMITS_CPU: "500m"
+  PLUGIN_RESOURCE_LIMITS_MEMORY: "1Gi"
+  PLUGIN_EXECUTION_TIMEOUT: "300"
+
+  # Security configuration
+  CORS_ORIGINS: '["http://localhost:3000", "https://community.opifex.io"]'
+  JWT_ALGORITHM: "RS256"
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  JWT_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+
+  # Monitoring and logging
+  LOG_LEVEL: "INFO"
+  ENABLE_METRICS: "true"
+  METRICS_PORT: "9090"
+  JAEGER_ENDPOINT: "jaeger-collector.opifex-monitoring.svc.cluster.local:14268"
+
+  # Feature flags
+  ENABLE_PLUGIN_MARKETPLACE: "true"
+  ENABLE_EXPERIMENT_SHARING: "true"
+  ENABLE_NEURAL_FUNCTIONAL_VERSIONING: "true"
+  ENABLE_COLLABORATION_TOOLS: "true"

@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: unified-mlops-api-pdb
+  namespace: opifex-mlops
+  labels:
+    app.kubernetes.io/name: unified-mlops-api
+    app.kubernetes.io/component: api-gateway
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unified-mlops-api

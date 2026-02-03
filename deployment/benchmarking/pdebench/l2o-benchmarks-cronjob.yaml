@@ -1,0 +1,114 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: l2o-benchmarks
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: l2o-benchmarks
+    app.kubernetes.io/component: benchmark-execution
+    app.kubernetes.io/part-of: opifex-benchmarking
+spec:
+  schedule: "0 8 * * 2" # Weekly L2O benchmarks on Tuesday at 8 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      parallelism: 2 # Run 2 parallel L2O benchmark jobs
+      completions: 1
+      backoffLimit: 3
+      activeDeadlineSeconds: 18000 # 5 hours timeout
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: l2o-benchmarks
+            app.kubernetes.io/component: benchmark-execution
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+            prometheus.io/path: "/metrics"
+        spec:
+          serviceAccountName: benchmark-executor-service-account
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: l2o-benchmark-executor
+              image: opifex/benchmark-executor:latest
+              imagePullPolicy: Always
+              command: ["python", "-m", "opifex.benchmarking.l2o_algorithms"]
+              env:
+                - name: BENCHMARK_TYPE
+                  value: "l2o_algorithms"
+                - name: DATASETS_ROOT
+                  value: "/datasets"
+                - name: RESULTS_ROOT
+                  value: "/results"
+                - name: CACHE_ROOT
+                  value: "/cache"
+                - name: PARALLEL_WORKERS
+                  value: "2"
+                - name: GPU_MEMORY_FRACTION
+                  value: "0.9"
+                - name: BENCHMARK_CONFIG
+                  value: "/config/l2o_config.yaml"
+                - name: PYTHONPATH
+                  value: "/app"
+                - name: CUDA_VISIBLE_DEVICES
+                  value: "0"
+                - name: JAX_PLATFORMS
+                  value: "gpu"
+              resources:
+                requests:
+                  cpu: "6"
+                  memory: "24Gi"
+                  ephemeral-storage: "50Gi"
+                limits:
+                  cpu: "12"
+                  memory: "48Gi"
+                  ephemeral-storage: "100Gi"
+                  nvidia.com/gpu: "1"
+              volumeMounts:
+                - name: benchmark-config
+                  mountPath: /config
+                  readOnly: true
+                - name: datasets-storage
+                  mountPath: /datasets
+                  readOnly: true
+                - name: results-storage
+                  mountPath: /results
+                - name: cache-storage
+                  mountPath: /cache
+                - name: tmp-storage
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: benchmark-config
+              configMap:
+                name: benchmark-execution-config
+            - name: datasets-storage
+              persistentVolumeClaim:
+                claimName: pdebench-datasets
+            - name: results-storage
+              persistentVolumeClaim:
+                claimName: benchmark-results
+            - name: cache-storage
+              persistentVolumeClaim:
+                claimName: benchmark-cache
+            - name: tmp-storage
+              emptyDir:
+                sizeLimit: 20Gi
+          nodeSelector:
+            kubernetes.io/arch: amd64
+            node-type: gpu-node
+          tolerations:
+            - key: nvidia.com/gpu
+              operator: Exists
+              effect: NoSchedule

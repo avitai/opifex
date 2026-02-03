@@ -1,0 +1,10 @@
+# Fluid Dynamics Research Group
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-fluid-dynamics
+  labels:
+    opifex.local/research-group: "fluid-dynamics"
+    opifex.local/department: "physics"
+    opifex.local/gpu-quota: "200"
+    name: opifex-fluid-dynamics

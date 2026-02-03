@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: benchmarking-resource-quota
+  namespace: opifex-benchmarking
+  labels:
+    app.kubernetes.io/name: benchmarking-resource-quota
+    app.kubernetes.io/component: resource-management
+    app.kubernetes.io/part-of: opifex-benchmarking
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "50"
+    requests.memory: "200Gi"
+    requests.ephemeral-storage: "1Ti"
+    requests.nvidia.com/gpu: "8"
+
+    limits.cpu: "100"
+    limits.memory: "400Gi"
+    limits.ephemeral-storage: "2Ti"
+    limits.nvidia.com/gpu: "16"
+
+    # Storage resources
+    requests.storage: "2Ti"
+    persistentvolumeclaims: "20"
+
+    # Object counts
+    count/pods: "50"
+    count/services: "20"
+    count/deployments.apps: "10"
+    count/statefulsets.apps: "5"
+    count/jobs.batch: "100"
+    count/cronjobs.batch: "10"
+    count/configmaps: "50"
+    count/secrets: "20"
+    count/serviceaccounts: "10"

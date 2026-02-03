@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: SecurityContextConstraints
+metadata:
+  name: opifex-gpu-scc
+  labels:
+    app.kubernetes.io/name: gpu-scc
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: opifex-container-orchestration
+allowHostDirVolumePlugin: true
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegedContainer: false
+allowedCapabilities:
+  - SYS_ADMIN # Required for NVIDIA runtime
+defaultAddCapabilities: null
+defaultAllowPrivilegeEscalation: false
+forbiddenSysctls:
+  - "*"
+requiredDropCapabilities:
+  - ALL
+runAsUser:
+  type: MustRunAsNonRoot
+seLinuxContext:
+  type: RunAsAny
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+    - min: 1000
+      max: 65535
+users:
+  - system:serviceaccount:opifex-system:opifex-gpu-service-account
+volumes:
+  - configMap
+  - downwardAPI
+  - emptyDir
+  - persistentVolumeClaim
+  - projected
+  - secret
+  - hostPath

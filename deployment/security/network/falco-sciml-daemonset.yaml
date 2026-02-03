@@ -1,0 +1,100 @@
+# Falco Deployment
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco-opifex
+  namespace: opifex-network-security
+  labels:
+    app: falco
+    component: security-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: falco
+  template:
+    metadata:
+      labels:
+        app: falco
+    spec:
+      serviceAccountName: falco
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+      containers:
+        - name: falco
+          image: falcosecurity/falco:0.36.2
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "200m"
+          args:
+            - /usr/bin/falco
+            - --cri=/run/containerd/containerd.sock
+            - --k8s-api=https://kubernetes.default:443
+            - --k8s-api-cert=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            - --k8s-api-token=/var/run/secrets/kubernetes.io/serviceaccount/token
+            - -K
+            - /etc/falco/k8s_audit_rules.yaml
+            - -r
+            - /etc/falco/opifex_rules.yaml
+          volumeMounts:
+            - mountPath: /host/var/run/docker.sock
+              name: docker-socket
+              readOnly: true
+            - mountPath: /host/run/containerd/containerd.sock
+              name: containerd-socket
+              readOnly: true
+            - mountPath: /host/dev
+              name: dev-fs
+              readOnly: true
+            - mountPath: /host/proc
+              name: proc-fs
+              readOnly: true
+            - mountPath: /host/boot
+              name: boot-fs
+              readOnly: true
+            - mountPath: /host/lib/modules
+              name: lib-modules
+              readOnly: true
+            - mountPath: /host/usr
+              name: usr-fs
+              readOnly: true
+            - mountPath: /host/etc
+              name: etc-fs
+              readOnly: true
+            - mountPath: /etc/falco/opifex_rules.yaml
+              name: opifex-rules
+              subPath: opifex_rules.yaml
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+        - name: containerd-socket
+          hostPath:
+            path: /run/containerd/containerd.sock
+        - name: dev-fs
+          hostPath:
+            path: /dev
+        - name: proc-fs
+          hostPath:
+            path: /proc
+        - name: boot-fs
+          hostPath:
+            path: /boot
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: usr-fs
+          hostPath:
+            path: /usr
+        - name: etc-fs
+          hostPath:
+            path: /etc
+        - name: opifex-rules
+          configMap:
+            name: falco-opifex-rules

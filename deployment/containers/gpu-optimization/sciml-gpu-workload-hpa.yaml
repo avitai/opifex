@@ -1,0 +1,37 @@
+# HorizontalPodAutoscaler for GPU workloads
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: opifex-gpu-workload-hpa
+  namespace: opifex-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: opifex-gpu-workload
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metrics for GPU utilization
+    - type: External
+      external:
+        metric:
+          name: nvidia_gpu_utilization
+          selector:
+            matchLabels:
+              namespace: opifex-system
+        target:
+          type: AverageValue
+          averageValue: "75"

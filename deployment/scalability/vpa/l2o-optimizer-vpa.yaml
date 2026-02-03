@@ -1,0 +1,39 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: l2o-optimizer-vpa
+  namespace: opifex-system
+  labels:
+    app: l2o-optimizer
+    component: scalability
+    managed-by: opifex-framework
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: l2o-optimizer
+  updatePolicy:
+    updateMode: "Auto"
+    minReplicas: 1
+  resourcePolicy:
+    containerPolicies:
+      - containerName: l2o-optimizer
+        minAllowed:
+          cpu: 100m
+          memory: 512Mi
+          nvidia.com/gpu: 1
+        maxAllowed:
+          cpu: 8
+          memory: 32Gi
+          nvidia.com/gpu: 4
+        controlledResources: ["cpu", "memory", "nvidia.com/gpu"]
+        controlledValues: RequestsAndLimits
+      - containerName: sidecar-metrics
+        minAllowed:
+          cpu: 10m
+          memory: 64Mi
+        maxAllowed:
+          cpu: 100m
+          memory: 256Mi
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsAndLimits

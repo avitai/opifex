@@ -1,0 +1,31 @@
+apiVersion: networking.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: opifex-api-access-policy
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: opifex-api-authz
+    app.kubernetes.io/component: zero-trust
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opifex-api-gateway
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/opifex-system/sa/api-gateway-sa"]
+        - source:
+            requestPrincipals:
+              [
+                "https://auth.opifex.enterprise.com/auth/realms/opifex-enterprise/*",
+              ]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            paths: ["/api/*"]
+      when:
+        - key: custom.auth_level
+          values: ["authenticated"]
+        - key: custom.risk_score
+          values: ["low", "medium"]

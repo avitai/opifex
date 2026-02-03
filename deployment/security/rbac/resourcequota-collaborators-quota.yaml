@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: collaborators-quota
+  namespace: opifex-collaborators
+  labels:
+    opifex.local/research-group: "collaborators"
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: "40Gi"
+    requests.nvidia.com/gpu: "2"
+    limits.cpu: "20"
+    limits.memory: "80Gi"
+    limits.nvidia.com/gpu: "2"
+    persistentvolumeclaims: "5"
+    requests.storage: "500Gi"
+    pods: "20"
+    services: "5"

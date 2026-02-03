@@ -1,0 +1,25 @@
+# Shared Resources Access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opifex-shared-access-binding
+  labels:
+    opifex.local/resource-type: "shared"
+subjects:
+  # All researchers get access to shared resources
+  - kind: Group
+    name: "/AI/ML Research/Neural Operators"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: Group
+    name: "/AI/ML Research/Physics-Informed ML"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: Group
+    name: "/Computational Physics/Fluid Dynamics"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: Group
+    name: "/Computational Physics/Materials Science"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: opifex-shared-access
+  apiGroup: rbac.authorization.k8s.io
