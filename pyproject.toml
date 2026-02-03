@@ -1,0 +1,619 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+authors = [{email = "opifex@avitai.bio", name = "Opifex Team"}]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = [
+  "jax>=0.8.0",
+  # JAX - upgraded to 0.8.0 for performance and NNX compatibility
+  "flax>=0.12.0",
+  # FLAX NNX - upgraded to 0.12.0 for modern nnx.Optimizer API
+  "diffrax>=0.4.0",
+  # differential equations
+  "optax>=0.2.6",
+  # optimization - upgraded for Flax 0.12.0 compatibility
+  "optimistix>=0.0.10",
+  # root finding, minimisation, fixed points, and least squares.
+  "blackjax>=1.2.5",
+  # MCMC and sampling
+  "numpy>=1.24.0",
+  # numerical computing
+  "scipy>=1.10.0",
+  # numerical computing
+  "tensorly>=0.9.0",
+  # tensor decomposition for neural operators
+  "matplotlib>=3.7.0",
+  # visualization
+  "plotly>=5.15.0",
+  # visualization
+  "pydantic>=2.0.0",
+  # data validation
+  "typer>=0.9.0",
+  # CLI
+  "jaxtyping>=0.2.20",
+  # type hints
+  "beartype>=0.15.0",
+  "lineax>=0.0.8",
+  # model-sampler integration
+  "orbax-checkpoint>=0.11.13",
+  # checkpointing
+  "distrax>=0.1.0,<0.2.0",
+  # probabilistic programming
+  "tfp-nightly==0.26.0.dev20251024",
+  # probabilistic modeling and Bayesian inference - specific nightly for JAX 0.8.0 compatibility
+  "tf-keras>=2.19.0",
+  # Required by tensorflow-probability for variational inference
+  "typing_extensions>=4.5.0",
+  "fastapi>=0.115.13",
+  "uvicorn[standard]>=0.34.3",
+  "redis>=6.2.0",
+  "prometheus-client>=0.22.1",
+  "pyyaml>=6.0.2",
+  "tqdm>=4.67.1",
+  # Database dependencies for Neural Functional Registry
+  "sqlalchemy>=2.0.0",
+  # ORM for database operations
+  "asyncpg>=0.29.0",
+  # Async PostgreSQL driver
+  "alembic>=1.13.0",
+  # Database migrations
+  "pytest>=8.4.2",
+  "pytest-cov>=6.3.0",
+  "pytest-asyncio>=1.1.0",
+  "pytest-benchmark>=5.1.0",
+  "pytest-env>=1.1.5",
+  "pytest-timeout>=2.4.0",
+  "pytest-xdist>=3.8.0",
+  "pytest-json-report>=1.5.0",
+  "grain>=0.2.3",
+  "neural-tangents>=0.6.1",
+  "artifex @ git+https://github.com/avitai/artifex.git"
+]
+description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
+license = {file = "LICENSE"}
+name = "opifex"
+readme = "README.md"
+requires-python = ">=3.11, <3.13"
+version = "0.1.0"
+
+[project.optional-dependencies]
+all = ["opifex[dev,docs,gpu,profiling,test]"]
+all-cpu = [
+  # CPU-only installation with all development dependencies (no GPU)
+  # Use for Linux CPU-only or macOS Intel systems
+  "opifex[dev,docs,test,profiling]"
+]
+all-macos = [
+  # macOS Apple Silicon with Metal acceleration
+  # Use for macOS ARM64 systems with Metal GPU support
+  "opifex[dev,docs,metal,test]"
+]
+cuda-dev = [
+  # Comprehensive CUDA development environment
+  # Includes all dev tools, testing, and GPU support
+  # Automatically configured via scripts/fresh_cuda_setup.sh
+  "opifex[dev,gpu]"
+]
+dev = [
+  "build>=1.0.3",
+  # Testing and coverage dependencies - CRITICAL for pytest coverage HTML reports
+  "coverage>=7.9.2", # Core coverage package for HTML report generation
+  "pytest>=8.4.1", # Primary testing framework
+  "pytest-asyncio>=1.0.0", # Async test support
+  "pytest-benchmark>=5.1.0", # Performance benchmarking
+  "pytest-cov>=6.2.1", # Coverage integration with pytest
+  "pytest-env>=1.1.5", # Environment variable management
+  "pytest-timeout>=2.4.0", # Test timeout management
+  "pytest-xdist>=3.8.0", # Parallel test execution
+  # Development tools
+  "bandit>=1.7.5",
+  "ipykernel>=6.29.5",
+  "pip-audit>=2.6.0",
+  "pre-commit>=4.2.0",
+  "pydeps>=1.12.17",
+  "jupytext>=1.16.0", # Notebook conversion
+  "pyright>=1.1.336",
+  "python-dotenv>=1",
+  "rich>=14.0.0", # rich text and beautiful formatting
+  "ruff>=0.1.5",
+  "twine>=4.0.2"
+]
+docs = [
+  "griffe>=1.7.3",
+  "hippogriffe>=0.2",
+  "mkdocs>=1.6.1",
+  "mkdocs-include-exclude-files>=0.1",
+  "mkdocs-ipynb>=0.1",
+  "mkdocs-jupyter>=0.24",
+  "mkdocs-material>=9.6.7",
+  "mkdocstrings>=0.28.3",
+  "mkdocstrings-python>=1.1.2",
+  "pymdown-extensions>=10.14.3"
+]
+gpu = [
+  # GPU dependencies - Complete CUDA stack installed locally in venv
+  "jax[cuda12_local]==0.8.0",
+  "jaxlib==0.8.0", # Core CUDA runtime and libraries
+  "nvidia-cublas-cu12>=12.6",
+  "nvidia-cuda-cupti-cu12>=12.6",
+  "nvidia-cuda-nvcc-cu12>=12.6", # CUDA compiler
+  "nvidia-cuda-nvrtc-cu12>=12.6", # CUDA runtime compiler
+  "nvidia-cuda-runtime-cu12>=12.6",
+  "nvidia-cudnn-cu12>=9.1",
+  "nvidia-cufft-cu12>=11.4",
+  "nvidia-curand-cu12>=10.3",
+  "nvidia-cusolver-cu12>=11.7",
+  "nvidia-cusparse-cu12>=12.3",
+  "nvidia-nccl-cu12>=2.20", # Additional CUDA ML libraries
+  "nvidia-nvjitlink-cu12>=12.6",
+  "nvidia-nvtx-cu12>=12.6"
+]
+metal = [
+  # Metal acceleration for Apple Silicon Macs (M1/M2/M3+)
+  # Provides GPU-like acceleration on macOS
+  "jax-metal>=0.1.0"
+]
+neural-dft = [
+  # Neural DFT specific dependencies for quantum chemistry
+  "ase>=3.22.0", # Atomic Simulation Environment
+  "pyscf>=2.3.0", # Python-based Simulations of Chemistry Framework
+  "h5py>=3.8.0", # HDF5 for quantum data storage
+  "netcdf4>=1.6.0" # NetCDF for scientific data
+]
+# Workshop-inspired comprehensive development environments
+opifex-dev = [
+  # Comprehensive Opifex development environment
+  "opifex[dev,gpu,neural-dft,quantum-chemistry]"
+]
+platform = [
+  # Platform development dependencies
+  "sqlalchemy[asyncio]>=2.0.0", # Enhanced async support
+  "psycopg2-binary>=2.9.0", # Alternative PostgreSQL driver
+  "pgcli>=4.0.0", # PostgreSQL CLI for development
+  "redis>=5.0.0" # Enhanced Redis support
+]
+profiling = [
+  # Performance profiling and analysis dependencies
+  "tensorflow>=2.20.0", # TensorFlow for JAX profiler integration
+  "tensorboard-plugin-profile>=2.20.6" # TensorBoard profiler plugin for JAX profiling
+]
+quantum-chemistry = [
+  # Quantum chemistry benchmarks and validation
+  "qcelemental>=0.25.0", # Quantum chemistry data and constants
+  "qcengine>=0.26.0", # Quantum chemistry program executor
+  "basis-set-exchange>=0.9.0" # Basis set data
+]
+test = [
+  "beartype>=0.14.1",
+  # Testing and coverage dependencies - EXACT MATCH with dev section
+  "coverage>=7.9.2", # Core coverage package for HTML report generation
+  "pytest>=8.4.1", # Primary testing framework
+  "pytest-asyncio>=1.0.0", # Async test support
+  "pytest-benchmark>=5.1.0", # Performance benchmarking
+  "pytest-cov>=6.2.1", # Coverage integration with pytest
+  "pytest-env>=1.1.5", # Environment variable management
+  "pytest-timeout>=2.4.0", # Test timeout management
+  "pytest-xdist>=3.8.0" # Parallel test execution
+]
+
+[project.scripts]
+opifex-benchmark = "scripts.benchmark_runner:main"
+opifex-check-compatibility = "scripts.check_opifex_compatibility:main"
+# Phase 2 enhancements - workshop-inspired environment management
+opifex-env-activate = "scripts.activate_opifex:main"
+opifex-fresh-setup = "scripts.fresh_opifex_setup:main"
+# Workshop-inspired utilities for enhanced Opifex development
+opifex-gpu-test = "scripts.gpu_test_manager:main"
+opifex-gpu-utils = "scripts.gpu_utils:main"
+opifex-gpu-verify = "scripts.verify_opifex_gpu:main"
+opifex-verify-examples = "scripts.verify_opifex_examples:main"
+
+# Bandit security configuration
+[tool.bandit]
+# Exclude assert warnings in test files and scripts while maintaining security for production
+exclude_dirs = ["tests", "scripts", "memory-bank", "documents", "custom_modes", ".cursor"]
+skips = [
+  "B404",
+  "B603",
+  "B607",
+  "B602",
+  "B110",
+  "B403",
+  "B301"
+] # Skip subprocess, assert, and pickle warnings for utility scripts and checkpoint management
+
+# Allow assert statements in test files and scripts only
+[tool.bandit.assert_used]
+skips = ["*/tests/*", "tests/*", "*/scripts/*", "scripts/*"]
+
+[tool.coverage.run]
+branch = true
+omit = ["*/tests/*", "*/conftest.py", "*/__pycache__/*", "*/scripts/*", "*/examples/*"]
+parallel = true
+source = ["src"]
+
+[tool.hatch]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/opifex", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opifex"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.opifex]
+
+[tool.opifex.cuda]
+auto_detect = true
+documentation = "docs/setup/cuda-setup.md"
+environment_file = ".env"
+fallback_to_cpu = true
+setup_scripts = ["scripts/fresh_opifex_setup.sh", "scripts/setup_env.py", "scripts/run_tests_with_cuda.sh"]
+
+# Pydocstyle documentation configuration
+[tool.pydocstyle]
+# Allow missing docstrings in certain contexts for scientific code
+add-ignore = [
+  "D100", # Missing docstring in public module
+  "D104", # Missing docstring in public package
+  "D105", # Missing docstring in magic method
+  "D107", # Missing docstring in __init__
+  "D202", # No blank lines allowed after function docstring (conflicts with black)
+  "D212", # Multi-line docstring summary should start at the first line (conflicts with scientific style)
+  "D401", # First line should be in imperative mood (relaxed for scientific descriptions)
+  "D402", # First line should not be the function's "signature" (common in scientific docs)
+  "D415" # First line should end with a period (relaxed for scientific descriptions)
+]
+convention = "google"
+# Match only relevant directories, exclude test and utility directories
+match-dir = "(?!tests|memory-bank|documents|custom_modes|.cursor).*"
+
+[tool.pyright]
+exclude = [
+  "**/__pycache__",
+  "**/.venv",
+  "**/node_modules",
+  "**/.git",
+  "**/build",
+  "**/dist",
+  "scripts",
+  "memory-bank",
+  "documents",
+  "custom_modes",
+  ".cursor",
+  "examples", # Exclude example files from strict type checking
+  "src/opifex/training/orbax_checkpoint_manager.py", # Exclude due to Orbax type stub issues
+  "src/opifex/training/trainers/physics_informed_trainer.py", # Exclude due to return type issues
+  "tests/training/test_orbax_checkpoint_manager.py" # Exclude due to unused variable warnings
+]
+include = ["src", "tests"]
+pythonPlatform = "Linux"
+# Modern Python features
+pythonVersion = "3.11"
+reportArgumentType = "warning" # Relax argument type checking for scientific computing
+reportAssignmentType = "warning" # Relax assignment type checking for scientific arrays
+reportAttributeAccessIssue = "warning" # Relax attribute access for dynamic scientific objects
+# Additional JAX/Scientific computing permissive settings
+reportCallIssue = "warning" # Relax function call parameter matching for JAX
+reportConstantRedefinition = "warning"
+reportDuplicateImport = true
+# JAX/Scientific computing specific - make more permissive
+reportFunctionMemberAccess = false
+# Allow for scientific computing patterns
+reportGeneralTypeIssues = "warning"
+reportImportCycles = true
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = false
+reportMissingImports = true
+reportMissingParameterType = false # Lambda parameters in scientific code
+reportMissingTypeStubs = false
+reportOptionalCall = "warning"
+reportOptionalIterable = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportOverlappingOverload = "error"
+reportPrivateImportUsage = false # Allow matplotlib.pyplot.Figure imports
+reportReturnType = "warning" # Relax return type checking for scientific functions
+# Performance optimizations
+reportSelfClsParameterName = false
+reportUnknownArgumentType = false # JAX array operations
+reportUnknownLambdaType = false # Lambda expressions in JAX
+reportUnknownMemberType = false # JAX numpy functions often have complex types
+reportUnknownParameterType = false # Scientific computing lambdas
+reportUnknownVariableType = false # JAX transformations
+reportUntypedBaseClass = false # Protocol inheritance
+reportUntypedClassDecorator = false # dataclasses, attrs
+reportUntypedFunctionDecorator = false # JAX transforms
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportUnusedImport = true
+reportUnusedVariable = "warning"
+# Type checking configuration - relax for JAX ecosystem
+typeCheckingMode = "basic" # Changed from "strict" to "basic" for JAX compatibility
+venv = ".venv"
+venvPath = "."
+
+# Testing configuration
+[tool.pytest.ini_options]
+addopts = [
+  "-vv",
+  "--tb=short",
+  "--strict-markers",
+  "--disable-warnings",
+  "--cov=src/opifex",
+  "--cov-report=html",
+  "--cov-report=term-missing",
+  "--cov-fail-under=30",
+  "--benchmark-skip",
+  "--timeout=300",
+  "--json-report",
+  "--json-report-file=temp/test-results.json",
+  "--json-report-indent=2",
+  # Shows extra test summary info: f (failed), E (error), s (skipped), x (xfailed), X (xpassed), w (pytest-warnings), a (all)
+  "-rfsxXw"
+]
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:jax.*",
+  "ignore:jax.interpreters.xla.pytype_aval_mappings is deprecated:DeprecationWarning",
+  "ignore::UserWarning:jax._src.xla_bridge",
+  "ignore:.*cuSPARSE.*",
+  "ignore:.*CUDA-enabled jaxlib.*"
+]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "gpu: marks tests that require GPU (deselect with '-m \"not gpu\"') - automatically detected via conftest.py",
+  "gpu_required: marks tests as requiring GPU (will fail if GPU unavailable)",
+  "cuda: marks tests that specifically test CUDA functionality",
+  "cpu: marks tests that should run on CPU only",
+  "integration: marks tests as integration tests",
+  "unit: marks tests as unit tests",
+  "benchmark: marks tests as performance benchmarks (requires pytest-benchmark)",
+  "e2e: marks tests as end-to-end tests",
+  "performance: marks tests as performance tests",
+  "contract: marks tests as contract tests",
+  "training: marks tests related to training infrastructure",
+  "physics_informed: marks tests for physics-informed training",
+  "workshop_integration: marks tests for workshop integration",
+  "checkpoint: marks tests for checkpoint management",
+  "orbax: marks tests using Orbax backend"
+]
+python_classes = ["Test*"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+
+[tool.pytest-env]
+JAX_ENABLE_X64 = "0"
+# JAX_SKIP_CUDA_CONSTRAINTS_CHECK = "1"  # Disabled to catch CUDA version mismatches
+# Use venv CUDA libraries instead of system ones
+# This path is relative to the project root where pytest runs
+LD_LIBRARY_PATH = ".venv/lib/python3.12/site-packages/nvidia/cublas/lib:.venv/lib/python3.12/site-packages/nvidia/cusolver/lib:.venv/lib/python3.12/site-packages/nvidia/cusparse/lib:.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:.venv/lib/python3.12/site-packages/nvidia/cufft/lib:.venv/lib/python3.12/site-packages/nvidia/curand/lib:.venv/lib/python3.12/site-packages/nvidia/nccl/lib:.venv/lib/python3.12/site-packages/nvidia/nvjitlink/lib:.venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:.venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib:.venv/lib/python3.12/site-packages/nvidia/cuda_cupti/lib:.venv/lib/python3.12/site-packages/nvidia/nvtx/lib"
+TF_CPP_MIN_LOG_LEVEL = "1"
+XLA_PYTHON_CLIENT_MEM_FRACTION = "0.75"
+XLA_PYTHON_CLIENT_PREALLOCATE = "false"
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+line-length = 88
+src = ["src/opifex"]
+target-version = "py311" # Enforce Python 3.11+ features
+
+[tool.ruff.lint]
+# Exclude files
+exclude = [
+  ".bzr",
+  ".direnv",
+  ".eggs",
+  ".git",
+  ".hg",
+  ".mypy_cache",
+  ".nox",
+  ".pants.d",
+  ".pytype",
+  ".ruff_cache",
+  ".svn",
+  ".tox",
+  ".venv",
+  "__pypackages__",
+  "_build",
+  "buck-out",
+  "build",
+  "dist",
+  "node_modules",
+  "venv",
+  "memory-bank",
+  "documents",
+  "custom_modes",
+  ".cursor"
+]
+# Additional type checking rules
+extend-select = ["UP"] # Enforce modern Python syntax
+fixable = ["ALL"]
+ignore = [
+  # Scientific computing and JAX-specific ignores
+  "A003", # Class attribute shadows builtin (SQLAlchemy id columns)
+  "E402", # Module level import not at top of file (JAX imports)
+  "E721", # Do not compare types (JAX dtype comparisons)
+  "E731", # Do not assign a lambda expression (JAX functional programming)
+  "E741", # Ambiguous variable name (mathematical variables)
+  "F722", # Forward annotation syntax error (JAX typing)
+  "UP038", # non-pep604-isinstance (Union vs | for isinstance)
+  "S101", # Use of assert (common in scientific computing)
+  "PLR0913", # Too many arguments (scientific functions)
+  "PLR2004", # Magic value used in comparison (constants)
+  "NPY002", # Replace legacy np.random.* random number generators
+  "COM812", # Missing trailing comma (conflicts with formatter)
+  "ISC001", # Single line implicit string concatenation (conflicts with formatter)
+  # Mathematical variable naming exceptions for scientific computing
+  "N803", # Argument names like R, T are standard in mathematics/physics
+  "N806", # Variable names like Q, R, K, L are standard in mathematics
+  # Unused arguments in scientific computing (common for mathematical signatures)
+  "ARG001", # Unused function arguments (mathematical function signatures)
+  "ARG002", # Unused method arguments (mathematical method signatures)
+  "ARG005", # Unused lambda arguments (JAX functional programming)
+  # Exception handling patterns acceptable in scientific computing
+  "TRY003", # Long messages in exceptions (descriptive scientific errors)
+  "TRY300", # Consider else block (scientific error handling patterns)
+  # Function defaults in scientific computing
+  "B008", # Function calls in defaults (acceptable for initializers)
+  # Security warnings in utility scripts
+  "S602", # subprocess with shell=True (utility scripts)
+  "S603", # subprocess call (utility scripts)
+  "S607", # subprocess partial path (utility scripts)
+  "S110", # try-except-pass (GPU/hardware detection)
+  # Test-specific patterns
+  "PT003", # pytest scope function (explicit is better)
+  "PT018", # Complex assertions (scientific test validation)
+  "PT028", # pytest parameter default argument (utility scripts)
+  # Documentation and style for scientific code
+  "RUF002", # Ambiguous Unicode (mathematical symbols)
+  "SLF001", # Private member access (scientific library internals)
+  "ERA001", # Commented code (scientific development)
+  # Path operations in scripts
+  "PTH101", # os.chmod (scripts)
+  "PTH123", # open() (legacy scripts)
+  # Scientific computing import patterns - CRITICAL FOR OPTIONAL DEPENDENCIES
+  "PLC0415" # Import outside top-level (conditional/optional imports pattern)
+]
+# Enable more comprehensive rule sets for modern Python
+select = [
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "F", # pyflakes
+  "UP", # pyupgrade (modern Python idioms)
+  "I001", # isort
+  "N", # pep8-naming
+  "YTT", # flake8-2020
+  "S", # flake8-bandit (security)
+  "B", # flake8-bugbear
+  "A", # flake8-builtins
+  "COM", # flake8-commas
+  "C4", # flake8-comprehensions
+  "DTZ", # flake8-datetimez
+  "T10", # flake8-debugger
+  "ISC", # flake8-implicit-str-concat
+  "ICN", # flake8-import-conventions
+  "PIE", # flake8-pie
+  "T20", # flake8-print
+  "PYI", # flake8-pyi
+  "PT", # flake8-pytest-style
+  "Q", # flake8-quotes
+  "RSE", # flake8-raise
+  "RET", # flake8-return
+  "SLF", # flake8-self
+  "SIM", # flake8-simplify
+  "TID", # flake8-tidy-imports
+  "TCH", # flake8-type-checking
+  "ARG", # flake8-unused-arguments
+  "PTH", # flake8-use-pathlib
+  "ERA", # eradicate
+  "PGH", # pygrep-hooks
+  "PL", # pylint
+  "TRY", # tryceratops
+  "NPY", # NumPy-specific rules
+  "RUF" # Ruff-specific rules
+]
+unfixable = []
+
+[tool.ruff.lint.flake8-type-checking]
+# Enforce TYPE_CHECKING imports for better performance
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+extra-standard-library = ["typing_extensions"]
+known-first-party = ["opifex"]
+known-third-party = ["jax", "flax", "numpy", "scipy"]
+lines-after-imports = 2
+order-by-type = false
+
+# Per-file ignores for development scripts
+[tool.ruff.lint.per-file-ignores]
+# Example files with print statements for demonstration
+"examples/*" = [
+  "T201", # Print statements (examples need output)
+  "F841", # Unused variables (demonstrations may not use all variables)
+  "E501" # Long lines in example comments
+]
+"scripts/*" = [
+  "E501", # Line too long (development scripts can be longer)
+  "PLR0912", # Too many branches (complex utility scripts)
+  "RUF013", # Implicit Optional (legacy script patterns)
+  "PTH113", # os.path.isfile (legacy compatibility)
+  "PTH112", # os.path.isdir (legacy compatibility)
+  "PTH110", # os.path.exists (legacy compatibility)
+  "SIM102", # Nested if statements (readability in scripts)
+  "T201" # Print statements (utility scripts need output)
+]
+# Core library files with necessary user feedback
+"src/opifex/benchmarking/evaluation_engine.py" = [
+  "T201" # Print statements for evaluation warnings and feedback
+]
+"src/opifex/core/gpu_optimization.py" = [
+  "T201" # Print statements for benchmark results and user feedback
+]
+# Core library files with scientific computing patterns
+"src/opifex/core/problems.py" = [
+  "T201", # Print statements for debugging in development
+  "E722", # Bare except in scientific fallback patterns
+  "E501", # Long lines for scientific comments
+  "RET504" # Scientific computing return patterns
+]
+"src/opifex/core/quantum/operators.py" = [
+  "B028", # Warning stacklevel in scientific context
+  "E501" # Long scientific comments
+]
+"src/opifex/neural/bayesian/blackjax_integration.py" = [
+  "T201" # Print statements for MCMC fallback warnings
+]
+"src/opifex/neural/quantum/neural_dft.py" = [
+  "E501", # Long scientific comments
+  "RET504" # Scientific computing return patterns
+]
+# Add visualization complexity ignores to existing per-file-ignores section
+"src/opifex/visualization/**/*.py" = [
+  "PLR0912", # Too many branches - acceptable for comprehensive plotting
+  "PLR0915" # Too many statements - acceptable for comprehensive plotting
+]
+# Test files with scientific computing patterns
+"tests/*" = [
+  "T201", # Print statements in tests for debugging
+  "E501", # Long lines in test descriptions
+  "RUF003", # Mathematical symbols in comments
+  "RET504" # Test return patterns
+]
+"tests/conftest.py" = [
+  "T201", # Print statements (test configuration logging)
+  "E501" # Long lines in test configuration
+]
+"tests/core/*" = [
+  "T201", # Print statements in core tests
+  "E501", # Long test descriptions
+  "RUF003" # Mathematical symbols
+]
+
+[tool.ruff.lint.pylint]
+max-args = 8 # Allow more arguments for scientific functions
+
+[tool.ruff.lint.pyupgrade]
+# Keep dict/list union syntax for modern Python
+keep-runtime-typing = false
+
+# UV Configuration for optimal performance
+[tool.uv]
+python-preference = "only-managed"
+
+# Configure for GPU package installation
+[tool.uv.pip]
+find-links = ["https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"]

@@ -1,0 +1,46 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: opifex-virtual-service
+  namespace: opifex-system
+  labels:
+    app: opifex-istio
+    component: virtual-service
+spec:
+  hosts:
+    - "opifex.example.com"
+  gateways:
+    - opifex-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/v1/registry
+      route:
+        - destination:
+            host: opifex-registry-service
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /api/v1/collaboration
+      route:
+        - destination:
+            host: opifex-collaboration-service
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /api/v1/dashboard
+      route:
+        - destination:
+            host: opifex-dashboard-service
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: opifex-frontend-service
+            port:
+              number: 80

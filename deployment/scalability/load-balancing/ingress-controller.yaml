@@ -1,0 +1,78 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opifex-ingress
+  namespace: opifex-system
+  labels:
+    component: scalability
+    load-balancer: nginx
+    managed-by: opifex-framework
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - opifex.example.com
+        - api.opifex.example.com
+        - community.opifex.example.com
+      secretName: opifex-tls
+  rules:
+    - host: api.opifex.example.com
+      http:
+        paths:
+          - path: /api/v1/l2o(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: l2o-optimizer-service
+                port:
+                  number: 8000
+          - path: /api/v1/neural-operators(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: neural-operator-service
+                port:
+                  number: 8000
+          - path: /api/v1/benchmarking(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: opifex-benchmarking-service
+                port:
+                  number: 8000
+          - path: /api/v1/monitoring(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-service
+                port:
+                  number: 9090
+    - host: community.opifex.example.com
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: community-platform-api-service
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: community-platform-frontend-service
+                port:
+                  number: 3000

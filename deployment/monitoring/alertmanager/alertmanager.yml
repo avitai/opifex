@@ -1,0 +1,220 @@
+# AlertManager Configuration for Opifex Framework
+# Production alerting with escalation policies
+
+global:
+  smtp_smarthost: "localhost:587"
+  smtp_from: "alerts@opifex.example.com"
+  smtp_auth_username: "alerts@opifex.example.com"
+  smtp_auth_password: "password"
+  slack_api_url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+
+# Routing tree for alert notifications
+route:
+  group_by: ["alertname", "cluster", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: "default-receiver"
+  routes:
+    # GPU-specific alerts - immediate escalation
+    - match:
+        component: gpu
+      receiver: "gpu-alerts"
+      group_wait: 10s
+      repeat_interval: 5m
+      routes:
+        - match:
+            severity: critical
+          receiver: "gpu-critical-alerts"
+          group_wait: 0s
+          repeat_interval: 1m
+
+    # L2O optimization alerts
+    - match:
+        component: l2o
+      receiver: "l2o-alerts"
+      group_wait: 30s
+      repeat_interval: 10m
+
+    # Neural operator alerts
+    - match:
+        component: neural-operator
+      receiver: "neural-operator-alerts"
+      group_wait: 1m
+      repeat_interval: 15m
+
+    # Infrastructure alerts
+    - match:
+        component: infrastructure
+      receiver: "infrastructure-alerts"
+      routes:
+        - match:
+            severity: critical
+          receiver: "infrastructure-critical-alerts"
+          group_wait: 10s
+          repeat_interval: 2m
+
+    # Kubernetes alerts
+    - match:
+        component: kubernetes
+      receiver: "kubernetes-alerts"
+      routes:
+        - match:
+            severity: critical
+          receiver: "kubernetes-critical-alerts"
+          group_wait: 5s
+          repeat_interval: 1m
+
+# Alert receivers and notification templates
+receivers:
+  - name: "default-receiver"
+    slack_configs:
+      - channel: "#opifex-alerts"
+        title: "Opifex Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Component:* {{ .Labels.component }}
+          {{ end }}
+
+  - name: "gpu-alerts"
+    slack_configs:
+      - channel: "#opifex-gpu-alerts"
+        title: "GPU Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          🔥 *GPU Alert Detected*
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *GPU:* {{ .Labels.gpu }}
+          *Severity:* {{ .Labels.severity }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
+        actions:
+          - type: button
+            text: "View Runbook"
+            url: "{{ (index .Alerts 0).Annotations.runbook_url }}"
+
+  - name: "gpu-critical-alerts"
+    slack_configs:
+      - channel: "#opifex-gpu-critical"
+        title: "🚨 CRITICAL GPU Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          🚨 *CRITICAL GPU ALERT* 🚨
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *GPU:* {{ .Labels.gpu }}
+          *Action Required:* Immediate intervention needed
+          {{ end }}
+        send_resolved: true
+    email_configs:
+      - to: "gpu-team@opifex.example.com"
+        subject: "CRITICAL GPU Alert: {{ .GroupLabels.alertname }}"
+        body: |
+          Critical GPU alert detected in Opifex production environment.
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          GPU: {{ .Labels.gpu }}
+          Time: {{ .StartsAt }}
+          Runbook: {{ .Annotations.runbook_url }}
+          {{ end }}
+
+  - name: "l2o-alerts"
+    slack_configs:
+      - channel: "#opifex-l2o-alerts"
+        title: "L2O Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          🔧 *L2O Optimization Alert*
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Algorithm:* {{ .Labels.algorithm }}
+          *Problem Type:* {{ .Labels.problem_type }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  - name: "neural-operator-alerts"
+    slack_configs:
+      - channel: "#opifex-neural-ops-alerts"
+        title: "Neural Operator Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          🧠 *Neural Operator Alert*
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Model Type:* {{ .Labels.model_type }}
+          *Dataset:* {{ .Labels.dataset }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  - name: "infrastructure-alerts"
+    slack_configs:
+      - channel: "#opifex-infrastructure"
+        title: "Infrastructure Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          🏗️ *Infrastructure Alert*
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Pod:* {{ .Labels.pod }}
+          *Namespace:* {{ .Labels.namespace }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  - name: "infrastructure-critical-alerts"
+    slack_configs:
+      - channel: "#opifex-infrastructure-critical"
+        title: "🚨 CRITICAL Infrastructure Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          🚨 *CRITICAL INFRASTRUCTURE ALERT* 🚨
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Pod:* {{ .Labels.pod }}
+          *Namespace:* {{ .Labels.namespace }}
+          *Action Required:* Immediate investigation needed
+          {{ end }}
+        send_resolved: true
+    email_configs:
+      - to: "devops-team@opifex.example.com"
+        subject: "CRITICAL Infrastructure Alert: {{ .GroupLabels.alertname }}"
+
+  - name: "kubernetes-alerts"
+    slack_configs:
+      - channel: "#opifex-kubernetes"
+        title: "Kubernetes Alert: {{ .GroupLabels.alertname }}"
+        text: |
+          ⚙️ *Kubernetes Alert*
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Node:* {{ .Labels.node }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  - name: "kubernetes-critical-alerts"
+    slack_configs:
+      - channel: "#opifex-kubernetes-critical"
+        title: "🚨 CRITICAL Kubernetes Alert: {{ .GroupLabels.alertname }}"
+        send_resolved: true
+    email_configs:
+      - to: "platform-team@opifex.example.com"
+        subject: "CRITICAL Kubernetes Alert: {{ .GroupLabels.alertname }}"
+
+# Inhibition rules to prevent alert spam
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "instance"]
+
+  - source_match:
+      alertname: "GPUTemperatureHigh"
+    target_match:
+      alertname: "GPUMemoryHigh"
+    equal: ["gpu"]
+
+# Alert templates
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"

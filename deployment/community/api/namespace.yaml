@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-community
+  labels:
+    app.kubernetes.io/name: opifex-community
+    app.kubernetes.io/part-of: opifex-platform
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    description: "Opifex Community Platform - Neural Functional Registry and Collaboration Tools"

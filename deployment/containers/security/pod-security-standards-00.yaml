@@ -1,0 +1,93 @@
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: opifex-gpu-security-policy
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: pod-security-policy
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: opifex-container-orchestration
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: "docker/default,runtime/default"
+    seccomp.security.alpha.kubernetes.io/defaultProfileName: "runtime/default"
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: "runtime/default"
+    apparmor.security.beta.kubernetes.io/defaultProfileName: "runtime/default"
+spec:
+  # Security constraints for Opifex GPU workloads
+  privileged: false
+  allowPrivilegeEscalation: false
+
+  # Required capabilities drop
+  requiredDropCapabilities:
+    - ALL
+
+  # Allowed capabilities for GPU access
+  allowedCapabilities:
+    - SYS_ADMIN # Required for NVIDIA runtime
+
+  # Volume restrictions
+  volumes:
+    - "configMap"
+    - "emptyDir"
+    - "projected"
+    - "secret"
+    - "downwardAPI"
+    - "persistentVolumeClaim"
+    - "hostPath" # Limited hostPath for GPU device access
+
+  # Host path restrictions
+  allowedHostPaths:
+    # NVIDIA device access
+    - pathPrefix: "/dev/nvidia"
+      readOnly: false
+    - pathPrefix: "/dev/nvidiactl"
+      readOnly: false
+    - pathPrefix: "/dev/nvidia-uvm"
+      readOnly: false
+    - pathPrefix: "/dev/nvidia-uvm-tools"
+      readOnly: false
+    # CUDA libraries
+    - pathPrefix: "/usr/local/cuda"
+      readOnly: true
+    - pathPrefix: "/usr/lib/x86_64-linux-gnu"
+      readOnly: true
+
+  # User and group constraints
+  runAsUser:
+    rule: "MustRunAsNonRoot"
+    ranges:
+      - min: 1000
+        max: 65535
+
+  runAsGroup:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1000
+        max: 65535
+
+  supplementalGroups:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1000
+        max: 65535
+
+  # Filesystem constraints
+  fsGroup:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1000
+        max: 65535
+
+  # SELinux constraints
+  seLinux:
+    rule: "RunAsAny"
+
+  # Host network restrictions
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+
+  # Port restrictions
+  hostPorts:
+    - min: 0
+      max: 65535

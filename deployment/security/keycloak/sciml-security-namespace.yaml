@@ -1,0 +1,12 @@
+# Opifex Enterprise Keycloak Identity Hub - High Availability Deployment
+# Hybrid Security Model + Federation + Multi-Tier Compliance
+# Integration with Phase 7.1 Container Orchestration
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-security
+  labels:
+    app.kubernetes.io/name: opifex-security
+    app.kubernetes.io/part-of: opifex-framework
+    security.opifex.io/tier: enterprise

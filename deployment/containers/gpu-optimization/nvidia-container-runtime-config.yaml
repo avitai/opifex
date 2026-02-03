@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-container-runtime-config
+  namespace: opifex-system
+  labels:
+    app.kubernetes.io/name: nvidia-runtime-config
+    app.kubernetes.io/component: gpu-optimization
+    app.kubernetes.io/part-of: opifex-container-orchestration
+spec:
+data:
+  config.toml: |
+    version = 2
+
+    # NVIDIA Container Runtime Configuration for Opifex Framework
+    # Phase 7.1: Container Orchestration - GPU Optimization
+
+    [plugins]
+      [plugins."io.containerd.grpc.v1.cri"]
+        [plugins."io.containerd.grpc.v1.cri".containerd]
+          default_runtime_name = "nvidia"
+
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+            # NVIDIA GPU Runtime
+            [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+              runtime_type = "io.containerd.runc.v2"
+              runtime_engine = ""
+              runtime_root = ""
+              privileged_without_host_devices = false
+              base_runtime_spec = ""
+
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+                BinaryName = "/usr/bin/nvidia-container-runtime"
+                SystemdCgroup = true
+
+            # Standard runc for non-GPU workloads
+            [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+              runtime_type = "io.containerd.runc.v2"
+
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+                SystemdCgroup = true
+
+  daemon.json: |
+    {
+      "default-runtime": "nvidia",
+      "runtimes": {
+        "nvidia": {
+          "path": "nvidia-container-runtime",
+          "runtimeArgs": []
+        }
+      },
+      "exec-opts": ["native.cgroupdriver=systemd"],
+      "log-driver": "json-file",
+      "log-opts": {
+        "max-size": "100m",
+        "max-file": "3"
+      },
+      "storage-driver": "overlay2",
+      "storage-opts": [
+        "overlay2.override_kernel_check=true"
+      ],
+      "features": {
+        "buildkit": true
+      }
+    }

@@ -1,0 +1,325 @@
+site_name: Opifex - Unified Scientific Machine Learning Framework
+site_description: JAX-native platform for scientific machine learning, neural operators, physics-informed neural networks, and neural density functional theory
+site_url: https://docs.avitai.bio/opifex
+repo_url: https://github.com/Opifex/Opifex
+repo_name: Opifex/Opifex
+edit_uri: edit/main/docs/
+
+# Configuration for a Sphinx Book Theme-like appearance
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  features:
+    # Navigation features with collapsible sections
+    # Removed navigation.sections to allow proper collapse
+    # Removed navigation.expand to start with collapsed state
+    - navigation.path
+    - navigation.indexes
+    - navigation.top
+    # Add instant loading for better UX
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    # Enable navigation tracking
+    - navigation.tracking
+    # Table of contents - removed toc.integrate to keep TOC separate
+    - toc.follow
+    # - toc.integrate  # Commented out to prevent TOC from being embedded in content
+    # Standard usability features
+    - search.highlight
+    - search.share
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+# Navigation structure remains the same
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Environment Setup: getting-started/environment-setup.md
+      - Quick Start: getting-started/quickstart.md
+      - GPU Setup: getting-started/gpu-setup.md
+  - Framework Overview:
+      - Features: features.md
+      - Architecture: architecture.md
+      - Technology Stack: tech-stack.md
+  - User Guide:
+      - Core Concepts: user-guide/concepts.md
+      - Problem Definition: user-guide/problems.md
+      - Neural Networks: user-guide/neural-networks.md
+      - Training: user-guide/training.md
+      - Optimization: user-guide/optimization.md
+      - Geometry & Domains: user-guide/geometry.md
+  - Scientific Methods:
+      - Neural Operators: methods/neural-operators.md
+      - Physics-Informed Neural Networks: methods/pinns.md
+      - Domain Decomposition PINNs: methods/domain-decomposition-pinns.md
+      - NTK Analysis: methods/ntk-analysis.md
+      - Neural Density Functional Theory: methods/neural-dft.md
+      - Probabilistic Numerics: methods/probabilistic.md
+      - Learn-to-Optimize: methods/l2o.md
+      - Second-Order Optimization: methods/second-order-optimization.md
+      - Meta-Optimization: methods/meta-optimization.md
+      - Multilevel Training: methods/multilevel-training.md
+      - Adaptive Sampling: methods/adaptive-sampling.md
+      - Loss Balancing (GradNorm): methods/gradnorm.md
+      - Production Optimization: methods/production-optimization.md
+      - Control Systems: methods/control-systems.md
+      - Advanced Benchmarking: methods/advanced-benchmarking.md
+  - Examples:
+      - Overview: examples/index.md
+      - Getting Started:
+          - Your First Neural Operator: examples/getting-started/first-neural-operator.md
+          - Your First PINN: examples/getting-started/first-pinn.md
+      - Neural Operators:
+          - FNO on Darcy Flow: examples/neural-operators/fno-darcy.md
+          - FNO on Burgers Equation: examples/neural-operators/fno-burgers.md
+          - SFNO on Climate Data: examples/neural-operators/sfno-climate-simple.md
+          - SFNO with Conservation Laws: examples/neural-operators/sfno-climate-comprehensive.md
+          - U-FNO on Turbulence: examples/neural-operators/ufno-turbulence.md
+          - UNO on Darcy Flow: examples/neural-operators/uno-darcy.md
+          - DeepONet on Darcy Flow: examples/neural-operators/deeponet-darcy.md
+          - DeepONet on Antiderivative: examples/neural-operators/deeponet-antiderivative.md
+          - TFNO on Darcy Flow: examples/neural-operators/tfno-darcy.md
+          - PINO on Burgers: examples/neural-operators/pino-burgers.md
+          - Local FNO on Darcy Flow: examples/neural-operators/local-fno-darcy.md
+          - GNO on Darcy Flow: examples/neural-operators/gno-darcy.md
+          - Operator Comparison Tour: examples/neural-operators/operator-tour.md
+      - PINNs:
+          - Heat Equation: examples/pinns/heat-equation.md
+          - Poisson Equation: examples/pinns/poisson.md
+          - Burgers Equation: examples/pinns/burgers.md
+          - Navier-Stokes (Kovasznay Flow): examples/pinns/navier-stokes.md
+          - Wave Equation: examples/pinns/wave.md
+          - Helmholtz Equation: examples/pinns/helmholtz.md
+          - Allen-Cahn Equation: examples/pinns/allen-cahn.md
+          - Advection Equation: examples/pinns/advection.md
+          - Diffusion-Reaction: examples/pinns/diffusion-reaction.md
+          - Euler Beam: examples/pinns/euler-beam.md
+          - Inverse Diffusion: examples/pinns/inverse-diffusion.md
+      - Domain Decomposition:
+          - FBPINN on Harmonic Oscillator: examples/domain-decomposition/fbpinn-poisson.md
+          - XPINN on Burgers Equation: examples/domain-decomposition/xpinn-helmholtz.md
+          - CPINN on Advection-Diffusion: examples/domain-decomposition/cpinn-advection-diffusion.md
+      - Uncertainty Quantification:
+          - Calibration Methods: examples/uncertainty/calibration.md
+          - UQNO on Darcy Flow: examples/uncertainty/uqno-darcy.md
+          - Bayesian FNO: examples/uncertainty/bayesian-fno.md
+      - Quantum Chemistry:
+          - Neural DFT (H2 Molecule): examples/quantum-chemistry/neural-dft.md
+          - Neural XC Functional: examples/quantum-chemistry/neural-xc-functional.md
+      - Optimization & Meta-Learning:
+          - Learn-to-Optimize (L2O): examples/optimization/learn-to-optimize.md
+          - Meta-Optimization: examples/optimization/meta-optimization.md
+      - Advanced Training:
+          - NTK Analysis: examples/advanced-training/ntk-analysis.md
+          - GradNorm Loss Balancing: examples/advanced-training/gradnorm.md
+          - Adaptive Sampling: examples/advanced-training/adaptive-sampling.md
+      - Layers & Components:
+          - DISCO Convolutions: examples/layers/disco-convolutions.md
+          - Fourier Continuation: examples/layers/fourier-continuation.md
+          - Grid Embeddings: examples/layers/grid-embeddings.md
+          - Spectral Normalization: examples/layers/spectral-normalization.md
+      - Data & Analysis:
+          - Darcy Flow Analysis: examples/data/darcy-flow-analysis.md
+          - Spectral Analysis: examples/data/spectral-analysis.md
+      - Benchmarking:
+          - Neural Operator Benchmark: examples/benchmarking/operator-benchmark.md
+          - GPU Profiling & Optimization: examples/benchmarking/gpu-profiling.md
+  - API Reference:
+      - Core: api/core.md
+      - Neural: api/neural.md
+      - Training: api/training.md
+      - Geometry: api/geometry.md
+      - Optimization: api/optimization.md
+      - Data: api/data.md
+      - Physics: api/physics.md
+      - Visualization: api/visualization.md
+      - Platform: api/platform.md
+      - MLOps: api/mlops.md
+      - Deployment: api/deployment.md
+      - Benchmarking: api/benchmarking.md
+      - Benchmarking: api/benchmarking.md
+      - Bayesian: api/bayesian.md
+      - Scalability: api/scalability.md
+      - Education: api/education.md
+      - Utilities: api/utils.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Breaking Changes: development/breaking-changes.md
+      - NNX Migration: development/nnx-migration.md
+      - Testing: development/testing.md
+      - GPU Development: development/gpu-development.md
+      - Architecture: development/architecture.md
+      - Code Quality: development/code-quality.md
+      - Example Documentation Design: development/example_documentation_design.md
+  - Deployment:
+      - Local Development: deployment/local-development.md
+      - AWS Deployment: deployment/aws-deployment.md
+      - GCP Deployment: deployment/gcp-deployment.md
+      - Troubleshooting: deployment/troubleshooting.md
+  - Benchmarks: benchmarks.md
+  - FAQ: faq.md
+
+# Plugins configuration remains the same
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - mkdocstrings:
+      enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
+      handlers:
+        python:
+          paths: [src/opifex]
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://jax.readthedocs.io/en/latest/objects.inv
+          options:
+            docstring_style: google
+            docstring_options:
+              ignore_init_summary: true
+            merge_init_into_class: true
+            show_submodules: false
+            show_source: false
+            show_bases: true
+            show_inheritance_diagram: false
+            group_by_category: true
+            heading_level: 2
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            find_stubs_package: false
+            allow_inspection: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            filters:
+              - "!^_"
+              - "^__init__$"
+  # Disabled mkdocs-jupyter plugin as there are no notebooks in docs/ directory
+  # and the plugin was scanning .uv-cache causing build to hang
+  # - mkdocs-jupyter:
+  #     execute: false
+  #     include_source: true
+  #     ignore_h1_titles: true
+  #     kernel_name: python3
+  - include_exclude_files:
+      exclude:
+        - "*.tmp"
+        - "*.pyc"
+        - "__pycache__"
+        - "**/.uv-cache/**"
+        - "**/.venv/**"
+        - "**/site-packages/**"
+        - "CNAME"  # Excluded: workflow creates it at correct location
+
+# Markdown extensions for scientific content remain the same
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      title: On this page
+      toc_depth: 3 # Limit TOC depth to avoid clutter
+  - tables
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Extra configuration remains the same
+extra:
+  version:
+    provider: mike
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Opifex/Opifex
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/opifex/
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
+  consent:
+    title: Cookie consent
+    description: >-
+      We use cookies to recognize your repeated visits and preferences, as well
+      as to measure the effectiveness of our documentation and whether users
+      find what they're searching for. With your consent, you're helping us to
+      make our documentation better.
+
+# MathJax for scientific equations
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - stylesheets/extra.css
+
+strict: false
+
+# Site directory structure
+docs_dir: docs
+site_dir: site
+
+# File watching configuration
+watch:
+  - src/opifex/
+  - mkdocs.yml
+  - README.md

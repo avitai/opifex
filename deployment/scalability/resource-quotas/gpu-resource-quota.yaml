@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-resource-quota
+  namespace: opifex-system
+  labels:
+    component: scalability
+    resource-type: gpu
+    managed-by: opifex-framework
+spec:
+  hard:
+    nvidia.com/gpu: "50"
+    requests.nvidia.com/gpu: "40"
+    limits.nvidia.com/gpu: "50"
+    requests.cpu: "200"
+    requests.memory: 800Gi
+    limits.cpu: "400"
+    limits.memory: 1600Gi
+    persistentvolumeclaims: "20"
+    pods: "100"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values: ["gpu-workload", "high-priority"]

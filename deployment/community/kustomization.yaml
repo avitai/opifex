@@ -1,0 +1,167 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: opifex-community-platform-complete
+  annotations:
+    description: "Opifex Community Platform - Complete Neural Functional Registry and Collaboration Infrastructure"
+    version: "1.0.0"
+    created-by: "Opifex BUILD Mode - Phase 6 Extension"
+
+# Namespace for all resources
+namespace: opifex-community
+
+# Sub-applications to deploy
+resources:
+  # Core API services
+  - api/
+
+  # Frontend web interface
+  - frontend/
+
+  # Neural functional registry storage
+  - registry/
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: opifex-community-platform
+  app.kubernetes.io/part-of: opifex-platform
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/version: "1.0.0"
+  deployment.phase: "phase-6-extension"
+  deployment.component: "community-platform"
+
+# Common annotations
+commonAnnotations:
+  opifex.io/deployment-phase: "6"
+  opifex.io/component-type: "community-platform"
+  opifex.io/architecture: "hybrid-plugin-ecosystem"
+  opifex.io/creative-phase: "complete"
+
+# Production-ready configuration
+images:
+  # Core services
+  - name: opifex/community-registry
+    newTag: "1.0.0"
+  - name: opifex/community-user
+    newTag: "1.0.0"
+  - name: opifex/community-workspace
+    newTag: "1.0.0"
+  - name: opifex/community-plugin
+    newTag: "1.0.0"
+  - name: opifex/community-gateway
+    newTag: "1.0.0"
+  - name: opifex/community-frontend
+    newTag: "1.0.0"
+
+  # Storage and infrastructure
+  - name: minio/minio
+    newTag: "RELEASE.2024-02-26T09-33-48Z"
+  - name: minio/mc
+    newTag: "RELEASE.2024-02-26T10-51-58Z"
+  - name: postgres
+    newTag: "15-alpine"
+
+# Environment-specific patches
+patchesStrategicMerge:
+  # Production scaling and resource allocation
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: api-gateway
+      namespace: opifex-community
+    spec:
+      replicas: 3
+      template:
+        spec:
+          containers:
+          - name: api-gateway
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "2000m"
+
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: registry-service
+      namespace: opifex-community
+    spec:
+      replicas: 2
+      template:
+        spec:
+          containers:
+          - name: registry-service
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "1000m"
+              limits:
+                memory: "4Gi"
+                cpu: "4000m"
+
+# ConfigMap generator for platform-wide configuration
+configMapGenerator:
+  - name: community-platform-environment
+    literals:
+      - DEPLOYMENT_ENVIRONMENT=production
+      - PLATFORM_VERSION=1.0.0
+      - ENABLE_HIGH_AVAILABILITY=true
+      - ENABLE_MONITORING=true
+      - ENABLE_TRACING=true
+      - ENABLE_LOGGING=true
+      - SECURITY_LEVEL=high
+      - BACKUP_ENABLED=true
+      - MULTI_REGION_ENABLED=false
+
+# Secret generator for platform-wide secrets
+secretGenerator:
+  - name: community-platform-deployment
+    literals:
+      - DEPLOYMENT_SIGNATURE=REPLACE_WITH_DEPLOYMENT_SIGNATURE
+      - PLATFORM_ENCRYPTION_KEY=REPLACE_WITH_PLATFORM_KEY
+      - INTER_SERVICE_SECRET=REPLACE_WITH_INTER_SERVICE_SECRET
+
+# Global resource transformations
+replicas:
+  # High availability configuration
+  - name: api-gateway
+    count: 3
+  - name: registry-service
+    count: 2
+  - name: user-service
+    count: 2
+  - name: workspace-service
+    count: 2
+  - name: plugin-service
+    count: 2
+  - name: frontend-service
+    count: 2
+
+  # Storage services (single instance for consistency)
+  - name: minio-neural-functionals
+    count: 1
+
+# Namespace creation options
+generatorOptions:
+  disableNameSuffixHash: true
+
+# Resource ordering (for proper startup sequence)
+transformers:
+  # Ensure namespace is created first, then secrets, then services
+  - |-
+    apiVersion: builtin
+    kind: PrefixSuffixTransformer
+    metadata:
+      name: opifex-community-ordering
+    prefix: opifex-
+    fieldSpecs:
+    - kind: Secret
+      path: metadata/name
+    - kind: ConfigMap
+      path: metadata/name

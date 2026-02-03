@@ -1,0 +1,262 @@
+version: '3.8'
+
+# GPU-Optimized Docker Compose for Opifex Framework
+# Phase 7.1: Container Orchestration - Development and Testing
+
+services:
+  # Opifex Core Service with GPU Support
+  opifex-core:
+    build:
+      context: ../..
+      dockerfile: containers/multi-stage/Dockerfile.optimized
+      target: production
+      cache_from:
+        - nvidia/cuda:11.8-devel-ubuntu20.04
+        - nvidia/cuda:11.8-runtime-ubuntu20.04
+    image: opifex/framework:optimized
+    container_name: opifex-core-gpu
+    restart: unless-stopped
+
+    # GPU Configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Environment for GPU optimization
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - JAX_PLATFORMS=gpu
+      - XLA_PYTHON_CLIENT_PREALLOCATE=false
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.8
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+
+    # Networking
+    ports:
+      - "8000:8000"      # Opifex API
+      - "8001:8001"      # Health check port
+
+    # Volume mounts for development
+    volumes:
+      - ../../data:/app/data:ro
+      - ../../logs:/opt/opifex/logs
+      - gpu-cache:/tmp/jax-cache
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3.10", "-c", "import opifex; import jax; print('✅ Healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    mem_limit: 16g
+    memswap_limit: 16g
+    shm_size: 2g
+
+  # Neural Operator Service (FNO/SFNO)
+  opifex-neural-ops:
+    build:
+      context: ../..
+      dockerfile: containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex/framework:optimized
+    container_name: opifex-neural-ops
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - JAX_PLATFORMS=gpu
+      - OPIFEX_SERVICE=neural-operators
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.7
+
+    ports:
+      - "8010:8000"
+
+    volumes:
+      - ../../data:/app/data:ro
+      - ../../models:/app/models
+      - neural-cache:/tmp/jax-cache
+
+    command: ["python3.10", "-m", "opifex.neural.server"]
+
+    depends_on:
+      opifex-core:
+        condition: service_healthy
+
+  # L2O Optimization Service
+  opifex-l2o:
+    build:
+      context: ../..
+      dockerfile: containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex/framework:optimized
+    container_name: opifex-l2o
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - JAX_PLATFORMS=gpu
+      - OPIFEX_SERVICE=l2o-optimization
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.6
+
+    ports:
+      - "8020:8000"
+
+    volumes:
+      - ../../data:/app/data:ro
+      - ../../checkpoints:/app/checkpoints
+      - l2o-cache:/tmp/jax-cache
+
+    command: ["python3.10", "-m", "opifex.optimization.l2o.server"]
+
+    depends_on:
+      opifex-core:
+        condition: service_healthy
+
+  # Benchmarking Service
+  opifex-benchmarks:
+    build:
+      context: ../..
+      dockerfile: containers/multi-stage/Dockerfile.optimized
+      target: production
+    image: opifex/framework:optimized
+    container_name: opifex-benchmarks
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - JAX_PLATFORMS=gpu
+      - OPIFEX_SERVICE=benchmarking
+      - XLA_PYTHON_CLIENT_MEM_FRACTION=0.9
+
+    ports:
+      - "8030:8000"
+
+    volumes:
+      - ../../data:/app/data:ro
+      - ../../benchmark_results:/app/results
+      - benchmark-cache:/tmp/jax-cache
+
+    command: ["python3.10", "-m", "opifex.benchmarking.server"]
+
+    depends_on:
+      opifex-core:
+        condition: service_healthy
+
+  # Development and Testing Service
+  opifex-dev:
+    build:
+      context: ../..
+      dockerfile: containers/multi-stage/Dockerfile.optimized
+      target: gpu-runtime  # Use larger image for development
+    image: opifex/framework:dev
+    container_name: opifex-dev
+    restart: "no"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - JAX_PLATFORMS=gpu
+      - DEVELOPMENT_MODE=true
+
+    ports:
+      - "8888:8888"      # Jupyter
+      - "6006:6006"      # TensorBoard
+
+    volumes:
+      - ../..:/workspace
+      - dev-cache:/tmp/jax-cache
+      - jupyter-data:/home/opifex/.jupyter
+
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+
+    # Override for interactive development
+    stdin_open: true
+    tty: true
+
+# Named volumes for GPU cache optimization
+volumes:
+  gpu-cache:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=2g,uid=1000,gid=1000
+
+  neural-cache:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1g,uid=1000,gid=1000
+
+  l2o-cache:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1g,uid=1000,gid=1000
+
+  benchmark-cache:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=2g,uid=1000,gid=1000
+
+  dev-cache:
+    driver: local
+
+  jupyter-data:
+    driver: local
+
+# Networks for service communication
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

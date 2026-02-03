@@ -1,0 +1,16 @@
+# Performance monitoring for service mesh overhead
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: istio-proxy-metrics
+  namespace: istio-system
+  labels:
+    app: istio-proxy
+spec:
+  selector:
+    matchLabels:
+      app: istio-proxy
+  endpoints:
+    - port: http-monitoring
+      interval: 30s
+      path: /stats/prometheus

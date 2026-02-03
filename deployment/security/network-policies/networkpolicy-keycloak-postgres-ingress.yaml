@@ -1,0 +1,36 @@
+# PostgreSQL Database Policy - Allow only Keycloak connections
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-postgres-ingress
+  namespace: opifex-security
+  labels:
+    app: keycloak-postgres
+    security.opifex.local/policy-type: "allow-ingress"
+    security.opifex.local/component: "database"
+spec:
+  podSelector:
+    matchLabels:
+      app: keycloak-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow connections only from Keycloak
+    - from:
+        - podSelector:
+            matchLabels:
+              app: keycloak
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow monitoring from Prometheus (if postgres exporter is used)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9187 # postgres_exporter port

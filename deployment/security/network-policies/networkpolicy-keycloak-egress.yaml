@@ -1,0 +1,57 @@
+# Keycloak Egress Policy - Allow database and external IdP communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-egress
+  namespace: opifex-security
+  labels:
+    app: keycloak
+    security.opifex.local/policy-type: "allow-egress"
+    security.opifex.local/component: "identity-management"
+spec:
+  podSelector:
+    matchLabels:
+      app: keycloak
+  policyTypes:
+    - Egress
+  egress:
+    # Allow connection to PostgreSQL database
+    - to:
+        - podSelector:
+            matchLabels:
+              app: keycloak-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow external IdP communication (SAML, OIDC, LDAP)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443 # HTTPS for SAML/OIDC
+        - protocol: TCP
+          port: 636 # LDAPS for LDAP
+        - protocol: TCP
+          port: 389 # LDAP (if needed)
+    # Allow JGroups clustering between Keycloak instances
+    - to:
+        - podSelector:
+            matchLabels:
+              app: keycloak
+      ports:
+        - protocol: TCP
+          port: 7600
+        - protocol: UDP
+          port: 57600

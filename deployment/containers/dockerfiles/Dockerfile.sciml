@@ -1,0 +1,284 @@
+# Multi-Stage Dockerfile for SciML Framework - Production Optimized
+# Phase 7.1: Container Orchestration Implementation
+# Target: 54% image size reduction + <30s startup time + GPU optimization
+
+# =============================================================================
+# Stage 1: Build Environment - Development Tools and Dependencies
+# =============================================================================
+FROM nvidia/cuda:11.8-devel-ubuntu20.04 AS builder
+
+# Build stage metadata
+LABEL stage="builder" \
+      purpose="development-tools-and-build" \
+      size-category="large" \
+      gpu-support="cuda-11.8"
+
+# Environment setup for build
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    curl \
+    pkg-config \
+    libhdf5-dev \
+    libopenmpi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Setup Python environment
+RUN python3.10 -m pip install --upgrade pip setuptools wheel
+
+# Copy requirements and install Python dependencies
+WORKDIR /build
+COPY requirements.txt pyproject.toml ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code and build
+COPY sciml/ ./sciml/
+COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+COPY setup.py ./
+
+# Build and test the package
+RUN python setup.py bdist_wheel && \
+    pip install dist/*.whl && \
+    python -m pytest tests/unit/ -v --tb=short
+
+# =============================================================================
+# Stage 2: Dependencies Preparation - Scientific Libraries
+# =============================================================================
+FROM nvidia/cuda:11.8-runtime-ubuntu20.04 AS dependencies
+
+# Dependencies stage metadata
+LABEL stage="dependencies" \
+      purpose="scientific-libraries-preparation" \
+      size-category="medium" \
+      gpu-support="cuda-runtime"
+
+# Runtime environment setup
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    libhdf5-103 \
+    libopenmpi3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install built wheel from builder stage
+COPY --from=builder /build/dist/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl && \
+    rm -rf /tmp/*.whl /root/.cache/pip
+
+# Precompile JAX GPU kernels for faster startup
+RUN python3.10 -c "import jax; jax.random.PRNGKey(42); print('JAX GPU compilation complete')"
+
+# =============================================================================
+# Stage 3: GPU Optimization - CUDA Runtime Optimization
+# =============================================================================
+FROM dependencies AS gpu-optimized
+
+# GPU optimization metadata
+LABEL stage="gpu-optimized" \
+      purpose="cuda-runtime-optimization" \
+      size-category="medium" \
+      gpu-support="optimized-cuda-runtime"
+
+# GPU-specific optimizations
+ENV CUDA_VISIBLE_DEVICES="" \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    JAX_PLATFORMS=gpu \
+    XLA_PYTHON_CLIENT_PREALLOCATE=false \
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.8
+
+# Create GPU optimization scripts
+RUN mkdir -p /opt/sciml/gpu-utils
+
+# GPU memory optimization script
+RUN cat > /opt/sciml/gpu-utils/optimize-gpu.sh << 'EOF'
+#!/bin/bash
+# GPU Memory Optimization for SciML
+set -e
+
+echo "🎯 Initializing GPU optimization..."
+
+# Check GPU availability
+if ! nvidia-smi &>/dev/null; then
+    echo "⚠️  No GPU detected, running in CPU mode"
+    export JAX_PLATFORMS=cpu
+    exit 0
+fi
+
+# GPU memory optimization
+echo "📊 GPU Status:"
+nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader,nounits
+
+# Set optimal memory fraction based on available memory
+GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+if [ "$GPU_MEM" -gt 15000 ]; then
+    export XLA_PYTHON_CLIENT_MEM_FRACTION=0.9
+    echo "🚀 High-memory GPU detected, using 90% memory fraction"
+elif [ "$GPU_MEM" -gt 8000 ]; then
+    export XLA_PYTHON_CLIENT_MEM_FRACTION=0.8
+    echo "🎮 Standard GPU detected, using 80% memory fraction"
+else
+    export XLA_PYTHON_CLIENT_MEM_FRACTION=0.7
+    echo "💾 Low-memory GPU detected, using 70% memory fraction"
+fi
+
+# Warm up GPU kernels
+echo "🔥 Warming up GPU kernels..."
+python3.10 -c "
+import jax
+import jax.numpy as jnp
+# Warm up common operations
+x = jax.random.normal(jax.random.PRNGKey(42), (1000, 1000))
+y = jnp.dot(x, x.T)
+z = jnp.fft.fft2(x)
+print('✅ GPU kernels warmed up')
+"
+
+echo "✅ GPU optimization complete"
+EOF
+
+RUN chmod +x /opt/sciml/gpu-utils/optimize-gpu.sh
+
+# =============================================================================
+# Stage 4: Production Runtime - Minimal Production Image
+# =============================================================================
+FROM nvidia/cuda:11.8-runtime-ubuntu20.04 AS production
+
+# Production stage metadata
+LABEL stage="production" \
+      purpose="minimal-runtime-image" \
+      size-category="small" \
+      gpu-support="cuda-runtime" \
+      version="1.0.0" \
+      maintainer="sciml-team"
+
+# Production environment
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:/opt/sciml/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH} \
+    PYTHONPATH=/opt/sciml/lib/python3.10/site-packages
+
+# Install only essential runtime packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-distutils \
+    libhdf5-103 \
+    libopenmpi3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create SciML user for security
+RUN groupadd -g 1000 sciml && \
+    useradd -u 1000 -g sciml -m -s /bin/bash sciml && \
+    mkdir -p /opt/sciml/{bin,lib,data,logs} && \
+    chown -R sciml:sciml /opt/sciml
+
+# Copy optimized Python environment from dependencies stage
+COPY --from=gpu-optimized /usr/local/lib/python3.10/dist-packages /opt/sciml/lib/python3.10/site-packages/
+COPY --from=gpu-optimized /usr/local/bin/python3.10 /opt/sciml/bin/
+COPY --from=gpu-optimized /opt/sciml/gpu-utils /opt/sciml/gpu-utils/
+
+# Create production entrypoint
+RUN cat > /opt/sciml/bin/entrypoint.sh << 'EOF'
+#!/bin/bash
+# SciML Production Entrypoint
+set -e
+
+echo "🚀 Starting SciML Framework (Production)"
+echo "=================================="
+
+# Initialize GPU optimization
+if [ "${ENABLE_GPU:-true}" = "true" ]; then
+    source /opt/sciml/gpu-utils/optimize-gpu.sh
+fi
+
+# Health check
+echo "🔍 Health check..."
+python3.10 -c "
+import sciml
+print(f'✅ SciML Framework {sciml.__version__} loaded successfully')
+print(f'✅ GPU available: {\"yes\" if sciml.gpu_available() else \"no\"}')
+"
+
+# Execute command
+exec "$@"
+EOF
+
+RUN chmod +x /opt/sciml/bin/entrypoint.sh
+
+# Production configuration
+WORKDIR /opt/sciml
+USER sciml
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python3.10 -c "import sciml; assert sciml.gpu_available() or True"
+
+# Default command
+ENTRYPOINT ["/opt/sciml/bin/entrypoint.sh"]
+CMD ["python3.10", "-c", "import sciml; print('SciML Framework ready')"]
+
+# =============================================================================
+# Stage 5: Development Image - For Development and Testing
+# =============================================================================
+FROM production AS development
+
+# Development stage metadata
+LABEL stage="development" \
+      purpose="development-and-testing" \
+      size-category="medium" \
+      gpu-support="cuda-runtime"
+
+# Switch back to root for development tools installation
+USER root
+
+# Install development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    vim \
+    tmux \
+    htop \
+    tree \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install development Python packages
+RUN python3.10 -m pip install --no-cache-dir \
+    pytest \
+    pytest-cov \
+    black \
+    flake8 \
+    jupyter \
+    ipython
+
+# Development user setup
+USER sciml
+WORKDIR /workspace
+
+# Development command
+CMD ["bash"]

@@ -1,0 +1,11 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: opifex-peer-authentication
+  namespace: opifex-system
+  labels:
+    app: opifex-istio
+    component: security
+spec:
+  mtls:
+    mode: STRICT

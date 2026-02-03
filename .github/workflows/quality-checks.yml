@@ -1,0 +1,88 @@
+name: Code Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Run pre-commit hooks
+      run: |
+        uv run pre-commit run --all-files
+
+    - name: Run type checking with pyright
+      run: |
+        uv run pyright --warnings
+
+    - name: Run additional ruff checks
+      run: |
+        uv run ruff check --output-format=github
+        uv run ruff format --check
+
+    - name: Run tests with type checking
+      run: |
+        uv run pytest tests/ --strict-markers --strict-config
+
+    - name: Check import sorting
+      run: |
+        uv run ruff check --select I --diff
+
+    - name: Security audit
+      run: |
+        uv run pip-audit --local --desc
+      continue-on-error: true  # Don't fail build on audit issues
+
+  type-safety-report:
+    runs-on: ubuntu-latest
+    needs: quality-checks
+    if: always()
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Generate type safety report
+      run: |
+        echo "## Type Safety Report" >> $GITHUB_STEP_SUMMARY
+        echo "### Pyright Analysis" >> $GITHUB_STEP_SUMMARY
+        uv run pyright --outputjson | jq -r '.summary | "- Errors: \(.errorCount)\n- Warnings: \(.warningCount)\n- Information: \(.informationCount)"' >> $GITHUB_STEP_SUMMARY || true
+
+        echo "### Ruff Analysis" >> $GITHUB_STEP_SUMMARY
+        uv run ruff check --statistics --output-format=text | head -20 >> $GITHUB_STEP_SUMMARY || true

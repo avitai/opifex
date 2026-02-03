@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-migrations
+  namespace: opifex-community
+  labels:
+    app.kubernetes.io/name: database-migrations
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: opifex-community
+data:
+  001_initial_schema.sql: |
+    -- Initial migration already handled by setup job
+    SELECT 1;
+
+  002_add_neural_functional_dependencies.sql: |
+    -- Add dependency tracking for neural functionals
+    CREATE TABLE IF NOT EXISTS neural_functional_dependencies (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        functional_id UUID NOT NULL REFERENCES neural_functionals(id) ON DELETE CASCADE,
+        depends_on_id UUID NOT NULL REFERENCES neural_functionals(id) ON DELETE CASCADE,
+        dependency_type VARCHAR(50) NOT NULL DEFAULT 'runtime', -- 'runtime', 'build', 'optional'
+        version_constraint VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(functional_id, depends_on_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_nf_deps_functional ON neural_functional_dependencies(functional_id);
+    CREATE INDEX IF NOT EXISTS idx_nf_deps_depends_on ON neural_functional_dependencies(depends_on_id);
+
+  003_add_workspace_templates.sql: |
+    -- Add workspace templates for common research setups
+    CREATE TABLE IF NOT EXISTS workspace_templates (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        template_data JSONB NOT NULL,
+        resource_requirements JSONB,
+        is_public BOOLEAN DEFAULT false,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_templates_public ON workspace_templates(is_public);
+    CREATE INDEX IF NOT EXISTS idx_workspace_templates_created_by ON workspace_templates(created_by);

@@ -1,0 +1,14 @@
+# Default Deny All for Opifex Training Namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all-training
+  namespace: opifex-training
+  labels:
+    security.opifex.local/policy-type: "deny-all"
+    security.opifex.local/direction: "all"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

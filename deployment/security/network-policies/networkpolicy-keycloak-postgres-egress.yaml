@@ -1,0 +1,35 @@
+# PostgreSQL Egress Policy - Minimal required access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-postgres-egress
+  namespace: opifex-security
+  labels:
+    app: keycloak-postgres
+    security.opifex.local/policy-type: "allow-egress"
+    security.opifex.local/component: "database"
+spec:
+  podSelector:
+    matchLabels:
+      app: keycloak-postgres
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow backup to external storage (if configured)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443 # HTTPS for cloud backup services

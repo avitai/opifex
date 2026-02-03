@@ -1,0 +1,71 @@
+# GPU Resource Manager Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-resource-manager
+  namespace: opifex-system
+  labels:
+    app: gpu-resource-manager
+    component: resource-management
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-resource-manager
+  template:
+    metadata:
+      labels:
+        app: gpu-resource-manager
+        component: resource-management
+    spec:
+      serviceAccountName: gpu-resource-manager
+      containers:
+        - name: manager
+          image: opifex/gpu-resource-manager:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NAMESPACE
+              value: "opifex-system"
+            - name: CONFIG_PATH
+              value: "/etc/config/gpu-config.yaml"
+            - name: LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/config
+            - name: nvidia-device-plugin
+              mountPath: /var/lib/nvidia
+              readOnly: true
+          ports:
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 8081
+              name: health
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: gpu-optimization-config
+        - name: nvidia-device-plugin
+          hostPath:
+            path: /var/lib/nvidia
+      nodeSelector:
+        accelerator: nvidia-tesla

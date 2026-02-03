@@ -1,0 +1,42 @@
+# Sensitive Data Network Policy (GDPR Protected)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sensitive-data-access
+  namespace: opifex-platform
+  labels:
+    security.opifex.io/policy: data-access
+    security.opifex.io/classification: sensitive
+    security.opifex.io/gdpr: "true"
+spec:
+  podSelector:
+    matchLabels:
+      opifex.io/data-classification: sensitive
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              opifex.io/user-role: opifex-admin
+        - podSelector:
+            matchLabels:
+              opifex.io/gdpr-authorized: "true"
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-security
+      ports:
+        - protocol: TCP
+          port: 8443 # HTTPS only
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-security
+        - namespaceSelector:
+            matchLabels:
+              name: opifex-audit
+      ports:
+        - protocol: TCP
+          port: 8443

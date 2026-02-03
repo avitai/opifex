@@ -1,0 +1,12 @@
+# Opifex Advanced Network Security - Zero Trust Implementation
+# Phase 7.2: Enterprise Security & Scalability
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opifex-network-security
+  labels:
+    app.kubernetes.io/name: opifex-network-security
+    app.kubernetes.io/part-of: opifex-framework
+    security.opifex.io/tier: enterprise
+    security.opifex.io/zone: zero-trust

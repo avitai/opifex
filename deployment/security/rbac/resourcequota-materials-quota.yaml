@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: materials-quota
+  namespace: opifex-materials
+  labels:
+    opifex.local/research-group: "materials"
+spec:
+  hard:
+    requests.cpu: "75"
+    requests.memory: "300Gi"
+    requests.nvidia.com/gpu: "12"
+    limits.cpu: "150"
+    limits.memory: "600Gi"
+    limits.nvidia.com/gpu: "12"
+    persistentvolumeclaims: "30"
+    requests.storage: "3Ti"
+    pods: "75"
+    services: "15"
