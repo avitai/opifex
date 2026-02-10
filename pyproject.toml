@@ -140,7 +140,7 @@ docs = [
 ]
 gpu = [
   # GPU dependencies - Complete CUDA stack installed locally in venv
-  "jax[cuda12_local]==0.8.0",
+  "jax[cuda12_local]==0.9.0.1",
   "jaxlib==0.8.0", # Core CUDA runtime and libraries
   "nvidia-cublas-cu12>=12.6",
   "nvidia-cuda-cupti-cu12>=12.6",
