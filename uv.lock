@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'ARM64' and sys_platform == 'win32'",
@@ -2356,9 +2356,9 @@ name = "jax-triton"
 version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "absl-py" },
-    { name = "jax" },
-    { name = "triton" },
+    { name = "absl-py", marker = "sys_platform == 'linux'" },
+    { name = "jax", marker = "sys_platform == 'linux'" },
+    { name = "triton", marker = "sys_platform == 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2d/09/0f89c57a01085d5d12af066434d763179c3992ab299ba3beda82a3d05a86/jax_triton-0.3.0.tar.gz", hash = "sha256:da7b9cd8f784de50b26d104a3f4c417c0afcdd894f98442bc815a822900033e6", size = 62763, upload-time = "2025-05-02T11:19:41.575Z" }
 wheels = [
@@ -3131,16 +3131,16 @@ python = [
 
 [[package]]
 name = "mkdocstrings-python"
-version = "2.0.2"
+version = "2.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "griffe" },
+    { name = "griffelib" },
     { name = "mkdocs-autorefs" },
     { name = "mkdocstrings" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/25/84/78243847ad9d5c21d30a2842720425b17e880d99dfe824dee11d6b2149b4/mkdocstrings_python-2.0.2.tar.gz", hash = "sha256:4a32ccfc4b8d29639864698e81cfeb04137bce76bb9f3c251040f55d4b6e1ad8", size = 199124, upload-time = "2026-02-09T15:12:01.543Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/29/33/c225eaf898634bdda489a6766fc35d1683c640bffe0e0acd10646b13536d/mkdocstrings_python-2.0.3.tar.gz", hash = "sha256:c518632751cc869439b31c9d3177678ad2bfa5c21b79b863956ad68fc92c13b8", size = 199083, upload-time = "2026-02-20T10:38:36.368Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/31/7ee938abbde2322e553a2cb5f604cdd1e4728e08bba39c7ee6fae9af840b/mkdocstrings_python-2.0.2-py3-none-any.whl", hash = "sha256:31241c0f43d85a69306d704d5725786015510ea3f3c4bdfdb5a5731d83cdc2b0", size = 104900, upload-time = "2026-02-09T15:12:00.166Z" },
+    { url = "https://files.pythonhosted.org/packages/32/28/79f0f8de97cce916d5ae88a7bee1ad724855e83e6019c0b4d5b3fabc80f3/mkdocstrings_python-2.0.3-py3-none-any.whl", hash = "sha256:0b83513478bdfd803ff05aa43e9b1fca9dd22bcd9471f09ca6257f009bc5ee12", size = 104779, upload-time = "2026-02-20T10:38:34.517Z" },
 ]
 
 [[package]]
@@ -6851,8 +6851,10 @@ dependencies = [
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/40/c63173557a4ee32205dba0019fe4463cc13da43b5035c454a5d4716ff89a/xprof-2.21.6-cp311-none-any.whl", hash = "sha256:f28aff36688e247dac1960002b50664835d0e5591166d2fd376dbfd4e6f6c528", size = 19204782, upload-time = "2026-02-09T10:10:45.683Z" },
     { url = "https://files.pythonhosted.org/packages/d4/41/edc46056dd6e25fd8d1042c9f543228d5920dee1aca482d883b2ef7d3b97/xprof-2.21.6-cp311-none-manylinux_2_27_x86_64.whl", hash = "sha256:80a5e69ed2217124a35be111742e7379a85e5c4a9dce4837166527655bfdfdc9", size = 22731161, upload-time = "2026-02-09T09:58:13.106Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/a5/c80bf771bce071cf112fbbb37cf737caa6789d74d95a02fd569599cbb98d/xprof-2.21.6-cp311-none-manylinux_2_35_aarch64.whl", hash = "sha256:58b4873d5a373f9d88d11e7151d381329b25626e0a60c6f11e66ab61076db30e", size = 23661498, upload-time = "2026-02-24T22:48:27.629Z" },
     { url = "https://files.pythonhosted.org/packages/e3/76/051aa3498dc6d9f0d34a09a8e09a7461649f864d87c7b4a90109f520375d/xprof-2.21.6-cp312-none-any.whl", hash = "sha256:71aeb20edd72624dac1234d45b20e4bdbdecbdff8bee361c37e50c2cc41a5f94", size = 19204067, upload-time = "2026-02-09T10:16:17.998Z" },
     { url = "https://files.pythonhosted.org/packages/d9/00/66a81559c6db6442e986afbd1bc50efbb52c166e9d4432dee2f28b0d0fe8/xprof-2.21.6-cp312-none-manylinux_2_27_x86_64.whl", hash = "sha256:37a66b7b38b99a65a7c816cb6f7118f6261cb3ad7850e14c14656765d8b70afb", size = 22731696, upload-time = "2026-02-09T09:57:44.728Z" },
+    { url = "https://files.pythonhosted.org/packages/32/da/a88841648e04fb2bf0c7da70f0dd222a9f8710c9516c43105a7ea5213d04/xprof-2.21.6-cp312-none-manylinux_2_35_aarch64.whl", hash = "sha256:aa5ab88a88b8d70632b59a4c7a4a5024d11ed4cc34e75c12ade69f453d5d4a46", size = 23662813, upload-time = "2026-02-24T22:46:22.084Z" },
 ]
 
 [[package]]
