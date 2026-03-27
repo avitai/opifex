@@ -5453,7 +5453,7 @@ requires-dist = [
     { name = "tensorflow", marker = "extra == 'profiling'", specifier = ">=2.20.0" },
     { name = "tensorly", specifier = ">=0.9.0" },
     { name = "tf-keras", specifier = ">=2.19.0" },
-    { name = "tfp-nightly", specifier = "==0.26.0.dev20251024" },
+    { name = "tfp-nightly", specifier = "==0.26.0.dev20260327" },
     { name = "torch", marker = "extra == 'pdebench'", specifier = ">=2.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=4.0.2" },
@@ -5461,7 +5461,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.5.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'platform'", specifier = ">=0.34.3" },
 ]
-provides-extras = ["all", "all-cpu", "all-macos", "cuda-dev", "dev", "docs", "gpu", "metal", "neural-dft", "ntk", "opifex-dev", "platform", "profiling", "quantum-chemistry", "pdebench", "scientific-data", "test"]
+provides-extras = ["all", "all-cpu", "all-macos", "cuda-dev", "dev", "docs", "gpu", "metal", "neural-dft", "ntk", "opifex-dev", "pdebench", "platform", "profiling", "quantum-chemistry", "scientific-data", "test"]
 
 [[package]]
 name = "opt-einsum"
@@ -8136,7 +8136,7 @@ wheels = [
 
 [[package]]
 name = "tfp-nightly"
-version = "0.26.0.dev20251024"
+version = "0.26.0.dev20260327"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "absl-py" },
@@ -8148,7 +8148,7 @@ dependencies = [
     { name = "six" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/df/979b4a7aa27b02c8b1131f12762b55ab753752e616bc121389b52c34aa1d/tfp_nightly-0.26.0.dev20251024-py2.py3-none-any.whl", hash = "sha256:b7f706f5f6b6c7d4fa5d2f854a8fbfbb86b3d0acb062ca14d179745bf4372a63", size = 6975608, upload-time = "2025-10-24T08:43:49.481Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/f0/159619d6bc5ea6a12e55955c13b13d7ffcdd99ef56b315274fca125a0885/tfp_nightly-0.26.0.dev20260327-py2.py3-none-any.whl", hash = "sha256:17f57db2275331958f8d957a444d6caf210e7b889dc7be852e5b583529315cea", size = 6975583, upload-time = "2026-03-27T08:43:52.647Z" },
 ]
 
 [[package]]
