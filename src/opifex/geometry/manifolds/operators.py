@@ -169,9 +169,7 @@ class RiemannianNeuralOperator(ManifoldNeuralOperator):
 
         # Additional layers for metric-aware processing
         self.metric_processor = nnx.Sequential(
-            nnx.Linear(
-                manifold.dimension * manifold.dimension, hidden_dim // 2, rngs=rngs
-            ),
+            nnx.Linear(manifold.dimension * manifold.dimension, hidden_dim // 2, rngs=rngs),
             nnx.gelu,
             nnx.Linear(hidden_dim // 2, manifold.dimension, rngs=rngs),
         )
@@ -265,9 +263,7 @@ class HyperbolicNeuralOperator(ManifoldNeuralOperator):
         base_result = super().__call__(manifold_points)
 
         # Add curvature-aware processing
-        if hasattr(self.manifold, "curvature") or hasattr(
-            self.manifold, "scalar_curvature"
-        ):
+        if hasattr(self.manifold, "curvature") or hasattr(self.manifold, "scalar_curvature"):
             # Process points through curvature-aware layers
             curvature_features = self.curvature_processor(manifold_points)
 

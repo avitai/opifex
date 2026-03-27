@@ -118,9 +118,7 @@ class TestPerformanceAwareScheduler:
         rngs = nnx.Rngs(42)
         return PerformanceAwareScheduler(config=scheduler_config, rngs=rngs)
 
-    def test_performance_aware_scheduler_initialization(
-        self, performance_aware_scheduler
-    ):
+    def test_performance_aware_scheduler_initialization(self, performance_aware_scheduler):
         """Test PerformanceAwareScheduler initialization."""
         assert performance_aware_scheduler.config.base_learning_rate == 1e-3
         assert performance_aware_scheduler.current_learning_rate == 1e-3
@@ -128,9 +126,7 @@ class TestPerformanceAwareScheduler:
         assert performance_aware_scheduler.patience_counter == 0
         assert performance_aware_scheduler.best_loss == float("inf")
 
-    def test_performance_aware_scheduler_update_with_improvement(
-        self, performance_aware_scheduler
-    ):
+    def test_performance_aware_scheduler_update_with_improvement(self, performance_aware_scheduler):
         """Test scheduler update with improving loss."""
         # First loss
         new_lr = performance_aware_scheduler.update_learning_rate(loss=1.0)
@@ -143,9 +139,7 @@ class TestPerformanceAwareScheduler:
         assert performance_aware_scheduler.best_loss == 0.5
         assert performance_aware_scheduler.patience_counter == 0
 
-    def test_performance_aware_scheduler_update_with_stagnation(
-        self, performance_aware_scheduler
-    ):
+    def test_performance_aware_scheduler_update_with_stagnation(self, performance_aware_scheduler):
         """Test scheduler update with stagnating loss."""
         # Initialize with some losses
         performance_aware_scheduler.update_learning_rate(loss=1.0)
@@ -161,9 +155,7 @@ class TestPerformanceAwareScheduler:
         expected_lr = 1e-3 * 0.5  # adaptation_factor = 0.5
         assert abs(new_lr - expected_lr) < 1e-8
 
-    def test_performance_aware_scheduler_convergence_detection(
-        self, performance_aware_scheduler
-    ):
+    def test_performance_aware_scheduler_convergence_detection(self, performance_aware_scheduler):
         """Test convergence detection based on loss variance."""
         # Add losses with low variance (converged)
         for i in range(6):  # Convergence window is 5
@@ -172,9 +164,7 @@ class TestPerformanceAwareScheduler:
         converged = performance_aware_scheduler.is_converged()
         assert converged is True
 
-    def test_performance_aware_scheduler_learning_rate_bounds(
-        self, performance_aware_scheduler
-    ):
+    def test_performance_aware_scheduler_learning_rate_bounds(self, performance_aware_scheduler):
         """Test that learning rate respects bounds."""
         # Force learning rate to minimum
         performance_aware_scheduler.current_learning_rate = 1e-6
@@ -240,9 +230,7 @@ class TestMultiscaleScheduler:
         # Solver should maintain learning rate
         assert learning_rates["solver"] == 1e-3
 
-    def test_multiscale_scheduler_create_component_optimizers(
-        self, multiscale_scheduler
-    ):
+    def test_multiscale_scheduler_create_component_optimizers(self, multiscale_scheduler):
         """Test creating component-specific optimizers."""
         optimizers = multiscale_scheduler.create_component_optimizers()
 
@@ -338,9 +326,7 @@ class TestBayesianSchedulerOptimizer:
 
         # Test acquisition function
         test_params = {"learning_rate": 2e-3, "adaptation_factor": 0.6, "patience": 6}
-        acquisition_value = bayesian_scheduler._compute_acquisition_function(
-            test_params
-        )
+        acquisition_value = bayesian_scheduler._compute_acquisition_function(test_params)
 
         assert isinstance(acquisition_value, float)
         assert acquisition_value >= 0.0
@@ -370,9 +356,7 @@ class TestSchedulerIntegration:
         assert scheduler_integration.multiscale_scheduler is not None
         assert scheduler_integration.bayesian_scheduler is not None
 
-    def test_scheduler_integration_create_adaptive_optimizer(
-        self, scheduler_integration
-    ):
+    def test_scheduler_integration_create_adaptive_optimizer(self, scheduler_integration):
         """Test creating adaptive optimizer."""
         optimizer = scheduler_integration.create_adaptive_optimizer()
 
@@ -408,9 +392,7 @@ class TestSchedulerIntegration:
             assert isinstance(learning_rates["performance_aware"], float)
             assert isinstance(learning_rates["multiscale"], dict)
 
-    def test_scheduler_integration_auto_parameter_optimization(
-        self, scheduler_integration
-    ):
+    def test_scheduler_integration_auto_parameter_optimization(self, scheduler_integration):
         """Test automatic parameter optimization."""
 
         # Simulate optimization run
@@ -471,7 +453,9 @@ class TestIntegrationWithExistingFramework:
 
         # Test component-specific learning rates
         if scheduler_integration.multiscale_scheduler is not None:
-            learning_rates = scheduler_integration.multiscale_scheduler.get_component_learning_rates()
+            learning_rates = (
+                scheduler_integration.multiscale_scheduler.get_component_learning_rates()
+            )
 
             assert "pareto_optimizer" in learning_rates
             assert "scalarizer" in learning_rates
@@ -508,9 +492,7 @@ class TestIntegrationWithExistingFramework:
                 assert solution.shape == (2,)
             else:
                 # Fallback to regular solve if adaptive_solve doesn't exist
-                solution = enhanced_engine.solve_parametric_problem(
-                    problem, problem_params
-                )
+                solution = enhanced_engine.solve_parametric_problem(problem, problem_params)
                 assert solution.shape == (2,)
         except Exception:
             # If adaptive_solve doesn't work, fall back to regular solve to test compatibility

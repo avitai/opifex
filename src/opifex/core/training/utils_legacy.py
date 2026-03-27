@@ -48,9 +48,7 @@ def safe_compute_energy(model: Any, positions: jax.Array, **kwargs) -> jax.Array
 
     # Use direct model call without problematic kwargs
     try:
-        return model(
-            flat_positions, deterministic=clean_kwargs.get("deterministic", True)
-        )
+        return model(flat_positions, deterministic=clean_kwargs.get("deterministic", True))
     except Exception:
         # Final fallback - simplest possible call
         return model(flat_positions)
@@ -65,9 +63,7 @@ def safe_compute_forces(model: Any, positions: jax.Array, **kwargs) -> jax.Array
             # Don't pass rngs during JIT compilation - it can cause segmentation faults
             safe_kwargs.pop("rngs")
             if "deterministic" not in safe_kwargs:
-                safe_kwargs["deterministic"] = (
-                    True  # Default to deterministic if rngs present
-                )
+                safe_kwargs["deterministic"] = True  # Default to deterministic if rngs present
         return model.compute_forces(positions, **safe_kwargs)
 
     # Basic gradient-based forces for standard models

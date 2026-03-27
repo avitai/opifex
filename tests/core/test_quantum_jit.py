@@ -1,5 +1,5 @@
 """
-Comprehensive JIT compatibility tests for quantum modules.
+Full JIT compatibility tests for quantum modules.
 
 Tests JAX JIT compilation for molecular systems, quantum operators,
 and related quantum mechanical calculations.
@@ -275,9 +275,7 @@ class TestQuantumOperatorsJIT:
 
         expectation = jit_expectation_value(state)
         assert jnp.isfinite(expectation)
-        assert jnp.isclose(
-            jnp.real(expectation), 1.0, atol=1e-6
-        )  # Identity should give 1
+        assert jnp.isclose(jnp.real(expectation), 1.0, atol=1e-6)  # Identity should give 1
 
 
 class TestDensityMatrixJIT:
@@ -476,9 +474,9 @@ class TestJITCompatibility:
                     return jnp.linalg.norm(pos1 - pos2)
 
                 # Vectorize over all pairs using vmap
-                distances = jax.vmap(
-                    jax.vmap(compute_pairwise_distances, (None, 0)), (0, None)
-                )(positions, positions)
+                distances = jax.vmap(jax.vmap(compute_pairwise_distances, (None, 0)), (0, None))(
+                    positions, positions
+                )
 
                 # Create upper triangular mask to avoid double counting
                 i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
@@ -489,9 +487,7 @@ class TestJITCompatibility:
                 atomic_j = atomic_numbers[j_indices]
 
                 # Vectorized nuclear repulsion calculation
-                nuclear_repulsion = jnp.sum(
-                    atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1)
-                )
+                nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
             else:
                 nuclear_repulsion = 0.0
 
@@ -543,27 +539,23 @@ class TestJITCompatibility:
 
             if n_atoms == 1:
                 # Single atom - just return a constant
-                return (
-                    -atomic_numbers[0] * 0.5
-                )  # Simple ionization energy approximation
+                return -atomic_numbers[0] * 0.5  # Simple ionization energy approximation
 
             # Multi-atom - include nuclear repulsion and simple bonding term
             # Nuclear repulsion (using our optimized calculation)
             def compute_pairwise_distances(pos1, pos2):
                 return jnp.linalg.norm(pos1 - pos2)
 
-            distances = jax.vmap(
-                jax.vmap(compute_pairwise_distances, (None, 0)), (0, None)
-            )(positions, positions)
+            distances = jax.vmap(jax.vmap(compute_pairwise_distances, (None, 0)), (0, None))(
+                positions, positions
+            )
 
             i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
             pair_distances = distances[i_indices, j_indices]
             atomic_i = atomic_numbers[i_indices]
             atomic_j = atomic_numbers[j_indices]
 
-            nuclear_repulsion = jnp.sum(
-                atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1)
-            )
+            nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
 
             # Simple bonding term (attractive)
             bonding_energy = -jnp.sum(

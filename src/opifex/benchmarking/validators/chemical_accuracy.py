@@ -147,8 +147,7 @@ class ChemicalAccuracyValidator:
         if domain is not None:
             if domain not in self._thresholds:
                 raise ValueError(
-                    f"Unknown domain '{domain}'. "
-                    f"Known domains: {list(self._thresholds.keys())}"
+                    f"Unknown domain '{domain}'. Known domains: {list(self._thresholds.keys())}"
                 )
             return domain
 
@@ -185,17 +184,13 @@ class ChemicalAccuracyValidator:
             return []
 
         ratio = achieved / threshold if threshold > 0 else float("inf")
-        recommendations = [
-            f"Error ({achieved:.2e}) exceeds {domain} threshold ({threshold:.2e})"
-        ]
+        recommendations = [f"Error ({achieved:.2e}) exceeds {domain} threshold ({threshold:.2e})"]
 
         if ratio > 10:
             recommendations.append("Consider a fundamentally different architecture")
         elif ratio > 2:
             recommendations.append("Increase model capacity or training iterations")
         else:
-            recommendations.append(
-                "Fine-tune hyperparameters — result is close to threshold"
-            )
+            recommendations.append("Fine-tune hyperparameters — result is close to threshold")
 
         return recommendations

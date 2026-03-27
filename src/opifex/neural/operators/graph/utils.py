@@ -64,9 +64,7 @@ def grid_to_graph_data(
 
     # Broadcast to batch dimension
     num_edges = edge_indices.shape[0]
-    edge_indices = jnp.broadcast_to(
-        edge_indices[None, :, :], (batch_size, num_edges, 2)
-    )
+    edge_indices = jnp.broadcast_to(edge_indices[None, :, :], (batch_size, num_edges, 2))
 
     # Compute edge features (relative positions)
     # For each edge (src, dst), edge_feature = pos[dst] - pos[src]
@@ -136,9 +134,7 @@ def _create_radius_edges(height: int, width: int, radius: float) -> jax.Array:
         Edge indices of shape [num_edges, 2]
     """
     # Create grid positions (using grid spacing of 1)
-    y_coords, x_coords = jnp.meshgrid(
-        jnp.arange(height), jnp.arange(width), indexing="ij"
-    )
+    y_coords, x_coords = jnp.meshgrid(jnp.arange(height), jnp.arange(width), indexing="ij")
     positions = jnp.stack([x_coords.flatten(), y_coords.flatten()], axis=-1)  # [N, 2]
 
     n_nodes = height * width

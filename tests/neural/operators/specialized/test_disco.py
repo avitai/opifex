@@ -1,6 +1,6 @@
 """Tests for DISCO Convolution Layers.
 
-This module provides comprehensive tests for Discrete-Continuous (DISCO) convolution
+This module provides full tests for Discrete-Continuous (DISCO) convolution
 layers, ensuring proper functionality, performance, and integration with the Opifex framework.
 
 Test Coverage:
@@ -116,9 +116,7 @@ class TestDiscreteContinuousConv2d:
             output = conv(sample_input)
 
             # Check downsampling by stride
-            expected_h = (
-                16 + stride - 1
-            ) // stride  # Ceiling division for SAME padding
+            expected_h = (16 + stride - 1) // stride  # Ceiling division for SAME padding
             expected_w = (16 + stride - 1) // stride
             expected_shape = (2, expected_h, expected_w, 4)
 

@@ -401,12 +401,8 @@ print(f"Solution saved to {output_dir / 'solution.png'}")
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
 # Initial condition
-axes[0].plot(
-    np.array(x_eval), np.array(u_initial_exact), "b-", label="Exact", linewidth=2
-)
-axes[0].plot(
-    np.array(x_eval), np.array(u_initial_pred), "r--", label="PINN", linewidth=2
-)
+axes[0].plot(np.array(x_eval), np.array(u_initial_exact), "b-", label="Exact", linewidth=2)
+axes[0].plot(np.array(x_eval), np.array(u_initial_pred), "r--", label="PINN", linewidth=2)
 axes[0].set_xlabel("x")
 axes[0].set_ylabel("u(x, 0)")
 axes[0].set_title("Initial Condition Comparison")

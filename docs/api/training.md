@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `opifex.training` module provides comprehensive training infrastructure for scientific machine learning, including physics-informed neural networks, optimization algorithms, and quantum-aware training workflows.
+The `opifex.training` module provides full training infrastructure for scientific machine learning, including physics-informed neural networks, optimization algorithms, and quantum-aware training workflows.
 
 **Module Structure:**
 
@@ -63,7 +63,7 @@ trained_model, history = trainer.train(train_data, val_data)
 - **Type-Safe**: Full type hints and IDE support
 - **Zero Runtime Overhead**: Configuration at initialization only
 - **Extensible**: Add custom configs without modifying trainer
-- **Production-Ready**: Comprehensive testing and error handling
+- **Production-Ready**: Full testing and error handling
 
 **Supported Physics Configurations:**
 
@@ -151,7 +151,7 @@ error_manager = ErrorRecoveryManager(
 - NaN detection and recovery mechanisms
 - Loss explosion detection and mitigation
 - Multiple recovery strategies (gradient clipping, learning rate reduction, parameter reinitialization)
-- Comprehensive error logging and analytics
+- Full error logging and analytics
 
 ### FlexibleOptimizerFactory ✅ **NEW**
 
@@ -230,7 +230,7 @@ class CustomComponent(TrainingComponentBase):
 
 ### TrainingConfig
 
-Training configuration with comprehensive parameter control.
+Training configuration with full parameter control.
 
 ```python
 from opifex.core.training.config import TrainingConfig
@@ -258,7 +258,7 @@ config = TrainingConfig(
 
 ### TrainingState
 
-Enhanced training state with comprehensive tracking.
+Enhanced training state with full tracking.
 
 ```python
 from opifex.training.metrics import TrainingState
@@ -456,7 +456,7 @@ boundary_conditions = [DirichletBC(boundary="left", value=0.0)]
 
 ### Debug Features
 
-- **Comprehensive logging** of training metrics and errors
+- **Full logging** of training metrics and errors
 - **Recovery attempt tracking** for debugging stability issues
 - **Gradient norm monitoring** for optimization health
 - **Physics constraint validation** for PINN problems

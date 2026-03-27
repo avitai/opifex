@@ -29,8 +29,8 @@ This example demonstrates:
 
 ## Files
 
-- **Python Script**: [`examples/getting-started/first_neural_operator.py`](https://github.com/Opifex/Opifex/blob/main/examples/getting-started/first_neural_operator.py)
-- **Jupyter Notebook**: [`examples/getting-started/first_neural_operator.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/getting-started/first_neural_operator.ipynb)
+- **Python Script**: [`examples/getting-started/first_neural_operator.py`](https://github.com/avitai/opifex/blob/main/examples/getting-started/first_neural_operator.py)
+- **Jupyter Notebook**: [`examples/getting-started/first_neural_operator.ipynb`](https://github.com/avitai/opifex/blob/main/examples/getting-started/first_neural_operator.ipynb)
 
 ## Quick Start
 
@@ -91,7 +91,7 @@ Loading Darcy flow data...
 ```python
 from flax import nnx
 from opifex.neural.operators.fno.base import FourierNeuralOperator
-from opifex.neural.layers.embeddings import GridEmbedding2D
+from opifex.neural.operators.common.embeddings import GridEmbedding2D
 
 class FNOWithEmbedding(nnx.Module):
     def __init__(self, in_channels, out_channels, modes, hidden_channels,

@@ -1,6 +1,6 @@
 # Opifex Deployment on Amazon Web Services (AWS)
 
-This comprehensive guide walks you through deploying the Opifex framework on Amazon Web Services using Amazon Elastic Kubernetes Service (EKS). This guide is designed for beginners and provides step-by-step instructions.
+This full guide walks you through deploying the Opifex framework on Amazon Web Services using Amazon Elastic Kubernetes Service (EKS). This guide is designed for beginners and provides step-by-step instructions.
 
 ## 📋 Table of Contents
 
@@ -225,7 +225,7 @@ aws configure set default.region $AWS_REGION
 
 ```bash
 # Clone the Opifex repository
-git clone https://github.com/opifex-org/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 
 # Verify repository structure
@@ -1019,7 +1019,7 @@ curl -X POST http://$ALB_ENDPOINT/api/v1/neural-operator/predict \
 curl -X GET http://$ALB_ENDPOINT/api/v1/workers/status
 ```
 
-### Step 3: Run Comprehensive Tests
+### Step 3: Run Full Tests
 
 ```bash
 # Run deployment validation tests
@@ -1377,14 +1377,14 @@ After successful deployment:
 2. **Run Scientific Workloads** - Test with neural operators and physics simulations
 3. **Scale Your Infrastructure** - Add GPU nodes and increase capacity as needed
 4. **Implement CI/CD** - Set up automated deployment pipelines with AWS CodePipeline
-5. **Monitor Performance** - Use CloudWatch and Grafana for comprehensive monitoring
+5. **Monitor Performance** - Use CloudWatch and Grafana for full monitoring
 6. **Optimize Costs** - Implement spot instances and resource optimization strategies
 
 ## 🆘 Support and Resources
 
 - **AWS Documentation**: [Amazon EKS User Guide](https://docs.aws.amazon.com/eks/latest/userguide/)
 - **Opifex Documentation**: [Framework Documentation](../index.md)
-- **Community Support**: [GitHub Discussions](https://github.com/opifex-org/opifex/discussions)
+- **Community Support**: [GitHub Discussions](https://github.com/avitai/opifex/discussions)
 - **AWS Support**: [AWS Support Plans](https://aws.amazon.com/support/)
 - **Enterprise Support**: Contact for commercial support options
 

@@ -28,9 +28,7 @@ class TestTensorizedFourierNeuralOperator:
         height, width = 32, 32
         in_channels = 3
 
-        return jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, in_channels, height, width)
-        )
+        return jax.random.normal(jax.random.PRNGKey(0), (batch_size, in_channels, height, width))
 
     @pytest.fixture
     def sample_data_3d(self):
@@ -266,9 +264,7 @@ class TestSpectralConvolutionNotIdentity:
         output = tucker.multiply_factorized(x)
 
         # Output should have out_channels (4) instead of in_channels (3)
-        assert output.shape == (2, 4, 8, 8), (
-            f"Expected (2, 4, 8, 8), got {output.shape}"
-        )
+        assert output.shape == (2, 4, 8, 8), f"Expected (2, 4, 8, 8), got {output.shape}"
         assert jnp.all(jnp.isfinite(output)), "Output should be finite"
 
     def test_cp_multiply_factorized_output_shape(self):
@@ -281,9 +277,7 @@ class TestSpectralConvolutionNotIdentity:
 
         output = cp.multiply_factorized(x)
 
-        assert output.shape == (2, 4, 8, 8), (
-            f"Expected (2, 4, 8, 8), got {output.shape}"
-        )
+        assert output.shape == (2, 4, 8, 8), f"Expected (2, 4, 8, 8), got {output.shape}"
         assert jnp.all(jnp.isfinite(output)), "Output should be finite"
 
     def test_tt_multiply_factorized_output_shape(self):
@@ -296,9 +290,7 @@ class TestSpectralConvolutionNotIdentity:
 
         output = tt.multiply_factorized(x)
 
-        assert output.shape == (2, 4, 8, 8), (
-            f"Expected (2, 4, 8, 8), got {output.shape}"
-        )
+        assert output.shape == (2, 4, 8, 8), f"Expected (2, 4, 8, 8), got {output.shape}"
         assert jnp.all(jnp.isfinite(output)), "Output should be finite"
 
     def test_spectral_convolution_transforms_data(self):
@@ -321,9 +313,7 @@ class TestSpectralConvolutionNotIdentity:
         output = conv(x_ft)
 
         # Output should have correct shape (out_channels=4) and same spatial dims
-        assert output.shape == (2, 4, 16, 16), (
-            f"Expected (2, 4, 16, 16), got {output.shape}"
-        )
+        assert output.shape == (2, 4, 16, 16), f"Expected (2, 4, 16, 16), got {output.shape}"
         assert jnp.all(jnp.isfinite(output)), "Output should be finite"
 
     def test_tfno_spectral_layers_contribute(self, sample_data_2d=None):

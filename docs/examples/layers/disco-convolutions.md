@@ -38,8 +38,8 @@ for building encoder-decoder architectures. Explicit `rngs` parameter ensures re
 
 ## Files
 
-- **Python Script**: [`examples/layers/disco_convolutions_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/disco_convolutions_example.py)
-- **Jupyter Notebook**: [`examples/layers/disco_convolutions_example.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/layers/disco_convolutions_example.ipynb)
+- **Python Script**: [`examples/layers/disco_convolutions_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/disco_convolutions_example.py)
+- **Jupyter Notebook**: [`examples/layers/disco_convolutions_example.ipynb`](https://github.com/avitai/opifex/blob/main/examples/layers/disco_convolutions_example.ipynb)
 
 ## Quick Start
 
@@ -195,7 +195,7 @@ DISCO Encoder-Decoder Architecture Demonstration
 |---------|-------|-------------------|
 | [Grid Embeddings](grid-embeddings.md) | Beginner | Spatial coordinate injection for neural operators |
 | [Fourier Continuation](fourier-continuation.md) | Intermediate | Boundary handling for spectral methods |
-| [FNO Darcy Comprehensive](../neural-operators/fno-darcy.md) | Intermediate | Full neural operator training pipeline |
+| [FNO Darcy Full](../neural-operators/fno-darcy.md) | Intermediate | Full neural operator training pipeline |
 
 ### API Reference
 

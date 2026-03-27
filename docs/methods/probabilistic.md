@@ -4,7 +4,7 @@
 
 Probabilistic numerics represents a paradigm shift in scientific computing that treats numerical computation as a statistical inference problem. Instead of providing point estimates, probabilistic numerical methods quantify uncertainty in computational results, enabling more robust decision-making and better understanding of numerical errors.
 
-The Opifex probabilistic numerics framework provides comprehensive implementations of Bayesian neural networks, Gaussian processes, stochastic differential equations, probabilistic solvers, and uncertainty quantification methods, enabling principled uncertainty-aware scientific computing across diverse applications.
+The Opifex probabilistic numerics framework provides full implementations of Bayesian neural networks, Gaussian processes, stochastic differential equations, probabilistic solvers, and uncertainty quantification methods, enabling principled uncertainty-aware scientific computing across diverse applications.
 
 ## Theoretical Foundation
 

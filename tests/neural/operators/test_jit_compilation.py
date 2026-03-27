@@ -46,9 +46,7 @@ class TestJITCompilation:
         model = DeepONet(branch_sizes=[20, 32, 32], trunk_sizes=[2, 32, 32], rngs=rngs)
 
         branch = jax.random.normal(jax.random.PRNGKey(0), (4, 20))
-        trunk = jax.random.normal(
-            jax.random.PRNGKey(1), (4, 10, 2)
-        )  # (batch, locations, dim)
+        trunk = jax.random.normal(jax.random.PRNGKey(1), (4, 10, 2))  # (batch, locations, dim)
 
         # Test JIT compilation
         @nnx.jit
@@ -103,9 +101,7 @@ class TestJITCompilation:
             rngs=rngs,
         )
 
-        deeponet = DeepONet(
-            branch_sizes=[20, 32, 32], trunk_sizes=[2, 32, 32], rngs=rngs
-        )
+        deeponet = DeepONet(branch_sizes=[20, 32, 32], trunk_sizes=[2, 32, 32], rngs=rngs)
 
         # JIT compile both using proper nnx.jit
         @nnx.jit

@@ -39,8 +39,8 @@ optimization across many instances.
 
 ## Files
 
-- **Python script**: [`examples/optimization/learn_to_optimize.py`](https://github.com/Opifex/Opifex/blob/main/examples/optimization/learn_to_optimize.py)
-- **Jupyter notebook**: [`examples/optimization/learn_to_optimize.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/optimization/learn_to_optimize.ipynb)
+- **Python script**: [`examples/optimization/learn_to_optimize.py`](https://github.com/avitai/opifex/blob/main/examples/optimization/learn_to_optimize.py)
+- **Jupyter notebook**: [`examples/optimization/learn_to_optimize.ipynb`](https://github.com/avitai/opifex/blob/main/examples/optimization/learn_to_optimize.ipynb)
 
 ## Quick Start
 

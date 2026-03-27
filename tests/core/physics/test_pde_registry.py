@@ -251,9 +251,7 @@ class TestPoissonResidual:
 
         # Compute residual with source term = 4
         source_term = jnp.full(x.shape[0], 4.0)
-        residual = poisson(
-            analytical_solution, x, AutoDiffEngine, source_term=source_term
-        )
+        residual = poisson(analytical_solution, x, AutoDiffEngine, source_term=source_term)
 
         # Residual should be ∇²u - f ≈ 0
         assert residual.shape == (2,)

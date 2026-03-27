@@ -81,29 +81,21 @@ class TestAdaptiveDeepONet:
             rngs=rngs,
         )
 
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
 
         # Test specific resolution levels
         for level in range(num_resolution_levels):
-            output = adaptive_deeponet(
-                branch_input, trunk_input, resolution_level=level
-            )
+            output = adaptive_deeponet(branch_input, trunk_input, resolution_level=level)
             expected_shape = (batch_size, num_locations)
             assert output.shape == expected_shape
             assert jnp.all(jnp.isfinite(output))
 
         # Verify different resolution levels produce different outputs
-        output_level_0 = adaptive_deeponet(
-            branch_input, trunk_input, resolution_level=0
-        )
-        output_level_1 = adaptive_deeponet(
-            branch_input, trunk_input, resolution_level=1
-        )
+        output_level_0 = adaptive_deeponet(branch_input, trunk_input, resolution_level=0)
+        output_level_1 = adaptive_deeponet(branch_input, trunk_input, resolution_level=1)
         assert not jnp.allclose(output_level_0, output_level_1, atol=1e-6)
 
     def test_adaptive_deeponet_all_levels_adaptive_weights(self, rngs):
@@ -126,25 +118,19 @@ class TestAdaptiveDeepONet:
             rngs=rngs,
         )
 
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
 
         # Test with adaptive weights
-        output_adaptive = adaptive_deeponet(
-            branch_input, trunk_input, adaptive_weights=True
-        )
+        output_adaptive = adaptive_deeponet(branch_input, trunk_input, adaptive_weights=True)
         expected_shape = (batch_size, num_locations)
         assert output_adaptive.shape == expected_shape
         assert jnp.all(jnp.isfinite(output_adaptive))
 
         # Test with uniform weights
-        output_uniform = adaptive_deeponet(
-            branch_input, trunk_input, adaptive_weights=False
-        )
+        output_uniform = adaptive_deeponet(branch_input, trunk_input, adaptive_weights=False)
         assert output_uniform.shape == expected_shape
         assert jnp.all(jnp.isfinite(output_uniform))
 
@@ -174,9 +160,7 @@ class TestAdaptiveDeepONet:
             rngs=rngs,
         )
 
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
@@ -217,9 +201,7 @@ class TestAdaptiveDeepONet:
             output = model(branch_input, trunk_input)
             return jnp.mean(output**2)
 
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
@@ -235,9 +217,7 @@ class TestAdaptiveDeepONet:
 
         # Check that gradients are not all zero
         grad_leaves = jax.tree_util.tree_leaves(grads)
-        grad_norms = [
-            jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")
-        ]
+        grad_norms = [jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")]
         assert len(grad_norms) > 0
         assert any(norm > 1e-8 for norm in grad_norms)
 

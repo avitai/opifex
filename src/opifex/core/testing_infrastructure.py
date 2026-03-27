@@ -1,11 +1,11 @@
 """
-Opifex Testing Infrastructure - Comprehensive GPU Safety and Dependency Management
+Opifex Testing Infrastructure - Full GPU Safety and Dependency Management
 
 This module provides robust testing infrastructure that handles:
 1. GPU segmentation fault prevention and recovery
 2. Optional dependency management with graceful degradation
 3. Hardware-aware test execution
-4. Comprehensive error handling and diagnostics
+4. Full error handling and diagnostics
 5. Local .venv CUDA environment detection and management
 
 Key Features:
@@ -13,7 +13,7 @@ Key Features:
 - Local .venv CUDA library detection and configuration
 - Automatic JAX backend configuration based on environment safety
 - Process isolation for GPU-intensive operations
-- Comprehensive test environment management
+- Full test environment management
 """
 
 import functools
@@ -114,7 +114,7 @@ class GPUTestResult:
 
 class EnvironmentDetector:
     """
-    Comprehensive environment detection for local .venv CUDA setup.
+    Full environment detection for local .venv CUDA setup.
 
     This class detects and validates the local CUDA environment before
     any JAX operations to prevent segmentation faults.
@@ -239,9 +239,7 @@ class EnvironmentDetector:
             pass
         return None
 
-    def _prepare_environment_variables(
-        self, cuda_env: CUDAEnvironment
-    ) -> dict[str, str]:
+    def _prepare_environment_variables(self, cuda_env: CUDAEnvironment) -> dict[str, str]:
         """Prepare environment variables for CUDA setup."""
         env_vars = {}
 
@@ -288,9 +286,7 @@ class JAXConfigurationManager:
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self._configured = False
 
-    def configure_jax_for_environment(
-        self, cuda_env: CUDAEnvironment
-    ) -> EnvironmentType:
+    def configure_jax_for_environment(self, cuda_env: CUDAEnvironment) -> EnvironmentType:
         """
         Configure JAX based on detected CUDA environment.
 
@@ -371,9 +367,7 @@ class JAXConfigurationManager:
         os.environ["JAX_PLATFORMS"] = "cuda,cpu"
         os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
         os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.8"
-        os.environ["JAX_ENABLE_X64"] = (
-            "True"  # Enable x64 precision for numerical accuracy
-        )
+        os.environ["JAX_ENABLE_X64"] = "True"  # Enable x64 precision for numerical accuracy
 
     def _configure_gpu_unsafe_fallback(self):
         """Configure JAX to fallback to CPU for unsafe GPU."""
@@ -462,9 +456,7 @@ def ensure_safe_jax_environment() -> TestEnvironment:
 
     # Create test environment
     test_environment = TestEnvironment(
-        backend=BackendType.GPU
-        if env_type == EnvironmentType.GPU_SAFE
-        else BackendType.CPU,
+        backend=BackendType.GPU if env_type == EnvironmentType.GPU_SAFE else BackendType.CPU,
         environment_type=env_type,
         gpu_available=cuda_env.gpu_devices_detected > 0,
         gpu_safe=env_type == EnvironmentType.GPU_SAFE,
@@ -608,9 +600,7 @@ class DependencyManager:
         elif status == DependencyStatus.MOCK:
             return self.mocks[dependency]
 
-        raise ImportError(
-            f"Dependency {dependency} not available and no mock registered"
-        )
+        raise ImportError(f"Dependency {dependency} not available and no mock registered")
 
 
 class TestEnvironmentManager:
@@ -788,17 +778,11 @@ class SafeJITCompiler:
             return CompilationStrategy.NO_JIT
 
         # For unknown environments, use NO_JIT for safety
-        if (
-            hasattr(env, "environment_type")
-            and env.environment_type == EnvironmentType.UNKNOWN
-        ):
+        if hasattr(env, "environment_type") and env.environment_type == EnvironmentType.UNKNOWN:
             return CompilationStrategy.NO_JIT
 
         # For CPU only environments, use SAFE_JIT (compatible with CPU)
-        if (
-            hasattr(env, "environment_type")
-            and env.environment_type == EnvironmentType.CPU_ONLY
-        ):
+        if hasattr(env, "environment_type") and env.environment_type == EnvironmentType.CPU_ONLY:
             return CompilationStrategy.SAFE_JIT
 
         # Default to SAFE_JIT for stable GPU environments

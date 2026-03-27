@@ -12,7 +12,7 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/opifex-org/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 ```
 
@@ -60,7 +60,7 @@ Expected output:
 
 ```text
 JAX version: 0.8.0
-JAX devices: [cuda(id=0)] (or [cpu(id=0)] without GPU)
+JAX devices: [CudaDevice(id=0)] (or [CpuDevice(id=0)] without GPU)
 FLAX NNX available: True
 Opifex framework ready
 ```
@@ -136,7 +136,7 @@ uv run pytest tests/ -v
 # Run tests with coverage
 uv run pytest tests/ --cov=opifex --cov-report=html
 
-# Comprehensive test reporting with JSON output and detailed coverage
+# Full test reporting with JSON output and detailed coverage
 uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
@@ -163,7 +163,7 @@ uv run mkdocs build
 
 - **GitHub Issues**: Report bugs and request features
 - **Discussions**: Community Q&A and collaboration
-- **Documentation**: Comprehensive guides and tutorials
+- **Documentation**: Full guides and tutorials
 
 ## Next Steps
 

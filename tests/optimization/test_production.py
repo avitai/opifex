@@ -1,6 +1,6 @@
 """Tests for production optimization components.
 
-This module tests the Phase 7.4 Production Optimization implementation
+This module tests the Version 7.4 Production Optimization implementation
 including the Hybrid Performance Platform, adaptive JIT optimization,
 and intelligent GPU memory management.
 """
@@ -166,18 +166,14 @@ class TestAdaptiveJAXOptimizer:
         assert optimizer.memory_efficiency_target == 0.9
         assert optimizer.cache_size == 50
 
-    def test_workload_pattern_analysis_aggressive_fusion(
-        self, compute_intensive_workload
-    ):
+    def test_workload_pattern_analysis_aggressive_fusion(self, compute_intensive_workload):
         """Test workload analysis for compute-intensive workloads."""
         optimizer = AdaptiveJAXOptimizer()
         strategy = optimizer.analyze_workload_patterns(compute_intensive_workload)
 
         assert strategy == OptimizationStrategy.AGGRESSIVE_FUSION
 
-    def test_workload_pattern_analysis_memory_efficient(
-        self, memory_intensive_workload
-    ):
+    def test_workload_pattern_analysis_memory_efficient(self, memory_intensive_workload):
         """Test workload analysis for memory-intensive workloads."""
         optimizer = AdaptiveJAXOptimizer()
         strategy = optimizer.analyze_workload_patterns(memory_intensive_workload)
@@ -274,9 +270,7 @@ class TestAdaptiveJAXOptimizer:
         """Test complete neural operator optimization."""
         optimizer = AdaptiveJAXOptimizer()
 
-        optimized_container = optimizer.optimize_neural_operator(
-            sample_model, sample_workload
-        )
+        optimized_container = optimizer.optimize_neural_operator(sample_model, sample_workload)
 
         assert isinstance(optimized_container, OptimizedModel)
         assert optimized_container.optimization_type == OptimizationStrategy.BALANCED
@@ -298,9 +292,7 @@ class TestAdaptiveJAXOptimizer:
 
         # First optimization
         result1 = optimizer.optimize_neural_operator(sample_model, sample_workload)
-        assert (
-            len(optimizer.optimization_cache) <= 1
-        )  # May not cache if improvement is too small
+        assert len(optimizer.optimization_cache) <= 1  # May not cache if improvement is too small
 
         # Second optimization with same inputs should use cache if available
         result2 = optimizer.optimize_neural_operator(sample_model, sample_workload)
@@ -405,13 +397,11 @@ class TestHybridPerformancePlatform:
         assert platform.memory_manager is custom_manager
 
     def test_optimize_for_production(self, sample_model, sample_workload):
-        """Test comprehensive production optimization."""
+        """Test full production optimization."""
         rngs = nnx.Rngs(0)
         platform = HybridPerformancePlatform(rngs=rngs)
 
-        optimized_model = platform.optimize_for_production(
-            sample_model, sample_workload
-        )
+        optimized_model = platform.optimize_for_production(sample_model, sample_workload)
 
         assert isinstance(optimized_model, OptimizedModel)
         assert "memory_plan" in optimized_model.optimization_metadata
@@ -445,12 +435,8 @@ class TestProductionOptimizationIntegration:
         # Create different workload scenarios
         workloads = [
             WorkloadProfile(32, 128, 2.0, 8.0, 10.0, 100.0, "medium"),
-            WorkloadProfile(
-                16, 64, 1.0, 15.0, 5.0, 200.0, "simple"
-            ),  # Compute intensive
-            WorkloadProfile(
-                8, 512, 12.0, 3.0, 50.0, 20.0, "complex"
-            ),  # Memory intensive
+            WorkloadProfile(16, 64, 1.0, 15.0, 5.0, 200.0, "simple"),  # Compute intensive
+            WorkloadProfile(8, 512, 12.0, 3.0, 50.0, 20.0, "complex"),  # Memory intensive
             WorkloadProfile(64, 32, 0.5, 5.0, 2.0, 500.0, "simple"),  # Latency critical
         ]
 

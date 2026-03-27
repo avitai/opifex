@@ -93,9 +93,7 @@ class TestSpectralNeuralOperator:
 
     def test_training_vs_inference_mode(self, basic_operator):
         """Test behavior difference between training and inference modes."""
-        input_data = jax.random.normal(
-            jax.random.PRNGKey(42), (4, basic_operator.input_dim)
-        )
+        input_data = jax.random.normal(jax.random.PRNGKey(42), (4, basic_operator.input_dim))
 
         # Training mode
         output_train = basic_operator(input_data, training=True)
@@ -127,9 +125,7 @@ class TestSpectralNeuralOperator:
 
     def test_gradient_flow(self, basic_operator):
         """Test that gradients flow properly through the operator."""
-        input_data = jax.random.normal(
-            jax.random.PRNGKey(42), (4, basic_operator.input_dim)
-        )
+        input_data = jax.random.normal(jax.random.PRNGKey(42), (4, basic_operator.input_dim))
 
         def loss_fn(operator, x):
             output = operator(x, training=True)
@@ -182,9 +178,7 @@ class TestSpectralNeuralOperator:
 
     def test_jax_transformations(self, basic_operator):
         """Test compatibility with JAX transformations."""
-        input_data = jax.random.normal(
-            jax.random.PRNGKey(42), (4, basic_operator.input_dim)
-        )
+        input_data = jax.random.normal(jax.random.PRNGKey(42), (4, basic_operator.input_dim))
 
         # Test basic forward pass works (JAX JIT has issues with spectral norm state)
         output_normal = basic_operator(input_data, training=False)
@@ -196,9 +190,7 @@ class TestSpectralNeuralOperator:
     def test_batch_independence(self, basic_operator):
         """Test that different batch elements are processed independently."""
         # Create batch with repeated elements
-        single_input = jax.random.normal(
-            jax.random.PRNGKey(42), (1, basic_operator.input_dim)
-        )
+        single_input = jax.random.normal(jax.random.PRNGKey(42), (1, basic_operator.input_dim))
         batch_input = jnp.repeat(single_input, 4, axis=0)
 
         output = basic_operator(batch_input, training=False)

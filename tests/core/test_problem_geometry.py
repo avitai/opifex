@@ -37,7 +37,5 @@ def test_create_pde_problem_helper():
     # Let's assume for now it should accept Geometry
 
     rect = Rectangle(center=jnp.array([0.0, 0.0]), width=2.0, height=2.0)
-    prob = create_pde_problem(
-        geometry=rect, equation=lambda x, u, du: 0.0, boundary_conditions=[]
-    )
+    prob = create_pde_problem(geometry=rect, equation=lambda x, u, du: 0.0, boundary_conditions=[])
     assert prob.geometry is rect

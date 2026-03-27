@@ -324,9 +324,7 @@ uncertainty = jnp.std(preds_stacked, axis=0)
 
 # Compute error metrics
 mse = jnp.mean((predictions - test_targets) ** 2)
-l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(
-    jnp.sum(test_targets**2)
-)
+l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(jnp.sum(test_targets**2))
 
 print()
 print("Results:")
@@ -349,9 +347,9 @@ mean_error_per_sample = jnp.mean(errors, axis=(1, 2, 3))  # Average over C, H, W
 mean_uncertainty_per_sample = jnp.mean(uncertainty, axis=(1, 2, 3))
 
 # Correlation between error and uncertainty
-correlation = jnp.corrcoef(
-    mean_error_per_sample.flatten(), mean_uncertainty_per_sample.flatten()
-)[0, 1]
+correlation = jnp.corrcoef(mean_error_per_sample.flatten(), mean_uncertainty_per_sample.flatten())[
+    0, 1
+]
 print(f"  Error-Uncertainty Correlation: {float(correlation):.4f}")
 
 # Coverage
@@ -398,9 +396,7 @@ plt.colorbar(im, ax=ax, fraction=0.046)
 
 # Row 2: Error, Uncertainty, Calibration
 ax = axes[1, 0]
-error_map = jnp.abs(
-    predictions[sample_idx, 0, :, :] - test_targets[sample_idx, 0, :, :]
-)
+error_map = jnp.abs(predictions[sample_idx, 0, :, :] - test_targets[sample_idx, 0, :, :])
 im = ax.imshow(error_map, cmap="hot")
 ax.set_title("Absolute Error")
 ax.set_xlabel("x")

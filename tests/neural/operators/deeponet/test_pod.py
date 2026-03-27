@@ -1,7 +1,7 @@
 """Tests for POD-enhanced DeepONet (PODDeepONet).
 
 TDD tests based on reference implementation from:
-    Lu et al. (2022), "A comprehensive and fair comparison of two neural operators."
+    Lu et al. (2022), "A full and fair comparison of two neural operators."
     GitHub: lu-group/deeponet-fno
 """
 
@@ -205,7 +205,7 @@ class TestCreatePODDeepONet:
 
 
 # ---------------------------------------------------------------------------
-# Additional comprehensive tests
+# Additional full tests
 # ---------------------------------------------------------------------------
 
 

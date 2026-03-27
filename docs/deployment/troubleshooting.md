@@ -1,6 +1,6 @@
 # Opifex Deployment Troubleshooting Guide
 
-This comprehensive troubleshooting guide helps you resolve common issues when deploying Opifex across different platforms (local, GCP, AWS, and other cloud providers).
+This full troubleshooting guide helps you resolve common issues when deploying Opifex across different platforms (local, GCP, AWS, and other cloud providers).
 
 ## 📋 Table of Contents
 
@@ -95,7 +95,7 @@ source ./activate.sh
 ./setup.sh --force
 
 # 3. Check Python version
-python --version  # Should be 3.10+
+python --version  # Should be 3.11+
 ```
 
 #### Issue: JAX Installation Problems
@@ -207,13 +207,13 @@ docker run -it --rm opifex:debug /bin/bash
 docker build --dry-run -t opifex:test .
 
 # 2. Use multi-stage build
-FROM python:3.10-slim as builder
+FROM python:3.11-slim as builder
 # ... build steps ...
-FROM python:3.10-slim as runtime
+FROM python:3.11-slim as runtime
 COPY --from=builder /app /app
 
 # 3. Fix base image
-FROM python:3.10-slim
+FROM python:3.11-slim
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -847,8 +847,8 @@ echo "Diagnostic bundle created: $OUTPUT_DIR.tar.gz"
 
 ### Support Channels
 
-1. **GitHub Issues**: [Opifex Issues](https://github.com/opifex-org/opifex/issues)
-2. **Community Forum**: [GitHub Discussions](https://github.com/opifex-org/opifex/discussions)
+1. **GitHub Issues**: [Opifex Issues](https://github.com/avitai/opifex/issues)
+2. **Community Forum**: [GitHub Discussions](https://github.com/avitai/opifex/discussions)
 3. **Documentation**: [Opifex Docs](https://opifex.readthedocs.io/)
 4. **Cloud Provider Support**:
    - [GCP Support](https://cloud.google.com/support)

@@ -41,9 +41,7 @@ class OpifexTestFramework:
         # Clear any existing compilation cache
         jax.clear_caches()
 
-    def create_test_problem(
-        self, problem_type: str, complexity: str = "medium"
-    ) -> dict[str, Any]:
+    def create_test_problem(self, problem_type: str, complexity: str = "medium") -> dict[str, Any]:
         """Create standardized test problems for integration testing.
 
         Args:
@@ -148,9 +146,7 @@ class TestDataManager:
             },
         }
 
-    def create_problem(
-        self, problem_type: str, complexity: str = "medium"
-    ) -> dict[str, Any]:
+    def create_problem(self, problem_type: str, complexity: str = "medium") -> dict[str, Any]:
         """Create standardized test problem.
 
         Args:
@@ -169,9 +165,7 @@ class TestDataManager:
             raise ValueError(f"Unknown problem type: {problem_type}")
 
         if complexity not in self.problem_configs[problem_type]:
-            raise ValueError(
-                f"Unknown complexity: {complexity} for problem type: {problem_type}"
-            )
+            raise ValueError(f"Unknown complexity: {complexity} for problem type: {problem_type}")
 
         config = self.problem_configs[problem_type][complexity]
 
@@ -277,9 +271,7 @@ class TestDataManager:
             hessian = None
 
         # Create constraint functions
-        constraint_matrices = jax.random.normal(
-            jax.random.PRNGKey(42), (n_constraints, dimensions)
-        )
+        constraint_matrices = jax.random.normal(jax.random.PRNGKey(42), (n_constraints, dimensions))
         constraint_bounds = jnp.ones(n_constraints)
 
         return {
@@ -345,9 +337,7 @@ class TestDataManager:
             },
         }
 
-    def load_pdebench_dataset(
-        self, dataset_name: str, subset: str = "test"
-    ) -> dict[str, Any]:
+    def load_pdebench_dataset(self, dataset_name: str, subset: str = "test") -> dict[str, Any]:
         """Load and prepare PDEBench datasets for testing.
 
         Args:
@@ -480,9 +470,7 @@ class TestDataManager:
 
             # Random initial velocity field
             u0 = jax.random.normal(subkey, (grid_size, grid_size))
-            v0 = jax.random.normal(
-                jax.random.fold_in(subkey, 1), (grid_size, grid_size)
-            )
+            v0 = jax.random.normal(jax.random.fold_in(subkey, 1), (grid_size, grid_size))
 
             # Smooth initial conditions
             u0 = jnp.sin(jnp.pi * X) * jnp.cos(jnp.pi * Y) + 0.1 * u0
@@ -622,17 +610,15 @@ class PerformanceMonitor:
 
         return device_info
 
-    def benchmark(
-        self, operation, expected_performance: dict | None = None
-    ) -> dict[str, Any]:
-        """Comprehensive benchmark of operation.
+    def benchmark(self, operation, expected_performance: dict | None = None) -> dict[str, Any]:
+        """Full benchmark of operation.
 
         Args:
             operation: Function to benchmark
             expected_performance: Expected performance metrics for validation
 
         Returns:
-            Comprehensive performance report
+            Full performance report
         """
         # Timing benchmark
         timing_results = self.benchmark_execution_time(operation)
@@ -653,9 +639,7 @@ class PerformanceMonitor:
 
         # Validate against expected performance if provided
         if expected_performance:
-            validation = self._validate_performance(
-                benchmark_results, expected_performance
-            )
+            validation = self._validate_performance(benchmark_results, expected_performance)
             benchmark_results["validation"] = validation
 
         return benchmark_results
@@ -736,9 +720,7 @@ class IntegrationValidator:
 
                 if pair_key in self.validation_rules:
                     rules = self.validation_rules[pair_key]
-                    pair_validation = self._validate_component_pair(
-                        comp1, comp2, result, rules
-                    )
+                    pair_validation = self._validate_component_pair(comp1, comp2, result, rules)
                     validations[f"{comp1}_{comp2}"] = pair_validation
 
         return validations

@@ -167,9 +167,7 @@ class TestJITCompatibility:
         jit_distance = jax.jit(self.manifold.geodesic_distance)
 
         # Test compilation and execution
-        result_normal = self.manifold.geodesic_distance(
-            self.test_point, self.test_point2
-        )
+        result_normal = self.manifold.geodesic_distance(self.test_point, self.test_point2)
         result_jit = jit_distance(self.test_point, self.test_point2)
 
         assert jnp.allclose(result_normal, result_jit, atol=1e-5)
@@ -251,9 +249,7 @@ class TestVMAPCompatibility:
     def test_built_in_batch_methods(self):
         """Test the built-in batch methods work correctly."""
         # Test batch_geodesic_distance
-        result = self.manifold.batch_geodesic_distance(
-            self.batch_points, self.batch_points2
-        )
+        result = self.manifold.batch_geodesic_distance(self.batch_points, self.batch_points2)
         assert result.shape == (self.batch_size,)
 
         # Test batch_exp_map

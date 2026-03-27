@@ -4,7 +4,7 @@ This module provides the core functionality for composing physics-informed
 losses, including PDE residuals, boundary conditions, and conservation laws.
 
 Single source of truth for ALL physics loss functionality, extracted from
-opifex/training/physics_losses.py as part of comprehensive refactoring.
+opifex/training/physics_losses.py as part of full refactoring.
 
 Key Features:
     - Hierarchical loss composition with adaptive weighting
@@ -138,9 +138,7 @@ class PhysicsLossComposer:
                 if constraint == "density_positivity":
                     total_loss += self.config.density_positivity_weight * residual
                 elif constraint == "wavefunction_normalization":
-                    total_loss += (
-                        self.config.wavefunction_normalization_weight * residual
-                    )
+                    total_loss += self.config.wavefunction_normalization_weight * residual
 
         return total_loss
 
@@ -260,9 +258,7 @@ class AdaptiveWeightScheduler:
 
         weight = jnp.array(self.initial_physics_weight)
         total_steps = len(self.step_milestones)
-        weight_increment = (
-            self.final_physics_weight - self.initial_physics_weight
-        ) / total_steps
+        weight_increment = (self.final_physics_weight - self.initial_physics_weight) / total_steps
 
         for milestone in self.step_milestones:
             weight = jnp.where(epoch >= milestone, weight + weight_increment, weight)
@@ -413,9 +409,7 @@ class ConservationLawEnforcer:
             return jnp.var(total_energy)
         return jnp.array(0.0)
 
-    def _compute_particle_number_conservation(
-        self, density_matrix: jax.Array
-    ) -> jax.Array:
+    def _compute_particle_number_conservation(self, density_matrix: jax.Array) -> jax.Array:
         """Compute particle number conservation for quantum systems.
 
         Args:
@@ -596,24 +590,20 @@ class PhysicsInformedLoss:
         self.composer = PhysicsLossComposer(config)
 
         if config.adaptive_weighting:
-            self.weight_scheduler: AdaptiveWeightScheduler | None = (
-                AdaptiveWeightScheduler(
-                    schedule_type=config.weight_schedule,
-                    initial_physics_weight=config.physics_loss_weight,
-                    final_physics_weight=1.0,
-                    transition_epochs=1000,
-                    step_milestones=config.step_milestones,
-                )
+            self.weight_scheduler: AdaptiveWeightScheduler | None = AdaptiveWeightScheduler(
+                schedule_type=config.weight_schedule,
+                initial_physics_weight=config.physics_loss_weight,
+                final_physics_weight=1.0,
+                transition_epochs=1000,
+                step_milestones=config.step_milestones,
             )
         else:
             self.weight_scheduler: AdaptiveWeightScheduler | None = None
 
         if config.conservation_weights:
-            self.conservation_enforcer: ConservationLawEnforcer | None = (
-                ConservationLawEnforcer(
-                    conservation_laws=list(config.conservation_weights.keys()),
-                    tolerance=1e-6,
-                )
+            self.conservation_enforcer: ConservationLawEnforcer | None = ConservationLawEnforcer(
+                conservation_laws=list(config.conservation_weights.keys()),
+                tolerance=1e-6,
             )
         else:
             self.conservation_enforcer: ConservationLawEnforcer | None = None
@@ -745,9 +735,7 @@ class PhysicsInformedLoss:
 
         # Compute physics residual only if model function is provided
         if model is not None:
-            residual_per_point = self.residual_computer.compute_residual(
-                model, inputs, **kwargs
-            )
+            residual_per_point = self.residual_computer.compute_residual(model, inputs, **kwargs)
             # Average over batch to get scalar physics_residual for loss composition
             physics_residual = jnp.mean(residual_per_point**2)
         else:
@@ -778,13 +766,9 @@ class PhysicsInformedLoss:
         conservation_residuals = {}
         for law in self.conservation_enforcer.conservation_laws:
             if law in ["particle_number", "charge"] and density_matrix is not None:
-                residual = self.conservation_enforcer.compute_residual(
-                    law, density_matrix
-                )
+                residual = self.conservation_enforcer.compute_residual(law, density_matrix)
             else:
-                residual = self.conservation_enforcer.compute_residual(
-                    law, predictions, inputs
-                )
+                residual = self.conservation_enforcer.compute_residual(law, predictions, inputs)
             conservation_residuals[law] = residual
 
         return conservation_residuals
@@ -802,9 +786,7 @@ class PhysicsInformedLoss:
 
         # Density positivity constraint
         if self.config.density_positivity_weight > 0:
-            density_positivity_violation = jnp.mean(
-                jnp.maximum(0.0, -jnp.real(density_matrix))
-            )
+            density_positivity_violation = jnp.mean(jnp.maximum(0.0, -jnp.real(density_matrix)))
             quantum_residuals["density_positivity"] = density_positivity_violation
 
         # Wavefunction normalization constraint
@@ -846,7 +828,7 @@ class PhysicsInformedLoss:
         quantum_residuals: dict[str, jax.Array] | None,
         total_loss: jax.Array,
     ) -> dict[str, jax.Array]:
-        """Prepare comprehensive loss components dictionary."""
+        """Prepare full loss components dictionary."""
         loss_components = {
             "data_loss": basic_losses["data_loss"],
             "physics_loss": basic_losses["physics_residual"],

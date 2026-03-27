@@ -7,7 +7,7 @@ This module provides advanced neural operator implementations for learning mappi
 **Status**: ✅ **FULLY IMPLEMENTED AND TESTED** (February 2025)
 **Implementation**: Complete neural operator library with 26+ architectures
 **Testing**: ✅ **Neural operators contributing to 1800+ total tests (99.8% overall pass rate)**
-**Examples Validation**: ✅ **100% success rate (verified working examples)** - Perfect reliability
+**Examples Validation**: ✅ **all listed checks passing (verified working examples)** - Perfect reliability
 **Coverage**: High test coverage on neural operator foundations
 **Quality**: Enterprise-grade implementation with full JAX transformation support
 
@@ -63,14 +63,14 @@ print(f"DISCO Encoder-Decoder: {x.shape} -> {encoded.shape} -> {reconstructed.sh
 
 #### Complete DISCO Convolution Example
 
-For comprehensive DISCO convolution demonstrations:
+For full DISCO convolution demonstrations:
 
 **`examples/layers/disco_convolutions_example.py`** - Production-ready example featuring:
 
 - **Basic DISCO Functionality**: General convolution for structured/unstructured grids
 - **Equidistant Optimization**: 10x+ speedup for regular grids with performance comparison
 - **Encoder-Decoder Architectures**: Multi-scale feature learning with factory functions
-- **Performance Analysis**: Comprehensive timing and visualization of results
+- **Performance Analysis**: Full timing and visualization of results
 
 ```bash
 # Activate environment first
@@ -83,13 +83,13 @@ python examples/layers/disco_convolutions_example.py
 # ✅ Basic DISCO convolution: ~900ms
 # ⚡ Equidistant speedup: 9.92x on regular grids
 # 🏗️ Encoder-decoder architecture working
-# 📊 Comprehensive visualizations created
+# 📊 Full visualizations created
 ```
 
 **Technical Achievements**:
 
-- **15/15 tests passing** (100% success rate)
-- **High test coverage** with comprehensive validation
+- **15/15 tests passing** (all listed checks passing)
+- **High test coverage** with full validation
 - **Enterprise-grade implementation** with full JAX transformation support
 
 ### 2. Grid Embeddings for Neural Operators ✅ **WORKING**
@@ -134,7 +134,7 @@ print(f"Grid 3D: {x_3d.shape} -> {embedded_3d.shape}")  # (2, 32, 32, 32, 2) -> 
 
 #### Complete Grid Embeddings Example
 
-**`examples/layers/grid_embeddings_example.py`** - Comprehensive demonstration featuring:
+**`examples/layers/grid_embeddings_example.py`** - Full demonstration featuring:
 
 - **2D/3D/N-Dimensional Embeddings**: Coordinate injection for arbitrary dimensions
 - **Sinusoidal Positional Encoding**: Frequency-based embeddings for enhanced spatial representation
@@ -152,7 +152,7 @@ python examples/layers/grid_embeddings_example.py
 # ✅ Grid 2D: (8, 64, 64, 3) -> (8, 64, 64, 5)
 # ✅ Grid 3D: (4, 32, 32, 32, 2) -> (4, 32, 32, 32, 5)
 # ✅ Sinusoidal: (4, 4096, 2) -> (4, 4096, 64)
-# 📊 Comprehensive visualizations created
+# 📊 Full visualizations created
 ```
 
 ### 3. Fourier Neural Operators (FNO) ✅ **WORKING**
@@ -185,14 +185,14 @@ print(f"FNO: {x.shape} -> {output.shape}")  # (4, 1, 64, 64) -> (4, 1, 64, 64)
 
 #### Complete Darcy Flow FNO Example
 
-For a comprehensive real-world implementation of FNO applied to the Darcy flow equation:
+For a full real-world implementation of FNO applied to the Darcy flow equation:
 
-**`examples/darcy_fno_opifex.py`** - Complete production-ready example demonstrating:
+**`examples/neural-operators/fno_darcy.py`** - Complete production-ready example demonstrating:
 
 - **Automated Dataset Generation**: Realistic permeability fields using Fourier modes
 - **PDE Solving**: Vectorized finite difference solver for Darcy's equation: ∇·(a(x)∇u(x)) = f(x)
 - **Full Training Pipeline**: Production training with Opifex infrastructure
-- **Organized Results**: Timestamped output directories with comprehensive analysis
+- **Organized Results**: Timestamped output directories with full analysis
 - **Visualization**: Input/target/prediction comparisons and training curves
 
 ```bash
@@ -200,7 +200,7 @@ For a comprehensive real-world implementation of FNO applied to the Darcy flow e
 source ./activate.sh
 
 # Run the complete FNO example
-python examples/darcy_fno_opifex.py
+python examples/neural-operators/fno_darcy.py
 
 # Expected output:
 # ============================================================
@@ -557,4 +557,4 @@ JAX_PLATFORM_NAME=cpu python your_script.py
 
 ---
 
-**Ready to get started?** Check out the [examples directory](../../../examples/) for comprehensive demonstrations of all neural operator capabilities!
+**Ready to get started?** Check out the [examples directory](../../../examples/) for full demonstrations of all neural operator capabilities!

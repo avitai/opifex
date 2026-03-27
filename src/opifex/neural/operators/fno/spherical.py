@@ -64,13 +64,10 @@ class SphericalHarmonicConvolution(nnx.Module):
         weight_shape = (in_channels, out_channels, lmax + 1, 2 * self.mmax + 1)
         scale = (2 / (in_channels + out_channels)) ** 0.5
 
-        self.weight = nnx.Param(
-            (
-                jax.random.normal(rngs.params(), weight_shape)
-                + 1j * jax.random.normal(rngs.params(), weight_shape)
-            )
-            * scale
-        )
+        # Store real/imaginary parts separately to avoid JAX complex gradient
+        # convention issue (optax #196). See FourierSpectralConvolution docstring.
+        self.weight_real = nnx.Param(jax.random.normal(rngs.params(), weight_shape) * scale)
+        self.weight_imag = nnx.Param(jax.random.normal(rngs.params(), weight_shape) * scale)
 
     def _extract_spherical_modes(self, x_sht: Array) -> Array:
         """Extract relevant spherical harmonic modes."""
@@ -97,9 +94,8 @@ class SphericalHarmonicConvolution(nnx.Module):
         x_modes = self._extract_spherical_modes(x_sht)
 
         # Get weight dimensions and adjust if necessary
-        weight = (
-            self.weight.value
-        )  # Shape: (in_channels, out_channels, lmax+1, 2*mmax+1)
+        # Construct complex weight from real/imaginary parts
+        weight = self.weight_real[...] + 1j * self.weight_imag[...]
 
         # Ensure weight modes match input modes
         input_l, input_m = x_modes.shape[-2:]
@@ -262,12 +258,8 @@ class SphericalFourierNeuralOperator(nnx.Module):
         else:
             # Handle negative frequency wrapping
             split_point = nlon - m_start
-            full_spectrum = full_spectrum.at[:, :, :l_modes, m_start:].set(
-                x_sht[..., :split_point]
-            )
-            full_spectrum = full_spectrum.at[:, :, :l_modes, :m_end].set(
-                x_sht[..., split_point:]
-            )
+            full_spectrum = full_spectrum.at[:, :, :l_modes, m_start:].set(x_sht[..., :split_point])
+            full_spectrum = full_spectrum.at[:, :, :l_modes, :m_end].set(x_sht[..., split_point:])
 
         return jnp.fft.ifft2(full_spectrum, axes=(-2, -1)).real
 
@@ -307,9 +299,7 @@ class SphericalFourierNeuralOperator(nnx.Module):
             # Skip connection and activation - FIXED: Handle channel dimensions properly
             x_skip_input = jnp.moveaxis(x, 1, -1)  # Move channels to last
             x_skip = skip(x_skip_input)
-            x_skip = jnp.moveaxis(
-                x_skip, -1, 1
-            )  # Move channels back to second position
+            x_skip = jnp.moveaxis(x_skip, -1, 1)  # Move channels back to second position
 
             x = self.activation(x_conv + x_skip)
 

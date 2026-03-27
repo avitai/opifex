@@ -139,9 +139,7 @@ class TestNeuralSCF:
         old_density = jax.random.uniform(rng_key, (4,), minval=0.0, maxval=1.0)
         new_density = jax.random.uniform(rng_key, (4,), minval=0.0, maxval=1.0)
 
-        mixed_density = neural_scf._mix_densities(
-            old_density, new_density, deterministic=True
-        )
+        mixed_density = neural_scf._mix_densities(old_density, new_density, deterministic=True)
 
         # Check mixed density properties
         assert mixed_density.shape == (4,)
@@ -162,19 +160,17 @@ class TestNeuralSCF:
         # Create test convergence history
         convergence_history = jnp.array([1e-3, 1e-4, 1e-5, 1e-6, 1e-7])
 
-        is_converged, chemical_accuracy, prediction_score = (
-            neural_scf._check_convergence(
-                energy_error=1e-8,
-                density_error=1e-8,
-                convergence_history=convergence_history,
-                deterministic=True,
-            )
+        is_converged, chemical_accuracy, prediction_score = neural_scf._check_convergence(
+            energy_error=1e-8,
+            density_error=1e-8,
+            convergence_history=convergence_history,
+            deterministic=True,
         )
 
         # Check convergence prediction results
-        assert isinstance(is_converged, (bool, jnp.bool_))
-        assert isinstance(chemical_accuracy, (bool, jnp.bool_))
-        assert isinstance(prediction_score, (float, jnp.floating))
+        assert isinstance(is_converged, bool | jnp.bool_)
+        assert isinstance(chemical_accuracy, bool | jnp.bool_)
+        assert isinstance(prediction_score, float | jnp.floating)
         assert 0.0 <= prediction_score <= 1.0
 
 

@@ -399,9 +399,7 @@ class StructuredLogger:
         self.update_context(model_name=model_name)
 
         try:
-            with self.timed_operation(
-                "model_inference", batch_size=batch_size, **kwargs
-            ):
+            with self.timed_operation("model_inference", batch_size=batch_size, **kwargs):
                 yield
         finally:
             self.update_context(model_name=original_model)
@@ -535,9 +533,7 @@ def setup_global_logger(
 ) -> StructuredLogger:
     """Set up global logger instance."""
     global _global_logger  # noqa: PLW0603
-    _global_logger = get_logger(
-        context=context, environment=environment, elk_config=elk_config
-    )
+    _global_logger = get_logger(context=context, environment=environment, elk_config=elk_config)
     return _global_logger
 
 
@@ -594,9 +590,7 @@ def log_inference_request(
     )
 
 
-def log_model_load(
-    model_name: str, model_size_mb: float | None = None, **kwargs
-) -> None:
+def log_model_load(model_name: str, model_size_mb: float | None = None, **kwargs) -> None:
     """Log model loading event."""
     logger = get_global_logger()
     logger.info(

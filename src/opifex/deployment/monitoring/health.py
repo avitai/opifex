@@ -1,7 +1,7 @@
 """
 Health Check Management for Opifex Framework.
 
-Comprehensive health monitoring for production deployment.
+Full health monitoring for production deployment.
 """
 
 import asyncio
@@ -99,7 +99,7 @@ class ServiceHealth:
 
 class HealthChecker:
     """
-    Comprehensive health checker for Opifex production services.
+    Full health checker for Opifex production services.
 
     This class provides enterprise-grade health monitoring including
     system resources, service dependencies, model availability, and
@@ -146,9 +146,7 @@ class HealthChecker:
         if self.enable_system_checks:
             self.register_health_check("system_resources", self._check_system_resources)
             if HAS_JAX:
-                self.register_health_check(
-                    "gpu_availability", self._check_gpu_availability
-                )
+                self.register_health_check("gpu_availability", self._check_gpu_availability)
 
         # Always register basic application health
         self.register_health_check("application", self._check_application_health)
@@ -292,9 +290,7 @@ class HealthChecker:
 
             # Calculate overall GPU memory usage
             memory_percent = (
-                (total_memory_used / total_memory_limit * 100)
-                if total_memory_limit > 0
-                else 0
+                (total_memory_used / total_memory_limit * 100) if total_memory_limit > 0 else 0
             )
 
             if memory_percent > 95:
@@ -377,9 +373,7 @@ class HealthChecker:
                 message = f"Dependency {name} is reachable"
             elif 400 <= response.status_code < 500:
                 status = HealthStatus.DEGRADED
-                message = (
-                    f"Dependency {name} returned client error: {response.status_code}"
-                )
+                message = f"Dependency {name} returned client error: {response.status_code}"
             else:
                 status = HealthStatus.UNHEALTHY
                 message = f"Dependency {name} returned error: {response.status_code}"
@@ -427,9 +421,7 @@ class HealthChecker:
 
         try:
             # Try health endpoint first
-            health_url = (
-                f"{endpoint}/health" if not endpoint.endswith("/health") else endpoint
-            )
+            health_url = f"{endpoint}/health" if not endpoint.endswith("/health") else endpoint
             response = requests.get(health_url, timeout=self.check_timeout)
 
             if response.status_code == 200:
@@ -521,8 +513,7 @@ class HealthChecker:
 
         total_duration = (time.time() - start_time) * 1000
         self.logger.info(
-            f"Health check completed in {total_duration:.2f}ms - "
-            f"Status: {overall_status.value}"
+            f"Health check completed in {total_duration:.2f}ms - Status: {overall_status.value}"
         )
 
         return ServiceHealth(
@@ -572,9 +563,7 @@ class HealthChecker:
         callback: Callable[[ServiceHealth], None] | None = None,
     ) -> None:
         """Run health checks periodically."""
-        self.logger.info(
-            f"Starting periodic health checks every {interval_seconds} seconds"
-        )
+        self.logger.info(f"Starting periodic health checks every {interval_seconds} seconds")
 
         while True:
             try:

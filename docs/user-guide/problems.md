@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Opifex framework provides a unified, extensible interface for defining scientific problems across multiple domains. This comprehensive system supports partial differential equations (PDEs), ordinary differential equations (ODEs), optimization problems, and quantum mechanical calculations, all built on JAX for high-performance computation and automatic differentiation.
+The Opifex framework provides a unified, extensible interface for defining scientific problems across multiple domains. This full system supports partial differential equations (PDEs), ordinary differential equations (ODEs), optimization problems, and quantum mechanical calculations, all built on JAX for high-performance computation and automatic differentiation.
 
 The problem definition system is designed with modularity and extensibility in mind, allowing researchers to easily specify complex scientific problems while maintaining compatibility with the entire Opifex ecosystem of neural operators, physics-informed neural networks, and quantum neural networks.
 
@@ -10,7 +10,7 @@ The problem definition system is designed with modularity and extensibility in m
 
 ### 1. Partial Differential Equations (PDEs)
 
-PDEs form the backbone of many scientific simulations. The Opifex framework provides comprehensive support for defining and solving PDEs using both traditional numerical methods and neural approaches.
+PDEs form the backbone of many scientific simulations. The Opifex framework provides full support for defining and solving PDEs using both traditional numerical methods and neural approaches.
 
 #### Basic PDE Problem Definition
 
@@ -457,7 +457,7 @@ class QuantumDynamicsProblem(QuantumProblem):
 
 ### Classical Boundary Conditions
 
-The Opifex framework provides comprehensive support for all standard boundary condition types with advanced features like time-dependence and spatial variation.
+The Opifex framework provides full support for all standard boundary condition types with advanced features like time-dependence and spatial variation.
 
 #### Dirichlet Conditions
 

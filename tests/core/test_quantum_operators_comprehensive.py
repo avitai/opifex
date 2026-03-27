@@ -1,7 +1,7 @@
-"""Comprehensive tests for quantum operators functionality.
+"""Full tests for quantum operators functionality.
 
 This test suite focuses on improving coverage for quantum operators to reach
-the Phase 2 target of 70% coverage.
+the Version 2 target of 70% coverage.
 """
 
 import jax
@@ -150,9 +150,7 @@ class TestObservable:
         def position_operator(state, x_grid):
             return x_grid * state
 
-        observable = Observable(
-            operator_func=position_operator, name="position", is_hermitian=True
-        )
+        observable = Observable(operator_func=position_operator, name="position", is_hermitian=True)
 
         assert observable.name == "position"
         assert observable.is_hermitian
@@ -164,9 +162,7 @@ class TestObservable:
         def scaling_operator(state, scale=1.0):
             return scale * state
 
-        observable = Observable(
-            operator_func=scaling_operator, name="scaling", is_hermitian=True
-        )
+        observable = Observable(operator_func=scaling_operator, name="scaling", is_hermitian=True)
 
         state = jnp.array([1.0, 2.0, 3.0]) + 0j
         scale = 2.0
@@ -182,9 +178,7 @@ class TestObservable:
         def complex_operator(state):
             return (1.0 + 1.0j) * state
 
-        observable = Observable(
-            operator_func=complex_operator, name="complex", is_hermitian=False
-        )
+        observable = Observable(operator_func=complex_operator, name="complex", is_hermitian=False)
 
         adjoint = observable.adjoint()
         assert isinstance(adjoint, Observable)
@@ -251,9 +245,7 @@ class TestPotentialEnergyOperator:
         def harmonic_potential(x):
             return 0.5 * x**2
 
-        potential_op = PotentialEnergyOperator(
-            potential_func=harmonic_potential, name="harmonic"
-        )
+        potential_op = PotentialEnergyOperator(potential_func=harmonic_potential, name="harmonic")
 
         assert potential_op.name == "harmonic"
         assert callable(potential_op.potential_func)
@@ -264,9 +256,7 @@ class TestPotentialEnergyOperator:
         def square_potential(x):
             return x**2
 
-        potential_op = PotentialEnergyOperator(
-            potential_func=square_potential, name="square"
-        )
+        potential_op = PotentialEnergyOperator(potential_func=square_potential, name="square")
 
         wavefunction = jnp.array([1.0, 2.0, 3.0]) + 0j
         x_grid = jnp.array([0.0, 1.0, 2.0])
@@ -282,9 +272,7 @@ class TestPotentialEnergyOperator:
         def linear_potential(x):
             return x
 
-        potential_op = PotentialEnergyOperator(
-            potential_func=linear_potential, name="linear"
-        )
+        potential_op = PotentialEnergyOperator(potential_func=linear_potential, name="linear")
 
         adjoint = potential_op.adjoint()
         assert isinstance(adjoint, PotentialEnergyOperator)
@@ -297,9 +285,7 @@ class TestPotentialEnergyOperator:
         def any_potential(x):
             return x**3
 
-        potential_op = PotentialEnergyOperator(
-            potential_func=any_potential, name="cubic"
-        )
+        potential_op = PotentialEnergyOperator(potential_func=any_potential, name="cubic")
 
         # Potential energy operators are always Hermitian for real potentials
         assert potential_op.is_hermitian
@@ -310,9 +296,7 @@ class TestPotentialEnergyOperator:
         def constant_potential(x):
             return jnp.ones_like(x) * 5.0
 
-        potential_op = PotentialEnergyOperator(
-            potential_func=constant_potential, name="constant"
-        )
+        potential_op = PotentialEnergyOperator(potential_func=constant_potential, name="constant")
 
         state = jnp.array([0.5, 1.0, 0.5]) + 0j
         x_grid = jnp.array([0.0, 1.0, 2.0])
@@ -334,9 +318,7 @@ class TestSparseOperator:
         values = jnp.array([1.0, 2.0])
         shape = (2, 2)
 
-        sparse_op = SparseOperator(
-            indices=indices, values=values, shape=shape, name="diagonal"
-        )
+        sparse_op = SparseOperator(indices=indices, values=values, shape=shape, name="diagonal")
 
         assert sparse_op.name == "diagonal"
         assert sparse_op.shape == shape
@@ -529,7 +511,7 @@ class TestOperatorComposition:
 
 
 class TestHamiltonianOperatorComprehensive:
-    """Comprehensive tests for HamiltonianOperator."""
+    """Full tests for HamiltonianOperator."""
 
     def test_hamiltonian_operator_creation(self):
         """Test Hamiltonian operator creation with various methods."""
@@ -661,7 +643,7 @@ class TestHamiltonianOperatorComprehensive:
 
 
 class TestMomentumOperatorComprehensive:
-    """Comprehensive tests for MomentumOperator."""
+    """Full tests for MomentumOperator."""
 
     def test_momentum_operator_creation(self):
         """Test momentum operator creation."""
@@ -706,9 +688,7 @@ class TestMomentumOperatorComprehensive:
     def test_momentum_operator_different_orders(self):
         """Test momentum operator with different finite difference orders."""
         for order in [2, 4, 6]:
-            momentum_op = MomentumOperator(
-                method="finite_difference", order=order, hbar=1.0
-            )
+            momentum_op = MomentumOperator(method="finite_difference", order=order, hbar=1.0)
 
             wavefunction = jnp.array([0.0, 0.5, 1.0, 0.5, 0.0]) + 0j
             dx = 0.1
@@ -720,7 +700,7 @@ class TestMomentumOperatorComprehensive:
 
 
 class TestKineticEnergyOperatorComprehensive:
-    """Comprehensive tests for KineticEnergyOperator."""
+    """Full tests for KineticEnergyOperator."""
 
     def test_kinetic_energy_operator_creation(self):
         """Test kinetic energy operator creation."""
@@ -735,9 +715,7 @@ class TestKineticEnergyOperatorComprehensive:
 
     def test_kinetic_energy_operator_application(self):
         """Test kinetic energy operator application."""
-        kinetic_op = KineticEnergyOperator(
-            mass=1.0, hbar=1.0, method="finite_difference"
-        )
+        kinetic_op = KineticEnergyOperator(mass=1.0, hbar=1.0, method="finite_difference")
 
         wavefunction = jnp.array([0.0, 0.5, 1.0, 0.5, 0.0]) + 0j
         dx = 0.1
@@ -749,9 +727,7 @@ class TestKineticEnergyOperatorComprehensive:
 
     def test_kinetic_energy_operator_adjoint(self):
         """Test kinetic energy operator adjoint."""
-        kinetic_op = KineticEnergyOperator(
-            mass=1.0, hbar=1.0, method="finite_difference"
-        )
+        kinetic_op = KineticEnergyOperator(mass=1.0, hbar=1.0, method="finite_difference")
 
         adjoint = kinetic_op.adjoint()
         assert isinstance(adjoint, KineticEnergyOperator)
@@ -759,18 +735,14 @@ class TestKineticEnergyOperatorComprehensive:
 
     def test_kinetic_energy_operator_hermitian_property(self):
         """Test kinetic energy operator Hermitian property."""
-        kinetic_op = KineticEnergyOperator(
-            mass=1.0, hbar=1.0, method="finite_difference"
-        )
+        kinetic_op = KineticEnergyOperator(mass=1.0, hbar=1.0, method="finite_difference")
 
         # Kinetic energy operator is Hermitian
         assert kinetic_op.is_hermitian
 
     def test_kinetic_energy_expectation_value(self):
         """Test kinetic energy expectation value calculation."""
-        kinetic_op = KineticEnergyOperator(
-            mass=1.0, hbar=1.0, method="finite_difference"
-        )
+        kinetic_op = KineticEnergyOperator(mass=1.0, hbar=1.0, method="finite_difference")
 
         wavefunction = jnp.array([0.0, 0.5, 1.0, 0.5, 0.0]) + 0j
         dx = 0.1
@@ -783,9 +755,7 @@ class TestKineticEnergyOperatorComprehensive:
     def test_kinetic_energy_operator_different_methods(self):
         """Test kinetic energy operator with different methods."""
         # Test finite difference method
-        kinetic_op_fd = KineticEnergyOperator(
-            mass=1.0, hbar=1.0, method="finite_difference"
-        )
+        kinetic_op_fd = KineticEnergyOperator(mass=1.0, hbar=1.0, method="finite_difference")
 
         wavefunction = jnp.array([0.0, 0.5, 1.0, 0.5, 0.0]) + 0j
         dx = 0.1
@@ -888,9 +858,7 @@ class TestQuantumOperatorsFromProblems:
             """Position operator in position representation."""
             return x_grid * wavefunction
 
-        position = Observable(
-            operator_func=position_op, name="position", is_hermitian=True
-        )
+        position = Observable(operator_func=position_op, name="position", is_hermitian=True)
 
         assert position.name == "position"
         assert position.is_hermitian
@@ -931,9 +899,7 @@ class TestQuantumOperatorsFromProblems:
         # For plane wave exp(ikx), p|ψ⟩ = ℏk|ψ⟩
         # So momentum expectation should be ℏk = 1.0 * 2.0 = 2.0
         momentum_expectation = jnp.real(jnp.vdot(wavefunction, momentum_result)) * dx
-        assert jnp.isclose(
-            momentum_expectation, k, atol=0.2
-        )  # Finite difference approximation
+        assert jnp.isclose(momentum_expectation, k, atol=0.2)  # Finite difference approximation
 
         print(
             f"✅ Finite difference momentum operator working: expected {k}, got {momentum_expectation:.3f}"
@@ -988,9 +954,7 @@ class TestQuantumOperatorsFromProblems:
         n = 100
         indices = jnp.arange(n)
         values = jnp.ones(n)
-        sparse_identity = SparseOperator(
-            indices=(indices, indices), values=values, shape=(n, n)
-        )
+        sparse_identity = SparseOperator(indices=(indices, indices), values=values, shape=(n, n))
 
         # Test application to vector
         vector = jnp.arange(n)

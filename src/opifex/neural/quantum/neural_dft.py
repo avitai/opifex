@@ -1,6 +1,6 @@
 """Neural Density Functional Theory Framework.
 
-This module provides a comprehensive neural DFT implementation that combines
+This module provides a full neural DFT implementation that combines
 traditional DFT methodology with neural network enhancements for improved
 accuracy and efficiency. Fully compliant with Flax NNX patterns and optimized
 for quantum chemical calculations requiring high precision.
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class DFTResult:
-    """Result of neural DFT calculation with comprehensive diagnostics.
+    """Result of neural DFT calculation with full diagnostics.
 
     Attributes:
         converged: Whether SCF calculation converged
@@ -124,9 +124,7 @@ class NeuralDFT(nnx.Module):
 
         # Neural XC functional
         if self.xc_functional_type == "neural":
-            self.neural_xc_functional: NeuralXCFunctional | None = NeuralXCFunctional(
-                rngs=rngs
-            )
+            self.neural_xc_functional: NeuralXCFunctional | None = NeuralXCFunctional(rngs=rngs)
         else:
             self.neural_xc_functional = None
 
@@ -160,7 +158,7 @@ class NeuralDFT(nnx.Module):
             deterministic: Whether to use deterministic mode
 
         Returns:
-            Comprehensive DFT calculation result
+            Full DFT calculation result
         """
         return self.compute_energy(
             molecular_system,
@@ -226,9 +224,7 @@ class NeuralDFT(nnx.Module):
 
         # Precision and accuracy assessment
         precision_metrics = self._assess_precision(scf_result, molecular_system)
-        chemical_accuracy_achieved = self._check_chemical_accuracy(
-            precision_metrics, scf_result
-        )
+        chemical_accuracy_achieved = self._check_chemical_accuracy(precision_metrics, scf_result)
 
         return DFTResult(
             converged=scf_result.converged,
@@ -344,9 +340,7 @@ class NeuralDFT(nnx.Module):
 
         return jnp.sum(repulsion_terms)
 
-    def _compute_hamiltonian(
-        self, density: jax.Array, molecular_system: Any
-    ) -> jax.Array:
+    def _compute_hamiltonian(self, density: jax.Array, molecular_system: Any) -> jax.Array:
         """Compute Hamiltonian matrix with enhanced quantum accuracy."""
         n_electrons = molecular_system.n_electrons
         n_basis = min(n_electrons * 2, 50)  # Reasonable basis size
@@ -380,18 +374,14 @@ class NeuralDFT(nnx.Module):
         padding = n_basis - density.shape[0]
         return jnp.pad(density, (0, padding), constant_values=1e-12)
 
-    def _compute_core_hamiltonian(
-        self, molecular_system: Any, n_basis: int
-    ) -> jax.Array:
+    def _compute_core_hamiltonian(self, molecular_system: Any, n_basis: int) -> jax.Array:
         """Compute core Hamiltonian (kinetic + nuclear attraction)."""
         # Kinetic energy - use better approximation
         kinetic = jnp.eye(n_basis) * 0.5
 
         # Nuclear attraction - improved scaling
         n_atoms = molecular_system.atomic_numbers.shape[0]
-        total_nuclear_charge = float(
-            jnp.asarray(jnp.sum(molecular_system.atomic_numbers))
-        )
+        total_nuclear_charge = float(jnp.asarray(jnp.sum(molecular_system.atomic_numbers)))
 
         # Scale nuclear attraction based on system characteristics
         if n_atoms == 1:
@@ -405,9 +395,7 @@ class NeuralDFT(nnx.Module):
 
         return kinetic + nuclear
 
-    def _compute_coulomb_matrix(
-        self, density: jax.Array, n_electrons: int
-    ) -> jax.Array:
+    def _compute_coulomb_matrix(self, density: jax.Array, n_electrons: int) -> jax.Array:
         """Compute Coulomb interaction matrix."""
         # Scale Coulomb interaction appropriately
         coulomb_strength = 0.1 / jnp.sqrt(jnp.maximum(n_electrons, 1))
@@ -447,9 +435,7 @@ class NeuralDFT(nnx.Module):
 
         return jnp.where(is_finite, hamiltonian, safe_default)
 
-    def _compute_xc_energy(
-        self, density: jax.Array, deterministic: bool = True
-    ) -> jax.Array:
+    def _compute_xc_energy(self, density: jax.Array, deterministic: bool = True) -> jax.Array:
         """Compute exchange-correlation energy."""
         if self.neural_xc_functional is not None:
             # Neural XC functional
@@ -507,28 +493,21 @@ class NeuralDFT(nnx.Module):
         class SCFResult:
             def __init__(self):
                 self.converged = converged
-                self.total_energy = (
-                    convergence_history[-1] if convergence_history else 0.0
-                )
+                self.total_energy = convergence_history[-1] if convergence_history else 0.0
                 self.final_density = density
                 self.iterations = iteration + 1
                 self.convergence_history = jax.Array(convergence_history)
 
         return SCFResult()
 
-    def _assess_precision(
-        self, scf_result: Any, molecular_system: Any
-    ) -> dict[str, float]:
+    def _assess_precision(self, scf_result: Any, molecular_system: Any) -> dict[str, float]:
         """Assess numerical precision and accuracy of calculation."""
         metrics = {}
 
         # Convergence quality
         if scf_result.converged:
             final_gradient = (
-                abs(
-                    scf_result.convergence_history[-1]
-                    - scf_result.convergence_history[-2]
-                )
+                abs(scf_result.convergence_history[-1] - scf_result.convergence_history[-2])
                 if len(scf_result.convergence_history) > 1
                 else 0.0
             )
@@ -543,8 +522,7 @@ class NeuralDFT(nnx.Module):
         # Density quality
         density_integral = float(jnp.asarray(jnp.sum(scf_result.final_density)))
         metrics["density_normalization_error"] = (
-            abs(density_integral - molecular_system.n_electrons)
-            / molecular_system.n_electrons
+            abs(density_integral - molecular_system.n_electrons) / molecular_system.n_electrons
         )
 
         # Numerical stability
@@ -589,9 +567,7 @@ class NeuralDFT(nnx.Module):
         # Error estimation
         if result.precision_metrics:
             base_error = 0.01  # Base error estimate
-            convergence_penalty = (
-                result.precision_metrics.get("convergence_gradient", 0) * 1000
-            )
+            convergence_penalty = result.precision_metrics.get("convergence_gradient", 0) * 1000
             complexity_penalty = 0.005 * jnp.sqrt(
                 result.precision_metrics.get("n_atoms", 1)
                 * result.precision_metrics.get("n_electrons", 1)
@@ -616,8 +592,7 @@ class NeuralDFT(nnx.Module):
                     "reference_energy": reference_energy,
                     "actual_error_hartree": actual_error,
                     "actual_error_kcal_mol": actual_error * 627.5,
-                    "within_chemical_accuracy_actual": actual_error
-                    < self.chemical_accuracy_target,
+                    "within_chemical_accuracy_actual": actual_error < self.chemical_accuracy_target,
                 }
             )
 

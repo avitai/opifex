@@ -48,7 +48,7 @@ _MULTIFIELD_DATASETS: dict[str, tuple[str, ...]] = {
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class PDEBenchConfig(StructuralConfig):
     """Configuration for PDEBench HDF5 data source.
 
@@ -196,9 +196,7 @@ class PDEBenchSource(DataSourceModule):
         self.inputs = jnp.array(inputs, dtype=config.dtype)
         self.targets = jnp.array(targets, dtype=config.dtype)
         coord_dict = (
-            {k: jnp.array(v, dtype=config.dtype) for k, v in coords.items()}
-            if coords
-            else None
+            {k: jnp.array(v, dtype=config.dtype) for k, v in coords.items()} if coords else None
         )
         self.coordinates = nnx.data(coord_dict)
 
@@ -418,7 +416,7 @@ class PDEBenchSource(DataSourceModule):
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class VTKMeshConfig(StructuralConfig):
     """Configuration for VTK unstructured mesh data source.
 
@@ -500,9 +498,7 @@ class VTKMeshSource(DataSourceModule):
 
             # Node features
             if config.node_features:
-                node_feat = self._extract_features(
-                    config.node_features, mesh.point_data
-                )
+                node_feat = self._extract_features(config.node_features, mesh.point_data)
                 if node_feat is not None:
                     element["node_features"] = node_feat
 
@@ -572,9 +568,7 @@ class VTKMeshSource(DataSourceModule):
 
         for cell_block in cells:
             # cell_block is a CellBlock with .data array
-            cell_data = (
-                cell_block.data if hasattr(cell_block, "data") else cell_block[1]
-            )
+            cell_data = cell_block.data if hasattr(cell_block, "data") else cell_block[1]
             for cell in cell_data:
                 # Add edges between consecutive vertices of each cell
                 for i in range(len(cell)):

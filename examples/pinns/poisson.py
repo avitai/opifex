@@ -161,21 +161,13 @@ n_per_edge = N_BOUNDARY // 4
 keys = jax.random.split(key_boundary, 4)
 
 # Bottom edge (y=0)
-bottom = jnp.column_stack(
-    [jax.random.uniform(keys[0], (n_per_edge,)), jnp.zeros(n_per_edge)]
-)
+bottom = jnp.column_stack([jax.random.uniform(keys[0], (n_per_edge,)), jnp.zeros(n_per_edge)])
 # Top edge (y=1)
-top = jnp.column_stack(
-    [jax.random.uniform(keys[1], (n_per_edge,)), jnp.ones(n_per_edge)]
-)
+top = jnp.column_stack([jax.random.uniform(keys[1], (n_per_edge,)), jnp.ones(n_per_edge)])
 # Left edge (x=0)
-left = jnp.column_stack(
-    [jnp.zeros(n_per_edge), jax.random.uniform(keys[2], (n_per_edge,))]
-)
+left = jnp.column_stack([jnp.zeros(n_per_edge), jax.random.uniform(keys[2], (n_per_edge,))])
 # Right edge (x=1)
-right = jnp.column_stack(
-    [jnp.ones(n_per_edge), jax.random.uniform(keys[3], (n_per_edge,))]
-)
+right = jnp.column_stack([jnp.ones(n_per_edge), jax.random.uniform(keys[3], (n_per_edge,))])
 
 x_boundary = jnp.concatenate([bottom, top, left, right], axis=0)
 
@@ -315,18 +307,14 @@ mpl.use("Agg")
 fig, axes = plt.subplots(1, 4, figsize=(16, 4))
 
 # PINN solution
-im0 = axes[0].imshow(
-    np.array(u_pred_grid), extent=[0, 1, 0, 1], origin="lower", cmap="viridis"
-)
+im0 = axes[0].imshow(np.array(u_pred_grid), extent=[0, 1, 0, 1], origin="lower", cmap="viridis")
 axes[0].set_title("PINN Solution")
 axes[0].set_xlabel("x")
 axes[0].set_ylabel("y")
 plt.colorbar(im0, ax=axes[0], fraction=0.046)
 
 # Analytical solution
-im1 = axes[1].imshow(
-    np.array(u_exact), extent=[0, 1, 0, 1], origin="lower", cmap="viridis"
-)
+im1 = axes[1].imshow(np.array(u_exact), extent=[0, 1, 0, 1], origin="lower", cmap="viridis")
 axes[1].set_title("Analytical Solution")
 axes[1].set_xlabel("x")
 axes[1].set_ylabel("y")
@@ -358,12 +346,8 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
 # y = 0.5 cross-section
 idx_y = ny // 2
-axes[0].plot(
-    np.array(x_eval), np.array(u_pred_grid[idx_y, :]), "b-", label="PINN", linewidth=2
-)
-axes[0].plot(
-    np.array(x_eval), np.array(u_exact[idx_y, :]), "r--", label="Exact", linewidth=2
-)
+axes[0].plot(np.array(x_eval), np.array(u_pred_grid[idx_y, :]), "b-", label="PINN", linewidth=2)
+axes[0].plot(np.array(x_eval), np.array(u_exact[idx_y, :]), "r--", label="Exact", linewidth=2)
 axes[0].set_xlabel("x")
 axes[0].set_ylabel("u(x, 0.5)")
 axes[0].set_title("Cross-section at y = 0.5")
@@ -372,12 +356,8 @@ axes[0].grid(True, alpha=0.3)
 
 # x = 0.5 cross-section
 idx_x = nx // 2
-axes[1].plot(
-    np.array(y_eval), np.array(u_pred_grid[:, idx_x]), "b-", label="PINN", linewidth=2
-)
-axes[1].plot(
-    np.array(y_eval), np.array(u_exact[:, idx_x]), "r--", label="Exact", linewidth=2
-)
+axes[1].plot(np.array(y_eval), np.array(u_pred_grid[:, idx_x]), "b-", label="PINN", linewidth=2)
+axes[1].plot(np.array(y_eval), np.array(u_exact[:, idx_x]), "r--", label="Exact", linewidth=2)
 axes[1].set_xlabel("y")
 axes[1].set_ylabel("u(0.5, y)")
 axes[1].set_title("Cross-section at x = 0.5")

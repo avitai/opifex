@@ -161,9 +161,7 @@ def bandpass_filter(
     return jnp.real(jnp.fft.ifft2(filtered_fft))
 
 
-def compute_energy_spectrum(
-    field: jax.Array, dx: float = 1.0
-) -> tuple[jax.Array, jax.Array]:
+def compute_energy_spectrum(field: jax.Array, dx: float = 1.0) -> tuple[jax.Array, jax.Array]:
     """
     Compute 1D energy spectrum from 2D field.
 

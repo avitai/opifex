@@ -1,6 +1,6 @@
 """Test suite for Neural Functional Validation Engine.
 
-Provides comprehensive test coverage for validation functionality including
+Provides full test coverage for validation functionality including
 functional testing, performance benchmarking, and quality assurance workflows.
 """
 
@@ -44,9 +44,7 @@ class MockRegistryService:
                 "name": "Invalid Functional",
                 "description": "",  # Missing description
                 "type": "test",
-                "functional": lambda x: jnp.array(
-                    [jnp.nan, jnp.inf]
-                ),  # Problematic output
+                "functional": lambda x: jnp.array([jnp.nan, jnp.inf]),  # Problematic output
             }
         if functional_id == "slow-func":
             return {
@@ -54,9 +52,7 @@ class MockRegistryService:
                 "name": "Slow Functional",
                 "description": "A slow test functional",
                 "type": "test",
-                "functional": lambda x: (time.sleep(0.1), jnp.ones_like(x))[
-                    1
-                ],  # Slow function
+                "functional": lambda x: (time.sleep(0.1), jnp.ones_like(x))[1],  # Slow function
             }
         if functional_id == "error-func":
             return {
@@ -72,9 +68,7 @@ class MockRegistryService:
                 "name": "Non-JIT Functional",
                 "description": "A functional that doesn't work with JIT",
                 "type": "test",
-                "functional": lambda x: (
-                    print("side effect") or x
-                ),  # Side effect prevents JIT
+                "functional": lambda x: print("side effect") or x,  # Side effect prevents JIT
             }
         return None
 
@@ -170,9 +164,7 @@ class TestValidationEngine:
 
         assert removed is True
         assert len(validation_engine.rules) == initial_count - 1
-        assert not any(
-            rule.name == "determinism_test" for rule in validation_engine.rules
-        )
+        assert not any(rule.name == "determinism_test" for rule in validation_engine.rules)
 
     def test_remove_nonexistent_rule(self, validation_engine):
         """Test removing nonexistent rule."""
@@ -294,12 +286,8 @@ class TestValidationEngine:
     def test_calculate_overall_score(self, validation_engine):
         """Test overall score calculation."""
         results = [
-            ValidationResult(
-                rule_name="required_test", status=ValidationStatus.PASSED, score=1.0
-            ),
-            ValidationResult(
-                rule_name="optional_test", status=ValidationStatus.PASSED, score=0.8
-            ),
+            ValidationResult(rule_name="required_test", status=ValidationStatus.PASSED, score=1.0),
+            ValidationResult(rule_name="optional_test", status=ValidationStatus.PASSED, score=0.8),
         ]
 
         # Mock rules
@@ -378,9 +366,7 @@ class TestValidationEngine:
         status = validation_engine._determine_overall_status(results)
         assert status == ValidationStatus.WARNING
 
-    def test_determine_overall_status_warning_strict_mode(
-        self, strict_validation_engine
-    ):
+    def test_determine_overall_status_warning_strict_mode(self, strict_validation_engine):
         """Test overall status determination with warnings in strict mode."""
         results = [
             ValidationResult(rule_name="test1", status=ValidationStatus.WARNING),
@@ -443,9 +429,7 @@ class TestValidationEngine:
         ]
 
         functional_data = {"id": "test-func"}
-        recommendations = validation_engine._generate_recommendations(
-            results, functional_data
-        )
+        recommendations = validation_engine._generate_recommendations(results, functional_data)
 
         assert len(recommendations) > 0
         assert any("Fix failed_test" in rec for rec in recommendations)
@@ -683,9 +667,7 @@ class TestValidationEngine:
         assert report.execution_time > 0
 
     @pytest.mark.asyncio
-    async def test_integration_validation_problematic_functional(
-        self, validation_engine
-    ):
+    async def test_integration_validation_problematic_functional(self, validation_engine):
         """Test validation with problematic functional."""
         # Test with a problematic functional
         report = await validation_engine.validate_functional(
@@ -698,12 +680,8 @@ class TestValidationEngine:
         assert len(report.recommendations) > 0
 
         # Check specific issues detected
-        failed_tests = [
-            r for r in report.test_results if r.status == ValidationStatus.FAILED
-        ]
-        warning_tests = [
-            r for r in report.test_results if r.status == ValidationStatus.WARNING
-        ]
+        failed_tests = [r for r in report.test_results if r.status == ValidationStatus.FAILED]
+        warning_tests = [r for r in report.test_results if r.status == ValidationStatus.WARNING]
 
         assert len(failed_tests) + len(warning_tests) > 0
 

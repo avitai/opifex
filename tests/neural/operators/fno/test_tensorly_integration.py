@@ -1,7 +1,7 @@
 """
 Unit Tests for TensorLy Integration Module
 
-Comprehensive test suite for Phase 2 TensorLy integration including:
+Full test suite for Version 2 TensorLy integration including:
 - TensorLy backend detection and fallbacks
 - Enhanced tensor decomposition initialization
 - Memory-optimal contraction strategies
@@ -31,9 +31,7 @@ else:
     _tensorly_available = TENSORLY_AVAILABLE
 
 
-@pytest.mark.skipif(
-    not _module_available, reason="TensorLy integration module not available"
-)
+@pytest.mark.skipif(not _module_available, reason="TensorLy integration module not available")
 class TestTensorLyAvailability:
     """Test TensorLy availability detection and graceful fallbacks."""
 
@@ -181,9 +179,7 @@ class TestMemoryOptimalContractions:
         ]
 
         try:
-            result = MemoryOptimalContractions.contract_tucker_spectral(
-                input_tensor, core, factors
-            )
+            result = MemoryOptimalContractions.contract_tucker_spectral(input_tensor, core, factors)
 
             # Check output shape
             expected_shape = (
@@ -229,12 +225,8 @@ class TestMemoryOptimalContractions:
         for i, (dim_size, rank) in enumerate(
             zip([in_channels, 3, spatial_modes], ranks, strict=False)
         ):
-            real_factor = jax.random.normal(
-                jax.random.PRNGKey(54 + i), (dim_size, rank)
-            )
-            imag_factor = jax.random.normal(
-                jax.random.PRNGKey(57 + i), (dim_size, rank)
-            )
+            real_factor = jax.random.normal(jax.random.PRNGKey(54 + i), (dim_size, rank))
+            imag_factor = jax.random.normal(jax.random.PRNGKey(57 + i), (dim_size, rank))
             complex_factor = real_factor + 1j * imag_factor
             complex_factors.append(complex_factor)
 
@@ -276,7 +268,7 @@ class TestBenchmarkingUtilities:
 
     def test_performance_comparison(self):
         """Test performance comparison between methods."""
-        # This would test performance comparisons mentioned in Phase 2
+        # This would test performance comparisons mentioned in Version 2
 
 
 @pytest.mark.skipif(not _tensorly_available, reason="TensorLy not available")

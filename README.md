@@ -6,17 +6,17 @@
 
 *From Latin "opifex" — worker, skilled maker*
 
-[Documentation](docs/) • [Getting Started](docs/getting-started/installation.md) • [Examples](examples/) • [Contributing](CONTRIBUTING.md)
+[Documentation](docs/) • [Getting Started](docs/getting-started/installation.md) • [Examples](examples/) • [Contributing](docs/development/contributing.md)
 
 </div>
 
 ---
 
 <!-- CI/CD Status Badges -->
-[![CI](https://github.com/mahdi-shafiei/opifex/actions/workflows/ci.yml/badge.svg)](https://github.com/mahdi-shafiei/opifex/actions/workflows/ci.yml)
-[![Documentation](https://github.com/mahdi-shafiei/opifex/actions/workflows/docs.yml/badge.svg)](https://github.com/mahdi-shafiei/opifex/actions/workflows/docs.yml)
-[![Security](https://github.com/mahdi-shafiei/opifex/actions/workflows/security.yml/badge.svg)](https://github.com/mahdi-shafiei/opifex/actions/workflows/security.yml)
-[![codecov](https://codecov.io/gh/mahdi-shafiei/opifex/branch/main/graph/badge.svg)](https://codecov.io/gh/mahdi-shafiei/opifex)
+[![CI](https://github.com/avitai/opifex/actions/workflows/ci.yml/badge.svg)](https://github.com/avitai/opifex/actions/workflows/ci.yml)
+[![Documentation](https://github.com/avitai/opifex/actions/workflows/docs.yml/badge.svg)](https://github.com/avitai/opifex/actions/workflows/docs.yml)
+[![Security](https://github.com/avitai/opifex/actions/workflows/security.yml/badge.svg)](https://github.com/avitai/opifex/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/avitai/opifex/branch/main/graph/badge.svg)](https://codecov.io/gh/avitai/opifex)
 
 <!-- Package & Distribution Badges -->
 [![PyPI version](https://img.shields.io/pypi/v/opifex?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/opifex/)
@@ -24,10 +24,9 @@
 [![Downloads](https://img.shields.io/pypi/dm/opifex?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/opifex/)
 
 <!-- Social & Code Quality Badges -->
-[![GitHub stars](https://img.shields.io/github/stars/mahdi-shafiei/opifex?style=social)](https://github.com/mahdi-shafiei/opifex/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/mahdi-shafiei/opifex?style=social)](https://github.com/mahdi-shafiei/opifex/network/members)
+[![GitHub stars](https://img.shields.io/github/stars/avitai/opifex?style=social)](https://github.com/avitai/opifex/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/avitai/opifex?style=social)](https://github.com/avitai/opifex/network/members)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 <!-- Project Info Badges -->
@@ -46,7 +45,7 @@
 > | Area | Status | Impact |
 > |------|--------|--------|
 > | **API** | 🔄 Unstable | Breaking changes are expected. Public interfaces may change without deprecation warnings. Pin to specific commits if stability is required. |
-> | **Tests** | 🔄 In Flux | Test suite is being expanded. Some tests may fail or be skipped. Coverage metrics are improving but not yet comprehensive. |
+> | **Tests** | 🔄 In Flux | Test suite is being expanded. Some tests may fail or be skipped. Coverage metrics are improving but not yet full. |
 > | **Documentation** | 🔄 Evolving | Docs may not reflect current implementation. Code examples might be outdated. Refer to source code and tests for accurate usage. |
 >
 > We recommend waiting for a stable release (v1.0) before using Opifex in production. For research and experimentation, proceed with the understanding that APIs will evolve.
@@ -65,14 +64,16 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 
 ## ✨ Key Features
 
+- **Neural Operators**: FNO, DeepONet, SFNO, U-FNO, UNO, TFNO, GNO, PINO, Local FNO, and more (26 architectures)
+- **Physics-Informed Neural Networks**: Standard PINNs plus domain decomposition (FBPINN, XPINN, CPINN)
+- **Equation Discovery**: SINDy, Ensemble SINDy, and Weak SINDy for recovering governing equations from data
+- **Field Operations**: JAX-native differential operators, advection, and pressure projection on structured grids
+- **Uncertainty Quantification**: Bayesian FNO, UQNO, conformal prediction, and ensemble methods
+- **Advanced Training**: NTK analysis, GradNorm loss balancing, adaptive sampling (RAR-D)
+- **Optimization**: Learn-to-optimize, meta-optimization (MAML/Reptile), and second-order methods
 - **Unified SciML Solvers**: Standardized protocol for PINNs, Neural Operators, and Hybrid solvers
-- **Advanced Uncertainty Quantification**: Ensemble methods, Conformal Prediction, and Generative UQ
-- **Artifex Integration**: Seamless bridge to top-tier generative models (Diffusion, Flows)
-- **Neural Operators**: Fourier Neural Operators (FNO), DeepONet, and specialized variants
-- **Physics-Informed Neural Networks**: Standard PINNs and advanced variants with multi-physics composition
-- **Neural Density Functional Theory**: Quantum chemistry with chemical accuracy
-- **Learn-to-Optimize**: Meta-optimization and adaptive algorithms
-- **MLOps Integration**: Deployment infrastructure and MLOps tooling (in development)
+- **Quantum Chemistry**: Neural DFT and neural exchange-correlation functionals
+- **51 Working Examples**: Full coverage from getting started to advanced research workflows
 
 For detailed feature documentation, see [Features](docs/features.md).
 
@@ -87,7 +88,7 @@ For detailed feature documentation, see [Features](docs/features.md).
 
 ```bash
 # Clone the repository
-git clone https://github.com/mahdi-shafiei/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 
 # Set up development environment
@@ -155,26 +156,40 @@ output = deeponet(branch_input, trunk_input)
 print(f"DeepONet output: {output.shape}")  # (8, 50)
 ```
 
-### Unified Solver & Uncertainty Quantification
+### Equation Discovery (SINDy)
 
 ```python
-from opifex.solvers import PINNSolver, EnsembleWrapper
-from opifex.solvers.adapters import ArtifexSolverAdapter
+import jax.numpy as jnp
+from opifex.discovery.sindy import SINDy, SINDyConfig
 
-# 1. Standard PINN Solver
-# solver = PINNSolver(model=pinn_model, optimizer=opt)
+# Generate Lorenz trajectory (σ=10, ρ=28, β=8/3) with RK4
+def lorenz(state, sigma=10.0, rho=28.0, beta=8.0 / 3.0):
+    x, y, z = state
+    return jnp.array([sigma * (y - x), x * (rho - z) - y, x * y - beta * z])
 
-# 2. Ensemble UQ Wrapper (wraps multiple solver instances)
-# ensemble = EnsembleWrapper(solvers=[solver1, solver2, solver3])
-# solution = ensemble.solve(problem)
-# print(f"Mean: {solution.fields['u_mean'].shape}, Std: {solution.fields['u_std'].shape}")
+dt, state = 0.001, jnp.array([1.0, 1.0, 1.0])
+trajectory, derivatives = [state], [lorenz(state)]
+for _ in range(10000):
+    k1 = lorenz(state)
+    k2 = lorenz(state + 0.5 * dt * k1)
+    k3 = lorenz(state + 0.5 * dt * k2)
+    k4 = lorenz(state + dt * k3)
+    state = state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    trajectory.append(state)
+    derivatives.append(lorenz(state))
 
-# 3. Artifex Generative Integration (Diffusion/Flows)
-# adapter = ArtifexSolverAdapter(artifex_model)
-# gen_solution = adapter.solve(problem)
+# Discover governing equations from data
+model = SINDy(SINDyConfig(polynomial_degree=2, threshold=0.3))
+model.fit(jnp.stack(trajectory), jnp.stack(derivatives))
+
+for eq in model.equations(["x", "y", "z"]):
+    print(eq)
+# dx/dt = -9.999 x + 10.000 y            (true: -10 x + 10 y)
+# dy/dt = 28.000 x + -1.000 y + -1.000 x z  (true: 28 x - y - x z)
+# dz/dt = -2.667 z + 1.000 x y            (true: -8/3 z + x y)
 ```
 
-For comprehensive examples and tutorials, see the [Examples](examples/) directory and [Documentation](docs/).
+For full examples and tutorials, see the [Examples](examples/) directory and [Documentation](docs/).
 
 ## 🔧 Development
 

@@ -38,7 +38,7 @@ reimplemented using Opifex APIs.
 1. Compose `GridEmbedding2D` with `FourierNeuralOperator`
 2. Load Darcy flow data with `create_darcy_loader` (Grain-based)
 3. Train with Opifex's `Trainer.fit()` API
-4. Evaluate with L2 relative error and comprehensive visualization
+4. Evaluate with L2 relative error and full visualization
 """
 
 # %% [markdown]
@@ -61,7 +61,6 @@ import numpy as np
 from flax import nnx
 
 from opifex.core.training import Trainer, TrainingConfig
-from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 
@@ -78,14 +77,15 @@ print(f"JAX devices: {jax.devices()}")
 """
 
 # %%
-RESOLUTION = 64
-N_TRAIN = 200
-N_TEST = 50
-BATCH_SIZE = 16
-NUM_EPOCHS = 10
-LEARNING_RATE = 1e-3
-MODES = 12
-HIDDEN_WIDTH = 32
+# Match NeuralOperator's plot_FNO_darcy.py config exactly
+RESOLUTION = 16  # Same as neuraloperator small Darcy
+N_TRAIN = 1000
+N_TEST = 100
+BATCH_SIZE = 64
+NUM_EPOCHS = 15
+LEARNING_RATE = 1e-2  # AdamW lr from neuraloperator
+MODES = 8  # n_modes=(8,8) from neuraloperator
+HIDDEN_WIDTH = 24  # hidden_channels=24 from neuraloperator
 NUM_LAYERS = 4
 SEED = 42
 
@@ -99,58 +99,52 @@ print(f"FNO config: modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS}")
 
 # %% [markdown]
 """
-## Data Loading with Grain
+## Data Loading
 
-Opifex provides `create_darcy_loader` which generates Darcy flow equation data
-and wraps it in a Google Grain DataLoader. Each sample maps a permeability
-coefficient field to the pressure solution.
+We use the same Darcy flow dataset as NeuralOperator's `plot_FNO_darcy.py`
+(Zenodo record 12784353, 16x16 resolution, 1000 train / 100 test).
+This ensures a fair head-to-head comparison on identical data.
 """
 
 # %%
 print()
-print("Loading Darcy flow data via Grain...")
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-)
+data_dir = Path("example_data/darcy_neuralop")
+if not (data_dir / "darcy_train_16.npz").exists():
+    print("Downloading NeuralOperator Darcy data from Zenodo...")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    from neuralop.data.datasets import load_darcy_flow_small
 
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
+    _tl, _testl, _dp = load_darcy_flow_small(
+        n_train=1000,
+        batch_size=64,
+        n_tests=[100, 50],
+        test_resolutions=[16, 32],
+        test_batch_sizes=[32, 32],
+    )
+    _Xs, _Ys = [], []
+    for _b in _tl:
+        _b = _dp.preprocess(_b, batched=True)
+        _Xs.append(_b["x"].numpy())
+        _Ys.append(_b["y"].numpy())
+    np.savez(data_dir / "darcy_train_16.npz", x=np.concatenate(_Xs), y=np.concatenate(_Ys))
+    for _res in [16, 32]:
+        _Xs, _Ys = [], []
+        for _b in _testl[_res]:
+            _b = _dp.preprocess(_b, batched=True)
+            _Xs.append(_b["x"].numpy())
+            _Ys.append(_b["y"].numpy())
+        np.savez(data_dir / f"darcy_test_{_res}.npz", x=np.concatenate(_Xs), y=np.concatenate(_Ys))
+    print("Data downloaded and converted to numpy.")
+else:
+    print("Loading cached NeuralOperator Darcy data...")
 
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
+train_data = np.load(data_dir / "darcy_train_16.npz")
+test_data = np.load(data_dir / "darcy_test_16.npz")
 
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
-
-X_test_list, Y_test_list = [], []
-for batch in test_loader:
-    X_test_list.append(batch["input"])
-    Y_test_list.append(batch["output"])
-
-X_test = np.concatenate(X_test_list, axis=0)
-Y_test = np.concatenate(Y_test_list, axis=0)
-
-# Ensure 4D: FNO expects (batch, channels, height, width)
-if X_train.ndim == 3:
-    X_train = X_train[:, np.newaxis, :, :]
-    Y_train = Y_train[:, np.newaxis, :, :]
-if X_test.ndim == 3:
-    X_test = X_test[:, np.newaxis, :, :]
-    Y_test = Y_test[:, np.newaxis, :, :]
+X_train = train_data["x"][:N_TRAIN]
+Y_train = train_data["y"][:N_TRAIN]
+X_test = test_data["x"][:N_TEST]
+Y_test = test_data["y"][:N_TEST]
 
 print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
 print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
@@ -346,9 +340,7 @@ fig.suptitle("FNO Error Analysis", fontsize=14, fontweight="bold")
 
 per_sample_errors = np.array(per_sample_rel_l2)
 
-axes[0].hist(
-    per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black"
-)
+axes[0].hist(per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black")
 axes[0].set_title("Relative L2 Error Distribution")
 axes[0].set_xlabel("Relative L2 Error")
 axes[0].set_ylabel("Frequency")

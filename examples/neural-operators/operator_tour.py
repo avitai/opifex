@@ -10,7 +10,7 @@
 
 # %% [markdown]
 """
-# Comprehensive Neural Operators Demo
+# Full Neural Operators Demo
 
 | Property | Value |
 |---|---|
@@ -84,7 +84,7 @@ from opifex.neural.operators import (
 
 # %%
 class NeuralOperatorDemo:
-    """Comprehensive demo of neural operator capabilities."""
+    """Full demo of neural operator capabilities."""
 
     def __init__(self, seed: int = 42):
         """Initialize demo with random seed."""
@@ -207,9 +207,7 @@ class NeuralOperatorDemo:
         param_counts = {}
         for name, op in operators.items():
             count = sum(
-                p.size
-                for p in jax.tree_util.tree_leaves(nnx.state(op))
-                if hasattr(p, "size")
+                p.size for p in jax.tree_util.tree_leaves(nnx.state(op)) if hasattr(p, "size")
             )
             param_counts[name] = count
 
@@ -324,17 +322,11 @@ class NeuralOperatorDemo:
             pressure += 5 * jax.random.normal(k2, (nlat, nlon))
 
             # Humidity
-            humidity = 0.7 * jnp.exp(-jnp.abs(LAT)) + 0.1 * jax.random.normal(
-                k3, (nlat, nlon)
-            )
+            humidity = 0.7 * jnp.exp(-jnp.abs(LAT)) + 0.1 * jax.random.normal(k3, (nlat, nlon))
 
             # Wind components
-            u_wind = 10 * jnp.sin(LAT) * jnp.cos(LON) + 2 * jax.random.normal(
-                k4, (nlat, nlon)
-            )
-            v_wind = 5 * jnp.cos(LAT) * jnp.sin(2 * LON) + 2 * jax.random.normal(
-                k5, (nlat, nlon)
-            )
+            u_wind = 10 * jnp.sin(LAT) * jnp.cos(LON) + 2 * jax.random.normal(k4, (nlat, nlon))
+            v_wind = 5 * jnp.cos(LAT) * jnp.sin(2 * LON) + 2 * jax.random.normal(k5, (nlat, nlon))
 
             return jnp.stack([temperature, pressure, humidity, u_wind, v_wind], axis=0)
 
@@ -343,9 +335,7 @@ class NeuralOperatorDemo:
         batch_size = 2
         keys = jax.random.split(self.rng_key, batch_size)
 
-        climate_data = jnp.stack(
-            [create_climate_data(key, nlat=32, nlon=64) for key in keys]
-        )
+        climate_data = jnp.stack([create_climate_data(key, nlat=32, nlon=64) for key in keys])
 
         # Create SFNO for climate
         sfno = SphericalFourierNeuralOperator(
@@ -389,9 +379,7 @@ class NeuralOperatorDemo:
 
         # Create uncertain input data
         print("Generating uncertain data...")
-        x = jax.random.normal(
-            self.rng_key, (2, 32, 32, 2)
-        )  # (batch, height, width, channels)
+        x = jax.random.normal(self.rng_key, (2, 32, 32, 2))  # (batch, height, width, channels)
 
         # Create UQNO
         uqno = UncertaintyQuantificationNeuralOperator(
@@ -409,9 +397,7 @@ class NeuralOperatorDemo:
         # Get uncertainty predictions
         print("Computing uncertainty estimates...")
         start_time = time.time()
-        uncertainty_results = uqno.predict_with_uncertainty(
-            x, num_samples=50, key=self.rng_key
-        )
+        uncertainty_results = uqno.predict_with_uncertainty(x, num_samples=50, key=self.rng_key)
         uncertainty_time = time.time() - start_time
 
         # Analyze uncertainty
@@ -425,9 +411,7 @@ class NeuralOperatorDemo:
         print(
             f"Epistemic uncertainty: {jnp.mean(epistemic_std):.4f} +/- {jnp.std(epistemic_std):.4f}"
         )
-        print(
-            f"Total uncertainty: {jnp.mean(total_std):.4f} +/- {jnp.std(total_std):.4f}"
-        )
+        print(f"Total uncertainty: {jnp.mean(total_std):.4f} +/- {jnp.std(total_std):.4f}")
 
         # Check uncertainty decomposition
         aleatoric_std = uncertainty_results["aleatoric_uncertainty"]
@@ -468,9 +452,7 @@ class NeuralOperatorDemo:
             X, Y = jnp.meshgrid(x, y)
 
             # Airfoil shape (simplified NACA profile)
-            airfoil_mask = (
-                (X >= 0) & (X <= 1) & (jnp.abs(Y) <= 0.1 * jnp.sqrt(X) * (1 - X))
-            )
+            airfoil_mask = (X >= 0) & (X <= 1) & (jnp.abs(Y) <= 0.1 * jnp.sqrt(X) * (1 - X))
 
             # Distance to airfoil surface
             distance_field = jnp.where(
@@ -478,8 +460,7 @@ class NeuralOperatorDemo:
                 0.0,
                 jnp.minimum(
                     jnp.sqrt((X - 0.5) ** 2 + Y**2) - 0.3,  # Rough distance
-                    jnp.abs(Y)
-                    - 0.1 * jnp.sqrt(jnp.maximum(X, 0)) * (1 - jnp.maximum(X, 0)),
+                    jnp.abs(Y) - 0.1 * jnp.sqrt(jnp.maximum(X, 0)) * (1 - jnp.maximum(X, 0)),
                 ),
             )
 
@@ -504,9 +485,7 @@ class NeuralOperatorDemo:
         flows = []
         coords = []
         for key in keys:
-            flow, coord = create_airfoil_geometry(
-                key, size=64
-            )  # Match expected dimensions
+            flow, coord = create_airfoil_geometry(key, size=64)  # Match expected dimensions
             flows.append(flow)
             coords.append(coord)
 
@@ -540,22 +519,16 @@ class NeuralOperatorDemo:
         geometry_prediction = gino(flows, geometry_data={"coords": coords_reshaped})
         forward_time = time.time() - start_time
 
-        print(
-            f"Geometry-aware prediction: {flows.shape} -> {geometry_prediction.shape}"
-        )
+        print(f"Geometry-aware prediction: {flows.shape} -> {geometry_prediction.shape}")
         print(f"Time: {forward_time * 1000:.2f}ms")
         print(f"Coordinate input: {coords.shape}")
 
         # Test geometry invariance
         coords_rotated = coords * 1.5  # Scale coordinates
         coords_rotated_reshaped = coords_rotated.reshape(batch_size, height * width, 2)
-        prediction_rotated = gino(
-            flows, geometry_data={"coords": coords_rotated_reshaped}
-        )
+        prediction_rotated = gino(flows, geometry_data={"coords": coords_rotated_reshaped})
 
-        geometry_sensitivity = jnp.mean(
-            jnp.abs(geometry_prediction - prediction_rotated)
-        )
+        geometry_sensitivity = jnp.mean(jnp.abs(geometry_prediction - prediction_rotated))
         print(f"Geometry sensitivity: {geometry_sensitivity:.6f}")
 
         self.results["geometry_demo"] = {
@@ -633,9 +606,7 @@ class NeuralOperatorDemo:
         forces = mgno(features, positions)
         forward_time = time.time() - start_time
 
-        print(
-            f"Force prediction: {features.shape} + {positions.shape} -> {forces.shape}"
-        )
+        print(f"Force prediction: {features.shape} + {positions.shape} -> {forces.shape}")
         print(f"Time: {forward_time * 1000:.2f}ms")
 
         # Analyze force statistics
@@ -738,19 +709,17 @@ class NeuralOperatorDemo:
 
         self.results["ensemble_demo"] = {
             "num_operators": len(ensemble),
-            "prediction_shapes": {
-                name: pred.shape for name, pred in predictions.items()
-            },
+            "prediction_shapes": {name: pred.shape for name, pred in predictions.items()},
             "forward_times_ms": times,
             "ensemble_agreement": float(1.0 / (1.0 + jnp.mean(ensemble_std))),
             "prediction_std": float(jnp.mean(ensemble_std)),
         }
 
     def print_summary(self):
-        """Print comprehensive summary of all demos."""
+        """Print full summary of all demos."""
         print()
         print("=" * 60)
-        print("COMPREHENSIVE DEMO SUMMARY")
+        print("FULL DEMO SUMMARY")
         print("=" * 60)
 
         print()
@@ -799,15 +768,13 @@ class NeuralOperatorDemo:
         print("Next Steps:")
         print("  - Integrate operators into your Opifex workflows")
         print("  - Use factory functions for easy operator selection")
-        print(
-            "  - Leverage uncertainty quantification for safety-critical applications"
-        )
+        print("  - Leverage uncertainty quantification for safety-critical applications")
         print("  - Apply geometry-aware operators for complex domains")
         print("  - Utilize parameter-efficient variants for large-scale problems")
 
     def run_full_demo(self):
-        """Run the complete comprehensive demo."""
-        print("Starting Comprehensive Neural Operators Demo")
+        """Run the complete full demo."""
+        print("Starting Full Neural Operators Demo")
         print("Estimated time: ~3-5 minutes")
 
         try:
@@ -898,8 +865,8 @@ After running this demo you will have:
 
 # %%
 def main():
-    """Run the comprehensive demo."""
-    print("Opifex Neural Operators Comprehensive Demo")
+    """Run the full demo."""
+    print("Opifex Neural Operators Full Demo")
     print("=" * 60)
 
     # Create and run demo
@@ -922,7 +889,7 @@ def main():
         """Convert objects to JSON-serializable format for benchmarking."""
         if isinstance(obj, dict):
             return {k: convert_for_json(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
+        if isinstance(obj, list | tuple):
             return [convert_for_json(x) for x in obj]
         if hasattr(obj, "tolist"):  # JAX/NumPy arrays
             return obj.tolist()

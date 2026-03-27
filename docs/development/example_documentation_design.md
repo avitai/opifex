@@ -32,7 +32,7 @@
 
 ### Purpose
 
-This document defines comprehensive standards for documenting Opifex examples and
+This document defines full standards for documenting Opifex examples and
 tutorials. It ensures consistent, high-quality educational content that serves users
 from first-time learners to production researchers building scientific machine learning
 workflows with neural operators, physics-informed neural networks, and neural density
@@ -69,7 +69,7 @@ flowchart TB
 
     subgraph tier2["Tier 2: Tutorial (~30-60 min)"]
         direction LR
-        t2a["Comprehensive feature<br/>coverage with examples"] ~~~ t2b["Step-by-step guidance<br/>with theory"] ~~~ t2c["50% code<br/>50% explanation"]
+        t2a["Full feature<br/>coverage with examples"] ~~~ t2b["Step-by-step guidance<br/>with theory"] ~~~ t2c["50% code<br/>50% explanation"]
     end
 
     subgraph tier3["Tier 3: Advanced Guide (~60+ min)"]
@@ -240,14 +240,14 @@ flowchart TB
 
             subgraph t3["TIER 3: Advanced"]
                 t3info["60+ min - Production patterns"]
-                t3ex["Examples:<br/>- Comprehensive Profiling<br/>- Neural Operator Benchmark<br/>- Multi-Device Scaling"]
+                t3ex["Examples:<br/>- Full Profiling<br/>- Neural Operator Benchmark<br/>- Multi-Device Scaling"]
             end
 
             t1 --> t2 --> t3
         end
 
         subgraph api["API REFERENCE"]
-            apiinfo["Comprehensive documentation of all modules, classes, functions"]
+            apiinfo["Full documentation of all modules, classes, functions"]
         end
 
         t1 --> api
@@ -266,7 +266,7 @@ flowchart TB
 | Scenario | Recommended Tier | Rationale |
 |----------|------------------|-----------|
 | "How do I create an FNO model?" | Tier 1 | Single concept, quick answer |
-| "I've never used Opifex before" | Tier 2 | Needs guided introduction |
+| "New to Opifex" | Tier 2 | Needs guided introduction |
 | "How do I scale training across GPUs?" | Tier 3 | Complex production topic |
 | "What neural operators are available?" | Tier 2 | Overview of multiple concepts |
 | "How do I profile and optimize training?" | Tier 3 | Requires deep understanding |
@@ -416,8 +416,8 @@ Each markdown file in `docs/examples/` follows this pattern:
 
 ## Files
 
-- **Python Script**: [`examples/layers/grid_embeddings_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/grid_embeddings_example.py)
-- **Jupyter Notebook**: [`examples/layers/grid_embeddings_example.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/layers/grid_embeddings_example.ipynb)
+- **Python Script**: [`examples/layers/grid_embeddings_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/grid_embeddings_example.py)
+- **Jupyter Notebook**: [`examples/layers/grid_embeddings_example.ipynb`](https://github.com/avitai/opifex/blob/main/examples/layers/grid_embeddings_example.ipynb)
 
 ## Quick Start
 
@@ -932,13 +932,13 @@ By the end of this example, you will be able to:
 ### Quick Start
 
 ```bash
-source activate.sh && python examples/models/fno_darcy_comprehensive.py
+source activate.sh && python examples/neural-operators/fno_darcy.py
 ```
 
 ### Files
 
-- **Python Script**: [`examples/models/fno_darcy_comprehensive.py`](https://github.com/Opifex/Opifex/blob/main/examples/models/fno_darcy_comprehensive.py)
-- **Jupyter Notebook**: [`examples/models/fno_darcy_comprehensive.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/models/fno_darcy_comprehensive.ipynb)
+- **Python Script**: [`examples/neural-operators/fno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural-operators/fno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.ipynb)
 
 ### Imports
 
@@ -1616,7 +1616,7 @@ if __name__ == "__main__":
 
 ## Overview
 
-[Comprehensive overview including:
+[Full overview including:
 - What problem it solves
 - When to use it (and when not to)
 - Performance implications
@@ -1688,8 +1688,8 @@ source activate.sh && python examples/path/to/example.py
 
 ### Files
 
-- **Python Script**: [`examples/path/to/example.py`](https://github.com/Opifex/Opifex/blob/main/examples/path/to/example.py)
-- **Jupyter Notebook**: [`examples/path/to/example.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/path/to/example.ipynb)
+- **Python Script**: [`examples/path/to/example.py`](https://github.com/avitai/opifex/blob/main/examples/path/to/example.py)
+- **Jupyter Notebook**: [`examples/path/to/example.ipynb`](https://github.com/avitai/opifex/blob/main/examples/path/to/example.ipynb)
 """
 
 # %%
@@ -2163,14 +2163,14 @@ print("Saved prediction comparison plot")
 
 ## 14. Implementation Workflow
 
-### Four-Phase Development Process
+### Four-Version Development Process
 
 ```mermaid
 flowchart TB
-    P1["PHASE 1: PLANNING<br/>- Identify audience and tier<br/>- Define learning objectives<br/>- Check existing APIs/tests"]
-    P2["PHASE 2: IMPLEMENTATION<br/>- Write .py with jupytext format<br/>- Run and capture real output<br/>- Save visual artifacts"]
-    P3["PHASE 3: DOCUMENTATION<br/>- Write .md from captured output<br/>- Add diagrams/troubleshooting<br/>- Link to API reference"]
-    P4["PHASE 4: FINALIZATION<br/>- Generate .ipynb<br/>- Run pre-commit checks<br/>- Verify all links work"]
+    P1["VERSION 1: PLANNING<br/>- Identify audience and tier<br/>- Define learning objectives<br/>- Check existing APIs/tests"]
+    P2["VERSION 2: IMPLEMENTATION<br/>- Write .py with jupytext format<br/>- Run and capture real output<br/>- Save visual artifacts"]
+    P3["VERSION 3: DOCUMENTATION<br/>- Write .md from captured output<br/>- Add diagrams/troubleshooting<br/>- Link to API reference"]
+    P4["VERSION 4: FINALIZATION<br/>- Generate .ipynb<br/>- Run pre-commit checks<br/>- Verify all links work"]
 
     P1 --> P2 --> P3 --> P4
 
@@ -2180,7 +2180,7 @@ flowchart TB
     style P4 fill:#fff3e0,stroke:#e65100
 ```
 
-### Phase 1: Planning
+### Version 1: Planning
 
 Before writing any code, answer these questions:
 
@@ -2198,13 +2198,13 @@ Before writing any code, answer these questions:
 3. **What APIs and patterns exist?**
     - Check `src/opifex/` for relevant classes and factory functions
     - Review existing tests in `tests/` for API usage patterns
-    - Consult `memory-bank/guides/flax-nnx-guide.md` for Flax NNX patterns
+    - Consult internal Flax NNX guidance and nearby Opifex modules for Flax NNX patterns
 
 4. **What are the learning objectives?**
     - List 3-5 specific, measurable outcomes
     - Use action verbs: Create, Build, Configure, Train, Evaluate, Debug, Optimize
 
-### Phase 2: Implementation (Code First)
+### Version 2: Implementation (Code First)
 
 **Write and run the Python file before writing documentation.**
 
@@ -2250,10 +2250,10 @@ Before writing any code, answer these questions:
     - Ensure visualizations show meaningful patterns
     - Confirm training converges
 
-### Phase 3: Documentation (From Real Output)
+### Version 3: Documentation (From Real Output)
 
 1. **Write the .md file using captured terminal output**
-    - Every `**Terminal Output:**` section must contain actual output from Phase 2
+    - Every `**Terminal Output:**` section must contain actual output from Version 2
     - Copy-paste from terminal, do not paraphrase or abbreviate
     - Include timing information if relevant
 
@@ -2275,7 +2275,7 @@ Before writing any code, answer these questions:
     - Include 2-3 common issues users might encounter
     - Format: Symptom → Cause → Solution with code example
 
-### Phase 4: Finalization
+### Version 4: Finalization
 
 1. **Run pre-commit checks**
 
@@ -2502,7 +2502,7 @@ print(f"L2 Relative Error: {l2re:.4f}")
 | Example execution | Monthly | Run all examples, verify outputs |
 | Content review | Quarterly | Update for API changes |
 | Competitor comparison update | Quarterly | Update framework migration tables |
-| Comprehensive audit | Annually | Full restructure if needed |
+| Full audit | Annually | Full restructure if needed |
 
 ### Version History Tracking
 
@@ -2621,24 +2621,24 @@ Before committing:
 
 | Example | Location | Demonstrates |
 |---------|----------|--------------|
-| Grid Embeddings | [`examples/layers/grid_embeddings_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/grid_embeddings_example.py) | Quick reference for spatial embeddings |
-| Simple SFNO | [`examples/models/sfno_climate_simple.py`](https://github.com/Opifex/Opifex/blob/main/examples/models/sfno_climate_simple.py) | Quick reference for climate modeling |
-| Spectral Norm | [`examples/layers/spectral_normalization_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/spectral_normalization_example.py) | Stability techniques |
+| Grid Embeddings | [`examples/layers/grid_embeddings_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/grid_embeddings_example.py) | Quick reference for spatial embeddings |
+| Simple SFNO | [`examples/neural-operators/sfno_climate_simple.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_simple.py) | Quick reference for climate modeling |
+| Spectral Norm | [`examples/layers/spectral_normalization_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/spectral_normalization_example.py) | Stability techniques |
 
 ### Tier 2 Exemplars
 
 | Example | Location | Demonstrates |
 |---------|----------|--------------|
-| FNO Darcy | [`examples/models/fno_darcy_comprehensive.py`](https://github.com/Opifex/Opifex/blob/main/examples/models/fno_darcy_comprehensive.py) | Comprehensive FNO tutorial |
-| DISCO Convolutions | [`examples/layers/disco_convolutions_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/disco_convolutions_example.py) | DISCO layer tutorial |
-| Heat Equation PINN | [`examples/pinns/heat_equation.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/heat_equation.py) | PINN tutorial |
+| FNO Darcy | [`examples/neural-operators/fno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.py) | Full FNO tutorial |
+| DISCO Convolutions | [`examples/layers/disco_convolutions_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/disco_convolutions_example.py) | DISCO layer tutorial |
+| Heat Equation PINN | [`examples/pinns/heat_equation.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/heat_equation.py) | PINN tutorial |
 
 ### Tier 3 Exemplars
 
 | Example | Location | Demonstrates |
 |---------|----------|--------------|
-| Comprehensive Profiling | [`examples/comprehensive_profiling_demo.py`](https://github.com/Opifex/Opifex/blob/main/examples/comprehensive_profiling_demo.py) | Advanced performance analysis |
-| Neural Operator Benchmark | [`examples/comparative_studies/neural_operator_benchmark.py`](https://github.com/Opifex/Opifex/blob/main/examples/comparative_studies/neural_operator_benchmark.py) | Cross-architecture comparison |
+| Full Profiling | [`examples/benchmarking/gpu_profiling.py`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/gpu_profiling.py) | Advanced performance analysis |
+| Neural Operator Benchmark | [`examples/benchmarking/operator_benchmark.py`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/operator_benchmark.py) | Cross-architecture comparison |
 
 ### PDEBench Reference Datasets
 

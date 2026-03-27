@@ -122,13 +122,8 @@ class TestManifestGenerator:
             rule = manifest["spec"]["rules"][0]
             assert rule["host"] == "opifex.example.com"
             assert rule["http"]["paths"][0]["path"] == "/"
-            assert (
-                rule["http"]["paths"][0]["backend"]["service"]["name"]
-                == "opifex-server-service"
-            )
-            assert (
-                rule["http"]["paths"][0]["backend"]["service"]["port"]["number"] == 8000
-            )
+            assert rule["http"]["paths"][0]["backend"]["service"]["name"] == "opifex-server-service"
+            assert rule["http"]["paths"][0]["backend"]["service"]["port"]["number"] == 8000
 
         except NameError:
             pytest.skip("ManifestGenerator not implemented yet - TDD phase")
@@ -174,9 +169,7 @@ class TestAutoScaler:
     def test_autoscaler_initialization(self):
         """Test that AutoScaler can be initialized."""
         try:
-            autoscaler = AutoScaler(
-                namespace="opifex-production", deployment_name="opifex-server"
-            )
+            autoscaler = AutoScaler(namespace="opifex-production", deployment_name="opifex-server")
             assert autoscaler.namespace == "opifex-production"
             assert autoscaler.deployment_name == "opifex-server"
         except NameError:
@@ -185,9 +178,7 @@ class TestAutoScaler:
     def test_hpa_manifest_generation(self):
         """Test generation of Horizontal Pod Autoscaler manifest."""
         try:
-            autoscaler = AutoScaler(
-                namespace="opifex-production", deployment_name="opifex-server"
-            )
+            autoscaler = AutoScaler(namespace="opifex-production", deployment_name="opifex-server")
             manifest = autoscaler.generate_hpa(
                 min_replicas=2,
                 max_replicas=10,
@@ -210,9 +201,7 @@ class TestAutoScaler:
             # Validate metrics
             metrics = spec["metrics"]
             cpu_metric = next(
-                m
-                for m in metrics
-                if m["type"] == "Resource" and m["resource"]["name"] == "cpu"
+                m for m in metrics if m["type"] == "Resource" and m["resource"]["name"] == "cpu"
             )
             assert cpu_metric["resource"]["target"]["averageUtilization"] == 70
 
@@ -222,9 +211,7 @@ class TestAutoScaler:
     def test_vpa_manifest_generation(self):
         """Test generation of Vertical Pod Autoscaler manifest."""
         try:
-            autoscaler = AutoScaler(
-                namespace="opifex-production", deployment_name="opifex-server"
-            )
+            autoscaler = AutoScaler(namespace="opifex-production", deployment_name="opifex-server")
             manifest = autoscaler.generate_vpa(
                 update_mode="Auto", cpu_min="100m", memory_min="128Mi"
             )
@@ -254,9 +241,7 @@ class TestResourceManager:
         """Test generation of namespace manifest."""
         try:
             manager = ResourceManager(namespace="opifex-production")
-            manifest = manager.generate_namespace(
-                labels={"env": "production", "app": "opifex"}
-            )
+            manifest = manager.generate_namespace(labels={"env": "production", "app": "opifex"})
 
             # Validate namespace structure
             assert isinstance(manifest, dict)
@@ -396,9 +381,7 @@ class TestKubernetesIntegration:
             # Validate GPU configuration
             container = manifest["spec"]["template"]["spec"]["containers"][0]
             assert container["resources"]["limits"]["nvidia.com/gpu"] == 1
-            assert "CUDA_VISIBLE_DEVICES" in [
-                env["name"] for env in container.get("env", [])
-            ]
+            assert "CUDA_VISIBLE_DEVICES" in [env["name"] for env in container.get("env", [])]
 
         except ImportError:
             pytest.skip("GPU deployment not implemented yet - TDD phase")

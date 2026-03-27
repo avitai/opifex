@@ -80,7 +80,7 @@ class FunctionalReport:
 class ValidationEngine:
     """Neural functional validation engine.
 
-    Provides comprehensive validation including functional testing,
+    Provides full validation including functional testing,
     performance benchmarking, and quality assurance workflows.
     """
 
@@ -233,9 +233,7 @@ class ValidationEngine:
         start_time = time.time()
 
         # Load functional
-        functional_data = await self.registry.retrieve_functional(
-            functional_id, version
-        )
+        functional_data = await self.registry.retrieve_functional(functional_id, version)
         if not functional_data:
             return FunctionalReport(
                 functional_id=functional_id,
@@ -257,9 +255,7 @@ class ValidationEngine:
             rules_to_run = [rule for rule in self.rules if rule.test_type in test_types]
 
         if not include_performance:
-            rules_to_run = [
-                rule for rule in rules_to_run if rule.test_type != TestType.PERFORMANCE
-            ]
+            rules_to_run = [rule for rule in rules_to_run if rule.test_type != TestType.PERFORMANCE]
 
         # Run validation tests
         test_results = []
@@ -385,9 +381,7 @@ class ValidationEngine:
 
         return total_score / total_weight if total_weight > 0 else 0.0
 
-    def _determine_overall_status(
-        self, results: list[ValidationResult]
-    ) -> ValidationStatus:
+    def _determine_overall_status(self, results: list[ValidationResult]) -> ValidationStatus:
         """Determine overall validation status.
 
         Args:
@@ -411,17 +405,11 @@ class ValidationEngine:
 
         # Check for warnings
         if any(r.status == ValidationStatus.WARNING for r in results):
-            return (
-                ValidationStatus.WARNING
-                if not self.strict_mode
-                else ValidationStatus.FAILED
-            )
+            return ValidationStatus.WARNING if not self.strict_mode else ValidationStatus.FAILED
 
         return ValidationStatus.PASSED
 
-    def _extract_performance_metrics(
-        self, results: list[ValidationResult]
-    ) -> dict[str, Any]:
+    def _extract_performance_metrics(self, results: list[ValidationResult]) -> dict[str, Any]:
         """Extract performance metrics from test results.
 
         Args:
@@ -436,21 +424,15 @@ class ValidationEngine:
             if result.details:
                 # Extract execution time
                 if "execution_time" in result.details:
-                    metrics[f"{result.rule_name}_execution_time"] = result.details[
-                        "execution_time"
-                    ]
+                    metrics[f"{result.rule_name}_execution_time"] = result.details["execution_time"]
 
                 # Extract memory usage
                 if "memory_mb" in result.details:
-                    metrics[f"{result.rule_name}_memory_mb"] = result.details[
-                        "memory_mb"
-                    ]
+                    metrics[f"{result.rule_name}_memory_mb"] = result.details["memory_mb"]
 
                 # Extract throughput
                 if "throughput" in result.details:
-                    metrics[f"{result.rule_name}_throughput"] = result.details[
-                        "throughput"
-                    ]
+                    metrics[f"{result.rule_name}_throughput"] = result.details["throughput"]
 
         return metrics
 
@@ -472,9 +454,7 @@ class ValidationEngine:
             if result.status == ValidationStatus.FAILED:
                 recommendations.append(f"Fix {result.rule_name}: {result.message}")
             elif result.status == ValidationStatus.WARNING:
-                recommendations.append(
-                    f"Consider improving {result.rule_name}: {result.message}"
-                )
+                recommendations.append(f"Consider improving {result.rule_name}: {result.message}")
 
         # Performance recommendations
         memory_results = [
@@ -483,14 +463,10 @@ class ValidationEngine:
         if memory_results:
             max_memory = max(r.details["memory_mb"] for r in memory_results)
             if max_memory > 1000:  # > 1GB
-                recommendations.append(
-                    "Consider memory optimization - high memory usage detected"
-                )
+                recommendations.append("Consider memory optimization - high memory usage detected")
 
         execution_results = [
-            r
-            for r in results
-            if "speed" in r.rule_name and r.details.get("execution_time")
+            r for r in results if "speed" in r.rule_name and r.details.get("execution_time")
         ]
         if execution_results:
             max_time = max(r.details["execution_time"] for r in execution_results)
@@ -542,9 +518,7 @@ class ValidationEngine:
                 "score": 0.0,
             }
 
-    def _test_output_validation(
-        self, functional_data: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _test_output_validation(self, functional_data: dict[str, Any]) -> dict[str, Any]:
         """Test output format validation."""
         try:
             functional = functional_data.get("functional")
@@ -726,9 +700,7 @@ class ValidationEngine:
                 "score": 0.0,
             }
 
-    def _test_jax_compatibility(
-        self, functional_data: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _test_jax_compatibility(self, functional_data: dict[str, Any]) -> dict[str, Any]:
         """Test JAX/JIT compatibility."""
         try:
             functional = functional_data.get("functional")
@@ -840,9 +812,7 @@ class ValidationEngine:
             if missing_required:
                 return {
                     "status": ValidationStatus.FAILED,
-                    "message": (
-                        f"Missing required documentation: {', '.join(missing_required)}"
-                    ),
+                    "message": (f"Missing required documentation: {', '.join(missing_required)}"),
                     "score": 0.0,
                 }
 
@@ -856,9 +826,7 @@ class ValidationEngine:
 
             if missing_optional:
                 status = ValidationStatus.WARNING
-                message = (
-                    f"Missing optional documentation: {', '.join(missing_optional)}"
-                )
+                message = f"Missing optional documentation: {', '.join(missing_optional)}"
 
             return {
                 "status": status,

@@ -55,9 +55,7 @@ class DiscreteContinuousConv2d(nnx.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = (
-            kernel_size
-            if isinstance(kernel_size, tuple)
-            else (kernel_size, kernel_size)
+            kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
         )
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
         self.padding = padding
@@ -124,9 +122,7 @@ class DiscreteContinuousConv2d(nnx.Module):
 
         # Reshape to kernel format
         kernel_h, kernel_w = self.kernel_size
-        return kernel_values.reshape(
-            kernel_h, kernel_w, self.in_channels, self.out_channels
-        )
+        return kernel_values.reshape(kernel_h, kernel_w, self.in_channels, self.out_channels)
 
     def __call__(
         self,
@@ -155,7 +151,7 @@ class DiscreteContinuousConv2d(nnx.Module):
         elif self.padding == "VALID":
             padding = "VALID"
         # Convert to proper padding format for conv_general_dilated
-        elif isinstance(self.padding, (list, tuple)):
+        elif isinstance(self.padding, list | tuple):
             if len(self.padding) > 0 and isinstance(self.padding[0], int):
                 # Ensure integer padding tuples
                 padding = tuple((int(p), int(p)) for p in self.padding)
@@ -163,9 +159,9 @@ class DiscreteContinuousConv2d(nnx.Module):
                 # Handle nested tuples/lists, ensure all values are integers
                 padding_list = []
                 for p in self.padding:
-                    if isinstance(p, (list, tuple)) and len(p) >= 2:
+                    if isinstance(p, list | tuple) and len(p) >= 2:
                         padding_list.append((int(p[0]), int(p[1])))
-                    elif isinstance(p, (int, float)):
+                    elif isinstance(p, int | float):
                         padding_list.append((int(p), int(p)))
                     else:
                         padding_list.append((0, 0))  # Fallback
@@ -264,7 +260,7 @@ class DiscreteContinuousConvTranspose2d(DiscreteContinuousConv2d):
         elif self.padding == "VALID":
             padding = "VALID"
         # Convert to proper padding format for conv_transpose
-        elif isinstance(self.padding, (list, tuple)):
+        elif isinstance(self.padding, list | tuple):
             if len(self.padding) > 0 and isinstance(self.padding[0], int):
                 # Ensure integer padding tuples
                 padding = tuple((int(p), int(p)) for p in self.padding)
@@ -272,9 +268,9 @@ class DiscreteContinuousConvTranspose2d(DiscreteContinuousConv2d):
                 # Handle nested tuples/lists, ensure all values are integers
                 padding_list = []
                 for p in self.padding:
-                    if isinstance(p, (list, tuple)) and len(p) >= 2:
+                    if isinstance(p, list | tuple) and len(p) >= 2:
                         padding_list.append((int(p[0]), int(p[1])))
-                    elif isinstance(p, (int, float)):
+                    elif isinstance(p, int | float):
                         padding_list.append((int(p), int(p)))
                     else:
                         padding_list.append((0, 0))  # Fallback
@@ -328,9 +324,7 @@ def create_disco_encoder(
 
     # Select convolution class
     conv_class = (
-        EquidistantDiscreteContinuousConv2d
-        if use_equidistant
-        else DiscreteContinuousConv2d
+        EquidistantDiscreteContinuousConv2d if use_equidistant else DiscreteContinuousConv2d
     )
 
     # Input layer (with downsampling for encoder)

@@ -1,7 +1,7 @@
 """
 Test suite for FlopsCounter class
 
-This module contains comprehensive tests for the FlopsCounter class,
+This module contains full tests for the FlopsCounter class,
 covering initialization, forward pass profiling, backward pass profiling,
 model comparison, and training step profiling functionality.
 """
@@ -298,10 +298,7 @@ class TestFlopsCounterModelComparison:
         assert "models" in comparison
         assert "comparison" in comparison
         assert len(comparison["models"]) == 2
-        assert (
-            comparison["models"][0]["total_flops"]
-            < comparison["models"][1]["total_flops"]
-        )
+        assert comparison["models"][0]["total_flops"] < comparison["models"][1]["total_flops"]
 
     def test_compare_models_multiple_models(self):
         """Test model comparison with multiple models."""

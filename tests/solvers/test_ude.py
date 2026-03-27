@@ -222,9 +222,7 @@ class TestUDESolver:
 
         # Compare with exact solution
         exact = y0[None, :] * jnp.exp(-ts[:, None])
-        assert jnp.allclose(traj, exact, atol=1e-3), (
-            f"Max error: {jnp.max(jnp.abs(traj - exact))}"
-        )
+        assert jnp.allclose(traj, exact, atol=1e-3), f"Max error: {jnp.max(jnp.abs(traj - exact))}"
 
     def test_trajectory_loss_scalar(self, rngs):
         """trajectory_loss should return scalar MSE."""

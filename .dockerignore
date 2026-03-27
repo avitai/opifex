@@ -21,7 +21,14 @@ site
 # IDE
 .vscode
 .cursor
+.cursorignore
+.cursorindexingignore
 .claude
+.copilot
+.anthropic
+AGENTS.md
+copilot-instructions.md
+.github/copilot-instructions.md
 
 # Documentation & non-essential
 docs

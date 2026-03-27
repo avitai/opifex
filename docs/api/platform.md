@@ -425,7 +425,7 @@ class ValidationFramework:
             validation_suite: Validation level:
                 - 'basic': Shape and type checks
                 - 'standard': + numerical correctness
-                - 'comprehensive': + performance benchmarks
+                - 'full': + performance benchmarks
 
         Returns:
             Validation report with pass/fail status
@@ -434,7 +434,7 @@ class ValidationFramework:
             >>> validator = ValidationFramework()
             >>> report = validator.validate_model(
             ...     model,
-            ...     validation_suite="comprehensive"
+            ...     validation_suite="full"
             ... )
             >>> if report.passed:
             ...     print("All validations passed!")

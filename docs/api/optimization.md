@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Opifex optimization module provides comprehensive optimization algorithms and meta-learning approaches for scientific computing, including production optimization, learn-to-optimize algorithms, control systems, and quantum-aware optimization.
+The Opifex optimization module provides full optimization algorithms and meta-learning approaches for scientific computing, including production optimization, learn-to-optimize algorithms, control systems, and quantum-aware optimization.
 
 ## Core Optimization Components
 

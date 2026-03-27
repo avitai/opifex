@@ -34,9 +34,7 @@ class TestInitialCondition:
         def initial_func(x):
             return jnp.sin(x)
 
-        ic = InitialCondition(
-            value=initial_func, dimension=2, derivative_order=1, name="velocity"
-        )
+        ic = InitialCondition(value=initial_func, dimension=2, derivative_order=1, name="velocity")
 
         assert ic.value == initial_func
         assert ic.dimension == 2

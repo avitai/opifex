@@ -1,24 +1,16 @@
 """Search Engine for Neural Functional Discovery.
 
-Provides comprehensive search capabilities for the neural functional registry
+Provides full search capabilities for the neural functional registry
 including text search, semantic search, filtering, and recommendation systems.
 """
 
 import re
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
 
 import jax.numpy as jnp
 
-
-class SearchType(Enum):
-    """Types of search operations supported."""
-
-    TEXT = "text"
-    SEMANTIC = "semantic"
-    FILTER = "filter"
-    HYBRID = "hybrid"
+from opifex.platform.search_types import SearchType
 
 
 @dataclass
@@ -148,9 +140,7 @@ class SearchEngine:
         # HYBRID
         return await self._hybrid_search(query)
 
-    async def suggest_functionals(
-        self, functional_id: str, limit: int = 10
-    ) -> list[SearchResult]:
+    async def suggest_functionals(self, functional_id: str, limit: int = 10) -> list[SearchResult]:
         """Suggest similar functionals based on a given functional.
 
         Args:
@@ -422,9 +412,7 @@ class SearchEngine:
         words = re.findall(r"\b[a-zA-Z]+\b", text)
 
         # Filter out stop words and short words
-        keywords = [
-            word for word in words if word not in self._stop_words and len(word) > 2
-        ]
+        keywords = [word for word in words if word not in self._stop_words and len(word) > 2]
 
         # Remove duplicates while preserving order
         seen = set()
@@ -436,9 +424,7 @@ class SearchEngine:
 
         return unique_keywords
 
-    def _calculate_text_score(
-        self, functional: dict[str, Any], keywords: list[str]
-    ) -> float:
+    def _calculate_text_score(self, functional: dict[str, Any], keywords: list[str]) -> float:
         """Calculate text relevance score for a functional.
 
         Args:
@@ -485,9 +471,7 @@ class SearchEngine:
         # Final score (capped at 1.0)
         return min(1.0, base_score + name_boost + type_boost)
 
-    def _apply_filters(
-        self, results: list[SearchResult], query: SearchQuery
-    ) -> list[SearchResult]:
+    def _apply_filters(self, results: list[SearchResult], query: SearchQuery) -> list[SearchResult]:
         """Apply filter criteria to search results.
 
         Args:
@@ -500,9 +484,9 @@ class SearchEngine:
         filtered_results = []
 
         for result in results:
-            if self._passes_basic_filters(
+            if self._passes_basic_filters(result, query) and self._passes_performance_filters(
                 result, query
-            ) and self._passes_performance_filters(result, query):
+            ):
                 filtered_results.append(result)
 
         return filtered_results
@@ -535,9 +519,7 @@ class SearchEngine:
 
         return True
 
-    def _passes_performance_filters(
-        self, result: SearchResult, query: SearchQuery
-    ) -> bool:
+    def _passes_performance_filters(self, result: SearchResult, query: SearchQuery) -> bool:
         """Check if result passes performance filters."""
         # Check performance criteria
         if query.min_accuracy is not None:
@@ -592,9 +574,7 @@ class SearchEngine:
 
         return embedding
 
-    async def _get_functional_embedding(
-        self, functional: dict[str, Any]
-    ) -> jnp.ndarray:
+    async def _get_functional_embedding(self, functional: dict[str, Any]) -> jnp.ndarray:
         """Get or generate embedding for a functional.
 
         Args:

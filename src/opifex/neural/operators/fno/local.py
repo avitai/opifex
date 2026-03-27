@@ -35,7 +35,7 @@ class LocalFourierLayer(nnx.Module):
     Fourier layer with local convolution for capturing short-range interactions.
 
     Combines global spectral convolution with local spatial convolution
-    for comprehensive feature extraction.
+    for full feature extraction.
     """
 
     @beartype
@@ -71,9 +71,7 @@ class LocalFourierLayer(nnx.Module):
         self.spatial_dims = len(modes)
 
         # Spectral convolution branch
-        self.spectral_conv = StandardSpectralConv(
-            in_channels, out_channels, modes, rngs=rngs
-        )
+        self.spectral_conv = StandardSpectralConv(in_channels, out_channels, modes, rngs=rngs)
 
         # Local convolution branch
         spatial_dims = len(modes)

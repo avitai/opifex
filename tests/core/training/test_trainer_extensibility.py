@@ -100,9 +100,7 @@ class TestComposablePhysicsConfigurations:
         assert isinstance(metrics, dict)
 
         # Verify we can check conservation violations directly
-        violation = energy_violation(
-            y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True
-        )
+        violation = energy_violation(y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True)
         assert violation >= 0.0
 
     def test_multi_scale_physics_configuration(self, mock_model, sample_data):
@@ -322,9 +320,7 @@ class TestMultiDomainPhysicsIntegration:
     multi-scale physics simultaneously through config composition.
     """
 
-    def test_quantum_conservation_multi_scale_integration(
-        self, mock_model, sample_data
-    ):
+    def test_quantum_conservation_multi_scale_integration(self, mock_model, sample_data):
         """Test integrating quantum, conservation, and multi-scale physics."""
         # This integration test shows what was previously achieved through:
         # - trainer.register_custom_loss() (multiple calls)
@@ -384,9 +380,7 @@ class TestMultiDomainPhysicsIntegration:
         assert "loss" in metrics
 
         # Verify we can still use utilities directly
-        energy_viol = energy_violation(
-            y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True
-        )
+        energy_viol = energy_violation(y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True)
         assert energy_viol >= 0.0
 
     def test_extensibility_through_direct_utility_usage(self, mock_model, sample_data):
@@ -403,15 +397,11 @@ class TestMultiDomainPhysicsIntegration:
         loss, _ = trainer.training_step(x[:10], y[:10])
 
         # Use utilities directly for domain-specific operations
-        energy_viol = energy_violation(
-            y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True
-        )
+        energy_viol = energy_violation(y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True)
 
         momentum_viol = momentum_violation(y[:10], y[:10], tolerance=1e-5)
 
-        symmetry_viol = symmetry_violation(
-            jnp.array([[1.0, 1.0], [2.0, 2.0]]), tolerance=1e-6
-        )
+        symmetry_viol = symmetry_violation(jnp.array([[1.0, 1.0], [2.0, 2.0]]), tolerance=1e-6)
 
         # All violations should be computable
         assert energy_viol >= 0.0
@@ -483,9 +473,7 @@ class TestExtensibilityComparisonSummary:
         loss, metrics = trainer.training_step(x[:10], y[:10])
 
         # 7. Use utilities directly for domain operations
-        violation = energy_violation(
-            y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True
-        )
+        violation = energy_violation(y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True)
 
         # Verify everything works
         assert jnp.isfinite(loss)

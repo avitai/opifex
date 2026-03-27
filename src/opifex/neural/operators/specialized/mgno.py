@@ -65,9 +65,7 @@ class MultipoleExpansion(nnx.Module):
 
         # FIXED: Multipole coefficients with stability-focused initialization
         self.multipole_weights = nnx.Param(
-            nnx.initializers.xavier_normal()(
-                rngs.params(), (channels, channels, max_order + 1)
-            )
+            nnx.initializers.xavier_normal()(rngs.params(), (channels, channels, max_order + 1))
             * (stabilization_factor / jnp.sqrt(max_order + 1))  # Scale for stability
         )
 
@@ -79,7 +77,7 @@ class MultipoleExpansion(nnx.Module):
 
     def __call__(self, x: jax.Array, positions: jax.Array) -> jax.Array:
         """
-        Apply multipole expansion with comprehensive stability measures.
+        Apply multipole expansion with full stability measures.
 
         Args:
             x: Input features (batch, num_points, channels)
@@ -102,9 +100,7 @@ class MultipoleExpansion(nnx.Module):
         moments = self._compute_stable_multipole_moments(x, positions)
 
         # Apply learned transformation with stability checks
-        transformed = jnp.einsum(
-            "...i,ijo->...o", moments, self.multipole_weights.value
-        )
+        transformed = jnp.einsum("...i,ijo->...o", moments, self.multipole_weights.value)
 
         # Apply layer normalization for stability
         normalized = self.layer_norm(transformed)
@@ -112,11 +108,9 @@ class MultipoleExpansion(nnx.Module):
         # FIXED: Final NaN check and replacement
         return jnp.where(jnp.isnan(normalized), x, normalized)
 
-    def _compute_stable_multipole_moments(
-        self, x: jax.Array, positions: jax.Array
-    ) -> jax.Array:
+    def _compute_stable_multipole_moments(self, x: jax.Array, positions: jax.Array) -> jax.Array:
         """
-        Compute multipole moments with comprehensive numerical stability.
+        Compute multipole moments with full numerical stability.
 
         Args:
             x: Input features (batch, num_points, channels)
@@ -139,9 +133,7 @@ class MultipoleExpansion(nnx.Module):
             # FIXED: Normalized radial component to prevent explosion
             # Use tanh to bound the radial component
             radial_raw = jnp.power(distances_safe, order)
-            radial_normalized = radial_raw / (
-                1.0 + radial_raw
-            )  # Bounds between 0 and 1
+            radial_normalized = radial_raw / (1.0 + radial_raw)  # Bounds between 0 and 1
             radial = jnp.tanh(radial_normalized)  # Further stabilization
 
             # FIXED: Angular component (stable spherical harmonics approximation)
@@ -290,11 +282,9 @@ class MGNOLayer(nnx.Module):
         # Shape: (batch_size, channels, num_neighbors) -> (batch_size, channels)
         return jnp.mean(messages, axis=2)
 
-    def __call__(
-        self, x: jax.Array, positions: jax.Array, training: bool = False
-    ) -> jax.Array:
+    def __call__(self, x: jax.Array, positions: jax.Array, training: bool = False) -> jax.Array:
         """
-        Forward pass through MGNO layer with comprehensive error handling.
+        Forward pass through MGNO layer with full error handling.
 
         Args:
             x: Input features (batch, num_points, channels)
@@ -369,7 +359,7 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         rngs: nnx.Rngs,
     ):
         """
-        Initialize MGNO with comprehensive stability features.
+        Initialize MGNO with full stability features.
 
         Args:
             in_features: Number of input feature channels
@@ -408,11 +398,9 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         # Global dropout for regularization
         self.dropout = nnx.Dropout(rate=dropout_rate, rngs=rngs)
 
-    def __call__(
-        self, x: jax.Array, positions: jax.Array, training: bool = False
-    ) -> jax.Array:
+    def __call__(self, x: jax.Array, positions: jax.Array, training: bool = False) -> jax.Array:
         """
-        Forward pass with comprehensive error handling and stability.
+        Forward pass with full error handling and stability.
 
         Args:
             x: Input features (batch, num_points, in_channels)
@@ -422,14 +410,13 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         Returns:
             Output features (batch, num_points, out_channels)
         """
-        # FIXED: Comprehensive input validation
+        # FIXED: Full input validation
         if jnp.any(jnp.isnan(x)) or jnp.any(jnp.isnan(positions)):
             raise ValueError("NaN detected in inputs to MGNO")
 
         if x.shape[0] != positions.shape[0] or x.shape[1] != positions.shape[1]:
             raise ValueError(
-                f"Batch size or number of points mismatch: "
-                f"x={x.shape}, positions={positions.shape}"
+                f"Batch size or number of points mismatch: x={x.shape}, positions={positions.shape}"
             )
 
         # Input projection
@@ -442,9 +429,7 @@ class MultipoleGraphNeuralOperator(nnx.Module):
 
                 # Additional stability check
                 if jnp.any(jnp.isnan(x_new)):
-                    logger.warning(
-                        "NaN detected in layer %d, using previous features", i
-                    )
+                    logger.warning("NaN detected in layer %d, using previous features", i)
                     continue  # Skip this layer update
 
                 x = x_new

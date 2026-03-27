@@ -48,8 +48,8 @@ a spherical neural operator.
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/sfno_climate_simple.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/sfno_climate_simple.py)
-- **Jupyter Notebook**: [`examples/neural-operators/sfno_climate_simple.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/sfno_climate_simple.ipynb)
+- **Python Script**: [`examples/neural-operators/sfno_climate_simple.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_simple.py)
+- **Jupyter Notebook**: [`examples/neural-operators/sfno_climate_simple.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_simple.ipynb)
 
 ## Quick Start
 
@@ -388,14 +388,14 @@ Increasing epochs, training samples, and `lmax` will improve accuracy further.
 2. **More training data**: Increase `N_TRAIN` to 500+ samples for better generalization
 3. **Longer training**: Train for 50-100 epochs to observe convergence behavior
 4. **Mixed precision**: Use `jnp.bfloat16` for 40-50% memory reduction on larger resolutions
-5. **Conservation analysis**: Check whether the SFNO preserves mass and energy (see comprehensive SFNO example)
+5. **Conservation analysis**: Check whether the SFNO preserves mass and energy (see full SFNO example)
 
 ### Related Examples
 
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
-| [SFNO Climate Comprehensive](sfno-climate-comprehensive.md) | Advanced | Conservation-aware loss, energy/mass analysis, production patterns |
-| [FNO Darcy Comprehensive](fno-darcy.md) | Intermediate | Full FNO training pipeline on flat 2D domains |
+| [SFNO Climate Full](sfno-climate-full.md) | Advanced | Conservation-aware loss, energy/mass analysis, production patterns |
+| [FNO Darcy Full](fno-darcy.md) | Intermediate | Full FNO training pipeline on flat 2D domains |
 | [UNO Darcy Framework](uno-darcy.md) | Intermediate | Multi-resolution U-shaped neural operator architecture |
 | [Grid Embeddings](../layers/grid-embeddings.md) | Beginner | Spatial coordinate injection for neural operators |
 | [Neural Operator Benchmark](../benchmarking/operator-benchmark.md) | Advanced | Cross-architecture performance comparison |

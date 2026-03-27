@@ -1,7 +1,7 @@
 """Cost optimization and budget management for multi-cloud resources.
 
 This module implements cost tracking, budget alerts, optimization analysis,
-and comprehensive cost analytics for resource management.
+and full cost analytics for resource management.
 """
 
 import time
@@ -67,9 +67,7 @@ class CostController:
         self, active_allocations: dict[str, ResourceAllocation]
     ) -> CostOptimization:
         """Analyze opportunities for cost optimization."""
-        current_hourly_cost = sum(
-            alloc.cost_estimate_usd for alloc in active_allocations.values()
-        )
+        current_hourly_cost = sum(alloc.cost_estimate_usd for alloc in active_allocations.values())
 
         # Calculate potential savings
         recommendations = []
@@ -83,13 +81,9 @@ class CostController:
 
         # Generate recommendations
         if cost_breakdown[CloudProvider.AWS] > current_hourly_cost * 0.4:
-            recommendations.append(
-                "Consider migrating some workloads to lower-cost providers"
-            )
+            recommendations.append("Consider migrating some workloads to lower-cost providers")
 
-        if any(
-            alloc.performance_estimate < 0.7 for alloc in active_allocations.values()
-        ):
+        if any(alloc.performance_estimate < 0.7 for alloc in active_allocations.values()):
             recommendations.append(
                 "Optimize under-performing allocations for better cost efficiency"
             )
@@ -120,8 +114,7 @@ class CostController:
             "budget_warning": daily_spending > self.budget_limit_usd_per_day * 0.8,
             "daily_spending": daily_spending,
             "budget_limit": self.budget_limit_usd_per_day,
-            "utilization_percentage": (daily_spending / self.budget_limit_usd_per_day)
-            * 100,
+            "utilization_percentage": (daily_spending / self.budget_limit_usd_per_day) * 100,
             "recommended_actions": [],
         }
 
@@ -145,7 +138,7 @@ class CostController:
         return alerts
 
     def get_cost_analytics(self) -> dict[str, Any]:
-        """Get comprehensive cost analytics and insights."""
+        """Get full cost analytics and insights."""
         if not self.cost_history:
             return {"error": "No cost data available"}
 
@@ -166,8 +159,7 @@ class CostController:
         return {
             "total_spending_usd": total_spending,
             "average_daily_spending": avg_daily_spending,
-            "budget_utilization": (avg_daily_spending / self.budget_limit_usd_per_day)
-            * 100,
+            "budget_utilization": (avg_daily_spending / self.budget_limit_usd_per_day) * 100,
             "cost_by_provider": provider_costs,
             "cost_by_resource_type": resource_costs,
             "optimization_opportunities": len(self.optimization_history),

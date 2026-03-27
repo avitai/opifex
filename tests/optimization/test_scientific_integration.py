@@ -1,6 +1,6 @@
 """Tests for scientific computing integration components.
 
-This module tests the Phase 7.4 Scientific Computing Integration implementation
+This module tests the Version 7.4 Scientific Computing Integration implementation
 including physics profiling, numerical validation, and conservation checking.
 """
 
@@ -145,25 +145,17 @@ class TestPhysicsMetrics:
 class TestPhysicsProfiler:
     """Test PhysicsProfiler component."""
 
-    def test_profiler_initialization_quantum_chemistry(
-        self, quantum_chemistry_profiler
-    ):
+    def test_profiler_initialization_quantum_chemistry(self, quantum_chemistry_profiler):
         """Test quantum chemistry profiler initialization."""
         assert quantum_chemistry_profiler.domain == PhysicsDomain.QUANTUM_CHEMISTRY
         assert "energy_conservation" in quantum_chemistry_profiler.validation_tolerances
-        assert (
-            quantum_chemistry_profiler.validation_tolerances["energy_conservation"]
-            == 1e-12
-        )
+        assert quantum_chemistry_profiler.validation_tolerances["energy_conservation"] == 1e-12
 
     def test_profiler_initialization_fluid_dynamics(self, fluid_dynamics_profiler):
         """Test fluid dynamics profiler initialization."""
         assert fluid_dynamics_profiler.domain == PhysicsDomain.FLUID_DYNAMICS
         assert "mass_conservation" in fluid_dynamics_profiler.validation_tolerances
-        assert (
-            fluid_dynamics_profiler.validation_tolerances["momentum_conservation"]
-            == 1e-6
-        )
+        assert fluid_dynamics_profiler.validation_tolerances["momentum_conservation"] == 1e-6
 
     def test_profile_physics_metrics_basic(
         self, quantum_chemistry_profiler, sample_model_output, sample_physics_data
@@ -178,9 +170,7 @@ class TestPhysicsProfiler:
         assert isinstance(metrics.conservation_violations, dict)
         assert 0.0 <= metrics.numerical_stability <= 1.0
 
-    def test_energy_conservation_checking(
-        self, quantum_chemistry_profiler, sample_model_output
-    ):
+    def test_energy_conservation_checking(self, quantum_chemistry_profiler, sample_model_output):
         """Test energy conservation checking."""
         reference_data = {"energy": 100.0}
 
@@ -191,9 +181,7 @@ class TestPhysicsProfiler:
         assert isinstance(error, float)
         assert error >= 0.0
 
-    def test_momentum_conservation_checking(
-        self, fluid_dynamics_profiler, sample_model_output
-    ):
+    def test_momentum_conservation_checking(self, fluid_dynamics_profiler, sample_model_output):
         """Test momentum conservation checking."""
         reference_data = {"momentum": jnp.array([1.0, 2.0, 3.0])}
 
@@ -204,9 +192,7 @@ class TestPhysicsProfiler:
         assert isinstance(error, float)
         assert error >= 0.0
 
-    def test_mass_conservation_checking(
-        self, fluid_dynamics_profiler, sample_model_output
-    ):
+    def test_mass_conservation_checking(self, fluid_dynamics_profiler, sample_model_output):
         """Test mass conservation checking."""
         reference_data = {"total_mass": 50.0}
 
@@ -217,9 +203,7 @@ class TestPhysicsProfiler:
         assert isinstance(error, float)
         assert error >= 0.0
 
-    def test_symmetry_preservation_checking(
-        self, quantum_chemistry_profiler, sample_model_output
-    ):
+    def test_symmetry_preservation_checking(self, quantum_chemistry_profiler, sample_model_output):
         """Test symmetry preservation checking."""
         symmetry_operations = [
             {"type": "rotation", "axis": [0, 0, 1], "angle": jnp.pi / 4},
@@ -232,13 +216,9 @@ class TestPhysicsProfiler:
         assert isinstance(preservation, float)
         assert 0.0 <= preservation <= 1.0
 
-    def test_numerical_stability_assessment(
-        self, quantum_chemistry_profiler, sample_model_output
-    ):
+    def test_numerical_stability_assessment(self, quantum_chemistry_profiler, sample_model_output):
         """Test numerical stability assessment."""
-        stability = quantum_chemistry_profiler._assess_numerical_stability(
-            sample_model_output
-        )
+        stability = quantum_chemistry_profiler._assess_numerical_stability(sample_model_output)
 
         assert isinstance(stability, float)
         assert 0.0 <= stability <= 1.0
@@ -261,9 +241,7 @@ class TestPhysicsProfiler:
 
         reference_data = {"wavefunction": jnp.array([0.6, 0.8])}  # Normalized
 
-        unitarity = quantum_chemistry_profiler._check_unitarity(
-            unitary_matrix, reference_data
-        )
+        unitarity = quantum_chemistry_profiler._check_unitarity(unitary_matrix, reference_data)
 
         assert isinstance(unitarity, float)
         assert 0.0 <= unitarity <= 1.0
@@ -285,9 +263,7 @@ class TestPhysicsProfiler:
         assert isinstance(accuracy, float)
         assert 0.0 <= accuracy <= 1.0
 
-    def test_thermodynamic_consistency(
-        self, quantum_chemistry_profiler, sample_model_output
-    ):
+    def test_thermodynamic_consistency(self, quantum_chemistry_profiler, sample_model_output):
         """Test thermodynamic consistency checking."""
         reference_data = {"temperature": 300.0, "entropy": 25.0}
 
@@ -458,7 +434,7 @@ class TestScientificComputingIntegrator:
         assert integrator.benchmark_validator == custom_benchmark
 
     def test_comprehensive_scientific_validation(self, sample_model_output):
-        """Test comprehensive scientific validation."""
+        """Test full scientific validation."""
         integrator = ScientificComputingIntegrator(PhysicsDomain.QUANTUM_CHEMISTRY)
 
         reference_data = {

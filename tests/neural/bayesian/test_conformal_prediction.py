@@ -241,20 +241,14 @@ class TestConformalPredictor:
         key = jax.random.PRNGKey(0)
         n_cal = 500
         x_cal = jax.random.uniform(key, (n_cal, 1), minval=-3.0, maxval=3.0)
-        y_cal = jnp.sin(x_cal) + 0.1 * jax.random.normal(
-            jax.random.PRNGKey(1), (n_cal, 1)
-        )
+        y_cal = jnp.sin(x_cal) + 0.1 * jax.random.normal(jax.random.PRNGKey(1), (n_cal, 1))
 
         predictor.calibrate(x_cal, y_cal)
 
         # Generate test data from the same distribution
         n_test = 300
-        x_test = jax.random.uniform(
-            jax.random.PRNGKey(2), (n_test, 1), minval=-3.0, maxval=3.0
-        )
-        y_test = jnp.sin(x_test) + 0.1 * jax.random.normal(
-            jax.random.PRNGKey(3), (n_test, 1)
-        )
+        x_test = jax.random.uniform(jax.random.PRNGKey(2), (n_test, 1), minval=-3.0, maxval=3.0)
+        y_test = jnp.sin(x_test) + 0.1 * jax.random.normal(jax.random.PRNGKey(3), (n_test, 1))
 
         predictions, lower, upper = predictor.predict_with_intervals(x_test)
 
@@ -264,12 +258,10 @@ class TestConformalPredictor:
 
         # Coverage should be within +/-5% of nominal 90%
         assert empirical_coverage >= 0.85, (
-            f"Coverage {empirical_coverage:.3f} below 85% "
-            f"(nominal 90% with 5% tolerance)"
+            f"Coverage {empirical_coverage:.3f} below 85% (nominal 90% with 5% tolerance)"
         )
         assert empirical_coverage <= 0.95, (
-            f"Coverage {empirical_coverage:.3f} above 95% "
-            f"(nominal 90% with 5% tolerance)"
+            f"Coverage {empirical_coverage:.3f} above 95% (nominal 90% with 5% tolerance)"
         )
         # Predictions should match model output shape
         assert predictions.shape == (n_test, 1)
@@ -294,9 +286,7 @@ class TestConformalPredictor:
             y_subset = y_all[:n_cal]
             predictor.calibrate(x_subset, y_subset)
 
-            x_test = jax.random.uniform(
-                jax.random.PRNGKey(20), (100, 1), minval=-2.0, maxval=2.0
-            )
+            x_test = jax.random.uniform(jax.random.PRNGKey(20), (100, 1), minval=-2.0, maxval=2.0)
             _, lower, upper = predictor.predict_with_intervals(x_test)
             mean_width = float(jnp.mean(upper - lower))
             widths.append(mean_width)
@@ -334,9 +324,7 @@ class TestConformalPredictor:
         # Intervals should have positive width
         assert jnp.all(upper - lower > 0)
 
-    def test_conformal_works_with_operator(
-        self, operator_model: SimpleOperatorMLP
-    ) -> None:
+    def test_conformal_works_with_operator(self, operator_model: SimpleOperatorMLP) -> None:
         """ConformalPredictor should wrap an NNX model acting as an operator."""
         predictor = ConformalPredictor(model=operator_model)
 

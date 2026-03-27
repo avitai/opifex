@@ -198,15 +198,11 @@ class MessagePassingLayer(nnx.Module):
             # Prepare message input
             if edge_features is not None:
                 edge_feats = edge_features[batch_idx]  # [num_edges, edge_dim]
-                message_input = jnp.concatenate(
-                    [src_nodes, dst_nodes, edge_feats], axis=-1
-                )
+                message_input = jnp.concatenate([src_nodes, dst_nodes, edge_feats], axis=-1)
             else:
                 # Use zero edge features if not provided
                 zero_edges = jnp.zeros((num_edges, self.edge_dim))
-                message_input = jnp.concatenate(
-                    [src_nodes, dst_nodes, zero_edges], axis=-1
-                )
+                message_input = jnp.concatenate([src_nodes, dst_nodes, zero_edges], axis=-1)
 
             # Compute messages
             messages = self.message_net(message_input)  # [num_edges, hidden_dim]

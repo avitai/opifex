@@ -68,9 +68,7 @@ class TestGPUAccelerationBenchmarking:
 
         tester = CachedProgressiveTester()
 
-        success, exec_time, error = tester._actual_test_operation(
-            "safe_matmul", 512, "float32"
-        )
+        success, exec_time, error = tester._actual_test_operation("safe_matmul", 512, "float32")
 
         assert success, f"Test operation failed: {error}"
 
@@ -98,9 +96,7 @@ class TestGPUAccelerationBenchmarking:
         manager = OptimizedGPUManager()
 
         test_sizes = [64, 128]
-        results = manager.benchmark_with_prefetching(
-            manager.optimal_matrix_multiply, test_sizes
-        )
+        results = manager.benchmark_with_prefetching(manager.optimal_matrix_multiply, test_sizes)
 
         assert 64 in results
         assert 128 in results
@@ -108,8 +104,7 @@ class TestGPUAccelerationBenchmarking:
         if results[64]["success"] and results[64]["execution_time"] is not None:
             exec_time = results[64]["execution_time"]
             assert exec_time > 1e-5, (
-                f"Timing too fast ({exec_time:.6f}s). "
-                f"Missing block_until_ready in benchmark loop."
+                f"Timing too fast ({exec_time:.6f}s). Missing block_until_ready in benchmark loop."
             )
 
 

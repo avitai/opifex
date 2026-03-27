@@ -266,7 +266,7 @@ class TestModularTrainerMetrics:
         self.trainer = ModularTrainer(self.model, self.config)
 
     def test_get_comprehensive_metrics_summary(self):
-        """Test getting comprehensive metrics summary."""
+        """Test getting full metrics summary."""
         # Do some training first
         x = jnp.ones((8, 4))
         y = jnp.ones((8, 1))

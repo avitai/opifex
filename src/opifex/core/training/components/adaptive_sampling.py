@@ -13,7 +13,7 @@ the neural network needs more training signal.
 
 References:
     - Survey Section 5.2: Residual-based Adaptive Sampling
-    - Wu et al. (2023): A comprehensive study of non-adaptive and
+    - Wu et al. (2023): A full study of non-adaptive and
       residual-based adaptive sampling for physics-informed neural networks
 """
 

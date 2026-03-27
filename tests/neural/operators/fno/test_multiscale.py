@@ -54,6 +54,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=32,
             modes_per_scale=[16, 8, 4],
             num_layers_per_scale=[1, 1, 1],
+            spatial_dims=1,
             use_cross_scale_attention=True,
             rngs=rngs,
         )
@@ -100,6 +101,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=32,
             modes_per_scale=[8, 4],
             num_layers_per_scale=[2, 2],
+            spatial_dims=1,
             use_gradient_checkpointing=True,
             rngs=rngs,
         )
@@ -123,6 +125,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=16,
             modes_per_scale=[4, 2],
             num_layers_per_scale=[1, 1],
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -153,6 +156,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=32,
             modes_per_scale=[16, 8, 4],  # Multiple scales
             num_layers_per_scale=[2, 2, 2],
+            spatial_dims=1,
             rngs=rngs_ms,
         )
 
@@ -163,6 +167,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=32,
             modes=16,  # Single scale
             num_layers=4,
+            spatial_dims=1,
             rngs=rngs_regular,
         )
 
@@ -202,6 +207,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=64,
             modes_per_scale=[16, 8, 4],
             num_layers_per_scale=[2, 2, 2],
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -225,6 +231,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=32,
             modes_per_scale=[32, 16, 8],
             num_layers_per_scale=[2, 2, 2],
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -235,6 +242,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=32,
             modes_per_scale=[16, 8],
             num_layers_per_scale=[2, 2],
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -260,6 +268,7 @@ class TestMultiScaleFourierNeuralOperator:
             hidden_channels=16,
             modes_per_scale=[8, 4],
             num_layers_per_scale=[1, 1],
+            spatial_dims=1,
             rngs=rngs,
         )
 

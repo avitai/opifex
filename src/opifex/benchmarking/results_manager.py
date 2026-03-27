@@ -228,9 +228,7 @@ class ResultsManager:
             name_counts[n] = name_counts.get(n, 0) + 1
             dataset_counts[d] = dataset_counts.get(d, 0) + 1
 
-        exec_times = [
-            r["execution_time"] for r in results if r.get("execution_time") is not None
-        ]
+        exec_times = [r["execution_time"] for r in results if r.get("execution_time") is not None]
 
         stats: dict[str, Any] = {
             "total_results": len(results),
@@ -250,9 +248,7 @@ class ResultsManager:
 
         return stats
 
-    def create_benchmark_database_entry(
-        self, result: BenchmarkResult
-    ) -> dict[str, Any]:
+    def create_benchmark_database_entry(self, result: BenchmarkResult) -> dict[str, Any]:
         """Create standardized database entry for benchmark results.
 
         Args:
@@ -262,11 +258,7 @@ class ResultsManager:
             Standardized database entry dictionary.
         """
         return {
-            "id": (
-                f"{result.name}"
-                f"_{result.tags.get('dataset', 'unknown')}"
-                f"_{result.timestamp}"
-            ),
+            "id": (f"{result.name}_{result.tags.get('dataset', 'unknown')}_{result.timestamp}"),
             "name": result.name,
             "dataset": result.tags.get("dataset", "unknown"),
             "timestamp": result.timestamp,
@@ -346,10 +338,7 @@ class ResultsManager:
                 datasets: dict[str, dict[str, Any]] = {}
                 for result in operator_results:
                     ds = result["dataset"]
-                    if (
-                        ds not in datasets
-                        or result["timestamp"] > datasets[ds]["timestamp"]
-                    ):
+                    if ds not in datasets or result["timestamp"] > datasets[ds]["timestamp"]:
                         datasets[ds] = result
 
                 for ds, result in datasets.items():
@@ -362,9 +351,7 @@ class ResultsManager:
                     table_data.append(row)
 
         timestamp_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        table_file = (
-            self.tables_path / f"comparison_table_{timestamp_str}.{output_format}"
-        )
+        table_file = self.tables_path / f"comparison_table_{timestamp_str}.{output_format}"
 
         _generate_table_fallback(table_data, table_file, metrics, output_format)
 
@@ -391,9 +378,7 @@ def _generate_comparison_plots(
     datasets = list({r.tags.get("dataset", r.name) for r in results})
 
     for dataset in datasets:
-        dataset_results = [
-            r for r in results if r.tags.get("dataset", r.name) == dataset
-        ]
+        dataset_results = [r for r in results if r.tags.get("dataset", r.name) == dataset]
         if len(dataset_results) < 2:
             continue
 
@@ -402,9 +387,7 @@ def _generate_comparison_plots(
 
         models = [r.name for r in dataset_results]
 
-        mse_values = [
-            r.metrics["mse"].value for r in dataset_results if "mse" in r.metrics
-        ]
+        mse_values = [r.metrics["mse"].value for r in dataset_results if "mse" in r.metrics]
         if len(mse_values) == len(dataset_results):
             axes[0, 0].bar(models, mse_values)
             axes[0, 0].set_title("Mean Squared Error")
@@ -417,9 +400,7 @@ def _generate_comparison_plots(
         axes[0, 1].set_ylabel("Time (s)")
         axes[0, 1].tick_params(axis="x", rotation=45)
 
-        mae_values = [
-            r.metrics["mae"].value for r in dataset_results if "mae" in r.metrics
-        ]
+        mae_values = [r.metrics["mae"].value for r in dataset_results if "mae" in r.metrics]
         if len(mae_values) == len(dataset_results):
             axes[1, 0].bar(models, mae_values)
             axes[1, 0].set_title("Mean Absolute Error")
@@ -488,9 +469,7 @@ def _generate_table_fallback(
         _generate_csv_table(data, file_path, metrics)
 
 
-def _generate_latex_table(
-    data: list[dict[str, Any]], file_path: Path, metrics: list[str]
-) -> None:
+def _generate_latex_table(data: list[dict[str, Any]], file_path: Path, metrics: list[str]) -> None:
     """Generate LaTeX table."""
     with open(file_path, "w") as f:
         f.write("\\begin{table}[h]\n")
@@ -521,9 +500,7 @@ def _generate_latex_table(
         f.write("\\end{table}\n")
 
 
-def _generate_html_table(
-    data: list[dict[str, Any]], file_path: Path, metrics: list[str]
-) -> None:
+def _generate_html_table(data: list[dict[str, Any]], file_path: Path, metrics: list[str]) -> None:
     """Generate HTML table."""
     with open(file_path, "w") as f:
         f.write("<html><body>\n")
@@ -551,9 +528,7 @@ def _generate_html_table(
         f.write("</body></html>\n")
 
 
-def _generate_csv_table(
-    data: list[dict[str, Any]], file_path: Path, metrics: list[str]
-) -> None:
+def _generate_csv_table(data: list[dict[str, Any]], file_path: Path, metrics: list[str]) -> None:
     """Generate CSV table."""
     import csv
 

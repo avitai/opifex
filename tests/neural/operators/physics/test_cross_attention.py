@@ -22,9 +22,7 @@ class TestPhysicsCrossAttention:
         seq_len = 16
         embed_dim = 32
 
-        return jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, seq_len, embed_dim)
-        )
+        return jax.random.normal(jax.random.PRNGKey(0), (batch_size, seq_len, embed_dim))
 
     @pytest.fixture
     def sample_data_multi_system(self):
@@ -45,9 +43,7 @@ class TestPhysicsCrossAttention:
         seq_len = 16
         physics_dim = 3  # For energy, momentum, angular_momentum
 
-        return jax.random.normal(
-            jax.random.PRNGKey(2), (batch_size, seq_len, physics_dim)
-        )
+        return jax.random.normal(jax.random.PRNGKey(2), (batch_size, seq_len, physics_dim))
 
     def test_physics_cross_attention_initialization(self):
         """Test physics cross attention initialization with modern parameters."""
@@ -64,9 +60,7 @@ class TestPhysicsCrossAttention:
         assert hasattr(model, "conservation_projection")
         assert len(model.cross_attention_layers) == 2
 
-    def test_physics_cross_attention_single_system(
-        self, sample_data_single_system, physics_info
-    ):
+    def test_physics_cross_attention_single_system(self, sample_data_single_system, physics_info):
         """Test physics cross attention with single system."""
         model = PhysicsCrossAttention(
             embed_dim=32,
@@ -81,9 +75,7 @@ class TestPhysicsCrossAttention:
         assert output.shape == sample_data_single_system.shape
         assert jnp.all(jnp.isfinite(output))
 
-    def test_physics_cross_attention_multi_system(
-        self, sample_data_multi_system, physics_info
-    ):
+    def test_physics_cross_attention_multi_system(self, sample_data_multi_system, physics_info):
         """Test physics cross attention with multi-system."""
         model = PhysicsCrossAttention(
             embed_dim=32,
@@ -94,18 +86,14 @@ class TestPhysicsCrossAttention:
         )
 
         # Adjust physics_info for multi-system (add system dimension)
-        physics_info_multi = jnp.expand_dims(physics_info[:, :, :2], axis=1).repeat(
-            2, axis=1
-        )
+        physics_info_multi = jnp.expand_dims(physics_info[:, :, :2], axis=1).repeat(2, axis=1)
 
         output = model(sample_data_multi_system, physics_info=physics_info_multi)
 
         assert output.shape == sample_data_multi_system.shape
         assert jnp.all(jnp.isfinite(output))
 
-    def test_physics_cross_attention_different_num_heads(
-        self, sample_data_single_system
-    ):
+    def test_physics_cross_attention_different_num_heads(self, sample_data_single_system):
         """Test physics cross attention with different numbers of heads."""
         for num_heads in [1, 2, 4, 8]:
             model = PhysicsCrossAttention(
@@ -121,9 +109,7 @@ class TestPhysicsCrossAttention:
             assert output.shape == sample_data_single_system.shape
             assert jnp.all(jnp.isfinite(output))
 
-    def test_physics_cross_attention_different_constraints(
-        self, sample_data_single_system
-    ):
+    def test_physics_cross_attention_different_constraints(self, sample_data_single_system):
         """Test physics cross attention with different constraint sets."""
         constraint_sets = [
             ["energy"],
@@ -146,9 +132,7 @@ class TestPhysicsCrossAttention:
             assert output.shape == sample_data_single_system.shape
             assert jnp.all(jnp.isfinite(output))
 
-    def test_physics_cross_attention_conservation_enforcement(
-        self, sample_data_single_system
-    ):
+    def test_physics_cross_attention_conservation_enforcement(self, sample_data_single_system):
         """Test conservation law enforcement."""
         model = PhysicsCrossAttention(
             embed_dim=32,
@@ -160,18 +144,14 @@ class TestPhysicsCrossAttention:
         )
 
         # Test forward with conservation
-        output, conservation_loss = model.forward_with_conservation(
-            sample_data_single_system
-        )
+        output, conservation_loss = model.forward_with_conservation(sample_data_single_system)
 
         assert output.shape == sample_data_single_system.shape
         assert jnp.all(jnp.isfinite(output))
         assert jnp.all(jnp.isfinite(conservation_loss))
         assert conservation_loss.shape == ()  # Scalar loss
 
-    def test_physics_cross_attention_adaptive_weighting(
-        self, sample_data_single_system
-    ):
+    def test_physics_cross_attention_adaptive_weighting(self, sample_data_single_system):
         """Test adaptive constraint weighting."""
         # Test with adaptive weighting enabled
         model_adaptive = PhysicsCrossAttention(
@@ -201,9 +181,7 @@ class TestPhysicsCrossAttention:
         assert jnp.all(jnp.isfinite(output_adaptive))
         assert jnp.all(jnp.isfinite(output_fixed))
 
-    def test_physics_cross_attention_cross_system_coupling(
-        self, sample_data_multi_system
-    ):
+    def test_physics_cross_attention_cross_system_coupling(self, sample_data_multi_system):
         """Test cross-system coupling mechanism."""
         # Test with cross-system coupling enabled
         model_coupled = PhysicsCrossAttention(
@@ -233,9 +211,7 @@ class TestPhysicsCrossAttention:
         assert jnp.all(jnp.isfinite(output_coupled))
         assert jnp.all(jnp.isfinite(output_decoupled))
 
-    def test_physics_cross_attention_gradient_computation(
-        self, sample_data_single_system
-    ):
+    def test_physics_cross_attention_gradient_computation(self, sample_data_single_system):
         """Test gradient computation through physics cross attention."""
         model = PhysicsCrossAttention(
             embed_dim=32,
@@ -256,9 +232,7 @@ class TestPhysicsCrossAttention:
         assert len(grad_leaves) > 0
         assert all(jnp.all(jnp.isfinite(leaf)) for leaf in grad_leaves)
 
-    def test_physics_cross_attention_jax_transformations(
-        self, sample_data_single_system
-    ):
+    def test_physics_cross_attention_jax_transformations(self, sample_data_single_system):
         """Test physics cross attention compatibility with JAX transformations."""
         model = PhysicsCrossAttention(
             embed_dim=32,

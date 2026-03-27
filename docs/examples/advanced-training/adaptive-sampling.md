@@ -37,8 +37,8 @@ Residual-based Adaptive Refinement (RAR) algorithm (Lu et al., 2021).
 
 ## Files
 
-- **Python script**: [`examples/advanced-training/adaptive_sampling.py`](https://github.com/Opifex/Opifex/blob/main/examples/advanced-training/adaptive_sampling.py)
-- **Jupyter notebook**: [`examples/advanced-training/adaptive_sampling.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/advanced-training/adaptive_sampling.ipynb)
+- **Python script**: [`examples/advanced-training/adaptive_sampling.py`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/adaptive_sampling.py)
+- **Jupyter notebook**: [`examples/advanced-training/adaptive_sampling.ipynb`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/adaptive_sampling.ipynb)
 
 ## Quick Start
 

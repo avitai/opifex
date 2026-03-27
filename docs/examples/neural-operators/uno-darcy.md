@@ -52,8 +52,8 @@ compares:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/uno_darcy.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/uno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/uno_darcy.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/uno_darcy.ipynb)
+- **Python Script**: [`examples/neural-operators/uno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/uno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural-operators/uno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/uno_darcy.ipynb)
 
 ## Quick Start
 
@@ -495,7 +495,7 @@ generalizes across resolutions, a hallmark of neural operator architectures.
 |---------|-------|-------------------|
 | [FNO on Darcy Flow](fno-darcy.md) | Intermediate | Standard FNO pipeline for comparison with UNO |
 | [U-FNO on Turbulence](ufno-turbulence.md) | Intermediate | U-FNO architecture for turbulence modeling |
-| [SFNO with Conservation Laws](sfno-climate-comprehensive.md) | Intermediate | Spherical neural operator for climate data |
+| [SFNO with Conservation Laws](sfno-climate-full.md) | Intermediate | Spherical neural operator for climate data |
 | [Neural Operator Benchmark](../benchmarking/operator-benchmark.md) | Advanced | Cross-architecture comparison (FNO, UNO, SFNO, U-FNO) |
 | [Grid Embeddings](../layers/grid-embeddings.md) | Beginner | Spatial coordinate injection for neural operators |
 

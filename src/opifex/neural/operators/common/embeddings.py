@@ -55,9 +55,7 @@ class GridEmbedding2D(EmbeddingBase):
         """Number of output channels after embedding (input + 2 coordinate channels)."""
         return self.in_channels + 2
 
-    def _generate_grid(
-        self, spatial_shape: tuple[int, int]
-    ) -> tuple[jax.Array, jax.Array]:
+    def _generate_grid(self, spatial_shape: tuple[int, int]) -> tuple[jax.Array, jax.Array]:
         """Generate 2D coordinate grid.
 
         Args:
@@ -67,12 +65,8 @@ class GridEmbedding2D(EmbeddingBase):
             Tuple of (x_grid, y_grid) coordinate arrays
         """
         h, w = spatial_shape
-        x_coords = jnp.linspace(
-            self.grid_boundaries[0][0], self.grid_boundaries[0][1], w
-        )
-        y_coords = jnp.linspace(
-            self.grid_boundaries[1][0], self.grid_boundaries[1][1], h
-        )
+        x_coords = jnp.linspace(self.grid_boundaries[0][0], self.grid_boundaries[0][1], w)
+        y_coords = jnp.linspace(self.grid_boundaries[1][0], self.grid_boundaries[1][1], h)
 
         # Create coordinate grids
         x_grid, y_grid = jnp.meshgrid(x_coords, y_coords, indexing="xy")
@@ -105,12 +99,8 @@ class GridEmbedding2D(EmbeddingBase):
         y_grid_expanded = jnp.expand_dims(y_grid, axis=(0, -1))  # (1, h, w, 1)
 
         # Broadcast to match batch size
-        x_grid_broadcasted = jnp.broadcast_to(
-            x_grid_expanded, (batch_size, *spatial_shape, 1)
-        )
-        y_grid_broadcasted = jnp.broadcast_to(
-            y_grid_expanded, (batch_size, *spatial_shape, 1)
-        )
+        x_grid_broadcasted = jnp.broadcast_to(x_grid_expanded, (batch_size, *spatial_shape, 1))
+        y_grid_broadcasted = jnp.broadcast_to(y_grid_expanded, (batch_size, *spatial_shape, 1))
 
         # Concatenate input with coordinate grids
         return jnp.concatenate([x, x_grid_broadcasted, y_grid_broadcasted], axis=-1)
@@ -144,10 +134,7 @@ class GridEmbeddingND(EmbeddingBase):
 
         # Validate input dimensions
         if len(self.grid_boundaries) != dim:
-            msg = (
-                f"Expected grid_boundaries to have length {dim}, "
-                f"got {len(self.grid_boundaries)}"
-            )
+            msg = f"Expected grid_boundaries to have length {dim}, got {len(self.grid_boundaries)}"
             raise RuntimeError(msg)
 
     @property
@@ -218,9 +205,7 @@ class GridEmbeddingND(EmbeddingBase):
             grid_expanded = jnp.expand_dims(grid, axis=(0, -1))
 
             # Broadcast to match batch size
-            grid_broadcasted = jnp.broadcast_to(
-                grid_expanded, (batch_size, *spatial_shape, 1)
-            )
+            grid_broadcasted = jnp.broadcast_to(grid_expanded, (batch_size, *spatial_shape, 1))
             grid_tensors.append(grid_broadcasted)
 
         # Concatenate input with all coordinate grids
@@ -261,9 +246,7 @@ class SinusoidalEmbedding(EmbeddingBase):
         self.max_positions = max_positions
 
         if embedding_type == "transformer" and max_positions is None:
-            raise ValueError(
-                "max_positions must be specified for transformer embedding"
-            )
+            raise ValueError("max_positions must be specified for transformer embedding")
 
     @property
     def out_channels(self) -> int:
@@ -290,9 +273,7 @@ class SinusoidalEmbedding(EmbeddingBase):
         elif x.ndim == 3:
             unbatched = False
         else:
-            raise ValueError(
-                f"Expected 2D or 3D input, got {x.ndim}D with shape {original_shape}"
-            )
+            raise ValueError(f"Expected 2D or 3D input, got {x.ndim}D with shape {original_shape}")
 
         batch_size, n_points, _ = x.shape
 

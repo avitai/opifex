@@ -21,7 +21,7 @@
 
 ## Overview
 
-This benchmark provides a comprehensive comparative analysis of UNO, FNO, and SFNO
+This benchmark provides a full comparative analysis of UNO, FNO, and SFNO
 neural operators using Opifex's benchmarking infrastructure. It evaluates accuracy,
 training throughput, memory efficiency, and statistical significance across multiple
 PDE datasets.
@@ -88,7 +88,7 @@ operator creation, dataset generation, evaluation, statistical analysis, and rep
 
 # %%
 class NeuralOperatorComparativeStudy:
-    """Comprehensive comparative study of neural operators."""
+    """Full comparative study of neural operators."""
 
     def __init__(
         self,
@@ -233,9 +233,7 @@ class NeuralOperatorComparativeStudy:
             return jnp.transpose(arr, (0, 3, 1, 2))
         return arr
 
-    def generate_test_datasets(
-        self, resolution: int
-    ) -> dict[str, dict[str, jnp.ndarray]]:
+    def generate_test_datasets(self, resolution: int) -> dict[str, dict[str, jnp.ndarray]]:
         """Generate test datasets for benchmarking.
 
         Args:
@@ -291,9 +289,7 @@ class NeuralOperatorComparativeStudy:
             )
 
             logger.info(f"  - Collecting {self.n_samples} samples...")
-            x_all, y_all = self._collect_data_from_source(
-                burgers_source, self.n_samples
-            )
+            x_all, y_all = self._collect_data_from_source(burgers_source, self.n_samples)
 
             datasets["Burgers"] = {
                 "x_train": x_all[:n_train],
@@ -301,9 +297,7 @@ class NeuralOperatorComparativeStudy:
                 "x_test": x_all[n_train:],
                 "y_test": y_all[n_train:],
             }
-            logger.info(
-                f"Burgers dataset ready: {datasets['Burgers']['x_train'].shape}"
-            )
+            logger.info(f"Burgers dataset ready: {datasets['Burgers']['x_train'].shape}")
 
         except Exception as e:
             logger.warning(f"Burgers dataset generation failed: {e}")
@@ -330,9 +324,7 @@ class NeuralOperatorComparativeStudy:
         Returns:
             Benchmark result
         """
-        logger.info(
-            f"Benchmarking {operator_name} on {dataset_name} (resolution: {resolution})"
-        )
+        logger.info(f"Benchmarking {operator_name} on {dataset_name} (resolution: {resolution})")
 
         # Prepare model for evaluation with operator-specific interfaces
         def model_fn(x):
@@ -345,9 +337,7 @@ class NeuralOperatorComparativeStudy:
 
                 # Convert back to channels-first format for consistency with targets
                 if len(result.shape) == 4:  # 2D output
-                    result = jnp.transpose(
-                        result, (0, 3, 1, 2)
-                    )  # (B, H, W, C) -> (B, C, H, W)
+                    result = jnp.transpose(result, (0, 3, 1, 2))  # (B, H, W, C) -> (B, C, H, W)
 
             else:
                 # FNO and SFNO expect channels-first format: (batch, channels, height, width)
@@ -370,9 +360,7 @@ class NeuralOperatorComparativeStudy:
             mse_val = mse_metric.value if mse_metric else float("nan")
             exec_time = result.metadata.get("execution_time", 0.0)
             logger.info(
-                f"{operator_name} on {dataset_name}: "
-                f"MSE={mse_val:.6f}, "
-                f"Time={exec_time:.4f}s"
+                f"{operator_name} on {dataset_name}: MSE={mse_val:.6f}, Time={exec_time:.4f}s"
             )
 
             return result
@@ -437,8 +425,7 @@ class NeuralOperatorComparativeStudy:
             resolution_results = [
                 r
                 for r in self.all_results
-                if f"_{resolution}" in r.name
-                and f"_{resolution}" in r.tags.get("dataset", "")
+                if f"_{resolution}" in r.name and f"_{resolution}" in r.tags.get("dataset", "")
             ]
 
             if resolution_results:
@@ -446,9 +433,7 @@ class NeuralOperatorComparativeStudy:
                 for result in resolution_results:
                     self.results_manager.save_benchmark_results(result)
 
-                logger.info(
-                    f"Saved {len(resolution_results)} results for resolution {resolution}"
-                )
+                logger.info(f"Saved {len(resolution_results)} results for resolution {resolution}")
             else:
                 logger.warning(f"No results to save for resolution {resolution}")
 
@@ -456,7 +441,7 @@ class NeuralOperatorComparativeStudy:
             logger.exception("Failed to save intermediate results")
 
     def generate_comparative_analysis(self):
-        """Generate comprehensive comparative analysis."""
+        """Generate full comparative analysis."""
         logger.info("Generating comparative analysis...")
 
         if not self.all_results:
@@ -527,23 +512,15 @@ class NeuralOperatorComparativeStudy:
                     resolutions.add(resolution)
 
                 # Plot MSE vs Resolution
-                ax = (
-                    axes[0]
-                    if dataset_name == next(iter(results_by_dataset.keys()))
-                    else axes[1]
-                )
+                ax = axes[0] if dataset_name == next(iter(results_by_dataset.keys())) else axes[1]
                 ax.set_title(f"MSE vs Resolution - {dataset_name}")
 
                 for operator_name, mse_data in operator_mse.items():
                     resolutions_list = sorted(resolutions)
-                    mse_values = [
-                        mse_data.get(r, float("inf")) for r in resolutions_list
-                    ]
+                    mse_values = [mse_data.get(r, float("inf")) for r in resolutions_list]
 
                     # Filter out infinite values for plotting
-                    valid_indices = [
-                        i for i, v in enumerate(mse_values) if v != float("inf")
-                    ]
+                    valid_indices = [i for i, v in enumerate(mse_values) if v != float("inf")]
                     if valid_indices:
                         valid_resolutions = [resolutions_list[i] for i in valid_indices]
                         valid_mse = [mse_values[i] for i in valid_indices]
@@ -562,9 +539,7 @@ class NeuralOperatorComparativeStudy:
                 ax.grid(True, alpha=0.3)
 
             plt.tight_layout()
-            plt.savefig(
-                self.output_dir / "mse_comparison.png", dpi=300, bbox_inches="tight"
-            )
+            plt.savefig(self.output_dir / "mse_comparison.png", dpi=300, bbox_inches="tight")
             plt.close()
 
             # Plot 2: Execution time comparison
@@ -603,9 +578,7 @@ class NeuralOperatorComparativeStudy:
         except Exception:
             logger.exception("Plot creation failed")
 
-    def perform_statistical_analysis(
-        self, results_by_operator: dict[str, list[BenchmarkResult]]
-    ):
+    def perform_statistical_analysis(self, results_by_operator: dict[str, list[BenchmarkResult]]):
         """Perform statistical analysis of operator performance."""
         logger.info("Performing statistical analysis...")
 
@@ -644,9 +617,7 @@ class NeuralOperatorComparativeStudy:
 
                         analysis_results[f"{op1}_vs_{op2}"] = {
                             "mean_mse_diff": mean_mse1 - mean_mse2,
-                            "relative_improvement": (mean_mse2 - mean_mse1)
-                            / mean_mse2
-                            * 100,
+                            "relative_improvement": (mean_mse2 - mean_mse1) / mean_mse2 * 100,
                             f"{op1}_mean": mean_mse1,
                             f"{op1}_std": std_mse1,
                             f"{op2}_mean": mean_mse2,
@@ -664,9 +635,7 @@ class NeuralOperatorComparativeStudy:
         except Exception:
             logger.exception("Statistical analysis failed")
 
-    def _format_performance_metrics(
-        self, results: list[BenchmarkResult]
-    ) -> dict[str, float]:
+    def _format_performance_metrics(self, results: list[BenchmarkResult]) -> dict[str, float]:
         """Format performance metrics from results."""
         if not results:
             return {
@@ -678,16 +647,12 @@ class NeuralOperatorComparativeStudy:
 
         # Calculate average metrics
         mse_values = [
-            r.metrics["mse"].value if "mse" in r.metrics else float("inf")
-            for r in results
+            r.metrics["mse"].value if "mse" in r.metrics else float("inf") for r in results
         ]
         mae_values = [
-            r.metrics["mae"].value if "mae" in r.metrics else float("inf")
-            for r in results
+            r.metrics["mae"].value if "mae" in r.metrics else float("inf") for r in results
         ]
-        r2_values = [
-            r.metrics["r2"].value if "r2" in r.metrics else 0.0 for r in results
-        ]
+        r2_values = [r.metrics["r2"].value if "r2" in r.metrics else 0.0 for r in results]
         time_values = [r.metadata.get("execution_time", float("inf")) for r in results]
 
         return {
@@ -721,9 +686,7 @@ class NeuralOperatorComparativeStudy:
             f.write(f"- **{dataset_name}**: {results_count} benchmark runs\n")
         f.write("\n")
 
-    def _write_key_findings(
-        self, f, results_by_operator: dict[str, list[BenchmarkResult]]
-    ) -> None:
+    def _write_key_findings(self, f, results_by_operator: dict[str, list[BenchmarkResult]]) -> None:
         """Write key findings section."""
         f.write("## Key Findings\n\n")
 
@@ -747,9 +710,7 @@ class NeuralOperatorComparativeStudy:
         operator_avg_time = {}
         for operator_name, results in results_by_operator.items():
             valid_results = [
-                r
-                for r in results
-                if r.metadata.get("execution_time", float("inf")) != float("inf")
+                r for r in results if r.metadata.get("execution_time", float("inf")) != float("inf")
             ]
             if valid_results:
                 operator_avg_time[operator_name] = np.mean(
@@ -770,7 +731,7 @@ class NeuralOperatorComparativeStudy:
         results_by_operator: dict[str, list[BenchmarkResult]],
         results_by_dataset: dict[str, list[BenchmarkResult]],
     ):
-        """Generate comprehensive summary report."""
+        """Generate full summary report."""
         logger.info("Generating summary report...")
 
         try:
@@ -783,7 +744,7 @@ class NeuralOperatorComparativeStudy:
                 # Executive Summary
                 f.write("## Executive Summary\n\n")
                 f.write(
-                    f"This report presents a comprehensive comparative analysis of "
+                    f"This report presents a full comparative analysis of "
                     f"{len(results_by_operator)} neural operators across "
                     f"{len(results_by_dataset)} datasets and "
                     f"{len(self.resolution_sizes)} resolutions.\n\n"
@@ -794,15 +755,11 @@ class NeuralOperatorComparativeStudy:
                 for operator_name in results_by_operator:
                     f.write(f"- **{operator_name}**: ")
                     if operator_name == "UNO":
-                        f.write(
-                            "U-Net Neural Operator (Multi-scale CNN + Fourier layers)\n"
-                        )
+                        f.write("U-Net Neural Operator (Multi-scale CNN + Fourier layers)\n")
                     elif operator_name == "FNO":
                         f.write("Fourier Neural Operator (Spectral convolutions)\n")
                     elif operator_name == "SFNO":
-                        f.write(
-                            "Spherical Fourier Neural Operator (Spherical harmonics)\n"
-                        )
+                        f.write("Spherical Fourier Neural Operator (Spherical harmonics)\n")
                     else:
                         f.write("Neural operator\n")
 
@@ -813,9 +770,7 @@ class NeuralOperatorComparativeStudy:
 
                 # Resolution Study
                 f.write("## Multi-Resolution Analysis\n\n")
-                f.write(
-                    f"**Resolutions tested**: {', '.join(map(str, self.resolution_sizes))}\n\n"
-                )
+                f.write(f"**Resolutions tested**: {', '.join(map(str, self.resolution_sizes))}\n\n")
 
                 # Performance Summary
                 f.write("## Performance Summary\n\n")
@@ -824,16 +779,12 @@ class NeuralOperatorComparativeStudy:
                     valid_results = [r for r in results if "mse" in r.metrics]
                     if valid_results:
                         mse_values = [r.metrics["mse"].value for r in valid_results]
-                        time_values = [
-                            r.metadata.get("execution_time", 0.0) for r in valid_results
-                        ]
+                        time_values = [r.metadata.get("execution_time", 0.0) for r in valid_results]
 
                         f.write(f"### {operator_name}\n")
                         f.write(f"- **Mean MSE**: {np.mean(mse_values):.6f}\n")
                         f.write(f"- **MSE Std**: {np.std(mse_values):.6f}\n")
-                        f.write(
-                            f"- **Mean Execution Time**: {np.mean(time_values):.4f}s\n"
-                        )
+                        f.write(f"- **Mean Execution Time**: {np.mean(time_values):.4f}s\n")
                         f.write(f"- **Successful Runs**: {len(valid_results)}\n\n")
 
                 # Key Findings
@@ -851,12 +802,8 @@ class NeuralOperatorComparativeStudy:
                 # Files Generated
                 f.write("## Generated Files\n\n")
                 f.write("- `mse_comparison.png`: MSE vs resolution plots\n")
-                f.write(
-                    "- `execution_time_comparison.png`: Execution time distributions\n"
-                )
-                f.write(
-                    "- `statistical_analysis.json`: Detailed statistical comparisons\n"
-                )
+                f.write("- `execution_time_comparison.png`: Execution time distributions\n")
+                f.write("- `statistical_analysis.json`: Detailed statistical comparisons\n")
                 f.write("- Individual benchmark result files in results directory\n")
 
             logger.info(f"Report saved to {report_path}")
@@ -866,7 +813,7 @@ class NeuralOperatorComparativeStudy:
 
     def run_complete_study(self):
         """Run the complete comparative study."""
-        logger.info("Starting comprehensive neural operator comparative study!")
+        logger.info("Starting full neural operator comparative study!")
 
         start_time = time.perf_counter()
 
@@ -881,18 +828,14 @@ class NeuralOperatorComparativeStudy:
             logger.info(f"Complete study finished in {total_time:.2f} seconds!")
 
             # Print summary
-            successful_runs = len(
-                [r for r in self.all_results if r.metrics.get("error") is None]
-            )
+            successful_runs = len([r for r in self.all_results if r.metrics.get("error") is None])
             total_runs = len(self.all_results)
 
             logger.info("STUDY SUMMARY:")
             logger.info(f"   Total benchmark runs: {total_runs}")
             logger.info(f"   Successful runs: {successful_runs}")
             if total_runs > 0:
-                logger.info(
-                    f"   Success rate: {successful_runs / total_runs * 100:.1f}%"
-                )
+                logger.info(f"   Success rate: {successful_runs / total_runs * 100:.1f}%")
             else:
                 logger.info("   Success rate: N/A (no runs completed)")
             logger.info(f"   Results saved to: {self.output_dir}")
@@ -927,9 +870,7 @@ def main():
     """Main function to run the comparative study."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Neural Operator Comparative Benchmarking Study"
-    )
+    parser = argparse.ArgumentParser(description="Neural Operator Comparative Benchmarking Study")
     parser.add_argument(
         "--output-dir",
         default="benchmark_results/operator_benchmark",
@@ -942,9 +883,7 @@ def main():
         default=[32, 64, 96],
         help="Grid resolutions to test",
     )
-    parser.add_argument(
-        "--n-samples", type=int, default=1000, help="Number of samples per dataset"
-    )
+    parser.add_argument("--n-samples", type=int, default=1000, help="Number of samples per dataset")
     parser.add_argument(
         "--n-time-steps",
         type=int,

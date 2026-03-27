@@ -21,7 +21,7 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 
 ```bash
 # Clone the repository
-git clone https://github.com/opifex-org/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 
 # Set up unified development environment (auto-detects GPU/CPU)
@@ -147,7 +147,7 @@ We welcome contributions! Please see our [Contributing Guide](development/contri
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/opifex-org/opifex/blob/main/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/avitai/opifex/blob/main/LICENSE) file for details.
 
 ---
 

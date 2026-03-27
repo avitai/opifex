@@ -182,7 +182,7 @@ target_params = warm_starter.initialize_from_source(
 
 ### 3. Performance Monitoring
 
-Comprehensive tracking of optimization performance:
+Full tracking of optimization performance:
 
 ```python
 from opifex.optimization.meta_optimization import PerformanceMonitor

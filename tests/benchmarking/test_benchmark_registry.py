@@ -169,9 +169,7 @@ class TestCompatibility:
 class TestPersistence:
     """Tests for JSON save/load of registry state."""
 
-    def test_save_and_load(
-        self, tmp_path: Path, sample_benchmark: BenchmarkConfig
-    ) -> None:
+    def test_save_and_load(self, tmp_path: Path, sample_benchmark: BenchmarkConfig) -> None:
         """Save registry and reload from file preserves benchmarks."""
         config_path = str(tmp_path / "registry.json")
         reg = BenchmarkRegistry(config_path=config_path)

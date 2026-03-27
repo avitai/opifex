@@ -39,8 +39,8 @@ coordinate normalization and channel concatenation, replacing manual meshgrid bo
 
 ## Files
 
-- **Python Script**: [`examples/layers/grid_embeddings_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/grid_embeddings_example.py)
-- **Jupyter Notebook**: [`examples/layers/grid_embeddings_example.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/layers/grid_embeddings_example.ipynb)
+- **Python Script**: [`examples/layers/grid_embeddings_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/grid_embeddings_example.py)
+- **Jupyter Notebook**: [`examples/layers/grid_embeddings_example.ipynb`](https://github.com/avitai/opifex/blob/main/examples/layers/grid_embeddings_example.ipynb)
 
 ## Quick Start
 
@@ -190,7 +190,7 @@ The coordinate grids show the spatial structure injected by embeddings:
 |---------|-------|-------------------|
 | [DISCO Convolutions](disco-convolutions.md) | Intermediate | Convolutions on arbitrary grids |
 | [Fourier Continuation](fourier-continuation.md) | Intermediate | Boundary handling for spectral methods |
-| [FNO Darcy Comprehensive](../neural-operators/fno-darcy.md) | Intermediate | Full FNO training with grid embeddings |
+| [FNO Darcy Full](../neural-operators/fno-darcy.md) | Intermediate | Full FNO training with grid embeddings |
 
 ### API Reference
 

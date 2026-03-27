@@ -28,7 +28,7 @@ The Opifex framework uses a unified environment setup system designed to handle 
 
 - **One-time setup**: Run once, activate many times
 - **Isolated dependencies**: Virtual environment prevents conflicts
-- **Easy troubleshooting**: Comprehensive error detection and reporting
+- **Easy troubleshooting**: Full error detection and reporting
 
 ## Setup Process
 
@@ -36,7 +36,7 @@ The Opifex framework uses a unified environment setup system designed to handle 
 
 ```bash
 # Clone the repository
-git clone https://github.com/opifex-org/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 
 # Run unified setup (auto-detects GPU/CPU)
@@ -74,7 +74,7 @@ source ./activate.sh
 | Option | Description | Use Case |
 |--------|-------------|----------|
 | `--help`, `-h` | Show help message | Get usage information |
-| `--deep-clean` | Comprehensive cleaning | Clear all caches and start fresh |
+| `--deep-clean` | Full cleaning | Clear all caches and start fresh |
 | `--cpu-only` | Force CPU-only setup | Skip GPU detection/configuration |
 | `--force` | Force reinstallation | Overwrite existing environment |
 | `--verbose`, `-v` | Show detailed output | Debug setup issues |
@@ -215,7 +215,7 @@ $ source ./activate.sh
    Virtual Environment: /path/to/opifex/.venv
 
 🧪 JAX Configuration:
-   JAX version: 0.6.2
+   JAX version: 0.8.0
    Default backend: gpu
    Available devices: 2 total
    🎉 GPU devices: 1 ([cuda:0])
@@ -583,8 +583,8 @@ export XLA_CACHE_DIR="./cache/xla"
 
 ### Community Support
 
-- [GitHub Issues](https://github.com/opifex-org/opifex/issues) - Bug reports
-- [Discussions](https://github.com/opifex-org/opifex/discussions) - Q&A
+- [GitHub Issues](https://github.com/avitai/opifex/issues) - Bug reports
+- [Discussions](https://github.com/avitai/opifex/discussions) - Q&A
 - [Contributing Guide](../development/contributing.md) - Contribution help
 
 ### Quick Reference

@@ -75,9 +75,7 @@ class TestDataLoaderIntegration:
         """Burgers loader works with benchmarks."""
         from opifex.data.loaders import create_burgers_loader
 
-        loader = create_burgers_loader(
-            n_samples=10, batch_size=2, resolution=32, dimension="2d"
-        )
+        loader = create_burgers_loader(n_samples=10, batch_size=2, resolution=32, dimension="2d")
 
         batch = next(iter(loader))
         assert "input" in batch
@@ -335,8 +333,6 @@ class TestBenchmarkRunnerRealExecution:
         assert result.metadata.get("execution_time", 0.0) > 0  # Real timing
 
         # Run again - results should be deterministic (same seed)
-        result2 = runner._run_single_benchmark(
-            "TensorizedFourierNeuralOperator", config
-        )
+        result2 = runner._run_single_benchmark("TensorizedFourierNeuralOperator", config)
         # Results should be similar (not random each time)
         assert abs(result.metrics["mse"].value - result2.metrics["mse"].value) < 0.1

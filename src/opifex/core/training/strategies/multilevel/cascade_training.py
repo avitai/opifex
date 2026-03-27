@@ -108,7 +108,5 @@ class CascadeTrainer:
         new_val = jnp.zeros(new_shape, dtype=old_val.dtype)
 
         # Copy overlapping slice
-        slices = tuple(
-            slice(0, min(o, n)) for o, n in zip(old_val.shape, new_shape, strict=False)
-        )
+        slices = tuple(slice(0, min(o, n)) for o, n in zip(old_val.shape, new_shape, strict=False))
         return new_val.at[slices].set(old_val[slices])

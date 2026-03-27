@@ -407,9 +407,7 @@ def _compute_kurtosis(data: jax.Array) -> jax.Array:
     return jnp.mean(normalized**4) - 3
 
 
-def _analyze_spatial_patterns(
-    errors: jax.Array, spatial_coords: jax.Array
-) -> dict[str, Any]:
+def _analyze_spatial_patterns(errors: jax.Array, spatial_coords: jax.Array) -> dict[str, Any]:
     """Analyze spatial patterns in errors."""
     return {
         "spatial_correlation": float(
@@ -419,15 +417,11 @@ def _analyze_spatial_patterns(
     }
 
 
-def _analyze_temporal_patterns(
-    errors: jax.Array, temporal_coords: jax.Array
-) -> dict[str, Any]:
+def _analyze_temporal_patterns(errors: jax.Array, temporal_coords: jax.Array) -> dict[str, Any]:
     """Analyze temporal patterns in errors."""
     return {
         "temporal_correlation": float(
             jnp.corrcoef(errors.flatten(), temporal_coords.flatten())[0, 1]
         ),
-        "temporal_trend": float(
-            jnp.polyfit(temporal_coords.flatten(), errors.flatten(), 1)[0]
-        ),
+        "temporal_trend": float(jnp.polyfit(temporal_coords.flatten(), errors.flatten(), 1)[0]),
     }

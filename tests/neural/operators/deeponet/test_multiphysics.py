@@ -22,12 +22,8 @@ class TestMultiPhysicsDeepONet:
         trunk_input_dim = 2
 
         # Modern input format using Arrays
-        branch_inputs = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
-        trunk_input = jax.random.normal(
-            jax.random.PRNGKey(1), (batch_size, trunk_input_dim)
-        )
+        branch_inputs = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
+        trunk_input = jax.random.normal(jax.random.PRNGKey(1), (batch_size, trunk_input_dim))
 
         return {
             "branch_inputs": branch_inputs,
@@ -201,9 +197,7 @@ class TestMultiPhysicsDeepONet:
         )
 
         # Test with multiple branch inputs
-        branch_inputs = [
-            jax.random.normal(jax.random.PRNGKey(i), (8, 64)) for i in range(3)
-        ]
+        branch_inputs = [jax.random.normal(jax.random.PRNGKey(i), (8, 64)) for i in range(3)]
 
         output = model(
             branch_inputs,

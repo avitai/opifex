@@ -220,7 +220,7 @@ def _run_benchmark(
             "model_name": result.name,
             "dataset_name": result.tags.get("dataset", result.name),
             "execution_time": exec_time,
-            "metrics": {k: m.value for k, m in result.metrics.items()},
+            "metrics": {k: float(m.value) for k, m in result.metrics.items()},
             "framework_version": result.metadata.get("framework_version", ""),
         }
         with open(output_file, "w") as f:

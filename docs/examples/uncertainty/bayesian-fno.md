@@ -45,8 +45,8 @@ approach adds Bayesian capabilities to any existing neural operator.
 
 ## Files
 
-- **Python Script**: [`examples/uncertainty/bayesian_fno.py`](https://github.com/Opifex/Opifex/blob/main/examples/uncertainty/bayesian_fno.py)
-- **Jupyter Notebook**: [`examples/uncertainty/bayesian_fno.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/uncertainty/bayesian_fno.ipynb)
+- **Python Script**: [`examples/uncertainty/bayesian_fno.py`](https://github.com/avitai/opifex/blob/main/examples/uncertainty/bayesian_fno.py)
+- **Jupyter Notebook**: [`examples/uncertainty/bayesian_fno.ipynb`](https://github.com/avitai/opifex/blob/main/examples/uncertainty/bayesian_fno.ipynb)
 
 ## Quick Start
 
@@ -233,7 +233,7 @@ Uncertainty calibration analysis...
 
 | Issue | Solution |
 |-------|----------|
-| `distrax` import error | Install: `pip install tf-keras distrax` |
+| `distrax` import error | Install: `uv pip install tf-keras distrax` |
 | Memory issues | Reduce amortization `hidden_dims` |
 | Poor calibration | Use more MC samples, tune perturbation scale |
 | High parameter count | Use smaller amortization network |
@@ -243,7 +243,7 @@ Uncertainty calibration analysis...
 Full variational inference with ELBO training requires:
 
 ```bash
-pip install tf-keras distrax
+uv pip install tf-keras distrax
 ```
 
 This example uses simplified perturbation-based uncertainty for broader compatibility.

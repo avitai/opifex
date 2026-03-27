@@ -279,16 +279,12 @@ def ic_loss(model, xt_ic, u_ic):
     weight_left = jnp.where(x_vals < 0, 1.0, 0.0)
     networks_list = list(model.networks)
     u_pred_left = networks_list[0](xt_ic).squeeze()
-    loss_left = jnp.sum(weight_left * (u_pred_left - u_ic) ** 2) / (
-        jnp.sum(weight_left) + 1e-8
-    )
+    loss_left = jnp.sum(weight_left * (u_pred_left - u_ic) ** 2) / (jnp.sum(weight_left) + 1e-8)
 
     # Right subdomain: x >= 0
     weight_right = jnp.where(x_vals >= 0, 1.0, 0.0)
     u_pred_right = networks_list[1](xt_ic).squeeze()
-    loss_right = jnp.sum(weight_right * (u_pred_right - u_ic) ** 2) / (
-        jnp.sum(weight_right) + 1e-8
-    )
+    loss_right = jnp.sum(weight_right * (u_pred_right - u_ic) ** 2) / (jnp.sum(weight_right) + 1e-8)
 
     return (loss_left + loss_right) / 2.0
 
@@ -440,9 +436,7 @@ axes[1, 0].grid(True, alpha=0.3)
 
 # Interface continuity check
 axes[1, 1].plot(t_interface, u_left_interface, "b-", linewidth=2, label="Left at x=0")
-axes[1, 1].plot(
-    t_interface, u_right_interface, "r--", linewidth=2, label="Right at x=0"
-)
+axes[1, 1].plot(t_interface, u_right_interface, "r--", linewidth=2, label="Right at x=0")
 axes[1, 1].set_xlabel("t")
 axes[1, 1].set_ylabel("u at interface")
 axes[1, 1].set_title(f"Interface Continuity (jump={interface_jump:.4e})")
@@ -457,9 +451,7 @@ axes[1, 2].set_title("Training History")
 axes[1, 2].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(
-    "docs/assets/examples/xpinn_helmholtz/solution.png", dpi=150, bbox_inches="tight"
-)
+plt.savefig("docs/assets/examples/xpinn_helmholtz/solution.png", dpi=150, bbox_inches="tight")
 print()
 print("Saved: docs/assets/examples/xpinn_helmholtz/solution.png")
 plt.show()
@@ -487,9 +479,7 @@ axes[1].set_title("Solution at Interface (x=0)")
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(
-    "docs/assets/examples/xpinn_helmholtz/analysis.png", dpi=150, bbox_inches="tight"
-)
+plt.savefig("docs/assets/examples/xpinn_helmholtz/analysis.png", dpi=150, bbox_inches="tight")
 print("Saved: docs/assets/examples/xpinn_helmholtz/analysis.png")
 plt.show()
 

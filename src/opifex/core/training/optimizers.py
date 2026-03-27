@@ -339,11 +339,7 @@ def create_optimizer(config: OptimizerConfig) -> optax.GradientTransformation:
         if config.clip_type == "by_global_norm":
             transformations.append(optax.clip_by_global_norm(config.gradient_clip))
         elif config.clip_type == "by_value":
-            max_val = (
-                config.max_value
-                if config.max_value is not None
-                else config.gradient_clip
-            )
+            max_val = config.max_value if config.max_value is not None else config.gradient_clip
             transformations.append(optax.clip(max_val))
 
     # Add schedule (if specified)

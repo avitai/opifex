@@ -2,7 +2,7 @@
 
 ## Overview
 
-Opifex provides a unified framework for scientific machine learning, combining traditional numerical methods with modern deep learning approaches. Built on JAX and FLAX NNX, it offers high-performance, differentiable computing for scientific applications with comprehensive physics-informed capabilities.
+Opifex provides a unified framework for scientific machine learning, combining traditional numerical methods with modern deep learning approaches. Built on JAX and FLAX NNX, it offers high-performance, differentiable computing for scientific applications with full physics-informed capabilities.
 
 ## Framework Architecture
 
@@ -59,7 +59,7 @@ print(f"Input shape: {x.shape}, Output shape: {output.shape}")
 
 ### 1. Problems (`opifex.core.problems`)
 
-Define scientific problems with comprehensive specification capabilities:
+Define scientific problems with full specification capabilities:
 
 ```python
 from opifex.core.problems import create_pde_problem
@@ -124,7 +124,7 @@ Physics-aware training procedures with advanced optimization:
 from opifex.training.basic_trainer import ModularTrainer
 from opifex.core.training.config import TrainingConfig
 
-# Configure comprehensive training
+# Configure full training
 config = TrainingConfig(
     num_epochs=5000,
     batch_size=128,
@@ -149,7 +149,7 @@ trained_model, history = trainer.train(
 
 ### 4. Geometry (`opifex.geometry`)
 
-Comprehensive geometric modeling with CSG operations:
+Full geometric modeling with CSG operations:
 
 ```python
 from opifex.geometry import Rectangle, Circle, union, intersection

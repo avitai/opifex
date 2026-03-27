@@ -49,8 +49,8 @@ this workflow:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/fno_burgers.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/fno_burgers.py)
-- **Jupyter Notebook**: [`examples/neural-operators/fno_burgers.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/fno_burgers.ipynb)
+- **Python Script**: [`examples/neural-operators/fno_burgers.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_burgers.py)
+- **Jupyter Notebook**: [`examples/neural-operators/fno_burgers.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_burgers.ipynb)
 
 ## Quick Start
 

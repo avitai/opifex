@@ -41,7 +41,7 @@ print(f"Problem type: {type(pde_problem).__name__}")
 
 ### 2. Boundary and Initial Conditions ✅ **WORKING**
 
-Comprehensive boundary condition framework:
+Full boundary condition framework:
 
 ```python
 from opifex.core.conditions import (
@@ -340,7 +340,7 @@ print(f"✅ Multiple problem types supported")
 
 ### Testing Infrastructure
 
-The core module includes comprehensive testing infrastructure:
+The core module includes full testing infrastructure:
 
 ```python
 from opifex.core.testing_infrastructure import (
@@ -505,4 +505,4 @@ print(f'✅ GPU computation successful: {y}')
 
 ---
 
-**Ready to get started?** Check out the [examples directory](../../examples/) for comprehensive demonstrations of all core capabilities!
+**Ready to get started?** Check out the [examples directory](../../examples/) for full demonstrations of all core capabilities!

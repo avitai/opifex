@@ -335,9 +335,7 @@ total_uncertainty = output["total_uncertainty"]
 
 # Compute error metrics
 mse = jnp.mean((predictions - test_targets) ** 2)
-l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(
-    jnp.sum(test_targets**2)
-)
+l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(jnp.sum(test_targets**2))
 rmse = jnp.sqrt(mse)
 
 print()
@@ -368,9 +366,9 @@ mean_error_per_sample = jnp.mean(errors, axis=(1, 2, 3))
 mean_uncertainty_per_sample = jnp.mean(total_uncertainty, axis=(1, 2, 3))
 
 # Correlation between error and uncertainty (higher = better calibrated)
-correlation = jnp.corrcoef(
-    mean_error_per_sample.flatten(), mean_uncertainty_per_sample.flatten()
-)[0, 1]
+correlation = jnp.corrcoef(mean_error_per_sample.flatten(), mean_uncertainty_per_sample.flatten())[
+    0, 1
+]
 print(f"  Error-Uncertainty Correlation: {float(correlation):.4f}")
 
 # Coverage: fraction of errors within uncertainty bounds

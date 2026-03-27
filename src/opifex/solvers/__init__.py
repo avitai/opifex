@@ -13,14 +13,20 @@ from opifex.solvers.pinn import (
     PINNSolver,
     poisson_residual,
 )
-from opifex.solvers.wrappers import BayesianWrapper, ConformalWrapper, L2OWrapper
+from opifex.solvers.wrappers import (
+    BayesianWrapper,
+    ConformalWrapper,
+    EnsembleWrapper,
+    GenerativeWrapper,
+)
 
 
 __all__ = [
     "BayesianWrapper",
     "ConformalWrapper",
+    "EnsembleWrapper",
+    "GenerativeWrapper",
     "HybridSolver",
-    "L2OWrapper",
     "NeuralOperatorSolver",
     "PINNConfig",
     "PINNResult",

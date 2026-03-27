@@ -65,9 +65,7 @@ class BayesianLinear(nnx.Module):
 
         # Weight mean parameters  handling
         self.weight_mean = nnx.Param(
-            nnx.initializers.normal(stddev=0.1)(
-                rngs.params(), (out_features, in_features)
-            )
+            nnx.initializers.normal(stddev=0.1)(rngs.params(), (out_features, in_features))
         )
         self.weight_logvar = nnx.Param(
             nnx.initializers.constant(-3.0)(rngs.params(), (out_features, in_features))
@@ -82,9 +80,7 @@ class BayesianLinear(nnx.Module):
         # Counter for generating unique keys (stored as Param for JIT compatibility)
         self._sample_counter = nnx.Variable(jnp.array(0, dtype=jnp.int32))
 
-    def __call__(
-        self, x: jax.Array, training: bool = True, sample: bool = True
-    ) -> jax.Array:
+    def __call__(self, x: jax.Array, training: bool = True, sample: bool = True) -> jax.Array:
         """
         Forward pass with Bayesian sampling.
 
@@ -194,9 +190,7 @@ class BayesianSpectralConvolution(nnx.Module):
         self.weight_mean = nnx.Param(
             nnx.initializers.normal(stddev=0.1)(rngs.params(), weight_shape)
         )
-        self.weight_logvar = nnx.Param(
-            nnx.initializers.constant(-3.0)(rngs.params(), weight_shape)
-        )
+        self.weight_logvar = nnx.Param(nnx.initializers.constant(-3.0)(rngs.params(), weight_shape))
 
         # Separate imaginary parts for complex weights  handling
         self.weight_imag_mean = nnx.Param(
@@ -211,9 +205,7 @@ class BayesianSpectralConvolution(nnx.Module):
         # Counter for generating unique keys (stored as Variable for JIT compatibility)
         self._sample_counter = nnx.Variable(jnp.array(0, dtype=jnp.int32))
 
-    def _sample_weights(
-        self, training: bool, sample: bool
-    ) -> tuple[jax.Array, jax.Array]:
+    def _sample_weights(self, training: bool, sample: bool) -> tuple[jax.Array, jax.Array]:
         """Sample or use mean weights for spectral convolution."""
         if training and sample:
             real_std = jnp.exp(0.5 * self.weight_logvar.value)
@@ -275,12 +267,8 @@ class BayesianSpectralConvolution(nnx.Module):
         # Pad and inverse FFT back to spatial domain
         if len(self.modes) == 2:
             # 2D case: pad and use irfftn
-            out_ft_padded = jnp.zeros(
-                (batch_size, self.out_channels, height, width // 2 + 1)
-            )
-            out_ft_padded = out_ft_padded.at[:, :, :modes_h, : modes_w // 2 + 1].set(
-                out_ft
-            )
+            out_ft_padded = jnp.zeros((batch_size, self.out_channels, height, width // 2 + 1))
+            out_ft_padded = out_ft_padded.at[:, :, :modes_h, : modes_w // 2 + 1].set(out_ft)
             return jnp.fft.irfftn(out_ft_padded, s=(height, width), axes=(-2, -1))
         # 1D case: pad and use irfft
         out_ft_padded = jnp.zeros((batch_size, self.out_channels, height))
@@ -305,23 +293,17 @@ class BayesianSpectralConvolution(nnx.Module):
 
         # Validate input channels
         if in_channels != self.in_channels:
-            raise ValueError(
-                f"Expected {self.in_channels} input channels, got {in_channels}"
-            )
+            raise ValueError(f"Expected {self.in_channels} input channels, got {in_channels}")
 
         # Sample weights and get aleatoric uncertainty
         weights, aleatoric_uncertainty = self._sample_weights(training, sample)
 
         # Perform spectral convolution
-        output_mean = self._perform_spectral_convolution(
-            x, weights, batch_size, height, width
-        )
+        output_mean = self._perform_spectral_convolution(x, weights, batch_size, height, width)
         output_mean = jnp.real(output_mean)
 
         # Ensure aleatoric uncertainty has correct shape  handling
-        aleatoric_uncertainty = jnp.broadcast_to(
-            aleatoric_uncertainty, output_mean.shape
-        )
+        aleatoric_uncertainty = jnp.broadcast_to(aleatoric_uncertainty, output_mean.shape)
 
         return output_mean, aleatoric_uncertainty
 
@@ -407,9 +389,7 @@ class UQNOLayer(nnx.Module):
         else:
             self.channel_proj = None  # type: ignore[assignment]
 
-    def __call__(
-        self, x: jax.Array, training: bool = True
-    ) -> tuple[jax.Array, jax.Array]:
+    def __call__(self, x: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:
         """
         Forward pass with proper shape handling.
 
@@ -559,9 +539,7 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
         )  # Shape: (batch, hidden_channels, height, width)
 
         # Convert to channels-last for projection
-        combined_aleatoric_for_projection = combined_aleatoric_channels_first.transpose(
-            0, 2, 3, 1
-        )
+        combined_aleatoric_for_projection = combined_aleatoric_channels_first.transpose(0, 2, 3, 1)
         # Shape: (batch, height, width, hidden_channels)
 
         # Project to output dimension using a linear transformation
@@ -601,9 +579,7 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
         _batch_size, _height, _width, _in_channels = x.shape
 
         # Lifting with shape handling
-        x = self.lifting(
-            x, training=training
-        )  # (batch, height, width, hidden_channels)
+        x = self.lifting(x, training=training)  # (batch, height, width, hidden_channels)
 
         # Convert to channels-first for convolution layers
         x = x.transpose(0, 3, 1, 2)  # (batch, hidden_channels, height, width)
@@ -624,9 +600,7 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
 
         # Compute uncertainties
         epistemic_std = self._compute_epistemic_uncertainty(x, mean_pred, training)
-        combined_aleatoric = self._compute_aleatoric_uncertainty(
-            aleatoric_stds, mean_pred
-        )
+        combined_aleatoric = self._compute_aleatoric_uncertainty(aleatoric_stds, mean_pred)
 
         # Total uncertainty
         total_uncertainty = jnp.sqrt(epistemic_std**2 + combined_aleatoric**2)
@@ -672,9 +646,7 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
         epistemic_uncertainty = jnp.std(means, axis=0)
         aleatoric_uncertainty = jnp.mean(aleatoric_stack, axis=0)
 
-        total_uncertainty = jnp.sqrt(
-            epistemic_uncertainty**2 + aleatoric_uncertainty**2
-        )
+        total_uncertainty = jnp.sqrt(epistemic_uncertainty**2 + aleatoric_uncertainty**2)
 
         return {
             "mean": prediction_mean,

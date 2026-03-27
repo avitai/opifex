@@ -126,16 +126,10 @@ class LatentNeuralOperator(nnx.Module):
 
         # Layer normalization
         self.encoder_norms = nnx.List(
-            [
-                nnx.LayerNorm(num_features=latent_dim, rngs=rngs)
-                for _ in range(num_encoder_layers)
-            ]
+            [nnx.LayerNorm(num_features=latent_dim, rngs=rngs) for _ in range(num_encoder_layers)]
         )
         self.decoder_norms = nnx.List(
-            [
-                nnx.LayerNorm(num_features=latent_dim, rngs=rngs)
-                for _ in range(num_decoder_layers)
-            ]
+            [nnx.LayerNorm(num_features=latent_dim, rngs=rngs) for _ in range(num_decoder_layers)]
         )
         self.latent_norm = nnx.LayerNorm(num_features=latent_dim, rngs=rngs)
 
@@ -152,9 +146,7 @@ class LatentNeuralOperator(nnx.Module):
 
         # Create positional encoding
         positions = jnp.arange(seq_len)
-        div_term = jnp.exp(
-            jnp.arange(0, embed_dim, 2) * (-jnp.log(10000.0) / embed_dim)
-        )
+        div_term = jnp.exp(jnp.arange(0, embed_dim, 2) * (-jnp.log(10000.0) / embed_dim))
 
         pe = jnp.zeros((seq_len, embed_dim))
         pe = pe.at[:, 0::2].set(jnp.sin(positions[:, None] * div_term))

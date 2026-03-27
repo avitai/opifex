@@ -38,7 +38,7 @@ class HyperbolicManifold:
             dimension: Intrinsic dimension (inferred from data if None)
         """
         # Use JAX-compatible validation
-        if not isinstance(curvature, (jax.Array, jnp.ndarray)) and curvature >= 0:
+        if not isinstance(curvature, jax.Array | jnp.ndarray) and curvature >= 0:
             raise ValueError("Hyperbolic manifold requires negative curvature")
         self.curvature = curvature
         self._dimension = dimension
@@ -215,9 +215,7 @@ class HyperbolicManifold:
             # Batch case
             batch_shape = point.shape[:-1]
             conformal_factor = conformal_factor.reshape(*batch_shape, 1, 1)
-            euclidean_metric = jnp.broadcast_to(
-                euclidean_metric, (*batch_shape, dim, dim)
-            )
+            euclidean_metric = jnp.broadcast_to(euclidean_metric, (*batch_shape, dim, dim))
 
         return conformal_factor * euclidean_metric
 
@@ -260,9 +258,7 @@ class HyperbolicManifold:
             norms = jnp.linalg.norm(candidate, axis=-1)
             valid = norms < 1.0
 
-            new_samples = jnp.where(
-                valid[..., None] & ~accepted[..., None], candidate, samples
-            )
+            new_samples = jnp.where(valid[..., None] & ~accepted[..., None], candidate, samples)
             new_accepted = accepted | valid
 
             return key_i, new_accepted, new_samples
@@ -343,9 +339,7 @@ class HyperbolicManifold:
             term3 = jnp.einsum("jk,bi->bijk", identity, point)
 
             # Combine terms with factor
-            christoffel = jnp.einsum(
-                "b,bijk->bijk", factor[..., 0], term1 + term2 - term3
-            )
+            christoffel = jnp.einsum("b,bijk->bijk", factor[..., 0], term1 + term2 - term3)
         else:
             # Single point computation
             # δ_j^i x_k term: identity[j,i] * point[k]

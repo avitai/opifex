@@ -294,8 +294,7 @@ y_true_high = jax.image.resize(
 )
 
 sr_error = float(
-    jnp.sqrt(jnp.sum((y_pred_high - y_true_high) ** 2))
-    / jnp.sqrt(jnp.sum(y_true_high**2))
+    jnp.sqrt(jnp.sum((y_pred_high - y_true_high) ** 2)) / jnp.sqrt(jnp.sum(y_true_high**2))
 )
 print(f"Super-resolution L2 error: {sr_error:.6f}")
 

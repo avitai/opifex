@@ -10,7 +10,7 @@ Key Features:
 - Full checkpointing support with Orbax
 - Extensibility via hooks and custom losses
 - Support for all optimizer types
-- Comprehensive metrics collection
+- Full metrics collection
 
 Following strict TDD principles - implemented to pass tests in test_trainer.py.
 """
@@ -225,9 +225,7 @@ class Trainer(nnx.Module):
                         scale_weight = self.config.multiscale_config.weights.get(
                             scale, 1.0 / len(scales)
                         )
-                        scale_loss = self._compute_scale_specific_loss(
-                            x, y_pred, y, scale
-                        )
+                        scale_loss = self._compute_scale_specific_loss(x, y_pred, y, scale)
                         multiscale_loss = multiscale_loss + scale_weight * scale_loss
                         loss_components[f"{scale}_loss"] = scale_loss
                     total_loss = total_loss + multiscale_loss
@@ -275,9 +273,7 @@ class Trainer(nnx.Module):
 
         # ✅ SIMPLIFIED: Compute gradients with model (not params)
         # has_aux=True to handle tuple return (loss, loss_components)
-        (loss, loss_components), grads = nnx.value_and_grad(loss_fn, has_aux=True)(
-            self.model
-        )
+        (loss, loss_components), grads = nnx.value_and_grad(loss_fn, has_aux=True)(self.model)
 
         # ✅ BREAKING CHANGE: Simplified optimizer update (67% code reduction!)
         # OLD (6 lines):
@@ -295,9 +291,7 @@ class Trainer(nnx.Module):
         self.state.step += 1
 
         # Compute gradient norm
-        grad_norm = jnp.sqrt(
-            sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads))
-        )
+        grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
 
         # Collect metrics (keep as JAX arrays for JIT compatibility)
         metrics = {
@@ -329,9 +323,7 @@ class Trainer(nnx.Module):
 
         return loss, metrics
 
-    def validation_step(
-        self, x: jax.Array, y: jax.Array
-    ) -> tuple[jax.Array, dict[str, Any]]:
+    def validation_step(self, x: jax.Array, y: jax.Array) -> tuple[jax.Array, dict[str, Any]]:
         """Execute validation step without parameter updates.
 
         Args:
@@ -420,9 +412,7 @@ class Trainer(nnx.Module):
                 sharded = _maybe_shard(x_batch, y_batch)
 
                 # Use JIT-compiled step, passing 'self'
-                loss, _ = train_step_jit(
-                    self, sharded["x"], sharded["y"], boundary_data
-                )
+                loss, _ = train_step_jit(self, sharded["x"], sharded["y"], boundary_data)
                 epoch_losses.append(float(loss))  # float() is safe here (outside JIT)
 
             # Component hook: on_epoch_end
@@ -459,10 +449,7 @@ class Trainer(nnx.Module):
             # Verbose logging
             if self.config.verbose:
                 val_info = ""
-                if (
-                    val_data is not None
-                    and epoch % self.config.validation_frequency == 0
-                ):
+                if val_data is not None and epoch % self.config.validation_frequency == 0:
                     val_loss = final_metrics.get("final_val_loss")
                     if val_loss is not None:
                         val_info = f", Val Loss: {val_loss:.6f}"
@@ -516,9 +503,7 @@ class Trainer(nnx.Module):
 
         return str(checkpoint_path)
 
-    def load_checkpoint(
-        self, step: int
-    ) -> tuple[Any, dict[str, Any]]:  # Updated return type
+    def load_checkpoint(self, step: int) -> tuple[Any, dict[str, Any]]:  # Updated return type
         """Load checkpoint from Orbax.
 
         Args:

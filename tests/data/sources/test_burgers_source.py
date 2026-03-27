@@ -244,9 +244,7 @@ class TestBurgersDataSource:
         from opifex.data.sources import BurgersDataSource
 
         for resolution in [16, 32, 64]:
-            source = BurgersDataSource(
-                n_samples=3, resolution=resolution, dimension="2d", seed=42
-            )
+            source = BurgersDataSource(n_samples=3, resolution=resolution, dimension="2d", seed=42)
 
             sample = source[0]
             assert sample["input"].shape == (resolution, resolution)

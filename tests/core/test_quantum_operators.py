@@ -169,9 +169,7 @@ class TestQuantumOperatorNotImplementedTDD:
         dx = 0.05
 
         # This should raise NotImplementedError for unknown method
-        with pytest.raises(
-            NotImplementedError, match="Method pseudospectral not implemented"
-        ):
+        with pytest.raises(NotImplementedError, match="Method pseudospectral not implemented"):
             kinetic_op(wavefunction, dx)
 
 
@@ -232,8 +230,7 @@ class TestQuantumOperatorsTDD:
 
         # Allow 5% tolerance for numerical integration
         relative_error = (
-            jnp.abs(actual_kinetic_energy - expected_kinetic_energy)
-            / expected_kinetic_energy
+            jnp.abs(actual_kinetic_energy - expected_kinetic_energy) / expected_kinetic_energy
         )
         assert relative_error < 0.05, f"Kinetic energy error: {relative_error}"
 
@@ -271,18 +268,14 @@ class TestQuantumOperatorsTDD:
 
         # Energy should be negative for bound state with Coulomb potential
         energy = hamiltonian.compute_energy(wavefunction)
-        assert energy < 0, (
-            "Ground state energy should be negative for Coulomb potential"
-        )
+        assert energy < 0, "Ground state energy should be negative for Coulomb potential"
         assert jnp.isfinite(energy)
 
     def test_momentum_operator_finite_difference_orders(self):
         """Test MomentumOperator with different finite difference orders."""
         # Test with different orders
         for order in [2, 4, 6]:
-            momentum_op = MomentumOperator(
-                method="finite_difference", order=order, hbar=1.0
-            )
+            momentum_op = MomentumOperator(method="finite_difference", order=order, hbar=1.0)
 
             # Create test case
             n_points = 64
@@ -317,9 +310,7 @@ class TestQuantumOperatorsTDD:
         def position_op(state, x_grid):
             return x_grid * state
 
-        position_observable = Observable(
-            position_op, name="position", is_hermitian=True
-        )
+        position_observable = Observable(position_op, name="position", is_hermitian=True)
 
         # Create offset Gaussian wavefunction
         x = jnp.linspace(-10, 10, 128)
@@ -337,9 +328,7 @@ class TestQuantumOperatorsTDD:
         position_expectation = position_observable.expectation_value(wavefunction, x)
 
         # Should be close to x0 - increase tolerance for numerical integration
-        assert (
-            jnp.abs(position_expectation - x0) < 0.2
-        )  # Increased tolerance from 0.1 to 0.2
+        assert jnp.abs(position_expectation - x0) < 0.2  # Increased tolerance from 0.1 to 0.2
         assert jnp.all(jnp.isfinite(position_expectation))
 
     def test_quantum_operators_compatibility(self):

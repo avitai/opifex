@@ -204,9 +204,7 @@ async def predict(input_data: dict[str, Any]):
         return {
             "predictions": predictions.tolist(),
             "metadata": {
-                "model_name": app_state.config.model_name
-                if app_state.config
-                else "unknown",
+                "model_name": app_state.config.model_name if app_state.config else "unknown",
                 "batch_size": data.shape[0],
                 "input_shape": list(data.shape),
                 "output_shape": list(predictions.shape),
@@ -268,9 +266,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Get configuration from environment
-    host = os.getenv(
-        "OPIFEX_HOST", "127.0.0.1"
-    )  # Use localhost instead of 0.0.0.0 for security
+    host = os.getenv("OPIFEX_HOST", "127.0.0.1")  # Use localhost instead of 0.0.0.0 for security
     port = int(os.getenv("OPIFEX_PORT", "8080"))
     workers = int(os.getenv("OPIFEX_WORKERS", "1"))
     log_level = os.getenv("OPIFEX_LOG_LEVEL", "info").lower()

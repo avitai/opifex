@@ -300,9 +300,7 @@ x_grid = np.linspace(-1, 1, RESOLUTION)
 
 # --- Sample predictions ---
 n_vis = min(4, len(X_test))
-fig, axes = plt.subplots(
-    n_vis, TIME_STEPS + 1, figsize=(3.5 * (TIME_STEPS + 1), 3 * n_vis)
-)
+fig, axes = plt.subplots(n_vis, TIME_STEPS + 1, figsize=(3.5 * (TIME_STEPS + 1), 3 * n_vis))
 fig.suptitle("FNO 1D Burgers Predictions (Opifex)", fontsize=14, fontweight="bold")
 
 if n_vis == 1:
@@ -319,9 +317,7 @@ for i in range(n_vis):
 
     # Predicted vs ground truth at each time step
     for t in range(TIME_STEPS):
-        axes[i, t + 1].plot(
-            x_grid, Y_test[i, t], "b-", linewidth=1.5, alpha=0.8, label="Truth"
-        )
+        axes[i, t + 1].plot(x_grid, Y_test[i, t], "b-", linewidth=1.5, alpha=0.8, label="Truth")
         axes[i, t + 1].plot(
             x_grid,
             np.array(predictions[i, t]),
@@ -346,9 +342,7 @@ fig.suptitle("FNO Burgers Error Analysis", fontsize=14, fontweight="bold")
 
 per_sample_errors = np.array(per_sample_rel_l2)
 
-axes[0].hist(
-    per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black"
-)
+axes[0].hist(per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black")
 axes[0].set_title("Relative L2 Error Distribution")
 axes[0].set_xlabel("Relative L2 Error")
 axes[0].set_ylabel("Frequency")

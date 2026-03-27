@@ -62,8 +62,8 @@ If you're familiar with DeepXDE, here's how Opifex compares:
 
 ## Files
 
-- **Python Script**: [`examples/getting-started/first_pinn.py`](https://github.com/Opifex/Opifex/blob/main/examples/getting-started/first_pinn.py)
-- **Jupyter Notebook**: [`examples/getting-started/first_pinn.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/getting-started/first_pinn.ipynb)
+- **Python Script**: [`examples/getting-started/first_pinn.py`](https://github.com/avitai/opifex/blob/main/examples/getting-started/first_pinn.py)
+- **Jupyter Notebook**: [`examples/getting-started/first_pinn.ipynb`](https://github.com/avitai/opifex/blob/main/examples/getting-started/first_pinn.ipynb)
 
 ## Quick Start
 

@@ -1,6 +1,6 @@
 """Centralized training configuration classes for Opifex framework.
 
-This module provides comprehensive configuration management for training,
+This module provides full configuration management for training,
 including quantum-aware settings, loss configuration, optimization parameters,
 validation settings, checkpointing options, and meta-optimization.
 
@@ -189,7 +189,7 @@ class TrainingConfig:
     """Main training configuration.
 
     This is the primary configuration class that composes all other
-    configuration classes for comprehensive training setup.
+    configuration classes for full training setup.
 
     Attributes:
         num_epochs: Number of training epochs

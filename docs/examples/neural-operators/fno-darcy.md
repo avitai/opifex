@@ -20,7 +20,7 @@ What makes this example stand out is the composition of `GridEmbedding2D` with
 input channels, giving the FNO positional awareness that improves operator learning for
 spatially varying problems. The example covers the full pipeline: data loading with
 Google Grain, model creation, training with the unified `Trainer` API, evaluation with L2
-relative error, and comprehensive visualization of predictions and error distributions.
+relative error, and full visualization of predictions and error distributions.
 
 ## What You'll Learn
 
@@ -51,10 +51,32 @@ this workflow:
 3. **XLA compilation**: Automatic JIT compilation in `Trainer.fit()` for faster training
 4. **Functional transforms**: `jax.grad`, `jax.vmap`, `jax.pmap` for composable differentiation and parallelism
 
+### Benchmark Comparison
+
+Both frameworks trained on the same Zenodo 12784353 dataset (16x16 resolution,
+1000 training samples, 15 epochs):
+
+| Config | Opifex (JAX) | NeuralOperator (PyTorch) |
+|--------|-------------|--------------------------|
+| Data source | Zenodo 12784353 | Zenodo 12784353 |
+| Train / Test | 1000 / 100 | 1000 / 100 |
+| Resolution | 16x16 | 16x16 |
+| Modes | 8 | 8 |
+| Hidden channels | 24 | 24 |
+| Epochs | 15 | 15 |
+| Extra features | Grid embedding | None |
+| **Relative L2** | **0.680** | **4.851** |
+
+Note: Opifex uses `GridEmbedding2D` (positional encoding) which NeuralOperator
+does not include in this example. Opifex ran on GPU, NeuralOperator on CPU.
+These differences mean the comparison is not strictly apples-to-apples.
+For a controlled comparison, run both on the same hardware with the same
+feature set.
+
 ## Files
 
-- **Python Script**: [`examples/neural-operators/fno_darcy.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/fno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/fno_darcy.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/fno_darcy.ipynb)
+- **Python Script**: [`examples/neural-operators/fno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural-operators/fno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.ipynb)
 
 ## Quick Start
 
@@ -360,12 +382,12 @@ Setting up Trainer...
 Optimizer: Adam (lr=0.001)
 
 Starting training...
-Training completed in 2.0s
-Final train loss: 0.00017791663716100933
-Final val loss:   0.0004391744441818446
+Training completed in 8.1s
+Final train loss: 5.996e-05
+Final val loss:   7.599e-05
 ```
 
-### Step 6: Comprehensive Evaluation
+### Step 6: Full Evaluation
 
 Evaluate the trained FNO on the test set with per-sample L2 relative error:
 
@@ -386,10 +408,10 @@ mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 **Terminal Output:**
 ```
 Running evaluation...
-Test MSE:         0.000118
-Test Relative L2: 3.951391
-Min Relative L2:  2.609077
-Max Relative L2:  5.742762
+Test MSE:         0.000056
+Test Relative L2: 0.237545
+Min Relative L2:  0.185782
+Max Relative L2:  0.397117
 ```
 
 !!! info "About the Relative L2 Error"
@@ -401,7 +423,7 @@ Max Relative L2:  5.742762
 
 ### Step 7: Visualization
 
-Generate comprehensive visualizations including sample predictions, error maps, and
+Generate full visualizations including sample predictions, error maps, and
 error distribution analysis.
 
 ```python
@@ -492,7 +514,7 @@ benchmarks.
 | [Grid Embeddings](../layers/grid-embeddings.md) | Beginner | Spatial coordinate injection for neural operators |
 | [DISCO Convolutions](../layers/disco-convolutions.md) | Intermediate | Discrete-continuous convolutions for arbitrary grids |
 | [UNO on Darcy Flow](uno-darcy.md) | Intermediate | Multi-resolution U-shaped neural operator for Darcy flow |
-| [SFNO Climate](sfno-climate-comprehensive.md) | Intermediate | Spherical FNO for climate modeling on the sphere |
+| [SFNO Climate](sfno-climate-full.md) | Intermediate | Spherical FNO for climate modeling on the sphere |
 | [U-FNO Turbulence](ufno-turbulence.md) | Intermediate | U-Net enhanced FNO for turbulence problems |
 | [Neural Operator Benchmark](../benchmarking/operator-benchmark.md) | Advanced | Cross-architecture comparison (FNO, UNO, SFNO, U-FNO) |
 

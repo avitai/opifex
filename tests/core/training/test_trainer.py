@@ -382,10 +382,7 @@ class TestCheckpointing:
         loaded_physics = loaded_metadata["physics_metadata"]
 
         # Verify physics metadata preservation
-        assert (
-            loaded_physics["constraint_violations"]
-            == physics_metadata["constraint_violations"]
-        )
+        assert loaded_physics["constraint_violations"] == physics_metadata["constraint_violations"]
         assert loaded_physics["physics_metrics"] == physics_metadata["physics_metrics"]
 
 
@@ -587,9 +584,7 @@ class TestMetricsCollection:
         _, metrics = trainer.training_step(x[:10], y[:10])
 
         # Should have physics-related metrics
-        assert any(
-            "constraint" in k or "conservation" in k or "physics" in k for k in metrics
-        )
+        assert any("constraint" in k or "conservation" in k or "physics" in k for k in metrics)
 
 
 class TestPerformance:
@@ -632,7 +627,7 @@ class TestPerformance:
         loss, metrics = trainer.training_step(x, y)
 
         # Verify training works correctly
-        assert isinstance(loss, (float, jnp.ndarray))
+        assert isinstance(loss, float | jnp.ndarray)
         assert isinstance(metrics, dict)
         assert jnp.isfinite(loss)
 
@@ -662,9 +657,7 @@ class TestJITCompilation:
 
         try:
             # Execute the JIT-compiled step
-            loss, metrics = train_step_impl(
-                trainer.model, trainer.optimizer, x_batch, y_batch
-            )
+            loss, metrics = train_step_impl(trainer.model, trainer.optimizer, x_batch, y_batch)
             assert isinstance(loss, jax.Array)
             assert isinstance(metrics, dict)
         except Exception as e:

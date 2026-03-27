@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Opifex geometry framework provides comprehensive geometric modeling capabilities for scientific machine learning applications. Built on JAX for high-performance computation, it supports 2D/3D domain handling, constructive solid geometry (CSG) operations, Lie groups, Riemannian manifolds, graph neural networks, and molecular geometry modeling.
+The Opifex geometry framework provides full geometric modeling capabilities for scientific machine learning applications. Built on JAX for high-performance computation, it supports 2D/3D domain handling, constructive solid geometry (CSG) operations, Lie groups, Riemannian manifolds, graph neural networks, and molecular geometry modeling.
 
 This system is designed to handle complex geometric problems in scientific computing, from simple rectangular domains to advanced manifold-based neural operators and molecular systems with quantum mechanical constraints.
 
@@ -10,7 +10,7 @@ This system is designed to handle complex geometric problems in scientific compu
 
 ### 2D Basic Shapes
 
-The framework provides fundamental 2D shapes with comprehensive geometric operations:
+The framework provides fundamental 2D shapes with full geometric operations:
 
 ```python
 import jax
@@ -896,4 +896,4 @@ for _ in range(100):
 print("Geometry caching implemented for performance optimization")
 ```
 
-This comprehensive geometry guide provides the foundation for working with complex geometric problems in scientific machine learning. The unified framework supports everything from simple 2D domains to advanced manifold-based neural operators and quantum molecular systems, all optimized for high-performance computation with JAX.
+This full geometry guide provides the foundation for working with complex geometric problems in scientific machine learning. The unified framework supports everything from simple 2D domains to advanced manifold-based neural operators and quantum molecular systems, all optimized for high-performance computation with JAX.

@@ -1,6 +1,6 @@
 # Bayesian & Uncertainty Quantification API Reference
 
-The `opifex.neural.bayesian` package provides comprehensive Bayesian neural networks and uncertainty quantification capabilities for scientific machine learning applications.
+The `opifex.neural.bayesian` package provides full Bayesian neural networks and uncertainty quantification capabilities for scientific machine learning applications.
 
 ## Overview
 
@@ -390,7 +390,7 @@ constraint = {'type': 'boundedness', 'params': {}}
 # Enforces bounded range (-10 ≤ x ≤ 10)
 ```
 
-### Comprehensive Usage Example
+### Full Usage Example
 
 ```python
 import jax

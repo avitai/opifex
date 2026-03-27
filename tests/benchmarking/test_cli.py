@@ -111,30 +111,21 @@ class TestCLIValidation:
         """Invalid benchmark name returns non-zero exit code."""
         from opifex.benchmarking.cli import run_cli
 
-        exit_code = run_cli(
-            ["-b", "NonExistentBenchmark", "-o", "TensorizedFourierNeuralOperator"]
-        )
+        exit_code = run_cli(["-b", "NonExistentBenchmark", "-o", "TensorizedFourierNeuralOperator"])
         assert exit_code != 0
 
         captured = capsys.readouterr()
-        assert (
-            "NonExistentBenchmark" in captured.err
-            or "not found" in captured.err.lower()
-        )
+        assert "NonExistentBenchmark" in captured.err or "not found" in captured.err.lower()
 
     def test_invalid_operator_raises_error(self, capsys):
         """Invalid operator name returns non-zero exit code."""
         from opifex.benchmarking.cli import run_cli
 
-        exit_code = run_cli(
-            ["-b", "PDEBench_2D_DarcyFlow", "-o", "NonExistentOperator"]
-        )
+        exit_code = run_cli(["-b", "PDEBench_2D_DarcyFlow", "-o", "NonExistentOperator"])
         assert exit_code != 0
 
         captured = capsys.readouterr()
-        assert (
-            "NonExistentOperator" in captured.err or "not found" in captured.err.lower()
-        )
+        assert "NonExistentOperator" in captured.err or "not found" in captured.err.lower()
 
     def test_missing_required_args_shows_help(self, capsys):
         """Missing required args shows usage help."""

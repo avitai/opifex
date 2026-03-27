@@ -49,12 +49,8 @@ class QuantumTrainingManager:
 
             # DFT integration
             self.dft_functional = config.get("dft_functional", "pbe")
-            self.electron_density_threshold = config.get(
-                "electron_density_threshold", 1e-8
-            )
-            self.exchange_correlation_weight = config.get(
-                "exchange_correlation_weight", 0.3
-            )
+            self.electron_density_threshold = config.get("electron_density_threshold", 1e-8)
+            self.exchange_correlation_weight = config.get("exchange_correlation_weight", 0.3)
 
             # Quantum state tracking
             self.track_quantum_states = config.get("track_quantum_states", False)

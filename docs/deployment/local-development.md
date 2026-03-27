@@ -25,16 +25,16 @@ This guide helps you set up a local development environment for the Opifex frame
 ### Required Software
 
 ```bash
-# Install Python 3.10+
+# Install Python 3.11+
 # Ubuntu/Debian
 sudo apt update
-sudo apt install python3.10 python3.10-venv python3.10-dev
+sudo apt install python3.11 python3.11-venv python3.11-dev
 
 # macOS (using Homebrew)
-brew install python@3.10
+brew install python@3.11
 
 # Windows (using Chocolatey)
-choco install python --version=3.10.0
+choco install python --version=3.11.0
 
 # Install Git
 # Ubuntu/Debian
@@ -70,7 +70,7 @@ sudo apt install docker-compose-plugin
 
 ```bash
 # Clone the Opifex repository
-git clone https://github.com/opifex-org/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 
 # Verify repository structure
@@ -553,10 +553,10 @@ git commit -m "Add new feature"
 
 ```bash
 # Test neural operators
-uv run python examples/neural_operators_comprehensive_demo.py
+uv run python examples/neural-operators/operator_tour.py
 
 # Test L2O optimization
-uv run python examples/l2o_optimization_demo.py
+uv run python examples/optimization/learn_to_optimize.py
 
 # Test benchmarking
 uv run python examples/benchmarking_demo.py
@@ -602,10 +602,10 @@ uv run pytest tests/integration/test_workflows.py -v
 
 ```bash
 # Run benchmarks
-uv run python benchmarks/neural_operators_benchmark.py
+uv run python examples/benchmarking/operator_benchmark.py
 
 # Profile code
-uv run python -m cProfile -o profile.stats examples/neural_operators_demo.py
+uv run python -m cProfile -o profile.stats examples/benchmarking/gpu_profiling.py
 uv run python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumulative'); p.print_stats(20)"
 
 # Memory profiling

@@ -16,14 +16,14 @@ See the [installation guide](getting-started/installation.md) for detailed instr
 
 ```bash
 
-pip install opifex
+uv pip install opifex
 
 ```
 
 For development installation:
 
 ```bash
-git clone https://github.com/opifex-org/opifex.git
+git clone https://github.com/avitai/opifex.git
 cd opifex
 ./setup.sh
 ```
@@ -32,13 +32,13 @@ cd opifex
 
 **Minimum Requirements:**
 
-- Python 3.10+
+- Python 3.11+
 
-- JAX 0.4.38+
+- JAX 0.8.0+
 
 - NumPy 1.24+
 
-- FLAX NNX 0.8.0+
+- Flax 0.12.0+
 
 **Recommended:**
 
@@ -410,20 +410,18 @@ meta_optimizer = MetaOptimizer(
 
 ### How do I implement custom optimization algorithms?
 
-Opifex provides extensible optimization interfaces:
+Opifex provides optimization through standard Optax and Flax NNX patterns:
 
 ```python
+import optax
+from flax import nnx
 
-from opifex.optimization.base import BaseOptimizer
+# Use standard NNX optimizer with any optax schedule
+model = MyModel(rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
-class CustomOptimizer(BaseOptimizer):
-    def __init__(self, config):
-        super().__init__(config)
-        self.custom_params = config.custom_params
-
-    def step(self, params, gradients, state):
-        # Implement custom optimization step
-        updated_params = self.update_rule(params, gradients, state)
+# For second-order methods, use the hybrid optimizer
+from opifex.optimization.second_order.hybrid_optimizer import HybridOptimizer
         new_state = self.update_state(state, gradients)
         return updated_params, new_state
 
@@ -1057,8 +1055,8 @@ source ./activate.sh
 git checkout -b feature/new-algorithm
 
 # 5. Make changes and test
-python -m pytest tests/
-python -m pytest --cov=opifex tests/  # With coverage
+uv run pytest tests/
+uv run pytest --cov=opifex tests/  # With coverage
 
 # 6. Submit pull request
 git push origin feature/new-algorithm

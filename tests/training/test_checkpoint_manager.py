@@ -1,7 +1,7 @@
 """
 Test suite for CheckpointManager class
 
-This module contains comprehensive tests for the CheckpointManager class,
+This module contains full tests for the CheckpointManager class,
 covering initialization, saving, loading, and management functionality.
 """
 
@@ -97,9 +97,7 @@ class TestCheckpointManagerSave:
             metadata = {"epoch": 10, "learning_rate": 0.001}
 
             # Test
-            checkpoint_path = manager.save_checkpoint(
-                model, step=100, loss=0.5, metadata=metadata
-            )
+            checkpoint_path = manager.save_checkpoint(model, step=100, loss=0.5, metadata=metadata)
 
             # Verify
             assert Path(checkpoint_path).exists()
@@ -212,9 +210,7 @@ class TestCheckpointManagerLoad:
             )
 
             # Save checkpoint
-            checkpoint_path = manager.save_checkpoint(
-                original_model, step=100, loss=0.5
-            )
+            checkpoint_path = manager.save_checkpoint(original_model, step=100, loss=0.5)
 
             # Test
             checkpoint_data = manager.load_checkpoint(checkpoint_path)
@@ -275,9 +271,7 @@ class TestCheckpointManagerLoad:
             )
 
             # Save checkpoint
-            checkpoint_path = manager.save_checkpoint(
-                original_model, step=100, loss=0.5
-            )
+            checkpoint_path = manager.save_checkpoint(original_model, step=100, loss=0.5)
 
             # Test
             checkpoint_data = manager.load_checkpoint(checkpoint_path)
@@ -510,9 +504,7 @@ class TestCheckpointManagerIntegration:
             )
 
             # Save checkpoint
-            checkpoint_path = manager.save_checkpoint(
-                original_model, step=100, loss=0.5
-            )
+            checkpoint_path = manager.save_checkpoint(original_model, step=100, loss=0.5)
 
             # Test
             restored_model = manager.restore_model(original_model, checkpoint_path)

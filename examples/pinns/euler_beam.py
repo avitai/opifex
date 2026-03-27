@@ -312,9 +312,7 @@ w_exact = exact_solution(x_eval.squeeze())
 
 # Errors
 error = jnp.abs(w_pred - w_exact)
-l2_error = float(
-    jnp.sqrt(jnp.sum((w_pred - w_exact) ** 2) / jnp.sum(w_exact**2 + 1e-10))
-)
+l2_error = float(jnp.sqrt(jnp.sum((w_pred - w_exact) ** 2) / jnp.sum(w_exact**2 + 1e-10)))
 max_error = float(jnp.max(error))
 mean_error = float(jnp.mean(error))
 
@@ -345,9 +343,7 @@ fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
 # Deflection
 axes[0].plot(np.array(x_eval), np.array(w_pred), "b-", label="PINN", linewidth=2)
-axes[0].plot(
-    np.array(x_eval), np.array(w_exact), "r--", label="Exact", linewidth=2, alpha=0.7
-)
+axes[0].plot(np.array(x_eval), np.array(w_exact), "r--", label="Exact", linewidth=2, alpha=0.7)
 axes[0].set_xlabel("x")
 axes[0].set_ylabel("w(x)")
 axes[0].set_title("Beam Deflection")
@@ -390,9 +386,7 @@ w_xxxx_exact = jnp.full_like(x_eval.squeeze(), -1.0)  # w'''' = q = -1
 
 # Plot
 axes[0, 0].plot(np.array(x_eval), np.array(w_x_all), "b-", label="PINN", linewidth=2)
-axes[0, 0].plot(
-    np.array(x_eval), np.array(w_x_exact), "r--", label="Exact", linewidth=2, alpha=0.7
-)
+axes[0, 0].plot(np.array(x_eval), np.array(w_x_exact), "r--", label="Exact", linewidth=2, alpha=0.7)
 axes[0, 0].set_xlabel("x")
 axes[0, 0].set_ylabel("w'(x)")
 axes[0, 0].set_title("Slope")

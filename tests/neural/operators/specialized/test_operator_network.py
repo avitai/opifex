@@ -499,9 +499,7 @@ class TestOperatorNetworkEdgeCases:
         ]
 
         for config in invalid_configs:
-            with pytest.raises(
-                (ValueError, AssertionError, TypeError, ZeroDivisionError)
-            ):
+            with pytest.raises((ValueError, AssertionError, TypeError, ZeroDivisionError)):
                 # Should fail during operator creation, not forward pass
                 OperatorNetwork(
                     operator_type="fno",

@@ -36,6 +36,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         modes_per_scale: list[int],
         num_layers_per_scale: list[int],
         *,
+        spatial_dims: int = 2,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         use_cross_scale_attention: bool = True,
         attention_heads: int = 8,
@@ -51,6 +52,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             hidden_channels: Hidden channel dimension
             modes_per_scale: List of Fourier modes for each scale
             num_layers_per_scale: List of layer counts for each scale
+            spatial_dims: Number of spatial dimensions (1 or 2)
             activation: Activation function
             use_cross_scale_attention: Whether to use cross-scale attention
             attention_heads: Number of attention heads
@@ -69,6 +71,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         self.use_cross_scale_attention = use_cross_scale_attention
         self.attention_heads = attention_heads
         self.dropout_rate = dropout_rate
+        self.spatial_dims = spatial_dims
         self.use_gradient_checkpointing = use_gradient_checkpointing
 
         # Input projection
@@ -90,6 +93,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
                     out_channels=hidden_channels,
                     modes=modes,
                     activation=activation,
+                    spatial_dims=spatial_dims,
                     rngs=rngs,
                 )
                 scale_layers.append(layer)
@@ -158,9 +162,9 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             return jnp.mean(x.reshape(x.shape[0], x.shape[1], -1, factor), axis=-1)
         if len(x.shape) == 4:  # 2D case
             return jnp.mean(
-                jnp.mean(
-                    x.reshape(x.shape[0], x.shape[1], -1, factor, x.shape[3]), axis=3
-                ).reshape(x.shape[0], x.shape[1], x.shape[2] // factor, -1, factor),
+                jnp.mean(x.reshape(x.shape[0], x.shape[1], -1, factor, x.shape[3]), axis=3).reshape(
+                    x.shape[0], x.shape[1], x.shape[2] // factor, -1, factor
+                ),
                 axis=4,
             )
         raise ValueError(f"Unsupported input shape: {x.shape}")
@@ -187,9 +191,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             x = x.transpose(0, 2, 3, 1)  # (batch, height, width, channels)
             x = self.input_proj(x.reshape(batch_size, height * width, channels))
             x = x.reshape(batch_size, height, width, self.hidden_channels)
-            return x.transpose(
-                0, 3, 1, 2
-            )  # Back to (batch, hidden_channels, height, width)
+            return x.transpose(0, 3, 1, 2)  # Back to (batch, hidden_channels, height, width)
         raise ValueError(f"Unsupported input shape: {x.shape}")
 
     def _process_multiple_scales(self, x: jax.Array, training: bool) -> list[jax.Array]:
@@ -235,9 +237,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         elif len(x.shape) == 4:  # 2D case
             batch_size, channels, height, width = combined.shape
             combined = combined.transpose(0, 2, 3, 1)
-            combined = self.scale_fusion(
-                combined.reshape(batch_size, height * width, channels)
-            )
+            combined = self.scale_fusion(combined.reshape(batch_size, height * width, channels))
             combined = combined.reshape(batch_size, height, width, self.hidden_channels)
             combined = combined.transpose(0, 3, 1, 2)
 
@@ -248,9 +248,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         elif len(x.shape) == 4:  # 2D case
             batch_size, channels, height, width = combined.shape
             combined = combined.transpose(0, 2, 3, 1)
-            output = self.output_proj(
-                combined.reshape(batch_size, height * width, channels)
-            )
+            output = self.output_proj(combined.reshape(batch_size, height * width, channels))
             output = output.reshape(batch_size, height, width, self.out_channels)
             output = output.transpose(0, 3, 1, 2)
 

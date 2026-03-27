@@ -2,7 +2,7 @@
 
 This module implements a unified L2O engine that integrates parametric programming
 solvers with existing gradient-based meta-optimization algorithms, providing a
-comprehensive optimization framework for scientific computing applications.
+full optimization framework for scientific computing applications.
 
 Key Features:
 - Unified interface for parametric and gradient-based optimization
@@ -61,15 +61,13 @@ class L2OEngineConfig:
         valid_solver_types = ["parametric", "gradient", "hybrid"]
         if self.solver_type not in valid_solver_types:
             raise ValueError(
-                f"Invalid solver type: {self.solver_type}. "
-                f"Must be one of {valid_solver_types}"
+                f"Invalid solver type: {self.solver_type}. Must be one of {valid_solver_types}"
             )
 
         valid_modes = ["unified", "parametric_only", "gradient_only"]
         if self.integration_mode not in valid_modes:
             raise ValueError(
-                f"Invalid integration mode: {self.integration_mode}. "
-                f"Must be one of {valid_modes}"
+                f"Invalid integration mode: {self.integration_mode}. Must be one of {valid_modes}"
             )
 
 
@@ -80,9 +78,7 @@ class OptimizationProblemEncoder(nnx.Module):
     into dense embeddings that can be processed by neural optimization algorithms.
     """
 
-    def __init__(
-        self, input_dim: int, output_dim: int, hidden_layers: list[int], *, rngs: Rngs
-    ):
+    def __init__(self, input_dim: int, output_dim: int, hidden_layers: list[int], *, rngs: Rngs):
         """Initialize optimization problem encoder.
 
         Args:
@@ -110,9 +106,7 @@ class OptimizationProblemEncoder(nnx.Module):
 
         self.encoder_network = nnx.Sequential(*layers)
 
-    def encode_problem(
-        self, problem: OptimizationProblem, problem_params: jax.Array
-    ) -> jax.Array:
+    def encode_problem(self, problem: OptimizationProblem, problem_params: jax.Array) -> jax.Array:
         """Encode a single optimization problem.
 
         Args:
@@ -243,9 +237,7 @@ class ParametricOptimizationSolver(nnx.Module):
         # Solve using parametric solver with enhanced input
         solving_start = time.time()
         if enable_fallback and self.l2o_config.use_traditional_fallback:
-            solution = self.parametric_solver.solve_with_fallback(
-                enhanced_input.reshape(1, -1)
-            )[0]
+            solution = self.parametric_solver.solve_with_fallback(enhanced_input.reshape(1, -1))[0]
             fallback_used = True
         else:
             solution = self.parametric_solver(enhanced_input.reshape(1, -1))[0]
@@ -295,9 +287,7 @@ class ParametricOptimizationSolver(nnx.Module):
 
         # Calculate metrics
         speedup_factor = traditional_time / max(neural_time, 1e-6)
-        accuracy_comparison = float(
-            jnp.linalg.norm(neural_solution - traditional_solution)
-        )
+        accuracy_comparison = float(jnp.linalg.norm(neural_solution - traditional_solution))
 
         return {
             "neural_time": neural_time,
@@ -381,9 +371,7 @@ class L2OEngine:
         if self.parametric_solver is None:
             raise ValueError("Parametric solver not initialized")
 
-        solution, _ = self.parametric_solver.solve_optimization_problem(
-            problem, problem_params
-        )
+        solution, _ = self.parametric_solver.solve_optimization_problem(problem, problem_params)
         # Ensure solution matches problem dimension
         if solution.shape[0] != problem.dimension:
             # Truncate or pad to match problem dimension
@@ -418,9 +406,7 @@ class L2OEngine:
 
         # Use the meta-optimizer's learned optimization strategies (L2O)
         for step in range(steps):
-            params, opt_state, _ = self.meta_optimizer.step(
-                loss_fn, params, opt_state, step
-            )
+            params, opt_state, _ = self.meta_optimizer.step(loss_fn, params, opt_state, step)
 
         return params
 
@@ -447,9 +433,7 @@ class L2OEngine:
             def loss_fn(x):
                 return jnp.sum(x**2)  # Simplified loss
 
-            solution = self.solve_gradient_problem(
-                loss_fn, jnp.zeros(problem.dimension)
-            )
+            solution = self.solve_gradient_problem(loss_fn, jnp.zeros(problem.dimension))
 
         return algorithm, solution
 
@@ -516,9 +500,7 @@ class L2OEngine:
             def loss_fn(x):
                 return jnp.sum(x**2)
 
-            solution = self.solve_gradient_problem(
-                loss_fn, jnp.zeros(problem.dimension), steps=10
-            )
+            solution = self.solve_gradient_problem(loss_fn, jnp.zeros(problem.dimension), steps=10)
             gradient_time = time.time() - start_time
 
             results["gradient_l2o"] = {
@@ -540,9 +522,7 @@ class L2OEngine:
 
         return results
 
-    def recommend_algorithm(
-        self, problem: OptimizationProblem, problem_params: jax.Array
-    ) -> str:
+    def recommend_algorithm(self, problem: OptimizationProblem, problem_params: jax.Array) -> str:
         """Recommend best algorithm for given problem.
 
         Args:

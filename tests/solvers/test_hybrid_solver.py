@@ -54,15 +54,11 @@ def test_hybrid_solver_mix():
     # We define HybridSolver to run both and combine.
     # For TDD, let's start with a simple "Additive" composition.
 
-    solver = HybridSolver(
-        classical_solver=classical, neural_solver=neural, mode="additive"
-    )
+    solver = HybridSolver(classical_solver=classical, neural_solver=neural, mode="additive")
 
     # Create valid problem
     # Create valid problem
-    problem = create_ode_problem(
-        (0.0, 1.0), lambda t, y: -y, initial_conditions={"y": 1.0}
-    )
+    problem = create_ode_problem((0.0, 1.0), lambda t, y: -y, initial_conditions={"y": 1.0})
 
     solution = solver.solve(problem)
 

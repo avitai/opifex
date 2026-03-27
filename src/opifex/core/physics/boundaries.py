@@ -227,8 +227,7 @@ def apply_boundary_condition(
         type_map = {bt.value: bt for bt in BoundaryType}
         if boundary_type_lower not in type_map:
             raise ValueError(
-                f"Unknown boundary type: {boundary_type}. "
-                f"Must be one of {list(type_map.keys())}"
+                f"Unknown boundary type: {boundary_type}. Must be one of {list(type_map.keys())}"
             )
         boundary_type = type_map[boundary_type_lower]
 

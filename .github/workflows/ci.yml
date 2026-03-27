@@ -15,18 +15,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
           enable-cache: true
           cache-suffix: "lint"
 
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Create virtual environment
+        run: uv venv
+
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv pip install -e ".[dev]"
 
       - name: Run Ruff linter
         run: uv run ruff check --output-format=github
@@ -46,18 +48,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
           enable-cache: true
           cache-suffix: "test-${{ matrix.python-version }}"
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
 
+      - name: Create virtual environment
+        run: uv venv
+
       - name: Install dependencies
-        run: uv sync --extra dev --extra test
+        run: uv pip install -e ".[dev,test]"
 
       - name: Run tests
         env:
@@ -95,7 +99,7 @@ jobs:
         with:
           directory: artifacts
           flags: unittests
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
   build:
     name: Build Package
@@ -105,18 +109,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
           enable-cache: true
           cache-suffix: "build"
 
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Create virtual environment
+        run: uv venv
+
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv pip install -e ".[dev]"
 
       - name: Build package
         run: uv build

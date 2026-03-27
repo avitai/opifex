@@ -198,8 +198,7 @@ X_test_64 = (X_test_64 - X_mean) / X_std
 Y_test_64 = (Y_test_64 - Y_mean) / Y_std
 
 print(
-    f"  Training data ({TRAIN_RESOLUTION}x{TRAIN_RESOLUTION}): "
-    f"X={X_train.shape}, Y={Y_train.shape}"
+    f"  Training data ({TRAIN_RESOLUTION}x{TRAIN_RESOLUTION}): X={X_train.shape}, Y={Y_train.shape}"
 )
 print(
     f"  Test data ({TEST_RESOLUTION_1}x{TEST_RESOLUTION_1}): "
@@ -427,9 +426,7 @@ plt.colorbar(im, ax=axes[0, 3], fraction=0.046)
 
 # Row 2: Zero-shot super-resolution (64x64)
 axes[1, 0].imshow(X_test_64[idx, 0], cmap="viridis")
-axes[1, 0].set_ylabel(
-    f"Zero-Shot 2x\n({TEST_RESOLUTION_2}x{TEST_RESOLUTION_2})", fontsize=11
-)
+axes[1, 0].set_ylabel(f"Zero-Shot 2x\n({TEST_RESOLUTION_2}x{TEST_RESOLUTION_2})", fontsize=11)
 axes[1, 0].axis("off")
 
 axes[1, 1].imshow(gt_64, cmap="RdBu_r", vmin=vmin_64, vmax=vmax_64)

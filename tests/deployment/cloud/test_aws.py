@@ -156,10 +156,7 @@ class TestAWSDeploymentManager:
         managed_policies = node_role["managed_policy_arns"]
         assert any("AmazonEKSWorkerNodePolicy" in policy for policy in managed_policies)
         assert any("AmazonEKS_CNI_Policy" in policy for policy in managed_policies)
-        assert any(
-            "AmazonEC2ContainerRegistryReadOnly" in policy
-            for policy in managed_policies
-        )
+        assert any("AmazonEC2ContainerRegistryReadOnly" in policy for policy in managed_policies)
 
         # Test service role with inline policies
         service_role = iam_config["service_role"]
@@ -390,9 +387,7 @@ class TestAWSDeploymentManager:
         inline_policies = service_role["inline_policies"]
 
         # Check Secrets Manager policy
-        secrets_policy = next(
-            p for p in inline_policies if p["name"] == "SecretsManagerAccess"
-        )
+        secrets_policy = next(p for p in inline_policies if p["name"] == "SecretsManagerAccess")
         policy_doc = secrets_policy["policy"]
         statements = policy_doc["Statement"]
 
@@ -402,9 +397,7 @@ class TestAWSDeploymentManager:
         assert "opifex/*" in secrets_statement["Resource"]
 
         # Check CloudWatch policy
-        cloudwatch_policy = next(
-            p for p in inline_policies if p["name"] == "CloudWatchAccess"
-        )
+        cloudwatch_policy = next(p for p in inline_policies if p["name"] == "CloudWatchAccess")
         policy_doc = cloudwatch_policy["policy"]
         statements = policy_doc["Statement"]
 

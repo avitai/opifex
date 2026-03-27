@@ -68,9 +68,7 @@ class PhysicsInformedPriors(nnx.Module):
         # Apply conservation law constraints
         for i, law in enumerate(self.conservation_laws):
             weight = float(self.constraint_weights.value[i])
-            constrained_params = self._apply_conservation_law(
-                constrained_params, law, weight
-            )
+            constrained_params = self._apply_conservation_law(constrained_params, law, weight)
 
         # Apply boundary condition constraints
         boundary_start_idx = len(self.conservation_laws)
@@ -82,9 +80,7 @@ class PhysicsInformedPriors(nnx.Module):
 
         return constrained_params
 
-    def _apply_conservation_law(
-        self, params: jax.Array, law: str, weight: float
-    ) -> jax.Array:
+    def _apply_conservation_law(self, params: jax.Array, law: str, weight: float) -> jax.Array:
         """Apply specific conservation law constraint.
 
         Args:
@@ -230,7 +226,7 @@ class PhysicsInformedPriors(nnx.Module):
         return plausibility
 
 
-# Phase 3: Physics-Informed Integration - NEW CLASSES
+# Version 3: Physics-Informed Integration - NEW CLASSES
 
 
 class ConservationLawPriors(nnx.Module):
@@ -302,9 +298,7 @@ class ConservationLawPriors(nnx.Module):
             law_scaling = float(self.uncertainty_scalings.value[i])
             law_strength = float(self.conservation_strengths.value[i])
 
-            physics_contribution = (
-                law_scaling * law_strength * jnp.abs(constraint_violation)
-            )
+            physics_contribution = law_scaling * law_strength * jnp.abs(constraint_violation)
             physics_uncertainty = physics_uncertainty + physics_contribution
 
         return physics_uncertainty
@@ -407,9 +401,7 @@ class ConservationLawPriors(nnx.Module):
         constrained_params = base_params
 
         for i, law in enumerate(self.conservation_laws):
-            law_strength = (
-                float(self.conservation_strengths.value[i]) * constraint_strength
-            )
+            law_strength = float(self.conservation_strengths.value[i]) * constraint_strength
             constrained_params = self._apply_conservation_constraint(
                 constrained_params, law, law_strength
             )
@@ -486,9 +478,7 @@ class DomainSpecificPriors(nnx.Module):
 
         # Set up domain-specific parameter ranges and distributions
         self.parameter_ranges = parameter_ranges or self._get_default_ranges(domain)
-        self.distribution_types = distribution_types or self._get_default_distributions(
-            domain
-        )
+        self.distribution_types = distribution_types or self._get_default_distributions(domain)
 
         # Initialize prior parameters for each parameter type
         n_params = len(self.parameter_ranges)
@@ -570,9 +560,7 @@ class DomainSpecificPriors(nnx.Module):
         param_names = list(self._get_default_ranges(domain).keys())
         return dict.fromkeys(param_names, "normal")
 
-    def sample_domain_priors(
-        self, sample_shape: tuple[int, ...], parameter_type: str
-    ) -> jax.Array:
+    def sample_domain_priors(self, sample_shape: tuple[int, ...], parameter_type: str) -> jax.Array:
         """Sample from domain-specific priors.
 
         Args:
@@ -598,9 +586,7 @@ class DomainSpecificPriors(nnx.Module):
         if distribution_type == "normal":
             samples = jax.random.normal(key, sample_shape) * prior_scale + prior_mean
         elif distribution_type == "lognormal":
-            log_samples = (
-                jax.random.normal(key, sample_shape) * prior_scale + prior_mean
-            )
+            log_samples = jax.random.normal(key, sample_shape) * prior_scale + prior_mean
             samples = jnp.exp(log_samples)
         elif distribution_type == "gamma":
             # Use shape=2, scale=prior_scale for gamma distribution
@@ -618,9 +604,7 @@ class DomainSpecificPriors(nnx.Module):
         range_min, range_max = param_range
         return jnp.clip(samples, range_min, range_max)
 
-    def evaluate_prior_log_prob(
-        self, values: jax.Array, parameter_type: str
-    ) -> jax.Array:
+    def evaluate_prior_log_prob(self, values: jax.Array, parameter_type: str) -> jax.Array:
         """Evaluate log probability under domain-specific prior.
 
         Args:
@@ -644,9 +628,7 @@ class DomainSpecificPriors(nnx.Module):
             # Normal log probability
             normalized_values = (values - prior_mean) / prior_scale
             log_prob = (
-                -0.5 * normalized_values**2
-                - jnp.log(prior_scale)
-                - 0.5 * jnp.log(2 * jnp.pi)
+                -0.5 * normalized_values**2 - jnp.log(prior_scale) - 0.5 * jnp.log(2 * jnp.pi)
             )
         elif distribution_type == "lognormal":
             # Log-normal log probability
@@ -743,9 +725,7 @@ class HierarchicalBayesianFramework(nnx.Module):
         scale = self.level_scales[level].value
 
         key = self.rngs.params()  # Use proper RNG from module
-        base_samples = jax.random.normal(
-            key, (*sample_shape, self.level_dimensions[level])
-        )
+        base_samples = jax.random.normal(key, (*sample_shape, self.level_dimensions[level]))
 
         # Apply mean and scale
         return base_samples * scale + mean
@@ -769,9 +749,7 @@ class HierarchicalBayesianFramework(nnx.Module):
             level_scale = jnp.mean(self.level_scales[level].value)
 
             if self.uncertainty_propagation == "multiplicative":
-                propagated_uncertainty = propagated_uncertainty * (
-                    1 + weight * level_scale
-                )
+                propagated_uncertainty = propagated_uncertainty * (1 + weight * level_scale)
             elif self.uncertainty_propagation == "additive":
                 propagated_uncertainty = propagated_uncertainty + weight * level_scale
             else:
@@ -798,9 +776,7 @@ class HierarchicalBayesianFramework(nnx.Module):
 
         # Compute log probability for each dimension
         normalized_values = (values - mean) / scale
-        log_prob_per_dim = (
-            -0.5 * normalized_values**2 - jnp.log(scale) - 0.5 * jnp.log(2 * jnp.pi)
-        )
+        log_prob_per_dim = -0.5 * normalized_values**2 - jnp.log(scale) - 0.5 * jnp.log(2 * jnp.pi)
 
         # Sum over dimensions
         return jnp.sum(log_prob_per_dim, axis=-1)
@@ -935,9 +911,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
 
         return physics_aware_uncertainty
 
-    def _evaluate_physics_constraint(
-        self, physics_state: jax.Array, law: str
-    ) -> jax.Array:
+    def _evaluate_physics_constraint(self, physics_state: jax.Array, law: str) -> jax.Array:
         """Evaluate physics constraint violation.
 
         Args:

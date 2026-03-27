@@ -1,4 +1,4 @@
-"""Tests for gradient checkpointing (rematerialization) integration (Sprint 1 C.1).
+"""Tests for gradient checkpointing (rematerialization) integration (Version 1 C.1).
 
 Tests are written first per TDD. BasicTrainer should use artifex's apply_remat()
 when gradient_checkpointing=True in TrainingConfig.
@@ -37,9 +37,7 @@ def training_data() -> tuple[jax.Array, jax.Array]:
 class TestGradientCheckpointing:
     """Test gradient checkpointing integration with BasicTrainer."""
 
-    def test_remat_same_loss_trajectory(
-        self, training_data: tuple[jax.Array, jax.Array]
-    ) -> None:
+    def test_remat_same_loss_trajectory(self, training_data: tuple[jax.Array, jax.Array]) -> None:
         """Training produces same loss with and without remat (numerical tolerance)."""
         from opifex.training.basic_trainer import BasicTrainer
 
@@ -118,9 +116,7 @@ class TestGradientCheckpointing:
         assert config.gradient_checkpointing is False
         assert config.gradient_checkpoint_policy is None
 
-    def test_remat_no_policy_uses_default(
-        self, training_data: tuple[jax.Array, jax.Array]
-    ) -> None:
+    def test_remat_no_policy_uses_default(self, training_data: tuple[jax.Array, jax.Array]) -> None:
         """When remat enabled without explicit policy, it still works."""
         from opifex.training.basic_trainer import BasicTrainer
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Opifex provides comprehensive benchmarking tools for evaluating scientific machine learning methods.
+Opifex provides full benchmarking tools for evaluating scientific machine learning methods.
 
 ## PDE Benchmarks
 

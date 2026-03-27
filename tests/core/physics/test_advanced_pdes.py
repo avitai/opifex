@@ -57,9 +57,7 @@ class TestTimeDependentSchrodinger:
         x = jnp.array([[0.0], [0.5], [1.0]])
 
         tdse = PDEResidualRegistry.get("schrodinger_td")
-        residual = tdse(
-            ground_state, x, hbar=1.0, mass=1.0, potential_fn=lambda x: 0.5 * x**2
-        )
+        residual = tdse(ground_state, x, hbar=1.0, mass=1.0, potential_fn=lambda x: 0.5 * x**2)
 
         assert residual.shape == (3,)
         assert jnp.all(jnp.isfinite(residual))
@@ -82,9 +80,7 @@ class TestTimeDependentSchrodinger:
         tdse = PDEResidualRegistry.get("schrodinger_td")
         residual = tdse(complex_model, x)
 
-        assert residual.dtype in [jnp.complex64, jnp.complex128] or jnp.isrealobj(
-            residual
-        )
+        assert residual.dtype in [jnp.complex64, jnp.complex128] or jnp.isrealobj(residual)
 
 
 class TestNavierStokes:
@@ -306,9 +302,7 @@ class TestNonlinearSchrodinger:
         info = PDEResidualRegistry.get_info("schrodinger_nonlinear")
 
         # Should mention nonlinearity or sigma
-        assert (
-            "sigma" in str(info["signature"]) or "nonlin" in info["docstring"].lower()
-        )
+        assert "sigma" in str(info["signature"]) or "nonlin" in info["docstring"].lower()
 
 
 class TestCoupledPDESystems:
@@ -455,9 +449,7 @@ class TestRegistryExtensibility:
             return laplacian_psi + coupling * jnp.abs(psi) ** 2 * psi
 
         # Register it
-        PDEResidualRegistry.register(
-            "custom_quantum", custom_quantum_residual, override=True
-        )
+        PDEResidualRegistry.register("custom_quantum", custom_quantum_residual, override=True)
 
         assert "custom_quantum" in PDEResidualRegistry.list()
 
@@ -484,9 +476,7 @@ class TestRegistryExtensibility:
             return grad_u[..., 0] + u * v / Re
 
         # Register
-        PDEResidualRegistry.register(
-            "custom_fluid", custom_fluid_residual, override=True
-        )
+        PDEResidualRegistry.register("custom_fluid", custom_fluid_residual, override=True)
 
         assert "custom_fluid" in PDEResidualRegistry.list()
 

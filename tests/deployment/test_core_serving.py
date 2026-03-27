@@ -100,15 +100,11 @@ class TestDeploymentConfig:
 
         # Test invalid port
         with pytest.raises(ValueError, match="Port must be between"):
-            DeploymentConfig(
-                model_name="test", model_type="neural_operator", serving_port=70000
-            )
+            DeploymentConfig(model_name="test", model_type="neural_operator", serving_port=70000)
 
         # Test invalid batch size
         with pytest.raises(ValueError, match="Batch size must be positive"):
-            DeploymentConfig(
-                model_name="test", model_type="neural_operator", batch_size=0
-            )
+            DeploymentConfig(model_name="test", model_type="neural_operator", batch_size=0)
 
     def test_deployment_config_jax_precision(self):
         """Test JAX precision configuration."""
@@ -533,9 +529,7 @@ class TestServingIntegration:
         if None in [ModelServer, InferenceEngine, DeploymentConfig]:
             pytest.skip("Serving components not yet implemented")
 
-        config = DeploymentConfig(
-            model_name="error_test", model_type="fno", batch_size=4
-        )
+        config = DeploymentConfig(model_name="error_test", model_type="fno", batch_size=4)
 
         # Test uninitialized server prediction
         server = ModelServer(config)

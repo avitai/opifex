@@ -1,13 +1,9 @@
-"""
-Opifex Testing Configuration - Enhanced GPU Safety and Dependency Management
+"""Opifex Testing Configuration.
 
-This module provides comprehensive pytest configuration with:
-1. Proactive GPU environment detection and configuration
-2. Local .venv CUDA library management
-3. Automatic JAX backend configuration before any operations
-4. Optional dependency management with mocking
-5. Hardware-aware test execution with intelligent fallback
-6. Comprehensive error handling and diagnostics
+Lightweight pytest configuration that defers JAX initialization and device
+probing to test execution time, keeping test collection fast and side-effect
+free.  Environment variables are managed by activate.sh / .opifex.env / .env
+and pytest-env in pyproject.toml — this module does NOT mutate them.
 """
 
 import os
@@ -17,81 +13,60 @@ from pathlib import Path
 import pytest
 
 
-def setup_cuda_environment():
-    """Set up CUDA environment variables for JAX."""
-    # Set CUDA library path
-    cuda_lib_path = "/usr/local/cuda/lib64"
-    current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-
-    if Path(cuda_lib_path).exists() and cuda_lib_path not in current_ld_path:
-        if current_ld_path:
-            new_ld_path = f"{cuda_lib_path}:{current_ld_path}"
-        else:
-            new_ld_path = cuda_lib_path
-        os.environ["LD_LIBRARY_PATH"] = new_ld_path
-
-    # Set additional CUDA environment variables
-    os.environ["CUDA_ROOT"] = "/usr/local/cuda"
-    os.environ["CUDA_HOME"] = "/usr/local/cuda"
-
-    # JAX CUDA configuration - respect existing JAX_PLATFORMS setting
-    if "JAX_PLATFORMS" not in os.environ:
-        os.environ["JAX_PLATFORMS"] = "cuda,cpu"
-
-    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.8"
-
-    # Disable CUDA plugin validation to bypass cuSPARSE check
-    os.environ["JAX_CUDA_PLUGIN_VERIFY"] = "false"
-    os.environ["XLA_FLAGS"] = "--xla_gpu_strict_conv_algorithm_picker=false"
-
-
-# Removed duplicate pytest_configure function - functionality moved to main pytest_configure below
-
-
-# Add the project root to the Python path
+# ---------------------------------------------------------------------------
+# Project root on sys.path (needed for editable installs to resolve)
+# ---------------------------------------------------------------------------
 project_root = Path(__file__).parent.parent
 import sys
 
 
 sys.path.insert(0, str(project_root))
 
-# Import Opifex testing infrastructure after environment setup
-try:
-    from opifex.core.testing_infrastructure import (
-        DependencyManager,
-        ensure_safe_jax_environment,
-        MockMetricsImplementation,
-    )
-
-    # Initialize the environment proactively to prevent segmentation faults
-    _test_environment = ensure_safe_jax_environment()
-except ImportError:
-    # Fallback if Opifex testing infrastructure is not available
-    _test_environment = None
-    DependencyManager = None
-    MockMetricsImplementation = None
+# ---------------------------------------------------------------------------
+# Lazy imports — resolved at first use, not at collection time
+# ---------------------------------------------------------------------------
+_test_environment = None
+_test_env_initialized = False
+DependencyManager = None
+MockMetricsImplementation = None
 
 
-# Now safe to import JAX and other components
+def _init_test_environment():
+    """Initialize test environment lazily on first use."""
+    global _test_environment, _test_env_initialized, DependencyManager, MockMetricsImplementation  # noqa: PLW0603
+    if _test_env_initialized:
+        return _test_environment
+    _test_env_initialized = True
+    try:
+        from opifex.core.testing_infrastructure import (
+            DependencyManager as _DepMgr,
+            ensure_safe_jax_environment,
+            MockMetricsImplementation as _MockMetrics,
+        )
+
+        DependencyManager = _DepMgr
+        MockMetricsImplementation = _MockMetrics
+        _test_environment = ensure_safe_jax_environment()
+    except ImportError:
+        pass
+    return _test_environment
+
+
 import jax
 import jax.numpy as jnp
 
-
-# Configure JAX for testing - X64 precision for numerical accuracy
-os.environ["JAX_ENABLE_X64"] = "True"
 
 # Suppress specific warnings during testing
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning, module="jax")
 
-# Global managers
 _dependency_manager = None
 
 
 def get_dependency_manager():
-    """Get the global dependency manager."""
+    """Get the global dependency manager, initializing lazily."""
     global _dependency_manager  # noqa: PLW0603
+    _init_test_environment()
     if _dependency_manager is None and DependencyManager is not None:
         _dependency_manager = DependencyManager()
     return _dependency_manager
@@ -127,40 +102,9 @@ def rngs():
 
 @pytest.fixture(scope="session", autouse=True)
 def configure_test_environment():
-    """Configure the test environment for safe execution."""
-    if _test_environment is not None:
-        print("\n🔧 Opifex Test Environment Configuration:")
-        print(f"📱 Backend: {_test_environment.backend.value}")
-        print(f"🌍 Environment: {_test_environment.environment_type.value}")
-        print(f"🚀 GPU Available: {_test_environment.gpu_available}")
-        print(f"✅ GPU Safe: {_test_environment.gpu_safe}")
-        cuda_paths = _test_environment.cuda_env.cuda_library_paths or []
-        print(f"📦 CUDA Libraries: {len(cuda_paths)} paths")
-        print(f"🔗 JAX CUDA: {_test_environment.cuda_env.jax_cuda_available}")
-        print(
-            f"📊 Dependencies: {len([d for d in _test_environment.dependencies.values() if d.value == 'available'])} available"
-        )
-
-        # Log CUDA environment details
-        if _test_environment.cuda_env.venv_cuda_available:
-            print(
-                f"💾 CUDA Version: {_test_environment.cuda_env.cuda_version or 'Unknown'}"
-            )
-            print(f"🎯 GPU Devices: {_test_environment.cuda_env.gpu_devices_detected}")
-
-        # Confirm JAX backend configuration
-        jax_platforms = os.environ.get("JAX_PLATFORMS", "cpu")
-        print(f"⚙️ JAX Platforms: {jax_platforms}")
-
-        # Display safety status
-        if _test_environment.gpu_safe:
-            print("🟢 GPU backend enabled with full safety validation")
-        elif _test_environment.gpu_available:
-            print("🟡 GPU available but unsafe - using CPU fallback")
-        else:
-            print("🔵 CPU-only environment - optimal for development")
-
-    return _test_environment
+    """Initialize test environment lazily at session start (not collection time)."""
+    env = _init_test_environment()
+    return env
 
 
 @pytest.fixture(scope="session")
@@ -172,12 +116,13 @@ def dependency_manager():
 @pytest.fixture(scope="session")
 def test_environment():
     """Provide the test environment configuration."""
-    return _test_environment
+    return _init_test_environment()
 
 
 @pytest.fixture
 def mock_prometheus_metrics():
     """Provide a mock Prometheus metrics implementation."""
+    _init_test_environment()
     if MockMetricsImplementation is not None:
         return MockMetricsImplementation()
     return None
@@ -186,7 +131,8 @@ def mock_prometheus_metrics():
 @pytest.fixture
 def safe_context():
     """Provide a safe JAX context for tests."""
-    if _test_environment is not None:
+    env = _init_test_environment()
+    if env is not None:
         from opifex.core.testing_infrastructure import ensure_safe_jax_environment
 
         ensure_safe_jax_environment()
@@ -342,80 +288,29 @@ def mock_registry_service():
     return mock
 
 
-# Enhanced pytest markers for different test categories
 def pytest_configure(config):
-    """Configure pytest environment with proper JAX/CUDA handling and custom markers."""
-    # Setup CUDA environment first, before any JAX imports
-    setup_cuda_environment()
-
-    # Suppress CUDA warnings and errors in test output
-    warnings.filterwarnings(
-        "ignore", category=UserWarning, module="jax._src.xla_bridge"
-    )
+    """Register custom markers.  No JAX init or device probing here."""
+    warnings.filterwarnings("ignore", category=UserWarning, module="jax._src.xla_bridge")
     warnings.filterwarnings("ignore", message=".*cuSPARSE.*")
     warnings.filterwarnings("ignore", message=".*CUDA-enabled jaxlib.*")
 
-    # Import JAX and configure after environment setup
-    try:
-        import jax
-
-        # Force JAX to initialize with current environment
-        # Respect the JAX_PLATFORMS environment variable
-        current_platforms = os.environ.get("JAX_PLATFORMS", "cuda,cpu")
-        jax.config.update("jax_platforms", current_platforms)
-
-        # Check if CUDA is available
-        try:
-            devices = jax.devices()
-            gpu_devices = [d for d in devices if d.platform == "gpu"]
-            cpu_devices = [d for d in devices if d.platform == "cpu"]
-
-            config.addinivalue_line(
-                "markers",
-                f"gpu_available: GPU devices available: {len(gpu_devices) > 0}",
-            )
-            config.addinivalue_line("markers", f"devices: Available devices: {devices}")
-
-            print(f"\nGPU available for testing: {len(gpu_devices) > 0}")
-            if gpu_devices:
-                print(f"GPU devices: {gpu_devices}")
-            print(f"CPU devices: {cpu_devices}")
-
-        except Exception as e:
-            print(f"\nDevice detection failed: {e}")
-            config.addinivalue_line(
-                "markers", "gpu_available: GPU devices available: False"
-            )
-
-    except ImportError as e:
-        print(f"\nJAX import failed: {e}")
-
-    # Configure custom pytest markers
-    config.addinivalue_line(
-        "markers", "gpu_required: mark test as requiring GPU hardware"
-    )
+    config.addinivalue_line("markers", "gpu_required: mark test as requiring GPU hardware")
     config.addinivalue_line(
         "markers", "gpu_preferred: mark test as preferring GPU but can run on CPU"
     )
-    config.addinivalue_line(
-        "markers", "cpu_safe: mark test as safe to run on CPU-only systems"
-    )
+    config.addinivalue_line("markers", "cpu_safe: mark test as safe to run on CPU-only systems")
     config.addinivalue_line(
         "markers", "requires_prometheus: mark test as requiring Prometheus client"
     )
     config.addinivalue_line("markers", "requires_psutil: mark test as requiring psutil")
     config.addinivalue_line("markers", "slow: mark test as slow running")
     config.addinivalue_line("markers", "integration: mark test as integration test")
-    config.addinivalue_line(
-        "markers", "cuda_local: mark test as requiring local .venv CUDA"
-    )
+    config.addinivalue_line("markers", "cuda_local: mark test as requiring local .venv CUDA")
 
 
 def pytest_addoption(parser):
     """Add custom command line options."""
-    parser.addoption(
-        "--runslow", action="store_true", default=False, help="run slow tests"
-    )
+    parser.addoption("--runslow", action="store_true", default=False, help="run slow tests")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -435,14 +330,12 @@ def pytest_collection_modifyitems(config, items):
 
     for item in items:
         # Handle dependency-required tests
-        if item.get_closest_marker(
-            "requires_prometheus"
-        ) and not dep_manager.is_available("prometheus_client"):
+        if item.get_closest_marker("requires_prometheus") and not dep_manager.is_available(
+            "prometheus_client"
+        ):
             item.add_marker(pytest.mark.skip(reason="Prometheus client not available"))
 
-        if item.get_closest_marker("requires_psutil") and not dep_manager.is_available(
-            "psutil"
-        ):
+        if item.get_closest_marker("requires_psutil") and not dep_manager.is_available("psutil"):
             item.add_marker(pytest.mark.skip(reason="psutil not available"))
 
 
@@ -455,31 +348,22 @@ def reset_jax_config():
 
 
 def pytest_runtest_makereport(item, call):
-    """Handle test execution with comprehensive error handling."""
+    """Log CUDA-related test failures via logging instead of print."""
     if call.when == "call" and call.excinfo and "CUDA" in str(call.excinfo.value):
-        # Check for GPU-related failures and provide helpful diagnostics
-        print("\n⚠️ CUDA-related test failure detected:")
-        if _test_environment is not None:
-            print(f"Environment Type: {_test_environment.environment_type.value}")
-            print(f"GPU Safe: {_test_environment.gpu_safe}")
-        print(f"JAX Platforms: {os.environ.get('JAX_PLATFORMS', 'cpu')}")
+        import logging
 
-        if _test_environment is not None and not _test_environment.gpu_safe:
-            print("💡 Consider running with CPU-only backend: JAX_PLATFORMS=cpu")
+        logger = logging.getLogger("opifex.tests")
+        env = _init_test_environment()
+        logger.warning(
+            "CUDA-related test failure: %s (JAX_PLATFORMS=%s, gpu_safe=%s)",
+            item.nodeid,
+            os.environ.get("JAX_PLATFORMS", "cpu"),
+            getattr(env, "gpu_safe", None),
+        )
 
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_session():
     """Clean up test session resources."""
     yield
-
-    # Final cleanup
     jax.clear_caches()
-
-    # Log final environment status
-    if _test_environment is not None:
-        print(
-            f"\n🏁 Test session completed with {_test_environment.environment_type.value} environment"
-        )
-    else:
-        print("\n🏁 Test session completed")

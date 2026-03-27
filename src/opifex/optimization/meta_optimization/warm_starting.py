@@ -85,17 +85,13 @@ class WarmStartingStrategy:
             adapted_params = previous_params * self.adaptation_ratio
 
             # Add small random perturbation for exploration
-            noise = 0.1 * jax.random.normal(
-                jax.random.PRNGKey(42), previous_params.shape
-            )
+            noise = 0.1 * jax.random.normal(jax.random.PRNGKey(42), previous_params.shape)
             return adapted_params + noise
 
         # Default: return parameters as-is
         return previous_params
 
-    def adapt_optimizer_state(
-        self, previous_opt_state: dict[str, Any]
-    ) -> dict[str, Any]:
+    def adapt_optimizer_state(self, previous_opt_state: dict[str, Any]) -> dict[str, Any]:
         """Adapt optimizer state for warm-starting.
 
         Args:
@@ -142,9 +138,7 @@ class WarmStartingStrategy:
                 * jnp.linalg.norm(current_fingerprint)
             )
         elif self.similarity_metric == "euclidean":
-            distances = jnp.linalg.norm(
-                previous_fingerprints - current_fingerprint, axis=1
-            )
+            distances = jnp.linalg.norm(previous_fingerprints - current_fingerprint, axis=1)
             similarities = 1.0 / (1.0 + distances)
         else:
             # Default to uniform similarity

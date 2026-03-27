@@ -130,9 +130,7 @@ local_fno = LocalFourierNeuralOperator(
 )
 
 # Count parameters
-local_fno_params = sum(
-    x.size for x in jax.tree_util.tree_leaves(nnx.state(local_fno, nnx.Param))
-)
+local_fno_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(local_fno, nnx.Param)))
 print(f"LocalFNO parameters: {local_fno_params:,}")
 
 # Create standard FNO for comparison
@@ -147,9 +145,7 @@ standard_fno = FourierNeuralOperator(
     rngs=nnx.Rngs(42),
 )
 
-fno_params = sum(
-    x.size for x in jax.tree_util.tree_leaves(nnx.state(standard_fno, nnx.Param))
-)
+fno_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(standard_fno, nnx.Param)))
 print(f"Standard FNO parameters: {fno_params:,}")
 print(f"LocalFNO overhead: {(local_fno_params / fno_params - 1) * 100:.1f}%")
 
@@ -189,15 +185,11 @@ def train_model(model, X_train, Y_train, epochs, lr=1e-3, model_name="Model"):
 
 # %%
 print()
-local_fno_losses = train_model(
-    local_fno, X_train, Y_train, EPOCHS, model_name="LocalFNO"
-)
+local_fno_losses = train_model(local_fno, X_train, Y_train, EPOCHS, model_name="LocalFNO")
 print(f"Final LocalFNO loss: {local_fno_losses[-1]:.6e}")
 
 print()
-fno_losses = train_model(
-    standard_fno, X_train, Y_train, EPOCHS, model_name="Standard FNO"
-)
+fno_losses = train_model(standard_fno, X_train, Y_train, EPOCHS, model_name="Standard FNO")
 print(f"Final FNO loss: {fno_losses[-1]:.6e}")
 
 # %% [markdown]
@@ -214,8 +206,7 @@ def evaluate_model(model, X_test, Y_test, model_name="Model"):
 
     # Relative L2 error per sample
     rel_l2_per_sample = jnp.sqrt(
-        jnp.sum((predictions - Y_test) ** 2, axis=(1, 2, 3))
-        / jnp.sum(Y_test**2, axis=(1, 2, 3))
+        jnp.sum((predictions - Y_test) ** 2, axis=(1, 2, 3)) / jnp.sum(Y_test**2, axis=(1, 2, 3))
     )
     rel_l2_mean = float(jnp.mean(rel_l2_per_sample))
     rel_l2_min = float(jnp.min(rel_l2_per_sample))
@@ -223,9 +214,7 @@ def evaluate_model(model, X_test, Y_test, model_name="Model"):
 
     print(f"{model_name} Results:")
     print(f"  Test MSE:         {mse:.6f}")
-    print(
-        f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})"
-    )
+    print(f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})")
 
     return predictions, mse, rel_l2_mean
 
@@ -233,13 +222,9 @@ def evaluate_model(model, X_test, Y_test, model_name="Model"):
 # %%
 print()
 print("Running evaluation...")
-local_pred, local_mse, local_rel_l2 = evaluate_model(
-    local_fno, X_test, Y_test, "LocalFNO"
-)
+local_pred, local_mse, local_rel_l2 = evaluate_model(local_fno, X_test, Y_test, "LocalFNO")
 print()
-fno_pred, fno_mse, fno_rel_l2 = evaluate_model(
-    standard_fno, X_test, Y_test, "Standard FNO"
-)
+fno_pred, fno_mse, fno_rel_l2 = evaluate_model(standard_fno, X_test, Y_test, "Standard FNO")
 
 # Compare
 print()
@@ -357,9 +342,7 @@ print("Results Summary:")
 print(
     f"  LocalFNO:     MSE={local_mse:.6f}, Rel L2={local_rel_l2:.4f}, Params={local_fno_params:,}"
 )
-print(
-    f"  Standard FNO: MSE={fno_mse:.6f}, Rel L2={fno_rel_l2:.4f}, Params={fno_params:,}"
-)
+print(f"  Standard FNO: MSE={fno_mse:.6f}, Rel L2={fno_rel_l2:.4f}, Params={fno_params:,}")
 print(f"  Improvement:  MSE {mse_improvement:+.1f}%, Rel L2 {rel_l2_improvement:+.1f}%")
 print()
 print(f"Results saved to: {output_dir}")

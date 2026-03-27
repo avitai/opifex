@@ -1,4 +1,4 @@
-"""Comprehensive tests for ResourceOrchestrator.
+"""Full tests for ResourceOrchestrator.
 
 Test-driven development (TDD) approach: These tests are written BEFORE
 extracting the ResourceOrchestrator module from the original file.
@@ -55,9 +55,7 @@ class TestResourceOrchestratorInitialization:
             optimization_objective=OptimizationObjective.MINIMIZE_COST, rngs=rngs
         )
 
-        assert (
-            orchestrator.optimization_objective == OptimizationObjective.MINIMIZE_COST
-        )
+        assert orchestrator.optimization_objective == OptimizationObjective.MINIMIZE_COST
 
     def test_neural_network_components_exist(self, rngs):
         """Test that all neural network components are properly initialized."""
@@ -91,9 +89,7 @@ class TestPoolManagement:
         assert sample_pool.pool_id in resource_orchestrator.resource_pools
         assert resource_orchestrator.resource_pools[sample_pool.pool_id] == sample_pool
 
-    def test_register_multiple_pools(
-        self, resource_orchestrator, sample_pool, sample_pool_2
-    ):
+    def test_register_multiple_pools(self, resource_orchestrator, sample_pool, sample_pool_2):
         """Test registering multiple resource pools."""
         resource_orchestrator.register_resource_pool(sample_pool)
         resource_orchestrator.register_resource_pool(sample_pool_2)
@@ -102,9 +98,7 @@ class TestPoolManagement:
         assert sample_pool.pool_id in resource_orchestrator.resource_pools
         assert sample_pool_2.pool_id in resource_orchestrator.resource_pools
 
-    def test_update_pool_status_success(
-        self, resource_orchestrator_with_pools, sample_pool
-    ):
+    def test_update_pool_status_success(self, resource_orchestrator_with_pools, sample_pool):
         """Test updating pool status successfully."""
         result = resource_orchestrator_with_pools.update_pool_status(
             sample_pool.pool_id, utilization=0.75, available_capacity=50
@@ -127,13 +121,9 @@ class TestPoolManagement:
 class TestRequirementEncoding:
     """Test requirement encoding into feature vectors."""
 
-    def test_encode_requirements_basic(
-        self, resource_orchestrator, sample_resource_requirements
-    ):
+    def test_encode_requirements_basic(self, resource_orchestrator, sample_resource_requirements):
         """Test encoding basic resource requirements."""
-        features = resource_orchestrator._encode_requirements(
-            sample_resource_requirements, {}
-        )
+        features = resource_orchestrator._encode_requirements(sample_resource_requirements, {})
 
         assert isinstance(features, jnp.ndarray)
         assert features.shape == (32,)
@@ -189,9 +179,7 @@ class TestPoolFiltering:
             required = sample_resource_requirements.get(pool.resource_type, 0)
             assert pool.available_capacity >= required
 
-    def test_filter_eligible_pools_cost_constraint(
-        self, resource_orchestrator_with_pools
-    ):
+    def test_filter_eligible_pools_cost_constraint(self, resource_orchestrator_with_pools):
         """Test filtering pools by cost constraint."""
         requirements = {ResourceType.GPU_A100: 1}
         constraints = {"max_cost_usd_per_hour": 5.0}  # Very low cost
@@ -204,9 +192,7 @@ class TestPoolFiltering:
         for pool in eligible:
             assert pool.cost_per_hour_usd <= 5.0
 
-    def test_filter_eligible_pools_performance_constraint(
-        self, resource_orchestrator_with_pools
-    ):
+    def test_filter_eligible_pools_performance_constraint(self, resource_orchestrator_with_pools):
         """Test filtering pools by performance constraint."""
         requirements = {ResourceType.GPU_A100: 1}
         constraints = {"min_performance_score": 0.9}  # High performance required
@@ -218,9 +204,7 @@ class TestPoolFiltering:
         for pool in eligible:
             assert pool.performance_score >= 0.9
 
-    def test_filter_eligible_pools_provider_preference(
-        self, resource_orchestrator_with_pools
-    ):
+    def test_filter_eligible_pools_provider_preference(self, resource_orchestrator_with_pools):
         """Test filtering pools by provider preference."""
         requirements = {ResourceType.GPU_A100: 1}
         constraints = {"preferred_providers": [CloudProvider.AWS]}
@@ -236,16 +220,13 @@ class TestPoolFiltering:
         """Test filtering when no pools match requirements."""
         requirements = {ResourceType.GPU_A100: 10000}  # Impossible capacity
 
-        eligible = resource_orchestrator_with_pools._filter_eligible_pools(
-            requirements, {}
-        )
+        eligible = resource_orchestrator_with_pools._filter_eligible_pools(requirements, {})
 
         # Pools of other resource types don't match GPU_A100 requirements
         # But they're still returned by filter if they have capacity for their type
         # The actual filtering happens in _select_optimal_pools which groups by type
         assert all(
-            pool.resource_type != ResourceType.GPU_A100
-            or pool.available_capacity < 10000
+            pool.resource_type != ResourceType.GPU_A100 or pool.available_capacity < 10000
             for pool in eligible
         )
 
@@ -554,13 +535,9 @@ class TestResourceAllocation:
             sample_resource_requirements, constraints
         )
 
-        assert allocation.cost_estimate_usd <= 100.0 * len(
-            allocation.allocated_resources
-        )
+        assert allocation.cost_estimate_usd <= 100.0 * len(allocation.allocated_resources)
 
-    def test_optimize_resource_allocation_no_eligible_pools(
-        self, resource_orchestrator
-    ):
+    def test_optimize_resource_allocation_no_eligible_pools(self, resource_orchestrator):
         """Test allocation when no pools meet requirements."""
         # Empty orchestrator with no pools
         requirements = {ResourceType.GPU_A100: 1}
@@ -578,13 +555,8 @@ class TestResourceAllocation:
             sample_resource_requirements
         )
 
-        assert len(resource_orchestrator_with_pools.active_allocations) == (
-            initial_count + 1
-        )
-        assert (
-            allocation.allocation_id
-            in resource_orchestrator_with_pools.active_allocations
-        )
+        assert len(resource_orchestrator_with_pools.active_allocations) == (initial_count + 1)
+        assert allocation.allocation_id in resource_orchestrator_with_pools.active_allocations
 
 
 class TestCostEstimation:
@@ -604,9 +576,7 @@ class TestCostEstimation:
         expected_cost = pool.cost_per_hour_usd * 2
         assert abs(cost - expected_cost) < 0.01
 
-    def test_calculate_cost_estimate_multiple_pools(
-        self, resource_orchestrator_with_pools
-    ):
+    def test_calculate_cost_estimate_multiple_pools(self, resource_orchestrator_with_pools):
         """Test cost estimation with multiple pools."""
         pools = list(resource_orchestrator_with_pools.resource_pools.values())[:2]
         selected_pools = {p.pool_id: p for p in pools}
@@ -641,9 +611,7 @@ class TestPerformanceEstimation:
 
         assert performance == 0.0
 
-    def test_calculate_performance_estimate_weighted(
-        self, resource_orchestrator_with_pools
-    ):
+    def test_calculate_performance_estimate_weighted(self, resource_orchestrator_with_pools):
         """Test weighted performance estimation with multiple pools."""
         pools = list(resource_orchestrator_with_pools.resource_pools.values())[:2]
         selected_pools = {p.pool_id: p for p in pools}
@@ -697,9 +665,7 @@ class TestAllocationStrategyNames:
         }
 
         for objective, expected_name in expected_names.items():
-            orchestrator = ResourceOrchestrator(
-                optimization_objective=objective, rngs=rngs
-            )
+            orchestrator = ResourceOrchestrator(optimization_objective=objective, rngs=rngs)
             assert orchestrator._get_allocation_strategy_name() == expected_name
 
 
@@ -735,9 +701,7 @@ class TestEdgeCases:
         requirements = {ResourceType.GPU_A100: 0, ResourceType.CPU_INTEL: 2}
 
         # Should not raise error, just skip zero quantity
-        allocation = resource_orchestrator_with_pools.optimize_resource_allocation(
-            requirements
-        )
+        allocation = resource_orchestrator_with_pools.optimize_resource_allocation(requirements)
 
         # Should only allocate CPU_INTEL
         assert len(allocation.allocated_resources) >= 0

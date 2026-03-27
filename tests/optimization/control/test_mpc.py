@@ -205,19 +205,13 @@ class TestConstraintProjector:
         projector = ConstraintProjector(**constraint_config, rngs=nnx.Rngs(key))
 
         # Test state that violates bounds
-        invalid_state = jnp.array(
-            [3.0, 2.0, 2 * jnp.pi, 10.0]
-        )  # All exceed upper bounds
+        invalid_state = jnp.array([3.0, 2.0, 2 * jnp.pi, 10.0])  # All exceed upper bounds
 
         projected_state = projector.project_state(invalid_state)
 
         # Check that projected state satisfies bounds
-        assert jnp.all(
-            projected_state >= jnp.array(constraint_config["state_bounds"]["lower"])
-        )
-        assert jnp.all(
-            projected_state <= jnp.array(constraint_config["state_bounds"]["upper"])
-        )
+        assert jnp.all(projected_state >= jnp.array(constraint_config["state_bounds"]["lower"]))
+        assert jnp.all(projected_state <= jnp.array(constraint_config["state_bounds"]["upper"]))
 
     def test_control_constraint_projection(self, constraint_config):
         """Test control constraint projection."""
@@ -230,12 +224,8 @@ class TestConstraintProjector:
         projected_control = projector.project_control(invalid_control)
 
         # Check that projected control satisfies bounds
-        assert jnp.all(
-            projected_control >= jnp.array(constraint_config["control_bounds"]["lower"])
-        )
-        assert jnp.all(
-            projected_control <= jnp.array(constraint_config["control_bounds"]["upper"])
-        )
+        assert jnp.all(projected_control >= jnp.array(constraint_config["control_bounds"]["lower"]))
+        assert jnp.all(projected_control <= jnp.array(constraint_config["control_bounds"]["upper"]))
 
     def test_custom_constraint_projection(self, constraint_config):
         """Test custom constraint projection."""
@@ -379,8 +369,8 @@ class TestRealTimeOptimizer:
 
         # Check real-time performance (allow reasonable overhead for research setting)
         assert (
-            (end_time - start_time) <= optimizer.time_limit * 100
-        )  # Allow significant overhead for GPU compilation
+            end_time - start_time
+        ) <= optimizer.time_limit * 100  # Allow significant overhead for GPU compilation
         # Check that optimization completed (may not converge due to tight time limits)
         assert jnp.all(jnp.isfinite(result.solution))
 
@@ -506,9 +496,7 @@ class TestRecedingHorizonController:
 
         # Define reference trajectory (sinusoidal)
         t = jnp.linspace(0, 2 * jnp.pi, 50)
-        reference = jnp.column_stack(
-            [jnp.sin(t), jnp.cos(t), jnp.zeros_like(t), jnp.zeros_like(t)]
-        )
+        reference = jnp.column_stack([jnp.sin(t), jnp.cos(t), jnp.zeros_like(t), jnp.zeros_like(t)])
 
         # Track reference
         initial_state = reference[0]
@@ -623,9 +611,7 @@ class TestMPCBenchmarks:
             denominator = m_cart + m_pole * sin_theta**2
 
             x_ddot = (
-                u
-                + m_pole * l_pole * theta_dot**2 * sin_theta
-                - m_pole * g * sin_theta * cos_theta
+                u + m_pole * l_pole * theta_dot**2 * sin_theta - m_pole * g * sin_theta * cos_theta
             ) / denominator
 
             theta_ddot = (g * sin_theta - x_ddot * cos_theta) / l_pole

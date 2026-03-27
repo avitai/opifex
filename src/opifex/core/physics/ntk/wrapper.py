@@ -66,7 +66,7 @@ def create_ntk_fn_from_nnx(
         Kernel function that takes (x1, x2, params) and returns NTK matrix
     """
     try:
-        import neural_tangents as nt
+        import neural_tangents as nt  # pyright: ignore[reportMissingImports]
     except ImportError as err:
         raise ImportError(
             "neural-tangents is required for NTK computation. "

@@ -65,9 +65,7 @@ class MultiPhysicsDeepONet(nnx.Module):
         self.sensor_optimization = sensor_optimization
 
         # Validate and configure sensor parameters
-        num_sensors = self._configure_sensors(
-            sensor_optimization, num_sensors, branch_input_dim
-        )
+        num_sensors = self._configure_sensors(sensor_optimization, num_sensors, branch_input_dim)
 
         # Store physics constraints for test compatibility
         self.physics_constraints = physics_constraints or []
@@ -136,8 +134,7 @@ class MultiPhysicsDeepONet(nnx.Module):
             if sensor_optimization:
                 if num_sensors is None:
                     raise ValueError(
-                        "num_sensors should be set by now when "
-                        "sensor_optimization is enabled"
+                        "num_sensors should be set by now when sensor_optimization is enabled"
                     )
                 actual_branch_input_dim = num_sensors
             else:
@@ -200,9 +197,7 @@ class MultiPhysicsDeepONet(nnx.Module):
                 rngs=rngs,
             )
 
-    def _prepare_branch_inputs(
-        self, branch_inputs: jax.Array | list[jax.Array]
-    ) -> list[jax.Array]:
+    def _prepare_branch_inputs(self, branch_inputs: jax.Array | list[jax.Array]) -> list[jax.Array]:
         """Prepare branch inputs for multiple physics systems."""
         if isinstance(branch_inputs, jax.Array):
             # Single input - replicate for all systems
@@ -210,8 +205,7 @@ class MultiPhysicsDeepONet(nnx.Module):
         # Multiple inputs - assume one per system
         if len(branch_inputs) != self.num_physics_systems:
             raise ValueError(
-                f"Expected {self.num_physics_systems} branch inputs, "
-                f"got {len(branch_inputs)}"
+                f"Expected {self.num_physics_systems} branch inputs, got {len(branch_inputs)}"
             )
         return branch_inputs
 
@@ -228,16 +222,12 @@ class MultiPhysicsDeepONet(nnx.Module):
                     batch_size, num_features = branch_input.shape
                     # Reshape to [batch, num_points, 1] for sensor sampling
                     expanded_input = branch_input.reshape(batch_size, num_features, 1)
-                    optimized_input = self.sensor_optimizer(
-                        expanded_input, spatial_coords
-                    )
+                    optimized_input = self.sensor_optimizer(expanded_input, spatial_coords)
                     # Flatten back to [batch, num_sensors]
                     optimized_input = optimized_input.reshape(batch_size, -1)
                     optimized_inputs.append(optimized_input)
                 else:
-                    optimized_inputs.append(
-                        self.sensor_optimizer(branch_input, spatial_coords)
-                    )
+                    optimized_inputs.append(self.sensor_optimizer(branch_input, spatial_coords))
             return optimized_inputs
         return branch_input_list
 
@@ -299,8 +289,7 @@ class MultiPhysicsDeepONet(nnx.Module):
             batch_size, num_locations, trunk_dim = trunk_input.shape
         else:
             raise ValueError(
-                f"Expected trunk_input to have 2 or 3 dimensions, "
-                f"got {len(trunk_input.shape)}"
+                f"Expected trunk_input to have 2 or 3 dimensions, got {len(trunk_input.shape)}"
             )
 
         # Flatten for processing: [batch * num_locations, trunk_dim]
@@ -336,9 +325,7 @@ class MultiPhysicsDeepONet(nnx.Module):
             batch_size, num_systems, latent_dim = branch_encoding.shape
 
             # Reshape for attention: [batch * num_systems, 1, latent_dim]
-            reshaped_encoding = branch_encoding.reshape(
-                batch_size * num_systems, 1, latent_dim
-            )
+            reshaped_encoding = branch_encoding.reshape(batch_size * num_systems, 1, latent_dim)
 
             # Apply attention
             attended_encoding = self.physics_attention(
@@ -381,17 +368,13 @@ class MultiPhysicsDeepONet(nnx.Module):
 
         # Apply sensor optimization if enabled
         if spatial_coords is not None:
-            branch_input_list = self._apply_sensor_optimization(
-                branch_input_list, spatial_coords
-            )
+            branch_input_list = self._apply_sensor_optimization(branch_input_list, spatial_coords)
 
         # Encode branch inputs
         branch_encoding = self._encode_branch_inputs(branch_input_list)
 
         # Apply physics-aware attention
-        branch_encoding = self._apply_physics_attention(
-            branch_encoding, physics_info, training
-        )
+        branch_encoding = self._apply_physics_attention(branch_encoding, physics_info, training)
 
         # Encode trunk inputs
         trunk_encoding = self._encode_trunk_inputs(trunk_input)

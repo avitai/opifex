@@ -217,9 +217,7 @@ class TestGradientError:
 class TestHessianError:
     """Test suite for curvature-based error estimation."""
 
-    def test_quadratic_function_constant_hessian(
-        self, quadratic_function, test_points_2d
-    ):
+    def test_quadratic_function_constant_hessian(self, quadratic_function, test_points_2d):
         """Test that quadratic function has constant Hessian.
 
         For u = x² + y², H = [[2, 0], [0, 2]] everywhere.
@@ -237,9 +235,7 @@ class TestHessianError:
         assert error.shape == (test_points_2d.shape[0],)
         assert jnp.allclose(error, expected_norm, atol=1e-4)
 
-    def test_hessian_error_varying_curvature(
-        self, exponential_function, test_points_2d
-    ):
+    def test_hessian_error_varying_curvature(self, exponential_function, test_points_2d):
         """Test Hessian error for function with varying curvature.
 
         Exponential function has higher curvature near origin.

@@ -389,9 +389,7 @@ class TestJAXCompatibility:
         # Test normalization with batched psi
         psi_batch = jnp.ones((batch_size, 10))
         dx = 0.1
-        norm_violations = jax.vmap(lambda p: wavefunction_normalization(p, dx))(
-            psi_batch
-        )
+        norm_violations = jax.vmap(lambda p: wavefunction_normalization(p, dx))(psi_batch)
         assert norm_violations.shape == (batch_size,)
 
         # Test positivity with batched rho

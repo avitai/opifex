@@ -88,7 +88,7 @@ class MolecularSystem:
     """
     Standard molecular system representation for Neural DFT.
 
-    This class provides a comprehensive representation of molecular systems
+    This class provides a full representation of molecular systems
     suitable for quantum mechanical calculations, following atomic units
     convention and supporting both molecular and periodic systems.
 
@@ -211,10 +211,7 @@ class MolecularSystem:
     def center_of_charge(self) -> Array:
         """Center of nuclear charge in Bohr."""
         total_charge = jnp.sum(self.atomic_numbers)
-        return (
-            jnp.sum(self.atomic_numbers[:, None] * self.positions, axis=0)
-            / total_charge
-        )
+        return jnp.sum(self.atomic_numbers[:, None] * self.positions, axis=0) / total_charge
 
     def distance_matrix(self) -> Array:
         """
@@ -328,7 +325,7 @@ class MolecularSystem:
 
     def get_system_info(self) -> dict[str, Any]:
         """
-        Get comprehensive system information.
+        Get full system information.
 
         Returns:
             Dictionary with system properties
@@ -412,9 +409,7 @@ def create_molecular_system(
     )
 
 
-def create_water_molecule(
-    oh_distance: float = 0.96, hoh_angle: float = 104.5
-) -> MolecularSystem:
+def create_water_molecule(oh_distance: float = 0.96, hoh_angle: float = 104.5) -> MolecularSystem:
     """
     Create a water molecule with specified geometry.
 

@@ -1,7 +1,7 @@
 """
 Kubernetes orchestrator for Opifex deployments.
 
-This module provides a comprehensive orchestrator that combines all Kubernetes
+This module provides a full orchestrator that combines all Kubernetes
 components for complete deployment management.
 """
 
@@ -17,7 +17,7 @@ from opifex.deployment.kubernetes.resource_manager import ResourceManager
 
 class KubernetesOrchestrator:
     """
-    Comprehensive Kubernetes orchestrator for Opifex deployments.
+    Full Kubernetes orchestrator for Opifex deployments.
 
     Integrates manifest generation, auto-scaling, and resource management
     to provide complete deployment orchestration.

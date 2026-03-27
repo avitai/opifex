@@ -156,9 +156,7 @@ class AdaptiveDeepONet(nnx.Module):
         # If specific resolution level is requested
         if resolution_level is not None:
             level = min(resolution_level, self.num_resolution_levels - 1)
-            branch_encoding = self.branch_networks[level](
-                branch_input, deterministic=deterministic
-            )
+            branch_encoding = self.branch_networks[level](branch_input, deterministic=deterministic)
             trunk_encoding_flat = self.trunk_networks[level](
                 trunk_input_flat, deterministic=deterministic
             )
@@ -172,9 +170,7 @@ class AdaptiveDeepONet(nnx.Module):
         branch_encodings: list[jax.Array] = []
 
         for level in range(self.num_resolution_levels):
-            branch_encoding = self.branch_networks[level](
-                branch_input, deterministic=deterministic
-            )
+            branch_encoding = self.branch_networks[level](branch_input, deterministic=deterministic)
             trunk_encoding_flat = self.trunk_networks[level](
                 trunk_input_flat, deterministic=deterministic
             )
@@ -189,9 +185,7 @@ class AdaptiveDeepONet(nnx.Module):
             trunk_encoding = trunk_encoding_flat.reshape(batch_size, num_locations, -1)
 
             # Compute output for this level
-            level_output = jnp.sum(
-                branch_encoding[:, None, :] * trunk_encoding, axis=-1
-            )
+            level_output = jnp.sum(branch_encoding[:, None, :] * trunk_encoding, axis=-1)
             outputs.append(level_output)
 
         # Adaptive weighting
@@ -200,9 +194,7 @@ class AdaptiveDeepONet(nnx.Module):
             weights = weights[:, :, None]  # (batch, num_levels, 1)
 
             # Weighted combination of outputs
-            stacked_outputs = jnp.stack(
-                outputs, axis=1
-            )  # (batch, num_levels, num_locations)
+            stacked_outputs = jnp.stack(outputs, axis=1)  # (batch, num_levels, num_locations)
             final_output = jnp.sum(weights * stacked_outputs, axis=1)
         else:
             # Simple averaging

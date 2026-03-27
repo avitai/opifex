@@ -1,5 +1,5 @@
 """
-Comprehensive tests for optimized hyperbolic manifold operations.
+Full tests for optimized hyperbolic manifold operations.
 
 Tests JAX compatibility (JIT, VMAP, GRAD) for all hyperbolic manifold operations
 after optimization with vectorized operations.
@@ -329,9 +329,7 @@ class TestOptimizedParallelTransport:
         original_norm = jnp.sqrt(jnp.einsum("i,ij,j->", tangent, start_metric, tangent))
 
         transported = self.manifold.parallel_transport(tangent, start, end)
-        transported_norm = jnp.sqrt(
-            jnp.einsum("i,ij,j->", transported, end_metric, transported)
-        )
+        transported_norm = jnp.sqrt(jnp.einsum("i,ij,j->", transported, end_metric, transported))
 
         assert jnp.allclose(original_norm, transported_norm, atol=1e-5)
 
@@ -439,9 +437,7 @@ class TestPerformanceBenchmarks:
 
         batch_size = 100
         base_points = jax.random.uniform(self.key, (batch_size, 2)) * 0.6
-        target_points = (
-            jax.random.uniform(jax.random.split(self.key)[0], (batch_size, 2)) * 0.6
-        )
+        target_points = jax.random.uniform(jax.random.split(self.key)[0], (batch_size, 2)) * 0.6
 
         # Warm up JIT compilation
         _ = batch_distance_computation(base_points, target_points)

@@ -11,13 +11,11 @@ from typing import Any, TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
-from opifex.core.training.components import TrainingComponent
+from opifex.core.training.components.lifecycle import TrainingComponent
 
 
 if TYPE_CHECKING:
     from flax import nnx
-
-    from opifex.core.training.monitoring.metrics import TrainingState
 
 
 class ErrorRecoveryManager(TrainingComponent):
@@ -35,15 +33,15 @@ class ErrorRecoveryManager(TrainingComponent):
         self.gradient_clip_threshold = self.config.get("gradient_clip_threshold", 10.0)
         self.loss_explosion_threshold = self.config.get("loss_explosion_threshold", 1e6)
         self.recovery_attempts = 0
-        self.last_stable_state: TrainingState | None = None
+        self.last_stable_state: Any = None
 
-    def setup(self, model: nnx.Module, training_state: TrainingState) -> None:
+    def setup(self, model: nnx.Module, training_state: Any) -> None:
         """Setup error recovery with initial stable state."""
         self.last_stable_state = training_state
         self.recovery_attempts = 0
 
     def check_training_stability(
-        self, loss: float, grads: Any, training_state: TrainingState
+        self, loss: float, grads: Any, training_state: Any
     ) -> tuple[bool, str | None]:
         """Check if training is stable and suggest recovery if needed.
 
@@ -60,9 +58,7 @@ class ErrorRecoveryManager(TrainingComponent):
             return False, "loss_explosion"
 
         # Check for gradient explosion
-        grad_norm = jnp.sqrt(
-            sum(jnp.sum(g**2) for g in jax.tree_util.tree_leaves(grads))
-        )
+        grad_norm = jnp.sqrt(sum(jnp.sum(g**2) for g in jax.tree_util.tree_leaves(grads)))
         if grad_norm > self.gradient_clip_threshold:
             return False, "gradient_explosion"
 
@@ -85,9 +81,7 @@ class ErrorRecoveryManager(TrainingComponent):
         Returns:
             Clipped gradients
         """
-        grad_norm = jnp.sqrt(
-            sum(jnp.sum(g**2) for g in jax.tree_util.tree_leaves(grads))
-        )
+        grad_norm = jnp.sqrt(sum(jnp.sum(g**2) for g in jax.tree_util.tree_leaves(grads)))
 
         if grad_norm > self.gradient_clip_threshold:
             clip_factor = self.gradient_clip_threshold / grad_norm
@@ -95,9 +89,7 @@ class ErrorRecoveryManager(TrainingComponent):
 
         return grads
 
-    def recover_from_instability(
-        self, issue_type: str, training_state: TrainingState
-    ) -> TrainingState:
+    def recover_from_instability(self, issue_type: str, training_state: Any) -> Any:
         """Attempt recovery from training instability.
 
         Args:
@@ -125,17 +117,14 @@ class ErrorRecoveryManager(TrainingComponent):
                 new_lr = current_lr * 0.5
                 training_state.recovery_state["reduced_lr"] = new_lr
 
-        elif (
-            issue_type in ["nan_loss", "nan_gradients"]
-            and self.last_stable_state is not None
-        ):
+        elif issue_type in ["nan_loss", "nan_gradients"] and self.last_stable_state is not None:
             # Reinitialize problematic parameters
             training_state = self.last_stable_state
             training_state.recovery_state["reinitialized"] = True
 
         return training_state
 
-    def update_stable_state(self, training_state: TrainingState) -> None:
+    def update_stable_state(self, training_state: Any) -> None:
         """Update the last known stable training state."""
         self.last_stable_state = training_state
         self.recovery_attempts = 0  # Reset recovery attempts on stable training

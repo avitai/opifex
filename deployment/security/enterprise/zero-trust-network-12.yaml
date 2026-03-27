@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: risk-scoring-sa
-  namespace: security
-  labels:
-    app.kubernetes.io/name: risk-scoring-sa
-    app.kubernetes.io/component: zero-trust

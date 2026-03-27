@@ -1,4 +1,4 @@
-"""Comprehensive tests for GlobalResourceManager.
+"""Full tests for GlobalResourceManager.
 
 Test-driven development (TDD) approach: These tests are written BEFORE
 extracting the GlobalResourceManager module.
@@ -41,9 +41,7 @@ class TestGlobalResourceManagerInitialization:
         assert hasattr(global_resource_manager.cost_controller, "daily_spending")
 
         # Check sustainability tracker
-        assert hasattr(
-            global_resource_manager.sustainability_tracker, "carbon_emissions"
-        )
+        assert hasattr(global_resource_manager.sustainability_tracker, "carbon_emissions")
 
 
 class TestIntelligentResourceAllocation:
@@ -73,9 +71,7 @@ class TestIntelligentResourceAllocation:
         assert allocation.requested_resources == sample_resource_requirements
 
     @pytest.mark.asyncio
-    async def test_allocate_resources_with_constraints(
-        self, global_resource_manager_with_setup
-    ):
+    async def test_allocate_resources_with_constraints(self, global_resource_manager_with_setup):
         """Test resource allocation with specific constraints."""
         requirements = {ResourceType.GPU_A100: 1}
         constraints = {"max_cost_usd_per_hour": 50.0}
@@ -99,9 +95,7 @@ class TestIntelligentResourceAllocation:
         assert result["sustainability_optimized"] is False
 
     @pytest.mark.asyncio
-    async def test_gpu_allocation_integration(
-        self, global_resource_manager_with_gpu_pools
-    ):
+    async def test_gpu_allocation_integration(self, global_resource_manager_with_gpu_pools):
         """Test that GPU allocations are handled properly."""
         requirements = {ResourceType.GPU_A100: 2}
 
@@ -149,9 +143,7 @@ class TestIntelligentResourceAllocation:
 
         # Carbon emissions should be tracked
         assert (
-            len(
-                global_resource_manager_with_setup.sustainability_tracker.carbon_emissions
-            )
+            len(global_resource_manager_with_setup.sustainability_tracker.carbon_emissions)
             > initial_emissions_len
         )
 
@@ -165,9 +157,7 @@ class TestResourceMonitoring:
         assert global_resource_manager.is_monitoring is False
 
         # Start monitoring in background
-        monitoring_task = asyncio.create_task(
-            global_resource_manager.start_resource_monitoring()
-        )
+        monitoring_task = asyncio.create_task(global_resource_manager.start_resource_monitoring())
 
         # Give it a moment to start
         await asyncio.sleep(0.1)
@@ -185,9 +175,7 @@ class TestResourceMonitoring:
         assert global_resource_manager.is_monitoring is False
 
     @pytest.mark.asyncio
-    async def test_monitoring_runs_continuously(
-        self, global_resource_manager_with_setup
-    ):
+    async def test_monitoring_runs_continuously(self, global_resource_manager_with_setup):
         """Test that monitoring runs continuously until stopped."""
         # Start monitoring
         monitoring_task = asyncio.create_task(
@@ -212,7 +200,7 @@ class TestResourceMonitoring:
 
 
 class TestComprehensiveStatus:
-    """Test comprehensive status reporting."""
+    """Test full status reporting."""
 
     def test_get_comprehensive_status_empty(self, global_resource_manager):
         """Test status with no activity."""
@@ -247,9 +235,7 @@ class TestComprehensiveStatus:
         assert status["resource_orchestration"]["active_allocations"] > 0
         assert status["resource_orchestration"]["available_pools"] > 0
 
-    def test_status_includes_orchestrator_info(
-        self, global_resource_manager_with_setup
-    ):
+    def test_status_includes_orchestrator_info(self, global_resource_manager_with_setup):
         """Test that status includes orchestrator information."""
         status = global_resource_manager_with_setup.get_comprehensive_resource_status()
 
@@ -260,9 +246,7 @@ class TestComprehensiveStatus:
 
     def test_status_includes_gpu_stats(self, global_resource_manager_with_gpu_pools):
         """Test that status includes GPU management stats."""
-        status = (
-            global_resource_manager_with_gpu_pools.get_comprehensive_resource_status()
-        )
+        status = global_resource_manager_with_gpu_pools.get_comprehensive_resource_status()
 
         gpu_mgmt = status["gpu_management"]
         assert "total_pools" in gpu_mgmt
@@ -282,9 +266,7 @@ class TestComprehensiveStatus:
         # Should have either data or error message
         assert cost_analytics is not None
 
-    def test_status_includes_sustainability_metrics(
-        self, global_resource_manager_with_setup
-    ):
+    def test_status_includes_sustainability_metrics(self, global_resource_manager_with_setup):
         """Test that status includes sustainability metrics."""
         status = global_resource_manager_with_setup.get_comprehensive_resource_status()
 
@@ -299,9 +281,7 @@ class TestIntegrationScenarios:
     """Test end-to-end integration scenarios."""
 
     @pytest.mark.asyncio
-    async def test_full_lifecycle_scenario(
-        self, global_resource_manager_with_gpu_pools
-    ):
+    async def test_full_lifecycle_scenario(self, global_resource_manager_with_gpu_pools):
         """Test complete lifecycle: allocate, monitor status, deallocate."""
         manager = global_resource_manager_with_gpu_pools
 
@@ -339,9 +319,7 @@ class TestIntegrationScenarios:
 
         assert result1["allocation"] is not None
         assert result2["allocation"] is not None
-        assert (
-            result1["allocation"].allocation_id != result2["allocation"].allocation_id
-        )
+        assert result1["allocation"].allocation_id != result2["allocation"].allocation_id
 
         # Check that both are tracked
         status = manager.get_comprehensive_resource_status()
@@ -372,19 +350,13 @@ class TestEdgeCases:
         requirements = {ResourceType.GPU_A100: 1}
 
         with pytest.raises(ValueError, match=r".*"):
-            await global_resource_manager.allocate_resources_with_intelligence(
-                requirements
-            )
+            await global_resource_manager.allocate_resources_with_intelligence(requirements)
 
     @pytest.mark.asyncio
-    async def test_empty_resource_requirements(
-        self, global_resource_manager_with_setup
-    ):
+    async def test_empty_resource_requirements(self, global_resource_manager_with_setup):
         """Test allocation with empty requirements."""
         # This should still work, just return empty allocation
-        result = await global_resource_manager_with_setup.allocate_resources_with_intelligence(
-            {}
-        )
+        result = await global_resource_manager_with_setup.allocate_resources_with_intelligence({})
 
         # Should handle gracefully
         assert "allocation" in result or result is not None

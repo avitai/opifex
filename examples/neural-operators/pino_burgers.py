@@ -295,9 +295,7 @@ def train_step(model, optimizer, x_batch, y_batch):
     """Single PINO training step."""
 
     def loss_fn(model):
-        return pino_loss_fn(
-            model, x_batch, y_batch, DX, DT, VISCOSITY, DATA_WEIGHT, PHYSICS_WEIGHT
-        )
+        return pino_loss_fn(model, x_batch, y_batch, DX, DT, VISCOSITY, DATA_WEIGHT, PHYSICS_WEIGHT)
 
     (loss, aux), grads = nnx.value_and_grad(loss_fn, has_aux=True)(model)
     optimizer.update(model, grads)
@@ -401,12 +399,8 @@ x_grid = np.linspace(-1, 1, RESOLUTION)
 
 # --- Sample predictions ---
 n_vis = min(4, len(X_test))
-fig, axes = plt.subplots(
-    n_vis, TIME_STEPS + 1, figsize=(3.5 * (TIME_STEPS + 1), 3 * n_vis)
-)
-fig.suptitle(
-    "PINO 1D Burgers Predictions (Opifex)", fontsize=14, fontweight="bold", y=1.02
-)
+fig, axes = plt.subplots(n_vis, TIME_STEPS + 1, figsize=(3.5 * (TIME_STEPS + 1), 3 * n_vis))
+fig.suptitle("PINO 1D Burgers Predictions (Opifex)", fontsize=14, fontweight="bold", y=1.02)
 
 if n_vis == 1:
     axes = axes[np.newaxis, :]
@@ -420,9 +414,7 @@ for i in range(n_vis):
         axes[i, 0].legend(fontsize=8)
 
     for t in range(TIME_STEPS):
-        axes[i, t + 1].plot(
-            x_grid, Y_test[i, t], "b-", linewidth=1.5, alpha=0.8, label="Truth"
-        )
+        axes[i, t + 1].plot(x_grid, Y_test[i, t], "b-", linewidth=1.5, alpha=0.8, label="Truth")
         axes[i, t + 1].plot(
             x_grid,
             np.array(predictions[i, t]),
@@ -449,9 +441,7 @@ epochs_arr = np.arange(1, NUM_EPOCHS + 1)
 
 axes[0].semilogy(epochs_arr, train_history["total"], "k-", linewidth=2, label="Total")
 axes[0].semilogy(epochs_arr, train_history["data"], "b--", linewidth=1.5, label="Data")
-axes[0].semilogy(
-    epochs_arr, train_history["physics"], "r--", linewidth=1.5, label="Physics"
-)
+axes[0].semilogy(epochs_arr, train_history["physics"], "r--", linewidth=1.5, label="Physics")
 axes[0].set_xlabel("Epoch")
 axes[0].set_ylabel("Loss (log scale)")
 axes[0].set_title("Training Loss Components")
@@ -459,17 +449,14 @@ axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
 per_sample_errors = np.array(per_sample_rel_l2)
-axes[1].hist(
-    per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black"
-)
+axes[1].hist(per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black")
 axes[1].set_xlabel("Relative L2 Error")
 axes[1].set_ylabel("Frequency")
 axes[1].set_title("Test Error Distribution")
 axes[1].grid(True, alpha=0.3)
 
 per_step_mse = [
-    float(jnp.mean((predictions[:, t, :] - Y_test_jnp[:, t, :]) ** 2))
-    for t in range(TIME_STEPS)
+    float(jnp.mean((predictions[:, t, :] - Y_test_jnp[:, t, :]) ** 2)) for t in range(TIME_STEPS)
 ]
 axes[2].bar(
     range(1, TIME_STEPS + 1),

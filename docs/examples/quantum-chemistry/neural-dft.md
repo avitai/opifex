@@ -49,8 +49,8 @@ exchange-correlation functionals and SCF solvers.
 
 ## Files
 
-- **Python Script**: [`examples/quantum-chemistry/neural_dft.py`](https://github.com/Opifex/Opifex/blob/main/examples/quantum-chemistry/neural_dft.py)
-- **Jupyter Notebook**: [`examples/quantum-chemistry/neural_dft.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/quantum-chemistry/neural_dft.ipynb)
+- **Python Script**: [`examples/quantum-chemistry/neural_dft.py`](https://github.com/avitai/opifex/blob/main/examples/quantum-chemistry/neural_dft.py)
+- **Jupyter Notebook**: [`examples/quantum-chemistry/neural_dft.ipynb`](https://github.com/avitai/opifex/blob/main/examples/quantum-chemistry/neural_dft.ipynb)
 
 ## Quick Start
 

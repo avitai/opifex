@@ -2,7 +2,7 @@
 
 ## Overview
 
-Opifex provides a comprehensive collection of specialized neural network architectures designed for scientific computing applications. Built with FLAX NNX, all networks support automatic differentiation, JIT compilation, and multi-device execution for high-performance scientific machine learning.
+Opifex provides a full collection of specialized neural network architectures designed for scientific computing applications. Built with FLAX NNX, all networks support automatic differentiation, JIT compilation, and multi-device execution for high-performance scientific machine learning.
 
 ## Core Neural Network Architectures
 
@@ -688,4 +688,4 @@ def regularized_loss(model, x_data, y_data, x_physics):
     return data_loss + reg_loss
 ```
 
-This comprehensive neural network guide provides everything needed to build, train, and deploy sophisticated scientific machine learning models with Opifex's extensive architecture collection.
+This full neural network guide provides everything needed to build, train, and deploy sophisticated scientific machine learning models with Opifex's extensive architecture collection.

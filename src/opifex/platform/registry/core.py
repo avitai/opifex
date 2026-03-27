@@ -3,6 +3,14 @@
 Provides the core functionality for storing, retrieving, and managing
 neural functionals in the Opifex community platform. Implements CRUD
 operations with metadata management and version control integration.
+
+.. warning::
+    Database persistence is not yet implemented. The private ``_save_async``,
+    ``_get_functional_by_id``, ``_search_functionals_db``, and related methods
+    are TODO stubs that return None/empty collections. The public API
+    (``register_functional``, ``retrieve_functional``, ``search_functionals``,
+    ``delete_functional``) will cascade to these stubs and return incorrect
+    results until a storage backend is integrated.
 """
 
 import asyncio
@@ -29,7 +37,7 @@ class RegistryService:
     """Core service for neural functional registry operations.
 
     Handles storage, retrieval, and management of neural functionals
-    with comprehensive metadata tracking and version control.
+    with full metadata tracking and version control.
     """
 
     def __init__(
@@ -162,9 +170,7 @@ class RegistryService:
             raise HTTPException(status_code=404, detail="Version not found")
 
         # Load functional data
-        functional_data = await self._load_functional_file(
-            functional_id, version.version_tag
-        )
+        functional_data = await self._load_functional_file(functional_id, version.version_tag)
 
         # Get metadata
         metadata = await self._get_functional_metadata(functional_id)
@@ -213,9 +219,7 @@ class RegistryService:
             filters["author_id"] = author_id
 
         # Execute search query
-        functionals = await self._search_functionals_db(
-            query, filters, tags, limit, offset
-        )
+        functionals = await self._search_functionals_db(query, filters, tags, limit, offset)
 
         # Format results
         results = []
@@ -260,8 +264,8 @@ class RegistryService:
             raise HTTPException(status_code=404, detail="Functional not found")
 
         if functional.author_id != user_id:
-            # TODO: Add admin check
-            raise HTTPException(status_code=403, detail="Not authorized")
+            # Only the author can delete; admin override not yet implemented
+            raise HTTPException(status_code=403, detail="Not authorized to delete this functional")
 
         if version_tag:
             # Delete specific version
@@ -279,9 +283,7 @@ class RegistryService:
         required_fields = ["name", "type"]
         for field in required_fields:
             if field not in metadata:
-                raise HTTPException(
-                    status_code=400, detail=f"Missing required field: {field}"
-                )
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
 
         # Validate functional type
         valid_types = ["l2o", "neural_operator", "pinn", "neural_dft", "custom"]
@@ -296,9 +298,7 @@ class RegistryService:
 
         return metadata
 
-    async def _serialize_functional(
-        self, functional: nnx.Module | dict[str, Any]
-    ) -> bytes:
+    async def _serialize_functional(self, functional: nnx.Module | dict[str, Any]) -> bytes:
         """Serialize neural functional for storage."""
         if isinstance(functional, dict):
             # Already serialized
@@ -328,10 +328,7 @@ class RegistryService:
         if len(json_bytes) > self.max_file_size:
             raise HTTPException(
                 status_code=413,
-                detail=(
-                    f"Functional too large: {len(json_bytes)} bytes > "
-                    f"{self.max_file_size}"
-                ),
+                detail=(f"Functional too large: {len(json_bytes)} bytes > {self.max_file_size}"),
             )
 
         return json_bytes
@@ -366,13 +363,9 @@ class RegistryService:
 
         return file_path
 
-    async def _load_functional_file(
-        self, functional_id: str, version_tag: str
-    ) -> dict[str, Any]:
+    async def _load_functional_file(self, functional_id: str, version_tag: str) -> dict[str, Any]:
         """Load functional data from file system."""
-        file_path = (
-            self.storage_path / functional_id / "versions" / f"{version_tag}.json"
-        )
+        file_path = self.storage_path / functional_id / "versions" / f"{version_tag}.json"
 
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Functional file not found")
@@ -391,9 +384,7 @@ class RegistryService:
                 status_code=500, detail=f"Failed to parse functional data: {e}"
             ) from e
 
-    def _check_access_permission(
-        self, functional: NeuralFunctional, user_id: str | None
-    ) -> bool:
+    def _check_access_permission(self, functional: NeuralFunctional, user_id: str | None) -> bool:
         """Check if user has access to functional."""
         # Public functionals are accessible to all
         # Handle both SQLAlchemy models and plain objects
@@ -431,9 +422,7 @@ class RegistryService:
         # TODO: Implement database query
         return
 
-    async def _get_functional_version(
-        self, functional_id: str, version_tag: str | None
-    ):
+    async def _get_functional_version(self, functional_id: str, version_tag: str | None):
         """Get functional version from database."""
         # TODO: Implement database query
         return

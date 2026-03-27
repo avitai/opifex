@@ -1,4 +1,4 @@
-"""Comprehensive tests for Opifex metrics collection system."""
+"""Full tests for Opifex metrics collection system."""
 
 from unittest.mock import Mock, patch
 
@@ -59,9 +59,7 @@ class TestPrometheusMetrics:
     @patch("opifex.deployment.monitoring.metrics.Counter")
     @patch("opifex.deployment.monitoring.metrics.Gauge")
     @patch("opifex.deployment.monitoring.metrics.Histogram")
-    def test_init_with_prometheus(
-        self, mock_histogram, mock_gauge, mock_counter, mock_registry
-    ):
+    def test_init_with_prometheus(self, mock_histogram, mock_gauge, mock_counter, mock_registry):
         """Test initialization when prometheus is available."""
         mock_registry_instance = Mock()
         mock_registry.return_value = mock_registry_instance
@@ -161,9 +159,7 @@ class TestPrometheusMetrics:
             metrics = PrometheusMetrics()
 
             # Test the actual interface
-            metrics.record_training_metrics(
-                model_type="FNO", job_id="job123", loss=0.05
-            )
+            metrics.record_training_metrics(model_type="FNO", job_id="job123", loss=0.05)
 
             # Basic verification that the object exists and method worked
             assert metrics is not None
@@ -187,9 +183,7 @@ class TestPrometheusMetrics:
     @patch("opifex.deployment.monitoring.metrics.Counter")
     @patch("opifex.deployment.monitoring.metrics.Histogram")
     @patch("opifex.deployment.monitoring.metrics.Gauge")
-    def test_create_custom_metric_counter(
-        self, mock_gauge, mock_histogram, mock_counter
-    ):
+    def test_create_custom_metric_counter(self, mock_gauge, mock_histogram, mock_counter):
         """Test creating custom counter metric."""
         with patch("opifex.deployment.monitoring.metrics.CollectorRegistry"):
             metrics = PrometheusMetrics()
@@ -322,13 +316,9 @@ class TestPrometheusMetrics:
             metrics = PrometheusMetrics()
 
             # Test the actual interface
-            metrics.record_inference_metrics(
-                model_type="FNO", model_version="v1.0", duration=0.02
-            )
+            metrics.record_inference_metrics(model_type="FNO", model_version="v1.0", duration=0.02)
 
-            metrics.record_inference_accuracy(
-                model_type="FNO", model_version="v1.0", accuracy=0.95
-            )
+            metrics.record_inference_accuracy(model_type="FNO", model_version="v1.0", accuracy=0.95)
 
             # Basic verification
             assert metrics is not None
@@ -441,9 +431,7 @@ class TestCustomMetrics:
             # Mock metric objects
             custom_metrics.pde_accuracy = Mock()  # type: ignore[attr-defined]
 
-            custom_metrics.record_pde_accuracy(
-                equation_type="heat", method="FNO", error=0.01
-            )
+            custom_metrics.record_pde_accuracy(equation_type="heat", method="FNO", error=0.01)
 
             # Verify accuracy was recorded
             assert custom_metrics.pde_accuracy.labels.called  # type: ignore[attr-defined]

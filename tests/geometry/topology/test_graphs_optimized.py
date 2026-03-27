@@ -1,5 +1,5 @@
 """
-Comprehensive tests for optimized graph neural operations.
+Full tests for optimized graph neural operations.
 
 Tests JAX compatibility (JIT, VMAP, GRAD) for all graph neural operations
 after optimization with vectorized operations.
@@ -191,9 +191,7 @@ class TestOptimizedGraphNeuralOperator:
 
         # Create test graph
         self.nodes = jax.random.normal(self.key, (6, self.input_dim))
-        self.edges = jnp.array(
-            [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 3], [1, 4]]
-        )
+        self.edges = jnp.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 3], [1, 4]])
         self.edge_features = jax.random.normal(jax.random.split(self.key)[0], (8, 1))
 
         self.graph = GraphTopology(
@@ -223,9 +221,7 @@ class TestOptimizedGraphNeuralOperator:
         """Test that GNO forward pass works with vmap."""
 
         def gno_forward_single(nodes):
-            graph = GraphTopology(
-                nodes=nodes, edges=self.edges, edge_features=self.edge_features
-            )
+            graph = GraphTopology(nodes=nodes, edges=self.edges, edge_features=self.edge_features)
             return self.gno(graph)
 
         # Create batch of node features
@@ -285,9 +281,7 @@ class TestOptimizedLinearLayer:
 
         self.weights = jax.random.normal(self.key, (self.input_dim, self.output_dim))
         self.bias = jax.random.normal(jax.random.split(self.key)[0], (self.output_dim,))
-        self.input_data = jax.random.normal(
-            jax.random.split(self.key)[1], (5, self.input_dim)
-        )
+        self.input_data = jax.random.normal(jax.random.split(self.key)[1], (5, self.input_dim))
 
     def test_linear_layer_jit_compatibility(self):
         """Test that linear layer works with JIT compilation."""
@@ -362,9 +356,7 @@ class TestCombinedTransformations:
         """Test JIT compilation of vmap functions."""
 
         def gno_forward(nodes):
-            graph = GraphTopology(
-                nodes=nodes, edges=self.edges, edge_features=self.edge_features
-            )
+            graph = GraphTopology(nodes=nodes, edges=self.edges, edge_features=self.edge_features)
             return self.gno(graph)
 
         vmap_gno = jax.vmap(gno_forward)
@@ -381,9 +373,7 @@ class TestCombinedTransformations:
         """Test JIT compilation of gradient functions."""
 
         def gno_loss(nodes):
-            graph = GraphTopology(
-                nodes=nodes, edges=self.edges, edge_features=self.edge_features
-            )
+            graph = GraphTopology(nodes=nodes, edges=self.edges, edge_features=self.edge_features)
             output = self.gno(graph)
             return jnp.sum(output**2)
 
@@ -399,9 +389,7 @@ class TestCombinedTransformations:
         """Test vmap of gradient functions."""
 
         def gno_output_norm(nodes):
-            graph = GraphTopology(
-                nodes=nodes, edges=self.edges, edge_features=self.edge_features
-            )
+            graph = GraphTopology(nodes=nodes, edges=self.edges, edge_features=self.edge_features)
             output = self.gno(graph)
             return jnp.linalg.norm(output)
 
@@ -429,9 +417,7 @@ class TestPerformanceBenchmarks:
         num_edges = 200
 
         nodes = jax.random.normal(self.key, (num_nodes, 5))
-        edges = jax.random.randint(
-            jax.random.split(self.key)[0], (num_edges, 2), 0, num_nodes
-        )
+        edges = jax.random.randint(jax.random.split(self.key)[0], (num_edges, 2), 0, num_nodes)
         edge_features = jax.random.normal(jax.random.split(self.key)[1], (num_edges, 2))
 
         graph = GraphTopology(nodes=nodes, edges=edges, edge_features=edge_features)

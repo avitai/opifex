@@ -21,9 +21,7 @@ def test_solution_dataclass():
     # Test Solution object structure
     import jax.numpy as jnp
 
-    sol = Solution(
-        fields={"u": jnp.array([1.0])}, metrics={"loss": 0.1}, execution_time=1.0
-    )
+    sol = Solution(fields={"u": jnp.array([1.0])}, metrics={"loss": 0.1}, execution_time=1.0)
     assert sol.fields["u"][0] == 1.0
     assert sol.metrics["loss"] == 0.1
     assert sol.execution_time == 1.0

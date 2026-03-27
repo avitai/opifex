@@ -69,9 +69,7 @@ class DistributedManager:
         axis_names = self._config.mesh_axis_names
 
         # Resolve -1 to actual device count
-        resolved_shape = tuple(
-            jax.device_count() if dim == -1 else dim for dim in shape
-        )
+        resolved_shape = tuple(jax.device_count() if dim == -1 else dim for dim in shape)
 
         mesh_spec = list(zip(axis_names, resolved_shape, strict=True))
         mesh = self._mesh_manager.create_device_mesh(mesh_spec)

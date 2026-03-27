@@ -220,7 +220,8 @@ class LaplaceLayer(nnx.Module):
         # x: (B, C_in, N) → (B, N, C_in) → linear → (B, N, C_out) → (B, C_out, N)
         skip = self.local_linear(x.transpose(0, 2, 1)).transpose(0, 2, 1)
 
-        return x1 + x2 + skip
+        # Preserve input dtype (avoid float64 promotion from FFT intermediates)
+        return (x1 + x2 + skip).astype(x.dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -314,18 +315,14 @@ class LaplaceNeuralOperator(nnx.Module):
             Output ``(B, C_out, N)``.
         """
         # Lift: (B, C_in, N) → (B, N, C_in) → MLP → (B, N, hidden) → (B, H, N)
-        h = self.lift(x.transpose(0, 2, 1), deterministic=deterministic).transpose(
-            0, 2, 1
-        )
+        h = self.lift(x.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
 
         # Laplace layers: each applies PR + skip + activation
         for layer in self.laplace_layers:
             h = self.activation_fn(layer(h))
 
         # Project: (B, H, N) -> (B, N, H) -> MLP -> (B, N, C_out) -> (B, C_out, N)
-        return self.project(
-            h.transpose(0, 2, 1), deterministic=deterministic
-        ).transpose(0, 2, 1)
+        return self.project(h.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
 
 
 # ---------------------------------------------------------------------------

@@ -155,9 +155,7 @@ def fused_elementwise_chain(
     return fused_chain(x)
 
 
-def optimize_memory_layout_for_fusion(
-    x: jax.Array, target_layout: str = "NHWC"
-) -> jax.Array:
+def optimize_memory_layout_for_fusion(x: jax.Array, target_layout: str = "NHWC") -> jax.Array:
     """Optimize tensor memory layout for better fusion.
 
     Converts tensor to optimal memory layout for hardware-specific fusion.

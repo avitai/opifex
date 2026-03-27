@@ -284,9 +284,7 @@ class TestPerformanceConfig:
 
     def test_custom_initialization(self):
         """Test PerformanceConfig with custom values."""
-        config = PerformanceConfig(
-            analytics=True, timing=True, memory=True, convergence=True
-        )
+        config = PerformanceConfig(analytics=True, timing=True, memory=True, convergence=True)
 
         assert config.analytics is True
         assert config.timing is True
@@ -305,9 +303,7 @@ class TestConfigComposition:
         constraint_config = ConstraintConfig(
             constraints=["energy_conservation"], adaptive_weighting=True
         )
-        conservation_config = ConservationConfig(
-            laws=["energy"], energy_monitoring=True
-        )
+        conservation_config = ConservationConfig(laws=["energy"], energy_monitoring=True)
         boundary_config = BoundaryConfig(weight=0.5, enforce=True)
 
         # Compose into TrainingConfig

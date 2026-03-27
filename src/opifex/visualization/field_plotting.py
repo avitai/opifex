@@ -1,7 +1,7 @@
 """
 Field plotting utilities for visualizing PDE solutions and neural operator outputs.
 
-Provides comprehensive plotting tools for 2D fields, error analysis,
+Provides full plotting tools for 2D fields, error analysis,
 spectral content visualization, and comparative analysis.
 """
 
@@ -57,9 +57,7 @@ def plot_2d_field(
         vmax = float(np.max(field))
 
     # Create plot
-    im = ax.imshow(
-        field, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto"
-    )
+    im = ax.imshow(field, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto")
 
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax, shrink=0.8)
@@ -126,18 +124,14 @@ def plot_field_comparison(
     vmax = max(float(np.max(gt)), float(np.max(pred)))
 
     # Ground truth
-    im1 = axes[0].imshow(
-        gt, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto"
-    )
+    im1 = axes[0].imshow(gt, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto")
     axes[0].set_title(titles[0])
     axes[0].set_xlabel("X")
     axes[0].set_ylabel("Y")
     plt.colorbar(im1, ax=axes[0], shrink=0.8)
 
     # Prediction
-    im2 = axes[1].imshow(
-        pred, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto"
-    )
+    im2 = axes[1].imshow(pred, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto")
     axes[1].set_title(titles[1])
     axes[1].set_xlabel("X")
     axes[1].set_ylabel("Y")
@@ -342,9 +336,7 @@ def plot_field_evolution(
     n_times = field_sequence_np.shape[0]
 
     # Select time indices
-    time_indices = np.linspace(
-        0, n_times - 1, n_snapshots
-    )  # Remove explicit dtype casting
+    time_indices = np.linspace(0, n_times - 1, n_snapshots)  # Remove explicit dtype casting
 
     # Set up subplots
     rows = 2
@@ -364,9 +356,7 @@ def plot_field_evolution(
         time_idx_int = int(time_idx)
         field = field_sequence_np[time_idx_int]
 
-        im = ax.imshow(
-            field, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto"
-        )
+        im = ax.imshow(field, cmap=colormap, vmin=vmin, vmax=vmax, origin="lower", aspect="auto")
 
         title = (
             f"t = {float(time_points[time_idx_int]):.3f}"

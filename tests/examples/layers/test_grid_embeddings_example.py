@@ -115,12 +115,6 @@ def test_demonstrate_sinusoidal_embedding():
     assert "embedding_patterns" in freq_analysis
 
 
-@pytest.mark.skip(reason="compare_embedding_methods not yet implemented")
-def test_compare_embedding_methods():
-    """Test embedding methods comparison function."""
-    # This function is not yet implemented in the example
-
-
 def test_visualize_coordinate_grids():
     """Test coordinate grid visualization function."""
     from examples.layers.grid_embeddings_example import visualize_coordinate_grids
@@ -137,12 +131,6 @@ def test_visualize_coordinate_grids():
         pytest.fail(f"Visualization failed: {e}")
 
     assert visualization_success
-
-
-@pytest.mark.skip(reason="run_grid_embeddings_demo not yet implemented")
-def test_run_grid_embeddings_demo():
-    """Test the complete grid embeddings demonstration."""
-    # This function is not yet implemented in the example
 
 
 def test_embedding_jax_compatibility():
@@ -175,9 +163,7 @@ def test_embedding_gradient_flow():
     from examples.layers.grid_embeddings_example import demonstrate_grid_embedding_2d
 
     # Test gradient computation on embedded data
-    result = demonstrate_grid_embedding_2d(
-        spatial_shape=(4, 4), batch_size=1, in_channels=1
-    )
+    result = demonstrate_grid_embedding_2d(spatial_shape=(4, 4), batch_size=1, in_channels=1)
     embedded_data = result["embedded_data"]
 
     # Define a simple loss function that operates on the embedded data

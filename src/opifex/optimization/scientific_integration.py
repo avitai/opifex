@@ -1,7 +1,7 @@
 """Scientific computing integration for Opifex production optimization.
 
 This module implements physics-informed optimization, numerical validation,
-and conservation checking for the Phase 7.4 Production Optimization system.
+and conservation checking for the Version 7.4 Production Optimization system.
 
 Part of: Hybrid Performance Platform + Intelligent Edge + Adaptive Optimization
 """
@@ -92,9 +92,7 @@ class PhysicsProfilerProtocol(Protocol):
         """Profile physics-specific metrics."""
         ...
 
-    def validate_domain_constraints(
-        self, model_output: jnp.ndarray, domain: PhysicsDomain
-    ) -> bool:
+    def validate_domain_constraints(self, model_output: jnp.ndarray, domain: PhysicsDomain) -> bool:
         """Validate domain-specific constraints."""
         ...
 
@@ -108,9 +106,7 @@ class PhysicsProfiler:
         validation_tolerances: dict[str, float] | None = None,
     ):
         self.domain = domain
-        self.validation_tolerances = (
-            validation_tolerances or self._get_default_tolerances()
-        )
+        self.validation_tolerances = validation_tolerances or self._get_default_tolerances()
 
     def _get_default_tolerances(self) -> dict[str, float]:
         """Get default validation tolerances for the domain."""
@@ -157,7 +153,7 @@ class PhysicsProfiler:
         reference_data: dict[str, Any],
         time_series: list[jnp.ndarray] | None = None,
     ) -> PhysicsMetrics:
-        """Profile comprehensive physics-specific metrics."""
+        """Profile full physics-specific metrics."""
 
         metrics = PhysicsMetrics(domain=self.domain)
 
@@ -197,18 +193,10 @@ class PhysicsProfiler:
         metrics.numerical_stability = self._assess_numerical_stability(model_output)
 
         # Domain-specific checks
-        if (
-            self.domain == PhysicsDomain.QUANTUM_CHEMISTRY
-            and "wavefunction" in reference_data
-        ):
-            metrics.unitarity_preservation = self._check_unitarity(
-                model_output, reference_data
-            )
+        if self.domain == PhysicsDomain.QUANTUM_CHEMISTRY and "wavefunction" in reference_data:
+            metrics.unitarity_preservation = self._check_unitarity(model_output, reference_data)
 
-        if (
-            self.domain == PhysicsDomain.FLUID_DYNAMICS
-            and "boundary_conditions" in reference_data
-        ):
+        if self.domain == PhysicsDomain.FLUID_DYNAMICS and "boundary_conditions" in reference_data:
             metrics.boundary_condition_accuracy = self._check_boundary_conditions(
                 model_output, reference_data["boundary_conditions"]
             )
@@ -242,8 +230,7 @@ class PhysicsProfiler:
                 computed_energy = jnp.sum(model_output)  # Simplified energy calculation
                 reference_energy = reference_data["energy"]
                 return float(
-                    jnp.abs(computed_energy - reference_energy)
-                    / jnp.abs(reference_energy)
+                    jnp.abs(computed_energy - reference_energy) / jnp.abs(reference_energy)
                 )
             return 0.0
 
@@ -274,12 +261,10 @@ class PhysicsProfiler:
 
         # Simplified momentum calculation (assuming velocity field)
         if model_output.ndim >= 2:
-            computed_momentum = jnp.sum(
-                model_output, axis=0
-            )  # Sum over spatial dimensions
+            computed_momentum = jnp.sum(model_output, axis=0)  # Sum over spatial dimensions
             reference_momentum = reference_data["momentum"]
 
-            if isinstance(reference_momentum, (list, tuple)):
+            if isinstance(reference_momentum, list | tuple):
                 reference_momentum = jnp.array(reference_momentum)
 
             momentum_error = jnp.linalg.norm(computed_momentum - reference_momentum)
@@ -306,9 +291,7 @@ class PhysicsProfiler:
             if "total_mass" in reference_data:
                 computed_mass = jnp.sum(model_output)
                 reference_mass = reference_data["total_mass"]
-                return float(
-                    jnp.abs(computed_mass - reference_mass) / jnp.abs(reference_mass)
-                )
+                return float(jnp.abs(computed_mass - reference_mass) / jnp.abs(reference_mass))
             return 0.0
 
         # For time series, check mass conservation over time
@@ -385,9 +368,7 @@ class PhysicsProfiler:
             return 1.0
 
         # Check for numerical precision issues
-        relative_precision = jnp.std(model_output) / (
-            jnp.mean(jnp.abs(model_output)) + 1e-12
-        )
+        relative_precision = jnp.std(model_output) / (jnp.mean(jnp.abs(model_output)) + 1e-12)
 
         # Stability score based on reasonable dynamic range
         if relative_precision < 1e-12:
@@ -399,9 +380,7 @@ class PhysicsProfiler:
 
         return float(stability_score)
 
-    def _check_unitarity(
-        self, model_output: jnp.ndarray, reference_data: dict[str, Any]
-    ) -> float:
+    def _check_unitarity(self, model_output: jnp.ndarray, reference_data: dict[str, Any]) -> float:
         """Check unitarity preservation for quantum systems."""
         # For quantum systems, check if U†U = I for unitary operators
         if model_output.ndim >= 2 and model_output.shape[-1] == model_output.shape[-2]:
@@ -422,9 +401,7 @@ class PhysicsProfiler:
 
         return 1.0
 
-    def _compute_accuracy_from_error(
-        self, error: float, reference_norm: float
-    ) -> float:
+    def _compute_accuracy_from_error(self, error: float, reference_norm: float) -> float:
         """Compute accuracy score from error and reference norm."""
         if reference_norm < 1e-12:
             # Use absolute error with a reasonable scale
@@ -446,9 +423,7 @@ class PhysicsProfiler:
         if expected_values.size == 1:
             expected_values = jnp.full(boundary_values.shape, expected_values[0])
         else:
-            expected_values = jnp.broadcast_to(
-                expected_values[:, None], boundary_values.shape
-            )
+            expected_values = jnp.broadcast_to(expected_values[:, None], boundary_values.shape)
         error = jnp.linalg.norm(boundary_values - expected_values)
         reference_norm = jnp.linalg.norm(expected_values)
         return self._compute_accuracy_from_error(error, reference_norm)
@@ -462,9 +437,7 @@ class PhysicsProfiler:
             if expected_values.size == boundary_values.size:
                 expected_values = expected_values.reshape(boundary_values.shape)
             elif expected_values.size == 1:
-                expected_values = jnp.full(
-                    boundary_values.shape, expected_values.item()
-                )
+                expected_values = jnp.full(boundary_values.shape, expected_values.item())
 
         error = jnp.linalg.norm(boundary_values - expected_values)
         reference_norm = jnp.linalg.norm(expected_values)
@@ -477,7 +450,7 @@ class PhysicsProfiler:
         boundary_indices = bc_data["indices"]
         expected_values = bc_data["values"]
 
-        if not isinstance(boundary_indices, (list, tuple)):
+        if not isinstance(boundary_indices, list | tuple):
             return 1.0
 
         # Convert to JAX array for proper indexing
@@ -514,9 +487,7 @@ class PhysicsProfiler:
 
         for bc_type, bc_data in boundary_conditions.items():
             if bc_type == "dirichlet":
-                accuracy = self._check_dirichlet_boundary_condition(
-                    model_output, bc_data
-                )
+                accuracy = self._check_dirichlet_boundary_condition(model_output, bc_data)
                 accuracy_scores.append(accuracy)
             elif bc_type == "neumann":
                 accuracy = self._check_neumann_boundary_condition(model_output, bc_data)
@@ -546,9 +517,7 @@ class PhysicsProfiler:
         # Check entropy consistency (simplified)
         if "entropy" in reference_data:
             # Entropy should not decrease for isolated systems
-            computed_entropy = -jnp.sum(
-                model_output * jnp.log(jnp.abs(model_output) + 1e-12)
-            )
+            computed_entropy = -jnp.sum(model_output * jnp.log(jnp.abs(model_output) + 1e-12))
             reference_entropy = reference_data["entropy"]
 
             entropy_consistency = 1.0 if computed_entropy >= reference_entropy else 0.5
@@ -563,9 +532,7 @@ class PhysicsProfiler:
 class NumericalValidator:
     """Numerical precision and stability validator."""
 
-    def __init__(
-        self, precision_threshold: float = 1e-6, stability_threshold: float = 1e-3
-    ):
+    def __init__(self, precision_threshold: float = 1e-6, stability_threshold: float = 1e-3):
         self.precision_threshold = precision_threshold
         self.stability_threshold = stability_threshold
 
@@ -595,9 +562,7 @@ class NumericalValidator:
         # Stability assessment
         value_range = jnp.max(computed_values) - jnp.min(computed_values)
         stability_score = (
-            1.0
-            if value_range < 1e12
-            else float(jnp.maximum(0.0, 1.0 - value_range / 1e15))
+            1.0 if value_range < 1e12 else float(jnp.maximum(0.0, 1.0 - value_range / 1e15))
         )
 
         # Convergence rate estimation (simplified)
@@ -608,10 +573,7 @@ class NumericalValidator:
             convergence_rate = 0.0
 
         # Condition number estimation
-        if (
-            computed_values.ndim >= 2
-            and computed_values.shape[0] == computed_values.shape[1]
-        ):
+        if computed_values.ndim >= 2 and computed_values.shape[0] == computed_values.shape[1]:
             try:
                 condition_number = float(jnp.linalg.cond(computed_values))
             except (ValueError, ArithmeticError):
@@ -631,18 +593,13 @@ class NumericalValidator:
                 f"Relative error {max_relative_error:.2e} exceeds threshold "
                 f"{self.precision_threshold:.2e}"
             )
-            recommendations.append(
-                "Consider higher precision arithmetic or refined algorithms"
-            )
+            recommendations.append("Consider higher precision arithmetic or refined algorithms")
 
         if condition_number > 1e6:
             validation_errors.append(
-                f"High condition number {condition_number:.2e} indicates "
-                f"numerical instability"
+                f"High condition number {condition_number:.2e} indicates numerical instability"
             )
-            recommendations.append(
-                "Consider matrix conditioning or alternative algorithms"
-            )
+            recommendations.append("Consider matrix conditioning or alternative algorithms")
 
         return NumericalValidationResult(
             is_valid=is_valid,
@@ -761,10 +718,7 @@ class ScientificBenchmarkValidator:
 
         # Check chemical accuracy for quantum chemistry
         chemical_accuracy = False
-        if (
-            self.domain == PhysicsDomain.QUANTUM_CHEMISTRY
-            and accuracy_type == "chemical_accuracy"
-        ):
+        if self.domain == PhysicsDomain.QUANTUM_CHEMISTRY and accuracy_type == "chemical_accuracy":
             # Convert error to kcal/mol (assuming input is in appropriate units)
             error_kcal_mol = absolute_error  # Simplified assumption
             chemical_accuracy = error_kcal_mol < 1.0
@@ -807,9 +761,7 @@ class ScientificComputingIntegrator:
         self.domain = domain
         self.physics_profiler = physics_profiler or PhysicsProfiler(domain)
         self.numerical_validator = numerical_validator or NumericalValidator()
-        self.benchmark_validator = benchmark_validator or ScientificBenchmarkValidator(
-            domain
-        )
+        self.benchmark_validator = benchmark_validator or ScientificBenchmarkValidator(domain)
 
     def comprehensive_scientific_validation(
         self,
@@ -818,12 +770,11 @@ class ScientificComputingIntegrator:
         benchmarks: dict[str, tuple[float, float]] | None = None,
         time_series: list[jnp.ndarray] | None = None,
     ) -> dict[str, Any]:
-        """Perform comprehensive scientific validation."""
+        """Perform full scientific validation."""
 
         results = {
             "domain": self.domain.value,
-            "timestamp": jax.random.uniform(jax.random.PRNGKey(0))
-            * 1000,  # Simplified timestamp
+            "timestamp": jax.random.uniform(jax.random.PRNGKey(0)) * 1000,  # Simplified timestamp
         }
 
         # Physics profiling
@@ -853,9 +804,7 @@ class ScientificComputingIntegrator:
 
         # Benchmark validation
         if benchmarks:
-            benchmark_results = self.benchmark_validator.validate_multiple_benchmarks(
-                benchmarks
-            )
+            benchmark_results = self.benchmark_validator.validate_multiple_benchmarks(benchmarks)
             results["benchmark_validation"] = benchmark_results
 
         # Overall scientific score
@@ -875,9 +824,7 @@ class ScientificComputingIntegrator:
             ) / len(results["benchmark_validation"])
             scores.append(benchmark_score)
 
-        results["overall_scientific_score"] = (
-            sum(scores) / len(scores) if scores else 0.0
-        )
+        results["overall_scientific_score"] = sum(scores) / len(scores) if scores else 0.0
 
         return results
 
@@ -904,14 +851,10 @@ class ScientificComputingIntegrator:
 
             if physics.energy_conservation_error > 1e-6:
                 recommendations["recommendations"].append("Improve energy conservation")
-                recommendations["priority_actions"].append(
-                    "enforce_energy_conservation"
-                )
+                recommendations["priority_actions"].append("enforce_energy_conservation")
 
             if physics.symmetry_preservation < 0.95:
-                recommendations["recommendations"].append(
-                    "Enhance symmetry preservation"
-                )
+                recommendations["recommendations"].append("Enhance symmetry preservation")
                 recommendations["priority_actions"].append("enforce_symmetries")
 
         # Check numerical validation

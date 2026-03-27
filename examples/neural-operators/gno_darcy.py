@@ -120,12 +120,8 @@ print()
 print("Converting grids to graphs...")
 
 # Convert to graph format
-train_nodes, train_edges, train_edge_feats = grid_to_graph_data(
-    X_train, connectivity=CONNECTIVITY
-)
-test_nodes, test_edges, test_edge_feats = grid_to_graph_data(
-    X_test, connectivity=CONNECTIVITY
-)
+train_nodes, train_edges, train_edge_feats = grid_to_graph_data(X_train, connectivity=CONNECTIVITY)
+test_nodes, test_edges, test_edge_feats = grid_to_graph_data(X_test, connectivity=CONNECTIVITY)
 
 # Also convert target outputs
 train_targets, _, _ = grid_to_graph_data(Y_train, connectivity=CONNECTIVITY)
@@ -221,8 +217,7 @@ def evaluate_model(model, test_data, model_name="GNO"):
 
     # Relative L2 error per sample
     rel_l2_per_sample = jnp.sqrt(
-        jnp.sum((pred_values - target_values) ** 2, axis=1)
-        / jnp.sum(target_values**2, axis=1)
+        jnp.sum((pred_values - target_values) ** 2, axis=1) / jnp.sum(target_values**2, axis=1)
     )
     rel_l2_mean = float(jnp.mean(rel_l2_per_sample))
     rel_l2_min = float(jnp.min(rel_l2_per_sample))
@@ -230,9 +225,7 @@ def evaluate_model(model, test_data, model_name="GNO"):
 
     print(f"{model_name} Results:")
     print(f"  Test MSE:         {mse:.6f}")
-    print(
-        f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})"
-    )
+    print(f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})")
 
     return predictions, mse, rel_l2_mean
 
@@ -344,9 +337,7 @@ print("GNO Darcy Flow example completed")
 print("=" * 70)
 print()
 print("Results Summary:")
-print(
-    f"  GNO:        MSE={gno_mse:.6f}, Rel L2={gno_rel_l2:.4f}, Params={gno_params:,}"
-)
+print(f"  GNO:        MSE={gno_mse:.6f}, Rel L2={gno_rel_l2:.4f}, Params={gno_params:,}")
 print()
 print(f"Results saved to: {output_dir}")
 print("=" * 70)

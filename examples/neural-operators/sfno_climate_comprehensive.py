@@ -10,7 +10,7 @@
 
 # %% [markdown]
 """
-# Comprehensive SFNO for Climate Modeling
+# Full SFNO for Climate Modeling
 
 | Property    | Value                                                  |
 |-------------|--------------------------------------------------------|
@@ -19,16 +19,16 @@
 | Prerequisites | JAX, Flax NNX, Spherical Harmonics, Conservation Laws |
 
 ## Overview
-This example demonstrates comprehensive Spherical FNO functionality for climate
+This example demonstrates full Spherical FNO functionality for climate
 modeling using the Opifex framework with JAX/Flax NNX. Features include spherical
-harmonic analysis, conservation laws, and comprehensive climate data visualization.
+harmonic analysis, conservation laws, and full climate data visualization.
 
 We use Opifex's `create_climate_sfno` factory, the `create_shallow_water_loader`
 for streaming data via Google Grain, and the `Trainer` with `TrainingConfig`
 (including `ConservationConfig`) for physics-aware training.
 
 ## Learning Goals
-1. Build comprehensive SFNO with conservation-aware loss via `TrainingConfig`
+1. Build full SFNO with conservation-aware loss via `TrainingConfig`
 2. Analyze spherical harmonic spectra
 3. Evaluate energy and mass conservation
 4. Visualize climate fields on spherical domains
@@ -59,7 +59,7 @@ from opifex.neural.operators.fno.spherical import create_climate_sfno
 
 
 print("=" * 70)
-print("Opifex Example: Comprehensive Spherical FNO for Climate Modeling")
+print("Opifex Example: Full Spherical FNO for Climate Modeling")
 print("=" * 70)
 print(f"JAX backend: {jax.default_backend()}")
 print(f"JAX devices: {jax.devices()}")
@@ -179,11 +179,11 @@ print(
 
 # %% [markdown]
 """
-## Comprehensive Evaluation
+## Full Evaluation
 """
 
 # %%
-print("\nRunning comprehensive evaluation...")
+print("\nRunning full evaluation...")
 X_test_jnp, Y_test_jnp = jnp.array(X_test), jnp.array(Y_test)
 predictions = trained_model(X_test_jnp)
 test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
@@ -191,9 +191,7 @@ test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 per_sample_errors = []
 for i in range(X_test_jnp.shape[0]):
     p, t = predictions[i : i + 1], Y_test_jnp[i : i + 1]
-    per_sample_errors.append(
-        float(jnp.sqrt(jnp.sum((p - t) ** 2)) / jnp.sqrt(jnp.sum(t**2)))
-    )
+    per_sample_errors.append(float(jnp.sqrt(jnp.sum((p - t) ** 2)) / jnp.sqrt(jnp.sum(t**2))))
 mean_error, std_error = (
     float(np.mean(per_sample_errors)),
     float(np.std(per_sample_errors)),
@@ -207,9 +205,7 @@ target_mass = jnp.mean(Y_test_jnp, axis=(2, 3))
 mass_conservation = float(jnp.mean(jnp.abs(pred_mass - target_mass)))
 
 print(f"MSE: {test_mse:.6f} | Rel L2: {mean_error:.6f}+/-{std_error:.6f}")
-print(
-    f"Energy Conserv: {energy_conservation:.6f} | Mass Conserv: {mass_conservation:.6f}"
-)
+print(f"Energy Conserv: {energy_conservation:.6f} | Mass Conserv: {mass_conservation:.6f}")
 
 # %% [markdown]
 """
@@ -219,9 +215,7 @@ print(
 # %%
 print("\nGenerating training curves...")
 fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-fig.suptitle(
-    "Spherical FNO Training - Climate Modeling", fontsize=16, fontweight="bold"
-)
+fig.suptitle("Spherical FNO Training - Climate Modeling", fontsize=16, fontweight="bold")
 
 axes[0, 0].bar(
     ["Train", "Val"],
@@ -392,12 +386,8 @@ print("Generating error analysis...")
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 fig.suptitle("Spherical FNO Error Analysis", fontsize=16, fontweight="bold")
 
-axes[0, 0].hist(
-    per_sample_errors, bins=15, alpha=0.7, color="lightcoral", edgecolor="black"
-)
-axes[0, 0].axvline(
-    mean_error, color="red", ls="--", label=f"Mean: {mean_error:.4f}", lw=2
-)
+axes[0, 0].hist(per_sample_errors, bins=15, alpha=0.7, color="lightcoral", edgecolor="black")
+axes[0, 0].axvline(mean_error, color="red", ls="--", label=f"Mean: {mean_error:.4f}", lw=2)
 axes[0, 0].set_title("Error Distribution", fontweight="bold")
 axes[0, 0].set_xlabel("Rel L2")
 axes[0, 0].legend()
@@ -443,7 +433,7 @@ After running this example you should observe:
 - Decreasing training and validation loss with conservation-aware objectives
 - Energy and mass conservation metrics from physics-informed training
 - Spherical harmonic spectral analysis of predictions vs ground truth
-- Comprehensive error statistics across the test set
+- Full error statistics across the test set
 
 **Next steps:**
 - Increase `lmax` and resolution for higher-fidelity climate modeling
@@ -455,7 +445,7 @@ After running this example you should observe:
 # %%
 print()
 print("=" * 70)
-print(f"Comprehensive SFNO Climate example completed in {training_time:.1f}s")
+print(f"Full SFNO Climate example completed in {training_time:.1f}s")
 print(f"Mean Relative L2 Error: {mean_error:.6f}")
 print(f"Results saved to: {OUTPUT_DIR}")
 print("=" * 70)

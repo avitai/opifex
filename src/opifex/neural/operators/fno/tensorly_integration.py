@@ -1,7 +1,7 @@
 """
 TensorLy Integration for Enhanced Tensor Decomposition
 
-Phase 2: Integration of TensorLy's battle-tested algorithms with JAX-first approach.
+Version 2: Integration of TensorLy's battle-tested algorithms with JAX-first approach.
 Following the rationale's recommendation for "composition over inheritance" -
 leveraging mature tensor decomposition libraries while maintaining
 high-performance JAX computation.
@@ -149,9 +149,7 @@ class TensorLyTuckerInitializer:
                 reconstructed = jnp.tensordot(reconstructed, factor, axes=1)
 
         # Compute relative error
-        relative_error = jnp.linalg.norm(original - reconstructed) / jnp.linalg.norm(
-            original
-        )
+        relative_error = jnp.linalg.norm(original - reconstructed) / jnp.linalg.norm(original)
 
         if relative_error > tolerance:
             warnings.warn(
@@ -198,11 +196,7 @@ class TensorLyCPInitializer:
                 _raise_parafac_unavailable()
 
             # Convert back to JAX arrays
-            jax_weights = (
-                jnp.array(weights)
-                if hasattr(weights, "shape")
-                else jnp.array([weights])
-            )
+            jax_weights = jnp.array(weights) if hasattr(weights, "shape") else jnp.array([weights])
             jax_factors = [jnp.array(factor) for factor in factors]
 
             return jax_weights, jax_factors
@@ -215,7 +209,7 @@ class MemoryOptimalContractions:
     """Memory-optimal tensor contractions inspired by Multi-Grid TFNO research.
 
     Implements optimal contraction ordering to minimize intermediate tensor sizes
-    as recommended in the comprehensive rationale.
+    as recommended in the full rationale.
     """
 
     @staticmethod
@@ -279,9 +273,7 @@ class MemoryOptimalContractions:
                 # Expand spatial dimension back
                 # From (batch, out_channels) to (batch, out_channels, spatial_modes)
                 spatial_size = input_tensor.shape[2]
-                result = jnp.broadcast_to(
-                    result[..., None], (*result.shape, spatial_size)
-                )
+                result = jnp.broadcast_to(result[..., None], (*result.shape, spatial_size))
         else:
             # No spatial factor - simpler case
             # result: (batch, spatial, rank1)
@@ -384,11 +376,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
 
         elif self.decomposition_type == "cp":
             # Use TensorLy CP decomposition - ensure rank is a scalar
-            if isinstance(self.rank, (float, int)):
-                rank_value = int(self.rank)
-            else:
-                # If sequence, use first element as CP requires scalar rank
-                rank_value = int(self.rank[0])
+            rank_value = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
 
             weights, factors = TensorLyCPInitializer.decompose_tensor(
                 init_tensor, rank_value, max_iter=max_iter, tolerance=tolerance
@@ -398,9 +386,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             self.factors = nnx.List([nnx.Param(factor) for factor in factors])
 
         else:
-            raise ValueError(
-                f"TensorLy initialization not supported for {self.decomposition_type}"
-            )
+            raise ValueError(f"TensorLy initialization not supported for {self.decomposition_type}")
 
     def _init_random(self, rngs: nnx.Rngs):
         """Fallback random initialization when TensorLy is not available."""
@@ -430,16 +416,12 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             self.core = nnx.Param(jax.random.normal(keys[0], ranks))
             self.factors = nnx.List(
                 [
-                    nnx.Param(
-                        jax.random.normal(keys[i + 1], (self.tensor_shape[i], ranks[i]))
-                    )
+                    nnx.Param(jax.random.normal(keys[i + 1], (self.tensor_shape[i], ranks[i])))
                     for i in range(len(self.tensor_shape))
                 ]
             )
         else:
-            raise NotImplementedError(
-                f"Random initialization for {self.decomposition_type}"
-            )
+            raise NotImplementedError(f"Random initialization for {self.decomposition_type}")
 
     def multiply_factorized(self, input_tensor: jax.Array) -> jax.Array:
         """High-performance factorized multiplication using JAX."""
@@ -449,9 +431,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             return MemoryOptimalContractions.contract_tucker_spectral(
                 input_tensor, self.core.value, factor_values
             )
-        raise NotImplementedError(
-            f"Factorized multiplication for {self.decomposition_type}"
-        )
+        raise NotImplementedError(f"Factorized multiplication for {self.decomposition_type}")
 
     def reconstruct(self) -> jax.Array:
         """Reconstruct full tensor from factors."""
@@ -472,9 +452,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             if hasattr(self, "weights") and hasattr(self, "factors"):
                 # Basic CP reconstruction
                 result = (
-                    self.weights.value[0]
-                    if hasattr(self.weights, "value")
-                    else self.weights[0]
+                    self.weights.value[0] if hasattr(self.weights, "value") else self.weights[0]
                 )
                 for factor in self.factors:
                     factor_value = factor.value if hasattr(factor, "value") else factor
@@ -582,9 +560,7 @@ def benchmark_tensorly_integration(
 
     if tl is not None:
         backend_info = {
-            "backend": str(tl.get_backend())
-            if hasattr(tl, "get_backend")
-            else "unknown",
+            "backend": str(tl.get_backend()) if hasattr(tl, "get_backend") else "unknown",
             "tensor_creation": (2,) if tl is not None else "N/A",
         }
     else:

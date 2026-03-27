@@ -118,9 +118,9 @@ class TestCrossLayerIntegration:
 
         # Test core layer independence (complex input for exact roundtrip)
         # Real input with rfft2/irfft2 does not guarantee exact roundtrip for random data
-        x = jax.random.normal(
-            jax.random.PRNGKey(0), (4, 16, 16)
-        ) + 1j * jax.random.normal(jax.random.PRNGKey(1), (4, 16, 16))
+        x = jax.random.normal(jax.random.PRNGKey(0), (4, 16, 16)) + 1j * jax.random.normal(
+            jax.random.PRNGKey(1), (4, 16, 16)
+        )
         x_ft = standardized_fft(x, spatial_dims=2)
         x_reconstructed = standardized_ifft(x_ft, target_shape=x.shape, spatial_dims=2)
         assert jnp.allclose(x, x_reconstructed, rtol=1e-6, atol=1e-6)
@@ -129,9 +129,7 @@ class TestCrossLayerIntegration:
         # The std is not preserved for random real input with rfft2/irfft2 due to loss of imaginary part
         x_real = jax.random.normal(jax.random.PRNGKey(2), (4, 16, 16))
         x_ft_real = standardized_fft(x_real, spatial_dims=2)
-        x_rec_real = standardized_ifft(
-            x_ft_real, target_shape=x_real.shape, spatial_dims=2
-        )
+        x_rec_real = standardized_ifft(x_ft_real, target_shape=x_real.shape, spatial_dims=2)
         # Check mean is close
         assert jnp.abs(jnp.mean(x_real) - jnp.mean(x_rec_real)) < 1e-3
         # Do not check std for real input roundtrip
@@ -142,9 +140,7 @@ class TestCrossLayerIntegration:
         assert jnp.isfinite(ke).all()
 
         # Test neural layer independence
-        conv = FNOSpectralConvolution(
-            in_channels=2, out_channels=3, modes=8, rngs=nnx.Rngs(42)
-        )
+        conv = FNOSpectralConvolution(in_channels=2, out_channels=3, modes=8, rngs=nnx.Rngs(42))
         x_ft = jax.random.normal(jax.random.PRNGKey(4), (4, 2, 16))
         output = conv(x_ft)
         assert output.shape == (4, 3, 16)
@@ -220,9 +216,7 @@ class TestCrossLayerIntegration:
         processed_ft = neural_op(wf_ft)
 
         # 5. Core: Transform back to spatial domain
-        processed_spatial = standardized_ifft(
-            processed_ft, target_shape=(1, 2, n), spatial_dims=1
-        )
+        processed_spatial = standardized_ifft(processed_ft, target_shape=(1, 2, n), spatial_dims=1)
 
         # 6. Validate end-to-end workflow
         assert processed_spatial.shape == (1, 2, n)

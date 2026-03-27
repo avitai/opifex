@@ -172,17 +172,13 @@ class MetaOptimizer:
             meta_update = meta_update.reshape(params.shape)
 
             # Apply meta-update using optax pattern
-            new_params = optax.apply_updates(
-                params, -meta_update
-            )  # Negative for gradient descent
+            new_params = optax.apply_updates(params, -meta_update)  # Negative for gradient descent
             new_opt_state = opt_state  # L2O manages its own state
 
             meta_gradient_norm = jnp.linalg.norm(meta_update)
         else:
             # Use standard optimizer
-            updates, new_opt_state = updated_optimizer.update(
-                gradient, opt_state, params
-            )
+            updates, new_opt_state = updated_optimizer.update(gradient, opt_state, params)
             new_params = optax.apply_updates(params, updates)
             meta_gradient_norm = gradient_norm
 
@@ -211,15 +207,12 @@ class MetaOptimizer:
         # Convert to proper types for return signature
         return_params = jax.tree.map(jnp.asarray, new_params)
         return_info = {
-            k: jnp.asarray(v) if isinstance(v, (int, float)) else v
-            for k, v in meta_info.items()
+            k: jnp.asarray(v) if isinstance(v, int | float) else v for k, v in meta_info.items()
         }
 
         return return_params, new_opt_state, return_info
 
-    def store_optimization_result(
-        self, params: jax.Array, problem_features: jax.Array
-    ) -> None:
+    def store_optimization_result(self, params: jax.Array, problem_features: jax.Array) -> None:
         """Store optimization result for future warm-starting.
 
         Args:
@@ -261,8 +254,7 @@ class MetaOptimizer:
             similarities = []
             for prev_features in self.warm_start_strategy._problem_features_memory:
                 similarity = jnp.dot(current_problem_features, prev_features) / (
-                    jnp.linalg.norm(current_problem_features)
-                    * jnp.linalg.norm(prev_features)
+                    jnp.linalg.norm(current_problem_features) * jnp.linalg.norm(prev_features)
                 )
                 similarities.append(float(similarity))
 
@@ -304,17 +296,13 @@ class MetaOptimizer:
             return self.step(energy_fn, orbital_coeffs, opt_state, step)
 
         # Standard optimization step
-        new_coeffs, new_opt_state, meta_info = self.step(
-            energy_fn, orbital_coeffs, opt_state, step
-        )
+        new_coeffs, new_opt_state, meta_info = self.step(energy_fn, orbital_coeffs, opt_state, step)
 
         # Quantum-specific adaptations
         if self.l2o_engine is not None and self.l2o_engine.quantum_aware:
             # Use quantum-aware L2O adaptations
             scf_history = scf_context.get("energy_history", jnp.array([]))
-            quantum_adaptation = self.l2o_engine.compute_quantum_update(
-                new_coeffs, scf_history
-            )
+            quantum_adaptation = self.l2o_engine.compute_quantum_update(new_coeffs, scf_history)
 
             # Apply quantum adaptation
             new_coeffs = new_coeffs + 0.1 * quantum_adaptation
@@ -330,10 +318,7 @@ class MetaOptimizer:
         )
 
         # Update quantum performance metrics
-        if (
-            self.performance_monitor is not None
-            and self.performance_monitor.quantum_aware
-        ):
+        if self.performance_monitor is not None and self.performance_monitor.quantum_aware:
             energy_error = abs(float(energy_fn(new_coeffs) - energy_fn(orbital_coeffs)))
             self.performance_monitor.update_metrics(
                 step=step,

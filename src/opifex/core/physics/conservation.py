@@ -81,9 +81,7 @@ def energy_violation(
     violation = jnp.mean((energy_pred - energy_true) ** 2)
 
     # Apply tolerance and monitoring flags (JAX-compatible)
-    return jnp.where(
-        monitoring_enabled, jnp.where(violation > tolerance, violation, 0.0), 0.0
-    )
+    return jnp.where(monitoring_enabled, jnp.where(violation > tolerance, violation, 0.0), 0.0)
 
 
 def momentum_violation(
@@ -308,9 +306,7 @@ class MultiScalePhysics:
 
         for scale in self.scales:
             weight = self.normalized_weights[scale]
-            scale_loss = self._compute_scale_loss(
-                scale, x, y_pred, y_true, base_loss_fn
-            )
+            scale_loss = self._compute_scale_loss(scale, x, y_pred, y_true, base_loss_fn)
             total_loss = total_loss + weight * scale_loss
 
         return total_loss
@@ -384,9 +380,7 @@ class AdaptiveConstraintWeighting:
         self.current_weights = dict(initial_weights)
         self.adaptation_rate = adaptation_rate
 
-    def update_weights(
-        self, constraint_violations: dict[str, float]
-    ) -> dict[str, float]:
+    def update_weights(self, constraint_violations: dict[str, float]) -> dict[str, float]:
         """Update constraint weights based on violations.
 
         Constraints with higher violations get increased weights to
@@ -414,9 +408,7 @@ class AdaptiveConstraintWeighting:
             violation_ratio = violation / max_violation
 
             # Increase weight for constraints with higher violations
-            current_weight = self.current_weights.get(
-                constraint, 1.0 / len(self.constraints)
-            )
+            current_weight = self.current_weights.get(constraint, 1.0 / len(self.constraints))
             new_weight = current_weight * (1.0 + self.adaptation_rate * violation_ratio)
             new_weights[constraint] = new_weight
 
@@ -497,9 +489,7 @@ class ConstraintAggregator:
             weights = self.weight_manager.get_current_weights()
         else:
             # Uniform weighting
-            weights = {
-                law: 1.0 / len(self.conservation_laws) for law in self.conservation_laws
-            }
+            weights = {law: 1.0 / len(self.conservation_laws) for law in self.conservation_laws}
 
         # Compute each conservation law violation
         for law in self.conservation_laws:

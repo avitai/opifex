@@ -43,9 +43,7 @@ class BaselineRepository:
             Path(baseline_data_path) if baseline_data_path else Path("baselines.json")
         )
 
-        store_dir = (
-            Path(store_path) if store_path else self.baseline_data_path.parent / "store"
-        )
+        store_dir = Path(store_path) if store_path else self.baseline_data_path.parent / "store"
         self._store = Store(store_dir)
 
         # Initialize with standard baselines if no file exists
@@ -130,9 +128,7 @@ class BaselineRepository:
         with open(self.baseline_data_path, "w") as f:
             json.dump(self.baselines, f, indent=2)
 
-    def get_baseline_metrics(
-        self, dataset_name: str, model_type: str
-    ) -> dict[str, float]:
+    def get_baseline_metrics(self, dataset_name: str, model_type: str) -> dict[str, float]:
         """
         Get baseline metrics for a specific dataset and model type.
 
@@ -151,17 +147,14 @@ class BaselineRepository:
 
         if model_type not in self.baselines[dataset_name]:
             raise ValueError(
-                f"No baselines available for model type: {model_type} on "
-                f"dataset: {dataset_name}"
+                f"No baselines available for model type: {model_type} on dataset: {dataset_name}"
             )
 
         baseline_data = self.baselines[dataset_name][model_type].copy()
 
         # Filter out non-metric fields
         return {
-            k: v
-            for k, v in baseline_data.items()
-            if k not in ["source", "model_config", "notes"]
+            k: v for k, v in baseline_data.items() if k not in ["source", "model_config", "notes"]
         }
 
     def get_available_datasets(self) -> list[str]:
@@ -270,9 +263,7 @@ class BaselineRepository:
 
         if metrics_to_compare is None:
             # Compare all metrics that are in both test and baseline
-            metrics_to_compare = list(
-                set(test_metrics.keys()) & set(baseline_metrics.keys())
-            )
+            metrics_to_compare = list(set(test_metrics.keys()) & set(baseline_metrics.keys()))
 
         comparison = {
             "absolute_difference": {},
@@ -298,15 +289,11 @@ class BaselineRepository:
             # relative change
             if metric.lower() in LOWER_IS_BETTER:
                 # Lower is better - negative relative change is improvement
-                rel_improvement = (baseline_value - test_value) / (
-                    baseline_value + 1e-8
-                )
+                rel_improvement = (baseline_value - test_value) / (baseline_value + 1e-8)
                 is_better = test_value < baseline_value
             else:
                 # Higher is better - positive relative change is improvement
-                rel_improvement = (test_value - baseline_value) / (
-                    baseline_value + 1e-8
-                )
+                rel_improvement = (test_value - baseline_value) / (baseline_value + 1e-8)
                 is_better = test_value > baseline_value
 
             comparison["relative_improvement"][metric] = rel_improvement
@@ -353,9 +340,7 @@ class BaselineRepository:
                 best_metrics = self.get_baseline_metrics(dataset_name, model_type)
 
         if best_model is None:
-            raise ValueError(
-                f"No baseline found with metric: {metric} for dataset: {dataset_name}"
-            )
+            raise ValueError(f"No baseline found with metric: {metric} for dataset: {dataset_name}")
 
         # This is guaranteed to be non-None due to the check above
         if best_metrics is None:
@@ -364,7 +349,7 @@ class BaselineRepository:
 
     def generate_baseline_summary(self) -> dict[str, Any]:
         """
-        Generate a comprehensive summary of all baselines.
+        Generate a full summary of all baselines.
 
         Returns:
             Dictionary with baseline summary statistics

@@ -29,9 +29,7 @@ class TrainingComponent(Protocol):
         """Called at the beginning of each batch."""
         ...
 
-    def on_batch_end(
-        self, batch: int, state: Any, loss: float, metrics: dict[str, Any]
-    ) -> None:
+    def on_batch_end(self, batch: int, state: Any, loss: float, metrics: dict[str, Any]) -> None:
         """Called at the end of each batch."""
         ...
 
@@ -48,7 +46,5 @@ class BaseComponent:
     def on_batch_begin(self, batch: int, state: Any) -> None:
         """Called at the beginning of each batch."""
 
-    def on_batch_end(
-        self, batch: int, state: Any, loss: float, metrics: dict[str, Any]
-    ) -> None:
+    def on_batch_end(self, batch: int, state: Any, loss: float, metrics: dict[str, Any]) -> None:
         """Called at the end of each batch."""

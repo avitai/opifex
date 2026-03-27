@@ -32,7 +32,7 @@ Data-driven operator learning: map input functions to output functions.
 | [FNO on Darcy Flow](neural-operators/fno-darcy.md) | FNO + GridEmbedding2D | Darcy Flow 64x64 | Standard FNO benchmark |
 | [FNO on Burgers](neural-operators/fno-burgers.md) | FNO | Burgers 1D | Time-dependent PDE |
 | [SFNO Climate (Simple)](neural-operators/sfno-climate-simple.md) | Spherical FNO | Shallow Water 32x32 | Quick start for spherical data |
-| [SFNO Climate (Comprehensive)](neural-operators/sfno-climate-comprehensive.md) | Spherical FNO + Conservation | Shallow Water 64x64 | Conservation-aware training |
+| [SFNO Climate (Full)](neural-operators/sfno-climate-full.md) | Spherical FNO + Conservation | Shallow Water 64x64 | Conservation-aware training |
 | [U-FNO on Turbulence](neural-operators/ufno-turbulence.md) | U-FNO + Energy Loss | 2D Burgers 64x64 | Multi-scale architecture |
 | [UNO on Darcy Flow](neural-operators/uno-darcy.md) | UNO + Super-Resolution | Darcy Flow 32x32 | Zero-shot super-resolution |
 | [TFNO on Darcy Flow](neural-operators/tfno-darcy.md) | Tensorized FNO | Darcy Flow 64x64 | Memory-efficient decomposition |
@@ -168,6 +168,34 @@ python examples/layers/disco_convolutions_example.py
 
 ---
 
+## Equation Discovery
+
+Recover governing equations directly from data.
+
+| Example | Method | Description |
+|---------|--------|-------------|
+| [SINDy on Lorenz System](discovery/sindy-lorenz.md) | SINDy | Sparse identification of Lorenz equations from trajectories |
+
+```bash
+python examples/discovery/sindy_lorenz.py
+```
+
+---
+
+## Fields
+
+JAX-native field abstractions for differential operators and fluid simulation.
+
+| Example | Focus | Description |
+|---------|-------|-------------|
+| [Field Operations](fields/field-operations.md) | Differential Operators | Gradient, Laplacian, advection, pressure projection on grids |
+
+```bash
+python examples/fields/field_operations.py
+```
+
+---
+
 ## Data & Analysis
 
 Explore and validate the synthetic datasets used by neural operator examples.
@@ -176,9 +204,24 @@ Explore and validate the synthetic datasets used by neural operator examples.
 |---------|-------|
 | [Darcy Flow Analysis](data/darcy-flow-analysis.md) | FNO prediction validation, error analysis |
 | [Spectral Analysis](data/spectral-analysis.md) | Power spectrum and mode analysis |
+| [PDEBench Data Loading](data/pdebench-loading.md) | Loading PDEBench HDF5 datasets |
 
 ```bash
 python examples/data/darcy_flow_analysis.py
+```
+
+---
+
+## Distributed Computing
+
+Multi-device data-parallel training for large-scale problems.
+
+| Example | Method | Description |
+|---------|--------|-------------|
+| [Distributed PDE Training](distributed/distributed-pde.md) | Data Parallel | Multi-GPU training with JAX sharding |
+
+```bash
+python examples/distributed/distributed_pde.py
 ```
 
 ---

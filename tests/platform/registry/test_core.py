@@ -1,4 +1,4 @@
-"""Comprehensive tests for Neural Functional Registry Core Service.
+"""Full tests for Neural Functional Registry Core Service.
 
 Tests cover CRUD operations, metadata validation, file storage,
 access control, and error handling using TDD approach.
@@ -90,9 +90,7 @@ class TestRegistryService:
         assert len(functional_id) == 36  # UUID format
 
         # Verify file is stored
-        functional_dir = (
-            Path(registry_service.storage_path) / functional_id / "versions"
-        )
+        functional_dir = Path(registry_service.storage_path) / functional_id / "versions"
         assert functional_dir.exists()
 
         # Verify at least one version file exists
@@ -126,17 +124,12 @@ class TestRegistryService:
 
         # Verify version file with custom tag
         version_file = (
-            Path(registry_service.storage_path)
-            / functional_id
-            / "versions"
-            / f"{version_tag}.json"
+            Path(registry_service.storage_path) / functional_id / "versions" / f"{version_tag}.json"
         )
         assert version_file.exists()
 
     @pytest.mark.asyncio
-    async def test_register_functional_invalid_metadata(
-        self, registry_service, sample_functional
-    ):
+    async def test_register_functional_invalid_metadata(self, registry_service, sample_functional):
         """Test registration with invalid metadata."""
         user_id = "test-user-123"
 
@@ -165,9 +158,7 @@ class TestRegistryService:
             )
 
     @pytest.mark.asyncio
-    async def test_register_functional_too_large(
-        self, registry_service, sample_metadata
-    ):
+    async def test_register_functional_too_large(self, registry_service, sample_metadata):
         """Test registration with file too large."""
         user_id = "test-user-123"
 
@@ -291,9 +282,7 @@ class TestRegistryService:
         version_tag = "v1.0.0"
         data = b'{"test": "data"}'
 
-        file_path = await registry_service._store_functional_file(
-            functional_id, version_tag, data
-        )
+        file_path = await registry_service._store_functional_file(functional_id, version_tag, data)
 
         assert file_path.exists()
         assert file_path.name == f"{version_tag}.json"
@@ -311,14 +300,10 @@ class TestRegistryService:
 
         # Store file first
         data_bytes = json.dumps(test_data).encode("utf-8")
-        await registry_service._store_functional_file(
-            functional_id, version_tag, data_bytes
-        )
+        await registry_service._store_functional_file(functional_id, version_tag, data_bytes)
 
         # Load file
-        loaded_data = await registry_service._load_functional_file(
-            functional_id, version_tag
-        )
+        loaded_data = await registry_service._load_functional_file(functional_id, version_tag)
 
         assert loaded_data == test_data
 
@@ -335,9 +320,7 @@ class TestRegistryService:
         version_tag = "v1.0.0"
 
         # Store invalid JSON
-        await registry_service._store_functional_file(
-            functional_id, version_tag, b"invalid json{"
-        )
+        await registry_service._store_functional_file(functional_id, version_tag, b"invalid json{")
 
         with pytest.raises(Exception, match="Failed to parse"):
             await registry_service._load_functional_file(functional_id, version_tag)
@@ -373,9 +356,7 @@ class TestRegistryService:
         mock_functional.author_id = "author-123"
 
         # Other user should not have access
-        assert not registry_service._check_access_permission(
-            mock_functional, "user-456"
-        )
+        assert not registry_service._check_access_permission(mock_functional, "user-456")
         assert not registry_service._check_access_permission(mock_functional, None)
 
     # Test edge cases and error handling

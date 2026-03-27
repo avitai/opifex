@@ -56,9 +56,7 @@ def _register_shape_pytrees(Rectangle, Circle, Polygon):
         aux_data = (rect.width, rect.height)
         return children, aux_data
 
-    def rectangle_tree_unflatten(
-        aux_data: tuple[Any, ...], children: tuple[Any, ...]
-    ) -> Any:
+    def rectangle_tree_unflatten(aux_data: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
         """Unflatten Rectangle from pytree operations."""
         (center,) = children
         width, height = aux_data
@@ -72,9 +70,7 @@ def _register_shape_pytrees(Rectangle, Circle, Polygon):
         rect.y_max = rect.center[1] + rect.height / 2
         return rect
 
-    jax.tree_util.register_pytree_node(
-        Rectangle, rectangle_tree_flatten, rectangle_tree_unflatten
-    )
+    jax.tree_util.register_pytree_node(Rectangle, rectangle_tree_flatten, rectangle_tree_unflatten)
 
     # Register Circle
     def circle_tree_flatten(circle: Any) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
@@ -83,9 +79,7 @@ def _register_shape_pytrees(Rectangle, Circle, Polygon):
         aux_data = (circle.radius,)
         return children, aux_data
 
-    def circle_tree_unflatten(
-        aux_data: tuple[Any, ...], children: tuple[Any, ...]
-    ) -> Any:
+    def circle_tree_unflatten(aux_data: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
         """Unflatten Circle from pytree operations."""
         (center,) = children
         (radius,) = aux_data
@@ -94,9 +88,7 @@ def _register_shape_pytrees(Rectangle, Circle, Polygon):
         circle.radius = radius
         return circle
 
-    jax.tree_util.register_pytree_node(
-        Circle, circle_tree_flatten, circle_tree_unflatten
-    )
+    jax.tree_util.register_pytree_node(Circle, circle_tree_flatten, circle_tree_unflatten)
 
     # Register Polygon
     def polygon_tree_flatten(
@@ -114,9 +106,7 @@ def _register_shape_pytrees(Rectangle, Circle, Polygon):
         polygon.vertices = vertices
         return polygon
 
-    jax.tree_util.register_pytree_node(
-        Polygon, polygon_tree_flatten, polygon_tree_unflatten
-    )
+    jax.tree_util.register_pytree_node(Polygon, polygon_tree_flatten, polygon_tree_unflatten)
 
 
 def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference):
@@ -136,9 +126,7 @@ def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference):
         shape_a, shape_b = children
         return CSGUnion(shape_a, shape_b)
 
-    jax.tree_util.register_pytree_node(
-        CSGUnion, csg_union_tree_flatten, csg_union_tree_unflatten
-    )
+    jax.tree_util.register_pytree_node(CSGUnion, csg_union_tree_flatten, csg_union_tree_unflatten)
 
     # Register CSGIntersection
     def csg_intersection_tree_flatten(
@@ -149,9 +137,7 @@ def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference):
         aux_data = ()  # Empty tuple for no auxiliary data
         return children, aux_data
 
-    def csg_intersection_tree_unflatten(
-        _: tuple[Any, ...], children: tuple[Any, ...]
-    ) -> Any:
+    def csg_intersection_tree_unflatten(_: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
         """Unflatten CSGIntersection from pytree operations."""
         shape_a, shape_b = children
         return CSGIntersection(shape_a, shape_b)
@@ -171,9 +157,7 @@ def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference):
         aux_data = ()  # Empty tuple for no auxiliary data
         return children, aux_data
 
-    def csg_difference_tree_unflatten(
-        _: tuple[Any, ...], children: tuple[Any, ...]
-    ) -> Any:
+    def csg_difference_tree_unflatten(_: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
         """Unflatten CSGDifference from pytree operations."""
         shape_a, shape_b = children
         return CSGDifference(shape_a, shape_b)
@@ -194,9 +178,7 @@ def _register_periodic_pytrees(PeriodicCell):
         aux_data = ()  # Empty tuple for no auxiliary data
         return children, aux_data
 
-    def periodic_cell_tree_unflatten(
-        _: tuple[Any, ...], children: tuple[Any, ...]
-    ) -> Any:
+    def periodic_cell_tree_unflatten(_: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
         """Unflatten PeriodicCell from pytree operations."""
         (lattice_vectors,) = children
         return PeriodicCell(lattice_vectors)
@@ -362,9 +344,7 @@ def _register_graph_pytrees():  # noqa: PLR0915
         aux_data = (gt.edge_features,)  # edge_features can be None
         return children, aux_data
 
-    def graph_topology_tree_unflatten(
-        aux_data: tuple[Any, ...], children: tuple[Any, ...]
-    ) -> Any:
+    def graph_topology_tree_unflatten(aux_data: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
         """Unflatten GraphTopology from pytree operations."""
         (edge_features,) = aux_data
         nodes, edges, adjacency_matrix = children

@@ -31,9 +31,7 @@ class SimpleModel(nnx.Module):
 class MLPModel(nnx.Module):
     """MLP for more complex optimization tests."""
 
-    def __init__(
-        self, in_features: int, hidden: int, out_features: int, *, rngs: nnx.Rngs
-    ):
+    def __init__(self, in_features: int, hidden: int, out_features: int, *, rngs: nnx.Rngs):
         self.linear1 = nnx.Linear(in_features, hidden, rngs=rngs)
         self.linear2 = nnx.Linear(hidden, out_features, rngs=rngs)
 

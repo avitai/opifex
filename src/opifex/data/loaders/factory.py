@@ -114,9 +114,7 @@ def create_burgers_loader(
 
     # Optional: Normalize data
     if enable_normalization:
-        operations.append(
-            NormalizeTransform(mean=normalization_mean, std=normalization_std)
-        )
+        operations.append(NormalizeTransform(mean=normalization_mean, std=normalization_std))
 
     # Optional: Add spectral features
     if enable_spectral:
@@ -327,9 +325,7 @@ def create_navier_stokes_loader(
 
     operations = []
     if enable_normalization:
-        operations.append(
-            NormalizeTransform(mean=normalization_mean, std=normalization_std)
-        )
+        operations.append(NormalizeTransform(mean=normalization_mean, std=normalization_std))
     operations.append(grain.Batch(batch_size=batch_size, drop_remainder=True))
 
     return grain.DataLoader(

@@ -75,9 +75,7 @@ class TestMultiObjectiveConfig:
 
         # Test invalid hypervolume reference point dimension
         with pytest.raises(ValueError, match="same dimension as objectives"):
-            MultiObjectiveConfig(
-                num_objectives=3, hypervolume_reference_point=[1.0, 1.0]
-            )
+            MultiObjectiveConfig(num_objectives=3, hypervolume_reference_point=[1.0, 1.0])
 
 
 class TestParetoFrontierOptimizer:
@@ -98,9 +96,7 @@ class TestParetoFrontierOptimizer:
 
     def test_pareto_frontier_optimizer_with_reference_point(self):
         """Test Pareto frontier optimizer with custom reference point."""
-        config = MultiObjectiveConfig(
-            num_objectives=3, hypervolume_reference_point=[2.0, 3.0, 1.0]
-        )
+        config = MultiObjectiveConfig(num_objectives=3, hypervolume_reference_point=[2.0, 3.0, 1.0])
         rngs = nnx.Rngs(42)
 
         optimizer = ParetoFrontierOptimizer(config, problem_dimension=4, rngs=rngs)
@@ -124,9 +120,7 @@ class TestParetoFrontierOptimizer:
 
         objective_functions = [obj1, obj2]
 
-        solutions, objective_values = optimizer.generate_pareto_solutions(
-            objective_functions
-        )
+        solutions, objective_values = optimizer.generate_pareto_solutions(objective_functions)
 
         # Check output shapes
         assert solutions.shape[1] == 3  # problem dimension
@@ -178,9 +172,7 @@ class TestParetoFrontierOptimizer:
             ]
         )
 
-        non_dominated_mask = optimizer._identify_non_dominated_solutions(
-            objective_values
-        )
+        non_dominated_mask = optimizer._identify_non_dominated_solutions(objective_values)
 
         # Check that dominated solutions are correctly identified
         expected_non_dominated = jnp.array([True, True, True, True, True, False, False])
@@ -196,31 +188,23 @@ class TestParetoFrontierOptimizer:
 
         optimizer_weighted = ParetoFrontierOptimizer(config_weighted, 2, rngs=rngs)
         optimizer_chebyshev = ParetoFrontierOptimizer(config_chebyshev, 2, rngs=rngs)
-        optimizer_achievement = ParetoFrontierOptimizer(
-            config_achievement, 2, rngs=rngs
-        )
+        optimizer_achievement = ParetoFrontierOptimizer(config_achievement, 2, rngs=rngs)
 
         objectives = jnp.array([2.0, 3.0])
         preference = jnp.array([0.6, 0.4])
 
         # Test weighted sum
-        weighted_result = optimizer_weighted._scalarize_objectives(
-            objectives, preference
-        )
+        weighted_result = optimizer_weighted._scalarize_objectives(objectives, preference)
         expected_weighted = 0.6 * 2.0 + 0.4 * 3.0
         assert jnp.isclose(weighted_result, expected_weighted)
 
         # Test Chebyshev
-        chebyshev_result = optimizer_chebyshev._scalarize_objectives(
-            objectives, preference
-        )
+        chebyshev_result = optimizer_chebyshev._scalarize_objectives(objectives, preference)
         expected_chebyshev = jnp.max(preference * objectives)
         assert jnp.isclose(chebyshev_result, expected_chebyshev)
 
         # Test achievement
-        achievement_result = optimizer_achievement._scalarize_objectives(
-            objectives, preference
-        )
+        achievement_result = optimizer_achievement._scalarize_objectives(objectives, preference)
         expected_achievement = jnp.max(preference * objectives) + 0.01 * jnp.sum(
             preference * objectives
         )
@@ -269,9 +253,7 @@ class TestObjectiveScalarizer:
 
         problem_features = jnp.array([1.0, 2.0, 3.0])
         objective_values_history = jnp.array([[1.0, 2.0]])
-        performance_feedback = jnp.array(
-            [0.5, 0.9]
-        )  # First objective performing poorly
+        performance_feedback = jnp.array([0.5, 0.9])  # First objective performing poorly
 
         weights = scalarizer.learn_scalarization_weights(
             problem_features, objective_values_history, performance_feedback
@@ -309,9 +291,7 @@ class TestObjectiveScalarizer:
         achievement_result = scalarizer.scalarize_objectives(
             objectives, weights, strategy="achievement"
         )
-        expected_achievement = jnp.max(weights * objectives) + 0.01 * jnp.sum(
-            weights * objectives
-        )
+        expected_achievement = jnp.max(weights * objectives) + 0.01 * jnp.sum(weights * objectives)
         assert jnp.isclose(achievement_result, expected_achievement)
 
 
@@ -330,9 +310,7 @@ class TestPerformanceIndicators:
         )
         reference_point = jnp.array([5.0, 5.0])
 
-        hypervolume = PerformanceIndicators.compute_hypervolume(
-            pareto_front, reference_point
-        )
+        hypervolume = PerformanceIndicators.compute_hypervolume(pareto_front, reference_point)
 
         # Should be positive for a valid Pareto front
         assert hypervolume > 0
@@ -349,9 +327,7 @@ class TestPerformanceIndicators:
         )
         reference_point = jnp.array([3.0, 3.0, 4.0])
 
-        hypervolume = PerformanceIndicators.compute_hypervolume(
-            pareto_front, reference_point
-        )
+        hypervolume = PerformanceIndicators.compute_hypervolume(pareto_front, reference_point)
 
         assert hypervolume >= 0
         assert jnp.isfinite(hypervolume)
@@ -435,9 +411,7 @@ class TestPerformanceIndicators:
             ]
         )
 
-        convergence = PerformanceIndicators.compute_convergence_indicator(
-            pareto_front, true_front
-        )
+        convergence = PerformanceIndicators.compute_convergence_indicator(pareto_front, true_front)
 
         # Should be small positive value indicating good convergence
         assert convergence > 0
@@ -448,9 +422,7 @@ class TestPerformanceIndicators:
         """Test convergence indicator edge cases."""
         # Single point
         single_point = jnp.array([[1.0, 2.0]])
-        convergence_single = PerformanceIndicators.compute_convergence_indicator(
-            single_point
-        )
+        convergence_single = PerformanceIndicators.compute_convergence_indicator(single_point)
         assert convergence_single == 0.0
 
 
@@ -467,9 +439,7 @@ class TestMultiObjectiveL2OEngine:
         rngs = nnx.Rngs(42)
         l2o_engine = L2OEngine(l2o_config, meta_config, rngs=rngs)
 
-        mo_engine = MultiObjectiveL2OEngine(
-            mo_config, l2o_engine, problem_dimension=3, rngs=rngs
-        )
+        mo_engine = MultiObjectiveL2OEngine(mo_config, l2o_engine, problem_dimension=3, rngs=rngs)
 
         assert mo_engine.config == mo_config
         assert mo_engine.l2o_engine == l2o_engine
@@ -489,9 +459,7 @@ class TestMultiObjectiveL2OEngine:
         rngs = nnx.Rngs(42)
         l2o_engine = L2OEngine(l2o_config, meta_config, rngs=rngs)
 
-        mo_engine = MultiObjectiveL2OEngine(
-            mo_config, l2o_engine, problem_dimension=2, rngs=rngs
-        )
+        mo_engine = MultiObjectiveL2OEngine(mo_config, l2o_engine, problem_dimension=2, rngs=rngs)
 
         # Define simple test objectives
         def objective1(x):
@@ -503,9 +471,7 @@ class TestMultiObjectiveL2OEngine:
         objective_functions = [objective1, objective2]
         problem_features = jnp.array([1.0, 2.0, 3.0, 4.0])  # 2 * problem_dimension
 
-        results = mo_engine.solve_multi_objective_problem(
-            objective_functions, problem_features
-        )
+        results = mo_engine.solve_multi_objective_problem(objective_functions, problem_features)
 
         # Check that all expected keys are present
         expected_keys = [
@@ -545,9 +511,7 @@ class TestMultiObjectiveL2OEngine:
         rngs = nnx.Rngs(42)
         l2o_engine = L2OEngine(l2o_config, meta_config, rngs=rngs)
 
-        mo_engine = MultiObjectiveL2OEngine(
-            mo_config, l2o_engine, problem_dimension=2, rngs=rngs
-        )
+        mo_engine = MultiObjectiveL2OEngine(mo_config, l2o_engine, problem_dimension=2, rngs=rngs)
 
         # Define test objectives
         def objective1(x):
@@ -589,9 +553,7 @@ class TestIntegrationWithL2OFramework:
         rngs = nnx.Rngs(42)
         l2o_engine = L2OEngine(l2o_config, meta_config, rngs=rngs)
 
-        mo_engine = MultiObjectiveL2OEngine(
-            mo_config, l2o_engine, problem_dimension=2, rngs=rngs
-        )
+        mo_engine = MultiObjectiveL2OEngine(mo_config, l2o_engine, problem_dimension=2, rngs=rngs)
 
         # Define objectives and constraints
         def objective1(x):
@@ -626,9 +588,7 @@ class TestIntegrationWithL2OFramework:
         rngs = nnx.Rngs(42)
         l2o_engine = L2OEngine(l2o_config, meta_config, rngs=rngs)
 
-        mo_engine = MultiObjectiveL2OEngine(
-            mo_config, l2o_engine, problem_dimension=2, rngs=rngs
-        )
+        mo_engine = MultiObjectiveL2OEngine(mo_config, l2o_engine, problem_dimension=2, rngs=rngs)
 
         # Test with different scalarization strategies
         strategies = ["weighted_sum", "chebyshev", "achievement"]
@@ -647,9 +607,7 @@ class TestIntegrationWithL2OFramework:
             # Update scalarization strategy
             mo_engine.config.scalarization_strategy = strategy
 
-            results = mo_engine.solve_multi_objective_problem(
-                objective_functions, problem_features
-            )
+            results = mo_engine.solve_multi_objective_problem(objective_functions, problem_features)
 
             results_by_strategy[strategy] = results
 
@@ -707,9 +665,7 @@ class TestJITCompatibility:
         # Test batch processing with JIT
         batch_preferences = jax.random.uniform(jax.random.PRNGKey(0), (20, 2))
         # Normalize preferences to sum to 1
-        batch_preferences = batch_preferences / jnp.sum(
-            batch_preferences, axis=-1, keepdims=True
-        )
+        batch_preferences = batch_preferences / jnp.sum(batch_preferences, axis=-1, keepdims=True)
 
         # JIT compile batch processing
         jitted_batch_frontier = nnx.jit(jax.vmap(optimizer.frontier_network))
@@ -727,9 +683,7 @@ class TestJITCompatibility:
         # JIT compile performance indicator methods
         jitted_hypervolume = nnx.jit(PerformanceIndicators.compute_hypervolume)
         jitted_spread = nnx.jit(PerformanceIndicators.compute_spread_indicator)
-        jitted_convergence = nnx.jit(
-            PerformanceIndicators.compute_convergence_indicator
-        )
+        jitted_convergence = nnx.jit(PerformanceIndicators.compute_convergence_indicator)
 
         # Test JIT compilation works
         hypervolume = jitted_hypervolume(pareto_front, reference_point)
@@ -839,9 +793,7 @@ class TestJITCompatibility:
         # Test batch processing
         batch_preferences = jax.random.uniform(jax.random.PRNGKey(0), (5, 2))
         # Normalize preferences to sum to 1
-        batch_preferences = batch_preferences / jnp.sum(
-            batch_preferences, axis=-1, keepdims=True
-        )
+        batch_preferences = batch_preferences / jnp.sum(batch_preferences, axis=-1, keepdims=True)
 
         batch_solutions = jitted_batch_process(batch_preferences)
 

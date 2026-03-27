@@ -286,9 +286,7 @@ u_exact_grid = exact_solution(xx, tt)
 # Errors
 error = jnp.abs(u_pred_grid - u_exact_grid)
 l2_error = float(
-    jnp.sqrt(
-        jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2 + 1e-10)
-    )
+    jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2 + 1e-10))
 )
 max_error = float(jnp.max(error))
 mean_error = float(jnp.mean(error))

@@ -160,8 +160,6 @@ class TestGeometryInformedNeuralOperator:
         assert grads is not None
         # Check that at least some gradients are non-zero
         grad_leaves = jax.tree_util.tree_leaves(grads)
-        grad_norms = [
-            jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")
-        ]
+        grad_norms = [jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")]
         assert len(grad_norms) > 0
         assert any(norm > 1e-8 for norm in grad_norms)

@@ -8,7 +8,7 @@ This module provides a global registry for PDE residual functions, enabling:
 - Introspection and listing capabilities
 - Clear error messages
 
-The registry follows the extensibility pattern from Phase 0E, allowing users to:
+The registry follows the extensibility pattern from Version 0E, allowing users to:
 1. Use built-in PDEs (zero code)
 2. Register custom PDEs globally (reusable)
 3. Pass custom functions directly via config (one-off use)
@@ -116,8 +116,7 @@ class PDEResidualRegistry:
                 # Check for duplicates
                 if name in cls._registry and not override:
                     warnings.warn(
-                        f"PDE '{name}' is already registered. "
-                        f"Use override=True to replace it.",
+                        f"PDE '{name}' is already registered. Use override=True to replace it.",
                         UserWarning,
                         stacklevel=3,
                     )
@@ -157,9 +156,7 @@ class PDEResidualRegistry:
             if name not in cls._registry:
                 # Get available names without calling list() to avoid deadlock
                 available = sorted(cls._registry.keys())
-                raise KeyError(
-                    f"PDE '{name}' not found in registry. Available PDEs: {available}"
-                )
+                raise KeyError(f"PDE '{name}' not found in registry. Available PDEs: {available}")
             return cls._registry[name]
 
     @classmethod
@@ -476,9 +473,7 @@ def _schrodinger_residual(
             energy = 0.5 * x.shape[-1]  # E_0 = (d/2) where d is dimension
     elif potential_type == "coulomb":
         # V(x) = -1/r (for hydrogen atom, atomic units)
-        r = jnp.sqrt(
-            jnp.sum(x**2, axis=-1) + 1e-10
-        )  # Add small epsilon to avoid division by zero
+        r = jnp.sqrt(jnp.sum(x**2, axis=-1) + 1e-10)  # Add small epsilon to avoid division by zero
         potential = -1.0 / r
         if energy is None:
             energy = -0.5  # Ground state energy of hydrogen
@@ -901,11 +896,7 @@ def _homogenization_residual(
     laplacian_u = jnp.real(laplacian_u)
 
     # Default coefficient to 1.0
-    coeff = (
-        jnp.ones(x.shape[0])
-        if coefficient_fn is None
-        else jnp.squeeze(coefficient_fn(x))
-    )
+    coeff = jnp.ones(x.shape[0]) if coefficient_fn is None else jnp.squeeze(coefficient_fn(x))
 
     # Compute gradient of coefficient
     # For now, assume constant coefficient (∇a = 0) for simplicity and JIT compatibility
@@ -1083,24 +1074,16 @@ def _register_builtin_pdes() -> None:
     PDEResidualRegistry.register("schrodinger", _schrodinger_residual, override=True)
 
     # Advanced PDEs (Batch 5)
-    PDEResidualRegistry.register(
-        "schrodinger_td", _schrodinger_td_residual, override=True
-    )
-    PDEResidualRegistry.register(
-        "navier_stokes", _navier_stokes_residual, override=True
-    )
+    PDEResidualRegistry.register("schrodinger_td", _schrodinger_td_residual, override=True)
+    PDEResidualRegistry.register("navier_stokes", _navier_stokes_residual, override=True)
     PDEResidualRegistry.register("maxwell", _maxwell_residual, override=True)
     PDEResidualRegistry.register(
         "schrodinger_nonlinear", _schrodinger_nonlinear_residual, override=True
     )
-    PDEResidualRegistry.register(
-        "reaction_diffusion", _reaction_diffusion_residual, override=True
-    )
+    PDEResidualRegistry.register("reaction_diffusion", _reaction_diffusion_residual, override=True)
 
     # Multi-Scale PDEs (Batch 6)
-    PDEResidualRegistry.register(
-        "homogenization", _homogenization_residual, override=True
-    )
+    PDEResidualRegistry.register("homogenization", _homogenization_residual, override=True)
     PDEResidualRegistry.register("two_scale", _two_scale_residual, override=True)
     PDEResidualRegistry.register("amr_poisson", _amr_poisson_residual, override=True)
 

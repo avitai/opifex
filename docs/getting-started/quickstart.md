@@ -1,134 +1,132 @@
 # Quick Start Guide
 
-Welcome to **Opifex**! This guide will get you solving differential equations in minutes using the **Unified SciMLSolver API**.
+Welcome to **Opifex**! This guide shows three core workflows: solving a PDE with PINNs, learning an operator from data, and discovering equations from trajectories.
 
 ## Prerequisites
 
 Opifex is installed and running. If not, see the [Installation Guide](installation.md).
 
-## 🚀 Concept: The Solver Protocol
-
-In Opifex, you don't write training loops. You define a **Problem** and pass it to a **Solver**.
-
-```python
-solution = solver.solve(problem)
+```bash
+source ./activate.sh
 ```
 
 ---
 
-## Example 1: Solving a PDE (Physics-Informed)
+## Example 1: Solving a PDE with PINNs
 
-Let's solve the 2D Heat Equation on a Rectangle.
+Solve the 1D Poisson equation: $-u''(x) = \pi^2 \sin(\pi x)$ on $[-1, 1]$ with $u(-1)=u(1)=0$.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from opifex.geometry import Interval
+from opifex.neural.base import StandardMLP
+from opifex.solvers import PINNSolver
+from opifex.solvers.pinn import PINNConfig, poisson_residual
+
+# 1. Define the problem
+geometry = Interval(-1.0, 1.0)
+source_fn = lambda x: jnp.pi**2 * jnp.sin(jnp.pi * x[..., 0:1])
+residual_fn = poisson_residual(source_fn)
+bc_fn = lambda x: jnp.zeros(x.shape[:-1])
+
+# 2. Create model and solve
+model = StandardMLP(layer_sizes=[1, 32, 32, 1], activation="tanh", rngs=nnx.Rngs(42))
+solver = PINNSolver(model)
+result = solver.solve(geometry, residual_fn, bc_fn, PINNConfig(num_iterations=1000, print_every=0))
+
+print(f"Final loss: {result.final_loss:.2e}")
+print(f"Training time: {result.training_time:.1f}s")
+```
+
+```text
+Final loss: 5.93e-02
+Training time: 1.3s
+```
+
+---
+
+## Example 2: Learning an Operator (FNO)
+
+Train a Fourier Neural Operator to map input fields to output fields.
 
 ```python
 import jax
-import jax.numpy as jnp
 from flax import nnx
-from opifex.core.problems import create_pde_problem
-from opifex.geometry import Rectangle
-from opifex.neural.base import StandardMLP
-from opifex.solvers import PINNSolver
+from opifex.neural.operators.fno import FourierNeuralOperator
+from opifex.core.training.trainer import Trainer
+from opifex.core.training.config import TrainingConfig
 
-# 1. Define the Physics (Poisson Equation)
-def poisson_residual(x, u, u_derivatives, params):
-    # Laplace Equation: u_xx + u_yy = 0
-    return u_derivatives["xx"] + u_derivatives["yy"]
+# 1. Create synthetic data (batch, channels, height, width)
+x_train = jax.random.normal(jax.random.PRNGKey(0), (100, 1, 32, 32))
+y_train = jax.random.normal(jax.random.PRNGKey(1), (100, 1, 32, 32))
 
-# 2. Define the Problem (Geometry + Physics)
-problem = create_pde_problem(
-    geometry=Rectangle(center=(0.5, 0.5), width=1.0, height=1.0), # Geometry Object
-    equation=poisson_residual,
-    parameters={},
-    boundary_conditions=[{"type": "dirichlet", "value": 0.0}] # Simplified config
-)
-
-# 3. Create a PINN Model
-model = StandardMLP(
-    layer_sizes=[2, 32, 32, 1], # Input: 2 (x,y), Hidden: 32, Output: 1 (u)
-    rngs=nnx.Rngs(42)
-)
-
-# 4. Solve!
-solver = PINNSolver(model=model)
-solution = solver.solve(problem)
-
-print(f"Converged: {solution.converged}")
-print(f"Final Loss: {solution.stats['loss']:.2e}")
-```
-```text
-Converged: True
-Final Loss: 4.09e-05
-```
----
-
-## Example 2: Operator Learning (Data-Driven)
-
-Learn the mapping from initial conditions to solutions using a **Neural Operator**.
-
-```python
-from opifex.neural.operators import FourierNeuralOperator
-from opifex.solvers import NeuralOperatorSolver
-from opifex.core.problems import DataDrivenProblem
-
-# 1. Load Data (e.g., existing simulation data)
-# shape: (n_samples, resolution, resolution, 1)
-x_train = jax.random.normal(jax.random.key(0), (100, 64, 64, 1))
-y_train = jax.random.normal(jax.random.key(1), (100, 64, 64, 1))
-
-problem = DataDrivenProblem(train_dataset=(x_train, y_train))
-
-# 2. Create FNO Model
+# 2. Create FNO model
 fno = FourierNeuralOperator(
-    in_channels=1,
-    out_channels=1,
-    hidden_channels=64,
-    modes=16,
-    num_layers=4,
-    rngs=nnx.Rngs(42)
+    in_channels=1, out_channels=1, hidden_channels=32,
+    modes=8, num_layers=4, rngs=nnx.Rngs(42),
 )
 
-# 3. Solve!
-solver = NeuralOperatorSolver(model=fno)
-solution = solver.solve(problem)
+# 3. Train
+trainer = Trainer(model=fno, config=TrainingConfig(num_epochs=5, batch_size=16))
+_, metrics = trainer.fit(train_data=(x_train, y_train))
 
-print(f"Training Complete. Validation Metrics: {solution.metrics}")
+print(f"FNO training complete")
+print(f"Input/output shape: {x_train.shape} -> {y_train.shape}")
 ```
+
 ```text
-Training Complete. Validation Metrics: {'final_train_loss': 1.002, 'avg_epoch_time': 0.045}
+FNO training complete
+Input/output shape: (100, 1, 32, 32) -> (100, 1, 32, 32)
 ```
+
 ---
 
-## Example 3: Uncertainty Quantification
+## Example 3: Equation Discovery (SINDy)
 
-Any solver can be wrapped for uncertainty quantification. Here we use an **Ensemble**.
+Discover the Lorenz equations from trajectory data.
 
 ```python
-from opifex.solvers import PINNSolver, EnsembleWrapper
+import jax.numpy as jnp
+from opifex.discovery.sindy import SINDy, SINDyConfig
 
-# 1. Create multiple solvers (with different random seeds)
-solvers = [
-    PINNSolver(model=StandardMLP(layer_sizes=[2, 32, 32, 1], rngs=nnx.Rngs(i)))
-    for i in range(3)
-]
+# 1. Generate Lorenz trajectory with RK4
+def lorenz(state, sigma=10.0, rho=28.0, beta=8.0 / 3.0):
+    x, y, z = state
+    return jnp.array([sigma * (y - x), x * (rho - z) - y, x * y - beta * z])
 
-# 2. Wrap them
-ensemble = EnsembleWrapper(solvers=solvers)
+dt, state = 0.001, jnp.array([1.0, 1.0, 1.0])
+trajectory, derivatives = [state], [lorenz(state)]
+for _ in range(10000):
+    k1 = lorenz(state)
+    k2 = lorenz(state + 0.5 * dt * k1)
+    k3 = lorenz(state + 0.5 * dt * k2)
+    k4 = lorenz(state + dt * k3)
+    state = state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    trajectory.append(state)
+    derivatives.append(lorenz(state))
 
-# 3. Solve! (Returns mean and standard deviation)
-solution = ensemble.solve(problem)
+# 2. Discover governing equations
+model = SINDy(SINDyConfig(polynomial_degree=2, threshold=0.3))
+model.fit(jnp.stack(trajectory), jnp.stack(derivatives))
 
-u_mean = solution.fields["u_mean"]
-u_std = solution.fields["u_std"]
-
-print(f"UQ Complete. Mean field shape: {u_mean.shape}")
+for eq in model.equations(["x", "y", "z"]):
+    print(eq)
 ```
+
 ```text
-UQ Complete. Mean field shape: (1000, 1)
+dx/dt = -9.999 x + 10.000 y
+dy/dt = 28.000 x + -1.000 y + -1.000 x z
+dz/dt = -2.667 z + 1.000 x y
 ```
+
+Recovers the true Lorenz coefficients ($\sigma=10$, $\rho=28$, $\beta=8/3$) to high accuracy.
+
 ---
 
-## 🔧 Going Deeper?
+## Next Steps
 
-- **[Benchmarks](../benchmarks.md)**: See how PINNs compare to Operators.
-- **[Generative AI](../methods/probabilistic.md)**: Use `ArtifexSolverAdapter` for diffusion models.
-- **[API Reference](../api/core.md)**: Full documentation.
+- **[Examples](../examples/index.md)**: 51 working examples across neural operators, PINNs, discovery, and more
+- **[Neural Operators Guide](../methods/neural-operators.md)**: Theory and architecture details
+- **[PINNs Guide](../methods/pinns.md)**: Physics-informed methods
+- **[API Reference](../api/core.md)**: Full API documentation

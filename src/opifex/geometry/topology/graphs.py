@@ -212,9 +212,7 @@ class GraphMessagePassing:
 
         # Prepare message input
         if edge_features is not None:
-            message_input = jnp.concatenate(
-                [src_nodes, dst_nodes, edge_features], axis=-1
-            )
+            message_input = jnp.concatenate([src_nodes, dst_nodes, edge_features], axis=-1)
         else:
             # Use zero edge features if not provided
             zero_edges = jnp.zeros((edges.shape[0], self.edge_dim))
@@ -276,9 +274,7 @@ class GraphNeuralOperator:
 
         # Initialize message passing layers
         self.mp_layers = [
-            GraphMessagePassing(
-                hidden_dim, edge_dim, hidden_dim, hidden_dim, keys[i + 1]
-            )
+            GraphMessagePassing(hidden_dim, edge_dim, hidden_dim, hidden_dim, keys[i + 1])
             for i in range(num_layers)
         ]
 
@@ -308,9 +304,7 @@ class GraphNeuralOperator:
         for mp_layer in self.mp_layers:
             updated_features = mp_layer(node_features, graph.edges, graph.edge_features)
             # Residual connection
-            node_features = updated_features + linear_layer(
-                graph.nodes, self.input_w, self.input_b
-            )
+            node_features = updated_features + linear_layer(graph.nodes, self.input_w, self.input_b)
 
         # Output projection
         return linear_layer(node_features, self.output_w, self.output_b)

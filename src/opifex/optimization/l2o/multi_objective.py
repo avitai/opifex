@@ -53,9 +53,7 @@ class MultiObjectiveConfig:
     def __post_init__(self):
         """Validate multi-objective configuration parameters."""
         if self.num_objectives < 2:
-            raise ValueError(
-                "Multi-objective optimization requires at least 2 objectives"
-            )
+            raise ValueError("Multi-objective optimization requires at least 2 objectives")
         if self.pareto_points_target <= 0:
             raise ValueError("Pareto points target must be positive")
         valid_strategies = ["learned", "weighted_sum", "chebyshev", "achievement"]
@@ -68,9 +66,7 @@ class MultiObjectiveConfig:
             self.hypervolume_reference_point is not None
             and len(self.hypervolume_reference_point) != self.num_objectives
         ):
-            raise ValueError(
-                "Hypervolume reference point must have same dimension as objectives"
-            )
+            raise ValueError("Hypervolume reference point must have same dimension as objectives")
 
 
 class ParetoFrontierOptimizer(nnx.Module):
@@ -148,9 +144,7 @@ class ParetoFrontierOptimizer(nnx.Module):
             is_invalid = jnp.any(jnp.isnan(objectives)) | jnp.any(jnp.isinf(objectives))
 
             def use_fallback():
-                fallback_solution = (
-                    jax.random.normal(key, (self.problem_dimension,)) * 0.5
-                )
+                fallback_solution = jax.random.normal(key, (self.problem_dimension,)) * 0.5
                 fallback_objectives = jnp.array(
                     [obj_fn(fallback_solution) for obj_fn in objective_functions]
                 )
@@ -160,9 +154,7 @@ class ParetoFrontierOptimizer(nnx.Module):
                 return solution, objectives
 
             # Use JAX conditional to select between original and fallback
-            final_solution, final_objectives = jax.lax.cond(
-                is_invalid, use_fallback, use_original
-            )
+            final_solution, final_objectives = jax.lax.cond(is_invalid, use_fallback, use_original)
 
             return final_solution, final_objectives
 
@@ -170,15 +162,11 @@ class ParetoFrontierOptimizer(nnx.Module):
         keys = jax.random.split(jax.random.PRNGKey(42), len(preference_vectors))
 
         # Vectorized processing of all preference vectors using vmap
-        solutions, objective_values = jax.vmap(process_single_preference)(
-            preference_vectors, keys
-        )
+        solutions, objective_values = jax.vmap(process_single_preference)(preference_vectors, keys)
 
         # Filter dominated solutions if enabled
         if self.config.dominated_solution_filtering:
-            non_dominated_mask = self._identify_non_dominated_solutions(
-                objective_values
-            )
+            non_dominated_mask = self._identify_non_dominated_solutions(objective_values)
             solutions = solutions[non_dominated_mask]
             objective_values = objective_values[non_dominated_mask]
 
@@ -213,27 +201,19 @@ class ParetoFrontierOptimizer(nnx.Module):
                 if constraint_function is not None:
                     constraint_violation = constraint_function(solution)
                     has_violation = jnp.any(constraint_violation > 0)
-                    constraint_penalty = 1000.0 * jnp.sum(
-                        jnp.maximum(0, constraint_violation)
-                    )
+                    constraint_penalty = 1000.0 * jnp.sum(jnp.maximum(0, constraint_violation))
                 else:
                     has_violation = False
                     constraint_penalty = 0.0
 
                 # Evaluate objectives
-                objectives = jnp.array(
-                    [obj_fn(solution) for obj_fn in objective_functions]
-                )
+                objectives = jnp.array([obj_fn(solution) for obj_fn in objective_functions])
 
                 # Multi-objective loss: combination of objectives with diversity
                 scalarized_loss = self._scalarize_objectives(objectives, preference)
-                diversity_term = self._compute_diversity_loss(
-                    solution, preference_vectors
-                )
+                diversity_term = self._compute_diversity_loss(solution, preference_vectors)
 
-                objective_loss = (
-                    scalarized_loss + self.config.diversity_pressure * diversity_term
-                )
+                objective_loss = scalarized_loss + self.config.diversity_pressure * diversity_term
 
                 # Use JAX conditional to handle constraint violations
                 total_loss = jax.lax.cond(
@@ -257,16 +237,12 @@ class ParetoFrontierOptimizer(nnx.Module):
             return jnp.sum(valid_losses) / jnp.maximum(1, num_valid)
 
         # Optimize frontier network using JAX
-        optimizer = nnx.Optimizer(
-            self.frontier_network, optax.adam(1e-3), wrt=nnx.Param
-        )
+        optimizer = nnx.Optimizer(self.frontier_network, optax.adam(1e-3), wrt=nnx.Param)
 
         best_loss = float("inf")
         iteration_count = 0
         for _iteration in range(self.config.max_pareto_iterations):
-            loss_value, grads = nnx.value_and_grad(pareto_loss_fn)(
-                self.frontier_network
-            )
+            loss_value, grads = nnx.value_and_grad(pareto_loss_fn)(self.frontier_network)
 
             # Update network parameters using NNX API
             optimizer.update(self.frontier_network, grads)
@@ -300,9 +276,7 @@ class ParetoFrontierOptimizer(nnx.Module):
 
         return preferences
 
-    def _identify_non_dominated_solutions(
-        self, objective_values: jax.Array
-    ) -> jax.Array:
+    def _identify_non_dominated_solutions(self, objective_values: jax.Array) -> jax.Array:
         """Identify non-dominated solutions using vectorized operations."""
         num_solutions = objective_values.shape[0]
 
@@ -329,9 +303,7 @@ class ParetoFrontierOptimizer(nnx.Module):
         # Vectorized computation across all solutions
         return jax.vmap(check_domination_for_solution)(jnp.arange(num_solutions))
 
-    def _scalarize_objectives(
-        self, objectives: jax.Array, preference: jax.Array
-    ) -> jax.Array:
+    def _scalarize_objectives(self, objectives: jax.Array, preference: jax.Array) -> jax.Array:
         """Convert multi-objective problem to single objective using scalarization."""
         if self.config.scalarization_strategy == "weighted_sum":
             return jnp.dot(preference, objectives)
@@ -339,16 +311,12 @@ class ParetoFrontierOptimizer(nnx.Module):
             return jnp.max(preference * objectives)
         if self.config.scalarization_strategy == "achievement":
             # Achievement scalarizing function
-            return jnp.max(preference * objectives) + 0.01 * jnp.sum(
-                preference * objectives
-            )
+            return jnp.max(preference * objectives) + 0.01 * jnp.sum(preference * objectives)
         # "learned"
         # For now, use weighted sum - in practice, this would be a learned function
         return jnp.dot(preference, objectives)
 
-    def _compute_diversity_loss(
-        self, solution: jax.Array, all_preferences: jax.Array
-    ) -> jax.Array:
+    def _compute_diversity_loss(self, solution: jax.Array, all_preferences: jax.Array) -> jax.Array:
         """Compute diversity loss to encourage spread along Pareto frontier."""
         # Sample subset of preferences for efficiency
         subset_preferences = all_preferences[:10]
@@ -363,9 +331,7 @@ class ParetoFrontierOptimizer(nnx.Module):
         distances = jax.vmap(compute_distance_to_solution)(other_solutions)
 
         # Encourage minimum distance to other solutions
-        min_distance = jnp.min(
-            distances + 1e-8
-        )  # Add small epsilon to avoid division by zero
+        min_distance = jnp.min(distances + 1e-8)  # Add small epsilon to avoid division by zero
         return 1.0 / min_distance
 
 
@@ -426,9 +392,7 @@ class ObjectiveScalarizer(nnx.Module):
         # Adaptive adjustment based on performance feedback
         if self.config.adaptive_weights:
             # Simple adaptation: increase weights for objectives with poor performance
-            poor_performance_mask = performance_feedback < jnp.mean(
-                performance_feedback
-            )
+            poor_performance_mask = performance_feedback < jnp.mean(performance_feedback)
             adaptation_factor = 1.1
 
             adapted_weights = jnp.where(
@@ -620,7 +584,7 @@ class MultiObjectiveL2OEngine(nnx.Module):
     """Core multi-objective L2O optimization engine.
 
     This engine integrates Pareto frontier optimization, learned scalarization,
-    and performance assessment for comprehensive multi-objective optimization.
+    and performance assessment for full multi-objective optimization.
     """
 
     def __init__(
@@ -646,9 +610,7 @@ class MultiObjectiveL2OEngine(nnx.Module):
         self.problem_dimension = problem_dimension
 
         # Initialize components
-        self.pareto_optimizer = ParetoFrontierOptimizer(
-            config, problem_dimension, rngs=rngs
-        )
+        self.pareto_optimizer = ParetoFrontierOptimizer(config, problem_dimension, rngs=rngs)
 
         # Problem features dimension based on problem characteristics
         features_dim = problem_dimension * 2  # Problem params + derived features
@@ -672,7 +634,7 @@ class MultiObjectiveL2OEngine(nnx.Module):
             true_pareto_front: Optional true Pareto front for evaluation
 
         Returns:
-            Comprehensive optimization results and metrics
+            Full optimization results and metrics
         """
         start_time = time.time()
 
@@ -682,8 +644,8 @@ class MultiObjectiveL2OEngine(nnx.Module):
         )
 
         # Step 2: Generate diverse Pareto solutions
-        pareto_solutions, pareto_objectives = (
-            self.pareto_optimizer.generate_pareto_solutions(objective_functions)
+        pareto_solutions, pareto_objectives = self.pareto_optimizer.generate_pareto_solutions(
+            objective_functions
         )
 
         # Step 3: Learn scalarization weights
@@ -739,9 +701,7 @@ class MultiObjectiveL2OEngine(nnx.Module):
         objectives = jnp.array([obj_fn(solution) for obj_fn in objective_functions])
 
         # Scalarize objectives using preference
-        scalarized_value = self.scalarizer.scalarize_objectives(
-            objectives, preference_vector
-        )
+        scalarized_value = self.scalarizer.scalarize_objectives(objectives, preference_vector)
 
         metrics = {
             "objectives": objectives,

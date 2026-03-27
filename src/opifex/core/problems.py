@@ -464,9 +464,9 @@ class ElectronicStructureProblem(QuantumProblem):
                     return jnp.linalg.norm(pos1 - pos2)
 
                 # Vectorize over all pairs using vmap
-                distances = jax.vmap(
-                    jax.vmap(compute_pairwise_distances, (None, 0)), (0, None)
-                )(positions, positions)
+                distances = jax.vmap(jax.vmap(compute_pairwise_distances, (None, 0)), (0, None))(
+                    positions, positions
+                )
 
                 # Create upper triangular mask to avoid double counting
                 i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
@@ -477,9 +477,7 @@ class ElectronicStructureProblem(QuantumProblem):
                 atomic_j = self.molecular_system.atomic_numbers[j_indices]
 
                 # Vectorized nuclear repulsion calculation
-                nuclear_repulsion = jnp.sum(
-                    atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1)
-                )
+                nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
             else:
                 nuclear_repulsion = 0.0
 
@@ -497,9 +495,7 @@ class ElectronicStructureProblem(QuantumProblem):
                 is_hydrogen = self.molecular_system.atomic_numbers[0] == 1
                 total_result = jnp.where(
                     is_hydrogen,
-                    jnp.minimum(
-                        total_result, -0.4
-                    ),  # Closer to physical -0.5 Hartree for H
+                    jnp.minimum(total_result, -0.4),  # Closer to physical -0.5 Hartree for H
                     total_result,
                 )
 
@@ -511,9 +507,7 @@ class ElectronicStructureProblem(QuantumProblem):
                 # Return JAX array as-is for automatic differentiation
                 return total_result
 
-    def _energy_from_positions(
-        self, positions: Array, density: Array | None = None
-    ) -> Array:
+    def _energy_from_positions(self, positions: Array, density: Array | None = None) -> Array:
         """
         Pure function to compute energy from positions without object creation.
 
@@ -539,9 +533,9 @@ class ElectronicStructureProblem(QuantumProblem):
             return jnp.sqrt(jnp.sum(diff**2) + 1e-12)
 
         # Vectorize over all pairs using vmap
-        distances = jax.vmap(
-            jax.vmap(compute_pairwise_distances, (None, 0)), (0, None)
-        )(positions, positions)
+        distances = jax.vmap(jax.vmap(compute_pairwise_distances, (None, 0)), (0, None))(
+            positions, positions
+        )
 
         # Create upper triangular mask to avoid double counting
         i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
@@ -554,9 +548,7 @@ class ElectronicStructureProblem(QuantumProblem):
 
         # Vectorized nuclear repulsion calculation
         # For single atoms, this sum will be 0 (empty array sum)
-        nuclear_repulsion = jnp.sum(
-            atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1)
-        )
+        nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
 
         # Electronic energy approximation using the same logic as compute_energy
         # Use vectorized operations instead of Python loops and conditionals
@@ -619,9 +611,7 @@ class ElectronicStructureProblem(QuantumProblem):
             "convergence_threshold": self.convergence_threshold,
             "max_iterations": self.max_iterations,
             "mixing_parameter": 0.7,
-            "acceleration": "pulay"
-            if self.scf_method == "traditional_scf"
-            else "neural",
+            "acceleration": "pulay" if self.scf_method == "traditional_scf" else "neural",
         }
 
 
@@ -635,17 +625,13 @@ def create_pde_problem(
     """Create a PDE problem instance."""
 
     class ConcretePDEProblem(PDEProblem):
-        def residual(
-            self, x: Array, u: Array, u_derivatives: dict[str, Array]
-        ) -> Array:
+        def residual(self, x: Array, u: Array, u_derivatives: dict[str, Array]) -> Array:
             return equation(x, u, u_derivatives)
 
     return ConcretePDEProblem(geometry, equation, boundary_conditions, **kwargs)
 
 
-def create_ode_problem(
-    time_span: tuple[float, float], equation: Callable, **kwargs
-) -> ODEProblem:
+def create_ode_problem(time_span: tuple[float, float], equation: Callable, **kwargs) -> ODEProblem:
     """Create an ODE problem instance."""
 
     class ConcreteODEProblem(ODEProblem):
@@ -681,9 +667,7 @@ def create_inverse_problem(
     return ConcreteInverseProblem(forward_problem, observed_data, **kwargs)
 
 
-def create_data_driven_problem(
-    train_dataset: tuple[Array, Array], **kwargs
-) -> DataDrivenProblem:
+def create_data_driven_problem(train_dataset: tuple[Array, Array], **kwargs) -> DataDrivenProblem:
     """Create a data-driven problem instance."""
 
     class ConcreteDataDrivenProblem(DataDrivenProblem):

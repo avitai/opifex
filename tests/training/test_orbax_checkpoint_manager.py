@@ -106,9 +106,7 @@ class TestOrbaxCheckpointManager:
         # Save checkpoint
         step = 100
         loss = 0.05
-        checkpoint_path = manager.save_checkpoint(
-            simple_model, step, loss, physics_metadata
-        )
+        checkpoint_path = manager.save_checkpoint(simple_model, step, loss, physics_metadata)
 
         # Verify checkpoint was saved
         assert checkpoint_path == str(Path(temp_dir) / str(step))
@@ -163,7 +161,7 @@ class TestOrbaxCheckpointManager:
         assert loaded_metadata["step"] == 200
 
     def test_save_with_metadata(self, temp_dir, simple_model, physics_metadata):
-        """Test saving with comprehensive physics metadata."""
+        """Test saving with full physics metadata."""
         manager = OrbaxCheckpointManager(temp_dir)
 
         # Save with rich metadata
@@ -171,9 +169,7 @@ class TestOrbaxCheckpointManager:
         loss = 0.02
         additional_metadata = {"experiment_id": "test_001", "notes": "Test run"}
 
-        manager.save_checkpoint(
-            simple_model, step, loss, physics_metadata, additional_metadata
-        )
+        manager.save_checkpoint(simple_model, step, loss, physics_metadata, additional_metadata)
 
         # Load and verify all metadata preserved
         _, loaded_metadata = manager.load_checkpoint(simple_model, step)
@@ -212,9 +208,7 @@ class TestOrbaxCheckpointManager:
         manager.save_checkpoint(simple_model, step, 0.05, physics_metadata)
 
         # Load raw data
-        loaded_model, loaded_metadata = manager.load_checkpoint(
-            target_model=None, step=step
-        )
+        loaded_model, loaded_metadata = manager.load_checkpoint(target_model=None, step=step)
 
         # Should return None for model and metadata dict
         assert loaded_model is None
@@ -310,9 +304,7 @@ class TestOrbaxCheckpointManager:
 
         # Create TrainState with initial step
         initial_step = 50
-        train_state_obj = manager.create_train_state(
-            simple_model, optimizer, step=initial_step
-        )
+        train_state_obj = manager.create_train_state(simple_model, optimizer, step=initial_step)
 
         # Simulate some training steps to update optimizer state
         test_input = jnp.ones((1, 4))
@@ -346,13 +338,11 @@ class TestOrbaxCheckpointManager:
         # Verify the model parameters are preserved
         assert loaded_train_state.params is not None
 
-    def test_complete_model_state_preservation(
-        self, temp_dir, simple_model, physics_metadata
-    ):
+    def test_complete_model_state_preservation(self, temp_dir, simple_model, physics_metadata):
         """Test that complete model state including all metadata is preserved."""
         manager = OrbaxCheckpointManager(temp_dir)
 
-        # Create comprehensive metadata
+        # Create full metadata
         comprehensive_metadata = {
             "experiment_config": {
                 "learning_rate": 0.001,
@@ -373,12 +363,10 @@ class TestOrbaxCheckpointManager:
             "physics_metadata": physics_metadata,
         }
 
-        # Save checkpoint with comprehensive metadata
+        # Save checkpoint with full metadata
         step = 300
         loss = 0.01
-        manager.save_checkpoint(
-            simple_model, step, loss, physics_metadata, comprehensive_metadata
-        )
+        manager.save_checkpoint(simple_model, step, loss, physics_metadata, comprehensive_metadata)
 
         # Load checkpoint
         _, loaded_metadata = manager.load_checkpoint(simple_model, step)
@@ -405,23 +393,17 @@ class TestOrbaxCheckpointManager:
         assert physics_meta["chemical_accuracy"] == 0.001
         assert physics_meta["scf_convergence"] is True
 
-    def test_train_state_metadata_loading(
-        self, temp_dir, train_state_obj, physics_metadata
-    ):
+    def test_train_state_metadata_loading(self, temp_dir, train_state_obj, physics_metadata):
         """Test that TrainState checkpoints can be loaded as metadata-only."""
         manager = OrbaxCheckpointManager(temp_dir)
 
         # Save TrainState checkpoint
         step = 400
         loss = 0.015
-        manager.save_train_state_checkpoint(
-            train_state_obj, step, loss, physics_metadata
-        )
+        manager.save_train_state_checkpoint(train_state_obj, step, loss, physics_metadata)
 
         # Load only metadata (without target model)
-        _loaded_model, loaded_metadata = manager.load_checkpoint(
-            target_model=None, step=step
-        )  # type: ignore[reportUnusedVariable]
+        _loaded_model, loaded_metadata = manager.load_checkpoint(target_model=None, step=step)  # type: ignore[reportUnusedVariable]
 
         # Should return None for model and metadata dict
         assert _loaded_model is None  # type: ignore[reportUnusedVariable]

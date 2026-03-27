@@ -12,7 +12,7 @@ PINNs leverage automatic differentiation to embed PDEs into the loss function:
 - **No mesh required** - operates on collocation points
 
 !!! tip "Survey Reference"
-    This framework implements methodologies from the comprehensive PINN survey (arXiv:2601.10222v1).
+    This framework implements methodologies from the full PINN survey (arXiv:2601.10222v1).
 
 ## Theoretical Foundation
 

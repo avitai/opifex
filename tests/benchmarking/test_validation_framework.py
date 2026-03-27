@@ -214,18 +214,14 @@ class TestToleranceChecking:
     def test_fluid_dynamics_tolerance_pass(self):
         """Test fluid dynamics tolerance - passing case."""
         metrics = {"mse": 1e-3, "relative_error": 0.05}
-        violations = self._check_violations(
-            metrics, "NavierStokes2D", self.framework._infer_domain
-        )
+        violations = self._check_violations(metrics, "NavierStokes2D", self.framework._infer_domain)
 
         assert len(violations) == 0
 
     def test_fluid_dynamics_tolerance_fail(self):
         """Test fluid dynamics tolerance - failing case."""
         metrics = {"mse": 0.5, "relative_error": 0.5}
-        violations = self._check_violations(
-            metrics, "NavierStokes2D", self.framework._infer_domain
-        )
+        violations = self._check_violations(metrics, "NavierStokes2D", self.framework._infer_domain)
 
         assert len(violations) == 2
         assert any("fluid" in v.lower() for v in violations)
@@ -261,9 +257,7 @@ class TestDomainInference:
         """Test inference of quantum computing domain."""
         assert self.framework._infer_domain("QuantumChemistry") == "quantum_computing"
         assert self.framework._infer_domain("dft_energies") == "quantum_computing"
-        assert (
-            self.framework._infer_domain("molecular_structures") == "quantum_computing"
-        )
+        assert self.framework._infer_domain("molecular_structures") == "quantum_computing"
 
     def test_fluid_dynamics_domain(self):
         """Test inference of fluid dynamics domain."""
@@ -336,9 +330,7 @@ class TestValidateAgainstReference:
             metadata={"execution_time": 1.0, "framework_version": "flax_nnx"},
         )
 
-        report = self.framework.validate_against_reference(
-            result, "FEM", reference_data=None
-        )
+        report = self.framework.validate_against_reference(result, "FEM", reference_data=None)
 
         # Should use metrics from benchmark results (extracted as floats)
         assert report.accuracy_metrics["mse"] == 0.01
@@ -427,9 +419,7 @@ class TestConvergenceRateAnalysis:
         ]
 
         custom_tolerances = [1e-1, 1e-2]
-        analysis = self.framework.check_convergence_rates(
-            results, tolerances=custom_tolerances
-        )
+        analysis = self.framework.check_convergence_rates(results, tolerances=custom_tolerances)
 
         # achieved dict keys encode metric_tolerance pairs
         assert isinstance(analysis, ConvergenceResult)
@@ -480,9 +470,7 @@ class TestChemicalAccuracyAssessment:
             metadata={"execution_time": 1.0, "framework_version": "flax_nnx"},
         )
 
-        assessment = self.framework.assess_chemical_accuracy(
-            result, accuracy_type="force_accuracy"
-        )
+        assessment = self.framework.assess_chemical_accuracy(result, accuracy_type="force_accuracy")
 
         assert assessment.metric_type == "force_accuracy"
         assert assessment.units == "eV/Ang"
@@ -496,16 +484,14 @@ class TestChemicalAccuracyAssessment:
             metadata={"execution_time": 1.0, "framework_version": "flax_nnx"},
         )
 
-        assessment = self.framework.assess_chemical_accuracy(
-            result, target_accuracy=0.01
-        )
+        assessment = self.framework.assess_chemical_accuracy(result, target_accuracy=0.01)
 
         assert assessment.target == 0.01
         assert assessment.passed is True  # 0.005 < 0.01
 
 
 class TestErrorAnalysis:
-    """Test comprehensive error analysis."""
+    """Test full error analysis."""
 
     def setup_method(self):
         """Set up test fixtures."""

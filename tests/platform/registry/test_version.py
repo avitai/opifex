@@ -1,6 +1,6 @@
 """Test suite for Neural Functional Version Management.
 
-Provides comprehensive test coverage for version control functionality including
+Provides full test coverage for version control functionality including
 Git operations, branching, merging, and version tracking.
 """
 
@@ -85,9 +85,7 @@ class TestVersionManager:
         assert temp_storage.exists()
 
     @patch("subprocess.run")
-    def test_initialization_with_git(
-        self, mock_subprocess, mock_registry, temp_storage
-    ):
+    def test_initialization_with_git(self, mock_subprocess, mock_registry, temp_storage):
         """Test version manager initialization with Git."""
         manager = VersionManager(
             storage_root=temp_storage,
@@ -100,9 +98,7 @@ class TestVersionManager:
         assert mock_subprocess.call_count >= 1
 
     @patch("subprocess.run")
-    def test_git_repo_initialization(
-        self, mock_subprocess, mock_registry, temp_storage
-    ):
+    def test_git_repo_initialization(self, mock_subprocess, mock_registry, temp_storage):
         """Test Git repository initialization."""
         # Simulate .git directory doesn't exist
         mock_subprocess.return_value.returncode = 0
@@ -114,9 +110,7 @@ class TestVersionManager:
         )
 
         # Should call git init, config commands
-        git_calls = [
-            call for call in mock_subprocess.call_args_list if call[0][0][0] == "git"
-        ]
+        git_calls = [call for call in mock_subprocess.call_args_list if call[0][0][0] == "git"]
         assert len(git_calls) >= 1
 
     @pytest.mark.asyncio
@@ -146,9 +140,7 @@ class TestVersionManager:
         assert version.size_bytes > 0
 
     @pytest.mark.asyncio
-    async def test_create_version_with_files(
-        self, version_manager_no_git, temp_storage
-    ):
+    async def test_create_version_with_files(self, version_manager_no_git, temp_storage):
         """Test version creation with file storage."""
         files = {
             "model.py": "# Neural functional implementation\nprint('Hello World')",
@@ -182,9 +174,7 @@ class TestVersionManager:
 
     @pytest.mark.asyncio
     @patch("subprocess.run")
-    async def test_create_version_with_git(
-        self, mock_subprocess, version_manager_with_git
-    ):
+    async def test_create_version_with_git(self, mock_subprocess, version_manager_with_git):
         """Test version creation with Git operations."""
         mock_subprocess.return_value.returncode = 0
         mock_subprocess.return_value.stdout = "abc123"
@@ -202,9 +192,7 @@ class TestVersionManager:
         assert version.commit_hash == "abc123"
 
         # Should have called Git commands
-        git_calls = [
-            call for call in mock_subprocess.call_args_list if "git" in call[0][0]
-        ]
+        git_calls = [call for call in mock_subprocess.call_args_list if "git" in call[0][0]]
         assert len(git_calls) > 0
 
     @pytest.mark.asyncio
@@ -285,12 +273,8 @@ class TestVersionManager:
             branch="development",
         )
 
-        main_versions = await version_manager_no_git.list_versions(
-            "func-001", branch="main"
-        )
-        dev_versions = await version_manager_no_git.list_versions(
-            "func-001", branch="development"
-        )
+        main_versions = await version_manager_no_git.list_versions("func-001", branch="main")
+        dev_versions = await version_manager_no_git.list_versions("func-001", branch="development")
 
         assert len(main_versions) == 1
         assert len(dev_versions) == 1
@@ -318,9 +302,7 @@ class TestVersionManager:
         )
 
         # Delete by author
-        result = await version_manager_no_git.delete_version(
-            "func-001", "v1.0.0", "user-001"
-        )
+        result = await version_manager_no_git.delete_version("func-001", "v1.0.0", "user-001")
         assert result is True
 
         # Verify deletion
@@ -342,9 +324,7 @@ class TestVersionManager:
         )
 
         # Try to delete by different user
-        result = await version_manager_no_git.delete_version(
-            "func-001", "v1.0.0", "user-002"
-        )
+        result = await version_manager_no_git.delete_version("func-001", "v1.0.0", "user-002")
         assert result is False
 
         # Verify version still exists
@@ -354,9 +334,7 @@ class TestVersionManager:
     @pytest.mark.asyncio
     async def test_delete_version_nonexistent(self, version_manager_no_git):
         """Test deleting nonexistent version."""
-        result = await version_manager_no_git.delete_version(
-            "func-001", "v1.0.0", "user-001"
-        )
+        result = await version_manager_no_git.delete_version("func-001", "v1.0.0", "user-001")
         assert result is False
 
     @pytest.mark.asyncio
@@ -391,9 +369,7 @@ class TestVersionManager:
 
     @pytest.mark.asyncio
     @patch("subprocess.run")
-    async def test_merge_branch_success(
-        self, mock_subprocess, version_manager_with_git
-    ):
+    async def test_merge_branch_success(self, mock_subprocess, version_manager_with_git):
         """Test successful branch merge."""
         mock_subprocess.return_value.returncode = 0
 
@@ -410,9 +386,7 @@ class TestVersionManager:
 
     @pytest.mark.asyncio
     @patch("subprocess.run")
-    async def test_merge_branch_conflict(
-        self, mock_subprocess, version_manager_with_git
-    ):
+    async def test_merge_branch_conflict(self, mock_subprocess, version_manager_with_git):
         """Test branch merge with conflict."""
         import subprocess
 
@@ -468,9 +442,7 @@ class TestVersionManager:
         )
 
         # Verify appropriate git commands were called
-        git_calls = [
-            call for call in mock_subprocess.call_args_list if "git" in call[0][0]
-        ]
+        git_calls = [call for call in mock_subprocess.call_args_list if "git" in call[0][0]]
         assert len(git_calls) > 0
 
     @pytest.mark.asyncio
@@ -479,9 +451,7 @@ class TestVersionManager:
         """Test getting version differences."""
         # Mock git diff output
         mock_subprocess.return_value.returncode = 0
-        mock_subprocess.return_value.stdout = (
-            "A\tmodel.py\nM\tconfig.yaml\nD\told_file.py\n"
-        )
+        mock_subprocess.return_value.stdout = "A\tmodel.py\nM\tconfig.yaml\nD\told_file.py\n"
 
         diff = await version_manager_with_git.get_version_diff(
             functional_id="func-001",
@@ -512,17 +482,13 @@ class TestVersionManager:
 
     @pytest.mark.asyncio
     @patch("subprocess.run")
-    async def test_ensure_branch_existing(
-        self, mock_subprocess, version_manager_with_git
-    ):
+    async def test_ensure_branch_existing(self, mock_subprocess, version_manager_with_git):
         """Test ensuring existing branch."""
         # Mock branch exists
         mock_subprocess.return_value.returncode = 0
         mock_subprocess.return_value.stdout = "  feature-branch\n"
 
-        await version_manager_with_git._ensure_branch(
-            "func-001", "feature-branch", "user-001"
-        )
+        await version_manager_with_git._ensure_branch("func-001", "feature-branch", "user-001")
 
         # Should checkout existing branch
         checkout_calls = [
@@ -538,9 +504,7 @@ class TestVersionManager:
         mock_subprocess.return_value.returncode = 0
         mock_subprocess.return_value.stdout = ""
 
-        await version_manager_with_git._ensure_branch(
-            "func-001", "new-branch", "user-001"
-        )
+        await version_manager_with_git._ensure_branch("func-001", "new-branch", "user-001")
 
         # Should create new branch
         checkout_calls = [
@@ -567,12 +531,8 @@ class TestVersionManager:
         assert commit_hash == "abc123def456"
 
         # Should call git add and git commit
-        add_calls = [
-            call for call in mock_subprocess.call_args_list if "add" in call[0][0]
-        ]
-        commit_calls = [
-            call for call in mock_subprocess.call_args_list if "commit" in call[0][0]
-        ]
+        add_calls = [call for call in mock_subprocess.call_args_list if "add" in call[0][0]]
+        commit_calls = [call for call in mock_subprocess.call_args_list if "commit" in call[0][0]]
         assert len(add_calls) > 0
         assert len(commit_calls) > 0
 
@@ -589,9 +549,7 @@ class TestVersionManager:
         )
 
         # Should call git tag
-        tag_calls = [
-            call for call in mock_subprocess.call_args_list if "tag" in call[0][0]
-        ]
+        tag_calls = [call for call in mock_subprocess.call_args_list if "tag" in call[0][0]]
         assert len(tag_calls) > 0
 
     @pytest.mark.asyncio
@@ -617,9 +575,7 @@ class TestVersionManager:
         mock_subprocess.return_value.returncode = 0
         mock_subprocess.return_value.stdout = "abc123def456\n"
 
-        commit_hash = await version_manager_with_git._get_commit_for_tag(
-            "func-001", "v1.0.0"
-        )
+        commit_hash = await version_manager_with_git._get_commit_for_tag("func-001", "v1.0.0")
 
         assert commit_hash == "abc123def456"
 
@@ -756,9 +712,7 @@ class TestVersionManagerIntegration:
         assert retrieved_v1.version_tag == "v1.0.0"
 
         # Delete old version
-        deleted = await version_manager_no_git.delete_version(
-            "func-001", "v1.0.0", "user-001"
-        )
+        deleted = await version_manager_no_git.delete_version("func-001", "v1.0.0", "user-001")
         assert deleted is True
 
         # Verify deletion
@@ -826,13 +780,9 @@ class TestVersionManagerIntegration:
         )
 
         # User 1 cannot delete User 2's version
-        deleted = await version_manager_no_git.delete_version(
-            "func-001", "v1.1.0", "user-001"
-        )
+        deleted = await version_manager_no_git.delete_version("func-001", "v1.1.0", "user-001")
         assert deleted is False
 
         # User 2 can delete their own version
-        deleted = await version_manager_no_git.delete_version(
-            "func-001", "v1.1.0", "user-002"
-        )
+        deleted = await version_manager_no_git.delete_version("func-001", "v1.1.0", "user-002")
         assert deleted is True

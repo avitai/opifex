@@ -215,9 +215,7 @@ class DomainDecompositionPINN(nnx.Module):
 
         return jnp.sum(stacked * weights_expanded, axis=-1)
 
-    def get_subdomain_outputs(
-        self, x: Float[Array, ...]
-    ) -> list[Float[Array, "batch out"]]:
+    def get_subdomain_outputs(self, x: Float[Array, ...]) -> list[Float[Array, "batch out"]]:
         """Get outputs from all subdomain networks.
 
         Args:

@@ -16,7 +16,7 @@ from opifex.data.preprocessing.spectral_analysis import (
 
 
 class TestSpectralAnalysis:
-    """Test suite for spectral analysis utilities with comprehensive coverage."""
+    """Test suite for spectral analysis utilities with full coverage."""
 
     def test_power_spectral_density_basic(self):
         """Test power spectral density computation for 2D fields."""
@@ -75,9 +75,7 @@ class TestSpectralAnalysis:
         X, Y = jnp.meshgrid(x, y, indexing="ij")
         field = jnp.sin(X) * jnp.cos(Y)
 
-        reconstructed, coefficients = modal_analysis(
-            field, modes=5, return_coefficients=True
-        )
+        reconstructed, coefficients = modal_analysis(field, modes=5, return_coefficients=True)
 
         assert reconstructed.shape == field.shape
         assert coefficients.shape == (5,)
@@ -165,9 +163,7 @@ class TestSpectralAnalysis:
         wavenumbers, _ = compute_energy_spectrum(field, dx=0.1)
 
         # Wavenumbers should be monotonically increasing
-        assert jnp.all(wavenumbers[1:] >= wavenumbers[:-1]), (
-            "Wavenumbers should be ordered"
-        )
+        assert jnp.all(wavenumbers[1:] >= wavenumbers[:-1]), "Wavenumbers should be ordered"
 
     def test_jax_transformations_compatibility(self):
         """Test JAX transformations compatibility."""

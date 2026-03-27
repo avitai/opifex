@@ -147,12 +147,8 @@ class TestFNOTransferOperators:
             SimpleFNO,
         )
 
-        coarse_fno = SimpleFNO(
-            modes=4, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(0)
-        )
-        fine_fno = SimpleFNO(
-            modes=8, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(1)
-        )
+        coarse_fno = SimpleFNO(modes=4, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(0))
+        fine_fno = SimpleFNO(modes=8, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(1))
 
         prolongate_fno_modes(coarse_fno, fine_fno)
 
@@ -166,12 +162,8 @@ class TestFNOTransferOperators:
             SimpleFNO,
         )
 
-        fine_fno = SimpleFNO(
-            modes=8, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(0)
-        )
-        coarse_fno = SimpleFNO(
-            modes=4, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(1)
-        )
+        fine_fno = SimpleFNO(modes=8, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(0))
+        coarse_fno = SimpleFNO(modes=4, width=16, input_dim=1, output_dim=1, rngs=nnx.Rngs(1))
 
         restrict_fno_modes(fine_fno, coarse_fno)
 

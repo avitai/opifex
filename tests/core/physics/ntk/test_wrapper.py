@@ -16,7 +16,7 @@ def _check_neural_tangents_available():
         return False
     try:
         # Check if it can be imported without compatibility issues
-        import neural_tangents  # noqa: F401  # pyright: ignore[reportUnusedImport]
+        import neural_tangents  # noqa: F401  # pyright: ignore[reportUnusedImport,reportMissingImports]
 
         return True
     except Exception:

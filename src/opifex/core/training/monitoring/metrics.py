@@ -1,6 +1,6 @@
 """Training metrics and state management for Opifex framework.
 
-This module provides comprehensive metrics tracking for scientific machine learning,
+This module provides full metrics tracking for scientific machine learning,
 including physics-aware metrics, quantum chemistry metrics, and advanced diagnostics.
 """
 
@@ -74,7 +74,7 @@ class TrainingMetrics:
 
 @dataclass
 class TrainingState:
-    """Enhanced training state management with comprehensive physics-aware metrics.
+    """Enhanced training state management with full physics-aware metrics.
 
     Modernized for Flax NNX compliance while maintaining optax flexibility.
     """
@@ -180,12 +180,8 @@ class TrainingState:
 
         # SCF convergence
         if self.scf_convergence_history:
-            converged_count = sum(
-                1 for converged, _ in self.scf_convergence_history if converged
-            )
-            summary["scf_convergence_rate"] = converged_count / len(
-                self.scf_convergence_history
-            )
+            converged_count = sum(1 for converged, _ in self.scf_convergence_history if converged)
+            summary["scf_convergence_rate"] = converged_count / len(self.scf_convergence_history)
             avg_iterations = sum(
                 iterations for _, iterations in self.scf_convergence_history
             ) / len(self.scf_convergence_history)
@@ -278,10 +274,7 @@ class AdvancedMetricsCollector:
 
         # Gradient diagnostics (handle complex gradients properly)
         grad_norm = jnp.sqrt(
-            sum(
-                jnp.sum(jnp.real(g * jnp.conj(g)))
-                for g in jax.tree_util.tree_leaves(grads)
-            )
+            sum(jnp.sum(jnp.real(g * jnp.conj(g))) for g in jax.tree_util.tree_leaves(grads))
         )
         metrics["gradient_norm"] = float(grad_norm)
 
@@ -307,9 +300,7 @@ class AdvancedMetricsCollector:
 
         return metrics
 
-    def collect_convergence_metrics(
-        self, training_state: TrainingState
-    ) -> dict[str, float]:
+    def collect_convergence_metrics(self, training_state: TrainingState) -> dict[str, float]:
         """Collect convergence-related metrics.
 
         Args:
@@ -338,18 +329,13 @@ class AdvancedMetricsCollector:
         # SCF convergence statistics
         if training_state.scf_convergence_history:
             converged_count = sum(
-                1
-                for converged, _ in training_state.scf_convergence_history
-                if converged
+                1 for converged, _ in training_state.scf_convergence_history if converged
             )
             total_count = len(training_state.scf_convergence_history)
             metrics["scf_convergence_rate"] = float(converged_count / total_count)
 
             avg_iterations = (
-                sum(
-                    iterations
-                    for _, iterations in training_state.scf_convergence_history
-                )
+                sum(iterations for _, iterations in training_state.scf_convergence_history)
                 / total_count
             )
             metrics["avg_scf_iterations"] = float(avg_iterations)
@@ -423,12 +409,8 @@ class AdvancedMetricsCollector:
             metrics["dft_energy"] = float(dft_energy)
 
             # Exchange-correlation energy (approximation)
-            exchange_correlation_weight = quantum_config.get(
-                "exchange_correlation_weight", 0.3
-            )
-            metrics["exchange_correlation_energy"] = float(
-                dft_energy * exchange_correlation_weight
-            )
+            exchange_correlation_weight = quantum_config.get("exchange_correlation_weight", 0.3)
+            metrics["exchange_correlation_energy"] = float(dft_energy * exchange_correlation_weight)
 
         # Quantum state tracking
         if quantum_config.get("track_quantum_states", False):
@@ -561,9 +543,7 @@ class AdvancedMetricsCollector:
         from opifex.core.physics.conservation import particle_number_violation
 
         # Use a default target of 10 particles (can be made configurable later)
-        return particle_number_violation(
-            y_pred, target_particle_number=10.0, tolerance=1e-4
-        )
+        return particle_number_violation(y_pred, target_particle_number=10.0, tolerance=1e-4)
 
     def _compute_symmetry_conservation(
         self,

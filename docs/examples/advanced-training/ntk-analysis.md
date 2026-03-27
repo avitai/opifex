@@ -40,8 +40,8 @@ for certain solution modes.
 
 ## Files
 
-- **Python script**: [`examples/advanced-training/ntk_analysis.py`](https://github.com/Opifex/Opifex/blob/main/examples/advanced-training/ntk_analysis.py)
-- **Jupyter notebook**: [`examples/advanced-training/ntk_analysis.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/advanced-training/ntk_analysis.ipynb)
+- **Python script**: [`examples/advanced-training/ntk_analysis.py`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/ntk_analysis.py)
+- **Jupyter notebook**: [`examples/advanced-training/ntk_analysis.ipynb`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/ntk_analysis.ipynb)
 
 ## Quick Start
 

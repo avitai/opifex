@@ -112,7 +112,7 @@ class TestBoundaryConditionCollection:
         assert len(collection) == 1
 
     def test_comprehensive_collection(self):
-        """Test BoundaryConditionCollection with comprehensive scenarios."""
+        """Test BoundaryConditionCollection with full scenarios."""
         # Create diverse boundary conditions
         bc1 = DirichletBC(boundary="left", value=1.0)
         bc2 = NeumannBC(boundary="right", value=0.0)

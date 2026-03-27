@@ -44,8 +44,8 @@ and nonlinear reaction terms.
 
 ## Files
 
-- **Python Script**: [`examples/pinns/allen_cahn.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/allen_cahn.py)
-- **Jupyter Notebook**: [`examples/pinns/allen_cahn.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/allen_cahn.ipynb)
+- **Python Script**: [`examples/pinns/allen_cahn.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/allen_cahn.py)
+- **Jupyter Notebook**: [`examples/pinns/allen_cahn.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/allen_cahn.ipynb)
 
 ## Quick Start
 

@@ -44,8 +44,8 @@ are computed as pure functions, enabling JIT compilation of the entire training 
 
 ## Files
 
-- **Python Script**: [`examples/pinns/heat_equation.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/heat_equation.py)
-- **Jupyter Notebook**: [`examples/pinns/heat_equation.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/heat_equation.ipynb)
+- **Python Script**: [`examples/pinns/heat_equation.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/heat_equation.py)
+- **Jupyter Notebook**: [`examples/pinns/heat_equation.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/heat_equation.ipynb)
 
 ## Quick Start
 
@@ -194,7 +194,7 @@ The trained PINN's temperature field on the evaluation grid:
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
 | [Domain Decomposition PINNs](../../methods/domain-decomposition-pinns.md) | Advanced | Scale PINNs to large domains |
-| [FNO Darcy Comprehensive](../neural-operators/fno-darcy.md) | Intermediate | Data-driven alternative to PINNs |
+| [FNO Darcy Full](../neural-operators/fno-darcy.md) | Intermediate | Data-driven alternative to PINNs |
 | [Enhanced Calibration](../uncertainty/calibration.md) | Advanced | Uncertainty quantification for predictions |
 
 ### API Reference

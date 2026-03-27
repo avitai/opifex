@@ -247,13 +247,9 @@ class TestMeshGraphNetWithGridToGraph:
         height = 4
         width = 4
 
-        grid = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, channels, height, width)
-        )
+        grid = jax.random.normal(jax.random.PRNGKey(0), (batch_size, channels, height, width))
 
-        node_features, edge_indices, edge_features = grid_to_graph_data(
-            grid, connectivity=4
-        )
+        node_features, edge_indices, edge_features = grid_to_graph_data(grid, connectivity=4)
 
         # node_features: [B, H*W, channels+2], edge_features: [B, num_edges, 2]
         node_input_dim = channels + 2  # grid values + (x, y) positions
@@ -281,13 +277,9 @@ class TestMeshGraphNetWithGridToGraph:
         height = 4
         width = 4
 
-        grid = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, channels, height, width)
-        )
+        grid = jax.random.normal(jax.random.PRNGKey(0), (batch_size, channels, height, width))
 
-        node_features, edge_indices, edge_features = grid_to_graph_data(
-            grid, connectivity=8
-        )
+        node_features, edge_indices, edge_features = grid_to_graph_data(grid, connectivity=8)
 
         node_input_dim = channels + 2
         edge_input_dim = 2
@@ -406,9 +398,7 @@ class TestMeshGraphNetMultiScale:
             out_perturbed = model(perturbed, edge_indices)
 
             # Sum absolute differences at distant nodes
-            diff = jnp.abs(
-                out_perturbed[0, distant_slice] - out_original[0, distant_slice]
-            ).sum()
+            diff = jnp.abs(out_perturbed[0, distant_slice] - out_original[0, distant_slice]).sum()
             if num_layers == 1:
                 diff_shallow = float(diff)
             else:

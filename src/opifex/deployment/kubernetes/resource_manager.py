@@ -12,7 +12,7 @@ class ResourceManager:
     """
     Generate Kubernetes resource management manifests for Opifex deployment.
 
-    Provides comprehensive resource governance including namespace isolation,
+    Provides full resource governance including namespace isolation,
     resource quotas, and default limits for enterprise-grade deployments.
     """
 
@@ -276,9 +276,7 @@ class ResourceManager:
         }
 
         if image_pull_secrets:
-            manifest["imagePullSecrets"] = [
-                {"name": secret} for secret in image_pull_secrets
-            ]
+            manifest["imagePullSecrets"] = [{"name": secret} for secret in image_pull_secrets]
 
         return manifest
 

@@ -43,9 +43,7 @@ class MultiHeadAttention(nnx.Module):
         self.dropout_rate = dropout_rate
 
         if features % num_heads != 0:
-            raise ValueError(
-                f"Features {features} must be divisible by num_heads {num_heads}"
-            )
+            raise ValueError(f"Features {features} must be divisible by num_heads {num_heads}")
 
         # Enhanced Query, Key, Value projections  handling
         self.q_proj = nnx.Linear(features, features, rngs=rngs)
@@ -141,20 +139,14 @@ class DensityFeatureExtractor(nnx.Module):
             # Ensure dimensions sum to feature_dim exactly
             density_features = feature_dim // 3
             gradient_features = feature_dim // 3
-            advanced_features = (
-                feature_dim - density_features - gradient_features
-            )  # Remainder
+            advanced_features = feature_dim - density_features - gradient_features  # Remainder
         else:
             density_features = feature_dim // 2
             gradient_features = feature_dim - density_features  # Remainder
             advanced_features = 0
 
-        self.density_proj = nnx.Linear(
-            2, density_features, rngs=rngs
-        )  # density + log(density)
-        self.gradient_proj = nnx.Linear(
-            4, gradient_features, rngs=rngs
-        )  # 3 gradients + magnitude
+        self.density_proj = nnx.Linear(2, density_features, rngs=rngs)  # density + log(density)
+        self.gradient_proj = nnx.Linear(4, gradient_features, rngs=rngs)  # 3 gradients + magnitude
 
         if use_advanced_features:
             # Advanced physics features (kinetic energy density, etc.)
@@ -210,9 +202,7 @@ class DensityFeatureExtractor(nnx.Module):
         if self.use_advanced_features:
             # Advanced physics features
             # Reduced density gradient (important for GGA functionals)
-            reduced_gradient = gradient_magnitude / (
-                safe_density[..., None] ** (4 / 3) + self.eps
-            )
+            reduced_gradient = gradient_magnitude / (safe_density[..., None] ** (4 / 3) + self.eps)
 
             # Approximate kinetic energy density
             kinetic_energy_density = (
@@ -234,9 +224,7 @@ class DensityFeatureExtractor(nnx.Module):
                 [density_features, gradient_features, advanced_features], axis=-1
             )
         else:
-            combined_features = jnp.concatenate(
-                [density_features, gradient_features], axis=-1
-            )
+            combined_features = jnp.concatenate([density_features, gradient_features], axis=-1)
 
         # Apply normalization for numerical stability
         return self.feature_norm(combined_features)
@@ -315,9 +303,7 @@ class NeuralXCFunctional(nnx.Module):
         self.correlation_weight = nnx.Param(jnp.array(0.3))
 
         # Numerical stability parameters  handling
-        self.energy_clamp_min = nnx.Param(
-            jnp.array(-10.0)
-        )  # Reasonable XC energy bounds
+        self.energy_clamp_min = nnx.Param(jnp.array(-10.0))  # Reasonable XC energy bounds
         self.energy_clamp_max = nnx.Param(jnp.array(0.0))
 
     def _enforce_physics_constraints(
@@ -351,9 +337,7 @@ class NeuralXCFunctional(nnx.Module):
 
         # Ensure smooth behavior at low densities
         low_density_cutoff = 1e-8
-        smooth_factor = jnp.where(
-            density < low_density_cutoff, density / low_density_cutoff, 1.0
-        )
+        smooth_factor = jnp.where(density < low_density_cutoff, density / low_density_cutoff, 1.0)
 
         return scaled_energy * smooth_factor
 
@@ -377,9 +361,7 @@ class NeuralXCFunctional(nnx.Module):
             raise ValueError(f"Expected 3D gradient tensor, got {gradients.ndim}D")
 
         # Extract physics-informed features
-        features = self.feature_extractor(
-            density, gradients, deterministic=deterministic
-        )
+        features = self.feature_extractor(density, gradients, deterministic=deterministic)
 
         # Apply attention for non-local correlations
         if self.use_attention:
@@ -436,9 +418,7 @@ class NeuralXCFunctional(nnx.Module):
 
         # Apply numerical stability measures
         eps = jnp.finfo(jnp.float64).eps
-        result = jnp.where(
-            jnp.abs(derivative) < eps, jnp.sign(derivative) * eps, derivative
-        )
+        result = jnp.where(jnp.abs(derivative) < eps, jnp.sign(derivative) * eps, derivative)
         # Ensure we return a single Array, not a tuple
         return jnp.asarray(result)
 

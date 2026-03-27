@@ -45,15 +45,11 @@ class ResourceOrchestrator(nnx.Module):
 
         # Neural network for resource allocation optimization
         self.allocation_optimizer = nnx.Sequential(
-            nnx.Linear(
-                32, 128, rngs=rngs
-            ),  # Input: resource requirements + constraints
+            nnx.Linear(32, 128, rngs=rngs),  # Input: resource requirements + constraints
             nnx.gelu,
             nnx.Linear(128, 64, rngs=rngs),
             nnx.gelu,
-            nnx.Linear(
-                64, 16, rngs=rngs
-            ),  # Output: allocation scores for different pools
+            nnx.Linear(64, 16, rngs=rngs),  # Output: allocation scores for different pools
         )
 
         # Cost prediction network
@@ -89,9 +85,7 @@ class ResourceOrchestrator(nnx.Module):
         self.resource_pools[pool.pool_id] = pool
         return True
 
-    def update_pool_status(
-        self, pool_id: str, utilization: float, available_capacity: int
-    ) -> bool:
+    def update_pool_status(self, pool_id: str, utilization: float, available_capacity: int) -> bool:
         """Update resource pool status.
 
         Args:
@@ -129,9 +123,7 @@ class ResourceOrchestrator(nnx.Module):
         constraints = constraints or {}
 
         # Convert requirements to feature vector
-        requirement_features = self._encode_requirements(
-            resource_requirements, constraints
-        )
+        requirement_features = self._encode_requirements(resource_requirements, constraints)
 
         # Get allocation scores for available pools
         allocation_scores = self.allocation_optimizer(requirement_features)
@@ -148,13 +140,9 @@ class ResourceOrchestrator(nnx.Module):
         )
 
         # Calculate cost and performance estimates
-        cost_estimate = self._calculate_cost_estimate(
-            selected_pools, resource_requirements
-        )
+        cost_estimate = self._calculate_cost_estimate(selected_pools, resource_requirements)
         performance_estimate = self._calculate_performance_estimate(selected_pools)
-        carbon_footprint = self._calculate_carbon_footprint(
-            selected_pools, resource_requirements
-        )
+        carbon_footprint = self._calculate_carbon_footprint(selected_pools, resource_requirements)
 
         # Create allocation
         allocation = ResourceAllocation(
@@ -202,8 +190,7 @@ class ResourceOrchestrator(nnx.Module):
                 max_cost / 1000.0,  # Normalize
                 min_performance,
                 max_latency / 100.0,  # Normalize
-                len(preferred_providers)
-                / len(CloudProvider),  # Provider preference ratio
+                len(preferred_providers) / len(CloudProvider),  # Provider preference ratio
             ]
         )
 
@@ -373,9 +360,7 @@ class ResourceOrchestrator(nnx.Module):
 
         return total_cost
 
-    def _calculate_performance_estimate(
-        self, selected_pools: dict[str, ResourcePool]
-    ) -> float:
+    def _calculate_performance_estimate(self, selected_pools: dict[str, ResourcePool]) -> float:
         """Calculate performance estimate for allocation.
 
         Args:

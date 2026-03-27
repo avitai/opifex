@@ -177,9 +177,7 @@ class TestScheduleCreation:
         boundaries = [100, 200, 300]
         values = [0.1, 0.01, 0.001, 0.0001]
 
-        schedule = create_schedule(
-            schedule_type="step", boundaries_and_values=(boundaries, values)
-        )
+        schedule = create_schedule(schedule_type="step", boundaries_and_values=(boundaries, values))
 
         assert callable(schedule)
         assert schedule(0) == pytest.approx(0.1)
@@ -231,12 +229,8 @@ class TestGradientClipping:
         # Updates should be clipped
         # Convert updates to array tree for norm computation
         updates_flat, _ = jax.tree_util.tree_flatten(updates)
-        update_norm = jnp.sqrt(
-            jnp.sum(jnp.array([jnp.sum(u**2) for u in updates_flat]))
-        )
-        assert (
-            update_norm <= 2.0
-        )  # Should be clipped (accounting for optimizer scaling)
+        update_norm = jnp.sqrt(jnp.sum(jnp.array([jnp.sum(u**2) for u in updates_flat])))
+        assert update_norm <= 2.0  # Should be clipped (accounting for optimizer scaling)
 
     def test_with_gradient_clipping_by_value(self):
         """Test adding value-based gradient clipping."""
@@ -355,9 +349,7 @@ class TestCreateOptimizer:
 
     def test_create_optimizer_adamw(self):
         """Test creating AdamW optimizer from config."""
-        config = OptimizerConfig(
-            optimizer_type="adamw", learning_rate=0.001, weight_decay=0.01
-        )
+        config = OptimizerConfig(optimizer_type="adamw", learning_rate=0.001, weight_decay=0.01)
         optimizer = create_optimizer(config)
 
         assert isinstance(optimizer, optax.GradientTransformation)
@@ -399,9 +391,7 @@ class TestCreateOptimizer:
 
     def test_create_optimizer_with_gradient_clipping(self):
         """Test creating optimizer with gradient clipping."""
-        config = OptimizerConfig(
-            optimizer_type="adam", learning_rate=0.001, gradient_clip=1.0
-        )
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=0.001, gradient_clip=1.0)
         optimizer = create_optimizer(config)
 
         assert isinstance(optimizer, optax.GradientTransformation)
@@ -551,9 +541,7 @@ class TestEdgeCases:
 
     def test_extreme_gradient_clipping(self):
         """Test with very small clip value."""
-        config = OptimizerConfig(
-            optimizer_type="adam", learning_rate=0.001, gradient_clip=1e-6
-        )
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=0.001, gradient_clip=1e-6)
         optimizer = create_optimizer(config)
 
         params = jnp.array([1.0, 2.0, 3.0])
@@ -569,9 +557,7 @@ class TestEdgeCases:
         boundaries = []
         values = [0.1]
 
-        schedule = create_schedule(
-            schedule_type="step", boundaries_and_values=(boundaries, values)
-        )
+        schedule = create_schedule(schedule_type="step", boundaries_and_values=(boundaries, values))
 
         assert callable(schedule)
         assert schedule(0) == 0.1

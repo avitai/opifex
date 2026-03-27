@@ -44,9 +44,7 @@ class DomainResults:
     benchmark_results: dict[
         str, dict[str, BenchmarkResult]
     ]  # benchmark_name -> operator_name -> result
-    validation_reports: dict[str, dict[str, ValidationReport]] = field(
-        default_factory=dict
-    )
+    validation_reports: dict[str, dict[str, ValidationReport]] = field(default_factory=dict)
     comparison_reports: dict[str, ComparisonReport] = field(default_factory=dict)
     insight_reports: dict[str, dict[str, InsightReport]] = field(default_factory=dict)
     summary_statistics: dict[str, Any] = field(default_factory=dict)
@@ -71,7 +69,7 @@ class BenchmarkRunner:
     """Orchestrates complete benchmarking pipeline execution.
 
     This runner provides end-to-end benchmarking capabilities including:
-    - Comprehensive multi-operator benchmarking across domains
+    - Full multi-operator benchmarking across domains
     - Domain-specific benchmark suite execution with validation
     - Publication-ready report and figure generation
     - Automated benchmark database updates and maintenance
@@ -100,14 +98,10 @@ class BenchmarkRunner:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.registry = registry or BenchmarkRegistry()
-        self.evaluator = evaluator or BenchmarkEvaluator(
-            output_dir=str(self.output_dir)
-        )
+        self.evaluator = evaluator or BenchmarkEvaluator(output_dir=str(self.output_dir))
         self.validator = validator or ValidationFramework()
         self.analyzer = analyzer or AnalysisEngine()
-        self.results_manager = results_manager or ResultsManager(
-            storage_path=str(self.output_dir)
-        )
+        self.results_manager = results_manager or ResultsManager(storage_path=str(self.output_dir))
 
         # Auto-discover operators if registry is empty
         if len(self.registry.list_available_operators()) == 0:
@@ -120,7 +114,7 @@ class BenchmarkRunner:
         validate_results: bool = True,
         generate_analysis: bool = True,
     ) -> dict[str, dict[str, BenchmarkResult]]:
-        """Run comprehensive benchmark across multiple operators and problems.
+        """Run full benchmark across multiple operators and problems.
 
         Args:
             operators: List of operator names (uses all available if None)
@@ -142,8 +136,7 @@ class BenchmarkRunner:
             raise ValueError("No benchmarks available for testing")
 
         logger.info(
-            f"Running comprehensive benchmark: {len(operators)} operators x "
-            f"{len(benchmarks)} benchmarks"
+            f"Running full benchmark: {len(operators)} operators x {len(benchmarks)} benchmarks"
         )
 
         all_results = {}
@@ -160,10 +153,7 @@ class BenchmarkRunner:
                 # Check compatibility
                 compatible_ops = self.registry.list_compatible_operators(benchmark_name)
                 if operator_name not in compatible_ops:
-                    logger.debug(
-                        f"Skipping {operator_name} (not compatible with "
-                        f"{benchmark_name})"
-                    )
+                    logger.debug(f"Skipping {operator_name} (not compatible with {benchmark_name})")
                     continue
 
                 logger.info(f"Testing {operator_name}...")
@@ -182,9 +172,7 @@ class BenchmarkRunner:
                         benchmark_validations[operator_name] = validation
 
                 except Exception:
-                    logger.exception(
-                        "Benchmark %s failed for %s", benchmark_name, operator_name
-                    )
+                    logger.exception("Benchmark %s failed for %s", benchmark_name, operator_name)
 
             all_results[benchmark_name] = benchmark_results
             if validate_results:
@@ -203,7 +191,7 @@ class BenchmarkRunner:
             domain: Scientific domain name
 
         Returns:
-            Comprehensive domain-specific results
+            Full domain-specific results
         """
 
         # Get domain benchmarks and configuration
@@ -240,9 +228,7 @@ class BenchmarkRunner:
                     operator_results[operator_name] = result
 
                     # Domain-specific validation
-                    validation = self._validate_result_for_domain(
-                        result, benchmark, domain_config
-                    )
+                    validation = self._validate_result_for_domain(result, benchmark, domain_config)
                     operator_validations[operator_name] = validation
 
                     # Generate insights
@@ -259,9 +245,7 @@ class BenchmarkRunner:
                     )
 
                 except Exception:
-                    logger.exception(
-                        "Benchmark %s failed for %s", benchmark.name, operator_name
-                    )
+                    logger.exception("Benchmark %s failed for %s", benchmark.name, operator_name)
 
             # Generate comparison report for this benchmark
             if len(operator_results) >= 2:
@@ -292,7 +276,7 @@ class BenchmarkRunner:
         """Generate publication-ready report from benchmark results.
 
         Args:
-            results: Benchmark results (either comprehensive or domain-specific)
+            results: Benchmark results (either full or domain-specific)
             title: Report title (auto-generated if None)
 
         Returns:
@@ -305,9 +289,9 @@ class BenchmarkRunner:
             title = title or f"Benchmarking Study: {domain.title()} Domain"
 
         else:
-            # Comprehensive report
+            # Full report
             benchmark_results = results
-            title = title or "Comprehensive Neural Operator Benchmarking Study"
+            title = title or "Full Neural Operator Benchmarking Study"
             domain = "multi_domain"
 
         # Generate methodology section
@@ -337,9 +321,7 @@ class BenchmarkRunner:
         # Generate figures
         figure_files = []
         for plot_type_str in ["comparison", "scaling"]:
-            plot_type = cast(
-                "Literal['comparison', 'scaling', 'convergence']", plot_type_str
-            )
+            plot_type = cast("Literal['comparison', 'scaling', 'convergence']", plot_type_str)
             plots = self.results_manager.export_publication_plots(
                 all_results,
                 plot_type,
@@ -489,8 +471,7 @@ class BenchmarkRunner:
         loader_fn = loader_registry.get(loader_type)
         if loader_fn is None:
             raise ValueError(
-                f"Unknown loader_type '{loader_type}'. "
-                f"Available: {list(loader_registry.keys())}"
+                f"Unknown loader_type '{loader_type}'. Available: {list(loader_registry.keys())}"
             )
 
         # DRY: Factory function for creating loaders
@@ -498,12 +479,8 @@ class BenchmarkRunner:
         resolution = benchmark_config.input_shape[0]
 
         # Create train and test loaders
-        train_loader = loader_fn(
-            n_samples=1000, batch_size=batch_size, resolution=resolution
-        )
-        test_loader = loader_fn(
-            n_samples=100, batch_size=batch_size, resolution=resolution
-        )
+        train_loader = loader_fn(n_samples=1000, batch_size=batch_size, resolution=resolution)
+        test_loader = loader_fn(n_samples=100, batch_size=batch_size, resolution=resolution)
 
         return train_loader, test_loader
 
@@ -584,9 +561,7 @@ class BenchmarkRunner:
                 }
 
         # Allow benchmark-specific overrides
-        config.update(
-            benchmark_config.computational_requirements.get("operator_config", {})
-        )
+        config.update(benchmark_config.computational_requirements.get("operator_config", {}))
 
         return config
 
@@ -604,9 +579,7 @@ class BenchmarkRunner:
     ) -> ValidationReport:
         """Validate result with domain-specific criteria."""
         # Use domain-specific validation
-        validation = self.validator.validate_against_reference(
-            result, "domain_reference"
-        )
+        validation = self.validator.validate_against_reference(result, "domain_reference")
 
         # Add domain-specific checks
         if hasattr(domain_config, "tolerance_ranges"):
@@ -626,7 +599,7 @@ class BenchmarkRunner:
         results: dict[str, dict[str, BenchmarkResult]],
         validations: dict[str, dict[str, ValidationReport]],
     ) -> None:
-        """Generate comprehensive analysis across all results."""
+        """Generate full analysis across all results."""
 
         # Generate comparison reports for each benchmark
         for _benchmark_name, operator_results in results.items():
@@ -654,17 +627,14 @@ class BenchmarkRunner:
         # Calculate domain-wide statistics
         exec_times = [r.metadata.get("execution_time", 0.0) for r in all_results]
         mse_values = [
-            r.metrics["mse"].value if "mse" in r.metrics else float("inf")
-            for r in all_results
+            r.metrics["mse"].value if "mse" in r.metrics else float("inf") for r in all_results
         ]
 
         finite_mse = [v for v in mse_values if v != float("inf")]
         summary.update(
             {
                 "avg_execution_time": float(np.mean(np.array(exec_times))),
-                "avg_mse": float(np.mean(np.array(finite_mse)))
-                if finite_mse
-                else float("inf"),
+                "avg_mse": float(np.mean(np.array(finite_mse))) if finite_mse else float("inf"),
                 "best_overall_model": min(
                     all_results,
                     key=lambda r: extract_metric_value(r, "mse"),
@@ -673,9 +643,7 @@ class BenchmarkRunner:
         )
         return summary
 
-    def _generate_methodology_section(
-        self, results: dict[str, dict[str, BenchmarkResult]]
-    ) -> str:
+    def _generate_methodology_section(self, results: dict[str, dict[str, BenchmarkResult]]) -> str:
         """Generate methodology section for publication."""
         n_operators = len(
             {
@@ -702,7 +670,7 @@ mean absolute error (MAE), and relative error.
     ) -> str:
         """Generate abstract for publication."""
         return f"""
-        This study presents a comprehensive benchmarking analysis of neural \
+        This study presents a full benchmarking analysis of neural \
 operator architectures
         for {domain} applications. We evaluate multiple advanced \
 operators across diverse
@@ -715,9 +683,7 @@ in scientific computing
         applications.
         """
 
-    def _extract_key_findings(
-        self, results: dict[str, dict[str, BenchmarkResult]]
-    ) -> list[str]:
+    def _extract_key_findings(self, results: dict[str, dict[str, BenchmarkResult]]) -> list[str]:
         """Extract key findings from benchmark results."""
         findings = []
 
@@ -732,9 +698,7 @@ in scientific computing
                 key=lambda r: extract_metric_value(r, "mse"),
             )
             mse_v = extract_metric_value(best_mse, "mse")
-            findings.append(
-                f"{best_mse.name} achieved best accuracy (MSE: {mse_v:.2e})"
-            )
+            findings.append(f"{best_mse.name} achieved best accuracy (MSE: {mse_v:.2e})")
 
             fastest = min(
                 all_results,
@@ -752,8 +716,7 @@ in scientific computing
         return [
             "For accuracy-critical applications, consider ensemble methods",
             "For real-time applications, prioritize computational efficiency",
-            "Domain-specific architectures show superior performance "
-            "in specialized applications",
+            "Domain-specific architectures show superior performance in specialized applications",
         ]
 
     def _generate_results_summary(
@@ -777,12 +740,8 @@ in scientific computing
                     "max": max(extract_metric_value(r, "mse") for r in all_results),
                 },
                 "execution_time": {
-                    "min": min(
-                        r.metadata.get("execution_time", 0.0) for r in all_results
-                    ),
-                    "max": max(
-                        r.metadata.get("execution_time", 0.0) for r in all_results
-                    ),
+                    "min": min(r.metadata.get("execution_time", 0.0) for r in all_results),
+                    "max": max(r.metadata.get("execution_time", 0.0) for r in all_results),
                 },
             },
         }

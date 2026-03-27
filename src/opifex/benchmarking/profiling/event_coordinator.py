@@ -99,9 +99,7 @@ class EventCoordinator:
         self.active_profilers.discard(profiler_id)
 
     @contextmanager
-    def profiling_session(
-        self, enable_jax_profiler: bool = True, trace_dir: str | None = None
-    ):
+    def profiling_session(self, enable_jax_profiler: bool = True, trace_dir: str | None = None):
         """Context manager for coordinated profiling session."""
         if trace_dir is None:
             import tempfile
@@ -129,9 +127,7 @@ class EventCoordinator:
                     )
                 except Exception as e:
                     # JAX profiler might not be available in all environments
-                    self.timeline.add_event(
-                        "jax_profiler_error", "coordinator", {"error": str(e)}
-                    )
+                    self.timeline.add_event("jax_profiler_error", "coordinator", {"error": str(e)})
 
             # Notify profilers of session start
             for profiler_id in self.active_profilers:
@@ -191,7 +187,7 @@ class EventCoordinator:
             # Ensure JAX computation completes
             if hasattr(result, "block_until_ready"):
                 result.block_until_ready()
-            elif isinstance(result, (tuple, list)):
+            elif isinstance(result, tuple | list):
                 for item in result:
                     if hasattr(item, "block_until_ready"):
                         item.block_until_ready()
@@ -302,9 +298,7 @@ class EventCoordinator:
             writer = csv.writer(output)
 
             # Header
-            writer.writerow(
-                ["timestamp", "event_type", "profiler_id", "duration_ms", "data"]
-            )
+            writer.writerow(["timestamp", "event_type", "profiler_id", "duration_ms", "data"])
 
             # Events
             for event in events:

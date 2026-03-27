@@ -16,19 +16,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        enable-cache: true
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        version: "latest"
+    - name: Set up Python
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Create virtual environment
+      run: uv venv
 
     - name: Install dependencies
-      run: |
-        uv sync --extra dev
+      run: uv pip install -e ".[dev]"
 
     - name: Run pre-commit hooks
       run: |
@@ -60,19 +60,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: "3.11"
+        enable-cache: true
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        version: "latest"
+    - name: Set up Python
+      run: uv python install 3.11
+
+    - name: Create virtual environment
+      run: uv venv
 
     - name: Install dependencies
-      run: |
-        uv sync --extra dev
+      run: uv pip install -e ".[dev]"
 
     - name: Generate type safety report
       run: |

@@ -116,9 +116,7 @@ class AutoScaler:
                     },
                     "scaleDown": {
                         "stabilizationWindowSeconds": 300,
-                        "policies": [
-                            {"type": "Percent", "value": 50, "periodSeconds": 60}
-                        ],
+                        "policies": [{"type": "Percent", "value": 50, "periodSeconds": 60}],
                     },
                 },
             },
@@ -203,9 +201,7 @@ class AutoScaler:
             # Default to allowing 25% unavailability
             max_unavailable = "25%"
 
-        spec: dict[str, Any] = {
-            "selector": {"matchLabels": {"app": self.deployment_name}}
-        }
+        spec: dict[str, Any] = {"selector": {"matchLabels": {"app": self.deployment_name}}}
 
         if min_available is not None:
             spec["minAvailable"] = min_available

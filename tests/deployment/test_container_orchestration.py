@@ -1,6 +1,6 @@
 """
 Test Suite for Container Orchestration Architecture
-Phase 7.1: Container Orchestration - Validation and Testing
+Version 7.1: Container Orchestration - Validation and Testing
 
 Tests multi-stage Docker builds, GPU optimization, security policies,
 and Istio service mesh configuration.
@@ -15,7 +15,7 @@ import yaml
 
 
 class TestContainerOrchestration:
-    """Test suite for Phase 7.1 Container Orchestration implementation."""
+    """Test suite for Version 7.1 Container Orchestration implementation."""
 
     @pytest.fixture(scope="class")
     def deployment_path(self) -> Path:
@@ -104,9 +104,7 @@ class TestContainerOrchestration:
         # Check for volumes optimization
         assert "volumes" in compose_config
         cache_volumes = [v for v in compose_config["volumes"] if "cache" in v]
-        assert len(cache_volumes) >= 4, (
-            "Should have multiple cache volumes for optimization"
-        )
+        assert len(cache_volumes) >= 4, "Should have multiple cache volumes for optimization"
 
         print("✅ Docker Compose GPU configuration validation passed")
 
@@ -239,16 +237,12 @@ class TestContainerOrchestration:
         # Validate namespace-level PSP
         namespaces = [c for c in configs if c and c.get("kind") == "Namespace"]
         opifex_namespaces = [
-            ns
-            for ns in namespaces
-            if "opifex" in ns.get("metadata", {}).get("name", "")
+            ns for ns in namespaces if "opifex" in ns.get("metadata", {}).get("name", "")
         ]
         assert len(opifex_namespaces) >= 1, "Should have Opifex namespaces with PSP"
 
         # Validate network policies
-        network_policies = [
-            c for c in configs if c and c.get("kind") == "NetworkPolicy"
-        ]
+        network_policies = [c for c in configs if c and c.get("kind") == "NetworkPolicy"]
         assert len(network_policies) >= 1, "Should have network policies"
 
         print("✅ Pod Security Standards validation passed")
@@ -304,20 +298,14 @@ class TestContainerOrchestration:
         servers = gateway_spec.get("servers", [])
 
         # Check for HTTPS and HTTP redirect
-        https_servers = [
-            s for s in servers if s.get("port", {}).get("protocol") == "HTTPS"
-        ]
-        http_servers = [
-            s for s in servers if s.get("port", {}).get("protocol") == "HTTP"
-        ]
+        https_servers = [s for s in servers if s.get("port", {}).get("protocol") == "HTTPS"]
+        http_servers = [s for s in servers if s.get("port", {}).get("protocol") == "HTTP"]
 
         assert len(https_servers) >= 1, "Should have HTTPS server configured"
         assert len(http_servers) >= 1, "Should have HTTP redirect server"
 
         # Validate mTLS enforcement
-        peer_auth = next(
-            c for c in configs if c and c.get("kind") == "PeerAuthentication"
-        )
+        peer_auth = next(c for c in configs if c and c.get("kind") == "PeerAuthentication")
         mtls_mode = peer_auth.get("spec", {}).get("mtls", {}).get("mode")
         assert mtls_mode == "STRICT", "mTLS should be strictly enforced"
 
@@ -419,9 +407,7 @@ class TestContainerOrchestration:
         # Verify consistent namespace usage
         unique_namespaces = set(namespace_configs)
         opifex_namespaces = {ns for ns in unique_namespaces if "opifex" in ns}
-        assert "opifex-system" in opifex_namespaces, (
-            "Should use opifex-system namespace"
-        )
+        assert "opifex-system" in opifex_namespaces, "Should use opifex-system namespace"
 
         # Check label consistency
         label_selectors = []
@@ -432,11 +418,7 @@ class TestContainerOrchestration:
                     with open(yaml_file) as f:
                         configs = list(yaml.safe_load_all(f))
                         for config in configs:
-                            if (
-                                config
-                                and "metadata" in config
-                                and "labels" in config["metadata"]
-                            ):
+                            if config and "metadata" in config and "labels" in config["metadata"]:
                                 labels = config["metadata"]["labels"]
                                 part_of = labels.get("app.kubernetes.io/part-of")
                                 if part_of:
@@ -468,9 +450,7 @@ class TestContainerOrchestration:
             "gpu-runtime",
             "production",
         ]
-        assert stages == expected_stages, (
-            f"Expected stages {expected_stages}, got {stages}"
-        )
+        assert stages == expected_stages, f"Expected stages {expected_stages}, got {stages}"
 
         # Validate stage dependencies
         stage_dependencies = {
@@ -519,10 +499,7 @@ class TestContainerOrchestration:
         for _, service_config in services.items():
             if "mem_limit" in service_config:
                 # Should have memory limits for resource management
-                assert (
-                    "16g" in service_config["mem_limit"]
-                    or "memswap_limit" in service_config
-                )
+                assert "16g" in service_config["mem_limit"] or "memswap_limit" in service_config
 
         # Check GPU memory fraction settings for GPU services
         gpu_service_names = [
@@ -547,7 +524,7 @@ class TestContainerOrchestration:
 
 
 def test_container_orchestration_comprehensive():
-    """Comprehensive test runner for Container Orchestration Phase 7.1."""
+    """Full test runner for Container Orchestration Version 7.1."""
     print("\n🚀 Running Container Orchestration Architecture Tests")
     print("=" * 60)
 
@@ -575,7 +552,7 @@ def test_container_orchestration_comprehensive():
         test_instance.test_performance_optimization_targets(multi_stage_path)
 
         print("\n🎉 All Container Orchestration tests passed!")
-        print("✅ Phase 7.1 Container Orchestration implementation validated")
+        print("✅ Version 7.1 Container Orchestration implementation validated")
         return True
 
     except Exception as e:
@@ -584,6 +561,6 @@ def test_container_orchestration_comprehensive():
 
 
 if __name__ == "__main__":
-    # Run comprehensive test when script is executed directly
+    # Run full test when script is executed directly
     success = test_container_orchestration_comprehensive()
     sys.exit(0 if success else 1)

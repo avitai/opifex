@@ -248,9 +248,7 @@ print(f"Parameters per subdomain: ~{total_params // len(subdomains)}")
 print()
 print("Subdomain bounds:")
 for i, sd in enumerate(subdomains):
-    print(
-        f"  Subdomain {i}: [{float(sd.bounds[0, 0]):.3f}, {float(sd.bounds[0, 1]):.3f}]"
-    )
+    print(f"  Subdomain {i}: [{float(sd.bounds[0, 0]):.3f}, {float(sd.bounds[0, 1]):.3f}]")
 
 # %% [markdown]
 # ## Generate Collocation Points
@@ -403,12 +401,8 @@ for i in range(NUM_SUBDOMAINS):
     axes[1, 0].plot(t_eval, weights[:, i], color=colors[i], label=f"Subdomain {i}")
     # Mark subdomain bounds
     sd_bounds = subdomains[i]
-    axes[1, 0].axvline(
-        sd_bounds.bounds[0, 0], color=colors[i], linestyle=":", alpha=0.5
-    )
-    axes[1, 0].axvline(
-        sd_bounds.bounds[0, 1], color=colors[i], linestyle=":", alpha=0.5
-    )
+    axes[1, 0].axvline(sd_bounds.bounds[0, 0], color=colors[i], linestyle=":", alpha=0.5)
+    axes[1, 0].axvline(sd_bounds.bounds[0, 1], color=colors[i], linestyle=":", alpha=0.5)
 axes[1, 0].plot(t_eval, jnp.sum(weights, axis=-1), "k--", linewidth=2, label="Sum")
 axes[1, 0].set_xlabel("t")
 axes[1, 0].set_ylabel("Window Weight")
@@ -424,9 +418,7 @@ axes[1, 1].set_title("Training History")
 axes[1, 1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(
-    "docs/assets/examples/fbpinn_poisson/solution.png", dpi=150, bbox_inches="tight"
-)
+plt.savefig("docs/assets/examples/fbpinn_poisson/solution.png", dpi=150, bbox_inches="tight")
 print()
 print("Saved: docs/assets/examples/fbpinn_poisson/solution.png")
 plt.show()
@@ -442,9 +434,7 @@ u_with_bc = model(t_test).squeeze()
 
 axes[0].plot(t_test, u_network_raw, "g-", linewidth=1.5, label="Raw network output")
 axes[0].plot(t_test, u_with_bc, "b-", linewidth=2, label="With hard BC")
-axes[0].plot(
-    t_test, exact_solution(t_test.squeeze()), "r--", linewidth=2, label="Exact"
-)
+axes[0].plot(t_test, exact_solution(t_test.squeeze()), "r--", linewidth=2, label="Exact")
 axes[0].set_xlabel("t")
 axes[0].set_ylabel("u")
 axes[0].set_title("Hard BC Effect: u = 1 + tanh^2(t/sigma) * u_network")
@@ -460,9 +450,7 @@ axes[1].set_yscale("log")
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(
-    "docs/assets/examples/fbpinn_poisson/analysis.png", dpi=150, bbox_inches="tight"
-)
+plt.savefig("docs/assets/examples/fbpinn_poisson/analysis.png", dpi=150, bbox_inches="tight")
 print("Saved: docs/assets/examples/fbpinn_poisson/analysis.png")
 plt.show()
 

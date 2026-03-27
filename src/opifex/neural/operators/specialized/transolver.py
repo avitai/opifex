@@ -72,8 +72,7 @@ class TransolverConfig:
             raise ValueError(f"num_heads must be positive, got {self.num_heads}")
         if self.hidden_dim % self.num_heads != 0:
             raise ValueError(
-                f"hidden_dim ({self.hidden_dim}) must be divisible by "
-                f"num_heads ({self.num_heads})"
+                f"hidden_dim ({self.hidden_dim}) must be divisible by num_heads ({self.num_heads})"
             )
         if self.num_layers <= 0:
             raise ValueError(f"num_layers must be positive, got {self.num_layers}")
@@ -174,15 +173,11 @@ class PhysicsAttention(nnx.Module):
         # --- (1) Slice ---
         # Project to multi-head representations: (B, N, C) → (B, H, N, D)
         fx_mid = (
-            self.in_project_fx(x)
-            .reshape(B, N, self.num_heads, self.dim_head)
-            .transpose(0, 2, 1, 3)
+            self.in_project_fx(x).reshape(B, N, self.num_heads, self.dim_head).transpose(0, 2, 1, 3)
         )
 
         x_mid = (
-            self.in_project_x(x)
-            .reshape(B, N, self.num_heads, self.dim_head)
-            .transpose(0, 2, 1, 3)
+            self.in_project_x(x).reshape(B, N, self.num_heads, self.dim_head).transpose(0, 2, 1, 3)
         )
 
         # Temperature-scaled soft assignment: (B, H, N, D) → (B, H, N, G)

@@ -141,9 +141,7 @@ class TestSpectralSecondDerivative:
         d2_raw = spectral_second_derivative(psi, dx, apply_kinetic_factor=False)
 
         # Kinetic energy version
-        kinetic = spectral_second_derivative(
-            psi, dx, hbar=2.0, mass=0.5, apply_kinetic_factor=True
-        )
+        kinetic = spectral_second_derivative(psi, dx, hbar=2.0, mass=0.5, apply_kinetic_factor=True)
 
         # Kinetic should be -ℏ²/(2m) * d2_raw = -4/1 * d2_raw = -4 * d2_raw
         expected_kinetic = -4.0 * d2_raw
@@ -317,9 +315,7 @@ class TestJAXTransformations:
             """Simple energy functional for testing."""
             kinetic = spectral_kinetic_energy(psi, dx)
             potential = 0.5 * jnp.linspace(-5, 5, len(psi)) ** 2 * psi
-            return jnp.real(
-                jnp.sum(kinetic * jnp.conj(psi) + potential * jnp.conj(psi)) * dx
-            )
+            return jnp.real(jnp.sum(kinetic * jnp.conj(psi) + potential * jnp.conj(psi)) * dx)
 
         x = jnp.linspace(-5, 5, 32)
         dx = float(x[1] - x[0])

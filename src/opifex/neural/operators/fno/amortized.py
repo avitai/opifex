@@ -124,13 +124,9 @@ class AmortizedSpectralConvolution(nnx.Module):
         )
 
         # Learnable scaling
-        self.kernel_scale = nnx.Param(
-            jnp.ones((1,)) * (2 / (in_channels + out_channels)) ** 0.5
-        )
+        self.kernel_scale = nnx.Param(jnp.ones((1,)) * (2 / (in_channels + out_channels)) ** 0.5)
 
-    def _generate_frequency_coordinates(
-        self, modes_shape: tuple[int, ...]
-    ) -> jax.Array:
+    def _generate_frequency_coordinates(self, modes_shape: tuple[int, ...]) -> jax.Array:
         """Generate frequency coordinates for given modes shape."""
         coords = []
         for mode_size in modes_shape:
@@ -160,23 +156,17 @@ class AmortizedSpectralConvolution(nnx.Module):
         kernel_complex = kernel_weights[..., 0] + 1j * kernel_weights[..., 1]
 
         # Reshape to spatial format: (in_channels, out_channels, *actual_modes)
-        spatial_kernel = kernel_complex.reshape(
-            *actual_modes, self.in_channels, self.out_channels
-        )
+        spatial_kernel = kernel_complex.reshape(*actual_modes, self.in_channels, self.out_channels)
 
         # Permute to get channels first
         perm = [self.n_dim, self.n_dim + 1, *range(self.n_dim)]
         return jnp.transpose(spatial_kernel, perm)
 
-    def __call__(
-        self, x_ft: jax.Array, training: bool = True
-    ) -> tuple[jax.Array, jax.Array]:
+    def __call__(self, x_ft: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:
         """Forward pass through amortized spectral convolution."""
         # Extract spatial dimensions from input
         input_modes = x_ft.shape[2:]  # Skip batch and channel dimensions
-        actual_modes = tuple(
-            min(m, im) for m, im in zip(self.modes, input_modes, strict=False)
-        )
+        actual_modes = tuple(min(m, im) for m, im in zip(self.modes, input_modes, strict=False))
 
         # Generate kernel weights
         kernel_weights = self._generate_kernel_weights(actual_modes)
@@ -336,9 +326,7 @@ class AmortizedFourierNeuralOperator(nnx.Module):
             x_conv, _reg_loss = conv(x_ft, training)
 
             # IFFT back to spatial domain with target size
-            x_conv = jnp.fft.irfftn(
-                x_conv, s=target_size, axes=tuple(range(2, x_conv.ndim))
-            )
+            x_conv = jnp.fft.irfftn(x_conv, s=target_size, axes=tuple(range(2, x_conv.ndim)))
 
             # Skip connection - resize input to match target size
             x_resized = self._resize_tensor(x, target_size)
@@ -376,9 +364,7 @@ class AmortizedFourierNeuralOperator(nnx.Module):
         for i in range(self.num_layers):
             conv = getattr(self, f"conv_{i}")
             input_modes = x_ft.shape[2:]
-            actual_modes = tuple(
-                min(m, im) for m, im in zip(conv.modes, input_modes, strict=False)
-            )
+            actual_modes = tuple(min(m, im) for m, im in zip(conv.modes, input_modes, strict=False))
             kernel_weights = conv._generate_kernel_weights(actual_modes)
             reg_loss = jnp.sum(jnp.abs(kernel_weights) ** 2) * 1e-4
             total_reg_loss += reg_loss

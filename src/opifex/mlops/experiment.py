@@ -254,9 +254,7 @@ class Experiment(ABC):
         """Start the experiment and return experiment ID."""
 
     @abstractmethod
-    async def log_metrics(
-        self, metrics: dict[str, float | int], step: int | None = None
-    ):
+    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None):
         """Log scalar metrics."""
 
     @abstractmethod
@@ -322,9 +320,7 @@ class ExperimentTracker:
 
     async def create_experiment(self, config: ExperimentConfig) -> Experiment:
         """Create an experiment with the appropriate backend."""
-        backend = (
-            config.backend if config.backend != "auto" else self._select_backend(config)
-        )
+        backend = config.backend if config.backend != "auto" else self._select_backend(config)
 
         if backend not in self._backend_registry:
             available = list(self._backend_registry.keys())

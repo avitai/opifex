@@ -94,9 +94,7 @@ class TestPDEResidualJIT:
 
         @jax.jit
         def compute_jitted(x):
-            return schrodinger_fn(
-                psi_ground, x, AutoDiffEngine, potential_type="harmonic"
-            )
+            return schrodinger_fn(psi_ground, x, AutoDiffEngine, potential_type="harmonic")
 
         x = jnp.linspace(-2, 2, 64).reshape(-1, 1)
         residual = compute_jitted(x)
@@ -349,9 +347,7 @@ class TestStaticVsDynamicControl:
             boundary_loss_weight=1.0,
         )
 
-        pi_loss = PhysicsInformedLoss(
-            config=config, equation_type="poisson", domain_type="2d"
-        )
+        pi_loss = PhysicsInformedLoss(config=config, equation_type="poisson", domain_type="2d")
 
         # Test with model=None (static branch)
         @jax.jit
@@ -380,9 +376,7 @@ class TestStaticVsDynamicControl:
             boundary_loss_weight=1.0,
         )
 
-        pi_loss = PhysicsInformedLoss(
-            config=config, equation_type="poisson", domain_type="2d"
-        )
+        pi_loss = PhysicsInformedLoss(config=config, equation_type="poisson", domain_type="2d")
 
         def model(x):
             return jnp.sum(x**2, axis=-1)

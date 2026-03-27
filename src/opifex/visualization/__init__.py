@@ -1,7 +1,7 @@
 """
 Visualization package for Opifex framework.
 
-Provides comprehensive visualization tools for scientific computing including
+Provides full visualization tools for scientific computing including
 field plotting, animation, and performance analysis.
 """
 

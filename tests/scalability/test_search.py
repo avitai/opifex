@@ -379,9 +379,7 @@ class TestAsyncSearch:
         mock_registry_service.search_functionals = AsyncMock(return_value=[])
         engine = SearchEngine(mock_registry_service)
 
-        query = SearchQuery(
-            functional_type="neural_operator", search_type=SearchType.FILTER
-        )
+        query = SearchQuery(functional_type="neural_operator", search_type=SearchType.FILTER)
         results = await engine.search(query)
 
         assert isinstance(results, list)

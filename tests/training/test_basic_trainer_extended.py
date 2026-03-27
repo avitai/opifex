@@ -6,7 +6,7 @@ This module tests the basic trainer functionality, covering:
 - Training step execution
 - Validation step execution
 - Full training loop
-- Comprehensive metrics summary
+- Full metrics summary
 - Physics-informed training step
 - Quantum training step
 - Checkpointing
@@ -371,7 +371,7 @@ class TestBasicTrainerQuantumTraining:
 
 
 class TestBasicTrainerMetrics:
-    """Test comprehensive metrics summary."""
+    """Test full metrics summary."""
 
     def setup_method(self):
         """Set up test fixtures."""
@@ -380,7 +380,7 @@ class TestBasicTrainerMetrics:
         self.trainer = BasicTrainer(self.model, self.config)
 
     def test_get_comprehensive_metrics_summary(self):
-        """Test getting comprehensive metrics summary."""
+        """Test getting full metrics summary."""
         # Do some training first
         x = jnp.ones((8, 4))
         y = jnp.ones((8, 1))

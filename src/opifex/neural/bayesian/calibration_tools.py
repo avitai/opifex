@@ -55,9 +55,7 @@ class TemperatureScaling(nnx.Module):
         # Initialize physics constraint tracking
         self.constraint_penalty_history: list[float] = []
 
-    def __call__(
-        self, predictions: jax.Array, inputs: jax.Array
-    ) -> tuple[jax.Array, jax.Array]:
+    def __call__(self, predictions: jax.Array, inputs: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Apply temperature scaling to predictions.
 
         Args:
@@ -76,9 +74,7 @@ class TemperatureScaling(nnx.Module):
         input_variance = jnp.var(inputs, axis=-1, keepdims=True)
 
         # Combine magnitude and variance for better uncertainty estimation
-        aleatoric_uncertainty = (
-            0.1 * (input_magnitude + input_variance) / (1.0 + input_magnitude)
-        )
+        aleatoric_uncertainty = 0.1 * (input_magnitude + input_variance) / (1.0 + input_magnitude)
 
         return calibrated_predictions, aleatoric_uncertainty
 
@@ -202,9 +198,7 @@ class TemperatureScaling(nnx.Module):
                 # Binary classification case
                 probs = jax.nn.sigmoid(scaled_logits.squeeze())
                 probs = jnp.clip(probs, 1e-8, 1.0 - 1e-8)
-                return -jnp.mean(
-                    labels * jnp.log(probs) + (1 - labels) * jnp.log(1 - probs)
-                )
+                return -jnp.mean(labels * jnp.log(probs) + (1 - labels) * jnp.log(1 - probs))
             # Multi-class classification case
             log_probs = jax.nn.log_softmax(scaled_logits, axis=-1)
             return -jnp.mean(log_probs[jnp.arange(len(labels)), labels])
@@ -252,8 +246,8 @@ class TemperatureScaling(nnx.Module):
             scaled_predictions = predictions / temp
 
             # Apply physics constraints
-            constrained_predictions, constraint_penalty = (
-                self._enforce_physics_constraints(scaled_predictions, inputs)
+            constrained_predictions, constraint_penalty = self._enforce_physics_constraints(
+                scaled_predictions, inputs
             )
 
             # Base calibration loss (MSE)
@@ -358,9 +352,7 @@ class PlattScaling(nnx.Module):
         """
         return jax.nn.sigmoid(self.a[...] * logits + self.b[...])
 
-    def fit(
-        self, logits: jax.Array, labels: jax.Array, max_iterations: int = 100
-    ) -> None:
+    def fit(self, logits: jax.Array, labels: jax.Array, max_iterations: int = 100) -> None:
         """Fit Platt scaling parameters using maximum likelihood.
 
         Args:
@@ -374,9 +366,7 @@ class PlattScaling(nnx.Module):
             probs = jax.nn.sigmoid(a_param * logits + b_param)
             # Clip probabilities to avoid log(0)
             probs = jnp.clip(probs, 1e-8, 1.0 - 1e-8)
-            return -jnp.mean(
-                labels * jnp.log(probs) + (1 - labels) * jnp.log(1 - probs)
-            )
+            return -jnp.mean(labels * jnp.log(probs) + (1 - labels) * jnp.log(1 - probs))
 
         # Optimize A and B parameters
         current_A, current_B = self.a[...], self.b[...]
@@ -443,8 +433,7 @@ class IsotonicRegression(nnx.Module):
 
         # Bin the data
         bin_indices = (
-            jnp.searchsorted(self.bin_edges[...][:-1], sorted_confidences, side="right")
-            - 1
+            jnp.searchsorted(self.bin_edges[...][:-1], sorted_confidences, side="right") - 1
         )
         bin_indices = jnp.clip(bin_indices, 0, self.n_bins - 1)
 
@@ -600,14 +589,10 @@ class CalibrationTools(nnx.Module):
         accuracies = errors < jnp.median(errors)  # Binary accuracy threshold
 
         # Compute reliability diagram
-        reliability_data = self.compute_reliability_diagram(
-            confidences, accuracies, num_bins
-        )
+        reliability_data = self.compute_reliability_diagram(confidences, accuracies, num_bins)
 
         # Expected Calibration Error (ECE)
-        bin_weights = reliability_data["bin_counts"] / jnp.sum(
-            reliability_data["bin_counts"]
-        )
+        bin_weights = reliability_data["bin_counts"] / jnp.sum(reliability_data["bin_counts"])
         calibration_errors = jnp.abs(
             reliability_data["bin_confidences"] - reliability_data["bin_accuracies"]
         )
@@ -664,9 +649,7 @@ class CalibrationTools(nnx.Module):
                 actual_error = jnp.mean(bin_errors)
 
                 calibration_error += (
-                    jnp.abs(expected_error - actual_error)
-                    * (end_idx - start_idx)
-                    / n_samples
+                    jnp.abs(expected_error - actual_error) * (end_idx - start_idx) / n_samples
                 )
 
         return float(calibration_error)
@@ -698,9 +681,7 @@ class CalibrationTools(nnx.Module):
         # Compute bin statistics
         for i in range(num_bins):
             # Find samples in this bin
-            in_bin = (confidences >= bin_boundaries[i]) & (
-                confidences < bin_boundaries[i + 1]
-            )
+            in_bin = (confidences >= bin_boundaries[i]) & (confidences < bin_boundaries[i + 1])
 
             # Handle last bin edge case
             if i == num_bins - 1:
@@ -709,9 +690,7 @@ class CalibrationTools(nnx.Module):
             bin_count = jnp.sum(in_bin)
 
             if bin_count > 0:
-                bin_confidences = bin_confidences.at[i].set(
-                    jnp.mean(confidences[in_bin])
-                )
+                bin_confidences = bin_confidences.at[i].set(jnp.mean(confidences[in_bin]))
                 bin_accuracies = bin_accuracies.at[i].set(jnp.mean(accuracies[in_bin]))
                 bin_counts = bin_counts.at[i].set(bin_count)
 
@@ -798,9 +777,7 @@ class CalibrationTools(nnx.Module):
         for i in range(len(sorted_confidences)):
             start_idx = max(0, i - window_size // 2)
             end_idx = min(len(sorted_confidences), i + window_size // 2 + 1)
-            calibrated = calibrated.at[i].set(
-                jnp.mean(sorted_accuracies[start_idx:end_idx])
-            )
+            calibrated = calibrated.at[i].set(jnp.mean(sorted_accuracies[start_idx:end_idx]))
 
         # Map back to original order
         inverse_indices = jnp.argsort(sorted_indices)

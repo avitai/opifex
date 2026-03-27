@@ -1,4 +1,4 @@
-"""Comprehensive tests for training components module.
+"""Full tests for training components module.
 
 Following strict TDD - these tests define the API and behavior of the
 centralized components system that will consolidate all component patterns.
@@ -394,9 +394,7 @@ class TestRecoveryComponent:
         component.last_stable_state = stable_state
 
         # Attempt recovery
-        recovered_state = component.recover_from_instability(
-            "loss_explosion", training_state
-        )
+        recovered_state = component.recover_from_instability("loss_explosion", training_state)
 
         assert recovered_state is not None
         assert component.recovery_attempts == 1
@@ -516,9 +514,7 @@ class TestComponentEdgeCases:
         assert component.last_stable_state is None
 
         # Recovery should handle gracefully
-        recovered_state = component.recover_from_instability(
-            "loss_explosion", training_state
-        )
+        recovered_state = component.recover_from_instability("loss_explosion", training_state)
 
         # Should return the current state or handle gracefully
         assert recovered_state is not None

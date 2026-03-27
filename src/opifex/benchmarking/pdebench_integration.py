@@ -1,7 +1,7 @@
 """
 PDEBench Integration Module
 
-This module provides comprehensive integration with PDEBench datasets for
+This module provides full integration with PDEBench datasets for
 standardized evaluation of neural operators. It includes dataset loading,
 preprocessing, and automated evaluation pipelines.
 
@@ -14,7 +14,7 @@ Key Features:
 Following Critical Technical Guidelines:
 - JAX-native data processing for GPU compatibility
 - FLAX NNX integration for neural operator evaluation
-- Test-driven development with comprehensive coverage
+- Test-driven development with full coverage
 - Type hints and documentation for all public APIs
 """
 
@@ -39,9 +39,7 @@ class PDEBenchLoader:
     neural operator architectures (FNO, DeepONet, etc.).
     """
 
-    def __init__(
-        self, data_root: str | None = None, cache_dir: str | None = None
-    ) -> None:
+    def __init__(self, data_root: str | None = None, cache_dir: str | None = None) -> None:
         """
         Initialize PDEBench dataset loader.
 
@@ -49,12 +47,8 @@ class PDEBenchLoader:
             data_root: Root directory for PDEBench datasets
             cache_dir: Directory for caching preprocessed datasets
         """
-        self.data_root = (
-            Path(data_root) if data_root else Path.cwd() / "data" / "pdebench"
-        )
-        self.cache_dir = (
-            Path(cache_dir) if cache_dir else Path.cwd() / "cache" / "pdebench"
-        )
+        self.data_root = Path(data_root) if data_root else Path.cwd() / "data" / "pdebench"
+        self.cache_dir = Path(cache_dir) if cache_dir else Path.cwd() / "cache" / "pdebench"
 
         # Ensure directories exist
         self.data_root.mkdir(parents=True, exist_ok=True)
@@ -246,9 +240,7 @@ class PDEBenchLoader:
             y = jnp.linspace(0, 1, spatial_shape[1])
             X, Y = jnp.meshgrid(x, y, indexing="ij")
             return jnp.stack([X.flatten(), Y.flatten()], axis=1)
-        raise NotImplementedError(
-            f"Spatial coordinates for {len(spatial_shape)}D not implemented"
-        )
+        raise NotImplementedError(f"Spatial coordinates for {len(spatial_shape)}D not implemented")
 
 
 class PDEBenchEvaluationPipeline:
@@ -345,7 +337,7 @@ class PDEBenchEvaluationPipeline:
         subset_size: int = 10,
     ) -> dict[str, list[BenchmarkResult]]:
         """
-        Run comprehensive evaluation across multiple models and datasets.
+        Run full evaluation across multiple models and datasets.
 
         Args:
             models: List of (model_name, model) tuples

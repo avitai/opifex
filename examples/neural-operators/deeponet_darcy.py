@@ -231,9 +231,7 @@ for epoch in range(NUM_EPOCHS):
     # Validation loss on test set
     X_test_jax = jnp.array(X_test_branch)
     Y_test_jax = jnp.array(Y_test_flat)
-    trunk_test = jnp.broadcast_to(
-        trunk_jax[None], (X_test_jax.shape[0], *trunk_jax.shape)
-    )
+    trunk_test = jnp.broadcast_to(trunk_jax[None], (X_test_jax.shape[0], *trunk_jax.shape))
     test_pred = model(X_test_jax, trunk_test)
     val_loss = float(jnp.mean((test_pred - Y_test_jax) ** 2))
     val_losses.append(val_loss)
@@ -335,15 +333,11 @@ axes[0].hist(np.array(relative_l2), bins=20, color="steelblue", edgecolor="white
 axes[0].set_xlabel("Relative L2 Error")
 axes[0].set_ylabel("Count")
 axes[0].set_title("Error Distribution")
-axes[0].axvline(
-    mean_rel_l2, color="red", linestyle="--", label=f"Mean: {mean_rel_l2:.4f}"
-)
+axes[0].axvline(mean_rel_l2, color="red", linestyle="--", label=f"Mean: {mean_rel_l2:.4f}")
 axes[0].legend()
 
 # Training and validation loss curves
-axes[1].semilogy(
-    range(1, NUM_EPOCHS + 1), train_losses, label="Train Loss", color="steelblue"
-)
+axes[1].semilogy(range(1, NUM_EPOCHS + 1), train_losses, label="Train Loss", color="steelblue")
 axes[1].semilogy(range(1, NUM_EPOCHS + 1), val_losses, label="Val Loss", color="coral")
 axes[1].set_xlabel("Epoch")
 axes[1].set_ylabel("MSE Loss")

@@ -98,9 +98,7 @@ class TestServiceHealth:
     def test_service_health_to_json(self):
         """Test ServiceHealth to_json conversion."""
         check = HealthCheckResult("test", HealthStatus.HEALTHY)
-        service_health = ServiceHealth(
-            overall_status=HealthStatus.HEALTHY, checks=[check]
-        )
+        service_health = ServiceHealth(overall_status=HealthStatus.HEALTHY, checks=[check])
 
         json_str = service_health.to_json()
 
@@ -320,9 +318,7 @@ class TestHealthChecker:
 
     def test_run_all_health_checks_all_healthy(self):
         """Test running all health checks when all are healthy."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def healthy_check():
             return HealthCheckResult("healthy", HealthStatus.HEALTHY)
@@ -336,9 +332,7 @@ class TestHealthChecker:
 
     def test_get_health_summary(self):
         """Test getting health summary."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def healthy_check():
             return HealthCheckResult("healthy", HealthStatus.HEALTHY)
@@ -351,18 +345,14 @@ class TestHealthChecker:
 
         summary = checker.get_health_summary()
 
-        assert (
-            summary["overall_status"] == "unhealthy"
-        )  # Mixed health statuses with unhealthy
+        assert summary["overall_status"] == "unhealthy"  # Mixed health statuses with unhealthy
         assert summary["total_checks"] >= 2
         assert summary["healthy_checks"] >= 1
         assert summary["unhealthy_checks"] >= 1
 
     def test_is_healthy_when_healthy(self):
         """Test is_healthy method when service is healthy."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def healthy_check():
             return HealthCheckResult("healthy", HealthStatus.HEALTHY)
@@ -373,9 +363,7 @@ class TestHealthChecker:
 
     def test_is_healthy_when_unhealthy(self):
         """Test is_healthy method when service is unhealthy."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def unhealthy_check():
             return HealthCheckResult("unhealthy", HealthStatus.UNHEALTHY)
@@ -386,9 +374,7 @@ class TestHealthChecker:
 
     def test_is_ready_when_healthy(self):
         """Test is_ready method when service is healthy."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def healthy_check():
             return HealthCheckResult("healthy", HealthStatus.HEALTHY)
@@ -399,9 +385,7 @@ class TestHealthChecker:
 
     def test_is_ready_when_degraded(self):
         """Test is_ready method when service is degraded (should still be ready)."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def degraded_check():
             return HealthCheckResult("degraded", HealthStatus.DEGRADED)
@@ -412,9 +396,7 @@ class TestHealthChecker:
 
     def test_is_ready_when_unhealthy(self):
         """Test is_ready method when service is unhealthy."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def unhealthy_check():
             return HealthCheckResult("unhealthy", HealthStatus.UNHEALTHY)
@@ -484,9 +466,7 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_periodic_health_checks(self):
         """Test periodic health check execution."""
-        checker = HealthChecker(
-            enable_system_checks=False, enable_dependency_checks=False
-        )
+        checker = HealthChecker(enable_system_checks=False, enable_dependency_checks=False)
 
         def simple_check():
             return HealthCheckResult("simple", HealthStatus.HEALTHY)

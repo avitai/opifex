@@ -178,29 +178,12 @@ class CPINN(DomainDecompositionPINN):
     def compute_continuity_loss(self) -> Float[Array, ""]:
         """Compute interface continuity loss.
 
-        Enforces u_left = u_right at all interface points.
+        Delegates to base class ``compute_interface_residual`` (DRY).
 
         Returns:
             Scalar continuity loss (MSE of discontinuity)
         """
-        if not self.interfaces:
-            return jnp.array(0.0)
-
-        total_loss = jnp.array(0.0)
-
-        for interface in self.interfaces:
-            left_id, right_id = interface.subdomain_ids
-            points = interface.points
-
-            # Get predictions from both subdomains
-            u_left = list(self.networks)[left_id](points)
-            u_right = list(self.networks)[right_id](points)
-
-            # Continuity loss
-            loss = jnp.mean((u_left - u_right) ** 2)
-            total_loss = total_loss + loss
-
-        return total_loss / max(len(self.interfaces), 1)
+        return self.compute_interface_residual()
 
     def compute_flux_conservation_loss(self) -> Float[Array, ""]:
         """Compute flux conservation loss at interfaces.
@@ -242,7 +225,4 @@ class CPINN(DomainDecompositionPINN):
         continuity_loss = self.compute_continuity_loss()
         flux_loss = self.compute_flux_conservation_loss()
 
-        return (
-            self.config.continuity_weight * continuity_loss
-            + self.config.flux_weight * flux_loss
-        )
+        return self.config.continuity_weight * continuity_loss + self.config.flux_weight * flux_loss

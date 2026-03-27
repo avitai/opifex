@@ -1,5 +1,5 @@
 """
-Comprehensive tests for the optimized GPU optimization module.
+Full tests for the optimized GPU optimization module.
 
 This test suite defines the expected behavior for maximum efficiency GPU optimization
 including mixed precision, roofline analysis, asynchronous operations, and memory pooling.
@@ -201,9 +201,7 @@ class TestAsyncMemoryManager:
         current_data = jnp.ones((32, 32))
         next_data = jnp.ones((32, 32))
 
-        result, _ = manager.overlapped_computation(
-            dummy_operation, current_data, next_data
-        )
+        result, _ = manager.overlapped_computation(dummy_operation, current_data, next_data)
 
         # Should compute result correctly
         expected = current_data * 2
@@ -454,9 +452,7 @@ class TestIntegrationScenarios:
         with patch.object(manager.cached_tester, "_cached_test_operation") as mock_test:
             mock_test.return_value = (False, None, "Test error")
 
-            results = manager.benchmark_with_prefetching(
-                manager.optimal_matrix_multiply, [64]
-            )
+            results = manager.benchmark_with_prefetching(manager.optimal_matrix_multiply, [64])
 
             assert 64 in results
             assert results[64]["success"] is False
@@ -598,9 +594,7 @@ class TestPerformanceBenchmarks:
 
             # Memory pool should provide some benefit, but be realistic about test environment
             # In a real scenario with larger allocations, the benefit would be much higher
-            assert efficiency > 0.8, (
-                f"Memory pool is too slow: {efficiency:.2f}x efficiency"
-            )
+            assert efficiency > 0.8, f"Memory pool is too slow: {efficiency:.2f}x efficiency"
 
             # Verify that buffer reuse actually happened
             assert stats["reuse_ratio"] > 0.5, (

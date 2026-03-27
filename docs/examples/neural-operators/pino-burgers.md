@@ -48,8 +48,8 @@ If you are familiar with the neuraloperator library's PINO examples:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/pino_burgers.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/pino_burgers.py)
-- **Jupyter Notebook**: [`examples/neural-operators/pino_burgers.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/pino_burgers.ipynb)
+- **Python Script**: [`examples/neural-operators/pino_burgers.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/pino_burgers.py)
+- **Jupyter Notebook**: [`examples/neural-operators/pino_burgers.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/pino_burgers.ipynb)
 
 ## Quick Start
 

@@ -197,9 +197,7 @@ class HamiltonianOperator(QuantumOperator):
             if jnp.isrealobj(wf_array):
                 return jnp.real(kinetic_result)
             return kinetic_result
-        raise NotImplementedError(
-            f"Kinetic method {self.kinetic_method} not implemented"
-        )
+        raise NotImplementedError(f"Kinetic method {self.kinetic_method} not implemented")
 
     def _apply_potential(self, wavefunction: Array) -> Array:
         """Apply potential energy operator."""
@@ -215,9 +213,7 @@ class HamiltonianOperator(QuantumOperator):
             x = jnp.linspace(-5, 5, len(wavefunction))
             potential = 0.5 * x**2
             return potential * wavefunction
-        raise NotImplementedError(
-            f"Potential method {self.potential_method} not implemented"
-        )
+        raise NotImplementedError(f"Potential method {self.potential_method} not implemented")
 
 
 class DensityMatrix:
@@ -658,9 +654,7 @@ class PotentialEnergyOperator(QuantumOperator):
     potential functions.
     """
 
-    def __init__(
-        self, potential_func: Callable[[Array], Array], name: str = "potential_energy"
-    ):
+    def __init__(self, potential_func: Callable[[Array], Array], name: str = "potential_energy"):
         """
         Initialize potential energy operator.
 

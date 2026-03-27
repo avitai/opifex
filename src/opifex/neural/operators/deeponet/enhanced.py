@@ -88,9 +88,7 @@ class FourierEnhancedDeepONet(nnx.Module):
             self.trunk_spectral = FourierSpectralConvolution(
                 in_channels=1,  # Single channel for coordinate processing
                 out_channels=trunk_sizes[1] // 2,
-                modes=max(
-                    fourier_modes, trunk_sizes[0]
-                ),  # Ensure modes >= spatial size
+                modes=max(fourier_modes, trunk_sizes[0]),  # Ensure modes >= spatial size
                 rngs=rngs,
             )
 
@@ -146,23 +144,15 @@ class FourierEnhancedDeepONet(nnx.Module):
         # Process branch input with optional spectral enhancement
         if self.use_spectral_branch:
             # Reshape for spectral convolution (assume 1D spatial function)
-            branch_spatial = branch_input.reshape(
-                batch_size, 1, -1
-            )  # (batch, 1, spatial)
+            branch_spatial = branch_input.reshape(batch_size, 1, -1)  # (batch, 1, spatial)
             branch_spectral_features = self.branch_spectral(
                 branch_spatial
             )  # (batch, channels, spatial)
-            branch_spectral_flat = branch_spectral_features.mean(
-                axis=-1
-            )  # (batch, channels)
+            branch_spectral_flat = branch_spectral_features.mean(axis=-1)  # (batch, channels)
 
             # Combine original and spectral features
-            branch_combined = jnp.concatenate(
-                [branch_input, branch_spectral_flat], axis=-1
-            )
-            branch_encoding = self.branch_net(
-                branch_combined, deterministic=deterministic
-            )
+            branch_combined = jnp.concatenate([branch_input, branch_spectral_flat], axis=-1)
+            branch_encoding = self.branch_net(branch_combined, deterministic=deterministic)
         else:
             branch_encoding = self.branch_net(branch_input, deterministic=deterministic)
 
@@ -180,16 +170,10 @@ class FourierEnhancedDeepONet(nnx.Module):
             )  # (batch*locations, out_channels)
 
             # Combine original and spectral features
-            trunk_combined = jnp.concatenate(
-                [trunk_input_flat, trunk_spectral_flat], axis=-1
-            )
-            trunk_encoding_flat = self.trunk_net(
-                trunk_combined, deterministic=deterministic
-            )
+            trunk_combined = jnp.concatenate([trunk_input_flat, trunk_spectral_flat], axis=-1)
+            trunk_encoding_flat = self.trunk_net(trunk_combined, deterministic=deterministic)
         else:
-            trunk_encoding_flat = self.trunk_net(
-                trunk_input_flat, deterministic=deterministic
-            )
+            trunk_encoding_flat = self.trunk_net(trunk_input_flat, deterministic=deterministic)
 
         trunk_encoding = trunk_encoding_flat.reshape(
             batch_size, num_locations, self.branch_sizes[-1]

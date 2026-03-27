@@ -89,10 +89,7 @@ class TestGCPDeploymentManager:
         node_config = config["node_config"]
         assert node_config["machine_type"] == "n1-standard-4"
         assert node_config["disk_size_gb"] == 100
-        assert (
-            "https://www.googleapis.com/auth/cloud-platform"
-            in node_config["oauth_scopes"]
-        )
+        assert "https://www.googleapis.com/auth/cloud-platform" in node_config["oauth_scopes"]
 
         # Test network configuration
         assert config["network"] == "opifex-vpc"
@@ -100,8 +97,7 @@ class TestGCPDeploymentManager:
 
         # Test security settings
         assert (
-            config["workload_identity_config"]["workload_pool"]
-            == "test-opifex-project.svc.id.goog"
+            config["workload_identity_config"]["workload_pool"] == "test-opifex-project.svc.id.goog"
         )
         assert config["network_policy"]["enabled"] is True
         assert config["pod_security_policy_config"]["enabled"] is True
@@ -148,9 +144,7 @@ class TestGCPDeploymentManager:
         secondary_ranges = subnet["secondary_ip_ranges"]
         assert len(secondary_ranges) == 2
         pods_range = next(r for r in secondary_ranges if r["range_name"] == "pods")
-        services_range = next(
-            r for r in secondary_ranges if r["range_name"] == "services"
-        )
+        services_range = next(r for r in secondary_ranges if r["range_name"] == "services")
         assert pods_range["ip_cidr_range"] == "10.1.0.0/16"
         assert services_range["ip_cidr_range"] == "10.2.0.0/16"
 

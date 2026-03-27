@@ -64,12 +64,9 @@ class MetaSchedulerConfig:
         if self.min_learning_rate >= self.max_learning_rate:
             raise ValueError("min_learning_rate must be less than max_learning_rate")
 
-        if not (
-            self.min_learning_rate <= self.base_learning_rate <= self.max_learning_rate
-        ):
+        if not (self.min_learning_rate <= self.base_learning_rate <= self.max_learning_rate):
             raise ValueError(
-                "base_learning_rate must be between min_learning_rate and "
-                "max_learning_rate"
+                "base_learning_rate must be between min_learning_rate and max_learning_rate"
             )
 
         # Validate other parameters
@@ -174,9 +171,7 @@ class MultiscaleScheduler(nnx.Module):
 
         # Create individual schedulers for each component
         if config.multiscale_components is None:
-            raise ValueError(
-                "Multiscale components must be specified for MultiscaleScheduler"
-            )
+            raise ValueError("Multiscale components must be specified for MultiscaleScheduler")
 
         for component in config.multiscale_components:
             component_config = MetaSchedulerConfig(
@@ -225,9 +220,7 @@ class MultiscaleScheduler(nnx.Module):
         """
         optimizers = {}
         for component, scheduler in self.component_schedulers.items():
-            optimizers[component] = optax.adam(
-                learning_rate=scheduler.current_learning_rate
-            )
+            optimizers[component] = optax.adam(learning_rate=scheduler.current_learning_rate)
         return optimizers
 
     def reset_all_components(self):
@@ -331,11 +324,7 @@ class BayesianSchedulerOptimizer(nnx.Module):
                 best_acquisition = acquisition_value
                 best_params = candidate_params
 
-        return (
-            best_params
-            if best_params is not None
-            else self._random_parameter_suggestion()
-        )
+        return best_params if best_params is not None else self._random_parameter_suggestion()
 
     def _compute_acquisition_function(self, parameters: dict[str, float]) -> float:
         """Compute acquisition function for given parameters.
@@ -392,9 +381,7 @@ class SchedulerIntegration(nnx.Module):
 
         # Initialize enabled schedulers
         if config.enable_performance_awareness:
-            self.performance_scheduler = PerformanceAwareScheduler(
-                config=config, rngs=rngs
-            )
+            self.performance_scheduler = PerformanceAwareScheduler(config=config, rngs=rngs)
         else:
             self.performance_scheduler = None
 
@@ -404,9 +391,7 @@ class SchedulerIntegration(nnx.Module):
             self.multiscale_scheduler = None
 
         if config.enable_bayesian_optimization:
-            self.bayesian_scheduler = BayesianSchedulerOptimizer(
-                config=config, rngs=rngs
-            )
+            self.bayesian_scheduler = BayesianSchedulerOptimizer(config=config, rngs=rngs)
         else:
             self.bayesian_scheduler = None
 

@@ -43,8 +43,8 @@ framework for these problems by treating the unknown parameter as a trainable va
 
 ## Files
 
-- **Python Script**: [`examples/pinns/inverse_diffusion.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/inverse_diffusion.py)
-- **Jupyter Notebook**: [`examples/pinns/inverse_diffusion.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/inverse_diffusion.ipynb)
+- **Python Script**: [`examples/pinns/inverse_diffusion.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/inverse_diffusion.py)
+- **Jupyter Notebook**: [`examples/pinns/inverse_diffusion.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/inverse_diffusion.ipynb)
 
 ## Quick Start
 

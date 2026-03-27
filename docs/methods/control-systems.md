@@ -494,7 +494,7 @@ pi_mpc = PhysicsInformedMPC(
 Using meta-optimization for controller tuning:
 
 ```python
-from opifex.optimization.meta_optimizers import MetaOptimizer
+from opifex.optimization.meta_optimization import MetaOptimizer
 from opifex.optimization.control import MetaOptimizedMPC
 
 # Meta-optimizer for MPC tuning

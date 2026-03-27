@@ -44,22 +44,16 @@ class BayesianLayer(nnx.Module):
         self.bias_mean = nnx.Param(jnp.zeros(out_features))
         self.bias_logvar = nnx.Param(jnp.full(out_features, -10.0))
 
-    def __call__(
-        self, x: jax.Array, training: bool = True, sample: bool = True
-    ) -> jax.Array:
+    def __call__(self, x: jax.Array, training: bool = True, sample: bool = True) -> jax.Array:
         """Forward pass with optional weight sampling."""
         if sample and training:
             # Sample weights
-            weight_eps = jax.random.normal(
-                jax.random.PRNGKey(0), self.weight_mean.value.shape
-            )
+            weight_eps = jax.random.normal(jax.random.PRNGKey(0), self.weight_mean.value.shape)
             weight_std = jnp.exp(0.5 * self.weight_logvar.value)
             weight = self.weight_mean.value + weight_std * weight_eps
 
             # Sample bias
-            bias_eps = jax.random.normal(
-                jax.random.PRNGKey(1), self.bias_mean.value.shape
-            )
+            bias_eps = jax.random.normal(jax.random.PRNGKey(1), self.bias_mean.value.shape)
             bias_std = jnp.exp(0.5 * self.bias_logvar.value)
             bias = self.bias_mean.value + bias_std * bias_eps
         else:

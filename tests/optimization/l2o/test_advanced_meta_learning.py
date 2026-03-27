@@ -1,7 +1,7 @@
 """Test-driven development tests for advanced L2O meta-learning algorithms.
 
 These tests define the expected behavior of MAML, Reptile, gradient-based meta-learning,
-and Meta-L2O integration for Phase 5.1.3 implementation.
+and Meta-L2O integration for Version 5.1.3 implementation.
 """
 
 import jax.numpy as jnp
@@ -309,9 +309,7 @@ class TestReptileOptimizer:
         problem = OptimizationProblem(problem_type="linear", dimension=4)
         c_vector = jnp.array([1.0, 2.0, 0.5, 1.5])
 
-        adapted_params = reptile_optimizer.adapt_to_task(
-            problem, c_vector, adaptation_steps=5
-        )
+        adapted_params = reptile_optimizer.adapt_to_task(problem, c_vector, adaptation_steps=5)
 
         assert adapted_params.shape == (reptile_optimizer.output_dim,)
         assert jnp.isfinite(adapted_params).all()
@@ -459,17 +457,13 @@ class TestMetaL2OIntegration:
     def test_meta_l2o_integration_maml_only(self, l2o_engine, maml_config):
         """Test Meta-L2O integration with MAML only."""
         rngs = nnx.Rngs(42)
-        integration = MetaL2OIntegration(
-            l2o_engine=l2o_engine, maml_config=maml_config, rngs=rngs
-        )
+        integration = MetaL2OIntegration(l2o_engine=l2o_engine, maml_config=maml_config, rngs=rngs)
 
         assert integration.maml_config is not None
         assert integration.reptile_config is None
         assert integration.gb_config is None
 
-    def test_meta_l2o_solve_with_meta_learning(
-        self, l2o_engine, maml_config, reptile_config
-    ):
+    def test_meta_l2o_solve_with_meta_learning(self, l2o_engine, maml_config, reptile_config):
         """Test solving problems with meta-learning strategies."""
         rngs = nnx.Rngs(42)
         integration = MetaL2OIntegration(
@@ -509,9 +503,7 @@ class TestMetaL2OIntegration:
 
         quad_strategy = integration._select_meta_learning_strategy(quadratic_problem)
         linear_strategy = integration._select_meta_learning_strategy(linear_problem)
-        nonlinear_strategy = integration._select_meta_learning_strategy(
-            nonlinear_problem
-        )
+        nonlinear_strategy = integration._select_meta_learning_strategy(nonlinear_problem)
 
         assert quad_strategy in ["maml", "reptile", "gradient_based", "fallback"]
         assert linear_strategy in ["maml", "reptile", "gradient_based", "fallback"]
@@ -529,9 +521,7 @@ class TestMetaL2OIntegration:
             solution = jnp.ones(3) * (i + 1)  # Mock solution
             metrics = {"solve_time": 0.1 * (i + 1)}
 
-            integration._store_optimization_experience(
-                problem, problem_params, solution, metrics
-            )
+            integration._store_optimization_experience(problem, problem_params, solution, metrics)
 
         assert len(integration.experience_buffer) == 5
 
@@ -540,9 +530,7 @@ class TestMetaL2OIntegration:
         assert len(trajectories) == 5
         assert all("problem_type" in traj for traj in trajectories)
 
-    def test_meta_l2o_trigger_meta_learning_update(
-        self, l2o_engine, maml_config, reptile_config
-    ):
+    def test_meta_l2o_trigger_meta_learning_update(self, l2o_engine, maml_config, reptile_config):
         """Test triggering meta-learning updates across algorithms."""
         rngs = nnx.Rngs(42)
         integration = MetaL2OIntegration(
@@ -579,9 +567,7 @@ class TestIntegrationWithExistingFramework:
         # Create base L2O engine
         l2o_config = L2OEngineConfig(solver_type="parametric")
         meta_config = MetaOptimizerConfig(meta_algorithm="l2o")
-        l2o_engine = L2OEngine(
-            l2o_config=l2o_config, meta_config=meta_config, rngs=rngs
-        )
+        l2o_engine = L2OEngine(l2o_config=l2o_config, meta_config=meta_config, rngs=rngs)
 
         # Test that engine works without meta-learning
         problem = OptimizationProblem(problem_type="linear", dimension=3)
@@ -598,14 +584,10 @@ class TestIntegrationWithExistingFramework:
         # Create enhanced L2O with meta-learning
         l2o_config = L2OEngineConfig(solver_type="parametric")
         meta_config = MetaOptimizerConfig(meta_algorithm="l2o")
-        l2o_engine = L2OEngine(
-            l2o_config=l2o_config, meta_config=meta_config, rngs=rngs
-        )
+        l2o_engine = L2OEngine(l2o_config=l2o_config, meta_config=meta_config, rngs=rngs)
 
         maml_config = MAMLConfig(inner_steps=2, meta_batch_size=2)
-        integration = MetaL2OIntegration(
-            l2o_engine=l2o_engine, maml_config=maml_config, rngs=rngs
-        )
+        integration = MetaL2OIntegration(l2o_engine=l2o_engine, maml_config=maml_config, rngs=rngs)
 
         # Test enhanced solving capabilities
         problem = OptimizationProblem(problem_type="quadratic", dimension=4)
@@ -629,9 +611,7 @@ class TestIntegrationWithExistingFramework:
         # Setup components
         l2o_config = L2OEngineConfig(solver_type="parametric")
         meta_config = MetaOptimizerConfig(meta_algorithm="l2o")
-        l2o_engine = L2OEngine(
-            l2o_config=l2o_config, meta_config=meta_config, rngs=rngs
-        )
+        l2o_engine = L2OEngine(l2o_config=l2o_config, meta_config=meta_config, rngs=rngs)
 
         # Test problem
         problem = OptimizationProblem(problem_type="linear", dimension=3)
@@ -642,9 +622,7 @@ class TestIntegrationWithExistingFramework:
 
         # Enhanced meta-learning solution
         maml_config = MAMLConfig(inner_steps=2)
-        integration = MetaL2OIntegration(
-            l2o_engine=l2o_engine, maml_config=maml_config, rngs=rngs
-        )
+        integration = MetaL2OIntegration(l2o_engine=l2o_engine, maml_config=maml_config, rngs=rngs)
         enhanced_solution, enhanced_metrics = integration.solve_with_meta_learning(
             problem, problem_params, meta_learning_strategy="maml"
         )

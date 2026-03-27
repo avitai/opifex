@@ -1,7 +1,7 @@
 """
-Comprehensive JAX Profiling Harness for Opifex.
+Full JAX Profiling Harness for Opifex.
 
-Main interface for the comprehensive profiling system that coordinates
+Main interface for the full profiling system that coordinates
 hardware-aware profiling, roofline analysis, compilation profiling,
 and generates actionable optimization reports.
 """
@@ -164,10 +164,7 @@ class OptimizationReport:
             html += '<div class="section"><h2>🎯 Priority Recommendations</h2>'
             for i, rec in enumerate(self.priority_recommendations, 1):
                 html += f'<div class="recommendation">{i}. {rec["recommendation"]}<br>'
-                html += (
-                    f"<small>Impact: {rec['impact']}, Effort: {rec['effort']}</small>"
-                    "</div>"
-                )
+                html += f"<small>Impact: {rec['impact']}, Effort: {rec['effort']}</small></div>"
             html += "</div>"
 
         # Sections
@@ -190,7 +187,7 @@ class OptimizationReport:
 
 
 class OpifexProfilingHarness:
-    """Comprehensive JAX profiling harness for Opifex applications."""
+    """Full JAX profiling harness for Opifex applications."""
 
     def __init__(
         self,
@@ -230,7 +227,7 @@ class OpifexProfilingHarness:
 
     @contextmanager
     def profiling_session(self, enable_jax_profiler: bool = True):
-        """Context manager for comprehensive profiling session."""
+        """Context manager for full profiling session."""
 
         session_start = time.perf_counter()
 
@@ -250,9 +247,7 @@ class OpifexProfilingHarness:
                 raise
             finally:
                 session_data["end_time"] = time.perf_counter()
-                session_data["duration"] = (
-                    session_data["end_time"] - session_data["start_time"]
-                )
+                session_data["duration"] = session_data["end_time"] - session_data["start_time"]
                 self.profiling_sessions.append(session_data)
 
     def profile_neural_operator(
@@ -261,12 +256,10 @@ class OpifexProfilingHarness:
         inputs: list[jax.Array],
         operation_name: str | None = None,
     ) -> tuple[dict[str, Any], OptimizationReport]:
-        """Profile a complete neural operator with comprehensive analysis."""
+        """Profile a complete neural operator with full analysis."""
 
         if operation_name is None:
-            operation_name = getattr(operator, "__class__", {}).get(
-                "__name__", "neural_operator"
-            )
+            operation_name = getattr(operator, "__class__", {}).get("__name__", "neural_operator")
         results: dict[str, Any] = {"operation_name": operation_name}
 
         # Hardware-specific analysis (calibrax: static spec detection)
@@ -302,7 +295,7 @@ class OpifexProfilingHarness:
             except (RuntimeError, ValueError, TypeError) as e:
                 results["compilation_analysis"] = {"error": str(e)}
 
-        # Generate comprehensive report
+        # Generate full report
         report = self._generate_comprehensive_report(results)
 
         return results, report
@@ -310,7 +303,7 @@ class OpifexProfilingHarness:
     def profile_function(
         self, func: Callable, inputs: list[jax.Array], function_name: str | None = None
     ) -> tuple[dict[str, Any], OptimizationReport]:
-        """Profile a JAX function with comprehensive analysis."""
+        """Profile a JAX function with full analysis."""
 
         if function_name is None:
             function_name = getattr(func, "__name__", "jax_function")
@@ -337,15 +330,11 @@ class OpifexProfilingHarness:
         return {
             "individual_results": comparison_results,
             "comparison_analysis": comparison_analysis,
-            "recommendations": self._generate_comparison_recommendations(
-                comparison_analysis
-            ),
+            "recommendations": self._generate_comparison_recommendations(comparison_analysis),
         }
 
-    def _generate_comprehensive_report(
-        self, results: dict[str, Any]
-    ) -> OptimizationReport:
-        """Generate a comprehensive optimization report."""
+    def _generate_comprehensive_report(self, results: dict[str, Any]) -> OptimizationReport:
+        """Generate a full optimization report."""
 
         report = OptimizationReport()
 
@@ -354,28 +343,19 @@ class OpifexProfilingHarness:
         report.set_executive_summary(executive_summary)
 
         # Add detailed sections
-        if (
-            "hardware_analysis" in results
-            and "error" not in results["hardware_analysis"]
-        ):
+        if "hardware_analysis" in results and "error" not in results["hardware_analysis"]:
             report.add_section(
                 "Hardware Analysis",
                 self._format_hardware_analysis(results["hardware_analysis"]),
             )
 
-        if (
-            "roofline_analysis" in results
-            and "error" not in results["roofline_analysis"]
-        ):
+        if "roofline_analysis" in results and "error" not in results["roofline_analysis"]:
             report.add_section(
                 "Roofline Analysis",
                 self._format_roofline_analysis(results["roofline_analysis"]),
             )
 
-        if (
-            "compilation_analysis" in results
-            and "error" not in results["compilation_analysis"]
-        ):
+        if "compilation_analysis" in results and "error" not in results["compilation_analysis"]:
             report.add_section(
                 "Compilation Analysis",
                 self._format_compilation_analysis(results["compilation_analysis"]),
@@ -390,9 +370,7 @@ class OpifexProfilingHarness:
         # Generate priority recommendations
         priority_recommendations = self._extract_priority_recommendations(results)
         for rec in priority_recommendations:
-            report.add_priority_recommendation(
-                rec["text"], rec["impact"], rec["effort"]
-            )
+            report.add_priority_recommendation(rec["text"], rec["impact"], rec["effort"])
 
         return report
 
@@ -406,10 +384,7 @@ class OpifexProfilingHarness:
         }
 
         # Roofline metrics
-        if (
-            "roofline_analysis" in results
-            and "error" not in results["roofline_analysis"]
-        ):
+        if "roofline_analysis" in results and "error" not in results["roofline_analysis"]:
             roofline = results["roofline_analysis"]
             summary["Arithmetic Intensity"] = (
                 f"{roofline.get('arithmetic_intensity', 0):.1f} FLOPs/byte"
@@ -418,31 +393,21 @@ class OpifexProfilingHarness:
             summary["Efficiency"] = f"{roofline.get('efficiency', 0):.2%}"
 
         # Hardware utilization
-        if (
-            "hardware_analysis" in results
-            and "error" not in results["hardware_analysis"]
-        ):
+        if "hardware_analysis" in results and "error" not in results["hardware_analysis"]:
             hw_analysis = results["hardware_analysis"]
             backend = hw_analysis.get("backend", "unknown")
 
             if backend == "tpu" and "platform_analysis" in hw_analysis:
                 mxu_analysis = hw_analysis["platform_analysis"].get("mxu_analysis", {})
-                summary["MXU Utilization"] = (
-                    f"{mxu_analysis.get('mxu_utilization', 0):.2%}"
-                )
+                summary["MXU Utilization"] = f"{mxu_analysis.get('mxu_utilization', 0):.2%}"
             elif backend == "gpu" and "platform_analysis" in hw_analysis:
-                tc_analysis = hw_analysis["platform_analysis"].get(
-                    "tensorcore_analysis", {}
-                )
+                tc_analysis = hw_analysis["platform_analysis"].get("tensorcore_analysis", {})
                 summary["TensorCore Utilization"] = (
                     f"{tc_analysis.get('tensorcore_utilization', 0):.2%}"
                 )
 
         # Compilation metrics
-        if (
-            "compilation_analysis" in results
-            and "error" not in results["compilation_analysis"]
-        ):
+        if "compilation_analysis" in results and "error" not in results["compilation_analysis"]:
             comp_analysis = results["compilation_analysis"]
             cache_stats = comp_analysis.get("cache_statistics", {})
             summary["Cache Hit Rate"] = f"{cache_stats.get('cache_hit_rate', 0):.2%}"
@@ -454,9 +419,7 @@ class OpifexProfilingHarness:
 
         formatted = {
             "Backend": hw_analysis.get("backend", "Unknown"),
-            "Device Count": len(
-                hw_analysis.get("hardware_info", {}).get("devices", [])
-            ),
+            "Device Count": len(hw_analysis.get("hardware_info", {}).get("devices", [])),
         }
 
         platform_analysis = hw_analysis.get("platform_analysis", {})
@@ -468,9 +431,7 @@ class OpifexProfilingHarness:
 
         if "tensorcore_analysis" in platform_analysis:
             tc = platform_analysis["tensorcore_analysis"]
-            formatted["GPU TensorCore Utilization"] = (
-                f"{tc.get('tensorcore_utilization', 0):.2%}"
-            )
+            formatted["GPU TensorCore Utilization"] = f"{tc.get('tensorcore_utilization', 0):.2%}"
             formatted["GPU Recommendations"] = tc.get("recommendations", [])
 
         if "simd_analysis" in platform_analysis:
@@ -486,12 +447,8 @@ class OpifexProfilingHarness:
         """Format roofline analysis for report."""
 
         return {
-            "Arithmetic Intensity": (
-                f"{roofline.get('arithmetic_intensity', 0):.1f} FLOPs/byte"
-            ),
-            "Critical Intensity": (
-                f"{roofline.get('critical_intensity', 0):.1f} FLOPs/byte"
-            ),
+            "Arithmetic Intensity": (f"{roofline.get('arithmetic_intensity', 0):.1f} FLOPs/byte"),
+            "Critical Intensity": (f"{roofline.get('critical_intensity', 0):.1f} FLOPs/byte"),
             "Bottleneck": roofline.get("bottleneck", "Unknown"),
             "Efficiency": f"{roofline.get('efficiency', 0):.2%}",
             "Execution Time": f"{roofline.get('actual_time_ms', 0):.2f} ms",
@@ -502,9 +459,7 @@ class OpifexProfilingHarness:
             "Recommendations": roofline.get("optimization_recommendations", []),
         }
 
-    def _format_compilation_analysis(
-        self, comp_analysis: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _format_compilation_analysis(self, comp_analysis: dict[str, Any]) -> dict[str, Any]:
         """Format compilation analysis for report."""
 
         cache_stats = comp_analysis.get("cache_statistics", {})
@@ -533,9 +488,7 @@ class OpifexProfilingHarness:
             "Recommendations": xla_analysis.get("recommendations", []),
         }
 
-    def _extract_priority_recommendations(
-        self, results: dict[str, Any]
-    ) -> list[dict[str, str]]:
+    def _extract_priority_recommendations(self, results: dict[str, Any]) -> list[dict[str, str]]:
         """Extract and prioritize recommendations from all analyses."""
 
         all_recommendations = []
@@ -580,9 +533,7 @@ class OpifexProfilingHarness:
             ]
         ):
             impact = "high"
-        elif any(
-            indicator in rec_lower for indicator in ["alignment", "precision", "fusion"]
-        ):
+        elif any(indicator in rec_lower for indicator in ["alignment", "precision", "fusion"]):
             impact = "medium"
         else:
             impact = "low"
@@ -590,15 +541,9 @@ class OpifexProfilingHarness:
         # Effort assessment
         if any(indicator in rec_lower for indicator in ["increase", "use", "enable"]):
             effort = "low"
-        elif any(
-            indicator in rec_lower
-            for indicator in ["optimize", "consider", "fine-tune"]
-        ):
+        elif any(indicator in rec_lower for indicator in ["optimize", "consider", "fine-tune"]):
             effort = "medium"
-        elif any(
-            indicator in rec_lower
-            for indicator in ["redesign", "implement", "break down"]
-        ):
+        elif any(indicator in rec_lower for indicator in ["redesign", "implement", "break down"]):
             effort = "high"
         else:
             effort = "medium"
@@ -622,19 +567,13 @@ class OpifexProfilingHarness:
             if "roofline_analysis" in result:
                 roofline = result["roofline_analysis"]
                 metrics[name]["efficiency"] = roofline.get("efficiency", 0)
-                metrics[name]["arithmetic_intensity"] = roofline.get(
-                    "arithmetic_intensity", 0
-                )
+                metrics[name]["arithmetic_intensity"] = roofline.get("arithmetic_intensity", 0)
                 metrics[name]["execution_time_ms"] = roofline.get("actual_time_ms", 0)
 
         # Find best and worst performers
         if metrics:
-            best_efficiency = max(
-                metrics.keys(), key=lambda k: metrics[k].get("efficiency", 0)
-            )
-            worst_efficiency = min(
-                metrics.keys(), key=lambda k: metrics[k].get("efficiency", 0)
-            )
+            best_efficiency = max(metrics.keys(), key=lambda k: metrics[k].get("efficiency", 0))
+            worst_efficiency = min(metrics.keys(), key=lambda k: metrics[k].get("efficiency", 0))
             fastest_execution = min(
                 metrics.keys(),
                 key=lambda k: metrics[k].get("execution_time_ms", float("inf")),
@@ -649,9 +588,7 @@ class OpifexProfilingHarness:
 
         return {"error": "No comparable metrics found"}
 
-    def _generate_comparison_recommendations(
-        self, comparison: dict[str, Any]
-    ) -> list[str]:
+    def _generate_comparison_recommendations(self, comparison: dict[str, Any]) -> list[str]:
         """Generate recommendations based on operation comparison."""
 
         recommendations = []
@@ -684,21 +621,15 @@ class OpifexProfilingHarness:
             return {"message": "No profiling sessions recorded"}
 
         total_sessions = len(self.profiling_sessions)
-        successful_sessions = sum(
-            1 for s in self.profiling_sessions if s.get("success", False)
-        )
+        successful_sessions = sum(1 for s in self.profiling_sessions if s.get("success", False))
         total_duration = sum(s.get("duration", 0) for s in self.profiling_sessions)
 
         return {
             "total_sessions": total_sessions,
             "successful_sessions": successful_sessions,
-            "success_rate": successful_sessions / total_sessions
-            if total_sessions > 0
-            else 0,
+            "success_rate": successful_sessions / total_sessions if total_sessions > 0 else 0,
             "total_duration_s": total_duration,
-            "average_duration_s": total_duration / total_sessions
-            if total_sessions > 0
-            else 0,
+            "average_duration_s": total_duration / total_sessions if total_sessions > 0 else 0,
             "profilers_used": list(self.profilers.keys()),
             "coordinator_summary": self.coordinator.get_profiling_summary(),
         }

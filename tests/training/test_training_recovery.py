@@ -155,9 +155,7 @@ class TestErrorRecoveryManager:
         )
 
         # Create gradients with NaN values
-        grads = jax.tree_util.tree_map(
-            lambda x: jnp.ones_like(x) * float("nan"), params
-        )
+        grads = jax.tree_util.tree_map(lambda x: jnp.ones_like(x) * float("nan"), params)
 
         is_stable, issue = manager.check_training_stability(
             loss=0.5,
@@ -204,9 +202,7 @@ class TestErrorRecoveryManager:
         large_grads = jax.tree_util.tree_map(lambda x: jnp.ones_like(x) * 10.0, params)
 
         # Compute original norm
-        original_norm = jnp.sqrt(
-            sum(jnp.sum(g**2) for g in jax.tree_util.tree_leaves(large_grads))
-        )
+        original_norm = jnp.sqrt(sum(jnp.sum(g**2) for g in jax.tree_util.tree_leaves(large_grads)))
 
         # Apply clipping
         clipped_grads = manager.apply_gradient_clipping(large_grads)
@@ -258,9 +254,7 @@ class TestErrorRecoveryManager:
         manager.last_stable_state = training_state
 
         # Attempt recovery
-        recovered_state = manager.recover_from_instability(
-            "loss_explosion", training_state
-        )
+        recovered_state = manager.recover_from_instability("loss_explosion", training_state)
 
         assert recovered_state is not None
         assert manager.recovery_attempts == 1

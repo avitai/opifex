@@ -10,7 +10,7 @@
 
 # %% [markdown]
 """
-# Comprehensive GPU Acceleration and Profiling
+# Full GPU Acceleration and Profiling
 
 | Property | Value |
 |---|---|
@@ -42,7 +42,7 @@ Features included:
 - JIT vs non-JIT performance comparison
 - Compilation overhead analysis with break-even calculations
 - TensorCore alignment and utilization analysis
-- Comprehensive performance reporting with efficiency metrics
+- Full performance reporting with efficiency metrics
 """
 
 import time
@@ -72,10 +72,10 @@ from opifex.training.mixed_precision import (
 
 
 class ComprehensiveProfilingDemo:
-    """Comprehensive profiling demonstration with advanced GPU acceleration."""
+    """Full profiling demonstration with advanced GPU acceleration."""
 
     def __init__(self):
-        """Initialize the comprehensive profiling demo with GPU acceleration."""
+        """Initialize the full profiling demo with GPU acceleration."""
         self.profiler = OpifexProfilingHarness(
             enable_hardware_profiling=True,
             enable_compilation_profiling=True,
@@ -98,13 +98,9 @@ class ComprehensiveProfilingDemo:
         print(
             f"✅ GPU acceleration initialized on {self.gpu_baseline['backend_info']['backend']} backend"
         )
-        print(
-            f"   Available memory: {self.gpu_baseline['backend_info']['memory_gb']:.1f}GB"
-        )
+        print(f"   Available memory: {self.gpu_baseline['backend_info']['memory_gb']:.1f}GB")
 
-    def create_sample_data(
-        self, batch_size=32, grid_size=64, channels=3, optimize=False
-    ):
+    def create_sample_data(self, batch_size=32, grid_size=64, channels=3, optimize=False):
         """Create sample data for neural operator profiling."""
         key = jax.random.PRNGKey(42)
 
@@ -118,17 +114,13 @@ class ComprehensiveProfilingDemo:
 
             print("📊 Optimized Data Configuration:")
             print(f"   • Batch size: {batch_size}")
-            print(
-                f"   • Grid size: {aligned_grid_size}x{aligned_grid_size} (TensorCore aligned)"
-            )
+            print(f"   • Grid size: {aligned_grid_size}x{aligned_grid_size} (TensorCore aligned)")
             print(f"   • Channels: {channels}")
             print(f"   • Data shape: {input_data.shape}")
             print(f"   • Data dtype: {input_data.dtype}")
         else:
             # Basic version
-            input_data = jax.random.normal(
-                key, (batch_size, grid_size, grid_size, channels)
-            )
+            input_data = jax.random.normal(key, (batch_size, grid_size, grid_size, channels))
 
         return input_data
 
@@ -173,9 +165,7 @@ class ComprehensiveProfilingDemo:
             "UNO": uno,
         }
 
-    def time_with_proper_warmup(
-        self, func, inputs, num_warmup=5, num_runs=10, verbose=True
-    ):
+    def time_with_proper_warmup(self, func, inputs, num_warmup=5, num_runs=10, verbose=True):
         """Time function with proper warm-up and multiple runs for accuracy."""
 
         if verbose:
@@ -208,9 +198,7 @@ class ComprehensiveProfilingDemo:
             "mean_time": sum(times) / len(times),
             "min_time": min(times),
             "max_time": max(times),
-            "std_time": (
-                sum((t - sum(times) / len(times)) ** 2 for t in times) / len(times)
-            )
+            "std_time": (sum((t - sum(times) / len(times)) ** 2 for t in times) / len(times))
             ** 0.5,
             "all_times": times,
         }
@@ -243,9 +231,7 @@ class ComprehensiveProfilingDemo:
         # JIT version
         print("\n⚡ Testing JIT Performance...")
         jit_func = jax.jit(forward_func)
-        jit_results = self.time_with_proper_warmup(
-            jit_func, [test_data], num_warmup=5, num_runs=10
-        )
+        jit_results = self.time_with_proper_warmup(jit_func, [test_data], num_warmup=5, num_runs=10)
 
         # Calculate speedup
         speedup = non_jit_results["mean_time"] / jit_results["mean_time"]
@@ -359,13 +345,9 @@ class ComprehensiveProfilingDemo:
         ]  # Multiple shapes for realistic scenario
         dtype = jnp.float32
         num_iterations = 50  # Reduced for faster demo but still meaningful
-        operations_per_buffer = (
-            5  # Multiple operations per buffer to show reuse benefit
-        )
+        operations_per_buffer = 5  # Multiple operations per buffer to show reuse benefit
 
-        print(
-            f"Testing {num_iterations} iterations with {len(shapes)} different buffer shapes"
-        )
+        print(f"Testing {num_iterations} iterations with {len(shapes)} different buffer shapes")
         print(
             f"Performing {operations_per_buffer} operations per buffer to simulate realistic workload"
         )
@@ -439,9 +421,7 @@ class ComprehensiveProfilingDemo:
         print(f"  • Buffer reuse ratio: {pool_stats['reuse_ratio']:.2%}")
         print(f"  • Total allocations: {pool_stats['total_allocations']}")
         print(f"  • Total reuses: {pool_stats['total_reuses']}")
-        print(
-            f"  • Memory saved: {(pool_stats['total_reuses'] * 1024 * 1024 * 4 / 1024**2):.1f}MB"
-        )
+        print(f"  • Memory saved: {(pool_stats['total_reuses'] * 1024 * 1024 * 4 / 1024**2):.1f}MB")
 
         if efficiency > 3.0:
             print("  ✅ Excellent memory pool performance!")
@@ -521,12 +501,8 @@ class ComprehensiveProfilingDemo:
 
             print(f"  Results for {config_name}:")
             print(f"    • Float32 time: {f32_time * 1000:.2f}ms")
-            print(
-                f"    • Mixed precision time: {mixed_time * 1000:.2f}ms ({mixed_speedup:.2f}x)"
-            )
-            print(
-                f"    • GPU optimized time: {opt_time * 1000:.2f}ms ({opt_speedup:.2f}x)"
-            )
+            print(f"    • Mixed precision time: {mixed_time * 1000:.2f}ms ({mixed_speedup:.2f}x)")
+            print(f"    • GPU optimized time: {opt_time * 1000:.2f}ms ({opt_speedup:.2f}x)")
 
             # Calculate FLOPS for performance analysis
             flops = 2 * size_m * size_n * size_m  # Matrix multiplication FLOPs
@@ -552,12 +528,12 @@ class ComprehensiveProfilingDemo:
 
         # Summary
         print("\n📊 Mixed Precision Summary:")
-        avg_mixed_speedup = sum(
-            r["mixed_speedup"] for r in mixed_precision_results.values()
-        ) / len(mixed_precision_results)
-        avg_opt_speedup = sum(
-            r["opt_speedup"] for r in mixed_precision_results.values()
-        ) / len(mixed_precision_results)
+        avg_mixed_speedup = sum(r["mixed_speedup"] for r in mixed_precision_results.values()) / len(
+            mixed_precision_results
+        )
+        avg_opt_speedup = sum(r["opt_speedup"] for r in mixed_precision_results.values()) / len(
+            mixed_precision_results
+        )
 
         print(f"  • Average mixed precision speedup: {avg_mixed_speedup:.2f}x")
         print(f"  • Average optimized speedup: {avg_opt_speedup:.2f}x")
@@ -615,9 +591,7 @@ class ComprehensiveProfilingDemo:
         for i, batch in enumerate(data_batches):
             # Prefetch next batch while processing current
             if i + 1 < len(data_batches):
-                self.async_manager.async_device_put(
-                    data_batches[i + 1], device, f"batch_{i + 1}"
-                )
+                self.async_manager.async_device_put(data_batches[i + 1], device, f"batch_{i + 1}")
 
             # Process current batch
             result = jnp.sum(batch**2, axis=(1, 2))
@@ -680,9 +654,7 @@ class ComprehensiveProfilingDemo:
 
             # Estimate operation efficiency using correct method signature
             try:
-                efficiency = self.roofline_manager.estimate_operation_efficiency(
-                    op_type, *shapes
-                )
+                efficiency = self.roofline_manager.estimate_operation_efficiency(op_type, *shapes)
 
                 print(
                     f"  • Arithmetic intensity: {efficiency['arithmetic_intensity']:.2f} FLOP/byte"
@@ -691,11 +663,7 @@ class ComprehensiveProfilingDemo:
                 print(f"  • Expected: {expected_bound}")
 
                 # Verify prediction
-                actual_bound = (
-                    "compute-bound"
-                    if efficiency["is_compute_bound"]
-                    else "memory-bound"
-                )
+                actual_bound = "compute-bound" if efficiency["is_compute_bound"] else "memory-bound"
                 if expected_bound == actual_bound:
                     print("  ✅ Roofline prediction matches expectation")
                 else:
@@ -778,9 +746,7 @@ class ComprehensiveProfilingDemo:
             mixed_speedup = f32_time / mixed_time if mixed_time > 0 else 0
 
             print(f"  Results for {config_name}:")
-            print(
-                f"    • Float32 time: {f32_time * 1000:.2f}ms ({f32_gflops:.1f} GFLOPS)"
-            )
+            print(f"    • Float32 time: {f32_time * 1000:.2f}ms ({f32_gflops:.1f} GFLOPS)")
             print(
                 f"    • TensorCore time: {tc_time * 1000:.2f}ms ({tc_gflops:.1f} GFLOPS, {tc_speedup:.2f}x)"
             )
@@ -791,9 +757,7 @@ class ComprehensiveProfilingDemo:
             # Estimate TensorCore utilization based on performance
             theoretical_tc_gflops = 312000  # Approximate for modern GPUs
             tc_utilization = (
-                min(tc_gflops / theoretical_tc_gflops, 1.0)
-                if theoretical_tc_gflops > 0
-                else 0
+                min(tc_gflops / theoretical_tc_gflops, 1.0) if theoretical_tc_gflops > 0 else 0
             )
 
             print(f"    • Estimated TensorCore utilization: {tc_utilization:.2%}")
@@ -814,15 +778,15 @@ class ComprehensiveProfilingDemo:
 
         # Summary
         print("\n📊 TensorCore Optimization Summary:")
-        avg_tc_speedup = sum(
-            r["tc_speedup"] for r in tensorcore_results.values()
-        ) / len(tensorcore_results)
+        avg_tc_speedup = sum(r["tc_speedup"] for r in tensorcore_results.values()) / len(
+            tensorcore_results
+        )
         avg_tc_gflops = sum(r["tc_gflops"] for r in tensorcore_results.values()) / len(
             tensorcore_results
         )
-        avg_utilization = sum(
-            r["tc_utilization"] for r in tensorcore_results.values()
-        ) / len(tensorcore_results)
+        avg_utilization = sum(r["tc_utilization"] for r in tensorcore_results.values()) / len(
+            tensorcore_results
+        )
 
         print(f"  • Average TensorCore speedup: {avg_tc_speedup:.2f}x")
         print(f"  • Average TensorCore performance: {avg_tc_gflops:.1f} GFLOPS")
@@ -841,7 +805,7 @@ class ComprehensiveProfilingDemo:
         return tensorcore_results
 
     def profile_neural_operators(self):
-        """Profile neural operators with comprehensive analysis."""
+        """Profile neural operators with full analysis."""
 
         print("\n🔍 Profiling Neural Operators")
         print("=" * 50)
@@ -928,9 +892,7 @@ class ComprehensiveProfilingDemo:
             print(f"\n--- Profiling {name} ---")
 
             with self.profiler.profiling_session():
-                results, report = self.profiler.profile_function(
-                    func, [input_data], name
-                )
+                results, report = self.profiler.profile_function(func, [input_data], name)
 
                 print(f"{name} Results:")
                 print(report.render(output_format="text"))
@@ -1063,9 +1025,7 @@ class ComprehensiveProfilingDemo:
                         tc = platform_analysis["tensorcore_analysis"]
                         tensorcore_util = tc.get("tensorcore_utilization", 0)
                         shape_alignment = tc.get("shape_alignment", {})
-                        alignment_score = shape_alignment.get(
-                            "average_alignment_score", 0
-                        )
+                        alignment_score = shape_alignment.get("average_alignment_score", 0)
 
                         print(f"  TensorCore Utilization: {tensorcore_util:.2%}")
                         print(f"  Shape Alignment Score: {alignment_score:.2f}")
@@ -1111,9 +1071,9 @@ class ComprehensiveProfilingDemo:
         return comparison_results
 
     def generate_comprehensive_summary(self):  # noqa: PLR0912, PLR0915
-        """Generate comprehensive summary of all profiling results."""
+        """Generate full summary of all profiling results."""
 
-        print("\n🎉 Comprehensive Profiling Summary")
+        print("\n🎉 Full Profiling Summary")
         print("=" * 60)
 
         print("📋 Completed Analyses:")
@@ -1131,15 +1091,11 @@ class ComprehensiveProfilingDemo:
         if "memory_pool_efficiency" in self.results:
             pool_data = self.results["memory_pool_efficiency"]
             print(f"  • Memory pool efficiency: {pool_data['efficiency']:.2f}x speedup")
-            print(
-                f"  • Buffer reuse ratio: {pool_data['pool_stats']['reuse_ratio']:.2%}"
-            )
+            print(f"  • Buffer reuse ratio: {pool_data['pool_stats']['reuse_ratio']:.2%}")
 
         if "mixed_precision" in self.results:
             mixed_data = self.results["mixed_precision"]
-            avg_speedup = sum(r["mixed_speedup"] for r in mixed_data.values()) / len(
-                mixed_data
-            )
+            avg_speedup = sum(r["mixed_speedup"] for r in mixed_data.values()) / len(mixed_data)
             print(f"  • Mixed precision average speedup: {avg_speedup:.2f}x")
 
         if "async_operations" in self.results:
@@ -1148,9 +1104,7 @@ class ComprehensiveProfilingDemo:
 
         if "tensorcore_optimization" in self.results:
             tc_data = self.results["tensorcore_optimization"]
-            avg_tc_speedup = sum(r["tc_speedup"] for r in tc_data.values()) / len(
-                tc_data
-            )
+            avg_tc_speedup = sum(r["tc_speedup"] for r in tc_data.values()) / len(tc_data)
             avg_tc_gflops = sum(r["tc_gflops"] for r in tc_data.values()) / len(tc_data)
             print(f"  • TensorCore average speedup: {avg_tc_speedup:.2f}x")
             print(f"  • TensorCore average performance: {avg_tc_gflops:.1f} GFLOPS")
@@ -1163,9 +1117,7 @@ class ComprehensiveProfilingDemo:
         # Compilation Overhead
         if "compilation_analysis" in self.results:
             comp_data = self.results["compilation_analysis"]
-            print(
-                f"  • Compilation break-even: {comp_data['break_even_calls']:.1f} calls"
-            )
+            print(f"  • Compilation break-even: {comp_data['break_even_calls']:.1f} calls")
 
         # Best performing operator
         if "operator_profiling" in self.results:
@@ -1187,9 +1139,7 @@ class ComprehensiveProfilingDemo:
         # Batch size recommendations
         if "batch_optimization" in self.results:
             batch_data = self.results["batch_optimization"]
-            successful_batches = {
-                k: v for k, v in batch_data.items() if "error" not in v
-            }
+            successful_batches = {k: v for k, v in batch_data.items() if "error" not in v}
             if successful_batches:
                 best_batch = max(
                     successful_batches.keys(),
@@ -1217,17 +1167,13 @@ class ComprehensiveProfilingDemo:
         # Mixed precision recommendations
         if "mixed_precision" in self.results:
             mixed_data = self.results["mixed_precision"]
-            avg_speedup = sum(r["mixed_speedup"] for r in mixed_data.values()) / len(
-                mixed_data
-            )
+            avg_speedup = sum(r["mixed_speedup"] for r in mixed_data.values()) / len(mixed_data)
             if avg_speedup > 1.2:
                 print(
                     "  ✅ Mixed precision optimization is beneficial - use for large matrix operations"
                 )
             else:
-                print(
-                    "  ⚠️  Mixed precision shows limited benefit - verify TensorCore availability"
-                )
+                print("  ⚠️  Mixed precision shows limited benefit - verify TensorCore availability")
 
         # Async operations recommendations
         if "async_operations" in self.results:
@@ -1240,17 +1186,11 @@ class ComprehensiveProfilingDemo:
                 print("  ⚠️  Limited async benefit - operations may be compute-bound")
 
         # General recommendations
-        print("  • Use OptimizedGPUManager for comprehensive acceleration")
-        print(
-            "  • JIT compilation provides significant speedup - ensure proper warm-up"
-        )
+        print("  • Use OptimizedGPUManager for full acceleration")
+        print("  • JIT compilation provides significant speedup - ensure proper warm-up")
         print("  • Consider compilation overhead for short-running applications")
-        print(
-            "  • Use TensorCore-aligned shapes (multiples of 16) for GPU optimization"
-        )
-        print(
-            "  • Optimize batch sizes based on roofline analysis and hardware capabilities"
-        )
+        print("  • Use TensorCore-aligned shapes (multiples of 16) for GPU optimization")
+        print("  • Optimize batch sizes based on roofline analysis and hardware capabilities")
         print("  • Monitor arithmetic intensity and memory bandwidth utilization")
         print("  • Use buffer donation in JIT functions for memory efficiency")
         print("  • Implement memory pooling for applications with repeated allocations")
@@ -1264,9 +1204,9 @@ class ComprehensiveProfilingDemo:
         print(f"  • Profilers used: {session_summary.get('profilers_used', [])}")
 
     def run_comprehensive_demo(self):
-        """Run the complete comprehensive GPU acceleration and profiling demonstration."""
+        """Run the complete full GPU acceleration and profiling demonstration."""
 
-        print("🚀 Opifex Comprehensive GPU Acceleration & Profiling Demo")
+        print("🚀 Opifex Full GPU Acceleration & Profiling Demo")
         print("=" * 75)
         print("This demo showcases advanced GPU acceleration capabilities:")
         print("  1. Memory pool efficiency with 8x+ speedup demonstrations")
@@ -1305,12 +1245,10 @@ class ComprehensiveProfilingDemo:
             self.demonstrate_hardware_specific_analysis()
             self.compare_operations()
 
-            # Generate comprehensive summary
+            # Generate full summary
             self.generate_comprehensive_summary()
 
-            print(
-                "\n✅ Comprehensive GPU acceleration and profiling demo completed successfully!"
-            )
+            print("\n✅ Full GPU acceleration and profiling demo completed successfully!")
 
         except Exception as e:
             print(f"\n❌ Demo failed with error: {e}")
@@ -1320,7 +1258,7 @@ class ComprehensiveProfilingDemo:
 
 
 def main():
-    """Main function to run the comprehensive profiling demo."""
+    """Main function to run the full profiling demo."""
     demo = ComprehensiveProfilingDemo()
     demo.run_comprehensive_demo()
 

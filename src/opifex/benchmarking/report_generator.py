@@ -1,6 +1,6 @@
 """Report generation for PDEBench evaluation and benchmarking results.
 
-This module provides comprehensive report generation capabilities for PDEBench
+This module provides full report generation capabilities for PDEBench
 evaluation results, including statistical analysis, baseline comparisons, and
 publication-ready formatted outputs.
 """
@@ -16,7 +16,7 @@ from opifex.benchmarking._shared import ACCURACY_METRIC_KEYS
 
 
 class PDEBenchReportGenerator:
-    """Generator for comprehensive PDEBench evaluation reports.
+    """Generator for full PDEBench evaluation reports.
 
     Creates detailed reports from evaluation results including statistical
     analysis, baseline comparisons, and multiple output formats for both
@@ -39,7 +39,7 @@ class PDEBenchReportGenerator:
         dataset_info: dict[str, str] | None = None,
         model_info: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Generate comprehensive evaluation report.
+        """Generate full evaluation report.
 
         Args:
             evaluation_results: Results from benchmarking evaluation
@@ -54,12 +54,8 @@ class PDEBenchReportGenerator:
             "metadata": self._generate_metadata(dataset_info, model_info),
             "evaluation_summary": self._generate_evaluation_summary(evaluation_results),
             "detailed_metrics": self._generate_detailed_metrics(evaluation_results),
-            "statistical_analysis": self._generate_statistical_analysis(
-                evaluation_results
-            ),
-            "baseline_comparison": self._generate_baseline_comparison(
-                baseline_comparisons
-            ),
+            "statistical_analysis": self._generate_statistical_analysis(evaluation_results),
+            "baseline_comparison": self._generate_baseline_comparison(baseline_comparisons),
             "recommendations": self._generate_recommendations(evaluation_results),
             "generation_info": {
                 "timestamp": self.generation_timestamp,
@@ -82,9 +78,7 @@ class PDEBenchReportGenerator:
                 "name": dataset_info.get("name", "Unknown"),
                 "type": dataset_info.get("type", "Unknown"),
                 "size": dataset_info.get("size", "Unknown"),
-                "description": dataset_info.get(
-                    "description", "No description available"
-                ),
+                "description": dataset_info.get("description", "No description available"),
             }
 
         if model_info:
@@ -128,9 +122,7 @@ class PDEBenchReportGenerator:
             summary["key_metrics"]["r2_score"] = r2_value
 
             if r2_value > 0.95:
-                summary["notable_findings"].append(
-                    "Excellent correlation with ground truth"
-                )
+                summary["notable_findings"].append("Excellent correlation with ground truth")
             elif r2_value < 0.5:
                 summary["notable_findings"].append(
                     "Low correlation with ground truth - model may need improvement"
@@ -144,9 +136,7 @@ class PDEBenchReportGenerator:
             if eval_time < 1.0:
                 summary["notable_findings"].append("Very fast inference time")
             elif eval_time > 10.0:
-                summary["notable_findings"].append(
-                    "Slow inference time - consider optimization"
-                )
+                summary["notable_findings"].append("Slow inference time - consider optimization")
 
         return summary
 
@@ -174,12 +164,8 @@ class PDEBenchReportGenerator:
         statistical_keys = ["mean_prediction", "std_prediction", "confidence_interval"]
         for key in statistical_keys:
             if key in results:
-                if key == "confidence_interval" and isinstance(
-                    results[key], (list, tuple)
-                ):
-                    detailed["statistical_metrics"][key] = [
-                        float(x) for x in results[key]
-                    ]
+                if key == "confidence_interval" and isinstance(results[key], list | tuple):
+                    detailed["statistical_metrics"][key] = [float(x) for x in results[key]]
                 else:
                     detailed["statistical_metrics"][key] = float(results[key])
 
@@ -235,15 +221,11 @@ class PDEBenchReportGenerator:
 
         # Extract baseline information
         if "baselines" in baseline_comparisons:
-            for baseline_name, baseline_data in baseline_comparisons[
-                "baselines"
-            ].items():
+            for baseline_name, baseline_data in baseline_comparisons["baselines"].items():
                 baseline_info = {
                     "name": baseline_name,
                     "mse": float(baseline_data.get("mse", 0.0)),
-                    "relative_improvement": float(
-                        baseline_data.get("relative_improvement", 0.0)
-                    ),
+                    "relative_improvement": float(baseline_data.get("relative_improvement", 0.0)),
                 }
                 comparison["baseline_models"].append(baseline_info)
 
@@ -267,8 +249,7 @@ class PDEBenchReportGenerator:
             mse_value = float(results["mse"])
             if mse_value > 1.0:
                 recommendations.append(
-                    "Consider increasing model complexity or training time to "
-                    "improve accuracy"
+                    "Consider increasing model complexity or training time to improve accuracy"
                 )
             elif mse_value < 0.001:
                 recommendations.append(
@@ -288,8 +269,7 @@ class PDEBenchReportGenerator:
             epistemic = float(results["epistemic_uncertainty"])
             if epistemic > 0.5:
                 recommendations.append(
-                    "High epistemic uncertainty - consider ensemble methods or "
-                    "more training data"
+                    "High epistemic uncertainty - consider ensemble methods or more training data"
                 )
 
         # Data quality recommendations
@@ -297,8 +277,7 @@ class PDEBenchReportGenerator:
             r2 = float(results["r2_score"])
             if r2 < 0.7:
                 recommendations.append(
-                    "Low R² score suggests potential data quality issues or "
-                    "model underfitting"
+                    "Low R² score suggests potential data quality issues or model underfitting"
                 )
 
         if not recommendations:
@@ -326,15 +305,13 @@ class PDEBenchReportGenerator:
             if "dataset" in metadata:
                 dataset = metadata["dataset"]
                 lines.append(
-                    f"Dataset: {dataset.get('name', 'Unknown')} "
-                    f"({dataset.get('type', 'Unknown')})"
+                    f"Dataset: {dataset.get('name', 'Unknown')} ({dataset.get('type', 'Unknown')})"
                 )
 
             if "model" in metadata:
                 model = metadata["model"]
                 lines.append(
-                    f"Model: {model.get('name', 'Unknown')} "
-                    f"({model.get('type', 'Unknown')})"
+                    f"Model: {model.get('name', 'Unknown')} ({model.get('type', 'Unknown')})"
                 )
             lines.append("")
 
@@ -343,9 +320,7 @@ class PDEBenchReportGenerator:
             lines.append("EVALUATION SUMMARY")
             lines.append("-" * 30)
             summary = report["evaluation_summary"]
-            lines.append(
-                f"Overall Performance: {summary.get('overall_performance', 'Unknown')}"
-            )
+            lines.append(f"Overall Performance: {summary.get('overall_performance', 'Unknown')}")
 
             if "key_metrics" in summary:
                 lines.append("\nKey Metrics:")
@@ -392,9 +367,7 @@ class PDEBenchReportGenerator:
         else:
             raise ValueError(f"Unsupported format: {format_type}")
 
-    def generate_summary_statistics(
-        self, reports: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def generate_summary_statistics(self, reports: list[dict[str, Any]]) -> dict[str, Any]:
         """Generate summary statistics across multiple reports.
 
         Args:
@@ -445,7 +418,7 @@ class PDEBenchReportGenerator:
         include_baseline_comparison: bool = True,
         include_statistical_analysis: bool = True,
     ) -> dict[str, Any]:
-        """Generate comprehensive report from benchmark results.
+        """Generate full report from benchmark results.
 
         Args:
             results: List of BenchmarkResult objects
@@ -453,7 +426,7 @@ class PDEBenchReportGenerator:
             include_statistical_analysis: Whether to include statistical analysis
 
         Returns:
-            Comprehensive report dictionary
+            Full report dictionary
         """
         if not results:
             return {"error": "No results provided for report generation"}

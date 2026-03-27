@@ -28,8 +28,8 @@ selects the best method, and verifies JAX transformation compatibility (JIT, gra
 
 ## Files
 
-- **Python Script**: [`examples/layers/fourier_continuation_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/fourier_continuation_example.py)
-- **Jupyter Notebook**: [`examples/layers/fourier_continuation_example.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/layers/fourier_continuation_example.ipynb)
+- **Python Script**: [`examples/layers/fourier_continuation_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/fourier_continuation_example.py)
+- **Jupyter Notebook**: [`examples/layers/fourier_continuation_example.ipynb`](https://github.com/avitai/opifex/blob/main/examples/layers/fourier_continuation_example.ipynb)
 
 ## Quick Start
 
@@ -234,7 +234,7 @@ Smooth    : X.XXX ms per call (JIT compiled)
 |---------|-------|-------------------|
 | [Grid Embeddings](grid-embeddings.md) | Beginner | Spatial coordinate injection |
 | [Spectral Normalization](spectral-normalization.md) | Intermediate | Stability for spectral layers |
-| [FNO Darcy Comprehensive](../neural-operators/fno-darcy.md) | Intermediate | FNO using spectral convolutions |
+| [FNO Darcy Full](../neural-operators/fno-darcy.md) | Intermediate | FNO using spectral convolutions |
 
 ### API Reference
 

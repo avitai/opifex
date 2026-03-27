@@ -113,12 +113,8 @@ def solve_burgers_2d(
         u_padded = jnp.pad(u, ((1, 1), (1, 1)), mode="wrap")
 
         # Second derivatives (Laplacian)
-        u_xx = (
-            u_padded[2:, 1:-1] - 2 * u_padded[1:-1, 1:-1] + u_padded[:-2, 1:-1]
-        ) / dx**2
-        u_yy = (
-            u_padded[1:-1, 2:] - 2 * u_padded[1:-1, 1:-1] + u_padded[1:-1, :-2]
-        ) / dx**2
+        u_xx = (u_padded[2:, 1:-1] - 2 * u_padded[1:-1, 1:-1] + u_padded[:-2, 1:-1]) / dx**2
+        u_yy = (u_padded[1:-1, 2:] - 2 * u_padded[1:-1, 1:-1] + u_padded[1:-1, :-2]) / dx**2
 
         # First derivatives (upwind scheme)
         u_x = jnp.where(
@@ -184,9 +180,9 @@ class Burgers2DSolver:
     ):
         if not isinstance(resolution, int) or resolution <= 0:
             raise ValueError("resolution must be a positive integer")
-        if not (isinstance(viscosity, (int, float)) and viscosity > 0):
+        if not (isinstance(viscosity, int | float) and viscosity > 0):
             raise ValueError("viscosity must be a positive number")
-        if not (isinstance(dt_max, (int, float)) and dt_max > 0):
+        if not (isinstance(dt_max, int | float) and dt_max > 0):
             raise ValueError("dt_max must be a positive number")
         self.resolution = resolution
         self.domain_size = domain_size
@@ -244,9 +240,7 @@ class Burgers2DSolver:
 
         def rhs(u_curr, v_curr):
             """Right-hand side of the Burgers equation."""
-            u_x, u_y, v_x, v_y, u_xx, u_yy, v_xx, v_yy = self._compute_derivatives(
-                u_curr, v_curr
-            )
+            u_x, u_y, v_x, v_y, u_xx, u_yy, v_xx, v_yy = self._compute_derivatives(u_curr, v_curr)
 
             # Burgers equation RHS
             du_dt = -u_curr * u_x - v_curr * u_y + self.viscosity * (u_xx + u_yy)

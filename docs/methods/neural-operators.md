@@ -416,7 +416,7 @@ print(f"PDE residual: {pi_training_result.final_pde_residual:.6f}")
 Use advanced optimization for neural operator training:
 
 ```python
-from opifex.optimization.meta_optimizers import MetaOptimizer
+from opifex.optimization.meta_optimization import MetaOptimizer
 
 # Meta-optimizer for neural operators
 meta_config = MetaOptimizerConfig(

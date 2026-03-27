@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Comprehensive GPU verification script for Opifex framework.
+Full GPU verification script for Opifex framework.
 
 This script tests matrix multiplication with progressive sizes to identify
 and resolve segmentation faults in JAX operations, based on workshop insights.
@@ -237,8 +237,8 @@ def test_opifex_specific_operations() -> bool:
 
 
 def run_comprehensive_tests() -> dict[str, bool]:
-    """Run comprehensive GPU tests and return results."""
-    print("🧪 Opifex GPU Comprehensive Test Suite")
+    """Run full GPU tests and return results."""
+    print("🧪 Opifex GPU Full Test Suite")
     print("=" * 50)
 
     # Configure environment for optimal performance
@@ -258,7 +258,7 @@ def run_comprehensive_tests() -> dict[str, bool]:
 
     # Run tests in order of increasing complexity
     print("\n" + "=" * 50)
-    print("STARTING COMPREHENSIVE TESTS")
+    print("STARTING FULL TESTS")
     print("=" * 50)
 
     # Test 1: Small matrix multiplication
@@ -346,7 +346,7 @@ def print_recommendations(results: dict[str, bool]) -> None:
         print("3. Check for automatic differentiation conflicts")
 
     print("\n📋 Quick setup command:")
-    print("python scripts/gpu_utils.py --comprehensive")
+    print("python scripts/gpu_utils.py --full")
 
 
 def main() -> None:
@@ -366,14 +366,12 @@ def main() -> None:
     has_accelerator = any(device.device_kind != "cpu" for device in devices)
 
     if not has_accelerator:
-        print(
-            "❌ No accelerator devices detected. This tool is designed for GPU systems."
-        )
+        print("❌ No accelerator devices detected. This tool is designed for GPU systems.")
         print("   For CPU-only setup, use: python scripts/gpu_utils.py")
         print("   JAX will use CPU backend by default.")
         return
 
-    # Print comprehensive GPU info first
+    # Print full GPU info first
     print_comprehensive_gpu_info()
 
     # Run all tests

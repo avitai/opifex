@@ -1,4 +1,4 @@
-# Comprehensive GPU Acceleration and Profiling
+# Full GPU Acceleration and Profiling
 
 | Metadata | Value |
 |----------|-------|
@@ -10,7 +10,7 @@
 
 ## Overview
 
-This example demonstrates advanced GPU acceleration techniques and comprehensive profiling capabilities in Opifex. The demo showcases performance optimization strategies including memory pooling, mixed precision computation, TensorCore utilization, asynchronous memory operations, and roofline model analysis for neural operators.
+This example demonstrates advanced GPU acceleration techniques and full profiling capabilities in Opifex. The demo showcases performance optimization strategies including memory pooling, mixed precision computation, TensorCore utilization, asynchronous memory operations, and roofline model analysis for neural operators.
 
 The example systematically profiles multiple aspects of GPU performance to identify bottlenecks and optimization opportunities, providing actionable insights for high-performance scientific computing.
 
@@ -29,8 +29,8 @@ The example systematically profiles multiple aspects of GPU performance to ident
 
 ## Files
 
-- **Python Script**: [`examples/benchmarking/gpu_profiling.py`](https://github.com/Opifex/Opifex/blob/main/examples/benchmarking/gpu_profiling.py)
-- **Jupyter Notebook**: [`examples/benchmarking/gpu_profiling.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/benchmarking/gpu_profiling.ipynb)
+- **Python Script**: [`examples/benchmarking/gpu_profiling.py`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/gpu_profiling.py)
+- **Jupyter Notebook**: [`examples/benchmarking/gpu_profiling.ipynb`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/gpu_profiling.ipynb)
 
 ## Quick Start
 
@@ -81,7 +81,7 @@ graph TD
 
 ### Key Components
 
-**OpifexProfilingHarness**: Comprehensive profiling framework with hardware, compilation, and roofline analysis capabilities.
+**OpifexProfilingHarness**: Full profiling framework with hardware, compilation, and roofline analysis capabilities.
 
 **OptimizedGPUManager**: Manages GPU-specific optimizations including matrix multiplication, memory transfer, and compute strategies.
 
@@ -492,7 +492,7 @@ Hardware Specifications:
 2. **Optimize Batch Sizes**: Use roofline analysis to determine optimal batch configurations
 3. **Enable Mixed Precision**: Add use_mixed_precision=True to neural operators
 4. **Implement Memory Pooling**: Use MemoryPoolManager for repeated allocations
-5. **Profile Production Code**: Run comprehensive profiling on your actual workloads
+5. **Profile Production Code**: Run full profiling on your actual workloads
 6. **Tune Hyperparameters**: Use profiling insights to guide hyperparameter search
 7. **Hardware Benchmarking**: Run on different GPU architectures to understand portability
 8. **Continuous Monitoring**: Integrate profiling into CI/CD for performance regression detection
@@ -503,7 +503,7 @@ Hardware Specifications:
 |---------|-------|-------------------|
 | [Neural Operator Benchmark](./operator-benchmark.md) | Advanced | Cross-architecture comparison |
 | [FNO Darcy](../neural-operators/fno-darcy.md) | Intermediate | Training FNO on Darcy flow |
-| [SFNO Climate](../neural-operators/sfno-climate-comprehensive.md) | Advanced | Spherical neural operators |
+| [SFNO Climate](../neural-operators/sfno-climate-full.md) | Advanced | Spherical neural operators |
 | [UFNO Turbulence](../neural-operators/ufno-turbulence.md) | Advanced | Multi-scale turbulence modeling |
 
 ### Further Reading

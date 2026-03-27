@@ -2,7 +2,7 @@
 """
 Mixed Precision Training Infrastructure for Opifex JAX Neural Operators.
 
-This module provides comprehensive mixed precision training support to enable
+This module provides full mixed precision training support to enable
 TensorCore utilization and improve performance based on profiling recommendations.
 
 Key Features:
@@ -155,9 +155,7 @@ def update_loss_scale(
 
     if has_overflow:
         # Reduce loss scale on overflow
-        new_loss_scale = max(
-            mp_state.loss_scale / config.loss_scale_factor, config.min_loss_scale
-        )
+        new_loss_scale = max(mp_state.loss_scale / config.loss_scale_factor, config.min_loss_scale)
         new_overflow_count = mp_state.overflow_count + 1
     else:
         # Increase loss scale periodically if no overflow
@@ -209,9 +207,7 @@ class MixedPrecisionTrainer(BasicTrainer):
         logger.info(f"   • Compute dtype: {self.mp_config.compute_dtype}")
         logger.info(f"   • Parameter dtype: {self.mp_config.param_dtype}")
         logger.info(f"   • Backend: {self.mp_config.backend}")
-        logger.info(
-            f"   • TensorCore alignment: {self.mp_config.enable_tensorcore_alignment}"
-        )
+        logger.info(f"   • TensorCore alignment: {self.mp_config.enable_tensorcore_alignment}")
 
     def _convert_model_to_mixed_precision(self):
         """Convert model parameters to mixed precision format."""
@@ -219,9 +215,7 @@ class MixedPrecisionTrainer(BasicTrainer):
         # Computations will be done in lower precision
         # Model parameters stay in float32
 
-    def _prepare_batch(
-        self, batch: tuple[jax.Array, jax.Array]
-    ) -> tuple[jax.Array, jax.Array]:
+    def _prepare_batch(self, batch: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
         """Prepare batch with mixed precision and TensorCore alignment."""
         x, y = batch
 
@@ -258,9 +252,7 @@ class MixedPrecisionTrainer(BasicTrainer):
             return scaled_loss, loss
 
         # Compute gradients
-        (_, actual_loss), grads = jax.value_and_grad(loss_fn, has_aux=True)(
-            nnx.state(model)
-        )
+        (_, actual_loss), grads = jax.value_and_grad(loss_fn, has_aux=True)(nnx.state(model))
 
         # Check for overflow
         has_overflow = check_for_overflow(grads)

@@ -10,7 +10,7 @@
 
 ## Overview
 
-This benchmark provides a comprehensive comparative analysis of three neural
+This benchmark provides a full comparative analysis of three neural
 operator architectures -- UNO, FNO, and SFNO -- using Opifex's benchmarking
 infrastructure. It evaluates accuracy and inference time across multiple PDE
 datasets at different grid resolutions.
@@ -24,8 +24,8 @@ datasets at different grid resolutions.
 
 ## Files
 
-- **Python Script**: [`examples/benchmarking/operator_benchmark.py`](https://github.com/Opifex/Opifex/blob/main/examples/benchmarking/operator_benchmark.py)
-- **Jupyter Notebook**: [`examples/benchmarking/operator_benchmark.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/benchmarking/operator_benchmark.ipynb)
+- **Python Script**: [`examples/benchmarking/operator_benchmark.py`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/operator_benchmark.py)
+- **Jupyter Notebook**: [`examples/benchmarking/operator_benchmark.ipynb`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/operator_benchmark.ipynb)
 
 ## Quick Start
 
@@ -136,7 +136,7 @@ source activate.sh && python examples/benchmarking/operator_benchmark.py \
 ## Sample Output (32x32 Resolution)
 
 ```text
-INFO: Starting comprehensive neural operator comparative study!
+INFO: Starting full neural operator comparative study!
 INFO: Starting multi-resolution comparative study...
 INFO: ============================================================
 INFO: RESOLUTION 32x32 STUDY

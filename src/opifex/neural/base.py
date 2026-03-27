@@ -90,9 +90,7 @@ class StandardMLP(nnx.Module):
 
         # Validate layer sizes
         if len(layer_sizes) < 2:
-            raise ValueError(
-                "layer_sizes must have at least 2 elements (input and output)"
-            )
+            raise ValueError("layer_sizes must have at least 2 elements (input and output)")
 
         # Create layers following NNX patterns (use nnx.List for Flax 0.12.0+)
         layers = []
@@ -228,9 +226,7 @@ class QuantumMLP(nnx.Module):
 
         # Validate layer sizes
         if len(layer_sizes) < 2:
-            raise ValueError(
-                "layer_sizes must have at least 2 elements (input and output)"
-            )
+            raise ValueError("layer_sizes must have at least 2 elements (input and output)")
 
         # Apply quantum-aware initialization scaling if needed
         quantum_kernel_init = self._apply_quantum_scaling(kernel_init)
@@ -391,8 +387,7 @@ class QuantumMLP(nnx.Module):
             # Assume 3D coordinates, create batch with single item
             if positions.shape[0] % 3 != 0:
                 raise ValueError(
-                    f"Flattened positions length {positions.shape[0]} must be "
-                    f"divisible by 3"
+                    f"Flattened positions length {positions.shape[0]} must be divisible by 3"
                 )
             flat_positions = positions[None, :]  # Add batch dimension
         # Handle both batched and single inputs for 2D/3D
@@ -405,9 +400,7 @@ class QuantumMLP(nnx.Module):
             batch_size = positions.shape[0]
             flat_positions = positions.reshape(batch_size, -1)  # (batch, n_atoms*3)
         else:
-            raise ValueError(
-                f"Expected positions with 1, 2 or 3 dimensions, got {positions.ndim}"
-            )
+            raise ValueError(f"Expected positions with 1, 2 or 3 dimensions, got {positions.ndim}")
 
         # Forward pass to get energy
         energy = self(flat_positions, deterministic=deterministic)
@@ -440,9 +433,7 @@ class QuantumMLP(nnx.Module):
         """
         # This method is used for gradient computation and expects single molecule
         if positions.ndim != 2:
-            raise ValueError(
-                f"_compute_energy_scalar expects 2D positions, got {positions.ndim}D"
-            )
+            raise ValueError(f"_compute_energy_scalar expects 2D positions, got {positions.ndim}D")
 
         # Flatten positions for network input
         flat_positions = positions.flatten()[None, :]  # Add batch dimension
@@ -476,8 +467,7 @@ class QuantumMLP(nnx.Module):
             # Assume 3D coordinates, reshape to (n_atoms, 3)
             if positions.shape[0] % 3 != 0:
                 raise ValueError(
-                    f"Flattened positions length {positions.shape[0]} must be "
-                    f"divisible by 3"
+                    f"Flattened positions length {positions.shape[0]} must be divisible by 3"
                 )
             n_atoms = positions.shape[0] // 3
             positions_reshaped = positions.reshape(n_atoms, 3)
@@ -501,9 +491,7 @@ class QuantumMLP(nnx.Module):
             # Batched case - use vmap to handle batch dimension
             batched_grad = jax.vmap(jax.grad(energy_fn_2d3d))
             return -batched_grad(positions)
-        raise ValueError(
-            f"Expected positions with 1, 2 or 3 dimensions, got {positions.ndim}"
-        )
+        raise ValueError(f"Expected positions with 1, 2 or 3 dimensions, got {positions.ndim}")
 
     def compute_energy_and_forces(
         self,
@@ -528,8 +516,7 @@ class QuantumMLP(nnx.Module):
             # Assume 3D coordinates, reshape to (n_atoms, 3)
             if positions.shape[0] % 3 != 0:
                 raise ValueError(
-                    f"Flattened positions length {positions.shape[0]} must be "
-                    f"divisible by 3"
+                    f"Flattened positions length {positions.shape[0]} must be divisible by 3"
                 )
             n_atoms = positions.shape[0] // 3
             positions_reshaped = positions.reshape(n_atoms, 3)

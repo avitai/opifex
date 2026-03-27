@@ -1,6 +1,6 @@
 # DeepONet: Deep Operator Networks
 
-This module provides comprehensive DeepONet implementations for learning operators between function spaces using the branch-trunk architecture.
+This module provides full DeepONet implementations for learning operators between function spaces using the branch-trunk architecture.
 
 ## Available Implementations
 

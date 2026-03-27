@@ -41,8 +41,8 @@ characteristic lines. PINNs must learn to track the traveling wave solution.
 
 ## Files
 
-- **Python Script**: [`examples/pinns/advection.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/advection.py)
-- **Jupyter Notebook**: [`examples/pinns/advection.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/advection.ipynb)
+- **Python Script**: [`examples/pinns/advection.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/advection.py)
+- **Jupyter Notebook**: [`examples/pinns/advection.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/advection.ipynb)
 
 ## Quick Start
 

@@ -10,7 +10,7 @@
 
 # %% [markdown]
 """
-# Comprehensive U-FNO for Turbulence Modeling
+# Full U-FNO for Turbulence Modeling
 
 | Property    | Value                                                      |
 |-------------|------------------------------------------------------------|
@@ -21,7 +21,7 @@
 ## Overview
 This example demonstrates U-FNO functionality for multi-scale turbulence modeling
 using the Opifex framework with JAX/Flax NNX. Features include grid embeddings,
-physics-aware energy conservation loss, and comprehensive turbulence analysis.
+physics-aware energy conservation loss, and full turbulence analysis.
 
 We use Opifex's `create_turbulence_ufno` factory, `GridEmbedding2D` for positional
 encoding, `create_burgers_loader` for streaming data, and `Trainer.fit()` with
@@ -60,7 +60,7 @@ from opifex.neural.operators.fno.ufno import create_turbulence_ufno
 
 
 print("=" * 70)
-print("Opifex Example: Comprehensive U-FNO for Turbulence Modeling")
+print("Opifex Example: Full U-FNO for Turbulence Modeling")
 print("=" * 70)
 print(f"JAX backend: {jax.default_backend()}")
 print(f"JAX devices: {jax.devices()}")
@@ -161,9 +161,7 @@ The U-FNO model is created via `create_turbulence_ufno` factory.
 
 # %%
 print("\nCreating U-FNO model with grid embedding...")
-grid_embedding = GridEmbedding2D(
-    in_channels=IN_CHANNELS, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]]
-)
+grid_embedding = GridEmbedding2D(in_channels=IN_CHANNELS, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]])
 
 model = create_turbulence_ufno(
     in_channels=grid_embedding.out_channels,
@@ -243,11 +241,11 @@ print(
 
 # %% [markdown]
 """
-## Comprehensive Evaluation
+## Full Evaluation
 """
 
 # %%
-print("\nRunning comprehensive evaluation...")
+print("\nRunning full evaluation...")
 X_test_jnp = jnp.array(X_test_emb)
 Y_test_jnp = jnp.array(Y_test)
 predictions = trained_model(X_test_jnp)
@@ -257,9 +255,7 @@ test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 per_sample_errors = []
 for i in range(Y_test_jnp.shape[0]):
     p, t = predictions[i : i + 1], Y_test_jnp[i : i + 1]
-    per_sample_errors.append(
-        float(jnp.sqrt(jnp.sum((p - t) ** 2)) / jnp.sqrt(jnp.sum(t**2)))
-    )
+    per_sample_errors.append(float(jnp.sqrt(jnp.sum((p - t) ** 2)) / jnp.sqrt(jnp.sum(t**2))))
 mean_error, std_error = (
     float(np.mean(per_sample_errors)),
     float(np.std(per_sample_errors)),
@@ -438,12 +434,8 @@ print("Generating error analysis...")
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 fig.suptitle("U-FNO Error Analysis", fontsize=16, fontweight="bold")
 
-axes[0, 0].hist(
-    per_sample_errors, bins=15, alpha=0.7, color="lightcoral", edgecolor="black"
-)
-axes[0, 0].axvline(
-    mean_error, color="red", ls="--", label=f"Mean: {mean_error:.4f}", lw=2
-)
+axes[0, 0].hist(per_sample_errors, bins=15, alpha=0.7, color="lightcoral", edgecolor="black")
+axes[0, 0].axvline(mean_error, color="red", ls="--", label=f"Mean: {mean_error:.4f}", lw=2)
 axes[0, 0].set_title("Error Distribution", fontweight="bold")
 axes[0, 0].set_xlabel("Rel L2")
 axes[0, 0].legend()
@@ -488,7 +480,7 @@ plt.close()
 After running this example you should observe:
 - Decreasing training loss with physics-aware energy conservation
 - Multi-scale frequency analysis showing U-FNO captures turbulence structure
-- Comprehensive error statistics across the test set
+- Full error statistics across the test set
 
 **Next steps:**
 - Increase resolution and training epochs for better convergence
@@ -500,7 +492,7 @@ After running this example you should observe:
 # %%
 print()
 print("=" * 70)
-print(f"Comprehensive U-FNO Turbulence example completed in {training_time:.1f}s")
+print(f"Full U-FNO Turbulence example completed in {training_time:.1f}s")
 print(f"Mean Relative L2 Error: {mean_error:.6f}")
 print(f"Results saved to: {OUTPUT_DIR}")
 print("=" * 70)

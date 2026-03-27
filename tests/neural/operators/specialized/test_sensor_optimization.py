@@ -113,9 +113,7 @@ class TestSensorOptimization:
         channels = 2
 
         input_function = jax.random.normal(rng_key, (batch_size, num_points, channels))
-        spatial_coords = jax.random.uniform(
-            rng_key, (num_points, 2), minval=-1, maxval=1
-        )
+        spatial_coords = jax.random.uniform(rng_key, (num_points, 2), minval=-1, maxval=1)
 
         output = sensor_opt(input_function, spatial_coords)
 
@@ -165,9 +163,7 @@ class TestSensorOptimization:
         channels = 1
 
         input_function = jax.random.normal(rng_key, (batch_size, num_points, channels))
-        spatial_coords = jax.random.uniform(
-            rng_key, (num_points, 2), minval=-1, maxval=1
-        )
+        spatial_coords = jax.random.uniform(rng_key, (num_points, 2), minval=-1, maxval=1)
 
         grads = nnx.grad(loss_fn)(sensor_opt, input_function, spatial_coords)
 
@@ -176,9 +172,7 @@ class TestSensorOptimization:
 
         # Check that gradients are not all zero
         grad_leaves = jax.tree_util.tree_leaves(grads)
-        grad_norms = [
-            jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")
-        ]
+        grad_norms = [jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")]
         assert len(grad_norms) > 0
         assert any(norm > 1e-8 for norm in grad_norms)
 
@@ -219,15 +213,11 @@ class TestSensorOptimization:
 
         num_points = 32
         channels = 1
-        spatial_coords = jax.random.uniform(
-            rng_key, (num_points, 2), minval=-1, maxval=1
-        )
+        spatial_coords = jax.random.uniform(rng_key, (num_points, 2), minval=-1, maxval=1)
 
         # Test with different batch sizes
         for batch_size in [1, 2, 4]:
-            input_function = jax.random.normal(
-                rng_key, (batch_size, num_points, channels)
-            )
+            input_function = jax.random.normal(rng_key, (batch_size, num_points, channels))
             output = sensor_opt(input_function, spatial_coords)
 
             assert output.shape == (batch_size, 8, channels)

@@ -95,9 +95,7 @@ class TestDirichletBCApplication:
         def time_dependent_func(x, t):
             return t * jnp.ones_like(x)
 
-        bc = DirichletBC(
-            boundary="left", value=time_dependent_func, time_dependent=True
-        )
+        bc = DirichletBC(boundary="left", value=time_dependent_func, time_dependent=True)
         params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
         x = jnp.linspace(0, 1, 5)
 

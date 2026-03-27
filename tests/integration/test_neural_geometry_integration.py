@@ -92,18 +92,16 @@ class TestNeuralOperatorGeometryIntegration:
             assert jnp.all(jnp.isfinite(output))
 
             # Test boundary condition application (simplified check)
-            boundary_coords = jnp.array(
-                [[0.0, 0.5], [1.0, 0.5], [0.5, 0.0], [0.5, 1.0]]
-            )[None, ...]  # Add batch dimension: (1, 4, 2)
+            boundary_coords = jnp.array([[0.0, 0.5], [1.0, 0.5], [0.5, 0.0], [0.5, 1.0]])[
+                None, ...
+            ]  # Add batch dimension: (1, 4, 2)
             boundary_output = deeponet(sensor_data, boundary_coords)
 
             # Boundary conditions should be applicable
             assert boundary_output.shape == (1, 4)
             assert jnp.all(jnp.isfinite(boundary_output))
 
-    def test_geometry_aware_training_integration(
-        self, integration_framework, test_rngs
-    ):
+    def test_geometry_aware_training_integration(self, integration_framework, test_rngs):
         """Test geometry-aware neural network training."""
         with integration_framework.managed_resources():
             # Note: Circle geometry defined for demonstration - could be integrated with training loss
@@ -156,9 +154,7 @@ class TestNeuralOperatorGeometryIntegration:
             assert jnp.isfinite(loss_value)
             assert loss_value >= 0
             # Check that gradients exist for the FNO model structure
-            assert hasattr(
-                gradients, "fourier_layers"
-            )  # Has gradients for fourier layers
+            assert hasattr(gradients, "fourier_layers")  # Has gradients for fourier layers
 
 
 class TestGeometryConstraintPreservation:
@@ -248,9 +244,7 @@ class TestGeometryConstraintPreservation:
 class TestPerformanceIntegration:
     """Test performance characteristics of neural-geometry integration."""
 
-    def test_neural_geometry_performance(
-        self, integration_framework, performance_benchmark
-    ):
+    def test_neural_geometry_performance(self, integration_framework, performance_benchmark):
         """Test performance of neural operators on geometric domains."""
 
         # Create test scenario
@@ -273,9 +267,7 @@ class TestPerformanceIntegration:
             y = jnp.linspace(0, 1, grid_size)
             X, Y = jnp.meshgrid(x, y)
 
-            input_data = jnp.stack([jnp.sin(jnp.pi * X), jnp.cos(jnp.pi * Y)], axis=0)[
-                None, ...
-            ]
+            input_data = jnp.stack([jnp.sin(jnp.pi * X), jnp.cos(jnp.pi * Y)], axis=0)[None, ...]
 
             # Forward pass
             output = fno(input_data)
@@ -309,9 +301,7 @@ class TestPerformanceIntegration:
                 )
 
                 # Create input data
-                input_data = jax.random.normal(
-                    rngs.params(), (1, 1, grid_size, grid_size)
-                )
+                input_data = jax.random.normal(rngs.params(), (1, 1, grid_size, grid_size))
 
                 # Forward pass
                 output = fno(input_data)

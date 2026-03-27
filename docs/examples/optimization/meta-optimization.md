@@ -39,8 +39,8 @@ initialization with the same step budget. This represents a ~10x speedup in conv
 
 ## Files
 
-- **Python script**: [`examples/optimization/meta_optimization.py`](https://github.com/Opifex/Opifex/blob/main/examples/optimization/meta_optimization.py)
-- **Jupyter notebook**: [`examples/optimization/meta_optimization.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/optimization/meta_optimization.ipynb)
+- **Python script**: [`examples/optimization/meta_optimization.py`](https://github.com/avitai/opifex/blob/main/examples/optimization/meta_optimization.py)
+- **Jupyter notebook**: [`examples/optimization/meta_optimization.ipynb`](https://github.com/avitai/opifex/blob/main/examples/optimization/meta_optimization.ipynb)
 
 ## Quick Start
 
