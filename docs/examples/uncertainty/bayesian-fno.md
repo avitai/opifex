@@ -45,8 +45,8 @@ approach adds Bayesian capabilities to any existing neural operator.
 
 ## Files
 
-- **Python Script**: [`examples/uncertainty/bayesian_fno.py`](https://github.com/Opifex/Opifex/blob/main/examples/uncertainty/bayesian_fno.py)
-- **Jupyter Notebook**: [`examples/uncertainty/bayesian_fno.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/uncertainty/bayesian_fno.ipynb)
+- **Python Script**: [`examples/uncertainty/bayesian_fno.py`](https://github.com/avitai/opifex/blob/main/examples/uncertainty/bayesian_fno.py)
+- **Jupyter Notebook**: [`examples/uncertainty/bayesian_fno.ipynb`](https://github.com/avitai/opifex/blob/main/examples/uncertainty/bayesian_fno.ipynb)
 
 ## Quick Start
 

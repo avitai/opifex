@@ -7,7 +7,7 @@ from opifex.geometry.csg import Rectangle
 from opifex.geometry.manifolds.spherical import SphericalManifold
 
 
-# Define the Master Geometry Protocol expected by Phase 1
+# Define the Master Geometry Protocol expected by Version 1
 @runtime_checkable
 class Geometry(Protocol):
     """Unified Geometry Protocol for Opifex."""
@@ -35,15 +35,11 @@ class TestGeometryProtocolCompliance:
         # This checks runtime compliance structure
         # Currently expected to FAIL because Rectangle lacks `sample_interior` and `boundary_sdf`
         # (It has `distance` matching boundary_sdf logic, but different name)
-        assert isinstance(rect, Geometry), (
-            "Rectangle does not satisfy Geometry protocol"
-        )
+        assert isinstance(rect, Geometry), "Rectangle does not satisfy Geometry protocol"
 
     def test_spherical_manifold_compliance(self):
         """Test if SphericalManifold adheres to the new Geometry protocol."""
         sphere = SphericalManifold(radius=1.0, dimension=2)
 
         # Currently expected to FAIL because Manifold lacks all 3 strict methods
-        assert isinstance(sphere, Geometry), (
-            "SphericalManifold does not satisfy Geometry protocol"
-        )
+        assert isinstance(sphere, Geometry), "SphericalManifold does not satisfy Geometry protocol"

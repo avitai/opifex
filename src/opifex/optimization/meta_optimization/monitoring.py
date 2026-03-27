@@ -1,6 +1,6 @@
 """Performance monitoring and analytics for meta-optimization.
 
-This module provides comprehensive performance monitoring capabilities
+This module provides full performance monitoring capabilities
 including metric tracking, convergence detection, and performance
 analytics for optimization algorithms.
 
@@ -19,7 +19,7 @@ import jax.numpy as jnp
 class PerformanceMonitor:
     """Performance monitoring and analytics for meta-optimization.
 
-    This class provides comprehensive performance monitoring capabilities
+    This class provides full performance monitoring capabilities
     including metric tracking, convergence detection, and performance
     analytics for optimization algorithms.
 
@@ -92,9 +92,7 @@ class PerformanceMonitor:
 
                 # Keep only recent history
                 if len(self._metric_history[metric]) > self.window_size:
-                    self._metric_history[metric] = self._metric_history[metric][
-                        -self.window_size :
-                    ]
+                    self._metric_history[metric] = self._metric_history[metric][-self.window_size :]
 
                 # Update convergence tracking
                 self._update_convergence_tracking(metric, value)
@@ -141,7 +139,7 @@ class PerformanceMonitor:
         return value_range < self.convergence_tolerance
 
     def get_performance_analytics(self) -> dict[str, Any]:
-        """Get comprehensive performance analytics.
+        """Get full performance analytics.
 
         Returns:
             Dictionary containing performance analytics
@@ -182,9 +180,7 @@ class PerformanceMonitor:
                 efficiency = total_improvement / steps_taken if steps_taken > 0 else 0.0
                 analytics["optimization_efficiency"] = efficiency
 
-        analytics["convergence_rate"] = sum(self._convergence_state.values()) / len(
-            self.metrics
-        )
+        analytics["convergence_rate"] = sum(self._convergence_state.values()) / len(self.metrics)
         analytics["stability_metrics"] = {
             metric: self._steps_since_improvement[metric] < self.convergence_patience
             for metric in self.metrics
@@ -208,17 +204,11 @@ class PerformanceMonitor:
             scf_history = self._metric_history["scf_iterations"]
             if scf_history:
                 avg_scf_iters = jnp.mean(jnp.array(scf_history))
-                scf_trend = (
-                    jnp.diff(jnp.array(scf_history[-10:]))
-                    if len(scf_history) > 1
-                    else [0]
-                )
+                scf_trend = jnp.diff(jnp.array(scf_history[-10:])) if len(scf_history) > 1 else [0]
                 quantum_analytics["scf_efficiency"] = {
                     "average_iterations": float(avg_scf_iters),
                     "recent_trend": float(jnp.mean(jnp.array(scf_trend))),
-                    "acceleration": float(
-                        jnp.mean(jnp.array(scf_trend)) < 0
-                    ),  # Decreasing is good
+                    "acceleration": float(jnp.mean(jnp.array(scf_trend)) < 0),  # Decreasing is good
                 }
 
         # Energy convergence analysis
@@ -236,12 +226,9 @@ class PerformanceMonitor:
         if "chemical_accuracy" in self._metric_history:
             accuracy_history = self._metric_history["chemical_accuracy"]
             if accuracy_history:
-                target_achieved = [
-                    acc < 1e-3 for acc in accuracy_history
-                ]  # 1 kcal/mol target
+                target_achieved = [acc < 1e-3 for acc in accuracy_history]  # 1 kcal/mol target
                 quantum_analytics["chemical_accuracy_progress"] = {
-                    "target_achieved_ratio": sum(target_achieved)
-                    / len(target_achieved),
+                    "target_achieved_ratio": sum(target_achieved) / len(target_achieved),
                     "best_accuracy": min(accuracy_history),
                     "current_accuracy": accuracy_history[-1],
                 }

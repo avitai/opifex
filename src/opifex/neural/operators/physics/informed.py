@@ -218,9 +218,7 @@ class PhysicsInformedOperator(nnx.Module):
         solution = self.__call__(coordinates, deterministic=deterministic)
 
         # Physics loss
-        physics_loss = self.compute_physics_loss(
-            coordinates, deterministic=deterministic
-        )
+        physics_loss = self.compute_physics_loss(coordinates, deterministic=deterministic)
 
         # Data loss (if target provided)
         if target_solution is not None:

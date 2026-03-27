@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 @beartype
-def validate_tensor_shape(
-    tensor: jax.Array, expected_dims: int, min_spatial_dims: int = 1
-) -> None:
+def validate_tensor_shape(tensor: jax.Array, expected_dims: int, min_spatial_dims: int = 1) -> None:
     """
     Validate tensor has expected number of dimensions.
 
@@ -38,8 +36,7 @@ def validate_tensor_shape(
     """
     if len(tensor.shape) != expected_dims:
         raise ValueError(
-            f"Expected {expected_dims}D tensor, got {len(tensor.shape)}D: "
-            f"{tensor.shape}"
+            f"Expected {expected_dims}D tensor, got {len(tensor.shape)}D: {tensor.shape}"
         )
 
     if len(tensor.shape) < 2 + min_spatial_dims:
@@ -134,9 +131,7 @@ def standardized_fft(x: jax.Array, spatial_dims: int) -> jax.Array:
 
 
 @beartype
-def standardized_ifft(
-    x_ft: jax.Array, target_shape: Sequence[int], spatial_dims: int
-) -> Array:
+def standardized_ifft(x_ft: jax.Array, target_shape: Sequence[int], spatial_dims: int) -> Array:
     """
     Standardized IFFT operation with proper shape restoration.
 
@@ -194,17 +189,13 @@ def apply_linear_with_channel_transform(x: Array, linear_layer: nnx.Linear) -> A
 
     # Reshape back to spatial format
     out_channels = y_flat.shape[-1]
-    y_reshaped = y_flat.reshape(
-        batch_size, -1, out_channels
-    )  # (batch, points, out_channels)
+    y_reshaped = y_flat.reshape(batch_size, -1, out_channels)  # (batch, points, out_channels)
     y_reshaped = jnp.transpose(y_reshaped, (0, 2, 1))  # (batch, out_channels, points)
     return y_reshaped.reshape(batch_size, out_channels, *spatial_shape)
 
 
 @beartype
-def safe_spectral_multiply(
-    x_modes: Array, weights: Array, modes: Sequence[int]
-) -> Array:
+def safe_spectral_multiply(x_modes: Array, weights: Array, modes: Sequence[int]) -> Array:
     """
     Safe spectral multiplication with automatic shape handling.
 
@@ -220,9 +211,7 @@ def safe_spectral_multiply(
     _, in_channels = x_modes.shape[:2]
     weight_in_channels, _ = weights.shape[:2]
 
-    validate_channel_compatibility(
-        in_channels, weight_in_channels, "safe_spectral_multiply"
-    )
+    validate_channel_compatibility(in_channels, weight_in_channels, "safe_spectral_multiply")
 
     # Ensure consistent mode handling between input and weights
     # Both should be truncated to the minimum effective modes
@@ -249,19 +238,12 @@ def safe_spectral_multiply(
         if x_axis < len(effective_x.shape) and effective_x.shape[x_axis] > eff_mode:
             effective_x = jnp.take(effective_x, jnp.arange(eff_mode), axis=x_axis)
 
-        if (
-            w_axis < len(effective_weights.shape)
-            and effective_weights.shape[w_axis] > eff_mode
-        ):
-            effective_weights = jnp.take(
-                effective_weights, jnp.arange(eff_mode), axis=w_axis
-            )
+        if w_axis < len(effective_weights.shape) and effective_weights.shape[w_axis] > eff_mode:
+            effective_weights = jnp.take(effective_weights, jnp.arange(eff_mode), axis=w_axis)
 
     # Validate einsum dimensions before operation
     pattern = "bi...,ij...->bj..."
-    validate_einsum_dimensions(
-        effective_x, effective_weights, pattern, "safe_spectral_multiply"
-    )
+    validate_einsum_dimensions(effective_x, effective_weights, pattern, "safe_spectral_multiply")
 
     # Perform spectral multiplication using einsum
     return jnp.einsum(pattern, effective_x, effective_weights)
@@ -327,9 +309,7 @@ def interpolate_spatial_dimensions(
     for _, (current_size, target_size) in enumerate(
         zip(current_spatial, target_spatial_shape, strict=False)
     ):
-        axis_indices = jnp.asarray(
-            jnp.round(jnp.linspace(0, current_size - 1, target_size))
-        )
+        axis_indices = jnp.asarray(jnp.round(jnp.linspace(0, current_size - 1, target_size)))
         indices.append(axis_indices)
 
     # Apply interpolation
@@ -404,9 +384,7 @@ class StandardSpectralConv(nnx.Module):
         else:
             raise ValueError(f"Unsupported spatial dimensions: {spatial_dims}")
 
-        self.weights = nnx.Param(
-            nnx.initializers.normal(stddev=0.02)(rngs.params(), weight_shape)
-        )
+        self.weights = nnx.Param(nnx.initializers.normal(stddev=0.02)(rngs.params(), weight_shape))
 
     def __call__(self, x_ft: Array) -> Array:
         """
@@ -448,9 +426,7 @@ def match_spatial_dimensions(x: Array, target_shape: Sequence[int]) -> Array:
 
 
 @beartype
-def create_channel_mapper(
-    in_channels: int, out_channels: int, rngs: nnx.Rngs
-) -> nnx.Linear:
+def create_channel_mapper(in_channels: int, out_channels: int, rngs: nnx.Rngs) -> nnx.Linear:
     """
     Create a channel mapping layer for dimension compatibility.
 
@@ -466,7 +442,7 @@ def create_channel_mapper(
 
 
 class TensorShapeValidator:
-    """Comprehensive tensor shape validation for neural operators."""
+    """Full tensor shape validation for neural operators."""
 
     @staticmethod
     def validate_einsum(equation: str, *operands: Array) -> None:
@@ -495,9 +471,7 @@ class TensorShapeValidator:
                 )
 
             # Validate each operand's dimensions
-            for i, (operand, input_spec) in enumerate(
-                zip(operands, input_specs, strict=False)
-            ):
+            for i, (operand, input_spec) in enumerate(zip(operands, input_specs, strict=False)):
                 spec = input_spec.strip()
                 expected_dims = len(spec)
                 actual_dims = len(operand.shape)
@@ -546,17 +520,11 @@ class TensorShapeValidator:
         """
         # Validate basic shape requirements
         if len(query.shape) != 3:
-            raise ValueError(
-                f"Query must be 3D [batch, seq_len, d_model], got shape {query.shape}"
-            )
+            raise ValueError(f"Query must be 3D [batch, seq_len, d_model], got shape {query.shape}")
         if len(key.shape) != 3:
-            raise ValueError(
-                f"Key must be 3D [batch, seq_len, d_model], got shape {key.shape}"
-            )
+            raise ValueError(f"Key must be 3D [batch, seq_len, d_model], got shape {key.shape}")
         if len(value.shape) != 3:
-            raise ValueError(
-                f"Value must be 3D [batch, seq_len, d_model], got shape {value.shape}"
-            )
+            raise ValueError(f"Value must be 3D [batch, seq_len, d_model], got shape {value.shape}")
 
         batch_q, _, d_q = query.shape
         batch_k, seq_k, d_k = key.shape
@@ -565,8 +533,7 @@ class TensorShapeValidator:
         # Validate batch dimensions match
         if not (batch_q == batch_k == batch_v):
             raise ValueError(
-                f"Batch dimensions must match: query={batch_q}, "
-                f"key={batch_k}, value={batch_v}"
+                f"Batch dimensions must match: query={batch_q}, key={batch_k}, value={batch_v}"
             )
 
         # Validate sequence lengths match for key and value
@@ -577,9 +544,7 @@ class TensorShapeValidator:
 
         # Validate query and key have same model dimension
         if d_q != d_k:
-            raise ValueError(
-                f"Query and key model dimensions must match: query={d_q}, key={d_k}"
-            )
+            raise ValueError(f"Query and key model dimensions must match: query={d_q}, key={d_k}")
 
     @staticmethod
     def validate_spectral_conv_dims(input_tensor: Array, weights: Array) -> None:
@@ -625,13 +590,10 @@ class TensorShapeValidator:
             )
 
         # Check that mode dimensions don't exceed spatial dimensions
-        for i, (spatial_size, mode_size) in enumerate(
-            zip(spatial_dims, mode_dims, strict=False)
-        ):
+        for i, (spatial_size, mode_size) in enumerate(zip(spatial_dims, mode_dims, strict=False)):
             if mode_size > spatial_size:
                 raise ValueError(
-                    f"Mode size {mode_size} in dimension {i} exceeds "
-                    f"spatial size {spatial_size}"
+                    f"Mode size {mode_size} in dimension {i} exceeds spatial size {spatial_size}"
                 )
 
     @staticmethod
@@ -652,9 +614,7 @@ class TensorShapeValidator:
                 expected = expected_shapes[name]
                 actual = tensor.shape
                 if actual != expected:
-                    raise ValueError(
-                        f"Tensor '{name}' has shape {actual}, expected {expected}"
-                    )
+                    raise ValueError(f"Tensor '{name}' has shape {actual}, expected {expected}")
 
 
 class EinsumPatterns:
@@ -715,9 +675,7 @@ def validate_tensor_shapes(func):
         except Exception:
             logger.exception(f"Tensor operation failed in {func.__name__}")
             if args:
-                logger.info(
-                    f"Input shapes: {[getattr(arg, 'shape', 'N/A') for arg in args]}"
-                )
+                logger.info(f"Input shapes: {[getattr(arg, 'shape', 'N/A') for arg in args]}")
             raise
 
     return wrapper
@@ -749,9 +707,7 @@ def safe_einsum(equation: str, *operands: Array, **kwargs) -> Array:
         raise
 
 
-def safe_attention(
-    query: Array, key: Array, value: Array, mask: Array | None = None
-) -> Array:
+def safe_attention(query: Array, key: Array, value: Array, mask: Array | None = None) -> Array:
     """Safe attention computation with validation.
 
     Args:
@@ -779,9 +735,7 @@ def safe_attention(
     return safe_einsum(EinsumPatterns.ATTENTION_SCORES_V, attention_weights, value)
 
 
-def safe_spectral_conv(
-    input_tensor: Array, weights: Array, modes: tuple[int, ...]
-) -> Array:
+def safe_spectral_conv(input_tensor: Array, weights: Array, modes: tuple[int, ...]) -> Array:
     """Safe spectral convolution with validation.
 
     Args:
@@ -803,9 +757,7 @@ def safe_spectral_conv(
 
     # Extract modes
     mode_slices = [slice(None), slice(None)]  # batch and channel dimensions
-    for i, (spatial_size, mode_count) in enumerate(
-        zip(spatial_dims, modes, strict=False)
-    ):
+    for i, (spatial_size, mode_count) in enumerate(zip(spatial_dims, modes, strict=False)):
         if i == len(spatial_dims) - 1:  # Last dimension for rfft
             mode_slices.append(slice(0, min(mode_count, spatial_size // 2 + 1)))
         else:
@@ -830,10 +782,7 @@ def safe_spectral_conv(
     pad_widths = [(0, 0), (0, 0)]  # No padding for batch and channel dims
     for i, (spatial_size, _) in enumerate(zip(spatial_dims, modes, strict=False)):
         current_size = out_ft.shape[2 + i]
-        if i == len(spatial_dims) - 1:  # Last dimension for rfft
-            target_size = spatial_size // 2 + 1
-        else:
-            target_size = spatial_size
+        target_size = spatial_size // 2 + 1 if i == len(spatial_dims) - 1 else spatial_size
 
         if current_size < target_size:
             pad_widths.append((0, target_size - current_size))
@@ -844,9 +793,7 @@ def safe_spectral_conv(
         out_ft = jnp.pad(out_ft, pad_widths)
 
     # Transform back to spatial domain
-    return jnp.fft.irfftn(
-        out_ft, s=spatial_dims, axes=tuple(range(2, len(out_ft.shape)))
-    )
+    return jnp.fft.irfftn(out_ft, s=spatial_dims, axes=tuple(range(2, len(out_ft.shape))))
 
 
 # Utility functions for common tensor operations
@@ -887,7 +834,7 @@ def validate_operator_config(config: dict[str, Any], required_keys: list[str]) -
 
 
 def get_tensor_info(tensor: Array) -> dict[str, Any]:
-    """Get comprehensive information about a tensor.
+    """Get full information about a tensor.
 
     Args:
         tensor: Input tensor
@@ -906,6 +853,33 @@ def get_tensor_info(tensor: Array) -> dict[str, Any]:
         "mean": float(jnp.mean(tensor)),
         "std": float(jnp.std(tensor)),
     }
+
+
+def pad_spectral_1d(
+    out_ft: Array,
+    batch_size: int,
+    out_channels: int,
+    target_freq_size: int,
+) -> Array:
+    """Pad 1D spectral output to target frequency resolution.
+
+    Used after spectral convolution when the output has fewer modes than
+    the original grid requires. This avoids duplicating the padding logic
+    across FNO variants (base, factorized, multiscale).
+
+    Args:
+        out_ft: Spectral output of shape (batch, channels, modes).
+        batch_size: Batch dimension size.
+        out_channels: Output channel count.
+        target_freq_size: Target frequency dimension (grid_size // 2 + 1).
+
+    Returns:
+        Padded spectral tensor of shape (batch, channels, target_freq_size).
+    """
+    if out_ft.shape[-1] >= target_freq_size:
+        return out_ft
+    padded = jnp.zeros((batch_size, out_channels, target_freq_size), dtype=out_ft.dtype)
+    return padded.at[:, :, : out_ft.shape[-1]].set(out_ft)
 
 
 def _raise_einsum_dimension_error(message: str) -> None:

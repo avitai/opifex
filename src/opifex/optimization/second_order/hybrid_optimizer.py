@@ -287,9 +287,7 @@ class HybridOptimizer:
             last_loss = loss_history[-1]
             if not (jnp.isfinite(first_loss) and jnp.isfinite(last_loss)):
                 return False
-            rel_improvement = jnp.abs(first_loss - last_loss) / (
-                jnp.abs(first_loss) + 1e-8
-            )
+            rel_improvement = jnp.abs(first_loss - last_loss) / (jnp.abs(first_loss) + 1e-8)
             return float(rel_improvement) < self.config.relative_improvement_threshold
 
         return False

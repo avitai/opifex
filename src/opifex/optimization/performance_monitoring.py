@@ -1,7 +1,7 @@
 """Performance monitoring and prediction for Opifex production optimization.
 
 This module implements AI-powered performance monitoring, anomaly detection,
-and predictive scaling for the Phase 7.4 Production Optimization system.
+and predictive scaling for the Version 7.4 Production Optimization system.
 
 Part of: Hybrid Performance Platform + Intelligent Edge + Adaptive Optimization
 """
@@ -42,7 +42,7 @@ class Anomaly:
 
 @dataclass
 class PerformanceMetrics:
-    """Comprehensive performance metrics for monitoring."""
+    """Full performance metrics for monitoring."""
 
     timestamp: float
     latency_ms: float
@@ -88,9 +88,7 @@ class PerformanceMonitorProtocol(Protocol):
         """Collect current performance metrics."""
         ...
 
-    async def analyze_trends(
-        self, metrics_history: list[PerformanceMetrics]
-    ) -> dict[str, Any]:
+    async def analyze_trends(self, metrics_history: list[PerformanceMetrics]) -> dict[str, Any]:
         """Analyze performance trends."""
         ...
 
@@ -226,49 +224,37 @@ class PerformanceMonitor:
         # collect from actual system monitoring)
         return PerformanceMetrics(
             timestamp=current_time,
-            latency_ms=float(
-                jax.random.normal(jax.random.PRNGKey(int(current_time)), ()) * 2 + 10
-            ),
+            latency_ms=float(jax.random.normal(jax.random.PRNGKey(int(current_time)), ()) * 2 + 10),
             throughput_rps=float(
-                jax.random.normal(jax.random.PRNGKey(int(current_time + 1)), ()) * 20
-                + 100
+                jax.random.normal(jax.random.PRNGKey(int(current_time + 1)), ()) * 20 + 100
             ),
             memory_usage_gb=float(
-                jax.random.normal(jax.random.PRNGKey(int(current_time + 2)), ()) * 0.5
-                + 2.0
+                jax.random.normal(jax.random.PRNGKey(int(current_time + 2)), ()) * 0.5 + 2.0
             ),
             gpu_utilization=float(
-                jax.random.uniform(jax.random.PRNGKey(int(current_time + 3)), ()) * 0.3
-                + 0.7
+                jax.random.uniform(jax.random.PRNGKey(int(current_time + 3)), ()) * 0.3 + 0.7
             ),
             cpu_utilization=float(
-                jax.random.uniform(jax.random.PRNGKey(int(current_time + 4)), ()) * 0.4
-                + 0.5
+                jax.random.uniform(jax.random.PRNGKey(int(current_time + 4)), ()) * 0.4 + 0.5
             ),
             energy_efficiency=float(
-                jax.random.uniform(jax.random.PRNGKey(int(current_time + 5)), ()) * 0.2
-                + 0.8
+                jax.random.uniform(jax.random.PRNGKey(int(current_time + 5)), ()) * 0.2 + 0.8
             ),
             error_rate=float(
                 jax.random.uniform(jax.random.PRNGKey(int(current_time + 6)), ()) * 0.01
             ),
             numerical_stability=float(
-                jax.random.uniform(jax.random.PRNGKey(int(current_time + 7)), ()) * 0.1
-                + 0.9
+                jax.random.uniform(jax.random.PRNGKey(int(current_time + 7)), ()) * 0.1 + 0.9
             ),
             conservation_score=float(
-                jax.random.uniform(jax.random.PRNGKey(int(current_time + 8)), ()) * 0.1
-                + 0.9
+                jax.random.uniform(jax.random.PRNGKey(int(current_time + 8)), ()) * 0.1 + 0.9
             ),
             physics_consistency=float(
-                jax.random.uniform(jax.random.PRNGKey(int(current_time + 9)), ()) * 0.1
-                + 0.9
+                jax.random.uniform(jax.random.PRNGKey(int(current_time + 9)), ()) * 0.1 + 0.9
             ),
         )
 
-    async def detect_performance_anomalies(
-        self, metrics: PerformanceMetrics
-    ) -> list[Anomaly]:
+    async def detect_performance_anomalies(self, metrics: PerformanceMetrics) -> list[Anomaly]:
         """Detect performance anomalies using AI models."""
         anomalies = []
 
@@ -315,9 +301,7 @@ class PerformanceMonitor:
                 timestamp=metrics.timestamp,
                 severity=severity,
                 anomaly_type="performance_anomaly",
-                description=(
-                    f"Performance anomaly detected with error {error_value:.3f}"
-                ),
+                description=(f"Performance anomaly detected with error {error_value:.3f}"),
                 metrics={
                     "latency_ms": metrics.latency_ms,
                     "throughput_rps": metrics.throughput_rps,

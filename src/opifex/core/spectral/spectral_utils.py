@@ -167,9 +167,7 @@ def wavenumber_grid(
     dx_list = ensure_static_grid_spacing(dx, spatial_dims)
 
     if len(dx_list) != spatial_dims:
-        raise ValueError(
-            f"dx length {len(dx_list)} doesn't match shape dimensions {spatial_dims}"
-        )
+        raise ValueError(f"dx length {len(dx_list)} doesn't match shape dimensions {spatial_dims}")
 
     # Generate wavenumber arrays for each dimension
     k_arrays = []

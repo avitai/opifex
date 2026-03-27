@@ -32,7 +32,7 @@ Data-driven operator learning: map input functions to output functions.
 | [FNO on Darcy Flow](neural-operators/fno-darcy.md) | FNO + GridEmbedding2D | Darcy Flow 64x64 | Standard FNO benchmark |
 | [FNO on Burgers](neural-operators/fno-burgers.md) | FNO | Burgers 1D | Time-dependent PDE |
 | [SFNO Climate (Simple)](neural-operators/sfno-climate-simple.md) | Spherical FNO | Shallow Water 32x32 | Quick start for spherical data |
-| [SFNO Climate (Comprehensive)](neural-operators/sfno-climate-comprehensive.md) | Spherical FNO + Conservation | Shallow Water 64x64 | Conservation-aware training |
+| [SFNO Climate (Full)](neural-operators/sfno-climate-full.md) | Spherical FNO + Conservation | Shallow Water 64x64 | Conservation-aware training |
 | [U-FNO on Turbulence](neural-operators/ufno-turbulence.md) | U-FNO + Energy Loss | 2D Burgers 64x64 | Multi-scale architecture |
 | [UNO on Darcy Flow](neural-operators/uno-darcy.md) | UNO + Super-Resolution | Darcy Flow 32x32 | Zero-shot super-resolution |
 | [TFNO on Darcy Flow](neural-operators/tfno-darcy.md) | Tensorized FNO | Darcy Flow 64x64 | Memory-efficient decomposition |

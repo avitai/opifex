@@ -26,9 +26,7 @@ def _lazy_import_fourier_enhanced_deeponet():
 
         return FourierEnhancedDeepONet
     except ImportError as e:
-        raise ValueError(
-            f"FourierEnhancedDeepONet is not available. Import error: {e}"
-        ) from e
+        raise ValueError(f"FourierEnhancedDeepONet is not available. Import error: {e}") from e
 
 
 def _lazy_import_adaptive_deeponet():
@@ -48,9 +46,7 @@ def _lazy_import_graph_neural_operator():
 
         return GraphNeuralOperator
     except ImportError as e:
-        raise ValueError(
-            f"GraphNeuralOperator is not available. Import error: {e}"
-        ) from e
+        raise ValueError(f"GraphNeuralOperator is not available. Import error: {e}") from e
 
 
 def _lazy_import_multiphysics_deeponet():
@@ -70,9 +66,7 @@ def _lazy_import_latent_neural_operator():
 
         return LatentNeuralOperator
     except ImportError as e:
-        raise ValueError(
-            f"LatentNeuralOperator is not available. Import error: {e}"
-        ) from e
+        raise ValueError(f"LatentNeuralOperator is not available. Import error: {e}") from e
 
 
 class OperatorNetwork(nnx.Module):
@@ -141,9 +135,7 @@ class OperatorNetwork(nnx.Module):
             return self._create_latent_operator(config, activation, rngs)
         raise ValueError(f"Unknown operator type: {operator_type}")
 
-    def _create_fno_operator(
-        self, config: dict[str, Any], activation, rngs: nnx.Rngs
-    ) -> Any:
+    def _create_fno_operator(self, config: dict[str, Any], activation, rngs: nnx.Rngs) -> Any:
         """Create FNO operator."""
         return FourierNeuralOperator(
             in_channels=config["in_channels"],
@@ -151,6 +143,7 @@ class OperatorNetwork(nnx.Module):
             hidden_channels=config["hidden_channels"],
             modes=config["modes"],
             num_layers=config["num_layers"],
+            spatial_dims=config.get("spatial_dims", 2),
             activation=activation,
             factorization_type=config.get("factorization_type"),
             factorization_rank=config.get("factorization_rank"),
@@ -158,9 +151,7 @@ class OperatorNetwork(nnx.Module):
             rngs=rngs,
         )
 
-    def _create_deeponet_operator(
-        self, config: dict[str, Any], activation, rngs: nnx.Rngs
-    ) -> Any:
+    def _create_deeponet_operator(self, config: dict[str, Any], activation, rngs: nnx.Rngs) -> Any:
         """Create DeepONet operator."""
         if config.get("enhanced", False):
             MultiPhysicsDeepONet = _lazy_import_multiphysics_deeponet()
@@ -182,14 +173,10 @@ class OperatorNetwork(nnx.Module):
                 )
         # Build sizes from input/hidden dims for new API
         branch_sizes = (
-            [config["branch_input_dim"]]
-            + config["branch_hidden_dims"]
-            + [config["latent_dim"]]
+            [config["branch_input_dim"]] + config["branch_hidden_dims"] + [config["latent_dim"]]
         )
         trunk_sizes = (
-            [config["trunk_input_dim"]]
-            + config["trunk_hidden_dims"]
-            + [config["latent_dim"]]
+            [config["trunk_input_dim"]] + config["trunk_hidden_dims"] + [config["latent_dim"]]
         )
         return DeepONet(
             branch_sizes=branch_sizes,
@@ -206,14 +193,10 @@ class OperatorNetwork(nnx.Module):
 
         # Build sizes from input/hidden dims for new API
         branch_sizes = (
-            [config["branch_input_dim"]]
-            + config["branch_hidden_dims"]
-            + [config["latent_dim"]]
+            [config["branch_input_dim"]] + config["branch_hidden_dims"] + [config["latent_dim"]]
         )
         trunk_sizes = (
-            [config["trunk_input_dim"]]
-            + config["trunk_hidden_dims"]
-            + [config["latent_dim"]]
+            [config["trunk_input_dim"]] + config["trunk_hidden_dims"] + [config["latent_dim"]]
         )
         return FourierEnhancedDeepONet(
             branch_sizes=branch_sizes,
@@ -242,9 +225,7 @@ class OperatorNetwork(nnx.Module):
             rngs=rngs,
         )
 
-    def _create_gno_operator(
-        self, config: dict[str, Any], activation, rngs: nnx.Rngs
-    ) -> Any:
+    def _create_gno_operator(self, config: dict[str, Any], activation, rngs: nnx.Rngs) -> Any:
         """Create Graph Neural Operator."""
         GraphNeuralOperator = _lazy_import_graph_neural_operator()
 
@@ -257,9 +238,7 @@ class OperatorNetwork(nnx.Module):
             rngs=rngs,
         )
 
-    def _create_latent_operator(
-        self, config: dict[str, Any], activation, rngs: nnx.Rngs
-    ) -> Any:
+    def _create_latent_operator(self, config: dict[str, Any], activation, rngs: nnx.Rngs) -> Any:
         """Create Latent Neural Operator."""
         LatentNeuralOperator = _lazy_import_latent_neural_operator()
 

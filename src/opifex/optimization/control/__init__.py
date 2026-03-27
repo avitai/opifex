@@ -3,7 +3,7 @@
 This module implements differentiable predictive control components including
 system identification networks and model predictive control frameworks.
 
-Sprint 5.2: Differentiable Predictive Control
+Version 5.2: Differentiable Predictive Control
 - Task 5.2.1: System Identification Networks (COMPLETE)
 - Task 5.2.2: Model Predictive Control Framework (COMPLETE)
 """

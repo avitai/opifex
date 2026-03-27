@@ -98,9 +98,7 @@ class TestOperatorNetwork:
         assert op_net.operator_type == "deeponet"
         # Note: MultiPhysicsDeepONet has been moved to tests/neural/operators/deeponet/test_multiphysics.py
         # This test now focuses on the enhanced DeepONet configuration interface
-        assert hasattr(
-            op_net.operator, "branch_nets"
-        )  # Should have multiple branch networks
+        assert hasattr(op_net.operator, "branch_nets")  # Should have multiple branch networks
 
     def test_operator_network_invalid_type(self):
         """Test operator network with invalid type."""
@@ -121,6 +119,7 @@ class TestOperatorNetwork:
                 "hidden_channels": 16,
                 "modes": 4,
                 "num_layers": 1,
+                "spatial_dims": 1,
             },
             rngs=rngs,
         )
@@ -170,6 +169,7 @@ class TestOperatorLearningIntegration:
             hidden_channels=32,
             modes=8,
             num_layers=2,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -202,6 +202,7 @@ class TestOperatorLearningIntegration:
             hidden_channels=16,
             modes=4,
             num_layers=1,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -227,6 +228,7 @@ class TestOperatorLearningIntegration:
             hidden_channels=16,
             modes=8,
             num_layers=1,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -386,6 +388,7 @@ class TestAdvancedOperatorIntegration:
             hidden_channels=hidden_channels,
             modes=16,
             num_layers=3,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -396,6 +399,7 @@ class TestAdvancedOperatorIntegration:
             hidden_channels=hidden_channels,
             modes_per_scale=[16, 8, 4],
             num_layers_per_scale=[1, 1, 1],
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -496,6 +500,7 @@ class TestAdvancedOperatorIntegration:
                 hidden_channels=32,
                 modes_per_scale=[16, 8],
                 num_layers_per_scale=[1, 1],
+                spatial_dims=1,
                 use_gradient_checkpointing=True,
                 rngs=rngs,
             ),
@@ -532,6 +537,7 @@ class TestAdvancedOperatorIntegration:
             hidden_channels=32,
             modes_per_scale=[8, 4],
             num_layers_per_scale=[1, 1],
+            spatial_dims=1,
             use_cross_scale_attention=True,
             rngs=rngs,
         )

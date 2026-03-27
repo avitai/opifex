@@ -174,10 +174,8 @@ class FlopsCounter:
             "update_flops": update_flops,
             "timing": backward_info["timing"] + 0.1,  # Add update timing estimate
             "breakdown": {
-                "forward_percentage": (backward_info["forward_flops"] / total_flops)
-                * 100,
-                "backward_percentage": (backward_info["backward_flops"] / total_flops)
-                * 100,
+                "forward_percentage": (backward_info["forward_flops"] / total_flops) * 100,
+                "backward_percentage": (backward_info["backward_flops"] / total_flops) * 100,
                 "update_percentage": (update_flops / total_flops) * 100,
             },
         }
@@ -289,9 +287,7 @@ class FlopsCounter:
 
         try:
             # Get parameter count as a proxy for model complexity
-            param_count = sum(
-                x.size for x in jax.tree_util.tree_leaves(nnx.state(model))
-            )
+            param_count = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(model)))
         except Exception as e:
             # If we can't get the state, it's not a valid model
             raise TypeError(f"Invalid model type: {type(model)}") from e

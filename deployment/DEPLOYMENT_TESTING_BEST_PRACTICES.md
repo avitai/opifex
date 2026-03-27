@@ -5,7 +5,7 @@
 
 ## 🎯 Overview
 
-This document outlines comprehensive best practices for testing deployment configurations in the Opifex framework, ensuring reliable, secure, and scalable deployments across different environments.
+This document outlines full best practices for testing deployment configurations in the Opifex framework, ensuring reliable, secure, and scalable deployments across different environments.
 
 ## 🔍 **Dry Run Testing Strategies**
 
@@ -53,7 +53,7 @@ helm lint deployment/kubernetes/gpu-operator/
 helm template deployment/kubernetes/gpu-operator/ | kubectl apply --dry-run=client -f -
 ```
 
-## 🧪 **Comprehensive Testing Approaches**
+## 🧪 **Full Testing Approaches**
 
 ### 1. **Syntax Validation**
 
@@ -142,7 +142,7 @@ make validate-security
 ### 2. **Custom Testing Script**
 
 ```bash
-# Run comprehensive testing
+# Run full testing
 ./deployment/test-deployment.sh
 
 # Test specific environment
@@ -151,7 +151,7 @@ ENVIRONMENT=production ./deployment/test-deployment.sh
 
 ## 📊 **Testing Phases**
 
-### Phase 1: Pre-Deployment Validation
+### Version 1: Pre-Deployment Validation
 
 1. **Syntax Validation**
 
@@ -178,7 +178,7 @@ ENVIRONMENT=production ./deployment/test-deployment.sh
    make validate-security
    ```
 
-### Phase 2: Dry Run Deployment
+### Version 2: Dry Run Deployment
 
 1. **Client-Side Validation**
 
@@ -198,7 +198,7 @@ ENVIRONMENT=production ./deployment/test-deployment.sh
    kubectl apply --dry-run=client -k deployment/kubernetes/overlays/production/
    ```
 
-### Phase 3: Post-Deployment Validation
+### Version 3: Post-Deployment Validation
 
 1. **Health Checks**
 

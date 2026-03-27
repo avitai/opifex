@@ -1,6 +1,11 @@
 """Adapter for Artifex Generative Models to SciMLSolver interface.
 
 Allows usage of Artifex Diffusion/Flow models within Opifex workflows.
+
+.. warning::
+    Experimental — planned for Version 5 (Foundation Models & Generative).
+    The solve() method currently returns placeholder output pending Artifex
+    DDPMModel API integration.
 """
 
 from typing import Any

@@ -1,6 +1,6 @@
 """Tests for performance monitoring and prediction components.
 
-This module tests the Phase 7.4 Performance Monitoring & Prediction implementation
+This module tests the Version 7.4 Performance Monitoring & Prediction implementation
 including AI-powered anomaly detection and predictive scaling.
 """
 
@@ -207,9 +207,7 @@ class TestAIAnomalyDetector:
         normal_data = jnp.ones((1, 16)) * 0.5
 
         # Detect anomalies
-        is_anomaly, reconstruction_error = anomaly_detector.detect_anomalies(
-            normal_data
-        )
+        is_anomaly, reconstruction_error = anomaly_detector.detect_anomalies(normal_data)
 
         # Check results
         assert is_anomaly.shape == (1,)
@@ -286,9 +284,7 @@ class TestPerformanceMonitor:
             assert anomaly.severity in AnomalySeverity
 
     @pytest.mark.asyncio
-    async def test_predict_future_performance_insufficient_data(
-        self, performance_monitor
-    ):
+    async def test_predict_future_performance_insufficient_data(self, performance_monitor):
         """Test prediction with insufficient data."""
         # Add only a few metrics (less than 10)
         for _ in range(5):
@@ -299,9 +295,7 @@ class TestPerformanceMonitor:
             await performance_monitor.predict_future_performance()
 
     @pytest.mark.asyncio
-    async def test_predict_future_performance_sufficient_data(
-        self, performance_monitor
-    ):
+    async def test_predict_future_performance_sufficient_data(self, performance_monitor):
         """Test prediction with sufficient data."""
         # Add enough metrics for prediction
         for _ in range(15):
@@ -370,9 +364,7 @@ class TestPredictiveScaler:
         assert scaler.current_replicas == 1
 
     @pytest.mark.asyncio
-    async def test_evaluate_scaling_decision_insufficient_data(
-        self, performance_monitor
-    ):
+    async def test_evaluate_scaling_decision_insufficient_data(self, performance_monitor):
         """Test scaling decision with insufficient data."""
         scaler = PredictiveScaler(performance_monitor=performance_monitor)
 

@@ -1,6 +1,6 @@
 # Opifex Examples
 
-This directory contains comprehensive examples demonstrating the Opifex framework capabilities for scientific machine learning applications.
+This directory contains full examples demonstrating the Opifex framework capabilities for scientific machine learning applications.
 
 ## 🚀 Available Examples
 
@@ -25,7 +25,7 @@ source ./activate.sh
 # Run DISCO convolutions demonstration
 python layers/disco_convolutions_example.py
 
-# View comprehensive visualizations and performance metrics
+# View full visualizations and performance metrics
 ```
 
 **Expected Output:**
@@ -36,7 +36,7 @@ python layers/disco_convolutions_example.py
 ✅ Basic DISCO convolution: 954.9ms
 ⚡ Equidistant optimization: 9.92x speedup
 🏗️ Encoder-decoder error: 6.04e+03
-📊 Comprehensive visualization created
+📊 Full visualization created
 ```
 
 ### 2. Grid Embeddings (`layers/grid_embeddings_example.py`) ✅ **WORKING**
@@ -84,7 +84,7 @@ python layers/grid_embeddings_example.py
 - Vectorized finite difference PDE solver using JAX
 - Full FNO training pipeline with Opifex framework
 - Organized results output with timestamped directories
-- Comprehensive visualization and error analysis
+- Full visualization and error analysis
 
 **Usage:**
 
@@ -126,10 +126,10 @@ examples_output/darcy_fno_run_YYYYMMDD_HHMMSS/
 
 - ✅ **Real PDE Solving**: Actual Darcy flow equation with physics-based data generation
 - ✅ **Production Pipeline**: Error handling, monitoring, and organized output
-- ✅ **Comprehensive Analysis**: Visual comparisons and quantitative error metrics
+- ✅ **Full Analysis**: Visual comparisons and quantitative error metrics
 - ✅ **Modular Design**: Easily adaptable to other PDE operator learning problems
 
-### 4. Neural Operators Comprehensive Demo (`neural_operators_comprehensive_demo.py`) ⚠️ **PARTIAL**
+### 4. Neural Operators Full Demo (`neural_operators_comprehensive_demo.py`) ⚠️ **PARTIAL**
 
 **Complete demonstration of neural operator architectures with practical applications.**
 
@@ -146,7 +146,7 @@ examples_output/darcy_fno_run_YYYYMMDD_HHMMSS/
 **Usage:**
 
 ```bash
-# Run the comprehensive demo (may encounter GPU memory issues)
+# Run the full demo (may encounter GPU memory issues)
 python neural_operators_comprehensive_demo.py
 
 # For testing individual components, use smaller examples
@@ -161,7 +161,7 @@ python neural_operators_comprehensive_demo.py
 - Multiple calibration methods (Platt scaling, temperature scaling, isotonic regression)
 - Uncertainty decomposition (epistemic and aleatoric)
 - Physics-aware temperature scaling with constraints
-- Comprehensive uncertainty quality assessment
+- Full uncertainty quality assessment
 
 **Usage:**
 
@@ -434,7 +434,7 @@ uv run pytest tests/benchmarking/ -v
 
 ### Common Issues
 
-1. **GPU Memory Issues**: Some examples (like the comprehensive neural operators demo) may encounter GPU memory issues. Try reducing batch sizes or using CPU-only mode.
+1. **GPU Memory Issues**: Some examples (like the full neural operators demo) may encounter GPU memory issues. Try reducing batch sizes or using CPU-only mode.
 
 2. **Environment Not Activated**: Always run `source ./activate.sh` before running examples.
 

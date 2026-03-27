@@ -133,9 +133,7 @@ class SystemIdentifier(nnx.Module):
         prediction_error = jnp.mean((predictions - targets) ** 2)
 
         # Simple validation threshold
-        validation_passed = bool(
-            prediction_error < 10.0
-        )  # Generous for untrained model
+        validation_passed = bool(prediction_error < 10.0)  # Generous for untrained model
 
         return BenchmarkValidationResult(
             benchmark_name=benchmark_name,
@@ -400,9 +398,7 @@ class ControlIntegratedSystemID(SystemIdentifier):
 
         # Control policy network
         self.control_policy = nnx.Sequential(
-            nnx.Linear(
-                state_dim * 2, hidden_dim, rngs=rngs, dtype=dtype
-            ),  # current + target
+            nnx.Linear(state_dim * 2, hidden_dim, rngs=rngs, dtype=dtype),  # current + target
             nnx.gelu,
             nnx.Linear(hidden_dim, hidden_dim // 2, rngs=rngs, dtype=dtype),
             nnx.gelu,
@@ -579,7 +575,7 @@ class ControlIntegratedSystemID(SystemIdentifier):
         )
 
     def integrate_constraint_learning(self) -> dict[str, Any]:
-        """Integration with constraint learning from Sprint 5.1.
+        """Integration with constraint learning from Version 5.1.
 
         Returns:
             Constraint satisfaction integration results

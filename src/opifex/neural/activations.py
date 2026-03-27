@@ -1,6 +1,6 @@
 """Activation functions optimized for scientific neural networks.
 
-This module provides a comprehensive collection of activation functions
+This module provides a full collection of activation functions
 specifically optimized for scientific machine learning applications.
 All functions are fully compatible with Flax NNX patterns and JAX transformations.
 

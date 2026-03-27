@@ -146,9 +146,7 @@ def demonstrate_basic_spectral_layers():
     print()
     print("Convolution Layer Comparison:")
     regular_conv = nnx.Conv(3, 16, kernel_size=3, rngs=rngs)
-    spectral_conv = SpectralNormalizedConv(
-        3, 16, kernel_size=3, power_iterations=3, rngs=rngs
-    )
+    spectral_conv = SpectralNormalizedConv(3, 16, kernel_size=3, power_iterations=3, rngs=rngs)
 
     # Test input
     x_img = jax.random.normal(key, (4, 32, 32, 3))
@@ -204,9 +202,7 @@ def demonstrate_spectral_attention():
     print(f"   Forward pass time: {(end_time - start_time) * 1000:.2f} ms")
 
     # Test with causal mask
-    mask = jnp.tril(
-        jnp.ones((batch_size, spectral_attention.num_heads, seq_len, seq_len))
-    )
+    mask = jnp.tril(jnp.ones((batch_size, spectral_attention.num_heads, seq_len, seq_len)))
     output_masked = spectral_attention(x, mask=mask, training=True)
 
     print(f"   Masked output shape: {output_masked.shape}")
@@ -241,9 +237,7 @@ def demonstrate_adaptive_spectral_norm():
     models = {}
     for name, config in configs.items():
         base_linear = nnx.Linear(16, 8, rngs=rngs)
-        adaptive_layer = AdaptiveSpectralNorm(
-            base_linear, power_iterations=5, rngs=rngs, **config
-        )
+        adaptive_layer = AdaptiveSpectralNorm(base_linear, power_iterations=5, rngs=rngs, **config)
         models[name] = adaptive_layer
 
         print(f"{name}:")
@@ -388,10 +382,7 @@ def demonstrate_complete_neural_operators():
         output = model(x, training=True)
         end_time = time.time()
 
-        print(
-            f"   {name}: {x.shape} -> {output.shape} "
-            f"({(end_time - start_time) * 1000:.2f} ms)"
-        )
+        print(f"   {name}: {x.shape} -> {output.shape} ({(end_time - start_time) * 1000:.2f} ms)")
 
 
 # %% [markdown]
@@ -488,15 +479,11 @@ def demonstrate_stability_analysis():  # noqa: PLR0915
     }
 
     print("   Regular network:")
-    print(
-        f"     Mean Lipschitz: {regular_stats['mean']:.3f} +/- {regular_stats['std']:.3f}"
-    )
+    print(f"     Mean Lipschitz: {regular_stats['mean']:.3f} +/- {regular_stats['std']:.3f}")
     print(f"     Max Lipschitz: {regular_stats['max']:.3f}")
 
     print("   Spectral normalized network:")
-    print(
-        f"     Mean Lipschitz: {spectral_stats['mean']:.3f} +/- {spectral_stats['std']:.3f}"
-    )
+    print(f"     Mean Lipschitz: {spectral_stats['mean']:.3f} +/- {spectral_stats['std']:.3f}")
     print(f"     Max Lipschitz: {spectral_stats['max']:.3f}")
 
     # Spectral norm analysis
@@ -573,9 +560,7 @@ def demonstrate_jax_transformations():
     # Test vectorized mapping (vmap)
     batch_x = jax.random.normal(key, (16, 4, 12))  # (batch, mini_batch, features)
 
-    vectorized_forward = jax.vmap(
-        lambda x_single: layer(x_single, training=True), in_axes=0
-    )
+    vectorized_forward = jax.vmap(lambda x_single: layer(x_single, training=True), in_axes=0)
 
     start_time = time.time()
     batch_output = vectorized_forward(batch_x)
@@ -594,10 +579,7 @@ def demonstrate_jax_transformations():
     hessian = hessian_fn(small_x)
     end_time = time.time()
 
-    print(
-        f"Hessian computation: shape {hessian.shape} "
-        f"({(end_time - start_time) * 1000:.2f} ms)"
-    )
+    print(f"Hessian computation: shape {hessian.shape} ({(end_time - start_time) * 1000:.2f} ms)")
 
 
 # %% [markdown]
@@ -752,8 +734,7 @@ def create_visualization_demo():
             mse_spectral = jnp.mean((y_pred_spectral - y_target) ** 2)
 
             print(
-                f"   Step {i}: Regular MSE = {mse_regular:.6f}, "
-                f"Spectral MSE = {mse_spectral:.6f}"
+                f"   Step {i}: Regular MSE = {mse_regular:.6f}, Spectral MSE = {mse_spectral:.6f}"
             )
 
     print("   Note: In practice, spectral normalization provides more stable training")
@@ -790,7 +771,7 @@ def create_visualization_demo():
 
 ### Related Examples
 
-- [FNO Darcy Comprehensive](../models/fno_darcy_comprehensive.md) - Apply spectral layers in training
+- [FNO Darcy Full](../models/fno_darcy_comprehensive.md) - Apply spectral layers in training
 - [Grid Embeddings](grid_embeddings_example.md) - Spatial coordinate injection
 - [Neural Operator Benchmark](../comparative_studies/neural_operator_benchmark.md) - Cross-architecture comparison
 
@@ -809,7 +790,7 @@ def main():
     """Run all spectral normalization demonstrations."""
     print("SPECTRAL NORMALIZATION FOR NEURAL OPERATORS")
     print("=" * 60)
-    print("Comprehensive demonstrations of spectral normalization techniques")
+    print("Full demonstrations of spectral normalization techniques")
     print("for enhancing neural operator stability and controlling Lipschitz constants")
     print("=" * 60)
 

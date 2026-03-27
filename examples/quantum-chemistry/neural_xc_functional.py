@@ -107,15 +107,9 @@ def generate_density_sample(key: jax.Array, grid_points: int) -> jax.Array:
 
     for i in range(n_centers):
         # Random center position and width
-        center = jax.random.uniform(
-            jax.random.fold_in(key2, i), (), minval=-3.0, maxval=3.0
-        )
-        width = jax.random.uniform(
-            jax.random.fold_in(key3, i), (), minval=0.5, maxval=2.0
-        )
-        amplitude = jax.random.uniform(
-            jax.random.fold_in(key1, i + 10), (), minval=0.5, maxval=2.0
-        )
+        center = jax.random.uniform(jax.random.fold_in(key2, i), (), minval=-3.0, maxval=3.0)
+        width = jax.random.uniform(jax.random.fold_in(key3, i), (), minval=0.5, maxval=2.0)
+        amplitude = jax.random.uniform(jax.random.fold_in(key1, i + 10), (), minval=0.5, maxval=2.0)
 
         # Add Gaussian contribution
         density = density + amplitude * jnp.exp(-((x - center) ** 2) / (2 * width**2))
@@ -167,16 +161,12 @@ key = jax.random.PRNGKey(SEED)
 # Generate training densities
 train_keys = jax.random.split(key, NUM_TRAIN_SAMPLES + 1)
 key = train_keys[0]
-train_densities = jnp.stack(
-    [generate_density_sample(k, GRID_POINTS) for k in train_keys[1:]]
-)
+train_densities = jnp.stack([generate_density_sample(k, GRID_POINTS) for k in train_keys[1:]])
 
 # Generate test densities
 test_keys = jax.random.split(key, NUM_TEST_SAMPLES + 1)
 key = test_keys[0]
-test_densities = jnp.stack(
-    [generate_density_sample(k, GRID_POINTS) for k in test_keys[1:]]
-)
+test_densities = jnp.stack([generate_density_sample(k, GRID_POINTS) for k in test_keys[1:]])
 
 # Compute gradients
 train_gradients = jnp.stack([compute_density_gradients(d) for d in train_densities])
@@ -307,9 +297,7 @@ for epoch in range(NUM_EPOCHS):
         batch_gradients = shuffled_gradients[start_idx:end_idx]
         batch_targets = shuffled_targets[start_idx:end_idx]
 
-        loss = train_step(
-            model, optimizer, batch_densities, batch_gradients, batch_targets
-        )
+        loss = train_step(model, optimizer, batch_densities, batch_gradients, batch_targets)
         epoch_losses.append(float(loss))
 
     # Record epoch loss

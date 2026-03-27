@@ -1,4 +1,4 @@
-"""Comprehensive tests for Edge Network production optimization.
+"""Full tests for Edge Network production optimization.
 
 This test suite provides enterprise-grade testing for the intelligent edge network
 using pytest, pytest-mock, pytest-asyncio, and pytest-benchmark.
@@ -28,7 +28,7 @@ from opifex.optimization.edge_network import (
 
 
 class TestEdgeGateway:
-    """Test suite for EdgeGateway with comprehensive coverage."""
+    """Test suite for EdgeGateway with full coverage."""
 
     def test_edge_gateway_initialization(self):
         """Test EdgeGateway initialization with default and custom parameters."""
@@ -210,9 +210,7 @@ class TestEdgeGateway:
             geographic_distribution={EdgeRegion.US_EAST: 0.7, EdgeRegion.EU_WEST: 0.3},
         )
 
-        optimal_region = gateway.select_optimal_region(
-            EdgeRegion.US_EAST, workload_profile, 100.0
-        )
+        optimal_region = gateway.select_optimal_region(EdgeRegion.US_EAST, workload_profile, 100.0)
 
         # Should return a valid region
         assert isinstance(optimal_region, EdgeRegion)
@@ -229,24 +227,20 @@ class TestEdgeGateway:
             geographic_distribution={EdgeRegion.US_EAST: 1.0},
         )
 
-        optimal_region = gateway.select_optimal_region(
-            EdgeRegion.US_EAST, workload_profile, 100.0
-        )
+        optimal_region = gateway.select_optimal_region(EdgeRegion.US_EAST, workload_profile, 100.0)
 
         # Should return default primary region
         assert optimal_region in gateway.primary_regions
 
 
 class TestEdgeCache:
-    """Test suite for EdgeCache with comprehensive coverage."""
+    """Test suite for EdgeCache with full coverage."""
 
     def test_edge_cache_initialization(self):
         """Test EdgeCache initialization with different configurations."""
         # Test default initialization
         cache = EdgeCache()
-        assert cache.max_cache_size_bytes == int(
-            10.0 * 1024 * 1024 * 1024
-        )  # 10GB in bytes
+        assert cache.max_cache_size_bytes == int(10.0 * 1024 * 1024 * 1024)  # 10GB in bytes
         assert cache.max_entries == 10000
         assert cache.ttl_seconds == 3600
         assert len(cache.cache) == 0
@@ -438,7 +432,7 @@ class TestEdgeCache:
 
 
 class TestRegionalFailover:
-    """Test suite for RegionalFailover with comprehensive coverage."""
+    """Test suite for RegionalFailover with full coverage."""
 
     @pytest.fixture
     def mock_edge_gateway(self):
@@ -543,9 +537,7 @@ class TestRegionalFailover:
         """Test latency impact calculation."""
         failover = RegionalFailover(edge_gateway=mock_edge_gateway)
 
-        impact = failover._calculate_latency_impact(
-            EdgeRegion.EU_WEST, EdgeRegion.US_EAST
-        )
+        impact = failover._calculate_latency_impact(EdgeRegion.EU_WEST, EdgeRegion.US_EAST)
 
         # Should match the mocked latency matrix
         assert impact == 150.0
@@ -570,14 +562,10 @@ class TestRegionalFailover:
         }
 
         # Mock successful failover execution
-        with patch.object(
-            failover, "_execute_failover", new_callable=AsyncMock
-        ) as mock_execute:
+        with patch.object(failover, "_execute_failover", new_callable=AsyncMock) as mock_execute:
             mock_execute.return_value = True
 
-            result = await failover._trigger_failover(
-                EdgeRegion.EU_WEST, "High latency"
-            )
+            result = await failover._trigger_failover(EdgeRegion.EU_WEST, "High latency")
 
             assert isinstance(result, FailoverResult)
             assert result.original_region == EdgeRegion.EU_WEST
@@ -588,7 +576,7 @@ class TestRegionalFailover:
 
 
 class TestIntelligentEdgeNetwork:
-    """Test suite for IntelligentEdgeNetwork integration with comprehensive coverage."""
+    """Test suite for IntelligentEdgeNetwork integration with full coverage."""
 
     @pytest.fixture
     def edge_network_components(self):
@@ -714,9 +702,7 @@ class TestEdgeNetworkPerformance:
         )
 
         def region_selection():
-            return gateway.select_optimal_region(
-                EdgeRegion.US_EAST, workload_profile, 100.0
-            )
+            return gateway.select_optimal_region(EdgeRegion.US_EAST, workload_profile, 100.0)
 
         selected_region = benchmark(region_selection)
         assert isinstance(selected_region, EdgeRegion)

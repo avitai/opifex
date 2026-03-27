@@ -6,7 +6,7 @@ metadata:
   annotations:
     description: "Opifex Community Platform - Complete Neural Functional Registry and Collaboration Infrastructure"
     version: "1.0.0"
-    created-by: "Opifex BUILD Mode - Phase 6 Extension"
+    created-by: "Opifex BUILD Mode - Version 6 Extension"
 
 # Namespace for all resources
 namespace: opifex-community
@@ -28,7 +28,7 @@ commonLabels:
   app.kubernetes.io/part-of: opifex-platform
   app.kubernetes.io/managed-by: kustomize
   app.kubernetes.io/version: "1.0.0"
-  deployment.phase: "phase-6-extension"
+  deployment.phase: "version-6-extension"
   deployment.component: "community-platform"
 
 # Common annotations

@@ -1,7 +1,7 @@
 """
 Unit Tests for Multi-Grid Tensorized Fourier Neural Operator (MG-TFNO)
 
-Comprehensive test suite for Phase 3 Multi-Grid TFNO implementation including:
+Full test suite for Version 3 Multi-Grid TFNO implementation including:
 - Hierarchical tensor decomposition
 - Frequency-aware rank adaptation
 - Adaptive rank learning
@@ -372,7 +372,7 @@ class TestMultiGridTFNOIntegration:
         assert len(mg_tucker.band_decompositions) == len(mg_tucker.frequency_bands)
         assert mg_tucker.adaptive_rank_learning
 
-        # Get comprehensive stats
+        # Get full stats
         stats = mg_tucker.get_compression_stats()
         assert stats["compression_ratio"] > 1.0
 

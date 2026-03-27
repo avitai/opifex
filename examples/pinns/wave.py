@@ -334,9 +334,7 @@ u_exact_grid = exact_solution(xx, tt)
 
 # Compute errors
 error = jnp.abs(u_pred_grid - u_exact_grid)
-l2_error = float(
-    jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2))
-)
+l2_error = float(jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2)))
 max_error = float(jnp.max(error))
 mean_error = float(jnp.mean(error))
 
@@ -449,12 +447,8 @@ axes[0].legend(fontsize=8, ncol=2)
 axes[0].grid(True, alpha=0.3)
 
 # Initial condition comparison
-axes[1].plot(
-    np.array(x_eval), np.array(u_pred_grid[0, :]), "b-", label="PINN", linewidth=2
-)
-axes[1].plot(
-    np.array(x_eval), np.array(u_exact_grid[0, :]), "r--", label="Exact", linewidth=2
-)
+axes[1].plot(np.array(x_eval), np.array(u_pred_grid[0, :]), "b-", label="PINN", linewidth=2)
+axes[1].plot(np.array(x_eval), np.array(u_exact_grid[0, :]), "r--", label="Exact", linewidth=2)
 axes[1].set_xlabel("x")
 axes[1].set_ylabel("u(x, 0)")
 axes[1].set_title("Initial Condition")

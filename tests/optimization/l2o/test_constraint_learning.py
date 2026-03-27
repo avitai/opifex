@@ -334,9 +334,7 @@ class TestFeasibilityLearner:
         # Simplified network for speed
         config = ProjectorConfig(hidden_sizes=[16], embedding_dim=4)
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            )
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"])
         ]
         learner = FeasibilityLearner(2, constraints, config, nnx.Rngs(0))
 
@@ -360,9 +358,7 @@ class TestFeasibilityLearner:
     def test_feasibility_learner_initialization(self):
         """Test feasibility learner initialization."""
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            )
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"])
         ]
         config = ProjectorConfig(hidden_sizes=[64, 32], embedding_dim=16)
 
@@ -378,9 +374,7 @@ class TestFeasibilityLearner:
     def test_constraint_satisfaction_basic(self):
         """Test basic constraint satisfaction functionality."""
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            )
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"])
         ]
         config = ProjectorConfig(hidden_sizes=[32, 16], embedding_dim=8)
         learner = FeasibilityLearner(2, constraints, config, nnx.Rngs(0))
@@ -395,9 +389,7 @@ class TestFeasibilityLearner:
     def test_batch_constraint_satisfaction(self):
         """Test constraint satisfaction for batches of points."""
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            )
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"])
         ]
         config = ProjectorConfig(hidden_sizes=[32, 16], embedding_dim=8)
         learner = FeasibilityLearner(2, constraints, config, nnx.Rngs(0))
@@ -412,9 +404,7 @@ class TestFeasibilityLearner:
     def test_feasibility_checking(self):
         """Test feasibility checking functionality."""
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            )
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"])
         ]
         config = ProjectorConfig(hidden_sizes=[32, 16], embedding_dim=8)
         learner = FeasibilityLearner(2, constraints, config, nnx.Rngs(0))
@@ -435,15 +425,9 @@ class TestFeasibilityLearner:
     def test_multiple_constraints_handling(self):
         """Test handling of multiple simultaneous constraints."""
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            ),
-            ConstraintSpecification(
-                "inequality", "x >= 0", jnp.array([1.0, 0.0]), ["x", "y"]
-            ),
-            ConstraintSpecification(
-                "inequality", "y >= 0", jnp.array([0.0, 1.0]), ["x", "y"]
-            ),
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]),
+            ConstraintSpecification("inequality", "x >= 0", jnp.array([1.0, 0.0]), ["x", "y"]),
+            ConstraintSpecification("inequality", "y >= 0", jnp.array([0.0, 1.0]), ["x", "y"]),
         ]
         config = ProjectorConfig(hidden_sizes=[32, 16], embedding_dim=8)
         learner = FeasibilityLearner(2, constraints, config, nnx.Rngs(0))
@@ -458,9 +442,7 @@ class TestFeasibilityLearner:
     def test_constraint_encoding_integration(self):
         """Test integration between constraint encoding and projection."""
         constraints = [
-            ConstraintSpecification(
-                "equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"]
-            )
+            ConstraintSpecification("equality", "x + y = 1", jnp.array([1.0, 1.0]), ["x", "y"])
         ]
         config = ProjectorConfig(hidden_sizes=[32, 16], embedding_dim=8)
         learner = FeasibilityLearner(2, constraints, config, nnx.Rngs(0))
@@ -519,17 +501,13 @@ class TestFeasibilityLearner:
 
         assert satisfied_variables.shape == (3, 3)
         assert jnp.isfinite(satisfied_variables).all()
-        assert (
-            total_time < 1.0
-        )  # Should be reasonably fast for batch processing with JIT
+        assert total_time < 1.0  # Should be reasonably fast for batch processing with JIT
 
         # Check constraints are better satisfied (relaxed tolerance for neural network)
         for var in satisfied_variables:
             # Check equality constraint: sum should be close to 1
             sum_violation = jnp.abs(jnp.sum(var) - 1.0)
-            assert (
-                sum_violation < 0.5
-            )  # Reasonable tolerance for untrained neural network
+            assert sum_violation < 0.5  # Reasonable tolerance for untrained neural network
 
             # Check inequality constraints: all should be >= 0
             assert jnp.all(var >= -0.01)  # Small tolerance for numerical precision

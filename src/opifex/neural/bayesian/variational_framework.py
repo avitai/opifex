@@ -1,6 +1,6 @@
 """Variational inference framework for Bayesian neural networks.
 
-This module provides a comprehensive framework for variational Bayesian neural networks
+This module provides a full framework for variational Bayesian neural networks
 with physics-informed priors and amortized uncertainty estimation.
 """
 
@@ -98,16 +98,10 @@ class MeanFieldGaussian(nnx.Module):
         self.num_params = num_params
 
         # Variational parameters
-        self.mean = nnx.Param(
-            nnx.initializers.zeros_init()(rngs.params(), (num_params,))
-        )
-        self.log_std = nnx.Param(
-            nnx.initializers.constant(-2.0)(rngs.params(), (num_params,))
-        )
+        self.mean = nnx.Param(nnx.initializers.zeros_init()(rngs.params(), (num_params,)))
+        self.log_std = nnx.Param(nnx.initializers.constant(-2.0)(rngs.params(), (num_params,)))
 
-    def sample(
-        self, num_samples: int, *, rngs: nnx.Rngs
-    ) -> Float[Array, "samples params"]:
+    def sample(self, num_samples: int, *, rngs: nnx.Rngs) -> Float[Array, "samples params"]:
         """Sample from variational posterior.
 
         Args:
@@ -120,9 +114,7 @@ class MeanFieldGaussian(nnx.Module):
         eps = jax.random.normal(rngs.sample(), (num_samples, self.num_params))
         return self.mean.value + jnp.exp(self.log_std.value) * eps
 
-    def log_prob(
-        self, samples: Float[Array, "samples params"]
-    ) -> Float[Array, samples]:  # type: ignore[reportUndefinedVariable]  # noqa: F821
+    def log_prob(self, samples: Float[Array, "samples params"]) -> Float[Array, samples]:  # type: ignore[reportUndefinedVariable]  # noqa: F821
         """Compute log probability of samples.
 
         Args:
@@ -133,14 +125,12 @@ class MeanFieldGaussian(nnx.Module):
         """
         distrax = jax.tree.map(lambda x: x, _get_distrax())  # type: ignore # noqa: PGH003
         return jnp.asarray(
-            distrax.MultivariateNormalDiag(
-                self.mean.value, jnp.exp(self.log_std.value)
-            ).log_prob(samples)
+            distrax.MultivariateNormalDiag(self.mean.value, jnp.exp(self.log_std.value)).log_prob(
+                samples
+            )
         )
 
-    def kl_divergence(
-        self, prior_mean: float = 0.0, prior_std: float = 1.0
-    ) -> Float[Array, ""]:
+    def kl_divergence(self, prior_mean: float = 0.0, prior_std: float = 1.0) -> Float[Array, ""]:
         """Compute KL divergence from prior.
 
         Args:
@@ -205,9 +195,7 @@ class UncertaintyEncoder(nnx.Module):
 
         self.layers = nnx.Sequential(*layers)
 
-    def __call__(
-        self, x: Float[Array, "batch input_dim"]
-    ) -> Float[Array, "batch output_dim"]:
+    def __call__(self, x: Float[Array, "batch input_dim"]) -> Float[Array, "batch output_dim"]:
         """Forward pass through uncertainty encoder.
 
         Args:
@@ -251,9 +239,7 @@ class AmortizedVariationalFramework(nnx.Module):
         self.num_params = self._count_parameters(base_model)
 
         # Variational posterior approximation
-        self.variational_posterior = MeanFieldGaussian(
-            num_params=self.num_params, rngs=rngs
-        )
+        self.variational_posterior = MeanFieldGaussian(num_params=self.num_params, rngs=rngs)
 
         # Amortized inference network
         self.amortization_network = UncertaintyEncoder(
@@ -384,15 +370,11 @@ class AmortizedVariationalFramework(nnx.Module):
 
         # Add small perturbation based on parameter vector to simulate parameter changes
         perturbation_scale = jnp.mean(jnp.abs(params_vector)) * 0.001
-        perturbed_x = x + perturbation_scale * jax.random.normal(
-            jax.random.PRNGKey(0), x.shape
-        )
+        perturbed_x = x + perturbation_scale * jax.random.normal(jax.random.PRNGKey(0), x.shape)
 
         return self.base_model(perturbed_x)  # type: ignore[misc, operator]
 
-    def _inject_parameters(
-        self, model: nnx.Module, params_vector: Float[Array, ...]
-    ) -> None:
+    def _inject_parameters(self, model: nnx.Module, params_vector: Float[Array, ...]) -> None:
         """Inject parameter vector into model.
 
         Args:
@@ -448,9 +430,7 @@ class AmortizedVariationalFramework(nnx.Module):
                 # Forward pass with sampled parameters
                 y_pred = self._forward_with_params(x, param_samples[i])
                 # Gaussian likelihood (negative MSE)
-                sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (
-                    2.0 * 0.01
-                )  # sigma^2 = 0.01
+                sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)  # sigma^2 = 0.01
                 log_likelihood += sample_log_likelihood
             except Exception:
                 # Fallback to base model if parameter injection fails

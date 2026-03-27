@@ -38,8 +38,7 @@ class ConstraintSpecification:
         valid_types = ["equality", "inequality"]
         if self.constraint_type not in valid_types:
             raise ValueError(
-                f"Invalid constraint type: {self.constraint_type}. "
-                f"Must be one of {valid_types}"
+                f"Invalid constraint type: {self.constraint_type}. Must be one of {valid_types}"
             )
 
     def evaluate(self, x: jax.Array) -> jax.Array:
@@ -56,9 +55,7 @@ class ConstraintSpecification:
             # Handle case where coefficients include constant term
             if len(self.coefficients) == len(x) + 1:
                 # Coefficients include constant term: ax + b = 0
-                constraint_value = (
-                    jnp.dot(self.coefficients[:-1], x) + self.coefficients[-1]
-                )
+                constraint_value = jnp.dot(self.coefficients[:-1], x) + self.coefficients[-1]
             else:
                 # Coefficients match variables: ax = 0
                 constraint_value = jnp.dot(self.coefficients, x)
@@ -66,9 +63,7 @@ class ConstraintSpecification:
         if self.constraint_type == "inequality":
             # For inequality constraints: max(0, -g(x)) where g(x) >= 0 is satisfied
             if len(self.coefficients) == len(x) + 1:
-                constraint_value = (
-                    jnp.dot(self.coefficients[:-1], x) + self.coefficients[-1]
-                )
+                constraint_value = jnp.dot(self.coefficients[:-1], x) + self.coefficients[-1]
             else:
                 constraint_value = jnp.dot(self.coefficients, x)
             return jnp.maximum(0.0, -constraint_value)
@@ -113,9 +108,7 @@ class ConstraintViolationDetector:
             # Batch processing
             batch_size = x.shape[0]
             for i, constraint in enumerate(self.constraints):
-                batch_violations = jnp.array(
-                    [constraint.evaluate(x[j]) for j in range(batch_size)]
-                )
+                batch_violations = jnp.array([constraint.evaluate(x[j]) for j in range(batch_size)])
                 violations[f"constraint_{i}"] = batch_violations
                 total_violation += jnp.sum(batch_violations)
 
@@ -150,9 +143,7 @@ class SymbolicConstraintEncoder:
             Vector embedding representing the constraint
         """
         # Create a hash-based encoding for constraint type using SHA-256
-        type_hash = int(
-            hashlib.sha256(constraint.constraint_type.encode()).hexdigest()[:8], 16
-        )
+        type_hash = int(hashlib.sha256(constraint.constraint_type.encode()).hexdigest()[:8], 16)
         type_encoding = jnp.array([type_hash % 256 / 255.0])
 
         # Use constraint coefficients as part of embedding
@@ -287,9 +278,7 @@ class FeasibilityLearner:
         self.projector = ConstraintProjector(input_dim, config, rngs)
 
         # Pre-encode constraints for efficiency
-        self.constraint_embeddings = [
-            self.encoder.encode_constraint(c) for c in constraints
-        ]
+        self.constraint_embeddings = [self.encoder.encode_constraint(c) for c in constraints]
 
     def satisfy_constraints(self, variables: jax.Array) -> jax.Array:
         """Project variables to satisfy all constraints.

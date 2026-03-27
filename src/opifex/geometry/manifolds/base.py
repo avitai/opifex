@@ -163,9 +163,7 @@ class TangentSpace(Protocol):
         ...
 
     @abstractmethod
-    def inner_product(
-        self, u: TangentVector, v: TangentVector
-    ) -> Float[jax.Array, ...]:
+    def inner_product(self, u: TangentVector, v: TangentVector) -> Float[jax.Array, ...]:
         """Inner product of tangent vectors using Riemannian metric.
 
         Args:

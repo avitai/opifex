@@ -212,6 +212,4 @@ def _topology_tree_unflatten(aux_data, children):
 
 # Register all topological types as JAX pytrees
 for topo_type in [TopologicalSpace, GraphTopology, SimplicialComplex, Hypergraph]:
-    jax.tree_util.register_pytree_node(
-        topo_type, _topology_tree_flatten, _topology_tree_unflatten
-    )
+    jax.tree_util.register_pytree_node(topo_type, _topology_tree_flatten, _topology_tree_unflatten)

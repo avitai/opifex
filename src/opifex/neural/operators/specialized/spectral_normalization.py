@@ -53,9 +53,7 @@ class PowerIteration(nnx.Module):
         self.u = nnx.Param(jnp.array([1.0]))
         self.v = nnx.Param(jnp.array([1.0]))
 
-    def __call__(
-        self, weight: jax.Array, training: bool = True
-    ) -> tuple[jax.Array, jax.Array]:
+    def __call__(self, weight: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:
         """Estimate spectral norm using power iteration.
 
         Args:
@@ -67,10 +65,7 @@ class PowerIteration(nnx.Module):
         """
         # Reshape weight to 2D matrix for SVD computation
         original_shape = weight.shape
-        if len(original_shape) > 2:
-            weight_2d = weight.reshape(-1, original_shape[-1])
-        else:
-            weight_2d = weight
+        weight_2d = weight.reshape(-1, original_shape[-1]) if len(original_shape) > 2 else weight
 
         height, width = weight_2d.shape
 
@@ -393,9 +388,7 @@ class AdaptiveSpectralNorm(nnx.Module):
 
         # Scale by learnable bound
         bound_value = self.bound[...]
-        adaptive_weight = normalized_weight * jnp.maximum(
-            bound_value, 0.1
-        )  # Prevent collapse
+        adaptive_weight = normalized_weight * jnp.maximum(bound_value, 0.1)  # Prevent collapse
 
         # Temporarily set adaptive weight
         original_value = getattr(self.layer, weight_name)[...]
@@ -581,7 +574,7 @@ def spectral_norm_summary(
                 spectral_norms.append(float(spectral_norm))
 
         # Recursively process containers and modules
-        if isinstance(obj, (list, tuple)):
+        if isinstance(obj, list | tuple):
             for item in obj:
                 collect_spectral_norms(item)
         elif hasattr(obj, "__dict__"):
@@ -589,7 +582,7 @@ def spectral_norm_summary(
                 if not attr_name.startswith("_"):
                     try:
                         attr = getattr(obj, attr_name)
-                        if isinstance(attr, (nnx.Module, list, tuple)):
+                        if isinstance(attr, nnx.Module | list | tuple):
                             collect_spectral_norms(attr)
                     except (AttributeError, TypeError):
                         pass

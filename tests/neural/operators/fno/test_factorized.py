@@ -56,9 +56,7 @@ class TestFactorizedFourierLayer:
         assert tucker_stats["parameter_reduction"] > 0.5  # At least 50% reduction
         assert tucker_stats["compression_ratio"] < 0.5  # Compression ratio < 0.5
         assert tucker_stats["factorized_spectral"] > 0
-        assert (
-            tucker_stats["full_tensor_equivalent"] > tucker_stats["factorized_spectral"]
-        )
+        assert tucker_stats["full_tensor_equivalent"] > tucker_stats["factorized_spectral"]
 
         # Test that all expected keys are present
         expected_keys = {
@@ -202,9 +200,7 @@ class TestFactorizedFourierLayer:
         assert cp_stats["parameter_reduction"] > 0
 
         # Test forward pass with same input
-        x = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, in_channels, spatial_dim)
-        )
+        x = jax.random.normal(jax.random.PRNGKey(0), (batch_size, in_channels, spatial_dim))
 
         tucker_output = tucker_layer(x)
         cp_output = cp_layer(x)

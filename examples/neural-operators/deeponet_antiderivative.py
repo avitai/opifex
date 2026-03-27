@@ -307,9 +307,7 @@ test_mse = float(jnp.mean((predictions - Y_test_jax) ** 2))
 
 # Per-sample relative L2 error
 pred_diff = predictions - Y_test_jax
-per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(
-    Y_test_jax, axis=1
-)
+per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_test_jax, axis=1)
 mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 
 print(f"Test MSE:         {test_mse:.6f}")
@@ -331,9 +329,7 @@ x_grid = np.linspace(0, 1, N_SENSORS)
 # --- Sample predictions ---
 n_vis = 4
 fig, axes = plt.subplots(n_vis, 3, figsize=(12, 3 * n_vis))
-fig.suptitle(
-    "DeepONet Antiderivative Predictions (Opifex)", fontsize=14, fontweight="bold"
-)
+fig.suptitle("DeepONet Antiderivative Predictions (Opifex)", fontsize=14, fontweight="bold")
 
 for i in range(n_vis):
     # Input function v(x)
@@ -344,9 +340,7 @@ for i in range(n_vis):
 
     # True antiderivative u(x)
     axes[i, 1].plot(x_grid, Y_test[i], "b-", linewidth=1.5, label="Truth")
-    axes[i, 1].plot(
-        x_grid, np.array(predictions[i]), "r--", linewidth=1.5, label="DeepONet"
-    )
+    axes[i, 1].plot(x_grid, np.array(predictions[i]), "r--", linewidth=1.5, label="DeepONet")
     axes[i, 1].set_title("Antiderivative u(x)" if i == 0 else "")
     if i == 0:
         axes[i, 1].legend(fontsize=8)
@@ -379,9 +373,7 @@ axes[0].grid(True, alpha=0.3)
 
 # Error distribution
 per_sample_errors = np.array(per_sample_rel_l2)
-axes[1].hist(
-    per_sample_errors, bins=30, alpha=0.7, color="steelblue", edgecolor="black"
-)
+axes[1].hist(per_sample_errors, bins=30, alpha=0.7, color="steelblue", edgecolor="black")
 axes[1].set_xlabel("Relative L2 Error")
 axes[1].set_ylabel("Frequency")
 axes[1].set_title("Error Distribution")

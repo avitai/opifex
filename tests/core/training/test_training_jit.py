@@ -13,7 +13,6 @@ import time
 
 import jax
 import jax.numpy as jnp
-import pytest
 from flax import nnx
 
 
@@ -152,38 +151,6 @@ class TestTrainerJITCompilation:
         # But computation should be deterministic (same gradients)
         assert isinstance(loss1, jax.Array)
         assert isinstance(loss2, jax.Array)
-
-
-class TestBasicTrainerJIT:
-    """Test BasicTrainer JIT compilation (if it exists)."""
-
-    @pytest.mark.skipif(
-        not hasattr(
-            __import__("opifex.training.basic_trainer", fromlist=["BasicTrainer"]),
-            "BasicTrainer",
-        ),
-        reason="BasicTrainer may not exist or be deprecated",
-    )
-    def test_basic_trainer_uses_jit(self):
-        """Test BasicTrainer training step is JIT-compiled."""
-        # Will be implemented if BasicTrainer exists
-
-
-class TestIncrementalTrainerJIT:
-    """Test IncrementalTrainer JIT compilation (if it exists)."""
-
-    @pytest.mark.skipif(
-        not hasattr(
-            __import__(
-                "opifex.training.incremental_trainer", fromlist=["IncrementalTrainer"]
-            ),
-            "IncrementalTrainer",
-        ),
-        reason="IncrementalTrainer may not exist",
-    )
-    def test_incremental_trainer_uses_jit(self):
-        """Test IncrementalTrainer training step is JIT-compiled."""
-        # Will be implemented if IncrementalTrainer exists
 
 
 class TestQuantumTrainingJIT:

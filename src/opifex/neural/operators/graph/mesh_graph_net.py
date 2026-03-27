@@ -79,9 +79,7 @@ class MeshGraphNet(nnx.Module):
         # still created (with input size 0 is invalid, so we gate on it).
         if edge_input_dim > 0:
             self.edge_encoder: nnx.Sequential | None = nnx.Sequential(
-                nnx.Linear(
-                    in_features=edge_input_dim, out_features=hidden_dim, rngs=rngs
-                ),
+                nnx.Linear(in_features=edge_input_dim, out_features=hidden_dim, rngs=rngs),
                 activation,
                 nnx.Linear(in_features=hidden_dim, out_features=hidden_dim, rngs=rngs),
             )

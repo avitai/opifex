@@ -1,6 +1,6 @@
 #!/bin/bash
 # Opifex Container Build Optimization Script
-# Phase 7.1: Container Orchestration Implementation
+# Version 7.1: Container Orchestration Implementation
 # Target: 54% image size reduction + <30s startup time
 
 set -e

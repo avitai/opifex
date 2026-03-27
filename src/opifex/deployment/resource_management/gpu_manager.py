@@ -95,16 +95,12 @@ class GPUPoolManager:
         if preferred_pool_id and preferred_pool_id in self.gpu_pools:
             pool = self.gpu_pools[preferred_pool_id]
             if self._can_allocate_memory(pool, memory_requirement_gb):
-                return self._execute_memory_allocation(
-                    pool, model_hash, memory_requirement_gb
-                )
+                return self._execute_memory_allocation(pool, model_hash, memory_requirement_gb)
 
         # Find best available pool
         best_pool = self._find_best_gpu_pool(memory_requirement_gb)
         if best_pool:
-            return self._execute_memory_allocation(
-                best_pool, model_hash, memory_requirement_gb
-            )
+            return self._execute_memory_allocation(best_pool, model_hash, memory_requirement_gb)
 
         # No suitable pool found
         return {
@@ -127,9 +123,7 @@ class GPUPoolManager:
         available_memory = pool["total_memory_gb"] - pool["allocated_memory_gb"]
         return available_memory >= memory_gb
 
-    def _find_best_gpu_pool(
-        self, memory_requirement_gb: float
-    ) -> dict[str, Any] | None:
+    def _find_best_gpu_pool(self, memory_requirement_gb: float) -> dict[str, Any] | None:
         """Find the best GPU pool for memory allocation.
 
         Args:
@@ -160,15 +154,11 @@ class GPUPoolManager:
 
             # Prefer pools with sufficient headroom
             memory_headroom = (
-                pool["total_memory_gb"]
-                - pool["allocated_memory_gb"]
-                - memory_requirement_gb
+                pool["total_memory_gb"] - pool["allocated_memory_gb"] - memory_requirement_gb
             )
             headroom_score = min(1.0, memory_headroom / memory_requirement_gb)
 
-            combined_score = (
-                0.4 * utilization_score + 0.3 * gpu_type_score + 0.3 * headroom_score
-            )
+            combined_score = 0.4 * utilization_score + 0.3 * gpu_type_score + 0.3 * headroom_score
 
             if combined_score > best_score:
                 best_score = combined_score
@@ -272,10 +262,7 @@ class GPUPoolManager:
 
         # Update allocation record
         for allocation in self.memory_allocations.values():
-            if (
-                allocation["model_hash"] == model_hash
-                and allocation["pool_id"] == pool_id
-            ):
+            if allocation["model_hash"] == model_hash and allocation["pool_id"] == pool_id:
                 allocation["status"] = "deallocated"
                 allocation["deallocation_time"] = time.time()
                 break
@@ -302,9 +289,7 @@ class GPUPoolManager:
 
                 if pool_optimization["memory_saved_gb"] > 0:
                     optimization_results["pools_optimized"] += 1
-                    optimization_results["memory_saved_gb"] += pool_optimization[
-                        "memory_saved_gb"
-                    ]
+                    optimization_results["memory_saved_gb"] += pool_optimization["memory_saved_gb"]
                     optimization_results["models_relocated"] += pool_optimization[
                         "models_relocated"
                     ]
@@ -383,24 +368,18 @@ class GPUPoolManager:
         return None
 
     def get_pool_statistics(self) -> dict[str, Any]:
-        """Get comprehensive GPU pool statistics.
+        """Get full GPU pool statistics.
 
         Returns:
             Dictionary with pool statistics
         """
         total_gpus = sum(pool["gpu_count"] for pool in self.gpu_pools.values())
-        total_memory_gb = sum(
-            pool["total_memory_gb"] for pool in self.gpu_pools.values()
-        )
-        allocated_memory_gb = sum(
-            pool["allocated_memory_gb"] for pool in self.gpu_pools.values()
-        )
+        total_memory_gb = sum(pool["total_memory_gb"] for pool in self.gpu_pools.values())
+        allocated_memory_gb = sum(pool["allocated_memory_gb"] for pool in self.gpu_pools.values())
 
         pool_utilizations = [pool["utilization"] for pool in self.gpu_pools.values()]
         avg_utilization = (
-            sum(pool_utilizations) / len(pool_utilizations)
-            if pool_utilizations
-            else 0.0
+            sum(pool_utilizations) / len(pool_utilizations) if pool_utilizations else 0.0
         )
 
         return {

@@ -56,9 +56,7 @@ def validate_spectral_input(
     if not jnp.issubdtype(x.dtype, jnp.floating) and not jnp.issubdtype(
         x.dtype, jnp.complexfloating
     ):
-        raise ValueError(
-            f"Input dtype {x.dtype} is not supported for spectral operations"
-        )
+        raise ValueError(f"Input dtype {x.dtype} is not supported for spectral operations")
 
 
 def validate_spatial_dims(spatial_dims: int) -> None:
@@ -99,7 +97,7 @@ def validate_fft_shape(
     if not isinstance(x_ft, jax.Array):
         raise TypeError(f"x_ft must be a JAX array, got {type(x_ft)}")
 
-    if not isinstance(target_shape, (list, tuple)):
+    if not isinstance(target_shape, list | tuple):
         raise TypeError(f"target_shape must be a sequence, got {type(target_shape)}")
 
     # Validate spatial dimensions
@@ -119,9 +117,7 @@ def validate_fft_shape(
     # Validate target shape elements
     for i, size in enumerate(target_shape):
         if not isinstance(size, int) or size <= 0:
-            raise ValueError(
-                f"Target shape element {i} must be a positive integer, got {size}"
-            )
+            raise ValueError(f"Target shape element {i} must be a positive integer, got {size}")
 
     # Check FFT dimension compatibility
     target_spatial = target_shape[-spatial_dims:]
@@ -169,7 +165,7 @@ def validate_grid_spacing(  # noqa: PLR0912
     validate_spatial_dims(spatial_dims)
 
     # Handle scalar dx
-    if isinstance(dx, (int, float)):
+    if isinstance(dx, int | float):
         if dx <= 0:
             raise ValueError(f"Grid spacing must be positive, got {dx}")
         return [float(dx)] * spatial_dims
@@ -185,31 +181,27 @@ def validate_grid_spacing(  # noqa: PLR0912
         dx_list = [float(dx[i]) for i in range(dx.shape[0])]
         if len(dx_list) != spatial_dims:
             raise ValueError(
-                f"Grid spacing length {len(dx_list)} doesn't match "
-                f"spatial_dims {spatial_dims}"
+                f"Grid spacing length {len(dx_list)} doesn't match spatial_dims {spatial_dims}"
             )
         for i, dx_i in enumerate(dx_list):
             if dx_i <= 0:
-                raise ValueError(
-                    f"Grid spacing element {i} must be positive, got {dx_i}"
-                )
+                raise ValueError(f"Grid spacing element {i} must be positive, got {dx_i}")
         return dx_list
 
     # Handle sequence dx
-    if not isinstance(dx, (list, tuple)):
+    if not isinstance(dx, list | tuple):
         raise TypeError(f"dx must be a scalar or sequence, got {type(dx)}")
 
     dx_list = list(dx)
 
     if len(dx_list) != spatial_dims:
         raise ValueError(
-            f"Grid spacing length {len(dx_list)} doesn't match "
-            f"spatial_dims {spatial_dims}"
+            f"Grid spacing length {len(dx_list)} doesn't match spatial_dims {spatial_dims}"
         )
 
     # Validate each element
     for i, dx_i in enumerate(dx_list):
-        if not isinstance(dx_i, (int, float, jax.Array)):
+        if not isinstance(dx_i, int | float | jax.Array):
             raise TypeError(f"dx element {i} must be numeric, got {type(dx_i)}")
         if dx_i <= 0:
             raise ValueError(f"dx element {i} must be positive, got {dx_i}")
@@ -244,24 +236,21 @@ def validate_axis_parameter(
     # Handle single axis
     if isinstance(axis, int):
         if axis < 0 or axis >= spatial_dims:
-            raise ValueError(
-                f"Axis {axis} out of range for {spatial_dims} spatial dimensions"
-            )
+            raise ValueError(f"Axis {axis} out of range for {spatial_dims} spatial dimensions")
         return [axis]
 
     # Handle sequence of axes
-    if not isinstance(axis, (list, tuple, jax.Array)):
+    if not isinstance(axis, list | tuple | jax.Array):
         raise TypeError(f"axis must be an int, sequence, or None, got {type(axis)}")
 
     axis_list = list(axis)
 
     for i, ax in enumerate(axis_list):
-        if not isinstance(ax, (int, jax.Array)):
+        if not isinstance(ax, int | jax.Array):
             raise TypeError(f"axis element {i} must be an integer, got {type(ax)}")
         if ax < 0 or ax >= spatial_dims:
             raise ValueError(
-                f"Axis element {i} ({ax}) out of range for "
-                f"{spatial_dims} spatial dimensions"
+                f"Axis element {i} ({ax}) out of range for {spatial_dims} spatial dimensions"
             )
 
     # Check for duplicates

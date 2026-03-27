@@ -48,8 +48,8 @@ If you are familiar with the DeepXDE library:
 
 ## Files
 
-- **Python Script**: [`examples/pinns/helmholtz.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/helmholtz.py)
-- **Jupyter Notebook**: [`examples/pinns/helmholtz.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/helmholtz.ipynb)
+- **Python Script**: [`examples/pinns/helmholtz.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/helmholtz.py)
+- **Jupyter Notebook**: [`examples/pinns/helmholtz.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/helmholtz.ipynb)
 
 ## Quick Start
 

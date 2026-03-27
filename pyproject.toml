@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling"]
+requires = ["hatchling>=1.18"]
 
 [project]
 authors = [{email = "opifex@avitai.bio", name = "Opifex Team"}]
@@ -52,41 +52,21 @@ dependencies = [
   "tf-keras>=2.19.0",
   # Required by tensorflow-probability for variational inference
   "typing_extensions>=4.5.0",
-  "fastapi>=0.115.13",
-  "uvicorn[standard]>=0.34.3",
-  "redis>=6.2.0",
-  "prometheus-client>=0.22.1",
   "pyyaml>=6.0.2",
   "tqdm>=4.67.1",
-  # Database dependencies for Neural Functional Registry
-  "sqlalchemy>=2.0.0",
-  # ORM for database operations
-  "asyncpg>=0.29.0",
-  # Async PostgreSQL driver
-  "alembic>=1.13.0",
-  # Database migrations
-  "pytest>=8.4.2",
-  "pytest-cov>=6.3.0",
-  "pytest-asyncio>=1.1.0",
-  "pytest-benchmark>=5.1.0",
-  "pytest-env>=1.1.5",
-  "pytest-timeout>=2.4.0",
-  "pytest-xdist>=3.8.0",
-  "pytest-json-report>=1.5.0",
-  "grain>=0.2.3",
-  "neural-tangents>=0.6.1",
   "artifex @ git+https://github.com/avitai/artifex.git",
-  "calibrax @ git+https://github.com/avitai/calibrax.git"
+  "calibrax @ git+https://github.com/avitai/calibrax.git",
+  "datarax @ git+https://github.com/avitai/datarax.git"
 ]
 description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
 license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"
-requires-python = ">=3.11, <3.13"
+requires-python = ">=3.11"
 version = "0.1.0"
 
 [project.optional-dependencies]
-all = ["opifex[dev,docs,gpu,profiling,test]"]
+all = ["opifex[dev,docs,gpu,ntk,platform,profiling,scientific-data,test]"]
 all-cpu = [
   # CPU-only installation with all development dependencies (no GPU)
   # Use for Linux CPU-only or macOS Intel systems
@@ -105,25 +85,29 @@ cuda-dev = [
 ]
 dev = [
   "build>=1.0.3",
-  # Testing and coverage dependencies - CRITICAL for pytest coverage HTML reports
-  "coverage>=7.9.2", # Core coverage package for HTML report generation
-  "pytest>=8.4.1", # Primary testing framework
-  "pytest-asyncio>=1.0.0", # Async test support
-  "pytest-benchmark>=5.1.0", # Performance benchmarking
-  "pytest-cov>=6.2.1", # Coverage integration with pytest
-  "pytest-env>=1.1.5", # Environment variable management
-  "pytest-timeout>=2.4.0", # Test timeout management
-  "pytest-xdist>=3.8.0", # Parallel test execution
+  # Testing and coverage dependencies
+  "coverage>=7.9.2",
+  "pytest>=8.4.1",
+  "pytest-asyncio>=1.0.0",
+  "pytest-benchmark>=5.1.0",
+  "pytest-cov>=6.2.1",
+  "pytest-env>=1.1.5",
+  "pytest-json-report>=1.5.0",
+  "pytest-randomly>=3.15",
+  "pytest-timeout>=2.4.0",
+  "pytest-xdist>=3.8.0",
   # Development tools
   "bandit>=1.7.5",
+  "interrogate>=1.5",
   "ipykernel>=6.29.5",
+  "jupytext>=1.16.0",
   "pip-audit>=2.6.0",
   "pre-commit>=4.2.0",
   "pydeps>=1.12.17",
-  "jupytext>=1.16.0", # Notebook conversion
   "pyright>=1.1.336",
   "python-dotenv>=1",
-  "rich>=14.0.0", # rich text and beautiful formatting
+  "radon>=6.0",
+  "rich>=14.0.0",
   "ruff>=0.1.5",
   "twine>=4.0.2"
 ]
@@ -169,17 +153,36 @@ neural-dft = [
   "h5py>=3.8.0", # HDF5 for quantum data storage
   "netcdf4>=1.6.0" # NetCDF for scientific data
 ]
+ntk = [
+  # Neural Tangent Kernel analysis
+  "neural-tangents>=0.6.1"
+]
 # Workshop-inspired comprehensive development environments
 opifex-dev = [
   # Comprehensive Opifex development environment
   "opifex[dev,gpu,neural-dft,quantum-chemistry]"
 ]
+pdebench = [
+  # PDEBench competitor comparison — run reference PyTorch FNO alongside our JAX FNO
+  # Install: uv pip install -e ".[pdebench]"
+  "torch>=2.0.0",
+  "h5py>=3.8.0",
+  "hydra-core>=1.3.0",
+  "pandas>=2.0.0"
+]
 platform = [
-  # Platform development dependencies
-  "sqlalchemy[asyncio]>=2.0.0", # Enhanced async support
-  "psycopg2-binary>=2.9.0", # Alternative PostgreSQL driver
-  "pgcli>=4.0.0", # PostgreSQL CLI for development
-  "redis>=5.0.0" # Enhanced Redis support
+  # Platform serving and registry infrastructure
+  "fastapi>=0.115.13",
+  "uvicorn[standard]>=0.34.3",
+  "redis>=6.2.0",
+  "prometheus-client>=0.22.1",
+  # Database for Neural Functional Registry
+  "sqlalchemy>=2.0.0",
+  "sqlalchemy[asyncio]>=2.0.0",
+  "asyncpg>=0.29.0",
+  "alembic>=1.13.0",
+  "psycopg2-binary>=2.9.0",
+  "pgcli>=4.0.0"
 ]
 profiling = [
   # Performance profiling and analysis dependencies
@@ -193,21 +196,23 @@ quantum-chemistry = [
   "basis-set-exchange>=0.9.0" # Basis set data
 ]
 scientific-data = [
-  # Scientific data loading — PDEBench HDF5, VTK mesh I/O
-  "h5py>=3.8.0", # HDF5 file reading for PDEBench datasets
-  "meshio>=5.3.0" # VTK/VTU mesh I/O for unstructured grids
+  # Scientific data loading — PDEBench HDF5, VTK mesh I/O, grain pipelines
+  "grain>=0.2.3",
+  "h5py>=3.8.0",
+  "meshio>=5.3.0"
 ]
 test = [
   "beartype>=0.14.1",
-  # Testing and coverage dependencies - EXACT MATCH with dev section
-  "coverage>=7.9.2", # Core coverage package for HTML report generation
-  "pytest>=8.4.1", # Primary testing framework
-  "pytest-asyncio>=1.0.0", # Async test support
-  "pytest-benchmark>=5.1.0", # Performance benchmarking
-  "pytest-cov>=6.2.1", # Coverage integration with pytest
-  "pytest-env>=1.1.5", # Environment variable management
-  "pytest-timeout>=2.4.0", # Test timeout management
-  "pytest-xdist>=3.8.0" # Parallel test execution
+  "coverage>=7.9.2",
+  "pytest>=8.4.1",
+  "pytest-asyncio>=1.0.0",
+  "pytest-benchmark>=5.1.0",
+  "pytest-cov>=6.2.1",
+  "pytest-env>=1.1.5",
+  "pytest-json-report>=1.5.0",
+  "pytest-randomly>=3.15",
+  "pytest-timeout>=2.4.0",
+  "pytest-xdist>=3.8.0"
 ]
 
 [project.scripts]
@@ -262,9 +267,9 @@ allow-direct-references = true
 [tool.opifex.cuda]
 auto_detect = true
 documentation = "docs/setup/cuda-setup.md"
-environment_file = ".env"
+environment_file = ".opifex.env"
 fallback_to_cpu = true
-setup_scripts = ["scripts/fresh_opifex_setup.sh", "scripts/setup_env.py", "scripts/run_tests_with_cuda.sh"]
+setup_scripts = ["setup.sh", "scripts/setup_env.py"]
 
 # Pydocstyle documentation configuration
 [tool.pydocstyle]
@@ -359,7 +364,7 @@ addopts = [
   "--cov=src/opifex",
   "--cov-report=html",
   "--cov-report=term-missing",
-  "--cov-fail-under=30",
+  "--cov-fail-under=50",
   "--benchmark-skip",
   "--timeout=300",
   "--json-report",
@@ -401,18 +406,15 @@ python_functions = ["test_*"]
 testpaths = ["tests"]
 
 [tool.pytest-env]
-JAX_ENABLE_X64 = "0"
-# JAX_SKIP_CUDA_CONSTRAINTS_CHECK = "1"  # Disabled to catch CUDA version mismatches
-# Use venv CUDA libraries instead of system ones
-# This path is relative to the project root where pytest runs
-LD_LIBRARY_PATH = ".venv/lib/python3.12/site-packages/nvidia/cublas/lib:.venv/lib/python3.12/site-packages/nvidia/cusolver/lib:.venv/lib/python3.12/site-packages/nvidia/cusparse/lib:.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:.venv/lib/python3.12/site-packages/nvidia/cufft/lib:.venv/lib/python3.12/site-packages/nvidia/curand/lib:.venv/lib/python3.12/site-packages/nvidia/nccl/lib:.venv/lib/python3.12/site-packages/nvidia/nvjitlink/lib:.venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:.venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib:.venv/lib/python3.12/site-packages/nvidia/cuda_cupti/lib:.venv/lib/python3.12/site-packages/nvidia/nvtx/lib"
-TF_CPP_MIN_LOG_LEVEL = "1"
-XLA_PYTHON_CLIENT_MEM_FRACTION = "0.75"
-XLA_PYTHON_CLIENT_PREALLOCATE = "false"
+# D: prefix = set as default only (don't override existing env vars from activate.sh/.opifex.env)
+"D:JAX_ENABLE_X64" = "0"
+"D:TF_CPP_MIN_LOG_LEVEL" = "1"
+"D:XLA_PYTHON_CLIENT_MEM_FRACTION" = "0.75"
+"D:XLA_PYTHON_CLIENT_PREALLOCATE" = "false"
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
-line-length = 88
+line-length = 100
 src = ["src/opifex"]
 target-version = "py311" # Enforce Python 3.11+ features
 
@@ -455,7 +457,6 @@ ignore = [
   "E731", # Do not assign a lambda expression (JAX functional programming)
   "E741", # Ambiguous variable name (mathematical variables)
   "F722", # Forward annotation syntax error (JAX typing)
-  "UP038", # non-pep604-isinstance (Union vs | for isinstance)
   "S101", # Use of assert (common in scientific computing)
   "PLR0913", # Too many arguments (scientific functions)
   "PLR2004", # Magic value used in comparison (constants)

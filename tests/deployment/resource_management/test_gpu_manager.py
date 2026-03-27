@@ -1,4 +1,4 @@
-"""Comprehensive tests for GPUPoolManager.
+"""Full tests for GPUPoolManager.
 
 Test-driven development (TDD) approach: These tests are written BEFORE
 extracting the GPUPoolManager module from the original file.
@@ -163,9 +163,7 @@ class TestMemoryAllocation:
         assert result["required_memory_gb"] == 500.0
         assert "available_pools" in result
 
-    def test_allocate_memory_preferred_pool_insufficient(
-        self, gpu_pool_manager_with_pools
-    ):
+    def test_allocate_memory_preferred_pool_insufficient(self, gpu_pool_manager_with_pools):
         """Test allocation falls back when preferred pool has insufficient space."""
         manager = gpu_pool_manager_with_pools
 
@@ -229,9 +227,7 @@ class TestMemoryDeallocation:
 
         assert result is False
 
-    def test_deallocate_updates_allocation_record(
-        self, gpu_pool_manager_with_allocation
-    ):
+    def test_deallocate_updates_allocation_record(self, gpu_pool_manager_with_allocation):
         """Test deallocation updates allocation record status."""
         manager = gpu_pool_manager_with_allocation
 
@@ -310,9 +306,7 @@ class TestMemoryOptimization:
     """Test memory optimization functionality."""
 
     @pytest.mark.asyncio
-    async def test_optimize_memory_layout_no_optimization_needed(
-        self, gpu_pool_manager_with_pools
-    ):
+    async def test_optimize_memory_layout_no_optimization_needed(self, gpu_pool_manager_with_pools):
         """Test memory optimization when no optimization needed."""
         manager = gpu_pool_manager_with_pools
 
@@ -328,9 +322,7 @@ class TestMemoryOptimization:
         assert result["models_relocated"] == 0
 
     @pytest.mark.asyncio
-    async def test_optimize_memory_layout_high_utilization(
-        self, gpu_pool_manager_with_pools
-    ):
+    async def test_optimize_memory_layout_high_utilization(self, gpu_pool_manager_with_pools):
         """Test memory optimization with high utilization pool."""
         manager = gpu_pool_manager_with_pools
 
@@ -346,9 +338,7 @@ class TestMemoryOptimization:
         assert result["pools_optimized"] >= 0
 
     @pytest.mark.asyncio
-    async def test_optimize_pool_memory_relocates_models(
-        self, gpu_pool_manager_with_pools
-    ):
+    async def test_optimize_pool_memory_relocates_models(self, gpu_pool_manager_with_pools):
         """Test pool memory optimization relocates small models."""
         manager = gpu_pool_manager_with_pools
 
@@ -376,9 +366,7 @@ class TestMemoryOptimization:
         manager.allocate_gpu_memory("filler", 100.0, preferred_pool_id="pool-001")
 
         # pool-002 has low utilization
-        better_pool = manager._find_better_pool_for_model(
-            "small-model", 5.0, "pool-001"
-        )
+        better_pool = manager._find_better_pool_for_model("small-model", 5.0, "pool-001")
 
         # Should find pool-002 as better option (lower utilization)
         if better_pool:
@@ -419,9 +407,7 @@ class TestPoolStatistics:
         assert stats["average_pool_utilization"] == 0.0
         assert isinstance(stats["pools_by_provider"], dict)
 
-    def test_get_pool_statistics_with_allocations(
-        self, gpu_pool_manager_with_allocation
-    ):
+    def test_get_pool_statistics_with_allocations(self, gpu_pool_manager_with_allocation):
         """Test statistics with active allocations."""
         manager = gpu_pool_manager_with_allocation
 
@@ -470,9 +456,7 @@ class TestEdgeCases:
         """Test pool utilization is calculated correctly."""
         manager = gpu_pool_manager_with_pools
 
-        result = manager.allocate_gpu_memory(
-            "model", 80.0, preferred_pool_id="pool-001"
-        )
+        result = manager.allocate_gpu_memory("model", 80.0, preferred_pool_id="pool-001")
 
         pool = manager.gpu_pools["pool-001"]
         expected_utilization = 80.0 / 160.0  # 0.5

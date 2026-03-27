@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""Jupytext Conversion & Synchronization Utility
 
-A comprehensive tool for converting and synchronizing between Python scripts (.py)
+A full tool for converting and synchronizing between Python scripts (.py)
 and Jupyter notebooks (.ipynb) using Jupytext's py:percent format.
 
 Features:
@@ -134,9 +134,7 @@ def run_jupytext_command(args: list[str], verbose: bool = False) -> tuple[bool, 
         print(f"Running: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, check=False, timeout=120
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=120)
 
         if verbose or result.returncode != 0:
             if result.stdout:
@@ -184,9 +182,7 @@ def convert_py_to_nb(py_file: Path, verbose: bool = False) -> bool:
             print(f"  {issue}")
             print()
         print("  These patterns will cause jupytext to create invalid notebook syntax.")
-        print(
-            "  Please fix these issues before converting, or the notebook will fail linting."
-        )
+        print("  Please fix these issues before converting, or the notebook will fail linting.")
         return False
 
     nb_file = py_file.with_suffix(".ipynb")
@@ -349,9 +345,7 @@ def batch_convert_directory(
 
     # Filter out __init__.py and checkpoint files
     source_files = [
-        f
-        for f in source_files
-        if f.name != "__init__.py" and ".ipynb_checkpoints" not in str(f)
+        f for f in source_files if f.name != "__init__.py" and ".ipynb_checkpoints" not in str(f)
     ]
 
     if not source_files:
@@ -465,16 +459,12 @@ def main():  # noqa: PLR0915
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # py-to-nb command
-    py_to_nb = subparsers.add_parser(
-        "py-to-nb", help="Convert Python script to notebook"
-    )
+    py_to_nb = subparsers.add_parser("py-to-nb", help="Convert Python script to notebook")
     py_to_nb.add_argument("file", type=Path, help="Python file to convert")
     py_to_nb.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
     # nb-to-py command
-    nb_to_py = subparsers.add_parser(
-        "nb-to-py", help="Convert notebook to Python script"
-    )
+    nb_to_py = subparsers.add_parser("nb-to-py", help="Convert notebook to Python script")
     nb_to_py.add_argument("file", type=Path, help="Notebook file to convert")
     nb_to_py.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
@@ -487,23 +477,15 @@ def main():  # noqa: PLR0915
     batch_py_to_nb = subparsers.add_parser(
         "batch-py-to-nb", help="Batch convert Python scripts to notebooks"
     )
-    batch_py_to_nb.add_argument(
-        "directory", type=Path, help="Directory to search for .py files"
-    )
-    batch_py_to_nb.add_argument(
-        "-v", "--verbose", action="store_true", help="Verbose output"
-    )
+    batch_py_to_nb.add_argument("directory", type=Path, help="Directory to search for .py files")
+    batch_py_to_nb.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
     # batch-nb-to-py command
     batch_nb_to_py = subparsers.add_parser(
         "batch-nb-to-py", help="Batch convert notebooks to Python scripts"
     )
-    batch_nb_to_py.add_argument(
-        "directory", type=Path, help="Directory to search for .ipynb files"
-    )
-    batch_nb_to_py.add_argument(
-        "-v", "--verbose", action="store_true", help="Verbose output"
-    )
+    batch_nb_to_py.add_argument("directory", type=Path, help="Directory to search for .ipynb files")
+    batch_nb_to_py.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
     # validate command
     validate = subparsers.add_parser(
@@ -537,18 +519,14 @@ def main():  # noqa: PLR0915
         sys.exit(0 if success else 1)
 
     elif args.command == "batch-py-to-nb":
-        success_count, fail_count = batch_convert_directory(
-            args.directory, ".py", args.verbose
-        )
+        success_count, fail_count = batch_convert_directory(args.directory, ".py", args.verbose)
         print("=" * 80)
         print(f"✅ Succeeded: {success_count}")
         print(f"❌ Failed: {fail_count}")
         sys.exit(0 if fail_count == 0 else 1)
 
     elif args.command == "batch-nb-to-py":
-        success_count, fail_count = batch_convert_directory(
-            args.directory, ".ipynb", args.verbose
-        )
+        success_count, fail_count = batch_convert_directory(args.directory, ".ipynb", args.verbose)
         print("=" * 80)
         print(f"✅ Succeeded: {success_count}")
         print(f"❌ Failed: {fail_count}")

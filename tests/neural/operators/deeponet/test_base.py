@@ -60,9 +60,7 @@ class TestDeepONetComponents:
         assert deeponet_valid.output_dim == 16
 
         # This should raise an error - mismatched output dimensions
-        with pytest.raises(
-            ValueError, match=r"Branch output dim .* must match trunk output dim"
-        ):
+        with pytest.raises(ValueError, match=r"Branch output dim .* must match trunk output dim"):
             DeepONet(
                 branch_sizes=[50, 32, 16],  # Output: 16
                 trunk_sizes=[2, 32, 32],  # Output: 32 (mismatch!)
@@ -120,9 +118,7 @@ class TestDeepONetComponents:
 
         # Mismatched batch sizes
         branch_input = jax.random.normal(jax.random.PRNGKey(0), (4, 30))
-        trunk_input = jax.random.normal(
-            jax.random.PRNGKey(1), (6, 20, 2)
-        )  # Different batch size
+        trunk_input = jax.random.normal(jax.random.PRNGKey(1), (6, 20, 2))  # Different batch size
 
         with pytest.raises(ValueError, match=r"Branch input batch size.*must match"):
             deeponet(branch_input, trunk_input)

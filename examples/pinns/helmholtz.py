@@ -339,9 +339,7 @@ u_exact_grid = exact_solution(xy_eval).reshape(ny, nx)
 
 # Compute errors
 error = jnp.abs(u_pred_grid - u_exact_grid)
-l2_error = float(
-    jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2))
-)
+l2_error = float(jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2)))
 max_error = float(jnp.max(error))
 mean_error = float(jnp.mean(error))
 
@@ -426,9 +424,7 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
 # y = 0.5 cross-section
 y_idx = ny // 2
-axes[0].plot(
-    np.array(x_eval), np.array(u_pred_grid[y_idx, :]), "b-", label="PINN", linewidth=2
-)
+axes[0].plot(np.array(x_eval), np.array(u_pred_grid[y_idx, :]), "b-", label="PINN", linewidth=2)
 axes[0].plot(
     np.array(x_eval),
     np.array(u_exact_grid[y_idx, :]),
@@ -444,9 +440,7 @@ axes[0].grid(True, alpha=0.3)
 
 # x = 0.5 cross-section
 x_idx = nx // 2
-axes[1].plot(
-    np.array(y_eval), np.array(u_pred_grid[:, x_idx]), "b-", label="PINN", linewidth=2
-)
+axes[1].plot(np.array(y_eval), np.array(u_pred_grid[:, x_idx]), "b-", label="PINN", linewidth=2)
 axes[1].plot(
     np.array(y_eval),
     np.array(u_exact_grid[:, x_idx]),

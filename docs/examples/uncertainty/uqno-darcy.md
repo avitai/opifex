@@ -45,8 +45,8 @@ uncertainty estimates using Bayesian spectral convolutions.
 
 ## Files
 
-- **Python Script**: [`examples/uncertainty/uqno_darcy.py`](https://github.com/Opifex/Opifex/blob/main/examples/uncertainty/uqno_darcy.py)
-- **Jupyter Notebook**: [`examples/uncertainty/uqno_darcy.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/uncertainty/uqno_darcy.ipynb)
+- **Python Script**: [`examples/uncertainty/uqno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/uncertainty/uqno_darcy.py)
+- **Jupyter Notebook**: [`examples/uncertainty/uqno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/uncertainty/uqno_darcy.ipynb)
 
 ## Quick Start
 

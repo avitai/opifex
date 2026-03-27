@@ -271,9 +271,7 @@ class ExperienceReplayBuffer:
             Batch of sampled experiences
         """
         if batch_size > len(self.buffer):
-            raise ValueError(
-                f"Cannot sample {batch_size} from buffer of size {len(self.buffer)}"
-            )
+            raise ValueError(f"Cannot sample {batch_size} from buffer of size {len(self.buffer)}")
 
         # Use deterministic sampling for reproducibility in tests
         # In production, this could use JAX random for better randomness
@@ -320,25 +318,20 @@ class RewardFunction:
             Computed reward value
         """
         # Convergence reward (based on objective improvement)
-        convergence_reward = (
-            jnp.tanh(objective_improvement) * self.config.reward_convergence_weight
-        )
+        convergence_reward = jnp.tanh(objective_improvement) * self.config.reward_convergence_weight
 
         # Quality reward (based on convergence speed)
         quality_reward = jnp.tanh(convergence_speed) * self.config.reward_quality_weight
 
         # Efficiency reward (based on computational cost)
         efficiency_reward = (
-            jnp.tanh(1.0 / (computational_cost + 1e-8))
-            * self.config.reward_efficiency_weight
+            jnp.tanh(1.0 / (computational_cost + 1e-8)) * self.config.reward_efficiency_weight
         )
 
         # Penalty for constraint violations
         constraint_penalty = -10.0 * constraint_violation
 
-        total_reward = (
-            convergence_reward + quality_reward + efficiency_reward + constraint_penalty
-        )
+        total_reward = convergence_reward + quality_reward + efficiency_reward + constraint_penalty
 
         return float(total_reward)
 
@@ -368,9 +361,7 @@ class RLOptimizationAgent(nnx.Module):
 
         # Create networks
         self.state_encoder = StateEncoder(config.state_dim, rngs=rngs)
-        self.dqn = DQNNetwork(
-            config.state_dim, config.action_dim, config.hidden_dims, rngs=rngs
-        )
+        self.dqn = DQNNetwork(config.state_dim, config.action_dim, config.hidden_dims, rngs=rngs)
         self.target_dqn = DQNNetwork(
             config.state_dim, config.action_dim, config.hidden_dims, rngs=rngs
         )
@@ -379,9 +370,7 @@ class RLOptimizationAgent(nnx.Module):
         self._update_target_network()
 
         # Create optimizer
-        self.optimizer = nnx.Optimizer(
-            self.dqn, optax.adam(config.learning_rate), wrt=nnx.Param
-        )
+        self.optimizer = nnx.Optimizer(self.dqn, optax.adam(config.learning_rate), wrt=nnx.Param)
 
         # Experience replay buffer
         self.replay_buffer = ExperienceReplayBuffer(config.replay_buffer_size)
@@ -513,9 +502,7 @@ class RLOptimizationAgent(nnx.Module):
         # Compute target Q-values
         next_q_values = self.target_dqn(next_states)
         max_next_q_values = jnp.max(next_q_values, axis=1)
-        targets = rewards + self.config.discount_factor * max_next_q_values * (
-            1 - dones
-        )
+        targets = rewards + self.config.discount_factor * max_next_q_values * (1 - dones)
 
         # Define loss function
         def loss_fn(params):
@@ -534,9 +521,7 @@ class RLOptimizationAgent(nnx.Module):
             self._update_target_network()
 
         # Decay epsilon
-        self.epsilon = max(
-            self.config.epsilon_end, self.epsilon * self.config.epsilon_decay
-        )
+        self.epsilon = max(self.config.epsilon_end, self.epsilon * self.config.epsilon_decay)
 
         return {
             "loss": float(loss),
@@ -683,9 +668,7 @@ class RLOptimizationEngine(nnx.Module):
             )
 
             # Execute optimization step with selected strategy
-            step_result = self._execute_optimization_step(
-                problem, action_type, params, iteration
-            )
+            step_result = self._execute_optimization_step(problem, action_type, params, iteration)
 
             # Compute reward
             reward = self.rl_agent.reward_function.compute_reward(
@@ -698,9 +681,7 @@ class RLOptimizationEngine(nnx.Module):
             episode_reward += reward
 
             # Update resource usage
-            resource_usage["time_remaining"] = max(
-                0.0, resource_usage["time_remaining"] - 0.001
-            )
+            resource_usage["time_remaining"] = max(0.0, resource_usage["time_remaining"] - 0.001)
             resource_usage["computational_cost"] += step_result["computational_cost"]
             resource_usage["max_iterations_remaining"] = (
                 max_iterations - iteration
@@ -712,9 +693,7 @@ class RLOptimizationEngine(nnx.Module):
             )
 
             # Encode next state
-            next_state = self.rl_agent.encode_state(
-                problem, convergence_history, resource_usage
-            )
+            next_state = self.rl_agent.encode_state(problem, convergence_history, resource_usage)
 
             # Check termination
             done = (
@@ -776,9 +755,7 @@ class RLOptimizationEngine(nnx.Module):
 
         # Simulate optimization step
         if hasattr(self, "_previous_objective"):
-            objective_improvement = max(
-                0.0, self._previous_objective - (iteration * 0.1)
-            )
+            objective_improvement = max(0.0, self._previous_objective - (iteration * 0.1))
         else:
             objective_improvement = 1.0
             self._previous_objective: float = 10.0

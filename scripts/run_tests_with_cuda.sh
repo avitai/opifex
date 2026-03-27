@@ -255,30 +255,28 @@ run_tests() {
         exit 1
     fi
 
-    # Build pytest command
-    local pytest_cmd="python -m pytest"
+    # Build pytest command as array to avoid eval injection
+    local -a pytest_args=("python" "-m" "pytest")
 
-    # Add verbose flag if requested
     if [ "$VERBOSE" = true ]; then
-        pytest_cmd="$pytest_cmd -v"
+        pytest_args+=("-v")
     fi
 
-    # Add test path
-    pytest_cmd="$pytest_cmd $TEST_PATH"
+    pytest_args+=("$TEST_PATH")
 
-    # Add any additional pytest arguments
+    # Split PYTEST_ARGS on whitespace into array elements
     if [ -n "$PYTEST_ARGS" ]; then
-        pytest_cmd="$pytest_cmd $PYTEST_ARGS"
+        read -ra extra_args <<< "$PYTEST_ARGS"
+        pytest_args+=("${extra_args[@]}")
     fi
 
-    # Add standard Opifex test options
-    pytest_cmd="$pytest_cmd --tb=short --color=yes"
+    pytest_args+=("--tb=short" "--color=yes")
 
-    log_info "Executing: $pytest_cmd"
+    log_info "Executing: ${pytest_args[*]}"
     echo ""
 
-    # Run the tests
-    eval "$pytest_cmd"
+    # Run the tests using array expansion (no eval)
+    "${pytest_args[@]}"
     local exit_code=$?
 
     echo ""

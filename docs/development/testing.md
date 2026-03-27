@@ -19,13 +19,13 @@ pytest tests/training/
 # Run with coverage
 pytest --cov=opifex --cov-report=html
 
-# Comprehensive test reporting with JSON output and detailed coverage
+# Full test reporting with JSON output and detailed coverage
 uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
-### Comprehensive Test Reporting
+### Full Test Reporting
 
-The comprehensive test command above generates detailed reports for CI/CD integration and analysis:
+The full test command above generates detailed reports for CI/CD integration and analysis:
 
 **Output Files:**
 

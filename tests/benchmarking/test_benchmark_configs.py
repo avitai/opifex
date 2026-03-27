@@ -68,9 +68,7 @@ class TestRealPDEBenchConfigs:
 
     def test_cylinder_config_exists(self, registry_with_realpdebench):
         """Cylinder vortex shedding config is defined."""
-        config = registry_with_realpdebench.get_benchmark_config(
-            "RealPDEBench_Cylinder"
-        )
+        config = registry_with_realpdebench.get_benchmark_config("RealPDEBench_Cylinder")
 
         assert config.domain == "fluid_dynamics"
         assert "reynolds_number" in config.physics_constraints
@@ -130,10 +128,7 @@ class TestBenchmarkRegistryOperatorMetadata:
 
         # Metadata should be accessible
         assert (
-            registry._operator_metadata["TensorizedFourierNeuralOperator"][
-                "operator_type"
-            ]
-            == "fno"
+            registry._operator_metadata["TensorizedFourierNeuralOperator"]["operator_type"] == "fno"
         )
         assert (
             registry._operator_metadata["TensorizedFourierNeuralOperator"][
@@ -157,9 +152,7 @@ class TestBenchmarkRegistryOperatorMetadata:
         )
 
         # Verify metadata is stored
-        metadata = registry._operator_metadata.get(
-            "TensorizedFourierNeuralOperator", {}
-        )
+        metadata = registry._operator_metadata.get("TensorizedFourierNeuralOperator", {})
         assert metadata.get("operator_type") == "fno"
 
         # This metadata should be used by BenchmarkRunner._get_operator_config()

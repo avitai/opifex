@@ -1,0 +1,24 @@
+[
+  {
+    "dataset": "2D_DarcyFlow",
+    "operator": "FNO",
+    "n_train": 9000,
+    "n_test": 1000,
+    "n_epochs": 500,
+    "relative_l2": 0.31496065855026245,
+    "mse": 0.004015511367470026,
+    "training_time_s": 1838.9237840300193,
+    "parameters": 484577
+  },
+  {
+    "dataset": "1D_Burgers",
+    "operator": "FNO",
+    "n_train": 9000,
+    "n_test": 1000,
+    "n_epochs": 500,
+    "relative_l2": 0.7101147770881653,
+    "mse": 0.003860374679788947,
+    "training_time_s": 357.5001761530293,
+    "parameters": 484537
+  }
+]

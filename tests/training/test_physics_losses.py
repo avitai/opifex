@@ -112,9 +112,7 @@ class TestPhysicsLossComposer:
         batch_size = 32
         x = jnp.linspace(0, 1, batch_size).reshape(-1, 1)
         y_true = jnp.sin(jnp.pi * x)
-        y_pred = jnp.sin(jnp.pi * x) + 0.1 * jax.random.normal(
-            jax.random.PRNGKey(42), x.shape
-        )
+        y_pred = jnp.sin(jnp.pi * x) + 0.1 * jax.random.normal(jax.random.PRNGKey(42), x.shape)
 
         # Mock residuals
         physics_residual = jnp.mean((y_pred - y_true) ** 2)
@@ -328,9 +326,7 @@ class TestConservationLawEnforcer:
         )
 
         # Compute particle number conservation
-        particle_residual = enforcer.compute_residual(
-            "particle_number", density_matrix, None
-        )
+        particle_residual = enforcer.compute_residual("particle_number", density_matrix, None)
 
         assert particle_residual.shape == ()
         assert jnp.isfinite(particle_residual)
@@ -615,9 +611,7 @@ class TestPhysicsInformedLoss:
 
         # Mock target energy
         energy_target = jax.random.normal(jax.random.PRNGKey(44), (batch_size,))
-        energy_pred = energy_target + 0.1 * jax.random.normal(
-            jax.random.PRNGKey(45), (batch_size,)
-        )
+        energy_pred = energy_target + 0.1 * jax.random.normal(jax.random.PRNGKey(45), (batch_size,))
 
         # Compute quantum-enhanced loss
         total_loss, loss_components = pi_loss.compute_loss(

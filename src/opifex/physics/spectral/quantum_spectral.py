@@ -128,9 +128,7 @@ def quantum_fft_gradient(wavefunction: Array, dx: float, hbar: float = 1.0) -> A
     return gradient
 
 
-def quantum_fft_second_derivative(
-    wavefunction: Array, dx: float, hbar: float = 1.0
-) -> Array:
+def quantum_fft_second_derivative(wavefunction: Array, dx: float, hbar: float = 1.0) -> Array:
     """
     Compute second derivative using spectral (FFT) method for quantum wavefunctions.
 

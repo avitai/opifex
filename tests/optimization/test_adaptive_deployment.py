@@ -1,4 +1,4 @@
-"""Comprehensive tests for Adaptive Deployment production optimization.
+"""Full tests for Adaptive Deployment production optimization.
 
 This test suite provides enterprise-grade testing for the adaptive deployment system
 using pytest, pytest-mock, pytest-asyncio, and industry testing patterns.
@@ -250,9 +250,7 @@ class TestDeploymentAI:
     def test_deployment_ai_initialization(self):
         """Test DeploymentAI initialization with custom parameters."""
         rngs = nnx.Rngs(42)
-        ai = DeploymentAI(
-            input_features=32, hidden_features=256, decision_threshold=0.8, rngs=rngs
-        )
+        ai = DeploymentAI(input_features=32, hidden_features=256, decision_threshold=0.8, rngs=rngs)
 
         assert hasattr(ai, "strategy_selector")
         assert hasattr(ai, "rollback_predictor")
@@ -380,7 +378,7 @@ class TestDeploymentAI:
 
 
 class TestCanaryController:
-    """Test suite for CanaryController with comprehensive async coverage."""
+    """Test suite for CanaryController with full async coverage."""
 
     @pytest.fixture
     def mock_deployment_ai(self):
@@ -510,9 +508,7 @@ class TestCanaryController:
             gpu_utilization=0.95,
         )
 
-        health_result = await controller._evaluate_deployment_health(
-            unhealthy_metrics, config
-        )
+        health_result = await controller._evaluate_deployment_health(unhealthy_metrics, config)
 
         assert not health_result["is_healthy"]
         assert "failed_checks" in health_result  # Fixed key
@@ -550,9 +546,7 @@ class TestCanaryController:
             gpu_utilization=0.99,
         )
 
-        health_result = await controller._evaluate_deployment_health(
-            very_unhealthy_metrics, config
-        )
+        health_result = await controller._evaluate_deployment_health(very_unhealthy_metrics, config)
 
         assert not health_result["is_healthy"]
         assert len(health_result["failed_checks"]) > 0  # Fixed key
@@ -614,7 +608,7 @@ class TestCanaryController:
 
 
 class TestTrafficShaper:
-    """Test suite for TrafficShaper with comprehensive coverage."""
+    """Test suite for TrafficShaper with full coverage."""
 
     @pytest.fixture
     def mock_deployment_ai(self):
@@ -625,9 +619,7 @@ class TestTrafficShaper:
 
     def test_traffic_shaper_initialization(self, mock_deployment_ai):
         """Test TrafficShaper initialization."""
-        shaper = TrafficShaper(
-            deployment_ai=mock_deployment_ai, max_traffic_change_per_minute=15.0
-        )
+        shaper = TrafficShaper(deployment_ai=mock_deployment_ai, max_traffic_change_per_minute=15.0)
 
         assert shaper.deployment_ai == mock_deployment_ai
         assert shaper.max_traffic_change_per_minute == 15.0
@@ -701,9 +693,7 @@ class TestTrafficShaper:
 
         target_distribution = {"deploy_1": 50.0, "deploy_2": 50.0}
 
-        result = await shaper.optimize_traffic_distribution(
-            deployments, target_distribution
-        )
+        result = await shaper.optimize_traffic_distribution(deployments, target_distribution)
 
         assert isinstance(result, dict)
         assert "deploy_1" in result
@@ -738,7 +728,7 @@ class TestTrafficShaper:
 
 
 class TestRollbackEngine:
-    """Test suite for RollbackEngine with comprehensive coverage."""
+    """Test suite for RollbackEngine with full coverage."""
 
     @pytest.fixture
     def mock_deployment_ai(self):
@@ -906,9 +896,7 @@ class TestAdaptiveDeploymentSystem:
 
         return deployment_ai, canary_controller, traffic_shaper, rollback_engine
 
-    def test_adaptive_deployment_system_initialization(
-        self, deployment_system_components
-    ):
+    def test_adaptive_deployment_system_initialization(self, deployment_system_components):
         """Test AdaptiveDeploymentSystem initialization."""
         ai, canary, shaper, rollback = deployment_system_components
 
@@ -947,9 +935,7 @@ class TestAdaptiveDeploymentSystem:
         system_features = jnp.ones((1, 24))  # 24 features
 
         # Mock the canary deployment to avoid long-running tasks
-        with patch.object(
-            canary, "start_canary_deployment", new_callable=AsyncMock
-        ) as mock_canary:
+        with patch.object(canary, "start_canary_deployment", new_callable=AsyncMock) as mock_canary:
             mock_canary.return_value = True
 
             result = await system.deploy_model("deploy_123", config, system_features)

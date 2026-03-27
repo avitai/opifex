@@ -1,7 +1,7 @@
 """
 Multi-Grid Tensorized Fourier Neural Operator (MG-TFNO)
 
-Phase 3: Implementation of advanced Multi-Grid TFNO techniques for hierarchical
+Version 3: Implementation of advanced Multi-Grid TFNO techniques for hierarchical
 tensor decomposition with frequency-aware rank adaptation and dynamic rank learning.
 
 Based on the detailed rationale's recommendations for advanced
@@ -112,9 +112,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
             self.frequency_bands = frequency_bands
 
         # Compute frequency-aware ranks
-        self.frequency_ranks = self._compute_frequency_ranks(
-            base_rank, rank_adaptation_strategy
-        )
+        self.frequency_ranks = self._compute_frequency_ranks(base_rank, rank_adaptation_strategy)
 
         # Initialize decomposition components
         self._init_multi_grid_decomposition(rngs, use_tensorly_init)
@@ -123,9 +121,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
         if self.adaptive_rank_learning:
             self._init_adaptive_rank_learning(rngs)
 
-    def _auto_frequency_bands(
-        self, spatial_modes: Sequence[int]
-    ) -> Sequence[tuple[int, int]]:
+    def _auto_frequency_bands(self, spatial_modes: Sequence[int]) -> Sequence[tuple[int, int]]:
         """Automatically determine frequency bands based on spatial mode sizes.
 
         Uses Multi-Grid TFNO principle: partition frequency space into bands
@@ -161,9 +157,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
             # Base ranks from compression ratio
             base_in_rank = max(1, int(base_rank * self.in_channels))
             base_out_rank = max(1, int(base_rank * self.out_channels))
-            base_spatial_ranks = [
-                max(1, int(base_rank * mode)) for mode in self.spatial_modes
-            ]
+            base_spatial_ranks = [max(1, int(base_rank * mode)) for mode in self.spatial_modes]
         else:
             # Explicit ranks - use cast to help type checker
             base_rank_seq = cast("Sequence[int]", base_rank)
@@ -349,9 +343,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
         spatial_shape = x.shape[2:]
 
         # Initialize output
-        output = jnp.zeros(
-            (batch_size, self.out_channels, *spatial_shape), dtype=x.dtype
-        )
+        output = jnp.zeros((batch_size, self.out_channels, *spatial_shape), dtype=x.dtype)
 
         # Process each frequency band separately
         for band_name, band_decomp in self.band_decompositions.items():
@@ -442,9 +434,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
         # Contract over input channels and all spatial dimensions except last
         input_axes = [1, *list(range(2, len(band_input.shape)))]
         weight_axes = [0, *list(range(2, len(band_tensor.shape)))]
-        return jnp.tensordot(
-            band_input, jnp.conj(band_tensor), axes=(input_axes, weight_axes)
-        )
+        return jnp.tensordot(band_input, jnp.conj(band_tensor), axes=(input_axes, weight_axes))
 
     def _add_band_to_output(
         self, output: jax.Array, band_output: jax.Array, band_name: str
@@ -455,17 +445,11 @@ class MultiGridTuckerDecomposition(nnx.Module):
 
         # Add to appropriate frequency range
         if len(output.shape) == 3:  # 1D spatial
-            output = output.at[:, :, start : start + band_output.shape[2]].add(
-                band_output
-            )
+            output = output.at[:, :, start : start + band_output.shape[2]].add(band_output)
         elif len(output.shape) == 4:  # 2D spatial
-            output = output.at[:, :, :, start : start + band_output.shape[3]].add(
-                band_output
-            )
+            output = output.at[:, :, :, start : start + band_output.shape[3]].add(band_output)
         elif len(output.shape) == 5:  # 3D spatial
-            output = output.at[:, :, :, :, start : start + band_output.shape[4]].add(
-                band_output
-            )
+            output = output.at[:, :, :, :, start : start + band_output.shape[4]].add(band_output)
 
         return output
 
@@ -493,18 +477,14 @@ class MultiGridTuckerDecomposition(nnx.Module):
 
                         # Adaptive rank adjustment
                         current_rank = self.frequency_ranks[band_name][i]
-                        rank_adjustment = (
-                            self.rank_learning_rate * self.rank_momentum[band_name][i]
-                        )
+                        rank_adjustment = self.rank_learning_rate * self.rank_momentum[band_name][i]
 
                         # Update rank (with bounds checking)
                         new_rank = max(
                             1,
                             min(
                                 current_rank + int(rank_adjustment),
-                                self.tensor_shape[i]
-                                if i < len(self.tensor_shape)
-                                else 64,
+                                self.tensor_shape[i] if i < len(self.tensor_shape) else 64,
                             ),
                         )
 
@@ -525,10 +505,8 @@ class MultiGridTuckerDecomposition(nnx.Module):
             factors = band_decomp["factors"]
 
             # Type-safe access: core is always Param, factors is always list[Param]
-            core_param = core if not isinstance(core, (list, nnx.List)) else core[0]
-            factor_list = (
-                factors if isinstance(factors, (list, nnx.List)) else [factors]
-            )
+            core_param = core if not isinstance(core, list | nnx.List) else core[0]
+            factor_list = factors if isinstance(factors, list | nnx.List) else [factors]
 
             band_params = np.prod(core_param.value.shape) + sum(
                 np.prod(f.value.shape) for f in factor_list
@@ -542,9 +520,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
                 "factor_shapes": [f.value.shape for f in factor_list],
             }
 
-        stats["compression_ratio"] = (
-            stats["original_parameters"] / stats["total_parameters"]
-        )
+        stats["compression_ratio"] = stats["original_parameters"] / stats["total_parameters"]
         stats["parameter_reduction"] = 1.0 - (
             stats["total_parameters"] / stats["original_parameters"]
         )
@@ -558,9 +534,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
         core_param = first_band_decomp["core"]
         # Handle both Param and list[Param] cases
         core_value = (
-            core_param.value
-            if not isinstance(core_param, (list, nnx.List))
-            else core_param[0].value
+            core_param.value if not isinstance(core_param, list | nnx.List) else core_param[0].value
         )
         reference_dtype = core_value.dtype
 
@@ -698,11 +672,7 @@ class AdaptiveRankMultiGridTFNO(nnx.Module):
 
         # Apply FFT to spatial dimensions
         for i in range(2, len(x.shape)):
-            x = (
-                jnp.fft.rfft(x, axis=i)
-                if i == len(x.shape) - 1
-                else jnp.fft.fft(x, axis=i)
-            )
+            x = jnp.fft.rfft(x, axis=i) if i == len(x.shape) - 1 else jnp.fft.fft(x, axis=i)
 
         # Keep only specified modes
         spatial_slices = [slice(None), slice(None)]  # batch, channels
@@ -770,12 +740,10 @@ class AdaptiveRankMultiGridTFNO(nnx.Module):
         ):
             output_bias_size = int(self.output_projection.bias.value.size)
 
-        return (
-            input_kernel_size + input_bias_size + output_kernel_size + output_bias_size
-        )
+        return input_kernel_size + input_bias_size + output_kernel_size + output_bias_size
 
     def get_multi_grid_stats(self) -> dict[str, Any]:
-        """Get comprehensive Multi-Grid TFNO statistics."""
+        """Get full Multi-Grid TFNO statistics."""
         stats: dict[str, Any] = {
             "model_type": "AdaptiveRankMultiGridTFNO",
             "architecture": {
@@ -825,19 +793,12 @@ class AdaptiveRankMultiGridTFNO(nnx.Module):
             # Safe access to core parameter value
             if core_param is not None and hasattr(core_param, "value"):
                 core_value = getattr(core_param, "value", None)
-                if core_value is not None:
-                    core_norm = float(jnp.linalg.norm(core_value))
-                else:
-                    core_norm = 0.0
+                core_norm = float(jnp.linalg.norm(core_value)) if core_value is not None else 0.0
             else:
                 core_norm = 0.0
 
             # Safe access to factor parameter values
-            if (
-                factor_params
-                and len(factor_params) > 0
-                and hasattr(factor_params[0], "value")
-            ):
+            if factor_params and len(factor_params) > 0 and hasattr(factor_params[0], "value"):
                 factor_value = getattr(factor_params[0], "value", None)
                 if factor_value is not None:
                     factor_norm = float(jnp.linalg.norm(factor_value))

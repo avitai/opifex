@@ -46,7 +46,7 @@
 > | Area | Status | Impact |
 > |------|--------|--------|
 > | **API** | 🔄 Unstable | Breaking changes are expected. Public interfaces may change without deprecation warnings. Pin to specific commits if stability is required. |
-> | **Tests** | 🔄 In Flux | Test suite is being expanded. Some tests may fail or be skipped. Coverage metrics are improving but not yet comprehensive. |
+> | **Tests** | 🔄 In Flux | Test suite is being expanded. Some tests may fail or be skipped. Coverage metrics are improving but not yet full. |
 > | **Documentation** | 🔄 Evolving | Docs may not reflect current implementation. Code examples might be outdated. Refer to source code and tests for accurate usage. |
 >
 > We recommend waiting for a stable release (v1.0) before using Opifex in production. For research and experimentation, proceed with the understanding that APIs will evolve.
@@ -174,7 +174,7 @@ from opifex.solvers.adapters import ArtifexSolverAdapter
 # gen_solution = adapter.solve(problem)
 ```
 
-For comprehensive examples and tutorials, see the [Examples](examples/) directory and [Documentation](docs/).
+For full examples and tutorials, see the [Examples](examples/) directory and [Documentation](docs/).
 
 ## 🔧 Development
 

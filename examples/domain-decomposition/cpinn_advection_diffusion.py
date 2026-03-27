@@ -191,9 +191,7 @@ collocation_points_per_subdomain = []
 for i, subdomain in enumerate(subdomains):
     x_lo, x_hi = subdomain.bounds[0]
     x_pts = jax.random.uniform(keys[i], (N_DOMAIN,), minval=x_lo, maxval=x_hi)
-    t_pts = jax.random.uniform(
-        keys[i + NUM_SUBDOMAINS], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX
-    )
+    t_pts = jax.random.uniform(keys[i + NUM_SUBDOMAINS], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)
     xt_pts = jnp.column_stack([x_pts, t_pts])
     collocation_points_per_subdomain.append(xt_pts)
 
@@ -344,9 +342,7 @@ def train_step(model, opt, colloc_pts, xt_bc, u_bc, xt_ic, u_ic):
 
 losses = []
 for epoch in range(EPOCHS):
-    loss = train_step(
-        model, opt, collocation_points_per_subdomain, xt_bc, u_bc, xt_ic, u_ic
-    )
+    loss = train_step(model, opt, collocation_points_per_subdomain, xt_bc, u_bc, xt_ic, u_ic)
     losses.append(float(loss))
 
     if (epoch + 1) % 3000 == 0 or epoch == 0:

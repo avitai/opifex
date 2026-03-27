@@ -275,9 +275,7 @@ test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 # Relative L2 error per sample
 pred_flat = predictions.reshape(predictions.shape[0], -1)
 true_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-rel_l2 = jnp.linalg.norm(pred_flat - true_flat, axis=1) / jnp.linalg.norm(
-    true_flat, axis=1
-)
+rel_l2 = jnp.linalg.norm(pred_flat - true_flat, axis=1) / jnp.linalg.norm(true_flat, axis=1)
 mean_rel_l2 = float(jnp.mean(rel_l2))
 
 print(f"Test MSE:         {test_mse:.6f}")
@@ -336,11 +334,7 @@ for row, label in enumerate(row_labels):
         pred_vort = []
         for t in range(TIME_STEPS):
             truth_vort.append(
-                np.array(
-                    compute_vorticity(
-                        Y_test[sample_idx, t, 0], Y_test[sample_idx, t, 1], dx
-                    )
-                )
+                np.array(compute_vorticity(Y_test[sample_idx, t, 0], Y_test[sample_idx, t, 1], dx))
             )
             pred_vort.append(
                 np.array(
@@ -365,9 +359,7 @@ for row, label in enumerate(row_labels):
     for t in range(TIME_STEPS):
         data = pred[t]
 
-        im = axes[row, t + 1].imshow(
-            data.T, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax
-        )
+        im = axes[row, t + 1].imshow(data.T, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax)
         if row == 0:
             axes[row, t + 1].set_title(f"t={t + 1}")
         axes[row, t + 1].set_xticks([])

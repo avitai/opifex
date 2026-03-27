@@ -96,14 +96,9 @@ class TestOptimizationObjectiveEnum:
         assert OptimizationObjective.MINIMIZE_COST.value == "minimize_cost"
         assert OptimizationObjective.MINIMIZE_LATENCY.value == "minimize_latency"
         assert OptimizationObjective.MAXIMIZE_THROUGHPUT.value == "maximize_throughput"
-        assert (
-            OptimizationObjective.BALANCE_COST_PERFORMANCE.value
-            == "balance_cost_performance"
-        )
+        assert OptimizationObjective.BALANCE_COST_PERFORMANCE.value == "balance_cost_performance"
         assert OptimizationObjective.MINIMIZE_CARBON.value == "minimize_carbon"
-        assert (
-            OptimizationObjective.MAXIMIZE_AVAILABILITY.value == "maximize_availability"
-        )
+        assert OptimizationObjective.MAXIMIZE_AVAILABILITY.value == "maximize_availability"
 
 
 class TestResourcePoolDataclass:

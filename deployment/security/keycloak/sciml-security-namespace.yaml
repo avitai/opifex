@@ -1,6 +1,6 @@
 # Opifex Enterprise Keycloak Identity Hub - High Availability Deployment
 # Hybrid Security Model + Federation + Multi-Tier Compliance
-# Integration with Phase 7.1 Container Orchestration
+# Integration with Version 7.1 Container Orchestration
 
 apiVersion: v1
 kind: Namespace

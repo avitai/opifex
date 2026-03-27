@@ -12,7 +12,7 @@ from opifex.core.quantum.molecular_system import MolecularSystem
 
 @dataclass
 class SCFResult:
-    """Result of SCF calculation with comprehensive convergence information."""
+    """Result of SCF calculation with full convergence information."""
 
     converged: bool
     total_energy: float
@@ -86,9 +86,7 @@ class DensityMixingNetwork(nnx.Module):
         """
         # Input validation for quantum calculations
         if old_density.shape != new_density.shape:
-            raise ValueError(
-                f"Density shape mismatch: {old_density.shape} != {new_density.shape}"
-            )
+            raise ValueError(f"Density shape mismatch: {old_density.shape} != {new_density.shape}")
 
         # Ensure numerical stability for quantum calculations
         eps = jnp.finfo(jnp.float64).eps
@@ -150,9 +148,7 @@ class ConvergencePredictor(nnx.Module):
             nnx.gelu,
             nnx.Linear(hidden_dim, hidden_dim // 2, rngs=rngs),
             nnx.gelu,
-            nnx.Linear(
-                hidden_dim // 2, 2, rngs=rngs
-            ),  # [convergence_prob, accuracy_score]
+            nnx.Linear(hidden_dim // 2, 2, rngs=rngs),  # [convergence_prob, accuracy_score]
         )
 
         # Chemical accuracy assessment parameters
@@ -190,7 +186,7 @@ class ConvergencePredictor(nnx.Module):
 
 
 class NeuralSCFSolver(nnx.Module):
-    """Neural-enhanced self-consistent field solver with comprehensive
+    """Neural-enhanced self-consistent field solver with full
 
     convergence analysis.
 
@@ -281,9 +277,7 @@ class NeuralSCFSolver(nnx.Module):
             Mixed density for next iteration
         """
         if self.mixing_strategy == "neural":
-            return self.density_mixer(
-                old_density, new_density, deterministic=deterministic
-            )
+            return self.density_mixer(old_density, new_density, deterministic=deterministic)
 
         # Enhanced linear mixing with adaptive factor
         alpha = self.default_mixing.value * self.adaptive_factor.value
@@ -336,7 +330,7 @@ class NeuralSCFSolver(nnx.Module):
         *,
         deterministic: bool = False,
     ) -> SCFResult:
-        """Solve SCF equations with neural acceleration and comprehensive analysis.
+        """Solve SCF equations with neural acceleration and full analysis.
 
         Args:
             molecular_system: Molecular system to solve
@@ -345,12 +339,11 @@ class NeuralSCFSolver(nnx.Module):
             deterministic: Whether to use deterministic computation
 
         Returns:
-            Comprehensive SCF result with convergence analysis
+            Full SCF result with convergence analysis
         """
         if initial_density.size != self.grid_size:
             raise ValueError(
-                f"Initial density size {initial_density.size} != "
-                f"grid_size {self.grid_size}"
+                f"Initial density size {initial_density.size} != grid_size {self.grid_size}"
             )
 
             # Initialize SCF iteration variables
@@ -377,9 +370,7 @@ class NeuralSCFSolver(nnx.Module):
             energy_error = self._compute_energy_error(previous_energy, current_energy)
 
             if iteration > 0:
-                density_error = self._compute_density_error(
-                    previous_density, current_density
-                )
+                density_error = self._compute_density_error(previous_density, current_density)
             else:
                 density_error = jnp.inf
 
@@ -388,7 +379,7 @@ class NeuralSCFSolver(nnx.Module):
             energy_history.append(current_energy)
             density_errors.append(density_error)
 
-            # Check convergence with comprehensive analysis
+            # Check convergence with full analysis
             converged, chemical_accuracy, convergence_prob = self._check_convergence(
                 energy_error,
                 density_error,
@@ -427,9 +418,7 @@ class NeuralSCFSolver(nnx.Module):
                 previous_energy = current_energy
 
         # SCF did not converge
-        final_convergence_prob = (
-            convergence_probabilities[-1] if convergence_probabilities else 0.0
-        )
+        final_convergence_prob = convergence_probabilities[-1] if convergence_probabilities else 0.0
 
         return SCFResult(
             converged=False,
@@ -459,9 +448,7 @@ class NeuralSCFSolver(nnx.Module):
             Predicted number of iterations for convergence
         """
         # Run a few test iterations to build convergence history
-        test_result = self.solve_scf(
-            molecular_system, initial_density, deterministic=deterministic
-        )
+        test_result = self.solve_scf(molecular_system, initial_density, deterministic=deterministic)
 
         if test_result.converged:
             return test_result.iterations

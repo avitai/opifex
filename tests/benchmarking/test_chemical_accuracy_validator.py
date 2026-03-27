@@ -45,17 +45,13 @@ class TestChemicalAccuracyValidator:
         assessment = validator.assess(result, "materials_science")
         assert assessment.passed is False
 
-    def test_molecular_dynamics_pass(
-        self, validator: ChemicalAccuracyValidator
-    ) -> None:
+    def test_molecular_dynamics_pass(self, validator: ChemicalAccuracyValidator) -> None:
         """Passes when error is below molecular dynamics threshold (1e-2 eV)."""
         result = _make_result(relative_error=5e-3)
         assessment = validator.assess(result, "molecular_dynamics")
         assert assessment.passed is True
 
-    def test_molecular_dynamics_fail(
-        self, validator: ChemicalAccuracyValidator
-    ) -> None:
+    def test_molecular_dynamics_fail(self, validator: ChemicalAccuracyValidator) -> None:
         """Fails when error exceeds molecular dynamics threshold."""
         result = _make_result(relative_error=5e-2)
         assessment = validator.assess(result, "molecular_dynamics")
@@ -75,17 +71,13 @@ class TestChemicalAccuracyValidator:
         assessment = validator.assess(result, "quantum_computing")
         assert assessment.passed is True
 
-    def test_margin_positive_when_passing(
-        self, validator: ChemicalAccuracyValidator
-    ) -> None:
+    def test_margin_positive_when_passing(self, validator: ChemicalAccuracyValidator) -> None:
         """Margin is positive when result passes (headroom)."""
         result = _make_result(relative_error=5e-4)
         assessment = validator.assess(result, "quantum_computing")
         assert assessment.margin > 0
 
-    def test_assessment_wraps_accuracy_result(
-        self, validator: ChemicalAccuracyValidator
-    ) -> None:
+    def test_assessment_wraps_accuracy_result(self, validator: ChemicalAccuracyValidator) -> None:
         """ChemicalAccuracyAssessment wraps calibrax AccuracyResult."""
         result = _make_result(relative_error=5e-4)
         assessment = validator.assess(result, "quantum_computing")
@@ -93,9 +85,7 @@ class TestChemicalAccuracyValidator:
         assert assessment.accuracy_result is not None
         assert assessment.domain == "quantum_computing"
 
-    def test_recommendations_on_failure(
-        self, validator: ChemicalAccuracyValidator
-    ) -> None:
+    def test_recommendations_on_failure(self, validator: ChemicalAccuracyValidator) -> None:
         """Provides recommendations when assessment fails."""
         result = _make_result(relative_error=5e-3)
         assessment = validator.assess(result, "quantum_computing")

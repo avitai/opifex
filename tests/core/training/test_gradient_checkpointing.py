@@ -302,9 +302,7 @@ class TestTrainerGradientCheckpointing:
             "nothing_saveable",
         ],
     )
-    def test_training_step_all_policies(
-        self, simple_model, train_data, policy: str | None
-    ):
+    def test_training_step_all_policies(self, simple_model, train_data, policy: str | None):
         """Training step succeeds with each named checkpoint policy."""
         from opifex.core.training.trainer import Trainer
 
@@ -344,6 +342,7 @@ class TestFNOMultiscaleGradientCheckpointing:
             hidden_channels=8,
             modes_per_scale=[4, 2],
             num_layers_per_scale=layers_per_scale or [1, 1],
+            spatial_dims=1,
             use_gradient_checkpointing=checkpointing,
             rngs=nnx.Rngs(0),
         )

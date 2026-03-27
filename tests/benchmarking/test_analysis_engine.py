@@ -102,9 +102,7 @@ class TestOperatorComparison:
     def test_performance_rankings_lower_is_better(self):
         """Test that lower values are ranked higher for error metrics."""
         result1 = _make_result("FNO", "TestDataset", {"mse": 0.01})
-        result2 = _make_result(
-            "DeepONet", "TestDataset", {"mse": 0.02}, execution_time=2.0
-        )
+        result2 = _make_result("DeepONet", "TestDataset", {"mse": 0.02}, execution_time=2.0)
 
         report = self.engine.compare_operators({"FNO": result1, "DeepONet": result2})
 
@@ -127,9 +125,7 @@ class TestOperatorComparison:
     def test_improvement_factors_computed(self):
         """Test that improvement factors are computed for each metric."""
         result1 = _make_result("FNO", "TestDataset", {"mse": 0.01})
-        result2 = _make_result(
-            "DeepONet", "TestDataset", {"mse": 0.02}, execution_time=2.0
-        )
+        result2 = _make_result("DeepONet", "TestDataset", {"mse": 0.02}, execution_time=2.0)
 
         report = self.engine.compare_operators({"FNO": result1, "DeepONet": result2})
 
@@ -137,9 +133,7 @@ class TestOperatorComparison:
         # FNO should have improvement factor of 1.0 (best)
         assert report.improvement_factors["mse"]["FNO"] == pytest.approx(1.0, rel=1e-5)
         # DeepONet should have improvement factor of 0.5 (2x worse)
-        assert report.improvement_factors["mse"]["DeepONet"] == pytest.approx(
-            0.5, rel=1e-5
-        )
+        assert report.improvement_factors["mse"]["DeepONet"] == pytest.approx(0.5, rel=1e-5)
 
 
 class TestScalingBehaviorAnalysis:
@@ -193,9 +187,7 @@ class TestScalingBehaviorAnalysis:
 
         assert "execution_time" in analysis.scaling_coefficients
         # Should be close to 2.0 for O(n^2)
-        assert analysis.scaling_coefficients["execution_time"] == pytest.approx(
-            2.0, rel=0.1
-        )
+        assert analysis.scaling_coefficients["execution_time"] == pytest.approx(2.0, rel=0.1)
 
 
 class TestComplexityEstimation:
@@ -253,8 +245,7 @@ class TestPerformanceInsightsGeneration:
         report = self.engine.generate_performance_insights(result)
 
         assert any(
-            "execution time" in bottleneck.lower()
-            for bottleneck in report.performance_bottlenecks
+            "execution time" in bottleneck.lower() for bottleneck in report.performance_bottlenecks
         )
 
     def test_excellent_efficiency_insight(self):
@@ -263,10 +254,7 @@ class TestPerformanceInsightsGeneration:
 
         report = self.engine.generate_performance_insights(result)
 
-        assert any(
-            "computational efficiency" in insight.lower()
-            for insight in report.key_insights
-        )
+        assert any("computational efficiency" in insight.lower() for insight in report.key_insights)
 
     def test_exceptional_accuracy_insight(self):
         """Test insight for exceptional accuracy."""
@@ -274,9 +262,7 @@ class TestPerformanceInsightsGeneration:
 
         report = self.engine.generate_performance_insights(result)
 
-        assert any(
-            "exceptional accuracy" in insight.lower() for insight in report.key_insights
-        )
+        assert any("exceptional accuracy" in insight.lower() for insight in report.key_insights)
 
     def test_poor_accuracy_bottleneck(self):
         """Test bottleneck identification for poor accuracy."""
@@ -285,8 +271,7 @@ class TestPerformanceInsightsGeneration:
         report = self.engine.generate_performance_insights(result)
 
         assert any(
-            "accuracy" in bottleneck.lower()
-            for bottleneck in report.performance_bottlenecks
+            "accuracy" in bottleneck.lower() for bottleneck in report.performance_bottlenecks
         )
 
     def test_high_memory_usage_bottleneck(self):
@@ -300,10 +285,7 @@ class TestPerformanceInsightsGeneration:
 
         report = self.engine.generate_performance_insights(result)
 
-        assert any(
-            "memory" in bottleneck.lower()
-            for bottleneck in report.performance_bottlenecks
-        )
+        assert any("memory" in bottleneck.lower() for bottleneck in report.performance_bottlenecks)
 
 
 class TestDomainInference:
@@ -348,9 +330,7 @@ class TestOperatorRecommendations:
 
     def test_recommendations_for_pde_solving(self):
         """Test recommendations for PDE solving problem type."""
-        report = self.engine.create_operator_recommendations(
-            "pde_solving", "fluid_dynamics"
-        )
+        report = self.engine.create_operator_recommendations("pde_solving", "fluid_dynamics")
 
         assert isinstance(report, RecommendationReport)
         assert report.problem_type == "pde_solving"
@@ -363,9 +343,7 @@ class TestOperatorRecommendations:
 
     def test_recommendations_include_domain_considerations(self):
         """Test that recommendations include domain-specific considerations."""
-        report = self.engine.create_operator_recommendations(
-            "pde_solving", "quantum_computing"
-        )
+        report = self.engine.create_operator_recommendations("pde_solving", "quantum_computing")
 
         # Should include quantum-specific considerations
         assert any(
@@ -397,9 +375,7 @@ class TestStatisticalSignificanceTesting:
     def test_single_run_significance_testing(self):
         """Test significance testing with single run results."""
         result1 = _make_result("FNO", "TestDataset", {"mse": 0.01})
-        result2 = _make_result(
-            "DeepONet", "TestDataset", {"mse": 0.05}, execution_time=2.0
-        )
+        result2 = _make_result("DeepONet", "TestDataset", {"mse": 0.05}, execution_time=2.0)
 
         significance = _test_statistical_significance(
             {"FNO": result1, "DeepONet": result2}, self.engine.significance_threshold

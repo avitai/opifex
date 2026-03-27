@@ -2,7 +2,7 @@
 """
 Memory Layout Optimization for Opifex JAX Neural Operators.
 
-This module provides comprehensive memory layout optimization to improve GPU
+This module provides full memory layout optimization to improve GPU
 performance, specifically addressing the NHWC vs NCHW layout optimization
 identified by the profiling harness.
 
@@ -125,23 +125,15 @@ class LayoutOptimizer:
 
         return conversions.get((current, target))
 
-    def optimize_for_operation(
-        self, x: jax.Array, operation_type: str = "default"
-    ) -> jax.Array:
+    def optimize_for_operation(self, x: jax.Array, operation_type: str = "default") -> jax.Array:
         """Optimize tensor layout for specific operation type."""
-        target_layout = self.optimal_layouts.get(
-            operation_type, self.optimal_layouts["default"]
-        )
+        target_layout = self.optimal_layouts.get(operation_type, self.optimal_layouts["default"])
         return self.convert_layout(x, target_layout)
 
-    def get_performance_score(
-        self, x: jax.Array, operation_type: str = "default"
-    ) -> float:
+    def get_performance_score(self, x: jax.Array, operation_type: str = "default") -> float:
         """Get performance score for current tensor layout."""
         current_layout = self.detect_layout(x)
-        optimal_layout = self.optimal_layouts.get(
-            operation_type, self.optimal_layouts["default"]
-        )
+        optimal_layout = self.optimal_layouts.get(operation_type, self.optimal_layouts["default"])
 
         if current_layout == optimal_layout:
             return 1.0
@@ -167,9 +159,7 @@ class OptimizedConvolution(nnx.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.kernel_size = (
-            kernel_size
-            if isinstance(kernel_size, tuple)
-            else (kernel_size, kernel_size)
+            kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
         )
         self.strides = strides if isinstance(strides, tuple) else (strides, strides)
         self.padding = padding
@@ -222,9 +212,7 @@ class OptimizedLinear(nnx.Module):
         aligned_out = ((out_features + 15) // 16) * 16
 
         # Initialize weights with TensorCore alignment
-        self.kernel = nnx.Param(
-            jax.random.normal(rngs.params(), (aligned_in, aligned_out)) * 0.1
-        )
+        self.kernel = nnx.Param(jax.random.normal(rngs.params(), (aligned_in, aligned_out)) * 0.1)
         self.bias = nnx.Param(jnp.zeros(aligned_out))
 
         # Store original dimensions for output trimming
@@ -236,8 +224,7 @@ class OptimizedLinear(nnx.Module):
         input_shape = x.shape
         padded_x = jnp.pad(
             x,
-            [(0, 0)] * (len(input_shape) - 1)
-            + [(0, self.kernel.value.shape[0] - input_shape[-1])],
+            [(0, 0)] * (len(input_shape) - 1) + [(0, self.kernel.value.shape[0] - input_shape[-1])],
         )
 
         # Optimize layout for matrix multiplication
@@ -303,7 +290,7 @@ def create_layout_optimization_report(
     model: nnx.Module,
     sample_input: jax.Array,
 ) -> dict[str, Any]:
-    """Create comprehensive layout optimization report."""
+    """Create full layout optimization report."""
     optimizer = LayoutOptimizer()
 
     report = {

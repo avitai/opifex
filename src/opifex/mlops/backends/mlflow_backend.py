@@ -58,18 +58,14 @@ class MLflowBackend(Experiment):
     def _setup_mlflow(self):
         """Initialize MLflow client and configuration."""
         # Configure MLflow tracking URI
-        tracking_uri = os.getenv(
-            "MLFLOW_TRACKING_URI", "http://mlflow-tracking-server:5000"
-        )
+        tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-tracking-server:5000")
         mlflow.set_tracking_uri(tracking_uri)
 
         # Initialize client
         self.client = MlflowClient()
 
         # Set experiment
-        experiment_name = (
-            f"opifex_{self.config.physics_domain.value}_{self.config.name}"
-        )
+        experiment_name = f"opifex_{self.config.physics_domain.value}_{self.config.name}"
         try:
             experiment = mlflow.get_experiment_by_name(experiment_name)
             if experiment is None:
@@ -79,8 +75,7 @@ class MLflowBackend(Experiment):
                         "opifex.physics_domain": self.config.physics_domain.value,
                         "opifex.framework": self.config.framework.value,
                         "opifex.version": "1.0.0",
-                        "opifex.research_group": self.config.research_group
-                        or "default",
+                        "opifex.research_group": self.config.research_group or "default",
                     },
                 )
             else:
@@ -197,9 +192,7 @@ class MLflowBackend(Experiment):
             for name, value in metadata.system_parameters.items():
                 params[f"physics.system.{name}"] = value
 
-    async def log_metrics(
-        self, metrics: dict[str, float | int], step: int | None = None
-    ):
+    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None):
         """Log scalar metrics to MLflow."""
         mlflow.log_metrics(metrics, step=step)
         self._metrics.update(metrics)
@@ -226,10 +219,8 @@ class MLflowBackend(Experiment):
                             metrics_dict[f"{field_name}.{sub_key}"] = sub_value
                     elif isinstance(field_value, list):
                         # Convert lists to strings or summary statistics
-                        if all(isinstance(x, (int, float)) for x in field_value):
-                            metrics_dict[f"{field_name}.mean"] = sum(field_value) / len(
-                                field_value
-                            )
+                        if all(isinstance(x, int | float) for x in field_value):
+                            metrics_dict[f"{field_name}.mean"] = sum(field_value) / len(field_value)
                             metrics_dict[f"{field_name}.min"] = min(field_value)
                             metrics_dict[f"{field_name}.max"] = max(field_value)
                         else:
@@ -248,7 +239,7 @@ class MLflowBackend(Experiment):
         # Convert complex types to strings for MLflow compatibility
         mlflow_params = {}
         for key, value in params.items():
-            if isinstance(value, (dict, list)):
+            if isinstance(value, dict | list):
                 mlflow_params[key] = str(value)
             else:
                 mlflow_params[key] = value
@@ -281,9 +272,7 @@ class MLflowBackend(Experiment):
                 isinstance(model, (dict)) and "params" in str(type(model))
             ):
                 # Custom JAX model logging
-                model_info = await self._log_jax_model(
-                    model, model_name, physics_metadata
-                )
+                model_info = await self._log_jax_model(model, model_name, physics_metadata)
         except ImportError:
             pass
 
@@ -309,7 +298,7 @@ class MLflowBackend(Experiment):
             # Try TensorFlow model logging
             import tensorflow as tf  # type: ignore[import-untyped]
 
-            if isinstance(model, (tf.keras.Model, tf.Module)):  # pyright: ignore[reportAttributeAccessIssue]
+            if isinstance(model, tf.keras.Model | tf.Module):  # pyright: ignore[reportAttributeAccessIssue]
                 model_info = mlflow.tensorflow.log_model(
                     model,
                     model_name,
@@ -398,7 +387,5 @@ class MLflowBackend(Experiment):
         """Get the URL to view this experiment in MLflow UI."""
         if self.run_id:
             tracking_uri = mlflow.get_tracking_uri()
-            return (
-                f"{tracking_uri}/#/experiments/{self.experiment_id}/runs/{self.run_id}"
-            )
+            return f"{tracking_uri}/#/experiments/{self.experiment_id}/runs/{self.run_id}"
         return None

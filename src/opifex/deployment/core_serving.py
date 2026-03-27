@@ -189,14 +189,10 @@ class ModelRegistry:
         )
 
         # Sort by version (simple string comparison)
-        self._models["versions"][model_name].sort(
-            key=lambda x: x["version"], reverse=True
-        )
+        self._models["versions"][model_name].sort(key=lambda x: x["version"], reverse=True)
 
         self._save_registry()
-        logger.info(
-            f"Registered model {metadata.name} v{metadata.version} with ID {model_id}"
-        )
+        logger.info(f"Registered model {metadata.name} v{metadata.version} with ID {model_id}")
 
         return model_id
 
@@ -385,9 +381,7 @@ class InferenceEngine:
         # Validate input shape
         expected_shape = (input_data.shape[0], *self.metadata.input_shape)
         if input_data.shape != expected_shape:
-            raise ValueError(
-                f"Expected input shape {expected_shape}, got {input_data.shape}"
-            )
+            raise ValueError(f"Expected input shape {expected_shape}, got {input_data.shape}")
 
         # Ensure correct dtype
         input_data = jnp.asarray(input_data)

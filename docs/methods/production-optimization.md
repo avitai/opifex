@@ -79,11 +79,8 @@ deployment_result = deployment_system.deploy(
 Multi-cloud optimization with cost intelligence and sustainability tracking:
 
 ```python
-from opifex.optimization.resource_management import (
-    GlobalResourceManager,
-    CloudProvider,
-    OptimizationObjective
-)
+from opifex.deployment.resource_management.global_manager import GlobalResourceManager
+from opifex.deployment.resource_management.types import CloudProvider, OptimizationObjective
 
 resource_manager = GlobalResourceManager(
     cloud_providers=[CloudProvider.AWS, CloudProvider.GCP, CloudProvider.AZURE],
@@ -187,7 +184,7 @@ scaler = PredictiveScaler(
 
 #### Monitoring Features
 
-- **Real-Time Metrics**: Comprehensive performance tracking
+- **Real-Time Metrics**: Full performance tracking
 - **Anomaly Detection**: AI-powered anomaly identification
 - **Predictive Scaling**: Proactive resource scaling
 - **Performance Forecasting**: Future performance prediction

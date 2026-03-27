@@ -181,11 +181,7 @@ class ConservationValidator:
         if law == "energy":
             return energy_violation(y_pred, y_true, tolerance=self._energy_tolerance)
         if law == "momentum":
-            return momentum_violation(
-                y_pred, y_true, tolerance=self._momentum_tolerance
-            )
+            return momentum_violation(y_pred, y_true, tolerance=self._momentum_tolerance)
         if law == "mass":
-            return mass_violation(
-                y_pred, self._mass_target, tolerance=self._mass_tolerance
-            )
+            return mass_violation(y_pred, self._mass_target, tolerance=self._mass_tolerance)
         return jnp.array(0.0)

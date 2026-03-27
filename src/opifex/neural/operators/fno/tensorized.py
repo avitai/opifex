@@ -59,26 +59,21 @@ class TuckerDecomposition(nnx.Module):
         # Convert rank ratio to actual ranks (for compression stats)
         if isinstance(rank, float):
             self.ranks = [max(1, int(rank * dim)) for dim in tensor_shape]
-        elif isinstance(rank, (list, tuple)):
+        elif isinstance(rank, list | tuple):
             self.ranks = list(rank)
         elif isinstance(rank, int):
             self.ranks = [rank] * len(tensor_shape)
         else:
             self.ranks = [1] * len(tensor_shape)
 
-        # Initialize complex weights for spectral convolution
-        self.weights = nnx.Param(self._initialize_weights(tensor_shape, rngs.params()))
-
-    def _initialize_weights(self, shape: Sequence[int], key: jax.Array) -> jax.Array:
-        """Initialize complex weights with Xavier scaling."""
-        fan_in = int(jnp.prod(jnp.asarray(shape[1:])))
-        fan_out = shape[0]
+        # Store real/imaginary parts separately to avoid JAX complex gradient
+        # convention issue (optax #196). See FourierSpectralConvolution docstring.
+        fan_in = int(jnp.prod(jnp.asarray(tensor_shape[1:])))
+        fan_out = tensor_shape[0]
         std = jnp.sqrt(2.0 / (fan_in + fan_out))
-        # Complex weights for spectral domain
-        key1, key2 = jax.random.split(key)
-        real = jax.random.normal(key1, shape) * std
-        imag = jax.random.normal(key2, shape) * std
-        return real + 1j * imag
+        key1, key2 = jax.random.split(rngs.params())
+        self.weights_real = nnx.Param(jax.random.normal(key1, tensor_shape) * std)
+        self.weights_imag = nnx.Param(jax.random.normal(key2, tensor_shape) * std)
 
     def multiply_factorized(self, x: jax.Array) -> jax.Array:
         """Contract input with spectral weights.
@@ -89,7 +84,7 @@ class TuckerDecomposition(nnx.Module):
         Returns:
             Output tensor of shape (batch, out_channels, *spatial_modes)
         """
-        weights = self.weights.value
+        weights = self.weights_real[...] + 1j * self.weights_imag[...]
 
         # Handle different spatial dimensions with appropriate einsum
         if self.ndim == 1:
@@ -109,7 +104,7 @@ class TuckerDecomposition(nnx.Module):
 
     def reconstruct(self) -> jax.Array:
         """Return full weight tensor."""
-        return self.weights.value
+        return self.weights_real[...] + 1j * self.weights_imag[...]
 
     def parameter_count(self) -> int:
         """Count parameters in weight tensor."""
@@ -138,22 +133,17 @@ class CPDecomposition(nnx.Module):
         self.ndim = len(self.modes)
         self.rank = min(rank, *tensor_shape)
 
-        # Initialize complex weights for spectral convolution
-        self.weights = nnx.Param(self._initialize_weights(tensor_shape, rngs.params()))
-
-    def _initialize_weights(self, shape: Sequence[int], key: jax.Array) -> jax.Array:
-        """Initialize complex weights with Xavier scaling."""
-        fan_in = int(jnp.prod(jnp.asarray(shape[1:])))
-        fan_out = shape[0]
+        # Store real/imaginary parts separately (optax #196)
+        fan_in = int(jnp.prod(jnp.asarray(tensor_shape[1:])))
+        fan_out = tensor_shape[0]
         std = jnp.sqrt(2.0 / (fan_in + fan_out))
-        key1, key2 = jax.random.split(key)
-        real = jax.random.normal(key1, shape) * std
-        imag = jax.random.normal(key2, shape) * std
-        return real + 1j * imag
+        key1, key2 = jax.random.split(rngs.params())
+        self.weights_real = nnx.Param(jax.random.normal(key1, tensor_shape) * std)
+        self.weights_imag = nnx.Param(jax.random.normal(key2, tensor_shape) * std)
 
     def multiply_factorized(self, x: jax.Array) -> jax.Array:
         """Contract input with spectral weights."""
-        weights = self.weights.value
+        weights = self.weights_real[...] + 1j * self.weights_imag[...]
 
         if self.ndim == 1:
             return jnp.einsum("bim,oim->bom", x, weights)
@@ -191,22 +181,17 @@ class TensorTrainDecomposition(nnx.Module):
         self.ndim = len(self.modes)
         self.max_rank = max_rank
 
-        # Initialize complex weights for spectral convolution
-        self.weights = nnx.Param(self._initialize_weights(tensor_shape, rngs.params()))
-
-    def _initialize_weights(self, shape: Sequence[int], key: jax.Array) -> jax.Array:
-        """Initialize complex weights with Xavier scaling."""
-        fan_in = int(jnp.prod(jnp.asarray(shape[1:])))
-        fan_out = shape[0]
+        # Store real/imaginary parts separately (optax #196)
+        fan_in = int(jnp.prod(jnp.asarray(tensor_shape[1:])))
+        fan_out = tensor_shape[0]
         std = jnp.sqrt(2.0 / (fan_in + fan_out))
-        key1, key2 = jax.random.split(key)
-        real = jax.random.normal(key1, shape) * std
-        imag = jax.random.normal(key2, shape) * std
-        return real + 1j * imag
+        key1, key2 = jax.random.split(rngs.params())
+        self.weights_real = nnx.Param(jax.random.normal(key1, tensor_shape) * std)
+        self.weights_imag = nnx.Param(jax.random.normal(key2, tensor_shape) * std)
 
     def multiply_factorized(self, x: jax.Array) -> jax.Array:
         """Contract input with spectral weights."""
-        weights = self.weights.value
+        weights = self.weights_real[...] + 1j * self.weights_imag[...]
 
         if self.ndim == 1:
             return jnp.einsum("bim,oim->bom", x, weights)
@@ -245,9 +230,7 @@ class TensorizedSpectralConvolution(nnx.Module):
         tensor_shape = (out_channels, in_channels, *modes)
 
         # Initialize appropriate decomposition with simplified implementations
-        self.decomposition: (
-            TuckerDecomposition | CPDecomposition | TensorTrainDecomposition
-        )
+        self.decomposition: TuckerDecomposition | CPDecomposition | TensorTrainDecomposition
         if decomposition_type == "tucker":
             self.decomposition = TuckerDecomposition(tensor_shape, rank, rngs=rngs)
         elif decomposition_type == "cp":
@@ -255,9 +238,7 @@ class TensorizedSpectralConvolution(nnx.Module):
             self.decomposition = CPDecomposition(tensor_shape, cp_rank, rngs=rngs)
         elif decomposition_type == "tt":
             tt_rank = max(1, int(rank * min(tensor_shape)))
-            self.decomposition = TensorTrainDecomposition(
-                tensor_shape, tt_rank, rngs=rngs
-            )
+            self.decomposition = TensorTrainDecomposition(tensor_shape, tt_rank, rngs=rngs)
         else:
             raise ValueError(f"Unknown decomposition type: {decomposition_type}")
 
@@ -300,9 +281,7 @@ class TensorizedSpectralConvolution(nnx.Module):
     def get_compression_stats(self) -> dict[str, float]:
         """Get compression statistics."""
         factorized_params = self.decomposition.parameter_count()
-        dense_params = (
-            self.in_channels * self.out_channels * jnp.prod(jnp.asarray(self.modes))
-        )
+        dense_params = self.in_channels * self.out_channels * jnp.prod(jnp.asarray(self.modes))
         compression_ratio = factorized_params / dense_params if dense_params > 0 else 0
 
         return {
@@ -340,9 +319,7 @@ class TensorizedFourierNeuralOperator(nnx.Module):
         keys = jax.random.split(rngs.params(), num_layers + 2)
 
         # Input projection - takes channels as last dimension
-        self.input_proj = nnx.Linear(
-            in_channels, hidden_channels, rngs=nnx.Rngs(keys[0])
-        )
+        self.input_proj = nnx.Linear(in_channels, hidden_channels, rngs=nnx.Rngs(keys[0]))
 
         # Tensorized spectral convolution layers
         tfno_layers_temp = []
@@ -359,9 +336,7 @@ class TensorizedFourierNeuralOperator(nnx.Module):
             self.tfno_layers = nnx.List(tfno_layers_temp)
 
         # Output projection - outputs channels as last dimension
-        self.output_proj = nnx.Linear(
-            hidden_channels, out_channels, rngs=nnx.Rngs(keys[-1])
-        )
+        self.output_proj = nnx.Linear(hidden_channels, out_channels, rngs=nnx.Rngs(keys[-1]))
 
     def __call__(self, x: jax.Array) -> jax.Array:
         """Forward pass through simplified tensorized FNO."""

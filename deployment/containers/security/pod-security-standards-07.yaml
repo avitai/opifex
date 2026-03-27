@@ -10,7 +10,7 @@ metadata:
 data:
   security-context.yaml: |
     # Default Security Context for Opifex Containers
-    # Phase 7.1: Container Orchestration - Security Standards
+    # Version 7.1: Container Orchestration - Security Standards
 
     securityContext:
       # Run as non-root user

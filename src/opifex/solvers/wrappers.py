@@ -2,7 +2,9 @@
 
 Provides wrappers to enhance base SciML solvers with:
 - Bayesian Uncertainty Quantification (UQ)
-- Learning-to-Optimize (L2O) capabilities
+- Conformal Prediction intervals
+- Ensemble-based UQ
+- Generative sampling statistics
 """
 
 from collections.abc import Sequence
@@ -63,35 +65,6 @@ class BayesianWrapper:
             execution_time=sum(s.execution_time for s in solutions),
             converged=all(s.converged for s in solutions),
         )
-
-
-class L2OWrapper:
-    """Wraps a solver to apply Learning-to-Optimize strategies."""
-
-    def __init__(self, solver: SciMLSolver, l2o_model_path: str):
-        self.solver = solver
-        self.l2o_model_path = l2o_model_path
-
-    def solve(
-        self,
-        problem: Problem,
-        initial_state: SolverState | None = None,
-        config: SolverConfig | None = None,
-    ) -> Solution:
-        """Run solver with L2O enhancements."""
-        # 1. Load L2O model (placeholder)
-        # model = load(self.l2o_model_path)
-
-        # 2. Modify config or state based on L2O prediction
-        # new_lr = model.predict(problem_features)
-
-        # 3. Run solver
-        solution = self.solver.solve(problem, initial_state, config)
-
-        # 4. Add L2O metadata
-        solution.metrics["l2o_active"] = True
-
-        return solution
 
 
 class ConformalWrapper:
@@ -198,9 +171,7 @@ class EnsembleWrapper:
         metrics["ensemble_size"] = len(self.solvers)
 
         # Average execution time
-        metrics["avg_execution_time"] = sum(s.execution_time for s in solutions) / len(
-            self.solvers
-        )
+        metrics["avg_execution_time"] = sum(s.execution_time for s in solutions) / len(self.solvers)
         metrics["total_execution_time"] = sum(s.execution_time for s in solutions)
 
         return Solution(

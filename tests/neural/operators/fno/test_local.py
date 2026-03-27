@@ -219,9 +219,7 @@ class TestLocalFourierNeuralOperator:
 
         # Check that gradients are not all zero
         grad_leaves = jax.tree_util.tree_leaves(grads)
-        grad_norms = [
-            jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")
-        ]
+        grad_norms = [jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")]
         assert len(grad_norms) > 0
         assert any(norm > 1e-8 for norm in grad_norms)
 
@@ -248,12 +246,8 @@ class TestLocalFourierNeuralOperator:
         output_regular = local_fno(x)
 
         # Type assertions
-        assert isinstance(output_jit, jax.Array), (
-            f"Expected Array, got {type(output_jit)}"
-        )
-        assert isinstance(output_regular, jax.Array), (
-            f"Expected Array, got {type(output_regular)}"
-        )
+        assert isinstance(output_jit, jax.Array), f"Expected Array, got {type(output_jit)}"
+        assert isinstance(output_regular, jax.Array), f"Expected Array, got {type(output_regular)}"
 
         # FIXED: Use more relaxed tolerance for JIT vs non-JIT comparison
         # JIT compilation can introduce small numerical differences due to optimization
@@ -270,9 +264,7 @@ class TestLocalFourierNeuralOperator:
         batch_output = vmapped_forward(batch_x)
 
         # Type assertion
-        assert isinstance(batch_output, jax.Array), (
-            f"Expected Array, got {type(batch_output)}"
-        )
+        assert isinstance(batch_output, jax.Array), f"Expected Array, got {type(batch_output)}"
 
         # Check batch output shape
         expected_batch_shape = (4, 1, 1, 16, 16)
@@ -312,9 +304,7 @@ class TestLocalFourierNeuralOperator:
         assert isinstance(output_adaptive, jax.Array), (
             f"Expected Array, got {type(output_adaptive)}"
         )
-        assert isinstance(output_fixed, jax.Array), (
-            f"Expected Array, got {type(output_fixed)}"
-        )
+        assert isinstance(output_fixed, jax.Array), f"Expected Array, got {type(output_fixed)}"
 
         # Check basic properties
         assert output_adaptive.shape == output_fixed.shape

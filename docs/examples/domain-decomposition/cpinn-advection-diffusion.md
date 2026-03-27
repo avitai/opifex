@@ -42,8 +42,8 @@ $F_{left} \cdot n = F_{right} \cdot n$ where $F = \nabla u$.
 
 ## Files
 
-- **Python Script**: [`examples/domain-decomposition/cpinn_advection_diffusion.py`](https://github.com/Opifex/Opifex/blob/main/examples/domain-decomposition/cpinn_advection_diffusion.py)
-- **Jupyter Notebook**: [`examples/domain-decomposition/cpinn_advection_diffusion.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/domain-decomposition/cpinn_advection_diffusion.ipynb)
+- **Python Script**: [`examples/domain-decomposition/cpinn_advection_diffusion.py`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/cpinn_advection_diffusion.py)
+- **Jupyter Notebook**: [`examples/domain-decomposition/cpinn_advection_diffusion.ipynb`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/cpinn_advection_diffusion.ipynb)
 
 ## Quick Start
 

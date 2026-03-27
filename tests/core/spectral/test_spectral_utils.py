@@ -1,7 +1,7 @@
 """
-Comprehensive tests for opifex.core.spectral.spectral_utils module.
+Full tests for opifex.core.spectral.spectral_utils module.
 
-This test suite provides comprehensive coverage for spectral analysis utilities
+This test suite provides full coverage for spectral analysis utilities
 including power spectral density, energy spectrum, and wavenumber operations.
 """
 
@@ -97,9 +97,7 @@ class TestPowerSpectralDensity:
         signal = jnp.ones((1, 1, 16, 16))
         dx_wrong = [0.1, 0.2, 0.3]  # Wrong length for 2D
 
-        with pytest.raises(
-            ValueError, match=r"Grid spacing length .* doesn't match spatial_dims"
-        ):
+        with pytest.raises(ValueError, match=r"Grid spacing length .* doesn't match spatial_dims"):
             power_spectral_density(signal, spatial_dims=2, dx=dx_wrong)
 
     def test_power_spectral_density_no_batch_channel(self):
@@ -376,9 +374,7 @@ class TestWavenumberGrid:
         shape = (16, 16)
         dx_wrong = [0.1, 0.2, 0.3]  # Wrong length
 
-        with pytest.raises(
-            ValueError, match=r"Grid spacing length .* doesn't match spatial_dims"
-        ):
+        with pytest.raises(ValueError, match=r"Grid spacing length .* doesn't match spatial_dims"):
             wavenumber_grid(shape, dx_wrong)
 
     def test_wavenumber_grid_symmetry_properties(self):

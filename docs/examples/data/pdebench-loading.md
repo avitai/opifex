@@ -25,8 +25,8 @@ iteration for training neural operators.
 
 ## Files
 
-- **Python Script**: [`examples/data/pdebench_loading.py`](https://github.com/Opifex/Opifex/blob/main/examples/data/pdebench_loading.py)
-- **Jupyter Notebook**: [`examples/data/pdebench_loading.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/data/pdebench_loading.ipynb)
+- **Python Script**: [`examples/data/pdebench_loading.py`](https://github.com/avitai/opifex/blob/main/examples/data/pdebench_loading.py)
+- **Jupyter Notebook**: [`examples/data/pdebench_loading.ipynb`](https://github.com/avitai/opifex/blob/main/examples/data/pdebench_loading.ipynb)
 
 ## Quick Start
 

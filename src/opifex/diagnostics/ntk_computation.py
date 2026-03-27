@@ -90,9 +90,7 @@ def compute_gradient_jacobian(model: nnx.Module, x: jax.Array) -> jax.Array:
 
         # Let's flatten parameters only.
         # leaf: (batch, output_dim, p...)
-        flat_leaf = leaf.reshape(
-            batch_size, -1
-        )  # (batch, output_dim * p...) is not right.
+        flat_leaf = leaf.reshape(batch_size, -1)  # (batch, output_dim * p...) is not right.
 
         # Let's restart the flattening logic carefully.
         # J should be (batch_size, num_params) if output is scalar.

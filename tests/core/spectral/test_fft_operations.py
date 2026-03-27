@@ -27,9 +27,7 @@ class TestStandardizedFFT:
         """Test 1D FFT with basic functionality."""
         # Setup
         batch_size, channels, spatial_size = 4, 3, 32
-        x = jax.random.normal(
-            jax.random.PRNGKey(42), (batch_size, channels, spatial_size)
-        )
+        x = jax.random.normal(jax.random.PRNGKey(42), (batch_size, channels, spatial_size))
 
         # Execute
         x_ft = standardized_fft(x, spatial_dims=1)
@@ -39,9 +37,7 @@ class TestStandardizedFFT:
         assert x_ft.shape == expected_shape
 
         # Check dtype based on JAX precision setting
-        expected_dtype = (
-            jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
-        )
+        expected_dtype = jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
         assert x_ft.dtype == expected_dtype
 
     def test_fft_2d_basic(self):
@@ -58,9 +54,7 @@ class TestStandardizedFFT:
         assert x_ft.shape == expected_shape
 
         # Check dtype based on JAX precision setting
-        expected_dtype = (
-            jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
-        )
+        expected_dtype = jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
         assert x_ft.dtype == expected_dtype
 
     def test_fft_3d_basic(self):
@@ -77,9 +71,7 @@ class TestStandardizedFFT:
         assert x_ft.shape == expected_shape
 
         # Check dtype based on JAX precision setting
-        expected_dtype = (
-            jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
-        )
+        expected_dtype = jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
         assert x_ft.dtype == expected_dtype
 
     def test_fft_jax_transformations(self):
@@ -149,9 +141,7 @@ class TestStandardizedIFFT:
 
         # Execute with truncation
         target_shape = (1, 1, 4)
-        x_reconstructed = standardized_ifft(
-            x_fft, target_shape=target_shape, spatial_dims=1
-        )
+        x_reconstructed = standardized_ifft(x_fft, target_shape=target_shape, spatial_dims=1)
 
         # Verify
         assert x_reconstructed.shape == target_shape
@@ -217,9 +207,7 @@ class TestSpectralDerivative:
         x = jax.random.normal(jax.random.PRNGKey(42), (2, 2, 16, 20))
 
         # dx length doesn't match spatial_dims
-        with pytest.raises(
-            ValueError, match="Grid spacing length 3 doesn't match spatial_dims 2"
-        ):
+        with pytest.raises(ValueError, match="Grid spacing length 3 doesn't match spatial_dims 2"):
             spectral_derivative(x, spatial_dims=2, dx=[0.1, 0.2, 0.3])
 
     def test_derivative_axis_out_of_range(self):
@@ -227,9 +215,7 @@ class TestSpectralDerivative:
         x = jax.random.normal(jax.random.PRNGKey(42), (2, 2, 16, 20))
 
         # axis >= spatial_dims
-        with pytest.raises(
-            ValueError, match="Axis 2 out of bounds for 2 spatial dimensions"
-        ):
+        with pytest.raises(ValueError, match="Axis 2 out of bounds for 2 spatial dimensions"):
             spectral_derivative(x, spatial_dims=2, dx=0.1, axis=2)
 
     def test_derivative_single_axis_specification(self):
@@ -274,17 +260,13 @@ class TestSpectralFilter:
         signal = signal[None, None, :]  # Add batch and channel dims
 
         # Execute
-        filtered_signal = spectral_filter(
-            signal, cutoff=0.1, spatial_dims=1, filter_type="lowpass"
-        )
+        filtered_signal = spectral_filter(signal, cutoff=0.1, spatial_dims=1, filter_type="lowpass")
 
         # Verify
         assert filtered_signal.shape == signal.shape
 
         # Check dtype based on JAX precision setting
-        expected_dtype = (
-            jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
-        )
+        expected_dtype = jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
         assert filtered_signal.dtype == expected_dtype
 
         # High-frequency component should be reduced
@@ -300,11 +282,7 @@ class TestSpectralFilter:
         """Test high-pass filtering."""
         # Setup
         x = jnp.linspace(0, 1, 128, endpoint=False)
-        signal = (
-            jnp.sin(2 * jnp.pi * x)
-            + jnp.sin(10 * jnp.pi * x)
-            + jnp.sin(30 * jnp.pi * x)
-        )
+        signal = jnp.sin(2 * jnp.pi * x) + jnp.sin(10 * jnp.pi * x) + jnp.sin(30 * jnp.pi * x)
         signal = signal[None, None, :]
 
         # Execute: High-pass filter (remove low frequencies)
@@ -325,21 +303,15 @@ class TestSpectralFilter:
         signal = jax.random.normal(jax.random.PRNGKey(42), (2, 2, d, h, w))
 
         # Test lowpass filter
-        filtered = spectral_filter(
-            signal, cutoff=0.3, spatial_dims=3, filter_type="lowpass"
-        )
+        filtered = spectral_filter(signal, cutoff=0.3, spatial_dims=3, filter_type="lowpass")
         assert filtered.shape == signal.shape
 
         # Check dtype based on JAX precision setting
-        expected_dtype = (
-            jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
-        )
+        expected_dtype = jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
         assert filtered.dtype == expected_dtype
 
         # Test highpass filter
-        filtered_hp = spectral_filter(
-            signal, cutoff=0.3, spatial_dims=3, filter_type="highpass"
-        )
+        filtered_hp = spectral_filter(signal, cutoff=0.3, spatial_dims=3, filter_type="highpass")
         assert filtered_hp.shape == signal.shape
 
     def test_filter_unsupported_spatial_dims(self):
@@ -406,9 +378,7 @@ class TestFFTFrequencyGrid:
 
     def test_frequency_grid_mismatched_dx(self):
         """Test error handling for mismatched dx length."""
-        with pytest.raises(
-            ValueError, match="Grid spacing length 3 doesn't match spatial_dims 2"
-        ):
+        with pytest.raises(ValueError, match="Grid spacing length 3 doesn't match spatial_dims 2"):
             fft_frequency_grid(shape=(16, 20), dx=[0.1, 0.2, 0.3])
 
 
@@ -497,15 +467,11 @@ class TestEdgeCases:
         x_ft = standardized_fft(x, spatial_dims=1)
 
         # Test reconstruction to larger size (should work per original implementation)
-        x_reconstructed = standardized_ifft(
-            x_ft, target_shape=(2, 2, 32), spatial_dims=1
-        )
+        x_reconstructed = standardized_ifft(x_ft, target_shape=(2, 2, 32), spatial_dims=1)
         assert x_reconstructed.shape == (2, 2, 32)
 
         # Check dtype based on JAX precision setting
-        expected_dtype = (
-            jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
-        )
+        expected_dtype = jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
         assert x_reconstructed.dtype == expected_dtype
 
 
@@ -640,9 +606,7 @@ class TestJITCompatibility:
             return fft_frequency_grid(shape, dx, wavenumber=True)
 
         jitted_freq_grid = jax.jit(freq_grid_static, static_argnames=["shape", "dx"])
-        jitted_wavenumber_grid = jax.jit(
-            wavenumber_grid_static, static_argnames=["shape", "dx"]
-        )
+        jitted_wavenumber_grid = jax.jit(wavenumber_grid_static, static_argnames=["shape", "dx"])
 
         # Test JIT compilation works with static arguments
         freqs = jitted_freq_grid(shape=(32, 64), dx=(0.1, 0.2))
@@ -653,9 +617,7 @@ class TestJITCompatibility:
         assert freqs[1].shape == (33,)  # rfft frequency count
 
         assert len(wavenumbers) == 2
-        assert jnp.all(
-            jnp.abs(wavenumbers[0]) >= jnp.abs(freqs[0]) * 2 * jnp.pi - 1e-10
-        )
+        assert jnp.all(jnp.abs(wavenumbers[0]) >= jnp.abs(freqs[0]) * 2 * jnp.pi - 1e-10)
 
     def test_get_spectral_frequencies_jit_compilation(self):
         """Test that spectral frequency generation can be JIT compiled."""

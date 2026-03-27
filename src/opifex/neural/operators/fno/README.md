@@ -1,6 +1,6 @@
 # FNO: Fourier Neural Operators
 
-This module provides comprehensive FNO implementations for learning solution operators of PDEs using spectral methods.
+This module provides full FNO implementations for learning solution operators of PDEs using spectral methods.
 
 ## Available Implementations
 

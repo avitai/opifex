@@ -109,9 +109,7 @@ class FourierContinuationExtender(nnx.Module):
                 repeated_left = jnp.tile(signal, n_full_repeats_left)
                 if remainder_left > 0:
                     partial_left = signal[..., -remainder_left:]
-                    left_extension = jnp.concatenate(
-                        [repeated_left, partial_left], axis=-1
-                    )
+                    left_extension = jnp.concatenate([repeated_left, partial_left], axis=-1)
                 else:
                     left_extension = repeated_left
             else:
@@ -125,9 +123,7 @@ class FourierContinuationExtender(nnx.Module):
                 repeated_right = jnp.tile(signal, n_full_repeats_right)
                 if remainder_right > 0:
                     partial_right = signal[..., :remainder_right]
-                    right_extension = jnp.concatenate(
-                        [repeated_right, partial_right], axis=-1
-                    )
+                    right_extension = jnp.concatenate([repeated_right, partial_right], axis=-1)
                 else:
                     right_extension = repeated_right
             else:
@@ -159,9 +155,7 @@ class FourierContinuationExtender(nnx.Module):
                         [jnp.flip(signal, axis=-1), extended_signal], axis=-1
                     )
                 else:
-                    extended_signal = jnp.concatenate(
-                        [signal, extended_signal], axis=-1
-                    )
+                    extended_signal = jnp.concatenate([signal, extended_signal], axis=-1)
             left_ext = extended_signal[
                 ..., -(self.extension_length + signal_length) : -signal_length
             ]
@@ -174,12 +168,8 @@ class FourierContinuationExtender(nnx.Module):
                         [extended_signal, jnp.flip(signal, axis=-1)], axis=-1
                     )
                 else:
-                    extended_signal = jnp.concatenate(
-                        [extended_signal, signal], axis=-1
-                    )
-            right_ext = extended_signal[
-                ..., signal_length : signal_length + self.extension_length
-            ]
+                    extended_signal = jnp.concatenate([extended_signal, signal], axis=-1)
+            right_ext = extended_signal[..., signal_length : signal_length + self.extension_length]
         else:
             # Simple case: extension is shorter than signal
             left_ext = jnp.flip(signal[..., : self.extension_length], axis=-1)
@@ -231,8 +221,7 @@ class FourierContinuationExtender(nnx.Module):
 
         # Left extension (going backwards from signal start)
         poly_left = (
-            left_val[..., None] * (1 - x_ext) ** 3
-            + left_grad[..., None] * x_ext * (1 - x_ext) ** 2
+            left_val[..., None] * (1 - x_ext) ** 3 + left_grad[..., None] * x_ext * (1 - x_ext) ** 2
         )
         left_ext = jnp.flip(poly_left, axis=-1)
 
@@ -264,9 +253,7 @@ class FourierContinuationExtender(nnx.Module):
             return self._smooth_extension_1d(signal)
         raise ValueError(f"Unknown extension type: {self.extension_type}")
 
-    def extend_2d(
-        self, signal: jnp.ndarray, axes: tuple[int, int] = (-2, -1)
-    ) -> jnp.ndarray:
+    def extend_2d(self, signal: jnp.ndarray, axes: tuple[int, int] = (-2, -1)) -> jnp.ndarray:
         """Extend 2D signal using specified continuation method.
 
         Args:
@@ -391,9 +378,7 @@ class FourierBoundaryHandler(nnx.Module):
             # Validate method is a valid extension type
             valid_methods = ["periodic", "symmetric", "smooth", "zero"]
             if method not in valid_methods:
-                raise ValueError(
-                    f"Invalid method {method}, must be one of {valid_methods}"
-                )
+                raise ValueError(f"Invalid method {method}, must be one of {valid_methods}")
 
             extenders[method] = FourierContinuationExtender(
                 extension_type=method,  # type: ignore[arg-type]
@@ -444,9 +429,7 @@ class FourierBoundaryHandler(nnx.Module):
             quarter_len = signal.shape[-1] // 4
             first_quarter = signal[..., :quarter_len]
             last_quarter = signal[..., -quarter_len:]
-            periodicity = jnp.corrcoef(first_quarter.flatten(), last_quarter.flatten())[
-                0, 1
-            ]
+            periodicity = jnp.corrcoef(first_quarter.flatten(), last_quarter.flatten())[0, 1]
             periodicity = jnp.where(jnp.isnan(periodicity), 0.0, periodicity)
         else:
             periodicity = jnp.array(0.0)

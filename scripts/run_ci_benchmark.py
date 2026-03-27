@@ -37,9 +37,7 @@ def _get_git_info() -> tuple[str | None, str | None]:
     branch = None
     try:
         commit = (
-            subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-            )
+            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
             .decode()
             .strip()
         )

@@ -138,9 +138,7 @@ class TestPlotFieldComparison:
         ground_truth = jnp.ones((16, 16))
         prediction = jnp.ones((16, 16))
 
-        fig = plot_field_comparison(
-            ground_truth, prediction, titles=["GT", "Pred", "Error"]
-        )
+        fig = plot_field_comparison(ground_truth, prediction, titles=["GT", "Pred", "Error"])
 
         assert fig is not None
         import matplotlib.pyplot as plt

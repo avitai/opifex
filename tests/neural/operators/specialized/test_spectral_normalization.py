@@ -162,9 +162,7 @@ class TestSpectralNorm:
 
     def test_initialization(self, base_layer, rngs):
         """Test initialization of SpectralNorm wrapper."""
-        spectral_layer = SpectralNorm(
-            base_layer, power_iterations=3, eps=1e-8, rngs=rngs
-        )
+        spectral_layer = SpectralNorm(base_layer, power_iterations=3, eps=1e-8, rngs=rngs)
 
         assert hasattr(spectral_layer, "layer")
         assert hasattr(spectral_layer, "power_iter")
@@ -526,9 +524,7 @@ class TestSpectralMultiHeadAttention:
         """Test forward pass through spectral multi-head attention."""
         seq_len = 16
         batch_size = 4
-        input_data = jax.random.normal(
-            jax.random.PRNGKey(42), (batch_size, seq_len, 64)
-        )
+        input_data = jax.random.normal(jax.random.PRNGKey(42), (batch_size, seq_len, 64))
 
         output = spectral_attention(input_data, training=True)
 
@@ -539,9 +535,7 @@ class TestSpectralMultiHeadAttention:
         """Test attention with masking."""
         seq_len = 16
         batch_size = 4
-        input_data = jax.random.normal(
-            jax.random.PRNGKey(42), (batch_size, seq_len, 64)
-        )
+        input_data = jax.random.normal(jax.random.PRNGKey(42), (batch_size, seq_len, 64))
 
         # Create a simple causal mask
         mask = jnp.tril(jnp.ones((seq_len, seq_len)))
@@ -566,9 +560,7 @@ class TestSpectralMultiHeadAttention:
                     rngs=rngs,
                 )
 
-                input_data = jax.random.normal(
-                    jax.random.PRNGKey(42), (2, 8, in_features)
-                )
+                input_data = jax.random.normal(jax.random.PRNGKey(42), (2, 8, in_features))
                 output = layer(input_data)
 
                 assert output.shape == (2, 8, in_features)

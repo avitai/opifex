@@ -231,29 +231,12 @@ class APINN(DomainDecompositionPINN):
         return self.gating_network(x, temperature=self.config.temperature)
 
     def compute_interface_loss(self) -> Float[Array, ""]:
-        """Compute interface continuity loss.
+        """Compute weighted interface continuity loss.
 
-        Even with learned gating, we can still encourage continuity
-        at explicit interface points.
+        Delegates continuity computation to base class ``compute_interface_residual``
+        and applies the configured continuity weight (DRY).
 
         Returns:
             Scalar interface loss
         """
-        if not self.interfaces:
-            return jnp.array(0.0)
-
-        total_loss = jnp.array(0.0)
-
-        for interface in self.interfaces:
-            left_id, right_id = interface.subdomain_ids
-            points = interface.points
-
-            # Get predictions from both subdomains
-            u_left = list(self.networks)[left_id](points)
-            u_right = list(self.networks)[right_id](points)
-
-            # Continuity loss
-            loss = jnp.mean((u_left - u_right) ** 2)
-            total_loss = total_loss + loss
-
-        return self.config.continuity_weight * total_loss / max(len(self.interfaces), 1)
+        return self.config.continuity_weight * self.compute_interface_residual()

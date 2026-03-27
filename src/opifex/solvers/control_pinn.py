@@ -117,9 +117,7 @@ class ControlPINN(nnx.Module):
         control = raw[:, n_state:]
         return state, control
 
-    def state_output(
-        self, x: Float[Array, "batch input_dim"]
-    ) -> Float[Array, "batch n_state"]:
+    def state_output(self, x: Float[Array, "batch input_dim"]) -> Float[Array, "batch n_state"]:
         """Return only state variables.
 
         Args:
@@ -131,9 +129,7 @@ class ControlPINN(nnx.Module):
         state, _ = self(x)
         return state
 
-    def control_output(
-        self, x: Float[Array, "batch input_dim"]
-    ) -> Float[Array, "batch n_ctrl"]:
+    def control_output(self, x: Float[Array, "batch input_dim"]) -> Float[Array, "batch n_ctrl"]:
         """Return only control variables.
 
         Args:
@@ -214,11 +210,7 @@ class ControlPINN(nnx.Module):
         # Control regularization (L2)
         ctrl_reg = jnp.mean(control**2)
 
-        return (
-            objective
-            + self.config.pde_weight * pde_res
-            + self.config.control_weight * ctrl_reg
-        )
+        return objective + self.config.pde_weight * pde_res + self.config.control_weight * ctrl_reg
 
 
 def create_control_pinn(

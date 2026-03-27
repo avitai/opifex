@@ -335,10 +335,7 @@ for step in range(TRAINING_STEPS):
             f"  Step {step:4d}: loss={total_loss:.6e}, "
             f"PDE={losses[0]:.4e}, BC={losses[1]:.4e}, IC={losses[2]:.4e}"
         )
-        print(
-            f"           weights: PDE={weights[0]:.3f}, "
-            f"BC={weights[1]:.3f}, IC={weights[2]:.3f}"
-        )
+        print(f"           weights: PDE={weights[0]:.3f}, BC={weights[1]:.3f}, IC={weights[2]:.3f}")
 
 # Final step
 weights = balancer.weights
@@ -509,9 +506,7 @@ fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
 # Total loss
 ax1 = axes[0, 0]
-ax1.semilogy(
-    history["step"], history["total_loss"], "b-", label="GradNorm", linewidth=2
-)
+ax1.semilogy(history["step"], history["total_loss"], "b-", label="GradNorm", linewidth=2)
 ax1.semilogy(
     fixed_history["step"],
     fixed_history["total_loss"],
@@ -538,15 +533,9 @@ ax2.grid(True, alpha=0.3)
 
 # Individual losses - Fixed weights
 ax3 = axes[1, 0]
-ax3.semilogy(
-    fixed_history["step"], fixed_history["pde_loss"], "b-", label="PDE", linewidth=2
-)
-ax3.semilogy(
-    fixed_history["step"], fixed_history["bc_loss"], "g-", label="BC", linewidth=2
-)
-ax3.semilogy(
-    fixed_history["step"], fixed_history["ic_loss"], "r-", label="IC", linewidth=2
-)
+ax3.semilogy(fixed_history["step"], fixed_history["pde_loss"], "b-", label="PDE", linewidth=2)
+ax3.semilogy(fixed_history["step"], fixed_history["bc_loss"], "g-", label="BC", linewidth=2)
+ax3.semilogy(fixed_history["step"], fixed_history["ic_loss"], "r-", label="IC", linewidth=2)
 ax3.set_xlabel("Training Step", fontsize=12)
 ax3.set_ylabel("Loss (log scale)", fontsize=12)
 ax3.set_title("Fixed Weights: Individual Losses", fontsize=14)
@@ -604,9 +593,7 @@ plt.colorbar(im2, ax=ax2)
 # Error
 ax3 = axes[2]
 error = np.abs(np.array(U_gradnorm - U_exact))
-im3 = ax3.imshow(
-    error, extent=[0, 1, 0, T_MAX], origin="lower", aspect="auto", cmap="hot"
-)
+im3 = ax3.imshow(error, extent=[0, 1, 0, T_MAX], origin="lower", aspect="auto", cmap="hot")
 ax3.set_xlabel("x", fontsize=12)
 ax3.set_ylabel("t", fontsize=12)
 ax3.set_title("Absolute Error", fontsize=14)

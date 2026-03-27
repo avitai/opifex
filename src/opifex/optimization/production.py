@@ -3,7 +3,7 @@
 This module implements the Hybrid Performance Platform for production deployment
 with adaptive JIT compilation, GPU memory management, and performance optimization.
 
-Phase 7.4: Production Optimization Implementation
+Version 7.4: Production Optimization Implementation
 Selected Architecture: Hybrid Performance Platform + Intelligent Edge + Adaptive
 Optimization
 """
@@ -79,9 +79,7 @@ def get_model_input_features(model: Module) -> int:
         return 64
 
     except (AttributeError, TypeError) as e:
-        raise ValueError(
-            f"Cannot determine input features for model {type(model)}: {e}"
-        ) from e
+        raise ValueError(f"Cannot determine input features for model {type(model)}: {e}") from e
 
 
 class OptimizationStrategy(Enum):
@@ -155,9 +153,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         self.optimization_cache: dict[str, OptimizedModel] = {}
         self.cache_size = cache_size
 
-    def analyze_workload_patterns(
-        self, workload: WorkloadProfile
-    ) -> OptimizationStrategy:
+    def analyze_workload_patterns(self, workload: WorkloadProfile) -> OptimizationStrategy:
         """Analyze workload to select optimal optimization strategy."""
 
         # High compute intensity favors aggressive fusion
@@ -286,9 +282,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         throughput = 1000 / avg_latency if avg_latency > 0 else 0
 
         # Estimate memory usage (simplified)
-        memory_usage = (
-            workload.memory_footprint * 0.8
-        )  # Optimization typically reduces memory
+        memory_usage = workload.memory_footprint * 0.8  # Optimization typically reduces memory
 
         # Placeholder values for other metrics
         gpu_utilization = 0.85
@@ -304,9 +298,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
             improvement_factor=improvement_factor,
         )
 
-    def optimize_neural_operator(
-        self, model: Module, workload: WorkloadProfile
-    ) -> OptimizedModel:
+    def optimize_neural_operator(self, model: Module, workload: WorkloadProfile) -> OptimizedModel:
         """Optimize neural operator for production workload.
 
         Args:
@@ -336,9 +328,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
             optimized_model = self.apply_balanced_optimization(model)
 
         # Benchmark performance
-        performance_metrics = self.benchmark_model_performance(
-            optimized_model, workload
-        )
+        performance_metrics = self.benchmark_model_performance(optimized_model, workload)
 
         # Create optimized model container
         optimized_container = OptimizedModel(
@@ -399,9 +389,7 @@ class IntelligentGPUMemoryManager(nnx.Module):
         else:
             self.pool_sizes = pool_sizes
 
-        self.memory_pools: dict[str, list[Any]] = {
-            pool_name: [] for pool_name in self.pool_sizes
-        }
+        self.memory_pools: dict[str, list[Any]] = {pool_name: [] for pool_name in self.pool_sizes}
 
     def select_memory_pool(self, size_mb: float) -> str:
         """Select appropriate memory pool for allocation size."""
@@ -421,18 +409,12 @@ class IntelligentGPUMemoryManager(nnx.Module):
         param_count = sum(p.size for p in jax.tree_util.tree_leaves(nnx.state(model)))
 
         # Estimate: parameters + activations + gradients (if training)
-        param_memory = (
-            param_count * 4 / (1024 * 1024)
-        )  # 4 bytes per float32, convert to MB
-        activation_memory = (
-            param_memory * 0.5 * batch_size
-        )  # Rough activation estimation
+        param_memory = param_count * 4 / (1024 * 1024)  # 4 bytes per float32, convert to MB
+        activation_memory = param_memory * 0.5 * batch_size  # Rough activation estimation
 
         return param_memory + activation_memory
 
-    def optimize_multi_model_allocation(
-        self, models: list[tuple[Module, int]]
-    ) -> dict[str, Any]:
+    def optimize_multi_model_allocation(self, models: list[tuple[Module, int]]) -> dict[str, Any]:
         """Optimize memory allocation for multiple concurrent models.
 
         Args:
@@ -464,9 +446,7 @@ class IntelligentGPUMemoryManager(nnx.Module):
             total_memory += model_memory
 
         allocation_plan["total_memory_mb"] = total_memory
-        allocation_plan["efficiency_score"] = min(
-            1.0, (1024 * 8) / total_memory
-        )  # Assume 8GB GPU
+        allocation_plan["efficiency_score"] = min(1.0, (1024 * 8) / total_memory)  # Assume 8GB GPU
 
         return allocation_plan
 
@@ -474,7 +454,7 @@ class IntelligentGPUMemoryManager(nnx.Module):
 class HybridPerformancePlatform(nnx.Module):
     """Hybrid Performance Platform for production optimization.
 
-    This is the main orchestrator for Phase 7.4 Production Optimization,
+    This is the main orchestrator for Version 7.4 Production Optimization,
     integrating all 6 major components: JIT optimization, edge network,
     adaptive deployment, performance monitoring, scientific validation,
     and global resource management.
@@ -501,7 +481,7 @@ class HybridPerformancePlatform(nnx.Module):
         self.jit_optimizer = jit_optimizer or AdaptiveJAXOptimizer()
         self.memory_manager = memory_manager or IntelligentGPUMemoryManager()
 
-        # Phase 7.4 enhancements
+        # Version 7.4 enhancements
         self.physics_domain = physics_domain
         self.target_latency_ms = target_latency_ms
 
@@ -517,9 +497,8 @@ class HybridPerformancePlatform(nnx.Module):
             self.performance_monitor = performance_monitor
 
         # Initialize scientific computing integration
-        self.scientific_integrator = (
-            scientific_integrator
-            or ScientificComputingIntegrator(domain=physics_domain)
+        self.scientific_integrator = scientific_integrator or ScientificComputingIntegrator(
+            domain=physics_domain
         )
 
         # Initialize predictive scaling
@@ -527,17 +506,15 @@ class HybridPerformancePlatform(nnx.Module):
             performance_monitor=self.performance_monitor
         )
 
-        # Initialize Phase 7.4 new components
+        # Initialize Version 7.4 new components
         self.edge_network = edge_network
         self.deployment_system = deployment_system
         self.resource_manager = resource_manager
 
-    def optimize_for_production(
-        self, model: Module, workload: WorkloadProfile
-    ) -> OptimizedModel:
-        """Comprehensive production optimization for a model.
+    def optimize_for_production(self, model: Module, workload: WorkloadProfile) -> OptimizedModel:
+        """Full production optimization for a model.
 
-        This method now includes Phase 7.4 enhancements:
+        This method now includes Version 7.4 enhancements:
         - AI-powered performance monitoring
         - Scientific computing validation
         - Predictive scaling recommendations
@@ -554,25 +531,21 @@ class HybridPerformancePlatform(nnx.Module):
         optimized_model.optimization_metadata.update(
             {
                 "memory_plan": {
-                    "allocation_strategy": memory_allocation.get(
-                        "allocation_strategy", "balanced"
-                    ),
+                    "allocation_strategy": memory_allocation.get("allocation_strategy", "balanced"),
                     "memory_pools": memory_allocation.get("pool_allocations", {}),
                     "fragmentation_prevention": True,
-                    "memory_efficiency_target": (
-                        self.memory_manager.gc_trigger_threshold
-                    ),
+                    "memory_efficiency_target": (self.memory_manager.gc_trigger_threshold),
                 },
                 "platform_optimization": True,  # Add platform optimization flag
             }
         )
 
-        # Step 3: Phase 7.4 - Performance monitoring setup
+        # Step 3: Version 7.4 - Performance monitoring setup
         with contextlib.suppress(Exception):
             # Collect current metrics (asyncio.run handles event loop automatically)
             asyncio.run(self.performance_monitor.collect_current_metrics())  # type: ignore[misc]
 
-        # Step 4: Phase 7.4 - Scientific validation
+        # Step 4: Version 7.4 - Scientific validation
         if callable(model):
             # Generate sample input for validation
             input_features = get_model_input_features(model)
@@ -592,10 +565,8 @@ class HybridPerformancePlatform(nnx.Module):
                 }
 
                 # Perform scientific validation
-                scientific_results = (
-                    self.scientific_integrator.comprehensive_scientific_validation(
-                        model_output, reference_data
-                    )
+                scientific_results = self.scientific_integrator.comprehensive_scientific_validation(
+                    model_output, reference_data
                 )
 
                 # Generate optimization recommendations
@@ -616,25 +587,17 @@ class HybridPerformancePlatform(nnx.Module):
 
             except Exception as e:
                 # Log scientific validation error and continue
-                optimized_model.optimization_metadata["scientific_validation_error"] = (
-                    str(e)
-                )
+                optimized_model.optimization_metadata["scientific_validation_error"] = str(e)
 
-        # Step 5: Phase 7.4 - Predictive scaling recommendations
+        # Step 5: Version 7.4 - Predictive scaling recommendations
         try:
             if len(self.performance_monitor.metrics_history) >= 10:
-                scaling_decision = asyncio.run(
-                    self.predictive_scaler.evaluate_scaling_decision()
-                )  # type: ignore[misc]
-                optimized_model.optimization_metadata["scaling_recommendation"] = (
-                    scaling_decision
-                )
+                scaling_decision = asyncio.run(self.predictive_scaler.evaluate_scaling_decision())  # type: ignore[misc]
+                optimized_model.optimization_metadata["scaling_recommendation"] = scaling_decision
             else:
                 # Collect some initial metrics for future scaling decisions
                 for _ in range(5):
-                    metrics = asyncio.run(
-                        self.performance_monitor.collect_current_metrics()
-                    )  # type: ignore[misc]
+                    metrics = asyncio.run(self.performance_monitor.collect_current_metrics())  # type: ignore[misc]
                     self.performance_monitor.metrics_history.append(metrics)
 
                 optimized_model.optimization_metadata["scaling_recommendation"] = {
@@ -657,7 +620,7 @@ class HybridPerformancePlatform(nnx.Module):
         # Add production readiness flag
         optimized_model.optimization_metadata["production_ready"] = is_production_ready
 
-        # Step 6: Update performance metrics with Phase 7.4 enhancements
+        # Step 6: Update performance metrics with Version 7.4 enhancements
         enhanced_metrics = PerformanceMetrics(
             latency_ms=optimized_model.performance_metrics.latency_ms,
             throughput_rps=optimized_model.performance_metrics.throughput_rps,
@@ -667,11 +630,11 @@ class HybridPerformancePlatform(nnx.Module):
             improvement_factor=optimized_model.performance_metrics.improvement_factor,
         )
 
-        # Add Phase 7.4 scientific metrics
+        # Add Version 7.4 scientific metrics
         if "scientific_validation" in optimized_model.optimization_metadata:
-            scientific_score = optimized_model.optimization_metadata[
-                "scientific_validation"
-            ].get("overall_scientific_score", 0.0)
+            scientific_score = optimized_model.optimization_metadata["scientific_validation"].get(
+                "overall_scientific_score", 0.0
+            )
             enhanced_metrics.improvement_factor *= (
                 1.0 + scientific_score * 0.1
             )  # Bonus for scientific accuracy
@@ -689,7 +652,7 @@ class HybridPerformancePlatform(nnx.Module):
         await self.performance_monitor.stop_monitoring()
 
     def get_comprehensive_status(self) -> dict[str, Any]:
-        """Get comprehensive status of the hybrid performance platform."""
+        """Get full status of the hybrid performance platform."""
         status = {
             "platform_type": "hybrid_performance_platform",
             "physics_domain": self.physics_domain.value,

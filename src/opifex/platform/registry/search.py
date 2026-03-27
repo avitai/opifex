@@ -1,26 +1,18 @@
 """Neural Functional Search Engine.
 
-Provides comprehensive search capabilities for neural functionals including
+Provides full search capabilities for neural functionals including
 text search, semantic search with neural embeddings, advanced filtering,
 and recommendation systems for the Opifex community platform.
 """
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import jax
 import jax.numpy as jnp
 
-
-class SearchType(Enum):
-    """Types of search operations."""
-
-    TEXT = "text"
-    SEMANTIC = "semantic"
-    FILTER = "filter"
-    HYBRID = "hybrid"
+from opifex.platform.search_types import SearchType
 
 
 @dataclass
@@ -58,7 +50,7 @@ class SearchResult:
 class SearchEngine:
     """Neural functional search engine.
 
-    Provides comprehensive search capabilities including text-based search,
+    Provides full search capabilities including text-based search,
     semantic search with neural embeddings, advanced filtering, and
     recommendation systems.
     """
@@ -148,9 +140,7 @@ class SearchEngine:
         end = query.offset + query.limit
         return results[start:end]
 
-    async def suggest_functionals(
-        self, functional_id: str, limit: int = 5
-    ) -> list[SearchResult]:
+    async def suggest_functionals(self, functional_id: str, limit: int = 5) -> list[SearchResult]:
         """Suggest similar functionals based on a reference functional.
 
         Args:
@@ -189,8 +179,7 @@ class SearchEngine:
                             functional_type=functional["type"],
                             author_id=functional["author_id"],
                             tags=functional.get("tags", []),
-                            relevance_score=overlap
-                            / max(len(ref_tags), len(func_tags)),
+                            relevance_score=overlap / max(len(ref_tags), len(func_tags)),
                             metadata=functional.get("metadata", {}),
                         )
                     )
@@ -400,16 +389,12 @@ class SearchEngine:
         words = re.findall(r"\b\w+\b", text.lower())
 
         # Filter out stop words and short words
-        keywords = [
-            word for word in words if len(word) > 2 and word not in self._stop_words
-        ]
+        keywords = [word for word in words if len(word) > 2 and word not in self._stop_words]
 
         # Remove duplicates while preserving order
         return list(dict.fromkeys(keywords))
 
-    def _calculate_text_score(
-        self, functional: dict[str, Any], keywords: list[str]
-    ) -> float:
+    def _calculate_text_score(self, functional: dict[str, Any], keywords: list[str]) -> float:
         """Calculate text relevance score for a functional.
 
         Args:
@@ -459,9 +444,7 @@ class SearchEngine:
         # Normalize score
         return matches / total_weight if total_weight > 0 else 0.0
 
-    def _apply_filters(
-        self, results: list[SearchResult], query: SearchQuery
-    ) -> list[SearchResult]:
+    def _apply_filters(self, results: list[SearchResult], query: SearchQuery) -> list[SearchResult]:
         """Apply filter criteria to search results.
 
         Args:
@@ -475,9 +458,7 @@ class SearchEngine:
 
         # Filter by functional type
         if query.functional_type:
-            filtered = [
-                r for r in filtered if r.functional_type == query.functional_type
-            ]
+            filtered = [r for r in filtered if r.functional_type == query.functional_type]
 
         # Filter by author
         if query.author_id:
@@ -490,45 +471,31 @@ class SearchEngine:
         # Filter by domain
         if query.domain:
             filtered = [
-                r
-                for r in filtered
-                if query.domain.lower() in r.metadata.get("domain", "").lower()
+                r for r in filtered if query.domain.lower() in r.metadata.get("domain", "").lower()
             ]
 
         # Filter by minimum rating
         if query.min_rating is not None:
             filtered = [
-                r
-                for r in filtered
-                if r.metadata.get("average_rating", 0) >= query.min_rating
+                r for r in filtered if r.metadata.get("average_rating", 0) >= query.min_rating
             ]
 
         # Filter by minimum accuracy
         if query.min_accuracy is not None:
-            filtered = [
-                r
-                for r in filtered
-                if r.metadata.get("accuracy", 0) >= query.min_accuracy
-            ]
+            filtered = [r for r in filtered if r.metadata.get("accuracy", 0) >= query.min_accuracy]
 
         # Filter by maximum memory usage
         if query.max_memory_gb is not None:
             filtered = [
-                r
-                for r in filtered
-                if r.metadata.get("memory_gb", 0) <= query.max_memory_gb
+                r for r in filtered if r.metadata.get("memory_gb", 0) <= query.max_memory_gb
             ]
 
         # Filter by GPU requirement
         if query.gpu_required is not None:
             if query.gpu_required:
-                filtered = [
-                    r for r in filtered if r.metadata.get("gpu_required", False)
-                ]
+                filtered = [r for r in filtered if r.metadata.get("gpu_required", False)]
             else:
-                filtered = [
-                    r for r in filtered if not r.metadata.get("gpu_required", False)
-                ]
+                filtered = [r for r in filtered if not r.metadata.get("gpu_required", False)]
 
         return filtered
 
@@ -558,9 +525,7 @@ class SearchEngine:
         norm = jnp.linalg.norm(embedding)
         return embedding / norm if norm > 0 else embedding
 
-    async def _get_functional_embedding(
-        self, functional: dict[str, Any]
-    ) -> jnp.ndarray:
+    async def _get_functional_embedding(self, functional: dict[str, Any]) -> jnp.ndarray:
         """Get or generate embedding for a functional.
 
         Args:

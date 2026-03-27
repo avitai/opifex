@@ -173,10 +173,8 @@ class UNeuralOperator(nnx.Module):
                 encoder_channels[-1], modes, activation, rngs
             )
 
-        self.decoder_blocks, self.upsample_convs, self.needs_upsample = (
-            self._build_decoder(
-                encoder_channels, hidden_channels, n_layers, activation, rngs
-            )
+        self.decoder_blocks, self.upsample_convs, self.needs_upsample = self._build_decoder(
+            encoder_channels, hidden_channels, n_layers, activation, rngs
         )
 
         # Output projection

@@ -1,6 +1,6 @@
 """
 Test Suite for Enterprise Security Architecture
-Phase 7.2: Enterprise Security - Validation and Testing
+Version 7.2: Enterprise Security - Validation and Testing
 
 Tests Identity Federation Hub, GDPR Compliance Framework, SOC 2 Type II Controls,
 and Zero Trust Network Security implementation.
@@ -15,17 +15,12 @@ import yaml
 
 
 class TestEnterpriseSecurityArchitecture:
-    """Test suite for Phase 7.2 Enterprise Security implementation."""
+    """Test suite for Version 7.2 Enterprise Security implementation."""
 
     @pytest.fixture(scope="class")
     def security_path(self) -> Path:
         """Get security deployment path for enterprise security."""
-        return (
-            Path(__file__).parent.parent.parent
-            / "deployment"
-            / "security"
-            / "enterprise"
-        )
+        return Path(__file__).parent.parent.parent / "deployment" / "security" / "enterprise"
 
     @pytest.fixture(scope="class")
     def identity_federation_path(self, security_path: Path) -> Path:
@@ -49,9 +44,7 @@ class TestEnterpriseSecurityArchitecture:
 
     def test_identity_federation_hub_config(self, identity_federation_path: Path):
         """Test Identity Federation Hub configuration and components."""
-        assert identity_federation_path.exists(), (
-            "Identity Federation configuration should exist"
-        )
+        assert identity_federation_path.exists(), "Identity Federation configuration should exist"
 
         # Load and validate YAML
         with open(identity_federation_path) as f:
@@ -62,16 +55,13 @@ class TestEnterpriseSecurityArchitecture:
         expected_kinds = {"ConfigMap"}
 
         missing_kinds = expected_kinds - component_kinds
-        assert not missing_kinds, (
-            f"Missing Identity Federation resource kinds: {missing_kinds}"
-        )
+        assert not missing_kinds, f"Missing Identity Federation resource kinds: {missing_kinds}"
 
         # Validate Keycloak realm configuration
         realm_config = next(
             c
             for c in configs
-            if c
-            and c.get("metadata", {}).get("name") == "opifex-enterprise-realm-config"
+            if c and c.get("metadata", {}).get("name") == "opifex-enterprise-realm-config"
         )
         realm_data = realm_config.get("data", {})
         assert "opifex-enterprise-realm.json" in realm_data
@@ -91,9 +81,7 @@ class TestEnterpriseSecurityArchitecture:
             "enterprise-oidc-provider",
             "research-ldap-provider",
         }
-        assert expected_providers.issubset(provider_aliases), (
-            "Missing required identity providers"
-        )
+        assert expected_providers.issubset(provider_aliases), "Missing required identity providers"
 
         # Validate research groups
         groups = realm_json.get("groups", [])
@@ -113,18 +101,14 @@ class TestEnterpriseSecurityArchitecture:
 
     def test_gdpr_compliance_framework(self, gdpr_compliance_path: Path):
         """Test GDPR Compliance Framework implementation."""
-        assert gdpr_compliance_path.exists(), (
-            "GDPR Compliance configuration should exist"
-        )
+        assert gdpr_compliance_path.exists(), "GDPR Compliance configuration should exist"
 
         # Load and validate YAML
         with open(gdpr_compliance_path) as f:
             configs = list(yaml.safe_load_all(f))
 
         # Check for required GDPR components
-        component_names = {
-            config.get("metadata", {}).get("name") for config in configs if config
-        }
+        component_names = {config.get("metadata", {}).get("name") for config in configs if config}
         expected_components = {
             "gdpr-compliance-config",
         }
@@ -155,9 +139,7 @@ class TestEnterpriseSecurityArchitecture:
         # Check data classification levels
         classification_levels = ["public", "research", "sensitive", "confidential"]
         for level in classification_levels:
-            assert level in data_classification, (
-                f"Missing data classification level: {level}"
-            )
+            assert level in data_classification, f"Missing data classification level: {level}"
             level_config = data_classification[level]
 
             # Validate required fields for each level
@@ -180,9 +162,7 @@ class TestEnterpriseSecurityArchitecture:
             configs = list(yaml.safe_load_all(f))
 
         # Check for required SOC 2 components
-        component_names = {
-            config.get("metadata", {}).get("name") for config in configs if config
-        }
+        component_names = {config.get("metadata", {}).get("name") for config in configs if config}
         expected_components = {
             "soc2-compliance-config",
         }
@@ -219,20 +199,13 @@ class TestEnterpriseSecurityArchitecture:
             "privacy",
         ]
         for criterion in expected_criteria:
-            assert criterion in trust_criteria, (
-                f"Missing trust services criterion: {criterion}"
-            )
+            assert criterion in trust_criteria, f"Missing trust services criterion: {criterion}"
 
         # Validate security controls
         security_controls = trust_criteria["security"]
         assert security_controls["access_controls"]["principle_of_least_privilege"]
-        assert (
-            security_controls["logical_access"]["multi_factor_authentication"]
-            == "required"
-        )
-        assert (
-            security_controls["network_security"]["network_segmentation"] == "enforced"
-        )
+        assert security_controls["logical_access"]["multi_factor_authentication"] == "required"
+        assert security_controls["network_security"]["network_segmentation"] == "enforced"
 
         # Validate audit logging configuration
         audit_config = yaml.safe_load(soc2_data["audit-logging-config.yaml"])
@@ -247,9 +220,7 @@ class TestEnterpriseSecurityArchitecture:
         ]
         for event_type in expected_event_types:
             assert event_type in audit_events, f"Missing audit event type: {event_type}"
-            assert len(audit_events[event_type]) > 0, (
-                f"No events defined for {event_type}"
-            )
+            assert len(audit_events[event_type]) > 0, f"No events defined for {event_type}"
 
         # Deployment and job configurations are stored as configuration data
         # Actual resources would be generated from these configurations
@@ -287,9 +258,7 @@ class TestEnterpriseSecurityArchitecture:
         """Validate Zero Trust policies configuration."""
         # Validate Zero Trust configuration
         zt_config = next(
-            c
-            for c in configs
-            if c and c.get("metadata", {}).get("name") == "zero-trust-config"
+            c for c in configs if c and c.get("metadata", {}).get("name") == "zero-trust-config"
         )
         zt_data = zt_config.get("data", {})
 
@@ -299,9 +268,7 @@ class TestEnterpriseSecurityArchitecture:
             "micro-segmentation-rules.yaml",
         ]
         for config_file in required_configs:
-            assert config_file in zt_data, (
-                f"Missing Zero Trust config file: {config_file}"
-            )
+            assert config_file in zt_data, f"Missing Zero Trust config file: {config_file}"
 
         # Parse and validate Zero Trust policies
         zt_policies = yaml.safe_load(zt_data["zero-trust-policies.yaml"])
@@ -354,9 +321,7 @@ class TestEnterpriseSecurityArchitecture:
         for yaml_file in security_path.glob("*.yaml"):
             security_files.append(yaml_file)
 
-        assert len(security_files) >= 4, (
-            "Should have all Enterprise Security component files"
-        )
+        assert len(security_files) >= 4, "Should have all Enterprise Security component files"
 
         # Validate namespace consistency
         namespaces = set()
@@ -456,9 +421,7 @@ class TestEnterpriseSecurityArchitecture:
             except yaml.YAMLError as e:
                 pytest.fail(f"Invalid YAML syntax in {yaml_file}: {e}")
 
-        print(
-            f"✅ All {len(yaml_files)} Enterprise Security YAML files have valid syntax"
-        )
+        print(f"✅ All {len(yaml_files)} Enterprise Security YAML files have valid syntax")
 
     @pytest.mark.integration
     def test_enterprise_security_performance_targets(self, security_path: Path):
@@ -483,17 +446,13 @@ class TestEnterpriseSecurityArchitecture:
                         if "requests" in resources or "limits" in resources:
                             performance_configs.append(
                                 {
-                                    "deployment": config.get("metadata", {}).get(
-                                        "name"
-                                    ),
+                                    "deployment": config.get("metadata", {}).get("name"),
                                     "resources": resources,
                                 }
                             )
 
         # Validate resource configuration
-        assert len(performance_configs) > 0, (
-            "Should have resource configurations for deployments"
-        )
+        assert len(performance_configs) > 0, "Should have resource configurations for deployments"
 
         # Check for reasonable resource limits
         for perf_config in performance_configs:
@@ -503,23 +462,19 @@ class TestEnterpriseSecurityArchitecture:
             # Should have both requests and limits
             if "requests" in resources:
                 requests = resources["requests"]
-                assert "memory" in requests, (
-                    f"Missing memory requests for {deployment_name}"
-                )
+                assert "memory" in requests, f"Missing memory requests for {deployment_name}"
                 assert "cpu" in requests, f"Missing CPU requests for {deployment_name}"
 
             if "limits" in resources:
                 limits = resources["limits"]
-                assert "memory" in limits, (
-                    f"Missing memory limits for {deployment_name}"
-                )
+                assert "memory" in limits, f"Missing memory limits for {deployment_name}"
                 assert "cpu" in limits, f"Missing CPU limits for {deployment_name}"
 
         print("✅ Enterprise Security performance targets validation passed")
 
 
 def test_enterprise_security_comprehensive():
-    """Comprehensive test runner for Enterprise Security Architecture Phase 7.2."""
+    """Full test runner for Enterprise Security Architecture Version 7.2."""
     print("\n🔐 Running Enterprise Security Architecture Tests")
     print("=" * 70)
 
@@ -527,9 +482,7 @@ def test_enterprise_security_comprehensive():
     test_instance = TestEnterpriseSecurityArchitecture()
 
     # Mock paths for testing
-    base_path = (
-        Path(__file__).parent.parent.parent / "deployment" / "security" / "enterprise"
-    )
+    base_path = Path(__file__).parent.parent.parent / "deployment" / "security" / "enterprise"
     identity_path = base_path / "identity-federation-hub.yaml"
     gdpr_path = base_path / "gdpr-compliance-framework.yaml"
     soc2_path = base_path / "soc2-controls.yaml"
@@ -546,7 +499,7 @@ def test_enterprise_security_comprehensive():
         test_instance.test_enterprise_security_performance_targets(base_path)
 
         print("\n🎉 All Enterprise Security tests passed!")
-        print("✅ Phase 7.2 Enterprise Security Architecture implementation validated")
+        print("✅ Version 7.2 Enterprise Security Architecture implementation validated")
         return True
 
     except Exception as e:
@@ -555,6 +508,6 @@ def test_enterprise_security_comprehensive():
 
 
 if __name__ == "__main__":
-    # Run comprehensive test when script is executed directly
+    # Run full test when script is executed directly
     success = test_enterprise_security_comprehensive()
     sys.exit(0 if success else 1)

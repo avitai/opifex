@@ -1,6 +1,6 @@
 """Geometric structures and computations for scientific ML.
 
-This module provides comprehensive geometric tools including:
+This module provides full geometric tools including:
 - Lie groups and algebraic structures
 - Differentiable manifolds
 - Topological spaces and complexes

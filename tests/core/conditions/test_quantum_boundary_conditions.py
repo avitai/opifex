@@ -118,9 +118,7 @@ class TestQuantumInitialCondition:
         def excited_state(x):
             return x * jnp.exp(-(x**2) / 2)
 
-        qic = QuantumInitialCondition(
-            condition_type="excited_state", value=excited_state
-        )
+        qic = QuantumInitialCondition(condition_type="excited_state", value=excited_state)
 
         assert qic.condition_type == "excited_state"
         assert qic.value == excited_state
@@ -158,7 +156,5 @@ class TestQuantumInitialCondition:
         def wf(x):
             return jnp.exp(-(x**2))
 
-        qic = QuantumInitialCondition(
-            condition_type="ground_state", value=wf, normalization=-1.0
-        )
+        qic = QuantumInitialCondition(condition_type="ground_state", value=wf, normalization=-1.0)
         assert qic.validate() is False

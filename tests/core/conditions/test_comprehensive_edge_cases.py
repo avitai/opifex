@@ -1,7 +1,7 @@
 """
-Tests for Comprehensive Edge Cases and Error Paths
+Tests for Full Edge Cases and Error Paths
 
-Comprehensive tests for edge cases, error handling, and enhanced code coverage
+Full tests for edge cases, error handling, and enhanced code coverage
 for the conditions module.
 """
 
@@ -48,9 +48,7 @@ class TestConditionsErrorPaths:
         x = jnp.array([[1.0, 2.0, 3.0]]).T
 
         # This should handle the None value gracefully
-        with pytest.raises(
-            TypeError, match="full_like requires ndarray or scalar arguments"
-        ):
+        with pytest.raises(TypeError, match="full_like requires ndarray or scalar arguments"):
             ic.evaluate(x)
 
     def test_robin_bc_function_evaluation_edge_cases(self):
@@ -63,9 +61,7 @@ class TestConditionsErrorPaths:
         x = jnp.array([1.0, 2.0, 3.0])
 
         # This should handle empty array case
-        with pytest.raises(
-            IndexError, match="index is out of bounds for axis 0 with size 0"
-        ):
+        with pytest.raises(IndexError, match="index is out of bounds for axis 0 with size 0"):
             bc.evaluate(x)
 
     def test_wavefunction_bc_missing_norm_value(self):
@@ -84,25 +80,17 @@ class TestConditionsErrorPaths:
         """Test symmetry constraint with problematic lattice vectors."""
         # Test with 1D lattice vectors (invalid)
         lattice_vectors = jnp.array([1.0, 2.0])
-        constraint = SymmetryConstraint(
-            lattice_vectors=lattice_vectors, symmetry_type="lattice"
-        )
-        assert (
-            constraint.validate() is True
-        )  # Fixed: validation doesn't check dimensionality
+        constraint = SymmetryConstraint(lattice_vectors=lattice_vectors, symmetry_type="lattice")
+        assert constraint.validate() is True  # Fixed: validation doesn't check dimensionality
 
         # Test with 4D lattice vectors (invalid)
         lattice_vectors = jnp.array([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]])
-        constraint = SymmetryConstraint(
-            lattice_vectors=lattice_vectors, symmetry_type="lattice"
-        )
-        assert (
-            constraint.validate() is True
-        )  # Fixed: validation doesn't check dimensionality
+        constraint = SymmetryConstraint(lattice_vectors=lattice_vectors, symmetry_type="lattice")
+        assert constraint.validate() is True  # Fixed: validation doesn't check dimensionality
 
 
 class TestConditionsEnhancement:
-    """Comprehensive test class to enhance code coverage for conditions module."""
+    """Full test class to enhance code coverage for conditions module."""
 
     def test_boundary_condition_abstract_enforcement(self):
         """Test that BoundaryCondition cannot be instantiated directly."""
@@ -152,9 +140,7 @@ class TestConditionsEnhancement:
         def complex_time_func(x, t):
             return jnp.sin(t) * jnp.sum(x) + jnp.cos(t)
 
-        bc_time = DirichletBC(
-            boundary="bottom", value=complex_time_func, time_dependent=True
-        )
+        bc_time = DirichletBC(boundary="bottom", value=complex_time_func, time_dependent=True)
         result_time = bc_time.evaluate(x, t=jnp.pi / 2)
         expected_time = jnp.sin(jnp.pi / 2) * jnp.sum(x) + jnp.cos(jnp.pi / 2)
         assert jnp.allclose(result_time, expected_time, atol=1e-6)
@@ -182,7 +168,7 @@ class TestConditionsEnhancement:
         assert jnp.allclose(result_var, expected_var)
 
     def test_robin_bc_comprehensive_validation_edge_cases(self):
-        """Test RobinBC validation with comprehensive edge cases."""
+        """Test RobinBC validation with full edge cases."""
 
         # Test callable alpha that works with arrays
         def alpha_array_func(x):
@@ -192,9 +178,7 @@ class TestConditionsEnhancement:
             return 2.0
 
         # This should pass validation
-        bc_valid = RobinBC(
-            boundary="left", alpha=alpha_array_func, beta=beta_simple, gamma=1.0
-        )
+        bc_valid = RobinBC(boundary="left", alpha=alpha_array_func, beta=beta_simple, gamma=1.0)
         assert bc_valid.validate() is True
 
         # Test callable alpha that fails with arrays but works with scalars
@@ -204,9 +188,7 @@ class TestConditionsEnhancement:
             return float(x) + 1.0
 
         # This should still work due to fallback mechanism
-        bc_fallback = RobinBC(
-            boundary="right", alpha=alpha_scalar_only, beta=1.0, gamma=0.0
-        )
+        bc_fallback = RobinBC(boundary="right", alpha=alpha_scalar_only, beta=1.0, gamma=0.0)
         assert bc_fallback.validate() is True
 
     def test_robin_bc_evaluation_comprehensive(self):
@@ -237,11 +219,9 @@ class TestConditionsEnhancement:
         assert jnp.allclose(result_mixed, expected_mixed)
 
     def test_wavefunction_bc_comprehensive_edge_cases(self):
-        """Test WavefunctionBC with comprehensive edge cases."""
+        """Test WavefunctionBC with full edge cases."""
         # Test boundary type edge case with complex value
-        bc_complex = WavefunctionBC(
-            condition_type="boundary", boundary="left", value=1.0 + 2.0j
-        )
+        bc_complex = WavefunctionBC(condition_type="boundary", boundary="left", value=1.0 + 2.0j)
         assert bc_complex.validate() is True
         assert bc_complex.value == (1.0 + 2.0j)
 
@@ -333,15 +313,11 @@ class TestConditionsEnhancement:
 
         # Test lattice type with lattice_vectors
         lattice_vecs = jnp.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        sc_lattice = SymmetryConstraint(
-            lattice_vectors=lattice_vecs, symmetry_type="lattice"
-        )
+        sc_lattice = SymmetryConstraint(lattice_vectors=lattice_vecs, symmetry_type="lattice")
         assert sc_lattice.validate() is True
 
         # Test translational type with lattice_vectors
-        sc_trans = SymmetryConstraint(
-            lattice_vectors=lattice_vecs, symmetry_type="translational"
-        )
+        sc_trans = SymmetryConstraint(lattice_vectors=lattice_vecs, symmetry_type="translational")
         assert sc_trans.validate() is True
 
         # Test point_group without group or operations (should fail)
@@ -353,7 +329,7 @@ class TestConditionsEnhancement:
         assert sc_lattice_invalid.validate() is False
 
     def test_quantum_initial_condition_comprehensive(self):
-        """Test QuantumInitialCondition with comprehensive scenarios."""
+        """Test QuantumInitialCondition with full scenarios."""
         # Test with all valid condition types
         valid_types = [
             "ground_state",
@@ -444,7 +420,7 @@ class TestConditionsEnhancement:
         assert pc_invalid.validate() is False
 
     def test_quantum_constraint_comprehensive(self):
-        """Test QuantumConstraint with comprehensive scenarios."""
+        """Test QuantumConstraint with full scenarios."""
         # Test all valid quantum constraint types
         valid_types = [
             "particle_number",

@@ -129,9 +129,7 @@ class TestSwitchingBehavior:
         # Run up to first_order_steps
         for _ in range(5):
             loss, grads = jax.value_and_grad(loss_fn)(params)
-            updates, state = optimizer.update(
-                grads, state, params, loss=loss, value_fn=loss_fn
-            )
+            updates, state = optimizer.update(grads, state, params, loss=loss, value_fn=loss_fn)
             params = optax.apply_updates(params, updates)
 
         # Should not have switched yet (step 5 is first check)
@@ -139,9 +137,7 @@ class TestSwitchingBehavior:
 
         # One more step should trigger switch
         loss, grads = jax.value_and_grad(loss_fn)(params)
-        updates, state = optimizer.update(
-            grads, state, params, loss=loss, value_fn=loss_fn
-        )
+        updates, state = optimizer.update(grads, state, params, loss=loss, value_fn=loss_fn)
 
         assert state.switched is True
         assert state.using_lbfgs is True
@@ -162,9 +158,7 @@ class TestSwitchingBehavior:
         # Run until switch
         for _ in range(10):
             loss, grads = jax.value_and_grad(loss_fn)(params)
-            updates, state = optimizer.update(
-                grads, state, params, loss=loss, value_fn=loss_fn
-            )
+            updates, state = optimizer.update(grads, state, params, loss=loss, value_fn=loss_fn)
             params = optax.apply_updates(params, updates)
 
         # Should be using L-BFGS and stay on it
@@ -218,9 +212,7 @@ class TestConvergence:
         # Run optimization
         for _ in range(50):
             loss, grads = jax.value_and_grad(loss_fn)(params)
-            updates, state = optimizer.update(
-                grads, state, params, loss=loss, value_fn=loss_fn
-            )
+            updates, state = optimizer.update(grads, state, params, loss=loss, value_fn=loss_fn)
             params = optax.apply_updates(params, updates)
 
         final_loss = loss_fn(params)
@@ -275,9 +267,7 @@ class TestGradientNormSwitching:
         # Run optimization
         for _ in range(10):
             loss, grads = jax.value_and_grad(loss_fn)(params)
-            updates, state = optimizer.update(
-                grads, state, params, loss=loss, value_fn=loss_fn
-            )
+            updates, state = optimizer.update(grads, state, params, loss=loss, value_fn=loss_fn)
             params = optax.apply_updates(params, updates)
 
         # Should have switched due to low gradient norm

@@ -91,9 +91,7 @@ class TestPDEProblem:
                 return u
 
         problem2 = TestPDEProblem.__new__(TestPDEProblem)  # Create without __init__
-        problem2.geometry = Rectangle(
-            center=jnp.array([0.0, 0.0]), width=1.0, height=1.0
-        )
+        problem2.geometry = Rectangle(center=jnp.array([0.0, 0.0]), width=1.0, height=1.0)
         problem2.equation = cast("Callable", None)  # Invalid equation (type-safe)
         problem2.boundary_conditions = {}
         problem2.initial_conditions = {}
@@ -260,9 +258,7 @@ class TestProblemIntegration:
 
         ode_problem = create_ode_problem(time_span=(0.0, 1.0), equation=lambda t, y: y)
 
-        opt_problem = create_optimization_problem(
-            dimension=2, objective=lambda x: jnp.sum(x**2)
-        )
+        opt_problem = create_optimization_problem(dimension=2, objective=lambda x: jnp.sum(x**2))
 
         neural_dft_problem = create_neural_dft_problem(water)
 

@@ -75,9 +75,7 @@ class NavierStokesDataSource(grain.RandomAccessDataSource):
         """Return total number of samples."""
         return self.n_samples
 
-    def _generate_initial_condition(
-        self, key: jax.Array
-    ) -> tuple[jax.Array, jax.Array]:
+    def _generate_initial_condition(self, key: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Generate random initial condition for NS equations."""
         key1, key2, key3 = jax.random.split(key, 3)
 
@@ -110,12 +108,8 @@ class NavierStokesDataSource(grain.RandomAccessDataSource):
 
                 cx = float(jax.random.uniform(subkeys[0], (), minval=1, maxval=5))
                 cy = float(jax.random.uniform(subkeys[1], (), minval=1, maxval=5))
-                strength = float(
-                    jax.random.uniform(subkeys[2], (), minval=-1.0, maxval=1.0)
-                )
-                width = float(
-                    jax.random.uniform(subkeys[3], (), minval=0.3, maxval=1.0)
-                )
+                strength = float(jax.random.uniform(subkeys[2], (), minval=-1.0, maxval=1.0))
+                width = float(jax.random.uniform(subkeys[3], (), minval=0.3, maxval=1.0))
 
                 r_sq = (X - cx) ** 2 + (Y - cy) ** 2
                 decay = jnp.exp(-r_sq / (2 * width**2))
@@ -192,9 +186,7 @@ class NavierStokesDataSource(grain.RandomAccessDataSource):
         # Skip initial condition in trajectory (it's already in input)
         output_u = np.array(u_traj[1:])  # (time_steps, res, res)
         output_v = np.array(v_traj[1:])  # (time_steps, res, res)
-        output_data = np.stack(
-            [output_u, output_v], axis=1
-        )  # (time_steps, 2, res, res)
+        output_data = np.stack([output_u, output_v], axis=1)  # (time_steps, 2, res, res)
 
         return {
             "input": input_data,

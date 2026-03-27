@@ -44,8 +44,8 @@ satisfied.
 
 ## Files
 
-- **Python Script**: [`examples/domain-decomposition/fbpinn_poisson.py`](https://github.com/Opifex/Opifex/blob/main/examples/domain-decomposition/fbpinn_poisson.py)
-- **Jupyter Notebook**: [`examples/domain-decomposition/fbpinn_poisson.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/domain-decomposition/fbpinn_poisson.ipynb)
+- **Python Script**: [`examples/domain-decomposition/fbpinn_poisson.py`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/fbpinn_poisson.py)
+- **Jupyter Notebook**: [`examples/domain-decomposition/fbpinn_poisson.ipynb`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/fbpinn_poisson.ipynb)
 
 ## Quick Start
 

@@ -109,9 +109,7 @@ class TestBenchmarkRunnerInitialization:
         """Test runner with default components."""
         output_dir = str(temp_directory / "benchmark_results")
 
-        with patch(
-            "opifex.benchmarking.benchmark_runner.BenchmarkRegistry"
-        ) as mock_registry:
+        with patch("opifex.benchmarking.benchmark_runner.BenchmarkRegistry") as mock_registry:
             mock_registry.return_value.list_available_operators.return_value = []
             runner = BenchmarkRunner(output_dir=output_dir)
 
@@ -125,9 +123,7 @@ class TestBenchmarkRunnerInitialization:
         """Test that output directory is created."""
         output_dir = temp_directory / "new_benchmark_dir"
 
-        with patch(
-            "opifex.benchmarking.benchmark_runner.BenchmarkRegistry"
-        ) as mock_registry:
+        with patch("opifex.benchmarking.benchmark_runner.BenchmarkRegistry") as mock_registry:
             mock_registry.return_value.list_available_operators.return_value = []
             BenchmarkRunner(output_dir=str(output_dir))
 

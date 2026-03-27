@@ -76,9 +76,7 @@ class TestHomogenizationPDE:
         pde_fn = PDEResidualRegistry.get("homogenization")
         assert callable(pde_fn)
 
-    def test_homogenization_homogeneous_coefficient(
-        self, simple_quadratic, test_points_2d
-    ):
+    def test_homogenization_homogeneous_coefficient(self, simple_quadratic, test_points_2d):
         """Test homogenization with constant coefficient (reduces to Poisson).
 
         For u = x² + y², ∇²u = 4
@@ -103,9 +101,7 @@ class TestHomogenizationPDE:
         assert residual.shape == (test_points_2d.shape[0],)
         assert jnp.allclose(residual, 0.0, atol=1e-5)
 
-    def test_homogenization_periodic_coefficient(
-        self, simple_quadratic, test_points_2d
-    ):
+    def test_homogenization_periodic_coefficient(self, simple_quadratic, test_points_2d):
         """Test homogenization with periodic coefficient.
 
         Coefficient: a_ε(x) = 1 + 0.5*cos(2πx)
@@ -127,9 +123,7 @@ class TestHomogenizationPDE:
         assert residual.shape == (test_points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(residual))
 
-    def test_homogenization_discontinuous_coefficient(
-        self, linear_function, test_points_2d
-    ):
+    def test_homogenization_discontinuous_coefficient(self, linear_function, test_points_2d):
         """Test homogenization with discontinuous coefficient (material interface).
 
         Coefficient: a_ε(x) = 1 if x < 0.5 else 2
@@ -256,13 +250,9 @@ class TestTwoScalePDE:
         def u_micro(x):
             return jnp.sin(20 * jnp.pi * jnp.sum(x, axis=-1))
 
-        macro_res_small, _ = pde_fn(
-            u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=0.01
-        )
+        macro_res_small, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=0.01)
 
-        macro_res_large, _ = pde_fn(
-            u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=0.1
-        )
+        macro_res_large, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=0.1)
 
         # Residuals should differ based on scale parameter
         assert not jnp.allclose(macro_res_small, macro_res_large, atol=1e-10)
@@ -369,9 +359,7 @@ class TestAMRPoissonPDE:
         origin_idx = 2  # [0.0, 0.0] is at index 2
         assert error_indicator[origin_idx] > error_indicator[1]  # Higher than [1, 1]
 
-    def test_amr_poisson_error_indicator_computation(
-        self, simple_quadratic, test_points_2d
-    ):
+    def test_amr_poisson_error_indicator_computation(self, simple_quadratic, test_points_2d):
         """Test that error indicator is computed correctly.
 
         Error indicator = ||∇u|| + ||H||_F
@@ -450,9 +438,7 @@ class TestMultiScaleIntegration:
             return 1.0 + 0.5 * jnp.cos(4 * jnp.pi * x[:, 0])
 
         # Compute
-        residual = pde_fn(
-            u, test_points_2d, AutoDiffEngine, coefficient_fn=periodic_coeff
-        )
+        residual = pde_fn(u, test_points_2d, AutoDiffEngine, coefficient_fn=periodic_coeff)
 
         # Verify
         assert residual.shape == (test_points_2d.shape[0],)
@@ -472,13 +458,9 @@ class TestMultiScaleIntegration:
         eps_small = 0.01
         eps_large = 0.1
 
-        macro_small, _ = pde_fn(
-            u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=eps_small
-        )
+        macro_small, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=eps_small)
 
-        macro_large, _ = pde_fn(
-            u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=eps_large
-        )
+        macro_large, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=eps_large)
 
         # Verify coupling effect
         assert not jnp.allclose(macro_small, macro_large)

@@ -6,7 +6,7 @@ The `opifex.scalability` package provides components for scaling scientific mach
 
 ## Search Engine
 
-The search engine provides comprehensive search capabilities for the neural functional registry, including text search, semantic search, filtering, and recommendation systems.
+The search engine provides full search capabilities for the neural functional registry, including text search, semantic search, filtering, and recommendation systems.
 
 ::: opifex.scalability.search
 

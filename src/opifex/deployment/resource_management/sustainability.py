@@ -49,7 +49,7 @@ class SustainabilityTracker:
         )
 
     def calculate_sustainability_metrics(self) -> SustainabilityMetrics:
-        """Calculate comprehensive sustainability metrics."""
+        """Calculate full sustainability metrics."""
         if not self.carbon_emissions:
             return SustainabilityMetrics(
                 total_carbon_footprint_kg=0.0,
@@ -60,32 +60,23 @@ class SustainabilityTracker:
                 green_computing_recommendations=[],
             )
 
-        total_carbon = sum(
-            emission["carbon_footprint_kg"] for emission in self.carbon_emissions
-        )
+        total_carbon = sum(emission["carbon_footprint_kg"] for emission in self.carbon_emissions)
         avg_renewable_percentage = sum(
-            emission["renewable_energy_percentage"]
-            for emission in self.carbon_emissions
+            emission["renewable_energy_percentage"] for emission in self.carbon_emissions
         ) / len(self.carbon_emissions)
 
         # Calculate carbon offset cost (estimated at $20 per ton CO2)
         carbon_offset_cost = (total_carbon / 1000.0) * 20.0
 
         # Calculate sustainability score (0-1 scale)
-        sustainability_score = min(
-            1.0, avg_renewable_percentage + (1.0 - total_carbon / 100.0)
-        )
+        sustainability_score = min(1.0, avg_renewable_percentage + (1.0 - total_carbon / 100.0))
 
         # Generate recommendations
         recommendations = []
         if avg_renewable_percentage < 0.8:
-            recommendations.append(
-                "Prioritize data centers with higher renewable energy usage"
-            )
+            recommendations.append("Prioritize data centers with higher renewable energy usage")
         if total_carbon > 50.0:
-            recommendations.append(
-                "Consider carbon offset programs for large emissions"
-            )
+            recommendations.append("Consider carbon offset programs for large emissions")
 
         sustainability_metrics = SustainabilityMetrics(
             total_carbon_footprint_kg=total_carbon,

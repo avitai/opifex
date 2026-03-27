@@ -16,7 +16,7 @@ source ./activate.sh          # Activate environment after setup
 The unified `setup.sh` at the project root provides:
 - Automatic GPU/CPU detection
 - Unified activation script (`activate.sh`)
-- Comprehensive environment verification
+- Full environment verification
 - Cross-platform compatibility
 
 ## 📁 Available Scripts
@@ -41,14 +41,6 @@ Clean various caches (JAX, Python, pytest, etc.)
 
 ### Testing & Verification
 
-#### `run_tests_reliably.sh`
-Run tests with retry logic and better error handling.
-
-```bash
-./scripts/run_tests_reliably.sh tests/neural/ -v
-./scripts/run_tests_reliably.sh tests/benchmarks/ --maxfail=1
-```
-
 #### `run_tests_with_cuda.sh`
 GPU-specific test runner with CUDA configuration.
 
@@ -58,7 +50,7 @@ GPU-specific test runner with CUDA configuration.
 ```
 
 #### `verify_opifex_gpu.py`
-Comprehensive GPU verification and diagnostics.
+Full GPU verification and diagnostics.
 
 ```bash
 uv run python scripts/verify_opifex_gpu.py
@@ -138,7 +130,7 @@ uv run python scripts/gpu_utils.py  # Shows available functions
 
 2. **Run Tests**:
    ```bash
-   ./scripts/run_tests_reliably.sh tests/
+   source activate.sh && uv run pytest tests/
    ```
 
 3. **Clean Environment** (if needed):
@@ -178,7 +170,7 @@ uv run python scripts/gpu_utils.py  # Shows available functions
 
 ### Testing Issues
 
-- **Flaky tests**: Use `./scripts/run_tests_reliably.sh` instead of pytest directly
+- **Flaky tests**: Use `source activate.sh && uv run pytest --timeout=60` with explicit timeout
 - **GPU test failures**: Run `scripts/verify_opifex_gpu.py` for diagnosis
 - **Memory issues**: Use `scripts/clean_cache.sh --deep`
 

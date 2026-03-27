@@ -85,9 +85,7 @@ class TestGradNormLossComputation:
         losses = jnp.array([0.5, 0.25])
         initial_losses = jnp.array([1.0, 1.0])
 
-        gradnorm_loss = balancer.compute_gradnorm_loss(
-            grad_norms, losses, initial_losses
-        )
+        gradnorm_loss = balancer.compute_gradnorm_loss(grad_norms, losses, initial_losses)
 
         assert jnp.isfinite(gradnorm_loss)
         assert gradnorm_loss >= 0
@@ -159,9 +157,7 @@ class TestGradNormIntegration:
         def loss_fn(model):
             y = model(x)
             data_loss = jnp.mean((y - y_target) ** 2)
-            reg_loss = jnp.sum(
-                jnp.array([jnp.sum(p**2) for p in jax.tree.leaves(model)])
-            )
+            reg_loss = jnp.sum(jnp.array([jnp.sum(p**2) for p in jax.tree.leaves(model)]))
             return jnp.array([data_loss, reg_loss])
 
         losses = loss_fn(model)

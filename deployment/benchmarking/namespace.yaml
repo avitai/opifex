@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: opifex-benchmarking
     app.kubernetes.io/component: namespace
     app.kubernetes.io/part-of: opifex-platform
-    opifex.local/deployment-phase: "phase-6"
+    opifex.local/deployment-phase: "version-6"
     opifex.local/extension-component: "advanced-benchmarking"
     pod-security.kubernetes.io/enforce: "restricted"
     pod-security.kubernetes.io/audit: "restricted"

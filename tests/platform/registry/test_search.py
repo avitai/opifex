@@ -1,6 +1,6 @@
 """Test suite for Neural Functional Search Engine.
 
-Provides comprehensive test coverage for search functionality including
+Provides full test coverage for search functionality including
 text search, semantic search, filtering, and recommendation systems.
 """
 
@@ -86,9 +86,7 @@ class MockRegistryService:
             },
         ]
 
-    async def search_functionals(
-        self, query: str = "", limit: int = 10000
-    ) -> list[dict]:
+    async def search_functionals(self, query: str = "", limit: int = 10000) -> list[dict]:
         """Mock search functionals method."""
         return self.functionals[:limit]
 
@@ -308,9 +306,7 @@ class TestSearchEngine:
 
         assert len(results) > 0
         # Should include items that don't require GPU
-        non_gpu_results = [
-            r for r in results if not r.metadata.get("gpu_required", False)
-        ]
+        non_gpu_results = [r for r in results if not r.metadata.get("gpu_required", False)]
         assert len(non_gpu_results) > 0
 
     @pytest.mark.asyncio

@@ -12,7 +12,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from calibrax.core.models import Metric
-from calibrax.metrics import calculate_all, mae, mse, r_squared, relative_error
+from calibrax.metrics import calculate_all
+from calibrax.metrics.functional import mae, mse, r_squared, relative_error
 from calibrax.statistics import StatisticalAnalyzer, welch_t_test
 from flax import nnx
 
@@ -99,7 +100,7 @@ class TestCalibrationMetrics:
         rel_error = relative_error(predictions, targets)
 
         assert rel_error > 0.0
-        assert isinstance(rel_error, float)
+        assert jnp.ndim(rel_error) == 0  # scalar (JAX array or float)
 
     def test_r2_score_calculation(self) -> None:
         """Test R-squared score calculation."""
@@ -122,7 +123,7 @@ class TestCalibrationMetrics:
         assert "mae" in all_metrics
         assert "r_squared" in all_metrics
         assert "relative_error" in all_metrics
-        assert all(isinstance(v, float) for v in all_metrics.values())
+        assert all(jnp.ndim(v) == 0 for v in all_metrics.values())
 
 
 class TestStatisticalAnalyzer:
@@ -207,6 +208,7 @@ class TestBenchmarkEvaluator:
             hidden_channels=32,
             modes=8,
             num_layers=2,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -288,6 +290,7 @@ class TestBenchmarkEvaluator:
             hidden_channels=16,
             modes=4,
             num_layers=1,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -353,6 +356,7 @@ class TestBenchmarkEvaluator:
             hidden_channels=32,
             modes=8,
             num_layers=2,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -432,6 +436,7 @@ class TestBenchmarkIntegration:
                 hidden_channels=16,
                 modes=4,
                 num_layers=1,
+                spatial_dims=1,
                 rngs=rngs,
             )
 
@@ -477,6 +482,7 @@ class TestBenchmarkIntegration:
             hidden_channels=16,
             modes=4,
             num_layers=1,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -486,6 +492,7 @@ class TestBenchmarkIntegration:
             hidden_channels=32,
             modes=8,
             num_layers=2,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -570,9 +577,7 @@ class TestPDEBenchIntegration:
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         loader = PDEBenchLoader()
-        dataset = loader.load_dataset(
-            dataset_name="burgers", subset_size=5, resolution="low"
-        )
+        dataset = loader.load_dataset(dataset_name="burgers", subset_size=5, resolution="low")
 
         assert "input_data" in dataset
         assert "target_data" in dataset
@@ -584,9 +589,7 @@ class TestPDEBenchIntegration:
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         loader = PDEBenchLoader()
-        dataset = loader.load_dataset(
-            dataset_name="darcy_flow", subset_size=5, resolution="low"
-        )
+        dataset = loader.load_dataset(dataset_name="darcy_flow", subset_size=5, resolution="low")
 
         assert "input_data" in dataset
         assert "target_data" in dataset
@@ -630,6 +633,7 @@ class TestPDEBenchIntegration:
             hidden_channels=16,
             modes=4,
             num_layers=1,
+            spatial_dims=1,
             rngs=rngs,
         )
 

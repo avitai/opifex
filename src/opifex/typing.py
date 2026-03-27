@@ -76,9 +76,7 @@ def ensure_optional_axes(x: Axis) -> Axis:
         except TypeError:
             return tuple(i if isinstance(i, str) else operator.index(i) for i in x)
 
-    return core.concrete_or_error(
-        force, x, "The axis argument must be known statically."
-    )
+    return core.concrete_or_error(force, x, "The axis argument must be known statically.")
 
 
 def is_single_axis(axis: Any) -> bool:
@@ -172,7 +170,7 @@ def assert_valid_axis(axis: Any) -> Axis:
 
 def is_scalar_spacing(spacing: Any) -> bool:
     """Type guard to check if value is a scalar spacing (float)."""
-    return isinstance(spacing, (int, float))
+    return isinstance(spacing, int | float)
 
 
 def is_sequence_spacing(spacing: Any) -> bool:
@@ -180,7 +178,7 @@ def is_sequence_spacing(spacing: Any) -> bool:
     return (
         isinstance(spacing, Sequence)
         and not isinstance(spacing, str)
-        and all(isinstance(x, (int, float)) for x in spacing)
+        and all(isinstance(x, int | float) for x in spacing)
     )
 
 
@@ -191,11 +189,7 @@ def is_array_spacing(spacing: Any) -> bool:
 
 def is_valid_grid_spacing(spacing: Any) -> bool:
     """Type guard to check if value is a valid grid spacing specification."""
-    return (
-        is_scalar_spacing(spacing)
-        or is_sequence_spacing(spacing)
-        or is_array_spacing(spacing)
-    )
+    return is_scalar_spacing(spacing) or is_sequence_spacing(spacing) or is_array_spacing(spacing)
 
 
 def validate_grid_spacing_values(spacing: GridSpacing) -> bool:
@@ -207,7 +201,7 @@ def validate_grid_spacing_values(spacing: GridSpacing) -> bool:
     Returns:
         True if all spacing values are positive, False otherwise
     """
-    if isinstance(spacing, (int, float)):
+    if isinstance(spacing, int | float):
         return float(spacing) > 0
 
     if isinstance(spacing, Sequence) and not isinstance(spacing, str):
@@ -235,7 +229,7 @@ def normalize_grid_spacing(spacing: GridSpacing, spatial_dims: int) -> list[floa
     if not is_valid_grid_spacing(spacing):
         raise TypeError(f"Invalid grid spacing type: {type(spacing)}")
 
-    if isinstance(spacing, (int, float)):
+    if isinstance(spacing, int | float):
         spacing_val = float(spacing)
         if spacing_val <= 0:
             raise ValueError(f"Grid spacing must be positive, got {spacing_val}")
@@ -245,8 +239,7 @@ def normalize_grid_spacing(spacing: GridSpacing, spatial_dims: int) -> list[floa
         spacing_list = [float(s) for s in spacing]
         if len(spacing_list) != spatial_dims:
             raise ValueError(
-                f"Grid spacing length {len(spacing_list)} doesn't match "
-                f"spatial_dims {spatial_dims}"
+                f"Grid spacing length {len(spacing_list)} doesn't match spatial_dims {spatial_dims}"
             )
         if not all(s > 0 for s in spacing_list):
             raise ValueError("All grid spacing values must be positive")
@@ -261,8 +254,7 @@ def normalize_grid_spacing(spacing: GridSpacing, spatial_dims: int) -> list[floa
             and spacing_shape[0] != spatial_dims
         ):
             raise ValueError(
-                f"Grid spacing shape {spacing_shape} doesn't match "
-                f"spatial_dims {spatial_dims}"
+                f"Grid spacing shape {spacing_shape} doesn't match spatial_dims {spatial_dims}"
             )
         return [float(spacing[i]) for i in range(spatial_dims)]
 
@@ -310,9 +302,7 @@ def assert_valid_grid_spacing(spacing: Any) -> GridSpacing:
         TypeError: If spacing is not a valid specification
     """
     if not is_valid_grid_spacing(spacing):
-        raise TypeError(
-            f"Expected valid grid spacing specification, got {type(spacing).__name__}"
-        )
+        raise TypeError(f"Expected valid grid spacing specification, got {type(spacing).__name__}")
     return spacing
 
 

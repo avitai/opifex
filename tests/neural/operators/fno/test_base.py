@@ -45,7 +45,8 @@ class TestFourierSpectralConvolution:
         assert layer.in_channels == in_channels
         assert layer.out_channels == out_channels
         assert layer.modes == modes
-        assert hasattr(layer, "weights")
+        assert hasattr(layer, "weights_real")
+        assert hasattr(layer, "weights_imag")
 
     def test_spectral_convolution_forward(self, rngs):
         """Test Fourier spectral convolution forward pass."""
@@ -73,9 +74,7 @@ class TestFourierSpectralConvolution:
 
     def test_spectral_convolution_gradient_computation(self, rngs):
         """Test Fourier spectral convolution gradient computation."""
-        layer = FourierSpectralConvolution(
-            in_channels=8, out_channels=16, modes=8, rngs=rngs
-        )
+        layer = FourierSpectralConvolution(in_channels=8, out_channels=16, modes=8, rngs=rngs)
 
         def loss_fn(layer, x):
             return jnp.sum(jnp.abs(layer(x)) ** 2)
@@ -84,7 +83,7 @@ class TestFourierSpectralConvolution:
 
         # Should not raise error
         grads = nnx.grad(loss_fn)(layer, x)
-        assert hasattr(grads, "weights")
+        assert hasattr(grads, "weights_real")
 
 
 class TestFourierLayer:
@@ -113,11 +112,12 @@ class TestFourierLayer:
         assert layer.in_channels == in_channels
         assert layer.out_channels == out_channels
         assert layer.modes == modes
-        assert hasattr(layer, "spectral_conv")
+        # Default spatial_dims=2 creates 2D spectral weights (not 1D spectral_conv)
+        assert hasattr(layer, "weights_2d_1_real")
         assert hasattr(layer, "linear")
 
-    def test_fourier_layer_forward(self, rngs):
-        """Test Fourier layer forward pass."""
+    def test_fourier_layer_forward_1d(self, rngs):
+        """Test Fourier layer forward pass with 1D spatial input."""
         batch_size = 4
         in_channels = 16
         out_channels = 32
@@ -125,17 +125,36 @@ class TestFourierLayer:
         grid_size = 64
 
         layer = FourierLayer(
-            in_channels=in_channels, out_channels=out_channels, modes=modes, rngs=rngs
+            in_channels=in_channels,
+            out_channels=out_channels,
+            modes=modes,
+            spatial_dims=1,
+            rngs=rngs,
         )
 
-        # Create input in spatial domain
         x = jnp.ones((batch_size, in_channels, grid_size))
-
         output = layer(x)
+        assert output.shape == (batch_size, out_channels, grid_size)
 
-        # Check output shape
-        expected_shape = (batch_size, out_channels, grid_size)
-        assert output.shape == expected_shape
+    def test_fourier_layer_forward_2d(self, rngs):
+        """Test Fourier layer forward pass with 2D spatial input."""
+        batch_size = 2
+        in_channels = 8
+        out_channels = 8
+        modes = 8
+        h, w = 16, 16
+
+        layer = FourierLayer(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            modes=modes,
+            spatial_dims=2,
+            rngs=rngs,
+        )
+
+        x = jnp.ones((batch_size, in_channels, h, w))
+        output = layer(x)
+        assert output.shape == (batch_size, out_channels, h, w)
 
     def test_fourier_layer_activation(self, rngs):
         """Test Fourier layer with different activations."""
@@ -290,6 +309,7 @@ class TestFourierNeuralOperator:
             hidden_channels=32,
             modes=16,
             num_layers=3,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -314,6 +334,7 @@ class TestFourierNeuralOperator:
             hidden_channels=32,
             modes=16,
             num_layers=2,
+            spatial_dims=2,
             rngs=rngs,
         )
 
@@ -336,6 +357,7 @@ class TestFourierNeuralOperator:
             hidden_channels=16,
             modes=8,
             num_layers=2,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -361,6 +383,7 @@ class TestFourierNeuralOperator:
             hidden_channels=16,
             modes=8,
             num_layers=2,
+            spatial_dims=1,
             rngs=rngs,
         )
 
@@ -402,6 +425,7 @@ class TestFourierNeuralOperator:
                 modes=8,
                 num_layers=2,
                 activation=activation,
+                spatial_dims=1,
                 rngs=rngs,
             )
 

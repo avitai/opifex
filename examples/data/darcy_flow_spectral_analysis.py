@@ -226,12 +226,8 @@ def analyze_darcy_spectral_properties(
             k_radial_out, power_out = compute_power_spectrum_2d(output_field)
 
             # Radially averaged spectra
-            _k_centers_in, avg_spectrum_in = radial_average_spectrum(
-                k_radial_in, power_in
-            )
-            k_centers_out, avg_spectrum_out = radial_average_spectrum(
-                k_radial_out, power_out
-            )
+            _k_centers_in, avg_spectrum_in = radial_average_spectrum(k_radial_in, power_in)
+            k_centers_out, avg_spectrum_out = radial_average_spectrum(k_radial_out, power_out)
 
             input_spectra.append(avg_spectrum_in)
             output_spectra.append(avg_spectrum_out)
@@ -258,15 +254,11 @@ def analyze_darcy_spectral_properties(
             "high_freq_percentage": np.mean(
                 [ed["high_freq_percentage"] for ed in energy_distributions]
             ),
-            "total_energy": np.mean(
-                [ed["total_energy"] for ed in energy_distributions]
-            ),
+            "total_energy": np.mean([ed["total_energy"] for ed in energy_distributions]),
         }
 
         print(f"  Low frequency energy: {avg_energy_dist['low_freq_percentage']:.1f}%")
-        print(
-            f"  High frequency energy: {avg_energy_dist['high_freq_percentage']:.1f}%"
-        )
+        print(f"  High frequency energy: {avg_energy_dist['high_freq_percentage']:.1f}%")
 
         # Store results
         results["spectral_data"][resolution] = {
@@ -437,9 +429,7 @@ def _plot_dominant_modes(axes, results):
     mode_y, mode_x = modes_data["mode_indices"]
 
     # Create mode locations plot
-    scatter = axes.scatter(
-        mode_x, mode_y, c=mode_powers, s=100, cmap="viridis", alpha=0.8
-    )
+    scatter = axes.scatter(mode_x, mode_y, c=mode_powers, s=100, cmap="viridis", alpha=0.8)
     axes.set_xlabel("Mode X Index")
     axes.set_ylabel("Mode Y Index")
     axes.set_title(f"Dominant Modes Location ({highest_res}x{highest_res})")
@@ -450,9 +440,7 @@ def _plot_dominant_modes(axes, results):
 def _plot_generation_performance(axes, results):
     """Plot generation time vs resolution."""
     resolutions = results["resolutions"]
-    generation_times = [
-        results["spectral_data"][r]["generation_time"] for r in resolutions
-    ]
+    generation_times = [results["spectral_data"][r]["generation_time"] for r in resolutions]
 
     axes.plot(resolutions, generation_times, "o-", linewidth=2, markersize=8)
     axes.set_xlabel("Resolution")
@@ -461,10 +449,8 @@ def _plot_generation_performance(axes, results):
     axes.grid(True, alpha=0.3)
 
 
-def create_spectral_visualization(
-    results: dict[str, Any], save_path: str | None = None
-) -> None:
-    """Create comprehensive spectral analysis visualization."""
+def create_spectral_visualization(results: dict[str, Any], save_path: str | None = None) -> None:
+    """Create full spectral analysis visualization."""
     print("\nCreating Spectral Analysis Visualization")
     print("=" * 45)
 
@@ -511,13 +497,13 @@ def create_spectral_visualization(
 - Compare spectral properties before and after FNO prediction to validate learned operators
 - Use spectral slopes to guide FNO mode truncation (higher slopes = fewer modes needed)
 - See [Darcy Flow Analysis](darcy_flow_analysis.md) for spatial domain statistics
-- See [FNO Darcy Comprehensive](../models/fno_darcy_comprehensive.md) for training
+- See [FNO Darcy Full](../models/fno_darcy_comprehensive.md) for training
 """
 
 
 # %%
 def main(output_dir: str = "docs/assets/examples/darcy_flow_spectral_analysis_files"):
-    """Main function demonstrating comprehensive Darcy flow spectral analysis."""
+    """Main function demonstrating full Darcy flow spectral analysis."""
     print("Starting Darcy Flow Spectral Analysis Example")
     print("Using Opifex Framework with JAX/Flax NNX")
     print()
@@ -556,7 +542,7 @@ def main(output_dir: str = "docs/assets/examples/darcy_flow_spectral_analysis_fi
         print("  Computed power spectral densities")
         print("  Identified dominant modes")
         print("  Analyzed energy distributions")
-        print("  Created comprehensive visualization")
+        print("  Created full visualization")
 
         return results
 

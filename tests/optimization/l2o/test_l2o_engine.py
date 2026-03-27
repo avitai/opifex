@@ -95,9 +95,7 @@ class TestOptimizationProblemEncoder:
     def test_quadratic_problem_encoding(self, encoder):
         """Test encoding of quadratic optimization problems."""
         # Create quadratic problem specification
-        problem = OptimizationProblem(
-            problem_type="quadratic", dimension=5, constraints=None
-        )
+        problem = OptimizationProblem(problem_type="quadratic", dimension=5, constraints=None)
 
         # Problem parameters: Q matrix + c vector
         Q_matrix = jnp.eye(5) * 0.5  # Positive definite
@@ -124,15 +122,11 @@ class TestOptimizationProblemEncoder:
             "inequality": jnp.array([[0.0, 0.0, 1.0, -1.0, 0.0]]),  # x3 >= x4
         }
 
-        problem = OptimizationProblem(
-            problem_type="linear", dimension=5, constraints=constraints
-        )
+        problem = OptimizationProblem(problem_type="linear", dimension=5, constraints=constraints)
 
         # Linear problem: minimize c^T x
         c_vector = jnp.array([1.0, 2.0, 0.5, 1.5, 0.8])
-        problem_params = jnp.pad(c_vector, (0, max(0, encoder.input_dim - 5)))[
-            : encoder.input_dim
-        ]
+        problem_params = jnp.pad(c_vector, (0, max(0, encoder.input_dim - 5)))[: encoder.input_dim]
 
         encoding = encoder.encode_problem(problem, problem_params)
 
@@ -160,9 +154,7 @@ class TestParametricOptimizationSolver:
     @pytest.fixture
     def solver_config(self):
         """Fixture providing solver configuration."""
-        return SolverConfig(
-            hidden_sizes=[64, 32], learning_rate=1e-3, max_iterations=100
-        )
+        return SolverConfig(hidden_sizes=[64, 32], learning_rate=1e-3, max_iterations=100)
 
     @pytest.fixture
     def l2o_config(self):
@@ -185,9 +177,7 @@ class TestParametricOptimizationSolver:
             rngs=rngs,
         )
 
-    def test_parametric_optimization_solver_initialization(
-        self, solver_config, l2o_config
-    ):
+    def test_parametric_optimization_solver_initialization(self, solver_config, l2o_config):
         """Test parametric optimization solver initialization."""
         rngs = nnx.Rngs(42)
         solver = ParametricOptimizationSolver(
@@ -216,9 +206,7 @@ class TestParametricOptimizationSolver:
         problem_params = jnp.ones(parametric_solver.input_dim) * 0.5
 
         # Solve optimization problem
-        solution, metadata = parametric_solver.solve_optimization_problem(
-            problem, problem_params
-        )
+        solution, metadata = parametric_solver.solve_optimization_problem(problem, problem_params)
 
         assert solution.shape == (parametric_solver.output_dim,)
         assert jnp.isfinite(solution).all()
@@ -233,9 +221,7 @@ class TestParametricOptimizationSolver:
             problem_type="nonlinear", dimension=parametric_solver.output_dim
         )
 
-        problem_params = (
-            jnp.ones(parametric_solver.input_dim) * 1000
-        )  # Difficult problem
+        problem_params = jnp.ones(parametric_solver.input_dim) * 1000  # Difficult problem
 
         solution, metadata = parametric_solver.solve_optimization_problem(
             problem, problem_params, enable_fallback=True
@@ -307,9 +293,7 @@ class TestL2OEngine:
         parametric_problem = OptimizationProblem("quadratic", 5)
         problem_params = jnp.ones(20)
 
-        solution = l2o_engine.solve_parametric_problem(
-            parametric_problem, problem_params
-        )
+        solution = l2o_engine.solve_parametric_problem(parametric_problem, problem_params)
         assert solution.shape == (5,)
         assert jnp.isfinite(solution).all()
 
@@ -318,9 +302,7 @@ class TestL2OEngine:
             return jnp.sum(x**2)  # Simple quadratic loss
 
         initial_params = jnp.ones(5)
-        optimized_params = l2o_engine.solve_gradient_problem(
-            loss_fn, initial_params, steps=10
-        )
+        optimized_params = l2o_engine.solve_gradient_problem(loss_fn, initial_params, steps=10)
 
         assert optimized_params.shape == (5,)
         assert jnp.isfinite(optimized_params).all()
@@ -347,12 +329,8 @@ class TestL2OEngine:
 
         # Solve problems sequentially, allowing meta-learning
         solutions = []
-        for i, (problem, params) in enumerate(
-            zip(problems, problem_params_list, strict=False)
-        ):
-            solution, metadata = l2o_engine.solve_with_meta_learning(
-                problem, params, problem_id=i
-            )
+        for i, (problem, params) in enumerate(zip(problems, problem_params_list, strict=False)):
+            solution, metadata = l2o_engine.solve_with_meta_learning(problem, params, problem_id=i)
             solutions.append(solution)
 
             # Check that meta-learning information is tracked
@@ -364,7 +342,7 @@ class TestL2OEngine:
         assert all(jnp.isfinite(sol).all() for sol in solutions)
 
     def test_performance_comparison_framework(self, l2o_engine):
-        """Test comprehensive performance comparison capabilities."""
+        """Test full performance comparison capabilities."""
         problem = OptimizationProblem("quadratic", 5)
         problem_params = jnp.ones(20)
 
@@ -394,9 +372,7 @@ class TestL2OEngine:
             problem_params = jnp.ones(20)
 
             # Get algorithm recommendation
-            recommended_algorithm = l2o_engine.recommend_algorithm(
-                problem, problem_params
-            )
+            recommended_algorithm = l2o_engine.recommend_algorithm(problem, problem_params)
             assert recommended_algorithm in [
                 "parametric",
                 "gradient",

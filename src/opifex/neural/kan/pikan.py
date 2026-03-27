@@ -73,11 +73,7 @@ class PIKANConfig:
             msg = f"n_layers must be >= 1, got {self.n_layers}"
             raise ValueError(msg)
         if self.kan_type not in _VALID_KAN_TYPES:
-            msg = (
-                f"kan_type must be one of "
-                f"{sorted(_VALID_KAN_TYPES)}, "
-                f"got '{self.kan_type}'"
-            )
+            msg = f"kan_type must be one of {sorted(_VALID_KAN_TYPES)}, got '{self.kan_type}'"
             raise ValueError(msg)
 
 

@@ -79,19 +79,15 @@ class DarcyDataSource(grain.RandomAccessDataSource):
 
         for i in range(n_modes):
             coeff_field += amplitudes[i] * jnp.sin(
-                freqs[i, 0] * jnp.pi * self.X
-                + freqs[i, 1] * jnp.pi * self.Y
-                + phases[i]
+                freqs[i, 0] * jnp.pi * self.X + freqs[i, 1] * jnp.pi * self.Y + phases[i]
             )
 
         # Ensure positive definite and bounded within viscosity range
         coeff_field = jnp.exp(coeff_field)
         # Scale to viscosity range
-        return self.viscosity_range[0] + (
-            self.viscosity_range[1] - self.viscosity_range[0]
-        ) * (coeff_field - jnp.min(coeff_field)) / (
-            jnp.max(coeff_field) - jnp.min(coeff_field) + 1e-10
-        )
+        return self.viscosity_range[0] + (self.viscosity_range[1] - self.viscosity_range[0]) * (
+            coeff_field - jnp.min(coeff_field)
+        ) / (jnp.max(coeff_field) - jnp.min(coeff_field) + 1e-10)
 
     def __getitem__(self, index: SupportsIndex | slice) -> dict[str, Any]:
         """

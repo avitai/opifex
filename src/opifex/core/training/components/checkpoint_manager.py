@@ -77,7 +77,7 @@ class CheckpointManager:
             raise TypeError("Step must be an integer")
         if step < 0:
             raise ValueError("Step cannot be negative")
-        if not isinstance(loss, (int, float)):
+        if not isinstance(loss, int | float):
             raise TypeError("Loss must be a number")
 
         # Create checkpoint filename with timezone-aware timestamp
@@ -123,9 +123,7 @@ class CheckpointManager:
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
         # Security warning for pickle usage
-        logger.warning(
-            "Loading checkpoint with pickle - ensure file is from trusted source"
-        )
+        logger.warning("Loading checkpoint with pickle - ensure file is from trusted source")
 
         try:
             with open(checkpoint_path, "rb") as f:
@@ -197,9 +195,7 @@ class CheckpointManager:
         latest = max(checkpoints, key=lambda x: x["step"])
         return latest["path"]
 
-    def get_best_checkpoint(
-        self, metric: str = "loss", minimize: bool = True
-    ) -> str | None:
+    def get_best_checkpoint(self, metric: str = "loss", minimize: bool = True) -> str | None:
         """
         Get the path to the best checkpoint based on a metric.
 
@@ -219,9 +215,7 @@ class CheckpointManager:
         def get_metric_value(checkpoint):
             if metric == "loss":
                 return checkpoint["loss"]
-            return checkpoint["metadata"].get(
-                metric, float("inf") if minimize else float("-inf")
-            )
+            return checkpoint["metadata"].get(metric, float("inf") if minimize else float("-inf"))
 
         if minimize:
             best = min(checkpoints, key=get_metric_value)
@@ -290,7 +284,7 @@ class CheckpointManager:
             # Check data types
             if not isinstance(checkpoint_data["step"], int):
                 return False
-            if not isinstance(checkpoint_data["loss"], (int, float)):
+            if not isinstance(checkpoint_data["loss"], int | float):
                 return False
 
             # Return condition directly

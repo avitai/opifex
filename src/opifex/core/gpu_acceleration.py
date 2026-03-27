@@ -38,9 +38,7 @@ class RooflineMemoryManager:
                 try:
                     if hasattr(device, "memory_stats"):
                         memory_stats = device.memory_stats()
-                        memory_gb = memory_stats.get("bytes_limit", 24 * 1024**3) / (
-                            1024**3
-                        )
+                        memory_gb = memory_stats.get("bytes_limit", 24 * 1024**3) / (1024**3)
                     else:
                         memory_gb = 24.0  # Reasonable default for modern GPUs
                 except Exception:
@@ -88,9 +86,7 @@ class RooflineMemoryManager:
             "supports_tensorcore": False,
         }
 
-    def estimate_operation_efficiency(
-        self, operation_type: str, *shapes
-    ) -> dict[str, Any]:
+    def estimate_operation_efficiency(self, operation_type: str, *shapes) -> dict[str, Any]:
         """Estimate operation efficiency using roofline model."""
         cache_key = (operation_type, shapes)
         if cache_key in self.operation_cache:
@@ -108,12 +104,8 @@ class RooflineMemoryManager:
             compute_time = flops / self.hw_specs["peak_flops"]
             memory_time = bytes_accessed / self.hw_specs["memory_bandwidth"]
 
-            is_compute_bound = (
-                arithmetic_intensity > self.hw_specs["critical_intensity"]
-            )
-            efficiency = min(
-                arithmetic_intensity / self.hw_specs["critical_intensity"], 1.0
-            )
+            is_compute_bound = arithmetic_intensity > self.hw_specs["critical_intensity"]
+            efficiency = min(arithmetic_intensity / self.hw_specs["critical_intensity"], 1.0)
 
             result = {
                 "arithmetic_intensity": arithmetic_intensity,
@@ -150,13 +142,9 @@ class RooflineMemoryManager:
 
         while low <= high:
             mid = (low + high) // 2
-            test_shapes = (
-                (mid, *base_shape[1:]) if len(base_shape) > 1 else (mid, mid, mid)
-            )
+            test_shapes = (mid, *base_shape[1:]) if len(base_shape) > 1 else (mid, mid, mid)
 
-            efficiency = self.estimate_operation_efficiency(
-                operation_type, *test_shapes
-            )
+            efficiency = self.estimate_operation_efficiency(operation_type, *test_shapes)
             memory_usage = efficiency["memory_gb"]
 
             if memory_usage <= self.hw_specs["memory_gb"] * 0.8:  # 80% memory limit
@@ -225,12 +213,8 @@ class MixedPrecisionOptimizer:
         for arr in arrays:
             if arr.ndim >= 2:
                 # Pad to multiples of target alignment
-                pad_rows = (
-                    target_alignment - arr.shape[-2] % target_alignment
-                ) % target_alignment
-                pad_cols = (
-                    target_alignment - arr.shape[-1] % target_alignment
-                ) % target_alignment
+                pad_rows = (target_alignment - arr.shape[-2] % target_alignment) % target_alignment
+                pad_cols = (target_alignment - arr.shape[-1] % target_alignment) % target_alignment
 
                 if pad_rows > 0 or pad_cols > 0:
                     pad_spec = [(0, 0)] * (arr.ndim - 2) + [
@@ -277,9 +261,7 @@ class AsyncMemoryManager:
     def __init__(self):
         self.prefetch_queue = {}
 
-    def async_device_put(
-        self, array: jax.Array, device: Any, key: str | None = None
-    ) -> jax.Array:
+    def async_device_put(self, array: jax.Array, device: Any, key: str | None = None) -> jax.Array:
         """Asynchronous device placement with prefetching."""
         if key:
             # Store handle for later retrieval (simulate async with regular device_put)
@@ -394,9 +376,7 @@ class MemoryPoolManager:
     def get_pool_stats(self) -> dict[str, Any]:
         """Get memory pool statistics."""
         total_buffers = sum(len(pool) for pool in self.buffer_pools.values())
-        reuse_ratio = self.reuse_count / max(
-            1, self.allocation_count + self.reuse_count
-        )
+        reuse_ratio = self.reuse_count / max(1, self.allocation_count + self.reuse_count)
 
         return {
             "total_allocations": self.allocation_count,
@@ -440,9 +420,7 @@ class CachedProgressiveTester:
             return False, None, f"Invalid dtype: {dtype_str}"
 
         # Use roofline analysis for pre-screening
-        efficiency = self.memory_manager.estimate_operation_efficiency(
-            "matmul", size, size, size
-        )
+        efficiency = self.memory_manager.estimate_operation_efficiency("matmul", size, size, size)
 
         if efficiency["memory_gb"] > self.memory_manager.hw_specs["memory_gb"] * 0.9:
             return (
@@ -493,9 +471,7 @@ class CachedProgressiveTester:
         mixed_precision = MixedPrecisionOptimizer()
         return mixed_precision.mixed_precision_matmul(x, y)
 
-    def find_optimal_configuration(
-        self, operation_name: str = "safe_matmul"
-    ) -> dict[str, Any]:
+    def find_optimal_configuration(self, operation_name: str = "safe_matmul") -> dict[str, Any]:
         """Find optimal configuration using adaptive search."""
         # Start with hardware-suggested batch size
         base_size = self.memory_manager.get_optimal_batch_size("matmul", (1, 1))
@@ -527,17 +503,13 @@ class CachedProgressiveTester:
                             "dtype": dtype_str,
                             "execution_time": exec_time,
                             "efficiency_score": efficiency["efficiency_score"],
-                            "throughput": (2 * size**3) / exec_time
-                            if exec_time > 0
-                            else 0,
+                            "throughput": (2 * size**3) / exec_time if exec_time > 0 else 0,
                         }
                     )
 
         # Find best configuration (highest throughput with good efficiency)
         if configurations:
-            best_config = max(
-                configurations, key=lambda x: x["throughput"] * x["efficiency_score"]
-            )
+            best_config = max(configurations, key=lambda x: x["throughput"] * x["efficiency_score"])
             return {
                 "optimal_config": best_config,
                 "all_configs": configurations,
@@ -624,15 +596,11 @@ class OptimizedGPUManager:
                         next_key = jax.random.PRNGKey(43)
                         next_x = jax.random.normal(next_key, (next_size, next_size))
                         with contextlib.suppress(Exception):
-                            self.async_manager.prefetch_next_batch(
-                                next_x, jax.devices()[0]
-                            )
+                            self.async_manager.prefetch_next_batch(next_x, jax.devices()[0])
 
                     # Run benchmark with overlapped computation
-                    success, exec_time, error = (
-                        self.cached_tester._cached_test_operation(
-                            "optimized_matmul", size, "float32"
-                        )
+                    success, exec_time, error = self.cached_tester._cached_test_operation(
+                        "optimized_matmul", size, "float32"
                     )
 
                     results[size] = {
@@ -674,9 +642,7 @@ def benchmark_gpu_operations() -> dict[str, Any]:
     """Legacy benchmark function - OptimizedGPUManager.benchmark_with_prefetching."""
     manager = OptimizedGPUManager()
     test_sizes = [64, 128, 256, 512]
-    results = manager.benchmark_with_prefetching(
-        manager.optimal_matrix_multiply, test_sizes
-    )
+    results = manager.benchmark_with_prefetching(manager.optimal_matrix_multiply, test_sizes)
 
     return {
         "benchmark_results": results,

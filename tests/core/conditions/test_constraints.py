@@ -51,9 +51,7 @@ class TestDensityConstraint:
     def test_invalid_enforcement_method(self):
         """Test initialization with invalid enforcement method."""
         with pytest.raises(ValueError, match="Invalid enforcement_method"):
-            DensityConstraint(
-                constraint_type="conservation", enforcement_method="invalid"
-            )
+            DensityConstraint(constraint_type="conservation", enforcement_method="invalid")
 
     def test_validate_conservation_valid(self):
         """Test validation for valid conservation constraint."""
@@ -85,9 +83,7 @@ class TestSymmetryConstraint:
     def test_initialization_operations(self):
         """Test symmetry constraint with operations."""
         operations = ["E", "C2", "sigma_v", "sigma_v'"]
-        constraint = SymmetryConstraint(
-            operations=operations, symmetry_type="point_group"
-        )
+        constraint = SymmetryConstraint(operations=operations, symmetry_type="point_group")
 
         assert constraint.operations == operations
         assert constraint.symmetry_type == "point_group"
@@ -95,9 +91,7 @@ class TestSymmetryConstraint:
     def test_initialization_lattice(self):
         """Test symmetry constraint with lattice vectors."""
         lattice_vectors = jnp.array([[1.0, 0.0], [0.0, 1.0]])
-        constraint = SymmetryConstraint(
-            lattice_vectors=lattice_vectors, symmetry_type="lattice"
-        )
+        constraint = SymmetryConstraint(lattice_vectors=lattice_vectors, symmetry_type="lattice")
 
         assert constraint.lattice_vectors is not None
         assert jnp.allclose(constraint.lattice_vectors, lattice_vectors)
@@ -116,29 +110,21 @@ class TestSymmetryConstraint:
     def test_validate_operations(self):
         """Test validation for operations constraint."""
         operations = ["E", "C3", "C3^2"]
-        constraint = SymmetryConstraint(
-            operations=operations, symmetry_type="point_group"
-        )
+        constraint = SymmetryConstraint(operations=operations, symmetry_type="point_group")
         assert constraint.validate() is True
 
     def test_validate_lattice_valid(self):
         """Test validation for valid lattice constraint."""
         lattice_vectors = jnp.array([[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]])
-        constraint = SymmetryConstraint(
-            lattice_vectors=lattice_vectors, symmetry_type="lattice"
-        )
+        constraint = SymmetryConstraint(lattice_vectors=lattice_vectors, symmetry_type="lattice")
         assert constraint.validate() is True
 
     def test_validate_lattice_invalid(self):
         """Test validation for invalid lattice constraint."""
         # Invalid lattice vectors (not 2D or 3D)
         lattice_vectors = jnp.array([1.0, 2.0, 3.0, 4.0])
-        constraint = SymmetryConstraint(
-            lattice_vectors=lattice_vectors, symmetry_type="lattice"
-        )
-        assert (
-            constraint.validate() is True
-        )  # Fixed: the validation doesn't check dimensionality
+        constraint = SymmetryConstraint(lattice_vectors=lattice_vectors, symmetry_type="lattice")
+        assert constraint.validate() is True  # Fixed: the validation doesn't check dimensionality
 
     def test_validate_no_specification(self):
         """Test validation when no symmetry specification is provided."""
@@ -286,9 +272,7 @@ class TestQuantumConstraint:
 
     def test_validate_invalid(self):
         """Test validation for invalid quantum constraint."""
-        constraint = QuantumConstraint(
-            constraint_type="unitarity", expression="", variables=["U"]
-        )
+        constraint = QuantumConstraint(constraint_type="unitarity", expression="", variables=["U"])
         assert constraint.validate() is False
 
 

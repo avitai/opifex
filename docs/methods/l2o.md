@@ -432,7 +432,7 @@ benchmark = L2OBenchmark(
     metrics=["convergence_speed", "final_accuracy", "computational_cost"]
 )
 
-# Run comprehensive benchmark
+# Run full benchmark
 results = benchmark.run_benchmark(
     l2o_engine=l2o_engine,
     num_trials=100,

@@ -1,4 +1,4 @@
-# Comprehensive U-FNO for Turbulence Modeling
+# Full U-FNO for Turbulence Modeling
 
 | Metadata | Value |
 |----------|-------|
@@ -24,7 +24,7 @@ ground truth -- a physically meaningful constraint for turbulence modeling.
 The pipeline covers: loading 2D turbulent Burgers data via `create_burgers_loader` (Google
 Grain), augmenting inputs with `GridEmbedding2D` for spatial positional encoding, creating
 the model with `create_turbulence_ufno` factory, training with `Trainer.fit()` plus custom
-energy loss, and comprehensive evaluation with multi-scale spectral analysis.
+energy loss, and full evaluation with multi-scale spectral analysis.
 
 ## What You'll Learn
 
@@ -53,8 +53,8 @@ energy loss, and comprehensive evaluation with multi-scale spectral analysis.
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/ufno_turbulence_comprehensive.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/ufno_turbulence_comprehensive.py)
-- **Jupyter Notebook**: [`examples/neural-operators/ufno_turbulence_comprehensive.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/ufno_turbulence_comprehensive.ipynb)
+- **Python Script**: [`examples/neural-operators/ufno_turbulence_comprehensive.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/ufno_turbulence_comprehensive.py)
+- **Jupyter Notebook**: [`examples/neural-operators/ufno_turbulence_comprehensive.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/ufno_turbulence_comprehensive.ipynb)
 
 ## Quick Start
 
@@ -163,7 +163,7 @@ from opifex.neural.operators.fno.ufno import create_turbulence_ufno
 **Terminal Output:**
 ```
 ======================================================================
-Opifex Example: Comprehensive U-FNO for Turbulence Modeling
+Opifex Example: Full U-FNO for Turbulence Modeling
 ======================================================================
 JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
@@ -334,7 +334,7 @@ Done in 16.5s | Train: 0.0011161690248021234 | Val: 0.004518489353358746
     `def loss_fn(model, x, y_pred, y_true) -> scalar`. The Trainer automatically
     adds these to the total training loss alongside the primary MSE objective.
 
-### Step 7: Comprehensive Evaluation
+### Step 7: Full Evaluation
 
 Evaluate the trained U-FNO on the test set with MSE, per-sample relative L2 error, and
 energy conservation metrics:
@@ -357,7 +357,7 @@ energy_conservation = float(jnp.mean(jnp.abs(pred_energy - target_energy)))
 
 **Terminal Output:**
 ```
-Running comprehensive evaluation...
+Running full evaluation...
 MSE: 0.000600 | Rel L2: 0.079943+/-0.031530
 Energy Conservation: 0.003490
 ```
@@ -392,7 +392,7 @@ The example generates four sets of visualizations:
 **Terminal Output:**
 ```
 ======================================================================
-Comprehensive U-FNO Turbulence example completed in 16.5s
+Full U-FNO Turbulence example completed in 16.5s
 Mean Relative L2 Error: 0.079943
 Results saved to: docs/assets/examples/ufno_turbulence
 ======================================================================
@@ -440,8 +440,8 @@ higher-frequency turbulent features.
 
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
-| [FNO Darcy Comprehensive](fno-darcy.md) | Intermediate | Standard FNO with grid embedding for steady-state problems |
-| [SFNO Climate Comprehensive](sfno-climate-comprehensive.md) | Advanced | Conservation-aware training with `ConservationConfig` on spherical domains |
+| [FNO Darcy Full](fno-darcy.md) | Intermediate | Standard FNO with grid embedding for steady-state problems |
+| [SFNO Climate Full](sfno-climate-full.md) | Advanced | Conservation-aware training with `ConservationConfig` on spherical domains |
 | [SFNO Climate Simple](sfno-climate-simple.md) | Intermediate | Minimal SFNO example for quick start |
 | [UNO Darcy Framework](uno-darcy.md) | Intermediate | U-shaped neural operator with zero-shot super-resolution |
 | [Grid Embeddings](../layers/grid-embeddings.md) | Beginner | Spatial coordinate injection for neural operators |

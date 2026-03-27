@@ -54,9 +54,7 @@ def detect_cuda_version_detailed() -> dict[str, str | None]:
                 parts = line.split("|")
                 for part in parts:
                     if "Driver Version" in part:
-                        info["driver_version"] = (
-                            part.split("Driver Version:")[1].strip().split()[0]
-                        )
+                        info["driver_version"] = part.split("Driver Version:")[1].strip().split()[0]
 
         # Get GPU details
         try:
@@ -140,9 +138,7 @@ def has_nvidia_gpu() -> bool:
         bool: True if GPU is available, False otherwise
     """
     try:
-        result = subprocess.run(
-            ["nvidia-smi"], capture_output=True, text=True, check=False
-        )
+        result = subprocess.run(["nvidia-smi"], capture_output=True, text=True, check=False)
         return result.returncode == 0
     except FileNotFoundError:
         return False
@@ -216,7 +212,7 @@ def get_jax_installation_command() -> str:
 
 
 def check_jax_gpu_status() -> dict[str, str | list | bool | None]:
-    """Check JAX GPU status with comprehensive information.
+    """Check JAX GPU status with full information.
 
     Returns:
         dict: JAX and GPU status information
@@ -246,9 +242,7 @@ def check_jax_gpu_status() -> dict[str, str | list | bool | None]:
             gpu_devices = jax.devices("cuda")
             status["gpu_devices"] = [str(d) for d in gpu_devices]
             status["gpu_available"] = len(gpu_devices) > 0
-            status["cuda_available"] = any(
-                "cuda" in str(d).lower() for d in gpu_devices
-            )
+            status["cuda_available"] = any("cuda" in str(d).lower() for d in gpu_devices)
         except Exception as gpu_error:
             status["error"] = f"GPU device check failed: {gpu_error}"
 
@@ -261,7 +255,7 @@ def check_jax_gpu_status() -> dict[str, str | list | bool | None]:
 
 
 def print_comprehensive_gpu_info() -> None:
-    """Print comprehensive GPU and JAX information."""
+    """Print full GPU and JAX information."""
     print("🔍 Opifex GPU & JAX Status Report")
     print("=" * 50)
 
@@ -313,8 +307,8 @@ def print_comprehensive_gpu_info() -> None:
 
 
 if __name__ == "__main__":
-    # Enhanced script behavior with comprehensive reporting
-    if len(sys.argv) > 1 and sys.argv[1] == "--comprehensive":
+    # Enhanced script behavior with full reporting
+    if len(sys.argv) > 1 and sys.argv[1] == "--full":
         print_comprehensive_gpu_info()
     else:
         # Quick status check
@@ -335,4 +329,4 @@ if __name__ == "__main__":
         else:
             print(f"\n❌ JAX status: {jax_status.get('error', 'Not available')}")
 
-        print("\nRun with --comprehensive for detailed information")
+        print("\nRun with --full for detailed information")

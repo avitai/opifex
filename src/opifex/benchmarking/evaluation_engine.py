@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class BenchmarkEvaluator:
     """Main benchmark evaluator for Opifex models.
 
-    Provides comprehensive evaluation capabilities including model assessment,
+    Provides full evaluation capabilities including model assessment,
     performance profiling, batch evaluation, and result management.
     """
 
@@ -103,9 +103,7 @@ class BenchmarkEvaluator:
             if hasattr(predictions, "block_until_ready"):
                 predictions.block_until_ready()
         except Exception as e:
-            raise RuntimeError(
-                f"Model forward pass failed during evaluation: {e}"
-            ) from e
+            raise RuntimeError(f"Model forward pass failed during evaluation: {e}") from e
         execution_time = time.perf_counter() - start_time
 
         # Calculate metrics via calibrax
@@ -115,9 +113,7 @@ class BenchmarkEvaluator:
         if custom_metrics:
             for metric_name, metric_fn in custom_metrics.items():
                 try:
-                    raw_metrics[metric_name] = float(
-                        metric_fn(predictions, target_data)
-                    )
+                    raw_metrics[metric_name] = float(metric_fn(predictions, target_data))
                 except (ValueError, TypeError, ArithmeticError) as e:
                     logger.warning("Custom metric '%s' failed: %s", metric_name, e)
 
@@ -205,7 +201,7 @@ class BenchmarkEvaluator:
         jit_forward = jax.jit(forward_fn, static_argnums=(0,))
 
         # Use TimingCollector for consistent, GPU-synced timing with warmup
-        def _sync() -> None:
+        def _sync(_result: object = None) -> None:
             jax.numpy.array(0.0).block_until_ready()
 
         collector = TimingCollector(sync_fn=_sync, warmup_iterations=1)

@@ -43,9 +43,7 @@ def _gradient(p: jax.Array, dx: float) -> tuple[jax.Array, jax.Array]:
     return dp_dx, dp_dy
 
 
-def _solve_pressure_poisson(
-    div_u: jax.Array, dx: float, n_iters: int = 50
-) -> jax.Array:
+def _solve_pressure_poisson(div_u: jax.Array, dx: float, n_iters: int = 50) -> jax.Array:
     """Solve pressure Poisson equation: nabla^2 p = nabla dot u using Jacobi."""
     p = jnp.zeros_like(div_u)
     for _ in range(n_iters):

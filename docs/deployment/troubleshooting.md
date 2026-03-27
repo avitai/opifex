@@ -1,6 +1,6 @@
 # Opifex Deployment Troubleshooting Guide
 
-This comprehensive troubleshooting guide helps you resolve common issues when deploying Opifex across different platforms (local, GCP, AWS, and other cloud providers).
+This full troubleshooting guide helps you resolve common issues when deploying Opifex across different platforms (local, GCP, AWS, and other cloud providers).
 
 ## 📋 Table of Contents
 

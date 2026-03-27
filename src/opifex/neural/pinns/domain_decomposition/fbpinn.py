@@ -244,9 +244,7 @@ class FBPINN(DomainDecompositionPINN):
             for subdomain in subdomains
         ]
 
-    def compute_window_weights(
-        self, x: Float[Array, ...]
-    ) -> Float[Array, "batch num_subdomains"]:
+    def compute_window_weights(self, x: Float[Array, ...]) -> Float[Array, "batch num_subdomains"]:
         """Compute window weights for all subdomains.
 
         Args:

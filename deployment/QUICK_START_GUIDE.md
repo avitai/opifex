@@ -46,7 +46,7 @@ make -f Makefile-opifex-enhancements test-opifex-simple
 ### **5. Run Enhanced Deployment Testing**
 
 ```bash
-# Run comprehensive deployment validation
+# Run full deployment validation
 ./test-deployment.sh
 
 # This will generate an enhanced test report with Opifex-specific results
@@ -56,7 +56,7 @@ make -f Makefile-opifex-enhancements test-opifex-simple
 
 - **`Makefile-opifex-enhancements`**: Opifex-specific deployment targets
 - **`test-deployment.sh`**: Enhanced testing script with Opifex validation
-- **`DEPLOYMENT_TESTING_BEST_PRACTICES.md`**: Comprehensive testing guidelines
+- **`DEPLOYMENT_TESTING_BEST_PRACTICES.md`**: Full testing guidelines
 - **`OPIFEX_ENHANCEMENTS_SUMMARY.md`**: Complete implementation summary
 
 ## 🎯 **Resource Profiles**

@@ -98,9 +98,7 @@ def demonstrate_grid_embedding_2d(
     print(f"   Grid Boundaries: {grid_boundaries}")
 
     # Create grid embedding
-    embedding = GridEmbedding2D(
-        in_channels=in_channels, grid_boundaries=grid_boundaries
-    )
+    embedding = GridEmbedding2D(in_channels=in_channels, grid_boundaries=grid_boundaries)
 
     # Generate sample input data
     rng_key = jax.random.PRNGKey(42)
@@ -159,9 +157,7 @@ def demonstrate_grid_embedding_nd(
     print(f"   Dimensions: {dim}")
 
     # Create N-dimensional grid embedding
-    embedding = GridEmbeddingND(
-        in_channels=in_channels, dim=dim, grid_boundaries=grid_boundaries
-    )
+    embedding = GridEmbeddingND(in_channels=in_channels, dim=dim, grid_boundaries=grid_boundaries)
 
     # Generate sample input data
     rng_key = jax.random.PRNGKey(43)
@@ -240,7 +236,9 @@ def demonstrate_sinusoidal_embedding(
 
     # Add input channels
     input_features = jax.random.normal(rng_key, (batch_size, n_points, in_channels))
-    sample_input = input_features  # Using features directly as SinusoidalEmbedding usually expects features
+    sample_input = (
+        input_features  # Using features directly as SinusoidalEmbedding usually expects features
+    )
 
     # Apply embedding
     start_time = time.time()
@@ -357,7 +355,7 @@ def visualize_coordinate_grids(
 ### Related Examples
 
 - [DISCO Convolutions](disco_convolutions_example.md) - Convolutions on arbitrary grids
-- [FNO Darcy Comprehensive](../models/fno_darcy_comprehensive.md) - FNO using grid embeddings
+- [FNO Darcy Full](../models/fno_darcy_comprehensive.md) - FNO using grid embeddings
 - [Fourier Continuation](fourier_continuation_example.md) - Boundary handling for spectral methods
 
 ### API Reference

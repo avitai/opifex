@@ -1,7 +1,7 @@
 """
 Boundary and Initial Conditions for Opifex Framework.
 
-This module provides comprehensive boundary condition and initial condition
+This module provides full boundary condition and initial condition
 specifications for PDEs, ODEs, and quantum mechanical problems, with support
 for time-dependent conditions, symbolic constraints, and quantum-specific
 boundary conditions following physics principles.
@@ -124,9 +124,7 @@ class BoundaryCondition(ABC):
             "all",
         }
         if boundary not in valid_boundaries:
-            raise ValueError(
-                f"Invalid boundary: {boundary}. Must be one of {valid_boundaries}"
-            )
+            raise ValueError(f"Invalid boundary: {boundary}. Must be one of {valid_boundaries}")
 
         self.boundary = boundary
         self.time_dependent = time_dependent
@@ -171,7 +169,7 @@ class InitialCondition:
         """Validate initial condition specification."""
         try:
             # Check if value is callable or numeric
-            if not (callable(self.value) or isinstance(self.value, (int, float))):
+            if not (callable(self.value) or isinstance(self.value, int | float)):
                 return False
 
             # Check non-negative derivative order
@@ -235,7 +233,7 @@ class DirichletBC(BoundaryCondition):
         """Validate Dirichlet boundary condition."""
         try:
             # Check if value is callable or numeric
-            return callable(self.value) or isinstance(self.value, (int, float))
+            return callable(self.value) or isinstance(self.value, int | float)
         except Exception:
             return False
 
@@ -247,9 +245,7 @@ class DirichletBC(BoundaryCondition):
             return self.value(x)
         return jnp.full_like(x[..., 0], self.value)
 
-    def _evaluate_boundary_value(
-        self, x: jax.Array | None = None, t: float = 0.0
-    ) -> float:
+    def _evaluate_boundary_value(self, x: jax.Array | None = None, t: float = 0.0) -> float:
         """Evaluate boundary value from specification.
 
         Helper method to reduce branches in apply().
@@ -262,9 +258,7 @@ class DirichletBC(BoundaryCondition):
             evaluated = self.value(x, t) if self.time_dependent else self.value(x)
         else:
             dummy_x = jnp.array([0.0])
-            evaluated = (
-                self.value(dummy_x, t) if self.time_dependent else self.value(dummy_x)
-            )
+            evaluated = self.value(dummy_x, t) if self.time_dependent else self.value(dummy_x)
 
         # Extract scalar from evaluated result
         if hasattr(evaluated, "__getitem__"):
@@ -304,9 +298,7 @@ class DirichletBC(BoundaryCondition):
 
         # Check if user explicitly provided left_boundary or right_boundary
         if "left_boundary" in kwargs or "right_boundary" in kwargs:
-            return apply_dirichlet(
-                params, boundary_value=boundary_value, weight=weight, **kwargs
-            )
+            return apply_dirichlet(params, boundary_value=boundary_value, weight=weight, **kwargs)
 
         # Respect the boundary attribute - only apply to specified side
         if self.boundary == "left":
@@ -353,7 +345,7 @@ class NeumannBC(BoundaryCondition):
         """Validate Neumann boundary condition."""
         try:
             # Check if value is callable or numeric
-            return callable(self.value) or isinstance(self.value, (int, float))
+            return callable(self.value) or isinstance(self.value, int | float)
         except Exception:
             return False
 
@@ -430,10 +422,8 @@ class RobinBC(BoundaryCondition):
                     try:
                         alpha(1.0)  # Fall back to scalar test
                     except Exception as e:
-                        raise ValueError(
-                            "alpha function must accept array or scalar input"
-                        ) from e
-            elif not isinstance(alpha, (int, float)):
+                        raise ValueError("alpha function must accept array or scalar input") from e
+            elif not isinstance(alpha, int | float):
                 raise TypeError("alpha must be callable or numeric")  # noqa: TRY301
 
             if callable(beta):
@@ -445,19 +435,12 @@ class RobinBC(BoundaryCondition):
                     try:
                         beta(1.0)  # Fall back to scalar test
                     except Exception as e:
-                        raise ValueError(
-                            "beta function must accept array or scalar input"
-                        ) from e
-            elif not isinstance(beta, (int, float)):
+                        raise ValueError("beta function must accept array or scalar input") from e
+            elif not isinstance(beta, int | float):
                 raise TypeError("beta must be callable or numeric")  # noqa: TRY301
 
             # Only validate zero constraint for constant values
-            if (
-                not callable(alpha)
-                and not callable(beta)
-                and alpha == 0.0
-                and beta == 0.0
-            ):
+            if not callable(alpha) and not callable(beta) and alpha == 0.0 and beta == 0.0:
                 raise ValueError("Both alpha and beta cannot be zero")  # noqa: TRY301
 
         except ValueError:
@@ -484,7 +467,7 @@ class RobinBC(BoundaryCondition):
                         self.alpha(1.0)
                     except Exception:
                         return False
-            elif not isinstance(self.alpha, (int, float)):
+            elif not isinstance(self.alpha, int | float):
                 return False
 
             # Validate beta parameter
@@ -497,7 +480,7 @@ class RobinBC(BoundaryCondition):
                         self.beta(1.0)
                     except Exception:
                         return False
-            elif not isinstance(self.beta, (int, float)):
+            elif not isinstance(self.beta, int | float):
                 return False
 
             # Check zero constraint for constant values - return negated condition
@@ -529,13 +512,9 @@ class RobinBC(BoundaryCondition):
             gamma_val = jnp.full_like(x[..., 0], self.gamma)
 
         # Return array with Robin condition coefficients
-        return jnp.array(
-            [alpha_val, beta_val, gamma_val[0] if gamma_val.ndim > 0 else gamma_val]
-        )
+        return jnp.array([alpha_val, beta_val, gamma_val[0] if gamma_val.ndim > 0 else gamma_val])
 
-    def _evaluate_coefficient(
-        self, coeff, x: jax.Array | None = None, t: float = 0.0
-    ) -> float:
+    def _evaluate_coefficient(self, coeff, x: jax.Array | None = None, t: float = 0.0) -> float:
         """Evaluate coefficient from specification.
 
         Helper method to reduce branches in apply().
@@ -551,7 +530,7 @@ class RobinBC(BoundaryCondition):
             evaluated = coeff(dummy_x, t) if self.time_dependent else coeff(dummy_x)
 
         # Extract scalar from evaluated result
-        if isinstance(evaluated, (jnp.ndarray, list, tuple)):
+        if isinstance(evaluated, jnp.ndarray | list | tuple):
             return float(evaluated[0])  # type: ignore[index]
         return float(evaluated)  # pyright: ignore[reportArgumentType]
 
@@ -604,9 +583,7 @@ class RobinBC(BoundaryCondition):
             )
             return result.at[..., 0].set(params[..., 0])
         # For "all" or other boundaries, apply to both
-        return apply_robin(
-            params, alpha=alpha_val, beta=beta_val, gamma=gamma_val, weight=weight
-        )
+        return apply_robin(params, alpha=alpha_val, beta=beta_val, gamma=gamma_val, weight=weight)
 
 
 # ============================================================================
@@ -642,14 +619,13 @@ class WavefunctionBC(BoundaryCondition):
         valid_types = {"vanishing", "normalization", "periodic", "boundary"}
         if condition_type not in valid_types:
             raise ValueError(
-                f"Invalid condition_type: {condition_type}. "
-                f"Must be one of {valid_types}"
+                f"Invalid condition_type: {condition_type}. Must be one of {valid_types}"
             )
 
         super().__init__(boundary, time_dependent=False, spatial_dependent=True)
         self.condition_type = condition_type
         # Convert real values to complex for quantum boundary conditions
-        if value is not None and isinstance(value, (int, float)):
+        if value is not None and isinstance(value, int | float):
             self.value = complex(value)
         else:
             self.value = value
@@ -707,16 +683,14 @@ class DensityConstraint(Constraint):
         valid_types = {"conservation", "positivity", "particle_number"}
         if constraint_type not in valid_types:
             raise ValueError(
-                f"Invalid constraint_type: {constraint_type}. "
-                f"Must be one of {valid_types}"
+                f"Invalid constraint_type: {constraint_type}. Must be one of {valid_types}"
             )
 
         # Validate enforcement method immediately
         valid_methods = {"lagrange", "penalty", "projection"}
         if enforcement_method not in valid_methods:
             raise ValueError(
-                f"Invalid enforcement_method: {enforcement_method}. "
-                f"Must be one of {valid_methods}"
+                f"Invalid enforcement_method: {enforcement_method}. Must be one of {valid_methods}"
             )
 
         super().__init__(constraint_type, tolerance)
@@ -730,10 +704,7 @@ class DensityConstraint(Constraint):
             return False
 
         # Both conservation and particle_number require n_electrons
-        if (
-            self.constraint_type in ("conservation", "particle_number")
-            and self.n_electrons is None
-        ):
+        if self.constraint_type in ("conservation", "particle_number") and self.n_electrons is None:
             return False
 
         valid_methods = {"lagrange", "penalty", "projection"}
@@ -782,11 +753,7 @@ class SymmetryConstraint(Constraint):
             return False
 
         # For point_group type, require either point_group OR operations
-        if (
-            self.symmetry_type == "point_group"
-            and not self.point_group
-            and not self.operations
-        ):
+        if self.symmetry_type == "point_group" and not self.point_group and not self.operations:
             return False
 
         # For lattice type, require lattice_vectors
@@ -794,9 +761,7 @@ class SymmetryConstraint(Constraint):
             return False
 
         # For translational type, require lattice_vectors
-        return not (
-            self.symmetry_type == "translational" and self.lattice_vectors is None
-        )
+        return not (self.symmetry_type == "translational" and self.lattice_vectors is None)
 
 
 # ============================================================================
@@ -833,8 +798,7 @@ class QuantumInitialCondition(InitialCondition):
         }
         if condition_type not in valid_types:
             raise ValueError(
-                f"Invalid condition_type: {condition_type}. "
-                f"Must be one of {valid_types}"
+                f"Invalid condition_type: {condition_type}. Must be one of {valid_types}"
             )
 
         super().__init__(value, dimension=1)
@@ -981,8 +945,7 @@ class QuantumConstraint(PhysicsConstraint):
         valid_methods = {"penalty", "lagrange", "projection", "soft"}
         if enforcement_method not in valid_methods:
             raise ValueError(
-                f"Invalid enforcement_method: {enforcement_method}. "
-                f"Must be one of {valid_methods}"
+                f"Invalid enforcement_method: {enforcement_method}. Must be one of {valid_methods}"
             )
 
         super().__init__(
@@ -1067,14 +1030,8 @@ class BoundaryConditionCollection:
             # Optimized condition checking using JAX-compatible logic
             is_match = (
                 class_name_lower == condition_type_lower
-                or (
-                    bc_condition_type is not None
-                    and bc_condition_type == condition_type
-                )
-                or (
-                    condition_type_lower == "dirichlet"
-                    and "dirichlet" in class_name_lower
-                )
+                or (bc_condition_type is not None and bc_condition_type == condition_type)
+                or (condition_type_lower == "dirichlet" and "dirichlet" in class_name_lower)
                 or (condition_type_lower == "neumann" and "neumann" in class_name_lower)
                 or (condition_type_lower == "robin" and "robin" in class_name_lower)
             )

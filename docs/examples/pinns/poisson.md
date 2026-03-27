@@ -48,8 +48,8 @@ If you are familiar with the DeepXDE library:
 
 ## Files
 
-- **Python Script**: [`examples/pinns/poisson.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/poisson.py)
-- **Jupyter Notebook**: [`examples/pinns/poisson.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/poisson.ipynb)
+- **Python Script**: [`examples/pinns/poisson.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/poisson.py)
+- **Jupyter Notebook**: [`examples/pinns/poisson.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/poisson.ipynb)
 
 ## Quick Start
 

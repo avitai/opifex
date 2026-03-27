@@ -1,4 +1,4 @@
-"""Comprehensive tests for physics loss composition and PDE residual computation.
+"""Full tests for physics loss composition and PDE residual computation.
 
 This test suite validates all physics loss functionality following TDD principles.
 Tests are written FIRST to define the API and expected behavior.
@@ -69,9 +69,7 @@ class TestPhysicsLossConfig:
 
     def test_step_schedule_milestones(self):
         """Test step schedule milestone initialization."""
-        config = PhysicsLossConfig(
-            weight_schedule="step", step_milestones=[100, 200, 300]
-        )
+        config = PhysicsLossConfig(weight_schedule="step", step_milestones=[100, 200, 300])
         assert config.step_milestones == [100, 200, 300]
 
         # Test auto-initialization to empty list
@@ -106,9 +104,7 @@ class TestPhysicsLossComposer:
         physics_residual = jnp.array(0.5)
         boundary_residual = jnp.array(1.0)
 
-        total_loss = composer.compose_loss(
-            data_loss, physics_residual, boundary_residual
-        )
+        total_loss = composer.compose_loss(data_loss, physics_residual, boundary_residual)
         expected = 1.0 * 2.0 + 0.1 * 0.5 + 1.0 * 1.0
         assert jnp.allclose(total_loss, expected)
 
@@ -175,9 +171,7 @@ class TestPhysicsLossComposer:
         assert "data_loss" in residuals
         assert "physics_residual" in residuals
         assert "boundary_residual" in residuals
-        assert jnp.allclose(
-            residuals["data_loss"], jnp.mean((predictions - targets) ** 2)
-        )
+        assert jnp.allclose(residuals["data_loss"], jnp.mean((predictions - targets) ** 2))
 
 
 class TestAdaptiveWeightScheduler:
@@ -463,9 +457,7 @@ class TestResidualComputer:
 
     def test_equation_params(self):
         """Test residual computation with equation parameters."""
-        computer = ResidualComputer(
-            "schrodinger", "3d", potential_type="coulomb", charge=-1.0
-        )
+        computer = ResidualComputer("schrodinger", "3d", potential_type="coulomb", charge=-1.0)
 
         assert computer.equation_params["potential_type"] == "coulomb"
         assert computer.equation_params["charge"] == -1.0
@@ -493,9 +485,7 @@ class TestPhysicsInformedLoss:
 
     def test_conservation_enforcer_creation(self):
         """Test that conservation enforcer is created when needed."""
-        config = PhysicsLossConfig(
-            conservation_weights={"energy": 0.1, "momentum": 0.2}
-        )
+        config = PhysicsLossConfig(conservation_weights={"energy": 0.1, "momentum": 0.2})
         loss_system = PhysicsInformedLoss(config, "poisson", "2d")
 
         assert loss_system.conservation_enforcer is not None
@@ -545,9 +535,7 @@ class TestPhysicsInformedLoss:
 
     def test_loss_with_conservation_laws(self):
         """Test loss computation with conservation law enforcement."""
-        config = PhysicsLossConfig(
-            conservation_weights={"energy": 0.1, "momentum": 0.2}
-        )
+        config = PhysicsLossConfig(conservation_weights={"energy": 0.1, "momentum": 0.2})
         loss_system = PhysicsInformedLoss(config, "poisson", "2d")
 
         predictions = jnp.array([1.0, 2.0, 3.0])
@@ -615,12 +603,8 @@ class TestPhysicsInformedLoss:
         inputs = jnp.array([[0.0, 0.0], [1.0, 0.0]])
 
         # Compute loss at different epochs
-        loss_epoch_0, _ = loss_system.compute_loss(
-            predictions, targets, inputs, epoch=0
-        )
-        loss_epoch_1000, _ = loss_system.compute_loss(
-            predictions, targets, inputs, epoch=1000
-        )
+        loss_epoch_0, _ = loss_system.compute_loss(predictions, targets, inputs, epoch=0)
+        loss_epoch_1000, _ = loss_system.compute_loss(predictions, targets, inputs, epoch=1000)
 
         # Losses can differ due to adaptive weighting
         # (or be same if physics residual is zero)

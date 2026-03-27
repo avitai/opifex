@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build Optimization Script for Opifex Container Orchestration
-# Phase 7.1: Container Orchestration - Automated Build Pipeline
+# Version 7.1: Container Orchestration - Automated Build Pipeline
 # Target: 54% image size reduction + optimized build times
 
 set -e
@@ -87,7 +87,7 @@ main() {
     # Enable BuildKit for advanced features
     export DOCKER_BUILDKIT=1
 
-    # Build with comprehensive caching strategy
+    # Build with full caching strategy
     print_status "Building with BuildKit optimizations..."
 
     docker build \

@@ -1,6 +1,6 @@
 """Tests for System Identification Networks (Task 5.2.1).
 
-This module provides comprehensive tests for neural network-based system identification
+This module provides full tests for neural network-based system identification
 with physics constraints, online learning, and control integration.
 """
 
@@ -170,9 +170,7 @@ class TestSystemIdentifier:
 
         # Compute loss and gradients
         loss_and_grad = nnx.value_and_grad(loss_fn)
-        loss, grads = loss_and_grad(
-            system_id, train_states, train_inputs, train_targets
-        )
+        loss, grads = loss_and_grad(system_id, train_states, train_inputs, train_targets)
 
         assert jnp.isfinite(loss)
         assert loss >= 0.0
@@ -315,9 +313,7 @@ class TestOnlineSystemLearner:
 
     def test_memory_management(self, rngs):
         """Test memory management for online learning."""
-        online_learner = OnlineSystemLearner(
-            state_dim=2, input_dim=1, buffer_size=10, rngs=rngs
-        )
+        online_learner = OnlineSystemLearner(state_dim=2, input_dim=1, buffer_size=10, rngs=rngs)
 
         # Add multiple observations
         for i in range(15):  # More than buffer size
@@ -377,9 +373,7 @@ class TestControlIntegratedSystemID:
         target_state = jnp.array([0.0, 0.0])
 
         # Get control action
-        control_action = control_system_id.compute_control_action(
-            current_state, target_state
-        )
+        control_action = control_system_id.compute_control_action(current_state, target_state)
 
         assert control_action.shape == (1,)
         assert jnp.isfinite(control_action).all()
@@ -411,9 +405,7 @@ class TestSystemDynamicsModel:
 
     def test_linear_system_model(self, rngs):
         """Test linear system dynamics model."""
-        model = SystemDynamicsModel(
-            model_type="linear", state_dim=3, input_dim=2, rngs=rngs
-        )
+        model = SystemDynamicsModel(model_type="linear", state_dim=3, input_dim=2, rngs=rngs)
 
         assert model.model_type == "linear"
         assert model.state_dim == 3
@@ -434,9 +426,7 @@ class TestSystemDynamicsModel:
 
     def test_model_prediction_consistency(self, rngs):
         """Test prediction consistency for the same input."""
-        model = SystemDynamicsModel(
-            model_type="linear", state_dim=2, input_dim=1, rngs=rngs
-        )
+        model = SystemDynamicsModel(model_type="linear", state_dim=2, input_dim=1, rngs=rngs)
 
         state = jnp.array([1.0, -0.5])
         input_val = jnp.array([0.1])
@@ -534,7 +524,7 @@ class TestIntegrationWithL2O:
         assert result["optimization_ready"] is True
 
     def test_constraint_learning_integration(self, rngs):
-        """Test integration with constraint learning from Sprint 5.1."""
+        """Test integration with constraint learning from Version 5.1."""
         control_system_id = ControlIntegratedSystemID(
             state_dim=2, input_dim=1, control_dim=1, rngs=rngs
         )

@@ -233,9 +233,7 @@ class TestApplyConservationConstraint:
         """Test energy conservation constraint application."""
         params = jnp.array([[1.0, 2.0, 3.0]])
 
-        constrained = apply_conservation_constraint(
-            params, ConservationLaw.ENERGY, weight=1.0
-        )
+        constrained = apply_conservation_constraint(params, ConservationLaw.ENERGY, weight=1.0)
 
         # Should normalize parameter norm
         assert constrained.shape == params.shape
@@ -245,9 +243,7 @@ class TestApplyConservationConstraint:
         """Test mass conservation constraint application."""
         params = jnp.array([[1.0, 2.0, 3.0]])
 
-        constrained = apply_conservation_constraint(
-            params, ConservationLaw.MASS, weight=1.0
-        )
+        constrained = apply_conservation_constraint(params, ConservationLaw.MASS, weight=1.0)
 
         # Should normalize total mass
         assert constrained.shape == params.shape
@@ -258,14 +254,10 @@ class TestApplyConservationConstraint:
         params = jnp.array([[1.0, 2.0, 3.0]])
 
         # Full constraint (weight=1.0)
-        constrained_full = apply_conservation_constraint(
-            params, ConservationLaw.ENERGY, weight=1.0
-        )
+        constrained_full = apply_conservation_constraint(params, ConservationLaw.ENERGY, weight=1.0)
 
         # No constraint (weight=0.0) - should return original
-        constrained_none = apply_conservation_constraint(
-            params, ConservationLaw.ENERGY, weight=0.0
-        )
+        constrained_none = apply_conservation_constraint(params, ConservationLaw.ENERGY, weight=0.0)
 
         assert jnp.allclose(constrained_none, params)
         assert not jnp.allclose(constrained_full, params)
@@ -274,9 +266,7 @@ class TestApplyConservationConstraint:
         """Test partial constraint application (0 < weight < 1)."""
         params = jnp.array([[1.0, 2.0, 3.0]])
 
-        constrained = apply_conservation_constraint(
-            params, ConservationLaw.ENERGY, weight=0.5
-        )
+        constrained = apply_conservation_constraint(params, ConservationLaw.ENERGY, weight=0.5)
 
         # Should be between original and fully constrained
         assert constrained.shape == params.shape
@@ -402,9 +392,7 @@ class TestAdaptiveConstraintWeighting:
         constraints = ["energy", "momentum"]
         initial_weights = {"energy": 0.5, "momentum": 0.5}
 
-        acw = AdaptiveConstraintWeighting(
-            constraints, initial_weights, adaptation_rate=0.1
-        )
+        acw = AdaptiveConstraintWeighting(constraints, initial_weights, adaptation_rate=0.1)
 
         # Simulate energy having higher violation
         violations = {"energy": 1.0, "momentum": 0.1}

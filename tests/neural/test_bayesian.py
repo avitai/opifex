@@ -304,9 +304,7 @@ class TestAmortizedVariationalFramework:
         posterior_params = jnp.ones((batch_size, total_params))
 
         # Split parameters
-        mean_params, log_std_params = framework._split_posterior_params(
-            posterior_params
-        )
+        mean_params, log_std_params = framework._split_posterior_params(posterior_params)
 
         assert mean_params.shape == (batch_size, framework.num_params)
         assert log_std_params.shape == (batch_size, framework.num_params)
@@ -330,9 +328,7 @@ class TestBayesianIntegration:
         framework = AmortizedVariationalFramework(
             base_model=base_model,
             prior_config=PriorConfig(prior_scale=0.5),
-            variational_config=VariationalConfig(
-                input_dim=input_dim, num_samples=5, kl_weight=0.1
-            ),
+            variational_config=VariationalConfig(input_dim=input_dim, num_samples=5, kl_weight=0.1),
             rngs=rngs,
         )
 
@@ -398,9 +394,7 @@ class TestUncertaintyQuantification:
         batch_size = 5
         output_dim = 3
 
-        predictions = jax.random.normal(
-            jax.random.PRNGKey(42), (samples, batch_size, output_dim)
-        )
+        predictions = jax.random.normal(jax.random.PRNGKey(42), (samples, batch_size, output_dim))
 
         # Add some variation to make uncertainty meaningful
         predictions = predictions * jnp.arange(samples)[:, None, None] * 0.1
@@ -419,14 +413,10 @@ class TestUncertaintyQuantification:
         batch_size = 5
         output_dim = 2
 
-        predictions = jax.random.normal(
-            jax.random.PRNGKey(42), (samples, batch_size, output_dim)
-        )
+        predictions = jax.random.normal(jax.random.PRNGKey(42), (samples, batch_size, output_dim))
         aleatoric_variance = jnp.ones((samples, batch_size, output_dim)) * 0.1
 
-        uncertainty_components = quantifier.decompose_uncertainty(
-            predictions, aleatoric_variance
-        )
+        uncertainty_components = quantifier.decompose_uncertainty(predictions, aleatoric_variance)
 
         assert isinstance(uncertainty_components, UncertaintyComponents)
         assert uncertainty_components.epistemic.shape == (batch_size, output_dim)
@@ -434,9 +424,7 @@ class TestUncertaintyQuantification:
         assert uncertainty_components.total.shape == (batch_size, output_dim)
 
         # Total should be approximately epistemic + aleatoric
-        expected_total = (
-            uncertainty_components.epistemic + uncertainty_components.aleatoric
-        )
+        expected_total = uncertainty_components.epistemic + uncertainty_components.aleatoric
         assert jnp.allclose(uncertainty_components.total, expected_total, rtol=1e-5)
 
     def test_confidence_intervals(self):
@@ -447,9 +435,7 @@ class TestUncertaintyQuantification:
         batch_size = 5
         output_dim = 2
 
-        predictions = jax.random.normal(
-            jax.random.PRNGKey(42), (samples, batch_size, output_dim)
-        )
+        predictions = jax.random.normal(jax.random.PRNGKey(42), (samples, batch_size, output_dim))
 
         lower, upper = quantifier.compute_confidence_intervals(predictions)
 
@@ -465,13 +451,10 @@ class TestUncertaintyQuantification:
         output_dim = 1
 
         # Create synthetic data with known properties
-        predictions = jax.random.normal(
-            jax.random.PRNGKey(42), (batch_size, output_dim)
-        )
+        predictions = jax.random.normal(jax.random.PRNGKey(42), (batch_size, output_dim))
         uncertainties = jnp.ones((batch_size, output_dim)) * 0.5
         true_values = (
-            predictions
-            + jax.random.normal(jax.random.PRNGKey(43), (batch_size, output_dim)) * 0.3
+            predictions + jax.random.normal(jax.random.PRNGKey(43), (batch_size, output_dim)) * 0.3
         )
 
         metrics = quantifier._assess_uncertainty_calibration(
@@ -538,9 +521,7 @@ class TestAdvancedUncertaintyDecomposition:
         assert jnp.allclose(mean_pred, expected_mean)
 
         # Test median aggregation
-        median_pred = estimator.aggregate_predictions(
-            ensemble_predictions, method="median"
-        )
+        median_pred = estimator.aggregate_predictions(ensemble_predictions, method="median")
         expected_median = jnp.median(ensemble_predictions, axis=0)
         assert jnp.allclose(median_pred, expected_median)
 
@@ -599,23 +580,15 @@ class TestAdvancedUncertaintyDecomposition:
         batch_size, output_dim, num_components = 6, 2, 3
 
         # Mixture parameters
-        mixture_weights = jax.random.uniform(
-            jax.random.PRNGKey(42), (batch_size, num_components)
-        )
-        mixture_weights = mixture_weights / jnp.sum(
-            mixture_weights, axis=-1, keepdims=True
-        )
+        mixture_weights = jax.random.uniform(jax.random.PRNGKey(42), (batch_size, num_components))
+        mixture_weights = mixture_weights / jnp.sum(mixture_weights, axis=-1, keepdims=True)
 
-        means = jax.random.normal(
-            jax.random.PRNGKey(43), (batch_size, num_components, output_dim)
-        )
+        means = jax.random.normal(jax.random.PRNGKey(43), (batch_size, num_components, output_dim))
         log_stds = jax.random.normal(
             jax.random.PRNGKey(44), (batch_size, num_components, output_dim)
         )
 
-        uncertainty = estimator.compute_mixture_uncertainty(
-            mixture_weights, means, log_stds
-        )
+        uncertainty = estimator.compute_mixture_uncertainty(mixture_weights, means, log_stds)
         assert uncertainty.shape == (batch_size, output_dim)
         assert jnp.all(uncertainty >= 0)
 
@@ -683,9 +656,7 @@ class TestAdvancedUncertaintyDecomposition:
         )
 
         # Mock distributional parameters
-        aleatoric_std = (
-            jax.random.uniform(jax.random.PRNGKey(44), (batch_size, output_dim)) * 0.5
-        )
+        aleatoric_std = jax.random.uniform(jax.random.PRNGKey(44), (batch_size, output_dim)) * 0.5
 
         # Test enhanced decomposition
         result = quantifier.enhanced_decompose_uncertainty(
@@ -713,9 +684,7 @@ class TestBayesianDataStructures:
         aleatoric = jnp.array([0.05, 0.15])
         total = epistemic + aleatoric
 
-        components = UncertaintyComponents(
-            epistemic=epistemic, aleatoric=aleatoric, total=total
-        )
+        components = UncertaintyComponents(epistemic=epistemic, aleatoric=aleatoric, total=total)
 
         assert jnp.array_equal(components.epistemic, epistemic)
         assert jnp.array_equal(components.aleatoric, aleatoric)
@@ -727,9 +696,7 @@ class TestBayesianDataStructures:
         predictions = jnp.ones((4, 2))
         log_variance = jnp.log(jnp.ones((4, 2)) * 0.1)
 
-        homo_uncertainty = AleatoricUncertainty.homoscedastic_uncertainty(
-            predictions, log_variance
-        )
+        homo_uncertainty = AleatoricUncertainty.homoscedastic_uncertainty(predictions, log_variance)
         expected = jnp.exp(log_variance)
         assert jnp.allclose(homo_uncertainty, expected)
 
@@ -774,9 +741,7 @@ class TestBlackJAXIntegration:
         x1 = jnp.linspace(-1, 1, 20)
         x2 = jnp.linspace(0.5, 1.5, 20)
         x_data = jnp.column_stack([x1, x2])  # Shape: (20, 2)
-        y_data = (x1**2 + x2).reshape(-1, 1) + 0.1 * jax.random.normal(
-            rngs.sample(), (20, 1)
-        )
+        y_data = (x1**2 + x2).reshape(-1, 1) + 0.1 * jax.random.normal(rngs.sample(), (20, 1))
 
         # Create BlackJAX sampler
         sampler = BlackJAXIntegration(
@@ -866,9 +831,7 @@ class TestCalibrationTools:
         num_samples = 100
         predictions = jax.random.normal(rngs.sample(), (num_samples,))
         uncertainties = jnp.abs(jax.random.normal(rngs.sample(), (num_samples,))) + 0.1
-        true_values = predictions + 0.5 * jax.random.normal(
-            rngs.sample(), (num_samples,)
-        )
+        true_values = predictions + 0.5 * jax.random.normal(rngs.sample(), (num_samples,))
 
         # Create calibration tools
         calibration_tools = CalibrationTools(rngs=rngs)
@@ -884,7 +847,7 @@ class TestCalibrationTools:
         assert "reliability_diagram_data" in calibration_metrics
         assert "brier_score" in calibration_metrics
         ece_value = calibration_metrics["expected_calibration_error"]
-        assert isinstance(ece_value, (int, float)) and ece_value >= 0.0
+        assert isinstance(ece_value, int | float) and ece_value >= 0.0
 
     def test_reliability_diagram_computation(self):
         """Test reliability diagram data computation."""
@@ -894,9 +857,7 @@ class TestCalibrationTools:
         num_samples = 200
         confidences = jax.random.uniform(rngs.sample(), (num_samples,))
         # Make accuracies correlated with confidences for better calibration
-        accuracies = (
-            confidences + 0.1 * jax.random.normal(rngs.sample(), (num_samples,))
-        ) > 0.5
+        accuracies = (confidences + 0.1 * jax.random.normal(rngs.sample(), (num_samples,))) > 0.5
 
         calibration_tools = CalibrationTools(rngs=rngs)
 
@@ -957,8 +918,8 @@ class TestCalibrationTools:
         predictions = jax.random.normal(rngs.sample(), (batch_size, 1)) - 2.0
 
         # Apply physics-aware calibration
-        calibrated_predictions, physics_penalty = (
-            calibrator.apply_physics_aware_calibration(predictions, inputs)
+        calibrated_predictions, physics_penalty = calibrator.apply_physics_aware_calibration(
+            predictions, inputs
         )
 
         # Physics-aware calibration should:
@@ -1084,15 +1045,13 @@ class TestPhysicsInformedPriors:
 
         # Test physically implausible parameters
         implausible_params = jnp.array([jnp.inf, -1e10, jnp.nan])
-        implausibility_score = physics_prior.check_physical_plausibility(
-            implausible_params
-        )
+        implausibility_score = physics_prior.check_physical_plausibility(implausible_params)
 
         assert implausibility_score < plausibility_score
 
 
 class TestConservationLawPriors:
-    """Test conservation law priors for uncertainty estimation (Phase 3)."""
+    """Test conservation law priors for uncertainty estimation (Version 3)."""
 
     def test_conservation_law_priors_initialization(self):
         """Test ConservationLawPriors initialization."""
@@ -1161,7 +1120,7 @@ class TestConservationLawPriors:
 
 
 class TestDomainSpecificPriors:
-    """Test domain-specific prior distributions (Phase 3)."""
+    """Test domain-specific prior distributions (Version 3)."""
 
     def test_domain_specific_priors_initialization(self):
         """Test DomainSpecificPriors initialization."""
@@ -1204,9 +1163,7 @@ class TestDomainSpecificPriors:
 
         # Sample bond length parameters
         sample_shape = (20,)
-        bond_length_samples = domain_priors.sample_domain_priors(
-            sample_shape, "bond_length"
-        )
+        bond_length_samples = domain_priors.sample_domain_priors(sample_shape, "bond_length")
 
         assert bond_length_samples.shape == sample_shape
         assert jnp.all(jnp.isfinite(bond_length_samples))
@@ -1235,7 +1192,7 @@ class TestDomainSpecificPriors:
 
 
 class TestHierarchicalBayesianFramework:
-    """Test hierarchical Bayesian framework (Phase 3)."""
+    """Test hierarchical Bayesian framework (Version 3)."""
 
     def test_hierarchical_framework_initialization(self):
         """Test HierarchicalBayesianFramework initialization."""
@@ -1297,10 +1254,8 @@ class TestHierarchicalBayesianFramework:
         base_uncertainty = jnp.array([0.1, 0.2, 0.15, 0.3])
 
         # Propagate to level 2
-        propagated_uncertainty = (
-            hierarchical_framework.propagate_uncertainty_hierarchically(
-                base_uncertainty, target_level=2
-            )
+        propagated_uncertainty = hierarchical_framework.propagate_uncertainty_hierarchically(
+            base_uncertainty, target_level=2
         )
 
         assert propagated_uncertainty.shape == base_uncertainty.shape
@@ -1320,16 +1275,14 @@ class TestHierarchicalBayesianFramework:
 
         # Test values for level 0
         test_values = jax.random.normal(rngs.sample(), (5, 16))
-        log_probs = hierarchical_framework.compute_hierarchical_log_prob(
-            test_values, level=0
-        )
+        log_probs = hierarchical_framework.compute_hierarchical_log_prob(test_values, level=0)
 
         assert log_probs.shape == (5,)
         assert jnp.all(jnp.isfinite(log_probs))
 
 
 class TestPhysicsAwareUncertaintyPropagation:
-    """Test physics-aware uncertainty propagation (Phase 3)."""
+    """Test physics-aware uncertainty propagation (Version 3)."""
 
     def test_physics_aware_propagation_initialization(self):
         """Test PhysicsAwareUncertaintyPropagation initialization."""
@@ -1364,9 +1317,7 @@ class TestPhysicsAwareUncertaintyPropagation:
 
         # Create test data
         input_uncertainty = jax.random.uniform(rngs.sample(), (batch_size,)) * 0.1
-        model_jacobian = jax.random.normal(
-            rngs.sample(), (batch_size, output_dim, input_dim)
-        )
+        model_jacobian = jax.random.normal(rngs.sample(), (batch_size, output_dim, input_dim))
         physics_state = jax.random.normal(rngs.sample(), (batch_size, 4))
 
         # Propagate uncertainty with physics constraints
@@ -1417,9 +1368,7 @@ class TestPhysicsAwareUncertaintyPropagation:
 
         # Project parameters while accounting for uncertainty
         projected_params, adjusted_uncertainties = (
-            physics_propagation.uncertainty_aware_constraint_projection(
-                parameters, uncertainties
-            )
+            physics_propagation.uncertainty_aware_constraint_projection(parameters, uncertainties)
         )
 
         assert projected_params.shape == parameters.shape
@@ -1487,9 +1436,7 @@ class TestProbabilisticIntegration:
         # Create synthetic physics problem data
         batch_size = 30
         input_dim = 2
-        x_data = jax.random.uniform(
-            rngs.sample(), (batch_size, input_dim), minval=-1, maxval=1
-        )
+        x_data = jax.random.uniform(rngs.sample(), (batch_size, input_dim), minval=-1, maxval=1)
         # Create model with all probabilistic components
         base_model = StandardMLP([input_dim, 8, 1], rngs=rngs)
 
@@ -1527,10 +1474,10 @@ class TestProbabilisticIntegration:
         assert jnp.all(uncertainties >= 0.0)
 
     def test_phase_3_integration_workflow(self):
-        """Test Phase 3 physics-informed integration workflow."""
+        """Test Version 3 physics-informed integration workflow."""
         rngs = nnx.Rngs(42)
 
-        # Create Phase 3 components
+        # Create Version 3 components
         conservation_priors = ConservationLawPriors(
             conservation_laws=["energy", "momentum"],
             rngs=rngs,
@@ -1556,9 +1503,7 @@ class TestProbabilisticIntegration:
         batch_size = 5
 
         # Sample from domain priors
-        bond_length_samples = domain_priors.sample_domain_priors(
-            (batch_size,), "bond_length"
-        )
+        bond_length_samples = domain_priors.sample_domain_priors((batch_size,), "bond_length")
 
         # Sample hierarchical parameters
         hierarchical_samples = hierarchical_framework.sample_hierarchical_parameters(
@@ -1592,7 +1537,7 @@ class TestProbabilisticIntegration:
 
 
 class TestEnhancedCalibrationMethods:
-    """Test enhanced calibration methods from Phase 2."""
+    """Test enhanced calibration methods from Version 2."""
 
     def test_platt_scaling_initialization(self):
         """Test PlattScaling initialization."""
@@ -1647,9 +1592,7 @@ class TestEnhancedCalibrationMethods:
         num_samples = 200
         confidences = jax.random.uniform(rngs.sample(), (num_samples,))
         # Make labels correlated with confidences for better calibration
-        labels = (
-            confidences + 0.1 * jax.random.normal(rngs.sample(), (num_samples,))
-        ) > 0.5
+        labels = (confidences + 0.1 * jax.random.normal(rngs.sample(), (num_samples,))) > 0.5
 
         # Fit isotonic regression
         isotonic_regressor.fit(confidences, labels)  # Remove explicit dtype casting
@@ -1692,9 +1635,7 @@ class TestEnhancedCalibrationMethods:
         test_predictions = jax.random.normal(rngs.sample(), (num_test_samples,))
 
         # Compute prediction intervals
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(
-            test_predictions
-        )
+        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
 
         assert lower_bounds.shape == test_predictions.shape
         assert upper_bounds.shape == test_predictions.shape
@@ -1711,9 +1652,7 @@ class TestEnhancedCalibrationMethods:
         # Create synthetic test data
         num_samples = 100
         predictions = jax.random.normal(rngs.sample(), (num_samples,))
-        true_values = predictions + 0.3 * jax.random.normal(
-            rngs.sample(), (num_samples,)
-        )
+        true_values = predictions + 0.3 * jax.random.normal(rngs.sample(), (num_samples,))
 
         # Calibrate with part of the data
         conformal_predictor.calibrate(predictions[:50], true_values[:50])
@@ -1722,14 +1661,12 @@ class TestEnhancedCalibrationMethods:
         test_predictions = predictions[50:]
         test_true_values = true_values[50:]
 
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(
-            test_predictions
-        )
+        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
         coverage = conformal_predictor.compute_coverage(
             lower_bounds, upper_bounds, test_true_values
         )
 
-        assert isinstance(coverage, (int, float))
+        assert isinstance(coverage, int | float)
         assert 0.0 <= coverage <= 1.0
         # With alpha=0.1, we expect coverage to be around 0.9
         assert coverage > 0.5  # Reasonable lower bound for this test
@@ -1757,9 +1694,7 @@ class TestEnhancedCalibrationMethods:
         # Apply all calibration methods
         platt_calibrated = platt_scaler(logits[100:])
         isotonic_calibrated = isotonic_regressor(predictions[100:])
-        conformal_lower, conformal_upper = conformal_predictor.predict_intervals(
-            predictions[100:]
-        )
+        conformal_lower, conformal_upper = conformal_predictor.predict_intervals(predictions[100:])
 
         # All methods should produce valid outputs
         assert jnp.all(jnp.isfinite(platt_calibrated))

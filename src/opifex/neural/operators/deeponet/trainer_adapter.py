@@ -65,9 +65,7 @@ class DeepONetTrainerAdapter(nnx.Module):
             )
         missing = {"branch", "trunk"} - set(x.keys())
         if missing:
-            raise TypeError(
-                f"DeepONetTrainerAdapter input dict missing keys: {missing}"
-            )
+            raise TypeError(f"DeepONetTrainerAdapter input dict missing keys: {missing}")
         return self.model(  # pyright: ignore[reportCallIssue]
             x["branch"], x["trunk"], deterministic=deterministic, **kwargs
         )

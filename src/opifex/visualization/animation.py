@@ -61,9 +61,7 @@ def create_physics_animation(
         ax.set_title(f"{title} - t={time_points[frame]:.3f}")
         return [im]
 
-    anim = animation.FuncAnimation(
-        fig, animate, frames=n_frames, interval=100, blit=True
-    )
+    anim = animation.FuncAnimation(fig, animate, frames=n_frames, interval=100, blit=True)
 
     if save_path:
         anim.save(save_path, writer="pillow", fps=10)

@@ -407,28 +407,17 @@ print(f"  Iterations:                {accuracy_prediction['iterations']}")
 
 if "predicted_error_hartree" in accuracy_prediction:
     print()
-    print(
-        "  Predicted Error (Hartree): "
-        f"{accuracy_prediction['predicted_error_hartree']:.6e}"
-    )
-    print(
-        f"  Predicted Error (kcal/mol): {accuracy_prediction['predicted_error_kcal_mol']:.3f}"
-    )
+    print(f"  Predicted Error (Hartree): {accuracy_prediction['predicted_error_hartree']:.6e}")
+    print(f"  Predicted Error (kcal/mol): {accuracy_prediction['predicted_error_kcal_mol']:.3f}")
     print(
         f"  Within Chemical Accuracy:  {accuracy_prediction['within_chemical_accuracy_prediction']}"
     )
 
 if "actual_error_hartree" in accuracy_prediction:
     print()
-    print(
-        f"  Actual Error (Hartree):    {accuracy_prediction['actual_error_hartree']:.6e}"
-    )
-    print(
-        f"  Actual Error (kcal/mol):   {accuracy_prediction['actual_error_kcal_mol']:.3f}"
-    )
-    print(
-        f"  Within Chemical Accuracy:  {accuracy_prediction['within_chemical_accuracy_actual']}"
-    )
+    print(f"  Actual Error (Hartree):    {accuracy_prediction['actual_error_hartree']:.6e}")
+    print(f"  Actual Error (kcal/mol):   {accuracy_prediction['actual_error_kcal_mol']:.3f}")
+    print(f"  Within Chemical Accuracy:  {accuracy_prediction['within_chemical_accuracy_actual']}")
 
 # %% [markdown]
 """
@@ -449,9 +438,7 @@ print(f"SCF iterations:              {result.iterations}")
 print()
 print(f"Total Energy:                {result.total_energy:.6f} Ha")
 print(f"Reference Energy:            {H2_REFERENCE_ENERGY:.6f} Ha")
-print(
-    f"Error:                       {error_hartree:.6f} Ha ({error_kcal_mol:.2f} kcal/mol)"
-)
+print(f"Error:                       {error_hartree:.6f} Ha ({error_kcal_mol:.2f} kcal/mol)")
 print()
 print(f"Equilibrium bond length:     {equilibrium_bond_length:.3f} A")
 print(f"Literature bond length:      {H2_BOND_LENGTH_ANGSTROM:.2f} A")

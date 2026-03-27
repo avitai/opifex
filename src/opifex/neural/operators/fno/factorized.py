@@ -64,9 +64,7 @@ class FactorizedFourierLayer(nnx.Module):
             raise ValueError("factorization_type must be 'tucker' or 'cp'")
 
         # Linear transformation for residual connection
-        self.linear = nnx.Linear(
-            in_features=in_channels, out_features=out_channels, rngs=rngs
-        )
+        self.linear = nnx.Linear(in_features=in_channels, out_features=out_channels, rngs=rngs)
 
     def _init_tucker_factorization(self, rngs: nnx.Rngs) -> None:
         """Initialize Tucker factorization parameters.
@@ -102,9 +100,7 @@ class FactorizedFourierLayer(nnx.Module):
 
         # Factor matrices
         self.tucker_u1 = nnx.Param(init_factor_matrix((self.in_channels, rank), key_u1))
-        self.tucker_u2 = nnx.Param(
-            init_factor_matrix((self.out_channels, rank), key_u2)
-        )
+        self.tucker_u2 = nnx.Param(init_factor_matrix((self.out_channels, rank), key_u2))
         self.tucker_u3 = nnx.Param(init_factor_matrix((self.modes, rank), key_u3))
 
     def _init_cp_factorization(self, rngs: nnx.Rngs) -> None:
@@ -180,9 +176,7 @@ class FactorizedFourierLayer(nnx.Module):
             return self._factorized_spectral_2d(x)
         if len(spatial_dims) == 3:
             return self._factorized_spectral_3d(x)  # NEW: 3D support
-        raise ValueError(
-            f"Unsupported number of spatial dimensions: {len(spatial_dims)}"
-        )
+        raise ValueError(f"Unsupported number of spatial dimensions: {len(spatial_dims)}")
 
     def _factorized_spectral_1d(self, x: jax.Array) -> jax.Array:
         """1D factorized spectral transform."""
@@ -206,12 +200,9 @@ class FactorizedFourierLayer(nnx.Module):
         out_ft = jnp.einsum("bik,iok->bok", x_ft_truncated, weights_truncated)
 
         # Pad back to original frequency resolution
-        if out_ft.shape[-1] < grid_size // 2 + 1:
-            out_ft_padded = jnp.zeros(
-                (batch_size, self.out_channels, grid_size // 2 + 1), dtype=out_ft.dtype
-            )
-            out_ft_padded = out_ft_padded.at[:, :, : out_ft.shape[-1]].set(out_ft)
-            out_ft = out_ft_padded
+        from opifex.neural.operators.common.tensor_ops import pad_spectral_1d
+
+        out_ft = pad_spectral_1d(out_ft, batch_size, self.out_channels, grid_size // 2 + 1)
 
         # IFFT back to spatial domain
         return jnp.fft.irfft(out_ft, n=grid_size, axis=-1)
@@ -256,9 +247,7 @@ class FactorizedFourierLayer(nnx.Module):
         out_ft_flat = jnp.einsum("bik,iok->bok", x_ft_flat, weights_used)
 
         # Reshape back to 2D
-        out_ft_truncated = out_ft_flat.reshape(
-            batch_size, self.out_channels, modes_h, modes_w
-        )
+        out_ft_truncated = out_ft_flat.reshape(batch_size, self.out_channels, modes_h, modes_w)
 
         # Pad back to original frequency resolution
         out_ft_padded = jnp.zeros(
@@ -319,9 +308,7 @@ class FactorizedFourierLayer(nnx.Module):
             (batch_size, self.out_channels, ft_d, ft_h, ft_w),
             dtype=out_ft_truncated.dtype,
         )
-        out_ft_padded = out_ft_padded.at[:, :, :modes_d, :modes_h, :modes_w].set(
-            out_ft_truncated
-        )
+        out_ft_padded = out_ft_padded.at[:, :, :modes_d, :modes_h, :modes_w].set(out_ft_truncated)
 
         # IFFT back to spatial domain
         return jnp.fft.irfftn(out_ft_padded, s=(d, h, w), axes=(-3, -2, -1))

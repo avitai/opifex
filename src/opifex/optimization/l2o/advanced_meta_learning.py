@@ -214,9 +214,7 @@ class MAMLOptimizer(nnx.Module):
 
         # Compute meta-gradients
         if self.config.second_order:
-            meta_loss, meta_grads = jax.value_and_grad(meta_loss_fn)(
-                self.meta_parameters[...]
-            )
+            meta_loss, meta_grads = jax.value_and_grad(meta_loss_fn)(self.meta_parameters[...])
         else:
             # First-order approximation for computational efficiency
             meta_loss, meta_grads = self._first_order_meta_gradients(
@@ -228,9 +226,7 @@ class MAMLOptimizer(nnx.Module):
             self.meta_parameters[...] - self.config.meta_learning_rate * meta_grads
         )
 
-        return {"meta_loss": float(meta_loss), "meta_gradients": meta_grads}, float(
-            meta_loss
-        )
+        return {"meta_loss": float(meta_loss), "meta_gradients": meta_grads}, float(meta_loss)
 
     def adapt_to_new_task(
         self,
@@ -300,9 +296,9 @@ class MAMLOptimizer(nnx.Module):
                     Q_matrix = jnp.eye(n_vars)
                     c = jnp.ones(n_vars) * 0.1
 
-                return 0.5 * jnp.dot(
-                    problem_vars, jnp.dot(Q_matrix, problem_vars)
-                ) + jnp.dot(c, problem_vars)
+                return 0.5 * jnp.dot(problem_vars, jnp.dot(Q_matrix, problem_vars)) + jnp.dot(
+                    c, problem_vars
+                )
 
             if problem.problem_type == "linear":
                 # Linear: c^T x
@@ -430,9 +426,7 @@ class ReptileOptimizer(nnx.Module):
                 )
 
                 # Update task parameters
-                task_params = (
-                    task_params - self.config.inner_learning_rate * clipped_gradients
-                )
+                task_params = task_params - self.config.inner_learning_rate * clipped_gradients
 
             # Reptile meta-gradient: difference between final and initial parameters
             task_meta_gradient = task_params - self.meta_parameters[...]
@@ -455,8 +449,7 @@ class ReptileOptimizer(nnx.Module):
 
         # Update meta-parameters
         self.meta_parameters[...] = (
-            self.meta_parameters[...]
-            + self.config.meta_learning_rate * self.momentum_buffer[...]
+            self.meta_parameters[...] + self.config.meta_learning_rate * self.momentum_buffer[...]
         )
 
         return {
@@ -491,14 +484,10 @@ class ReptileOptimizer(nnx.Module):
             )
 
             # Clip gradients
-            clipped_gradients = self._clip_gradients(
-                task_gradients, self.config.gradient_clipping
-            )
+            clipped_gradients = self._clip_gradients(task_gradients, self.config.gradient_clipping)
 
             # Update parameters
-            adapted_params = (
-                adapted_params - self.config.inner_learning_rate * clipped_gradients
-            )
+            adapted_params = adapted_params - self.config.inner_learning_rate * clipped_gradients
 
         return adapted_params
 
@@ -551,9 +540,9 @@ class ReptileOptimizer(nnx.Module):
                     Q_matrix = jnp.eye(n_vars)
                     c = jnp.ones(n_vars) * 0.1
 
-                return 0.5 * jnp.dot(
-                    problem_vars, jnp.dot(Q_matrix, problem_vars)
-                ) + jnp.dot(c, problem_vars)
+                return 0.5 * jnp.dot(problem_vars, jnp.dot(Q_matrix, problem_vars)) + jnp.dot(
+                    c, problem_vars
+                )
 
             if problem.problem_type == "linear":
                 if problem_params.size >= problem.dimension:
@@ -740,17 +729,13 @@ class GradientBasedMetaLearner(nnx.Module):
 
             for trajectory in optimization_trajectories:
                 # Reconstruct optimization trajectory with learned optimizer
-                simulated_loss = self._simulate_optimization_trajectory(
-                    trajectory, network_params
-                )
+                simulated_loss = self._simulate_optimization_trajectory(trajectory, network_params)
                 total_loss += simulated_loss
 
             return total_loss / len(optimization_trajectories)
 
         # Compute meta-gradients for the learned optimizer
-        meta_loss, meta_grads = jax.value_and_grad(meta_loss_fn)(
-            self._get_network_parameters()
-        )
+        meta_loss, meta_grads = jax.value_and_grad(meta_loss_fn)(self._get_network_parameters())
 
         # Update network parameters
         self._update_network_parameters(meta_grads)
@@ -769,9 +754,7 @@ class GradientBasedMetaLearner(nnx.Module):
         grad_norm = jnp.linalg.norm(gradients) + self.config.numerical_stability_epsilon
         normalized_gradients = gradients / grad_norm
 
-        update_norm = (
-            jnp.linalg.norm(previous_update) + self.config.numerical_stability_epsilon
-        )
+        update_norm = jnp.linalg.norm(previous_update) + self.config.numerical_stability_epsilon
         normalized_update = previous_update / update_norm
 
         # Prepare loss features
@@ -823,9 +806,7 @@ class GradientBasedMetaLearner(nnx.Module):
         """Update optimization history buffer."""
         # Circular buffer implementation
         buffer_idx = step % self.config.gradient_unroll_steps
-        self.optimization_history[...] = (
-            self.optimization_history[...].at[buffer_idx].set(update)
-        )
+        self.optimization_history[...] = self.optimization_history[...].at[buffer_idx].set(update)
 
     def _simulate_optimization_trajectory(
         self, trajectory: dict[str, Any], network_params: dict[str, Any]
@@ -946,9 +927,7 @@ class MetaL2OIntegration(nnx.Module):
 
         elif meta_learning_strategy == "gradient_based" and self.gb_config is not None:
             # Use existing L2O engine with gradient-based enhancement
-            base_solution = self.l2o_engine.solve_parametric_problem(
-                problem, problem_params
-            )
+            base_solution = self.l2o_engine.solve_parametric_problem(problem, problem_params)
             solution = base_solution  # Simplified for now
             metrics["meta_learning_strategy"] = "gradient_based"
 
@@ -964,9 +943,7 @@ class MetaL2OIntegration(nnx.Module):
 
         # Store experience for future meta-learning
         if self.meta_learning_active:
-            self._store_optimization_experience(
-                problem, problem_params, solution, metrics
-            )
+            self._store_optimization_experience(problem, problem_params, solution, metrics)
 
         return solution, metrics
 
@@ -1009,9 +986,7 @@ class MetaL2OIntegration(nnx.Module):
                 problem_dim,
                 rngs=self.rngs,
             )
-            reptile_metrics = reptile_optimizer.meta_learn_reptile_step(
-                task_distribution, 0
-            )
+            reptile_metrics = reptile_optimizer.meta_learn_reptile_step(task_distribution, 0)
             meta_results["reptile"] = reptile_metrics
 
         # Gradient-based meta-learning

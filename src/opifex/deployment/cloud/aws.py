@@ -88,9 +88,7 @@ class AWSDeploymentManager:
         return {
             "name": self.config.cluster_name,
             "version": "1.28",
-            "role_arn": (
-                f"arn:aws:iam::ACCOUNT_ID:role/{self.config.cluster_name}-cluster-role"
-            ),
+            "role_arn": (f"arn:aws:iam::ACCOUNT_ID:role/{self.config.cluster_name}-cluster-role"),
             "vpc_config": {
                 "subnet_ids": [
                     f"subnet-{self.config.cluster_name}-private-1",
@@ -106,9 +104,7 @@ class AWSDeploymentManager:
                 "endpoint_config_public_access": self.config.security_config[
                     "enable_public_access"
                 ],
-                "public_access_cidrs": self.config.security_config[
-                    "public_access_cidrs"
-                ],
+                "public_access_cidrs": self.config.security_config["public_access_cidrs"],
             },
             "enabled_cluster_log_types": self.config.security_config["log_types"],
             "encryption_config": [
@@ -138,9 +134,7 @@ class AWSDeploymentManager:
         return {
             "cluster_name": self.config.cluster_name,
             "node_group_name": f"{self.config.cluster_name}-nodes",
-            "node_role_arn": (
-                f"arn:aws:iam::ACCOUNT_ID:role/{self.config.cluster_name}-node-role"
-            ),
+            "node_role_arn": (f"arn:aws:iam::ACCOUNT_ID:role/{self.config.cluster_name}-node-role"),
             "subnet_ids": [
                 f"subnet-{self.config.cluster_name}-private-1",
                 f"subnet-{self.config.cluster_name}-private-2",
@@ -183,9 +177,7 @@ class AWSDeploymentManager:
                         }
                     ],
                 },
-                "managed_policy_arns": [
-                    "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-                ],
+                "managed_policy_arns": ["arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"],
             },
             "node_role": {
                 "name": f"{self.config.cluster_name}-node-role",
@@ -268,9 +260,7 @@ class AWSDeploymentManager:
         return {
             "vpc": {
                 "cidr_block": self.config.vpc_cidr,
-                "enable_dns_hostnames": self.config.network_config[
-                    "enable_dns_hostnames"
-                ],
+                "enable_dns_hostnames": self.config.network_config["enable_dns_hostnames"],
                 "enable_dns_support": True,
                 "tags": {
                     "Name": f"{self.config.cluster_name}-vpc",
@@ -493,12 +483,8 @@ class AWSDeploymentManager:
         main_tf = {
             "provider": {"aws": {"region": self.config.region}},
             "resource": {
-                "aws_eks_cluster": {
-                    "opifex_cluster": self.generate_eks_cluster_config()
-                },
-                "aws_eks_node_group": {
-                    "opifex_nodes": self.generate_node_group_config()
-                },
+                "aws_eks_cluster": {"opifex_cluster": self.generate_eks_cluster_config()},
+                "aws_eks_node_group": {"opifex_nodes": self.generate_node_group_config()},
                 "aws_vpc": {"opifex_vpc": self.generate_vpc_config()["vpc"]},
             },
         }

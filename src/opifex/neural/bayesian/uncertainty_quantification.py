@@ -44,12 +44,8 @@ class UncertaintyIntegrationResults:
     predictions: Float[Array, "batch output"]
     uncertainty_components: UncertaintyComponents
     calibration_metrics: CalibrationMetrics
-    confidence_intervals: tuple[
-        Float[Array, "batch output"], Float[Array, "batch output"]
-    ]
-    prediction_intervals: tuple[
-        Float[Array, "batch output"], Float[Array, "batch output"]
-    ]
+    confidence_intervals: tuple[Float[Array, "batch output"], Float[Array, "batch output"]]
+    prediction_intervals: tuple[Float[Array, "batch output"], Float[Array, "batch output"]]
 
 
 class EpistemicUncertainty:
@@ -173,9 +169,7 @@ class UncertaintyQuantifier:
         # Total uncertainty
         total = epistemic + aleatoric
 
-        return UncertaintyComponents(
-            epistemic=epistemic, aleatoric=aleatoric, total=total
-        )
+        return UncertaintyComponents(epistemic=epistemic, aleatoric=aleatoric, total=total)
 
     def enhanced_uncertainty_decomposition(
         self,
@@ -193,9 +187,7 @@ class UncertaintyQuantifier:
             # Use residuals to estimate aleatoric uncertainty
             mean_predictions = jnp.mean(predictions, axis=0)
             residuals = true_values - mean_predictions
-            aleatoric = AleatoricUncertainty.noise_estimation(
-                residuals, mean_predictions
-            )
+            aleatoric = AleatoricUncertainty.noise_estimation(residuals, mean_predictions)
         elif inputs is not None:
             # Use input complexity to estimate aleatoric uncertainty
             input_complexity = jnp.var(inputs, axis=-1, keepdims=True)
@@ -207,9 +199,7 @@ class UncertaintyQuantifier:
         # Total uncertainty with proper combination
         total = epistemic + aleatoric
 
-        return UncertaintyComponents(
-            epistemic=epistemic, aleatoric=aleatoric, total=total
-        )
+        return UncertaintyComponents(epistemic=epistemic, aleatoric=aleatoric, total=total)
 
     def compute_confidence_intervals(
         self,
@@ -326,9 +316,7 @@ class UncertaintyQuantifier:
 
         # Compute calibration metrics using binning approach
         n_bins = 10
-        ece, mce, reliability_data = self._compute_calibration_bins(
-            confidences, accuracies, n_bins
-        )
+        ece, mce, reliability_data = self._compute_calibration_bins(confidences, accuracies, n_bins)
 
         return CalibrationMetrics(
             expected_calibration_error=ece,
@@ -354,9 +342,7 @@ class UncertaintyQuantifier:
         # Compute statistics for each bin
         for i in range(n_bins):
             # Find samples in this bin
-            in_bin = (confidences >= bin_boundaries[i]) & (
-                confidences < bin_boundaries[i + 1]
-            )
+            in_bin = (confidences >= bin_boundaries[i]) & (confidences < bin_boundaries[i + 1])
 
             # Handle last bin edge case
             if i == n_bins - 1:
@@ -365,9 +351,7 @@ class UncertaintyQuantifier:
             bin_count = jnp.sum(in_bin)
 
             if bin_count > 0:
-                bin_confidences = bin_confidences.at[i].set(
-                    jnp.mean(confidences[in_bin])
-                )
+                bin_confidences = bin_confidences.at[i].set(jnp.mean(confidences[in_bin]))
                 bin_accuracies = bin_accuracies.at[i].set(jnp.mean(accuracies[in_bin]))
                 bin_counts = bin_counts.at[i].set(bin_count)
 
@@ -505,12 +489,8 @@ class CalibrationAssessment:
 class EnhancedUncertaintyComponents:
     """Enhanced uncertainty components with multiple sources."""
 
-    epistemic_ensemble: Float[
-        Array, "batch output"
-    ]  # Ensemble-based epistemic uncertainty
-    aleatoric_distributional: Float[
-        Array, "batch output"
-    ]  # Distributional aleatoric uncertainty
+    epistemic_ensemble: Float[Array, "batch output"]  # Ensemble-based epistemic uncertainty
+    aleatoric_distributional: Float[Array, "batch output"]  # Distributional aleatoric uncertainty
     total_uncertainty: Float[Array, "batch output"]  # Combined uncertainty
     uncertainty_breakdown: dict[str, Float[Array, "batch output"]]  # Detailed breakdown
     epistemic_dropout: Float[Array, "batch output"] | None = (
@@ -560,9 +540,7 @@ class EnsembleEpistemicUncertainty:
             return jnp.median(ensemble_predictions, axis=0)
         if method == "weighted_mean":
             # Equal weights for now, could be learned
-            weights = (
-                jnp.ones(ensemble_predictions.shape[0]) / ensemble_predictions.shape[0]
-            )
+            weights = jnp.ones(ensemble_predictions.shape[0]) / ensemble_predictions.shape[0]
             return jnp.average(ensemble_predictions, axis=0, weights=weights)
         raise ValueError(f"Unknown aggregation method: {method}")
 
@@ -705,33 +683,19 @@ class MultiSourceUncertaintyAggregator:
         if method == "weighted_sum":
             # Weighted sum of uncertainties
             if epistemic_weights is None:
-                epistemic_weights = jnp.ones(len(epistemic_sources)) / len(
-                    epistemic_sources
-                )
+                epistemic_weights = jnp.ones(len(epistemic_sources)) / len(epistemic_sources)
             if aleatoric_weights is None:
-                aleatoric_weights = jnp.ones(len(aleatoric_sources)) / len(
-                    aleatoric_sources
-                )
+                aleatoric_weights = jnp.ones(len(aleatoric_sources)) / len(aleatoric_sources)
 
             weighted_epistemic = jnp.sum(
                 jnp.stack(
-                    [
-                        w * u
-                        for w, u in zip(
-                            epistemic_weights, epistemic_sources, strict=False
-                        )
-                    ]
+                    [w * u for w, u in zip(epistemic_weights, epistemic_sources, strict=False)]
                 ),
                 axis=0,
             )
             weighted_aleatoric = jnp.sum(
                 jnp.stack(
-                    [
-                        w * u
-                        for w, u in zip(
-                            aleatoric_weights, aleatoric_sources, strict=False
-                        )
-                    ]
+                    [w * u for w, u in zip(aleatoric_weights, aleatoric_sources, strict=False)]
                 ),
                 axis=0,
             )
@@ -841,10 +805,8 @@ class EnhancedUncertaintyQuantifier:
         if distributional_std is not None:
             mean_predictions = jnp.mean(ensemble_predictions, axis=0)
             log_std = jnp.log(distributional_std + 1e-8)
-            aleatoric_distributional = (
-                self.distributional_estimator.compute_gaussian_uncertainty(
-                    mean_predictions, log_std
-                )
+            aleatoric_distributional = self.distributional_estimator.compute_gaussian_uncertainty(
+                mean_predictions, log_std
             )
         else:
             aleatoric_distributional = jnp.zeros_like(epistemic_ensemble)
@@ -929,18 +891,12 @@ class AdvancedUncertaintyAggregator:
         if adaptation_method == "reliability_based" and reliability_scores is not None:
             # Weight by reliability scores
             reliability_array = jnp.stack(reliability_scores, axis=0)
-            weights = reliability_array / (
-                jnp.sum(reliability_array, axis=0, keepdims=True) + 1e-8
-            )
+            weights = reliability_array / (jnp.sum(reliability_array, axis=0, keepdims=True) + 1e-8)
         elif adaptation_method == "inverse_variance":
             # Weight inversely proportional to variance
-            variances = jnp.stack(
-                [jnp.var(u, axis=-1) for u in uncertainty_sources], axis=0
-            )
+            variances = jnp.stack([jnp.var(u, axis=-1) for u in uncertainty_sources], axis=0)
             inv_variances = 1.0 / (variances + 1e-8)
-            weights = inv_variances / (
-                jnp.sum(inv_variances, axis=0, keepdims=True) + 1e-8
-            )
+            weights = inv_variances / (jnp.sum(inv_variances, axis=0, keepdims=True) + 1e-8)
         elif adaptation_method == "entropy_based":
             # Weight based on predictive entropy
             entropies = jnp.stack(
@@ -972,9 +928,7 @@ class AdvancedUncertaintyAggregator:
             upper_bound = predictions + 2 * uncertainties
 
             # Check coverage
-            coverage = jnp.mean(
-                (true_values >= lower_bound) & (true_values <= upper_bound)
-            )
+            coverage = jnp.mean((true_values >= lower_bound) & (true_values <= upper_bound))
             quality_metrics["coverage_probability"] = float(coverage)
 
             # Interval width
@@ -1014,9 +968,7 @@ class AdvancedEpistemicUncertainty:
         if aggregation_method == "std":
             return jnp.std(ensemble_predictions, axis=0)
         if aggregation_method == "range":
-            return jnp.max(ensemble_predictions, axis=0) - jnp.min(
-                ensemble_predictions, axis=0
-            )
+            return jnp.max(ensemble_predictions, axis=0) - jnp.min(ensemble_predictions, axis=0)
         if aggregation_method == "iqr":
             q75 = jnp.percentile(ensemble_predictions, 75, axis=0)
             q25 = jnp.percentile(ensemble_predictions, 25, axis=0)
@@ -1075,14 +1027,10 @@ class AdvancedAleatoricUncertainty:
                 return distribution_params["std"]
             if "variance" in distribution_params:
                 return jnp.sqrt(distribution_params["variance"])
-            raise ValueError(
-                "Gaussian distribution requires 'log_std', 'std', or 'variance'"
-            )
+            raise ValueError("Gaussian distribution requires 'log_std', 'std', or 'variance'")
         if distribution_type == "laplace":
             if "scale" in distribution_params:
-                return distribution_params["scale"] * jnp.sqrt(
-                    2.0
-                )  # Convert to std equivalent
+                return distribution_params["scale"] * jnp.sqrt(2.0)  # Convert to std equivalent
             raise ValueError("Laplace distribution requires 'scale' parameter")
         if distribution_type == "mixture":
             # For mixture distributions, compute weighted variance
@@ -1093,8 +1041,7 @@ class AdvancedAleatoricUncertainty:
             # Mixture variance formula: E[Var] + Var[E]
             expected_variance = jnp.sum(weights * variances, axis=-2)
             variance_of_means = (
-                jnp.sum(weights * means**2, axis=-2)
-                - (jnp.sum(weights * means, axis=-2)) ** 2
+                jnp.sum(weights * means**2, axis=-2) - (jnp.sum(weights * means, axis=-2)) ** 2
             )
 
             return jnp.sqrt(expected_variance + variance_of_means)

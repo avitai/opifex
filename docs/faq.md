@@ -410,20 +410,18 @@ meta_optimizer = MetaOptimizer(
 
 ### How do I implement custom optimization algorithms?
 
-Opifex provides extensible optimization interfaces:
+Opifex provides optimization through standard Optax and Flax NNX patterns:
 
 ```python
+import optax
+from flax import nnx
 
-from opifex.optimization.base import BaseOptimizer
+# Use standard NNX optimizer with any optax schedule
+model = MyModel(rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
-class CustomOptimizer(BaseOptimizer):
-    def __init__(self, config):
-        super().__init__(config)
-        self.custom_params = config.custom_params
-
-    def step(self, params, gradients, state):
-        # Implement custom optimization step
-        updated_params = self.update_rule(params, gradients, state)
+# For second-order methods, use the hybrid optimizer
+from opifex.optimization.second_order.hybrid_optimizer import HybridOptimizer
         new_state = self.update_state(state, gradients)
         return updated_params, new_state
 

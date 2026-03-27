@@ -165,8 +165,7 @@ class TestNNXOptimizerPerformance:
 
         # Should be fast (optimized update)
         assert mean_time < 0.01, (
-            f"Optimizer update too slow: {mean_time:.6f}s. "
-            f"Expected <10ms for small model."
+            f"Optimizer update too slow: {mean_time:.6f}s. Expected <10ms for small model."
         )
 
 

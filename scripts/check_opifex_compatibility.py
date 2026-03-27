@@ -72,14 +72,10 @@ def check_opifex_compatibility() -> tuple[bool, dict[str, str | None], list[str]
 
     # Check minimum versions for Opifex
     if jax_v < min_jax_version:
-        errors.append(
-            f"JAX {jax_v} is too old. Opifex requires JAX >= {min_jax_version}"
-        )
+        errors.append(f"JAX {jax_v} is too old. Opifex requires JAX >= {min_jax_version}")
 
     if flax_v < min_flax_version:
-        errors.append(
-            f"Flax {flax_v} is too old. Opifex requires Flax >= {min_flax_version}"
-        )
+        errors.append(f"Flax {flax_v} is too old. Opifex requires Flax >= {min_flax_version}")
 
     # Check if jaxlib version matches jax version (critical for GPU support)
     if versions["jaxlib"]:
@@ -87,29 +83,22 @@ def check_opifex_compatibility() -> tuple[bool, dict[str, str | None], list[str]
         # Allow minor version differences but major version should match
         if jaxlib_v.major != jax_v.major or abs(jaxlib_v.minor - jax_v.minor) > 1:
             errors.append(
-                f"JAXlib {jaxlib_v} incompatible with JAX {jax_v}. "
-                f"Should be same major version."
+                f"JAXlib {jaxlib_v} incompatible with JAX {jax_v}. Should be same major version."
             )
 
     # Check Flax NNX compatibility (requires Flax >= 0.10.0)
     if flax_v < version.parse("0.10.0"):
-        errors.append(
-            "Flax NNX requires Flax >= 0.10.0. Opifex uses FLAX NNX extensively."
-        )
+        errors.append("Flax NNX requires Flax >= 0.10.0. Opifex uses FLAX NNX extensively.")
 
     # Check JAX-Flax compatibility
     if flax_v >= version.parse("0.10.0") and jax_v < version.parse("0.5.1"):
-        errors.append(
-            f"Flax {flax_v} requires JAX >= 0.5.1, but JAX {jax_v} is installed"
-        )
+        errors.append(f"Flax {flax_v} requires JAX >= 0.5.1, but JAX {jax_v} is installed")
 
     # Check optax compatibility
     if versions["optax"]:
         optax_v = version.parse(versions["optax"])
         if optax_v < version.parse("0.2.0"):
-            errors.append(
-                f"Optax {optax_v} is too old for modern JAX. Recommend >= 0.2.0"
-            )
+            errors.append(f"Optax {optax_v} is too old for modern JAX. Recommend >= 0.2.0")
         elif optax_v >= version.parse("0.2.0") and jax_v < version.parse("0.5.1"):
             errors.append(f"Optax {optax_v} requires JAX >= 0.5.1")
 
@@ -131,33 +120,25 @@ def check_opifex_compatibility() -> tuple[bool, dict[str, str | None], list[str]
     for pkg, (min_ver, description) in scientific_packages.items():
         if versions[pkg]:  # Check that package is installed (not None)
             pkg_version = versions[pkg]
-            assert (
-                pkg_version is not None
-            )  # Help type checker understand this is not None
+            assert pkg_version is not None  # Help type checker understand this is not None
             pkg_v = version.parse(pkg_version)
             min_v = version.parse(min_ver)
             if pkg_v < min_v:
                 errors.append(
-                    f"{pkg} {pkg_v} is too old. "
-                    f"Opifex recommends >= {min_v} for {description}"
+                    f"{pkg} {pkg_v} is too old. Opifex recommends >= {min_v} for {description}"
                 )
 
     # Check type checking packages
     if versions["beartype"] and versions["jaxtyping"]:
         beartype_v = version.parse(versions["beartype"])
         if beartype_v < version.parse("0.18.0"):
-            errors.append(
-                "Beartype < 0.18.0 may have compatibility issues with JAX arrays"
-            )
+            errors.append("Beartype < 0.18.0 may have compatibility issues with JAX arrays")
 
     # Check NumPy compatibility (JAX has specific requirements)
     if versions["numpy"]:
         numpy_v = version.parse(versions["numpy"])
         if numpy_v >= version.parse("2.0.0"):
-            errors.append(
-                "NumPy 2.0+ may have compatibility issues with JAX. "
-                "Consider NumPy < 2.0"
-            )
+            errors.append("NumPy 2.0+ may have compatibility issues with JAX. Consider NumPy < 2.0")
 
     return len(errors) == 0, versions, errors
 
@@ -193,9 +174,7 @@ def generate_installation_commands(
         # Core JAX ecosystem
         core_packages = ["jax", "flax", "jaxlib", "optax", "orbax-checkpoint"]
         core_updates = [
-            pkg
-            for pkg in core_packages
-            if pkg in missing_packages or pkg in outdated_packages
+            pkg for pkg in core_packages if pkg in missing_packages or pkg in outdated_packages
         ]
 
         if core_updates:
@@ -209,9 +188,7 @@ def generate_installation_commands(
                 f'"optax>={recommended["optax"]}" '
                 f'"orbax-checkpoint>={recommended["orbax-checkpoint"]}"'
             )
-            commands.append(
-                f"# Core JAX ecosystem with CUDA support:\n{cuda_aware_install}"
-            )
+            commands.append(f"# Core JAX ecosystem with CUDA support:\n{cuda_aware_install}")
 
             # CPU-only alternative
             cpu_install = (
@@ -243,15 +220,11 @@ def generate_installation_commands(
         # Type checking packages
         type_packages = ["beartype", "jaxtyping"]
         type_updates = [
-            pkg
-            for pkg in type_packages
-            if pkg in missing_packages or pkg in outdated_packages
+            pkg for pkg in type_packages if pkg in missing_packages or pkg in outdated_packages
         ]
 
         if type_updates:
-            type_install = " ".join(
-                [f'"{pkg}>={recommended[pkg]}"' for pkg in type_updates]
-            )
+            type_install = " ".join([f'"{pkg}>={recommended[pkg]}"' for pkg in type_updates])
             commands.append(f"# Type checking packages:\nuv pip install {type_install}")
 
     return commands
@@ -287,8 +260,7 @@ def print_detailed_report(
             print(f"  {status} {pkg}: {installed_ver} (recommended: {recommended_ver})")
         else:
             print(
-                f"  ❌ {pkg}: Not installed "
-                f"(recommended: {recommended.get(pkg, 'Not specified')})"
+                f"  ❌ {pkg}: Not installed (recommended: {recommended.get(pkg, 'Not specified')})"
             )
 
     # Compatibility status
@@ -301,9 +273,7 @@ def print_detailed_report(
             print(f"  {i}. {error}")
 
     # Missing and outdated packages
-    missing_packages = [
-        pkg for pkg, ver in versions.items() if ver is None and pkg in recommended
-    ]
+    missing_packages = [pkg for pkg, ver in versions.items() if ver is None and pkg in recommended]
     outdated_packages = []
 
     for pkg, installed_ver in versions.items():
@@ -330,7 +300,7 @@ def print_detailed_report(
         print("1. Use 'uv' package manager for faster dependency resolution")
         print("2. Create a virtual environment for Opifex development")
         print("3. Run 'python scripts/verify_opifex_gpu.py' after installation")
-        print("4. Check 'python scripts/gpu_utils.py --comprehensive' for GPU setup")
+        print("4. Check 'python scripts/gpu_utils.py --full' for GPU setup")
 
 
 def fix_compatibility_issues() -> bool:
@@ -345,9 +315,7 @@ def fix_compatibility_issues() -> bool:
 
     # Get missing and outdated packages
     recommended = get_opifex_recommended_versions()
-    missing_packages = [
-        pkg for pkg, ver in versions.items() if ver is None and pkg in recommended
-    ]
+    missing_packages = [pkg for pkg, ver in versions.items() if ver is None and pkg in recommended]
     outdated_packages = []
 
     for pkg, installed_ver in versions.items():
@@ -389,15 +357,9 @@ def fix_compatibility_issues() -> bool:
 
 def main() -> None:
     """Main function to check Opifex compatibility."""
-    parser = argparse.ArgumentParser(
-        description="Check Opifex JAX ecosystem compatibility"
-    )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Show verbose output"
-    )
-    parser.add_argument(
-        "--fix", action="store_true", help="Attempt to fix compatibility issues"
-    )
+    parser = argparse.ArgumentParser(description="Check Opifex JAX ecosystem compatibility")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show verbose output")
+    parser.add_argument("--fix", action="store_true", help="Attempt to fix compatibility issues")
 
     args = parser.parse_args()
 

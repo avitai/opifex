@@ -1,7 +1,7 @@
 """
-Comprehensive tests for opifex.core.spectral.validation module.
+Full tests for opifex.core.spectral.validation module.
 
-This test suite provides comprehensive coverage for spectral operation validation
+This test suite provides full coverage for spectral operation validation
 utilities including input validation, shape checking, and parameter validation.
 """
 
@@ -64,9 +64,7 @@ class TestValidateSpectralInput:
     def test_validate_spectral_input_custom_min_size(self):
         """Test validation with custom minimum spatial size."""
         x = jnp.ones((8,))
-        validate_spectral_input(
-            x, spatial_dims=1, min_spatial_size=4
-        )  # Should not raise
+        validate_spectral_input(x, spatial_dims=1, min_spatial_size=4)  # Should not raise
 
     def test_validate_spectral_input_not_jax_array(self):
         """Test validation with non-JAX array input."""
@@ -266,9 +264,7 @@ class TestValidateFFTShape:
         x_ft = jnp.ones((17,), dtype=jnp.complex64)
         target_shape = (-32,)  # Negative size
 
-        with pytest.raises(
-            ValueError, match=r"Target shape element .* must be a positive integer"
-        ):
+        with pytest.raises(ValueError, match=r"Target shape element .* must be a positive integer"):
             validate_fft_shape(x_ft, target_shape, spatial_dims=1)
 
     def test_validate_fft_shape_zero_target_size(self):
@@ -276,9 +272,7 @@ class TestValidateFFTShape:
         x_ft = jnp.ones((17,), dtype=jnp.complex64)
         target_shape = (0,)  # Zero size
 
-        with pytest.raises(
-            ValueError, match=r"Target shape element .* must be a positive integer"
-        ):
+        with pytest.raises(ValueError, match=r"Target shape element .* must be a positive integer"):
             validate_fft_shape(x_ft, target_shape, spatial_dims=1)
 
     def test_validate_fft_shape_float_target_size(self):
@@ -286,9 +280,7 @@ class TestValidateFFTShape:
         x_ft = jnp.ones((17,), dtype=jnp.complex64)
         target_shape = (32.5,)  # Float instead of int
 
-        with pytest.raises(
-            ValueError, match=r"Target shape element .* must be a positive integer"
-        ):
+        with pytest.raises(ValueError, match=r"Target shape element .* must be a positive integer"):
             validate_fft_shape(x_ft, target_shape, spatial_dims=1)  # type: ignore[arg-type]
 
     def test_validate_fft_shape_incompatible_last_dim(self):
@@ -380,9 +372,7 @@ class TestValidateGridSpacing:
 
     def test_validate_grid_spacing_wrong_length(self):
         """Test grid spacing validation with wrong sequence length."""
-        with pytest.raises(
-            ValueError, match=r"Grid spacing length .* doesn't match spatial_dims"
-        ):
+        with pytest.raises(ValueError, match=r"Grid spacing length .* doesn't match spatial_dims"):
             validate_grid_spacing([0.1, 0.2], spatial_dims=1)
 
     def test_validate_grid_spacing_non_numeric_element(self):

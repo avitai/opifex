@@ -1,4 +1,4 @@
-"""Integration test for create_navier_stokes_pinn factory (Sprint 1 E.3)."""
+"""Integration test for create_navier_stokes_pinn factory (Version 1 E.3)."""
 
 import jax
 import jax.numpy as jnp

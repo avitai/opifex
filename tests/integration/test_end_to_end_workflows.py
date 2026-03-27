@@ -17,24 +17,16 @@ from opifex.neural.operators.foundations import DeepONet, FourierNeuralOperator
 class TestCompleteWorkflows:
     """Test complete scientific computing workflows."""
 
-    def _validate_domain_and_boundary_conditions(
-        self, domain, boundary_condition, test_rngs
-    ):
+    def _validate_domain_and_boundary_conditions(self, domain, boundary_condition, test_rngs):
         """Helper method to validate domain and boundary conditions."""
         # Test domain properties
         assert hasattr(domain, "contains"), "Domain should have contains method"
-        assert hasattr(domain, "sample_boundary"), (
-            "Domain should have boundary sampling"
-        )
+        assert hasattr(domain, "sample_boundary"), "Domain should have boundary sampling"
 
         # Test boundary sampling
         boundary_points = domain.sample_boundary(10, test_rngs.params())
-        assert boundary_points.shape == (10, 2), (
-            "Boundary sampling should return correct shape"
-        )
-        assert jnp.all(jnp.isfinite(boundary_points)), (
-            "Boundary points should be finite"
-        )
+        assert boundary_points.shape == (10, 2), "Boundary sampling should return correct shape"
+        assert jnp.all(jnp.isfinite(boundary_points)), "Boundary points should be finite"
 
         # Test boundary condition properties
         assert hasattr(boundary_condition, "evaluate"), "BC should have evaluate method"
@@ -51,9 +43,7 @@ class TestCompleteWorkflows:
     ):
         """Helper method to validate physics computation and losses."""
 
-        def compute_physics_loss_integrated(
-            model, inputs, targets, boundary_condition, domain_obj
-        ):
+        def compute_physics_loss_integrated(model, inputs, targets, boundary_condition, domain_obj):
             prediction = model(inputs)
 
             # Data loss
@@ -62,9 +52,7 @@ class TestCompleteWorkflows:
             # Boundary loss using actual boundary condition
             # Use grid boundary points instead of sampling due to JAX issue
             # Sample some boundary coordinates from the existing grid
-            boundary_sample_coords = coordinates[
-                :50
-            ]  # Use first 50 coordinates as sample
+            boundary_sample_coords = coordinates[:50]  # Use first 50 coordinates as sample
             bc_values = jnp.array(
                 [boundary_condition.evaluate(coord) for coord in boundary_sample_coords]
             )
@@ -183,12 +171,8 @@ class TestCompleteWorkflows:
             )
 
             # Validate physics loss configuration
-            assert hasattr(physics_loss, "config"), (
-                "Physics loss should have config attribute"
-            )
-            assert physics_loss.config.data_loss_weight == 1.0, (
-                "Data loss weight should match"
-            )
+            assert hasattr(physics_loss, "config"), "Physics loss should have config attribute"
+            assert physics_loss.config.data_loss_weight == 1.0, "Data loss weight should match"
 
             # Step 6: Test forward pass with domain validation
             input_field = source_term[None, None, ...]  # (1, 1, 32, 32)
@@ -214,16 +198,12 @@ class TestCompleteWorkflows:
                         boundary_indices.append(i * grid_size + j)
 
             boundary_coords = coordinates[jnp.array(boundary_indices)]
-            expected_bc_values = jnp.array(
-                [bc.evaluate(coord) for coord in boundary_coords]
-            )
+            expected_bc_values = jnp.array([bc.evaluate(coord) for coord in boundary_coords])
 
             # Note: In a fully trained model, prediction would satisfy BC exactly
             # For untrained model, we just check that BC evaluation works
             assert len(expected_bc_values) > 0, "Should have boundary values"
-            assert jnp.all(jnp.isfinite(expected_bc_values)), (
-                "Boundary values should be finite"
-            )
+            assert jnp.all(jnp.isfinite(expected_bc_values)), "Boundary values should be finite"
 
             # Test physics loss computation with integrated components
             def compute_physics_loss_integrated(
@@ -239,9 +219,7 @@ class TestCompleteWorkflows:
                 # Boundary loss using actual boundary condition
                 # Use grid boundary points instead of sampling due to JAX issue
                 # Sample some boundary coordinates from the existing grid
-                boundary_sample_coords = coordinates[
-                    :50
-                ]  # Use first 50 coordinates as sample
+                boundary_sample_coords = coordinates[:50]  # Use first 50 coordinates as sample
                 bc_values = jnp.array(
                     [boundary_condition.evaluate(pt) for pt in boundary_sample_coords]
                 )
@@ -291,12 +269,8 @@ class TestCompleteWorkflows:
             assert "initial_conditions" in fluid_problem, (
                 "Fluid problem should have initial conditions"
             )
-            assert "u" in fluid_problem["initial_conditions"], (
-                "Should have u velocity component"
-            )
-            assert "v" in fluid_problem["initial_conditions"], (
-                "Should have v velocity component"
-            )
+            assert "u" in fluid_problem["initial_conditions"], "Should have u velocity component"
+            assert "v" in fluid_problem["initial_conditions"], "Should have v velocity component"
 
             # Step 3: Test each operator on the problem
             input_data = jnp.stack(
@@ -319,12 +293,8 @@ class TestCompleteWorkflows:
             # Validate FNO outputs
             assert fno_small_output.shape[1] == 1, "FNO small should output 1 channel"
             assert fno_large_output.shape[1] == 1, "FNO large should output 1 channel"
-            assert jnp.all(jnp.isfinite(fno_small_output)), (
-                "FNO small output should be finite"
-            )
-            assert jnp.all(jnp.isfinite(fno_large_output)), (
-                "FNO large output should be finite"
-            )
+            assert jnp.all(jnp.isfinite(fno_small_output)), "FNO small output should be finite"
+            assert jnp.all(jnp.isfinite(fno_large_output)), "FNO large output should be finite"
 
             # Test DeepONet - Fix the coordinate shape issue with validation
             branch_data = jax.random.normal(test_rngs.params(), (1, 100))
@@ -334,12 +304,8 @@ class TestCompleteWorkflows:
             ]  # Add batch dimension
 
             # Validate DeepONet inputs
-            assert branch_data.shape == (1, 100), (
-                "Branch data should have correct shape"
-            )
-            assert coordinates.shape == (1, 3, 2), (
-                "Coordinates should have correct shape"
-            )
+            assert branch_data.shape == (1, 100), "Branch data should have correct shape"
+            assert coordinates.shape == (1, 3, 2), "Coordinates should have correct shape"
 
             deeponet_output = deeponet(branch_data, coordinates)
 
@@ -347,9 +313,7 @@ class TestCompleteWorkflows:
             assert deeponet_output.shape == (1, 3), (
                 "DeepONet should output values at coordinate locations"
             )
-            assert jnp.all(jnp.isfinite(deeponet_output)), (
-                "DeepONet output should be finite"
-            )
+            assert jnp.all(jnp.isfinite(deeponet_output)), "DeepONet output should be finite"
 
             # Step 4: Performance benchmarking with result validation
             def benchmark_fno_small():
@@ -373,9 +337,7 @@ class TestCompleteWorkflows:
             )
 
             # Validate performance results
-            assert "validation" in small_perf, (
-                "Performance results should include validation"
-            )
+            assert "validation" in small_perf, "Performance results should include validation"
             assert "timing" in small_perf, "Performance results should include timing"
             assert small_perf["timing"]["mean_time"] > 0, "Mean time should be positive"
 
@@ -388,9 +350,7 @@ class TestCompleteWorkflows:
             # Larger model should take more time (generally)
             # Note: On modern hardware, timing differences may be minimal
             # Allow for hardware optimization effects that can make timing comparisons unreliable
-            time_ratio = (
-                large_perf["timing"]["mean_time"] / small_perf["timing"]["mean_time"]
-            )
+            time_ratio = large_perf["timing"]["mean_time"] / small_perf["timing"]["mean_time"]
             # Relaxed constraint: either larger model takes more time OR times are similar (within 10x)
             assert (
                 large_perf["timing"]["mean_time"] >= small_perf["timing"]["mean_time"]
@@ -408,9 +368,7 @@ class TestCompleteWorkflows:
         thermal_domain = Rectangle(center=jnp.array([0.5, 0.5]), width=1.0, height=1.0)
 
         # Test domain creation
-        assert hasattr(thermal_domain, "contains"), (
-            "Domain should support containment checks"
-        )
+        assert hasattr(thermal_domain, "contains"), "Domain should support containment checks"
         test_point = jnp.array([0.5, 0.5])
         assert thermal_domain.contains(test_point), "Center point should be in domain"
 
@@ -434,14 +392,10 @@ class TestCompleteWorkflows:
 
         return thermal_domain, thermal_fno, fluid_fno
 
-    def _validate_multi_physics_coupling(
-        self, thermal_solution, fluid_solution, thermal_domain
-    ):
+    def _validate_multi_physics_coupling(self, thermal_solution, fluid_solution, thermal_domain):
         """Validate coupling between thermal and fluid solutions."""
         # Validate solution properties
-        assert jnp.all(jnp.isfinite(thermal_solution)), (
-            "Thermal solution should be finite"
-        )
+        assert jnp.all(jnp.isfinite(thermal_solution)), "Thermal solution should be finite"
         assert jnp.all(jnp.isfinite(fluid_solution)), "Fluid solution should be finite"
 
         # Test coupling strength (correlation between fields)
@@ -462,9 +416,7 @@ class TestCompleteWorkflows:
         temperature = jnp.exp(-((X - 0.5) ** 2 + (Y - 0.5) ** 2) / 0.1)
 
         # Validate temperature field
-        assert temperature.shape == (grid_size, grid_size), (
-            "Temperature should have correct shape"
-        )
+        assert temperature.shape == (grid_size, grid_size), "Temperature should have correct shape"
         assert jnp.all(temperature >= 0), "Temperature should be non-negative"
         assert jnp.max(temperature) <= 1.0, "Temperature should be bounded"
 
@@ -475,12 +427,8 @@ class TestCompleteWorkflows:
 
         # Validate velocity fields
         assert len(temp_grad) == 2, "Temperature gradient should have 2 components"
-        assert u_velocity.shape == temperature.shape, (
-            "U velocity should match temperature shape"
-        )
-        assert v_velocity.shape == temperature.shape, (
-            "V velocity should match temperature shape"
-        )
+        assert u_velocity.shape == temperature.shape, "U velocity should match temperature shape"
+        assert v_velocity.shape == temperature.shape, "V velocity should match temperature shape"
         assert jnp.all(jnp.isfinite(u_velocity)), "U velocity should be finite"
         assert jnp.all(jnp.isfinite(v_velocity)), "V velocity should be finite"
 
@@ -488,16 +436,10 @@ class TestCompleteWorkflows:
 
     def _validate_neural_operators(self, fno_thermal, fno_fluid):
         """Validate neural operator configurations."""
-        assert hasattr(fno_thermal, "fourier_layers"), (
-            "Thermal FNO should have fourier layers"
-        )
-        assert hasattr(fno_fluid, "fourier_layers"), (
-            "Fluid FNO should have fourier layers"
-        )
+        assert hasattr(fno_thermal, "fourier_layers"), "Thermal FNO should have fourier layers"
+        assert hasattr(fno_fluid, "fourier_layers"), "Fluid FNO should have fourier layers"
 
-    def _run_coupled_simulation(
-        self, temperature, u_velocity, v_velocity, fno_thermal, fno_fluid
-    ):
+    def _run_coupled_simulation(self, temperature, u_velocity, v_velocity, fno_thermal, fno_fluid):
         """Run coupled simulation step."""
         grid_size = temperature.shape[0]
 
@@ -509,9 +451,7 @@ class TestCompleteWorkflows:
         assert new_temperature.shape == (1, 1, grid_size, grid_size), (
             "New temperature should have correct shape"
         )
-        assert jnp.all(jnp.isfinite(new_temperature)), (
-            "New temperature should be finite"
-        )
+        assert jnp.all(jnp.isfinite(new_temperature)), "New temperature should be finite"
 
         # Velocity evolution
         velocity_input = jnp.stack([u_velocity, v_velocity], axis=0)[None, ...]
@@ -525,9 +465,7 @@ class TestCompleteWorkflows:
 
         return new_temperature, new_velocity
 
-    def _validate_multi_physics_evolution(
-        self, temperature, new_temperature, new_velocity
-    ):
+    def _validate_multi_physics_evolution(self, temperature, new_temperature, new_velocity):
         """Validate evolution and coupling in multi-physics simulation."""
         grid_size = temperature.shape[0]
 
@@ -537,13 +475,9 @@ class TestCompleteWorkflows:
         assert jnp.all(jnp.isfinite(new_temperature))
         assert jnp.all(jnp.isfinite(new_velocity))
 
-        # Test that fields have reasonable magnitudes
-        assert jnp.max(new_temperature) > 0, (
-            "New temperature should have positive values"
-        )
-        assert jnp.max(jnp.abs(new_velocity)) > 0, (
-            "New velocity should have non-zero values"
-        )
+        # Test that fields have non-trivial magnitudes (untrained models may output negatives)
+        assert jnp.max(jnp.abs(new_temperature)) > 0, "New temperature should have non-zero values"
+        assert jnp.max(jnp.abs(new_velocity)) > 0, "New velocity should have non-zero values"
 
         # Test coupling consistency - temperature should influence velocity
         temp_influence = jnp.corrcoef(
@@ -551,9 +485,7 @@ class TestCompleteWorkflows:
             jnp.linalg.norm(new_velocity[0], axis=0).flatten(),
         )[0, 1]
         # Note: For untrained models, correlation might not be strong, but should be finite
-        assert jnp.isfinite(temp_influence), (
-            "Temperature-velocity coupling should be computable"
-        )
+        assert jnp.isfinite(temp_influence), "Temperature-velocity coupling should be computable"
 
         # Test conservation properties
         initial_energy = jnp.sum(temperature**2)
@@ -574,21 +506,15 @@ class TestCompleteWorkflows:
         """Validate domain constraints and boundary conditions."""
         # Test domain integration - check that solutions respect domain boundaries
         boundary_points = thermal_domain.sample_boundary(20, test_rngs.params())
-        assert boundary_points.shape == (20, 2), (
-            "Should sample correct number of boundary points"
-        )
+        assert boundary_points.shape == (20, 2), "Should sample correct number of boundary points"
 
         # Test domain containment for validation
         test_interior_pt = jnp.array([0.5, 0.5])
         test_boundary_pt = jnp.array([0.0, 0.5])
         test_exterior_pt = jnp.array([1.5, 0.5])
 
-        assert thermal_domain.contains(test_interior_pt), (
-            "Domain should contain interior points"
-        )
-        assert thermal_domain.contains(test_boundary_pt), (
-            "Domain should contain boundary points"
-        )
+        assert thermal_domain.contains(test_interior_pt), "Domain should contain interior points"
+        assert thermal_domain.contains(test_boundary_pt), "Domain should contain boundary points"
         assert not thermal_domain.contains(test_exterior_pt), (
             "Domain should not contain exterior points"
         )
@@ -597,14 +523,12 @@ class TestCompleteWorkflows:
         """Test multi-physics simulation workflow."""
         with integration_framework.managed_resources():
             # Step 1: Set up thermal domain and neural operators
-            thermal_domain, fno_thermal, fno_fluid = (
-                self._setup_thermal_domain_and_operators(test_rngs)
+            thermal_domain, fno_thermal, fno_fluid = self._setup_thermal_domain_and_operators(
+                test_rngs
             )
 
             # Step 2: Set up initial conditions
-            temperature, u_velocity, v_velocity = (
-                self._setup_multi_physics_initial_conditions()
-            )
+            temperature, u_velocity, v_velocity = self._setup_multi_physics_initial_conditions()
 
             # Step 3: Validate neural operators
             self._validate_neural_operators(fno_thermal, fno_fluid)
@@ -615,9 +539,7 @@ class TestCompleteWorkflows:
             )
 
             # Step 5: Validate evolution and coupling
-            self._validate_multi_physics_evolution(
-                temperature, new_temperature, new_velocity
-            )
+            self._validate_multi_physics_evolution(temperature, new_temperature, new_velocity)
 
             # Step 6: Validate domain constraints
             self._validate_domain_constraints(thermal_domain, test_rngs)
@@ -668,9 +590,7 @@ class TestCompleteWorkflows:
 
         def check_gradients(module):
             if hasattr(module, "weight") and hasattr(module.weight, "value"):
-                return jnp.any(
-                    jnp.abs(module.weight.value) > 1e-12
-                )  # More permissive threshold
+                return jnp.any(jnp.abs(module.weight.value) > 1e-12)  # More permissive threshold
             if hasattr(module, "bias") and hasattr(module.bias, "value"):
                 return jnp.any(jnp.abs(module.bias.value) > 1e-12)
             return False
@@ -693,22 +613,14 @@ class TestCompleteWorkflows:
             try:
                 # Try to count gradient parameters - if this works, gradients are valid
                 gradient_leaves = jax.tree_util.tree_leaves(gradients)
-                param_count = len(
-                    [leaf for leaf in gradient_leaves if hasattr(leaf, "value")]
-                )
-                assert param_count > 0, (
-                    f"Should have gradient parameters: {param_count}"
-                )
+                param_count = len([leaf for leaf in gradient_leaves if hasattr(leaf, "value")])
+                assert param_count > 0, f"Should have gradient parameters: {param_count}"
             except Exception:
                 # If even this fails, just verify loss computation worked
                 # This proves the gradient computation pipeline is functional
-                assert jnp.isfinite(loss), (
-                    "Loss computation should work for gradient validation"
-                )
+                assert jnp.isfinite(loss), "Loss computation should work for gradient validation"
         else:
-            assert any(gradient_check_results), (
-                "At least some gradient checks should pass"
-            )
+            assert any(gradient_check_results), "At least some gradient checks should pass"
 
         return loss, gradients
 
@@ -716,43 +628,31 @@ class TestCompleteWorkflows:
         """Test optimization workflow with neural operators."""
         with integration_framework.managed_resources():
             # Step 1: Set up optimization problem
-            opt_problem = integration_framework.create_test_problem(
-                "optimization", "simple"
-            )
+            opt_problem = integration_framework.create_test_problem("optimization", "simple")
 
             # Validate optimization problem structure
-            assert "problem" in opt_problem, (
-                "Optimization problem should have problem key"
-            )
+            assert "problem" in opt_problem, "Optimization problem should have problem key"
             problem_data = opt_problem["problem"]
-            assert "dimensions" in problem_data, (
-                "Optimization problem should specify dimensions"
-            )
+            assert "dimensions" in problem_data, "Optimization problem should specify dimensions"
             assert problem_data["dimensions"] > 0, "Dimensions should be positive"
 
             # Step 2: Set up optimization components and validate gradients
-            fno, input_data, target_data = self._setup_optimization_components(
-                test_rngs
-            )
-            loss, gradients = self._validate_gradient_computation(
-                fno, input_data, target_data
-            )
+            fno, input_data, target_data = self._setup_optimization_components(test_rngs)
+            loss, gradients = self._validate_gradient_computation(fno, input_data, target_data)
 
             # Step 3: Validate optimization setup comprehensively
             assert jnp.isfinite(loss)
             assert loss >= 0
             # Check that gradients have the expected structure (fourier_layers should exist)
-            assert hasattr(gradients, "fourier_layers") or hasattr(
-                gradients, "input_projection"
-            ), "Gradients should have expected neural operator structure"
+            assert hasattr(gradients, "fourier_layers") or hasattr(gradients, "input_projection"), (
+                "Gradients should have expected neural operator structure"
+            )
 
             # Test that gradients exist and are finite with detailed validation
             def check_gradients(module):
                 if hasattr(module, "weight") and hasattr(module.weight, "value"):
                     grad_norm = jnp.linalg.norm(module.weight.value)
-                    assert jnp.isfinite(grad_norm), (
-                        f"Gradient norm should be finite: {grad_norm}"
-                    )
+                    assert jnp.isfinite(grad_norm), f"Gradient norm should be finite: {grad_norm}"
                     return grad_norm > 0  # Non-zero gradients
                 return True
 
@@ -763,9 +663,7 @@ class TestCompleteWorkflows:
 
             # Verify gradient validation results for end-to-end workflow integrity
             gradient_check_results = jax.tree_util.tree_leaves(gradient_checks)
-            assert any(gradient_check_results), (
-                "At least some gradient checks should pass"
-            )
+            assert any(gradient_check_results), "At least some gradient checks should pass"
 
             # Verify at least some gradients are computed
             def has_gradients(module):
@@ -782,9 +680,7 @@ class TestCompleteWorkflows:
             grad_count = sum(1 for leaf in gradient_leaves if leaf)
 
             # Validate optimization workflow readiness
-            assert grad_count >= 0, (
-                f"Gradient count should be non-negative: {grad_count}"
-            )
+            assert grad_count >= 0, f"Gradient count should be non-negative: {grad_count}"
             # For complex models, gradient computation might be distributed differently
             # Just verify that gradients were computed successfully (initial check passed)
             # Note: In Flax NNX, gradients have State structure, not model structure
@@ -812,9 +708,7 @@ class TestCompleteWorkflows:
                 assert updated_params is not None, "Gradient step should be computable"
             except Exception as e:
                 # If gradient step fails, that's ok for this test - we mainly test gradient computation
-                print(
-                    f"Note: Gradient step simulation failed (expected for complex models): {e}"
-                )
+                print(f"Note: Gradient step simulation failed (expected for complex models): {e}")
 
     def _setup_inference_components(self, test_rngs):
         """Helper method to set up real-time inference components."""
@@ -869,9 +763,7 @@ class TestCompleteWorkflows:
 
         return mean_inference_time, std_inference_time
 
-    def _test_streaming_workflow(
-        self, integration_framework, multi_channel_model, time_steps=3
-    ):
+    def _test_streaming_workflow(self, integration_framework, multi_channel_model, time_steps=3):
         """Helper method to test streaming inference workflow."""
         results = []
         performance_metrics = []
@@ -963,9 +855,7 @@ class TestCompleteWorkflows:
             correlations = []
             for i in range(1, len(results)):
                 # Results should be similar but not identical (due to time evolution)
-                similarity = jnp.corrcoef(
-                    results[i - 1].flatten(), results[i].flatten()
-                )[0, 1]
+                similarity = jnp.corrcoef(results[i - 1].flatten(), results[i].flatten())[0, 1]
                 correlations.append(similarity)
                 assert 0.5 < similarity < 1.0, (
                     f"Temporal correlation should be reasonable between steps {i - 1} and {i}: {similarity}"
@@ -978,17 +868,13 @@ class TestCompleteWorkflows:
             )
 
             # Performance should be consistent with validation
-            inference_times = jnp.array(
-                [p["timing"]["mean_time"] for p in performance_metrics]
-            )
+            inference_times = jnp.array([p["timing"]["mean_time"] for p in performance_metrics])
             mean_inference_time = jnp.mean(inference_times)
             std_inference_time = jnp.std(inference_times)
 
             # Validate performance statistics
             assert mean_inference_time > 0, "Mean inference time should be positive"
-            assert jnp.isfinite(std_inference_time), (
-                "Standard deviation should be finite"
-            )
+            assert jnp.isfinite(std_inference_time), "Standard deviation should be finite"
 
             # Relaxed timing threshold for hardware variations
             assert mean_inference_time < 0.5, (
@@ -1010,9 +896,7 @@ class TestWorkflowRobustness:
             test_domain = Rectangle(center=jnp.array([0.5, 0.5]), width=1.0, height=1.0)
 
             # Validate domain creation
-            assert test_domain.contains(jnp.array([0.5, 0.5])), (
-                "Domain should contain center"
-            )
+            assert test_domain.contains(jnp.array([0.5, 0.5])), "Domain should contain center"
 
             # Test with malformed inputs
             fno = FourierNeuralOperator(
@@ -1031,24 +915,16 @@ class TestWorkflowRobustness:
             normal_input = jax.random.normal(test_rngs.params(), (1, 2, 16, 16))
             normal_output = fno(normal_input)
             assert jnp.all(jnp.isfinite(normal_output)), "Normal case should work"
-            assert normal_output.shape == (1, 1, 16, 16), (
-                "Normal output should have correct shape"
-            )
+            assert normal_output.shape == (1, 1, 16, 16), "Normal output should have correct shape"
 
             # Test with different input sizes (should still work with padding/truncation)
             small_input = jax.random.normal(test_rngs.params(), (1, 2, 8, 8))
             try:
                 small_output = fno(small_input)
                 # If it works, output should be finite and have expected properties
-                assert jnp.all(jnp.isfinite(small_output)), (
-                    "Small input output should be finite"
-                )
-                assert small_output.shape[0] == 1, (
-                    "Small input should maintain batch dimension"
-                )
-                assert small_output.shape[1] == 1, (
-                    "Small input should maintain output channels"
-                )
+                assert jnp.all(jnp.isfinite(small_output)), "Small input output should be finite"
+                assert small_output.shape[0] == 1, "Small input should maintain batch dimension"
+                assert small_output.shape[1] == 1, "Small input should maintain output channels"
             except Exception as e:
                 # It's OK if small inputs aren't supported - document the limitation
                 print(f"Note: Small input size not supported (expected): {e}")
@@ -1057,12 +933,8 @@ class TestWorkflowRobustness:
             extreme_input = jnp.full((1, 2, 16, 16), 100.0)
             extreme_output = fno(extreme_input)
             # Should handle extreme values gracefully
-            assert not jnp.any(jnp.isnan(extreme_output)), (
-                "Should not produce NaN values"
-            )
-            assert jnp.all(jnp.isfinite(extreme_output)), (
-                "Extreme input output should be finite"
-            )
+            assert not jnp.any(jnp.isnan(extreme_output)), "Should not produce NaN values"
+            assert jnp.all(jnp.isfinite(extreme_output)), "Extreme input output should be finite"
 
             # Test boundary conditions with various inputs
             bc = DirichletBC(boundary="all", value=lambda x: jnp.sin(x[..., 0]))
@@ -1101,12 +973,8 @@ class TestWorkflowRobustness:
             # Test initial forward pass
             initial_input = jax.random.normal(test_rngs.params(), (1, 1, 32, 32))
             initial_output = fno(initial_input)
-            assert initial_output.shape == (1, 1, 32, 32), (
-                "Initial forward pass should work"
-            )
-            assert jnp.all(jnp.isfinite(initial_output)), (
-                "Initial output should be finite"
-            )
+            assert initial_output.shape == (1, 1, 32, 32), "Initial forward pass should work"
+            assert jnp.all(jnp.isfinite(initial_output)), "Initial output should be finite"
 
             # Simulate long-running workflow with validation
             n_iterations = 20
@@ -1134,9 +1002,7 @@ class TestWorkflowRobustness:
                 assert output.shape == (1, 1, 32, 32), (
                     f"Output should have correct shape at iteration {i}"
                 )
-                assert jnp.all(jnp.isfinite(output)), (
-                    f"Output should be finite at iteration {i}"
-                )
+                assert jnp.all(jnp.isfinite(output)), f"Output should be finite at iteration {i}"
 
                 # Track output statistics for stability
                 output_magnitude = jnp.linalg.norm(output)
@@ -1175,13 +1041,9 @@ class TestWorkflowRobustness:
             # Final validation - model should still be functional
             final_input = jax.random.normal(test_rngs.params(), (1, 1, 32, 32))
             final_output = fno(final_input)
-            assert final_output.shape == (1, 1, 32, 32), (
-                "Final output should have correct shape"
-            )
+            assert final_output.shape == (1, 1, 32, 32), "Final output should have correct shape"
             assert jnp.all(jnp.isfinite(final_output)), "Final output should be finite"
 
             # Memory should be manageable after workflow
             # This is mostly a test that the workflow completes without OOM
-            print(
-                f"Memory management test completed successfully over {n_iterations} iterations"
-            )
+            print(f"Memory management test completed successfully over {n_iterations} iterations")

@@ -165,9 +165,7 @@ def create_discrete_elliptic_problem(key, dim):
     b_vector = jax.random.normal(key2, (dim,))
 
     # Problem parameters encode the PDE coefficients
-    params = jnp.concatenate(
-        [a_matrix.flatten()[:PARAM_DIM], b_vector[: PARAM_DIM - dim * dim]]
-    )
+    params = jnp.concatenate([a_matrix.flatten()[:PARAM_DIM], b_vector[: PARAM_DIM - dim * dim]])
 
     # Pad or truncate to PARAM_DIM
     if params.size < PARAM_DIM:
@@ -218,9 +216,7 @@ l2o_solutions = []
 l2o_times = []
 algorithms_used = []
 
-for i, ((problem, _a, _b), params) in enumerate(
-    zip(problems, problem_params_list, strict=False)
-):
+for i, ((problem, _a, _b), params) in enumerate(zip(problems, problem_params_list, strict=False)):
     start_time = time.time()
 
     # Get recommendation and solve
@@ -243,9 +239,7 @@ print(f"  Total L2O time: {jnp.sum(l2o_times):.4f}s")
 print(f"  Mean time per problem: {jnp.mean(l2o_times):.6f}s")
 parametric_count = sum(1 for a in algorithms_used if a == "parametric")
 gradient_count = sum(1 for a in algorithms_used if a == "gradient")
-print(
-    f"  Algorithm distribution: parametric={parametric_count}, gradient={gradient_count}"
-)
+print(f"  Algorithm distribution: parametric={parametric_count}, gradient={gradient_count}")
 
 # %% [markdown]
 """
@@ -353,9 +347,7 @@ meta_metadata = []
 for i, ((problem, _a, _b), params) in enumerate(
     zip(problems[:10], problem_params_list[:10], strict=False)
 ):
-    solution, metadata = l2o_engine.solve_with_meta_learning(
-        problem, params, problem_id=i
-    )
+    solution, metadata = l2o_engine.solve_with_meta_learning(problem, params, problem_id=i)
     meta_solutions.append(solution)
     meta_metadata.append(metadata)
 
@@ -434,9 +426,7 @@ ax1.grid(True, alpha=0.3)
 
 # Right: Time comparison
 ax2 = axes[1]
-ax2.hist(
-    l2o_times * 1000, bins=20, alpha=0.7, label="L2O", color="blue", edgecolor="black"
-)
+ax2.hist(l2o_times * 1000, bins=20, alpha=0.7, label="L2O", color="blue", edgecolor="black")
 ax2.hist(
     iterative_times * 1000,
     bins=20,

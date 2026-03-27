@@ -149,9 +149,7 @@ class TestSolveDarcyFlow:
         # Check symmetry about the center (x and y swap)
         u_transposed = u.T
         symmetry_error = jnp.max(jnp.abs(u - u_transposed))
-        assert symmetry_error < 1e-6, (
-            f"Solution should be symmetric, error={symmetry_error}"
-        )
+        assert symmetry_error < 1e-6, f"Solution should be symmetric, error={symmetry_error}"
 
     def test_input_validation(self):
         """Test that invalid inputs raise appropriate errors."""

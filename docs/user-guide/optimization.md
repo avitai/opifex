@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Opifex optimization module provides a comprehensive suite of advanced optimization algorithms specifically designed for scientific machine learning applications. It includes meta-optimization engines, learn-to-optimize (L2O) algorithms, production optimization systems, and quantum-aware optimization workflows.
+The Opifex optimization module provides a full suite of advanced optimization algorithms specifically designed for scientific machine learning applications. It includes meta-optimization engines, learn-to-optimize (L2O) algorithms, production optimization systems, and quantum-aware optimization workflows.
 
 ## Key Components
 
@@ -13,7 +13,7 @@ The meta-optimization system learns to optimize across families of related probl
 - **Learn-to-Optimize (L2O)**: Neural networks that learn optimization algorithms
 - **Adaptive Learning Rate Scheduling**: Performance-based adaptation with multiple strategies
 - **Warm-Starting**: Parameter transfer between related optimization problems
-- **Performance Monitoring**: Comprehensive tracking and analytics
+- **Performance Monitoring**: Full tracking and analytics
 
 ### 2. Production Optimization
 
@@ -111,7 +111,7 @@ Integration with physics-based constraints and conservation laws:
 
 ```python
 from opifex.optimization.scientific_integration import ScientificComputingIntegrator
-from opifex.optimization.meta_optimizers import MetaOptimizer
+from opifex.optimization.meta_optimization import MetaOptimizer
 
 # Create physics-aware optimizer
 integrator = ScientificComputingIntegrator(
@@ -132,7 +132,7 @@ optimizer = MetaOptimizer(config=config, rngs=nnx.Rngs(42))
 ### Basic Meta-Optimization
 
 ```python
-from opifex.optimization.meta_optimizers import LearnToOptimize, MetaOptimizerConfig
+from opifex.optimization.meta_optimization import LearnToOptimize, MetaOptimizerConfig
 
 # Configure meta-optimizer
 config = MetaOptimizerConfig(
@@ -203,7 +203,7 @@ The optimization module seamlessly integrates with the training system:
 
 ```python
 from opifex.training.basic_trainer import BasicTrainer
-from opifex.optimization.meta_optimizers import LearnToOptimize
+from opifex.optimization.meta_optimization import LearnToOptimize
 
 # Use L2O with training
 trainer = BasicTrainer(model=model, config=training_config)

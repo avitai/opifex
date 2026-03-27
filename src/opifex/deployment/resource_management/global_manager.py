@@ -51,7 +51,7 @@ class GlobalResourceManager:
         constraints: dict[str, Any] | None = None,
         sustainability_priority: bool = True,
     ) -> dict[str, Any]:
-        """Allocate resources with comprehensive intelligence and optimization.
+        """Allocate resources with full intelligence and optimization.
 
         Args:
             resource_requirements: Dictionary mapping resource types to quantities
@@ -80,9 +80,7 @@ class GlobalResourceManager:
                 ResourceType.GPU_H100,
             ]:
                 # Estimate memory requirement (simplified)
-                memory_per_gpu = (
-                    40.0 if resource_type == ResourceType.GPU_A100 else 32.0
-                )
+                memory_per_gpu = 40.0 if resource_type == ResourceType.GPU_A100 else 32.0
                 total_memory_gb = memory_per_gpu * quantity
 
                 gpu_allocation = self.gpu_pool_manager.allocate_gpu_memory(
@@ -130,7 +128,7 @@ class GlobalResourceManager:
         }
 
     async def start_resource_monitoring(self) -> None:
-        """Start comprehensive resource monitoring and optimization.
+        """Start full resource monitoring and optimization.
 
         Monitors GPU memory, checks budget alerts, and updates sustainability
         metrics every 5 minutes until stopped.
@@ -158,7 +156,7 @@ class GlobalResourceManager:
         self.is_monitoring = False
 
     def get_comprehensive_resource_status(self) -> dict[str, Any]:
-        """Get comprehensive status of all resource management components.
+        """Get full status of all resource management components.
 
         Returns:
             Dictionary containing status of orchestration, GPU management,
@@ -166,16 +164,12 @@ class GlobalResourceManager:
         """
 
         # Get cost optimization analysis
-        cost_optimization = (
-            self.cost_controller.analyze_cost_optimization_opportunities(
-                self.resource_orchestrator.active_allocations
-            )
+        cost_optimization = self.cost_controller.analyze_cost_optimization_opportunities(
+            self.resource_orchestrator.active_allocations
         )
 
         # Get sustainability metrics
-        sustainability_metrics = (
-            self.sustainability_tracker.calculate_sustainability_metrics()
-        )
+        sustainability_metrics = self.sustainability_tracker.calculate_sustainability_metrics()
 
         # Get GPU pool statistics
         gpu_stats = self.gpu_pool_manager.get_pool_statistics()
@@ -185,32 +179,20 @@ class GlobalResourceManager:
 
         return {
             "resource_orchestration": {
-                "active_allocations": len(
-                    self.resource_orchestrator.active_allocations
-                ),
+                "active_allocations": len(self.resource_orchestrator.active_allocations),
                 "available_pools": len(self.resource_orchestrator.resource_pools),
-                "optimization_objective": (
-                    self.resource_orchestrator.optimization_objective.value
-                ),
+                "optimization_objective": (self.resource_orchestrator.optimization_objective.value),
             },
             "gpu_management": gpu_stats,
             "cost_optimization": {
-                "current_cost_usd_per_hour": (
-                    cost_optimization.current_cost_usd_per_hour
-                ),
-                "potential_savings_percentage": (
-                    cost_optimization.potential_savings_percentage
-                ),
+                "current_cost_usd_per_hour": (cost_optimization.current_cost_usd_per_hour),
+                "potential_savings_percentage": (cost_optimization.potential_savings_percentage),
                 "recommendations_count": len(cost_optimization.recommendations),
             },
             "cost_analytics": cost_analytics,
             "sustainability": {
-                "total_carbon_footprint_kg": (
-                    sustainability_metrics.total_carbon_footprint_kg
-                ),
-                "renewable_energy_percentage": (
-                    sustainability_metrics.renewable_energy_percentage
-                ),
+                "total_carbon_footprint_kg": (sustainability_metrics.total_carbon_footprint_kg),
+                "renewable_energy_percentage": (sustainability_metrics.renewable_energy_percentage),
                 "sustainability_score": sustainability_metrics.sustainability_score,
                 "carbon_offset_cost_usd": sustainability_metrics.carbon_offset_cost_usd,
             },

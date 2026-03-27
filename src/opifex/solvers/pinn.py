@@ -271,9 +271,7 @@ class PINNSolver:
         config = config or PINNConfig()
 
         # Create boundary loss function
-        def bc_loss_fn(
-            model: nnx.Module, x_bc: Float[Array, "... d"]
-        ) -> Float[Array, ""]:
+        def bc_loss_fn(model: nnx.Module, x_bc: Float[Array, "... d"]) -> Float[Array, ""]:
             """Compute boundary condition loss."""
             u_pred = model(x_bc)  # type: ignore[reportCallIssue]
             if u_pred.ndim > 1:

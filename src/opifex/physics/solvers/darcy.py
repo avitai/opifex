@@ -52,8 +52,7 @@ def solve_darcy_flow(
         raise ValueError("resolution must be a positive integer")
     if coeff_field.shape != (resolution, resolution):
         raise ValueError(
-            f"coeff_field shape {coeff_field.shape} != expected "
-            f"({resolution}, {resolution})"
+            f"coeff_field shape {coeff_field.shape} != expected ({resolution}, {resolution})"
         )
 
     h = 1.0 / (resolution - 1)

@@ -300,9 +300,7 @@ fig.suptitle("TFNO Analysis", fontsize=14, fontweight="bold")
 
 # Error distribution
 per_sample_errors = np.array(per_sample_rel_l2)
-axes[0].hist(
-    per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black"
-)
+axes[0].hist(per_sample_errors, bins=20, alpha=0.7, color="steelblue", edgecolor="black")
 axes[0].set_xlabel("Relative L2 Error")
 axes[0].set_ylabel("Frequency")
 axes[0].set_title("Error Distribution")

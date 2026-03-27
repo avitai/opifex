@@ -1,6 +1,6 @@
 #!/bin/bash
 # Opifex Container Orchestration Deployment Script
-# Phase 7.1: Container Orchestration Implementation
+# Version 7.1: Container Orchestration Implementation
 # Target: Multi-Stage Docker + Istio + Harbor + GPU Optimization
 
 set -e

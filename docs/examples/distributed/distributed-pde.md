@@ -38,8 +38,8 @@ data-parallel training.
 
 ## Files
 
-- **Python Script**: [`examples/distributed/distributed_pde.py`](https://github.com/Opifex/Opifex/blob/main/examples/distributed/distributed_pde.py)
-- **Jupyter Notebook**: [`examples/distributed/distributed_pde.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/distributed/distributed_pde.ipynb)
+- **Python Script**: [`examples/distributed/distributed_pde.py`](https://github.com/avitai/opifex/blob/main/examples/distributed/distributed_pde.py)
+- **Jupyter Notebook**: [`examples/distributed/distributed_pde.ipynb`](https://github.com/avitai/opifex/blob/main/examples/distributed/distributed_pde.ipynb)
 
 ## Quick Start
 

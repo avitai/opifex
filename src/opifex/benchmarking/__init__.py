@@ -1,6 +1,6 @@
 """Opifex Advanced Benchmarking System
 
-Comprehensive benchmarking infrastructure for neural operators and scientific ML models.
+Full benchmarking infrastructure for neural operators and scientific ML models.
 Provides performance evaluation, scientific validation, comparative analysis, and
 publication-ready results.
 

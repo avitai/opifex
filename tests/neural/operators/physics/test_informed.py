@@ -281,9 +281,7 @@ class TestPhysicsInformedOperator:
         assert pino.data_weight == initial_data_weight
 
         # Test weight adaptation based on training progress
-        def adaptive_weight_schedule(
-            epoch, initial_physics_weight, initial_data_weight
-        ):
+        def adaptive_weight_schedule(epoch, initial_physics_weight, initial_data_weight):
             # Example adaptive schedule: increase physics weight over time
             physics_weight = initial_physics_weight * (1 + 0.1 * epoch)
             data_weight = initial_data_weight * (1 - 0.05 * epoch)

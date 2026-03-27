@@ -69,9 +69,7 @@ class RiemannianManifold:
         """
         return self.metric_function(point)
 
-    def christoffel_symbols(
-        self, point: ManifoldPoint
-    ) -> Float[jax.Array, "dim dim dim"]:
+    def christoffel_symbols(self, point: ManifoldPoint) -> Float[jax.Array, "dim dim dim"]:
         """Compute Christoffel symbols at given point using vectorized operations.
 
         Args:
@@ -105,9 +103,7 @@ class RiemannianManifold:
         # Contract with inverse metric
         return 0.5 * jnp.einsum("kl,ijl->kij", g_inv, christoffel_terms)
 
-    def riemann_curvature(
-        self, point: ManifoldPoint
-    ) -> Float[jax.Array, "dim dim dim dim"]:
+    def riemann_curvature(self, point: ManifoldPoint) -> Float[jax.Array, "dim dim dim dim"]:
         """Compute Riemann curvature tensor at given point using vectorized operations.
 
         Args:
@@ -129,9 +125,7 @@ class RiemannianManifold:
         # Γ^i_{mk}Γ^m_{jl} - Γ^i_{ml}Γ^m_{jk}
 
         # First term: ∂Γ^i_{jl}/∂x^k - ∂Γ^i_{jk}/∂x^l
-        term1 = jnp.einsum("ijlk->ijkl", gamma_grad) - jnp.einsum(
-            "ijkl->ijkl", gamma_grad
-        )
+        term1 = jnp.einsum("ijlk->ijkl", gamma_grad) - jnp.einsum("ijkl->ijkl", gamma_grad)
 
         # Second term: Γ^i_{mk}Γ^m_{jl} - Γ^i_{ml}Γ^m_{jk}
         term2 = jnp.einsum("imk,mjl->ijkl", gamma, gamma) - jnp.einsum(
@@ -235,9 +229,7 @@ class RiemannianManifold:
         """
         return self._jax_log_map_optimization(base, point)
 
-    def _jax_log_map_optimization(
-        self, base: ManifoldPoint, point: ManifoldPoint
-    ) -> TangentVector:
+    def _jax_log_map_optimization(self, base: ManifoldPoint, point: ManifoldPoint) -> TangentVector:
         """JAX-native optimization for log map computation using gradient descent."""
 
         def objective(tangent_vec):
@@ -265,15 +257,11 @@ class RiemannianManifold:
 
         # Run optimization loop with fixed iterations (grad-compatible)
         initial_carry = (tangent_vec, jnp.inf)
-        final_tangent_vec, _ = jax.lax.fori_loop(
-            0, max_iterations, update_step, initial_carry
-        )
+        final_tangent_vec, _ = jax.lax.fori_loop(0, max_iterations, update_step, initial_carry)
 
         return final_tangent_vec
 
-    def geodesic_distance(
-        self, point1: ManifoldPoint, point2: ManifoldPoint
-    ) -> jax.Array:
+    def geodesic_distance(self, point1: ManifoldPoint, point2: ManifoldPoint) -> jax.Array:
         """Compute geodesic distance between two points.
 
         Args:
@@ -290,9 +278,7 @@ class RiemannianManifold:
         # Distance = sqrt(g_ij v^i v^j)
         return jnp.sqrt(jnp.einsum("i,ij,j->", tangent, g, tangent))
 
-    def batch_geodesic_distance(
-        self, points1: jax.Array, points2: jax.Array
-    ) -> jax.Array:
+    def batch_geodesic_distance(self, points1: jax.Array, points2: jax.Array) -> jax.Array:
         """Vectorized geodesic distance computation for batches of points.
 
         Args:

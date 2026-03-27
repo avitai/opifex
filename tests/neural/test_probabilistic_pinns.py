@@ -1,4 +1,4 @@
-"""Comprehensive tests for Probabilistic Physics-Informed Neural Networks."""
+"""Full tests for Probabilistic Physics-Informed Neural Networks."""
 
 import jax
 import jax.numpy as jnp
@@ -256,9 +256,7 @@ class TestMultiFidelityPINN:
         key = random.PRNGKey(42)
         x = random.normal(key, (3, 2))
 
-        predictions, uncertainties, info = mf_pinn.adaptive_prediction(
-            x, uncertainty_threshold=0.1
-        )
+        predictions, uncertainties, info = mf_pinn.adaptive_prediction(x, uncertainty_threshold=0.1)
 
         assert isinstance(predictions, jax.Array)
         assert isinstance(uncertainties, jax.Array)
@@ -291,9 +289,7 @@ class TestRobustPINNOptimizer:
     def test_robust_optimizer_init(self):
         """Test RobustPINNOptimizer initialization."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
-        optimizer = RobustPINNOptimizer(
-            model=pinn, learning_rate=1e-3, robustness_weight=0.1
-        )
+        optimizer = RobustPINNOptimizer(model=pinn, learning_rate=1e-3, robustness_weight=0.1)
 
         assert optimizer.model == pinn
         assert optimizer.learning_rate == 1e-3
@@ -319,9 +315,7 @@ class TestRobustPINNOptimizer:
         def simple_pde_residual(x_input, predictions):
             return jnp.sum(predictions**2, axis=-1)
 
-        loss_components = optimizer.compute_loss_components(
-            x, y_true, simple_pde_residual
-        )
+        loss_components = optimizer.compute_loss_components(x, y_true, simple_pde_residual)
 
         assert isinstance(loss_components, dict)
         assert "data_loss" in loss_components

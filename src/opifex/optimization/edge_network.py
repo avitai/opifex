@@ -1,7 +1,7 @@
 """Intelligent Edge Network for Opifex production optimization.
 
 This module implements global distribution with sub-millisecond latency optimization,
-edge caching, and regional failover for the Phase 7.4 Production Optimization system.
+edge caching, and regional failover for the Version 7.4 Production Optimization system.
 
 Part of: Hybrid Performance Platform + Intelligent Edge + Adaptive Optimization
 """
@@ -171,9 +171,7 @@ class EdgeGateway(nnx.Module):
         # Score regions based on latency and workload profile
         region_scores = {}
         for region in candidate_regions:
-            score = self._calculate_region_score(
-                client_region, region, workload_profile
-            )
+            score = self._calculate_region_score(client_region, region, workload_profile)
             region_scores[region] = score
 
         # Select region with highest score
@@ -188,44 +186,33 @@ class EdgeGateway(nnx.Module):
         """Calculate scoring for region selection."""
 
         # Base score from geographic distribution preferences
-        geographic_score = workload_profile.geographic_distribution.get(
-            candidate_region, 0.5
-        )
+        geographic_score = workload_profile.geographic_distribution.get(candidate_region, 0.5)
 
         # Latency score
         latency_key = (client_region, candidate_region)
         base_latency = self.latency_matrix.get(latency_key, 50.0)  # Default 50ms
-        latency_score = max(
-            0.0, 1.0 - (base_latency / workload_profile.target_latency_ms)
-        )
+        latency_score = max(0.0, 1.0 - (base_latency / workload_profile.target_latency_ms))
 
         # Capacity score
         region_nodes = [
             node for node in self.edge_nodes.values() if node.region == candidate_region
         ]
         if region_nodes:
-            avg_utilization = sum(node.cpu_utilization for node in region_nodes) / len(
-                region_nodes
-            )
+            avg_utilization = sum(node.cpu_utilization for node in region_nodes) / len(region_nodes)
             capacity_score = max(0.0, 1.0 - avg_utilization)
         else:
             capacity_score = 0.0
 
         # Health score
         if region_nodes:
-            avg_health = sum(node.health_score for node in region_nodes) / len(
-                region_nodes
-            )
+            avg_health = sum(node.health_score for node in region_nodes) / len(region_nodes)
             health_score = avg_health
         else:
             health_score = 0.0
 
         # Weighted final score
         return (
-            0.4 * latency_score
-            + 0.3 * capacity_score
-            + 0.2 * health_score
-            + 0.1 * geographic_score
+            0.4 * latency_score + 0.3 * capacity_score + 0.2 * health_score + 0.1 * geographic_score
         )
 
 
@@ -288,9 +275,7 @@ class LatencyOptimizer(nnx.Module):
         if jnp.any(viable_routes):
             # Select optimal route among viable options
             viable_indices = jnp.where(viable_routes)[0]
-            optimal_route_idx = viable_indices[
-                jnp.argmin(predicted_latencies[viable_indices])
-            ]
+            optimal_route_idx = viable_indices[jnp.argmin(predicted_latencies[viable_indices])]
         else:
             # Fallback: select route with minimum predicted latency
             optimal_route_idx = jnp.argmin(predicted_latencies)
@@ -298,9 +283,7 @@ class LatencyOptimizer(nnx.Module):
         return {
             "optimal_route_index": int(optimal_route_idx),
             "predicted_latency_ms": float(predicted_latencies[optimal_route_idx]),
-            "meets_target": bool(
-                predicted_latencies[optimal_route_idx] <= target_latency
-            ),
+            "meets_target": bool(predicted_latencies[optimal_route_idx] <= target_latency),
             "latency_improvement": float(
                 jnp.mean(current_latencies) - predicted_latencies[optimal_route_idx]
             ),
@@ -485,16 +468,12 @@ class RegionalFailover:
 
         for region in EdgeRegion:
             region_nodes = [
-                node
-                for node in self.edge_gateway.edge_nodes.values()
-                if node.region == region
+                node for node in self.edge_gateway.edge_nodes.values() if node.region == region
             ]
 
             if region_nodes:
                 # Calculate average health score
-                avg_health = sum(node.health_score for node in region_nodes) / len(
-                    region_nodes
-                )
+                avg_health = sum(node.health_score for node in region_nodes) / len(region_nodes)
                 region_health[region] = avg_health
             else:
                 region_health[region] = 0.0
@@ -505,13 +484,9 @@ class RegionalFailover:
         """Check if any region needs failover."""
         for region, health in self.region_health.items():
             if health < self.failover_threshold:
-                await self._trigger_failover(
-                    region, f"Health score {health:.2f} below threshold"
-                )
+                await self._trigger_failover(region, f"Health score {health:.2f} below threshold")
 
-    async def _trigger_failover(
-        self, failing_region: EdgeRegion, reason: str
-    ) -> FailoverResult:
+    async def _trigger_failover(self, failing_region: EdgeRegion, reason: str) -> FailoverResult:
         """Trigger failover from failing region to healthy alternative."""
         start_time = time.time()
 
@@ -590,9 +565,7 @@ class RegionalFailover:
         latency_key = (original_region, failover_region)
         return self.edge_gateway.latency_matrix.get(latency_key, 0.0)
 
-    async def _execute_failover(
-        self, from_region: EdgeRegion, to_region: EdgeRegion
-    ) -> bool:
+    async def _execute_failover(self, from_region: EdgeRegion, to_region: EdgeRegion) -> bool:
         """Execute the actual failover operation."""
         # In practice, this would:
         # 1. Update load balancer configurations
@@ -721,12 +694,8 @@ class IntelligentEdgeNetwork:
         return processing_time
 
     def get_network_statistics(self) -> dict[str, Any]:
-        """Get comprehensive network performance statistics."""
-        avg_latency = (
-            self.total_latency_ms / self.request_count
-            if self.request_count > 0
-            else 0.0
-        )
+        """Get full network performance statistics."""
+        avg_latency = self.total_latency_ms / self.request_count if self.request_count > 0 else 0.0
 
         cache_stats = self.edge_cache.get_cache_statistics()
 
@@ -735,9 +704,7 @@ class IntelligentEdgeNetwork:
             "average_latency_ms": avg_latency,
             "target_latency_ms": self.target_latency_ms,
             "meets_target_percentage": (
-                100.0 * (avg_latency <= self.target_latency_ms)
-                if self.request_count > 0
-                else 0.0
+                100.0 * (avg_latency <= self.target_latency_ms) if self.request_count > 0 else 0.0
             ),
             "cache_statistics": cache_stats,
             "regional_capacity": dict(self.edge_gateway.regional_capacity),

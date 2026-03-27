@@ -46,13 +46,13 @@ def solve_shallow_water_2d(
         raise ValueError("v_initial must be a 2D array")
     if not (h_initial.shape == u_initial.shape == v_initial.shape):
         raise ValueError("All input fields must have the same shape")
-    if not (isinstance(g, (int, float)) and g > 0):
+    if not (isinstance(g, int | float) and g > 0):
         raise ValueError("g must be a positive number")
-    if not (isinstance(dt, (int, float)) and dt > 0):
+    if not (isinstance(dt, int | float) and dt > 0):
         raise ValueError("dt must be a positive number")
     if not (isinstance(n_steps, int) and n_steps > 0):
         raise ValueError("n_steps must be a positive integer")
-    if not (isinstance(grid_spacing, (int, float)) and grid_spacing > 0):
+    if not (isinstance(grid_spacing, int | float) and grid_spacing > 0):
         raise ValueError("grid_spacing must be a positive number")
 
     dx = dy = grid_spacing

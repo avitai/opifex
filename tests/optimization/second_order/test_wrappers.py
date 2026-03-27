@@ -76,9 +76,7 @@ class TestCreateLBFGSOptimizer:
 
     def test_convergence_on_quadratic(self):
         """L-BFGS should converge on a quadratic function."""
-        optimizer = create_lbfgs_optimizer(
-            LBFGSConfig(memory_size=10, max_iterations=50)
-        )
+        optimizer = create_lbfgs_optimizer(LBFGSConfig(memory_size=10, max_iterations=50))
         params = jnp.array([5.0, -3.0, 2.0])
         state = optimizer.init(params)
 

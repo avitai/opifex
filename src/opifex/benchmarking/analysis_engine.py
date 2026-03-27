@@ -98,9 +98,7 @@ class AnalysisEngine:
         """
         self.significance_threshold = significance_threshold
 
-    def compare_operators(
-        self, results_dict: dict[str, BenchmarkResult]
-    ) -> ComparisonReport:
+    def compare_operators(self, results_dict: dict[str, BenchmarkResult]) -> ComparisonReport:
         """Compare multiple operators on the same benchmark.
 
         Delegates ranking and overall-winner determination to
@@ -152,9 +150,7 @@ class AnalysisEngine:
         # Keep local improvement_factors (calibrax has them per-metric but
         # opifex ComparisonReport uses a different structure)
         metric_comparisons, all_metrics = _organize_metrics_for_comparison(results_dict)
-        improvement_factors = _calculate_improvement_factors(
-            metric_comparisons, all_metrics
-        )
+        improvement_factors = _calculate_improvement_factors(metric_comparisons, all_metrics)
 
         statistical_significance = _test_statistical_significance(
             results_dict, self.significance_threshold
@@ -294,9 +290,7 @@ class AnalysisEngine:
         memory_usage = result.metadata.get("memory_usage")
         _analyze_memory_usage(memory_usage, bottlenecks, suggestions)
 
-        _analyze_performance_accuracy_tradeoff(
-            metrics_float, exec_time, insights, suggestions
-        )
+        _analyze_performance_accuracy_tradeoff(metrics_float, exec_time, insights, suggestions)
 
         confidence = _calculate_confidence(result)
 
@@ -360,9 +354,7 @@ def _calculate_scaling_coefficients(
 
                 law = scaling_fit(sizes, values)
                 scaling_coefficients[metric] = law.exponent
-                complexity_estimates[metric] = _estimate_complexity(
-                    metric, law.exponent
-                )
+                complexity_estimates[metric] = _estimate_complexity(metric, law.exponent)
 
             except (ValueError, RuntimeWarning):
                 scaling_coefficients[metric] = float("nan")
@@ -454,8 +446,7 @@ def _analyze_domain_specific_aspects(
             domain_observations.append("Chemical accuracy achieved for quantum system")
         else:
             domain_observations.append(
-                "Chemical accuracy not achieved - "
-                "may need specialized quantum architecture"
+                "Chemical accuracy not achieved - may need specialized quantum architecture"
             )
     elif domain == "fluid_dynamics":
         if relative_error < 0.05:
@@ -476,9 +467,7 @@ def _analyze_memory_usage(
         memory_gb = memory_usage / (1024**3)
         if memory_gb > 16:
             bottlenecks.append("High memory usage may limit scalability")
-            suggestions.append(
-                "Consider memory-efficient architectures or gradient checkpointing"
-            )
+            suggestions.append("Consider memory-efficient architectures or gradient checkpointing")
 
 
 def _analyze_performance_accuracy_tradeoff(
@@ -496,9 +485,7 @@ def _analyze_performance_accuracy_tradeoff(
     if efficiency_score > 100:
         insights.append("Excellent performance-accuracy trade-off")
     elif efficiency_score < 1:
-        suggestions.append(
-            "Consider balancing accuracy requirements with computational cost"
-        )
+        suggestions.append("Consider balancing accuracy requirements with computational cost")
 
 
 _infer_domain = infer_domain  # Re-export for backward compat with tests
@@ -689,9 +676,7 @@ _DOMAIN_CONSIDERATIONS: dict[str, list[str]] = {
 }
 
 
-def _build_recommendation_report(
-    problem_type: str, domain: str
-) -> RecommendationReport:
+def _build_recommendation_report(problem_type: str, domain: str) -> RecommendationReport:
     """Build a recommendation report for a problem type and domain."""
     recommended_operators: list[dict[str, Any]] = []
 
@@ -715,9 +700,7 @@ def _build_recommendation_report(
     }
 
     trade_offs = {
-        "accuracy_vs_speed": (
-            "FNO fastest, DeepONet most accurate, PINN most physics-informed"
-        ),
+        "accuracy_vs_speed": ("FNO fastest, DeepONet most accurate, PINN most physics-informed"),
         "memory_vs_accuracy": ("Compressed operators for memory constraints"),
         "training_vs_inference": ("Some operators slow to train but fast at inference"),
     }

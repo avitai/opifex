@@ -188,12 +188,8 @@ xt_domain = jnp.column_stack([x_domain, t_domain])
 
 # Boundary points (x = -1 and x = 1)
 t_bc = jax.random.uniform(keys[2], (N_BOUNDARY,), minval=T_MIN, maxval=T_MAX)
-xt_bc_left = jnp.column_stack(
-    [jnp.full(N_BOUNDARY // 2, X_MIN), t_bc[: N_BOUNDARY // 2]]
-)
-xt_bc_right = jnp.column_stack(
-    [jnp.full(N_BOUNDARY // 2, X_MAX), t_bc[N_BOUNDARY // 2 :]]
-)
+xt_bc_left = jnp.column_stack([jnp.full(N_BOUNDARY // 2, X_MIN), t_bc[: N_BOUNDARY // 2]])
+xt_bc_right = jnp.column_stack([jnp.full(N_BOUNDARY // 2, X_MAX), t_bc[N_BOUNDARY // 2 :]])
 xt_bc = jnp.vstack([xt_bc_left, xt_bc_right])
 # BC values: sin(pi * (+/-1)) * exp(-t) = 0
 u_bc = exact_solution(xt_bc[:, 0], xt_bc[:, 1])
@@ -316,9 +312,7 @@ for epoch in range(EPOCHS):
     C_history.append(float(pinn.coef))
 
     if (epoch + 1) % 4000 == 0 or epoch == 0:
-        print(
-            f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}, C={float(pinn.coef):.6f}"
-        )
+        print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}, C={float(pinn.coef):.6f}")
 
 print(f"Final loss: {losses[-1]:.6e}")
 print()
@@ -350,9 +344,7 @@ u_exact_grid = exact_solution(xx, tt)
 # Errors
 error = jnp.abs(u_pred_grid - u_exact_grid)
 l2_error = float(
-    jnp.sqrt(
-        jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2 + 1e-10)
-    )
+    jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2 + 1e-10))
 )
 max_error = float(jnp.max(error))
 mean_error = float(jnp.mean(error))
@@ -384,9 +376,7 @@ im0 = axes[0, 0].imshow(
     aspect="auto",
     cmap="viridis",
 )
-axes[0, 0].scatter(
-    np.array(x_obs), np.array(t_obs), c="r", s=50, marker="x", label="Observations"
-)
+axes[0, 0].scatter(np.array(x_obs), np.array(t_obs), c="r", s=50, marker="x", label="Observations")
 axes[0, 0].set_xlabel("x")
 axes[0, 0].set_ylabel("t")
 axes[0, 0].set_title("PINN Solution (with observations)")
@@ -425,9 +415,7 @@ axes[1, 0].set_title("Training Loss")
 axes[1, 0].grid(True, alpha=0.3)
 
 axes[1, 1].plot(C_history, "b-", linewidth=2, label="Discovered C")
-axes[1, 1].axhline(
-    y=C_TRUE, color="r", linestyle="--", linewidth=2, label=f"True C = {C_TRUE}"
-)
+axes[1, 1].axhline(y=C_TRUE, color="r", linestyle="--", linewidth=2, label=f"True C = {C_TRUE}")
 axes[1, 1].set_xlabel("Epoch")
 axes[1, 1].set_ylabel("Diffusion Coefficient (C)")
 axes[1, 1].set_title("Parameter Discovery")
@@ -472,9 +460,7 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
 # Convergence plot
 axes[0].plot(C_history, "b-", linewidth=2, label="Discovered C")
-axes[0].axhline(
-    y=C_TRUE, color="r", linestyle="--", linewidth=2, label=f"True C = {C_TRUE}"
-)
+axes[0].axhline(y=C_TRUE, color="r", linestyle="--", linewidth=2, label=f"True C = {C_TRUE}")
 axes[0].fill_between(
     range(len(C_history)),
     C_TRUE * 0.95,

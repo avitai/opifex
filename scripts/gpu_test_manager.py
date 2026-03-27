@@ -2,7 +2,7 @@
 """
 Enhanced GPU Test Management Script for Opifex Framework.
 
-Based on comprehensive insights from workshop project for handling GPU test failures,
+Based on full insights from workshop project for handling GPU test failures,
 with intelligent test routing and progressive testing strategies.
 """
 
@@ -26,7 +26,7 @@ except ImportError:
         """Configure JAX environment variables for optimal performance."""
 
     def print_comprehensive_gpu_info():
-        """Print comprehensive GPU information for debugging."""
+        """Print full GPU information for debugging."""
         print("GPU utilities not available")
 
 
@@ -35,9 +35,7 @@ def has_nvidia_gpu():
     try:
         import subprocess
 
-        result = subprocess.run(
-            ["nvidia-smi"], capture_output=True, text=True, check=False
-        )
+        result = subprocess.run(["nvidia-smi"], capture_output=True, text=True, check=False)
         return result.returncode == 0
     except FileNotFoundError:
         return False
@@ -106,9 +104,7 @@ class EnhancedGPUTestManager:
 
                     if "@pytest.mark.gpu" in content or "mark.gpu" in content:
                         markers["has_gpu_tests"] = True
-                        markers["requires_sequential"] = (
-                            True  # GPU tests should run sequentially
-                        )
+                        markers["requires_sequential"] = True  # GPU tests should run sequentially
 
                     if "@pytest.mark.cuda" in content or "mark.cuda" in content:
                         markers["has_cuda_specific"] = True
@@ -118,9 +114,7 @@ class EnhancedGPUTestManager:
                         markers["has_cpu_tests"] = True
 
                     # If no specific markers, assume it's CPU-safe for parallel execution
-                    if not any(
-                        [markers["has_gpu_tests"], markers["has_cuda_specific"]]
-                    ):
+                    if not any([markers["has_gpu_tests"], markers["has_cuda_specific"]]):
                         markers["has_cpu_tests"] = True
 
                 except Exception as e:
@@ -138,7 +132,7 @@ class EnhancedGPUTestManager:
         return markers
 
     def check_gpu_status(self) -> tuple[bool, str, list | None]:
-        """Comprehensive GPU status check with detailed information."""
+        """Full GPU status check with detailed information."""
         try:
             import jax
 
@@ -292,10 +286,10 @@ class EnhancedGPUTestManager:
 
         total_start_time = time.time()
 
-        # Phase 1: Always run CPU tests first (fast parallel execution)
+        # Version 1: Always run CPU tests first (fast parallel execution)
         if markers["has_cpu_tests"]:
             if self.verbose:
-                print("\n📋 Phase 1: CPU Tests (Parallel Execution)")
+                print("\n📋 Version 1: CPU Tests (Parallel Execution)")
             cpu_result = self.run_cpu_tests(test_path, extra_args)
 
             if cpu_result.returncode != 0:
@@ -307,17 +301,17 @@ class EnhancedGPUTestManager:
         else:
             cpu_result = None
             if self.verbose:
-                print("INFO: No CPU tests detected, skipping Phase 1")
+                print("INFO: No CPU tests detected, skipping Version 1")
 
-        # Phase 2: Run GPU tests if available and requested
+        # Version 2: Run GPU tests if available and requested
         if markers["has_gpu_tests"] or markers["has_cuda_specific"]:
             if self.verbose:
-                print("\n📋 Phase 2: GPU Tests (Sequential Execution)")
+                print("\n📋 Version 2: GPU Tests (Sequential Execution)")
             gpu_result = self.run_gpu_tests(test_path, extra_args)
         else:
             gpu_result = cpu_result
             if self.verbose:
-                print("INFO: No GPU-specific tests detected, skipping Phase 2")
+                print("INFO: No GPU-specific tests detected, skipping Version 2")
 
         total_end_time = time.time()
 
@@ -384,7 +378,7 @@ class EnhancedGPUTestManager:
             return False
 
     def print_comprehensive_status(self) -> None:
-        """Print comprehensive GPU and test status."""
+        """Print full GPU and test status."""
         print("🔍 Opifex Enhanced GPU Test Manager Status")
         print("=" * 60)
 
@@ -406,7 +400,7 @@ class EnhancedGPUTestManager:
 
 
 def main() -> None:
-    """Enhanced main entry point with comprehensive command-line interface."""
+    """Enhanced main entry point with full command-line interface."""
     parser = argparse.ArgumentParser(
         description="Enhanced GPU Test Manager for Opifex Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -416,7 +410,7 @@ Examples:
   python scripts/gpu_test_manager.py cpu                # Run CPU-only tests
   python scripts/gpu_test_manager.py gpu                # Run GPU tests
   python scripts/gpu_test_manager.py smart              # Smart test execution
-  python scripts/gpu_test_manager.py status             # Comprehensive status
+  python scripts/gpu_test_manager.py status             # Full status
   python scripts/gpu_test_manager.py progressive        # Progressive GPU testing
   python scripts/gpu_test_manager.py tests/core/ -v     # Test specific path
         """,

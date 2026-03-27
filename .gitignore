@@ -129,6 +129,8 @@ celerybeat.pid
 
 # Environments
 .env
+.opifex.env
+.env.local
 .venv
 env/
 venv/
@@ -193,6 +195,8 @@ cython_debug/
 .cursor/
 .cursorignore
 .cursorindexingignore
+.copilot/
+.anthropic/
 
 # Claude Code editor
 .claude/
@@ -463,11 +467,14 @@ pyvenv.cfg
 
 # prompts
 prompt*
-activate.sh
+AGENTS.md
 CLAUDE.md
+copilot-instructions.md
+.github/copilot-instructions.md
 CHANGELOG.md
 custom_modes/
 documents/
+example_data/
 
 # Internal development and memory bank files
 memory-bank/

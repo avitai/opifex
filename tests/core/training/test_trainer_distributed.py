@@ -50,9 +50,7 @@ def sample_data() -> tuple[jax.Array, jax.Array]:
 class TestTrainingConfigWithDistributed:
     """Test that TrainingConfig accepts DistributedConfig."""
 
-    def test_config_accepts_distributed_config(
-        self, distributed_config: DistributedConfig
-    ) -> None:
+    def test_config_accepts_distributed_config(self, distributed_config: DistributedConfig) -> None:
         config = TrainingConfig(
             num_epochs=2,
             learning_rate=1e-3,

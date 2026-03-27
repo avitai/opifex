@@ -1,6 +1,6 @@
 """Test embedding layers for neural operators.
 
-Comprehensive tests for grid embeddings, sinusoidal embeddings, and utility functions
+Full tests for grid embeddings, sinusoidal embeddings, and utility functions
 including JAX compatibility, different input configurations, and performance validation.
 """
 
@@ -17,7 +17,7 @@ from opifex.neural.operators.common.embeddings import (
 
 
 class TestGridEmbedding2D:
-    """Comprehensive tests for GridEmbedding2D layer."""
+    """Full tests for GridEmbedding2D layer."""
 
     @pytest.fixture
     def rng_key(self):
@@ -33,9 +33,7 @@ class TestGridEmbedding2D:
 
         # Test with custom boundaries
         custom_boundaries = [[-1.0, 1.0], [0.0, 2.0]]
-        embedding_custom = GridEmbedding2D(
-            in_channels=2, grid_boundaries=custom_boundaries
-        )
+        embedding_custom = GridEmbedding2D(in_channels=2, grid_boundaries=custom_boundaries)
         assert embedding_custom.in_channels == 2
         assert embedding_custom.grid_boundaries == custom_boundaries
 
@@ -214,7 +212,7 @@ class TestGridEmbedding2D:
 
 
 class TestGridEmbeddingND:
-    """Comprehensive tests for GridEmbeddingND layer."""
+    """Full tests for GridEmbeddingND layer."""
 
     @pytest.fixture
     def rng_key(self):
@@ -302,7 +300,7 @@ class TestGridEmbeddingND:
 
 
 class TestSinusoidalEmbedding:
-    """Comprehensive tests for SinusoidalEmbedding layer."""
+    """Full tests for SinusoidalEmbedding layer."""
 
     @pytest.fixture
     def rng_key(self):
@@ -311,9 +309,7 @@ class TestSinusoidalEmbedding:
 
     def test_basic_initialization(self):
         """Test basic SinusoidalEmbedding initialization."""
-        embedding = SinusoidalEmbedding(
-            in_channels=1, num_frequencies=64, max_positions=1000
-        )
+        embedding = SinusoidalEmbedding(in_channels=1, num_frequencies=64, max_positions=1000)
         assert embedding.in_channels == 1
         assert embedding.num_frequencies == 64
         assert embedding.max_positions == 1000
@@ -348,9 +344,7 @@ class TestSinusoidalEmbedding:
 
     def test_sinusoidal_properties(self, rng_key):
         """Test that sinusoidal embeddings have expected properties."""
-        embedding = SinusoidalEmbedding(
-            in_channels=1, num_frequencies=64, embedding_type="nerf"
-        )
+        embedding = SinusoidalEmbedding(in_channels=1, num_frequencies=64, embedding_type="nerf")
 
         # Test with constant input
         x_const = jnp.ones((1, 1, 1))
@@ -438,9 +432,7 @@ class TestUtilityFunctions:
     def test_regular_grid_2d_custom_boundaries(self):
         """Test 2D grid with custom boundaries."""
         boundaries = [[-1.0, 1.0], [0.0, 2.0]]
-        grid_x, grid_y = regular_grid_2d(
-            spatial_dims=(3, 5), grid_boundaries=boundaries
-        )
+        grid_x, grid_y = regular_grid_2d(spatial_dims=(3, 5), grid_boundaries=boundaries)
 
         assert grid_x.shape == (3, 5)
         assert grid_y.shape == (3, 5)

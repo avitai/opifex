@@ -98,30 +98,19 @@ class GCPDeploymentManager:
             "network": self.config.network_config["network"],
             "subnetwork": self.config.network_config["subnetwork"],
             "ip_allocation_policy": {"use_ip_aliases": True},
-            "workload_identity_config": {
-                "workload_pool": f"{self.config.project_id}.svc.id.goog"
-            },
-            "network_policy": {
-                "enabled": self.config.security_config["enable_network_policy"]
-            },
+            "workload_identity_config": {"workload_pool": f"{self.config.project_id}.svc.id.goog"},
+            "network_policy": {"enabled": self.config.security_config["enable_network_policy"]},
             "pod_security_policy_config": {
                 "enabled": self.config.security_config["enable_pod_security_policy"]
             },
             "private_cluster_config": {
-                "enable_private_nodes": self.config.network_config[
-                    "enable_private_nodes"
-                ],
+                "enable_private_nodes": self.config.network_config["enable_private_nodes"],
                 "enable_private_endpoint": False,
                 "master_ipv4_cidr_block": "172.16.0.0/28",
             },
             "master_authorized_networks_config": {
-                "enabled": len(
-                    self.config.security_config["master_authorized_networks"]
-                )
-                > 0,
-                "cidr_blocks": self.config.security_config[
-                    "master_authorized_networks"
-                ],
+                "enabled": len(self.config.security_config["master_authorized_networks"]) > 0,
+                "cidr_blocks": self.config.security_config["master_authorized_networks"],
             },
         }
 
@@ -302,12 +291,8 @@ class GCPDeploymentManager:
                 }
             },
             "resource": {
-                "google_container_cluster": {
-                    "opifex_cluster": self.generate_gke_cluster_config()
-                },
-                "google_compute_network": {
-                    "opifex_vpc": self.generate_vpc_config()["vpc"]
-                },
+                "google_container_cluster": {"opifex_cluster": self.generate_gke_cluster_config()},
+                "google_compute_network": {"opifex_vpc": self.generate_vpc_config()["vpc"]},
                 "google_compute_subnetwork": {
                     "opifex_subnet": self.generate_vpc_config()["subnet"]
                 },

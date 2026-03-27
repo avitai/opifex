@@ -1,4 +1,4 @@
-# Comprehensive SFNO for Climate Modeling
+# Full SFNO for Climate Modeling
 
 | Metadata | Value |
 |----------|-------|
@@ -11,7 +11,7 @@
 
 ## Overview
 
-This example demonstrates comprehensive Spherical Fourier Neural Operator (SFNO) functionality for climate modeling using the Opifex framework with JAX/Flax NNX. The SFNO extends the standard FNO to spherical geometries by replacing Fourier transforms with spherical harmonic transforms, making it the natural architecture for global climate and weather prediction tasks where data lives on the surface of a sphere.
+This example demonstrates full Spherical Fourier Neural Operator (SFNO) functionality for climate modeling using the Opifex framework with JAX/Flax NNX. The SFNO extends the standard FNO to spherical geometries by replacing Fourier transforms with spherical harmonic transforms, making it the natural architecture for global climate and weather prediction tasks where data lives on the surface of a sphere.
 
 The example covers the full pipeline: creating an SFNO model with `create_climate_sfno`, loading shallow water equation data via `create_shallow_water_loader` (Google Grain), training with conservation-aware physics loss through `ConservationConfig`, evaluating energy and mass conservation, and performing spherical harmonic spectral analysis of predictions.
 
@@ -19,7 +19,7 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 
 ## What You'll Learn
 
-1. **Build** a comprehensive SFNO model with `create_climate_sfno` for spherical domain climate data
+1. **Build** an SFNO model with `create_climate_sfno` for spherical domain climate data
 2. **Configure** conservation-aware training with `ConservationConfig` for energy and mass conservation
 3. **Analyze** spherical harmonic power spectra to evaluate spectral fidelity of predictions
 4. **Evaluate** energy and mass conservation metrics for physics-informed model quality
@@ -59,8 +59,8 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/sfno_climate_comprehensive.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/sfno_climate_comprehensive.py)
-- **Jupyter Notebook**: [`examples/neural-operators/sfno_climate_comprehensive.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/sfno_climate_comprehensive.ipynb)
+- **Python Script**: [`examples/neural-operators/sfno_climate_comprehensive.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_comprehensive.py)
+- **Jupyter Notebook**: [`examples/neural-operators/sfno_climate_comprehensive.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_comprehensive.ipynb)
 
 ## Quick Start
 
@@ -172,7 +172,7 @@ from opifex.neural.operators.fno.spherical import create_climate_sfno
 **Terminal Output:**
 ```
 ======================================================================
-Opifex Example: Comprehensive Spherical FNO for Climate Modeling
+Opifex Example: Full Spherical FNO for Climate Modeling
 ======================================================================
 JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
@@ -297,7 +297,7 @@ Done in 3.5s | Train: 0.03277627006173134 | Val: 0.0024642879143357277
     for violations of energy and mass conservation. The `energy_tolerance` parameter
     controls the threshold for conservation monitoring.
 
-### Step 6: Comprehensive Evaluation
+### Step 6: Evaluation
 
 Evaluate the trained model on test data with per-sample error statistics and conservation metrics:
 
@@ -324,7 +324,7 @@ mass_conservation = float(jnp.mean(jnp.abs(pred_mass - target_mass)))
 
 **Terminal Output:**
 ```
-Running comprehensive evaluation...
+Running evaluation...
 MSE: 0.004308 | Rel L2: 0.111657+/-0.002223
 Energy Conserv: 0.060785 | Mass Conserv: 0.031266
 ```
@@ -380,7 +380,7 @@ Generating error analysis...
 - Trained an SFNO for shallow water equation climate data with conservation-aware loss
 - Demonstrated energy and mass conservation monitoring through `ConservationConfig`
 - Performed spherical harmonic spectral analysis to evaluate spectral fidelity
-- Generated comprehensive visualizations of predictions, errors, and spectral properties
+- Generated full visualizations of predictions, errors, and spectral properties
 
 ### Interpretation
 
@@ -389,7 +389,7 @@ The SFNO with only 5 epochs of training achieves a relative L2 error of ~0.112. 
 **Terminal Output (final summary):**
 ```
 ======================================================================
-Comprehensive SFNO Climate example completed in 3.5s
+Full SFNO Climate example completed in 3.5s
 Mean Relative L2 Error: 0.111657
 Results saved to: docs/assets/examples/sfno_climate_comprehensive
 ======================================================================
@@ -410,7 +410,7 @@ Results saved to: docs/assets/examples/sfno_climate_comprehensive
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
 | [Simple SFNO Climate](sfno-climate-simple.md) | Beginner | Quick-start SFNO on spherical domain |
-| [FNO Darcy Comprehensive](fno-darcy.md) | Intermediate | Full FNO training pipeline for Darcy flow |
+| [FNO Darcy Tutorial](fno-darcy.md) | Intermediate | Full FNO training pipeline for Darcy flow |
 | [UNO Darcy Framework](uno-darcy.md) | Intermediate | Multi-resolution neural operator architecture |
 | [U-FNO Turbulence](ufno-turbulence.md) | Advanced | U-Net enhanced FNO for turbulence modeling |
 | [Neural Operator Benchmark](../benchmarking/operator-benchmark.md) | Advanced | Cross-architecture performance comparison |

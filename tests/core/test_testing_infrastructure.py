@@ -1,7 +1,7 @@
 """
-Comprehensive tests for opifex.core.testing_infrastructure module.
+Full tests for opifex.core.testing_infrastructure module.
 
-This test suite provides comprehensive coverage for testing infrastructure utilities
+This test suite provides full coverage for testing infrastructure utilities
 including environment detection, JAX configuration, dependency management, and safe compilation.
 """
 
@@ -199,9 +199,7 @@ class TestEnvironmentDetector:
         # Use patch.object with proper pathlib.Path mocking
         with (
             patch("pathlib.Path.exists") as mock_exists,
-            patch.object(
-                detector, "_find_cuda_libraries", return_value=["/usr/local/cuda/lib64"]
-            ),
+            patch.object(detector, "_find_cuda_libraries", return_value=["/usr/local/cuda/lib64"]),
             patch.object(detector, "_check_jax_cuda_support", return_value=True),
             patch.object(detector, "_detect_gpu_hardware", return_value=2),
         ):
@@ -240,9 +238,7 @@ class TestEnvironmentDetector:
         mock_exists.side_effect = exists_side_effect
 
         with patch("pathlib.Path.glob") as mock_glob:
-            mock_glob.return_value = [
-                Path("/usr/lib/x86_64-linux-gnu/nvidia/libcudart.so.12")
-            ]
+            mock_glob.return_value = [Path("/usr/lib/x86_64-linux-gnu/nvidia/libcudart.so.12")]
             cuda_paths = detector._find_cuda_libraries()
 
         assert len(cuda_paths) >= 0  # May be empty based on implementation logic
@@ -366,9 +362,7 @@ class TestJAXConfigurationManager:
 
     @patch.object(JAXConfigurationManager, "_classify_environment")
     @patch.object(JAXConfigurationManager, "_configure_gpu_safe")
-    def test_configure_jax_for_environment_gpu_safe(
-        self, mock_configure_gpu, mock_classify
-    ):
+    def test_configure_jax_for_environment_gpu_safe(self, mock_configure_gpu, mock_classify):
         """Test JAX configuration for GPU safe environment."""
         mock_classify.return_value = EnvironmentType.GPU_SAFE
 
@@ -382,9 +376,7 @@ class TestJAXConfigurationManager:
 
     @patch.object(JAXConfigurationManager, "_classify_environment")
     @patch.object(JAXConfigurationManager, "_configure_gpu_unsafe_fallback")
-    def test_configure_jax_for_environment_gpu_unsafe(
-        self, mock_configure_fallback, mock_classify
-    ):
+    def test_configure_jax_for_environment_gpu_unsafe(self, mock_configure_fallback, mock_classify):
         """Test JAX configuration for GPU unsafe environment."""
         mock_classify.return_value = EnvironmentType.GPU_AVAILABLE_UNSAFE
 
@@ -398,9 +390,7 @@ class TestJAXConfigurationManager:
 
     @patch.object(JAXConfigurationManager, "_classify_environment")
     @patch.object(JAXConfigurationManager, "_configure_cpu_only")
-    def test_configure_jax_for_environment_cpu_only(
-        self, mock_configure_cpu, mock_classify
-    ):
+    def test_configure_jax_for_environment_cpu_only(self, mock_configure_cpu, mock_classify):
         """Test JAX configuration for CPU only environment."""
         mock_classify.return_value = EnvironmentType.CPU_ONLY
 
@@ -653,8 +643,7 @@ class TestGPUStabilityTester:
 
         assert result.is_stable is False
         assert (
-            result.error_message is not None
-            and "Environment setup failed" in result.error_message
+            result.error_message is not None and "Environment setup failed" in result.error_message
         )
         assert result.test_duration_ms > 0
 
@@ -772,9 +761,7 @@ class TestDependencyManager:
     def test_get_implementation_unavailable(self):
         """Test getting implementation when unavailable."""
         manager = DependencyManager()
-        manager.dependencies["missing_dep"] = (
-            DependencyStatus.UNAVAILABLE
-        )  # Use correct attribute
+        manager.dependencies["missing_dep"] = DependencyStatus.UNAVAILABLE  # Use correct attribute
 
         # The real implementation raises ImportError when dependency is unavailable
         with pytest.raises(ImportError, match="Dependency missing_dep not available"):
@@ -1047,9 +1034,7 @@ class TestSafeJITCompiler:
         with patch.object(compiler, "_no_jit_wrapper") as mock_no_jit:
             mock_no_jit.return_value = test_func
 
-            result = compiler._apply_strategy(
-                test_func, CompilationStrategy.NO_JIT, env
-            )
+            result = compiler._apply_strategy(test_func, CompilationStrategy.NO_JIT, env)
 
             mock_no_jit.assert_called_once_with(test_func)
             assert result is test_func
@@ -1103,9 +1088,7 @@ class TestSafeJITCompiler:
                 patch("flax.nnx.jit", side_effect=RuntimeError("Flax JIT failed")),
                 patch("jax.jit", side_effect=RuntimeError("JAX JIT failed")),
             ):
-                result = compiler._apply_strategy(
-                    test_func, CompilationStrategy.SAFE_JIT, env
-                )
+                result = compiler._apply_strategy(test_func, CompilationStrategy.SAFE_JIT, env)
 
                 # Should fall back to no-jit wrapper
                 mock_no_jit.assert_called_once_with(test_func)
@@ -1154,9 +1137,7 @@ class TestSafeJITCompiler:
 class TestUtilityFunctions:
     """Test utility functions."""
 
-    @patch(
-        "opifex.core.testing_infrastructure._SingletonManager.get_environment_detector"
-    )
+    @patch("opifex.core.testing_infrastructure._SingletonManager.get_environment_detector")
     def test_get_environment_detector(self, mock_singleton):
         """Test get_environment_detector function."""
         mock_detector = Mock()
@@ -1167,9 +1148,7 @@ class TestUtilityFunctions:
         assert detector is mock_detector
         mock_singleton.assert_called_once()
 
-    @patch(
-        "opifex.core.testing_infrastructure._SingletonManager.get_jax_config_manager"
-    )
+    @patch("opifex.core.testing_infrastructure._SingletonManager.get_jax_config_manager")
     def test_get_jax_config_manager(self, mock_singleton):
         """Test get_jax_config_manager function."""
         mock_manager = Mock()
@@ -1183,12 +1162,8 @@ class TestUtilityFunctions:
     @patch("opifex.core.testing_infrastructure.get_environment_detector")
     @patch("opifex.core.testing_infrastructure.get_jax_config_manager")
     @patch("opifex.core.testing_infrastructure._check_dependencies")
-    @patch(
-        "opifex.core.testing_infrastructure._SingletonManager.get_current_environment"
-    )
-    @patch(
-        "opifex.core.testing_infrastructure._SingletonManager.set_current_environment"
-    )
+    @patch("opifex.core.testing_infrastructure._SingletonManager.get_current_environment")
+    @patch("opifex.core.testing_infrastructure._SingletonManager.set_current_environment")
     def test_ensure_safe_jax_environment_cached(
         self,
         mock_set_env,
@@ -1219,12 +1194,8 @@ class TestUtilityFunctions:
     @patch("opifex.core.testing_infrastructure.get_environment_detector")
     @patch("opifex.core.testing_infrastructure.get_jax_config_manager")
     @patch("opifex.core.testing_infrastructure._check_dependencies")
-    @patch(
-        "opifex.core.testing_infrastructure._SingletonManager.get_current_environment"
-    )
-    @patch(
-        "opifex.core.testing_infrastructure._SingletonManager.set_current_environment"
-    )
+    @patch("opifex.core.testing_infrastructure._SingletonManager.get_current_environment")
+    @patch("opifex.core.testing_infrastructure._SingletonManager.set_current_environment")
     def test_ensure_safe_jax_environment_new(
         self,
         mock_set_env,
@@ -1244,9 +1215,7 @@ class TestUtilityFunctions:
         mock_get_detector.return_value = mock_detector
 
         mock_jax_mgr = Mock()
-        mock_jax_mgr.configure_jax_for_environment.return_value = (
-            EnvironmentType.CPU_ONLY
-        )
+        mock_jax_mgr.configure_jax_for_environment.return_value = EnvironmentType.CPU_ONLY
         mock_get_jax_mgr.return_value = mock_jax_mgr
 
         mock_dependencies = {"dep1": DependencyStatus.AVAILABLE}
@@ -1258,9 +1227,7 @@ class TestUtilityFunctions:
         mock_get_detector.assert_called_once()
         mock_detector.detect_cuda_environment.assert_called_once()
         mock_get_jax_mgr.assert_called_once()
-        mock_jax_mgr.configure_jax_for_environment.assert_called_once_with(
-            mock_cuda_env
-        )
+        mock_jax_mgr.configure_jax_for_environment.assert_called_once_with(mock_cuda_env)
         mock_check_deps.assert_called_once()
         mock_set_env.assert_called_once()
 
@@ -1311,9 +1278,7 @@ class TestDecorators:
 
     @patch("opifex.core.testing_infrastructure.ensure_safe_jax_environment")
     @patch("opifex.core.testing_infrastructure.DependencyManager")
-    def test_requires_dependency_decorator_available(
-        self, mock_dep_manager_class, mock_ensure_env
-    ):
+    def test_requires_dependency_decorator_available(self, mock_dep_manager_class, mock_ensure_env):
         """Test requires_dependency decorator with available dependency."""
         # Mock dependency manager
         mock_dep_manager = Mock()
@@ -1370,9 +1335,7 @@ class TestDecorators:
         result = test_function()
         assert result == "success with mock"
         mock_dep_manager.is_available.assert_called_once_with("test_dep")
-        mock_dep_manager.register_mock.assert_called_once_with(
-            "test_dep", mock_implementation
-        )
+        mock_dep_manager.register_mock.assert_called_once_with("test_dep", mock_implementation)
 
     @patch("opifex.core.testing_infrastructure.ensure_safe_jax_environment")
     @patch("opifex.core.testing_infrastructure.DependencyManager")
@@ -1410,9 +1373,7 @@ class TestIntegrationScenarios:
 
     @patch("opifex.core.testing_infrastructure.EnvironmentDetector")
     @patch("opifex.core.testing_infrastructure.JAXConfigurationManager")
-    def test_full_environment_setup_gpu_safe(
-        self, mock_jax_mgr_class, mock_detector_class
-    ):
+    def test_full_environment_setup_gpu_safe(self, mock_jax_mgr_class, mock_detector_class):
         """Test full environment setup for GPU safe scenario."""
         # Mock detector
         mock_detector = Mock()
@@ -1424,9 +1385,7 @@ class TestIntegrationScenarios:
 
         # Mock JAX manager
         mock_jax_mgr = Mock()
-        mock_jax_mgr.configure_jax_for_environment.return_value = (
-            EnvironmentType.GPU_SAFE
-        )
+        mock_jax_mgr.configure_jax_for_environment.return_value = EnvironmentType.GPU_SAFE
         mock_jax_mgr_class.return_value = mock_jax_mgr
 
         # Reset singleton state
@@ -1445,9 +1404,7 @@ class TestIntegrationScenarios:
 
     @patch("opifex.core.testing_infrastructure.EnvironmentDetector")
     @patch("opifex.core.testing_infrastructure.JAXConfigurationManager")
-    def test_full_environment_setup_cpu_only(
-        self, mock_jax_mgr_class, mock_detector_class
-    ):
+    def test_full_environment_setup_cpu_only(self, mock_jax_mgr_class, mock_detector_class):
         """Test full environment setup for CPU only scenario."""
         # Mock detector
         mock_detector = Mock()
@@ -1459,9 +1416,7 @@ class TestIntegrationScenarios:
 
         # Mock JAX manager
         mock_jax_mgr = Mock()
-        mock_jax_mgr.configure_jax_for_environment.return_value = (
-            EnvironmentType.CPU_ONLY
-        )
+        mock_jax_mgr.configure_jax_for_environment.return_value = EnvironmentType.CPU_ONLY
         mock_jax_mgr_class.return_value = mock_jax_mgr
 
         # Reset singleton state
@@ -1488,9 +1443,7 @@ class TestIntegrationScenarios:
             return x + 1
 
         # Should not raise exceptions
-        with patch(
-            "opifex.core.testing_infrastructure.ensure_safe_jax_environment"
-        ) as mock_ensure:
+        with patch("opifex.core.testing_infrastructure.ensure_safe_jax_environment") as mock_ensure:
             mock_env = TestEnvironment(
                 backend=BackendType.CPU,
                 environment_type=EnvironmentType.CPU_ONLY,

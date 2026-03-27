@@ -33,9 +33,7 @@ def test_cascade_trainer_lifecycle():
 
     optimizer = MultilevelAdam(learning_rate=0.1)
 
-    trainer = CascadeTrainer(
-        hierarchy=hierarchy, optimizer=optimizer, prolongate_fn=prolongate_fn
-    )
+    trainer = CascadeTrainer(hierarchy=hierarchy, optimizer=optimizer, prolongate_fn=prolongate_fn)
 
     assert trainer.current_level == 0
     assert trainer.get_current_model().size == 2  # pyright: ignore[reportAttributeAccessIssue]

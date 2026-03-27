@@ -24,9 +24,7 @@ class TestGraphNeuralOperator:
         num_edges = 32
 
         # Generate graph data
-        node_features = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, num_nodes, node_dim)
-        )
+        node_features = jax.random.normal(jax.random.PRNGKey(0), (batch_size, num_nodes, node_dim))
 
         # Random edge connectivity (ensure valid indices)
         edge_indices = jax.random.randint(
@@ -303,9 +301,7 @@ class TestGraphNeuralOperator:
         num_edges = 128
 
         # Create larger graph data
-        node_features = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, num_nodes, node_dim)
-        )
+        node_features = jax.random.normal(jax.random.PRNGKey(0), (batch_size, num_nodes, node_dim))
         edge_indices = jax.random.randint(
             jax.random.PRNGKey(1), (batch_size, num_edges, 2), 0, num_nodes
         )
@@ -352,15 +348,11 @@ class TestGraphNeuralOperator:
         num_nodes = 16
         num_edges = 32
 
-        node_features = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, num_nodes, 32)
-        )
+        node_features = jax.random.normal(jax.random.PRNGKey(0), (batch_size, num_nodes, 32))
         edge_indices = jax.random.randint(
             jax.random.PRNGKey(1), (batch_size, num_edges, 2), 0, num_nodes
         )
-        edge_features = jax.random.normal(
-            jax.random.PRNGKey(2), (batch_size, num_edges, 8)
-        )
+        edge_features = jax.random.normal(jax.random.PRNGKey(2), (batch_size, num_edges, 8))
 
         output = model(node_features, edge_indices, edge_features)
 
@@ -379,15 +371,11 @@ class TestMollifiedGNO:
         node_dim = 4
         num_edges = 12
 
-        node_features = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, num_nodes, node_dim)
-        )
+        node_features = jax.random.normal(jax.random.PRNGKey(0), (batch_size, num_nodes, node_dim))
         edge_indices = jax.random.randint(
             jax.random.PRNGKey(1), (batch_size, num_edges, 2), 0, num_nodes
         )
-        positions = jax.random.normal(
-            jax.random.PRNGKey(99), (batch_size, num_nodes, 2)
-        )
+        positions = jax.random.normal(jax.random.PRNGKey(99), (batch_size, num_nodes, 2))
         return {
             "node_features": node_features,
             "edge_indices": edge_indices,
@@ -474,9 +462,7 @@ class TestMollifiedGNO:
         data = sample_graph_positions
 
         def loss_fn(model, node_features, edge_indices, positions):
-            return jnp.mean(
-                model(node_features, edge_indices, positions=positions) ** 2
-            )
+            return jnp.mean(model(node_features, edge_indices, positions=positions) ** 2)
 
         grads = nnx.grad(loss_fn)(
             model,

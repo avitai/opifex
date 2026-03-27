@@ -79,12 +79,8 @@ class TestCompilationCache:
         x64_disabled = "x64_enabled: False" in output_lines
 
         # Check that key optimizations are applied
-        assert cache_dir_ok, (
-            f"Compilation cache directory not set. Output: {result.stdout}"
-        )
-        assert cache_time_ok, (
-            f"Cache min compile time not set properly. Output: {result.stdout}"
-        )
+        assert cache_dir_ok, f"Compilation cache directory not set. Output: {result.stdout}"
+        assert cache_time_ok, f"Cache min compile time not set properly. Output: {result.stdout}"
 
         # Check default precision settings - should use 32-bit by default for performance
         assert x64_disabled, (

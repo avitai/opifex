@@ -132,9 +132,7 @@ class EmailNotification(NotificationChannel):
             msg = MIMEMultipart()
             msg["From"] = self.from_address
             msg["To"] = ", ".join(self.to_addresses)
-            msg["Subject"] = (
-                f"[{alert.severity.value.upper()}] Opifex Alert: {alert.rule_name}"
-            )
+            msg["Subject"] = f"[{alert.severity.value.upper()}] Opifex Alert: {alert.rule_name}"
 
             # Create email body
             body = self._create_email_body(alert)
@@ -174,28 +172,19 @@ class EmailNotification(NotificationChannel):
                 <tr><td><strong>Timestamp</strong></td><td>
                 {alert.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")}</td></tr>
                 {
-            f"<tr><td><strong>Value</strong></td><td>{alert.value}</td></tr>"
-            if alert.value
-            else ""
+            f"<tr><td><strong>Value</strong></td><td>{alert.value}</td></tr>" if alert.value else ""
         }
             </table>
             <br>
             <h3>Labels</h3>
             <table border="1" style="border-collapse: collapse;">
-                {
-            "".join(
-                f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in alert.labels.items()
-            )
-        }
+                {"".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in alert.labels.items())}
             </table>
             <br>
             <h3>Annotations</h3>
             <table border="1" style="border-collapse: collapse;">
                 {
-            "".join(
-                f"<tr><td>{k}</td><td>{v}</td></tr>"
-                for k, v in alert.annotations.items()
-            )
+            "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in alert.annotations.items())
         }
             </table>
         </body>
@@ -242,9 +231,7 @@ class SlackNotification(NotificationChannel):
                             },
                             {
                                 "title": "Timestamp",
-                                "value": alert.timestamp.strftime(
-                                    "%Y-%m-%d %H:%M:%S UTC"
-                                ),
+                                "value": alert.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC"),
                                 "short": True,
                             },
                         ]
@@ -299,9 +286,7 @@ class AlertManager:
 
     def suppress_rule(self, rule_name: str, duration_minutes: int = 60) -> None:
         """Suppress alerts for a rule temporarily."""
-        self.suppressed_rules[rule_name] = datetime.now(UTC) + timedelta(
-            minutes=duration_minutes
-        )
+        self.suppressed_rules[rule_name] = datetime.now(UTC) + timedelta(minutes=duration_minutes)
 
     def is_rule_suppressed(self, rule_name: str) -> bool:
         """Check if rule is currently suppressed."""
@@ -385,9 +370,7 @@ class AlertManager:
             {
                 "name": "opifex_alerts",
                 "rules": [
-                    rule.to_prometheus_rule()
-                    for rule in self.rules.values()
-                    if rule.enabled
+                    rule.to_prometheus_rule() for rule in self.rules.values() if rule.enabled
                 ],
             }
         ]
@@ -415,10 +398,7 @@ def get_system_alert_rules() -> list[AlertRule]:
         AlertRule(
             name="HighMemoryUsage",
             description="Memory usage is above 85%",
-            query=(
-                "(1 - (node_memory_MemAvailable_bytes / "
-                "node_memory_MemTotal_bytes)) * 100"
-            ),
+            query=("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"),
             severity=AlertSeverity.WARNING,
             threshold=85,
             duration="5m",
@@ -428,24 +408,17 @@ def get_system_alert_rules() -> list[AlertRule]:
         AlertRule(
             name="CriticalMemoryUsage",
             description="Memory usage is above 95%",
-            query=(
-                "(1 - (node_memory_MemAvailable_bytes / "
-                "node_memory_MemTotal_bytes)) * 100"
-            ),
+            query=("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"),
             severity=AlertSeverity.CRITICAL,
             threshold=95,
             duration="2m",
             labels={"category": "system"},
-            annotations={
-                "summary": "Critical memory usage - immediate attention required"
-            },
+            annotations={"summary": "Critical memory usage - immediate attention required"},
         ),
         AlertRule(
             name="HighDiskUsage",
             description="Disk usage is above 90%",
-            query=(
-                "(1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100"
-            ),
+            query=("(1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100"),
             severity=AlertSeverity.WARNING,
             threshold=90,
             duration="10m",
@@ -507,10 +480,7 @@ def get_inference_alert_rules() -> list[AlertRule]:
         AlertRule(
             name="HighInferenceLatency",
             description="Inference latency is too high",
-            query=(
-                "histogram_quantile(0.95, "
-                "rate(opifex_inference_duration_seconds_bucket[5m]))"
-            ),
+            query=("histogram_quantile(0.95, rate(opifex_inference_duration_seconds_bucket[5m]))"),
             severity=AlertSeverity.WARNING,
             threshold=1.0,  # 1 second
             duration="5m",
@@ -545,11 +515,7 @@ def get_inference_alert_rules() -> list[AlertRule]:
 
 def setup_default_alerts(alert_manager: AlertManager) -> None:
     """Set up default alert rules."""
-    all_rules = (
-        get_system_alert_rules()
-        + get_training_alert_rules()
-        + get_inference_alert_rules()
-    )
+    all_rules = get_system_alert_rules() + get_training_alert_rules() + get_inference_alert_rules()
 
     for rule in all_rules:
         alert_manager.add_rule(rule)

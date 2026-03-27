@@ -82,18 +82,18 @@ def solve_diffusion_advection_2d(
     # Input validation (outside JIT for proper error handling)
     if not (isinstance(initial_condition, jax.Array) and initial_condition.ndim == 2):
         raise ValueError("initial_condition must be a 2D array")
-    if not (isinstance(diffusion_coeff, (int, float)) and diffusion_coeff > 0):
+    if not (isinstance(diffusion_coeff, int | float) and diffusion_coeff > 0):
         raise ValueError("diffusion_coeff must be a positive number")
-    if not (isinstance(dt, (int, float)) and dt > 0):
+    if not (isinstance(dt, int | float) and dt > 0):
         raise ValueError("dt must be a positive number")
     if not (isinstance(n_steps, int) and n_steps > 0):
         raise ValueError("n_steps must be a positive integer")
-    if not (isinstance(grid_spacing, (int, float)) and grid_spacing > 0):
+    if not (isinstance(grid_spacing, int | float) and grid_spacing > 0):
         raise ValueError("grid_spacing must be a positive number")
     if not (
         isinstance(advection_vel, tuple)
         and len(advection_vel) == 2
-        and all(isinstance(v, (int, float)) for v in advection_vel)
+        and all(isinstance(v, int | float) for v in advection_vel)
     ):
         raise ValueError("advection_vel must be a tuple of two numbers")
 

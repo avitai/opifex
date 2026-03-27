@@ -1,8 +1,8 @@
 site_name: Opifex - Unified Scientific Machine Learning Framework
 site_description: JAX-native platform for scientific machine learning, neural operators, physics-informed neural networks, and neural density functional theory
 site_url: https://docs.avitai.bio/opifex
-repo_url: https://github.com/Opifex/Opifex
-repo_name: Opifex/Opifex
+repo_url: https://github.com/avitai/opifex
+repo_name: avitai/opifex
 edit_uri: edit/main/docs/
 
 # Configuration for a Sphinx Book Theme-like appearance
@@ -105,7 +105,7 @@ nav:
           - FNO on Darcy Flow: examples/neural-operators/fno-darcy.md
           - FNO on Burgers Equation: examples/neural-operators/fno-burgers.md
           - SFNO on Climate Data: examples/neural-operators/sfno-climate-simple.md
-          - SFNO with Conservation Laws: examples/neural-operators/sfno-climate-comprehensive.md
+          - SFNO with Conservation Laws: examples/neural-operators/sfno-climate-full.md
           - U-FNO on Turbulence: examples/neural-operators/ufno-turbulence.md
           - UNO on Darcy Flow: examples/neural-operators/uno-darcy.md
           - DeepONet on Darcy Flow: examples/neural-operators/deeponet-darcy.md

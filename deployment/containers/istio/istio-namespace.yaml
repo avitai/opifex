@@ -1,5 +1,5 @@
 # Istio Service Mesh Configuration for Opifex Framework
-# Phase 7.1: Container Orchestration Implementation
+# Version 7.1: Container Orchestration Implementation
 # Target: <5ms service mesh overhead + enterprise security + traffic management
 
 apiVersion: v1

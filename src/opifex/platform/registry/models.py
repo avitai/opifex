@@ -83,8 +83,7 @@ class NeuralFunctional(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<NeuralFunctional(id={self.id}, name='{self.name}', "
-            f"type='{self.functional_type}')>"
+            f"<NeuralFunctional(id={self.id}, name='{self.name}', type='{self.functional_type}')>"
         )
 
 
@@ -199,8 +198,7 @@ class FunctionalVersion(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<FunctionalVersion(functional_id={self.functional_id}, "
-            f"version='{self.version_tag}')>"
+            f"<FunctionalVersion(functional_id={self.functional_id}, version='{self.version_tag}')>"
         )
 
 
@@ -301,10 +299,7 @@ class FunctionalRating(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<FunctionalRating(functional_id={self.functional_id}, "
-            f"rating={self.rating})>"
-        )
+        return f"<FunctionalRating(functional_id={self.functional_id}, rating={self.rating})>"
 
 
 class FunctionalTag(Base):
@@ -324,9 +319,7 @@ class FunctionalTag(Base):
     color = Column(String(7))  # Hex color code
 
     # Hierarchy support
-    parent_tag_id = Column(
-        UUID(as_uuid=True), ForeignKey("functional_tags.id"), nullable=True
-    )
+    parent_tag_id = Column(UUID(as_uuid=True), ForeignKey("functional_tags.id"), nullable=True)
 
     # Usage tracking
     usage_count = Column(Integer, default=0, nullable=False)

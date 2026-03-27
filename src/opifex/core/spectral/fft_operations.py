@@ -56,9 +56,7 @@ def standardized_fft(x: jax.Array, spatial_dims: int) -> jax.Array:
     raise ValueError(f"Unsupported spatial_dims: {spatial_dims}")
 
 
-def standardized_ifft(
-    x: jax.Array, target_shape: tuple, spatial_dims: int
-) -> jax.Array:
+def standardized_ifft(x: jax.Array, target_shape: tuple, spatial_dims: int) -> jax.Array:
     """Standardized IFFT operation with scientific computing precision.
 
     Args:
@@ -154,9 +152,7 @@ def spectral_derivative(
     elif isinstance(axis, int):
         # Validate single axis bounds
         if not validate_axis_bounds(axis, spatial_dims):
-            raise ValueError(
-                f"Axis {axis} out of bounds for {spatial_dims} spatial dimensions"
-            )
+            raise ValueError(f"Axis {axis} out of bounds for {spatial_dims} spatial dimensions")
         # Normalize negative indices - we know this returns an int
         normalized_axis = normalize_axis(axis, spatial_dims)
         assert isinstance(normalized_axis, int)  # Type narrowing  # nosec B101
@@ -165,8 +161,7 @@ def spectral_derivative(
         # Handle sequence of axes
         if not validate_axis_bounds(axis, spatial_dims):
             raise ValueError(
-                f"One or more axes in {axis} out of bounds for "
-                f"{spatial_dims} spatial dimensions"
+                f"One or more axes in {axis} out of bounds for {spatial_dims} spatial dimensions"
             )
         # Normalize all negative indices and convert to list
         normalized_axes = normalize_axis(axis, spatial_dims)
@@ -202,9 +197,7 @@ def spectral_derivative(
         x_ft_deriv = x_ft * k
 
         # Transform back to spatial domain
-        x_deriv = standardized_ifft(
-            x_ft_deriv, target_shape=x.shape, spatial_dims=spatial_dims
-        )
+        x_deriv = standardized_ifft(x_ft_deriv, target_shape=x.shape, spatial_dims=spatial_dims)
 
         # For real inputs, the derivative should also be real
         # (take real part to remove numerical noise)
@@ -279,9 +272,7 @@ def spectral_filter(
         raise ValueError(f"Unsupported filter_type: {filter_type}")
 
     # Transform back to spatial domain
-    result = standardized_ifft(
-        x_fft_filtered, target_shape=x.shape, spatial_dims=spatial_dims
-    )
+    result = standardized_ifft(x_fft_filtered, target_shape=x.shape, spatial_dims=spatial_dims)
 
     # For real inputs, the result should also be real
     # (take real part to remove numerical noise)
@@ -318,10 +309,7 @@ def fft_frequency_grid(
 
     freqs = []
     for i, (n, spacing) in enumerate(zip(shape, dx_list, strict=False)):
-        if i == len(shape) - 1:  # Last dimension uses rfftfreq
-            freq = jnp.fft.rfftfreq(n, spacing)
-        else:
-            freq = jnp.fft.fftfreq(n, spacing)
+        freq = jnp.fft.rfftfreq(n, spacing) if i == len(shape) - 1 else jnp.fft.fftfreq(n, spacing)
 
         if wavenumber:
             freq = 2 * jnp.pi * freq

@@ -22,9 +22,7 @@ class TestUFourierNeuralOperator:
         height, width = 64, 64
         in_channels = 3
 
-        return jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, in_channels, height, width)
-        )
+        return jax.random.normal(jax.random.PRNGKey(0), (batch_size, in_channels, height, width))
 
     @pytest.fixture
     def sample_data_3d(self):

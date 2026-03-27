@@ -116,10 +116,7 @@ class MultiFidelityConfig:
         if self.high_fidelity_count <= 0:
             raise ValueError("high_fidelity_count must be positive")
 
-        if (
-            not isinstance(self.fidelity_weights, list)
-            or len(self.fidelity_weights) < 2
-        ):
+        if not isinstance(self.fidelity_weights, list) or len(self.fidelity_weights) < 2:
             raise ValueError("fidelity_weights must be a list with at least 2 elements")
 
         if not (0.0 <= self.uncertainty_threshold <= 1.0):

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Opifex training framework provides comprehensive, production-ready training infrastructure for scientific machine learning models. Built on JAX and FLAX NNX, it supports physics-informed neural networks (PINNs), neural operators, quantum neural networks, and traditional supervised learning with advanced optimization algorithms and physics-aware loss functions.
+The Opifex training framework provides full, production-ready training infrastructure for scientific machine learning models. Built on JAX and FLAX NNX, it supports physics-informed neural networks (PINNs), neural operators, quantum neural networks, and traditional supervised learning with advanced optimization algorithms and physics-aware loss functions.
 
 The training system is designed with modularity and extensibility in mind, featuring component-based architecture, advanced error recovery, and sophisticated metrics collection for scientific computing applications.
 
@@ -69,10 +69,10 @@ print(f"Final training loss: {history['train_losses'][-1]:.6f}")
 **Key Advantages:**
 
 - **Composable**: Mix and match physics configurations without modifying trainer code
-- **Type-Safe**: Full IDE support with comprehensive type hints
+- **Type-Safe**: Full IDE support with full type hints
 - **Zero Runtime Overhead**: All configuration at initialization
 - **Extensible**: Add new configs without changing existing code
-- **Well-Tested**: 88 comprehensive tests covering all functionality
+- **Well-Tested**: 88 full tests covering all functionality
 
 **Available Physics Configurations:**
 
@@ -566,7 +566,7 @@ class ComprehensiveMetricsCollector(AdvancedMetricsCollector):
             "grad_norm_total": jnp.sqrt(sum(jnp.sum(g**2) for g in jax.tree_leaves(gradients)))
         })
 
-# Use comprehensive metrics
+# Use full metrics
 comprehensive_metrics = ComprehensiveMetricsCollector()
 ```
 
@@ -628,7 +628,7 @@ class AdvancedCheckpointManager:
 
     def save_checkpoint(self, epoch, model_state, optimizer_state,
                        training_metrics, physics_metrics=None):
-        """Save comprehensive checkpoint with metadata."""
+        """Save full checkpoint with metadata."""
 
         # Prepare metadata
         metadata = {
@@ -680,7 +680,7 @@ checkpoint_manager = AdvancedCheckpointManager(
     max_to_keep=10
 )
 
-print("Comprehensive training infrastructure guide completed")
+print("Full training infrastructure guide completed")
 ```
 
 This thorough training guide provides the complete infrastructure for advanced scientific machine learning training. The modular, component-based architecture enables researchers to build sophisticated training workflows while maintaining the flexibility needed for modern scientific applications.
@@ -722,7 +722,7 @@ while not trainer.is_at_finest():
 - Better optimization landscape via progressive capacity
 - Natural curriculum from simple to complex representations
 
-For comprehensive details on MLP and FNO hierarchies, see the [Multilevel Training Guide](../methods/multilevel-training.md).
+For full details on MLP and FNO hierarchies, see the [Multilevel Training Guide](../methods/multilevel-training.md).
 
 ### Adaptive Sampling
 

@@ -101,7 +101,7 @@ class OrbaxCheckpointManager:
             ValueError: If step is negative
         """
         # Validate inputs
-        if not isinstance(model, (nnx.Module, train_state.TrainState, dict)):
+        if not isinstance(model, nnx.Module | train_state.TrainState | dict):
             raise TypeError("Expected model to be nnx.Module, TrainState, or dict")
 
         if step < 0:
@@ -185,16 +185,11 @@ class OrbaxCheckpointManager:
 
     def load_checkpoint(
         self,
-        target_model: nnx.Module
-        | train_state.TrainState
-        | dict[str, Any]
-        | None = None,
+        target_model: nnx.Module | train_state.TrainState | dict[str, Any] | None = None,
         step: int | None = None,
         return_original_on_missing: bool = True,
         restrict_to_nnx_module: bool = False,
-    ) -> tuple[
-        nnx.Module | train_state.TrainState | dict[str, Any] | None, dict[str, Any]
-    ]:
+    ) -> tuple[nnx.Module | train_state.TrainState | dict[str, Any] | None, dict[str, Any]]:
         """Load a checkpoint and restore complete model state and metadata.
 
         Args:
@@ -213,9 +208,7 @@ class OrbaxCheckpointManager:
             or step not in self.checkpoint_manager.all_steps()
             or (
                 target_model is not None
-                and not isinstance(
-                    target_model, (nnx.Module, train_state.TrainState, dict)
-                )
+                and not isinstance(target_model, nnx.Module | train_state.TrainState | dict)
             )
         )
         try:
@@ -228,17 +221,11 @@ class OrbaxCheckpointManager:
                 if target_model is None:
                     result_model = model_restored
                 elif isinstance(target_model, nnx.Module):
-                    result_model = self._restore_nnx_module(
-                        target_model, model_restored, step
-                    )
+                    result_model = self._restore_nnx_module(target_model, model_restored, step)
                 elif isinstance(target_model, train_state.TrainState):
-                    result_model = self._restore_train_state(
-                        target_model, model_restored, step
-                    )
+                    result_model = self._restore_train_state(target_model, model_restored, step)
                 elif isinstance(target_model, dict):
-                    result_model = self._restore_dict(
-                        target_model, model_restored, step
-                    )
+                    result_model = self._restore_dict(target_model, model_restored, step)
         except Exception:
             logger.exception("Error loading checkpoint")
             error = True
@@ -269,16 +256,12 @@ class OrbaxCheckpointManager:
         try:
             model_state = nnx.state(model)
         except (RuntimeError, TypeError, ValueError, IndexError, AttributeError) as e:
-            raise TypeError(
-                f"Expected model to be nnx.Module, got {type(model)}"
-            ) from e
+            raise TypeError(f"Expected model to be nnx.Module, got {type(model)}") from e
         params = model_state.get("params", model_state)
         # Always pass 'step' as a kwarg to TrainState.create, never as a named argument
         # Remove 'step' from kwargs if present, and set it after creation
         step_val = kwargs.pop("step", step)
-        ts = train_state.TrainState.create(
-            apply_fn=model, params=params, tx=optimizer, **kwargs
-        )
+        ts = train_state.TrainState.create(apply_fn=model, params=params, tx=optimizer, **kwargs)
         return ts.replace(step=step_val)
 
     def save_train_state_checkpoint(

@@ -237,9 +237,7 @@ test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 # Relative L2 error per sample
 pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
 Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-rel_l2 = float(
-    jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1))
-)
+rel_l2 = float(jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)))
 
 print(f"Test MSE:         {test_mse:.6f}")
 print(f"Test Relative L2: {rel_l2:.6f}")
@@ -257,9 +255,7 @@ print()
 print("Generating visualization...")
 
 fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-fig.suptitle(
-    "Spherical FNO Climate Prediction (Opifex)", fontsize=14, fontweight="bold"
-)
+fig.suptitle("Spherical FNO Climate Prediction (Opifex)", fontsize=14, fontweight="bold")
 
 sample_idx = 0
 
@@ -306,7 +302,7 @@ After running this example you should observe:
 - Visualization comparing input, ground truth, SFNO prediction, and error
 
 ## Next Steps
-- Try the comprehensive SFNO example with conservation-aware loss
+- Try the full SFNO example with conservation-aware loss
 - Increase `lmax` for higher spectral resolution
 - Experiment with more training samples and epochs
 - Explore energy and mass conservation analysis

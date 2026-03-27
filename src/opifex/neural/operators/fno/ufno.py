@@ -54,9 +54,7 @@ class UFNOEncoderBlock(nnx.Module):
         self.activation = activation
 
         # Spectral convolution: in_channels -> out_channels
-        self.spectral_conv = StandardSpectralConv(
-            in_channels, out_channels, modes, rngs=rngs
-        )
+        self.spectral_conv = StandardSpectralConv(in_channels, out_channels, modes, rngs=rngs)
 
         # Skip connection: in_channels -> out_channels
         self.skip = nnx.Linear(in_channels, out_channels, rngs=rngs)
@@ -164,9 +162,7 @@ class UFNODecoderBlock(nnx.Module):
 
         # Spectral convolution after concatenation
         combined_channels = in_channels + skip_channels
-        self.spectral_conv = StandardSpectralConv(
-            combined_channels, out_channels, modes, rngs=rngs
-        )
+        self.spectral_conv = StandardSpectralConv(combined_channels, out_channels, modes, rngs=rngs)
 
         # Skip connection for concatenated channels
         self.skip = nnx.Linear(combined_channels, out_channels, rngs=rngs)
@@ -267,9 +263,7 @@ class UFourierNeuralOperator(nnx.Module):
         self.bottleneck_spectral = StandardSpectralConv(
             bottleneck_channels, bottleneck_channels, modes, rngs=rngs
         )
-        self.bottleneck_skip = nnx.Linear(
-            bottleneck_channels, bottleneck_channels, rngs=rngs
-        )
+        self.bottleneck_skip = nnx.Linear(bottleneck_channels, bottleneck_channels, rngs=rngs)
 
         # Decoder path
         for i in range(num_levels - 1):
@@ -277,9 +271,7 @@ class UFourierNeuralOperator(nnx.Module):
             level_idx = num_levels - 2 - i
             decoder = UFNODecoderBlock(
                 channels[level_idx + 1],  # Input from deeper level
-                channels[
-                    level_idx + 1
-                ],  # Skip channels (same as output channels of encoder)
+                channels[level_idx + 1],  # Skip channels (same as output channels of encoder)
                 channels[level_idx],  # Output channels (reduce by half)
                 modes,
                 downsample_factor,

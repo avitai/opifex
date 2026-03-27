@@ -236,20 +236,14 @@ print("Creating viscosity distribution...")
 
 # Generate training and test viscosities
 key, subkey = jax.random.split(key)
-all_viscosities = jnp.linspace(
-    NU_MIN, NU_MAX, NUM_TRAIN_VISCOSITIES + NUM_TEST_VISCOSITIES
-)
-train_viscosities = all_viscosities[::2][
-    :NUM_TRAIN_VISCOSITIES
-]  # Every other for training
+all_viscosities = jnp.linspace(NU_MIN, NU_MAX, NUM_TRAIN_VISCOSITIES + NUM_TEST_VISCOSITIES)
+train_viscosities = all_viscosities[::2][:NUM_TRAIN_VISCOSITIES]  # Every other for training
 test_viscosities = all_viscosities[1::2][:NUM_TEST_VISCOSITIES]  # Alternating for test
 
 print(
     f"  Training viscosities ({len(train_viscosities)}): {[f'{v:.4f}' for v in train_viscosities]}"
 )
-print(
-    f"  Test viscosities ({len(test_viscosities)}):     {[f'{v:.4f}' for v in test_viscosities]}"
-)
+print(f"  Test viscosities ({len(test_viscosities)}):     {[f'{v:.4f}' for v in test_viscosities]}")
 
 # %% [markdown]
 """
@@ -303,9 +297,7 @@ def maml_inner_loop(
 
         # Manual gradient descent update
         current_params = get_pinn_params(pinn)
-        new_params = jax.tree_util.tree_map(
-            lambda p, g: p - inner_lr * g, current_params, grads
-        )
+        new_params = jax.tree_util.tree_map(lambda p, g: p - inner_lr * g, current_params, grads)
         set_pinn_params(pinn, new_params)
 
     # Return adapted parameters
@@ -354,9 +346,7 @@ def maml_meta_step(
         # (First-order MAML approximation for efficiency)
         def make_loss_fn(nu_val):
             def loss_fn(model):
-                return pinn_loss(
-                    model, xt_domain, xt_initial, u_initial, xt_boundary, nu_val
-                )
+                return pinn_loss(model, xt_domain, xt_initial, u_initial, xt_boundary, nu_val)
 
             return loss_fn
 
@@ -365,9 +355,7 @@ def maml_meta_step(
         task_grads = grads  # Actually use the computed gradients
 
         if meta_gradients is None:
-            meta_gradients = jax.tree_util.tree_map(
-                lambda g: g / len(viscosities), task_grads
-            )
+            meta_gradients = jax.tree_util.tree_map(lambda g: g / len(viscosities), task_grads)
         else:
             meta_gradients = jax.tree_util.tree_map(
                 lambda mg, g: mg + g / len(viscosities), meta_gradients, task_grads
@@ -452,9 +440,7 @@ def reptile_inner_loop(
 
         # Manual SGD update
         current_params = get_pinn_params(pinn)
-        new_params = jax.tree_util.tree_map(
-            lambda p, g: p - inner_lr * g, current_params, grads
-        )
+        new_params = jax.tree_util.tree_map(lambda p, g: p - inner_lr * g, current_params, grads)
         set_pinn_params(pinn, new_params)
 
     # Return adapted parameters
@@ -491,9 +477,7 @@ def reptile_meta_step(
         )
 
         # Compute direction: adapted - meta
-        direction = jax.tree_util.tree_map(
-            lambda a, m: a - m, adapted_params, meta_params
-        )
+        direction = jax.tree_util.tree_map(lambda a, m: a - m, adapted_params, meta_params)
 
         if accumulated_direction is None:
             accumulated_direction = jax.tree_util.tree_map(
@@ -566,9 +550,7 @@ Compare:
 
 
 # %%
-def train_pinn(
-    pinn, init_params, nu, xt_domain, xt_initial, u_initial, xt_boundary, lr, steps
-):
+def train_pinn(pinn, init_params, nu, xt_domain, xt_initial, u_initial, xt_boundary, lr, steps):
     """Train PINN for given number of steps."""
     set_pinn_params(pinn, init_params)
 
@@ -721,9 +703,7 @@ print("Few-Shot Adaptation Results (lower is better):")
 print("-" * 50)
 print(f"{'Method':<25} {'Steps':<8} {'Loss':<12} {'PDE Residual':<12}")
 print("-" * 50)
-print(
-    f"{'MAML + adapt':<25} {ADAPT_STEPS:<8} {maml_mean_loss:<12.6f} {maml_mean_residual:<12.6f}"
-)
+print(f"{'MAML + adapt':<25} {ADAPT_STEPS:<8} {maml_mean_loss:<12.6f} {maml_mean_residual:<12.6f}")
 print(
     f"{'Reptile + adapt':<25} {ADAPT_STEPS:<8} {reptile_mean_loss:<12.6f} {reptile_mean_residual:<12.6f}"
 )
@@ -735,21 +715,15 @@ print(
 )
 
 # Calculate improvement
-loss_improvement_maml = (
-    (scratch_short_mean_loss - maml_mean_loss) / scratch_short_mean_loss * 100
-)
+loss_improvement_maml = (scratch_short_mean_loss - maml_mean_loss) / scratch_short_mean_loss * 100
 loss_improvement_reptile = (
     (scratch_short_mean_loss - reptile_mean_loss) / scratch_short_mean_loss * 100
 )
 residual_improvement_maml = (
-    (scratch_short_mean_residual - maml_mean_residual)
-    / scratch_short_mean_residual
-    * 100
+    (scratch_short_mean_residual - maml_mean_residual) / scratch_short_mean_residual * 100
 )
 residual_improvement_reptile = (
-    (scratch_short_mean_residual - reptile_mean_residual)
-    / scratch_short_mean_residual
-    * 100
+    (scratch_short_mean_residual - reptile_mean_residual) / scratch_short_mean_residual * 100
 )
 
 print()
@@ -763,24 +737,16 @@ print(
 )
 
 # Efficiency comparison: meta-learning achieves similar to 10x training
-efficiency_maml = (
-    scratch_long_mean_residual / maml_mean_residual if maml_mean_residual > 0 else 0
-)
+efficiency_maml = scratch_long_mean_residual / maml_mean_residual if maml_mean_residual > 0 else 0
 efficiency_reptile = (
-    scratch_long_mean_residual / reptile_mean_residual
-    if reptile_mean_residual > 0
-    else 0
+    scratch_long_mean_residual / reptile_mean_residual if reptile_mean_residual > 0 else 0
 )
 
 print()
 print("Efficiency Comparison:")
 print("-" * 50)
-print(
-    f"  MAML ({ADAPT_STEPS} steps) achieves similar residual as scratch ({SCRATCH_STEPS} steps)"
-)
-print(
-    f"  Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps needed"
-)
+print(f"  MAML ({ADAPT_STEPS} steps) achieves similar residual as scratch ({SCRATCH_STEPS} steps)")
+print(f"  Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps needed")
 print("=" * 70)
 
 # %% [markdown]
@@ -892,9 +858,7 @@ ax1.grid(True, alpha=0.3, axis="y")
 
 # Residual comparison
 ax2 = axes[1]
-ax2.bar(
-    x_pos - 1.5 * width, results["maml"]["residual"], width, label="MAML", color="blue"
-)
+ax2.bar(x_pos - 1.5 * width, results["maml"]["residual"], width, label="MAML", color="blue")
 ax2.bar(
     x_pos - 0.5 * width,
     results["reptile"]["residual"],
@@ -937,12 +901,8 @@ print("Meta-optimization example completed successfully!")
 print("=" * 70)
 print()
 print("Key Takeaways:")
-print(
-    "  1. Meta-learning finds initializations that generalize across viscosity values"
-)
-print(
-    "  2. MAML/Reptile + 100 steps achieves quality comparable to random + 1000 steps"
-)
+print("  1. Meta-learning finds initializations that generalize across viscosity values")
+print("  2. MAML/Reptile + 100 steps achieves quality comparable to random + 1000 steps")
 print(
     f"  3. Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps for same quality"
 )

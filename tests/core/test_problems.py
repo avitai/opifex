@@ -1,7 +1,7 @@
 """
 Tests for Unified Problem Definition Framework
 
-This module provides comprehensive tests for boundary conditions, initial conditions,
+This module provides full tests for boundary conditions, initial conditions,
 and symbolic constraints in the Opifex framework.
 """
 
@@ -29,9 +29,7 @@ class TestBoundaryConditions:
         def boundary_func(x, t=0.0):
             return jnp.sin(x) * jnp.exp(-t)
 
-        bc_func = DirichletBC(
-            boundary="right", value=boundary_func, time_dependent=True
-        )
+        bc_func = DirichletBC(boundary="right", value=boundary_func, time_dependent=True)
         assert callable(bc_func.value)
         assert bc_func.validate()
 
@@ -154,9 +152,7 @@ class TestBoundaryConditions:
         # Translation symmetry for periodic systems
         periodic_symmetry = SymmetryConstraint(
             symmetry_type="translational",
-            lattice_vectors=jnp.array(
-                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-            ),
+            lattice_vectors=jnp.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
             enforce_in_loss=True,
         )
         assert periodic_symmetry.symmetry_type == "translational"

@@ -1,4 +1,4 @@
-"""Comprehensive test suite for reinforcement learning-based optimization.
+"""Full test suite for reinforcement learning-based optimization.
 
 Tests cover DQN implementation, state encoding, experience replay, reward function,
 action interpretation, and integration with existing L2O framework.
@@ -210,9 +210,7 @@ class TestStateEncoder:
         resource_constraints = jnp.ones(8)
 
         # Encode state
-        encoded_state = encoder(
-            problem_features, convergence_history, resource_constraints
-        )
+        encoded_state = encoder(problem_features, convergence_history, resource_constraints)
 
         assert encoded_state.shape == (64,)
         assert jnp.all(jnp.isfinite(encoded_state))
@@ -454,9 +452,7 @@ class TestRLOptimizationAgent:
 
     def test_rl_optimization_agent_action_selection(self):
         """Test action selection with epsilon-greedy policy."""
-        config = RLOptimizationConfig(
-            epsilon_start=0.01, epsilon_end=0.0
-        )  # Greedy selection
+        config = RLOptimizationConfig(epsilon_start=0.01, epsilon_end=0.0)  # Greedy selection
         rngs = nnx.Rngs(42)
         agent = RLOptimizationAgent(config, rngs=rngs)
 
@@ -533,17 +529,13 @@ class TestActionInterpreter:
         config = MetaSchedulerConfig()
 
         # Test learning rate increase action
-        action_type, params = interpreter.interpret_action(
-            3, config
-        )  # increase_learning_rate
+        action_type, params = interpreter.interpret_action(3, config)  # increase_learning_rate
         assert action_type == "increase_learning_rate"
         assert "learning_rate" in params
         assert params["learning_rate"] > config.base_learning_rate
 
         # Test learning rate decrease action
-        action_type, params = interpreter.interpret_action(
-            4, config
-        )  # decrease_learning_rate
+        action_type, params = interpreter.interpret_action(4, config)  # decrease_learning_rate
         assert action_type == "decrease_learning_rate"
         assert "learning_rate" in params
         assert params["learning_rate"] < config.base_learning_rate
@@ -554,16 +546,12 @@ class TestActionInterpreter:
         config = MetaSchedulerConfig()
 
         # Test momentum increase
-        action_type, params = interpreter.interpret_action(
-            5, config
-        )  # increase_momentum
+        action_type, params = interpreter.interpret_action(5, config)  # increase_momentum
         assert action_type == "increase_momentum"
         assert "momentum" in params
 
         # Test momentum decrease
-        action_type, params = interpreter.interpret_action(
-            6, config
-        )  # decrease_momentum
+        action_type, params = interpreter.interpret_action(6, config)  # decrease_momentum
         assert action_type == "decrease_momentum"
         assert "momentum" in params
 

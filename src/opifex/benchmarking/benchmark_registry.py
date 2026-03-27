@@ -2,7 +2,7 @@
 
 Manages available benchmarks and neural operators with domain organization.
 Provides registration, discovery, and configuration management for the
-comprehensive benchmarking ecosystem.
+full benchmarking ecosystem.
 """
 
 import json
@@ -68,9 +68,7 @@ class DomainConfig:
             )
 
         if not self.required_metrics:
-            object.__setattr__(
-                self, "required_metrics", ["mse", "mae", "relative_error"]
-            )
+            object.__setattr__(self, "required_metrics", ["mse", "mae", "relative_error"])
 
         if not self.default_problem_sizes:
             object.__setattr__(self, "default_problem_sizes", [64, 128, 256, 512])
@@ -116,9 +114,7 @@ class BenchmarkRegistry:
         Args:
             config_path: Path to registry configuration file
         """
-        self.config_path = (
-            Path(config_path) if config_path else Path("benchmark_registry.json")
-        )
+        self.config_path = Path(config_path) if config_path else Path("benchmark_registry.json")
 
         # Internal storage — operator lookup via calibrax Registry[type]
         self._operator_registry: Registry[type] = Registry()
@@ -163,9 +159,7 @@ class BenchmarkRegistry:
                 # Load compatibility mappings
                 compatibility = config.get("compatibility", {})
                 for benchmark_name, compatible_ops in compatibility.items():
-                    self._benchmark_operator_compatibility[benchmark_name] = set(
-                        compatible_ops
-                    )
+                    self._benchmark_operator_compatibility[benchmark_name] = set(compatible_ops)
 
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 logger.warning("Could not load registry config: %s", e)
@@ -190,9 +184,7 @@ class BenchmarkRegistry:
             "operator_metadata": self._operator_metadata,
             "compatibility": {
                 name: list(compatible_ops)
-                for name, compatible_ops in (
-                    self._benchmark_operator_compatibility.items()
-                )
+                for name, compatible_ops in (self._benchmark_operator_compatibility.items())
             },
         }
 
@@ -239,9 +231,7 @@ class BenchmarkRegistry:
             try:
                 operator_class = self._operator_registry.get(operator_name)
                 if callable(operator_class):
-                    self._benchmark_operator_compatibility[benchmark.name].add(
-                        operator_name
-                    )
+                    self._benchmark_operator_compatibility[benchmark.name].add(operator_name)
             except (KeyError, TypeError):
                 continue
 
@@ -254,11 +244,7 @@ class BenchmarkRegistry:
         Returns:
             List of benchmark configurations for the domain
         """
-        return [
-            benchmark
-            for benchmark in self._benchmarks.values()
-            if benchmark.domain == domain
-        ]
+        return [benchmark for benchmark in self._benchmarks.values() if benchmark.domain == domain]
 
     def list_compatible_operators(self, benchmark_name: str) -> list[str]:
         """Get list of operators compatible with a benchmark.
@@ -352,9 +338,7 @@ class BenchmarkRegistry:
             for attr_name in dir(operators):
                 attr = getattr(operators, attr_name)
                 if (
-                    isinstance(attr, type)
-                    and callable(attr)
-                    and attr_name not in ["Module", "nnx"]
+                    isinstance(attr, type) and callable(attr) and attr_name not in ["Module", "nnx"]
                 ):  # Skip base classes
                     operator_classes.append(attr)
 
@@ -370,7 +354,7 @@ class BenchmarkRegistry:
         """Generate a report of benchmark-operator compatibility.
 
         Returns:
-            Comprehensive compatibility report
+            Full compatibility report
         """
         report = {
             "total_operators": len(self._operator_registry),

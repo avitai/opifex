@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import optax
 from calibrax.core import BenchmarkResult
 from calibrax.core.models import Metric
-from calibrax.metrics import (
+from calibrax.metrics.functional import (
     mae as calc_mae,
     mse as calc_mse,
     relative_error as calc_relative_error,

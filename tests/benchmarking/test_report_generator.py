@@ -151,9 +151,7 @@ class TestEvaluationSummaryGeneration:
         results = {"mse": 0.5, "r2_score": 0.3}
         summary = self.generator._generate_evaluation_summary(results)
 
-        assert any(
-            "Low correlation" in finding for finding in summary["notable_findings"]
-        )
+        assert any("Low correlation" in finding for finding in summary["notable_findings"])
 
     def test_fast_inference_finding(self):
         """Test that fast evaluation time generates finding."""
@@ -167,9 +165,7 @@ class TestEvaluationSummaryGeneration:
         results = {"mse": 0.05, "evaluation_time": 15.0}
         summary = self.generator._generate_evaluation_summary(results)
 
-        assert any(
-            "Slow inference" in finding for finding in summary["notable_findings"]
-        )
+        assert any("Slow inference" in finding for finding in summary["notable_findings"])
 
 
 class TestDetailedMetricsExtraction:
@@ -312,9 +308,7 @@ class TestRecommendationsGeneration:
         results = {"r2_score": 0.5}
         recommendations = self.generator._generate_recommendations(results)
 
-        assert any(
-            "data quality" in rec or "underfitting" in rec for rec in recommendations
-        )
+        assert any("data quality" in rec or "underfitting" in rec for rec in recommendations)
 
     def test_default_recommendation(self):
         """Test default recommendation when all metrics are good."""
@@ -471,9 +465,7 @@ class TestGenerateEvaluationReport:
 
     def test_generation_info(self):
         """Test generation info section."""
-        report = self.generator.generate_evaluation_report(
-            evaluation_results={"mse": 0.05}
-        )
+        report = self.generator.generate_evaluation_report(evaluation_results={"mse": 0.05})
 
         gen_info = report["generation_info"]
         assert "timestamp" in gen_info
@@ -523,7 +515,7 @@ class TestSummaryStatistics:
 
 
 class TestComprehensiveReport:
-    """Test comprehensive report generation from BenchmarkResult objects."""
+    """Test full report generation from BenchmarkResult objects."""
 
     def setup_method(self):
         """Set up test fixtures."""
@@ -537,7 +529,7 @@ class TestComprehensiveReport:
         assert "No results provided" in report["error"]
 
     def test_comprehensive_report_with_results(self, benchmark_result):
-        """Test comprehensive report with actual results."""
+        """Test full report with actual results."""
         report = self.generator.generate_comprehensive_report(
             [benchmark_result],
             include_baseline_comparison=True,

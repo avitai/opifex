@@ -124,9 +124,7 @@ print("Creating PINN models...")
 pinn_adaptive = BurgersPINN(hidden_dims=[32, 32, 32], rngs=nnx.Rngs(SEED))
 pinn_uniform = BurgersPINN(hidden_dims=[32, 32, 32], rngs=nnx.Rngs(SEED))
 
-n_params = sum(
-    x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn_adaptive, nnx.Param))
-)
+n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn_adaptive, nnx.Param)))
 print("  Architecture: [2] -> [32] -> [32] -> [32] -> [1]")
 print(f"  Parameters: {n_params:,}")
 
@@ -154,9 +152,7 @@ xt_adaptive = jnp.concatenate([x_domain, t_domain], axis=1)
 
 # Fixed uniform points for baseline
 key, subkey = jax.random.split(key)
-x_uniform = jax.random.uniform(
-    subkey, (N_UNIFORM_POINTS, 1), minval=X_MIN, maxval=X_MAX
-)
+x_uniform = jax.random.uniform(subkey, (N_UNIFORM_POINTS, 1), minval=X_MIN, maxval=X_MAX)
 key, subkey = jax.random.split(key)
 t_uniform = jax.random.uniform(subkey, (N_UNIFORM_POINTS, 1), minval=0.0, maxval=T_MAX)
 xt_uniform = jnp.concatenate([x_uniform, t_uniform], axis=1)
@@ -309,9 +305,7 @@ for step in range(TRAINING_STEPS):
         xt_current = refiner.refine(xt_current, residuals, bounds, subkey)
 
         max_res = float(jnp.max(jnp.abs(residuals)))
-        print(
-            f"  Step {step:4d}: loss={loss:.6e}, points={len(xt_current)}, max_res={max_res:.4e}"
-        )
+        print(f"  Step {step:4d}: loss={loss:.6e}, points={len(xt_current)}, max_res={max_res:.4e}")
 
     if step % 100 == 0:
         residuals = compute_burgers_residual(pinn_adaptive, xt_current, NU)
@@ -354,9 +348,7 @@ def train_step_uniform(pinn, opt):
     """Single training step with uniform sampling."""
 
     def loss_fn(model):
-        return pinn_loss(
-            model, xt_uniform, xt_initial, u_initial, xt_left, xt_right, NU
-        )
+        return pinn_loss(model, xt_uniform, xt_initial, u_initial, xt_left, xt_right, NU)
 
     loss, grads = nnx.value_and_grad(loss_fn)(pinn)
     opt.update(pinn, grads)
@@ -461,9 +453,7 @@ ax3.plot(
     linewidth=2,
     markersize=4,
 )
-ax3.axhline(
-    y=N_UNIFORM_POINTS, color="r", linestyle="--", label=f"Uniform ({N_UNIFORM_POINTS})"
-)
+ax3.axhline(y=N_UNIFORM_POINTS, color="r", linestyle="--", label=f"Uniform ({N_UNIFORM_POINTS})")
 ax3.set_xlabel("Training Step", fontsize=12)
 ax3.set_ylabel("Number of Points", fontsize=12)
 ax3.set_title("Collocation Point Count", fontsize=14)
@@ -491,9 +481,7 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
 # Final adaptive points
 ax1 = axes[0]
-ax1.scatter(
-    np.array(xt_current[:, 0]), np.array(xt_current[:, 1]), s=1, alpha=0.5, c="blue"
-)
+ax1.scatter(np.array(xt_current[:, 0]), np.array(xt_current[:, 1]), s=1, alpha=0.5, c="blue")
 ax1.set_xlabel("x", fontsize=12)
 ax1.set_ylabel("t", fontsize=12)
 ax1.set_title(f"Adaptive Points (n={len(xt_current)})", fontsize=14)
@@ -502,9 +490,7 @@ ax1.set_ylim(0, T_MAX)
 
 # Uniform points
 ax2 = axes[1]
-ax2.scatter(
-    np.array(xt_uniform[:, 0]), np.array(xt_uniform[:, 1]), s=1, alpha=0.5, c="red"
-)
+ax2.scatter(np.array(xt_uniform[:, 0]), np.array(xt_uniform[:, 1]), s=1, alpha=0.5, c="red")
 ax2.set_xlabel("x", fontsize=12)
 ax2.set_ylabel("t", fontsize=12)
 ax2.set_title(f"Uniform Points (n={N_UNIFORM_POINTS})", fontsize=14)

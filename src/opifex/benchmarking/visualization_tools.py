@@ -13,7 +13,7 @@ Key Features:
 
 Following Critical Technical Guidelines:
 - JAX-native data processing
-- Type hints and comprehensive documentation
+- Type hints and full documentation
 - No external plotting dependencies (metadata only)
 """
 
@@ -289,9 +289,7 @@ class PDEBenchVisualizer:
             "metric": metric,
             "data": comparison_data,
             "metrics_compared": [metric],
-            "has_baselines": any(
-                d["baseline_value"] is not None for d in comparison_data
-            ),
+            "has_baselines": any(d["baseline_value"] is not None for d in comparison_data),
             "chart_config": {
                 "chart_type": "paired_bar",
                 "show_improvement": True,
@@ -332,9 +330,7 @@ class PDEBenchVisualizer:
             stats = {
                 "mean": statistics.mean(error_values),
                 "median": statistics.median(error_values),
-                "std_dev": statistics.stdev(error_values)
-                if len(error_values) > 1
-                else 0,
+                "std_dev": statistics.stdev(error_values) if len(error_values) > 1 else 0,
                 "min": min(error_values),
                 "max": max(error_values),
             }
@@ -412,9 +408,7 @@ class PDEBenchVisualizer:
                     "model_name": _name(result),
                     "dataset_name": _dataset(result),
                     "composite_score": score / total_weight,
-                    "individual_metrics": {
-                        m: _metric_val(result, m) for m in ranking_metrics
-                    },
+                    "individual_metrics": {m: _metric_val(result, m) for m in ranking_metrics},
                 }
 
         # Sort by composite score
@@ -437,9 +431,7 @@ class PDEBenchVisualizer:
             },
         }
 
-    def get_visualization_summary(
-        self, results: list[BenchmarkResult]
-    ) -> dict[str, Any]:
+    def get_visualization_summary(self, results: list[BenchmarkResult]) -> dict[str, Any]:
         """
         Generate a summary of available visualization options.
 

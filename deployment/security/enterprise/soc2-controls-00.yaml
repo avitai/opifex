@@ -50,7 +50,7 @@ data:
 
         processing_integrity:
           data_validation:
-            input_validation: "comprehensive"
+            input_validation: "full"
             processing_controls: "automated"
             error_handling: "robust"
             data_quality: "monitored"
@@ -76,7 +76,7 @@ data:
 
         privacy:
           notice_and_consent:
-            privacy_notice: "comprehensive"
+            privacy_notice: "full"
             consent_mechanisms: "granular"
             choice_options: "flexible"
             notice_updates: "automated"
@@ -195,7 +195,7 @@ data:
 
         investigation:
           forensic_procedures:
-            evidence_collection: "comprehensive"
+            evidence_collection: "full"
             timeline_reconstruction: "detailed"
             root_cause_analysis: "systematic"
             impact_assessment: "quantitative"
@@ -223,7 +223,7 @@ data:
           post_incident_review:
             timeline: "within_30_days"
             participants: "all_stakeholders"
-            documentation: "comprehensive"
+            documentation: "full"
             recommendations: "actionable"
 
           improvement_actions:

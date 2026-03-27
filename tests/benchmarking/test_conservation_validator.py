@@ -35,9 +35,7 @@ class TestConservationValidator:
         assert "energy" in report.violations
         assert report.violations["energy"] > 0
 
-    def test_momentum_violation_detected(
-        self, validator: ConservationValidator
-    ) -> None:
+    def test_momentum_violation_detected(self, validator: ConservationValidator) -> None:
         """Momentum violation detected when totals differ."""
         y_pred = jnp.array([[5.0, 0.0, 0.0]])
         y_true = jnp.array([[0.0, 0.0, 5.0]])
@@ -46,9 +44,7 @@ class TestConservationValidator:
 
     def test_mass_with_target(self) -> None:
         """Mass conservation checks against a target value."""
-        validator = ConservationValidator(
-            laws=["mass"], mass_target=1.0, mass_tolerance=1e-4
-        )
+        validator = ConservationValidator(laws=["mass"], mass_target=1.0, mass_tolerance=1e-4)
         y_pred = jnp.array([[0.5, 0.5]])
         report = validator.validate(y_pred, y_pred)
         assert "mass" in report.violations
@@ -149,8 +145,6 @@ class TestConservationConvergence:
             jnp.array([[1.0, 2.0]]),
             jnp.array([[1.0, 2.0]]),
         ]
-        result = validator.validate_convergence(
-            predictions, truths, tolerances=[1.0, 0.1]
-        )
+        result = validator.validate_convergence(predictions, truths, tolerances=[1.0, 0.1])
         assert result.rates is not None
         assert len(result.rates) > 0

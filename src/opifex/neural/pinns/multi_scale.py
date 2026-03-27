@@ -112,9 +112,7 @@ class MultiScalePINN(nnx.Module):
         """
         scale_outputs = []
 
-        for _i, (scale, network) in enumerate(
-            zip(self.scales, self.scale_networks, strict=False)
-        ):
+        for _i, (scale, network) in enumerate(zip(self.scales, self.scale_networks, strict=False)):
             # Scale input coordinates for this level
             scaled_x = x * scale
 

@@ -317,9 +317,7 @@ class RealTimeOptimizer(nnx.Module):
         # Simple convergence check based on gradient norm
         converged = jnp.linalg.norm(grad) < self.tolerance
 
-        return OptimizationResult(
-            solution=x, converged=converged, iterations=self.max_iterations
-        )
+        return OptimizationResult(solution=x, converged=converged, iterations=self.max_iterations)
 
     def optimize_with_time_limit(
         self,
@@ -385,9 +383,7 @@ class RealTimeOptimizer(nnx.Module):
                 converged = True
                 break
 
-        return OptimizationResult(
-            solution=x, converged=converged, iterations=final_iteration
-        )
+        return OptimizationResult(solution=x, converged=converged, iterations=final_iteration)
 
 
 class MPCObjective:
@@ -501,9 +497,7 @@ class DifferentiableMPC(nnx.Module):
 
         # Define optimization objective
         def mpc_objective(control_sequence_flat):
-            control_sequence = control_sequence_flat.reshape(
-                (self.horizon, self.control_dim)
-            )
+            control_sequence = control_sequence_flat.reshape((self.horizon, self.control_dim))
 
             # Project controls if projector available
             if self.constraint_projector is not None:
@@ -512,15 +506,11 @@ class DifferentiableMPC(nnx.Module):
                 )
 
             # Predict trajectory
-            predicted_trajectory = self._predict_trajectory(
-                current_state, control_sequence
-            )
+            predicted_trajectory = self._predict_trajectory(current_state, control_sequence)
             states = predicted_trajectory[1:]  # Exclude initial state
 
             # Compute objective
-            return self.compute_objective(
-                states, control_sequence, reference_trajectory
-            )
+            return self.compute_objective(states, control_sequence, reference_trajectory)
 
         # Optimize control sequence
         result = self.optimizer.optimize(
@@ -538,9 +528,7 @@ class DifferentiableMPC(nnx.Module):
 
         # Apply constraint projection
         if self.constraint_projector is not None:
-            optimal_controls = jax.vmap(self.constraint_projector.project_control)(
-                optimal_controls
-            )
+            optimal_controls = jax.vmap(self.constraint_projector.project_control)(optimal_controls)
 
         # Get predicted trajectory
         predicted_trajectory = self._predict_trajectory(current_state, optimal_controls)
@@ -579,9 +567,7 @@ class DifferentiableMPC(nnx.Module):
 
         # Execute batch computation
         # This returns a batched MPCResult
-        batched_result = batch_step_vmap(
-            graphdef, state, batch_states, batch_references
-        )
+        batched_result = batch_step_vmap(graphdef, state, batch_states, batch_references)
 
         return BatchMPCResult(
             control_actions=batched_result.control_action,
@@ -603,9 +589,7 @@ class SafetyCriticalMPC(DifferentiableMPC):
         backup_policy: bool = True,
         **kwargs,
     ):
-        config = MPCConfig(
-            horizon=horizon, control_dim=control_dim, state_dim=state_dim, **kwargs
-        )
+        config = MPCConfig(horizon=horizon, control_dim=control_dim, state_dim=state_dim, **kwargs)
         super().__init__(config)
 
         self.safety_barriers = safety_barriers
@@ -674,9 +658,7 @@ class SafetyCriticalMPC(DifferentiableMPC):
             )
 
         # Check if MPC is feasible
-        if self.backup_policy and not self._is_mpc_feasible(
-            current_state, reference_trajectory
-        ):
+        if self.backup_policy and not self._is_mpc_feasible(current_state, reference_trajectory):
             backup_used = True
             control_action = self.backup_policy_fn(current_state, reference_trajectory)
 
@@ -712,9 +694,7 @@ class RecedingHorizonController(nnx.Module):
         self.sampling_time = sampling_time
 
         # Create MPC controller
-        config = MPCConfig(
-            horizon=mpc_horizon, control_dim=control_dim, state_dim=state_dim
-        )
+        config = MPCConfig(horizon=mpc_horizon, control_dim=control_dim, state_dim=state_dim)
 
         if safety_critical:
             self.mpc = SafetyCriticalMPC(
@@ -734,9 +714,7 @@ class RecedingHorizonController(nnx.Module):
             padding = jnp.tile(last_ref, (padding_needed, 1))
             reference_trajectory = jnp.vstack([reference_trajectory, padding])
 
-        return self.mpc.compute_control(
-            current_state, reference_trajectory[: self.mpc_horizon]
-        )  # type: ignore[reportCallIssue]
+        return self.mpc.compute_control(current_state, reference_trajectory[: self.mpc_horizon])  # type: ignore[reportCallIssue]
 
     def simulate_tracking(
         self,

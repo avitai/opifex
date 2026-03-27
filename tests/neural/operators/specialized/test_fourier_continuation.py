@@ -133,10 +133,7 @@ class TestFourierContinuationExtender:
         # The extended signal should start and end close to the boundary values
         boundary_tolerance = 0.1
         assert abs(extended[extender.extension_length] - signal[0]) < boundary_tolerance
-        assert (
-            abs(extended[-(extender.extension_length + 1)] - signal[-1])
-            < boundary_tolerance
-        )
+        assert abs(extended[-(extender.extension_length + 1)] - signal[-1]) < boundary_tolerance
 
     def test_extend_2d(self):
         """Test 2D signal extension."""

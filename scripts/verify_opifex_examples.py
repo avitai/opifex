@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive verification script for Opifex documentation examples.
+Full verification script for Opifex documentation examples.
 
 This script tests all the key code examples from README files and documentation
 to ensure they work correctly with the current implementation.
@@ -78,9 +78,7 @@ def test_problem_creation():
 
     def heat_equation(x, u, u_derivatives):
         """Simple heat equation."""
-        return u_derivatives["u_t"] - 0.1 * (
-            u_derivatives["u_xx"] + u_derivatives["u_yy"]
-        )
+        return u_derivatives["u_t"] - 0.1 * (u_derivatives["u_xx"] + u_derivatives["u_yy"])
 
     # Test PDE problem creation
     pde_problem = create_pde_problem(
@@ -157,9 +155,7 @@ def test_boundary_conditions():
     assert neumann_bc is not None, "Neumann BC should be created"
 
     # Test quantum boundary conditions
-    wavefunction_bc = WavefunctionBC(
-        condition_type="vanishing", boundary="all", value=complex(0.0)
-    )
+    wavefunction_bc = WavefunctionBC(condition_type="vanishing", boundary="all", value=complex(0.0))
     assert wavefunction_bc is not None, "Wavefunction BC should be created"
 
 
@@ -379,7 +375,7 @@ def main() -> None:
         ("Neural Networks", test_neural_networks),
         ("Training Infrastructure", test_training_infrastructure),
         ("Activation Functions", test_activation_functions),
-        ("Comprehensive Workflow", test_comprehensive_workflow),
+        ("Full Workflow", test_comprehensive_workflow),
         ("JAX Integration", test_jax_integration),
         ("FLAX NNX Integration", test_flax_nnx_integration),
         ("Environment Configuration", test_environment_configuration),
@@ -388,9 +384,7 @@ def main() -> None:
     # Run specific test if requested
     if args.specific:
         matching_tests = [
-            (name, func)
-            for name, func in tests
-            if args.specific.lower() in name.lower()
+            (name, func) for name, func in tests if args.specific.lower() in name.lower()
         ]
         if not matching_tests:
             print(f"❌ No tests found matching '{args.specific}'")

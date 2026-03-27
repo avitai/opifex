@@ -49,7 +49,7 @@ class MultiFidelityPINN(nnx.Module):
         rngs: nnx.Rngs | None = None,
     ):
         """
-        Initialize MultiFidelityPINN with comprehensive configuration.
+        Initialize MultiFidelityPINN with full configuration.
 
         Args:
             input_dim: Dimension of input space
@@ -116,9 +116,7 @@ class MultiFidelityPINN(nnx.Module):
         }
         self.activation = activation_map.get(activation, nnx.tanh)
 
-    def _create_layer(
-        self, in_dim: int, out_dim: int, use_bayesian: bool, rngs: nnx.Rngs
-    ):
+    def _create_layer(self, in_dim: int, out_dim: int, use_bayesian: bool, rngs: nnx.Rngs):
         """Create a layer (either Bayesian or Linear) based on the configuration."""
         if use_bayesian:
             return BayesianLayer(in_dim, out_dim, rngs=rngs)
@@ -140,9 +138,7 @@ class MultiFidelityPINN(nnx.Module):
         # self.layers = nnx.List(layers_temp) - REMOVED: undefined variable
 
         # Low-fidelity output layer
-        self.low_fidelity_output = self._create_layer(
-            prev_dim, self.output_dim, use_bayesian, rngs
-        )
+        self.low_fidelity_output = self._create_layer(prev_dim, self.output_dim, use_bayesian, rngs)
 
     def _build_high_fidelity_networks(
         self, hidden_layers: list[int], use_bayesian: bool, rngs: nnx.Rngs
@@ -187,9 +183,7 @@ class MultiFidelityPINN(nnx.Module):
             "uncertainty_threshold_hits": 0,
         }
 
-    def _low_fidelity_forward(
-        self, x: jax.Array, training: bool = True
-    ) -> dict[str, jax.Array]:
+    def _low_fidelity_forward(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
         """
         Low-fidelity forward pass with uncertainty estimation.
 
@@ -218,9 +212,7 @@ class MultiFidelityPINN(nnx.Module):
 
         return {"low_fidelity_pred": prediction, "uncertainty_estimate": uncertainty}
 
-    def _high_fidelity_forward(
-        self, x: jax.Array, training: bool = True
-    ) -> dict[str, jax.Array]:
+    def _high_fidelity_forward(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
         """
         High-fidelity forward pass using first correction network.
 
@@ -262,9 +254,7 @@ class MultiFidelityPINN(nnx.Module):
             "uncertainty_estimate": uncertainty,
         }
 
-    def _adaptive_forward(
-        self, x: jax.Array, training: bool = True
-    ) -> dict[str, jax.Array]:
+    def _adaptive_forward(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
         """
         Adaptive forward pass with fidelity selection based on uncertainty.
 
@@ -379,9 +369,7 @@ class MultiFidelityPINN(nnx.Module):
         mean_prediction = jnp.mean(predictions_stack, axis=0)
         epistemic_uncertainty = jnp.std(predictions_stack, axis=0)
         aleatoric_uncertainty = jnp.mean(uncertainties_stack, axis=0)
-        total_uncertainty = jnp.sqrt(
-            epistemic_uncertainty**2 + aleatoric_uncertainty**2
-        )
+        total_uncertainty = jnp.sqrt(epistemic_uncertainty**2 + aleatoric_uncertainty**2)
 
         return {
             "mean": mean_prediction,
@@ -496,9 +484,7 @@ class ProbabilisticPINN(nnx.Module):
             return self.output_layer(h, training=training)
         return self.output_layer(h)
 
-    def predict_with_uncertainty(
-        self, x: jax.Array, num_samples: int = 10
-    ) -> dict[str, jax.Array]:
+    def predict_with_uncertainty(self, x: jax.Array, num_samples: int = 10) -> dict[str, jax.Array]:
         """
         Predict with uncertainty estimation for single-fidelity PINN.
 
@@ -716,9 +702,7 @@ class RobustPINNOptimizer(nnx.Module):
             "total_loss": total_loss,
         }
 
-    def _compute_robustness_penalty(
-        self, x: jax.Array, noise_scale: float = 0.01
-    ) -> jax.Array:
+    def _compute_robustness_penalty(self, x: jax.Array, noise_scale: float = 0.01) -> jax.Array:
         """
         Compute robustness penalty using adversarial noise.
 
@@ -752,9 +736,7 @@ class RobustPINNOptimizer(nnx.Module):
                 if clean_pred is None:
                     clean_pred = clean_output.get("low_fidelity_pred")
                 if clean_pred is None:
-                    raise ValueError(
-                        "Could not extract prediction from clean model output"
-                    )
+                    raise ValueError("Could not extract prediction from clean model output")
             else:
                 clean_pred = clean_output
 
@@ -765,9 +747,7 @@ class RobustPINNOptimizer(nnx.Module):
                 if noisy_pred is None:
                     noisy_pred = noisy_output.get("low_fidelity_pred")
                 if noisy_pred is None:
-                    raise ValueError(
-                        "Could not extract prediction from noisy model output"
-                    )
+                    raise ValueError("Could not extract prediction from noisy model output")
             else:
                 noisy_pred = noisy_output
 
@@ -821,18 +801,14 @@ class RobustPINNOptimizer(nnx.Module):
         """
         # Compute uncertainties for all candidates
         if hasattr(self.model, "predict_with_uncertainty"):
-            pred_result = self.model.predict_with_uncertainty(
-                x_candidates, num_samples=10
-            )
+            pred_result = self.model.predict_with_uncertainty(x_candidates, num_samples=10)
             uncertainties = pred_result.get(
                 "total_uncertainty",
                 pred_result.get("std", jnp.zeros(x_candidates.shape[0])),
             )
         else:
             # For models without uncertainty, use random selection
-            uncertainties = jax.random.uniform(
-                jax.random.PRNGKey(42), (x_candidates.shape[0],)
-            )
+            uncertainties = jax.random.uniform(jax.random.PRNGKey(42), (x_candidates.shape[0],))
 
         # Ensure uncertainties is 1D
         if uncertainties.ndim > 1:

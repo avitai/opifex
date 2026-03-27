@@ -1,6 +1,6 @@
 """Test activation function library.
 
-Test suite for comprehensive activation function collection following FLAX NNX patterns.
+Test suite for full activation function collection following FLAX NNX patterns.
 """
 
 import jax
@@ -68,9 +68,7 @@ class TestActivationRegistry:
 
     def test_unknown_activation_error(self):
         """Test error handling for unknown activation functions."""
-        with pytest.raises(
-            ValueError, match="Unknown activation function: unknown_func"
-        ):
+        with pytest.raises(ValueError, match="Unknown activation function: unknown_func"):
             get_activation("unknown_func")
 
     def test_register_custom_activation(self):

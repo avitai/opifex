@@ -42,8 +42,8 @@ reaction kinetics.
 
 ## Files
 
-- **Python Script**: [`examples/pinns/diffusion_reaction.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/diffusion_reaction.py)
-- **Jupyter Notebook**: [`examples/pinns/diffusion_reaction.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/diffusion_reaction.ipynb)
+- **Python Script**: [`examples/pinns/diffusion_reaction.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/diffusion_reaction.py)
+- **Jupyter Notebook**: [`examples/pinns/diffusion_reaction.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/diffusion_reaction.ipynb)
 
 ## Quick Start
 

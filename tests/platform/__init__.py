@@ -1,6 +1,6 @@
 """Test package for Opifex Platform components.
 
-Contains comprehensive test suites for:
+Contains full test suites for:
 - Neural functional registry
 - Collaboration platform
 - Community dashboard

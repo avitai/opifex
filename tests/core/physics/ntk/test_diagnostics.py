@@ -53,9 +53,7 @@ class TestModeWiseErrorDecay:
         learning_rate = 0.1
         iteration = 5
 
-        errors = predict_mode_errors(
-            initial_coeffs, eigenvalues, learning_rate, iteration
-        )
+        errors = predict_mode_errors(initial_coeffs, eigenvalues, learning_rate, iteration)
 
         assert errors.shape == (2,)
         assert jnp.all(jnp.abs(errors) <= jnp.abs(initial_coeffs))  # Should decay
@@ -218,9 +216,7 @@ class TestConvergenceRateEstimation:
         learning_rate = 0.1
         target_reduction = 0.01  # Reduce error by 100x
 
-        epochs = estimate_epochs_to_convergence(
-            eigenvalues, learning_rate, target_reduction
-        )
+        epochs = estimate_epochs_to_convergence(eigenvalues, learning_rate, target_reduction)
 
         assert epochs > 0
         assert jnp.isfinite(epochs)

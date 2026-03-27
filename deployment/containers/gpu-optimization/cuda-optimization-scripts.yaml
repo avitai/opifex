@@ -12,7 +12,7 @@ data:
   gpu-setup.sh: |
     #!/bin/bash
     # GPU Setup and Optimization Script for Opifex Containers
-    # Phase 7.1: Container Orchestration - CUDA Runtime Optimization
+    # Version 7.1: Container Orchestration - CUDA Runtime Optimization
 
     set -e
 

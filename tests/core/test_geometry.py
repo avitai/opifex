@@ -363,9 +363,7 @@ class TestGeometrySystemIntegration:
         circle = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
 
         # Create 3D molecular geometry
-        mol_geom = MolecularGeometry(
-            atomic_symbols=["C"], positions=jnp.array([[0.0, 0.0, 0.0]])
-        )
+        mol_geom = MolecularGeometry(atomic_symbols=["C"], positions=jnp.array([[0.0, 0.0, 0.0]]))
 
         # Should be able to project 3D geometry to 2D for visualization
         projection_2d = mol_geom.project_to_2d(plane="xy")
@@ -729,9 +727,7 @@ class TestManifoldNeuralOperator:
         # Outputs should be valid manifold points
         for i in range(batch_size):
             point = output[i]
-            assert manifold._validate_point(point) is not None, (
-                f"Output point {i} not on manifold"
-            )
+            assert manifold._validate_point(point) is not None, f"Output point {i} not on manifold"
 
     def test_manifold_neural_operator_jax_transforms(self):
         """Test ManifoldNeuralOperator with JAX transformations."""

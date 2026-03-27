@@ -243,13 +243,9 @@ class BlackJAXIntegration(nnx.Module):
         except Exception as e:
             # Fallback: return random samples from prior
             print(f"MCMC sampling failed: {e}. Using prior samples as fallback.")
-            return jax.random.normal(
-                rngs.sample(), (self.num_samples, len(initial_params))
-            )
+            return jax.random.normal(rngs.sample(), (self.num_samples, len(initial_params)))
 
-    def posterior_predictive(
-        self, x_test: jax.Array, posterior_samples: jax.Array
-    ) -> jax.Array:
+    def posterior_predictive(self, x_test: jax.Array, posterior_samples: jax.Array) -> jax.Array:
         """Generate posterior predictive samples.
 
         Args:
@@ -278,9 +274,7 @@ class BlackJAXIntegration(nnx.Module):
 
         return jnp.stack(predictions)
 
-    def compute_posterior_statistics(
-        self, posterior_samples: jax.Array
-    ) -> dict[str, Any]:
+    def compute_posterior_statistics(self, posterior_samples: jax.Array) -> dict[str, Any]:
         """Compute posterior statistics from samples.
 
         Args:

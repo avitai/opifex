@@ -56,9 +56,7 @@ def _plot_single_model_flops(results: dict[str, Any], axes: list[plt.Axes]):
     if "total_flops" in results:
         backward_flops = results.get("backward_flops", 0)
         # Use existing forward_flops or derive from total (total = forward + backward)
-        forward_flops = results.get(
-            "forward_flops", results.get("total_flops", 0) - backward_flops
-        )
+        forward_flops = results.get("forward_flops", results.get("total_flops", 0) - backward_flops)
 
         if backward_flops > 0:
             labels = ["Forward Pass", "Backward Pass"]
@@ -213,9 +211,7 @@ def _plot_multi_model_flops(results: dict[str, Any], axes: list[plt.Axes]):
     for name, data in results.items():
         if name.startswith("_"):  # Skip comparison metadata
             continue
-        if isinstance(data, dict) and (
-            "forward_flops" in data or "total_flops" in data
-        ):
+        if isinstance(data, dict) and ("forward_flops" in data or "total_flops" in data):
             model_names.append(name)
             backward_val = data.get("backward_flops", 0)
             total_val = data.get("total_flops", 0)
@@ -453,12 +449,8 @@ def plot_memory_usage(
             alpha=0.5,
             label="Very Efficient (<100MB)",
         )
-        ax.axhline(
-            y=500, color="orange", linestyle="--", alpha=0.5, label="Moderate (<500MB)"
-        )
-        ax.axhline(
-            y=1000, color="red", linestyle="--", alpha=0.5, label="Intensive (<1GB)"
-        )
+        ax.axhline(y=500, color="orange", linestyle="--", alpha=0.5, label="Moderate (<500MB)")
+        ax.axhline(y=1000, color="red", linestyle="--", alpha=0.5, label="Intensive (<1GB)")
         ax.legend(fontsize=8)
 
     # Optimization suggestions
@@ -543,7 +535,7 @@ def plot_model_complexity_comparison(
     save_path: str | None = None,
 ) -> plt.Figure:
     """
-    Plot comprehensive model complexity comparison.
+    Plot full model complexity comparison.
 
     Args:
         complexity_results: Results from compare_model_complexities
@@ -616,9 +608,7 @@ def plot_model_complexity_comparison(
 
     # Efficiency scatter plot (Parameters vs Memory)
     ax = axes[3]
-    scatter = ax.scatter(
-        total_params, memory_usage, c=total_ops, cmap="viridis", s=100, alpha=0.7
-    )
+    scatter = ax.scatter(total_params, memory_usage, c=total_ops, cmap="viridis", s=100, alpha=0.7)
     ax.set_xlabel("Total Parameters")
     ax.set_ylabel("Memory Usage (MB)")
     ax.set_title("Efficiency Analysis")

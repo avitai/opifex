@@ -184,8 +184,7 @@ class TestSustainabilityMetricsCalculation:
 
         assert metrics.renewable_energy_percentage == 0.5
         assert any(
-            "renewable energy" in rec.lower()
-            for rec in metrics.green_computing_recommendations
+            "renewable energy" in rec.lower() for rec in metrics.green_computing_recommendations
         )
 
     def test_calculate_sustainability_metrics_high_carbon(self):
@@ -204,8 +203,7 @@ class TestSustainabilityMetricsCalculation:
 
         assert metrics.total_carbon_footprint_kg == 100.0
         assert any(
-            "carbon offset" in rec.lower()
-            for rec in metrics.green_computing_recommendations
+            "carbon offset" in rec.lower() for rec in metrics.green_computing_recommendations
         )
 
     def test_calculate_sustainability_metrics_updates_history(self):

@@ -199,9 +199,7 @@ class VersionManager:
         # Commit to Git if enabled
         commit_hash = ""
         if self.enable_git:
-            commit_hash = await self._commit_changes(
-                functional_id, version_tag, message, author_id
-            )
+            commit_hash = await self._commit_changes(functional_id, version_tag, message, author_id)
 
         # Create version object
         version = Version(
@@ -263,9 +261,7 @@ class VersionManager:
             size_bytes=metadata.get("size_bytes", 0),
         )
 
-    async def list_versions(
-        self, functional_id: str, branch: str | None = None
-    ) -> list[Version]:
+    async def list_versions(self, functional_id: str, branch: str | None = None) -> list[Version]:
         """List all versions of a functional.
 
         Args:
@@ -291,9 +287,7 @@ class VersionManager:
         versions.sort(key=lambda v: v.created_at, reverse=True)
         return versions
 
-    async def delete_version(
-        self, functional_id: str, version_tag: str, author_id: str
-    ) -> bool:
+    async def delete_version(self, functional_id: str, version_tag: str, author_id: str) -> bool:
         """Delete a version of a functional.
 
         Args:
@@ -504,9 +498,7 @@ class VersionManager:
 
         return diff
 
-    async def _ensure_branch(
-        self, functional_id: str, branch: str, author_id: str
-    ) -> None:
+    async def _ensure_branch(self, functional_id: str, branch: str, author_id: str) -> None:
         """Ensure branch exists and switch to it."""
         if not self.enable_git:
             return
@@ -572,9 +564,7 @@ class VersionManager:
 
         return result.stdout.strip()
 
-    async def _create_git_tag(
-        self, functional_id: str, version_tag: str, commit_hash: str
-    ) -> None:
+    async def _create_git_tag(self, functional_id: str, version_tag: str, commit_hash: str) -> None:
         """Create Git tag for version."""
         functional_dir = self.storage_root / functional_id
 

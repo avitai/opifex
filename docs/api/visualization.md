@@ -5,7 +5,7 @@ import jax.numpy as jnp
 from typing import Optional, List, Tuple
 ```
 
-The `opifex.visualization` package provides comprehensive visualization tools for scientific computing applications, including field plotting, animation, and performance analysis.
+The `opifex.visualization` package provides full visualization tools for scientific computing applications, including field plotting, animation, and performance analysis.
 
 ## Overview
 

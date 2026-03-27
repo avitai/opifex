@@ -24,7 +24,7 @@ This module provides advanced Bayesian machine learning capabilities for scienti
 
 ### 1. Advanced Uncertainty Quantification
 
-Comprehensive uncertainty assessment with multiple uncertainty sources and propagation strategies.
+Full uncertainty assessment with multiple uncertainty sources and propagation strategies.
 
 ```python
 import jax

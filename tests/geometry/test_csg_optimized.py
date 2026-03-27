@@ -1,5 +1,5 @@
 """
-Comprehensive tests for optimized CSG operations.
+Full tests for optimized CSG operations.
 
 Tests JAX compatibility (JIT, VMAP, GRAD) for all CSG operations
 after optimization with vectorized operations.
@@ -29,9 +29,7 @@ class TestOptimizedCSGShapes:
         """Set up test fixtures."""
         self.rectangle = Rectangle(center=jnp.array([0.0, 0.0]), width=2.0, height=1.0)
         self.circle = Circle(center=jnp.array([1.0, 1.0]), radius=0.5)
-        self.polygon = Polygon(
-            vertices=jnp.array([[-1.0, -1.0], [1.0, -1.0], [0.0, 1.0]])
-        )
+        self.polygon = Polygon(vertices=jnp.array([[-1.0, -1.0], [1.0, -1.0], [0.0, 1.0]]))
 
     def test_rectangle_jit_compatibility(self):
         """Test that rectangle operations work with JIT compilation."""
@@ -240,9 +238,7 @@ class TestOptimizedMolecularExclusion:
         self.molecular_geometry = MolecularGeometry(
             atomic_symbols=atomic_symbols, positions=positions
         )
-        self.domain_shape = Rectangle(
-            center=jnp.array([0.0, 0.0]), width=4.0, height=4.0
-        )
+        self.domain_shape = Rectangle(center=jnp.array([0.0, 0.0]), width=4.0, height=4.0)
 
     def test_molecular_exclusion_functionality(self):
         """Test that molecular exclusion domain creation works correctly."""

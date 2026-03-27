@@ -49,8 +49,8 @@ If you are familiar with the DeepXDE library:
 
 ## Files
 
-- **Python Script**: [`examples/pinns/wave.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/wave.py)
-- **Jupyter Notebook**: [`examples/pinns/wave.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/wave.ipynb)
+- **Python Script**: [`examples/pinns/wave.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/wave.py)
+- **Jupyter Notebook**: [`examples/pinns/wave.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/wave.ipynb)
 
 ## Quick Start
 

@@ -114,10 +114,7 @@ def demonstrate_basic_continuation_methods():
 
         for method_name, extender in methods.items():
             extended = extender(signal)
-            print(
-                f"   {method_name:12}: {len(extended)} -> "
-                f"Shape preservation: {extended.shape}"
-            )
+            print(f"   {method_name:12}: {len(extended)} -> Shape preservation: {extended.shape}")
 
             # Verify extension properties
             original_part = extended[extension_length:-extension_length]
@@ -265,9 +262,7 @@ def demonstrate_jax_transformations():
 
     vectorized_extend = jax.vmap(extender, in_axes=0)
     batch_extended = vectorized_extend(batch_signals)
-    print(
-        f"[PASS] Vectorized mapping: Batch {batch_signals.shape} -> {batch_extended.shape}"
-    )
+    print(f"[PASS] Vectorized mapping: Batch {batch_signals.shape} -> {batch_extended.shape}")
 
 
 # %% [markdown]
@@ -392,7 +387,7 @@ def run_performance_benchmark():
 
 - [Grid Embeddings](grid_embeddings_example.md) - Spatial coordinate injection
 - [Spectral Normalization](spectral_normalization_example.md) - Stability for spectral layers
-- [FNO Darcy Comprehensive](../models/fno_darcy_comprehensive.md) - FNO using spectral convolutions
+- [FNO Darcy Full](../models/fno_darcy_comprehensive.md) - FNO using spectral convolutions
 
 ### API Reference
 

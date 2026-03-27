@@ -13,7 +13,7 @@ data:
     version = 2
 
     # NVIDIA Container Runtime Configuration for Opifex Framework
-    # Phase 7.1: Container Orchestration - GPU Optimization
+    # Version 7.1: Container Orchestration - GPU Optimization
 
     [plugins]
       [plugins."io.containerd.grpc.v1.cri"]

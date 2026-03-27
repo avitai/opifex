@@ -51,15 +51,11 @@ class NormalizeTransform(grain.MapTransform):
 
         # Normalize input if present
         if "input" in features:
-            result["input"] = (features["input"] - self.mean) / (
-                self.std + self.epsilon
-            )
+            result["input"] = (features["input"] - self.mean) / (self.std + self.epsilon)
 
         # Normalize output if present
         if "output" in features:
-            result["output"] = (features["output"] - self.mean) / (
-                self.std + self.epsilon
-            )
+            result["output"] = (features["output"] - self.mean) / (self.std + self.epsilon)
 
         return result
 

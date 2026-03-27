@@ -56,7 +56,6 @@ class SciMLSolver(Protocol):
     """
 
     @abstractmethod
-    @abstractmethod
     def solve(
         self,
         problem: Problem,

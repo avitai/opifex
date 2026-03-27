@@ -5,7 +5,7 @@ This module tests conservation law enforcement using the refactored API:
 - ConservationViolations utility for direct violation checking
 - Trainer remains domain-agnostic
 
-Migrated from test_physics_informed_trainer.py (Phase 0E - Batch 3)
+Migrated from test_physics_informed_trainer.py (Version 0E - Batch 3)
 """
 
 import jax
@@ -54,14 +54,14 @@ def sample_data():
 
 
 class TestConservationLawEnforcement:
-    """Test comprehensive conservation law enforcement.
+    """Test full conservation law enforcement.
 
     Migrated from PhysicsInformedTrainer tests.
     Uses ConservationConfig and ConservationViolations utility.
     """
 
     def test_energy_conservation_checking(self, mock_model, sample_data):
-        """Test comprehensive energy conservation checking."""
+        """Test full energy conservation checking."""
         conservation_config = ConservationConfig(
             laws=["energy"],
             energy_tolerance=1e-6,
@@ -80,9 +80,7 @@ class TestConservationLawEnforcement:
         _, _ = trainer.training_step(x, y)
 
         # Verify energy conservation checking using the utility directly
-        violation = energy_violation(
-            y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True
-        )
+        violation = energy_violation(y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True)
 
         assert isinstance(violation, jax.Array)
         assert violation >= 0.0
@@ -108,9 +106,7 @@ class TestConservationLawEnforcement:
 
         # Test particle conservation using the utility directly
         y_pred = jnp.ones((10, 1)) * 1.0  # Sum will be 10.0
-        violation = particle_number_violation(
-            y_pred, target_particle_number=10.0, tolerance=1e-4
-        )
+        violation = particle_number_violation(y_pred, target_particle_number=10.0, tolerance=1e-4)
 
         assert isinstance(violation, jax.Array)
         assert violation >= 0.0
@@ -195,9 +191,7 @@ class TestConservationLawToleranceBehavior:
         _, y = sample_data
 
         # Test using the ConservationViolations API
-        violation = energy_violation(
-            y[:5], y[:5], tolerance=1e-5, monitoring_enabled=True
-        )
+        violation = energy_violation(y[:5], y[:5], tolerance=1e-5, monitoring_enabled=True)
 
         # Small violations should return 0 due to tolerance threshold
         assert violation >= 0.0, "Violation should be non-negative"
@@ -219,9 +213,7 @@ class TestConservationLawToleranceBehavior:
         _, y = sample_data
 
         # Even with large violations, should return 0 when monitoring disabled
-        violation = energy_violation(
-            y[:10], y[:10] * 2.0, tolerance=1e-6, monitoring_enabled=False
-        )
+        violation = energy_violation(y[:10], y[:10] * 2.0, tolerance=1e-6, monitoring_enabled=False)
 
         assert violation == 0.0, "Should return 0 when monitoring is disabled"
 
@@ -243,9 +235,7 @@ class TestConservationLawToleranceBehavior:
 
         # Create predictions that give particle number close to target
         y_pred = jnp.ones((10, 1)) * 1.0  # Sum will be 10.0
-        violation = particle_number_violation(
-            y_pred, target_particle_number=10.0, tolerance=1e-4
-        )
+        violation = particle_number_violation(y_pred, target_particle_number=10.0, tolerance=1e-4)
 
         # Should have small violation due to tolerance
         assert violation >= 0.0, "Violation should be non-negative"
@@ -324,9 +314,7 @@ class TestConservationLawToleranceBehavior:
         # Perfectly symmetric data should have very small violation
         assert violation >= 0.0, "Violation should be non-negative"
 
-    def test_conservation_laws_integration_with_tolerance(
-        self, mock_model, sample_data
-    ):
+    def test_conservation_laws_integration_with_tolerance(self, mock_model, sample_data):
         """Test that all conservation laws work together with tolerance checking."""
         conservation_config = ConservationConfig(
             laws=["energy", "momentum", "symmetry"],
@@ -353,9 +341,7 @@ class TestConservationLawToleranceBehavior:
 
         # Test each violation separately using the utility
         # Energy
-        energy_viol = energy_violation(
-            y[:5], y[:5], tolerance=1e-6, monitoring_enabled=True
-        )
+        energy_viol = energy_violation(y[:5], y[:5], tolerance=1e-6, monitoring_enabled=True)
         assert energy_viol >= 0.0
 
         # Momentum
@@ -457,18 +443,12 @@ class TestAdaptiveConstraintWeighting:
             weights_history.append(dict(new_weights))
 
         # Verify weights changed over steps
-        assert weights_history[0] != weights_history[1], (
-            "Weights should change between steps"
-        )
-        assert weights_history[1] != weights_history[2], (
-            "Weights should continue to adapt"
-        )
+        assert weights_history[0] != weights_history[1], "Weights should change between steps"
+        assert weights_history[1] != weights_history[2], "Weights should continue to adapt"
 
         # Verify all weights are normalized
         for weights in weights_history:
-            assert abs(sum(weights.values()) - 1.0) < 1e-6, (
-                "All weights should be normalized"
-            )
+            assert abs(sum(weights.values()) - 1.0) < 1e-6, "All weights should be normalized"
 
     def test_adaptive_weighting_with_zero_violations(self):
         """Test that weights remain stable when violations are zero."""
@@ -490,9 +470,7 @@ class TestAdaptiveConstraintWeighting:
         new_weights = weighting.update_weights(violations)
 
         # Weights should remain unchanged
-        assert new_weights == initial_weights, (
-            "Weights should not change when violations are zero"
-        )
+        assert new_weights == initial_weights, "Weights should not change when violations are zero"
 
     def test_adaptive_weighting_integration_with_trainer(self, mock_model, sample_data):
         """Test adaptive weighting integrated with Trainer.
@@ -537,9 +515,7 @@ class TestAdaptiveConstraintWeighting:
             # Compute violations using ConservationViolations
             violations = {
                 "energy": float(
-                    energy_violation(
-                        y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True
-                    )
+                    energy_violation(y[:10], y[:10], tolerance=1e-6, monitoring_enabled=True)
                 ),
                 "momentum": float(momentum_violation(y[:10], y[:10], tolerance=1e-5)),
             }
@@ -551,9 +527,7 @@ class TestAdaptiveConstraintWeighting:
             weights_history.append(dict(new_weights))
 
         # Verify training works
-        assert all(jnp.isfinite(m["loss"]) for m in metrics_history), (
-            "All losses should be finite"
-        )
+        assert all(jnp.isfinite(m["loss"]) for m in metrics_history), "All losses should be finite"
 
         # Verify weights were tracked
         assert len(weights_history) == 5, "Should have 5 weight updates"

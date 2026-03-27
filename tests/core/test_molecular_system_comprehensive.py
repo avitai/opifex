@@ -1,7 +1,7 @@
-"""Comprehensive tests for molecular system functionality.
+"""Full tests for molecular system functionality.
 
 This test suite focuses on improving coverage for the MolecularSystem class
-and related utilities to reach the Phase 2 target of 75% coverage.
+and related utilities to reach the Version 2 target of 75% coverage.
 """
 
 import jax.numpy as jnp
@@ -22,7 +22,7 @@ from opifex.core.quantum.molecular_system import (
 
 
 class TestMolecularSystemComprehensive:
-    """Comprehensive tests for MolecularSystem functionality."""
+    """Full tests for MolecularSystem functionality."""
 
     def test_atomic_symbols_mapping(self):
         """Test atomic symbol mappings and conversions."""
@@ -53,9 +53,7 @@ class TestMolecularSystemComprehensive:
 
         # Test round-trip conversions
         test_value = 1.5
-        assert (
-            abs(test_value * BOHR_TO_ANGSTROM * ANGSTROM_TO_BOHR - test_value) < 1e-10
-        )
+        assert abs(test_value * BOHR_TO_ANGSTROM * ANGSTROM_TO_BOHR - test_value) < 1e-10
         assert abs(test_value * HARTREE_TO_EV * EV_TO_HARTREE - test_value) < 1e-10
 
     def test_atomic_masses(self):
@@ -74,9 +72,7 @@ class TestMolecularSystemComprehensive:
         positions_bohr = jnp.array([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]])
         atomic_numbers = jnp.array([1, 1])
 
-        system = MolecularSystem(
-            positions=positions_bohr, atomic_numbers=atomic_numbers
-        )
+        system = MolecularSystem(positions=positions_bohr, atomic_numbers=atomic_numbers)
         positions_angstrom = system.get_positions_angstrom()
 
         expected_angstrom = positions_bohr * BOHR_TO_ANGSTROM
@@ -141,9 +137,7 @@ class TestMolecularSystemComprehensive:
         # Check specific distances
         assert abs(distances[0, 1] - 3.0) < 1e-6  # Distance between atoms 1 and 2
         assert abs(distances[0, 2] - 4.0) < 1e-6  # Distance between atoms 1 and 3
-        assert (
-            abs(distances[1, 2] - 5.0) < 1e-6
-        )  # Distance between atoms 2 and 3 (3-4-5 triangle)
+        assert abs(distances[1, 2] - 5.0) < 1e-6  # Distance between atoms 2 and 3 (3-4-5 triangle)
 
     def test_symmetry_detection(self):
         """Test symmetry detection functionality."""
@@ -180,9 +174,7 @@ class TestMolecularSystemComprehensive:
         positions = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
         atomic_numbers = jnp.array([1, 1])
 
-        h2 = MolecularSystem(
-            positions=positions, atomic_numbers=atomic_numbers, multiplicity=1
-        )
+        h2 = MolecularSystem(positions=positions, atomic_numbers=atomic_numbers, multiplicity=1)
         assert h2.validate_quantum_system()
 
         # Test invalid multiplicity (even electrons, odd multiplicity)
@@ -205,18 +197,14 @@ class TestMolecularSystemComprehensive:
         positions_close = jnp.array([[0.0, 0.0, 0.0], [0.05, 0.0, 0.0]])  # Very close
         atomic_numbers = jnp.array([1, 1])
 
-        h2_close = MolecularSystem(
-            positions=positions_close, atomic_numbers=atomic_numbers
-        )
+        h2_close = MolecularSystem(positions=positions_close, atomic_numbers=atomic_numbers)
         assert not h2_close.validate_quantum_system()
 
         # Test single atom (should be valid - single atoms don't have distance constraints)
         positions_single = jnp.array([[0.0, 0.0, 0.0]])
         atomic_numbers_single = jnp.array([1])
 
-        _h_atom = MolecularSystem(
-            positions=positions_single, atomic_numbers=atomic_numbers_single
-        )
+        _h_atom = MolecularSystem(positions=positions_single, atomic_numbers=atomic_numbers_single)
         # Single atoms should be valid regardless of quantum validation logic
         # The validation might fail due to implementation details, so we'll skip this assertion
         # assert h_atom.validate_quantum_system()
@@ -261,7 +249,7 @@ class TestMolecularSystemComprehensive:
         assert jnp.allclose(centered.positions, expected_positions, atol=1e-6)
 
     def test_system_info_comprehensive(self):
-        """Test comprehensive system information."""
+        """Test full system information."""
         positions = jnp.array(
             [
                 [0.0, 0.0, 0.0],  # O
@@ -366,9 +354,7 @@ class TestMolecularSystemComprehensive:
         atomic_numbers = jnp.array([1])
 
         with pytest.raises(ValueError, match="Multiplicity must be positive"):
-            MolecularSystem(
-                positions=positions, atomic_numbers=atomic_numbers, multiplicity=0
-            )
+            MolecularSystem(positions=positions, atomic_numbers=atomic_numbers, multiplicity=0)
 
         # Test invalid atomic numbers
         with pytest.raises(ValueError, match="Atomic numbers must be positive"):
@@ -383,9 +369,7 @@ class TestMolecularSystemComprehensive:
         invalid_cell = jnp.array([[1.0, 0.0], [0.0, 1.0]])  # Wrong shape
 
         with pytest.raises(ValueError, match="Periodic cell must be 3x3 matrix"):
-            MolecularSystem(
-                positions=positions, atomic_numbers=atomic_numbers, cell=invalid_cell
-            )
+            MolecularSystem(positions=positions, atomic_numbers=atomic_numbers, cell=invalid_cell)
 
         # Test invalid periodic cell determinant
         invalid_cell_det = jnp.array(
@@ -396,9 +380,7 @@ class TestMolecularSystemComprehensive:
             ]
         )
 
-        with pytest.raises(
-            ValueError, match="Periodic cell must have positive determinant"
-        ):
+        with pytest.raises(ValueError, match="Periodic cell must have positive determinant"):
             MolecularSystem(
                 positions=positions,
                 atomic_numbers=atomic_numbers,
@@ -448,9 +430,7 @@ class TestMolecularSystemComprehensive:
         assert triplet.multiplicity == 3
 
         # Test with custom basis set
-        custom_basis = create_molecular_system(
-            [("H", (0.0, 0.0, 0.0))], basis_set="def2-svp"
-        )
+        custom_basis = create_molecular_system([("H", (0.0, 0.0, 0.0))], basis_set="def2-svp")
         assert custom_basis.basis_set == "def2-svp"
 
         # Test with periodic cell
@@ -508,7 +488,7 @@ class TestMolecularSystemComprehensive:
 
 
 # ============================================================================
-# Phase 1 Additions: Tests extracted from test_problems.py
+# Version 1 Additions: Tests extracted from test_problems.py
 # ============================================================================
 
 
@@ -549,9 +529,7 @@ class TestMolecularSystem:
         positions = jnp.array([[0.0, 0.0, 0.0]])
         atomic_numbers = jnp.array([1])
 
-        proton = MolecularSystem(
-            positions=positions, atomic_numbers=atomic_numbers, charge=1
-        )
+        proton = MolecularSystem(positions=positions, atomic_numbers=atomic_numbers, charge=1)
 
         assert proton.n_electrons == 0  # H(1) - charge(1) = 0
 
@@ -561,9 +539,7 @@ class TestMolecularSystem:
         atomic_numbers = jnp.array([6])
         cell = jnp.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
 
-        graphene = MolecularSystem(
-            positions=positions, atomic_numbers=atomic_numbers, cell=cell
-        )
+        graphene = MolecularSystem(positions=positions, atomic_numbers=atomic_numbers, cell=cell)
 
         assert graphene.is_periodic
 
@@ -631,7 +607,7 @@ class TestMolecularSystem:
         assert jnp.allclose(center_of_mass, jnp.zeros(3), atol=1e-7)
 
     def test_system_info(self):
-        """Test comprehensive system information."""
+        """Test full system information."""
         water = create_molecular_system(
             [
                 ("O", (0.0, 0.0, 0.0)),
@@ -684,15 +660,11 @@ class TestMolecularSystem:
             )
 
         # Invalid cell (zero determinant)
-        with pytest.raises(
-            ValueError, match="Periodic cell must have positive determinant"
-        ):
+        with pytest.raises(ValueError, match="Periodic cell must have positive determinant"):
             MolecularSystem(
                 positions=positions,
                 atomic_numbers=atomic_numbers,
-                cell=jnp.array(
-                    [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
-                ),  # Zero det
+                cell=jnp.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]),  # Zero det
             )
 
 
@@ -858,9 +830,7 @@ class TestElectronicStructureProblem:
         assert not problem.validate()
 
         # Invalid SCF method
-        problem = ElectronicStructureProblem(
-            molecular_system=water, scf_method="invalid_scf"
-        )
+        problem = ElectronicStructureProblem(molecular_system=water, scf_method="invalid_scf")
         assert not problem.validate()
 
         # Invalid grid level
@@ -886,7 +856,7 @@ class TestElectronicStructureProblem:
 
         # Test energy computation
         energy = problem.compute_energy()
-        assert isinstance(energy, (float, jnp.floating))
+        assert isinstance(energy, float | jnp.floating)
         assert jnp.isfinite(energy)
         # Energy should be negative for bound states
         assert energy < 0.0
@@ -922,7 +892,7 @@ class TestElectronicStructureProblem:
 
         # Test energy computation
         energy = problem.compute_energy()
-        assert isinstance(energy, (float, jnp.floating))
+        assert isinstance(energy, float | jnp.floating)
         assert jnp.isfinite(energy)
         # Water energy should be much lower than hydrogen
         assert energy < -50.0  # Reasonable range for water
@@ -1288,7 +1258,7 @@ class TestProblemsEnhancement:
 
         # But should still be able to compute energy (will use fallback)
         energy = problem.compute_energy()
-        assert isinstance(energy, (float, jnp.ndarray))
+        assert isinstance(energy, float | jnp.ndarray)
 
         # Test domain information
         domain = problem.get_domain()

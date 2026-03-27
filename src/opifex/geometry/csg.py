@@ -210,8 +210,7 @@ class Rectangle(_EnhancedShapeBase):
         """Check if point is inside rectangle (inclusive of boundary)."""
         point = jnp.asarray(point)
         return bool(
-            (self.x_min <= point[0] <= self.x_max)
-            and (self.y_min <= point[1] <= self.y_max)
+            (self.x_min <= point[0] <= self.x_max) and (self.y_min <= point[1] <= self.y_max)
         )
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
@@ -267,9 +266,7 @@ class Rectangle(_EnhancedShapeBase):
 
             # Top edge
             param3 = param - self.width - self.height
-            cond3 = (param >= self.width + self.height) & (
-                param < 2 * self.width + self.height
-            )
+            cond3 = (param >= self.width + self.height) & (param < 2 * self.width + self.height)
             p3 = jnp.array([self.x_max - param3, self.y_max])
 
             # Left edge
@@ -439,9 +436,7 @@ class Polygon(_EnhancedShapeBase):
             return y_check & (point[0] < x_intersect)
 
         # Count intersections
-        intersections = jnp.sum(
-            jax.vmap(ray_intersects_edge)(jnp.arange(self.n_vertices))
-        )
+        intersections = jnp.sum(jax.vmap(ray_intersects_edge)(jnp.arange(self.n_vertices)))
 
         # Point is inside if odd number of intersections
         return bool(intersections % 2 == 1)
@@ -487,9 +482,7 @@ class Polygon(_EnhancedShapeBase):
 
         def point_on_boundary(param):
             """Map parameter to boundary point."""
-            cumulative_lengths = jnp.cumsum(
-                jnp.concatenate([jnp.array([0.0]), edge_lengths])
-            )
+            cumulative_lengths = jnp.cumsum(jnp.concatenate([jnp.array([0.0]), edge_lengths]))
 
             # Find which edge the parameter corresponds to
             edge_idx = jnp.searchsorted(cumulative_lengths[1:], param, side="right")
@@ -665,9 +658,7 @@ class CSGUnion(_EnhancedShapeBase):
 
             # Sample n if we have more than needed
             if len(boundary_points) >= n:
-                indices = jax.random.choice(
-                    key3, len(boundary_points), (n,), replace=False
-                )
+                indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
                 return boundary_points[indices]
             # If not enough boundary points, fill with regular sampling
             remaining = n - len(boundary_points)
@@ -756,9 +747,7 @@ class CSGIntersection(_EnhancedShapeBase):
             boundary_points = all_points[boundary_mask]
 
             if len(boundary_points) >= n:
-                indices = jax.random.choice(
-                    key3, len(boundary_points), (n,), replace=False
-                )
+                indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
                 return boundary_points[indices]
             if len(boundary_points) > 0:
                 return boundary_points
@@ -906,9 +895,7 @@ def compute_boundary_normals(shape: Shape2D, point: Point2D) -> Point2D:
     return shape.compute_normal(point)
 
 
-def sample_boundary_points(
-    shape: Shape2D, n_points: int, key: jax.Array | None = None
-) -> Points2D:
+def sample_boundary_points(shape: Shape2D, n_points: int, key: jax.Array | None = None) -> Points2D:
     """Sample points on shape boundary."""
     if key is None:
         key = jax.random.PRNGKey(42)
@@ -965,9 +952,7 @@ class MolecularGeometry:
 
         if atomic_symbols is None or positions is None:
             # Fallback: inspect the molecular system object for debugging
-            available_attrs = [
-                attr for attr in dir(molecular_system) if not attr.startswith("_")
-            ]
+            available_attrs = [attr for attr in dir(molecular_system) if not attr.startswith("_")]
             raise ValueError(
                 f"Molecular system must have atomic symbols and positions. "
                 f"Available attributes: {available_attrs}. "
@@ -1130,9 +1115,7 @@ class PeriodicCell:
         n_atoms = positions.shape[0]
 
         # Create all pairwise combinations using JAX vectorized operations
-        i_indices, j_indices = jnp.meshgrid(
-            jnp.arange(n_atoms), jnp.arange(n_atoms), indexing="ij"
-        )
+        i_indices, j_indices = jnp.meshgrid(jnp.arange(n_atoms), jnp.arange(n_atoms), indexing="ij")
 
         # Only consider upper triangular pairs (i < j)
         upper_tri_mask = i_indices < j_indices
@@ -1259,9 +1242,7 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
             self.shape_a = shape_a
             self.shape_b = shape_b
             self.smoothness = smoothness
-            self._has_sdf = hasattr(shape_a, "distance") and hasattr(
-                shape_b, "distance"
-            )
+            self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
 
         def contains(self, point: Point2D) -> bool:
             if self._has_sdf:
@@ -1273,10 +1254,7 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
                 dist_a = self.shape_a.distance(point)
                 dist_b = self.shape_b.distance(point)
                 # Smooth minimum operation
-                h = (
-                    jnp.maximum(self.smoothness - jnp.abs(dist_a - dist_b), 0.0)
-                    / self.smoothness
-                )
+                h = jnp.maximum(self.smoothness - jnp.abs(dist_a - dist_b), 0.0) / self.smoothness
                 return jnp.minimum(dist_a, dist_b) - h * h * self.smoothness * 0.25
             return jnp.array(0.0)
 

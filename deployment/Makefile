@@ -64,7 +64,7 @@ create-namespaces: check-prerequisites ## Create all required namespaces
 	@$(KUBECTL) create namespace gpu-operator --dry-run=client -o yaml | $(KUBECTL) apply -f -
 	@echo "$(GREEN)Namespaces created successfully$(NC)"
 
-# Foundation Phase
+# Foundation Version
 .PHONY: deploy-foundation
 deploy-foundation: check-prerequisites create-namespaces ## Deploy foundation components
 	@echo "$(BLUE)Deploying foundation components...$(NC)"
@@ -82,7 +82,7 @@ deploy-gpu-operator: check-prerequisites ## Deploy NVIDIA GPU Operator
 		--set operator.defaultRuntime=containerd
 	@echo "$(GREEN)GPU Operator deployed$(NC)"
 
-# Core Phase
+# Core Version
 .PHONY: deploy-monitoring
 deploy-monitoring: check-prerequisites ## Deploy monitoring stack
 	@echo "$(BLUE)Deploying monitoring stack...$(NC)"
@@ -102,7 +102,7 @@ deploy-security: check-prerequisites ## Deploy security framework
 	@$(KUBECTL) apply -k security/network-policies/
 	@echo "$(GREEN)Security framework deployed$(NC)"
 
-# Extension Phase
+# Extension Version
 .PHONY: deploy-community
 deploy-community: check-prerequisites ## Deploy community platform
 	@echo "$(BLUE)Deploying community platform...$(NC)"
@@ -303,29 +303,29 @@ prometheus: port-forward-prometheus ## Open Prometheus UI (alias for port-forwar
 keycloak: port-forward-keycloak ## Open Keycloak admin console (alias for port-forward-keycloak)
 
 # Quick deployment for different phases
-.PHONY: phase-1
-phase-1: deploy-foundation ## Deploy Phase 1: Foundation
-	@echo "$(GREEN)Phase 1 (Foundation) deployed$(NC)"
+.PHONY: version-1
+version-1: deploy-foundation ## Deploy Version 1: Foundation
+	@echo "$(GREEN)Version 1 (Foundation) deployed$(NC)"
 
-.PHONY: phase-2
-phase-2: deploy-foundation deploy-gpu-operator deploy-monitoring deploy-security ## Deploy Phase 2: Core
-	@echo "$(GREEN)Phase 2 (Core) deployed$(NC)"
+.PHONY: version-2
+version-2: deploy-foundation deploy-gpu-operator deploy-monitoring deploy-security ## Deploy Version 2: Core
+	@echo "$(GREEN)Version 2 (Core) deployed$(NC)"
 
-.PHONY: phase-3
-phase-3: phase-2 deploy-community deploy-benchmarking deploy-scalability ## Deploy Phase 3: Extension
-	@echo "$(GREEN)Phase 3 (Extension) deployed$(NC)"
+.PHONY: version-3
+version-3: version-2 deploy-community deploy-benchmarking deploy-scalability ## Deploy Version 3: Extension
+	@echo "$(GREEN)Version 3 (Extension) deployed$(NC)"
 
-.PHONY: phase-4
-phase-4: phase-3 test-deployment ## Deploy Phase 4: Integration
-	@echo "$(GREEN)Phase 4 (Integration) deployed$(NC)"
+.PHONY: version-4
+version-4: version-3 test-deployment ## Deploy Version 4: Integration
+	@echo "$(GREEN)Version 4 (Integration) deployed$(NC)"
 
-.PHONY: phase-5
-phase-5: phase-4 ## Deploy Phase 5: Finalization
+.PHONY: version-5
+version-5: version-4 ## Deploy Version 5: Finalization
 	@echo "$(BLUE)Running final validation...$(NC)"
 	@$(MAKE) validate-configs
 	@$(MAKE) test-deployment
 	@$(MAKE) backup
-	@echo "$(GREEN)Phase 5 (Finalization) completed$(NC)"
+	@echo "$(GREEN)Version 5 (Finalization) completed$(NC)"
 	@echo "$(GREEN)🎉 SciML Production Deployment Complete! 🎉$(NC)"
 
 # Version information

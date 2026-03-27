@@ -28,7 +28,7 @@ The Opifex framework uses a unified environment setup system designed to handle 
 
 - **One-time setup**: Run once, activate many times
 - **Isolated dependencies**: Virtual environment prevents conflicts
-- **Easy troubleshooting**: Comprehensive error detection and reporting
+- **Easy troubleshooting**: Full error detection and reporting
 
 ## Setup Process
 
@@ -74,7 +74,7 @@ source ./activate.sh
 | Option | Description | Use Case |
 |--------|-------------|----------|
 | `--help`, `-h` | Show help message | Get usage information |
-| `--deep-clean` | Comprehensive cleaning | Clear all caches and start fresh |
+| `--deep-clean` | Full cleaning | Clear all caches and start fresh |
 | `--cpu-only` | Force CPU-only setup | Skip GPU detection/configuration |
 | `--force` | Force reinstallation | Overwrite existing environment |
 | `--verbose`, `-v` | Show detailed output | Debug setup issues |

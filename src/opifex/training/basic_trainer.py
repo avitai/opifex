@@ -1,6 +1,6 @@
 """Advanced training infrastructure for Opifex framework.
 
-This module provides comprehensive training capabilities including:
+This module provides full training capabilities including:
 - FLAX NNX transformation-based training loops with modern patterns
 - Optax optimizer integration with NNX state management
 - Loss function computation framework with physics-informed capabilities
@@ -13,7 +13,7 @@ This module provides comprehensive training capabilities including:
 - Enhanced error recovery and numerical stability
 
 This implementation follows Flax NNX best practices for high-performance
-scientific machine learning with comprehensive physics-informed capabilities.
+scientific machine learning with full physics-informed capabilities.
 """
 
 from __future__ import annotations
@@ -205,12 +205,10 @@ class ModularTrainer:
                 # Update model parameters
                 # Keep params as State, convert to tree only when needed for optax
                 params = nnx.state(self.model, nnx.Param)
-                updates, self.training_state.opt_state = (
-                    self.training_state.optimizer.update(
-                        nnx.to_tree(grads),
-                        self.training_state.opt_state,
-                        nnx.to_tree(params),
-                    )
+                updates, self.training_state.opt_state = self.training_state.optimizer.update(
+                    nnx.to_tree(grads),
+                    self.training_state.opt_state,
+                    nnx.to_tree(params),
                 )
                 updated_params = optax.apply_updates(nnx.to_tree(params), updates)
                 nnx.update(self.model, nnx.from_tree(updated_params))
@@ -223,10 +221,8 @@ class ModularTrainer:
                     self.error_recovery.update_stable_state(self.training_state)
 
                 # Collect and update metrics
-                training_diagnostics = (
-                    self.metrics_collector.collect_training_diagnostics(
-                        self.model, grads, self.config.learning_rate
-                    )
+                training_diagnostics = self.metrics_collector.collect_training_diagnostics(
+                    self.model, grads, self.config.learning_rate
                 )
                 metrics.update(training_diagnostics)
                 self.metrics_collector.update_metrics_history(metrics)
@@ -235,9 +231,7 @@ class ModularTrainer:
 
             except Exception as e:
                 if attempt == self.error_recovery.max_retries:
-                    raise RuntimeError(
-                        f"Training failed after all recovery attempts: {e}"
-                    ) from e
+                    raise RuntimeError(f"Training failed after all recovery attempts: {e}") from e
 
                 # Log error and attempt recovery
                 logger.warning("Training error on attempt %d: %s", attempt + 1, e)
@@ -293,8 +287,7 @@ class ModularTrainer:
     def train(
         self,
         train_data: tuple[Float[Array, "n_train ..."], Float[Array, "n_train ..."]],
-        val_data: tuple[Float[Array, "n_val ..."], Float[Array, "n_val ..."]]
-        | None = None,
+        val_data: tuple[Float[Array, "n_val ..."], Float[Array, "n_val ..."]] | None = None,
     ) -> tuple[nnx.Module, dict[str, Any]]:
         """Train the model with modular architecture.
 
@@ -353,16 +346,14 @@ class ModularTrainer:
         y_pred = safe_model_call(self.model, x_val)
         return jnp.mean((y_pred - y_val) ** 2)
 
-    def get_comprehensive_metrics_summary(
-        self, window_size: int = 10
-    ) -> dict[str, Any]:
-        """Get comprehensive metrics summary.
+    def get_comprehensive_metrics_summary(self, window_size: int = 10) -> dict[str, Any]:
+        """Get full metrics summary.
 
         Args:
             window_size: Window size for metrics aggregation
 
         Returns:
-            Comprehensive metrics dictionary
+            Full metrics dictionary
         """
         # Base metrics from collector
         base_metrics = self.metrics_collector.get_metrics_summary(window_size)
@@ -409,7 +400,7 @@ class BasicTrainer:
 
     Use :class:`opifex.core.training.Trainer` for a more composable API.
 
-    Provides comprehensive training capabilities including:
+    Provides full training capabilities including:
     - FLAX NNX transformation-based training loops
     - Optax optimizer integration
     - Loss function computation
@@ -437,7 +428,7 @@ class BasicTrainer:
         self.metrics = TrainingMetrics()
         self.physics_loss: Any | None = None  # Physics-informed loss instance
 
-        # Initialize advanced metrics collector for comprehensive tracking
+        # Initialize advanced metrics collector for full tracking
         self.advanced_metrics = AdvancedMetricsCollector()
 
         # Validate and setup gradient checkpointing (remat)
@@ -447,9 +438,7 @@ class BasicTrainer:
             )
 
             # Validate policy early — raises ValueError for invalid names
-            self._remat_policy = resolve_checkpoint_policy(
-                config.gradient_checkpoint_policy
-            )
+            self._remat_policy = resolve_checkpoint_policy(config.gradient_checkpoint_policy)
         else:
             self._remat_policy = None
 
@@ -473,9 +462,7 @@ class BasicTrainer:
         if config.checkpoint_config:
             self._setup_checkpointing()
 
-    def _create_optimizer(
-        self, opt_config: OptimizationConfig
-    ) -> optax.GradientTransformation:
+    def _create_optimizer(self, opt_config: OptimizationConfig) -> optax.GradientTransformation:
         """Create optimizer from configuration.
 
         Now uses centralized opifex.core.training.optimizers module.
@@ -530,9 +517,7 @@ class BasicTrainer:
         Returns:
             Scalar loss value
         """
-        y_pred = safe_model_call(
-            self.state.model, x, deterministic=False, rngs=self.state.rngs
-        )
+        y_pred = safe_model_call(self.state.model, x, deterministic=False, rngs=self.state.rngs)
 
         if self.config.loss_config.loss_type == "mse":
             data_loss = jnp.mean((y_pred - y_true) ** 2)
@@ -571,9 +556,7 @@ class BasicTrainer:
         flat_positions = positions.reshape(batch_size, -1)
 
         # Use safe model call to avoid type issues and potential problems
-        energies_pred = safe_model_call(
-            self.state.model, flat_positions, deterministic=True
-        )
+        energies_pred = safe_model_call(self.state.model, flat_positions, deterministic=True)
 
         # Ensure energies_pred has the right shape
         if energies_pred.ndim == 1:
@@ -585,10 +568,7 @@ class BasicTrainer:
         total_loss = energy_loss
 
         # Only add simple constraints if enabled, avoiding complex transformations
-        if (
-            self.config.quantum_config
-            and self.config.quantum_config.enable_density_constraints
-        ):
+        if self.config.quantum_config and self.config.quantum_config.enable_density_constraints:
             # Simple regularization penalty instead of force computation
             # This avoids the problematic JAX grad transformations
             params = nnx.state(self.state.model, nnx.Param)
@@ -597,9 +577,7 @@ class BasicTrainer:
             # Simple L2 regularization to prevent extreme parameters
             regularization = sum(jnp.sum(p**2) for p in param_values if p.size > 0)
             regularization_penalty = (
-                self.config.loss_config.quantum_constraint_weight
-                * regularization
-                * 1e-6
+                self.config.loss_config.quantum_constraint_weight * regularization * 1e-6
             )
 
             total_loss += regularization_penalty
@@ -651,10 +629,7 @@ class BasicTrainer:
 
         # Compute gradient norm for monitoring (handle complex gradients)
         grad_norm = jnp.sqrt(
-            sum(
-                jnp.sum(jnp.real(g * jnp.conj(g)))
-                for g in jax.tree_util.tree_leaves(grads)
-            )
+            sum(jnp.sum(jnp.real(g * jnp.conj(g))) for g in jax.tree_util.tree_leaves(grads))
         )
         self.state.update_gradient_norm(float(grad_norm))
         self.state.update_learning_rate(current_lr)
@@ -681,7 +656,7 @@ class BasicTrainer:
         if current_loss < self.state.best_loss:
             self.state.best_loss = float(current_loss)
 
-        # Collect comprehensive physics metrics
+        # Collect full physics metrics
         physics_metrics = self.advanced_metrics.collect_physics_metrics(
             self.state.model, x, y_true, self.physics_loss
         )
@@ -690,27 +665,19 @@ class BasicTrainer:
         self.advanced_metrics.update_metrics_history(physics_metrics)
 
         # Track physics-specific metrics if available
-        if self.physics_loss is not None and hasattr(
-            self.physics_loss, "compute_residuals"
-        ):
+        if self.physics_loss is not None and hasattr(self.physics_loss, "compute_residuals"):
             # Compute physics-specific metrics
             residual_loss = self.physics_loss.compute_residuals(self.state.model, x)
             self.state.update_physics_metric("residual_loss", float(residual_loss))
 
             # Check conservation law violations if physics loss supports it
             if hasattr(self.physics_loss, "check_conservation_violations"):
-                violations = self.physics_loss.check_conservation_violations(
-                    self.state.model, x
-                )
+                violations = self.physics_loss.check_conservation_violations(self.state.model, x)
                 for violation_type, value in violations.items():
-                    self.state.update_conservation_violation(
-                        violation_type, float(value)
-                    )
+                    self.state.update_conservation_violation(violation_type, float(value))
 
         # Collect convergence metrics
-        convergence_metrics = self.advanced_metrics.collect_convergence_metrics(
-            self.state
-        )
+        convergence_metrics = self.advanced_metrics.collect_convergence_metrics(self.state)
 
         # Update advanced metrics history with convergence metrics
         self.advanced_metrics.update_metrics_history(convergence_metrics)
@@ -739,23 +706,19 @@ class BasicTrainer:
         else:
             self.state.plateau_count += 1
 
-        # Collect comprehensive validation physics metrics
+        # Collect full validation physics metrics
         val_physics_metrics = self.advanced_metrics.collect_physics_metrics(
             self.state.model, x_val, y_val, self.physics_loss
         )
 
         # Prefix validation metrics to distinguish from training metrics
-        prefixed_val_metrics = {
-            f"val_{key}": value for key, value in val_physics_metrics.items()
-        }
+        prefixed_val_metrics = {f"val_{key}": value for key, value in val_physics_metrics.items()}
 
         # Update advanced metrics history with validation metrics
         self.advanced_metrics.update_metrics_history(prefixed_val_metrics)
 
         # Track physics-specific validation metrics if available
-        if self.physics_loss is not None and hasattr(
-            self.physics_loss, "compute_residuals"
-        ):
+        if self.physics_loss is not None and hasattr(self.physics_loss, "compute_residuals"):
             # Compute physics-specific validation metrics
             residual_loss = self.physics_loss.compute_residuals(self.state.model, x_val)
             self.state.update_physics_metric("val_residual_loss", float(residual_loss))
@@ -765,11 +728,8 @@ class BasicTrainer:
     def train(
         self,
         train_data: tuple[Float[Array, "n_train ..."], Float[Array, "n_train ..."]],
-        val_data: tuple[Float[Array, "n_val ..."], Float[Array, "n_val ..."]]
-        | None = None,
-        boundary_data: tuple[
-            Float[Array, "n_boundary ..."], Float[Array, "n_boundary ..."]
-        ]
+        val_data: tuple[Float[Array, "n_val ..."], Float[Array, "n_val ..."]] | None = None,
+        boundary_data: tuple[Float[Array, "n_boundary ..."], Float[Array, "n_boundary ..."]]
         | None = None,
         use_quantum_training: bool = False,
     ) -> tuple[nnx.Module, TrainingMetrics]:
@@ -799,9 +759,7 @@ class BasicTrainer:
                 loss_value = self._quantum_training_step(x_train, y_train)
             elif self.physics_loss is not None and boundary_data is not None:
                 # Physics-informed training step
-                loss_value = self._physics_informed_training_step(
-                    x_train, y_train, boundary_data
-                )
+                loss_value = self._physics_informed_training_step(x_train, y_train, boundary_data)
             else:
                 loss_value = self.training_step(x_train, y_train)
 
@@ -837,9 +795,7 @@ class BasicTrainer:
 
             # Basic verbose logging
             elif self.config.verbose and epoch % 10 == 0:
-                val_str = (
-                    f", Val: {val_loss_value:.6f}" if val_loss_value is not None else ""
-                )
+                val_str = f", Val: {val_loss_value:.6f}" if val_loss_value is not None else ""
                 logger.info(
                     "Epoch %3d/%d: Loss: %.6f%s",
                     epoch,
@@ -864,17 +820,15 @@ class BasicTrainer:
 
         return self.state.model, self.metrics
 
-    def get_comprehensive_metrics_summary(
-        self, window_size: int = 10
-    ) -> dict[str, Any]:
-        """Get comprehensive metrics summary including advanced metrics.
+    def get_comprehensive_metrics_summary(self, window_size: int = 10) -> dict[str, Any]:
+        """Get full metrics summary including advanced metrics.
 
         Args:
             window_size: Number of recent measurements to consider
                 for summary statistics
 
         Returns:
-            Dictionary containing comprehensive metrics summary
+            Dictionary containing full metrics summary
         """
         summary: dict[str, Any] = {}
 
@@ -883,9 +837,7 @@ class BasicTrainer:
             "train_losses": self.metrics.train_losses[-window_size:]
             if self.metrics.train_losses
             else [],
-            "val_losses": self.metrics.val_losses[-window_size:]
-            if self.metrics.val_losses
-            else [],
+            "val_losses": self.metrics.val_losses[-window_size:] if self.metrics.val_losses else [],
             "best_val_loss": self.metrics.best_val_loss,
             "learning_rates": self.metrics.learning_rates[-window_size:]
             if self.metrics.learning_rates
@@ -903,9 +855,7 @@ class BasicTrainer:
         }
 
         # Get advanced metrics summary
-        summary["advanced_metrics"] = self.advanced_metrics.get_metrics_summary(
-            window_size
-        )
+        summary["advanced_metrics"] = self.advanced_metrics.get_metrics_summary(window_size)
 
         return summary
 
@@ -924,9 +874,7 @@ class BasicTrainer:
 
         # Update parameters using the correct parameter format
         params = nnx.to_tree(nnx.state(self.state.model, nnx.Param))
-        updates, opt_state = self.state.optimizer.update(
-            grads, self.state.opt_state, params
-        )
+        updates, opt_state = self.state.optimizer.update(grads, self.state.opt_state, params)
         nnx.update(self.state.model, updates)
         self.state.opt_state = opt_state
 
@@ -944,9 +892,7 @@ class BasicTrainer:
         self,
         x_train: Float[Array, "batch ..."],
         y_train: Float[Array, "batch ..."],
-        boundary_data: tuple[
-            Float[Array, "n_boundary ..."], Float[Array, "n_boundary ..."]
-        ],
+        boundary_data: tuple[Float[Array, "n_boundary ..."], Float[Array, "n_boundary ..."]],
     ) -> Float[Array, ""]:
         """Physics-informed training step using attached physics loss."""
         # Extract boundary data once at the start
@@ -977,9 +923,9 @@ class BasicTrainer:
             return total_physics_loss, loss_components
 
         # Compute gradients
-        (loss_value, loss_components), grads = nnx.value_and_grad(
-            loss_fn, has_aux=True
-        )(self.state.model)
+        (loss_value, loss_components), grads = nnx.value_and_grad(loss_fn, has_aux=True)(
+            self.state.model
+        )
 
         # Track physics loss components
         self.metrics.physics_losses.append(float(loss_components["physics_loss"]))
@@ -987,9 +933,7 @@ class BasicTrainer:
 
         # Update parameters using the correct parameter format
         params = nnx.to_tree(nnx.state(self.state.model, nnx.Param))
-        updates, opt_state = self.state.optimizer.update(
-            grads, self.state.opt_state, params
-        )
+        updates, opt_state = self.state.optimizer.update(grads, self.state.opt_state, params)
         nnx.update(self.state.model, updates)
         self.state.opt_state = opt_state
 
@@ -1005,9 +949,7 @@ class BasicTrainer:
     ) -> None:
         """Validate quantum-specific constraints."""
         # Compute chemical accuracy
-        energies_pred = safe_compute_energy(
-            self.state.model, positions, deterministic=True
-        )
+        energies_pred = safe_compute_energy(self.state.model, positions, deterministic=True)
         accuracy = self.compute_chemical_accuracy(energies_pred, energies_true)
         self.metrics.update_chemical_accuracy(float(accuracy))
 
@@ -1037,15 +979,11 @@ class BasicTrainer:
         tolerance = self.config.quantum_config.scf_tolerance
 
         # Simplified SCF monitoring - in practice this would be more complex
-        energy_prev = safe_compute_energy(
-            self.state.model, positions, deterministic=True
-        )
+        energy_prev = safe_compute_energy(self.state.model, positions, deterministic=True)
 
         for iteration in range(1, max_iter + 1):
             # In real implementation, this would involve SCF iterations
-            energy_current = safe_compute_energy(
-                self.state.model, positions, deterministic=True
-            )
+            energy_current = safe_compute_energy(self.state.model, positions, deterministic=True)
 
             # Check convergence
             energy_diff = jnp.mean(jnp.abs(energy_current - energy_prev))
@@ -1156,9 +1094,7 @@ class BasicTrainer:
         """
         checkpoint_dir = Path(checkpoint_path).resolve()
         if not checkpoint_dir.exists():
-            raise FileNotFoundError(
-                f"Checkpoint directory not found: {checkpoint_path}"
-            )
+            raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_path}")
 
         # Create checkpoint manager with proper handlers
         checkpoint_manager = ocp.CheckpointManager(
@@ -1208,9 +1144,7 @@ class BasicTrainer:
         }
 
         # Load checkpoint data with target structure
-        checkpoint_data = checkpoint_manager.restore(
-            latest_step, items=target_structure
-        )
+        checkpoint_data = checkpoint_manager.restore(latest_step, items=target_structure)
 
         # Restore model state using proper NNX restoration
         model_state = checkpoint_data["model"]
@@ -1255,9 +1189,7 @@ class UncertaintyGuidedTrainer:
         self.uncertainty_threshold = uncertainty_threshold
         self.adaptation_strategy = adaptation_strategy
 
-    def select_uncertain_samples(
-        self, x_pool: jax.Array, num_samples: int = 10
-    ) -> list[int]:
+    def select_uncertain_samples(self, x_pool: jax.Array, num_samples: int = 10) -> list[int]:
         """Select most uncertain samples from pool for active learning.
 
         Args:
@@ -1275,9 +1207,7 @@ class UncertaintyGuidedTrainer:
         )
 
         # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(
-            mock_predictions
-        )
+        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
         total_uncertainty = uncertainty_components.total.squeeze()
 
         # Select samples with highest uncertainty
@@ -1302,9 +1232,7 @@ class UncertaintyGuidedTrainer:
         )
 
         # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(
-            mock_predictions
-        )
+        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
         total_uncertainty = uncertainty_components.total.squeeze()
 
         # Convert uncertainty to weights (higher uncertainty = higher weight)
@@ -1331,9 +1259,7 @@ class UncertaintyGuidedTrainer:
         )
 
         # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(
-            mock_predictions
-        )
+        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
 
         # Compute basic calibration error (simplified)
         calibration_error = jnp.mean(jnp.abs(uncertainty_components.total))
@@ -1453,16 +1379,12 @@ class ActiveUncertaintyLearner:
         )
 
         # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(
-            mock_predictions
-        )
+        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
         total_uncertainty = uncertainty_components.total.squeeze()
 
         if self.sampling_strategy == "max_uncertainty":
             # Select samples with highest uncertainty
-            selected_indices = jnp.argsort(total_uncertainty)[
-                -self.acquisition_size :
-            ].tolist()
+            selected_indices = jnp.argsort(total_uncertainty)[-self.acquisition_size :].tolist()
         elif self.sampling_strategy == "diverse_uncertainty":
             # Add diversity to uncertainty-based selection
             # Simple implementation: select top uncertain, then add diversity
@@ -1476,23 +1398,15 @@ class ActiveUncertaintyLearner:
             # Combine uncertainty with physics constraints
             if self.physics_priors is not None:
                 # Mock physics constraint scores
-                physics_scores = jax.random.uniform(
-                    jax.random.PRNGKey(44), (batch_size,)
-                )
+                physics_scores = jax.random.uniform(jax.random.PRNGKey(44), (batch_size,))
                 combined_scores = total_uncertainty + 0.3 * physics_scores
-                selected_indices = jnp.argsort(combined_scores)[
-                    -self.acquisition_size :
-                ].tolist()
+                selected_indices = jnp.argsort(combined_scores)[-self.acquisition_size :].tolist()
             else:
                 # Fall back to max uncertainty
-                selected_indices = jnp.argsort(total_uncertainty)[
-                    -self.acquisition_size :
-                ].tolist()
+                selected_indices = jnp.argsort(total_uncertainty)[-self.acquisition_size :].tolist()
         else:
             # Default to max uncertainty
-            selected_indices = jnp.argsort(total_uncertainty)[
-                -self.acquisition_size :
-            ].tolist()
+            selected_indices = jnp.argsort(total_uncertainty)[-self.acquisition_size :].tolist()
 
         return selected_indices
 

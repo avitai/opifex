@@ -217,9 +217,7 @@ class NNXHybridOptimizer:
                 "loss_variance_threshold": self.config.loss_variance_threshold,
                 "loss_history_window": self.config.loss_history_window,
                 "gradient_norm_threshold": self.config.gradient_norm_threshold,
-                "relative_improvement_threshold": (
-                    self.config.relative_improvement_threshold
-                ),
+                "relative_improvement_threshold": (self.config.relative_improvement_threshold),
                 "adam_learning_rate": self.config.adam_learning_rate,
                 "adam_b1": self.config.adam_b1,
                 "adam_b2": self.config.adam_b2,

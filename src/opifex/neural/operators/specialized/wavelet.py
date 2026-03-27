@@ -168,12 +168,8 @@ class WaveletNeuralOperator(nnx.Module):
         upsampled_detail = upsampled_detail.at[::2].set(detail)
 
         # Convolve with reconstruction filters
-        recon_low = jnp.convolve(
-            upsampled_approx, self.low_pass_filter.value[::-1], mode="same"
-        )
-        recon_high = jnp.convolve(
-            upsampled_detail, self.high_pass_filter.value[::-1], mode="same"
-        )
+        recon_low = jnp.convolve(upsampled_approx, self.low_pass_filter.value[::-1], mode="same")
+        recon_high = jnp.convolve(upsampled_detail, self.high_pass_filter.value[::-1], mode="same")
 
         return recon_low + recon_high
 
@@ -189,9 +185,7 @@ class WaveletNeuralOperator(nnx.Module):
 
         return coefficients
 
-    def _multi_level_idwt(
-        self, coefficients: list[tuple[jax.Array, jax.Array]]
-    ) -> jax.Array:
+    def _multi_level_idwt(self, coefficients: list[tuple[jax.Array, jax.Array]]) -> jax.Array:
         """Multi-level wavelet reconstruction."""
         # Start with the coarsest approximation
         current = coefficients[-1][0]  # Coarsest approximation
@@ -269,12 +263,8 @@ class WaveletNeuralOperator(nnx.Module):
                 # we need to use the original coefficients structure but with
                 # processed features
                 # For simplicity, use the processed features as both approx and detail
-                processed_approx = processed_coeffs.mean(
-                    axis=1
-                )  # Average across channels
-                processed_detail = processed_coeffs.mean(
-                    axis=1
-                )  # Average across channels
+                processed_approx = processed_coeffs.mean(axis=1)  # Average across channels
+                processed_detail = processed_coeffs.mean(axis=1)  # Average across channels
 
                 processed_coefficients.append((processed_approx, processed_detail))
 

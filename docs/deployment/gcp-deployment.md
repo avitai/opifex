@@ -1,6 +1,6 @@
 # Opifex Deployment on Google Cloud Platform (GCP)
 
-This comprehensive guide walks you through deploying the Opifex framework on Google Cloud Platform using Google Kubernetes Engine (GKE). This guide is designed for beginners and provides step-by-step instructions.
+This full guide walks you through deploying the Opifex framework on Google Cloud Platform using Google Kubernetes Engine (GKE). This guide is designed for beginners and provides step-by-step instructions.
 
 ## 📋 Table of Contents
 
@@ -596,7 +596,7 @@ curl -X POST http://$EXTERNAL_IP/api/v1/predict \
     -d '{"data": [1, 2, 3, 4, 5]}'
 ```
 
-### Step 3: Run Comprehensive Tests
+### Step 3: Run Full Tests
 
 ```bash
 # Run deployment tests

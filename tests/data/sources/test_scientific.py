@@ -33,9 +33,7 @@ def pdebench_hdf5_file(tmp_path: Path) -> Path:
     file_path = tmp_path / "1D_Burgers_test.hdf5"
     n_samples, time_steps, spatial_x, channels = 20, 11, 64, 1
     rng = np.random.default_rng(42)
-    tensor = rng.standard_normal((n_samples, time_steps, spatial_x, channels)).astype(
-        np.float32
-    )
+    tensor = rng.standard_normal((n_samples, time_steps, spatial_x, channels)).astype(np.float32)
     t = np.linspace(0.0, 1.0, time_steps, dtype=np.float32)
     x = np.linspace(0.0, 1.0, spatial_x, dtype=np.float32)
 
@@ -56,9 +54,7 @@ def pdebench_darcy_hdf5_file(tmp_path: Path) -> Path:
     file_path = tmp_path / "2D_DarcyFlow_test.hdf5"
     n_samples, spatial_x, spatial_y, channels = 12, 32, 32, 1
     rng = np.random.default_rng(99)
-    tensor = rng.standard_normal((n_samples, spatial_x, spatial_y, channels)).astype(
-        np.float32
-    )
+    tensor = rng.standard_normal((n_samples, spatial_x, spatial_y, channels)).astype(np.float32)
 
     with h5py.File(file_path, "w") as f:
         f.create_dataset("tensor", data=tensor)
@@ -79,21 +75,15 @@ def pdebench_multifield_hdf5_file(tmp_path: Path) -> Path:
     with h5py.File(file_path, "w") as f:
         f.create_dataset(
             "Vx",
-            data=rng.standard_normal((n_samples, time_steps, spatial_x)).astype(
-                np.float32
-            ),
+            data=rng.standard_normal((n_samples, time_steps, spatial_x)).astype(np.float32),
         )
         f.create_dataset(
             "density",
-            data=rng.standard_normal((n_samples, time_steps, spatial_x)).astype(
-                np.float32
-            ),
+            data=rng.standard_normal((n_samples, time_steps, spatial_x)).astype(np.float32),
         )
         f.create_dataset(
             "pressure",
-            data=rng.standard_normal((n_samples, time_steps, spatial_x)).astype(
-                np.float32
-            ),
+            data=rng.standard_normal((n_samples, time_steps, spatial_x)).astype(np.float32),
         )
         f.create_dataset(
             "t",

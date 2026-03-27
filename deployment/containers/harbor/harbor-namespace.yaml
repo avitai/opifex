@@ -1,5 +1,5 @@
 # Harbor Enterprise Registry for Opifex Framework
-# Phase 7.1: Container Orchestration Implementation
+# Version 7.1: Container Orchestration Implementation
 # Features: Vulnerability scanning + RBAC + Multi-cloud replication + Enterprise security
 
 apiVersion: v1

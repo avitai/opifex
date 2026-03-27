@@ -82,9 +82,7 @@ collocation points for 100 epochs.
 """
 
 # %%
-pinn = create_heat_equation_pinn(
-    spatial_dim=2, hidden_dims=[50, 50, 50], rngs=nnx.Rngs(42)
-)
+pinn = create_heat_equation_pinn(spatial_dim=2, hidden_dims=[50, 50, 50], rngs=nnx.Rngs(42))
 n_params = sum(x.size for x in jax.tree.leaves(nnx.state(pinn)))
 print(f"Parameters: {n_params:,}")
 

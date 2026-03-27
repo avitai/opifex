@@ -92,9 +92,7 @@ class SensorOptimization(nnx.Module):
         # Ensure output has correct shape
         return self._adjust_measurement_shape(measurements, x.shape[0])
 
-    def _apply_sensor_weights(
-        self, x: jax.Array, *, training: bool = False
-    ) -> jax.Array:
+    def _apply_sensor_weights(self, x: jax.Array, *, training: bool = False) -> jax.Array:
         """Apply sensor weights to input data.
 
         Args:
@@ -173,7 +171,7 @@ class SensorOptimization(nnx.Module):
         Returns:
             Measurements at specified positions
         """
-        if isinstance(sensor_positions, (int, jnp.integer)) or (
+        if isinstance(sensor_positions, int | jnp.integer) or (
             isinstance(sensor_positions, jax.Array) and sensor_positions.ndim == 0
         ):
             return self._extract_single_position(weighted_x, int(sensor_positions))
@@ -181,9 +179,7 @@ class SensorOptimization(nnx.Module):
             return self._extract_multiple_positions(weighted_x, sensor_positions)
         return weighted_x
 
-    def _extract_single_position(
-        self, weighted_x: jax.Array, sensor_idx: int
-    ) -> jax.Array:
+    def _extract_single_position(self, weighted_x: jax.Array, sensor_idx: int) -> jax.Array:
         """Extract measurement from single sensor position.
 
         Args:
@@ -247,9 +243,7 @@ class SensorOptimization(nnx.Module):
         padding = jnp.zeros((batch_size, padding_needed, weighted_x.shape[2]))
         return jnp.concatenate([weighted_x, padding], axis=1)
 
-    def _adjust_measurement_shape(
-        self, measurements: jax.Array, batch_size: int
-    ) -> jax.Array:
+    def _adjust_measurement_shape(self, measurements: jax.Array, batch_size: int) -> jax.Array:
         """Adjust measurement shape to match expected output.
 
         Args:
@@ -270,9 +264,7 @@ class SensorOptimization(nnx.Module):
             return jnp.concatenate([measurements, padding], axis=1)
         return measurements
 
-    def _extract_measurements(
-        self, function_vals: jax.Array, coords: jax.Array
-    ) -> jax.Array:
+    def _extract_measurements(self, function_vals: jax.Array, coords: jax.Array) -> jax.Array:
         """Extract measurements from function values at coordinates.
 
         Args:
@@ -294,8 +286,6 @@ class SensorOptimization(nnx.Module):
         if sensor_pos.ndim == 1:
             sensor_pos = sensor_pos.reshape(-1, 1)
 
-        distances = jnp.linalg.norm(
-            coords[:, None, :] - sensor_pos[None, :, :], axis=-1
-        )
+        distances = jnp.linalg.norm(coords[:, None, :] - sensor_pos[None, :, :], axis=-1)
         nearest_indices = jnp.argmin(distances, axis=0)
         return function_vals[nearest_indices]

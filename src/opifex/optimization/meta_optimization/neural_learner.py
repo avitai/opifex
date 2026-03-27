@@ -85,9 +85,7 @@ class LearnToOptimize(nnx.Module):
         # Input: [gradient, previous_updates, loss_history]
         # Output: [parameter_update] or [parameter_update, step_size]
         output_dim = (
-            meta_network_layers[0]
-            if not adaptive_step_size
-            else meta_network_layers[0] + 1
+            meta_network_layers[0] if not adaptive_step_size else meta_network_layers[0] + 1
         )
 
         layers = [*meta_network_layers, output_dim]
@@ -115,9 +113,7 @@ class LearnToOptimize(nnx.Module):
             Predicted parameter update
         """
         # Prepare input features for meta-network
-        input_features = self._prepare_meta_input(
-            gradient, previous_updates, loss_history
-        )
+        input_features = self._prepare_meta_input(gradient, previous_updates, loss_history)
 
         # Get meta-network prediction
         meta_output = self.meta_network(input_features)
@@ -270,9 +266,7 @@ class LearnToOptimize(nnx.Module):
         # In practice, this would use sophisticated quantum mechanical insights
 
         # SCF convergence-based adaptation
-        scf_trend = (
-            jnp.diff(scf_history[-5:]) if len(scf_history) > 1 else jnp.array([0.0])
-        )
+        scf_trend = jnp.diff(scf_history[-5:]) if len(scf_history) > 1 else jnp.array([0.0])
         scf_acceleration = jnp.mean(scf_trend)
 
         # Orbital-based features
@@ -281,9 +275,7 @@ class LearnToOptimize(nnx.Module):
 
         # Pad features to match meta-network input
         padded_features = jnp.zeros(128)
-        padded_features = padded_features.at[: len(orbital_features)].set(
-            orbital_features
-        )
+        padded_features = padded_features.at[: len(orbital_features)].set(orbital_features)
 
         # Get quantum adaptation from meta-network
         quantum_update = self.meta_network(padded_features)

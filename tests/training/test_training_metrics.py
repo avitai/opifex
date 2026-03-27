@@ -368,9 +368,7 @@ class TestAdvancedMetricsCollector:
 
         _, grads = loss_fn(model)
 
-        metrics = collector.collect_training_diagnostics(
-            model, grads, learning_rate=1e-3
-        )
+        metrics = collector.collect_training_diagnostics(model, grads, learning_rate=1e-3)
 
         assert "gradient_norm" in metrics
         assert "learning_rate" in metrics

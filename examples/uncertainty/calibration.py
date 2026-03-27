@@ -107,16 +107,12 @@ def demonstrate_platt_scaling():
     # Initialize Platt scaling
     platt_scaler = PlattScaling(rngs=rngs)
 
-    print(
-        f"Initial parameters: A={platt_scaler.a.value:.3f}, B={platt_scaler.b.value:.3f}"
-    )
+    print(f"Initial parameters: A={platt_scaler.a.value:.3f}, B={platt_scaler.b.value:.3f}")
 
     # Fit Platt scaling on training data
     platt_scaler.fit(train_logits, train_labels, max_iterations=100)
 
-    print(
-        f"Fitted parameters: A={platt_scaler.a.value:.3f}, B={platt_scaler.b.value:.3f}"
-    )
+    print(f"Fitted parameters: A={platt_scaler.a.value:.3f}, B={platt_scaler.b.value:.3f}")
 
     # Apply calibration to validation data
     uncalibrated_probs = jax.nn.sigmoid(calib_logits)
@@ -198,9 +194,7 @@ def demonstrate_isotonic_regression():
         bin_accuracies = []
 
         for i in range(n_bins):
-            in_bin = (confidences >= bin_boundaries[i]) & (
-                confidences < bin_boundaries[i + 1]
-            )
+            in_bin = (confidences >= bin_boundaries[i]) & (confidences < bin_boundaries[i + 1])
             if jnp.sum(in_bin) > 0:
                 bin_conf = jnp.mean(confidences[in_bin])
                 bin_acc = jnp.mean(accuracies[in_bin])
@@ -217,9 +211,7 @@ def demonstrate_isotonic_regression():
     before_reliability = jnp.mean(jnp.abs(before_conf - before_acc))
 
     # After calibration
-    after_conf, after_acc = reliability_diagram_data(
-        calibrated_confidences, _test_labels
-    )
+    after_conf, after_acc = reliability_diagram_data(calibrated_confidences, _test_labels)
     after_reliability = jnp.mean(jnp.abs(after_conf - after_acc))
 
     print(f"Average reliability gap before: {before_reliability:.4f}")
@@ -326,9 +318,7 @@ def demonstrate_enhanced_temperature_scaling():
     print(f"Initial temperature: {temp_scaler.temperature.value:.3f}")
 
     # Optimize temperature
-    optimized_temp = temp_scaler.optimize_temperature(
-        train_logits, _train_labels.astype(int)
-    )
+    optimized_temp = temp_scaler.optimize_temperature(train_logits, _train_labels.astype(int))
 
     print(f"Optimized temperature: {optimized_temp:.3f}")
 
@@ -364,7 +354,7 @@ def demonstrate_integrated_calibration_pipeline():
     key = jax.random.PRNGKey(999)
     rngs = nnx.Rngs(999)
 
-    # Generate comprehensive dataset
+    # Generate full dataset
     X, logits, labels, targets = generate_synthetic_data(key, n_samples=1000)
 
     # Split data into train/calib/test
@@ -434,9 +424,7 @@ def demonstrate_integrated_calibration_pipeline():
     _test_calibrated, test_uncertainty = temp_scaler(test_logits[:, None], test_X)
 
     # Final assessment
-    final_coverage = conformal_predictor.compute_coverage(
-        test_lower, test_upper, test_targets
-    )
+    final_coverage = conformal_predictor.compute_coverage(test_lower, test_upper, test_targets)
 
     # Classification calibration assessment
     def compute_ece(probs, labels):

@@ -1,6 +1,6 @@
 """Integration testing module for Opifex framework.
 
-This module contains comprehensive integration tests that validate interactions
+This module contains full integration tests that validate interactions
 between different components of the Opifex framework. Tests are organized into
 layers:
 

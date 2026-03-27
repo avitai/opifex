@@ -42,8 +42,8 @@ derivatives and multiple boundary conditions at different locations.
 
 ## Files
 
-- **Python Script**: [`examples/pinns/euler_beam.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/euler_beam.py)
-- **Jupyter Notebook**: [`examples/pinns/euler_beam.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/euler_beam.ipynb)
+- **Python Script**: [`examples/pinns/euler_beam.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/euler_beam.py)
+- **Jupyter Notebook**: [`examples/pinns/euler_beam.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/euler_beam.ipynb)
 
 ## Quick Start
 

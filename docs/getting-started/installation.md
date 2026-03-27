@@ -136,7 +136,7 @@ uv run pytest tests/ -v
 # Run tests with coverage
 uv run pytest tests/ --cov=opifex --cov-report=html
 
-# Comprehensive test reporting with JSON output and detailed coverage
+# Full test reporting with JSON output and detailed coverage
 uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
@@ -163,7 +163,7 @@ uv run mkdocs build
 
 - **GitHub Issues**: Report bugs and request features
 - **Discussions**: Community Q&A and collaboration
-- **Documentation**: Comprehensive guides and tutorials
+- **Documentation**: Full guides and tutorials
 
 ## Next Steps
 

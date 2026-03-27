@@ -143,11 +143,7 @@ class TestLearnToOptimize:
 
         # Verify meta-gradients structure
         assert isinstance(meta_grads, dict)
-        assert (
-            jnp.isfinite(meta_grads).all()
-            if isinstance(meta_grads, jax.Array)
-            else True
-        )
+        assert jnp.isfinite(meta_grads).all() if isinstance(meta_grads, jax.Array) else True
 
 
 class TestMetaOptimizer:
@@ -195,9 +191,7 @@ class TestMetaOptimizer:
         opt_state = meta_opt.init_optimizer_state(params)
 
         # Perform meta-optimization step
-        new_params, new_opt_state, meta_info = meta_opt.step(
-            loss_fn, params, opt_state, step=0
-        )
+        new_params, new_opt_state, meta_info = meta_opt.step(loss_fn, params, opt_state, step=0)
 
         assert new_params.shape == params.shape
         assert jnp.isfinite(new_params).all()

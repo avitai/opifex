@@ -49,8 +49,8 @@ LDA/GGA approximations.
 
 ## Files
 
-- **Python Script**: [`examples/quantum-chemistry/neural_xc_functional.py`](https://github.com/Opifex/Opifex/blob/main/examples/quantum-chemistry/neural_xc_functional.py)
-- **Jupyter Notebook**: [`examples/quantum-chemistry/neural_xc_functional.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/quantum-chemistry/neural_xc_functional.ipynb)
+- **Python Script**: [`examples/quantum-chemistry/neural_xc_functional.py`](https://github.com/avitai/opifex/blob/main/examples/quantum-chemistry/neural_xc_functional.py)
+- **Jupyter Notebook**: [`examples/quantum-chemistry/neural_xc_functional.ipynb`](https://github.com/avitai/opifex/blob/main/examples/quantum-chemistry/neural_xc_functional.ipynb)
 
 ## Quick Start
 

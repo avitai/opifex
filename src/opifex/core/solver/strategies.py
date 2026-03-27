@@ -44,9 +44,7 @@ class AdaptiveLossBalancing(BaseComponent, nnx.Module):
         self.alpha = alpha  # Smoothing parameter
         # Internal state using nnx.Dict for JIT compatibility
         # Eagerly initialize variables for known keys
-        self.weights = nnx.Dict(
-            {key: nnx.Variable(jnp.array(1.0)) for key in loss_keys}
-        )
+        self.weights = nnx.Dict({key: nnx.Variable(jnp.array(1.0)) for key in loss_keys})
 
     def update(self, losses: dict[str, Any]) -> None:
         """Update weights based on current losses using Inverse Magnitude Balancing.
@@ -66,9 +64,7 @@ class AdaptiveLossBalancing(BaseComponent, nnx.Module):
                 self.weights[key].value = new_w
             # else: Unknown keys are ignored to maintain static structure for JIT
 
-    def on_batch_end(
-        self, batch: int, state: Any, loss: Any, metrics: dict[str, Any]
-    ) -> None:
+    def on_batch_end(self, batch: int, state: Any, loss: Any, metrics: dict[str, Any]) -> None:
         """Hook to update weights after batch."""
         # Extract individual loss components from metrics if available
         relevant_losses = {k: v for k, v in metrics.items() if k.startswith("loss_")}

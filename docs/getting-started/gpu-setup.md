@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains the comprehensive solution implemented to ensure that Opifex tests **fail appropriately** when GPU is not available, rather than silently falling back to CPU. This approach ensures that GPU-dependent functionality is properly tested and that users understand when their environment doesn't meet the requirements.
+This document explains the full solution implemented to ensure that Opifex tests **fail appropriately** when GPU is not available, rather than silently falling back to CPU. This approach ensures that GPU-dependent functionality is properly tested and that users understand when their environment doesn't meet the requirements.
 
 ## Problem Statement
 
@@ -53,7 +53,7 @@ def configure_jax_for_reliability() -> dict[str, str | bool | int | list[str]]:
 
 #### GPU Testing Infrastructure (`opifex/core/testing_infrastructure.py`)
 
-The framework includes comprehensive GPU testing infrastructure that handles device detection, stability testing, and environment classification:
+The framework includes full GPU testing infrastructure that handles device detection, stability testing, and environment classification:
 
 ```python
 class EnvironmentType(Enum):
@@ -187,63 +187,11 @@ class PeriodicCell:
 - Clear error messages for GPU failures
 - Proper exception handling with context
 
-### 5. Test Runner Script
-
-#### Enhanced Test Runner (`scripts/run_tests_reliably.sh`)
-
-```bash
-#!/bin/bash
-# Opifex Test Runner - GPU-Required Testing
-# This script provides test configurations that require GPU and fail appropriately when GPU is not available
-
-# Function to check GPU availability
-check_gpu_availability() {
-    if command -v nvidia-smi &> /dev/null; then
-        if nvidia-smi &> /dev/null; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
-# Verify GPU is available before running tests
-if ! check_gpu_availability; then
-    print_error "GPU is not available. This test suite requires GPU."
-    print_error "Please ensure:"
-    print_error "  1. NVIDIA GPU is installed and working"
-    print_error "  2. NVIDIA drivers are properly installed"
-    print_error "  3. CUDA toolkit is installed"
-    print_error "  4. JAX with CUDA support is installed"
-    exit 1
-fi
-```
-
-**Features:**
-
-- GPU availability verification before test execution
-- Clear error messages and troubleshooting guidance
-- Multiple test configurations for different scenarios
-- No CPU fallback options
+### 5. Running GPU Tests
 
 ## Usage Examples
 
-### Running GPU-Required Tests
-
-```bash
-# Require GPU (tests will fail if GPU unavailable)
-./scripts/run_tests_reliably.sh --gpu-required
-
-# GPU-safe configuration (single worker)
-./scripts/run_tests_reliably.sh --gpu-safe
-
-# Sequential execution (no parallel)
-./scripts/run_tests_reliably.sh --sequential
-
-# Auto-detect best configuration
-./scripts/run_tests_reliably.sh
-```
-
-### Direct Pytest Usage
+### Pytest with GPU Markers
 
 ```bash
 # Run GPU-required tests only
@@ -261,7 +209,7 @@ uv run pytest -m "not gpu"
 # Run with single worker for GPU safety
 uv run pytest -n 1
 
-# Comprehensive test reporting with JSON output and detailed coverage
+# Full test reporting with JSON output and detailed coverage
 uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
@@ -321,7 +269,7 @@ This may indicate GPU memory issues or CUDA driver problems.
 1. Check GPU memory usage: `nvidia-smi`
 2. Close other GPU applications
 3. Reduce batch sizes in tests
-4. Use `./scripts/run_tests_reliably.sh --gpu-safe` for single-worker execution
+4. Use `uv run pytest -p no:xdist` for single-worker execution
 
 #### CUDA Driver Issues
 

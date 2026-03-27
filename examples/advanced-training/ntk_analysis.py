@@ -174,9 +174,7 @@ print(f"  NTK matrix shape: {ntk_matrix.shape}")
 # Compute eigenvalues (clip small negatives from numerical noise)
 eigenvalues_raw = ntk_wrapper.compute_eigenvalues(x_ntk)
 eigenvalues = jnp.maximum(eigenvalues_raw, 1e-10)  # Ensure positive for stability
-print(
-    f"  Eigenvalues range: [{float(eigenvalues[-1]):.6e}, {float(eigenvalues[0]):.6e}]"
-)
+print(f"  Eigenvalues range: [{float(eigenvalues[-1]):.6e}, {float(eigenvalues[0]):.6e}]")
 
 # Compute diagnostics
 cond_number = compute_condition_number(eigenvalues)
@@ -195,9 +193,7 @@ n_slow = int(jnp.sum(slow_modes))
 print(f"  Slow-converging modes: {n_slow}/{len(eigenvalues)}")
 
 # Estimate epochs to convergence
-est_epochs = estimate_epochs_to_convergence(
-    eigenvalues, LEARNING_RATE, target_reduction=0.01
-)
+est_epochs = estimate_epochs_to_convergence(eigenvalues, LEARNING_RATE, target_reduction=0.01)
 est_epochs_int = int(min(float(est_epochs), 1e9))  # Cap at 1 billion for display
 print(f"  Estimated epochs to 99% convergence: {est_epochs_int:,}")
 
@@ -284,25 +280,19 @@ for step in range(TRAINING_STEPS):
         eigenvalues = jnp.maximum(eigenvalues_raw, 1e-10)  # Clip for stability
 
         ntk_history["step"].append(step)
-        ntk_history["condition_number"].append(
-            float(compute_condition_number(eigenvalues))
-        )
+        ntk_history["condition_number"].append(float(compute_condition_number(eigenvalues)))
         ntk_history["effective_rank"].append(float(compute_effective_rank(eigenvalues)))
         ntk_history["max_eigenvalue"].append(float(eigenvalues[0]))
         ntk_history["min_eigenvalue"].append(float(jnp.maximum(eigenvalues[-1], 1e-10)))
         ntk_history["eigenvalues"].append(np.array(jnp.maximum(eigenvalues, 1e-10)))
 
-        print(
-            f"  Step {step:4d}: loss={loss:.6e}, cond={ntk_history['condition_number'][-1]:.2e}"
-        )
+        print(f"  Step {step:4d}: loss={loss:.6e}, cond={ntk_history['condition_number'][-1]:.2e}")
 
 # Final NTK computation
 eigenvalues_final_raw = ntk_wrapper.compute_eigenvalues(x_ntk)
 eigenvalues_final = jnp.maximum(eigenvalues_final_raw, 1e-10)
 ntk_history["step"].append(TRAINING_STEPS)
-ntk_history["condition_number"].append(
-    float(compute_condition_number(eigenvalues_final))
-)
+ntk_history["condition_number"].append(float(compute_condition_number(eigenvalues_final)))
 ntk_history["effective_rank"].append(float(compute_effective_rank(eigenvalues_final)))
 ntk_history["max_eigenvalue"].append(float(eigenvalues_final[0]))
 ntk_history["min_eigenvalue"].append(float(jnp.maximum(eigenvalues_final[-1], 1e-10)))

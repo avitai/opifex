@@ -20,9 +20,7 @@ class TestUncertaintyQuantificationNeuralOperator:
     def setup_method(self):
         """Setup for each test method with GPU/CPU backend detection."""
         self.backend = jax.default_backend()
-        print(
-            f"Running UncertaintyQuantificationNeuralOperator tests on {self.backend}"
-        )
+        print(f"Running UncertaintyQuantificationNeuralOperator tests on {self.backend}")
 
     @pytest.fixture
     def rng_key(self):
@@ -99,9 +97,7 @@ class TestUncertaintyQuantificationNeuralOperator:
         x = jax.random.normal(rng_key, (1, 4, 4, 1))  # Reduced size
 
         # Get uncertainty predictions with fewer samples
-        results = uqno.predict_with_uncertainty(
-            x, num_samples=5, key=rng_key
-        )  # Reduced samples
+        results = uqno.predict_with_uncertainty(x, num_samples=5, key=rng_key)  # Reduced samples
 
         # Check that all required keys are present
         required_keys = [
@@ -179,8 +175,6 @@ class TestUncertaintyQuantificationNeuralOperator:
         assert grads is not None
         # Check that at least some gradients are non-zero
         grad_leaves = jax.tree_util.tree_leaves(grads)
-        grad_norms = [
-            jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")
-        ]
+        grad_norms = [jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")]
         assert len(grad_norms) > 0
         assert any(norm > 1e-8 for norm in grad_norms)

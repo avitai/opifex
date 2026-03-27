@@ -94,9 +94,7 @@ class Dashboard:
     timezone: str = "browser"
     panels: list[Panel] = field(default_factory=list)
     templating: dict[str, Any] = field(default_factory=dict)
-    time: dict[str, Any] = field(
-        default_factory=lambda: {"from": "now-1h", "to": "now"}
-    )
+    time: dict[str, Any] = field(default_factory=lambda: {"from": "now-1h", "to": "now"})
     refresh: str = "30s"
     schema_version: int = 27
     version: int = 1

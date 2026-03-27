@@ -42,9 +42,7 @@ class PhysicsAwareAttention(nnx.Module):
         self.dropout_rate = dropout_rate
 
         if embed_dim % num_heads != 0:
-            raise ValueError(
-                f"embed_dim {embed_dim} must be divisible by num_heads {num_heads}"
-            )
+            raise ValueError(f"embed_dim {embed_dim} must be divisible by num_heads {num_heads}")
 
         # Core multi-head attention layer  handling
         self.attention = nnx.MultiHeadAttention(
@@ -66,9 +64,7 @@ class PhysicsAwareAttention(nnx.Module):
 
             # Constraint weights for adaptive physics enforcement
             # JAX-native precision handling
-            self.constraint_weights = nnx.Param(
-                jnp.ones((len(self.physics_constraints),))
-            )
+            self.constraint_weights = nnx.Param(jnp.ones((len(self.physics_constraints),)))
 
             # Add aliases for test compatibility (only when physics_projection exists)
             self.physics_proj = self.physics_projection
@@ -129,9 +125,7 @@ class PhysicsAwareAttention(nnx.Module):
             constraint_mask = jax.nn.sigmoid(physics_weights)
 
             # Modulate attention output based on physics constraints
-            attention_output = attention_output * constraint_mask.mean(
-                axis=-1, keepdims=True
-            )
+            attention_output = attention_output * constraint_mask.mean(axis=-1, keepdims=True)
 
         return attention_output
 
@@ -181,9 +175,7 @@ class PhysicsCrossAttention(nnx.Module):
         self.dropout_rate = dropout_rate
 
         if embed_dim % num_heads != 0:
-            raise ValueError(
-                f"embed_dim {embed_dim} must be divisible by num_heads {num_heads}"
-            )
+            raise ValueError(f"embed_dim {embed_dim} must be divisible by num_heads {num_heads}")
 
         # Multi-head cross-attention for each physics system
         # JAX-native precision handling
@@ -339,9 +331,7 @@ class PhysicsCrossAttention(nnx.Module):
                     system_physics_info = physics_info
 
                 physics_weights = self.physics_projection(system_output)
-                physics_bias = self._apply_physics_bias(
-                    physics_weights, system_physics_info
-                )
+                physics_bias = self._apply_physics_bias(physics_weights, system_physics_info)
                 system_output = system_output + physics_bias
 
             # Apply conservation enforcement
@@ -354,9 +344,7 @@ class PhysicsCrossAttention(nnx.Module):
         # Apply cross-system coupling if enabled
         if self.cross_system_coupling and num_systems > 1:
             # For multi-system, apply coupling but maintain the multi-system structure
-            return self._apply_cross_system_coupling_multi(
-                stacked_outputs, physics_info, training
-            )
+            return self._apply_cross_system_coupling_multi(stacked_outputs, physics_info, training)
 
         return stacked_outputs
 

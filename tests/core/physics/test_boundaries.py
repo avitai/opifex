@@ -64,9 +64,7 @@ class TestApplyDirichlet:
         params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
         left_value = 0.0
         right_value = 10.0
-        result = apply_dirichlet(
-            params, left_boundary=left_value, right_boundary=right_value
-        )
+        result = apply_dirichlet(params, left_boundary=left_value, right_boundary=right_value)
 
         assert result[0] == left_value
         assert result[-1] == right_value
@@ -252,9 +250,7 @@ class TestApplyBoundaryCondition:
     def test_apply_dirichlet_via_enum(self):
         """Test applying Dirichlet via unified function."""
         params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        result = apply_boundary_condition(
-            params, BoundaryType.DIRICHLET, boundary_value=0.0
-        )
+        result = apply_boundary_condition(params, BoundaryType.DIRICHLET, boundary_value=0.0)
 
         assert result[0] == 0.0
         assert result[-1] == 0.0

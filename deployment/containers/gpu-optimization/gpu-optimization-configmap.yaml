@@ -1,5 +1,5 @@
 # GPU Resource Management for Opifex Container Orchestration
-# Phase 7.1: Container Orchestration Implementation
+# Version 7.1: Container Orchestration Implementation
 # Features: Intelligent GPU allocation + Memory optimization + Multi-GPU support
 
 apiVersion: v1

@@ -24,9 +24,7 @@ class TestOptimizationProblem:
     def test_optimization_problem_initialization(self):
         """Test that optimization problems can be created with different types."""
         # Quadratic programming problem
-        problem = OptimizationProblem(
-            problem_type="quadratic", dimension=10, constraints=None
-        )
+        problem = OptimizationProblem(problem_type="quadratic", dimension=10, constraints=None)
         assert problem.problem_type == "quadratic"
         assert problem.dimension == 10
         assert problem.constraints is None
@@ -38,9 +36,7 @@ class TestOptimizationProblem:
             "inequality": jnp.array([[0.0, 1.0, -1.0]]),  # x2 >= 1
         }
 
-        problem = OptimizationProblem(
-            problem_type="linear", dimension=3, constraints=constraints
-        )
+        problem = OptimizationProblem(problem_type="linear", dimension=3, constraints=constraints)
         assert problem.problem_type == "linear"
         assert problem.dimension == 3
         assert problem.constraints is not None
@@ -77,12 +73,8 @@ class TestConstraintHandler:
         x = jnp.array([1.0, 2.0, 3.0])
         equality_constraint = jnp.array([1.0, 1.0, 0.0])  # x1 + x2 = 0
 
-        penalty = handler.compute_penalty(
-            x, equality_constraint, constraint_type="equality"
-        )
-        expected_violation = jnp.abs(
-            jnp.dot(equality_constraint, x)
-        )  # |1*1 + 1*2 + 0*3| = 3
+        penalty = handler.compute_penalty(x, equality_constraint, constraint_type="equality")
+        expected_violation = jnp.abs(jnp.dot(equality_constraint, x))  # |1*1 + 1*2 + 0*3| = 3
         expected_penalty = 10.0 * expected_violation**2
 
         assert jnp.allclose(penalty, expected_penalty)
@@ -93,9 +85,7 @@ class TestConstraintHandler:
 
         # Test inequality constraint g(x) >= 0
         x = jnp.array([2.0, 3.0])
-        inequality_constraint = jnp.array(
-            [1.0, -1.0]
-        )  # x1 - x2 >= 0 (violated: 2-3 = -1)
+        inequality_constraint = jnp.array([1.0, -1.0])  # x1 - x2 >= 0 (violated: 2-3 = -1)
 
         barrier = handler.compute_barrier(x, inequality_constraint)
         # Should return large positive value for violated constraint
@@ -153,9 +143,7 @@ class TestParametricProgrammingSolver:
     @pytest.fixture
     def solver_config(self):
         """Fixture providing a test solver configuration."""
-        return SolverConfig(
-            hidden_sizes=[64, 64, 32], learning_rate=1e-3, max_iterations=100
-        )
+        return SolverConfig(hidden_sizes=[64, 64, 32], learning_rate=1e-3, max_iterations=100)
 
     @pytest.fixture
     def solver(self, solver_config):
@@ -221,9 +209,7 @@ class TestParametricProgrammingSolver:
         # Define simple equality constraint: sum(x) = 1
         equality_constraint = jnp.ones(solver.output_dim)
 
-        solutions = solver(
-            problem_params, constraints={"equality": equality_constraint}
-        )
+        solutions = solver(problem_params, constraints={"equality": equality_constraint})
 
         # Check constraint satisfaction (approximately)
         constraint_violations = jnp.abs(jnp.sum(solutions, axis=1) - 1.0)
@@ -365,9 +351,7 @@ class TestIntegrationTests:
         assert jnp.isfinite(solution).all()
 
         # Check that solution respects bounds (approximately)
-        assert jnp.all(
-            solution >= -1.0
-        )  # Allow reasonable tolerance for neural network outputs
+        assert jnp.all(solution >= -1.0)  # Allow reasonable tolerance for neural network outputs
         assert jnp.all(solution <= 2.0)
 
     def test_performance_comparison_with_traditional_methods(self):
@@ -375,9 +359,7 @@ class TestIntegrationTests:
         config = SolverConfig(use_traditional_fallback=True)
         rngs = nnx.Rngs(42)
 
-        solver = ParametricProgrammingSolver(
-            config=config, input_dim=10, output_dim=5, rngs=rngs
-        )
+        solver = ParametricProgrammingSolver(config=config, input_dim=10, output_dim=5, rngs=rngs)
 
         # Should have performance measurement capabilities
         assert hasattr(solver, "measure_speedup")

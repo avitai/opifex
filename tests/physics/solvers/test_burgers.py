@@ -17,7 +17,7 @@ from opifex.physics.solvers.shallow_water import solve_shallow_water_2d
 
 
 class TestBurgers2DSolver:
-    """Test suite for Burgers2DSolver with comprehensive coverage."""
+    """Test suite for Burgers2DSolver with full coverage."""
 
     def test_solver_initialization_default_params(self):
         """Test solver initializes with default parameters correctly."""
@@ -146,9 +146,7 @@ class TestBurgers2DSolver:
 
     def test_complete_solve_small_problem(self):
         """Test complete solve for a small problem."""
-        solver = Burgers2DSolver(
-            resolution=16, viscosity=0.1
-        )  # High viscosity for stability
+        solver = Burgers2DSolver(resolution=16, viscosity=0.1)  # High viscosity for stability
 
         # Create simple initial condition
         u, v = solver.create_vortex_initial_condition(strength=0.1)  # Small strength
@@ -267,18 +265,14 @@ class TestSolveBurgers1d:
         resolution = 32
         time_steps = 5
         ic = jnp.sin(jnp.pi * jnp.linspace(-1, 1, resolution))
-        result = solve_burgers_1d(
-            ic, viscosity=0.1, time_steps=time_steps, resolution=resolution
-        )
+        result = solve_burgers_1d(ic, viscosity=0.1, time_steps=time_steps, resolution=resolution)
         assert result.shape == (time_steps + 1, resolution)
 
     def test_initial_condition_preserved(self):
         """First time step should match the initial condition."""
         resolution = 32
         ic = jnp.sin(jnp.pi * jnp.linspace(-1, 1, resolution))
-        result = solve_burgers_1d(
-            ic, viscosity=0.1, time_steps=3, resolution=resolution
-        )
+        result = solve_burgers_1d(ic, viscosity=0.1, time_steps=3, resolution=resolution)
         assert jnp.allclose(result[0], ic, atol=1e-6)
 
     def test_numerical_stability_low_viscosity(self):
@@ -345,9 +339,7 @@ class TestSolveBurgers2d:
         resolution = 16
         time_steps = 3
         ic = jnp.zeros((resolution, resolution))
-        result = solve_burgers_2d(
-            ic, viscosity=0.1, time_steps=time_steps, resolution=resolution
-        )
+        result = solve_burgers_2d(ic, viscosity=0.1, time_steps=time_steps, resolution=resolution)
         assert result.shape == (time_steps + 1, resolution, resolution)
 
     def test_initial_condition_preserved(self):
@@ -356,9 +348,7 @@ class TestSolveBurgers2d:
         x = jnp.linspace(-1, 1, resolution)
         X, Y = jnp.meshgrid(x, x, indexing="ij")
         ic = jnp.sin(jnp.pi * X) * jnp.sin(jnp.pi * Y)
-        result = solve_burgers_2d(
-            ic, viscosity=0.1, time_steps=3, resolution=resolution
-        )
+        result = solve_burgers_2d(ic, viscosity=0.1, time_steps=3, resolution=resolution)
         assert jnp.allclose(result[0], ic, atol=1e-6)
 
     def test_numerical_stability_low_viscosity(self):
@@ -396,9 +386,7 @@ def test_diffusion_advection_validation():
     with pytest.raises(ValueError, match="grid_spacing must be a positive number"):
         solve_diffusion_advection_2d(arr, 1.0, (1.0, 1.0), grid_spacing=0)
     # advection_vel wrong type
-    with pytest.raises(
-        ValueError, match="advection_vel must be a tuple of two numbers"
-    ):
+    with pytest.raises(ValueError, match="advection_vel must be a tuple of two numbers"):
         solve_diffusion_advection_2d(arr, 1.0, (1.0, 2.0, 3.0))  # type: ignore[arg-type]
 
 

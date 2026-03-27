@@ -1,7 +1,7 @@
-"""Test module for neural base classes - comprehensive TDD validation.
+"""Test module for neural base classes - full TDD validation.
 
 Tests for StandardMLP and QuantumMLP following TDD methodology:
-- Test-driven development with comprehensive coverage
+- Test-driven development with full coverage
 - Modern neural network features validation
 - Quantum-specific functionality testing
 - Integration with existing test patterns
@@ -135,9 +135,7 @@ class TestStandardMLP:
         """Test error handling for invalid layer sizes."""
         rngs = nnx.Rngs(42)
 
-        with pytest.raises(
-            ValueError, match="layer_sizes must have at least 2 elements"
-        ):
+        with pytest.raises(ValueError, match="layer_sizes must have at least 2 elements"):
             StandardMLP(
                 layer_sizes=[4],  # Only one layer
                 rngs=rngs,
@@ -285,9 +283,7 @@ class TestQuantumMLP:
         # Reshape for network input
         flat_positions = positions.flatten()
 
-        energy, forces = mlp.compute_energy_and_forces(
-            flat_positions, deterministic=True
-        )
+        energy, forces = mlp.compute_energy_and_forces(flat_positions, deterministic=True)
 
         assert energy.shape == ()  # Scalar energy
         assert forces.shape == (12,)  # Forces for all coordinates
@@ -363,9 +359,7 @@ class TestQuantumMLP:
     def test_initialization_validation(self):
         """Test validation logic in QuantumMLP initialization."""
         # Test invalid layer sizes validation
-        with pytest.raises(
-            ValueError, match="layer_sizes must have at least 2 elements"
-        ):
+        with pytest.raises(ValueError, match="layer_sizes must have at least 2 elements"):
             QuantumMLP(
                 layer_sizes=[1],  # Invalid: only one element
                 rngs=nnx.Rngs(42),
@@ -398,16 +392,12 @@ class TestQuantumMLP:
 
         # Test invalid 1D position length (line 418)
         invalid_1d_positions = jnp.array([1.0, 2.0, 3.0, 4.0])  # Not divisible by 3
-        with pytest.raises(
-            ValueError, match="Flattened positions length 4 must be divisible by 3"
-        ):
+        with pytest.raises(ValueError, match="Flattened positions length 4 must be divisible by 3"):
             mlp.compute_energy(invalid_1d_positions)
 
         # Test invalid dimensions (line 429)
         invalid_4d_positions = jnp.ones((2, 3, 3, 2))  # 4D array
-        with pytest.raises(
-            ValueError, match="Expected positions with 1, 2 or 3 dimensions, got 4"
-        ):
+        with pytest.raises(ValueError, match="Expected positions with 1, 2 or 3 dimensions, got 4"):
             mlp.compute_energy(invalid_4d_positions)
 
     def test_energy_scalar_error_handling(self):
@@ -420,15 +410,11 @@ class TestQuantumMLP:
 
         # Test invalid dimensions for _compute_energy_scalar (lines 445-448, 468)
         invalid_1d_positions = jnp.array([1.0, 2.0, 3.0])  # 1D array
-        with pytest.raises(
-            ValueError, match="_compute_energy_scalar expects 2D positions, got 1D"
-        ):
+        with pytest.raises(ValueError, match="_compute_energy_scalar expects 2D positions, got 1D"):
             mlp._compute_energy_scalar(invalid_1d_positions)
 
         invalid_3d_positions = jnp.ones((1, 2, 3))  # 3D array
-        with pytest.raises(
-            ValueError, match="_compute_energy_scalar expects 2D positions, got 3D"
-        ):
+        with pytest.raises(ValueError, match="_compute_energy_scalar expects 2D positions, got 3D"):
             mlp._compute_energy_scalar(invalid_3d_positions)
 
     def test_forces_computation_error_handling(self):
@@ -440,19 +426,13 @@ class TestQuantumMLP:
         )
 
         # Test invalid 1D position length for forces (line 503)
-        invalid_1d_positions = jnp.array(
-            [1.0, 2.0, 3.0, 4.0, 5.0]
-        )  # Not divisible by 3
-        with pytest.raises(
-            ValueError, match="Flattened positions length 5 must be divisible by 3"
-        ):
+        invalid_1d_positions = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])  # Not divisible by 3
+        with pytest.raises(ValueError, match="Flattened positions length 5 must be divisible by 3"):
             mlp.compute_forces(invalid_1d_positions)
 
         # Test invalid dimensions for forces (lines 519-529)
         invalid_4d_positions = jnp.ones((2, 3, 3, 2))  # 4D array
-        with pytest.raises(
-            ValueError, match="Expected positions with 1, 2 or 3 dimensions, got 4"
-        ):
+        with pytest.raises(ValueError, match="Expected positions with 1, 2 or 3 dimensions, got 4"):
             mlp.compute_forces(invalid_4d_positions)
 
     def test_energy_and_forces_error_handling(self):
@@ -464,12 +444,8 @@ class TestQuantumMLP:
         )
 
         # Test invalid 1D position length (line 555)
-        invalid_1d_positions = jnp.array(
-            [1.0, 2.0, 3.0, 4.0, 5.0]
-        )  # Not divisible by 3
-        with pytest.raises(
-            ValueError, match="Flattened positions length 5 must be divisible by 3"
-        ):
+        invalid_1d_positions = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])  # Not divisible by 3
+        with pytest.raises(ValueError, match="Flattened positions length 5 must be divisible by 3"):
             mlp.compute_energy_and_forces(invalid_1d_positions)
 
     def test_energy_output_shape_handling(self):
@@ -533,15 +509,11 @@ class TestQuantumMLP:
         # Test 1D input (lines 572-578)
         positions_1d = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])  # 2 atoms
         energy, forces = mlp.compute_energy_and_forces(positions_1d)
-        assert energy.ndim == 0 or (
-            energy.ndim == 1 and energy.shape[0] == 1
-        )  # Scalar energy
+        assert energy.ndim == 0 or (energy.ndim == 1 and energy.shape[0] == 1)  # Scalar energy
         assert forces.shape == (6,)  # Flattened forces
 
         # Test 2D input (single molecule)
         positions_2d = jnp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
         energy, forces = mlp.compute_energy_and_forces(positions_2d)
-        assert energy.ndim == 0 or (
-            energy.ndim == 1 and energy.shape[0] == 1
-        )  # Scalar energy
+        assert energy.ndim == 0 or (energy.ndim == 1 and energy.shape[0] == 1)  # Scalar energy
         assert forces.shape == (2, 3)  # Forces per atom

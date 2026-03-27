@@ -6,7 +6,7 @@ coefficients for the POD expansion.
 
 Reference:
     Lu, L., Meng, X., Mao, Z., & Karniadakis, G. E. (2022).
-    "A comprehensive and fair comparison of two neural operators."
+    "A full and fair comparison of two neural operators."
     GitHub: lu-group/deeponet-fno
 
 This module reuses:
@@ -65,8 +65,7 @@ class PODDeepONet(nnx.Module):
         # Validate: branch output dim must equal number of POD modes
         if branch_sizes[-1] != n_modes:
             raise ValueError(
-                f"branch output dim ({branch_sizes[-1]}) must match "
-                f"number of POD modes ({n_modes})"
+                f"branch output dim ({branch_sizes[-1]}) must match number of POD modes ({n_modes})"
             )
 
         self.n_locations = n_locations
@@ -83,9 +82,7 @@ class PODDeepONet(nnx.Module):
         self.pod_basis_modes = nnx.Variable(pod_basis)
 
         # Optional output mean: non-trainable
-        self.output_mean = (
-            nnx.Variable(output_mean) if output_mean is not None else None
-        )
+        self.output_mean = nnx.Variable(output_mean) if output_mean is not None else None
 
         logger.info(
             "PODDeepONet: %d modes, %d locations, branch=%s",

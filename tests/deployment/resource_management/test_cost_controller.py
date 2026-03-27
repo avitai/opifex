@@ -189,10 +189,7 @@ class TestBudgetAlerts:
         assert abs(alerts["utilization_percentage"] - 110.0) < 0.01  # Float comparison
         assert len(alerts["recommended_actions"]) == 3
         assert "Immediate cost reduction required" in alerts["recommended_actions"]
-        assert (
-            "Review and terminate non-essential allocations"
-            in alerts["recommended_actions"]
-        )
+        assert "Review and terminate non-essential allocations" in alerts["recommended_actions"]
 
     def test_check_budget_alerts_no_spending(self):
         """Test budget alerts with no spending."""
@@ -240,9 +237,7 @@ class TestCostOptimizationAnalysis:
         )
 
         active_allocations = {"alloc-1": allocation}
-        optimization = controller.analyze_cost_optimization_opportunities(
-            active_allocations
-        )
+        optimization = controller.analyze_cost_optimization_opportunities(active_allocations)
 
         assert isinstance(optimization, CostOptimization)
         assert optimization.current_cost_usd_per_hour == 10.0
@@ -309,9 +304,7 @@ class TestCostOptimizationAnalysis:
         )
 
         active_allocations = {"alloc-1": allocation1, "alloc-2": allocation2}
-        optimization = controller.analyze_cost_optimization_opportunities(
-            active_allocations
-        )
+        optimization = controller.analyze_cost_optimization_opportunities(active_allocations)
 
         assert optimization.current_cost_usd_per_hour == 15.0
         assert CloudProvider.AWS in optimization.cost_breakdown_by_provider
@@ -348,14 +341,10 @@ class TestCostOptimizationAnalysis:
             allocation_strategy="balanced",
         )
 
-        optimization = controller.analyze_cost_optimization_opportunities(
-            {"alloc-1": allocation}
-        )
+        optimization = controller.analyze_cost_optimization_opportunities({"alloc-1": allocation})
 
         # Should recommend migrating workloads
-        assert any(
-            "lower-cost providers" in rec for rec in optimization.recommendations
-        )
+        assert any("lower-cost providers" in rec for rec in optimization.recommendations)
 
     def test_analyze_cost_optimization_low_performance(self):
         """Test optimization recommendations for under-performing allocations."""
@@ -387,16 +376,14 @@ class TestCostOptimizationAnalysis:
             allocation_strategy="balanced",
         )
 
-        optimization = controller.analyze_cost_optimization_opportunities(
-            {"alloc-1": allocation}
-        )
+        optimization = controller.analyze_cost_optimization_opportunities({"alloc-1": allocation})
 
         # Should recommend optimizing under-performing allocations
         assert any("under-performing" in rec for rec in optimization.recommendations)
 
 
 class TestCostAnalytics:
-    """Tests for comprehensive cost analytics."""
+    """Tests for full cost analytics."""
 
     def test_get_cost_analytics_no_data(self):
         """Test cost analytics with no cost data."""
@@ -408,7 +395,7 @@ class TestCostAnalytics:
         assert analytics["error"] == "No cost data available"
 
     def test_get_cost_analytics_with_data(self):
-        """Test comprehensive cost analytics with data."""
+        """Test full cost analytics with data."""
         controller = CostController(budget_limit_usd_per_day=1000.0)
 
         # Track some costs

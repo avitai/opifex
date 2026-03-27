@@ -144,10 +144,7 @@ class TestValidationFramework:
 
         assert validator._infer_domain("darcy_flow_dataset") == "fluid_dynamics"
         assert validator._infer_domain("quantum_dft_molecule") == "quantum_computing"
-        assert (
-            validator._infer_domain("materials_crystal_structure")
-            == "materials_science"
-        )
+        assert validator._infer_domain("materials_crystal_structure") == "materials_science"
         assert validator._infer_domain("unknown_dataset") == "general"
 
     def test_tolerance_violation_checking(self):
@@ -296,9 +293,7 @@ class TestAnalysisEngine:
         """Test operator recommendations."""
         analyzer = AnalysisEngine()
 
-        recommendations = analyzer.create_operator_recommendations(
-            "pde_solving", "fluid_dynamics"
-        )
+        recommendations = analyzer.create_operator_recommendations("pde_solving", "fluid_dynamics")
 
         assert recommendations.problem_type == "pde_solving"
         assert recommendations.domain == "fluid_dynamics"
@@ -466,9 +461,7 @@ class TestBenchmarkRunner:
             }
             mock_loader = [mock_batch]
 
-            with patch.object(
-                runner, "_get_data_loaders", return_value=(mock_loader, mock_loader)
-            ):
+            with patch.object(runner, "_get_data_loaders", return_value=(mock_loader, mock_loader)):
                 result = runner._run_single_benchmark("MockFNO", benchmark)
 
             assert isinstance(result, BenchmarkResult)
@@ -519,7 +512,7 @@ class TestIntegrationWorkflows:
             runner.registry.register_operator(TestFNO)
             runner.registry.register_operator(TestDeepONet)
 
-            # Run comprehensive benchmark
+            # Run full benchmark
             results = runner.run_comprehensive_benchmark(
                 operators=["TestFNO", "TestDeepONet"],
                 benchmarks=["integration_test"],
@@ -567,9 +560,7 @@ class TestIntegrationWorkflows:
             domain_results = runner.execute_domain_specific_suite("fluid_dynamics")
 
             assert domain_results.domain == "fluid_dynamics"
-            assert (
-                len(domain_results.benchmark_results) <= 2
-            )  # Depends on compatibility
+            assert len(domain_results.benchmark_results) <= 2  # Depends on compatibility
             assert "total_benchmarks" in domain_results.summary_statistics
 
 

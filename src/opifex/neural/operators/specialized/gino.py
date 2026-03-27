@@ -1,6 +1,6 @@
 # FILE PLACEMENT: opifex/neural/operators/specialized/gino.py
 #
-# COMPREHENSIVE REWRITE - Geometry-Informed Neural Operators
+# FULL REWRITE - Geometry-Informed Neural Operators
 # Fixes all type annotation issues and structural problems
 #
 # This file completely replaces the existing gino.py
@@ -153,8 +153,7 @@ class GeometryAttention(nnx.Module):
         # Ensure feature_dim is divisible by num_heads
         if feature_dim % num_heads != 0:
             raise ValueError(
-                f"feature_dim ({feature_dim}) must be divisible by "
-                f"num_heads ({num_heads})"
+                f"feature_dim ({feature_dim}) must be divisible by num_heads ({num_heads})"
             )
 
         self.head_dim = feature_dim // num_heads
@@ -206,9 +205,7 @@ class GeometryAttention(nnx.Module):
         # Transpose to (batch, num_heads, num_points, num_points)
         return jnp.transpose(distance_weights, (0, 3, 1, 2))
 
-    def __call__(
-        self, features: jax.Array, geometry: jax.Array, coords: jax.Array
-    ) -> jax.Array:
+    def __call__(self, features: jax.Array, geometry: jax.Array, coords: jax.Array) -> jax.Array:
         """
         Apply geometry-aware attention with proper dimension validation.
 
@@ -224,13 +221,9 @@ class GeometryAttention(nnx.Module):
 
         # Validate input dimensions
         if feature_dim != self.feature_dim:
-            raise ValueError(
-                f"Expected feature_dim {self.feature_dim}, got {feature_dim}"
-            )
+            raise ValueError(f"Expected feature_dim {self.feature_dim}, got {feature_dim}")
         if geometry.shape[-1] != self.geometry_dim:
-            raise ValueError(
-                f"Expected geometry_dim {self.geometry_dim}, got {geometry.shape[-1]}"
-            )
+            raise ValueError(f"Expected geometry_dim {self.geometry_dim}, got {geometry.shape[-1]}")
 
         # Standard feature self-attention (self-attention: query=key=value=features)
         feature_attended = self.feature_attention(
@@ -243,9 +236,7 @@ class GeometryAttention(nnx.Module):
         geom_value = self.geometry_value(geometry)  # (batch, num_points, feature_dim)
 
         # Validate tensor dimensions before attention computation
-        if not (
-            geom_query.shape == geom_key.shape == geom_value.shape == features.shape
-        ):
+        if not (geom_query.shape == geom_key.shape == geom_value.shape == features.shape):
             raise ValueError(
                 f"Dimension mismatch: geom_query={geom_query.shape}, "
                 f"geom_key={geom_key.shape}, geom_value={geom_value.shape}, "
@@ -254,9 +245,7 @@ class GeometryAttention(nnx.Module):
 
         # Compute attention scores with proper scaling
         scale_factor = jnp.sqrt(self.head_dim)
-        attention_scores = (
-            jnp.einsum("bqd,bkd->bqk", geom_query, geom_key) / scale_factor
-        )
+        attention_scores = jnp.einsum("bqd,bkd->bqk", geom_query, geom_key) / scale_factor
 
         # Add distance-based attention if enabled
         if self.use_distance_attention:
@@ -330,16 +319,14 @@ class GINOBlock(nnx.Module):
             scale = 1 / (in_channels * out_channels)
             weight_shape = (in_channels, out_channels, *self.modes)
 
-            # Create separate real and imaginary components
-            weight_real = nnx.initializers.uniform(scale)(
-                rngs.params(), weight_shape, jnp.float32
+            # Store real/imaginary parts separately to avoid JAX complex gradient
+            # convention issue (optax #196). See FourierSpectralConvolution docstring.
+            self.weights_real = nnx.Param(
+                nnx.initializers.uniform(scale)(rngs.params(), weight_shape, jnp.float32)
             )
-            weight_imag = nnx.initializers.uniform(scale)(
-                rngs.params(), weight_shape, jnp.float32
+            self.weights_imag = nnx.Param(
+                nnx.initializers.uniform(scale)(rngs.params(), weight_shape, jnp.float32)
             )
-
-            # Combine into complex weights
-            self.weights = nnx.Param(weight_real + 1j * weight_imag)
 
         # Pointwise convolution for residual connection
         self.pointwise = nnx.Linear(in_channels, out_channels, rngs=rngs)
@@ -375,12 +362,11 @@ class GINOBlock(nnx.Module):
         # x_ft has shape (..., in_channels, height, width)
         # weights has shape (in_channels, out_channels, modes_h, modes_w)
         # We want output shape (..., out_channels, height, width)
-        x_ft_slice = x_ft[
-            ..., :h_slice, :w_slice
-        ]  # (..., in_channels, h_slice, w_slice)
-        weights_slice = self.weights.value[
-            :, :, :h_slice, :w_slice
-        ]  # (in_channels, out_channels, h_slice, w_slice)
+        x_ft_slice = x_ft[..., :h_slice, :w_slice]  # (..., in_channels, h_slice, w_slice)
+        weights_slice = (
+            self.weights_real.value[:, :, :h_slice, :w_slice]
+            + 1j * self.weights_imag.value[:, :, :h_slice, :w_slice]
+        )  # (in_channels, out_channels, h_slice, w_slice)
 
         # Correct einsum: "...ihw,iohw->...ohw"
         out_ft_slice = jnp.einsum(
@@ -580,9 +566,7 @@ class GeometryInformedNeuralOperator(nnx.Module):
         # Output projection
         return self.output_proj(x)
 
-    def _generate_default_coords(
-        self, spatial_dims: tuple[int, ...], batch_size: int
-    ) -> jax.Array:
+    def _generate_default_coords(self, spatial_dims: tuple[int, ...], batch_size: int) -> jax.Array:
         """Generate default coordinate grid."""
         if len(spatial_dims) == 2:
             h, w = spatial_dims

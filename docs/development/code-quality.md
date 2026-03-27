@@ -1,10 +1,10 @@
 # Code Quality Infrastructure
 
-This document describes the comprehensive code quality infrastructure implemented in the Opifex framework, including pre-commit hooks, static analysis, testing, and enterprise-grade standards.
+This document describes the full code quality infrastructure implemented in the Opifex framework, including pre-commit hooks, static analysis, testing, and enterprise-grade standards.
 
 ## 🎯 Overview
 
-The Opifex framework maintains enterprise-grade code quality through a comprehensive infrastructure that ensures:
+The Opifex framework maintains enterprise-grade code quality through a full infrastructure that ensures:
 
 - **Perfect Compliance**: 19/19 pre-commit hooks passing with zero errors/warnings
 - **Static Analysis**: Complete type safety with pyright and code quality with ruff
@@ -17,7 +17,7 @@ The Opifex framework maintains enterprise-grade code quality through a comprehen
 
 ### Pre-commit Hooks Configuration
 
-The framework uses a comprehensive `.pre-commit-config.yaml` with the following hooks:
+The framework uses a full `.pre-commit-config.yaml` with the following hooks:
 
 #### 1. File Management & Formatting
 
@@ -129,7 +129,7 @@ git commit -m "Your commit message"
 
 #### Configuration
 
-The framework uses a comprehensive `pyproject.toml` configuration for pyright:
+The framework uses a full `pyproject.toml` configuration for pyright:
 
 ```toml
 [tool.pyright]
@@ -164,7 +164,7 @@ reportTypedDictNotRequiredAccess = false
 #### Type Safety Achievements
 
 ```python
-# Example of comprehensive type annotations
+# Example of full type annotations
 from jax import Array
 from jaxtyping import Float, Complex
 from flax import nnx
@@ -419,7 +419,7 @@ jobs:
 # Daily quality check
 uv run pre-commit run --all-files
 
-# Weekly comprehensive check
+# Weekly full check
 uv run pytest tests/ --cov=opifex
 uv run pre-commit autoupdate
 
@@ -434,13 +434,13 @@ uv run pre-commit run --all-files
 2. **Type Safety Required**: All new code must include proper type annotations
 3. **Documentation Required**: All public functions must have docstrings
 4. **Security Validation**: All code must pass security scanning
-5. **Test Coverage**: New features must include comprehensive tests
+5. **Test Coverage**: New features must include full tests
 
 ## 🎯 Best Practices
 
 ### Development Guidelines
 
-1. **Type Annotations**: Use comprehensive type annotations with jaxtyping
+1. **Type Annotations**: Use full type annotations with jaxtyping
 2. **Documentation**: Write clear docstrings with examples
 3. **Testing**: Include unit and integration tests for new features
 4. **Error Handling**: Implement robust error handling and validation

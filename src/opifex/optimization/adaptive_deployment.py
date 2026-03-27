@@ -1,7 +1,7 @@
 """Adaptive Deployment System for Opifex production optimization.
 
 This module implements AI-driven deployment strategies, canary deployments,
-A/B testing, and automatic rollback for the Phase 7.4 Production Optimization system.
+A/B testing, and automatic rollback for the Version 7.4 Production Optimization system.
 
 Part of: Hybrid Performance Platform + Intelligent Edge + Adaptive Optimization
 """
@@ -208,9 +208,7 @@ class CanaryController:
 
         self.active_deployments: dict[str, DeploymentState] = {}
 
-    async def start_canary_deployment(
-        self, deployment_id: str, config: DeploymentConfig
-    ) -> bool:
+    async def start_canary_deployment(self, deployment_id: str, config: DeploymentConfig) -> bool:
         """Start a new canary deployment."""
         deployment_state = DeploymentState(
             deployment_id=deployment_id,
@@ -244,15 +242,11 @@ class CanaryController:
             deployment_state.metrics_history.append(current_metrics)
 
             # Evaluate deployment health
-            health_status = await self._evaluate_deployment_health(
-                current_metrics, config
-            )
+            health_status = await self._evaluate_deployment_health(current_metrics, config)
 
             if not health_status["is_healthy"]:
                 # Trigger rollback
-                await self._trigger_rollback(
-                    deployment_id, RollbackTrigger.HEALTH_CHECK_FAILURE
-                )
+                await self._trigger_rollback(deployment_id, RollbackTrigger.HEALTH_CHECK_FAILURE)
                 break
 
             # Check if ready for next progression step
@@ -273,9 +267,7 @@ class CanaryController:
             # Wait for next evaluation period
             await asyncio.sleep(config.health_check_interval_seconds)
 
-    async def _collect_deployment_metrics(
-        self, deployment_id: str
-    ) -> DeploymentMetrics:
+    async def _collect_deployment_metrics(self, deployment_id: str) -> DeploymentMetrics:
         """Collect current deployment metrics."""
         # Simulate metric collection (in practice, would query monitoring systems)
         current_time = time.time()
@@ -292,18 +284,10 @@ class CanaryController:
             latency_p50_ms=float(jnp.clip(base_latency, 0.5, 10.0)),
             latency_p95_ms=float(jnp.clip(base_latency * 2, 1.0, 20.0)),
             latency_p99_ms=float(jnp.clip(base_latency * 3, 2.0, 30.0)),
-            throughput_rps=float(
-                1000.0 + jax.random.normal(jax.random.PRNGKey(44)) * 100
-            ),
-            cpu_utilization=float(
-                0.6 + jax.random.normal(jax.random.PRNGKey(45)) * 0.1
-            ),
-            memory_utilization=float(
-                0.7 + jax.random.normal(jax.random.PRNGKey(46)) * 0.1
-            ),
-            gpu_utilization=float(
-                0.8 + jax.random.normal(jax.random.PRNGKey(47)) * 0.1
-            ),
+            throughput_rps=float(1000.0 + jax.random.normal(jax.random.PRNGKey(44)) * 100),
+            cpu_utilization=float(0.6 + jax.random.normal(jax.random.PRNGKey(45)) * 0.1),
+            memory_utilization=float(0.7 + jax.random.normal(jax.random.PRNGKey(46)) * 0.1),
+            gpu_utilization=float(0.8 + jax.random.normal(jax.random.PRNGKey(47)) * 0.1),
             numerical_accuracy=0.999,
             conservation_score=0.998,
             physics_consistency=0.997,
@@ -314,10 +298,8 @@ class CanaryController:
     ) -> dict[str, Any]:
         """Evaluate if deployment is healthy."""
         health_checks = {
-            "success_rate": metrics.success_rate
-            >= (config.success_threshold_percentage / 100),
-            "error_rate": metrics.error_rate
-            <= (config.error_threshold_percentage / 100),
+            "success_rate": metrics.success_rate >= (config.success_threshold_percentage / 100),
+            "error_rate": metrics.error_rate <= (config.error_threshold_percentage / 100),
             "latency": metrics.latency_p95_ms <= config.latency_threshold_ms,
             "numerical_accuracy": metrics.numerical_accuracy >= 0.995,
             "conservation_score": metrics.conservation_score >= 0.995,
@@ -360,15 +342,11 @@ class CanaryController:
                 return step
         return 100.0
 
-    async def _update_traffic_split(
-        self, deployment_id: str, percentage: float
-    ) -> None:
+    async def _update_traffic_split(self, deployment_id: str, percentage: float) -> None:
         """Update traffic split for deployment."""
         # In practice, would update load balancer, service mesh, etc.
 
-    async def _trigger_rollback(
-        self, deployment_id: str, trigger: RollbackTrigger
-    ) -> None:
+    async def _trigger_rollback(self, deployment_id: str, trigger: RollbackTrigger) -> None:
         """Trigger rollback for deployment."""
         if deployment_id in self.active_deployments:
             deployment_state = self.active_deployments[deployment_id]
@@ -543,9 +521,7 @@ class RollbackEngine:
         latest_metrics = recent_metrics[-1]
         metrics_array = self._metrics_to_array(latest_metrics)
 
-        rollback_probability = self.deployment_ai.predict_rollback_probability(
-            metrics_array
-        )
+        rollback_probability = self.deployment_ai.predict_rollback_probability(metrics_array)
 
         if rollback_probability > self.rollback_threshold:
             return RollbackDecision(
@@ -553,8 +529,7 @@ class RollbackEngine:
                 trigger=RollbackTrigger.ANOMALY_DETECTION,
                 confidence=rollback_probability,
                 reason=(
-                    f"AI detected deployment anomaly with "
-                    f"{rollback_probability:.1%} confidence"
+                    f"AI detected deployment anomaly with {rollback_probability:.1%} confidence"
                 ),
                 rollback_strategy="gradual",
                 estimated_rollback_time_minutes=5,
@@ -564,9 +539,7 @@ class RollbackEngine:
             should_rollback=False,
             trigger=RollbackTrigger.MANUAL,
             confidence=1.0 - rollback_probability,
-            reason=(
-                f"Deployment healthy, rollback probability {rollback_probability:.1%}"
-            ),
+            reason=(f"Deployment healthy, rollback probability {rollback_probability:.1%}"),
             rollback_strategy="none",
             estimated_rollback_time_minutes=0,
         )
@@ -622,8 +595,8 @@ class AdaptiveDeploymentSystem:
             selected_strategy = config.strategy
             confidence = 1.0
         else:
-            selected_strategy, confidence = (
-                self.deployment_ai.select_deployment_strategy(system_features)
+            selected_strategy, confidence = self.deployment_ai.select_deployment_strategy(
+                system_features
             )
 
         # Create deployment state
@@ -641,22 +614,16 @@ class AdaptiveDeploymentSystem:
         # Execute deployment based on strategy
         success = False
         if selected_strategy == DeploymentStrategy.CANARY:
-            success = await self.canary_controller.start_canary_deployment(
-                deployment_id, config
-            )
+            success = await self.canary_controller.start_canary_deployment(deployment_id, config)
         elif selected_strategy == DeploymentStrategy.BLUE_GREEN:
             success = await self._execute_blue_green_deployment(deployment_id, config)
         elif selected_strategy == DeploymentStrategy.ROLLING:
             success = await self._execute_rolling_deployment(deployment_id, config)
         else:
             # Default to canary for safety
-            success = await self.canary_controller.start_canary_deployment(
-                deployment_id, config
-            )
+            success = await self.canary_controller.start_canary_deployment(deployment_id, config)
 
-        deployment_state.status = (
-            DeploymentStatus.RUNNING if success else DeploymentStatus.FAILED
-        )
+        deployment_state.status = DeploymentStatus.RUNNING if success else DeploymentStatus.FAILED
 
         return {
             "deployment_id": deployment_id,
@@ -686,9 +653,7 @@ class AdaptiveDeploymentSystem:
     async def monitor_deployments(self) -> None:
         """Monitor all active deployments for health and rollback conditions."""
         while True:
-            for deployment_id, deployment_state in list(
-                self.active_deployments.items()
-            ):
+            for deployment_id, deployment_state in list(self.active_deployments.items()):
                 if deployment_state.status not in [
                     DeploymentStatus.RUNNING,
                     DeploymentStatus.PENDING,
@@ -709,10 +674,8 @@ class AdaptiveDeploymentSystem:
                 )
 
                 # Evaluate rollback decision
-                rollback_decision = (
-                    await self.rollback_engine.evaluate_rollback_decision(
-                        deployment_state, config
-                    )
+                rollback_decision = await self.rollback_engine.evaluate_rollback_decision(
+                    deployment_state, config
                 )
 
                 if rollback_decision.should_rollback and config.auto_rollback_enabled:
@@ -748,9 +711,7 @@ class AdaptiveDeploymentSystem:
 
         deployment_state = self.active_deployments[deployment_id]
         recent_metrics = (
-            deployment_state.metrics_history[-1]
-            if deployment_state.metrics_history
-            else None
+            deployment_state.metrics_history[-1] if deployment_state.metrics_history else None
         )
 
         return {
@@ -767,21 +728,13 @@ class AdaptiveDeploymentSystem:
         }
 
     def get_system_statistics(self) -> dict[str, Any]:
-        """Get comprehensive deployment system statistics."""
+        """Get full deployment system statistics."""
         total_deployments = len(self.active_deployments) + len(self.deployment_history)
         active_count = len(
-            [
-                d
-                for d in self.active_deployments.values()
-                if d.status == DeploymentStatus.RUNNING
-            ]
+            [d for d in self.active_deployments.values() if d.status == DeploymentStatus.RUNNING]
         )
         success_count = len(
-            [
-                d
-                for d in self.active_deployments.values()
-                if d.status == DeploymentStatus.SUCCESS
-            ]
+            [d for d in self.active_deployments.values() if d.status == DeploymentStatus.SUCCESS]
         )
         rollback_count = len(
             [

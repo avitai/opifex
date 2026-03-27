@@ -46,8 +46,8 @@ If you are familiar with the neuraloperator library, here is how Opifex TFNO com
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/tfno_darcy.py`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/tfno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/tfno_darcy.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/neural-operators/tfno_darcy.ipynb)
+- **Python Script**: [`examples/neural-operators/tfno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/tfno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural-operators/tfno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/tfno_darcy.ipynb)
 
 ## Quick Start
 

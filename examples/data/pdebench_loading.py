@@ -23,7 +23,7 @@
 
 ## Overview
 
-PDEBench is a comprehensive benchmark suite for scientific machine learning,
+PDEBench is a full benchmark suite for scientific machine learning,
 providing HDF5-formatted simulation trajectories across 1D/2D/3D PDEs
 (Burgers, Navier-Stokes, Darcy Flow, etc.).
 

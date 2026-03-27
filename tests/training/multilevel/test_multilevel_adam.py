@@ -62,9 +62,7 @@ def test_multilevel_adam_update_and_resize():
     optimizer.resize_state(new_model, transition_fn=simple_pad)
 
     # Perform update with new model
-    grads_new = nnx.grad(lambda m: jnp.mean((m.linear(x) - jnp.ones((1, 4))) ** 2))(
-        new_model
-    )
+    grads_new = nnx.grad(lambda m: jnp.mean((m.linear(x) - jnp.ones((1, 4))) ** 2))(new_model)
     optimizer.update(new_model, grads_new)
 
     # Check if update worked (no shape mismatch errors)

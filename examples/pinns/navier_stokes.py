@@ -386,8 +386,7 @@ else:
 # Mean PDE residual
 mom_x, mom_y, cont = compute_pde_residuals(pinn, xy_eval)
 mean_residual = (
-    float(jnp.mean(jnp.abs(mom_x)) + jnp.mean(jnp.abs(mom_y)) + jnp.mean(jnp.abs(cont)))
-    / 3.0
+    float(jnp.mean(jnp.abs(mom_x)) + jnp.mean(jnp.abs(mom_y)) + jnp.mean(jnp.abs(cont))) / 3.0
 )
 
 print(f"L2 relative error (u): {l2_error_u:.6e}")
@@ -499,18 +498,10 @@ axes[0].grid(True, alpha=0.3)
 
 # Cross-section at y = 0.5
 y_idx = ny // 2
-axes[1].plot(
-    np.array(x_eval), np.array(u_pred[y_idx, :]), "b-", label="PINN u", linewidth=2
-)
-axes[1].plot(
-    np.array(x_eval), np.array(u_true[y_idx, :]), "b--", label="Exact u", linewidth=2
-)
-axes[1].plot(
-    np.array(x_eval), np.array(v_pred[y_idx, :]), "r-", label="PINN v", linewidth=2
-)
-axes[1].plot(
-    np.array(x_eval), np.array(v_true[y_idx, :]), "r--", label="Exact v", linewidth=2
-)
+axes[1].plot(np.array(x_eval), np.array(u_pred[y_idx, :]), "b-", label="PINN u", linewidth=2)
+axes[1].plot(np.array(x_eval), np.array(u_true[y_idx, :]), "b--", label="Exact u", linewidth=2)
+axes[1].plot(np.array(x_eval), np.array(v_pred[y_idx, :]), "r-", label="PINN v", linewidth=2)
+axes[1].plot(np.array(x_eval), np.array(v_true[y_idx, :]), "r--", label="Exact v", linewidth=2)
 axes[1].set_xlabel("x")
 axes[1].set_ylabel("velocity")
 axes[1].set_title(f"Velocity at y = {float(y_eval[y_idx]):.2f}")
@@ -519,12 +510,8 @@ axes[1].grid(True, alpha=0.3)
 
 # Cross-section at x = 0.25
 x_idx = int(0.5 * nx)  # Approximately x = 0.25
-axes[2].plot(
-    np.array(y_eval), np.array(p_pred[:, x_idx]), "g-", label="PINN p", linewidth=2
-)
-axes[2].plot(
-    np.array(y_eval), np.array(p_true[:, x_idx]), "g--", label="Exact p", linewidth=2
-)
+axes[2].plot(np.array(y_eval), np.array(p_pred[:, x_idx]), "g-", label="PINN p", linewidth=2)
+axes[2].plot(np.array(y_eval), np.array(p_true[:, x_idx]), "g--", label="Exact p", linewidth=2)
 axes[2].set_xlabel("y")
 axes[2].set_ylabel("pressure")
 axes[2].set_title(f"Pressure at x = {float(x_eval[x_idx]):.2f}")

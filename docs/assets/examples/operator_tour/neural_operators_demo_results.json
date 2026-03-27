@@ -1,0 +1,133 @@
+{
+  "parameter_efficiency": {
+    "Standard FNO": 279105,
+    "Tucker TFNO (10%)": 4194625,
+    "CP TFNO": 4194625,
+    "U-FNO (3 levels)": 27977601
+  },
+  "turbulence_demo": {
+    "input_shape": [
+      4,
+      3,
+      64,
+      64
+    ],
+    "output_shape": [
+      4,
+      3,
+      64,
+      64
+    ],
+    "forward_time_ms": 5781.7254066467285,
+    "num_levels": 4
+  },
+  "climate_demo": {
+    "input_shape": [
+      2,
+      5,
+      32,
+      64
+    ],
+    "output_shape": [
+      2,
+      5,
+      32,
+      64
+    ],
+    "forward_time_ms": 717.109203338623,
+    "lmax": 16,
+    "spectrum_shape": [
+      1,
+      128,
+      17
+    ]
+  },
+  "uncertainty_demo": {
+    "input_shape": [
+      2,
+      32,
+      32,
+      2
+    ],
+    "num_samples": 50,
+    "uncertainty_time_ms": 2888.869285583496,
+    "mean_epistemic_std": 9.260354995727539,
+    "mean_aleatoric_std": 0.6311073899269104,
+    "mean_total_std": 9.281933784484863,
+    "epistemic_ratio": 0.9976751804351807,
+    "aleatoric_ratio": 0.06799308955669403
+  },
+  "geometry_demo": {
+    "input_shape": [
+      2,
+      64,
+      64,
+      2
+    ],
+    "coords_shape": [
+      2,
+      64,
+      64,
+      2
+    ],
+    "output_shape": [
+      2,
+      64,
+      64,
+      2
+    ],
+    "forward_time_ms": 2335.7279300689697,
+    "geometry_sensitivity": 0.0
+  },
+  "molecular_demo": {
+    "num_atoms": 48,
+    "features_shape": [
+      2,
+      48,
+      4
+    ],
+    "positions_shape": [
+      2,
+      48,
+      3
+    ],
+    "forces_shape": [
+      2,
+      48,
+      3
+    ],
+    "forward_time_ms": 2378.688097000122,
+    "mean_force_magnitude": 2.36688232421875,
+    "force_conservation_error": 112.03053283691406
+  },
+  "ensemble_demo": {
+    "num_operators": 3,
+    "prediction_shapes": {
+      "FNO": [
+        4,
+        1,
+        32,
+        32
+      ],
+      "TFNO": [
+        4,
+        1,
+        32,
+        32
+      ],
+      "LocalFNO": [
+        4,
+        1,
+        32,
+        32
+      ]
+    },
+    "forward_times_ms": {
+      "FNO": 929.161548614502,
+      "TFNO": 537.360668182373,
+      "LocalFNO": 1012.869119644165
+    },
+    "ensemble_agreement": 0.7222574949264526,
+    "prediction_std": 0.3845478594303131
+  }
+}

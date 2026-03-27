@@ -104,9 +104,7 @@ class TestJITCompatibility:
             return wavenumber_grid(shape, dx, magnitude=True)
 
         jitted_k_arrays = jax.jit(k_arrays_static, static_argnames=["shape", "dx"])
-        jitted_k_magnitude = jax.jit(
-            k_magnitude_static, static_argnames=["shape", "dx"]
-        )
+        jitted_k_magnitude = jax.jit(k_magnitude_static, static_argnames=["shape", "dx"])
 
         # Test JIT compilation works with static arguments
         k_arrays = jitted_k_arrays(shape=(32, 64), dx=(0.1, 0.2))

@@ -50,8 +50,8 @@ If you are familiar with the DeepXDE library:
 
 ## Files
 
-- **Python Script**: [`examples/pinns/navier_stokes.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/navier_stokes.py)
-- **Jupyter Notebook**: [`examples/pinns/navier_stokes.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/navier_stokes.ipynb)
+- **Python Script**: [`examples/pinns/navier_stokes.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/navier_stokes.py)
+- **Jupyter Notebook**: [`examples/pinns/navier_stokes.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/navier_stokes.ipynb)
 
 ## Quick Start
 

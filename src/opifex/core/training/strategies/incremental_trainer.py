@@ -1,7 +1,7 @@
 """IncrementalTrainer - Simple incremental training for neural operators.
 
 This module provides a focused implementation of incremental training
-with gradient-based mode expansion, designed to pass the comprehensive
+with gradient-based mode expansion, designed to pass the full
 test suite and enable neuraloperator examples reproduction.
 """
 
@@ -44,9 +44,7 @@ class IncrementalTrainer:
 
         # Initialize optimizer for training steps
         # Initialize optimizer for training steps
-        self.optimizer = nnx.Optimizer(
-            model, optax.adam(learning_rate=1e-3), wrt=nnx.Param
-        )
+        self.optimizer = nnx.Optimizer(model, optax.adam(learning_rate=1e-3), wrt=nnx.Param)
 
     def _get_initial_modes(self) -> tuple[int, ...]:
         """Get initial modes from the model."""
@@ -132,9 +130,7 @@ class IncrementalTrainer:
 
         if any(
             new_mode < current_mode
-            for new_mode, current_mode in zip(
-                new_modes, self.current_modes, strict=False
-            )
+            for new_mode, current_mode in zip(new_modes, self.current_modes, strict=False)
         ):
             raise ValueError("New modes must be greater than or equal to current modes")
 

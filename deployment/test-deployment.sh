@@ -323,7 +323,7 @@ generate_test_report() {
 
 ## Next Steps
 
-1. Run \`make validate-complete\` for comprehensive validation
+1. Run \`make validate-complete\` for full validation
 2. Test in staging environment first
 3. Monitor deployment with \`make status\`
 4. Use \`make test-deployment\` for health checks
@@ -627,7 +627,7 @@ generate_enhanced_test_report() {
 
 ## Next Steps
 
-1. **Immediate**: Run \`make validate-complete\` for comprehensive validation
+1. **Immediate**: Run \`make validate-complete\` for full validation
 2. **Development**: Use \`make deploy-dev\` for development environment
 3. **Testing**: Execute \`make test-opifex-complete\` for framework validation
 4. **Production**: Deploy with \`ENVIRONMENT=production make deploy-all\`

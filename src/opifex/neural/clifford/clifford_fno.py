@@ -61,10 +61,7 @@ class CliffordFNOConfig:
     def __post_init__(self) -> None:
         """Validate configuration."""
         if len(self.modes) != len(self.metric):
-            msg = (
-                f"modes length ({len(self.modes)}) must "
-                f"match metric dim ({len(self.metric)})"
-            )
+            msg = f"modes length ({len(self.modes)}) must match metric dim ({len(self.metric)})"
             raise ValueError(msg)
         if self.hidden_channels < 1:
             msg = f"hidden_channels must be >= 1, got {self.hidden_channels}"
@@ -225,10 +222,7 @@ class CliffordFNO(nnx.Module):
 
         # Fourier blocks
         self.blocks = nnx.List(
-            [
-                CliffordFourierBlock(config=config, rngs=rngs)
-                for _ in range(config.num_layers)
-            ]
+            [CliffordFourierBlock(config=config, rngs=rngs) for _ in range(config.num_layers)]
         )
 
         # Projection: (B, *D, C_hidden * n_blades) → (B, *D, C_out)

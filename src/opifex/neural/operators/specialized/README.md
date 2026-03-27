@@ -143,7 +143,7 @@ uqno = UncertaintyQuantificationNeuralOperator(
 )
 ```
 
-## 📚 Comprehensive Examples
+## 📚 Full Examples
 
 ### Complete DISCO Convolution Example
 
@@ -165,7 +165,7 @@ This example demonstrates:
 - Basic DISCO convolution functionality with timing analysis
 - Equidistant optimization for regular grids showing 10x+ speedup
 - Complete encoder-decoder architectures for feature learning
-- Comprehensive visualization of results and performance metrics
+- Full visualization of results and performance metrics
 
 ### Grid Embeddings Integration
 
@@ -192,9 +192,9 @@ python examples/layers/grid_embeddings_example.py
 
 ### Implementation Quality
 
-- ✅ **15/15 DISCO tests passing** (100% success rate)
+- ✅ **15/15 DISCO tests passing** (all listed checks passing)
 - ✅ **73% test coverage** on DISCO module
-- ✅ **Enterprise-grade code quality** with comprehensive documentation
+- ✅ **Enterprise-grade code quality** with full documentation
 - ✅ **Production-ready** with error handling and type safety
 
 ## 📖 Module Documentation
@@ -202,7 +202,7 @@ python examples/layers/grid_embeddings_example.py
 For detailed implementation documentation:
 
 - **[Main Neural Operators README](../README.md)**: Complete neural operator ecosystem
-- **[DISCO Implementation](disco.py)**: Source code with comprehensive docstrings
+- **[DISCO Implementation](disco.py)**: Source code with full docstrings
 - **[Grid Embeddings](../common/embeddings.py)**: Coordinate injection utilities
 
 For implementation history and achievements, see the main [CHANGELOG.md](../../../../CHANGELOG.md).

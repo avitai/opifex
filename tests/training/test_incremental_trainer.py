@@ -1,6 +1,6 @@
 """Tests for IncrementalTrainer - Test-Driven Development.
 
-This module contains comprehensive tests for the IncrementalTrainer class,
+This module contains full tests for the IncrementalTrainer class,
 written first to define the expected behavior before implementation.
 """
 
@@ -233,7 +233,7 @@ class TestIncrementalTrainerTrainingStep:
         loss = trainer.train_step(x, y)
 
         # Verify
-        assert isinstance(loss, (float, jnp.ndarray))
+        assert isinstance(loss, float | jnp.ndarray)
         assert jnp.isfinite(loss)
         assert loss >= 0.0
 
@@ -361,7 +361,7 @@ class TestIncrementalTrainerGradientAnalysis:
         variance = trainer._compute_gradient_variance(mock_grads)
 
         # Verify
-        assert isinstance(variance, (float, jnp.ndarray))
+        assert isinstance(variance, float | jnp.ndarray)
         assert jnp.isfinite(variance)
         assert variance >= 0.0
 

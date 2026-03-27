@@ -29,8 +29,8 @@ performance benchmarks.
 
 ## Files
 
-- **Python Script**: [`examples/layers/spectral_normalization_example.py`](https://github.com/Opifex/Opifex/blob/main/examples/layers/spectral_normalization_example.py)
-- **Jupyter Notebook**: [`examples/layers/spectral_normalization_example.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/layers/spectral_normalization_example.ipynb)
+- **Python Script**: [`examples/layers/spectral_normalization_example.py`](https://github.com/avitai/opifex/blob/main/examples/layers/spectral_normalization_example.py)
+- **Jupyter Notebook**: [`examples/layers/spectral_normalization_example.ipynb`](https://github.com/avitai/opifex/blob/main/examples/layers/spectral_normalization_example.ipynb)
 
 ## Quick Start
 
@@ -314,7 +314,7 @@ Testing forward passes:
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
 | [Grid Embeddings](grid-embeddings.md) | Beginner | Spatial coordinate injection |
-| [FNO Darcy Comprehensive](../neural-operators/fno-darcy.md) | Intermediate | Apply spectral layers in training |
+| [FNO Darcy Full](../neural-operators/fno-darcy.md) | Intermediate | Apply spectral layers in training |
 | [Neural Operator Benchmark](../benchmarking/operator-benchmark.md) | Advanced | Cross-architecture comparison |
 
 ### API Reference

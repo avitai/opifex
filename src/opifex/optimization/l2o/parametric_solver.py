@@ -39,8 +39,7 @@ class OptimizationProblem:
         valid_types = ["quadratic", "linear", "nonlinear"]
         if self.problem_type not in valid_types:
             raise ValueError(
-                f"Invalid problem type: {self.problem_type}. "
-                f"Must be one of {valid_types}"
+                f"Invalid problem type: {self.problem_type}. Must be one of {valid_types}"
             )
 
         if self.dimension <= 0:
@@ -73,9 +72,7 @@ class ConstraintHandler:
 
         valid_methods = ["penalty", "barrier", "projection"]
         if method not in valid_methods:
-            raise ValueError(
-                f"Invalid constraint method: {method}. Must be one of {valid_methods}"
-            )
+            raise ValueError(f"Invalid constraint method: {method}. Must be one of {valid_methods}")
 
     def compute_penalty(
         self, x: jax.Array, constraint: jax.Array, constraint_type: str = "equality"
@@ -90,13 +87,7 @@ class ConstraintHandler:
         Returns:
             Penalty value for constraint violation
         """
-        # Handle both single and batch inputs
-        if x.ndim == 1:
-            # Single input case
-            constraint_value = jnp.dot(constraint, x)
-        else:
-            # Batch input case - vectorized dot product
-            constraint_value = jnp.dot(x, constraint)
+        constraint_value = jnp.dot(constraint, x) if x.ndim == 1 else jnp.dot(x, constraint)
 
         # Use JAX conditional for constraint type handling
         def equality_penalty():
@@ -107,9 +98,7 @@ class ConstraintHandler:
             violation = jnp.maximum(0, -constraint_value)
             return self.penalty_weight * violation**2
 
-        return jax.lax.cond(
-            constraint_type == "equality", equality_penalty, inequality_penalty
-        )
+        return jax.lax.cond(constraint_type == "equality", equality_penalty, inequality_penalty)
 
     def compute_barrier(self, x: jax.Array, constraint: jax.Array) -> jax.Array:
         """Compute barrier function for inequality constraints.
@@ -121,13 +110,7 @@ class ConstraintHandler:
         Returns:
             Barrier function value
         """
-        # Handle both single and batch inputs
-        if x.ndim == 1:
-            # Single input case
-            constraint_value = jnp.dot(constraint, x)
-        else:
-            # Batch input case - vectorized dot product
-            constraint_value = jnp.dot(x, constraint)
+        constraint_value = jnp.dot(constraint, x) if x.ndim == 1 else jnp.dot(x, constraint)
 
         # Log barrier: -log(g(x)) if g(x) > 0, large positive value if g(x) <= 0
         return jnp.where(
@@ -136,9 +119,7 @@ class ConstraintHandler:
             1e6,  # Large penalty for violated constraints
         )
 
-    def project_to_feasible(
-        self, x: jax.Array, bounds: tuple[float, float]
-    ) -> jax.Array:
+    def project_to_feasible(self, x: jax.Array, bounds: tuple[float, float]) -> jax.Array:
         """Project variables to feasible region (box constraints).
 
         Args:
@@ -185,9 +166,7 @@ class ParametricProgrammingSolver(nnx.Module):
     - Constraint handler: Ensures solution feasibility
     """
 
-    def __init__(
-        self, config: SolverConfig, input_dim: int, output_dim: int, *, rngs: Rngs
-    ):
+    def __init__(self, config: SolverConfig, input_dim: int, output_dim: int, *, rngs: Rngs):
         """Initialize parametric programming solver network.
 
         Args:
@@ -264,9 +243,7 @@ class ParametricProgrammingSolver(nnx.Module):
             Constraint-satisfied solutions
         """
 
-        def apply_single_constraint_type(
-            solutions_input, constraint_type, constraint_data
-        ):
+        def apply_single_constraint_type(solutions_input, constraint_type, constraint_data):
             """Apply a single type of constraint to all solutions."""
             if constraint_type == "equality":
                 # Simple projection for sum constraint: sum(x) = target
@@ -274,9 +251,7 @@ class ParametricProgrammingSolver(nnx.Module):
                     constraint_data, 1.0
                 ):
                     # Vectorized normalization to satisfy sum(x) = 1 constraint
-                    return solutions_input / jnp.sum(
-                        solutions_input, axis=-1, keepdims=True
-                    )
+                    return solutions_input / jnp.sum(solutions_input, axis=-1, keepdims=True)
             elif constraint_type == "inequality":
                 # Apply box constraints or other inequality constraints
                 if "bounds" in constraints:
@@ -356,9 +331,7 @@ class ParametricProgrammingSolver(nnx.Module):
             solution = carry
 
             # Simulate gradient computation overhead
-            gradient = (
-                -0.1 * solution
-            )  # Move towards zero (simple quadratic assumption)
+            gradient = -0.1 * solution  # Move towards zero (simple quadratic assumption)
 
             # Simulate additional computational overhead that traditional methods have
             # (Hessian approximation, line search, convergence checks, etc.)

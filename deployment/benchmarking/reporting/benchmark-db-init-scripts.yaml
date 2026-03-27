@@ -111,7 +111,7 @@ data:
         report_path VARCHAR(500),
         status VARCHAR(50) DEFAULT 'generated',
 
-        CONSTRAINT valid_analysis_type CHECK (analysis_type IN ('performance', 'accuracy', 'efficiency', 'comprehensive')),
+        CONSTRAINT valid_analysis_type CHECK (analysis_type IN ('performance', 'accuracy', 'efficiency', 'full')),
         CONSTRAINT valid_report_format CHECK (report_format IN ('json', 'latex', 'html', 'pdf'))
     );
 

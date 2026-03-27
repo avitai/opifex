@@ -1,4 +1,4 @@
-# Comprehensive Neural Operators Demo
+# Full Neural Operators Demo
 
 | Metadata | Value |
 |----------|-------|
@@ -15,7 +15,7 @@ architectures. It walks through the operator factory system, compares parameter 
 across FNO variants, runs domain-specific forward passes (turbulence, climate, molecular
 dynamics, airfoil geometry), and builds a multi-operator ensemble with agreement scoring.
 
-Unlike single-model tutorials, this demo is designed as a comprehensive tour of the
+Unlike single-model tutorials, this demo is designed as a full tour of the
 `opifex.neural.operators` module family. Each section creates a different operator,
 feeds it synthetic domain-appropriate data, and reports timing and output statistics.
 The demo is console-only (no visualization files) and produces benchmark numbers you
@@ -133,9 +133,9 @@ from opifex.neural.operators import (
 
 **Terminal Output:**
 ```
-Opifex Neural Operators Comprehensive Demo
+Opifex Neural Operators Full Demo
 ============================================================
-Starting Comprehensive Neural Operators Demo
+Starting Full Neural Operators Demo
 Estimated time: ~3-5 minutes
 ```
 
@@ -513,7 +513,7 @@ Performance Comparison:
 **Terminal Output:**
 ```
 ============================================================
-COMPREHENSIVE DEMO SUMMARY
+FULL DEMO SUMMARY
 ============================================================
 
 Key Achievements:
@@ -586,8 +586,8 @@ Results saved to: examples_output/neural_operators_demo_results.json
 
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
-| [FNO Darcy Comprehensive](fno-darcy.md) | Intermediate | Full FNO training pipeline with grid embeddings on Darcy flow |
-| [SFNO Climate Comprehensive](sfno-climate-comprehensive.md) | Intermediate | Spherical FNO for climate modeling on the sphere |
+| [FNO Darcy Full](fno-darcy.md) | Intermediate | Full FNO training pipeline with grid embeddings on Darcy flow |
+| [SFNO Climate Full](sfno-climate-full.md) | Intermediate | Spherical FNO for climate modeling on the sphere |
 | [SFNO Climate Simple](sfno-climate-simple.md) | Intermediate | Simplified SFNO climate example |
 | [U-FNO Turbulence](ufno-turbulence.md) | Intermediate | U-Net enhanced FNO for turbulence problems |
 | [UNO Darcy Framework](uno-darcy.md) | Intermediate | Multi-resolution U-shaped neural operator for Darcy flow |

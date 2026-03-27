@@ -87,9 +87,7 @@ class TestFourierEnhancedDeepONet:
         )
 
         # Create test inputs
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
@@ -132,9 +130,7 @@ class TestFourierEnhancedDeepONet:
         )
 
         # Create test inputs
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
@@ -177,9 +173,7 @@ class TestFourierEnhancedDeepONet:
         )
 
         # Create test inputs
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
@@ -222,9 +216,7 @@ class TestFourierEnhancedDeepONet:
         )
 
         # Create test inputs
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )
@@ -273,9 +265,7 @@ class TestFourierEnhancedDeepONet:
             return jnp.mean(jnp.real(output) ** 2)
 
         # Create test inputs
-        branch_input = jax.random.normal(
-            jax.random.PRNGKey(0), (batch_size, branch_input_dim)
-        )
+        branch_input = jax.random.normal(jax.random.PRNGKey(0), (batch_size, branch_input_dim))
         trunk_input = jax.random.normal(
             jax.random.PRNGKey(1), (batch_size, num_locations, trunk_input_dim)
         )

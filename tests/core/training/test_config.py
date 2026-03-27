@@ -4,7 +4,7 @@ This test suite follows strict TDD principles:
 1. Tests are written FIRST to define the API
 2. Implementation comes AFTER tests are defined
 3. Tests define expected behavior, not accommodate implementation
-4. Comprehensive coverage of all config types and edge cases
+4. Full coverage of all config types and edge cases
 """
 
 from __future__ import annotations

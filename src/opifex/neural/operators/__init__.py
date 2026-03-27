@@ -1,13 +1,13 @@
 # FILE PLACEMENT: opifex/neural/operators/__init__.py
 #
 # Updated Neural Operators Package Init File
-# Comprehensive API for all neural operator variants
+# Full API for all neural operator variants
 #
 # This file should REPLACE the existing: opifex/neural/operators/__init__.py
 # It provides a complete API for all neural operator variants including the new ones
 
 """
-Opifex Neural Operators: Comprehensive Operator Learning Library
+Opifex Neural Operators: Full Operator Learning Library
 
 This module provides the most complete collection of neural operators for
 scientific machine learning, including all major variants from the neuraloperator
@@ -260,9 +260,7 @@ def create_operator(operator_type: str, **kwargs: Any) -> Any:
     """
     if operator_type not in OPERATOR_REGISTRY:
         available = ", ".join(sorted(OPERATOR_REGISTRY.keys()))
-        raise ValueError(
-            f"Unknown operator type '{operator_type}'. Available: {available}"
-        )
+        raise ValueError(f"Unknown operator type '{operator_type}'. Available: {available}")
 
     return OPERATOR_REGISTRY[operator_type](**kwargs)
 
@@ -328,33 +326,25 @@ def get_operator_info(operator_type: str) -> dict[str, Any]:
     """
     info_map = {
         "FNO": {
-            "description": (
-                "Standard Fourier Neural Operator with spectral convolutions"
-            ),
+            "description": ("Standard Fourier Neural Operator with spectral convolutions"),
             "best_for": ["regular grids", "periodic problems", "smooth solutions"],
             "parameters": "Medium",
             "computational_cost": "Medium",
         },
         "TFNO": {
-            "description": (
-                "Tensorized FNO with 10-20x parameter reduction via factorization"
-            ),
+            "description": ("Tensorized FNO with 10-20x parameter reduction via factorization"),
             "best_for": ["memory-constrained", "large-scale", "parameter efficiency"],
             "parameters": "Low",
             "computational_cost": "Medium",
         },
         "UFNO": {
-            "description": (
-                "U-Net style FNO with encoder-decoder for multi-scale problems"
-            ),
+            "description": ("U-Net style FNO with encoder-decoder for multi-scale problems"),
             "best_for": ["turbulent flow", "multi-scale", "fine details"],
             "parameters": "High",
             "computational_cost": "High",
         },
         "SFNO": {
-            "description": (
-                "Spherical FNO using spherical harmonics for global domains"
-            ),
+            "description": ("Spherical FNO using spherical harmonics for global domains"),
             "best_for": ["climate modeling", "global problems", "spherical geometry"],
             "parameters": "Medium",
             "computational_cost": "Medium",
@@ -366,9 +356,7 @@ def get_operator_info(operator_type: str) -> dict[str, Any]:
             "computational_cost": "Medium",
         },
         "AM-FNO": {
-            "description": (
-                "Amortized FNO with neural kernel networks for high frequencies"
-            ),
+            "description": ("Amortized FNO with neural kernel networks for high frequencies"),
             "best_for": ["high frequency", "shocks", "discontinuities"],
             "parameters": "Medium",
             "computational_cost": "High",
@@ -380,17 +368,13 @@ def get_operator_info(operator_type: str) -> dict[str, Any]:
             "computational_cost": "Medium",
         },
         "MGNO": {
-            "description": (
-                "Multipole Graph Neural Operator for long-range interactions"
-            ),
+            "description": ("Multipole Graph Neural Operator for long-range interactions"),
             "best_for": ["molecular dynamics", "N-body", "electrostatics"],
             "parameters": "High",
             "computational_cost": "High",
         },
         "UQNO": {
-            "description": (
-                "Uncertainty Quantification Neural Operator with Bayesian inference"
-            ),
+            "description": ("Uncertainty Quantification Neural Operator with Bayesian inference"),
             "best_for": ["safety critical", "uncertainty bounds", "robust design"],
             "parameters": "High",
             "computational_cost": "High",
@@ -415,7 +399,7 @@ def get_operator_info(operator_type: str) -> dict[str, Any]:
 
 
 # =============================================================================
-# COMPREHENSIVE EXPORTS
+# FULL EXPORTS
 # =============================================================================
 
 __all__ = [

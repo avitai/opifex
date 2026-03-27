@@ -6,7 +6,7 @@ in a consistent way across the Opifex framework.
 
 
 def get_device_info() -> dict[str, str | bool | int | list[str]]:
-    """Get comprehensive information about available JAX devices.
+    """Get full information about available JAX devices.
 
     Returns:
         Dictionary containing device information with the following keys:

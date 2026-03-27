@@ -26,9 +26,7 @@ class TestConservationViolations:
         y_pred = jnp.array([[1.0, 2.0], [3.0, 4.0]])
         y_true = jnp.array([[1.0 + 1e-7, 2.0], [3.0, 4.0 + 1e-7]])
 
-        violation = energy_violation(
-            y_pred, y_true, tolerance=1e-5, monitoring_enabled=True
-        )
+        violation = energy_violation(y_pred, y_true, tolerance=1e-5, monitoring_enabled=True)
 
         assert float(violation) == 0.0, "Small violations should be ignored"
 
@@ -37,9 +35,7 @@ class TestConservationViolations:
         y_pred = jnp.array([[1.0, 2.0], [3.0, 4.0]])
         y_true = jnp.array([[2.0, 3.0], [4.0, 5.0]])  # Large difference
 
-        violation = energy_violation(
-            y_pred, y_true, tolerance=1e-5, monitoring_enabled=True
-        )
+        violation = energy_violation(y_pred, y_true, tolerance=1e-5, monitoring_enabled=True)
 
         assert float(violation) > 0.0, "Large violations should be penalized"
 
@@ -48,9 +44,7 @@ class TestConservationViolations:
         y_pred = jnp.array([[1.0, 2.0]])
         y_true = jnp.array([[5.0, 6.0]])  # Large difference
 
-        violation = energy_violation(
-            y_pred, y_true, tolerance=1e-5, monitoring_enabled=False
-        )
+        violation = energy_violation(y_pred, y_true, tolerance=1e-5, monitoring_enabled=False)
 
         assert float(violation) == 0.0, "Disabled monitoring should return 0"
 
@@ -139,9 +133,7 @@ class TestMultiScalePhysics:
         y_true = jnp.array([[3.5, 4.5]])
         base_loss_fn = lambda pred, true: jnp.mean((pred - true) ** 2)
 
-        multi_scale = MultiScalePhysics(
-            scales=["molecular"], scale_weights={"molecular": 1.0}
-        )
+        multi_scale = MultiScalePhysics(scales=["molecular"], scale_weights={"molecular": 1.0})
 
         loss = multi_scale.compute_loss(x, y_pred, y_true, base_loss_fn)
 
@@ -183,9 +175,7 @@ class TestMultiScalePhysics:
         y_true = jnp.array([[1.0]])
         base_loss_fn = lambda pred, true: jnp.mean((pred - true) ** 2)
 
-        multi_scale = MultiScalePhysics(
-            scales=["molecular"], scale_weights={"molecular": 1.0}
-        )
+        multi_scale = MultiScalePhysics(scales=["molecular"], scale_weights={"molecular": 1.0})
 
         loss = multi_scale.compute_loss(x, y_pred, y_true, base_loss_fn)
 
@@ -210,9 +200,9 @@ class TestAdaptiveConstraintWeighting:
 
         new_weights = weighting.update_weights(violations)
 
-        assert (
-            new_weights["energy_conservation"] > new_weights["momentum_conservation"]
-        ), "Energy should have higher weight due to higher violation"
+        assert new_weights["energy_conservation"] > new_weights["momentum_conservation"], (
+            "Energy should have higher weight due to higher violation"
+        )
 
     def test_weights_sum_to_one_after_adaptation(self):
         """Weights should be normalized to sum to 1.0."""
@@ -239,9 +229,7 @@ class TestAdaptiveConstraintWeighting:
         new_weights = weighting.update_weights(violations)
 
         total_weight = sum(new_weights.values())
-        assert abs(total_weight - 1.0) < 1e-6, (
-            f"Weights should sum to 1.0, got {total_weight}"
-        )
+        assert abs(total_weight - 1.0) < 1e-6, f"Weights should sum to 1.0, got {total_weight}"
 
     def test_zero_violations_maintain_weights(self):
         """Zero violations should maintain current weights."""

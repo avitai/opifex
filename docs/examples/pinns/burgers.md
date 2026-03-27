@@ -51,8 +51,8 @@ If you are familiar with the DeepXDE library:
 
 ## Files
 
-- **Python Script**: [`examples/pinns/burgers.py`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/burgers.py)
-- **Jupyter Notebook**: [`examples/pinns/burgers.ipynb`](https://github.com/Opifex/Opifex/blob/main/examples/pinns/burgers.ipynb)
+- **Python Script**: [`examples/pinns/burgers.py`](https://github.com/avitai/opifex/blob/main/examples/pinns/burgers.py)
+- **Jupyter Notebook**: [`examples/pinns/burgers.ipynb`](https://github.com/avitai/opifex/blob/main/examples/pinns/burgers.ipynb)
 
 ## Quick Start
 
@@ -412,4 +412,27 @@ def fourier_features(xt, scales=[1, 2, 4, 8]):
         features.append(jnp.sin(s * jnp.pi * xt))
         features.append(jnp.cos(s * jnp.pi * xt))
     return jnp.concatenate(features, axis=-1)
+```
+
+## Comparison with DeepXDE
+
+Both frameworks solve the same Burgers equation with identical network size
+([2, 20, 20, 20, 1]) and training configuration (2540 domain points, 80 boundary,
+160 initial condition points, 15000 Adam iterations).
+
+Results from running on the same hardware:
+
+| Metric | Opifex (JAX) | DeepXDE (TensorFlow) |
+|--------|-------------|---------------------|
+| Final loss | 2.66e-3 | 5.80e-3 |
+| Mean PDE residual | 2.54e-2 | 3.23e-2 |
+| L2 relative error | -- | 0.291 |
+| BC error | 2.02e-3 | -- |
+| Parameters | 921 | 921 |
+
+Opifex achieves lower final loss (2.66e-3 vs 5.80e-3) and lower PDE residual
+(2.54e-2 vs 3.23e-2) with the same architecture and training budget.
+
+**Opifex advantages**: JIT-compiled training loop, explicit PRNG control,
+composable JAX transforms (`jax.grad`, `jax.vmap`), hard constraint support.
 ```

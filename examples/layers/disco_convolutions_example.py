@@ -338,9 +338,7 @@ def visualize_results(basic, equidistant, enc_dec):
     axes[1, 2].axis("off")
 
     # Summary
-    axes[1, 3].text(
-        0.5, 0.5, "DISCO Demo\nComplete", ha="center", va="center", fontsize=16
-    )
+    axes[1, 3].text(0.5, 0.5, "DISCO Demo\nComplete", ha="center", va="center", fontsize=16)
     axes[1, 3].axis("off")
 
     plt.tight_layout()
@@ -375,7 +373,7 @@ def visualize_results(basic, equidistant, enc_dec):
 
 - [Grid Embeddings](grid_embeddings_example.md) - Spatial coordinate injection for neural operators
 - [Fourier Continuation](fourier_continuation_example.md) - Boundary handling for spectral methods
-- [FNO Darcy Comprehensive](../models/fno_darcy_comprehensive.md) - Full neural operator training
+- [FNO Darcy Full](../models/fno_darcy_comprehensive.md) - Full neural operator training
 
 ### API Reference
 

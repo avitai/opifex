@@ -1,6 +1,6 @@
 """Deep Operator Networks (DeepONet) implementation.
 
-This module provides a comprehensive implementation of Deep Operator Networks
+This module provides a full implementation of Deep Operator Networks
 for learning nonlinear operators mapping between function spaces.
 Fully compliant with modern Flax NNX patterns and optimized for scientific computing.
 
@@ -165,9 +165,7 @@ class DeepONet(nnx.Module):
         trunk_output_flat = self.trunk_net(trunk_flat, deterministic=deterministic)
 
         # Reshape back to (batch_size, n_locations, output_dim)
-        trunk_output = trunk_output_flat.reshape(
-            batch_size, n_locations, self.output_dim
-        )
+        trunk_output = trunk_output_flat.reshape(batch_size, n_locations, self.output_dim)
 
         # Compute dot product between branch and trunk outputs
         # branch_output: (batch_size, output_dim)

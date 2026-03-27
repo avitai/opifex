@@ -31,7 +31,7 @@ data:
     \maketitle
 
     \begin{abstract}
-    This report presents comprehensive benchmark results for neural operators and learn-to-optimize algorithms on PDEBench datasets. The analysis includes performance comparisons, accuracy metrics, and computational efficiency evaluations across multiple methods and datasets.
+    This report presents full benchmark results for neural operators and learn-to-optimize algorithms on PDEBench datasets. The analysis includes performance comparisons, accuracy metrics, and computational efficiency evaluations across multiple methods and datasets.
     \end{abstract}
 
     \section{Executive Summary}
@@ -182,7 +182,7 @@ data:
                     <div class="card performance-highlight text-white mb-4">
                         <div class="card-body">
                             <h2 class="card-title">Executive Summary</h2>
-                            <p class="card-text">Comprehensive benchmark analysis of {{ total_experiments }} experiments across {{ total_datasets }} datasets.</p>
+                            <p class="card-text">Full benchmark analysis of {{ total_experiments }} experiments across {{ total_datasets }} datasets.</p>
                         </div>
                     </div>
                 </div>
