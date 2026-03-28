@@ -447,15 +447,14 @@ print(f"Lyapunov exponent: {stability_report.lyapunov_exponent}")
 Using neural operators for system identification:
 
 ```python
-from opifex.neural import FNO
+from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.optimization.control import NeuralOperatorSystemID
 
 # Use FNO for system dynamics
-fno_dynamics = FNO(
-    modes=32,
-    width=64,
-    input_dim=2,
-    output_dim=2
+fno_dynamics = FourierNeuralOperator(
+    in_channels=2, out_channels=2,
+    hidden_channels=64, modes=32,
+    num_layers=4, rngs=nnx.Rngs(42),
 )
 
 # Neural operator system ID

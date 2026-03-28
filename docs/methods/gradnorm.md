@@ -297,13 +297,13 @@ from opifex.training.multilevel import CascadeTrainer
 
 trainer = CascadeTrainer(...)
 
-while not trainer.is_at_finest():
+while True:
     model = trainer.get_current_model()
 
     # Reset balancer for each level
     balancer = GradNormBalancer(num_losses=3, rngs=nnx.Rngs(0))
 
-    for epoch in range(trainer.get_epochs_for_current_level()):
+    for epoch in range(100):
         losses = compute_losses(model)
 
         if epoch == 0:
@@ -312,7 +312,8 @@ while not trainer.is_at_finest():
         weighted_loss = balancer.compute_weighted_loss(losses)
         # ... train ...
 
-    trainer.advance_level()
+    if not trainer.advance_level():
+        break
 ```
 
 ### With Domain Decomposition

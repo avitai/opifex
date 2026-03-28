@@ -42,8 +42,8 @@ Opifex follows a modular, extensible architecture built on JAX for high-performa
 ```python
 # Pure functions with JAX transformations
 @jax.jit
-def physics_loss(params, batch):
-    predictions = model.apply(params, batch.inputs)
+def physics_loss(model, batch):
+    predictions = model(batch.inputs)
     residuals = compute_pde_residuals(predictions, batch)
     return jnp.mean(residuals**2)
 ```
@@ -65,8 +65,8 @@ class TrainingConfig:
 # Composable components
 problem = PDEProblem(...)
 model = PINN(...)
-trainer = PhysicsInformedTrainer(model, problem)
-history = trainer.train()
+trainer = Trainer(model, config)
+model, history = trainer.fit(train_data)
 ```
 
 ## Module Dependencies
@@ -89,10 +89,9 @@ graph TD
 ### Custom Neural Networks
 
 ```python
-class CustomPINN(nn.Module):
+class CustomPINN(nnx.Module):
     """Custom physics-informed architecture."""
 
-    @nn.compact
     def __call__(self, x):
         # Implementation
         return output

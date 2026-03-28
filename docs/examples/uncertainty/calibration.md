@@ -341,6 +341,5 @@ The integrated pipeline achieves near-target regression coverage (90.7% vs 90% t
 5. **Production Deployment**: Use `CalibrationTools.assess_calibration()` for continuous monitoring of model calibration in production
 
 For more advanced uncertainty quantification techniques, see:
-- **UQNO**: `/docs/methods/uqno.md`
-- **Bayesian Neural Operators**: `/docs/methods/bayesian-operators.md`
-- **Domain Decomposition with Uncertainty**: `/docs/methods/domain-decomposition-pinns.md`
+- **Probabilistic Methods**: [Probabilistic Methods](../../methods/probabilistic.md)
+- **Domain Decomposition with Uncertainty**: [Domain Decomposition PINNs](../../methods/domain-decomposition-pinns.md)

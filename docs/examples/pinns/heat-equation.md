@@ -95,7 +95,7 @@ where $\alpha$ is the thermal diffusivity and $u(x,t)$ is the temperature field.
 | Domain | $[0,1] \times [0,1]$ rectangle |
 | Boundary | Dirichlet: $u = 0$ on all boundaries |
 | Diffusivity | $\alpha = 0.01$ |
-| Architecture | MLP with 3 hidden layers of 50 units |
+| Architecture | MultiScalePINN with 3 scale networks of 50 units |
 
 ## Implementation
 

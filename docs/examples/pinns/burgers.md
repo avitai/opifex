@@ -435,4 +435,3 @@ Opifex achieves lower final loss (2.66e-3 vs 5.80e-3) and lower PDE residual
 
 **Opifex advantages**: JIT-compiled training loop, explicit PRNG control,
 composable JAX transforms (`jax.grad`, `jax.vmap`), hard constraint support.
-```

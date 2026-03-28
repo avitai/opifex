@@ -108,8 +108,7 @@ opifex/
 ├── .env                   # Environment configuration
 ├── activate.sh            # Activation script
 ├── uv.lock               # Dependency lock file
-├── setup.sh              # Setup script (existing)
-└── dot_env_template      # Environment template (existing)
+└── setup.sh              # Setup script (existing)
 ```
 
 ### File Descriptions
@@ -172,17 +171,15 @@ export PYTHONPATH="$(pwd)"
 export PYTEST_CUDA_ENABLED="false"
 ```
 
-### Opifex-Specific Variables
+### Opifex-Specific Variables (Optional)
+
+These variables are **not set by default** and are only needed for specific deployment scenarios:
 
 ```bash
-# Directory Configuration
-export OPIFEX_BENCHMARK_CACHE_DIR="./benchmark_results"
-export OPIFEX_DATA_DIR="./data"
-export OPIFEX_CHECKPOINT_DIR="./checkpoints"
-
-# Development Mode
-export OPIFEX_DEV_MODE="1"
+# Deployment server configuration (see opifex.deployment.server)
 export OPIFEX_LOG_LEVEL="INFO"
+export OPIFEX_PORT="8080"
+export OPIFEX_MODEL_REGISTRY="./models"
 ```
 
 ## Activation Process Details
@@ -431,7 +428,7 @@ rm -rf .venv .env activate.sh uv.lock
 
 # Verify clean installation
 source ./activate.sh
-uv run pytest tests/unit/test_core/ -v
+uv run pytest tests/core/ -v
 ```
 
 #### Manual Environment Verification

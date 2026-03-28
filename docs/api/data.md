@@ -412,7 +412,7 @@ model = FourierNeuralOperator(
     hidden_channels=64,
     modes=12,
     num_layers=4,
-    rngs=rnx.Rngs(42),
+    rngs=nnx.Rngs(42),
 )
 
 # Configure training
@@ -451,7 +451,7 @@ import optax
 from flax import nnx
 
 # Create optimizer
-optimizer = nnx.Optimizer(model, optax.adam(1e-3))
+optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
 # Training loop
 for epoch in range(num_epochs):
@@ -466,7 +466,7 @@ for epoch in range(num_epochs):
 
         # Compute gradients and update
         loss, grads = nnx.value_and_grad(loss_fn)(model)
-        optimizer.update(grads)
+        optimizer.update(model, grads)
 
     print(f"Epoch {epoch}, Loss: {loss:.6f}")
 ```

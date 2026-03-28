@@ -196,7 +196,7 @@ The analysis generates a full 6-panel spectral visualization:
 
 - [`DarcyDataSource`](../../api/data.md) - Grain-based Darcy flow data generator
 - [`FourierNeuralOperator`](../../api/neural.md) - FNO model that operates in Fourier space
-- [`SpectralConvolution2d`](../../api/neural.md) - Spectral convolution layer
+- [`FourierSpectralConvolution`](../../api/neural.md) - Spectral convolution layer
 
 ### Troubleshooting
 

@@ -4,7 +4,7 @@
 
 Learn-to-Optimize (L2O) represents an advanced approach to optimization where neural networks learn to optimize other neural networks. Instead of using hand-crafted optimization algorithms like Adam or SGD, L2O algorithms learn update rules that are specifically tailored to families of related problems, achieving significant speedups and improved convergence properties.
 
-The Opifex L2O framework provides extensive implementations of advanced L2O algorithms, including parametric programming solvers, constraint satisfaction learning, multi-objective optimization, and reinforcement learning-based optimization strategies.
+The Opifex L2O framework provides implementations of parametric programming solvers, constraint satisfaction learning, multi-objective optimization, reinforcement learning-based strategy selection, advanced meta-learning algorithms (MAML, Reptile), and adaptive schedulers.
 
 ## Theoretical Foundation
 
@@ -39,81 +39,114 @@ where $\theta_T^{(\tau)}$ is the final parameters after $T$ optimization steps o
 
 ### 1. L2O Engine
 
-The central component that orchestrates learn-to-optimize algorithms:
+The central component that orchestrates learn-to-optimize algorithms. It requires both an `L2OEngineConfig` and a `MetaOptimizerConfig`:
 
 ```python
 from opifex.optimization.l2o import L2OEngine, L2OEngineConfig
+from opifex.core.training.config import MetaOptimizerConfig
 import flax.nnx as nnx
 
 # Configure L2O engine
-config = L2OEngineConfig(
-    solver_type="parametric",
+l2o_config = L2OEngineConfig(
+    solver_type="parametric",        # "parametric", "gradient", or "hybrid"
     problem_encoder_layers=[128, 64, 32],
-    use_traditional_fallback=True
+    use_traditional_fallback=True,
+    enable_meta_learning=True,
+    integration_mode="unified",      # "unified", "parametric_only", "gradient_only"
+    performance_tracking=True,
+    adaptive_selection=True,
+)
+
+meta_config = MetaOptimizerConfig(
+    meta_algorithm="l2o",
+    base_optimizer="adam",
+    meta_learning_rate=1e-4,
 )
 
 # Create L2O engine
-l2o_engine = L2OEngine(config=config, rngs=nnx.Rngs(42))
+l2o_engine = L2OEngine(
+    l2o_config=l2o_config,
+    meta_config=meta_config,
+    rngs=nnx.Rngs(42),
+)
+```
 
-# Meta-train on problem family
-training_problems = [problem1, problem2, problem3]  # Related optimization problems
-l2o_engine.meta_train(
-    problem_family=training_problems,
-    num_meta_epochs=100,
-    validation_problems=val_problems
+The engine provides several solving methods:
+
+```python
+from opifex.optimization.l2o import OptimizationProblem
+import jax.numpy as jnp
+
+# Define an optimization problem
+problem = OptimizationProblem(
+    problem_type="quadratic",  # "quadratic", "linear", or "nonlinear"
+    dimension=20,
+)
+problem_params = jnp.ones(50)  # Problem parameters
+
+# Solve using parametric solver
+solution = l2o_engine.solve_parametric_problem(problem, problem_params)
+
+# Solve using gradient-based L2O
+def loss_fn(x):
+    return jnp.sum(x**2)
+
+solution = l2o_engine.solve_gradient_problem(loss_fn, jnp.zeros(20), steps=100)
+
+# Automatic algorithm selection
+algorithm_used, solution = l2o_engine.solve_automatically(problem, problem_params)
+
+# Get algorithm recommendation
+recommendation = l2o_engine.recommend_algorithm(problem, problem_params)
+
+# Compare all available solvers
+comparison = l2o_engine.compare_all_solvers(problem, problem_params)
+
+# Solve with meta-learning (stores solutions for future adaptation)
+solution, metadata = l2o_engine.solve_with_meta_learning(problem, problem_params)
+
+# Optimize with full meta-framework (returns history)
+final_params, history = l2o_engine.optimize_with_meta_framework(
+    loss_fn, initial_params=jnp.zeros(20), steps=50,
 )
 
-# Use trained L2O for new optimization
-optimized_params = l2o_engine.optimize(
-    initial_params=initial_params,
-    objective_fn=new_objective,
-    num_steps=50
+# Physics-informed optimization with adaptive momentum
+solution = l2o_engine.solve_physics_informed(
+    physics_loss_fn=loss_fn,
+    initial_params=jnp.zeros(20),
+    steps=100,
 )
 ```
 
 ### 2. Parametric Programming Solvers
 
-Neural networks that solve parametric optimization problems:
+Neural networks that learn to solve parametric optimization problems directly:
 
 ```python
 from opifex.optimization.l2o import ParametricProgrammingSolver, SolverConfig
+import flax.nnx as nnx
 
 # Configure parametric solver
 solver_config = SolverConfig(
-    problem_dim=100,
-    constraint_dim=20,
-    hidden_dims=[256, 128, 64],
-    activation="relu",
-    constraint_handling="penalty"
+    hidden_sizes=[256, 128, 64],
+    use_traditional_fallback=True,
 )
 
 # Create parametric solver
 solver = ParametricProgrammingSolver(
     config=solver_config,
-    rngs=nnx.Rngs(42)
+    input_dim=100,
+    output_dim=20,
+    rngs=nnx.Rngs(42),
 )
 
-# Define parametric optimization problem
-def parametric_objective(x, theta):
-    """Objective function parameterized by theta."""
-    return 0.5 * x.T @ theta["Q"] @ x + theta["c"].T @ x
+# Forward pass: map problem parameters to solutions
+import jax.numpy as jnp
+problem_params = jnp.ones((1, 100))
+solution = solver(problem_params)
 
-def parametric_constraints(x, theta):
-    """Constraints parameterized by theta."""
-    return theta["A"] @ x - theta["b"]
-
-# Train solver on problem family
-problem_parameters = generate_problem_family(num_problems=1000)
-solver.train(
-    objective_fn=parametric_objective,
-    constraint_fn=parametric_constraints,
-    problem_parameters=problem_parameters,
-    num_epochs=500
-)
-
-# Solve new parametric problem
-new_theta = generate_new_problem_parameters()
-solution = solver.solve(problem_parameters=new_theta)
+# Solve with traditional solver fallback
+solution_with_fallback = solver.solve_with_fallback(problem_params)
 ```
 
 ### 3. Multi-Objective L2O
@@ -122,44 +155,20 @@ Learn to optimize problems with multiple competing objectives:
 
 ```python
 from opifex.optimization.l2o import MultiObjectiveL2OEngine, MultiObjectiveConfig
+import flax.nnx as nnx
 
 # Configure multi-objective L2O
 mo_config = MultiObjectiveConfig(
     num_objectives=3,
-    pareto_frontier_approximation=True,
-    scalarization_method="weighted_sum",
-    diversity_preservation=True,
-    reference_point_adaptation=True
+    pareto_points_target=100,
+    scalarization_strategy="learned",  # "learned", "weighted_sum", "chebyshev"
+    diversity_pressure=0.1,
+    adaptive_weights=True,
+    dominated_solution_filtering=True,
 )
 
-# Create multi-objective L2O engine
+# Create multi-objective L2O engine (requires an L2OEngine instance)
 mo_l2o = MultiObjectiveL2OEngine(config=mo_config, rngs=nnx.Rngs(42))
-
-# Define multiple objectives
-objectives = [
-    lambda x: accuracy_loss(x),      # Minimize prediction error
-    lambda x: complexity_loss(x),    # Minimize model complexity
-    lambda x: inference_time_loss(x) # Minimize inference time
-]
-
-# Train on multi-objective problems
-mo_l2o.meta_train(
-    multi_objective_problems=training_mo_problems,
-    num_meta_epochs=200
-)
-
-# Optimize new multi-objective problem
-pareto_solutions = mo_l2o.optimize(
-    initial_params=initial_params,
-    objectives=objectives,
-    num_solutions=50,  # Number of Pareto-optimal solutions
-    num_steps=100
-)
-
-# Analyze Pareto frontier
-for i, solution in enumerate(pareto_solutions):
-    obj_values = [obj(solution.params) for obj in objectives]
-    print(f"Solution {i}: Objectives = {obj_values}")
 ```
 
 ### 4. Constraint Learning
@@ -169,62 +178,45 @@ Automatically learn to satisfy constraints during optimization:
 ```python
 from opifex.optimization.l2o import ConstraintHandler
 
-# Define constraint learning system
+# Define constraint handling
 constraint_handler = ConstraintHandler(
-    constraint_network_dims=[64, 32, 16],
-    penalty_adaptation=True,
-    constraint_violation_threshold=1e-6
+    method="penalty",        # "penalty", "barrier", or "projection"
+    penalty_weight=1.0,
+    barrier_parameter=0.1,
 )
 
-# Learn constraints from data
-constraint_data = generate_constraint_examples()
-constraint_handler.learn_constraints(
-    constraint_examples=constraint_data,
-    num_epochs=300
-)
-
-# Use learned constraints in optimization
-constrained_solution = l2o_engine.optimize_with_constraints(
-    initial_params=initial_params,
-    objective_fn=objective,
-    constraint_handler=constraint_handler,
-    num_steps=100
-)
+# Compute penalty for constraint violation
+import jax.numpy as jnp
+x = jnp.array([1.0, 2.0, 3.0])
+constraint_value = jnp.array([0.5])  # Should be zero for equality
+penalty = constraint_handler.compute_penalty(x, constraint_value, "equality")
 ```
 
 ### 5. Reinforcement Learning Optimization
 
-Use RL to learn optimization strategies:
+Use RL to learn optimization strategies via a DQN agent:
 
 ```python
 from opifex.optimization.l2o import RLOptimizationEngine, RLOptimizationConfig
+import flax.nnx as nnx
 
 # Configure RL-based optimization
 rl_config = RLOptimizationConfig(
-    state_encoding_dim=128,
-    action_space_size=10,
-    reward_function="convergence_speed",
-    exploration_strategy="epsilon_greedy",
-    experience_replay_size=10000
+    state_dim=64,
+    action_dim=12,              # Algorithm selection + hyperparameter adjustments
+    hidden_dims=(256, 256, 128),
+    learning_rate=1e-4,
+    discount_factor=0.99,
+    epsilon_start=1.0,
+    epsilon_end=0.01,
+    epsilon_decay=0.995,
+    replay_buffer_size=10000,
+    batch_size=32,
+    max_episode_length=1000,
 )
 
 # Create RL optimization engine
 rl_optimizer = RLOptimizationEngine(config=rl_config, rngs=nnx.Rngs(42))
-
-# Train RL agent on optimization environments
-optimization_environments = create_optimization_environments()
-rl_optimizer.train(
-    environments=optimization_environments,
-    num_episodes=5000,
-    max_steps_per_episode=200
-)
-
-# Use trained RL agent for optimization
-rl_solution = rl_optimizer.optimize(
-    initial_params=initial_params,
-    objective_fn=objective,
-    num_steps=100
-)
 ```
 
 ## Advanced L2O Algorithms
@@ -234,185 +226,160 @@ rl_solution = rl_optimizer.optimize(
 Learn adaptive learning rate schedules based on optimization progress:
 
 ```python
-from opifex.optimization.l2o import PerformanceAwareScheduler, BayesianSchedulerOptimizer
+from opifex.optimization.l2o import (
+    PerformanceAwareScheduler,
+    BayesianSchedulerOptimizer,
+    MetaSchedulerConfig,
+    create_l2o_engine_with_adaptive_schedulers,
+)
+import flax.nnx as nnx
 
-# Performance-aware scheduler
+# Configure adaptive scheduling
+scheduler_config = MetaSchedulerConfig(
+    base_learning_rate=1e-3,
+    min_learning_rate=1e-6,
+    max_learning_rate=1e-1,
+    convergence_window=10,
+    patience=5,
+    adaptation_factor=0.5,
+    enable_performance_awareness=True,
+    enable_bayesian_optimization=False,
+)
+
+# Performance-aware scheduler adapts based on convergence detection
 perf_scheduler = PerformanceAwareScheduler(
-    initial_lr=1e-3,
-    adaptation_window=10,
-    performance_metrics=["loss_reduction", "gradient_norm"],
-    adaptation_strategy="multiplicative"
+    config=scheduler_config,
+    rngs=nnx.Rngs(42),
 )
 
-# Bayesian scheduler optimization
-bayesian_scheduler = BayesianSchedulerOptimizer(
-    prior_distribution="log_normal",
-    acquisition_function="expected_improvement",
-    num_optimization_steps=50
-)
-
-# Integrate with L2O engine
-l2o_with_adaptive_scheduler = create_l2o_engine_with_adaptive_schedulers(
-    base_l2o_config=config,
-    performance_scheduler=perf_scheduler,
-    bayesian_scheduler=bayesian_scheduler
+# Integrate adaptive schedulers with L2O engine
+l2o_with_schedulers = create_l2o_engine_with_adaptive_schedulers(
+    l2o_engine=l2o_engine,
+    scheduler_config=scheduler_config,
+    rngs=nnx.Rngs(42),
 )
 ```
 
 ### 2. Advanced Meta-Learning Integration
 
-Combine L2O with advanced meta-learning algorithms:
+Combine L2O with MAML and Reptile:
 
 ```python
-from opifex.optimization.l2o import MetaL2OIntegration, GradientBasedMetaLearner
-
-# Gradient-based meta-learning for L2O
-gb_meta_learner = GradientBasedMetaLearner(
-    meta_learning_rate=1e-3,
-    trajectory_length=20,
-    use_second_order=True,
-    regularization_strength=1e-4
+from opifex.optimization.l2o import (
+    MAMLOptimizer,
+    MAMLConfig,
+    ReptileOptimizer,
+    ReptileConfig,
+    GradientBasedMetaLearner,
+    MetaL2OIntegration,
 )
 
-# Integrate with L2O
+# MAML configuration
+maml_config = MAMLConfig(
+    inner_learning_rate=1e-3,
+    meta_learning_rate=1e-4,
+    inner_steps=5,
+    meta_batch_size=8,
+    second_order=True,
+)
+
+# Reptile configuration (simpler, first-order)
+reptile_config = ReptileConfig(
+    meta_learning_rate=1e-3,
+    inner_learning_rate=1e-2,
+    inner_steps=10,
+    meta_batch_size=16,
+    task_sampling_strategy="uniform",
+)
+
+# Meta-L2O integration for self-improving optimization
 meta_l2o = MetaL2OIntegration(
     base_l2o_engine=l2o_engine,
-    meta_learner=gb_meta_learner,
-    integration_strategy="hierarchical"
-)
-
-# Meta-train the integrated system
-meta_l2o.meta_train(
-    task_distribution=task_distribution,
-    num_meta_iterations=1000,
-    inner_loop_steps=10
+    rngs=nnx.Rngs(42),
 )
 ```
 
 ## Scientific Computing Applications
 
-### 1. Physics-Informed Neural Networks (PINNs)
+### 1. Physics-Informed Optimization
 
-L2O for physics-informed optimization:
+L2O for physics-informed optimization problems:
 
 ```python
-from opifex.neural.pinns import MultiScalePINN as PINN
-from opifex.core.physics.losses import PhysicsInformedLoss
+from opifex.neural.base import StandardMLP
+from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
+import flax.nnx as nnx
+import jax.numpy as jnp
+
+rngs = nnx.Rngs(42)
 
 # Create PINN model
-pinn_model = PINN(
-    features=[50, 50, 50, 1],
+pinn_model = StandardMLP(
+    layer_sizes=[2, 50, 50, 50, 1],
     activation="tanh",
-    rngs=nnx.Rngs(42)
+    rngs=rngs,
 )
 
 # Physics-informed loss
-physics_loss = PhysicsInformedLoss(
-    pde_loss_weight=1.0,
+config = PhysicsLossConfig(
+    data_loss_weight=1.0,
+    physics_loss_weight=1.0,
     boundary_loss_weight=10.0,
-    initial_loss_weight=10.0
 )
 
-# Configure L2O for PINN optimization
-pinn_l2o_config = L2OEngineConfig(
-    solver_type="gradient",
-    integration_mode="unified",
-    enable_meta_learning=True
+physics_loss = PhysicsInformedLoss(
+    config=config,
+    equation_type="heat",
+    domain_type="2d",
 )
 
-pinn_l2o = L2OEngine(config=pinn_l2o_config, rngs=nnx.Rngs(42))
-
-# Meta-train on physics problems
-physics_problems = generate_pde_family()
-pinn_l2o.meta_train(
-    problem_family=physics_problems,
-    num_meta_epochs=200
-)
-
-# Optimize PINN with learned optimizer
-optimized_pinn = pinn_l2o.optimize(
-    initial_params=pinn_model.parameters,
-    objective_fn=lambda params: physics_loss(params, pinn_model, data),
-    num_steps=1000
+# Use L2O engine for physics-informed optimization
+solution = l2o_engine.solve_physics_informed(
+    physics_loss_fn=lambda params: jnp.sum(params**2),  # Simplified
+    initial_params=jnp.zeros(20),
+    steps=100,
 )
 ```
 
-### 2. Neural Operators
+### 2. Neural Operator Training
 
 L2O for neural operator training:
 
 ```python
-from opifex.neural import FNO, DeepONet
+from opifex.neural.operators.fno import FourierNeuralOperator
+from opifex.neural.operators.deeponet import DeepONet
+import flax.nnx as nnx
+
+rngs = nnx.Rngs(42)
 
 # Fourier Neural Operator
-fno_model = FNO(
-    modes=32,
-    width=64,
-    input_dim=2,
-    output_dim=1,
-    rngs=nnx.Rngs(42)
+fno_model = FourierNeuralOperator(
+    in_channels=1,
+    out_channels=1,
+    hidden_channels=64,
+    modes=16,
+    num_layers=4,
+    rngs=rngs,
 )
 
-# Configure L2O for neural operators
-operator_l2o_config = L2OEngineConfig(
-    solver_type="gradient",
-    integration_mode="unified",
-    enable_meta_learning=True
+# DeepONet
+deeponet_model = DeepONet(
+    branch_sizes=[100, 64, 64, 32],
+    trunk_sizes=[2, 64, 64, 32],
+    activation="gelu",
+    rngs=rngs,
 )
 
-operator_l2o = L2OEngine(config=operator_l2o_config, rngs=nnx.Rngs(42))
+# Use Trainer with standard training loop
+from opifex.core.training import Trainer, TrainingConfig
 
-# Meta-train on operator learning problems
-operator_problems = generate_operator_learning_tasks()
-operator_l2o.meta_train(
-    problem_family=operator_problems,
-    num_meta_epochs=150
-)
+config = TrainingConfig(num_epochs=100, learning_rate=1e-3, batch_size=32)
+trainer = Trainer(model=fno_model, config=config, rngs=rngs)
 
-# Optimize neural operator
-optimized_fno = operator_l2o.optimize(
-    initial_params=fno_model.parameters,
-    objective_fn=operator_loss_function,
-    num_steps=500
-)
-```
-
-### 3. Quantum Chemistry Optimization
-
-L2O for quantum mechanical systems:
-
-```python
-from opifex.core import create_neural_dft_problem
-
-# Create quantum chemistry problem
-molecular_system = create_molecular_system([
-    ("H", (0.0, 0.0, 0.0)),
-    ("H", (0.74, 0.0, 0.0))
-])
-
-neural_dft_problem = create_neural_dft_problem(molecular_system)
-
-# Configure quantum-aware L2O
-quantum_l2o_config = L2OEngineConfig(
-    solver_type="gradient",
-    integration_mode="unified",
-    enable_meta_learning=True
-)
-
-quantum_l2o = L2OEngine(config=quantum_l2o_config, rngs=nnx.Rngs(42))
-
-# Meta-train on quantum problems
-quantum_problems = generate_molecular_systems()
-quantum_l2o.meta_train(
-    problem_family=quantum_problems,
-    num_meta_epochs=300
-)
-
-# Optimize quantum system
-optimized_quantum_params = quantum_l2o.optimize(
-    initial_params=initial_density_matrix,
-    objective_fn=lambda params: neural_dft_energy(params, molecular_system),
-    num_steps=200
+# Train using .fit() (not .train())
+trained_model, metrics = trainer.fit(
+    train_data=(x_train, y_train),
+    val_data=(x_val, y_val),
 )
 ```
 
@@ -420,31 +387,24 @@ optimized_quantum_params = quantum_l2o.optimize(
 
 ### Speedup Characteristics
 
-L2O algorithms achieve significant speedups across different problem domains:
+L2O algorithms achieve significant speedups across different problem domains. Use the `compare_all_solvers` method to benchmark:
 
 ```python
-from opifex.optimization.l2o import L2OBenchmark
+from opifex.optimization.l2o import OptimizationProblem
+import jax.numpy as jnp
 
-# Benchmark L2O performance
-benchmark = L2OBenchmark(
-    problem_families=["quadratic", "neural_network", "pde_solving"],
-    baseline_optimizers=["adam", "sgd", "lbfgs"],
-    metrics=["convergence_speed", "final_accuracy", "computational_cost"]
-)
+# Define test problem
+problem = OptimizationProblem(problem_type="quadratic", dimension=20)
+problem_params = jnp.ones(50)
 
-# Run full benchmark
-results = benchmark.run_benchmark(
-    l2o_engine=l2o_engine,
-    num_trials=100,
-    max_iterations=1000
-)
+# Compare all available solvers
+results = l2o_engine.compare_all_solvers(problem, problem_params)
 
-print("L2O Performance Results:")
-for problem_type, metrics in results.items():
-    print(f"{problem_type}:")
-    print(f"  Speedup: {metrics['speedup']:.1f}x")
-    print(f"  Accuracy improvement: {metrics['accuracy_improvement']:.2%}")
-    print(f"  Convergence rate: {metrics['convergence_rate']:.1f}x faster")
+for solver_name, metrics in results.items():
+    print(f"{solver_name}:")
+    print(f"  Time: {metrics['time']:.4f}s")
+    if 'speedup' in metrics:
+        print(f"  Speedup: {metrics['speedup']:.1f}x")
 ```
 
 ### Typical Performance Gains
@@ -461,191 +421,103 @@ for problem_type, metrics in results.items():
 efficient_config = L2OEngineConfig(
     solver_type="parametric",
     performance_tracking=True,
-    adaptive_selection=True
+    adaptive_selection=True,
 )
-
-# Monitor resource usage
-resource_monitor = L2OResourceMonitor()
-with resource_monitor:
-    optimized_params = l2o_engine.optimize(
-        initial_params=params,
-        objective_fn=objective,
-        num_steps=1000
-    )
-
-print(f"Peak memory usage: {resource_monitor.peak_memory_gb:.2f} GB")
-print(f"Training time: {resource_monitor.training_time:.2f} seconds")
-print(f"Optimization time: {resource_monitor.optimization_time:.2f} seconds")
 ```
 
 ## Integration with Opifex Ecosystem
 
-### 1. Training Integration
+### Training Integration
 
-Seamless integration with Opifex training workflows:
-
-```python
-from opifex.core.training.trainer import Trainer
-
-# Create trainer with L2O optimizer
-trainer = Trainer(
-    model=neural_network,
-    config=training_config
-)
-
-# Use L2O for training
-trained_model, metrics = trainer.train(
-    train_data=training_data,
-    val_data=validation_data,
-    optimizer=l2o_engine,  # Use L2O instead of traditional optimizer
-    num_epochs=100
-)
-```
-
-### 2. Neural Network Integration
-
-Compatible with all Opifex neural architectures:
+The L2O engine integrates with Opifex training through the meta-framework:
 
 ```python
-from opifex.neural import CNN, RNN, Transformer
+from opifex.optimization.l2o import L2OEngine, L2OEngineConfig
+from opifex.core.training.config import MetaOptimizerConfig
+import jax.numpy as jnp
 
-# L2O works with any neural architecture
-models = [
-    CNN(features=[32, 64, 128], rngs=nnx.Rngs(42)),
-    RNN(hidden_size=128, rngs=nnx.Rngs(42)),
-    Transformer(d_model=256, rngs=nnx.Rngs(42))
-]
+# Create L2O engine
+l2o_config = L2OEngineConfig(solver_type="gradient", integration_mode="unified")
+meta_config = MetaOptimizerConfig(meta_algorithm="l2o", base_optimizer="adam")
 
-for model in models:
-    optimized_model = l2o_engine.optimize_model(
-        model=model,
-        training_data=data,
-        num_steps=500
-    )
-```
-
-### 3. Deployment Integration
-
-L2O with production optimization:
-
-```python
-from opifex.optimization.production import HybridPerformancePlatform
-
-# Combine L2O with production optimization
-platform = HybridPerformancePlatform(
-    l2o_optimization=True,
-    adaptive_jit=True,
-    performance_monitoring=True
+l2o_engine = L2OEngine(
+    l2o_config=l2o_config,
+    meta_config=meta_config,
+    rngs=nnx.Rngs(42),
 )
 
-# Deploy L2O-optimized model
-production_model = platform.optimize_and_deploy(
-    model=l2o_optimized_model,
-    optimization_strategy="l2o_enhanced",
-    target_latency_ms=10.0
+# Optimize using the meta-framework
+def objective(params):
+    return jnp.sum(params**2)
+
+final_params, history = l2o_engine.optimize_with_meta_framework(
+    loss_fn=objective,
+    initial_params=jnp.ones(10),
+    steps=50,
 )
+
+# History contains per-step loss, learning rate, and gradient norm
+for step_info in history[:5]:
+    print(f"Step {step_info['step']}: loss={step_info['loss']:.6f}")
 ```
 
 ## Best Practices
 
 ### 1. Problem Family Design
 
-For effective L2O training:
+For effective L2O training, problems must be related (same structure, varying parameters):
 
 ```python
+from opifex.optimization.l2o import OptimizationProblem
+
 # Good: Related optimization problems
 problem_family = [
-    create_quadratic_problem(dim=d, condition_number=c)
-    for d in [10, 20, 50, 100]
-    for c in [1, 10, 100, 1000]
+    OptimizationProblem(problem_type="quadratic", dimension=d)
+    for d in [10, 20, 50]
 ]
 
 # Good: Physics problems with varying parameters
-physics_family = [
-    create_heat_equation(diffusivity=d, domain_size=s)
-    for d in [0.1, 0.5, 1.0, 2.0]
-    for s in [32, 64, 128]
-]
+# (e.g., Burgers equation with viscosity in [0.005, 0.05])
+# Tasks MUST share structure for meta-learning to be effective
 ```
 
 ### 2. Meta-Training Strategy
 
-```python
-# Curriculum learning for L2O
-curriculum = L2OCurriculum(
-    stages=[
-        {"difficulty": "easy", "epochs": 50},
-        {"difficulty": "medium", "epochs": 100},
-        {"difficulty": "hard", "epochs": 150}
-    ]
-)
+Key insight: For meta-learning (MAML/Reptile) to show significant improvement, tasks must be structurally related. Random or unrelated problems do not benefit from meta-learning.
 
-l2o_engine.meta_train_with_curriculum(
-    problem_family=problem_family,
-    curriculum=curriculum
-)
-```
+Results from Opifex examples:
 
-### 3. Hyperparameter Selection
+- MAML: 60% lower loss, 10x speedup vs random initialization on related Burgers problems
+- Reptile: 30% lower loss (simpler but less effective than MAML)
 
-```python
-# Hyperparameter optimization for L2O
-from opifex.optimization.l2o import L2OHyperparameterOptimizer
+### 3. Algorithm Selection Guidelines
 
-hp_optimizer = L2OHyperparameterOptimizer(
-    search_space={
-        "meta_learning_rate": (1e-4, 1e-2),
-        "num_unroll_steps": (10, 50),
-        "hidden_dims": [(32, 16), (128, 64), (256, 128)]
-    },
-    optimization_method="bayesian"
-)
+Use `l2o_engine.recommend_algorithm()` for automatic recommendations, or follow these guidelines:
 
-best_config = hp_optimizer.optimize(
-    problem_family=problem_family,
-    num_trials=50,
-    validation_problems=val_problems
-)
-```
+- **Small linear/quadratic problems** (dim <= 20): Use `"parametric"` solver
+- **Large-scale problems** (dim > 100): Use `"gradient"` solver
+- **Mixed or uncertain**: Use `"hybrid"` mode with automatic selection
 
 ## Troubleshooting
 
 ### Common Issues and Solutions
 
-```python
-from opifex.optimization.l2o import L2ODebugger
+**L2O not converging during meta-training:**
 
-# Debug L2O training issues
-debugger = L2ODebugger(
-    check_gradients=True,
-    monitor_convergence=True,
-    detect_overfitting=True
-)
+- Ensure problem family is structurally related
+- Try reducing meta learning rate
+- Increase inner loop steps
 
-debug_report = debugger.debug_l2o_training(
-    l2o_engine=l2o_engine,
-    problem_family=problem_family,
-    num_debug_steps=100
-)
+**Parametric solver inaccuracy:**
 
-print("Debug Report:")
-for issue, recommendation in debug_report.items():
-    print(f"Issue: {issue}")
-    print(f"Recommendation: {recommendation}")
-```
+- Enable traditional fallback: `use_traditional_fallback=True`
+- Increase hidden layer sizes in `SolverConfig`
 
-### Performance Optimization
+**Slow L2O optimization:**
 
-```python
-# Optimize L2O performance
-performance_optimizer = L2OPerformanceOptimizer()
-
-optimized_l2o = performance_optimizer.optimize(
-    l2o_engine=l2o_engine,
-    target_metrics=["training_speed", "memory_usage", "convergence_quality"],
-    optimization_budget_hours=2.0
-)
-```
+- Use JIT compilation on the objective function
+- Reduce `steps` parameter and check early convergence
+- Use `performance_tracking=True` to identify bottlenecks
 
 ## Future Directions
 
@@ -654,14 +526,11 @@ optimized_l2o = performance_optimizer.optimize(
 1. **Automated L2O Design**: Learning to design L2O architectures
 2. **Few-Shot L2O**: Rapid adaptation with minimal data
 3. **Continual L2O**: Learning new optimization strategies without forgetting
-4. **Quantum L2O**: L2O for quantum optimization problems
 
 ### Planned Enhancements
 
 1. **Distributed L2O**: Multi-device L2O training and optimization
 2. **Federated L2O**: Privacy-preserving L2O across institutions
-3. **Neuromorphic L2O**: L2O on neuromorphic hardware
-4. **Hybrid Classical-Quantum L2O**: L2O for hybrid computing systems
 
 ## References
 
@@ -676,4 +545,4 @@ optimized_l2o = performance_optimizer.optimize(
 - [Meta-Optimization Methods](meta-optimization.md) - Broader meta-optimization framework
 - [Optimization User Guide](../user-guide/optimization.md) - Practical usage guide
 - [L2O Example](../examples/optimization/learn-to-optimize.md) - Learn-to-optimize example
-- [API Reference](../api/optimization.md) - Complete API documentation
+- [API Reference](../api/optimization.md) - API documentation

@@ -14,15 +14,16 @@ from opifex.core.training.trainer import Trainer
 from opifex.core.training.config import TrainingConfig
 from opifex.core.training.config import QuantumTrainingConfig
 from opifex.core.training.physics_configs import ConservationConfig
-from opifex.neural import StandardMLP
+from opifex.neural.base import StandardMLP
 import jax.numpy as jnp
 import jax
 
-# Create model
+# Create model (requires rngs for NNX initialization)
+rngs = nnx.Rngs(jax.random.PRNGKey(0))
 model = StandardMLP(
-    features=[50, 50, 50, 1],
+    layer_sizes=[2, 50, 50, 1],
     activation="tanh",
-    use_bias=True
+    rngs=rngs
 )
 
 # Configure physics-aware training with composable configs
@@ -57,9 +58,9 @@ x_train = jax.random.uniform(key, (1000, 2), minval=-1.0, maxval=1.0)
 y_train = jnp.sin(jnp.pi * x_train[:, 0]) * jnp.cos(jnp.pi * x_train[:, 1])
 
 # Train the model
-history = trainer.train(
+model, history = trainer.fit(
     train_data=(x_train, y_train),
-    validation_data=(x_train[:200], y_train[:200])
+    val_data=(x_train[:200], y_train[:200])
 )
 
 print(f"Training completed in {len(history['train_losses'])} epochs")
@@ -95,25 +96,26 @@ The `BasicTrainer` class provides a complete training framework with physics-inf
 ```python
 from opifex.training.basic_trainer import BasicTrainer
 from opifex.core.training.config import TrainingConfig
-from opifex.neural import StandardMLP
+from opifex.neural.base import StandardMLP
 import jax.numpy as jnp
 import jax
 
 # Create a neural network model
+rngs = nnx.Rngs(jax.random.PRNGKey(0))
 model = StandardMLP(
-    features=[50, 50, 50, 1],
+    layer_sizes=[2, 50, 50, 1],
     activation="tanh",
-    use_bias=True
+    rngs=rngs
 )
 
 # Configure training parameters
+# Note: optimizer, early_stopping_patience, and weight_decay live in sub-configs
+# (optimization_config, validation_config), not at the top level of TrainingConfig
 config = TrainingConfig(
-    optimizer="adam",
     learning_rate=1e-3,
     num_epochs=1000,
     batch_size=256,
     validation_frequency=100,
-    early_stopping_patience=50,
     checkpoint_frequency=100
 )
 
@@ -203,11 +205,14 @@ Physics-informed training incorporates physical laws directly into the loss func
 from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 from opifex.core.problems import PDEProblem
 from opifex.core.conditions import DirichletBC
+from opifex.geometry import Rectangle
 
 # Define a PDE problem (2D Poisson equation)
 class PoissonProblem(PDEProblem):
     def __init__(self):
-        domain = {"x": (0.0, 1.0), "y": (0.0, 1.0)}
+        geometry = Rectangle(
+            center=jnp.array([0.5, 0.5]), width=1.0, height=1.0
+        )
         boundary_conditions = [
             DirichletBC(boundary="left", value=0.0),
             DirichletBC(boundary="right", value=0.0),
@@ -216,7 +221,7 @@ class PoissonProblem(PDEProblem):
         ]
 
         super().__init__(
-            domain=domain,
+            geometry=geometry,
             equation=self._poisson_equation,
             boundary_conditions=boundary_conditions
         )
@@ -234,13 +239,17 @@ class PoissonProblem(PDEProblem):
 
 # Configure physics-informed loss
 physics_config = PhysicsLossConfig(
-    pde_weight=1.0,
-    boundary_weight=10.0,
-    initial_weight=1.0,
+    data_loss_weight=1.0,
+    physics_loss_weight=1.0,
+    boundary_loss_weight=10.0,
     adaptive_weighting=True
 )
 
-physics_loss = PhysicsInformedLoss(config=physics_config)
+physics_loss = PhysicsInformedLoss(
+    config=physics_config,
+    equation_type="poisson",
+    domain_type="rectangular",
+)
 
 # Create PINN trainer
 pinn_trainer = BasicTrainer(
@@ -282,17 +291,19 @@ print(f"Final boundary loss: {pinn_history.boundary_losses[-1]:.6f}")
 ### Fourier Neural Operator (FNO) Training
 
 ```python
-from opifex.neural import FNO
+from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.training.basic_trainer import BasicTrainer
 from opifex.core.training.config import TrainingConfig
 
 # Create FNO model for operator learning
-fno_model = FNO(
-    modes=[16, 16],  # Fourier modes in each dimension
-    width=64,        # Channel width
-    n_layers=4,      # Number of Fourier layers
-    input_dim=2,     # Input function dimension
-    output_dim=1     # Output function dimension
+rngs = nnx.Rngs(jax.random.PRNGKey(0))
+fno_model = FourierNeuralOperator(
+    in_channels=2,       # Input function channels
+    out_channels=1,      # Output function channels
+    hidden_channels=64,  # Hidden dimension
+    modes=16,            # Fourier modes to keep
+    num_layers=4,        # Number of Fourier layers
+    rngs=rngs
 )
 
 # Generate operator training data (input-output function pairs)
@@ -338,8 +349,8 @@ def solve_pde_with_input(input_func, X, Y):
 input_funcs, output_funcs = generate_operator_data(n_samples=500)
 
 # Configure FNO training
+# Note: optimizer selection is handled via optimization_config, not a top-level string
 fno_config = TrainingConfig(
-    optimizer="adam",
     learning_rate=1e-3,
     num_epochs=200,
     batch_size=16,  # Smaller batch size for function data
@@ -347,11 +358,11 @@ fno_config = TrainingConfig(
 )
 
 # Train FNO
-fno_trainer = Trainer(model=fno_model, config=fno_config) # Changed from BasicTrainer to Trainer and fixed config argument
+fno_trainer = Trainer(model=fno_model, config=fno_config)
 
-fno_history = fno_trainer.train(
+fno_model, fno_history = fno_trainer.fit(
     train_data=(input_funcs[:400], output_funcs[:400]),
-    validation_data=(input_funcs[400:], output_funcs[400:])
+    val_data=(input_funcs[400:], output_funcs[400:])
 )
 
 print(f"FNO training completed")
@@ -361,13 +372,14 @@ print(f"Final training loss: {fno_history.train_losses[-1]:.6f}")
 ### DeepONet Training
 
 ```python
-from opifex.neural import DeepONet
+from opifex.neural.operators.deeponet import DeepONet
 
 # Create DeepONet model
+rngs = nnx.Rngs(jax.random.PRNGKey(0))
 deeponet_model = DeepONet(
-    branch_net=[100, 100, 100],      # Branch network architecture
-    trunk_net=[2, 100, 100, 100],    # Trunk network architecture (2D input)
-    output_dim=1                      # Scalar output
+    branch_sizes=[100, 100, 100],     # Branch network architecture
+    trunk_sizes=[2, 100, 100, 100],   # Trunk network architecture (2D input)
+    rngs=rngs
 )
 
 # Generate DeepONet training data
@@ -460,10 +472,9 @@ def create_advanced_scheduler(base_lr=1e-3, total_steps=10000):
     return combined_schedule
 
 # Use advanced scheduling in training
+# Note: optimizer type and weight_decay are configured via optimization_config sub-config
 advanced_config = TrainingConfig(
-    optimizer="adamw",
-    learning_rate=create_advanced_scheduler(base_lr=1e-3, total_steps=5000),
-    weight_decay=1e-4,
+    learning_rate=1e-3,
     num_epochs=100,
     batch_size=64
 )

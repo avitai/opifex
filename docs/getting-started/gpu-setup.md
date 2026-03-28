@@ -23,34 +23,6 @@ This document explains the full solution implemented to ensure that Opifex tests
 
 ### 1. GPU Requirement Enforcement
 
-#### Core JAX Configuration (`opifex/core/testing_infrastructure.py`)
-
-The framework uses device-agnostic JAX configuration that automatically detects and configures available hardware:
-
-```python
-def configure_jax_for_reliability() -> dict[str, str | bool | int | list[str]]:
-    """Configure JAX runtime settings for maximum reliability across all platforms."""
-    # Detect available devices
-    devices = jax.devices()
-    backend = jax.default_backend()
-
-    # Enable 64-bit precision for reliability
-    jax.config.update("jax_enable_x64", True)
-
-    # Set memory management for optimal performance
-    if "XLA_PYTHON_CLIENT_MEM_FRACTION" not in os.environ:
-        os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.75"
-    if "XLA_PYTHON_CLIENT_PREALLOCATE" not in os.environ:
-        os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-```
-
-**Key Features:**
-
-- Automatic device detection and configuration
-- Device-agnostic operation (CPU/GPU/TPU)
-- Proper memory management settings
-- 64-bit precision for numerical accuracy
-
 #### GPU Testing Infrastructure (`opifex/core/testing_infrastructure.py`)
 
 The framework includes full GPU testing infrastructure that handles device detection, stability testing, and environment classification:
@@ -117,44 +89,28 @@ addopts = [
 
 ### 3. Test Collection and Execution
 
-#### Enhanced Conftest (`tests/conftest.py`)
+#### Conftest Hooks (`tests/conftest.py`)
+
+The actual conftest.py uses the following hooks:
+
+- **`pytest_runtest_setup`**: Clears JAX caches before each test. For tests marked `gpu` or `cuda`, runs garbage collection and checks for GPU device availability, skipping the test if no GPU is accessible.
+- **`pytest_collection_modifyitems`**: Skips tests marked `slow` unless the `--runslow` flag is passed. Also skips tests marked `requires_prometheus` or `requires_psutil` when those optional dependencies are not installed (checked via `DependencyManager`).
+- **`pytest_runtest_teardown`**: Clears JAX caches and runs garbage collection after each test. For GPU/CUDA tests, performs a dummy JAX operation to ensure the device is in a clean state.
+- **`pytest_configure`**: Registers custom markers (`gpu_required`, `gpu_preferred`, `cpu_safe`, `slow`, `integration`, `cuda_local`, etc.) and suppresses JAX/CUDA warnings.
 
 ```python
-def pytest_collection_modifyitems(config, items):
-    """Modify test collection to handle GPU requirements."""
-    # Check if we're running GPU-required tests
-    addopts = config.getoption("addopts", [])
-    gpu_required = (
-        "--config=gpu_required" in addopts or
-        ("-m" in addopts and "gpu_required" in str(addopts))
-    )
-
-    if gpu_required:
-        # Verify GPU is available before running tests
-        try:
-            require_gpu()
-            print("✅ GPU is available - running GPU-required tests")
-        except GPUUnavailableError as e:
-            pytest.fail(f"GPU is required but not available: {e}")
-
-    # Mark tests based on their content and GPU requirements
-    for item in items:
-        test_content = str(item.function)
-
-        # Mark tests that use GPU-specific operations
-        gpu_keywords = [
-            "gpu", "cuda", "gpu_", "neural_operator", "manifold_neural",
-            "periodic_cell", "lattice_vectors", "reciprocal_vectors"
-        ]
-        if any(keyword in test_content.lower() for keyword in gpu_keywords):
-            item.add_marker(pytest.mark.gpu)
+# Example: GPU tests are skipped automatically when no GPU is present
+@pytest.mark.gpu
+def test_gpu_operation():
+    """This test will be skipped if GPU is not available."""
+    ...
 ```
 
-**Features:**
+**Key behaviors:**
 
-- Automatic test marking based on content analysis
-- GPU availability verification before test execution
-- Clear error messages when GPU is required but unavailable
+- Tests marked `gpu` or `cuda` are automatically skipped when no GPU device is found
+- Slow tests require `--runslow` to execute
+- Optional dependency tests are skipped gracefully when packages are missing
 
 ### 4. GPU-Safe Operations
 
@@ -210,7 +166,7 @@ uv run pytest -m "not gpu"
 uv run pytest -n 1
 
 # Full test reporting with JSON output and detailed coverage
-uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
+uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=src/opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
 ### Marking Tests for GPU Requirements
@@ -391,7 +347,7 @@ export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false"
    ```python
    @pytest.mark.gpu_required
    def test_new_gpu_feature():
-       require_gpu()
+       # conftest.py automatically skips gpu-marked tests when no GPU is available
        # ... test implementation
    ```
 

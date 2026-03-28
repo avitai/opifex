@@ -1,768 +1,229 @@
-# Opifex Local Development Setup
+# Local Development Setup
 
-This guide helps you set up a local development environment for the Opifex framework. Perfect for development, testing, and learning before deploying to the cloud.
+This guide covers setting up a local development environment for the Opifex framework, including native installation, Docker-based workflows, and the model serving API.
 
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Local Installation](#local-installation)
+2. [Native Installation](#native-installation)
 3. [Docker Setup](#docker-setup)
-4. [Local Kubernetes Setup](#local-kubernetes-setup)
+4. [Model Serving API](#model-serving-api)
 5. [Development Workflow](#development-workflow)
 6. [Testing](#testing)
 7. [Troubleshooting](#troubleshooting)
 
-## 🚀 Prerequisites
+## Prerequisites
 
 ### System Requirements
 
 - **Operating System**: Linux, macOS, or Windows 10/11
 - **RAM**: 16GB minimum, 32GB recommended
-- **Storage**: 100GB free space
-- **CPU**: 8 cores minimum, 16 cores recommended
-- **GPU**: Optional NVIDIA GPU for acceleration
+- **Storage**: 50GB free space
+- **GPU**: Optional NVIDIA GPU for CUDA acceleration
 
 ### Required Software
 
-```bash
-# Install Python 3.11+
-# Ubuntu/Debian
-sudo apt update
-sudo apt install python3.11 python3.11-venv python3.11-dev
+- **Python 3.12+**
+- **[uv](https://github.com/astral-sh/uv)** -- the sole package manager for this project
+- **Git**
+- **Docker** and **Docker Compose** (for container workflows)
 
-# macOS (using Homebrew)
-brew install python@3.11
-
-# Windows (using Chocolatey)
-choco install python --version=3.11.0
-
-# Install Git
-# Ubuntu/Debian
-sudo apt install git
-
-# macOS
-brew install git
-
-# Windows
-choco install git
-
-# Install Docker
-# Ubuntu/Debian
-curl -fsSL https://get.docker.com -o get-docker.sh
-sh get-docker.sh
-
-# macOS
-brew install --cask docker
-
-# Windows
-choco install docker-desktop
-
-# Install Docker Compose
-# Ubuntu/Debian
-sudo apt install docker-compose-plugin
-
-# macOS/Windows (included with Docker Desktop)
-```
-
-## 🔧 Local Installation
+## Native Installation
 
 ### Step 1: Clone Repository
 
 ```bash
-# Clone the Opifex repository
 git clone https://github.com/avitai/opifex.git
 cd opifex
-
-# Verify repository structure
-ls -la
 ```
 
-### Step 2: Set Up Development Environment
+### Step 2: Run Setup
+
+The `setup.sh` script auto-detects your hardware, creates a `.venv` virtual environment, and installs all dependencies via `uv`.
 
 ```bash
-# Run setup script (auto-detects GPU/CPU and installs all dependencies)
 ./setup.sh
+```
 
-# Activate environment
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--backend auto\|cpu\|cuda12\|metal` | Choose compute backend. Default: `auto` (detects GPU) |
+| `--python <version>` | Create the `.venv` with a specific Python version |
+| `--recreate` | Remove existing `.venv` before syncing |
+| `--force-clean` | Remove `.venv`, generated `.opifex.env`, and test artifacts |
+| `--dry-run` | Print resolved backend and `uv` commands without making changes |
+
+The script writes a `.opifex.env` file with the resolved backend settings. If you have a `.env` file, it acts as a user-owned override layer loaded after `.opifex.env`.
+
+### Step 3: Activate Environment
+
+```bash
 source ./activate.sh
 ```
 
-### Step 3: Install Pre-commit Hooks
+You must run `source activate.sh` before any `uv run` command (tests, linting, etc.).
+
+### Step 4: Install Pre-commit Hooks
 
 ```bash
-# Install pre-commit hooks
 uv run pre-commit install
-
-# Run pre-commit on all files
 uv run pre-commit run --all-files
 ```
 
-### Step 4: Verify Installation
+### Step 5: Verify Installation
 
 ```bash
-# Run basic tests
-uv run pytest tests/ -v
+# Verify JAX
+python -c "import jax; print('JAX version:', jax.__version__); print('Devices:', jax.devices())"
 
-# Check code formatting
-uv run ruff format --check .
+# Run quick tests
+source activate.sh && uv run pytest tests/ -x -q
 
-# Check linting
-uv run ruff check .
-
-# Type checking
-uv run pyright
-
-# Verify JAX installation
-python -c "import jax; print('JAX version:', jax.__version__); print('JAX devices:', jax.devices())"
+# Code quality checks
+uv run ruff check src/
+uv run ruff format --check src/
+uv run pyright src/
 ```
 
-## 🐳 Docker Setup
+## Docker Setup
 
-### Step 1: Build Docker Images
+The project provides a single `Dockerfile` (based on `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04`) and a `docker-compose.yml` with two services.
+
+### Services
+
+| Service | Description | GPU |
+|---------|-------------|-----|
+| `opifex-gpu` | Full GPU runtime with NVIDIA device passthrough | Yes |
+| `opifex-cpu` | CPU-only runtime (`JAX_PLATFORMS=cpu`) | No |
+
+Both services mount `./data` and `./checkpoints` as volumes.
+
+### Build and Run
 
 ```bash
-# Build main Opifex image
-docker build -t opifex:local .
+# Build the image
+docker build -t opifex:latest .
 
-# Build development image with additional tools
-docker build -t opifex:dev -f Dockerfile.dev .
+# Run with GPU support
+docker compose up opifex-gpu
 
-# Verify images
-docker images | grep opifex
+# Run CPU-only
+docker compose up opifex-cpu
+
+# Run tests inside the container
+docker compose run opifex-cpu pytest tests/ -x -q
+
+# Quick smoke test
+docker run --rm --gpus all opifex:latest python -c "import opifex; print('OK')"
 ```
 
-### Step 2: Run with Docker Compose
+### Dockerfile Details
+
+The `Dockerfile` uses a two-layer caching strategy:
+
+1. **Layer 1 (dependencies)**: Copies `pyproject.toml`, `uv.lock`, and installs `.[dev,gpu,test]` extras via `uv`. Cached unless lock files change.
+2. **Layer 2 (source)**: Copies `src/`, `tests/`, `scripts/`, `examples/` and reinstalls in editable mode.
+
+Key environment variables set in the image:
+
+- `XLA_PYTHON_CLIENT_PREALLOCATE=false` -- prevents full GPU memory preallocation
+- `XLA_PYTHON_CLIENT_MEM_FRACTION=0.75` -- limits JAX GPU memory usage
+
+## Model Serving API
+
+Opifex includes a FastAPI-based model serving server at `opifex.deployment.server`.
+
+### Running the Server
 
 ```bash
-# Create docker-compose.yml for local development
-cat > docker-compose.dev.yml << EOF
-version: '3.8'
-
-services:
-  opifex-api:
-    build: .
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./logs:/app/logs
-    environment:
-      - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
-    depends_on:
-      - redis
-      - postgres
-
-  opifex-worker:
-    build: .
-    command: python -m opifex.workers.neural_operator
-    volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-    environment:
-      - ENVIRONMENT=development
-      - WORKER_TYPE=neural_operator
-      - API_ENDPOINT=http://opifex-api:8080
-    depends_on:
-      - opifex-api
-      - redis
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  postgres:
-    image: postgres:15-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=opifex
-      - POSTGRES_USER=opifex
-      - POSTGRES_PASSWORD=opifex_dev_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  jupyter:
-    build: .
-    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./notebooks:/app/notebooks
-      - ./data:/app/data
-      - ./models:/app/models
-    environment:
-      - JUPYTER_ENABLE_LAB=yes
-
-volumes:
-  redis_data:
-  postgres_data:
-EOF
-
-# Start services
-docker-compose -f docker-compose.dev.yml up -d
-
-# Check services
-docker-compose -f docker-compose.dev.yml ps
+# Via the module entry point
+source activate.sh
+python -m opifex.deployment.server
 ```
 
-### Step 3: Test Docker Setup
+The server reads configuration from environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPIFEX_HOST` | `127.0.0.1` | Bind address |
+| `OPIFEX_PORT` | `8080` | Bind port |
+| `OPIFEX_WORKERS` | `1` | Uvicorn worker count |
+| `OPIFEX_LOG_LEVEL` | `info` | Log level |
+| `OPIFEX_MODEL_NAME` | `default` | Model name |
+| `OPIFEX_MODEL_TYPE` | `neural_operator` | Model type |
+| `OPIFEX_BATCH_SIZE` | `32` | Batch size |
+| `OPIFEX_PRECISION` | `float32` | Precision (`float16`, `float32`, `float64`) |
+| `OPIFEX_MODEL_REGISTRY` | `./models` | Path for model registry storage |
+| `JAX_PLATFORM_NAME` | `cpu` | JAX platform (set to `gpu` for GPU inference) |
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | API information and links |
+| `GET` | `/health` | Health check (component status, uptime) |
+| `GET` | `/models` | List registered models |
+| `POST` | `/predict` | Run inference (JSON body: `{"data": [...]}`) |
+| `GET` | `/metrics` | Performance metrics (latency, throughput) |
+| `GET` | `/docs` | Swagger UI (auto-generated) |
+| `GET` | `/redoc` | ReDoc documentation |
+
+### Core Serving Components
+
+The serving infrastructure lives in `src/opifex/deployment/core_serving.py`:
+
+- **`DeploymentConfig`** -- dataclass for model deployment configuration (port, batch size, precision, GPU toggle)
+- **`InferenceEngine`** -- JIT-compiled inference with performance tracking. Load a Flax NNX model via `engine.load_model(model, metadata)`, then call `engine.predict(input_data)`
+- **`ModelRegistry`** -- file-based registry for storing and versioning models with metadata
+- **`ModelServer`** -- programmatic server wrapper around `InferenceEngine`
+- **`ModelMetadata`** -- dataclass for model metadata (name, version, shapes, accuracy metrics)
+
+Source: [`src/opifex/deployment/core_serving.py`](../../src/opifex/deployment/core_serving.py)
+
+### Health Monitoring
+
+The `HealthChecker` class (`src/opifex/deployment/monitoring/health.py`) provides production health monitoring:
+
+- System resource checks (CPU, memory, disk via `psutil`)
+- GPU availability and memory usage checks (via JAX)
+- External dependency health checks
+- Custom health check registration
+- Periodic async health check loops
+
+Source: [`src/opifex/deployment/monitoring/health.py`](../../src/opifex/deployment/monitoring/health.py)
+
+## Development Workflow
+
+### Running Examples
 
 ```bash
-# Test API endpoint
-curl http://localhost:8080/health
+source activate.sh
 
-# Test with sample data
-curl -X POST http://localhost:8080/api/v1/neural-operator/predict \
-    -H "Content-Type: application/json" \
-    -d '{
-        "model_type": "fno",
-        "input_data": [[1, 2, 3, 4, 5]],
-        "parameters": {
-            "modes": 12,
-            "width": 64
-        }
-    }'
+# Run a neural operator example
+python examples/neural-operators/operator_tour.py
 
-# Access Jupyter notebook
-echo "Jupyter Lab available at: http://localhost:8888"
+# Run with specific backend
+JAX_PLATFORMS=cpu python examples/neural-operators/operator_tour.py
 ```
 
-## ☸️ Local Kubernetes Setup
-
-### Step 1: Install Local Kubernetes
-
-Choose one of the following options:
-
-#### Option A: Minikube
+### Code Quality
 
 ```bash
-# Install Minikube
-# Linux
-curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-chmod +x minikube
-sudo mv minikube /usr/local/bin/
+source activate.sh
 
-# macOS
-brew install minikube
+# Format
+uv run ruff format src/
 
-# Windows
-choco install minikube
+# Lint with autofix
+uv run ruff check src/ --fix
 
-# Start Minikube with sufficient resources
-minikube start --cpus=4 --memory=8192 --disk-size=50g
+# Type check
+uv run pyright src/
 
-# Enable addons
-minikube addons enable ingress
-minikube addons enable metrics-server
-minikube addons enable dashboard
-```
-
-#### Option B: Kind (Kubernetes in Docker)
-
-```bash
-# Install Kind
-# Linux
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-chmod +x ./kind
-sudo mv ./kind /usr/local/bin/kind
-
-# macOS
-brew install kind
-
-# Windows
-choco install kind
-
-# Create cluster configuration
-cat > kind-config.yaml << EOF
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-  kubeadmConfigPatches:
-  - |
-    kind: InitConfiguration
-    nodeRegistration:
-      kubeletExtraArgs:
-        node-labels: "ingress-ready=true"
-  extraPortMappings:
-  - containerPort: 80
-    hostPort: 80
-    protocol: TCP
-  - containerPort: 443
-    hostPort: 443
-    protocol: TCP
-- role: worker
-- role: worker
-EOF
-
-# Create cluster
-kind create cluster --config kind-config.yaml --name opifex-local
-
-# Install ingress controller
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-```
-
-### Step 2: Deploy Opifex to Local Kubernetes
-
-```bash
-# Create namespace
-kubectl create namespace opifex-local
-
-# Set default namespace
-kubectl config set-context --current --namespace=opifex-local
-
-# Create local storage class
-cat > local-storage.yaml << EOF
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: local-storage
-provisioner: kubernetes.io/no-provisioner
-volumeBindingMode: WaitForFirstConsumer
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: opifex-data-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /tmp/opifex-data
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: kubernetes.io/hostname
-          operator: In
-          values:
-          - minikube  # or kind-worker if using Kind
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: opifex-data-pvc
-  namespace: opifex-local
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: local-storage
-EOF
-
-kubectl apply -f local-storage.yaml
-
-# Deploy Opifex application
-cat > opifex-local-deployment.yaml << EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: opifex-api
-  namespace: opifex-local
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: opifex-api
-  template:
-    metadata:
-      labels:
-        app: opifex-api
-    spec:
-      containers:
-      - name: opifex-api
-        image: opifex:local
-        imagePullPolicy: Never
-        ports:
-        - containerPort: 8080
-        env:
-        - name: ENVIRONMENT
-          value: "development"
-        - name: LOG_LEVEL
-          value: "DEBUG"
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1"
-        volumeMounts:
-        - name: data-volume
-          mountPath: /app/data
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
-      volumes:
-      - name: data-volume
-        persistentVolumeClaim:
-          claimName: opifex-data-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: opifex-api-service
-  namespace: opifex-local
-spec:
-  selector:
-    app: opifex-api
-  ports:
-    - port: 80
-      targetPort: 8080
-  type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: opifex-api-ingress
-  namespace: opifex-local
-spec:
-  rules:
-  - host: opifex.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: opifex-api-service
-            port:
-              number: 80
-EOF
-
-kubectl apply -f opifex-local-deployment.yaml
-
-# Wait for deployment
-kubectl wait --for=condition=available --timeout=300s deployment/opifex-api -n opifex-local
-
-# Add local DNS entry
-echo "127.0.0.1 opifex.local" | sudo tee -a /etc/hosts
-```
-
-### Step 3: Test Local Kubernetes Deployment
-
-```bash
-# Check pod status
-kubectl get pods -n opifex-local
-
-# Check services
-kubectl get services -n opifex-local
-
-# Test API
-curl http://opifex.local/health
-
-# Port forward for direct access
-kubectl port-forward service/opifex-api-service 8080:80 -n opifex-local &
-
-# Test forwarded port
-curl http://localhost:8080/health
-```
-
-## 🔄 Development Workflow
-
-### Step 1: Set Up Development Environment
-
-```bash
-# Create development configuration
-cat > .env.development << EOF
-ENVIRONMENT=development
-LOG_LEVEL=DEBUG
-DEBUG=true
-RELOAD=true
-DATABASE_URL=postgresql://opifex:opifex_dev_password@localhost:5432/opifex
-REDIS_URL=redis://localhost:6379
-JUPYTER_ENABLE_LAB=yes
-EOF
-
-# Load environment variables
-source .env.development
-```
-
-### Step 2: Run Development Server
-
-```bash
-# Start development server with hot reload
-uv run python -m opifex.api.server --reload --debug
-
-# Or use the development script
-uv run python scripts/dev-server.py
-
-# Run in background
-nohup uv run python -m opifex.api.server --reload --debug > dev-server.log 2>&1 &
-```
-
-### Step 3: Run Jupyter for Interactive Development
-
-```bash
-# Start Jupyter Lab
-uv run jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
-
-# Or use the development script
-uv run python scripts/start-jupyter.py
-```
-
-### Step 4: Code Development Workflow
-
-```bash
-# Make changes to code
-# ... edit files ...
-
-# Run tests
-uv run pytest tests/ -v
-
-# Run specific test
-uv run pytest tests/test_neural_operators.py::test_fno_forward -v
-
-# Run with coverage
-uv run pytest tests/ --cov=opifex --cov-report=html
-
-# Check code quality
-uv run ruff format .
-uv run ruff check .
-uv run pyright
-
-# Run pre-commit hooks
+# All pre-commit hooks
 uv run pre-commit run --all-files
-
-# Commit changes
-git add .
-git commit -m "Add new feature"
-```
-
-### Step 5: Testing Different Components
-
-```bash
-# Test neural operators
-uv run python examples/neural-operators/operator_tour.py
-
-# Test L2O optimization
-uv run python examples/optimization/learn_to_optimize.py
-
-# Test benchmarking
-uv run python examples/benchmarking_demo.py
-
-# Test with different backends
-JAX_PLATFORM_NAME=cpu uv run python examples/cpu_demo.py
-JAX_PLATFORM_NAME=gpu uv run python examples/gpu_demo.py
-```
-
-## 🧪 Testing
-
-### Step 1: Run Unit Tests
-
-```bash
-# Run all tests
-uv run pytest tests/ -v
-
-# Run specific test modules
-uv run pytest tests/test_core/ -v
-uv run pytest tests/test_neural/ -v
-uv run pytest tests/test_optimization/ -v
-
-# Run with markers
-uv run pytest tests/ -m "not slow" -v
-uv run pytest tests/ -m "gpu" -v
-uv run pytest tests/ -m "integration" -v
-```
-
-### Step 2: Run Integration Tests
-
-```bash
-# Run integration tests
-uv run pytest tests/integration/ -v
-
-# Test API endpoints
-uv run pytest tests/integration/test_api.py -v
-
-# Test end-to-end workflows
-uv run pytest tests/integration/test_workflows.py -v
-```
-
-### Step 3: Performance Testing
-
-```bash
-# Run benchmarks
-uv run python examples/benchmarking/operator_benchmark.py
-
-# Profile code
-uv run python -m cProfile -o profile.stats examples/benchmarking/gpu_profiling.py
-uv run python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumulative'); p.print_stats(20)"
-
-# Memory profiling
-uv run python -m memory_profiler examples/neural_operators_demo.py
-```
-
-### Step 4: Load Testing
-
-```bash
-# Install load testing tools
-uv add locust
-
-# Create load test
-cat > load_test.py << EOF
-from locust import HttpUser, task, between
-
-class OpifexUser(HttpUser):
-    wait_time = between(1, 3)
-
-    @task(3)
-    def health_check(self):
-        self.client.get("/health")
-
-    @task(1)
-    def predict(self):
-        self.client.post("/api/v1/neural-operator/predict", json={
-            "model_type": "fno",
-            "input_data": [[1, 2, 3, 4, 5]],
-            "parameters": {"modes": 12, "width": 64}
-        })
-EOF
-
-# Run load test
-uv run locust -f load_test.py --host=http://localhost:8080
-```
-
-## 🛠️ Troubleshooting
-
-### Common Issues and Solutions
-
-#### Issue 1: Import Errors
-
-```bash
-# Check Python path
-python -c "import sys; print(sys.path)"
-
-# Reinstall dependencies
-uv sync --force-reinstall
-
-# Check virtual environment
-which python
-which pip
-```
-
-#### Issue 2: JAX/GPU Issues
-
-```bash
-# Check JAX installation
-python -c "import jax; print(jax.__version__); print(jax.devices())"
-
-# Check CUDA availability
-nvidia-smi
-
-# Reinstall JAX with CUDA support
-uv remove jax jaxlib
-uv add jax[cuda] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-```
-
-#### Issue 3: Docker Issues
-
-```bash
-# Check Docker daemon
-docker info
-
-# Rebuild images
-docker-compose -f docker-compose.dev.yml build --no-cache
-
-# Check container logs
-docker-compose -f docker-compose.dev.yml logs opifex-api
-
-# Clean up Docker resources
-docker system prune -a
-```
-
-#### Issue 4: Kubernetes Issues
-
-```bash
-# Check cluster status
-kubectl cluster-info
-
-# Check pod logs
-kubectl logs -l app=opifex-api -n opifex-local
-
-# Describe pod for events
-kubectl describe pod <pod-name> -n opifex-local
-
-# Check resource usage
-kubectl top nodes
-kubectl top pods -n opifex-local
-```
-
-#### Issue 5: Port Conflicts
-
-```bash
-# Check port usage
-netstat -tlnp | grep :8080
-lsof -i :8080
-
-# Kill process using port
-kill -9 $(lsof -t -i:8080)
-
-# Use different port
-export PORT=8081
-uv run python -m opifex.api.server --port=$PORT
-```
-
-### Debugging Tips
-
-```bash
-# Enable debug logging
-export LOG_LEVEL=DEBUG
-export DEBUG=true
-
-# Use Python debugger
-python -m pdb examples/neural_operators_demo.py
-
-# Use IPython for interactive debugging
-uv add ipython
-uv run ipython
-
-# Check memory usage
-uv add psutil
-python -c "import psutil; print(f'Memory: {psutil.virtual_memory().percent}%')"
-
-# Monitor GPU usage
-watch -n 1 nvidia-smi
-```
-
-## 📚 Development Resources
-
-### Useful Commands
-
-```bash
-# Quick development setup
-make dev-setup
-
-# Run all quality checks
-make check
-
-# Build documentation
-make docs
-
-# Clean up generated files
-make clean
-
-# Run specific example
-make run-example EXAMPLE=neural_operators_demo
 ```
 
 ### IDE Configuration
@@ -771,45 +232,112 @@ make run-example EXAMPLE=neural_operators_demo
 
 ```json
 {
-    "python.defaultInterpreterPath": "./opifex-env/bin/python",
-    "python.linting.enabled": true,
-    "python.linting.ruffEnabled": true,
-    "python.formatting.provider": "ruff",
+    "python.defaultInterpreterPath": "./.venv/bin/python",
     "python.testing.pytestEnabled": true,
-    "python.testing.pytestArgs": ["tests/"],
-    "files.associations": {
-        "*.md": "markdown"
-    }
+    "python.testing.pytestArgs": ["tests/"]
 }
 ```
 
 #### PyCharm
 
-1. Set interpreter to `./opifex-env/bin/python`
+1. Set interpreter to `./.venv/bin/python`
 2. Enable pytest as test runner
-3. Configure ruff as formatter
-4. Set up run configurations for common tasks
+3. Configure ruff as external tool
 
-### Development Best Practices
+## Testing
 
-1. **Always activate virtual environment** before development
-2. **Run tests before committing** changes
-3. **Use pre-commit hooks** for code quality
-4. **Write tests** for new features
-5. **Update documentation** when needed
-6. **Follow code style guidelines**
-7. **Use meaningful commit messages**
+### Test Directory Structure
 
-## 🚀 Next Steps
+The test suite is organized by domain area:
 
-After setting up your local development environment:
+```
+tests/
+  core/           # Core framework tests
+  neural/         # Neural operator tests (FNO, DeepONet, GNO, etc.)
+  physics/        # Physics solver tests
+  data/           # Data loader tests
+  training/       # Training loop tests
+  optimization/   # Optimization tests
+  deployment/     # Deployment infrastructure tests
+  integration/    # End-to-end integration tests
+  benchmarking/   # Benchmark tests
+  visualization/  # Visualization tests
+  ...
+```
 
-1. **Explore Examples** - Run the provided examples to understand the framework
-2. **Read Documentation** - Familiarize yourself with the API and concepts
-3. **Write Tests** - Add tests for any new features you develop
-4. **Contribute** - Submit pull requests for improvements
-5. **Deploy to Cloud** - Use the cloud deployment guides when ready
+### Running Tests
 
----
+```bash
+source activate.sh
 
-**Happy Coding!** Your local Opifex development environment is now ready for scientific machine learning research and development.
+# Run all tests
+uv run pytest tests/ -v
+
+# Run a specific test module
+uv run pytest tests/core/ -v
+uv run pytest tests/neural/ -v
+uv run pytest tests/deployment/ -v
+
+# Run with coverage
+uv run pytest -vv \
+    --json-report --json-report-file=temp/test-results.json \
+    --json-report-indent=2 --json-report-verbosity=2 \
+    --cov=src/ --cov-report=json:temp/coverage.json \
+    --cov-report=term-missing
+
+# Run a single test by name
+uv run pytest tests/neural/operators/fno/test_tensorized.py -v -k "test_spectral"
+```
+
+## Troubleshooting
+
+### JAX/GPU Not Detected
+
+```bash
+# Check JAX sees your GPU
+python -c "import jax; print(jax.devices())"
+
+# Check NVIDIA driver
+nvidia-smi
+
+# Force CPU mode
+JAX_PLATFORMS=cpu python -c "import jax; print(jax.devices())"
+
+# Recreate environment with GPU support
+./setup.sh --recreate --backend cuda12
+source activate.sh
+```
+
+### Import Errors
+
+```bash
+# Ensure environment is activated
+source activate.sh
+
+# Reinstall
+./setup.sh --force-clean
+source activate.sh
+```
+
+### Docker GPU Issues
+
+```bash
+# Verify NVIDIA container toolkit is installed
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+
+# Rebuild without cache
+docker compose build --no-cache
+
+# Check container logs
+docker compose logs opifex-gpu
+```
+
+### Port Conflicts
+
+```bash
+# Check if port 8080 is in use
+lsof -i :8080
+
+# Use a different port
+OPIFEX_PORT=9090 python -m opifex.deployment.server
+```

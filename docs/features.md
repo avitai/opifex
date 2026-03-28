@@ -59,7 +59,7 @@ Opifex provides extensive support for modern scientific machine learning paradig
 - **ErrorRecoveryManager**: Robust error handling with gradient stability, NaN detection, and loss explosion recovery
 - **FlexibleOptimizerFactory**: Advanced optimizer creation (Adam, AdamW, SGD) with cosine, exponential, and linear scheduling
 - **AdvancedMetricsCollector**: Physics-aware metrics with convergence tracking, chemical accuracy monitoring, and SCF diagnostics
-- **TrainingComponentBase**: Base class for extensible training component development
+- **TrainingComponent**: Base class for extensible training component development
 - **TrainingConfig**: Configuration management for quantum-aware training, loss configuration, and checkpointing
 - **TrainingState**: Enhanced state management with physics metrics, conservation violations, and recovery tracking
 - **TrainingMetrics**: Extensive metrics tracking including physics losses, chemical accuracy, and SCF convergence
@@ -101,7 +101,7 @@ Opifex provides extensive support for modern scientific machine learning paradig
   - **Neural DFT Metrics**: Chemical accuracy, SCF convergence, and density optimization tracking
   - **PINN Metrics**: Physics loss components, boundary condition compliance, and solution accuracy
   - **Quantum Metrics**: State fidelity, circuit depth, and quantum advantage measurements
-- **Authentication Support**: Keycloak authentication with role-based access control
+- **Authentication Support**: Pluggable authentication (planned; not yet implemented)
 - **Deployment Infrastructure**: Kubernetes-native MLOps infrastructure for scalable experiments
 - **Unified API**: Vendor-independent experiment tracking with comparative analysis capabilities
 

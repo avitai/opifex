@@ -376,11 +376,11 @@ The plot shows:
 
 ### API Reference
 
-- [`Interval`](../../../api/geometry.md) — 1D geometry class
-- [`create_poisson_pinn`](../../../api/neural.md) — PINN factory function
-- [`PINNSolver`](../../../api/physics.md) — High-level PINN solver
-- [`PINNConfig`](../../../api/physics.md) — Solver configuration
-- [`poisson_residual`](../../../api/physics.md) — Poisson residual factory
+- [`Interval`](../../api/geometry.md) — 1D geometry class
+- [`create_poisson_pinn`](../../api/neural.md) — PINN factory function
+- [`PINNSolver`](../../api/physics.md) — High-level PINN solver
+- [`PINNConfig`](../../api/physics.md) — Solver configuration
+- [`poisson_residual`](../../api/physics.md) — Poisson residual factory
 
 ### Troubleshooting
 

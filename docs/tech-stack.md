@@ -130,7 +130,6 @@ Modern development tools ensuring code quality, testing, and documentation.
     - Import sorting and organization
 
 - **pytest**: Testing framework
-    - Full test suite (1800+ tests)
     - Parametrized testing
     - Fixture management
     - Coverage reporting
@@ -152,24 +151,22 @@ Modern development tools ensuring code quality, testing, and documentation.
 
 ### Data Management
 
-- **SQLAlchemy**: Database integration with type safety
-- **HDF5**: Large-scale data storage
 - **NumPy**: Numerical array operations
-- **Pandas**: Data manipulation and analysis
+- **SQLAlchemy**: Database integration with type safety (optional, in `platform` extras)
+- **HDF5** (h5py): Large-scale data storage (optional, in `neural-dft`/`scientific-data` extras)
+- **Pandas**: Data manipulation and analysis (optional, in `pdebench` extras)
 
 ### Visualization
 
 - **Matplotlib**: Scientific plotting
 - **Plotly**: Interactive visualizations
-- **Seaborn**: Statistical data visualization
-- **Mayavi**: 3D scientific visualization
 
 ### Security & Quality
 
 - **Bandit**: Security analysis
-- **pydocstyle**: Documentation standards
+- **pydocstyle**: Documentation standards (via pre-commit hook, not a direct dependency)
 - **pre-commit**: Git hook management
-- **mypy**: Static type checking
+- **pyright**: Static type checking
 
 ## 🚀 Performance Characteristics
 

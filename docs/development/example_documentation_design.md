@@ -111,7 +111,7 @@ from opifex.neural.operators.common.embeddings import GridEmbedding2D
 embedding = GridEmbedding2D(in_channels=1, grid_boundaries=[[0, 1], [0, 1]])
 
 # Level 3: Add training loop with optax
-from opifex.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, TrainingConfig
 config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
 trainer = Trainer(model=model, config=config)
 trainer.fit(train_data=(x_train, y_train))
@@ -956,7 +956,7 @@ import optax
 # Opifex
 from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
-from opifex.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, TrainingConfig
 ```
 ````
 
@@ -1464,7 +1464,7 @@ import optax
 
 # Opifex imports
 from opifex.neural.operators.fno import FourierNeuralOperator
-from opifex.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, TrainingConfig
 
 # %% [markdown]
 """
@@ -1708,7 +1708,7 @@ import optax
 # Opifex
 from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
-from opifex.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, TrainingConfig
 
 # Verify setup
 print(f"JAX version: {jax.__version__}")
@@ -2081,7 +2081,7 @@ from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 
 # Opifex submodules (alphabetical)
-from opifex.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, TrainingConfig
 ```
 
 #### Function Documentation

@@ -46,26 +46,28 @@ where:
 #### Implementation
 
 ```python
-from opifex.optimization.meta_optimization import LearnToOptimize, MetaOptimizerConfig
+from opifex.core.training.config import MetaOptimizerConfig
+from opifex.optimization.meta_optimization import LearnToOptimize
 
-config = MetaOptimizerConfig(
+# LearnToOptimize is initialized directly (not via MetaOptimizerConfig)
+l2o = LearnToOptimize(
+    meta_network_layers=[128, 64, 32],
+    base_optimizer="adam",
     meta_learning_rate=1e-3,
-    num_unroll_steps=20,
-    num_meta_epochs=100,
-    adaptation_strategy="cosine_annealing"
+    unroll_steps=20,
+    rngs=nnx.Rngs(42),
 )
 
-l2o = LearnToOptimize(config=config, rngs=nnx.Rngs(42))
-
-# Meta-training phase
-l2o.meta_train(training_problems, num_meta_epochs=100)
-
-# Optimization phase
-optimized_params = l2o.optimize(
+# Compute meta-gradients for training the meta-network
+meta_grads = l2o.compute_meta_gradients(
+    loss_fn=loss_function,
     initial_params=params,
-    objective_fn=loss_function,
-    num_steps=1000
 )
+
+# Compute parameter updates using the learned optimizer
+gradient = jax.grad(loss_function)(params)
+previous_updates = jnp.zeros((0, params.size))
+update = l2o.compute_update(gradient, previous_updates)
 ```
 
 ### 2. Model-Agnostic Meta-Learning (MAML)
@@ -213,22 +215,29 @@ Specialized meta-optimization for quantum mechanical systems:
 Self-consistent field (SCF) convergence acceleration for quantum chemistry:
 
 ```python
-from opifex.optimization.meta_optimization import MetaOptimizer, MetaOptimizerConfig
+from opifex.core.training.config import MetaOptimizerConfig
+from opifex.optimization.meta_optimization import MetaOptimizer
 
 config = MetaOptimizerConfig(
+    meta_algorithm="l2o",
+    base_optimizer="adam",
+    meta_learning_rate=1e-4,
     quantum_aware=True,
-    scf_acceleration=True,
-    energy_convergence_threshold=1e-6,
-    max_scf_iterations=100
+    scf_adaptation=True,
 )
 
 meta_optimizer = MetaOptimizer(config=config, rngs=nnx.Rngs(42))
 
-# Optimize quantum system
-quantum_params = meta_optimizer.optimize_quantum(
-    problem=neural_dft_problem,
-    initial_params=initial_density_matrix,
-    target_accuracy=1e-3  # Chemical accuracy
+# Optimize quantum system using quantum_step
+opt_state = meta_optimizer.init_optimizer_state(orbital_coeffs)
+scf_context = {"iteration": 0, "energy_history": jnp.array([])}
+
+new_coeffs, opt_state, quantum_info = meta_optimizer.quantum_step(
+    energy_fn=energy_function,
+    orbital_coeffs=orbital_coeffs,
+    opt_state=opt_state,
+    scf_context=scf_context,
+    step=0,
 )
 ```
 
@@ -317,20 +326,25 @@ Typical speedups achieved by meta-optimization:
 Meta-optimization can be enhanced with physics-informed constraints:
 
 ```python
-from opifex.optimization.meta_optimization import MetaOptimizer, MetaOptimizerConfig
-from opifex.core.physics.losses import PhysicsInformedLoss
+from opifex.core.training.config import MetaOptimizerConfig
+from opifex.optimization.meta_optimization import MetaOptimizer
+from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 
 # Physics-aware meta-optimization
 config = MetaOptimizerConfig(
-    physics_aware=True,
-    conservation_weighting=True,
-    pde_constraint_strength=1.0
+    meta_algorithm="l2o",
+    base_optimizer="adam",
+    meta_learning_rate=1e-3,
+    adaptation_steps=10,
 )
 
 physics_loss = PhysicsInformedLoss(
-    pde_loss_weight=1.0,
-    boundary_loss_weight=10.0,
-    initial_loss_weight=1.0
+    config=PhysicsLossConfig(
+        physics_loss_weight=1.0,
+        boundary_loss_weight=10.0,
+    ),
+    equation_type="poisson",
+    domain_type="rectangular",
 )
 
 meta_optimizer = MetaOptimizer(config=config, rngs=nnx.Rngs(42))

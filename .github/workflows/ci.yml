@@ -66,6 +66,7 @@ jobs:
       - name: Run tests
         env:
           JAX_PLATFORMS: cpu
+          JAX_ENABLE_X64: "0"
         run: |
           uv run pytest tests/ -v \
             --cov=src/opifex \

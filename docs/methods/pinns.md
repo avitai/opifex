@@ -102,8 +102,7 @@ def loss_fn(model, x_interior, x_boundary):
 # 4. Training
 import optax
 
-optimizer = optax.adam(1e-3)
-opt_state = optimizer.init(nnx.state(model))
+opt = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
 # Generate training points
 x_interior = jax.random.uniform(jax.random.key(0), (1000, 1))
@@ -113,8 +112,7 @@ for step in range(5000):
     loss, grads = nnx.value_and_grad(
         lambda m: loss_fn(m, x_interior, x_boundary)
     )(model)
-    updates, opt_state = optimizer.update(grads, opt_state)
-    nnx.update(model, updates)
+    opt.update(model, grads)
 
     if step % 500 == 0:
         print(f"Step {step}: loss = {loss:.4e}")
@@ -216,13 +214,19 @@ optimizer = HybridOptimizer(HybridOptimizerConfig(
 Use [multilevel training](multilevel-training.md) for hierarchical convergence:
 
 ```python
-from opifex.training.multilevel import CascadeTrainer
+from opifex.training.multilevel import (
+    CascadeTrainer, MultilevelAdam, create_network_hierarchy, prolongate,
+)
 
-trainer = CascadeTrainer(
+hierarchy = create_network_hierarchy(
     input_dim=2, output_dim=1,
-    base_hidden_dims=[64, 64],
-    config=MultilevelConfig(num_levels=3),
-    rngs=nnx.Rngs(0),
+    base_hidden_dims=[64, 64], num_levels=3,
+    coarsening_factor=0.5, rngs=nnx.Rngs(0),
+)
+trainer = CascadeTrainer(
+    hierarchy=hierarchy,
+    optimizer=MultilevelAdam(learning_rate=1e-3),
+    prolongate_fn=prolongate,
 )
 ```
 

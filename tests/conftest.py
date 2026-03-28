@@ -7,6 +7,7 @@ and pytest-env in pyproject.toml — this module does NOT mutate them.
 """
 
 import os
+import sys
 import warnings
 from pathlib import Path
 
@@ -17,40 +18,7 @@ import pytest
 # Project root on sys.path (needed for editable installs to resolve)
 # ---------------------------------------------------------------------------
 project_root = Path(__file__).parent.parent
-import sys
-
-
 sys.path.insert(0, str(project_root))
-
-# ---------------------------------------------------------------------------
-# Lazy imports — resolved at first use, not at collection time
-# ---------------------------------------------------------------------------
-_test_environment = None
-_test_env_initialized = False
-DependencyManager = None
-MockMetricsImplementation = None
-
-
-def _init_test_environment():
-    """Initialize test environment lazily on first use."""
-    global _test_environment, _test_env_initialized, DependencyManager, MockMetricsImplementation  # noqa: PLW0603
-    if _test_env_initialized:
-        return _test_environment
-    _test_env_initialized = True
-    try:
-        from opifex.core.testing_infrastructure import (
-            DependencyManager as _DepMgr,
-            ensure_safe_jax_environment,
-            MockMetricsImplementation as _MockMetrics,
-        )
-
-        DependencyManager = _DepMgr
-        MockMetricsImplementation = _MockMetrics
-        _test_environment = ensure_safe_jax_environment()
-    except ImportError:
-        pass
-    return _test_environment
-
 
 import jax
 import jax.numpy as jnp
@@ -60,22 +28,33 @@ import jax.numpy as jnp
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning, module="jax")
 
+# ---------------------------------------------------------------------------
+# Lazy imports — resolved at first use, not at collection time
+# ---------------------------------------------------------------------------
 _dependency_manager = None
 
 
 def get_dependency_manager():
     """Get the global dependency manager, initializing lazily."""
     global _dependency_manager  # noqa: PLW0603
-    _init_test_environment()
-    if _dependency_manager is None and DependencyManager is not None:
-        _dependency_manager = DependencyManager()
+    if _dependency_manager is None:
+        try:
+            from opifex.core.testing_infrastructure import DependencyManager
+
+            _dependency_manager = DependencyManager()
+        except ImportError:
+            pass
     return _dependency_manager
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def device():
     """Provide a device fixture that works with both CPU and GPU."""
-    # Try to get GPU device first, fall back to CPU
     try:
         devices = jax.devices()
         gpu_devices = [d for d in devices if d.platform == "gpu"]
@@ -94,17 +73,7 @@ def rngs():
 
         return nnx.Rngs(0)
     except ImportError:
-        # Fallback if flax is not available
-        import jax
-
         return jax.random.PRNGKey(0)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def configure_test_environment():
-    """Initialize test environment lazily at session start (not collection time)."""
-    env = _init_test_environment()
-    return env
 
 
 @pytest.fixture(scope="session")
@@ -115,52 +84,65 @@ def dependency_manager():
 
 @pytest.fixture(scope="session")
 def test_environment():
-    """Provide the test environment configuration."""
-    return _init_test_environment()
+    """Provide a minimal test environment description."""
+    from opifex.core.testing_infrastructure import (
+        BackendType,
+        CUDAEnvironment,
+        DependencyStatus,
+        EnvironmentType,
+        TestEnvironment,
+    )
+
+    has_gpu = any(d.platform == "gpu" for d in jax.devices())
+    return TestEnvironment(
+        backend=BackendType.GPU if has_gpu else BackendType.CPU,
+        environment_type=EnvironmentType.GPU_SAFE if has_gpu else EnvironmentType.CPU_ONLY,
+        gpu_available=has_gpu,
+        gpu_safe=has_gpu,
+        cuda_env=CUDAEnvironment(),
+        dependencies={
+            name: DependencyStatus.AVAILABLE
+            for name in ("prometheus_client", "psutil")
+            if (mgr := get_dependency_manager()) and mgr.is_available(name)
+        },
+    )
 
 
 @pytest.fixture
 def mock_prometheus_metrics():
     """Provide a mock Prometheus metrics implementation."""
-    _init_test_environment()
-    if MockMetricsImplementation is not None:
-        return MockMetricsImplementation()
-    return None
+    from opifex.core.testing_infrastructure import MockMetricsImplementation
+
+    return MockMetricsImplementation()
 
 
 @pytest.fixture
 def safe_context():
-    """Provide a safe JAX context for tests."""
-    env = _init_test_environment()
-    if env is not None:
-        from opifex.core.testing_infrastructure import ensure_safe_jax_environment
-
-        ensure_safe_jax_environment()
-
-    # Return a simple context manager that does nothing
+    """Provide a safe JAX context for tests (no-op)."""
     from contextlib import nullcontext
 
     return nullcontext()
 
 
+# ---------------------------------------------------------------------------
+# Hooks
+# ---------------------------------------------------------------------------
+
+
 def pytest_runtest_setup(item):
     """Set up for each test run - ensure clean JAX state."""
-    # Clear any JAX compilation cache to avoid issues
     try:
         jax.clear_caches()
 
-        # If this is a GPU test, ensure GPU memory is available
         if hasattr(item, "get_closest_marker"):
             gpu_marker = item.get_closest_marker("gpu")
             cuda_marker = item.get_closest_marker("cuda")
 
             if gpu_marker or cuda_marker:
-                # Force garbage collection before GPU tests
                 import gc
 
                 gc.collect()
 
-                # Verify GPU is available for GPU-marked tests
                 try:
                     gpu_devices = jax.devices("gpu")
                     if not gpu_devices:
@@ -175,23 +157,18 @@ def pytest_runtest_setup(item):
 def pytest_runtest_teardown(item, nextitem):
     """Teardown after each test run - clean up GPU memory."""
     try:
-        # Clear JAX caches after each test
         jax.clear_caches()
 
-        # Force garbage collection to free GPU memory
         import gc
 
         gc.collect()
 
-        # If this was a GPU test, ensure memory cleanup
         if hasattr(item, "get_closest_marker"):
             gpu_marker = item.get_closest_marker("gpu")
             cuda_marker = item.get_closest_marker("cuda")
 
             if gpu_marker or cuda_marker:
                 try:
-                    # Additional GPU memory cleanup
-                    # Force any pending operations to complete
                     dummy = jnp.array([1.0])
                     dummy.block_until_ready()
                     del dummy
@@ -207,7 +184,6 @@ def setup_test_logging(caplog):
     """Configure logging for individual tests."""
     import logging
 
-    # Set appropriate log levels for testing
     logging.getLogger("opifex").setLevel(logging.WARNING)
     logging.getLogger("jax").setLevel(logging.ERROR)
     logging.getLogger("tensorflow").setLevel(logging.ERROR)
@@ -317,7 +293,6 @@ def pytest_collection_modifyitems(config, items):
     """Modify test collection based on environment capabilities."""
     dep_manager = get_dependency_manager()
 
-    # Handle slow tests
     run_slow = config.getoption("--runslow")
     skip_slow = pytest.mark.skip(reason="need --runslow option to run")
 
@@ -329,7 +304,6 @@ def pytest_collection_modifyitems(config, items):
         return
 
     for item in items:
-        # Handle dependency-required tests
         if item.get_closest_marker("requires_prometheus") and not dep_manager.is_available(
             "prometheus_client"
         ):
@@ -339,27 +313,24 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason="psutil not available"))
 
 
-@pytest.fixture(scope="function")
-def reset_jax_config():
-    """Reset JAX configuration after each test."""
-    yield
-    # Clear JAX compilation cache to prevent memory issues
-    jax.clear_caches()
-
-
 def pytest_runtest_makereport(item, call):
     """Log CUDA-related test failures via logging instead of print."""
     if call.when == "call" and call.excinfo and "CUDA" in str(call.excinfo.value):
         import logging
 
-        logger = logging.getLogger("opifex.tests")
-        env = _init_test_environment()
-        logger.warning(
-            "CUDA-related test failure: %s (JAX_PLATFORMS=%s, gpu_safe=%s)",
+        test_logger = logging.getLogger("opifex.tests")
+        test_logger.warning(
+            "CUDA-related test failure: %s (JAX_PLATFORMS=%s)",
             item.nodeid,
             os.environ.get("JAX_PLATFORMS", "cpu"),
-            getattr(env, "gpu_safe", None),
         )
+
+
+@pytest.fixture(scope="function")
+def reset_jax_config():
+    """Reset JAX configuration after each test."""
+    yield
+    jax.clear_caches()
 
 
 @pytest.fixture(scope="session", autouse=True)

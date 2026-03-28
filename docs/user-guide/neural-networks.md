@@ -39,7 +39,6 @@ quantum_model = QuantumMLP(
     layer_sizes=[3, 128, 128, 1],  # 3D coordinates -> energy
     activation="swish",
     enforce_symmetry=True,
-    precision="float64",  # Chemical accuracy
     rngs=rngs
 )
 
@@ -49,7 +48,7 @@ energy = quantum_model(coords)
 print(f"Molecular energy: {energy}")
 ```
 
-**Available Activations (27 functions):**
+**Available Activations (22 unique functions):**
 
 ```python
 from opifex.neural.activations import get_activation, list_activations
@@ -63,7 +62,7 @@ gelu = get_activation("gelu")
 tanh = get_activation("tanh")
 
 # Scientific activations
-sin = get_activation("sin")
+snake = get_activation("snake")
 gaussian = get_activation("gaussian")
 ```
 
@@ -109,9 +108,8 @@ from opifex.neural.operators import DeepONet, AdaptiveDeepONet, FourierEnhancedD
 
 # Standard DeepONet
 deeponet = DeepONet(
-    branch_layers=[100, 128, 128],  # Branch network (input functions)
-    trunk_layers=[2, 128, 128],     # Trunk network (query points)
-    output_dim=1,                   # Output dimension
+    branch_sizes=[100, 128, 128],   # Branch network (input functions)
+    trunk_sizes=[2, 128, 128],      # Trunk network (query points)
     rngs=rngs
 )
 
@@ -124,19 +122,17 @@ print(f"DeepONet: functions {function_data.shape} + queries {query_points.shape}
 
 # Adaptive DeepONet with dynamic architecture
 adaptive_deeponet = AdaptiveDeepONet(
-    base_branch_layers=[50, 64],
-    base_trunk_layers=[2, 64],
+    base_branch_sizes=[50, 64],
+    base_trunk_sizes=[2, 64],
     adaptation_layers=[32, 16],
-    output_dim=1,
     rngs=rngs
 )
 
 # Fourier-enhanced DeepONet
 fourier_deeponet = FourierEnhancedDeepONet(
-    branch_layers=[100, 128],
-    trunk_layers=[2, 128],
+    branch_sizes=[100, 128],
+    trunk_sizes=[2, 128],
     fourier_modes=8,
-    output_dim=1,
     rngs=rngs
 )
 ```
@@ -259,18 +255,18 @@ from opifex.neural.pinns import MultiScalePINN, create_heat_equation_pinn
 
 # Multi-scale PINN for complex PDEs
 pinn = MultiScalePINN(
-    layers=[50, 50, 50, 1],
-    activation='tanh',
-    physics_loss_weight=1.0,
-    scales=[1, 2, 4],  # Multiple scales
+    input_dim=3,
+    output_dim=1,
+    scales=[1, 2, 4],            # Multiple scales
+    hidden_dims=[50, 50, 50],
     rngs=rngs
 )
 
 # Specialized PINN constructors
 heat_pinn = create_heat_equation_pinn(
-    layers=[50, 50, 50, 1],
-    domain={"x": (0, 1), "y": (0, 1), "t": (0, 1)},
-    diffusivity=0.01,
+    spatial_dim=2,
+    scales=[1, 2, 4],
+    hidden_dims=[50, 50, 50],
     rngs=rngs
 )
 
@@ -291,9 +287,11 @@ from opifex.neural.operators.physics import (
 
 # Physics-informed neural operator
 physics_operator = PhysicsInformedOperator(
-    base_operator="fno",
-    physics_constraints=["conservation", "symmetry"],
-    constraint_weights={"conservation": 1.0, "symmetry": 0.5},
+    layer_sizes=[2, 64, 64, 1],
+    physics_type="pde",
+    activation="gelu",
+    physics_weight=1.0,
+    data_weight=1.0,
     rngs=rngs
 )
 
@@ -333,11 +331,10 @@ edge_features = jax.random.normal(jax.random.PRNGKey(9), (200, 8))
 
 # Graph neural operator
 gno = GraphNeuralOperator(
-    node_features=16,
-    edge_features=8,
+    node_dim=16,
     hidden_dim=32,
-    output_dim=1,
     num_layers=3,
+    edge_dim=8,
     rngs=rngs
 )
 
@@ -359,21 +356,12 @@ print(f"Graph Neural Operator: nodes {node_features.shape} -> {graph_output.shap
 ### Uncertainty Quantification
 
 ```python
-from opifex.neural.bayesian import UncertaintyQuantifier, VariationalConfig
-
-# Bayesian neural network configuration
-variational_config = VariationalConfig(
-    prior_std=0.1,
-    likelihood_std=0.05,
-    method="mean_field",
-    kl_weight=1e-3
-)
+from opifex.neural.bayesian.uncertainty_quantification import UncertaintyQuantifier
 
 # Uncertainty quantifier
 bnn = UncertaintyQuantifier(
-    layers=[32, 32, 1],
-    variational_config=variational_config,
-    rngs=rngs
+    num_samples=100,
+    confidence_level=0.95,
 )
 
 # Prediction with uncertainty
@@ -503,13 +491,16 @@ from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 
 # Configure multi-objective loss
 physics_config = PhysicsLossConfig(
-    pde_weight=1.0,
-    boundary_weight=10.0,
-    initial_weight=1.0,
-    data_weight=1.0
+    data_loss_weight=1.0,
+    physics_loss_weight=1.0,
+    boundary_loss_weight=10.0,
 )
 
-physics_loss = PhysicsInformedLoss(config=physics_config)
+physics_loss = PhysicsInformedLoss(
+    config=physics_config,
+    equation_type="poisson",
+    domain_type="rectangular",
+)
 
 # Custom loss function
 def multi_objective_loss(model, params, x_data, y_data, x_physics):
@@ -522,7 +513,7 @@ def multi_objective_loss(model, params, x_data, y_data, x_physics):
     physics_loss_value = jnp.mean(physics_residual**2)
 
     # Combined loss
-    total_loss = data_loss + physics_config.pde_weight * physics_loss_value
+    total_loss = data_loss + physics_config.physics_loss_weight * physics_loss_value
     return total_loss
 ```
 
@@ -619,7 +610,7 @@ Choose appropriate activations for different physics problems:
 # Recommended activations by problem type
 ACTIVATION_RECOMMENDATIONS = {
     "heat_equation": "tanh",      # Smooth, bounded
-    "wave_equation": "sin",       # Periodic solutions
+    "wave_equation": "snake",     # Periodic solutions
     "navier_stokes": "swish",     # Smooth, unbounded
     "quantum_systems": "gelu",    # Smooth, good gradients
     "optimization": "relu",       # Simple, fast

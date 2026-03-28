@@ -104,8 +104,8 @@ Component-based training architecture with production-grade capabilities.
 ```python
 from opifex.training.basic_trainer import ModularTrainer
 from opifex.core.training.config import TrainingConfig
-from opifex.training.recovery import ErrorRecoveryManager
-from opifex.training.components import FlexibleOptimizerFactory
+from opifex.core.training.components.recovery import ErrorRecoveryManager
+from opifex.core.training.components import FlexibleOptimizerFactory
 
 trainer = ModularTrainer(
     model=model,
@@ -158,7 +158,7 @@ error_manager = ErrorRecoveryManager(
 Optimizer creation with scheduling support.
 
 ```python
-from opifex.training.components import FlexibleOptimizerFactory
+from opifex.core.training.components import FlexibleOptimizerFactory
 
 optimizer_factory = FlexibleOptimizerFactory(
     config={
@@ -203,19 +203,19 @@ metrics = collector.collect_physics_metrics(model, x, y_true)
 - Convergence rates and training diagnostics
 - Real-time performance analytics
 
-### TrainingComponentBase ✅ **NEW**
+### TrainingComponent ✅ **NEW**
 
 Base class for creating custom training components.
 
 ```python
-from opifex.training.components import TrainingComponentBase
+from opifex.core.training.components import TrainingComponent
 
-class CustomComponent(TrainingComponentBase):
-    def initialize(self, **kwargs):
+class CustomComponent(TrainingComponent):
+    def setup(self, model, training_state):
         # Initialize component
         pass
 
-    def update(self, **kwargs):
+    def step(self, model, training_state):
         # Update component state
         pass
 ```
@@ -284,7 +284,7 @@ print(f"Best validation loss: {state.best_val_loss}")
 Hierarchical multi-physics loss composition with adaptive weighting.
 
 ```python
-from opifex.training import PhysicsInformedLoss, PhysicsLossConfig
+from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 
 physics_loss = PhysicsInformedLoss(
     config=PhysicsLossConfig(
@@ -334,8 +334,8 @@ trained_model, history = trainer.train(train_data, val_data)
 ```python
 from opifex.training.basic_trainer import ModularTrainer
 from opifex.core.training.config import TrainingConfig
-from opifex.training.recovery import ErrorRecoveryManager
-from opifex.training.components import FlexibleOptimizerFactory
+from opifex.core.training.components.recovery import ErrorRecoveryManager
+from opifex.core.training.components import FlexibleOptimizerFactory
 
 # Configure components
 error_recovery = ErrorRecoveryManager(config={"max_retries": 5, "gradient_clip_threshold": 1.0})

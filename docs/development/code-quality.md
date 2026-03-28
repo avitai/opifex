@@ -10,8 +10,7 @@ The Opifex framework maintains enterprise-grade code quality through a full infr
 - **Static Analysis**: Complete type safety with pyright and code quality with ruff
 - **Security**: Automated security scanning with bandit
 - **Documentation**: Consistent documentation standards with pydocstyle
-- **Testing**: 1800+ tests with 99.8%+ pass rate
-- **Dependency Management**: SQLAlchemy integration with type safety
+- **Testing**: Extensive test suite with high pass rate
 
 ## 🔧 Pre-commit Infrastructure
 
@@ -133,29 +132,26 @@ The framework uses a full `pyproject.toml` configuration for pyright:
 
 ```toml
 [tool.pyright]
-include = ["opifex", "tests", "examples"]
-exclude = ["**/__pycache__"]
+include = ["src", "tests"]
+exclude = [
+  "**/__pycache__", "**/.venv", "scripts", "memory-bank",
+  "documents", "examples",
+]
 pythonVersion = "3.11"
-pythonPlatform = "All"
-typeCheckingMode = "strict"
+pythonPlatform = "Linux"
+typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnusedImport = true
-reportUnusedClass = true
-reportUnusedFunction = true
 reportDuplicateImport = true
-reportOptionalSubscript = true
-reportOptionalMemberAccess = true
-reportOptionalCall = true
-reportOptionalIterable = true
-reportOptionalContextManager = true
-reportOptionalOperand = true
-reportTypedDictNotRequiredAccess = false
+reportOptionalSubscript = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalCall = "warning"
 ```
 
 #### Key Features
 
-- **Strict Type Checking**: Complete type safety across the entire codebase
+- **Basic Type Checking**: Type safety tuned for JAX/scientific computing compatibility
 - **JAX Integration**: Native support for JAX arrays and transformations
 - **FLAX NNX Compatibility**: Full type coverage for neural network components
 - **SQLAlchemy Integration**: Type-safe database operations
@@ -184,26 +180,23 @@ def neural_operator_forward(
 
 ```toml
 [tool.ruff]
-target-version = "py310"
-line-length = 88
+target-version = "py311"
+line-length = 100
+src = ["src/opifex"]
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "PL",  # pylint
-    "SIM", # flake8-simplify
+    "E", "W", "F", "UP", "I001", "N", "S", "B", "A",
+    "COM", "C4", "ICN", "PIE", "PT", "Q", "RSE", "RET",
+    "SIM", "PL", "TRY", "NPY", "RUF",
+    # ... and more (see pyproject.toml for full list)
 ]
 ignore = [
-    "E501",   # line too long (handled by formatter)
-    "PLR0913", # too many arguments
+    "E741",    # Ambiguous variable name (mathematical variables)
+    "PLR0913", # Too many arguments (scientific functions)
+    # ... (see pyproject.toml for full list)
 ]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
 ```
 
 #### Key Features
@@ -256,8 +249,8 @@ def _check_dirichlet_boundary_condition(self, ...):
 
 ```toml
 [tool.bandit]
-exclude_dirs = ["tests", "examples"]
-skips = ["B101", "B601"]  # Skip assert and shell usage in tests
+exclude_dirs = ["tests", "scripts", "memory-bank", "documents", "custom_modes", ".cursor"]
+skips = ["B404", "B603", "B607", "B602", "B110", "B403", "B301"]
 ```
 
 #### Security Features
@@ -344,16 +337,22 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
+    "-vv",
+    "--tb=short",
     "--strict-markers",
-    "--strict-config",
-    "--cov=opifex",
-    "--cov-report=term-missing",
+    "--disable-warnings",
+    "--cov=src/opifex",
     "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-fail-under=50",
+    "--benchmark-skip",
+    "--timeout=300",
 ]
 markers = [
     "slow: marks tests as slow",
     "gpu: marks tests as requiring GPU",
     "integration: marks tests as integration tests",
+    "benchmark: marks tests as performance benchmarks",
 ]
 ```
 
@@ -364,10 +363,11 @@ markers = [
 uv run pytest tests/ -v
 
 # Run with coverage
-uv run pytest tests/ --cov=opifex --cov-report=html
+uv run pytest tests/ --cov=src/opifex --cov-report=html
 
 # Run specific test categories
-uv run pytest tests/unit/ -v          # Unit tests
+uv run pytest tests/core/ -v          # Core tests
+uv run pytest tests/neural/ -v        # Neural network tests
 uv run pytest tests/integration/ -v   # Integration tests
 uv run pytest -m "not slow" -v       # Skip slow tests
 uv run pytest -m gpu -v              # GPU tests only
@@ -393,7 +393,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
           uv sync
       - name: Run pre-commit
         run: uv run pre-commit run --all-files
@@ -420,7 +420,7 @@ jobs:
 uv run pre-commit run --all-files
 
 # Weekly full check
-uv run pytest tests/ --cov=opifex
+uv run pytest tests/ --cov=src/opifex
 uv run pre-commit autoupdate
 
 # Monthly dependency update
@@ -448,7 +448,7 @@ uv run pre-commit run --all-files
 
 ### Code Style Guidelines
 
-1. **Line Length**: Maximum 88 characters (enforced by ruff)
+1. **Line Length**: Maximum 100 characters (enforced by ruff)
 2. **Import Organization**: Automatic sorting with isort
 3. **Function Complexity**: Keep functions simple and focused
 4. **Variable Naming**: Use descriptive names following PEP 8

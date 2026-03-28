@@ -134,10 +134,10 @@ uv run pre-commit run --all-files
 uv run pytest tests/ -v
 
 # Run tests with coverage
-uv run pytest tests/ --cov=opifex --cov-report=html
+uv run pytest tests/ --cov=src/opifex --cov-report=html
 
 # Full test reporting with JSON output and detailed coverage
-uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
+uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=src/opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
 ### Documentation

@@ -306,7 +306,7 @@ Supported ML frameworks.
 ```python
 from enum import Enum
 
-class Framework(str, Enum):
+class Framework(Enum):
     """Supported ML frameworks."""
     JAX = "jax"
     PYTORCH = "pytorch"
@@ -318,7 +318,7 @@ class Framework(str, Enum):
 Physics domains for specialized tracking.
 
 ```python
-class PhysicsDomain(str, Enum):
+class PhysicsDomain(Enum):
     """Physics domains for scientific ML."""
     NEURAL_OPERATORS = "neural-operators"
     PINNS = "pinn"
@@ -477,30 +477,12 @@ if MLFLOW_AVAILABLE:
 
 ### Custom Backends
 
-Implement custom tracking backends.
+To implement a custom tracking backend, follow the pattern of the `MLflowBackend` class
+and pass it directly to `ExperimentTracker`.
 
 ```python
-from opifex.mlops.backends import BackendInterface
-
-class CustomBackend(BackendInterface):
-    """Custom experiment tracking backend."""
-
-    def start_run(self, run_name, config):
-        """Start new run in custom system."""
-        pass
-
-    def log_metrics(self, metrics, step):
-        """Log metrics to custom system."""
-        pass
-
-    def log_model(self, model, path):
-        """Log model to custom system."""
-        pass
-
-    # Implement other required methods...
-
 # Use custom backend
-tracker = ExperimentTracker(backend=CustomBackend())
+tracker = ExperimentTracker(backend=my_custom_backend)
 ```
 
 ## Integration Examples

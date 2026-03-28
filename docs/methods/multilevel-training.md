@@ -54,7 +54,7 @@ trainer = CascadeTrainer(
 )
 
 # Current model (Level 0 - Coarsest)
-model = trainer.model
+model = trainer.get_current_model()
 ```
 
 ### Multilevel Optimization
@@ -77,8 +77,8 @@ optimizer.update(model, grads)
 ```python
 # Iterate until finest level is completed
 while True:
-    model = trainer.model
-    level = trainer.current_level_index
+    model = trainer.get_current_model()
+    level = trainer.current_level
 
     print(f"Training Level {level}")
 
@@ -86,13 +86,12 @@ while True:
     for epoch in range(100):
         grads = nnx.grad(loss_fn)(model, batch)
         # Update model and optimizer state
-        trainer.step(grads)
-
-    if trainer.is_at_finest:
-        break
+        optimizer.update(model, grads)
 
     # Advance to next level (automatically prolongates model and optimizer state)
-    trainer.advance_level()
+    # Returns False if already at finest level
+    if not trainer.advance_level():
+        break
 ```
 
 ### Transfer Operators
@@ -215,10 +214,10 @@ from opifex.training.adaptive_sampling import RADSampler
 
 sampler = RADSampler()
 
-while not trainer.is_at_finest():
+while True:
     model = trainer.get_current_model()
 
-    for epoch in range(trainer.get_epochs_for_current_level()):
+    for epoch in range(100):
         # Compute residuals
         residuals = compute_residual(model, all_points)
 
@@ -229,7 +228,8 @@ while not trainer.is_at_finest():
         loss, grads = nnx.value_and_grad(loss_fn)(model, batch)
         # ...
 
-    trainer.advance_level()
+    if not trainer.advance_level():
+        break
 ```
 
 **With GradNorm:**
@@ -239,13 +239,13 @@ from opifex.core.physics.gradnorm import GradNormBalancer
 
 balancer = GradNormBalancer(num_losses=3, rngs=nnx.Rngs(0))
 
-while not trainer.is_at_finest():
+while True:
     model = trainer.get_current_model()
 
     # Reset balancer for each level
     balancer._initial_losses = None
 
-    for epoch in range(trainer.get_epochs_for_current_level()):
+    for epoch in range(100):
         losses = compute_losses(model)
 
         if epoch == 0:
@@ -254,7 +254,8 @@ while not trainer.is_at_finest():
         weighted_loss = balancer.compute_weighted_loss(losses)
         # ...
 
-    trainer.advance_level()
+    if not trainer.advance_level():
+        break
 ```
 
 **With Second-Order Optimization:**
@@ -265,17 +266,20 @@ from opifex.optimization.second_order import (
     HybridOptimizerConfig,
 )
 
-while not trainer.is_at_finest():
+while True:
     model = trainer.get_current_model()
+    level = trainer.current_level
+    is_finest = level == len(trainer.hierarchy) - 1
 
     # Use Adam at coarse levels, hybrid at finest
-    if trainer.is_at_finest():
-        optimizer = HybridOptimizer(HybridOptimizerConfig())
+    if is_finest:
+        opt = HybridOptimizer(HybridOptimizerConfig())
     else:
-        optimizer = optax.adam(1e-3)
+        opt = optax.adam(1e-3)
 
     # ... training ...
-    trainer.advance_level()
+    if not trainer.advance_level():
+        break
 ```
 
 ### Monitoring Progress
@@ -284,13 +288,13 @@ while not trainer.is_at_finest():
 # Track loss at each level
 level_losses = []
 
-while not trainer.is_at_finest():
+while True:
     model = trainer.get_current_model()
     level = trainer.current_level
 
     # Training
     losses = []
-    for epoch in range(trainer.get_epochs_for_current_level()):
+    for epoch in range(100):
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         losses.append(float(loss))
         # ... update ...
@@ -301,7 +305,8 @@ while not trainer.is_at_finest():
         'improvement': losses[0] / losses[-1],
     })
 
-    trainer.advance_level()
+    if not trainer.advance_level():
+        break
 
 # Analyze progression
 for info in level_losses:
@@ -312,10 +317,16 @@ for info in level_losses:
 ## Complete Training Example
 
 ```python
+import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
-from opifex.training.multilevel import CascadeTrainer, MultilevelConfig
+from opifex.training.multilevel import (
+    CascadeTrainer,
+    MultilevelAdam,
+    create_network_hierarchy,
+    prolongate,
+)
 
 # Problem setup
 def pde_residual(model, x):
@@ -336,19 +347,22 @@ def loss_fn(model, x_interior, x_boundary):
 
     return pde_loss + 10.0 * bc_loss
 
-# Create multilevel trainer
-config = MultilevelConfig(
-    num_levels=3,
-    coarsening_factor=0.5,
-    level_epochs=[100, 200, 500],
-)
-
-trainer = CascadeTrainer(
+# Create hierarchy and trainer
+hierarchy = create_network_hierarchy(
     input_dim=2,
     output_dim=1,
     base_hidden_dims=[64, 64],
-    config=config,
+    num_levels=3,
+    coarsening_factor=0.5,
     rngs=nnx.Rngs(42),
+)
+
+optimizer = MultilevelAdam(learning_rate=1e-3)
+
+trainer = CascadeTrainer(
+    hierarchy=hierarchy,
+    optimizer=optimizer,
+    prolongate_fn=prolongate,
 )
 
 # Training data
@@ -356,12 +370,11 @@ x_interior = jax.random.uniform(jax.random.key(0), (1000, 2))
 x_boundary = generate_boundary_points(100)
 
 # Multilevel training loop
-for level in range(config.num_levels):
+level_epochs = [100, 200, 500]
+while True:
     model = trainer.get_current_model()
-    epochs = trainer.get_epochs_for_current_level()
-
-    optimizer = optax.adam(1e-3)
-    opt_state = optimizer.init(nnx.state(model))
+    level = trainer.current_level
+    epochs = level_epochs[level]
 
     print(f"\n--- Level {level} ---")
     for epoch in range(epochs):
@@ -369,14 +382,13 @@ for level in range(config.num_levels):
             lambda m: loss_fn(m, x_interior, x_boundary)
         )(model)
 
-        updates, opt_state = optimizer.update(grads, opt_state)
-        nnx.update(model, updates)
+        optimizer.update(model, grads)
 
         if epoch % 50 == 0:
             print(f"Epoch {epoch}: loss = {loss:.4e}")
 
-    if not trainer.is_at_finest():
-        trainer.advance_level()
+    if not trainer.advance_level():
+        break
 
 # Final model
 final_model = trainer.get_current_model()

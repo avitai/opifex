@@ -126,5 +126,5 @@ Backend:      gpu
 ## Next Steps
 
 - Download real PDEBench data from [PDEBench](https://github.com/pdebench/PDEBench)
-- Train an FNO on the loaded data — see [FNO Darcy](../models/fno_darcy_comprehensive.md)
+- Train an FNO on the loaded data — see [FNO Darcy](../neural-operators/fno-darcy.md)
 - See [Darcy Flow Analysis](darcy-flow-analysis.md) for a related data example

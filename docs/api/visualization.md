@@ -298,50 +298,6 @@ def create_physics_animation(
     """
 ```
 
-### Advanced Animation Features
-
-```python
-# Create multi-panel animations
-def create_comparison_animation(
-    trajectories: List[Array],
-    titles: List[str],
-    times: Optional[Array] = None,
-    **kwargs
-) -> animation.FuncAnimation:
-    """
-    Animate multiple fields side-by-side for comparison.
-
-    Args:
-        trajectories: List of time-dependent fields
-        titles: Title for each panel
-        times: Shared time values
-        **kwargs: Additional arguments passed to create_physics_animation
-
-    Returns:
-        matplotlib FuncAnimation object
-    """
-
-# Add overlays (e.g., sensor locations, boundaries)
-def create_annotated_animation(
-    trajectory: Array,
-    annotations: Dict[str, Any],
-    **kwargs
-) -> animation.FuncAnimation:
-    """
-    Create animation with custom annotations.
-
-    Args:
-        trajectory: Time-dependent field
-        annotations: Dictionary specifying overlays:
-            - 'points': Array of (x, y) coordinates
-            - 'lines': List of line segments
-            - 'text': List of text labels
-        **kwargs: Additional arguments
-
-    Returns:
-        matplotlib FuncAnimation object
-    """
-```
 
 ## Performance Visualization
 
@@ -463,165 +419,6 @@ def plot_model_complexity_comparison(
     """
 ```
 
-## Integration with Training
-
-### Training Progress Visualization
-
-```python
-from opifex.visualization import plot_training_curves
-
-def plot_training_curves(
-    history: Dict[str, List[float]],
-    metrics: Optional[List[str]] = None,
-    smoothing: float = 0.0,
-    log_scale: bool = False
-) -> plt.Figure:
-    """
-    Plot training and validation curves.
-
-    Args:
-        history: Dictionary mapping metric names to value lists
-            Example: {'train_loss': [...], 'val_loss': [...]}
-        metrics: Specific metrics to plot (None = all)
-        smoothing: Exponential smoothing factor (0 = none, 1 = max)
-        log_scale: Use logarithmic scale for y-axis
-
-    Returns:
-        matplotlib Figure object
-
-    Example:
-        >>> from opifex.training import BasicTrainer
-        >>> trainer = BasicTrainer(model, dataset)
-        >>> history = trainer.train(epochs=100)
-        >>> fig = plot_training_curves(
-        ...     history,
-        ...     metrics=['train_loss', 'val_loss'],
-        ...     smoothing=0.6
-        ... )
-    """
-```
-
-## Customization and Styling
-
-### Publication-Quality Plots
-
-```python
-from opifex.visualization import set_publication_style
-
-def set_publication_style(style: str = 'default'):
-    """
-    Configure matplotlib for publication-quality figures.
-
-    Args:
-        style: Style preset:
-            - 'default': Opifex default style
-            - 'nature': Nature journal style
-            - 'ieee': IEEE style
-            - 'thesis': Thesis/dissertation style
-
-    Example:
-        >>> set_publication_style('nature')
-        >>> fig = plot_2d_field(field)
-        >>> fig.savefig('figure.pdf', dpi=300, bbox_inches='tight')
-    """
-```
-
-### Custom Colormaps
-
-```python
-from opifex.visualization import create_custom_colormap
-
-def create_custom_colormap(
-    name: str,
-    colors: List[str],
-    n_bins: int = 256
-) -> mcolors.LinearSegmentedColormap:
-    """
-    Create custom colormap for specific visualization needs.
-
-    Args:
-        name: Colormap name
-        colors: List of color specifications (hex, RGB, or names)
-        n_bins: Number of discrete color levels
-
-    Returns:
-        matplotlib colormap object
-
-    Example:
-        >>> # Create physics-specific colormap
-        >>> cmap = create_custom_colormap(
-        ...     'pressure',
-        ...     ['#0000FF', '#FFFFFF', '#FF0000'],
-        ...     n_bins=256
-        ... )
-        >>> fig = plot_2d_field(pressure_field, cmap=cmap)
-    """
-```
-
-## Performance Considerations
-
-### Large Dataset Visualization
-
-```python
-# For large fields, downsample before plotting
-from opifex.visualization import downsample_field
-
-def downsample_field(
-    field: Array,
-    target_size: Tuple[int, int],
-    method: str = 'mean'
-) -> Array:
-    """
-    Downsample field for faster visualization.
-
-    Args:
-        field: High-resolution field
-        target_size: Target (nx, ny) for visualization
-        method: Downsampling method ('mean', 'max', 'min')
-
-    Returns:
-        Downsampled field
-    """
-
-# Example usage
-high_res_field = solution  # Shape: (4096, 4096)
-vis_field = downsample_field(high_res_field, (512, 512))
-fig = plot_2d_field(vis_field)
-```
-
-### Batch Visualization
-
-```python
-from opifex.visualization import plot_batch_grid
-
-def plot_batch_grid(
-    batch: Array,
-    num_samples: int = 16,
-    titles: Optional[List[str]] = None,
-    **kwargs
-) -> plt.Figure:
-    """
-    Visualize multiple samples from a batch in grid layout.
-
-    Args:
-        batch: Batch of fields, shape (batch_size, nx, ny)
-        num_samples: Number of samples to display
-        titles: Optional title for each sample
-        **kwargs: Additional arguments passed to plot_2d_field
-
-    Returns:
-        matplotlib Figure object
-
-    Example:
-        >>> # Visualize batch of predictions
-        >>> predictions = model(test_batch)  # Shape: (64, 128, 128)
-        >>> fig = plot_batch_grid(
-        ...     predictions,
-        ...     num_samples=16,
-        ...     cmap='viridis'
-        ... )
-    """
-```
 
 ## Integration Examples
 
@@ -636,8 +433,6 @@ from opifex.training import BasicTrainer, TrainingConfig
 from opifex.visualization import (
     plot_field_comparison,
     create_physics_animation,
-    plot_training_curves,
-    set_publication_style
 )
 
 # Setup data loader
@@ -660,11 +455,6 @@ model = FourierNeuralOperator(
 config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
 trainer = BasicTrainer(model, config)
 trained_model, history = trainer.train(train_loader)
-
-# Visualize training progress
-set_publication_style('default')
-fig1 = plot_training_curves(history)
-fig1.savefig('training_curves.pdf')
 
 # Compare predictions
 test_sample = dataset[0]

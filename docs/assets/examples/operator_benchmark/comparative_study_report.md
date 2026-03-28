@@ -4,7 +4,7 @@
 
 ## Executive Summary
 
-This report presents a full comparative analysis of 3 neural operators across 1 datasets and 1 resolutions.
+This report presents a full comparative analysis of 3 neural operators across 1 dataset and 1 resolution.
 
 ## Neural Operators Analyzed
 

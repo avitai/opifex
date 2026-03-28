@@ -220,7 +220,7 @@ Distributed training complete!
 
 ### API Reference
 
-- [`DistributedConfig`](../../../api/distributed/config.md) — Mesh configuration
-- [`DistributedManager`](../../../api/distributed/manager.md) — Device mesh manager
-- [`TrainingConfig`](../../../api/core/training/config.md) — Training configuration
-- [`Trainer`](../../../api/core/training/trainer.md) — Training loop
+- [`DistributedConfig`](../../api/core.md) — Mesh configuration
+- [`DistributedManager`](../../api/core.md) — Device mesh manager
+- [`TrainingConfig`](../../api/training.md) — Training configuration
+- [`Trainer`](../../api/training.md) — Training loop

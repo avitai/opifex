@@ -84,17 +84,15 @@ training_config = TrainingConfig(
     num_epochs=10,  # Reduced for demonstration
     batch_size=10,
     learning_rate=1e-3,
-    scheduler="cosine_annealing",
-    early_stopping_patience=5
 )
 
 trainer = Trainer(model=fno_2d, config=training_config)
-trained_fno, history = trainer.train(
+trained_fno, history = trainer.fit(
     train_data=(train_inputs, train_outputs),
     val_data=(val_inputs, val_outputs)
 )
 
-print(f"FNO training completed. Final validation loss: {history.val_loss[-1]:.6f}")
+print(f"FNO training completed. Final validation loss: {history['final_val_loss']:.6f}")
 
 # Test prediction
 test_input = val_inputs[0:1]
@@ -160,11 +158,11 @@ def generate_antiderivative_data(n_samples=1000):
 antiderivative_inputs, antiderivative_outputs = generate_antiderivative_data()
 
 deeponet_trainer = Trainer(model=deeponet, config=training_config)
-trained_deeponet, deeponet_history = deeponet_trainer.train(
+trained_deeponet, deeponet_history = deeponet_trainer.fit(
     train_data=(antiderivative_inputs, antiderivative_outputs)
 )
 
-print(f"DeepONet training completed. Final loss: {deeponet_history.train_loss[-1]:.6f}")
+print(f"DeepONet training completed. Final loss: {deeponet_history['final_train_loss']:.6f}")
 ```
 
 ### 3. Graph Neural Operators (GNO)
@@ -217,142 +215,13 @@ def generate_irregular_mesh_data(n_samples=500):
 mesh_data, solution_data = generate_irregular_mesh_data()
 
 gno_trainer = Trainer(model=gno, config=training_config)
-trained_gno, gno_history = gno_trainer.train(
+trained_gno, gno_history = gno_trainer.fit(
     train_data=(mesh_data, solution_data)
 )
 
 print(f"GNO training completed on irregular meshes")
 ```
 
-
-## Scientific Applications
-
-### 1. Computational Fluid Dynamics
-
-Neural operators for fluid flow problems:
-
-```python
-from opifex.neural.operators import FluidDynamicsOperator
-
-# Navier-Stokes operator
-ns_config = {
-    "reynolds_number_range": [100, 10000],
-    "geometry_types": ["cylinder", "airfoil", "backward_step"],
-    "boundary_conditions": ["no_slip", "slip", "periodic"],
-    "compressibility": "incompressible"
-}
-
-ns_operator = FluidDynamicsOperator(
-    base_operator=fno_2d,
-    config=ns_config,
-    rngs=nnx.Rngs(42)
-)
-
-# Generate CFD training data
-def generate_cfd_data(n_samples=1000):
-    """Generate CFD training data with varying Reynolds numbers and geometries."""
-    geometries = []
-    flow_fields = []
-
-    for i in range(n_samples):
-        # Random geometry
-        if i % 3 == 0:
-            geometry = generate_cylinder_geometry(radius=jax.random.uniform(key, (), 0.1, 0.3))
-        elif i % 3 == 1:
-            geometry = generate_airfoil_geometry(angle_of_attack=jax.random.uniform(key, (), -10, 10))
-        else:
-            geometry = generate_backward_step_geometry(step_height=jax.random.uniform(key, (), 0.1, 0.5))
-
-        # Random Reynolds number
-        reynolds = jax.random.uniform(key, (), 100, 10000)
-
-        # Solve Navier-Stokes
-        velocity, pressure = solve_navier_stokes(
-            geometry=geometry,
-            reynolds_number=reynolds,
-            inlet_velocity=1.0
-        )
-
-        geometries.append(geometry)
-        flow_fields.append(jnp.stack([velocity[..., 0], velocity[..., 1], pressure], axis=-1))
-
-    return geometries, flow_fields
-
-# Train CFD operator
-cfd_inputs, cfd_outputs = generate_cfd_data()
-cfd_trainer = Trainer(model=ns_operator, config=training_config)
-trained_cfd_operator, cfd_history = cfd_trainer.train(
-    train_data=(cfd_inputs, cfd_outputs)
-)
-
-print(f"CFD operator training completed")
-
-# Test on new geometry
-new_geometry = generate_custom_geometry()
-predicted_flow = trained_cfd_operator(new_geometry[None, ...])[0]
-print(f"Flow prediction shape: {predicted_flow.shape}")
-```
-
-### 2. Climate and Weather Modeling
-
-Large-scale atmospheric and oceanic modeling:
-
-```python
-from opifex.neural.operators import ClimateOperator, AtmosphericModel
-
-# Configure climate operator
-climate_config = {
-    "variables": ["temperature", "pressure", "humidity", "wind_u", "wind_v"],
-    "vertical_levels": 20,
-    "time_step_hours": 6,
-    "spatial_resolution": "1deg",
-    "physics_parameterizations": ["convection", "radiation", "boundary_layer"]
-}
-
-climate_operator = ClimateOperator(
-    base_operator=attention_operator,  # Good for global patterns
-    config=climate_config,
-    rngs=nnx.Rngs(42)
-)
-
-# Generate climate training data
-def generate_climate_data(n_samples=500):
-    """Generate climate reanalysis training data."""
-    atmospheric_states = []
-    future_states = []
-
-    # Load historical reanalysis data
-    reanalysis_data = load_era5_data(years=range(1980, 2020))
-
-    for i in range(n_samples):
-        # Random time window
-        start_time = jax.random.randint(key, (), 0, len(reanalysis_data) - 24)
-
-        # Current atmospheric state
-        current_state = reanalysis_data[start_time]
-
-        # Future state (24 hours later)
-        future_state = reanalysis_data[start_time + 4]  # 4 * 6 hours = 24 hours
-
-        atmospheric_states.append(current_state)
-        future_states.append(future_state)
-
-    return atmospheric_states, future_states
-
-# Train climate operator
-climate_inputs, climate_outputs = generate_climate_data()
-climate_trainer = Trainer(model=climate_operator, config=training_config)
-trained_climate_operator, climate_history = climate_trainer.train(
-    train_data=(climate_inputs, climate_outputs)
-)
-
-print(f"Climate operator training completed")
-
-# Weather forecasting
-current_weather = get_current_atmospheric_state()
-weather_forecast = trained_climate_operator(current_weather[None, ...])[0]
-print(f"24-hour weather forecast generated")
-```
 
 ## Integration with Opifex Ecosystem
 
@@ -361,54 +230,19 @@ print(f"24-hour weather forecast generated")
 Combine neural operators with physics-informed training:
 
 ```python
-from opifex.core.physics.losses import PhysicsInformedLoss
-from opifex.neural.operators import PhysicsInformedOperatorTraining
+from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 
-# Define PDE residual for Navier-Stokes
-def navier_stokes_residual(u, v, p, x, y, t, reynolds):
-    """Compute Navier-Stokes residual."""
-    # Velocity derivatives
-    u_t = jax.grad(u, argnums=2)(x, y, t)
-    u_x = jax.grad(u, argnums=0)(x, y, t)
-    u_y = jax.grad(u, argnums=1)(x, y, t)
-    u_xx = jax.grad(jax.grad(u, argnums=0), argnums=0)(x, y, t)
-    u_yy = jax.grad(jax.grad(u, argnums=1), argnums=1)(x, y, t)
-
-    v_t = jax.grad(v, argnums=2)(x, y, t)
-    v_x = jax.grad(v, argnums=0)(x, y, t)
-    v_y = jax.grad(v, argnums=1)(x, y, t)
-    v_xx = jax.grad(jax.grad(v, argnums=0), argnums=0)(x, y, t)
-    v_yy = jax.grad(jax.grad(v, argnums=1), argnums=1)(x, y, t)
-
-    # Pressure derivatives
-    p_x = jax.grad(p, argnums=0)(x, y, t)
-    p_y = jax.grad(p, argnums=1)(x, y, t)
-
-    # Navier-Stokes equations
-    continuity = u_x + v_y
-    momentum_x = u_t + u * u_x + v * u_y + p_x - (1/reynolds) * (u_xx + u_yy)
-    momentum_y = v_t + u * v_x + v * v_y + p_y - (1/reynolds) * (v_xx + v_yy)
-
-    return continuity, momentum_x, momentum_y
-
-# Physics-informed operator training
-pi_operator_trainer = PhysicsInformedOperatorTraining(
-    model=ns_operator,
-    pde_residual_fn=navier_stokes_residual,
-    physics_weight=0.1,
-    boundary_weight=10.0
+# Configure physics-informed loss
+physics_config = PhysicsLossConfig(
+    physics_loss_weight=0.1,
+    boundary_loss_weight=10.0,
 )
 
-# Train with physics constraints
-pi_training_result = pi_operator_trainer.train(
-    data_points=cfd_data,
-    physics_points=physics_collocation_points,
-    boundary_points=boundary_points,
-    num_epochs=500
+physics_loss = PhysicsInformedLoss(
+    config=physics_config,
+    equation_type="navier_stokes",
+    domain_type="rectangular",
 )
-
-print(f"Physics-informed operator training completed")
-print(f"PDE residual: {pi_training_result.final_pde_residual:.6f}")
 ```
 
 ### 2. Optimization Integration
@@ -416,25 +250,28 @@ print(f"PDE residual: {pi_training_result.final_pde_residual:.6f}")
 Use advanced optimization for neural operator training:
 
 ```python
+from opifex.core.training.config import MetaOptimizerConfig
 from opifex.optimization.meta_optimization import MetaOptimizer
 
 # Meta-optimizer for neural operators
 meta_config = MetaOptimizerConfig(
-    operator_aware=True,
-    spectral_regularization=True,
-    multi_scale_optimization=True,
-    meta_learning_rate=1e-3
+    meta_algorithm="l2o",
+    base_optimizer="adam",
+    meta_learning_rate=1e-3,
+    adaptation_steps=10,
 )
 
 meta_optimizer = MetaOptimizer(config=meta_config, rngs=nnx.Rngs(42))
 
-# Optimize neural operator training
-optimized_operator = meta_optimizer.optimize_operator(
-    operator=fno_2d,
-    training_data=operator_training_data,
-    validation_data=operator_validation_data,
-    num_meta_epochs=100
-)
+# Use step-by-step optimization
+opt_state = meta_optimizer.init_optimizer_state(params)
+for step_idx in range(100):
+    params, opt_state, meta_info = meta_optimizer.step(
+        loss_fn=loss_function,
+        params=params,
+        opt_state=opt_state,
+        step=step_idx,
+    )
 
 print(f"Meta-optimization for neural operators completed")
 ```

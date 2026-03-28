@@ -40,8 +40,6 @@ class ModelServer:
         timeout_ms: Request timeout in milliseconds
 
     Example:
-        >>> from opifex.neural.operators.fno import FNO
-        >>> model = FNO.load_from_checkpoint('model.ckpt')
         >>> config = DeploymentConfig(
         ...     host='0.0.0.0',
         ...     port=8000,
@@ -597,9 +595,9 @@ class KubernetesOrchestrator:
 Monitor deployment health and performance.
 
 ```python
-from opifex.deployment.monitoring import HealthMonitor
+from opifex.deployment.monitoring.health import HealthChecker
 
-class HealthMonitor:
+class HealthChecker:
     """
     Monitor deployment health and performance.
 
@@ -618,7 +616,7 @@ class HealthMonitor:
             Health status dictionary
 
         Example:
-            >>> monitor = HealthMonitor(server)
+            >>> monitor = HealthChecker(server)
             >>> status = monitor.check_health()
             >>> if status['healthy']:
             ...     print("System healthy")
@@ -649,10 +647,9 @@ class HealthMonitor:
 
 ```python
 from opifex.deployment import ModelServer, DeploymentConfig
-from opifex.neural.operators.fno import FNO
 
-# Load trained model
-model = FNO.load_from_checkpoint('checkpoints/fno_best.ckpt')
+# Load trained model (use your preferred checkpoint loading method)
+# model = ...
 
 # Configure server
 config = DeploymentConfig(
@@ -753,8 +750,8 @@ orchestrator.deploy(
 )
 
 # Monitor
-from opifex.deployment.monitoring import HealthMonitor
-monitor = HealthMonitor(orchestrator)
+from opifex.deployment.monitoring.health import HealthChecker
+monitor = HealthChecker(orchestrator)
 metrics = monitor.get_metrics()
 print(f"Current RPS: {metrics['requests_per_second']}")
 print(f"P95 latency: {metrics['p95_latency_ms']} ms")

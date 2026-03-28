@@ -1,4 +1,8 @@
-# FBPINN: Finite Basis PINN on Damped Harmonic Oscillator
+# FBPINN: Finite Basis PINN on Damped Harmonic Oscillator {#fbpinn-harmonic-oscillator}
+
+!!! note "Filename Note"
+    The filename `fbpinn-poisson` is a historical artifact. This example solves a
+    **damped harmonic oscillator** ODE, not the Poisson equation.
 
 | Metadata          | Value                            |
 |-------------------|----------------------------------|

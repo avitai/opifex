@@ -348,18 +348,19 @@ from opifex.training.multilevel import CascadeTrainer
 trainer = CascadeTrainer(...)
 sampler = RADSampler()
 
-while not trainer.is_at_finest():
+while True:
     model = trainer.get_current_model()
 
     # Use adaptive sampling at each level
-    for epoch in range(trainer.get_epochs_for_current_level()):
+    for epoch in range(100):
         residuals = compute_pde_residual(model, all_points)
         batch = sampler.sample(all_points, residuals, batch_size, key)
 
         loss, grads = nnx.value_and_grad(loss_fn)(model, batch)
         # ...
 
-    trainer.advance_level()
+    if not trainer.advance_level():
+        break
 ```
 
 ## Complete Training Example

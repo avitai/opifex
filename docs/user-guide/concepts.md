@@ -63,24 +63,28 @@ Define scientific problems with full specification capabilities:
 
 ```python
 from opifex.core.problems import create_pde_problem
+from opifex.core.conditions import DirichletBC
+from opifex.geometry import Rectangle
 
-# Define heat equation problem
-def heat_equation(x, y, t, u, u_derivatives, params):
+# Define heat equation residual
+def heat_equation(x, u, u_derivatives):
     """Heat equation: du/dt - alpha * (d2u/dx2 + d2u/dy2) = 0"""
-    alpha = params.get('diffusivity', 0.01)
     u_t = u_derivatives['t']
     u_xx = u_derivatives['xx']
     u_yy = u_derivatives['yy']
+    alpha = 0.01
     return u_t - alpha * (u_xx + u_yy)
 
+# Define geometry and boundary conditions
+geometry = Rectangle(center=jnp.array([0.5, 0.5]), width=1.0, height=1.0)
+
 problem = create_pde_problem(
-    domain={"x": (0, 1), "y": (0, 1), "t": (0, 1)},
+    geometry=geometry,
     equation=heat_equation,
     boundary_conditions=[
-        {"type": "dirichlet", "boundary": "left", "value": 0.0},
-        {"type": "dirichlet", "boundary": "right", "value": 1.0}
+        DirichletBC(boundary="left", value=0.0),
+        DirichletBC(boundary="right", value=1.0),
     ],
-    initial_conditions={"u": lambda x, y: 0.5 * (x + y)},
     parameters={"diffusivity": 0.01}
 )
 ```
@@ -179,24 +183,29 @@ manifold_points = sphere.sample_points(n_points=50, key=key)
 Neural networks that incorporate physical laws as soft constraints during training:
 
 ```python
-from opifex.neural.pinns import MultiScalePINN
+from opifex.neural.pinns.multi_scale import MultiScalePINN
 from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 
 # Create multi-scale PINN
 pinn = MultiScalePINN(
-    layers=[50, 50, 50, 1],
-    activation='tanh',
-    physics_loss_weight=1.0,
+    input_dim=2,
+    output_dim=1,
+    scales=[1, 2, 4],
+    hidden_dims=[50, 50, 50],
     rngs=rngs
 )
 
 # Configure physics-informed loss
 physics_config = PhysicsLossConfig(
-    pde_weight=1.0,
-    boundary_weight=10.0,
-    initial_weight=1.0
+    physics_loss_weight=1.0,
+    boundary_loss_weight=10.0,
+    data_loss_weight=1.0
 )
-physics_loss = PhysicsInformedLoss(config=physics_config)
+physics_loss = PhysicsInformedLoss(
+    config=physics_config,
+    equation_type="heat",
+    domain_type="rectangular"
+)
 ```
 
 **Key Features:**
@@ -227,21 +236,8 @@ fno = FourierNeuralOperator(
 
 # Deep Operator Network
 deeponet = DeepONet(
-    branch_layers=[100, 128, 128],
-    trunk_layers=[2, 128, 128],
-    output_dim=1,
-    rngs=rngs
-)
-
-# Unified operator interface
-operator = OperatorNetwork(
-    operator_type="fno",
-    config={
-        "in_channels": 2,
-        "out_channels": 1,
-        "hidden_channels": 64,
-        "modes": 16
-    },
+    branch_sizes=[100, 128, 128],
+    trunk_sizes=[2, 128, 128],
     rngs=rngs
 )
 ```
@@ -264,9 +260,8 @@ from opifex.neural.base import QuantumMLP
 # Quantum-aware neural network
 quantum_net = QuantumMLP(
     layer_sizes=[3, 128, 128, 1],  # 3D coordinates -> energy
-    activation="swish",
-    enable_symmetry=True,
-    precision="float64",  # Chemical accuracy
+    activation="tanh",
+    enforce_symmetry=True,
     rngs=rngs
 )
 
@@ -281,23 +276,19 @@ print(f"Molecular energy: {energy}")
 Uncertainty quantification in scientific computations:
 
 ```python
-from opifex.neural.bayesian import UncertaintyQuantifier, VariationalConfig
+from opifex.neural.bayesian.uncertainty_quantification import UncertaintyQuantifier
 
-# Bayesian neural network
-bnn = UncertaintyQuantifier(
-    layers=[32, 32, 1],
-    variational_config=VariationalConfig(
-        prior_std=0.1,
-        likelihood_std=0.05,
-        method="mean_field"
-    ),
-    rngs=rngs
+# Uncertainty quantification interface
+uq = UncertaintyQuantifier(
+    num_samples=100,
+    confidence_level=0.95
 )
 
-# Prediction with uncertainty
-x_test = jax.random.normal(jax.random.PRNGKey(3), (100, 2))
-mean, std = bnn.predict_with_uncertainty(x_test, n_samples=100)
-print(f"Prediction uncertainty: mean±std = {jnp.mean(mean):.3f}±{jnp.mean(std):.3f}")
+# Decompose uncertainty from model predictions (samples x batch x output)
+predictions = jax.random.normal(jax.random.PRNGKey(3), (100, 50, 1))
+components = uq.decompose_uncertainty(predictions)
+print(f"Epistemic uncertainty: {jnp.mean(components.epistemic):.3f}")
+print(f"Aleatoric uncertainty: {jnp.mean(components.aleatoric):.3f}")
 ```
 
 ## Advanced Features
@@ -323,7 +314,7 @@ else:
 Robust model saving and loading:
 
 ```python
-from opifex.training.basic_trainer import TrainingConfig
+from opifex.core.training.config import TrainingConfig
 
 config = TrainingConfig(
     checkpoint_frequency=100,

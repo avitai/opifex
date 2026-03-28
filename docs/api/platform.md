@@ -15,14 +15,14 @@ The platform module offers:
 
 ## Registry Core
 
-### NeuralFunctionalRegistry
+### RegistryService
 
 Central registry for neural functionals with versioning and metadata.
 
 ```python
 from opifex.platform.registry import RegistryService
 
-class NeuralFunctionalRegistry:
+class RegistryService:
     """
     Registry for neural functionals with version control and metadata.
 
@@ -59,7 +59,7 @@ Register a new neural functional.
 def register(
     self,
     model: nnx.Module,
-    metadata: ModelMetadata,
+    metadata: FunctionalMetadata,
     version: Optional[str] = None,
     parent_id: Optional[str] = None
 ) -> str:
@@ -78,7 +78,7 @@ def register(
     Example:
         >>> from opifex.neural.operators.fno import FNO
         >>> model = FNO(modes=12, width=32)
-        >>> metadata = ModelMetadata(
+        >>> metadata = FunctionalMetadata(
         ...     name="darcy-flow-fno",
         ...     description="FNO for Darcy flow prediction",
         ...     task="operator-learning",
@@ -128,7 +128,7 @@ def update(
     self,
     model_id: str,
     model: nnx.Module,
-    metadata: Optional[ModelMetadata] = None,
+    metadata: Optional[FunctionalMetadata] = None,
     version_note: str = ""
 ) -> str:
     """
@@ -166,7 +166,7 @@ def search(
     filters: Optional[Dict[str, Any]] = None,
     limit: int = 10,
     sort_by: str = "relevance"
-) -> List[ModelSearchResult]:
+) -> List[SearchResult]:
     """
     Search registry for relevant models.
 
@@ -256,15 +256,15 @@ def delete(
 
 ## Model Metadata
 
-### ModelMetadata
+### FunctionalMetadata
 
 Structured metadata for neural functionals.
 
 ```python
-from opifex.platform.registry import ModelMetadata
+from opifex.platform.registry import FunctionalMetadata
 
 @dataclass
-class ModelMetadata:
+class FunctionalMetadata:
     """
     Metadata for registered neural functionals.
 
@@ -308,7 +308,7 @@ class ModelMetadata:
 ### Example Usage
 
 ```python
-metadata = ModelMetadata(
+metadata = FunctionalMetadata(
     name="burgers-fno-large",
     description="Large FNO trained on Burgers equation dataset",
     task="operator-learning",
@@ -336,178 +336,50 @@ metadata = ModelMetadata(
 
 ## Model Search
 
-### Semantic Search
+### SearchEngine
 
-Advanced search capabilities using embeddings and metadata.
+Search capabilities for discovering neural functionals in the registry.
 
 ```python
-from opifex.platform.registry import SemanticSearch
-
-class SemanticSearch:
-    """
-    Semantic search over model registry using embeddings.
-
-    Uses neural embeddings of model descriptions and metadata
-    to find semantically similar models.
-
-    Args:
-        registry: NeuralFunctionalRegistry instance
-        embedding_model: Model for computing embeddings
-        index_type: Search index type ('faiss', 'annoy', 'nmslib')
-    """
-
-    def __init__(
-        self,
-        registry: NeuralFunctionalRegistry,
-        embedding_model: str = "sentence-transformers",
-        index_type: str = "faiss"
-    ):
-        """Initialize semantic search engine."""
-
-    def search(
-        self,
-        query: str,
-        k: int = 10,
-        filters: Optional[Dict] = None
-    ) -> List[SearchResult]:
-        """
-        Perform semantic search.
-
-        Args:
-            query: Natural language query
-            k: Number of results to return
-            filters: Optional metadata filters
-
-        Returns:
-            Ranked list of search results
-
-        Example:
-            >>> search = SemanticSearch(registry)
-            >>> results = search.search(
-            ...     "neural operator for solving Navier-Stokes equations",
-            ...     k=5
-            ... )
-            >>> for r in results:
-            ...     print(f"{r.model_id}: {r.similarity:.3f}")
-        """
+from opifex.platform.registry import SearchEngine
 ```
+
+::: opifex.platform.registry.search.SearchEngine
+    options:
+        show_root_heading: true
+        show_source: false
 
 ## Model Validation
 
-### ValidationFramework
+### ValidationEngine
 
-Ensure model compatibility and correctness.
+Automated validation for registered neural functionals.
 
 ```python
-from opifex.platform.registry import ValidationFramework
-
-class ValidationFramework:
-    """
-    Validation framework for registered models.
-
-    Validates:
-    - Input/output shapes
-    - Numerical correctness
-    - Performance benchmarks
-    - API compatibility
-    """
-
-    def validate_model(
-        self,
-        model: nnx.Module,
-        validation_suite: str = "standard"
-    ) -> ValidationReport:
-        """
-        Run validation suite on model.
-
-        Args:
-            model: Model to validate
-            validation_suite: Validation level:
-                - 'basic': Shape and type checks
-                - 'standard': + numerical correctness
-                - 'full': + performance benchmarks
-
-        Returns:
-            Validation report with pass/fail status
-
-        Example:
-            >>> validator = ValidationFramework()
-            >>> report = validator.validate_model(
-            ...     model,
-            ...     validation_suite="full"
-            ... )
-            >>> if report.passed:
-            ...     print("All validations passed!")
-            >>> else:
-            ...     print(f"Failed: {report.failures}")
-        """
+from opifex.platform.registry import ValidationEngine
 ```
+
+::: opifex.platform.registry.validation.ValidationEngine
+    options:
+        show_root_heading: true
+        show_source: false
+
+The validation engine produces `FunctionalReport` objects (not `ValidationReport`).
 
 ## Version Control
 
-### Model Lineage
+### VersionManager
 
-Track model evolution and relationships.
+Git-based version control for neural functionals with dependency tracking.
 
 ```python
-from opifex.platform.registry import VersionControl
-
-class VersionControl:
-    """
-    Version control system for neural functionals.
-
-    Tracks model lineage, branching, and merging.
-    """
-
-    def get_lineage(
-        self,
-        model_id: str,
-        max_depth: Optional[int] = None
-    ) -> nx.DiGraph:
-        """
-        Get model lineage graph.
-
-        Args:
-            model_id: Model to trace
-            max_depth: Maximum ancestor depth
-
-        Returns:
-            NetworkX directed graph of model lineage
-
-        Example:
-            >>> vc = VersionControl(registry)
-            >>> lineage = vc.get_lineage("darcy-flow-fno")
-            >>> # Visualize lineage
-            >>> import matplotlib.pyplot as plt
-            >>> nx.draw(lineage, with_labels=True)
-        """
-
-    def compare_versions(
-        self,
-        model_id: str,
-        version1: str,
-        version2: str
-    ) -> VersionDiff:
-        """
-        Compare two model versions.
-
-        Args:
-            model_id: Model identifier
-            version1, version2: Versions to compare
-
-        Returns:
-            Diff object with changes
-
-        Example:
-            >>> diff = vc.compare_versions(
-            ...     "darcy-flow-fno",
-            ...     "v1.0.0",
-            ...     "v2.0.0"
-            ... )
-            >>> print(f"Parameter changes: {diff.param_changes}")
-            >>> print(f"Architecture changes: {diff.arch_changes}")
-        """
+from opifex.platform.registry import VersionManager
 ```
+
+::: opifex.platform.registry.version.VersionManager
+    options:
+        show_root_heading: true
+        show_source: false
 
 ## Integration Examples
 
@@ -516,15 +388,15 @@ class VersionControl:
 ```python
 import jax
 from opifex.platform.registry import (
-    NeuralFunctionalRegistry,
-    ModelMetadata
+    RegistryService,
+    FunctionalMetadata
 )
 from opifex.neural.operators.fno import FNO
 from opifex.training import BasicTrainer
 from opifex.data.loaders import create_darcy_loader
 
 # Initialize registry
-registry = NeuralFunctionalRegistry(storage_path="./models")
+registry = RegistryService(storage_path="./models")
 
 # Train model
 train_loader = create_darcy_loader(
@@ -540,7 +412,7 @@ trainer = BasicTrainer(model, config)
 trained_model, history = trainer.train(train_loader)
 
 # Register model
-metadata = ModelMetadata(
+metadata = FunctionalMetadata(
     name="darcy-fno-v1",
     description="FNO for Darcy flow operator learning",
     task="operator-learning",
@@ -573,7 +445,7 @@ new_version = registry.update(
 
 ```python
 # Team member 1: Register model
-registry = NeuralFunctionalRegistry()
+registry = RegistryService()
 model_id = registry.register(my_model, metadata)
 
 # Team member 2: Search and load
@@ -600,7 +472,7 @@ variant_id = registry.register(
 
 ```python
 # Enable caching for frequently accessed models
-registry = NeuralFunctionalRegistry(
+registry = RegistryService(
     enable_caching=True,
     cache_size=50  # Keep 50 models in memory
 )
@@ -609,24 +481,6 @@ registry = NeuralFunctionalRegistry(
 model = registry.load("popular-model")  # Cached after first load
 ```
 
-### Distributed Registry
-
-```python
-# Connect to remote registry
-from opifex.platform.registry import RemoteRegistry
-
-remote_registry = RemoteRegistry(
-    url="https://registry.opifex.io",
-    api_key=os.getenv("OPIFEX_API_KEY")
-)
-
-# Push local model to remote
-local_id = local_registry.register(model, metadata)
-remote_id = remote_registry.push(local_id)
-
-# Pull remote model
-remote_registry.pull(remote_id, target_path="./models")
-```
 
 ## See Also
 

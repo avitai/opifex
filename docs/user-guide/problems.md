@@ -17,18 +17,15 @@ PDEs form the backbone of many scientific simulations. The Opifex framework prov
 ```python
 from opifex.core.problems import PDEProblem
 from opifex.core.conditions import DirichletBC, NeumannBC, InitialCondition
+from opifex.geometry import Rectangle
 import jax.numpy as jnp
 
 class HeatEquationProblem(PDEProblem):
     """2D Heat equation with mixed boundary conditions."""
 
     def __init__(self, diffusivity=0.01):
-        # Define spatial-temporal domain
-        domain = {
-            "x": (0.0, 1.0),
-            "y": (0.0, 1.0),
-            "t": (0.0, 1.0)
-        }
+        # Define geometry
+        geometry = Rectangle(center=jnp.array([0.5, 0.5]), width=1.0, height=1.0)
 
         # Define boundary conditions
         boundary_conditions = [
@@ -41,14 +38,14 @@ class HeatEquationProblem(PDEProblem):
         # Define initial condition
         initial_conditions = [
             InitialCondition(
-                name="u",
                 value=lambda x: jnp.sin(jnp.pi * x[0]) * jnp.sin(jnp.pi * x[1]),
-                dimension=1
+                dimension=1,
+                name="u"
             )
         ]
 
         super().__init__(
-            domain=domain,
+            geometry=geometry,
             equation=self._heat_equation,
             boundary_conditions=boundary_conditions,
             initial_conditions=initial_conditions,
@@ -64,13 +61,13 @@ class HeatEquationProblem(PDEProblem):
         u_yy = u_derivatives["yy"]
         return u_t - alpha * (u_xx + u_yy)
 
-    def _heat_equation(self, x, y, t, u, u_derivatives, params):
+    def _heat_equation(self, x, u, u_derivatives):
         """Heat equation: ∂u/∂t = α∇²u"""
-        return self.residual(jnp.array([x, y, t]), u, u_derivatives)
+        return self.residual(x, u, u_derivatives)
 
 # Create and use the problem
 heat_problem = HeatEquationProblem(diffusivity=0.01)
-print(f"Domain: {heat_problem.get_domain()}")
+print(f"Geometry: {heat_problem.get_geometry()}")
 print(f"Parameters: {heat_problem.get_parameters()}")
 ```
 
@@ -83,22 +80,18 @@ class NavierStokesProblem(PDEProblem):
     """2D incompressible Navier-Stokes equations."""
 
     def __init__(self, reynolds_number=100):
-        domain = {
-            "x": (0.0, 2.0),
-            "y": (0.0, 1.0),
-            "t": (0.0, 10.0)
-        }
+        geometry = Rectangle(center=jnp.array([1.0, 0.5]), width=2.0, height=1.0)
 
         # No-slip boundary conditions on walls
         boundary_conditions = [
-            DirichletBC(boundary="top", value=jnp.array([0.0, 0.0])),    # u, v = 0
-            DirichletBC(boundary="bottom", value=jnp.array([0.0, 0.0])), # u, v = 0
-            DirichletBC(boundary="left", value=jnp.array([1.0, 0.0])),   # inlet: u=1, v=0
-            NeumannBC(boundary="right", value=jnp.array([0.0, 0.0]))     # outlet: ∂u/∂n=0
+            DirichletBC(boundary="top", value=0.0),
+            DirichletBC(boundary="bottom", value=0.0),
+            DirichletBC(boundary="left", value=1.0),      # inlet
+            NeumannBC(boundary="right", value=0.0)         # outlet
         ]
 
         super().__init__(
-            domain=domain,
+            geometry=geometry,
             equation=self._navier_stokes,
             boundary_conditions=boundary_conditions,
             parameters={"Re": reynolds_number},
@@ -138,7 +131,7 @@ class WaveEquationProblem(PDEProblem):
     """2D wave equation with source terms."""
 
     def __init__(self, wave_speed=1.0):
-        domain = {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "t": (0.0, 2.0)}
+        geometry = Rectangle(center=jnp.array([0.0, 0.0]), width=2.0, height=2.0)
 
         # Absorbing boundary conditions
         boundary_conditions = [
@@ -148,17 +141,19 @@ class WaveEquationProblem(PDEProblem):
         # Initial conditions: Gaussian pulse
         initial_conditions = [
             InitialCondition(
-                variable="u",
-                function=lambda x, y: jnp.exp(-(x**2 + y**2) / 0.1)
+                value=lambda x: jnp.exp(-(x[..., 0]**2 + x[..., 1]**2) / 0.1),
+                name="u",
+                derivative_order=0
             ),
             InitialCondition(
-                variable="u_t",
-                function=lambda x, y: jnp.zeros_like(x)
+                value=0.0,
+                name="u_t",
+                derivative_order=1
             )
         ]
 
         super().__init__(
-            domain=domain,
+            geometry=geometry,
             equation=self._wave_equation,
             boundary_conditions=boundary_conditions,
             initial_conditions=initial_conditions,
@@ -247,7 +242,7 @@ class ReactionDiffusionSystem(PDEProblem):
         if reaction_params is None:
             reaction_params = {"a": 1.0, "b": 3.0, "k": 1.0}
 
-        domain = {"x": (0.0, 10.0), "y": (0.0, 10.0), "t": (0.0, 50.0)}
+        geometry = Rectangle(center=jnp.array([5.0, 5.0]), width=10.0, height=10.0)
 
         # No-flux boundary conditions
         boundary_conditions = [
@@ -255,7 +250,7 @@ class ReactionDiffusionSystem(PDEProblem):
         ]
 
         super().__init__(
-            domain=domain,
+            geometry=geometry,
             equation=self._reaction_diffusion,
             boundary_conditions=boundary_conditions,
             parameters={"D_u": D_u, "D_v": D_v, **reaction_params}
@@ -476,22 +471,14 @@ constant_bc = DirichletBC(
 # Time-dependent Dirichlet condition
 time_varying_bc = DirichletBC(
     boundary="right",
-    value=lambda x, y, t: jnp.sin(2 * jnp.pi * t) * jnp.exp(-x**2),
+    value=lambda x, t: jnp.sin(2 * jnp.pi * t) * jnp.exp(-x[0]**2),
     time_dependent=True
 )
 
-# Spatially-varying Dirichlet condition
+# Spatially-varying Dirichlet condition (callable value)
 spatial_bc = DirichletBC(
     boundary="top",
-    value=lambda x, y, t: x**2 + y**2,
-    spatial_dependent=True
-)
-
-# Vector-valued Dirichlet condition (for systems)
-vector_bc = DirichletBC(
-    boundary="inlet",
-    value=jnp.array([1.0, 0.0, 0.0]),  # Velocity components [u, v, w]
-    vector_valued=True
+    value=lambda x: x[0]**2 + x[1]**2
 )
 
 print("Dirichlet boundary conditions configured for various scenarios")
@@ -516,15 +503,14 @@ no_flux = NeumannBC(
     value=0.0
 )
 
-# Spatially-varying flux
-def parabolic_flux(x, y, t):
+# Spatially-varying flux (pass a callable as value)
+def parabolic_flux(x):
     """Parabolic flux profile."""
-    return -0.1 * x * (1 - x)  # Maximum at center, zero at edges
+    return -0.1 * x[0] * (1 - x[0])  # Maximum at center, zero at edges
 
 varying_flux = NeumannBC(
     boundary="right",
-    value=parabolic_flux,
-    spatial_dependent=True
+    value=parabolic_flux
 )
 
 print("Neumann boundary conditions configured for flux problems")
@@ -561,35 +547,26 @@ time_varying_robin = RobinBC(
 print("Robin boundary conditions configured for heat transfer problems")
 ```
 
-#### Periodic Conditions
+#### Periodic Domains
 
-Periodic boundary conditions enforce solution continuity across domain boundaries, essential for problems with inherent periodicity.
+For problems with inherent periodicity, use `PeriodicCell` from `opifex.geometry` to define the periodic domain geometry rather than periodic boundary conditions. The periodicity is handled at the geometry level:
 
 ```python
-from opifex.core.conditions import PeriodicBC
+from opifex.geometry import PeriodicCell
 
-# Simple periodic condition
-periodic_x = PeriodicBC(
-    boundary_pair=("left", "right"),
-    direction="x"
-)
+# Define a periodic unit cell via lattice vectors
+lattice_vectors = jnp.array([
+    [5.0, 0.0, 0.0],
+    [0.0, 5.0, 0.0],
+    [0.0, 0.0, 5.0]
+])
+periodic_cell = PeriodicCell(lattice_vectors=lattice_vectors)
 
-# Periodic condition with phase shift
-phase_shifted = PeriodicBC(
-    boundary_pair=("bottom", "top"),
-    direction="y",
-    phase_shift=jnp.pi/4
-)
+# Wrap coordinates into the unit cell
+positions = jnp.array([[6.0, 2.0, 3.0], [-1.0, 7.0, 0.5]])
+wrapped = periodic_cell.wrap_coordinates(positions)
 
-# Vector periodic condition for fluid flow
-vector_periodic = PeriodicBC(
-    boundary_pair=("inlet", "outlet"),
-    direction="x",
-    vector_valued=True,
-    components=[0, 1, 2]  # All velocity components
-)
-
-print("Periodic boundary conditions configured for various symmetries")
+print(f"Unit cell volume: {periodic_cell.volume:.4f}")
 ```
 
 ## Domain Specification and Geometry
@@ -601,27 +578,20 @@ The Opifex framework provides sophisticated domain specification capabilities, f
 #### Basic Geometric Shapes
 
 ```python
-from opifex.geometry import Rectangle, Circle, Polygon, Box, Sphere
+from opifex.geometry import Rectangle, Circle, Polygon
 import jax.numpy as jnp
 
 # 2D Rectangular domain
 rectangle = Rectangle(
-    corner1=(0.0, 0.0),
-    corner2=(2.0, 1.0),
-    boundary_markers={
-        "left": "inlet",
-        "right": "outlet",
-        "top": "wall",
-        "bottom": "wall"
-    }
+    center=jnp.array([1.0, 0.5]),
+    width=2.0,
+    height=1.0
 )
 
-# Circular domain with refined boundary
+# Circular domain
 circle = Circle(
-    center=(0.0, 0.0),
-    radius=1.0,
-    boundary_resolution=100,  # High resolution for curved boundary
-    interior_points=5000
+    center=jnp.array([0.0, 0.0]),
+    radius=1.0
 )
 
 # Polygonal domain (airfoil shape)
@@ -634,13 +604,7 @@ airfoil_vertices = jnp.array([
     [0.8, -0.05]
 ])
 
-airfoil = Polygon(
-    vertices=airfoil_vertices,
-    boundary_markers={
-        "airfoil_surface": [1, 2, 3, 4, 5],  # Surface elements
-        "wake": [0]                           # Trailing edge
-    }
-)
+airfoil = Polygon(vertices=airfoil_vertices)
 
 print("Basic geometric domains configured")
 ```
@@ -648,29 +612,28 @@ print("Basic geometric domains configured")
 #### Complex Geometric Operations
 
 ```python
-from opifex.geometry import Union, Intersection, Difference
-from opifex.geometry.csg import CSGDomain
+from opifex.geometry import union, intersection, difference
 
 # Complex domain using CSG operations
-outer_circle = Circle(center=(0.0, 0.0), radius=2.0)
-inner_circle = Circle(center=(0.0, 0.0), radius=0.5)
-rectangular_slot = Rectangle(corner1=(-0.2, -3.0), corner2=(0.2, 3.0))
+outer_circle = Circle(center=jnp.array([0.0, 0.0]), radius=2.0)
+inner_circle = Circle(center=jnp.array([0.0, 0.0]), radius=0.5)
+rectangular_slot = Rectangle(center=jnp.array([0.0, 0.0]), width=0.4, height=6.0)
 
 # Annular domain with rectangular slot
-annular_region = Difference(outer_circle, inner_circle)
-slotted_annulus = Difference(annular_region, rectangular_slot)
+annular_region = difference(outer_circle, inner_circle)
+slotted_annulus = difference(annular_region, rectangular_slot)
 
 # Multi-hole geometry for heat transfer
-base_plate = Rectangle(corner1=(-2.0, -1.0), corner2=(2.0, 1.0))
+base_plate = Rectangle(center=jnp.array([0.0, 0.0]), width=4.0, height=2.0)
 holes = [
-    Circle(center=(-1.0, 0.0), radius=0.2),
-    Circle(center=(0.0, 0.0), radius=0.2),
-    Circle(center=(1.0, 0.0), radius=0.2)
+    Circle(center=jnp.array([-1.0, 0.0]), radius=0.2),
+    Circle(center=jnp.array([0.0, 0.0]), radius=0.2),
+    Circle(center=jnp.array([1.0, 0.0]), radius=0.2)
 ]
 
 perforated_plate = base_plate
 for hole in holes:
-    perforated_plate = Difference(perforated_plate, hole)
+    perforated_plate = difference(perforated_plate, hole)
 
 print("Complex CSG domains created")
 ```
@@ -726,7 +689,7 @@ For problems on irregular structures, networks, and discrete systems, the framew
 #### Network Structures
 
 ```python
-from opifex.geometry.topology import GraphTopology, NetworkDomain
+from opifex.geometry.topology import GraphTopology
 import jax.numpy as jnp
 
 # Create molecular graph domain

@@ -120,8 +120,8 @@ integrator = ScientificComputingIntegrator(
 )
 
 config = MetaOptimizerConfig(
-    physics_aware=True,
-    conservation_weighting=True
+    quantum_aware=True,
+    meta_algorithm="l2o",
 )
 
 optimizer = MetaOptimizer(config=config, rngs=nnx.Rngs(42))
@@ -137,8 +137,9 @@ from opifex.optimization.meta_optimization import LearnToOptimize, MetaOptimizer
 # Configure meta-optimizer
 config = MetaOptimizerConfig(
     meta_learning_rate=1e-3,
-    num_unroll_steps=20,
-    adaptation_strategy="cosine_annealing"
+    adaptation_steps=20,
+    base_optimizer="adam",
+    warm_start_strategy="previous_params",
 )
 
 # Initialize L2O optimizer
@@ -220,11 +221,20 @@ trained_model = trainer.train(
 Compatible with all neural network architectures:
 
 ```python
-from opifex.neural import FNO, DeepONet
+from opifex.neural.operators.fno import FourierNeuralOperator
+from opifex.neural.operators.deeponet import DeepONet
 from opifex.optimization.l2o import L2OEngine
 
 # Optimize neural operators with L2O
-fno_model = FNO(modes=32, width=64)
+rngs = nnx.Rngs(42)
+fno_model = FourierNeuralOperator(
+    in_channels=2,
+    out_channels=1,
+    hidden_channels=64,
+    modes=32,
+    num_layers=4,
+    rngs=rngs
+)
 l2o_engine = L2OEngine(config=config, rngs=nnx.Rngs(42))
 
 optimized_fno = l2o_engine.optimize_model(

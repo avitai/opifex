@@ -4,7 +4,7 @@
 
 Probabilistic numerics represents a paradigm shift in scientific computing that treats numerical computation as a statistical inference problem. Instead of providing point estimates, probabilistic numerical methods quantify uncertainty in computational results, enabling more robust decision-making and better understanding of numerical errors.
 
-The Opifex probabilistic numerics framework provides full implementations of Bayesian neural networks, Gaussian processes, stochastic differential equations, probabilistic solvers, and uncertainty quantification methods, enabling principled uncertainty-aware scientific computing across diverse applications.
+The Opifex probabilistic framework provides implementations of Bayesian neural network layers, variational inference, MCMC sampling (via BlackJAX), uncertainty quantification, physics-informed priors, and calibration tools -- enabling principled uncertainty-aware scientific computing.
 
 ## Theoretical Foundation
 
@@ -33,355 +33,324 @@ where:
 
 Probabilistic numerics distinguishes between:
 
-- **Aleatoric Uncertainty**: Inherent randomness in the system
-- **Epistemic Uncertainty**: Uncertainty due to limited knowledge
+- **Aleatoric Uncertainty**: Inherent randomness in the system (data noise)
+- **Epistemic Uncertainty**: Uncertainty due to limited knowledge (model uncertainty)
 - **Computational Uncertainty**: Uncertainty from numerical approximations
 
 ## Core Probabilistic Components
 
-### 1. Bayesian Neural Networks
+### 1. Bayesian Neural Network Layers
 
-Neural networks with probabilistic weights that quantify model uncertainty:
+Opifex provides `BayesianLayer` -- a variational Bayesian layer with learnable weight distributions for epistemic uncertainty estimation:
 
 ```python
 from opifex.neural.bayesian.layers import BayesianLayer
 import flax.nnx as nnx
+import jax
 import jax.numpy as jnp
 
-# Define a Bayesian MLP using BayesianLayer
-class BayesianMLP(nnx.Module):
-    def __init__(self, features, rngs):
-        self.layers = []
-        for i in range(len(features) - 1):
-            self.layers.append(
-                BayesianLayer(
-                    in_features=features[i],
-                    out_features=features[i+1],
-                    rngs=rngs
-                )
-            )
-            if i < len(features) - 2:
-                self.layers.append(nnx.relu)
-        self.model = nnx.Sequential(*self.layers)
-
-    def __call__(self, x, training=True, sample=True):
-        # Propagate sampling flag to Bayesian layers
-        # Note: In a real implementation, you would handle this propagation
-        # For this example, we assume sequential execution
-        x_out = x
-        for layer in self.layers:
-            if isinstance(layer, BayesianLayer):
-                x_out = layer(x_out, training=training, sample=sample)
-            else:
-                x_out = layer(x_out)
-        return x_out
-
-# Create Bayesian MLP
 rngs = nnx.Rngs(42)
-bnn = BayesianMLP(
-    features=[10, 64, 64, 1],
-    rngs=rngs
+
+# Create a Bayesian linear layer
+layer = BayesianLayer(
+    in_features=10,
+    out_features=64,
+    prior_std=1.0,
+    rngs=rngs,
 )
 
-# Training data
-key = jax.random.PRNGKey(42)
-x_train = jax.random.normal(key, (1000, 10))
-y_train = jnp.sum(x_train**2, axis=1, keepdims=True) + 0.1 * jax.random.normal(key, (1000, 1))
+# Forward pass with weight sampling (training mode)
+x = jax.random.normal(jax.random.PRNGKey(0), (32, 10))
+output_sampled = layer(x, training=True, sample=True)
 
-# Training loop (simplified)
-# In practice, you would use a variational loss (ELBO)
-print("Bayesian MLP created successfully.")
+# Forward pass with mean weights (inference mode)
+output_mean = layer(x, training=False, sample=False)
 ```
 
-### 2. Gaussian Processes (Planned)
+Each `BayesianLayer` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick during training.
 
-Non-parametric Bayesian models for function approximation with uncertainty.
-*Implementation coming soon.*
+### 2. Amortized Variational Framework
 
-### 3. Bayesian Optimization (Planned)
-
-Efficient optimization of expensive black-box functions.
-*Implementation coming soon.*
-
-### 4. Stochastic Differential Equations (Planned)
-
-Neural networks for modeling stochastic dynamics.
-*Implementation coming soon.*
-
-### 5. Probabilistic Solvers (Planned)
-
-Bayesian approaches to numerical integration and differential equations.
-*Implementation coming soon.*
-
-## Advanced Probabilistic Methods
-
-### 1. Variational Inference
-
-Scalable approximate Bayesian inference:
+The `AmortizedVariationalFramework` wraps any Flax NNX model to add amortized uncertainty estimation:
 
 ```python
-from opifex.neural.bayesian import VariationalInference, VariationalFamily
+from opifex.neural.bayesian import (
+    AmortizedVariationalFramework,
+    VariationalConfig,
+    PriorConfig,
+)
+from opifex.neural.base import StandardMLP
+import flax.nnx as nnx
 
-# Define variational family
-variational_family = VariationalFamily(
-    family_type="mean_field_gaussian",
-    num_parameters=1000,
-    initialization="prior_matching"
+rngs = nnx.Rngs(42)
+
+# Create a base model
+base_model = StandardMLP(
+    layer_sizes=[10, 64, 64, 1],
+    activation="gelu",
+    rngs=rngs,
 )
 
-# Variational inference configuration
-vi_config = {
-    "optimizer": "adam",
-    "learning_rate": 1e-2,
-    "num_samples": 10,
-    "gradient_estimator": "reparameterization",
-    "kl_regularization": 1e-3
-}
-
-# Create VI system
-vi_system = VariationalInference(
-    variational_family=variational_family,
-    config=vi_config
+# Wrap with variational framework
+config = VariationalConfig(
+    input_dim=10,
+    hidden_dims=(64, 32),
+    num_samples=10,
+    kl_weight=1.0,
+    temperature=1.0,
 )
 
-# Define log probability function
-def log_prob_fn(params, data):
-    """Log probability of parameters given data."""
-    predictions = model_forward(params, data.x)
-    likelihood = jnp.sum(jax.scipy.stats.norm.logpdf(data.y, predictions, 0.1))
-    prior = jnp.sum(jax.scipy.stats.norm.logpdf(params, 0, 1))
-    return likelihood + prior
-
-# Run variational inference
-vi_result = vi_system.fit(
-    log_prob_fn=log_prob_fn,
-    data=training_data,
-    num_iterations=5000
+framework = AmortizedVariationalFramework(
+    base_model=base_model,
+    config=config,
+    rngs=rngs,
 )
-
-# Sample from approximate posterior
-posterior_samples = vi_system.sample(num_samples=1000)
-
-print(f"VI converged. Final ELBO: {vi_result.final_elbo:.4f}")
-print(f"Posterior samples shape: {posterior_samples.shape}")
 ```
 
-### 2. Markov Chain Monte Carlo
+The framework includes a `MeanFieldGaussian` posterior and an `UncertaintyEncoder` that maps inputs to uncertainty estimates.
 
-Exact sampling from posterior distributions:
+### 3. BlackJAX MCMC Integration
+
+For full Bayesian posterior sampling, Opifex integrates with BlackJAX:
 
 ```python
-from opifex.neural.bayesian import MCMCSampler, HamiltonianMonteCarlo
+from opifex.neural.bayesian import BlackJAXIntegration
+from opifex.neural.base import StandardMLP
+import flax.nnx as nnx
 
-# Configure Hamiltonian Monte Carlo
-hmc_config = {
-    "step_size": 0.01,
-    "num_leapfrog_steps": 10,
-    "mass_matrix": "diagonal",
-    "adaptation_phase": 1000,
-    "target_acceptance_rate": 0.8
-}
+rngs = nnx.Rngs(42)
 
-# Create HMC sampler
-hmc_sampler = HamiltonianMonteCarlo(
-    config=hmc_config,
-    rngs=nnx.Rngs(42)
+base_model = StandardMLP(
+    layer_sizes=[10, 32, 32, 1],
+    activation="gelu",
+    rngs=rngs,
 )
 
-# Sample from posterior
-mcmc_result = hmc_sampler.sample(
-    log_prob_fn=log_prob_fn,
-    initial_state=initial_params,
-    num_samples=5000,
-    num_warmup=1000
+# Create MCMC sampler (NUTS, HMC, or MALA)
+mcmc = BlackJAXIntegration(
+    base_model=base_model,
+    sampler_type="nuts",       # "nuts", "hmc", or "mala"
+    num_warmup=1000,
+    num_samples=1000,
+    step_size=1e-3,
+    rngs=rngs,
 )
-
-# Analyze MCMC results
-from opifex.neural.bayesian import MCMCDiagnostics
-
-diagnostics = MCMCDiagnostics(mcmc_result.samples)
-diagnostic_report = diagnostics.compute_diagnostics()
-
-print(f"MCMC sampling completed")
-print(f"Effective sample size: {diagnostic_report.ess.mean():.1f}")
-print(f"R-hat (convergence): {diagnostic_report.rhat.max():.4f}")
-print(f"Acceptance rate: {mcmc_result.acceptance_rate:.3f}")
 ```
+
+This provides NUTS, HMC, and MALA samplers for posterior inference over neural network parameters, enabling rigorous uncertainty quantification without variational approximations.
+
+### 4. Uncertainty Quantification Utilities
+
+The `opifex.neural.bayesian.uncertainty_quantification` module provides tools for decomposing and analyzing uncertainty:
+
+```python
+from opifex.neural.bayesian import (
+    UncertaintyQuantifier,
+    EpistemicUncertainty,
+    AleatoricUncertainty,
+    UncertaintyComponents,
+    CalibrationMetrics,
+)
+import jax.numpy as jnp
+
+# Given Monte Carlo samples from a Bayesian model
+# predictions shape: (num_samples, batch_size, output_dim)
+predictions = jnp.stack([model(x) for _ in range(100)])
+
+# Compute epistemic uncertainty (model uncertainty)
+epistemic_var = EpistemicUncertainty.compute_variance(predictions)
+
+# Mean prediction
+mean_prediction = jnp.mean(predictions, axis=0)
+
+# Total uncertainty
+total_std = jnp.std(predictions, axis=0)
+print(f"Prediction: {mean_prediction[0]} +/- {total_std[0]}")
+```
+
+### 5. Physics-Informed Priors
+
+The `PhysicsInformedPriors` class enforces conservation laws and boundary conditions through learnable constraint weights:
+
+```python
+from opifex.neural.bayesian import PhysicsInformedPriors
+import flax.nnx as nnx
+
+priors = PhysicsInformedPriors(
+    conservation_laws=["energy", "momentum"],
+    boundary_conditions=["dirichlet"],
+    penalty_weight=1.0,
+    rngs=nnx.Rngs(42),
+)
+
+# Apply physics constraints to sampled parameters
+constrained_params = priors.apply_constraints(unconstrained_params)
+```
+
+Additional prior classes are available:
+
+- `ConservationLawPriors` -- specialized conservation law enforcement
+- `DomainSpecificPriors` -- domain-adapted prior distributions
+- `HierarchicalBayesianFramework` -- hierarchical prior structures
+- `PhysicsAwareUncertaintyPropagation` -- propagates uncertainty through physics constraints
+
+### 6. Calibration Tools
+
+Opifex provides calibration methods to ensure uncertainty estimates are well-calibrated:
+
+```python
+from opifex.neural.bayesian import (
+    CalibrationTools,
+    TemperatureScaling,
+    PlattScaling,
+    IsotonicRegression,
+    ConformalPrediction,
+)
+
+# Temperature scaling for calibration
+calibrator = TemperatureScaling()
+
+# Conformal prediction for distribution-free coverage guarantees
+from opifex.neural.bayesian import ConformalPredictor, ConformalConfig
+
+config = ConformalConfig()
+conformal = ConformalPredictor(config=config)
+```
+
+### 7. Planned Components
+
+The following are planned but not yet implemented:
+
+- **Gaussian Processes**: Non-parametric Bayesian models for function approximation
+- **Bayesian Optimization**: Efficient optimization of expensive black-box functions
+- **Stochastic Differential Equations**: Neural networks for stochastic dynamics
+- **Probabilistic Solvers**: Bayesian approaches to numerical integration
 
 ## Scientific Applications
 
-### 1. Physics-Informed Probabilistic Models
+### Physics-Informed Probabilistic Models
 
-Combine physical laws with probabilistic modeling:
+Combine physical laws with probabilistic modeling using `PhysicsInformedLoss` and Bayesian layers:
 
 ```python
-from opifex.neural.bayesian import PhysicsInformedBNN
-from opifex.core.physics.losses import PhysicsInformedLoss
+from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
+from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.neural.base import StandardMLP
+import flax.nnx as nnx
+import jax.numpy as jnp
 
-# Physics-informed Bayesian neural network
-pi_bnn_config = {
-    "physics_weight": 1.0,
-    "data_weight": 10.0,
-    "prior_physics_compliance": True,
-    "uncertainty_in_physics": True
-}
+rngs = nnx.Rngs(42)
 
-# Create physics-informed BNN
-pi_bnn = PhysicsInformedBNN(
-    features=[64, 64, 64, 1],
-    config=pi_bnn_config,
-    rngs=nnx.Rngs(42)
-)
+# Create a model with Bayesian layers for uncertainty
+class BayesianPINN(nnx.Module):
+    def __init__(self, *, rngs):
+        self.layer1 = BayesianLayer(2, 64, rngs=rngs)
+        self.layer2 = BayesianLayer(64, 64, rngs=rngs)
+        self.layer3 = BayesianLayer(64, 1, rngs=rngs)
 
-# Define PDE (heat equation)
-def heat_equation_residual(u, x, t):
-    """Heat equation: u_t - α∇²u = 0"""
-    u_t = jax.grad(u, argnums=1)(x, t)
-    u_xx = jax.grad(jax.grad(u, argnums=0), argnums=0)(x, t)
-    alpha = 0.1  # thermal diffusivity
-    return u_t - alpha * u_xx
+    def __call__(self, x):
+        h = nnx.tanh(self.layer1(x))
+        h = nnx.tanh(self.layer2(h))
+        return self.layer3(h)
 
-# Physics-informed loss
-physics_loss = PhysicsInformedLoss(
-    pde_loss_fn=heat_equation_residual,
+model = BayesianPINN(rngs=rngs)
+
+# Physics-informed loss for heat equation
+config = PhysicsLossConfig(
+    data_loss_weight=10.0,
+    physics_loss_weight=1.0,
     boundary_loss_weight=10.0,
-    initial_loss_weight=10.0
 )
 
-# Training data
-x_physics = jax.random.uniform(key, (1000, 1), minval=0, maxval=1)
-t_physics = jax.random.uniform(key, (1000, 1), minval=0, maxval=1)
-physics_points = jnp.concatenate([x_physics, t_physics], axis=1)
-
-# Train physics-informed BNN
-pi_trainer = pi_bnn.create_trainer(
-    physics_loss=physics_loss,
-    learning_rate=1e-3
+physics_loss = PhysicsInformedLoss(
+    config=config,
+    equation_type="heat",
+    domain_type="2d",
 )
-
-pi_result = pi_trainer.train(
-    physics_points=physics_points,
-    boundary_data=boundary_data,
-    initial_data=initial_data,
-    num_epochs=2000
-)
-
-print(f"Physics-informed BNN training completed")
-print(f"Physics loss: {pi_result.final_physics_loss:.6f}")
-print(f"Data loss: {pi_result.final_data_loss:.6f}")
 ```
 
-## Integration with Opifex Ecosystem
+### Probabilistic Neural Operators
 
-### 1. Probabilistic Neural Operators
-
-Combine uncertainty quantification with neural operators:
+For uncertainty-aware neural operators, wrap an FNO with the `AmortizedVariationalFramework`:
 
 ```python
-from opifex.neural import FNO
-from opifex.neural.bayesian import ProbabilisticFNO
+from opifex.neural.operators.fno import FourierNeuralOperator
+from opifex.neural.bayesian import AmortizedVariationalFramework, VariationalConfig
+import flax.nnx as nnx
 
-# Probabilistic Fourier Neural Operator
-prob_fno_config = {
-    "uncertainty_type": "epistemic",
-    "ensemble_size": 10,
-    "variational_layers": [2, 4, 6],  # Which layers to make variational
-    "prior_scale": 0.1
-}
+rngs = nnx.Rngs(42)
 
-# Create probabilistic FNO
-prob_fno = ProbabilisticFNO(
-    modes=32,
-    width=64,
-    config=prob_fno_config,
-    rngs=nnx.Rngs(42)
+# Create base FNO
+fno = FourierNeuralOperator(
+    in_channels=1,
+    out_channels=1,
+    hidden_channels=64,
+    modes=16,
+    num_layers=4,
+    rngs=rngs,
 )
 
-# Train on PDE data with uncertainty
-pde_data = load_pde_dataset("navier_stokes")
-prob_fno_trainer = prob_fno.create_trainer(
-    learning_rate=1e-4,
-    uncertainty_weight=0.1
+# Wrap with variational framework for uncertainty
+config = VariationalConfig(
+    input_dim=64,
+    hidden_dims=(64, 32),
+    num_samples=10,
+    kl_weight=0.1,
 )
 
-prob_fno_result = prob_fno_trainer.train(
-    train_data=pde_data.train,
-    validation_data=pde_data.validation,
-    num_epochs=1000
+prob_fno = AmortizedVariationalFramework(
+    base_model=fno,
+    config=config,
+    rngs=rngs,
 )
-
-# Make predictions with uncertainty
-test_predictions = prob_fno.predict_with_uncertainty(
-    pde_data.test.inputs,
-    num_samples=100
-)
-
-print(f"Probabilistic FNO training completed")
-print(f"Prediction uncertainty range: [{test_predictions.std.min():.6f}, {test_predictions.std.max():.6f}]")
 ```
 
 ## Best Practices
 
-### 1. Model Selection and Validation
-
-Guidelines for choosing appropriate probabilistic methods:
+### Model Selection Guidelines
 
 ```python
-# Model selection criteria
+# Decision guide for choosing probabilistic methods:
 model_selection_criteria = {
     "uncertainty_type": {
         "aleatoric_only": "Use heteroscedastic regression",
-        "epistemic_only": "Use ensemble methods or variational inference",
-        "both": "Use Bayesian neural networks or deep ensembles"
+        "epistemic_only": "Use AmortizedVariationalFramework or BlackJAXIntegration",
+        "both": "Use BayesianLayer-based models or deep ensembles",
     },
     "computational_budget": {
-        "low": "Use Monte Carlo dropout or single model with calibration",
-        "medium": "Use variational inference or small ensembles",
-        "high": "Use MCMC or large ensembles"
+        "low": "Use single model with TemperatureScaling calibration",
+        "medium": "Use AmortizedVariationalFramework with num_samples=10",
+        "high": "Use BlackJAXIntegration with NUTS sampling",
     },
     "data_size": {
-        "small": "Use Gaussian processes or Bayesian methods",
-        "medium": "Use Bayesian neural networks",
-        "large": "Use ensemble methods or variational inference"
-    }
+        "small": "Use PhysicsInformedPriors with strong constraints",
+        "medium": "Use AmortizedVariationalFramework",
+        "large": "Use ensemble methods or variational inference",
+    },
 }
-
-# Model validation framework
-from opifex.neural.bayesian import ModelValidation
-
-validator = ModelValidation(
-    validation_metrics=["calibration", "sharpness", "coverage"],
-    cross_validation_folds=5,
-    bootstrap_samples=1000
-)
-
-validation_result = validator.validate(
-    model=probabilistic_model,
-    data=validation_data,
-    uncertainty_type="both"
-)
-
-print("Model Validation Results:")
-print(f"Calibration score: {validation_result.calibration_score:.4f}")
-print(f"Sharpness: {validation_result.sharpness:.4f}")
-print(f"Coverage: {validation_result.coverage:.3f}")
 ```
+
+### Calibration Workflow
+
+After training a probabilistic model, always check calibration:
+
+1. Compute predictions with uncertainty on a held-out set
+2. Use `CalibrationMetrics` to assess expected calibration error
+3. Apply `TemperatureScaling` or `ConformalPredictor` to improve calibration
+4. Verify coverage of confidence intervals matches nominal level
 
 ## Future Directions
 
-### 1. Emerging Methods
+### Emerging Methods
 
-Cutting-edge developments in probabilistic numerics:
-
-- **Quantum Probabilistic Computing**: Quantum Bayesian neural networks and variational quantum eigensolvers
 - **Neural Differential Equations**: Probabilistic neural ODEs and uncertainty in neural SDEs
 - **Automated Uncertainty**: Self-calibrating models and adaptive uncertainty estimation
-- **Scalable Inference**: Distributed Bayesian inference and federated probabilistic learning
+- **Scalable Inference**: Distributed Bayesian inference
 
-### 2. Planned Enhancements
+### Planned Enhancements
 
-- **Short-term**: GPU-accelerated MCMC sampling, improved calibration methods
-- **Medium-term**: Quantum probabilistic algorithms, causal uncertainty quantification
+- **Short-term**: GPU-accelerated MCMC sampling improvements, better calibration methods
+- **Medium-term**: Gaussian process integration, causal uncertainty quantification
 - **Long-term**: Universal uncertainty quantification, automated probabilistic modeling
 
 ## References
@@ -396,5 +365,5 @@ Cutting-edge developments in probabilistic numerics:
 
 - [Bayesian Neural Networks](../user-guide/neural-networks.md#bayesian-neural-networks) - Bayesian neural network architectures
 - [Neural Network Training](../user-guide/training.md) - Training infrastructure with uncertainty quantification
-- [Optimization Methods](../user-guide/optimization.md) - Bayesian optimization techniques
-- [Bayesian Networks API](../api/neural.md#bayesian-networks) - Complete probabilistic numerics API documentation
+- [Optimization Methods](../user-guide/optimization.md) - Optimization techniques
+- [Bayesian Networks API](../api/neural.md#bayesian-networks) - API documentation

@@ -1183,29 +1183,6 @@ def create_molecular_geometry_from_dft_problem(dft_problem) -> MolecularGeometry
     raise ValueError("DFT problem must have molecular_system attribute")
 
 
-# Enhanced utilities (new features with optimal design patterns)
-def ensure_safe_jax_environment():
-    """Ensure JAX environment is properly configured for reliable operation."""
-    try:
-        # Import from the core testing infrastructure if available
-        from opifex.core.testing_infrastructure import (
-            ensure_safe_jax_environment as core_ensure_safe,
-        )
-
-        return core_ensure_safe()
-    except ImportError:
-        # Fallback implementation for standalone use - test basic JAX operation
-        try:
-            test_array = jnp.array([1.0, 2.0, 3.0])
-            result = jnp.sum(test_array)
-            jax.block_until_ready(result)  # Force computation
-        except Exception as e:
-            warnings.warn(
-                f"JAX environment issue detected: {e}. Check JAX installation.",
-                stacklevel=2,
-            )
-
-
 def compute_shape_area(
     shape: Shape2D, bbox: jax.Array | None = None, resolution: int = 1000
 ) -> float:

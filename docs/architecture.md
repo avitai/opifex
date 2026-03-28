@@ -25,8 +25,8 @@ At its core, Opifex leverages **JAX** for composable transformations (Just-In-Ti
 ### Layer 2: Problem & Geometry
 We enforce a strict separation between physics and geometry.
 
-- **Geometry Protocol**: `opifex.geometry` objects (`Rectangle`, `Sphere`, `CSGDomain`) provide exact point sampling and boundary logic.
-- **Problem Protocol**: `PDEProblem` defines *what* to solve (equations, boundary conditions), while Geometry defines *where* to solve it. This allows the same physics to be tested on different geometries without code changes.
+- **Geometry Protocol**: `opifex.geometry` objects (`Rectangle`, `SphericalManifold`, `CSGUnion`/`CSGIntersection`/`CSGDifference`) provide exact point sampling and boundary logic.
+- **Problem Protocol**: `PDEProblem` defines *what* to solve (equations, boundary conditions), while Geometry defines *where* to solve it. Constraints are defined in `opifex.core.conditions`. This allows the same physics to be tested on different geometries without code changes.
 
 ### Layer 3: Neural Primitives
 This layer provides optimized implementations of state-of-the-art architectures.
@@ -64,7 +64,7 @@ The architecture of Opifex is guided by five core philosophies:
 Every major component (`SciMLSolver`, `Geometry`, `TrainingComponent`) is defined by a Protocol. This allows users to inject custom implementations without carrying the weight of a base class hierarchy. If it quacks like a Solver, it is a Solver.
 
 ### 2. Composition Over Inheritance
-We favor composing behavior over deep inheritance trees. A `PINNSolver` is not a monolith; it is composed of a `PhysicsLoss`, a `Trainer`, and an `AdaptiveSampler`. This makes it easy to swap out the optimizer or the sampling strategy without rewriting the solver.
+We favor composing behavior over deep inheritance trees. A `PINNSolver` is not a monolith; it is composed of a `PhysicsLoss`, a `Trainer`, and a `RARDRefiner` (adaptive sampler). This makes it easy to swap out the optimizer or the sampling strategy without rewriting the solver.
 
 ### 3. Modularity
 Each layer is designed to be independently useful. You can use the `Geometry` library for mesh generation without ever touching a neural network. You can use the `NeuralOperator` primitives in your own custom training loops if you prefer.

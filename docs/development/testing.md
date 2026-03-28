@@ -10,17 +10,18 @@ Testing strategies and tools for Opifex development.
 
 ```bash
 # Run all tests
-pytest
+source activate.sh
+uv run pytest
 
 # Run specific module tests
-pytest tests/neural/
-pytest tests/training/
+uv run pytest tests/neural/
+uv run pytest tests/core/
 
 # Run with coverage
-pytest --cov=opifex --cov-report=html
+uv run pytest --cov=src/opifex --cov-report=html
 
 # Full test reporting with JSON output and detailed coverage
-uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
+uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json-report-indent=2 --json-report-verbosity=2 --cov=src/opifex --cov-report=json:temp/coverage.json --cov-report=term-missing
 ```
 
 ### Full Test Reporting
@@ -49,7 +50,7 @@ The full test command above generates detailed reports for CI/CD integration and
 - `--json-report-file=temp/test-results.json`: Output location for test results
 - `--json-report-indent=2`: Pretty-print JSON with 2-space indentation
 - `--json-report-verbosity=2`: Maximum verbosity in JSON output
-- `--cov=opifex`: Enable coverage for the opifex package
+- `--cov=src/opifex`: Enable coverage for the opifex package
 - `--cov-report=json:temp/coverage.json`: Output coverage data as JSON
 - `--cov-report=term-missing`: Show missing coverage in terminal
 
@@ -57,7 +58,7 @@ The full test command above generates detailed reports for CI/CD integration and
 
 ```bash
 # Run GPU-specific tests
-pytest tests/ -k "gpu"
+uv run pytest tests/ -k "gpu"
 
 # Verify GPU functionality
 python scripts/verify_opifex_gpu.py
@@ -90,18 +91,19 @@ python scripts/verify_opifex_gpu.py
 ```python
 import pytest
 import jax.numpy as jnp
-from opifex.neural import PINN
+from flax import nnx
+from opifex.neural.base import StandardMLP
 
-def test_pinn_creation():
-    """Test PINN model creation."""
-    pinn = PINN(layers=[2, 10, 1])
-    assert pinn is not None
+def test_mlp_creation():
+    """Test MLP model creation."""
+    model = StandardMLP(layer_sizes=[2, 10, 1], rngs=nnx.Rngs(0))
+    assert model is not None
 
-def test_pinn_forward_pass():
-    """Test PINN forward computation."""
-    pinn = PINN(layers=[2, 10, 1])
+def test_mlp_forward_pass():
+    """Test MLP forward computation."""
+    model = StandardMLP(layer_sizes=[2, 10, 1], rngs=nnx.Rngs(0))
     x = jnp.array([[0.5, 0.5]])
-    output = pinn(x)
+    output = model(x)
     assert output.shape == (1, 1)
 ```
 
@@ -124,14 +126,13 @@ Tests run automatically on:
 
 - Pull requests
 - Main branch commits
-- Scheduled nightly builds
 
 ### Pre-commit Hooks
 
 ```bash
 # Setup pre-commit
-pre-commit install
+uv run pre-commit install
 
 # Run manually
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```

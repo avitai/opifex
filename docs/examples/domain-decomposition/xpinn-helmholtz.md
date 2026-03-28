@@ -1,4 +1,8 @@
-# XPINN: Extended PINN on Viscous Burgers Equation
+# XPINN: Extended PINN on Viscous Burgers Equation {#xpinn-burgers}
+
+!!! note "Filename Note"
+    The filename `xpinn-helmholtz` is a historical artifact. This example solves the
+    **viscous Burgers equation**, not the Helmholtz equation.
 
 | Metadata          | Value                            |
 |-------------------|----------------------------------|

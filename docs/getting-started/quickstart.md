@@ -126,7 +126,7 @@ Recovers the true Lorenz coefficients ($\sigma=10$, $\rho=28$, $\beta=8/3$) to h
 
 ## Next Steps
 
-- **[Examples](../examples/index.md)**: 51 working examples across neural operators, PINNs, discovery, and more
+- **[Examples](../examples/index.md)**: 52 working examples across neural operators, PINNs, discovery, and more
 - **[Neural Operators Guide](../methods/neural-operators.md)**: Theory and architecture details
 - **[PINNs Guide](../methods/pinns.md)**: Physics-informed methods
 - **[API Reference](../api/core.md)**: Full API documentation

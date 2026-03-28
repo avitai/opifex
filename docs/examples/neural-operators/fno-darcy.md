@@ -216,7 +216,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 **Terminal Output:**
 ```
 Resolution: 64x64
-Training samples: 200, Test samples: 50
+Training samples: 200, Test samples: 40
 Batch size: 16, Epochs: 10
 FNO config: modes=12, width=32, layers=4
 ```

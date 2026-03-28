@@ -1,84 +1,3 @@
-# Development Environment Setup
-
-## UV Package Manager Configuration
-
-### Cross-Filesystem Warning Resolution
-
-If you encounter the following warning during development:
-
-```
-warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
-```
-
-This occurs when UV's cache directory and the project directory are on different filesystems. To resolve this:
-
-#### Option 1: Set Environment Variable (Recommended)
-
-```bash
-export UV_LINK_MODE=copy
-```
-
-#### Option 2: Use Command Flag
-
-```bash
-uv sync --link-mode=copy
-uv run --link-mode=copy <command>
-```
-
-#### Option 3: Configure in Shell Profile
-
-Add to your `~/.bashrc` or `~/.zshrc`:
-
-```bash
-# UV Configuration for cross-filesystem setups
-export UV_LINK_MODE=copy
-```
-
-### Performance Impact
-
-- **Hardlinking**: ~50-100ms for dependency installation
-- **File Copying**: ~200-500ms for dependency installation
-- **Impact**: Minimal for development workflow, no impact on application performance
-
-### Other Development Environment Variables
-
-```bash
-# JAX Configuration (already set)
-export JAX_SKIP_CUDA_CONSTRAINTS_CHECK=1
-
-# UV Configuration
-export UV_LINK_MODE=copy
-```
-
-## Pre-commit Configuration
-
-All pre-commit hooks are configured to pass consistently. The following quality gates are enforced:
-
-- **Code Formatting**: ruff format
-- **Linting**: ruff check
-- **Type Checking**: pyright
-- **Security**: bandit
-- **Documentation**: pydocstyle
-- **File Formatting**: Various pre-commit hooks
-
-### Running Pre-commit
-
-```bash
-# Run all hooks
-uv run pre-commit run --all-files
-
-# Install hooks (one-time setup)
-uv run pre-commit install
-```
-
-### Quality Metrics Maintained
-
-- **Type Safety**: 0 type errors across codebase
-- **Code Quality**: 0 linting violations
-- **Security**: 0 security issues identified
-- **Documentation**: Complete docstring coverage for public APIs
-- **Test Coverage**: Full test suite with extensive coverage
-
 # Opifex Development Setup Guide
 
 This guide covers the development setup for the Opifex framework, including environment configuration, code quality standards, and best practices.
@@ -171,8 +90,6 @@ Our pre-commit setup includes:
 **Solution**: Return expression directly
 
 ```python
-<!-- skip -->
-```python
 # ❌ Bad - Unnecessary assignment
 result = computation()
 return result
@@ -186,7 +103,6 @@ return computation()
 **Issue**: Functions exceeding complexity limits
 **Solution**: Extract helper methods
 
-<!-- skip -->
 ```python
 # ❌ Bad - Complex function
 def complex_function(self, inputs):
@@ -194,7 +110,6 @@ def complex_function(self, inputs):
     pass
 ```
 
-<!-- skip -->
 ```python
 # ✅ Good - Extracted helpers
 def complex_function(self, inputs):
@@ -217,9 +132,10 @@ def complex_function(self, inputs):
 ```bash
 # Daily development workflow
 git checkout -b feature/my-feature
+source activate.sh
 # ... make changes ...
 uv run pre-commit run --all-files  # Check before commit
-git add -A
+git add src/ tests/  # Stage specific files, not everything
 git commit -m "feat: descriptive commit message"
 ```
 
@@ -293,7 +209,6 @@ If patterns emerge that need rule adjustments:
 
 #### **Code Organization**
 
-<!-- skip -->
 ```python
 # ✅ Good - Clear separation of concerns
 class NeuralOperator(nnx.Module):
@@ -490,7 +405,7 @@ uv run pre-commit run pyright --verbose
 | Operation | Time Range | Notes |
 |-----------|------------|-------|
 | **UV Sync** | 200-500ms | Initial dependency installation |
-| **Pre-commit (all hooks)** | 5-8 seconds | All 15 quality gates |
+| **Pre-commit (all hooks)** | 5-8 seconds | All 20 quality gates |
 | **Individual hooks** | 0.1-2 seconds | Varies by hook complexity |
 | **Environment activation** | <100ms | Including UV configuration |
 

@@ -318,7 +318,7 @@ Per-time-step MSE:
 
 ```python
 physics_weight = 0.01  # Start small
-# Or normalize: physics_loss / physics_loss.detach() * target_scale
+# Or normalize: physics_loss / jax.lax.stop_gradient(physics_loss) * target_scale
 ```
 
 #### NaN in physics loss

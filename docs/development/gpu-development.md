@@ -52,7 +52,7 @@ def find_optimal_batch_size(model, max_size=1024):
             test_batch = jnp.ones((batch_size, input_dim))
             _ = model(test_batch)
             print(f"Batch size {batch_size}: OK")
-        except jax.errors.OutOfMemoryError:
+        except RuntimeError:  # JAX raises RuntimeError for OOM conditions
             print(f"Batch size {batch_size}: OOM")
             return batch_size // 2
     return max_size
@@ -121,7 +121,7 @@ print(f"Memory after: {memory_usage():.2f} GB")
 
 ### Code Patterns
 
-1. **Vectorization**: Use `jnp.vectorize` for element-wise operations
+1. **Vectorization**: Use `jax.vmap` for batched element-wise operations
 2. **Broadcasting**: Leverage JAX broadcasting for efficiency
 3. **Tree Operations**: Use `jax.tree_map` for nested structures
 4. **Gradient Checkpointing**: Save memory with `TrainingConfig(gradient_checkpointing=True)`

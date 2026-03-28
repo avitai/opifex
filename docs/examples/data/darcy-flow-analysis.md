@@ -221,8 +221,7 @@ Each index generates a unique sample deterministically.
 
 **Cause**: Generation time scales quadratically with resolution.
 
-**Solution**: Generate a smaller number of high-resolution samples, or use
-subsampling (`sub_resolution` parameter) to create coarse-grained versions:
+**Solution**: Generate a smaller number of high-resolution samples:
 ```python
 data_source = DarcyDataSource(resolution=256, n_samples=10, seed=42)
 ```

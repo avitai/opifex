@@ -1,866 +1,423 @@
-# Opifex Deployment Troubleshooting Guide
+# Deployment Troubleshooting Guide
 
-This full troubleshooting guide helps you resolve common issues when deploying Opifex across different platforms (local, GCP, AWS, and other cloud providers).
+This guide covers common issues when developing with or deploying the Opifex framework across local, Docker, and cloud environments.
 
-## 📋 Table of Contents
+## Table of Contents
 
-1. [General Troubleshooting](#general-troubleshooting)
+1. [General Diagnostics](#general-diagnostics)
 2. [Installation Issues](#installation-issues)
-3. [Container Issues](#container-issues)
-4. [Kubernetes Issues](#kubernetes-issues)
-5. [Cloud-Specific Issues](#cloud-specific-issues)
-6. [Performance Issues](#performance-issues)
-7. [Security Issues](#security-issues)
-8. [Monitoring and Logging](#monitoring-and-logging)
-9. [Recovery Procedures](#recovery-procedures)
+3. [JAX and GPU Issues](#jax-and-gpu-issues)
+4. [Container Issues](#container-issues)
+5. [Kubernetes Issues](#kubernetes-issues)
+6. [Model Serving Issues](#model-serving-issues)
+7. [Cloud-Specific Issues](#cloud-specific-issues)
+8. [Performance Issues](#performance-issues)
 
-## 🔧 General Troubleshooting
+## General Diagnostics
 
-### Basic Diagnostic Commands
+### System Information
 
 ```bash
-# Check system resources
+# System resources
 df -h                    # Disk usage
 free -h                  # Memory usage
 top                      # CPU usage
-lscpu                    # CPU information
-nvidia-smi              # GPU information (if available)
+nvidia-smi               # GPU information (if available)
 
-# Check network connectivity
-ping google.com
-nslookup kubernetes.default.svc.cluster.local
-curl -I http://localhost:8080/health
-
-# Check service status
-systemctl status docker
-systemctl status kubelet
-ps aux | grep -E "(python|java|node)"
-```
-
-### Environment Variables Check
-
-```bash
-# Check important environment variables
-echo $PATH
-echo $PYTHONPATH
-echo $KUBECONFIG
-echo $DOCKER_HOST
-echo $JAX_PLATFORM_NAME
-
-# Check Opifex-specific variables
-echo $OPIFEX_ENV
-echo $LOG_LEVEL
-echo $DEBUG
-```
-
-### Log Collection
-
-```bash
-# System logs
-journalctl -u docker.service --since "1 hour ago"
-journalctl -u kubelet.service --since "1 hour ago"
-
-# Application logs
-docker logs <container-id>
-kubectl logs <pod-name> -n <namespace>
-
-# Export logs for analysis
-kubectl logs -l app=opifex-api -n opifex --since=1h > opifex-logs.txt
-docker logs opifex-api 2>&1 | tail -n 100 > docker-logs.txt
-```
-
-## 🐍 Installation Issues
-
-### Python Environment Issues
-
-#### Issue: Import Errors
-
-```bash
-# Symptoms
-ImportError: No module named 'jax'
-ImportError: No module named 'opifex'
-ModuleNotFoundError: No module named 'flax'
-
-# Diagnosis
-python -c "import sys; print(sys.path)"
-pip list | grep -E "(jax|flax|opifex)"
+# Check environment
 which python
-which pip
+python --version
+uv --version
+```
 
-# Solutions
-# 1. Activate environment
+### Environment Check
+
+```bash
+# Activate environment first
 source ./activate.sh
 
-# 2. Reinstall dependencies
-./setup.sh --force
+# Verify key environment variables
+echo $VIRTUAL_ENV        # Should point to .venv
+echo $JAX_PLATFORMS      # cpu, gpu, or unset (auto-detect)
 
-# 3. Check Python version
-python --version  # Should be 3.11+
+# Verify Opifex is importable
+python -c "import opifex; print('OK')"
+python -c "import jax; print('JAX version:', jax.__version__); print('Devices:', jax.devices())"
 ```
 
-#### Issue: JAX Installation Problems
+## Installation Issues
+
+### Virtual Environment Problems
+
+**Symptom**: `Command not found: uv` or environment not activating.
 
 ```bash
-# Symptoms
-jax._src.lib.xla_bridge.XlaRuntimeError: CUDA not found
-ImportError: jaxlib version X.X.X is too old for jax version Y.Y.Y
-
-# Diagnosis
-python -c "import jax; print(jax.__version__); print(jax.devices())"
-nvidia-smi  # Check CUDA availability
-
-# Solutions
-# 1. Reinstall JAX with CUDA support
-pip uninstall jax jaxlib
-pip install jax[cuda] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-# 2. For CPU-only installation
-pip install jax[cpu]
-
-# 3. Check CUDA compatibility
-nvcc --version
-python -c "import jax; print(jax.local_devices())"
-```
-
-#### Issue: Virtual Environment Problems
-
-```bash
-# Symptoms
-Command not found: uv
-Permission denied: /usr/local/bin/python
-Virtual environment not activating
-
-# Solutions
-# 1. Install uv package manager
+# Install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 
-# 2. Fix permissions
-sudo chown -R $USER:$USER /usr/local/bin/python
-chmod +x opifex-env/bin/activate
-
-# 3. Recreate environment
-./setup.sh --deep-clean
+# Recreate the environment from scratch
+./setup.sh --force-clean
 source ./activate.sh
+```
+
+**Symptom**: `Permission denied` on `.venv/bin/activate`.
+
+```bash
+chmod +x .venv/bin/activate
+source ./activate.sh
+```
+
+### Import Errors
+
+**Symptom**: `ImportError: No module named 'jax'` or `No module named 'opifex'`.
+
+```bash
+# Ensure the environment is activated
+source ./activate.sh
+
+# Verify you are using the correct Python
+which python  # Should be .venv/bin/python
+
+# Reinstall all dependencies
+./setup.sh --force-clean
+source ./activate.sh
+
+# Verify
+python -c "import jax; print(jax.__version__)"
+python -c "import opifex; print('OK')"
 ```
 
 ### Dependency Conflicts
 
 ```bash
-# Check for conflicts
-pip check
+# Check for dependency issues
 uv pip check
 
-# Resolve conflicts
-pip install --upgrade --force-reinstall <package-name>
-uv sync --force-reinstall
+# Force a clean sync
+./setup.sh --recreate
+source ./activate.sh
 
-# Clean installation
-pip freeze > requirements.txt
-pip uninstall -r requirements.txt -y
-uv sync
+# Verify lock file is up to date
+uv lock --check
 ```
 
-## 🐳 Container Issues
+## JAX and GPU Issues
 
-### Docker Problems
+### GPU Not Detected
 
-#### Issue: Docker Daemon Not Running
+**Symptom**: `jax.devices()` returns only CPU devices, or `RuntimeError: No GPU/TPU found`.
 
 ```bash
-# Symptoms
-Cannot connect to the Docker daemon
-docker: command not found
-permission denied while trying to connect to the Docker daemon socket
+# Check NVIDIA driver
+nvidia-smi
 
-# Diagnosis
-systemctl status docker
-docker info
-groups $USER
+# Check what JAX sees
+source ./activate.sh
+python -c "import jax; print(jax.devices())"
 
-# Solutions
-# 1. Start Docker service
+# Reinstall with GPU support
+./setup.sh --recreate --backend cuda12
+source ./activate.sh
+python -c "import jax; print(jax.devices())"
+```
+
+### JAX Version Mismatch
+
+**Symptom**: `ImportError: jaxlib version X.X.X is too old for jax version Y.Y.Y`.
+
+```bash
+# The project pins compatible JAX/jaxlib versions via uv.lock.
+# A clean sync resolves version mismatches.
+./setup.sh --recreate
+source ./activate.sh
+```
+
+### CUDA Errors at Runtime
+
+**Symptom**: `XlaRuntimeError: CUDA not found` or CUDA library loading failures.
+
+Opifex uses JAX's locally-bundled CUDA runtime (installed via the `gpu` extra). You do not need a system CUDA toolkit or `LD_LIBRARY_PATH` injection. If you see CUDA errors:
+
+```bash
+# Verify the GPU extra is installed
+./setup.sh --backend cuda12
+source ./activate.sh
+
+# Check NVIDIA driver compatibility (driver must support CUDA 12.x)
+nvidia-smi  # Check "CUDA Version" in the top-right of the output
+
+# Force CPU mode as a workaround
+JAX_PLATFORMS=cpu python your_script.py
+```
+
+### GPU Memory Issues
+
+**Symptom**: `XLA_PYTHON_CLIENT_MEM_FRACTION` errors or out-of-memory.
+
+```bash
+# Prevent full GPU memory preallocation (set in Dockerfile by default)
+export XLA_PYTHON_CLIENT_PREALLOCATE=false
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.75
+
+# For very constrained GPU memory
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.5
+```
+
+## Container Issues
+
+### Docker Daemon Not Running
+
+```bash
+# Start Docker service
 sudo systemctl start docker
 sudo systemctl enable docker
 
-# 2. Add user to docker group
+# Add user to docker group (avoids needing sudo)
 sudo usermod -aG docker $USER
 newgrp docker
-
-# 3. Fix socket permissions
-sudo chmod 666 /var/run/docker.sock
 ```
 
-#### Issue: Container Build Failures
+### Container Build Failures
 
 ```bash
-# Symptoms
-ERROR: failed to solve: process "/bin/sh -c pip install -r requirements.txt" did not complete successfully
-Step X/Y : RUN command failed
-
-# Diagnosis
+# Build with full output for debugging
 docker build --no-cache --progress=plain -t opifex:debug .
+
+# Enter a failed build layer for inspection
 docker run -it --rm opifex:debug /bin/bash
-
-# Solutions
-# 1. Check Dockerfile syntax
-docker build --dry-run -t opifex:test .
-
-# 2. Use multi-stage build
-FROM python:3.11-slim as builder
-# ... build steps ...
-FROM python:3.11-slim as runtime
-COPY --from=builder /app /app
-
-# 3. Fix base image
-FROM python:3.11-slim
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
 ```
 
-#### Issue: Container Runtime Problems
+### Docker GPU Access
+
+**Symptom**: `docker: Error response from daemon: could not select device driver`
 
 ```bash
-# Symptoms
-Container exits immediately
-Out of memory errors
-Port binding failures
+# Install NVIDIA container toolkit
+# Ubuntu/Debian:
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
 
-# Diagnosis
-docker logs <container-id>
-docker inspect <container-id>
-docker stats <container-id>
-
-# Solutions
-# 1. Increase memory limits
-docker run -m 4g opifex:latest
-
-# 2. Fix port conflicts
-docker run -p 8081:8080 opifex:latest
-netstat -tlnp | grep :8080
-
-# 3. Debug container
-docker run -it --rm opifex:latest /bin/bash
-docker exec -it <container-id> /bin/bash
+# Verify GPU access inside container
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 ```
 
-### Docker Compose Issues
+### Docker Compose Services
+
+The `docker-compose.yml` defines two services:
 
 ```bash
-# Common issues and solutions
-# 1. Service dependencies
-depends_on:
-  - redis
-  - postgres
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
+# GPU runtime
+docker compose up opifex-gpu
 
-# 2. Volume mounting
-volumes:
-  - ./data:/app/data:rw
-  - ./logs:/app/logs:rw
+# CPU-only runtime
+docker compose up opifex-cpu
 
-# 3. Network connectivity
-networks:
-  - opifex-network
+# Run tests
+docker compose run opifex-cpu pytest tests/ -x -q
 
-# 4. Environment variables
-env_file:
-  - .env.development
-environment:
-  - DEBUG=true
+# View logs
+docker compose logs opifex-gpu
+docker compose logs opifex-cpu
 ```
 
-## ☸️ Kubernetes Issues
+## Kubernetes Issues
 
-### Cluster Connectivity
-
-#### Issue: kubectl Not Working
+### kubectl Not Connecting
 
 ```bash
-# Symptoms
-The connection to the server localhost:8080 was refused
-Unable to connect to the server: dial tcp: lookup kubernetes.default.svc
-
-# Diagnosis
-kubectl cluster-info
-kubectl config current-context
-kubectl config view
-
-# Solutions
-# 1. Set correct context
-kubectl config use-context <context-name>
-
-# 2. Update kubeconfig
-# For GKE
+# GKE
 gcloud container clusters get-credentials <cluster-name> --zone <zone>
 
-# For EKS
+# EKS
 aws eks update-kubeconfig --region <region> --name <cluster-name>
 
-# 3. Check cluster status
+# Verify
 kubectl get nodes
-kubectl get pods --all-namespaces
 ```
 
-### Pod Issues
+### Pods Stuck in Pending
 
-#### Issue: Pods Stuck in Pending State
+**Common causes**: insufficient resources, unschedulable GPU requests, or PVC binding failures.
 
 ```bash
-# Symptoms
-NAME                     READY   STATUS    RESTARTS   AGE
-opifex-api-xxx-xxx        0/1     Pending   0          5m
-
-# Diagnosis
 kubectl describe pod <pod-name> -n <namespace>
 kubectl get events --sort-by=.metadata.creationTimestamp -n <namespace>
 kubectl top nodes
-
-# Common causes and solutions
-# 1. Insufficient resources
-kubectl describe nodes
-kubectl get pods --all-namespaces -o wide
-
-# 2. Persistent volume issues
-kubectl get pv,pvc -n <namespace>
-kubectl describe pvc <pvc-name> -n <namespace>
-
-# 3. Node selector issues
-kubectl label nodes <node-name> workload-type=compute
-kubectl get nodes --show-labels
 ```
 
-#### Issue: Pods CrashLoopBackOff
+### Pods in CrashLoopBackOff
 
 ```bash
-# Symptoms
-NAME                     READY   STATUS             RESTARTS   AGE
-opifex-api-xxx-xxx        0/1     CrashLoopBackOff   5          5m
-
-# Diagnosis
+# Check current and previous logs
 kubectl logs <pod-name> -n <namespace>
 kubectl logs <pod-name> -n <namespace> --previous
-kubectl describe pod <pod-name> -n <namespace>
 
-# Solutions
-# 1. Check resource limits
-resources:
-  limits:
-    memory: "4Gi"
-    cpu: "2"
-  requests:
-    memory: "2Gi"
-    cpu: "1"
-
-# 2. Fix liveness/readiness probes
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8080
-  initialDelaySeconds: 60
-  periodSeconds: 30
-
-# 3. Debug container
-kubectl run debug --image=busybox --rm -it -- sh
-kubectl exec -it <pod-name> -- /bin/bash
+# Common fixes:
+# - Increase memory limits (JAX can use significant memory at JIT compilation time)
+# - Increase initialDelaySeconds on liveness probes (model loading takes time)
+# - Verify the container image works locally first
 ```
 
-### Service and Ingress Issues
-
-#### Issue: Service Not Accessible
+### GPU Not Available in Pods
 
 ```bash
-# Symptoms
-curl: (7) Failed to connect to service.domain.com port 80: Connection refused
-502 Bad Gateway
-
-# Diagnosis
-kubectl get services -n <namespace>
-kubectl get endpoints -n <namespace>
-kubectl describe service <service-name> -n <namespace>
-
-# Solutions
-# 1. Check service selector
-kubectl get pods -l app=opifex-api -n <namespace>
-kubectl describe service opifex-api-service -n <namespace>
-
-# 2. Test internal connectivity
-kubectl run test-pod --image=busybox --rm -it -- sh
-# Inside pod: wget -qO- http://opifex-api-service:80/health
-
-# 3. Check ingress configuration
-kubectl get ingress -n <namespace>
-kubectl describe ingress <ingress-name> -n <namespace>
-```
-
-### Storage Issues
-
-```bash
-# PVC stuck in Pending
-kubectl get pvc -n <namespace>
-kubectl describe pvc <pvc-name> -n <namespace>
-
-# Solutions
-# 1. Check storage class
-kubectl get storageclass
-kubectl describe storageclass <storage-class-name>
-
-# 2. Create storage class if missing
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: fast-ssd
-provisioner: kubernetes.io/gce-pd
-parameters:
-  type: pd-ssd
-  zones: us-central1-a,us-central1-b
-
-# 3. Check node affinity for local storage
-kubectl get nodes --show-labels
-kubectl describe pv <pv-name>
-```
-
-## ☁️ Cloud-Specific Issues
-
-### GCP Issues
-
-#### Issue: GKE Cluster Creation Fails
-
-```bash
-# Symptoms
-ERROR: (gcloud.container.clusters.create) ResponseError: code=403
-Insufficient quota
-
-# Diagnosis
-gcloud compute project-info describe --project=<project-id>
-gcloud compute regions list
-gcloud container clusters describe <cluster-name> --zone <zone>
-
-# Solutions
-# 1. Check quotas
-gcloud compute project-info describe --project=<project-id> | grep -A 5 quotas
-
-# 2. Request quota increase
-gcloud compute regions describe <region>
-# Use GCP Console to request quota increase
-
-# 3. Use different machine types
-gcloud container clusters create <cluster-name> \
-    --machine-type=e2-standard-2 \
-    --num-nodes=2
-```
-
-#### Issue: GCP Authentication Problems
-
-```bash
-# Symptoms
-ERROR: (gcloud.auth.login) There was a problem with web authentication
-Application Default Credentials not found
-
-# Solutions
-# 1. Re-authenticate
-gcloud auth login
-gcloud auth application-default login
-
-# 2. Set service account
-gcloud auth activate-service-account --key-file=<key-file>
-export GOOGLE_APPLICATION_CREDENTIALS=<key-file>
-
-# 3. Check permissions
-gcloud projects get-iam-policy <project-id>
-gcloud iam service-accounts list
-```
-
-### AWS Issues
-
-#### Issue: EKS Cluster Access Denied
-
-```bash
-# Symptoms
-error: You must be logged in to the server (Unauthorized)
-An error occurred (AccessDenied) when calling the AssumeRole operation
-
-# Diagnosis
-aws sts get-caller-identity
-aws eks describe-cluster --name <cluster-name> --region <region>
-kubectl config view
-
-# Solutions
-# 1. Update kubeconfig
-aws eks update-kubeconfig --region <region> --name <cluster-name>
-
-# 2. Check IAM permissions
-aws iam get-user
-aws iam list-attached-user-policies --user-name <user-name>
-
-# 3. Add user to cluster
-eksctl create iamidentitymapping \
-    --cluster <cluster-name> \
-    --arn arn:aws:iam::<account-id>:user/<user-name> \
-    --group system:masters \
-    --username <user-name>
-```
-
-#### Issue: EKS Node Group Problems
-
-```bash
-# Symptoms
-Nodes not joining cluster
-NodeCreationFailure
-InsufficientCapacity
-
-# Diagnosis
-aws eks describe-nodegroup --cluster-name <cluster-name> --nodegroup-name <nodegroup-name>
-aws ec2 describe-instances --filters "Name=tag:kubernetes.io/cluster/<cluster-name>,Values=owned"
-
-# Solutions
-# 1. Check instance types availability
-aws ec2 describe-instance-type-offerings --location-type availability-zone --filters Name=location,Values=<zone>
-
-# 2. Update launch template
-aws ec2 describe-launch-templates
-aws ec2 modify-launch-template --launch-template-id <template-id>
-
-# 3. Scale nodegroup
-eksctl scale nodegroup --cluster=<cluster-name> --name=<nodegroup-name> --nodes=5
-```
-
-## 🚀 Performance Issues
-
-### High Resource Usage
-
-#### Issue: High Memory Usage
-
-```bash
-# Symptoms
-OOMKilled pods
-Node memory pressure
-Slow application response
-
-# Diagnosis
-kubectl top nodes
-kubectl top pods --all-namespaces
-kubectl describe node <node-name>
-
-# Solutions
-# 1. Increase memory limits
-resources:
-  limits:
-    memory: "8Gi"
-  requests:
-    memory: "4Gi"
-
-# 2. Optimize application
-# Add memory profiling
-import psutil
-import gc
-gc.collect()
-
-# 3. Add more nodes
-kubectl scale deployment opifex-api --replicas=3
-```
-
-#### Issue: High CPU Usage
-
-```bash
-# Symptoms
-CPU throttling
-Slow processing
-High load average
-
-# Diagnosis
-kubectl top pods -n <namespace>
-kubectl describe pod <pod-name> -n <namespace>
-
-# Solutions
-# 1. Increase CPU limits
-resources:
-  limits:
-    cpu: "4"
-  requests:
-    cpu: "2"
-
-# 2. Optimize code
-# Use JAX compilation
-@jax.jit
-def compute_function(x):
-    return jax.numpy.sum(x**2)
-
-# 3. Scale horizontally
-kubectl autoscale deployment opifex-api --cpu-percent=70 --min=1 --max=10
-```
-
-### GPU Issues
-
-#### Issue: GPU Not Available
-
-```bash
-# Symptoms
-RuntimeError: No GPU/TPU found
-jax._src.lib.xla_bridge.XlaRuntimeError: CUDA not found
-
-# Diagnosis
-nvidia-smi
-kubectl get nodes -l accelerator=nvidia-tesla-k80
-kubectl describe node <gpu-node-name>
-
-# Solutions
-# 1. Install GPU drivers
+# Install NVIDIA device plugin (if not already installed)
 kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.1/nvidia-device-plugin.yml
 
-# 2. Check GPU allocation
-kubectl get nodes -o json | jq '.items[] | select(.status.capacity."nvidia.com/gpu" != null)'
+# Verify GPU allocation
+kubectl describe nodes | grep -A5 "nvidia.com/gpu"
 
-# 3. Request GPU resources
-resources:
-  limits:
-    nvidia.com/gpu: 1
-  requests:
-    nvidia.com/gpu: 1
+# Check pod GPU request
+kubectl describe pod <pod-name> -n <namespace> | grep -A3 "Limits"
 ```
 
-### Network Performance
+## Model Serving Issues
+
+### Server Not Starting
+
+The FastAPI server is at `opifex.deployment.server`:
 
 ```bash
-# Check network latency
-kubectl run test-pod --image=busybox --rm -it -- sh
-# Inside pod: ping <service-name>.<namespace>.svc.cluster.local
+source ./activate.sh
 
-# Check bandwidth
-kubectl run iperf-server --image=networkstatic/iperf3 -- iperf3 -s
-kubectl run iperf-client --image=networkstatic/iperf3 --rm -it -- iperf3 -c iperf-server
+# Start with debug logging
+OPIFEX_LOG_LEVEL=debug python -m opifex.deployment.server
 
-# Optimize network
-# Use nodeAffinity for co-location
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: workload-type
-          operator: In
-          values: ["compute"]
+# Check if port is in use
+lsof -i :8080
+
+# Use a different port
+OPIFEX_PORT=9090 python -m opifex.deployment.server
 ```
 
-## 🔒 Security Issues
-
-### Authentication Problems
+### Health Check Failing
 
 ```bash
-# RBAC issues
-kubectl auth can-i create pods --as=system:serviceaccount:default:my-sa
-kubectl get rolebindings,clusterrolebindings --all-namespaces
+# Test the health endpoint
+curl http://localhost:8080/health
 
-# Fix RBAC
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: opifex-role
-rules:
-- apiGroups: [""]
-  resources: ["pods", "services"]
-  verbs: ["get", "list", "create", "update", "delete"]
+# Expected response:
+# {"status": "healthy", "service": "opifex-model-serving", "version": "1.0.0", ...}
 ```
 
-### Network Security
+If the health check returns unhealthy, check:
+- Is the inference engine initialized? (requires loading a model via the API)
+- Is the model registry path writable? (set via `OPIFEX_MODEL_REGISTRY`)
+
+### Prediction Errors
 
 ```bash
-# Network policy issues
-kubectl get networkpolicies -n <namespace>
-kubectl describe networkpolicy <policy-name> -n <namespace>
-
-# Test connectivity
-kubectl run test-pod --image=busybox --rm -it -- sh
-# Inside pod: nc -zv <service-name> <port>
-
-# Fix network policies
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-opifex-api
-spec:
-  podSelector:
-    matchLabels:
-      app: opifex-api
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: opifex-worker
-    ports:
-    - protocol: TCP
-      port: 8080
+# Test prediction endpoint
+curl -X POST http://localhost:8080/predict \
+    -H "Content-Type: application/json" \
+    -d '{"data": [[1.0, 2.0, 3.0]]}'
 ```
 
-### Secrets Management
+Common errors:
+- **503**: Model not loaded. The inference engine must have a model loaded via `InferenceEngine.load_model()` before predictions work.
+- **400**: Missing `data` field in request body.
+- **400**: Input shape mismatch with loaded model's expected input shape.
+
+## Cloud-Specific Issues
+
+### GCP: Quota Exceeded
 
 ```bash
-# Secrets not mounting
-kubectl get secrets -n <namespace>
-kubectl describe secret <secret-name> -n <namespace>
-
-# Fix secrets mounting
-volumeMounts:
-- name: secret-volume
-  mountPath: /etc/secrets
-  readOnly: true
-volumes:
-- name: secret-volume
-  secret:
-    secretName: opifex-secrets
+gcloud compute project-info describe --project=<PROJECT_ID>
+gcloud compute regions describe <REGION> --project=<PROJECT_ID>
+# Request quota increase via the GCP Console
 ```
 
-## 📊 Monitoring and Logging
-
-### Metrics Collection Issues
+### GCP: Authentication
 
 ```bash
-# Prometheus not scraping
-kubectl get servicemonitors -n monitoring
-kubectl logs -l app=prometheus -n monitoring
-
-# Fix service monitor
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: opifex-metrics
-spec:
-  selector:
-    matchLabels:
-      app: opifex-api
-  endpoints:
-  - port: metrics
-    interval: 30s
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project <PROJECT_ID>
 ```
 
-### Log Aggregation Problems
+### AWS: Access Denied
 
 ```bash
-# Logs not appearing
-kubectl logs -l app=opifex-api -n <namespace>
-kubectl describe pod <pod-name> -n <namespace>
+# Verify identity
+aws sts get-caller-identity
 
-# Fix logging
-# Ensure proper log format
-import logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Check IAM permissions
+aws iam list-attached-user-policies --user-name <USER>
 
-# Use structured logging
-import structlog
-logger = structlog.get_logger()
-logger.info("Processing request", user_id=123, request_id="abc-123")
+# Update kubeconfig for EKS
+aws eks update-kubeconfig --region <REGION> --name <CLUSTER_NAME>
 ```
 
-## 🔄 Recovery Procedures
-
-### Cluster Recovery
+### AWS: ECR Push Failures
 
 ```bash
-# Backup cluster state
-kubectl get all --all-namespaces -o yaml > cluster-backup.yaml
-kubectl get pv -o yaml > pv-backup.yaml
-
-# Restore from backup
-kubectl apply -f cluster-backup.yaml
-kubectl apply -f pv-backup.yaml
-
-# Disaster recovery
-# 1. Recreate cluster
-eksctl create cluster -f cluster-config.yaml
-
-# 2. Restore persistent volumes
-kubectl apply -f pv-backup.yaml
-
-# 3. Restore applications
-kubectl apply -f opifex-deployment.yaml
+# Re-authenticate to ECR
+aws ecr get-login-password --region <REGION> | \
+    docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
 ```
 
-### Data Recovery
+## Performance Issues
+
+### High Memory Usage
 
 ```bash
-# Backup persistent volumes
-kubectl get pvc -n <namespace>
-aws ec2 create-snapshot --volume-id <volume-id> --description "Backup"
+# Monitor system memory
+free -h
 
-# Restore from snapshot
-aws ec2 create-volume --snapshot-id <snapshot-id> --availability-zone <zone>
-kubectl apply -f restored-pvc.yaml
+# Monitor GPU memory
+nvidia-smi
+
+# Reduce JAX GPU memory fraction
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.5
+
+# In Kubernetes, increase pod memory limits:
+# resources.limits.memory: "8Gi"
 ```
 
-### Application Recovery
+### Slow Inference
 
 ```bash
-# Rollback deployment
-kubectl rollout undo deployment/opifex-api -n <namespace>
-kubectl rollout history deployment/opifex-api -n <namespace>
+# Ensure JIT compilation has completed (first call is slow)
+# The InferenceEngine warm-ups JIT on load_model()
 
-# Scale to zero and back
-kubectl scale deployment opifex-api --replicas=0 -n <namespace>
-kubectl scale deployment opifex-api --replicas=3 -n <namespace>
+# Verify GPU is being used
+python -c "import jax; print(jax.devices())"
 
-# Restart pods
-kubectl delete pod -l app=opifex-api -n <namespace>
-kubectl rollout restart deployment/opifex-api -n <namespace>
+# Check the /metrics endpoint for latency data
+curl http://localhost:8080/metrics
 ```
 
-## 🆘 Getting Help
+### JAX Compilation Overhead
 
-### Diagnostic Information Collection
+The first inference call after loading a model triggers JIT compilation, which can take several seconds. Subsequent calls are fast. The `InferenceEngine` performs a warm-up call during `load_model()` to front-load this cost. If you change batch sizes at runtime, expect recompilation overhead.
+
+## Diagnostic Bundle
+
+For filing issues, collect this information:
 
 ```bash
-# Create diagnostic bundle
 #!/bin/bash
-NAMESPACE="opifex"
 OUTPUT_DIR="opifex-diagnostics-$(date +%Y%m%d-%H%M%S)"
-mkdir -p $OUTPUT_DIR
+mkdir -p "$OUTPUT_DIR"
 
-# Cluster information
-kubectl cluster-info > $OUTPUT_DIR/cluster-info.txt
-kubectl get nodes -o wide > $OUTPUT_DIR/nodes.txt
-kubectl get pods --all-namespaces -o wide > $OUTPUT_DIR/all-pods.txt
+# System info
+python --version > "$OUTPUT_DIR/python-version.txt" 2>&1
+uv pip list > "$OUTPUT_DIR/pip-list.txt" 2>&1
+nvidia-smi > "$OUTPUT_DIR/nvidia-smi.txt" 2>&1 || echo "No GPU" > "$OUTPUT_DIR/nvidia-smi.txt"
 
-# Application-specific information
-kubectl get all -n $NAMESPACE -o yaml > $OUTPUT_DIR/opifex-resources.yaml
-kubectl logs -l app=opifex-api -n $NAMESPACE > $OUTPUT_DIR/opifex-api-logs.txt
-kubectl describe pods -l app=opifex-api -n $NAMESPACE > $OUTPUT_DIR/opifex-api-describe.txt
+# JAX info
+python -c "import jax; print('JAX:', jax.__version__); print('Devices:', jax.devices())" > "$OUTPUT_DIR/jax-info.txt" 2>&1
 
-# System information
-kubectl get events --sort-by=.metadata.creationTimestamp -n $NAMESPACE > $OUTPUT_DIR/events.txt
-kubectl top nodes > $OUTPUT_DIR/node-usage.txt
-kubectl top pods -n $NAMESPACE > $OUTPUT_DIR/pod-usage.txt
+# If using Kubernetes
+kubectl get pods --all-namespaces -o wide > "$OUTPUT_DIR/pods.txt" 2>&1 || true
+kubectl get nodes -o wide > "$OUTPUT_DIR/nodes.txt" 2>&1 || true
 
-# Create archive
-tar -czf $OUTPUT_DIR.tar.gz $OUTPUT_DIR
-echo "Diagnostic bundle created: $OUTPUT_DIR.tar.gz"
+tar -czf "$OUTPUT_DIR.tar.gz" "$OUTPUT_DIR"
+echo "Diagnostic bundle: $OUTPUT_DIR.tar.gz"
 ```
-
-### Support Channels
-
-1. **GitHub Issues**: [Opifex Issues](https://github.com/avitai/opifex/issues)
-2. **Community Forum**: [GitHub Discussions](https://github.com/avitai/opifex/discussions)
-3. **Documentation**: [Opifex Docs](https://opifex.readthedocs.io/)
-4. **Cloud Provider Support**:
-   - [GCP Support](https://cloud.google.com/support)
-   - [AWS Support](https://aws.amazon.com/support/)
-
-### Escalation Process
-
-1. **Level 1**: Check this troubleshooting guide
-2. **Level 2**: Search existing GitHub issues
-3. **Level 3**: Create new GitHub issue with diagnostic bundle
-4. **Level 4**: Contact enterprise support (if available)
-
----
-
-**Remember**: Always include diagnostic information, error messages, and steps to reproduce when seeking help. This troubleshooting guide covers the most common issues, but every deployment is unique.

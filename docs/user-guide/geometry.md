@@ -150,27 +150,23 @@ print("Complex CSG geometries created successfully")
 The framework uses signed distance functions (SDFs) for smooth, differentiable CSG operations:
 
 ```python
-from opifex.geometry.csg import _SDFOperations
+from opifex.geometry import union, intersection, difference
 
-# Access internal SDF operations for custom compositions
-sdf_ops = _SDFOperations()
+# Use the public CSG functions for smooth SDF-based operations
+def smooth_union_distance(point, shape1, shape2):
+    """Union via the public CSG API (SDF-based internally)."""
+    combined = union(shape1, shape2)
+    return combined.distance(point)
 
-def smooth_union_distance(point, shape1, shape2, smoothing=0.1):
-    """Smooth union with controllable blending."""
-    d1 = shape1.distance(point)
-    d2 = shape2.distance(point)
-    return sdf_ops.union_sdf(d1, d2)
+def smooth_intersection_distance(point, shape1, shape2):
+    """Intersection via the public CSG API (SDF-based internally)."""
+    combined = intersection(shape1, shape2)
+    return combined.distance(point)
 
-def smooth_intersection_distance(point, shape1, shape2, smoothing=0.1):
-    """Smooth intersection with controllable blending."""
-    d1 = shape1.distance(point)
-    d2 = shape2.distance(point)
-    return sdf_ops.intersection_sdf(d1, d2)
-
-# Example: Smooth blending between shapes
+# Example: Blending between shapes
 blend_point = jnp.array([0.5, 0.0])
 smooth_dist = smooth_union_distance(blend_point, base_rect, cutout_circle)
-print(f"Smooth union distance at {blend_point}: {smooth_dist:.4f}")
+print(f"Union distance at {blend_point}: {smooth_dist:.4f}")
 ```
 
 ## Molecular Geometry and 3D Systems
@@ -178,8 +174,7 @@ print(f"Smooth union distance at {blend_point}: {smooth_dist:.4f}")
 ### Molecular System Definition
 
 ```python
-from opifex.geometry.csg import MolecularSystem
-from opifex.geometry import create_molecular_geometry_from_dft_problem
+from opifex.geometry import MolecularGeometry
 
 # Define a water molecule (H2O) in atomic units
 water_positions = jnp.array([
@@ -188,26 +183,20 @@ water_positions = jnp.array([
     [0.0000, -0.7572, -0.4692]    # Hydrogen 2
 ])
 
-atomic_numbers = jnp.array([8, 1, 1])  # O, H, H
-
-water_molecule = MolecularSystem(
-    positions=water_positions,
-    atomic_numbers=atomic_numbers,
-    charge=0,
-    multiplicity=1
+water_molecule = MolecularGeometry(
+    atomic_symbols=["O", "H", "H"],
+    positions=water_positions
 )
 
 print(f"Water molecule properties:")
 print(f"  Number of atoms: {water_molecule.n_atoms}")
-print(f"  Total charge: {water_molecule.charge}")
-print(f"  Spin multiplicity: {water_molecule.multiplicity}")
-print(f"  Center of mass: {water_molecule.center_of_mass}")
+print(f"  Pairwise distances: {water_molecule.compute_distances()}")
 ```
 
 ### Periodic Systems and Crystal Structures
 
 ```python
-from opifex.geometry.csg import PeriodicCell
+from opifex.geometry import PeriodicCell
 
 # Define a cubic unit cell
 lattice_vectors = jnp.array([
@@ -216,31 +205,29 @@ lattice_vectors = jnp.array([
     [0.0, 0.0, 5.0]   # c vector
 ])
 
-# Create periodic cell for crystal systems
-unit_cell = PeriodicCell(
-    lattice_vectors=lattice_vectors,
-    atomic_positions=jnp.array([
-        [0.0, 0.0, 0.0],    # Atom at origin
-        [2.5, 2.5, 2.5]     # Atom at body center
-    ]),
-    atomic_numbers=jnp.array([14, 14]),  # Silicon atoms
-    periodic_dimensions=[True, True, True]
-)
+# Create periodic cell (takes only lattice vectors)
+unit_cell = PeriodicCell(lattice_vectors=lattice_vectors)
+
+# Wrap coordinates into the unit cell
+positions = jnp.array([
+    [0.0, 0.0, 0.0],    # Atom at origin
+    [2.5, 2.5, 2.5]     # Atom at body center
+])
+wrapped = unit_cell.wrap_coordinates(positions)
 
 print(f"Unit cell volume: {unit_cell.volume:.4f}")
-print(f"Lattice parameters: {unit_cell.lattice_parameters}")
+print(f"Wrapped positions: {wrapped}")
 ```
 
 ### Molecular Exclusion Domains
 
 ```python
-# Create computational domain excluding molecular regions
-molecular_geometry = create_molecular_geometry_from_dft_problem(water_molecule)
+from opifex.geometry import create_computational_domain_with_molecular_exclusion
 
-# Define computational box around molecule
+# Use the MolecularGeometry directly for exclusion domain
 box_size = 10.0  # Atomic units
 computational_domain = create_computational_domain_with_molecular_exclusion(
-    molecular_geometry=molecular_geometry,
+    molecular_geometry=water_molecule,
     box_dimensions=jnp.array([box_size, box_size, box_size]),
     exclusion_radius=2.0,  # Exclude within 2 a.u. of atoms
     buffer_zone=1.0        # Additional buffer for numerical stability
@@ -339,7 +326,7 @@ print(f"Applied SE(3) transformation to {len(points_3d)} points")
 ### Graph Structures for Scientific Computing
 
 ```python
-from opifex.geometry.topology import GraphTopology, GraphNeuralOperator
+from opifex.geometry.topology import GraphTopology
 
 # Create graph from molecular structure
 def create_molecular_graph(positions, atomic_numbers, cutoff_radius=3.0):
@@ -371,6 +358,7 @@ def create_molecular_graph(positions, atomic_numbers, cutoff_radius=3.0):
     )
 
 # Create molecular graph for water
+atomic_numbers = jnp.array([8, 1, 1])  # O, H, H
 molecular_graph = create_molecular_graph(
     water_positions, atomic_numbers, cutoff_radius=2.0
 )
@@ -384,25 +372,21 @@ print(f"  Edge features: {molecular_graph.edge_features.shape}")
 ### Graph Neural Operators
 
 ```python
-from opifex.geometry.topology import GraphMessagePassing
+from opifex.neural.operators.graph import GraphNeuralOperator
+from flax import nnx
+
+rngs = nnx.Rngs(jax.random.PRNGKey(0))
 
 # Create graph neural operator for molecular property prediction
 graph_operator = GraphNeuralOperator(
-    node_features=molecular_graph.nodes.shape[-1],
-    edge_features=molecular_graph.edge_features.shape[-1],
+    node_dim=molecular_graph.nodes.shape[-1],
     hidden_dim=64,
-    n_layers=3,
-    output_dim=1  # Scalar property prediction
-)
-
-# Message passing layer for custom graph operations
-message_passing = GraphMessagePassing(
-    node_dim=64,
+    num_layers=3,
     edge_dim=molecular_graph.edge_features.shape[-1],
-    message_dim=32
+    rngs=rngs
 )
 
-print("Graph neural operators initialized for molecular ML")
+print("Graph neural operator initialized for molecular ML")
 ```
 
 ### Topological Spaces and Simplicial Complexes
@@ -664,38 +648,28 @@ class ComplexDomainPDEProblem(PDEProblem):
     """PDE problem on complex geometric domain."""
 
     def __init__(self, geometry, physics_parameters):
-        # Use geometry for domain definition
-        self.geometry = geometry
-
         # Define boundary conditions based on geometry
         boundary_conditions = [
-            DirichletBC(boundary="outer", value=1.0),
-            NeumannBC(boundary="inner", value=0.0)
+            DirichletBC(boundary="wall", value=1.0),
+            NeumannBC(boundary="symmetry", value=0.0)
         ]
 
-        # Domain includes geometry information
-        domain = {
-            "geometry": geometry,
-            "t": (0.0, 1.0)
-        }
-
         super().__init__(
-            domain=domain,
+            geometry=geometry,
             equation=self._heat_equation_with_geometry,
             boundary_conditions=boundary_conditions,
             parameters=physics_parameters
         )
 
-    def _heat_equation_with_geometry(self, x, y, t, u, u_derivatives, params):
+    def _heat_equation_with_geometry(self, x, u, u_derivatives):
         """Heat equation with geometry-dependent source term."""
-        alpha = params["diffusivity"]
+        alpha = self.parameters["diffusivity"]
         u_t = u_derivatives["t"]
         u_xx = u_derivatives["xx"]
         u_yy = u_derivatives["yy"]
 
         # Geometry-dependent source term
-        point = jnp.array([x, y])
-        distance_to_boundary = self.geometry.distance(point)
+        distance_to_boundary = self.geometry.distance(x[..., :2])
         source_term = jnp.exp(-distance_to_boundary**2)
 
         return u_t - alpha * (u_xx + u_yy) - source_term
