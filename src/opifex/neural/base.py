@@ -7,9 +7,10 @@ scientific machine learning with full Flax NNX compliance.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import jax
+import jax.numpy as jnp
 from flax import nnx
 
 
@@ -58,6 +59,8 @@ class StandardMLP(nnx.Module):
         use_bias: bool = True,
         apply_final_dropout: bool = False,
         *,
+        dtype: Any | None = None,
+        param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
         kernel_init: Callable = nnx.initializers.xavier_uniform(),
         bias_init: Callable = nnx.initializers.zeros,
@@ -75,6 +78,9 @@ class StandardMLP(nnx.Module):
             use_bias: Whether to use bias in linear projections
             apply_final_dropout: Whether to apply dropout after final layer
                 (useful for some transformer-style architectures)
+            dtype: Computation dtype for NNX linear layers. ``None`` preserves
+                the Flax default promotion behavior.
+            param_dtype: Parameter storage dtype for NNX linear layers.
             rngs: FLAX NNX random number generator state (keyword-only)
             kernel_init: Kernel initialization function (callable)
             bias_init: Bias initialization function (callable)
@@ -87,6 +93,8 @@ class StandardMLP(nnx.Module):
         self.dropout_rate = dropout_rate
         self.use_bias = use_bias
         self.apply_final_dropout = apply_final_dropout
+        self.dtype = dtype
+        self.param_dtype = param_dtype
 
         # Validate layer sizes
         if len(layer_sizes) < 2:
@@ -101,6 +109,8 @@ class StandardMLP(nnx.Module):
                 use_bias=use_bias,
                 kernel_init=kernel_init,
                 bias_init=bias_init,
+                dtype=dtype,
+                param_dtype=param_dtype,
                 rngs=rngs,
             )
             layers.append(layer)

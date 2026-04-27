@@ -6,7 +6,7 @@ Provides eager-loading sources for HDF5-based scientific datasets
 Datarax pattern reference:
     - Config: @dataclass inheriting StructuralConfig (frozen, validated)
     - Module: class extending DataSourceModule → StructuralModule → nnx.Module
-    - Data: annotate JAX array storage with nnx.data()
+    - Data: annotate JAX array storage with nnx.data(value)
     - I/O: all file I/O at __init__, pure JAX after
     - Deps: lazy-import optional deps (h5py, pyvista)
 """

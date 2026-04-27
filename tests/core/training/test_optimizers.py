@@ -172,6 +172,21 @@ class TestScheduleCreation:
         # Halfway point should be halfway between
         assert schedule(500) == pytest.approx(0.0055)
 
+    def test_create_linear_schedule_uses_float32_under_x64(self):
+        """Default schedules should be stable when global x64 is enabled."""
+        with jax.enable_x64(True):
+            schedule = create_schedule(
+                schedule_type="linear",
+                init_value=0.01,
+                end_value=0.001,
+                transition_steps=1000,
+            )
+
+            first_value = jnp.asarray(schedule(0))
+            assert first_value.dtype == jnp.float32
+            assert schedule(0) == 0.01
+            assert schedule(500) == pytest.approx(0.0055)
+
     def test_create_step_schedule(self):
         """Test step decay schedule."""
         boundaries = [100, 200, 300]

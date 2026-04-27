@@ -94,7 +94,7 @@ addopts = [
 The actual conftest.py uses the following hooks:
 
 - **`pytest_runtest_setup`**: Clears JAX caches before each test. For tests marked `gpu` or `cuda`, runs garbage collection and checks for GPU device availability, skipping the test if no GPU is accessible.
-- **`pytest_collection_modifyitems`**: Skips tests marked `slow` unless the `--runslow` flag is passed. Also skips tests marked `requires_prometheus` or `requires_psutil` when those optional dependencies are not installed (checked via `DependencyManager`).
+- **`pytest_collection_modifyitems`**: Skips tests marked `requires_prometheus` or `requires_psutil` when those optional dependencies are not installed (checked via `DependencyManager`). Slow, benchmark, integration, and end-to-end markers categorize tests for selection and reporting, but are not skipped by default.
 - **`pytest_runtest_teardown`**: Clears JAX caches and runs garbage collection after each test. For GPU/CUDA tests, performs a dummy JAX operation to ensure the device is in a clean state.
 - **`pytest_configure`**: Registers custom markers (`gpu_required`, `gpu_preferred`, `cpu_safe`, `slow`, `integration`, `cuda_local`, etc.) and suppresses JAX/CUDA warnings.
 
@@ -109,7 +109,7 @@ def test_gpu_operation():
 **Key behaviors:**
 
 - Tests marked `gpu` or `cuda` are automatically skipped when no GPU device is found
-- Slow tests require `--runslow` to execute
+- Slow, benchmark, integration, and end-to-end tests run by default unless explicitly deselected with pytest marker selection
 - Optional dependency tests are skipped gracefully when packages are missing
 
 ### 4. GPU-Safe Operations

@@ -7,6 +7,7 @@ Following datarax test patterns from:
 """
 
 from pathlib import Path
+from typing import Any
 
 import jax
 import numpy as np
@@ -756,8 +757,8 @@ class TestVTKMeshSource:
                     np.float32,
                 )
             )
-            cells = [("triangle", np.array([[0, 1, 2], [2, 3, 4], [4, 5, 6]]))]
-            point_data = {
+            cells: list[Any] = [("triangle", np.array([[0, 1, 2], [2, 3, 4], [4, 5, 6]]))]
+            point_data: dict[str, Any] = {
                 "velocity": np.random.default_rng(i + 10)
                 .standard_normal(
                     (50, 3),

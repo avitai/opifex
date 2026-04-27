@@ -21,6 +21,8 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
+from opifex.core.timing import block_until_ready
+
 
 class RooflineMemoryManager:
     """Memory management based on roofline model for optimal hardware utilization."""
@@ -446,14 +448,14 @@ class CachedProgressiveTester:
             # Warmup (3 runs)
             for _ in range(3):
                 result = operation_fn(x, y)
-                result.block_until_ready()
+                block_until_ready(result)
 
             # Actual timing (10 runs for accuracy)
             times = []
             for _ in range(10):
                 start = time.perf_counter()
                 result = operation_fn(x, y)
-                result.block_until_ready()
+                block_until_ready(result)
                 times.append(time.perf_counter() - start)
 
             avg_time = sum(times) / len(times)

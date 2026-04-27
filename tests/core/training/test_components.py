@@ -18,6 +18,7 @@ Date: October 2025
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import jax
@@ -497,6 +498,20 @@ class TestComponentEdgeCases:
 
         # Should raise PermissionError for invalid path
         with pytest.raises(PermissionError):
+            component.setup(simple_model, training_state)
+
+    def test_checkpoint_normalizes_os_directory_errors(
+        self, simple_model, training_state, monkeypatch
+    ):
+        """Checkpoint setup should expose directory creation failures consistently."""
+        component = CheckpointComponent(config={"checkpoint_dir": "/invalid/path"})
+
+        def raise_os_error(self, *args, **kwargs):
+            raise OSError(30, "Read-only file system")
+
+        monkeypatch.setattr(Path, "mkdir", raise_os_error)
+
+        with pytest.raises(PermissionError, match="Cannot create checkpoint directory"):
             component.setup(simple_model, training_state)
 
     def test_mixed_precision_with_incompatible_dtype(self):

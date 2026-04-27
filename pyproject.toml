@@ -54,9 +54,10 @@ dependencies = [
   "typing_extensions>=4.5.0",
   "pyyaml>=6.0.2",
   "tqdm>=4.67.1",
-  "artifex @ git+https://github.com/avitai/artifex.git",
-  "calibrax @ git+https://github.com/avitai/calibrax.git",
-  "datarax @ git+https://github.com/avitai/datarax.git"
+  # PyPI distribution for Avitai Artifex; imports remain under ``artifex``.
+  "avitai-artifex>=0.1.0",
+  "calibrax>=0.1.0",
+  "datarax>=0.1.2.post1"
 ]
 description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
 license = {file = "LICENSE"}
@@ -66,7 +67,7 @@ requires-python = ">=3.11"
 version = "0.1.0"
 
 [project.optional-dependencies]
-all = ["opifex[dev,docs,gpu,ntk,platform,profiling,scientific-data,test]"]
+all = ["opifex[dev,docs,gpu,platform,profiling,scientific-data,test]"]
 all-cpu = [
   # CPU-only installation with all development dependencies (no GPU)
   # Use for Linux CPU-only or macOS Intel systems
@@ -98,9 +99,9 @@ dev = [
   "pytest-xdist>=3.8.0",
   # Development tools
   "bandit>=1.7.5",
-  "interrogate>=1.5",
   "ipykernel>=6.29.5",
   "jupytext>=1.16.0",
+  "meshio>=5.3.0",
   "pip-audit>=2.6.0",
   "pre-commit>=4.2.0",
   "pydeps>=1.12.17",
@@ -152,10 +153,6 @@ neural-dft = [
   "pyscf>=2.3.0", # Python-based Simulations of Chemistry Framework
   "h5py>=3.8.0", # HDF5 for quantum data storage
   "netcdf4>=1.6.0" # NetCDF for scientific data
-]
-ntk = [
-  # Neural Tangent Kernel analysis
-  "neural-tangents>=0.6.1"
 ]
 # Workshop-inspired comprehensive development environments
 opifex-dev = [
@@ -365,7 +362,6 @@ addopts = [
   "--cov-report=html",
   "--cov-report=term-missing",
   "--cov-fail-under=50",
-  "--benchmark-skip",
   "--timeout=300",
   "--json-report",
   "--json-report-file=temp/test-results.json",

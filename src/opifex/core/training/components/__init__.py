@@ -58,7 +58,7 @@ class CheckpointComponent(TrainingComponent):
         # Create checkpoint directory if it doesn't exist
         try:
             Path(self.checkpoint_dir).mkdir(parents=True, exist_ok=True)
-        except PermissionError as e:
+        except OSError as e:
             raise PermissionError(
                 f"Cannot create checkpoint directory: {self.checkpoint_dir}"
             ) from e

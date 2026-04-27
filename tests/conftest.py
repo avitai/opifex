@@ -284,21 +284,9 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "cuda_local: mark test as requiring local .venv CUDA")
 
 
-def pytest_addoption(parser):
-    """Add custom command line options."""
-    parser.addoption("--runslow", action="store_true", default=False, help="run slow tests")
-
-
 def pytest_collection_modifyitems(config, items):
     """Modify test collection based on environment capabilities."""
     dep_manager = get_dependency_manager()
-
-    run_slow = config.getoption("--runslow")
-    skip_slow = pytest.mark.skip(reason="need --runslow option to run")
-
-    for item in items:
-        if "slow" in item.keywords and not run_slow:
-            item.add_marker(skip_slow)
 
     if dep_manager is None:
         return

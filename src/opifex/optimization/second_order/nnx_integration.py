@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import jax
+import jax.numpy as jnp
 import optax
 from flax import nnx
 
@@ -41,6 +42,22 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from jaxtyping import Array, Float
+
+
+def _parameter_loss_dtype(params) -> jnp.dtype | None:
+    """Return the floating dtype used by optimizer parameters."""
+    for leaf in jax.tree_util.tree_leaves(params):
+        dtype = getattr(leaf, "dtype", None)
+        if dtype is not None and jnp.issubdtype(dtype, jnp.inexact):
+            return jnp.dtype(dtype)
+    return None
+
+
+def _coerce_loss_to_parameter_dtype(loss, dtype: jnp.dtype | None):
+    """Keep scalar losses dtype-compatible with Optax line-search state."""
+    if dtype is None:
+        return loss
+    return jnp.asarray(loss, dtype=dtype)
 
 
 def create_nnx_lbfgs_optimizer(
@@ -118,6 +135,7 @@ class NNXSecondOrderOptimizer:
 
         # Initialize optimizer state with model parameters
         self._graphdef, self._params = nnx.split(model, nnx.Param)
+        self._loss_dtype = _parameter_loss_dtype(self._params)
         self._opt_state = self._optimizer.init(
             self._params  # pyright: ignore[reportArgumentType]
         )
@@ -138,7 +156,7 @@ class NNXSecondOrderOptimizer:
         # Create functional loss that works with params
         def functional_loss(params):
             model = nnx.merge(self._graphdef, params)
-            return loss_fn(model)
+            return _coerce_loss_to_parameter_dtype(loss_fn(model), self._loss_dtype)
 
         # Get value and grad using optax's L-BFGS compatible function
         value, grad = optax.value_and_grad_from_state(functional_loss)(
@@ -230,6 +248,7 @@ class NNXHybridOptimizer:
 
         # Initialize with model parameters
         self._graphdef, self._params = nnx.split(model, nnx.Param)
+        self._loss_dtype = _parameter_loss_dtype(self._params)
         self._state = self._hybrid.init(self._params)
 
     @property
@@ -258,7 +277,7 @@ class NNXHybridOptimizer:
         # Create functional loss that works with params
         def functional_loss(params):
             model = nnx.merge(self._graphdef, params)
-            return loss_fn(model)
+            return _coerce_loss_to_parameter_dtype(loss_fn(model), self._loss_dtype)
 
         # Compute loss and gradients
         loss, grads = jax.value_and_grad(functional_loss)(self._params)

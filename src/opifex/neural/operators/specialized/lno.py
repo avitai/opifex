@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -34,6 +35,7 @@ from flax import nnx
 
 from opifex.neural.activations import get_activation
 from opifex.neural.base import StandardMLP
+from opifex.neural.dtypes import as_compute_array, canonicalize_dtype
 
 
 logger = logging.getLogger(__name__)
@@ -104,12 +106,16 @@ class LaplaceLayer(nnx.Module):
         out_channels: int,
         num_poles: int = 16,
         *,
+        compute_dtype: Any = jnp.float32,
+        param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_poles = num_poles
+        self.compute_dtype = canonicalize_dtype(compute_dtype)
+        self.param_dtype = canonicalize_dtype(param_dtype)
 
         # Scale factor matching reference: 1 / (in * out)
         scale = 1.0 / (in_channels * out_channels)
@@ -124,6 +130,7 @@ class LaplaceLayer(nnx.Module):
             * jax.random.uniform(
                 key1,
                 (in_channels, out_channels, num_poles),
+                dtype=self.param_dtype,
             )
         )
         self.weights_pole_imag = nnx.Param(
@@ -131,6 +138,7 @@ class LaplaceLayer(nnx.Module):
             * jax.random.uniform(
                 key2,
                 (in_channels, out_channels, num_poles),
+                dtype=self.param_dtype,
             )
         )
 
@@ -140,6 +148,7 @@ class LaplaceLayer(nnx.Module):
             * jax.random.uniform(
                 key3,
                 (in_channels, out_channels, num_poles),
+                dtype=self.param_dtype,
             )
         )
         self.weights_residue_imag = nnx.Param(
@@ -147,11 +156,18 @@ class LaplaceLayer(nnx.Module):
             * jax.random.uniform(
                 key4,
                 (in_channels, out_channels, num_poles),
+                dtype=self.param_dtype,
             )
         )
 
         # Local linear transform (skip connection, like FNO's Conv1d w/ kernel=1)
-        self.local_linear = nnx.Linear(in_channels, out_channels, rngs=rngs)
+        self.local_linear = nnx.Linear(
+            in_channels,
+            out_channels,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
 
     def _build_complex_weights(
         self,
@@ -175,8 +191,12 @@ class LaplaceLayer(nnx.Module):
         Returns:
             Output tensor ``(B, C_out, N)``.
         """
+        x = as_compute_array(x, self.compute_dtype)
         _B, _C_in, N = x.shape
         poles, residues = self._build_complex_weights()
+        complex_dtype = (
+            jnp.complex64 if self.compute_dtype == jnp.dtype(jnp.float32) else jnp.complex128
+        )
 
         # --- Step 1: FFT to get input spectral coefficients ---
         # alpha = FFT(x): (B, C_in, N) -> (B, C_in, N) complex
@@ -207,10 +227,10 @@ class LaplaceLayer(nnx.Module):
         x1 = jnp.real(x1)
 
         # --- Step 3b: Transient via exponential kernel ---
-        t = jnp.linspace(0, 1, N)  # (N,)
+        t = jnp.linspace(0, 1, N, dtype=self.compute_dtype)  # (N,)
         # Compute exp(pole * t): poles (C_in, C_out, P), t (N,)
         # → (C_in, C_out, P, N) then einsum with residues
-        exp_term = jnp.exp(jnp.einsum("iop,n->iopn", poles, t.astype(jnp.complex64)))
+        exp_term = jnp.exp(jnp.einsum("iop,n->iopn", poles, t.astype(complex_dtype)))
         # output_residue2: (B, C_out, P), exp_term: (C_in, C_out, P, N)
         # → contract over P: (B, C_out, N)
         x2 = jnp.einsum("bop,iopn->bon", output_residue2, exp_term)
@@ -220,8 +240,7 @@ class LaplaceLayer(nnx.Module):
         # x: (B, C_in, N) → (B, N, C_in) → linear → (B, N, C_out) → (B, C_out, N)
         skip = self.local_linear(x.transpose(0, 2, 1)).transpose(0, 2, 1)
 
-        # Preserve input dtype (avoid float64 promotion from FFT intermediates)
-        return (x1 + x2 + skip).astype(x.dtype)
+        return (x1 + x2 + skip).astype(self.compute_dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +273,8 @@ class LaplaceNeuralOperator(nnx.Module):
         num_poles: int = 16,
         activation: str = "gelu",
         *,
+        compute_dtype: Any = jnp.float32,
+        param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ) -> None:
         super().__init__()
@@ -262,11 +283,15 @@ class LaplaceNeuralOperator(nnx.Module):
         self.hidden_channels = hidden_channels
         self.num_layers = num_layers
         self.num_poles = num_poles
+        self.compute_dtype = canonicalize_dtype(compute_dtype)
+        self.param_dtype = canonicalize_dtype(param_dtype)
 
         # Lifting layer: in_channels → hidden_channels (fc0 in reference)
         self.lift = StandardMLP(
             layer_sizes=[in_channels, hidden_channels],
             activation=activation,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
             rngs=rngs,
         )
 
@@ -277,6 +302,8 @@ class LaplaceNeuralOperator(nnx.Module):
                 in_channels=hidden_channels,
                 out_channels=hidden_channels,
                 num_poles=num_poles,
+                compute_dtype=self.compute_dtype,
+                param_dtype=self.param_dtype,
                 rngs=rngs,
             )
             layers.append(layer)
@@ -289,6 +316,8 @@ class LaplaceNeuralOperator(nnx.Module):
         self.project = StandardMLP(
             layer_sizes=[hidden_channels, hidden_channels, out_channels],
             activation=activation,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
             rngs=rngs,
         )
 
@@ -314,6 +343,8 @@ class LaplaceNeuralOperator(nnx.Module):
         Returns:
             Output ``(B, C_out, N)``.
         """
+        x = as_compute_array(x, self.compute_dtype)
+
         # Lift: (B, C_in, N) → (B, N, C_in) → MLP → (B, N, hidden) → (B, H, N)
         h = self.lift(x.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
 
@@ -322,7 +353,8 @@ class LaplaceNeuralOperator(nnx.Module):
             h = self.activation_fn(layer(h))
 
         # Project: (B, H, N) -> (B, N, H) -> MLP -> (B, N, C_out) -> (B, C_out, N)
-        return self.project(h.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
+        out = self.project(h.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
+        return out.astype(self.compute_dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +370,8 @@ def create_lno(
     num_poles: int = 16,
     activation: str = "gelu",
     *,
+    compute_dtype: Any = jnp.float32,
+    param_dtype: Any = jnp.float32,
     rngs: nnx.Rngs,
 ) -> LaplaceNeuralOperator:
     """Create a Laplace Neural Operator.
@@ -361,6 +395,8 @@ def create_lno(
         num_layers=num_layers,
         num_poles=num_poles,
         activation=activation,
+        compute_dtype=compute_dtype,
+        param_dtype=param_dtype,
         rngs=rngs,
     )
 

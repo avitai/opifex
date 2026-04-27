@@ -125,12 +125,15 @@ class DeploymentAI(nnx.Module):
     def __init__(
         self,
         input_features: int = 24,
+        metric_features: int = 12,
         hidden_features: int = 128,
         decision_threshold: float = 0.7,
         *,
         rngs: nnx.Rngs,
     ):
         super().__init__()
+        self.input_features = input_features
+        self.metric_features = metric_features
         self.decision_threshold = decision_threshold
 
         # Neural network for deployment strategy selection
@@ -144,7 +147,7 @@ class DeploymentAI(nnx.Module):
 
         # Neural network for rollback prediction
         self.rollback_predictor = nnx.Sequential(
-            nnx.Linear(input_features, hidden_features, rngs=rngs),
+            nnx.Linear(metric_features, hidden_features, rngs=rngs),
             nnx.gelu,
             nnx.Linear(hidden_features, 64, rngs=rngs),
             nnx.gelu,
@@ -153,17 +156,61 @@ class DeploymentAI(nnx.Module):
 
         # Traffic management optimizer
         self.traffic_optimizer = nnx.Sequential(
-            nnx.Linear(input_features, 64, rngs=rngs),
+            nnx.Linear(metric_features * 2, 64, rngs=rngs),
             nnx.gelu,
             nnx.Linear(64, 32, rngs=rngs),
             nnx.gelu,
             nnx.Linear(32, 1, rngs=rngs),  # Optimal traffic percentage
         )
 
+    def _single_feature_vector(
+        self,
+        features: jnp.ndarray,
+        expected_size: int,
+        name: str,
+    ) -> jnp.ndarray:
+        """Normalize one feature vector and fail early on invalid shapes."""
+        vector = jnp.asarray(features, dtype=jnp.float32)
+        if vector.ndim == 2 and vector.shape[0] == 1:
+            vector = vector[0]
+
+        if vector.ndim != 1 or vector.shape[0] != expected_size:
+            raise ValueError(
+                f"{name} must be a vector of shape ({expected_size},) or "
+                f"(1, {expected_size}), got {features.shape}"
+            )
+        return vector
+
+    def _deployment_metric_vector(self, metrics: jnp.ndarray, name: str) -> jnp.ndarray:
+        """Normalize compact or full deployment metrics to the model metric width."""
+        vector = jnp.asarray(metrics, dtype=jnp.float32)
+        if vector.ndim == 2 and vector.shape[0] == 1:
+            vector = vector[0]
+
+        if vector.ndim != 1:
+            raise ValueError(f"{name} must be a vector, got {metrics.shape}")
+
+        if vector.shape[0] == self.metric_features:
+            return vector
+
+        compact_metric_features = self.metric_features // 2
+        if vector.shape[0] == compact_metric_features:
+            return jnp.pad(vector, (0, self.metric_features - compact_metric_features))
+
+        raise ValueError(
+            f"{name} must have {compact_metric_features} compact metrics or "
+            f"{self.metric_features} full metrics, got {metrics.shape}"
+        )
+
     def select_deployment_strategy(
         self, system_features: jnp.ndarray
     ) -> tuple[DeploymentStrategy, float]:
         """Select optimal deployment strategy based on system state."""
+        system_features = self._single_feature_vector(
+            system_features,
+            self.input_features,
+            "system_features",
+        )
         strategy_scores = self.strategy_selector(system_features)
         strategy_probabilities = jax.nn.softmax(strategy_scores)
 
@@ -177,6 +224,10 @@ class DeploymentAI(nnx.Module):
 
     def predict_rollback_probability(self, deployment_metrics: jnp.ndarray) -> float:
         """Predict probability that deployment should be rolled back."""
+        deployment_metrics = self._deployment_metric_vector(
+            deployment_metrics,
+            "deployment_metrics",
+        )
         rollback_logit = self.rollback_predictor(deployment_metrics)
         rollback_probability = jax.nn.sigmoid(rollback_logit)
         return float(rollback_probability[0])
@@ -185,6 +236,8 @@ class DeploymentAI(nnx.Module):
         self, current_metrics: jnp.ndarray, target_metrics: jnp.ndarray
     ) -> float:
         """Optimize traffic split percentage for gradual rollout."""
+        current_metrics = self._deployment_metric_vector(current_metrics, "current_metrics")
+        target_metrics = self._deployment_metric_vector(target_metrics, "target_metrics")
         combined_features = jnp.concatenate([current_metrics, target_metrics])
         optimal_percentage = self.traffic_optimizer(combined_features)
         # Ensure percentage is in valid range [0, 100]

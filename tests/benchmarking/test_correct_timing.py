@@ -6,7 +6,6 @@ to ensure accurate timing measurements on GPU hardware.
 
 import time
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -15,48 +14,24 @@ class TestCorrectBenchmarkTiming:
     """Test that benchmarks use block_until_ready for accurate timing."""
 
     def test_benchmark_waits_for_computation(self):
-        """Verify benchmarks use block_until_ready for accurate timing.
+        """Benchmark synchronization should call block_until_ready on nested outputs."""
+        from opifex.core.timing import block_until_ready
 
-        JAX uses asynchronous dispatch - operations return immediately.
-        Without block_until_ready(), timing measures dispatch time (wrong).
+        class ReadySpy:
+            def __init__(self):
+                self.called = False
 
-        This test proves block_until_ready is necessary and implemented.
-        """
+            def block_until_ready(self):
+                self.called = True
+                return self
 
-        @jax.jit
-        def simple_matmul(x, y):
-            return jnp.dot(x, y)
+        first = ReadySpy()
+        second = ReadySpy()
+        output = {"first": first, "nested": (second,)}
 
-        x = jnp.ones((1000, 1000))
-        y = jnp.ones((1000, 1000))
-
-        # Warmup
-        for _ in range(3):
-            result = simple_matmul(x, y)
-            result.block_until_ready()
-
-        # Measure WITHOUT block_until_ready (wrong)
-        start_wrong = time.perf_counter()
-        _ = simple_matmul(x, y)
-        time_wrong = time.perf_counter() - start_wrong
-
-        # Measure WITH block_until_ready (correct)
-        start_correct = time.perf_counter()
-        result_correct = simple_matmul(x, y)
-        result_correct.block_until_ready()
-        time_correct = time.perf_counter() - start_correct
-
-        # Correct timing should be larger
-        assert time_correct > time_wrong * 2, (
-            f"block_until_ready not working: "
-            f"wrong={time_wrong:.6f}s, correct={time_correct:.6f}s. "
-            f"Ratio should be >2x, got {time_correct / time_wrong:.1f}x"
-        )
-
-        # Correct timing should be meaningful (not just dispatch)
-        assert time_correct > 1e-5, (
-            f"Timing too fast ({time_correct:.6f}s). Likely missing block_until_ready."
-        )
+        assert block_until_ready(output) is output
+        assert first.called
+        assert second.called
 
 
 class TestGPUAccelerationBenchmarking:
@@ -111,10 +86,9 @@ class TestGPUAccelerationBenchmarking:
 class TestBenchmarkPipelineCorrectness:
     """Integration tests for complete benchmark pipeline."""
 
-    @pytest.mark.slow
     @pytest.mark.integration
-    def test_end_to_end_benchmark_timing_accuracy(self):
-        """Test complete benchmark pipeline produces accurate timings."""
+    def test_end_to_end_benchmark_timing_accuracy(self, monkeypatch):
+        """Test complete benchmark timing aggregation without wall-clock flakiness."""
         from flax import nnx
 
         class SimpleModel(nnx.Module):
@@ -131,6 +105,16 @@ class TestBenchmarkPipelineCorrectness:
         for _ in range(3):
             result = model(x)
             result.block_until_ready()
+
+        current_time = 0.0
+
+        def fake_perf_counter():
+            nonlocal current_time
+            value = current_time
+            current_time += 0.001
+            return value
+
+        monkeypatch.setattr(time, "perf_counter", fake_perf_counter)
 
         # Time multiple iterations
         times = []

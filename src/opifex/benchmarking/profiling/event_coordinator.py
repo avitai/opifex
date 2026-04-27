@@ -16,6 +16,8 @@ from typing import Any
 
 import jax
 
+from opifex.core.timing import block_until_ready
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ProfilingEvent:
@@ -184,13 +186,7 @@ class EventCoordinator:
         try:
             result = func(*args, **kwargs)
 
-            # Ensure JAX computation completes
-            if hasattr(result, "block_until_ready"):
-                result.block_until_ready()
-            elif isinstance(result, tuple | list):
-                for item in result:
-                    if hasattr(item, "block_until_ready"):
-                        item.block_until_ready()
+            block_until_ready(result)
 
             execution_time = time.perf_counter() - start_time
 

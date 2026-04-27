@@ -345,7 +345,6 @@ addopts = [
     "--cov-report=html",
     "--cov-report=term-missing",
     "--cov-fail-under=50",
-    "--benchmark-skip",
     "--timeout=300",
 ]
 markers = [

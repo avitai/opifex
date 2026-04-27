@@ -95,6 +95,20 @@ class TestGradientEnhancedPINN:
         x = jax.random.normal(rngs.params(), (4, 2))
         assert model(x).dtype == jnp.float32
 
+    def test_float64_input_uses_default_compute_dtype(self, rngs):
+        model = GradientEnhancedPINN(
+            input_dim=2,
+            output_dim=1,
+            hidden_dims=[32, 32],
+            rngs=rngs,
+        )
+        with jax.enable_x64(True):
+            x = jax.random.normal(rngs.params(), (4, 2), dtype=jnp.float64)
+            out = model(x)
+
+        assert x.dtype == jnp.float64
+        assert out.dtype == jnp.float32
+
     def test_output_finite(self, rngs):
         model = GradientEnhancedPINN(
             input_dim=2,

@@ -12,11 +12,11 @@ from typing import Any, TYPE_CHECKING
 
 import jax
 from datarax.distributed import (
-    apply_sharding_rules,
     create_data_parallel_sharding,
     data_parallel_rules,
     MeshRules,
-    shard_batch as datarax_shard_batch,
+    partition_spec_for_names,
+    place_batch_on_shards as datarax_place_batch_on_shards,
     spmd_train_step,
 )
 from flax import nnx
@@ -33,10 +33,10 @@ logger = logging.getLogger(__name__)
 # Re-export useful datarax sharding utilities
 __all__ = [
     "MeshRules",
-    "apply_sharding_rules",
     "create_distributed_train_step",
     "create_sharded_model",
     "data_parallel_rules",
+    "partition_spec_for_names",
     "shard_batch",
 ]
 
@@ -93,7 +93,7 @@ def shard_batch(
         The batch with arrays sharded along the first dimension.
     """
     sharding = create_data_parallel_sharding(mesh, data_axis)
-    return datarax_shard_batch(batch, sharding)
+    return datarax_place_batch_on_shards(batch, sharding)
 
 
 def create_sharded_model(

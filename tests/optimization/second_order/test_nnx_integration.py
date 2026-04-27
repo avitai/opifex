@@ -3,6 +3,7 @@
 TDD: These tests define the expected behavior for NNX integration helpers.
 """
 
+import jax
 import jax.numpy as jnp
 from flax import nnx
 
@@ -12,10 +13,16 @@ from opifex.optimization.second_order.config import (
     SwitchCriterion,
 )
 from opifex.optimization.second_order.nnx_integration import (
+    _coerce_loss_to_parameter_dtype,
     create_nnx_lbfgs_optimizer,
     NNXHybridOptimizer,
     NNXSecondOrderOptimizer,
 )
+
+
+def _all_leaves_finite(tree) -> bool:
+    """Return True when every array leaf in a PyTree is finite."""
+    return all(bool(jnp.all(jnp.isfinite(leaf))) for leaf in jax.tree_util.tree_leaves(tree))
 
 
 class SimpleModel(nnx.Module):
@@ -136,6 +143,63 @@ class TestNNXSecondOrderOptimizer:
 
         # Parameters should have changed
         assert not jnp.allclose(initial_weight, new_weight)
+
+    def test_step_keeps_default_float32_loss_with_x64_inputs(self):
+        """x64-enabled inputs should not promote default NNX optimizer losses."""
+        with jax.enable_x64(True):
+            model = SimpleModel(2, 1, rngs=nnx.Rngs(0))
+            optimizer = NNXSecondOrderOptimizer(model)
+
+            x = jnp.array([[1.0, 2.0]])
+            y = jnp.array([[5.0]])
+
+            def loss_fn(model):
+                return jnp.mean((model(x) - y) ** 2)
+
+            loss = optimizer.step(loss_fn)
+
+        assert loss.dtype == jnp.float32
+        assert jnp.isfinite(loss)
+
+    def test_loss_dtype_coercion_is_jittable_and_differentiable(self):
+        """Loss dtype coercion should preserve JIT tracing and gradients."""
+        with jax.enable_x64(True):
+            x = jnp.array(2.0)
+
+            def loss_fn(weight):
+                loss = (weight * x - 1.0) ** 2
+                return _coerce_loss_to_parameter_dtype(loss, jnp.dtype(jnp.float32))
+
+            value, grad = jax.jit(jax.value_and_grad(loss_fn))(jnp.asarray(0.25, dtype=jnp.float32))
+
+        assert value.dtype == jnp.float32
+        assert grad.dtype == jnp.float32
+        assert jnp.isfinite(value)
+        assert jnp.isfinite(grad)
+
+    def test_nnx_functional_loss_is_jittable_and_differentiable_with_x64_inputs(self):
+        """NNX functional loss should remain traceable after dtype coercion."""
+        with jax.enable_x64(True):
+            model = SimpleModel(2, 1, rngs=nnx.Rngs(0))
+            optimizer = NNXSecondOrderOptimizer(model)
+
+            x = jnp.array([[1.0, 2.0]])
+            y = jnp.array([[5.0]])
+
+            def loss_fn(model):
+                return jnp.mean((model(x) - y) ** 2)
+
+            def functional_loss(params):
+                model = nnx.merge(optimizer._graphdef, params)
+                return _coerce_loss_to_parameter_dtype(loss_fn(model), optimizer._loss_dtype)
+
+            value, grads = jax.jit(jax.value_and_grad(functional_loss))(optimizer._params)
+
+        grad_leaves = jax.tree_util.tree_leaves(grads)
+        assert value.dtype == jnp.float32
+        assert {leaf.dtype for leaf in grad_leaves} == {jnp.dtype(jnp.float32)}
+        assert jnp.isfinite(value)
+        assert _all_leaves_finite(grads)
 
 
 class TestNNXHybridOptimizer:

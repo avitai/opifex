@@ -1,39 +1,15 @@
-"""Tests for NTK wrapper with neural-tangents integration.
+"""Tests for JAX-native NTK wrapper utilities.
 
 TDD: These tests define the expected behavior for NTK computation with NNX models.
 """
 
 import jax.numpy as jnp
-import pytest
 from flax import nnx
-
-
-# Check if neural-tangents is available and compatible
-def _check_neural_tangents_available():
-    import importlib.util
-
-    if importlib.util.find_spec("neural_tangents") is None:
-        return False
-    try:
-        # Check if it can be imported without compatibility issues
-        import neural_tangents  # noqa: F401  # pyright: ignore[reportUnusedImport,reportMissingImports]
-
-        return True
-    except Exception:
-        # Compatibility issues with JAX version
-        return False
-
-
-NEURAL_TANGENTS_AVAILABLE = _check_neural_tangents_available()
 
 
 class TestNTKWrapperCreation:
     """Test NTK wrapper creation."""
 
-    @pytest.mark.skipif(
-        not NEURAL_TANGENTS_AVAILABLE,
-        reason="neural-tangents not available or incompatible with JAX version",
-    )
     def test_create_ntk_fn_from_nnx(self):
         """Should create NTK function from NNX model."""
         from opifex.core.physics.ntk.wrapper import create_ntk_fn_from_nnx
@@ -51,11 +27,11 @@ class TestNTKWrapperCreation:
 
         assert ntk_fn is not None
         assert callable(ntk_fn)
+        x = jnp.array([[0.1, 0.2], [0.3, 0.4]])
+        ntk = ntk_fn(x)
+        assert ntk.shape == (2, 2)
+        assert jnp.all(jnp.isfinite(ntk))
 
-    @pytest.mark.skipif(
-        not NEURAL_TANGENTS_AVAILABLE,
-        reason="neural-tangents not available or incompatible with JAX version",
-    )
     def test_create_ntk_fn_with_deep_model(self):
         """Should work with deeper neural networks."""
         from opifex.core.physics.ntk.wrapper import create_ntk_fn_from_nnx
@@ -79,6 +55,10 @@ class TestNTKWrapperCreation:
         ntk_fn = create_ntk_fn_from_nnx(model)
 
         assert ntk_fn is not None
+        x = jnp.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
+        ntk = ntk_fn(x)
+        assert ntk.shape == (3, 3)
+        assert jnp.all(jnp.isfinite(ntk))
 
 
 class TestEmpiricalNTK:

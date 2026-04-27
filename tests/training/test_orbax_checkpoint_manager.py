@@ -16,6 +16,11 @@ from flax.training import train_state
 from opifex.training.orbax_checkpoint_manager import OrbaxCheckpointManager
 
 
+def _canonical_path(path: str | Path) -> str:
+    """Resolve equivalent filesystem paths for platform-specific temp dirs."""
+    return str(Path(path).resolve())
+
+
 class SimpleTestModel(nnx.Module):
     """Simple test model for checkpoint testing."""
 
@@ -95,7 +100,7 @@ class TestOrbaxCheckpointManager:
         """Test checkpoint manager initialization."""
         manager = OrbaxCheckpointManager(temp_dir)
 
-        assert str(manager.checkpoint_dir) == temp_dir
+        assert _canonical_path(manager.checkpoint_dir) == _canonical_path(temp_dir)
         assert manager.checkpoint_manager is not None
         assert Path(temp_dir).exists()
 
@@ -109,7 +114,7 @@ class TestOrbaxCheckpointManager:
         checkpoint_path = manager.save_checkpoint(simple_model, step, loss, physics_metadata)
 
         # Verify checkpoint was saved
-        assert checkpoint_path == str(Path(temp_dir) / str(step))
+        assert _canonical_path(checkpoint_path) == _canonical_path(Path(temp_dir) / str(step))
         assert Path(checkpoint_path).exists()
 
         # Load checkpoint
@@ -272,7 +277,7 @@ class TestOrbaxCheckpointManager:
         )
 
         # Verify checkpoint was saved
-        assert checkpoint_path == str(Path(temp_dir) / str(step))
+        assert _canonical_path(checkpoint_path) == _canonical_path(Path(temp_dir) / str(step))
         assert Path(checkpoint_path).exists()
 
         # Load TrainState checkpoint

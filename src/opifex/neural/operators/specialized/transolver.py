@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 
 from opifex.neural.base import StandardMLP
+from opifex.neural.dtypes import as_compute_array, canonicalize_dtype
 
 
 logger = logging.getLogger(__name__)
@@ -112,6 +114,8 @@ class PhysicsAttention(nnx.Module):
         dim_head: int,
         slice_num: int,
         dropout_rate: float = 0.0,
+        compute_dtype: Any = jnp.float32,
+        param_dtype: Any = jnp.float32,
         *,
         rngs: nnx.Rngs,
     ) -> None:
@@ -119,32 +123,81 @@ class PhysicsAttention(nnx.Module):
         self.num_heads = num_heads
         self.dim_head = dim_head
         self.slice_num = slice_num
+        self.compute_dtype = canonicalize_dtype(compute_dtype)
+        self.param_dtype = canonicalize_dtype(param_dtype)
         self.scale = dim_head**-0.5
         inner_dim = dim_head * num_heads
 
         # Learnable temperature for softmax sharpness (per head)
-        self.temperature = nnx.Param(jnp.full((1, num_heads, 1, 1), 0.5))
+        self.temperature = nnx.Param(jnp.full((1, num_heads, 1, 1), 0.5, dtype=self.param_dtype))
 
         # Input projections
-        self.in_project_x = nnx.Linear(dim, inner_dim, rngs=rngs)
-        self.in_project_fx = nnx.Linear(dim, inner_dim, rngs=rngs)
+        self.in_project_x = nnx.Linear(
+            dim,
+            inner_dim,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
+        self.in_project_fx = nnx.Linear(
+            dim,
+            inner_dim,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
 
         # Slice projection — orthogonal init for principled assignment
-        self.in_project_slice = nnx.Linear(dim_head, slice_num, rngs=rngs)
+        self.in_project_slice = nnx.Linear(
+            dim_head,
+            slice_num,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
         # Apply orthogonal initialization to slice weights
         ortho_key = rngs.params()
-        ortho_weight = jax.random.orthogonal(ortho_key, n=max(dim_head, slice_num))[
-            :dim_head, :slice_num
-        ]
+        ortho_weight = jax.random.orthogonal(
+            ortho_key,
+            n=max(dim_head, slice_num),
+            dtype=self.param_dtype,
+        )[:dim_head, :slice_num]
         self.in_project_slice.kernel.value = ortho_weight
 
         # QKV projections (no bias, per reference)
-        self.to_q = nnx.Linear(dim_head, dim_head, use_bias=False, rngs=rngs)
-        self.to_k = nnx.Linear(dim_head, dim_head, use_bias=False, rngs=rngs)
-        self.to_v = nnx.Linear(dim_head, dim_head, use_bias=False, rngs=rngs)
+        self.to_q = nnx.Linear(
+            dim_head,
+            dim_head,
+            use_bias=False,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
+        self.to_k = nnx.Linear(
+            dim_head,
+            dim_head,
+            use_bias=False,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
+        self.to_v = nnx.Linear(
+            dim_head,
+            dim_head,
+            use_bias=False,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
 
         # Output projection
-        self.out_proj = nnx.Linear(inner_dim, dim, rngs=rngs)
+        self.out_proj = nnx.Linear(
+            inner_dim,
+            dim,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
 
         # Dropout (Artifex pattern: conditional with rate guard)
         self.dropout_rate = dropout_rate
@@ -168,6 +221,7 @@ class PhysicsAttention(nnx.Module):
         Returns:
             Output tensor of shape ``(B, N, C)``.
         """
+        x = as_compute_array(x, self.compute_dtype)
         B, N, _C = x.shape
 
         # --- (1) Slice ---
@@ -181,7 +235,7 @@ class PhysicsAttention(nnx.Module):
         )
 
         # Temperature-scaled soft assignment: (B, H, N, D) → (B, H, N, G)
-        temp = jnp.clip(self.temperature.value, 0.1, 5.0)
+        temp = jnp.clip(self.temperature.value.astype(self.compute_dtype), 0.1, 5.0)
         slice_weights = jax.nn.softmax(self.in_project_slice(x_mid) / temp, axis=-1)
 
         # Aggregate into slice tokens: (B, H, G, D) via weighted average
@@ -205,7 +259,7 @@ class PhysicsAttention(nnx.Module):
         # (B, H, N, D) → (B, N, H*D)
         out_x = out_x.transpose(0, 2, 1, 3).reshape(B, N, -1)
 
-        return self.out_proj(out_x)
+        return self.out_proj(out_x).astype(self.compute_dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -245,38 +299,67 @@ class TransolverBlock(nnx.Module):
         activation: str = "gelu",
         last_layer: bool = False,
         out_dim: int = 1,
+        compute_dtype: Any = jnp.float32,
+        param_dtype: Any = jnp.float32,
         *,
         rngs: nnx.Rngs,
     ) -> None:
         super().__init__()
         self.last_layer = last_layer
+        self.compute_dtype = canonicalize_dtype(compute_dtype)
+        self.param_dtype = canonicalize_dtype(param_dtype)
 
         dim_head = hidden_dim // num_heads
 
         # Pre-norm 1 + Physics Attention
-        self.ln_1 = nnx.LayerNorm(hidden_dim, rngs=rngs)
+        self.ln_1 = nnx.LayerNorm(
+            hidden_dim,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
         self.attn = PhysicsAttention(
             dim=hidden_dim,
             num_heads=num_heads,
             dim_head=dim_head,
             slice_num=slice_num,
             dropout_rate=dropout_rate,
+            compute_dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
             rngs=rngs,
         )
 
         # Pre-norm 2 + FFN (reuses StandardMLP from opifex.neural.base)
-        self.ln_2 = nnx.LayerNorm(hidden_dim, rngs=rngs)
+        self.ln_2 = nnx.LayerNorm(
+            hidden_dim,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
+        )
         self.ffn = StandardMLP(
             layer_sizes=[hidden_dim, hidden_dim * mlp_ratio, hidden_dim],
             activation=activation,
             dropout_rate=dropout_rate,
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
             rngs=rngs,
         )
 
         # Optional output projection for last layer
         if last_layer:
-            self.ln_3 = nnx.LayerNorm(hidden_dim, rngs=rngs)
-            self.out_proj = nnx.Linear(hidden_dim, out_dim, rngs=rngs)
+            self.ln_3 = nnx.LayerNorm(
+                hidden_dim,
+                dtype=self.compute_dtype,
+                param_dtype=self.param_dtype,
+                rngs=rngs,
+            )
+            self.out_proj = nnx.Linear(
+                hidden_dim,
+                out_dim,
+                dtype=self.compute_dtype,
+                param_dtype=self.param_dtype,
+                rngs=rngs,
+            )
 
     def __call__(
         self,
@@ -293,14 +376,15 @@ class TransolverBlock(nnx.Module):
         Returns:
             ``(B, N, hidden_dim)`` or ``(B, N, out_dim)`` if last layer.
         """
+        x = as_compute_array(x, self.compute_dtype)
         # Pre-norm attention + residual
         x = self.attn(self.ln_1(x), deterministic=deterministic) + x
         # Pre-norm FFN + residual
         x = self.ffn(self.ln_2(x), deterministic=deterministic) + x
 
         if self.last_layer:
-            return self.out_proj(self.ln_3(x))
-        return x
+            return self.out_proj(self.ln_3(x)).astype(self.compute_dtype)
+        return x.astype(self.compute_dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -323,11 +407,15 @@ class Transolver(nnx.Module):
     def __init__(
         self,
         config: TransolverConfig,
+        compute_dtype: Any = jnp.float32,
+        param_dtype: Any = jnp.float32,
         *,
         rngs: nnx.Rngs,
     ) -> None:
         super().__init__()
         self.config = config
+        self.compute_dtype = canonicalize_dtype(compute_dtype)
+        self.param_dtype = canonicalize_dtype(param_dtype)
 
         # Input projection: (space_dim + fun_dim) → hidden_dim
         in_dim = config.space_dim + max(config.fun_dim, 0)
@@ -335,12 +423,15 @@ class Transolver(nnx.Module):
             layer_sizes=[in_dim, config.hidden_dim * 2, config.hidden_dim],
             activation=config.activation,
             dropout_rate=0.0,  # no dropout on input projection
+            dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
             rngs=rngs,
         )
 
         # Learnable placeholder bias (adds position-agnostic info)
         self.placeholder = nnx.Param(
-            jax.random.normal(rngs.params(), (config.hidden_dim,)) / config.hidden_dim
+            jax.random.normal(rngs.params(), (config.hidden_dim,), dtype=self.param_dtype)
+            / config.hidden_dim
         )
 
         # Stacked Transolver blocks
@@ -356,6 +447,8 @@ class Transolver(nnx.Module):
                 activation=config.activation,
                 last_layer=is_last,
                 out_dim=config.out_dim,
+                compute_dtype=self.compute_dtype,
+                param_dtype=self.param_dtype,
                 rngs=rngs,
             )
             blocks.append(block)
@@ -387,19 +480,21 @@ class Transolver(nnx.Module):
             Predictions ``(B, N, out_dim)``.
         """
         # Concatenate coordinates and function values
+        x = as_compute_array(x, self.compute_dtype)
+        fx = as_compute_array(fx, self.compute_dtype) if fx is not None else None
         h = jnp.concatenate([x, fx], axis=-1) if fx is not None else x
 
         # Project to hidden dimension
         h = self.preprocess(h, deterministic=deterministic)
 
         # Add learnable placeholder bias
-        h = h + self.placeholder.value[None, None, :]
+        h = h + self.placeholder.value.astype(self.compute_dtype)[None, None, :]
 
         # Pass through Transolver blocks
         for block in self.blocks:
             h = block(h, deterministic=deterministic)
 
-        return h
+        return h.astype(self.compute_dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +511,8 @@ def create_transolver(
     num_layers: int = 5,
     slice_num: int = 32,
     dropout_rate: float = 0.0,
+    compute_dtype: Any = jnp.float32,
+    param_dtype: Any = jnp.float32,
     *,
     rngs: nnx.Rngs,
 ) -> Transolver:
@@ -445,7 +542,12 @@ def create_transolver(
         slice_num=slice_num,
         dropout_rate=dropout_rate,
     )
-    return Transolver(config, rngs=rngs)
+    return Transolver(
+        config,
+        compute_dtype=compute_dtype,
+        param_dtype=param_dtype,
+        rngs=rngs,
+    )
 
 
 __all__ = [

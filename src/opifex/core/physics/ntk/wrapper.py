@@ -1,7 +1,7 @@
 """Neural Tangent Kernel (NTK) wrapper for FLAX NNX models.
 
-This module provides utilities for computing the empirical Neural Tangent Kernel
-using Google's neural-tangents library with FLAX NNX models.
+This module provides utilities for computing empirical Neural Tangent Kernels
+for FLAX NNX models using JAX-native Jacobian contraction.
 
 Key Features:
     - Wrap NNX models for NTK computation
@@ -12,7 +12,6 @@ Key Features:
 References:
     - Jacot et al. (2018): Neural Tangent Kernel
     - Survey Section 3: Neural Tangent Kernel Analysis
-    - GitHub: https://github.com/google/neural-tangents
 """
 
 from __future__ import annotations
@@ -55,45 +54,27 @@ def create_ntk_fn_from_nnx(
 ) -> Callable:
     """Create NTK function from NNX model.
 
-    This function creates a kernel function that can compute the empirical
-    NTK between sets of input points.
+    This function creates a JAX-native kernel function that computes the
+    empirical NTK between sets of input points through Jacobian contraction.
+    It intentionally avoids ``neural-tangents`` because current releases are
+    not compatible with the JAX version used by Opifex.
 
     Args:
         model: FLAX NNX model
         config: NTK configuration
 
     Returns:
-        Kernel function that takes (x1, x2, params) and returns NTK matrix
+        Kernel function that takes ``(x1, x2=None)`` and returns an NTK matrix.
     """
-    try:
-        import neural_tangents as nt  # pyright: ignore[reportMissingImports]
-    except ImportError as err:
-        raise ImportError(
-            "neural-tangents is required for NTK computation. "
-            "Install with: pip install neural-tangents"
-        ) from err
-
     config = config or NTKConfig()
 
-    # Split model into graphdef and params
-    graphdef, state = nnx.split(model)
+    def ntk_fn(
+        x1: Float[Array, "batch1 dim"],
+        x2: Float[Array, "batch2 dim"] | None = None,
+    ) -> Float[Array, "batch1 batch2"]:
+        return compute_empirical_ntk(model, x1, x2, config)
 
-    def apply_fn(params_flat, x):
-        """Apply function compatible with neural-tangents."""
-        # Reconstruct the state with updated params
-        # Note: This is a simplified version - in practice we need to
-        # properly merge the params back into the state
-        reconstructed_model = nnx.merge(graphdef, state)
-        return reconstructed_model(x)  # pyright: ignore[reportCallIssue]
-
-    # Create empirical kernel function using neural-tangents
-    return nt.empirical_kernel_fn(
-        apply_fn,  # pyright: ignore[reportArgumentType]
-        trace_axes=config.trace_axes,
-        diagonal_axes=config.diagonal_axes,
-        vmap_axes=config.vmap_axes,
-        implementation=config.implementation,
-    )
+    return ntk_fn
 
 
 def compute_empirical_ntk(

@@ -84,6 +84,17 @@ class TestLaplaceLayer:
         out = layer(x)
         assert out.dtype == jnp.float32
 
+    def test_float64_input_uses_default_compute_dtype(self, rngs):
+        """x64-enabled inputs should not silently promote the default layer output."""
+        with jax.enable_x64(True):
+            layer = LaplaceLayer(in_channels=4, out_channels=4, num_poles=8, rngs=rngs)
+            x = jax.random.normal(rngs.params(), (2, 4, 64), dtype=jnp.float64)
+
+            out = layer(x)
+
+        assert x.dtype == jnp.float64
+        assert out.dtype == jnp.float32
+
     def test_different_sequence_lengths(self, rngs):
         """Layer should work with any spatial resolution."""
         layer = LaplaceLayer(in_channels=4, out_channels=4, num_poles=8, rngs=rngs)
@@ -378,6 +389,24 @@ class TestLaplaceNeuralOperatorAdvanced:
         )
         x = jax.random.normal(rngs.params(), (2, 1, 64))
         out = model(x)
+        assert out.dtype == jnp.float32
+
+    def test_float64_input_uses_default_compute_dtype(self, rngs):
+        """The full LNO should keep default model outputs in float32 under x64."""
+        with jax.enable_x64(True):
+            model = LaplaceNeuralOperator(
+                in_channels=1,
+                out_channels=1,
+                hidden_channels=8,
+                num_layers=1,
+                num_poles=4,
+                rngs=rngs,
+            )
+            x = jax.random.normal(rngs.params(), (2, 1, 64), dtype=jnp.float64)
+
+            out = model(x)
+
+        assert x.dtype == jnp.float64
         assert out.dtype == jnp.float32
 
     def test_output_finite(self, rngs):

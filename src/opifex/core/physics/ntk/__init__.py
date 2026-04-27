@@ -13,7 +13,6 @@ Key Components:
 References:
     - Jacot et al. (2018): Neural Tangent Kernel
     - Survey Section 3: Neural Tangent Kernel Analysis
-    - Google's neural-tangents library
 """
 
 from opifex.core.physics.ntk.diagnostics import (

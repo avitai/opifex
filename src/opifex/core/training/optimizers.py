@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import jax.numpy as jnp
 import optax
 
 
@@ -168,23 +169,32 @@ def create_schedule(  # noqa: PLR0912
     Raises:
         ValueError: If schedule_type is unknown
     """
+
+    def as_float32_schedule(schedule: optax.Schedule) -> optax.Schedule:
+        def wrapped_schedule(count):
+            return jnp.asarray(schedule(count), dtype=jnp.float32)
+
+        return wrapped_schedule
+
     if schedule_type == "constant":
-        return optax.constant_schedule(init_value)
+        return as_float32_schedule(optax.constant_schedule(init_value))
 
     if schedule_type == "cosine":
         if decay_steps is None:
             decay_steps = 1000
-        return optax.cosine_decay_schedule(
-            init_value=init_value, decay_steps=decay_steps, alpha=alpha
+        return as_float32_schedule(
+            optax.cosine_decay_schedule(init_value=init_value, decay_steps=decay_steps, alpha=alpha)
         )
 
     if schedule_type == "exponential":
         if transition_steps is None:
             transition_steps = 1000
-        return optax.exponential_decay(
-            init_value=init_value,
-            transition_steps=transition_steps,
-            decay_rate=decay_rate,
+        return as_float32_schedule(
+            optax.exponential_decay(
+                init_value=init_value,
+                transition_steps=transition_steps,
+                decay_rate=decay_rate,
+            )
         )
 
     if schedule_type == "linear":
@@ -192,10 +202,12 @@ def create_schedule(  # noqa: PLR0912
             transition_steps = 1000
         if end_value is None:
             end_value = init_value * 0.1
-        return optax.linear_schedule(
-            init_value=init_value,
-            end_value=end_value,
-            transition_steps=transition_steps,
+        return as_float32_schedule(
+            optax.linear_schedule(
+                init_value=init_value,
+                end_value=end_value,
+                transition_steps=transition_steps,
+            )
         )
 
     if schedule_type == "step":
@@ -206,15 +218,17 @@ def create_schedule(  # noqa: PLR0912
                 [init_value, init_value * 0.1, init_value * 0.01],
             )
         boundaries, values = boundaries_and_values
-        return optax.piecewise_constant_schedule(
-            init_value=values[0] if values else init_value,
-            boundaries_and_scales={
-                b: values[i + 1] / values[i]
-                for i, b in enumerate(boundaries)
-                if i + 1 < len(values)
-            }
-            if len(values) > 1
-            else {},
+        return as_float32_schedule(
+            optax.piecewise_constant_schedule(
+                init_value=values[0] if values else init_value,
+                boundaries_and_scales={
+                    b: values[i + 1] / values[i]
+                    for i, b in enumerate(boundaries)
+                    if i + 1 < len(values)
+                }
+                if len(values) > 1
+                else {},
+            )
         )
 
     if schedule_type == "warmup_cosine":
@@ -225,11 +239,13 @@ def create_schedule(  # noqa: PLR0912
         if decay_steps is None:
             decay_steps = 1000
 
-        return optax.warmup_cosine_decay_schedule(
-            init_value=init_value,
-            peak_value=peak_value,
-            warmup_steps=warmup_steps,
-            decay_steps=decay_steps,
+        return as_float32_schedule(
+            optax.warmup_cosine_decay_schedule(
+                init_value=init_value,
+                peak_value=peak_value,
+                warmup_steps=warmup_steps,
+                decay_steps=decay_steps,
+            )
         )
 
     raise ValueError(f"Unknown schedule type: {schedule_type}")

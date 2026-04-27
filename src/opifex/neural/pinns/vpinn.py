@@ -13,10 +13,13 @@ Key ideas:
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array
+
+from opifex.neural.dtypes import as_compute_array, canonicalize_dtype
 
 
 def gauss_legendre_quadrature(n: int) -> tuple[Array, Array]:
@@ -117,6 +120,8 @@ class VPINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = jnp.tanh,
         config: VPINNConfig | None = None,
+        compute_dtype: Any = jnp.float32,
+        param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ):
         """Initialize VPINN.
@@ -127,6 +132,8 @@ class VPINN(nnx.Module):
             hidden_dims: Hidden layer dimensions.
             activation: Activation function.
             config: VPINN configuration.
+            compute_dtype: Computation dtype for neural network layers.
+            param_dtype: Parameter storage dtype for neural network layers.
             rngs: Random number generators.
         """
         super().__init__()
@@ -134,6 +141,8 @@ class VPINN(nnx.Module):
         self.output_dim = output_dim
         self.config = config or VPINNConfig()
         self.activation = activation
+        self.compute_dtype = canonicalize_dtype(compute_dtype)
+        self.param_dtype = canonicalize_dtype(param_dtype)
 
         dims = list(hidden_dims or self.config.hidden_dims)
 
@@ -141,9 +150,25 @@ class VPINN(nnx.Module):
         layers = []
         in_features = input_dim
         for h in dims:
-            layers.append(nnx.Linear(in_features, h, rngs=rngs))
+            layers.append(
+                nnx.Linear(
+                    in_features,
+                    h,
+                    dtype=self.compute_dtype,
+                    param_dtype=self.param_dtype,
+                    rngs=rngs,
+                )
+            )
             in_features = h
-        layers.append(nnx.Linear(in_features, output_dim, rngs=rngs))
+        layers.append(
+            nnx.Linear(
+                in_features,
+                output_dim,
+                dtype=self.compute_dtype,
+                param_dtype=self.param_dtype,
+                rngs=rngs,
+            )
+        )
         self.layers = nnx.List(layers)
 
     def __call__(self, x: Array) -> Array:
@@ -155,10 +180,10 @@ class VPINN(nnx.Module):
         Returns:
             Solution prediction (batch_size, output_dim).
         """
-        h = x
+        h = as_compute_array(x, self.compute_dtype)
         for layer in list(self.layers)[:-1]:
             h = self.activation(layer(h))
-        return list(self.layers)[-1](h)
+        return list(self.layers)[-1](h).astype(self.compute_dtype)
 
     def variational_residual(
         self,
@@ -242,6 +267,8 @@ def create_vpinn(
     *,
     config: VPINNConfig | None = None,
     activation: Callable[[Array], Array] = jnp.tanh,
+    compute_dtype: Any = jnp.float32,
+    param_dtype: Any = jnp.float32,
     rngs: nnx.Rngs,
 ) -> VPINN:
     """Create a VPINN model.
@@ -263,5 +290,7 @@ def create_vpinn(
         hidden_dims=hidden_dims,
         config=config,
         activation=activation,
+        compute_dtype=compute_dtype,
+        param_dtype=param_dtype,
         rngs=rngs,
     )

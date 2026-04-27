@@ -104,6 +104,24 @@ class TestPhysicsAttention:
         out = attn(x, deterministic=True)
         assert out.dtype == jnp.float32
 
+    def test_float64_input_uses_default_compute_dtype(self, rngs):
+        """Float64 inputs should not override the default float32 compute dtype."""
+        dim = 32
+        attn = PhysicsAttention(
+            dim=dim,
+            num_heads=2,
+            dim_head=16,
+            slice_num=4,
+            dropout_rate=0.0,
+            rngs=rngs,
+        )
+        with jax.enable_x64(True):
+            x = jax.random.normal(jax.random.PRNGKey(0), (1, 50, dim), dtype=jnp.float64)
+            out = attn(x, deterministic=True)
+
+        assert x.dtype == jnp.float64
+        assert out.dtype == jnp.float32
+
     def test_different_sequence_lengths(self, rngs):
         """Test that attention works with various sequence lengths."""
         dim = 32
