@@ -56,8 +56,8 @@ dependencies = [
   "tqdm>=4.67.1",
   # PyPI distribution for Avitai Artifex; imports remain under ``artifex``.
   "avitai-artifex>=0.1.0",
-  "calibrax>=0.1.0",
-  "datarax>=0.1.2.post1"
+  "calibrax>=0.1.1",
+  "datarax>=0.1.3"
 ]
 description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
 license = {file = "LICENSE"}

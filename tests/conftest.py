@@ -314,11 +314,17 @@ def pytest_runtest_makereport(item, call):
         )
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def reset_jax_config():
-    """Reset JAX configuration after each test."""
+    """Pin ``jax_enable_x64`` to False around every test.
+
+    Defensive bookend against x64 leakage when ``with jax.enable_x64(True):``
+    contexts are reordered across files by pytest-randomly. Keeps test
+    ordering hermetic so dtype assertions remain stable on CI.
+    """
+    jax.config.update("jax_enable_x64", False)
     yield
-    jax.clear_caches()
+    jax.config.update("jax_enable_x64", False)
 
 
 @pytest.fixture(scope="session", autouse=True)
