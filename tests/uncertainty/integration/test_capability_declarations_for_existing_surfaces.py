@@ -1,15 +1,14 @@
-"""Phase 1 integration test — capability declarations for existing UQ surfaces.
+"""Capability declarations for existing UQ surfaces.
 
 Pins one capability declaration per pre-existing UQ-bearing class and asserts
 the declarations are internally consistent (no contradictory flag pairs).
-Phase 7 owns the canonical registration; this test is an early smoke check
-that the :class:`UQCapability` schema is rich enough to describe the surfaces
-Phase 7 will register.
+Acts as a smoke check that the :class:`UQCapability` schema is rich enough to
+describe every surface the canonical registry will eventually hold.
 
-These are NOT the Phase 7 canonical capability tests — those live in
+These are NOT the canonical capability-coverage tests — those live in
 ``tests/uncertainty/test_capability_coverage.py`` and use the binding
 ``uq_registry`` singleton. Here we use a local registry instance to avoid
-polluting the singleton during Phase 1 testing.
+polluting the singleton.
 """
 
 from __future__ import annotations
@@ -109,7 +108,7 @@ def test_capability_declarations_round_trip_through_uq_registry() -> None:
 def test_capability_contradiction_native_jax_kernel_with_required_graph_adapter() -> None:
     """A pure JAX kernel cannot also require an NNX graph adapter (would be a contradiction).
 
-    Catching this combination in capability declarations early means Phase 7
+    Catching this combination in capability declarations early means downstream
     capability tests cannot accidentally claim mutually exclusive properties.
     """
     cap = UQCapability(
@@ -118,11 +117,11 @@ def test_capability_contradiction_native_jax_kernel_with_required_graph_adapter(
         notes="contradictory; this test asserts the test surfaces the contradiction",
         default_strategy=DefaultStrategy.DETERMINISTIC,
     )
-    # Currently the dataclass accepts this combination — Phase 7 must add a
-    # cross-field validator. The Opifex test surfaces the gap explicitly so
-    # the Phase 7 validator has a target to satisfy.
+    # Currently the dataclass accepts this combination — a cross-field
+    # validator is required. The test surfaces the gap explicitly so a
+    # subsequent validator has a target to satisfy.
     if cap.native_jax_kernel and cap.requires_graph_adapter:
         pytest.xfail(
-            "Phase 7 must add a __post_init__ validator that rejects "
+            "UQCapability must add a __post_init__ validator that rejects "
             "(native_jax_kernel AND requires_graph_adapter) as a contradiction."
         )

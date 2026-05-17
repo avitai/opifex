@@ -1,15 +1,12 @@
-"""Phase 1 Task 1.2 — canonical Bayesian-kernel KL helper tests.
+"""Canonical Bayesian-kernel KL helper tests.
 
-These tests pin two binding rules from
-``memory-bank/implementation-plans/uncertainty-quantification-platform-2026-05-15/GUIDE_ALIGNMENT.md``:
+These tests pin two binding rules:
 
-1. Item 8 — ``diagonal_gaussian_kl`` MUST delegate to Artifex
+1. ``diagonal_gaussian_kl`` MUST delegate to Artifex
    ``gaussian_kl_divergence`` for the N(0,1) prior; the Opifex helper only adds
    the parametric ``(prior_mean, prior_std)`` correction otherwise.
 2. The kernel module is pure JAX — no ``flax.nnx`` imports
-   (enforced by Phase 9 Task 9.3's container-pattern audit).
-
-Phase 2 Task 2.0 extends this file with additional Bayesian-kernel helpers.
+   (enforced by the container-pattern boundary audit).
 """
 
 from __future__ import annotations

@@ -1,10 +1,6 @@
 """Authoritative Opifex uncertainty-quantification platform.
 
-Sub-packages and modules in this package replace the fragmented
-``opifex.neural.bayesian`` / ``opifex.neural.operators.specialized.uqno`` /
-``opifex.solvers.wrappers`` UQ surfaces with shared contracts.
-
-Phase 1 contracts (complete):
+Core contracts:
 
 * :mod:`opifex.uncertainty.types` — predictive-distribution / prediction-set /
   prediction-interval value objects, plus the :class:`PredictiveMode` enum.
@@ -28,7 +24,7 @@ Phase 1 contracts (complete):
 * :mod:`opifex.uncertainty.priors` — diagonal-Gaussian prior log density,
   plus :class:`PriorSpec`.
 
-Subsequent phases populate ``calibration``, ``conformal``, ``ood``,
+Additional sub-packages cover ``calibration``, ``conformal``, ``ood``,
 ``selective``, ``forecasting_metrics``, ``scientific``, ``assimilation``,
 ``sensitivity``, ``reliability``, ``surrogate``, ``monitoring``, ``pac_bayes``,
 ``sbi``, and ``active``.

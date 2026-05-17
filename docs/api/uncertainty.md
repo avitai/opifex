@@ -1,16 +1,9 @@
 # `opifex.uncertainty` API Reference
 
-The `opifex.uncertainty` package is the canonical home for Opifex's
-uncertainty-quantification platform. It provides shared contracts, kernel
-helpers, and trainable layers that replace the fragmented surfaces previously
-spread across `opifex.neural.bayesian`,
-`opifex.neural.operators.specialized.uqno`, and `opifex.solvers.wrappers`.
-
-> **API path naming.** Submodule paths describe the UQ domain (Bayesian,
-> spectral, conformal, etc.); they do not name the underlying framework
-> (JAX / Flax NNX). The framework-boundary split between pure JAX kernels and
-> Flax NNX state-owning modules is enforced internally and is not part of the
-> public path.
+The `opifex.uncertainty` package provides predictive-distribution containers,
+loss-component aggregation, pure-JAX Bayesian kernels, trainable Bayesian
+layers, structural protocols for UQ-aware modules, a capability registry, and
+adapter/backend interfaces for downstream inference engines.
 
 ## Module layout
 

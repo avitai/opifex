@@ -1,11 +1,11 @@
-"""Phase 1 Task 1.5 — distribution adapter / model adapter protocols.
+"""Tests for distribution adapter / model adapter protocols.
 
-Sibling Reuse Gate decisions:
+Sibling-package targets:
 
 * Artifex ``Distribution`` (``../artifex/src/artifex/generative_models/core/
   distributions/base.py``) is the primary adapter target. Distrax-like is
   secondary. TFP / FlowJAX / bijx / GPJax / NumPyro are exposed through
-  unsupported-backend metadata until Phase 2 / Phase 8.
+  unsupported-backend metadata.
 """
 
 from __future__ import annotations

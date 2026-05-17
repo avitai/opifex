@@ -1,10 +1,10 @@
-"""Phase 1 Task 1.6 — diagonal-Gaussian prior log-density.
+"""Diagonal-Gaussian prior log-density.
 
 Same ``(prior_mean, prior_std)`` parameterization as
 :func:`opifex.uncertainty.kernels.bayesian.diagonal_gaussian_kl` so the same
 posterior parameters can be plugged into either helper without translation.
 
-Container pattern: :class:`PriorSpec` is pattern (A) per GUIDE_ALIGNMENT §5a.
+:class:`PriorSpec` is a frozen+slotted hashable capability declaration.
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ def diagonal_gaussian_log_prior(
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class PriorSpec:
-    """Pattern (A) capability declaration for a prior family.
+    """Capability declaration for a prior family.
 
-    Sequence fields are tuples (GUIDE_ALIGNMENT item 22a).
+    Frozen, slotted, hashable; sequence fields are tuples.
     """
 
     name: str
@@ -47,7 +47,7 @@ class PriorSpec:
 
     def __post_init__(self) -> None:
         if not isinstance(self.parameter_names, tuple):
-            raise TypeError("parameter_names must be a tuple (GUIDE_ALIGNMENT item 22a).")
+            raise TypeError("parameter_names must be a tuple.")
         if not self.name:
             raise ValueError("PriorSpec.name must be non-empty.")
 

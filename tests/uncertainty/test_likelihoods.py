@@ -1,10 +1,11 @@
-"""Phase 1 Task 1.6 — likelihood log-density tests.
+"""Likelihood log-density tests.
 
 Backend-neutral likelihood log-density helpers. Container patterns:
 
-* Likelihood spec metadata (``LikelihoodSpec``) → pattern (A) per
-  GUIDE_ALIGNMENT §5a.
-* Combined log-density containers carrying array values → pattern (B).
+* Likelihood spec metadata (``LikelihoodSpec``) → frozen+slotted hashable
+  dataclass.
+* Combined log-density containers carrying array values →
+  ``@flax.struct.dataclass`` so they flow through ``jit`` / ``vmap``.
 """
 
 from __future__ import annotations

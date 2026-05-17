@@ -1,19 +1,16 @@
-"""Phase 1 Task 1.4 — UQ capability declarations and registry.
+"""UQ capability declarations and registry.
 
-Pattern (A) capability container per GUIDE_ALIGNMENT §5a — scalar/string/enum
-fields only, hashable, no array data. Used for Python-level registry lookup;
-never traced as pytree data.
+Capability containers are scalar/string/enum-only frozen+slotted dataclasses,
+hashable with no array data. Used for Python-level registry lookup; never
+traced as pytree data.
 
-Sibling Reuse Gate decision (recorded for Phase 9 audit):
+``calibrax.core.registry.SingletonRegistry[T]`` is reused as the backing
+mechanism. Opifex adds two domain-specific policies on top:
 
-* ``calibrax.core.registry.SingletonRegistry[T]`` is reused directly as the
-  backing mechanism. Opifex adds two domain-specific policies:
-    1. Duplicate-registration rejection (CalibraX overwrites silently — Phase 0
-       import-check finding; rejection is required because every capability
-       declaration is canonical).
-    2. ``require()`` enhances ``get()``'s ``KeyError`` with the sorted list of
-       available names — actionable error message for Phase 7 capability
-       coverage tests.
+1. Duplicate-registration rejection (CalibraX overwrites silently; rejection
+   is required because every capability declaration is canonical).
+2. ``require()`` enhances ``get()``'s ``KeyError`` with the sorted list of
+   available names so callers get an actionable error message.
 """
 
 from __future__ import annotations
@@ -87,9 +84,9 @@ class DefaultStrategy(StrEnum):
 class UQCapability:
     """Static declaration of one UQ-bearing surface's capabilities.
 
-    Pattern (A) per GUIDE_ALIGNMENT §5a — all fields are scalars / strings /
-    enums; hashable; passed by Python-level registry lookup; never consumed by
-    jit'd code as pytree data.
+    All fields are scalars / strings / enums; the dataclass is hashable; it
+    is passed by Python-level registry lookup and never consumed by jit'd code
+    as pytree data.
 
     Fields fall into three groups:
 
@@ -97,30 +94,30 @@ class UQCapability:
     this UQ behavior end-to-end, without an external adapter:
 
     * ``native_bayesian`` — owns a Bayesian posterior over its own parameters
-      (Phase 2 ``BayesianLinear``-style modules, MCMC backends).
+      (``BayesianLinear``-style modules, MCMC backends).
     * ``native_distributional`` — outputs a parametric predictive distribution
       directly (heteroscedastic Gaussian regressor, mixture density network).
-    * ``supports_ensemble`` — can be wrapped by Phase 3 ``DeepEnsembleAdapter``
-      / ``SnapshotEnsembleAdapter`` / ``SWAGAdapter`` without changing its API.
-    * ``supports_conformal`` — Phase 4 conformal calibrators (split / CQR /
-      RAPS / Top-K) work against this surface.
-    * ``supports_calibration`` — Phase 4 post-hoc calibrators (temperature /
-      Platt / isotonic / beta) work against this surface.
+    * ``supports_ensemble`` — can be wrapped by ``DeepEnsembleAdapter`` /
+      ``SnapshotEnsembleAdapter`` / ``SWAGAdapter`` without changing its API.
+    * ``supports_conformal`` — conformal calibrators (split / CQR / RAPS /
+      Top-K) work against this surface.
+    * ``supports_calibration`` — post-hoc calibrators (temperature / Platt /
+      isotonic / beta) work against this surface.
     * ``supports_function_space`` — predicts over function/field outputs
-      (Phase 3 UQNO, Phase 5 field metrics, Phase 8 stochastic-field inputs).
+      (UQNO, field metrics, stochastic-field inputs).
     * ``supports_solver_uncertainty`` — wraps a numerical solver and propagates
-      solver-level numerical uncertainty (Phase 6 ``SolutionDistribution``).
-    * ``supports_ood_detection`` — exposes an OOD score per input (Phase 5).
+      solver-level numerical uncertainty (``SolutionDistribution``).
+    * ``supports_ood_detection`` — exposes an OOD score per input.
     * ``supports_selective_risk`` — supports an abstention / risk-coverage
-      curve (Phase 5 selective prediction).
+      curve for selective prediction.
     * ``supports_likelihood_free`` — usable as an inverse-problem target for
-      Phase 8 SBI (NPE / NLE / NRE).
-    * ``supports_active_learning`` — Phase 8 acquisition functions (BALD /
-      BatchBALD / EIG / PINN-residual) can rank candidates against it.
-    * ``supports_pac_bayes_certificate`` — Phase 8 PAC-Bayes bounds can be
-      computed for this surface.
+      SBI (NPE / NLE / NRE).
+    * ``supports_active_learning`` — acquisition functions (BALD / BatchBALD /
+      EIG / PINN-residual) can rank candidates against it.
+    * ``supports_pac_bayes_certificate`` — PAC-Bayes bounds can be computed
+      for this surface.
     * ``supports_stochastic_field_input`` — accepts a KLE/PCE-parameterized
-      random-field input (Phase 8 stochastic-Galerkin / collocation).
+      random-field input (stochastic-Galerkin / collocation).
 
     **Backend-stack flags** (``native_jax_kernel`` / ``native_nnx_module`` /
     ``requires_graph_adapter``) — distinguish where the implementation lives:
@@ -139,7 +136,7 @@ class UQCapability:
       what kind of UQ this surface delivers by default.
     * ``source_package`` — package name owning the implementation
       (``"opifex"``, ``"artifex"``, ``"calibrax"``, ``"datarax"``, etc.) so
-      Phase 7 capability docs don't mislabel sibling-backed primitives as
+      capability docs don't mislabel sibling-backed primitives as
       Opifex-local.
     * ``notes`` — free-text rationale (required when
       ``requires_graph_adapter=True``; optional otherwise).
@@ -206,8 +203,8 @@ class UQRegistry(SingletonRegistry["UQCapability"]):
 def register_uq_capability(name: str, capability: UQCapability) -> Callable[[_C], _C]:
     """Class decorator that registers ``capability`` under ``name`` in :class:`UQRegistry`.
 
-    Mirrors CalibraX's ``register_benchmark`` decorator pattern so Phase 7
-    capability-declaration tests can reuse the same decorator surface.
+    Mirrors CalibraX's ``register_benchmark`` decorator pattern so capability
+    declaration tests can reuse the same decorator surface.
     """
 
     def decorator(cls: _C) -> _C:

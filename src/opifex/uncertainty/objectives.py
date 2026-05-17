@@ -1,18 +1,17 @@
-"""Phase 1 Task 1.2 — objective and loss-component contracts.
+"""Objective and loss-component contracts.
 
-Container patterns follow GUIDE_ALIGNMENT §5a:
+Container patterns:
 
-* :class:`ObjectiveConfig` — pattern (A) plain
+* :class:`ObjectiveConfig` — plain
   ``@dataclass(frozen=True, slots=True, kw_only=True)`` (Avitai canonical
   config/document pattern). All fields are Python scalars / strings; the
   container is passed as a hashable static argument to jit'd loss kernels and
-  has zero per-call pytree overhead. Pattern (A) MAY validate in
-  ``__post_init__``.
-* :class:`UQLossComponents` — pattern (B)
+  has zero per-call pytree overhead. Validation runs in ``__post_init__``.
+* :class:`UQLossComponents` —
   ``@flax.struct.dataclass(slots=True, kw_only=True)``. Carries scalar loss
   arrays through ``jit``/``grad``/``vmap``. ``metadata`` is the canonical
-  ``tuple[tuple[str, Any], ...]`` aux_data (item 16). ``validate()`` is public
-  and NEVER called from ``__post_init__``/``tree_unflatten`` (item 7).
+  ``tuple[tuple[str, Any], ...]`` aux_data. ``validate()`` is public and is
+  NEVER called from ``__post_init__``/``tree_unflatten``.
 
 The optimizer-facing scalar is ``UQLossComponents.total`` — the weighted sum of
 every supplied loss component. ``elbo`` is derived from ``negative_elbo``.
@@ -32,7 +31,7 @@ from opifex.uncertainty.types import _metadata_dict, MetadataItems
 
 # StrEnum of supported reductions kept inline (small fixed set; avoids a new
 # import for a single field). Promotion to a public StrEnum can happen if a
-# later phase needs structural dispatch on the value.
+# caller needs structural dispatch on the value.
 _ALLOWED_REDUCTIONS = frozenset({"mean", "sum", "none"})
 
 
@@ -62,12 +61,12 @@ class ObjectiveConfig:
       (PINN initial-condition penalty).
     * ``regularization_weight`` — multiplier on ``regularization`` (extra
       penalty term: L2 / spectral / etc., separate from the KL term).
-    * ``calibration_weight`` — multiplier on ``calibration`` (Phase 4
-      calibration-aware training term).
-    * ``conformal_weight`` — multiplier on ``conformal`` (Phase 4
-      conformal-training term).
-    * ``pac_bayes_weight`` — multiplier on ``pac_bayes`` (Phase 8 PAC-Bayes
-      bound term).
+    * ``calibration_weight`` — multiplier on ``calibration``
+      (calibration-aware training term).
+    * ``conformal_weight`` — multiplier on ``conformal``
+      (conformal-training term).
+    * ``pac_bayes_weight`` — multiplier on ``pac_bayes`` (PAC-Bayes bound
+      term).
     * ``reduction`` — how per-example losses are reduced to a scalar; one of
       ``"mean"`` (default), ``"sum"``, or ``"none"``.
     """
@@ -146,13 +145,13 @@ class UQLossComponents:
     * ``negative_elbo`` — pre-computed negative ELBO (for backends that
       provide it directly, e.g., variational samplers). Added to ``total``
       WITHOUT additional weighting. ``elbo`` returns ``-negative_elbo``.
-    * ``calibration`` — Phase 4 calibration-aware training term. Weighted by
+    * ``calibration`` — calibration-aware training term. Weighted by
       ``calibration_weight``.
-    * ``conformal`` — Phase 4 conformal-training term. Weighted by
+    * ``conformal`` — conformal-training term. Weighted by
       ``conformal_weight``.
-    * ``pac_bayes`` — Phase 8 PAC-Bayes bound term. Weighted by
-      ``pac_bayes_weight``. Field is required in the contract from day one
-      (audit § 11) so Phase 8 doesn't need to widen the schema later.
+    * ``pac_bayes`` — PAC-Bayes bound term. Weighted by ``pac_bayes_weight``.
+      Field is part of the contract from day one so PAC-Bayes consumers do
+      not need to widen the schema later.
     * ``metadata`` — canonical ``tuple[tuple[str, Any], ...]`` static aux_data
       (immutable, hashable). Use :meth:`metadata_dict` for ergonomic
       dict-style read.

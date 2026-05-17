@@ -1,16 +1,16 @@
-"""Phase 1 Task 1.4 — UQ capability registry tests.
+"""UQ capability registry tests.
 
-Sibling Reuse Gate decision: ``calibrax.core.registry.SingletonRegistry`` is
-reused directly as the backing mechanism. ``UQRegistry`` extends it only with:
+``calibrax.core.registry.SingletonRegistry`` is reused directly as the backing
+mechanism. ``UQRegistry`` extends it with two domain-specific policies:
 
-* Duplicate-rejection on ``register`` (Phase 0 import-check found CalibraX's
-  base ``Registry.register`` overwrites silently — Opifex adds a guard because
-  capability declarations must be unique).
+* Duplicate-rejection on ``register`` (CalibraX's base ``Registry.register``
+  overwrites silently — Opifex adds a guard because capability declarations
+  must be unique).
 * ``require(name)`` that adds the sorted-available-names hint to the error
   message that CalibraX's ``get`` raises.
 
-Container pattern: ``UQCapability`` is pattern (A) per GUIDE_ALIGNMENT §5a —
-scalar/string/enum fields only, used as registry value, never traced as pytree
+``UQCapability`` is a frozen+slotted hashable dataclass with scalar / string /
+enum fields only; it is used as a registry value and never traced as pytree
 data.
 """
 

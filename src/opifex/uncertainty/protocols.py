@@ -1,9 +1,9 @@
-"""Phase 1 Task 1.3 — structural UQ protocols.
+"""Structural UQ protocols.
 
 Five runtime-checkable protocols for UQ-aware surfaces. Structural typing only —
 no inheritance required, no parallel implementation hierarchy created.
 
-Sibling Reuse Gate (recorded for Phase 9 audit):
+Sibling-package coverage check:
 
 * CalibraX ``core/protocols.py`` — benchmark / dataset / metric protocols. No
   UQ surface match.
@@ -33,7 +33,7 @@ class UncertaintyAwareModule(Protocol):
     """Any model that can return a :class:`PredictiveDistribution` for an input.
 
     Stochastic models must accept caller-owned ``nnx.Rngs`` at the method
-    boundary (GUIDE_ALIGNMENT item 4); deterministic models may ignore it.
+    boundary; deterministic models may ignore it.
     """
 
     def predict_distribution(
@@ -51,7 +51,7 @@ class VariationalModule(UncertaintyAwareModule, Protocol):
     """Bayesian / variational extension of :class:`UncertaintyAwareModule`.
 
     Adds the KL divergence, optimizer-facing loss decomposition, and ELBO
-    surfaces that Phase 2/3 Bayesian layers and PINN/UQNO models implement.
+    surfaces that Bayesian layers and PINN/UQNO models implement.
     """
 
     def kl_divergence(self) -> jax.Array:
@@ -84,7 +84,7 @@ class Calibrator(Protocol):
     """Post-hoc calibrator (temperature / Platt / isotonic / beta scaling).
 
     ``fit`` returns immutable fitted state (typically a small mapping or a
-    pattern-(B) ``@struct.dataclass`` per Phase 4).
+    ``@struct.dataclass``).
     """
 
     def fit(self, predictions: jax.Array, targets: jax.Array) -> Any:

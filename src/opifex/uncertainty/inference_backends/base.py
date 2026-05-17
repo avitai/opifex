@@ -1,20 +1,20 @@
-"""Phase 1 Task 1.5 — inference-backend protocol + base result/spec containers.
+"""Inference-backend protocol + base result/spec containers.
 
-Container patterns per GUIDE_ALIGNMENT §5a:
+Container patterns:
 
-* :class:`BackendDiagnostics` — pattern (B):
+* :class:`BackendDiagnostics` —
   ``@flax.struct.dataclass(slots=True, kw_only=True)``. Carries array
   diagnostic statistics (ESS, R-hat, acceptance rate, divergences) through
   ``jit``/``vmap``. Missing diagnostics are ``None`` — Bayes-vs-non-Bayes
   samplers expose different surfaces.
-* :class:`BackendResult` — pattern (B). Carries the backend's typed
-  sampler-state (Artifex ``BlackJAXSamplerState`` reused directly) plus the
-  :class:`BackendDiagnostics`. The ``sampler_state`` field is opaque
+* :class:`BackendResult` — ``@flax.struct.dataclass``. Carries the backend's
+  typed sampler-state (Artifex ``BlackJAXSamplerState`` reused directly) plus
+  the :class:`BackendDiagnostics`. The ``sampler_state`` field is opaque
   (``Any``) so any Artifex / future-backend state object can flow unchanged.
-* :class:`InferenceBackendSpec` — pattern (A):
+* :class:`InferenceBackendSpec` —
   ``@dataclass(frozen=True, slots=True, kw_only=True)``. Scalar/string/tuple
-  capability metadata; hashable; used by registries and the Phase 2 backend
-  router as a static argument.
+  capability metadata; hashable; used by registries and the backend router as
+  a static argument.
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ class UnsupportedBackendError(Exception):
     * requested sampler family not implemented,
     * malformed adapter routing arguments.
 
-    The message MUST identify the backend by name (Phase 2 router guarantees
-    this).
+    The message MUST identify the backend by name (the backend router
+    guarantees this).
     """
 
     def __init__(self, backend_name: str, *, reason: str) -> None:
@@ -100,9 +100,9 @@ class BackendResult:
 class InferenceBackendProtocol(Protocol):
     """Common surface for MCMC / VI / Laplace / Pathfinder / ADVI backends.
 
-    Concrete implementations live in Phase 2 (BlackJAX) and Phase 8 (PAC-Bayes,
-    SBI). Each implementation MUST accept caller-owned ``nnx.Rngs`` for every
-    stochastic call.
+    Concrete implementations include BlackJAX (MCMC), PAC-Bayes, and SBI
+    backends. Each implementation MUST accept caller-owned ``nnx.Rngs`` for
+    every stochastic call.
     """
 
     def fit(self, target_log_prob: Any, *, rngs: nnx.Rngs) -> BackendResult:
@@ -126,8 +126,8 @@ class InferenceBackendProtocol(Protocol):
 class InferenceBackendSpec:
     """Static capability declaration for an inference backend.
 
-    Pattern (A): hashable, no array data, passed as a static arg to the Phase 2
-    backend router. Sequence fields are tuples (GUIDE_ALIGNMENT item 22a).
+    Hashable, no array data, passed as a static arg to the backend router.
+    Sequence fields are tuples.
     """
 
     name: str
@@ -139,7 +139,7 @@ class InferenceBackendSpec:
         if not isinstance(self.sampler_names, tuple):
             raise TypeError(
                 f"sampler_names must be a tuple, got {type(self.sampler_names).__name__}. "
-                "Static / aux-data fields must be hashable (GUIDE_ALIGNMENT item 22a)."
+                "Static / aux-data fields must be hashable."
             )
         if not self.name:
             raise ValueError("InferenceBackendSpec.name must be non-empty.")

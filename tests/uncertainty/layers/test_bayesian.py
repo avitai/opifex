@@ -1,10 +1,9 @@
-"""Phase 2 Task 2.1 — shared ``BayesianLinear`` NNX module tests.
+"""Tests for the ``BayesianLinear`` / ``BayesianSpectralConvolution`` NNX modules.
 
 Container pattern: NNX state-owning surface (``nnx.Module``) — orthogonal to
-the dual container pattern that governs value-object dataclasses
-(GUIDE_ALIGNMENT §5a applies to value objects, not state-owning modules).
+the value-object container patterns that govern dataclasses elsewhere.
 
-RNG safety (GUIDE_ALIGNMENT items 4, 4a, 5, 7, 9):
+RNG safety:
 
 * Constructor ``rngs`` initializes parameters only.
 * Stochastic sampling routes through caller-owned ``nnx.Rngs`` (advancing
@@ -178,13 +177,13 @@ def test_no_fixed_prngkey_in_production_path() -> None:
             offending.append(f"line {node.lineno}: {ast.unparse(node)}")
     assert not offending, (
         "BayesianLinear production path must not call jax.random.PRNGKey(...) "
-        "directly (GUIDE_ALIGNMENT item 5). Use call-time rngs via "
-        f"extract_rng_key. Offending call sites: {offending}"
+        "directly. Use call-time rngs via extract_rng_key. "
+        f"Offending call sites: {offending}"
     )
 
 
 # ---------------------------------------------------------------------------
-# BayesianSpectralConvolution (Phase 2 Task 2.2)
+# BayesianSpectralConvolution
 # ---------------------------------------------------------------------------
 
 

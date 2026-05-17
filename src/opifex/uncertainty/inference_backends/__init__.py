@@ -1,4 +1,4 @@
-"""Inference-backend protocols and base result types (Phase 1 Task 1.5)."""
+"""Inference-backend protocols and base result types."""
 
 from __future__ import annotations
 

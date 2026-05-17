@@ -1,6 +1,6 @@
-"""Phase 1 Task 1.3 — UQ protocol structural-conformance tests.
+"""UQ protocol structural-conformance tests.
 
-Sibling Reuse Gate:
+Sibling-package coverage check:
 
 * CalibraX `core/protocols.py` exposes ``BenchmarkProtocol``/``MetricProtocol``/
   ``DatasetProtocol`` — none have a ``predict_distribution`` / ``kl_divergence``

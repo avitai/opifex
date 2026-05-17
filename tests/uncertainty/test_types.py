@@ -1,10 +1,10 @@
 """TDD tests for ``opifex.uncertainty.types``.
 
-These tests pin the Phase 1 Task 1.1 contracts:
+These tests pin the value-object contracts:
 
 * ``PredictionInterval`` (lower/upper/coverage/method/metadata)
 * ``PredictionSet`` (values/scores/threshold/method/metadata)
-* ``PredictiveDistribution`` (full 11-field set per audit lines 122-138)
+* ``PredictiveDistribution`` (full 11-field set)
 * ``PredictiveMode`` (StrEnum: predictive / posterior_predictive /
   prior_predictive / mean_only)
 
@@ -90,7 +90,7 @@ def test_prediction_set_shape_contract_classification() -> None:
 
 
 def test_predictive_distribution_full_field_set() -> None:
-    """All 11 audit-mandated fields are present and accept None for optionals."""
+    """All 11 fields are present and accept None for optionals."""
     from opifex.uncertainty.types import PredictiveDistribution
 
     mean = jnp.zeros((4, 2))
@@ -149,8 +149,8 @@ def test_predictive_distribution_std_raises_without_variance() -> None:
 def test_predictive_distribution_variance_additivity() -> None:
     """epistemic + aleatoric == total_uncertainty (variances, not std-devs).
 
-    Tolerance: ``rtol=1e-5, atol=1e-6`` — the canonical Phase 1 constants
-    re-used by Phase 6 ``SolutionDistribution``.
+    Tolerance: ``rtol=1e-5, atol=1e-6`` — the canonical constants re-used by
+    ``SolutionDistribution``.
     """
     from opifex.uncertainty.types import PredictiveDistribution
 
@@ -252,7 +252,7 @@ def test_predictive_distribution_vmaps_over_batch_dimension() -> None:
 
 
 def test_metadata_defaults_are_immutable_and_hashable() -> None:
-    """Per GUIDE_ALIGNMENT §16-17: aux_data must be hashable + immutable.
+    """aux_data must be hashable + immutable.
 
     Canonical metadata representation is ``tuple[tuple[str, Any], ...]`` —
     ``MappingProxyType`` is immutable but **not** hashable so it cannot serve

@@ -1,10 +1,10 @@
-"""Phase 1 Task 1.6 — backend-neutral likelihood log-density helpers.
+"""Backend-neutral likelihood log-density helpers.
 
 Pure JAX functions. No ``flax.nnx`` imports. All inputs are explicit; no model
 internals are inspected. Likelihood outputs compose with
 :attr:`opifex.uncertainty.objectives.UQLossComponents.negative_log_likelihood`.
 
-Container pattern: :class:`LikelihoodSpec` is pattern (A) per GUIDE_ALIGNMENT §5a.
+:class:`LikelihoodSpec` is a frozen+slotted hashable capability declaration.
 """
 
 from __future__ import annotations
@@ -125,9 +125,9 @@ def mixture_log_likelihood(
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class LikelihoodSpec:
-    """Pattern (A) capability declaration for a likelihood family.
+    """Capability declaration for a likelihood family.
 
-    Sequence fields are tuples (GUIDE_ALIGNMENT item 22a).
+    Frozen, slotted, hashable; sequence fields are tuples.
     """
 
     name: str
@@ -137,7 +137,7 @@ class LikelihoodSpec:
 
     def __post_init__(self) -> None:
         if not isinstance(self.parameter_names, tuple):
-            raise TypeError("parameter_names must be a tuple (GUIDE_ALIGNMENT item 22a).")
+            raise TypeError("parameter_names must be a tuple.")
         if not self.name:
             raise ValueError("LikelihoodSpec.name must be non-empty.")
 

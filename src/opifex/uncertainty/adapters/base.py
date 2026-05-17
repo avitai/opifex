@@ -1,4 +1,4 @@
-"""Phase 1 Task 1.5 — adapter protocols + spec containers.
+"""Adapter protocols + spec containers.
 
 Two protocols and one capability-spec container:
 
@@ -7,8 +7,8 @@ Two protocols and one capability-spec container:
   unsupported metadata).
 * :class:`ModelUncertaintyAdapterProtocol` — wraps deterministic / ensemble /
   dropout / Laplace-style models with capability metadata.
-* :class:`DistributionAdapterSpec` — pattern (A) capability declaration with
-  pinned ``resolution_order`` tuple.
+* :class:`DistributionAdapterSpec` — capability declaration with pinned
+  ``resolution_order`` tuple.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class DistributionAdapterProtocol(Protocol):
 class ModelUncertaintyAdapterProtocol(Protocol):
     """Wrap a model surface with declared UQ capability metadata.
 
-    Phase 3 implementations cover ``ModelUncertaintyAdapter``,
+    Concrete implementations cover ``ModelUncertaintyAdapter``,
     ``DeepEnsembleAdapter``, ``MCDropoutAdapter``,
     ``BayesianLastLayerAdapterSpec``, ``LaplaceAdapterSpec``, etc.
     """
@@ -53,10 +53,10 @@ class ModelUncertaintyAdapterProtocol(Protocol):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class DistributionAdapterSpec:
-    """Pattern (A) capability declaration for a distribution adapter.
+    """Capability declaration for a distribution adapter.
 
-    ``resolution_order`` is a tuple to remain hashable (GUIDE_ALIGNMENT item
-    22a). Order is binding — Phase 2 router walks the tuple left-to-right and
+    Frozen, slotted, hashable. ``resolution_order`` is a tuple to remain
+    hashable; order is binding — the router walks the tuple left-to-right and
     selects the first installed backend.
     """
 
@@ -66,7 +66,7 @@ class DistributionAdapterSpec:
 
     def __post_init__(self) -> None:
         if not isinstance(self.resolution_order, tuple):
-            raise TypeError("resolution_order must be a tuple (GUIDE_ALIGNMENT item 22a).")
+            raise TypeError("resolution_order must be a tuple.")
         if self.primary_target not in self.resolution_order:
             raise ValueError(
                 f"primary_target {self.primary_target!r} must appear in "

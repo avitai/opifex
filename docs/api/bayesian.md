@@ -1,13 +1,11 @@
 # Bayesian & Uncertainty Quantification API Reference
 
-The `opifex.neural.bayesian` package provides full Bayesian neural networks and uncertainty quantification capabilities for scientific machine learning applications.
-
-> **New shared uncertainty platform:** the `opifex.uncertainty` package is the
-> canonical home for new UQ surfaces (predictive containers, objectives, KL
-> kernels, capability registry, Bayesian layers). See [opifex.uncertainty API
-> reference](uncertainty.md). The `opifex.neural.bayesian` modules documented
-> below remain supported for existing call sites; new code should prefer the
-> shared platform.
+The `opifex.neural.bayesian` package provides full Bayesian neural networks
+and uncertainty quantification capabilities for scientific machine learning
+applications. Related: the
+[`opifex.uncertainty` API reference](uncertainty.md) documents shared
+predictive-distribution containers, objective helpers, Bayesian layers, and
+the capability registry.
 
 ## Overview
 

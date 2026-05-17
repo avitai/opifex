@@ -1,4 +1,4 @@
-"""Phase 1 Task 1.1 — core UQ value-object contracts.
+"""Core UQ value-object contracts.
 
 Implements:
 
@@ -7,8 +7,8 @@ Implements:
   interval container.
 * :class:`PredictionSet` — classification prediction-set container (boolean
   inclusion mask + nonconformity scores).
-* :class:`PredictiveDistribution` — the full 11-field audit-mandated container
-  (audit lines 122-138).
+* :class:`PredictiveDistribution` — the full 11-field predictive-distribution
+  container.
 
 **Container pattern.** All three containers use :func:`flax.struct.dataclass`
 with ``slots=True, kw_only=True`` — the Avitai-ecosystem-canonical
@@ -34,8 +34,7 @@ Variance fields (``variance``, ``epistemic``, ``aleatoric``,
 :meth:`PredictiveDistribution.validate` enforces variance-additivity
 ``total_uncertainty == epistemic + aleatoric`` within
 ``_VARIANCE_RTOL=1e-5``, ``_VARIANCE_ATOL=1e-6`` — the canonical tolerances
-reused by :class:`opifex.uncertainty.scientific.solutions.SolutionDistribution`
-(Phase 6 Task 6.1).
+reused by :class:`opifex.uncertainty.scientific.solutions.SolutionDistribution`.
 
 ``validate()`` is a public method and is **never** called from
 ``__post_init__`` or the pytree unflatten path. Per
@@ -47,8 +46,7 @@ construction when they want pre-jit safety checks.
 The metadata fields use ``tuple[tuple[str, Any], ...]`` because pytree
 aux_data must be hashable (it forms part of the JIT cache key).
 ``MappingProxyType`` is immutable but **not** hashable, so it cannot serve as
-aux_data. The tuple-of-pairs form satisfies both immutability and hashability
-per GUIDE_ALIGNMENT §16-17.
+aux_data. The tuple-of-pairs form satisfies both immutability and hashability.
 """
 
 from __future__ import annotations
@@ -62,7 +60,7 @@ import jax.numpy as jnp
 from flax import struct
 
 
-# Canonical variance-additivity tolerances. Reused by Phase 6
+# Canonical variance-additivity tolerances. Reused by
 # ``SolutionDistribution`` so a round-trip through
 # ``SolutionDistribution.as_predictive_distribution(field)`` does not flap
 # the additivity test.
@@ -181,7 +179,7 @@ class PredictionSet:
 
 @struct.dataclass(slots=True, kw_only=True)
 class PredictiveDistribution:
-    """Audit-mandated predictive-distribution container (audit:122-138).
+    """Predictive-distribution container.
 
     Field shapes (all optional except ``mean``):
 

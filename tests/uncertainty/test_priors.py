@@ -1,4 +1,4 @@
-"""Phase 1 Task 1.6 — diagonal Gaussian prior log-density tests.
+"""Diagonal Gaussian prior log-density tests.
 
 The diagonal-Gaussian prior log density MUST share the same (mean, log-variance)
 parameterization as :func:`opifex.uncertainty.kernels.bayesian.diagonal_gaussian_kl`

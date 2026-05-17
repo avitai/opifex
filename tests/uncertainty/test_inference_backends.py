@@ -1,17 +1,18 @@
-"""Phase 1 Task 1.5 — inference backend protocol and base result types.
+"""Inference backend protocol and base result type tests.
 
-Sibling Reuse Gate decisions:
+Sibling-package reuse:
 
 * Artifex ``SamplingAlgorithm`` (``../artifex/src/artifex/generative_models/
   core/sampling/base.py``) and ``BlackJAXSamplerState``
   (``blackjax_samplers.py:64``) are reused directly — the protocol must accept
-  them without modification so Phase 2 Task 2.5 can implement over them.
+  them without modification so concrete BlackJAX backends can implement over
+  them.
 * CalibraX ``StatisticalResult``/``BenchmarkResult`` are reused for typed
   diagnostics; the backend result container only adds UQ-specific provenance.
 
 Container patterns: ``BackendDiagnostics`` and fitted ``BackendResult`` are
-pattern (B) (array fields flow through transforms); ``InferenceBackendSpec``
-metadata is pattern (A).
+``@flax.struct.dataclass`` (array fields flow through transforms);
+``InferenceBackendSpec`` is a frozen+slotted hashable metadata container.
 """
 
 from __future__ import annotations
@@ -142,7 +143,7 @@ def test_inference_backend_spec_is_pattern_a_frozen_dataclass() -> None:
 
 
 def test_inference_backend_spec_rejects_list_for_sampler_names() -> None:
-    """GUIDE_ALIGNMENT item 22a — static sequence fields must be tuples."""
+    """Static sequence fields must be tuples (hashability requirement)."""
     with pytest.raises(TypeError):
         # mypy-equivalent: a list is not assignable to tuple, but dataclass
         # accepts it silently; we enforce tuple at construction time.

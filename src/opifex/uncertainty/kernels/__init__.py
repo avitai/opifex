@@ -2,7 +2,7 @@
 
 Modules under :mod:`opifex.uncertainty.kernels` are pure JAX functions only — no
 ``flax.nnx`` imports. NNX modules consume these kernels through call-time
-composition; Phase 9 Task 9.3's container-pattern audit enforces the boundary.
+composition; a container-pattern audit enforces the boundary.
 """
 
 from __future__ import annotations

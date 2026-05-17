@@ -1,16 +1,12 @@
-"""Phase 1 integration test — KL helper numerical equivalence.
+"""KL helper numerical equivalence tests.
 
 Pins the contract: Opifex ``diagonal_gaussian_kl`` MUST produce the same
 scalar value (within float tolerance) as the existing variational-framework
 KL formula in ``opifex.neural.bayesian.variational_framework.MeanFieldGaussian``.
 
-Phase 2 Task 2.0 / 2.1 / 2.3 migrates ``MeanFieldGaussian`` and the rest of
-the Bayesian stack to call ``diagonal_gaussian_kl`` directly; this test
-ensures the migration cannot silently change numerical behavior.
+If this test ever fails, it means either:
 
-If this test ever fails after a Phase 2 migration, it means either:
-
-* the migration changed the underlying formula (bug — fix the migration), or
+* the underlying formula changed (bug — fix the change), or
 * the legacy distrax-backed formula has been removed (expected — delete this
   test in the same commit that removes ``MeanFieldGaussian.kl_divergence``).
 """

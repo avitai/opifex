@@ -1,10 +1,11 @@
-"""Phase 1 Task 1.2 — ObjectiveConfig + UQLossComponents contract tests.
+"""ObjectiveConfig + UQLossComponents contract tests.
 
-Container patterns follow GUIDE_ALIGNMENT §5a:
+Container patterns:
 
-* ``ObjectiveConfig`` — pattern (A): plain ``@dataclass(frozen=True, slots=True,
-  kw_only=True)``. Hashable static argument; ``__post_init__`` MAY validate.
-* ``UQLossComponents`` — pattern (B): ``@flax.struct.dataclass(slots=True,
+* ``ObjectiveConfig`` — plain ``@dataclass(frozen=True, slots=True,
+  kw_only=True)``. Hashable static argument; validation runs in
+  ``__post_init__``.
+* ``UQLossComponents`` — ``@flax.struct.dataclass(slots=True,
   kw_only=True)``. Carries scalar loss arrays through ``jit``/``grad``.
   ``validate()`` is public, never called from ``__post_init__``/``tree_unflatten``.
 

@@ -1,12 +1,10 @@
-"""Phase 2 Task 2.1 — shared :class:`BayesianLinear` NNX module.
+"""Canonical Bayesian NNX layers (:class:`BayesianLinear`, :class:`BayesianSpectralConvolution`).
 
-Single canonical implementation of the variational diagonal-Gaussian dense
-layer. Replaces the two parallel implementations in
-``src/opifex/neural/bayesian/layers.py`` and
-``src/opifex/neural/operators/specialized/uqno.py``; Phase 2 Task 2.3 and
-Phase 3 Task 3.4 migrate those call sites to import from here.
+Single implementation of the variational diagonal-Gaussian dense layer (and
+its spectral counterpart) used everywhere in Opifex that needs a Bayesian
+dense / Fourier-spectral block.
 
-RNG safety (GUIDE_ALIGNMENT items 4, 4a, 5, 7, 9):
+RNG safety:
 
 * Constructor ``rngs`` initializes parameters only.
 * Stochastic sampling routes every call through
@@ -17,8 +15,8 @@ RNG safety (GUIDE_ALIGNMENT items 4, 4a, 5, 7, 9):
 
 KL math: delegated to
 :func:`opifex.uncertainty.kernels.bayesian.diagonal_gaussian_kl` which itself
-delegates to Artifex ``gaussian_kl_divergence`` for the N(0,1) case
-(GUIDE_ALIGNMENT item 8). One formula, owned in one place.
+delegates to Artifex ``gaussian_kl_divergence`` for the N(0,1) case. One
+formula, owned in one place.
 """
 
 from __future__ import annotations
@@ -248,7 +246,7 @@ class BayesianSpectralConvolution(nnx.Module):
             )
             return (real + 1j * imag,)
 
-        # 2D: four independent samples (positive/negative H × real/imag).
+        # 2D: four independent samples (positive/negative H by real/imag).
         keys = jax.random.split(key, 4)
         pos_real = _reparameterize(self.weight_mean[...], self.weight_logvar[...], keys[0])
         pos_imag = _reparameterize(
@@ -263,7 +261,7 @@ class BayesianSpectralConvolution(nnx.Module):
         return (pos_real + 1j * pos_imag, neg_real + 1j * neg_imag)
 
     def kl_divergence(self) -> jax.Array:
-        """Total KL divergence summed over every (real/imag, positive/negative-H) weight posterior."""
+        """Sum diagonal-Gaussian KL across every (real/imag, pos/neg-H) weight posterior."""
         total = diagonal_gaussian_kl(
             self.weight_mean[...],
             self.weight_logvar[...],

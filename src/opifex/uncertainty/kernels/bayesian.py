@@ -1,9 +1,8 @@
-"""Pure JAX Bayesian-kernel helpers (Phase 1 Task 1.2; Phase 2 Task 2.0 extends).
+"""Pure JAX Bayesian-kernel helpers.
 
-Two binding rules from
-``memory-bank/implementation-plans/uncertainty-quantification-platform-2026-05-15/GUIDE_ALIGNMENT.md``:
+Two binding rules:
 
-* Item 8 — :func:`diagonal_gaussian_kl` MUST delegate to Artifex
+* :func:`diagonal_gaussian_kl` MUST delegate to Artifex
   ``gaussian_kl_divergence`` whenever the prior is N(0, 1). The closed-form
   Gaussian-prior KL is implemented exactly once in the Avitai ecosystem
   (in Artifex); Opifex's helper is a thin wrapper that extends to parametric

@@ -1,4 +1,4 @@
-"""Distribution / model-uncertainty adapter protocols (Phase 1 Task 1.5)."""
+"""Distribution / model-uncertainty adapter protocols."""
 
 from __future__ import annotations
 

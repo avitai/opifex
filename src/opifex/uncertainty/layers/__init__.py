@@ -3,7 +3,7 @@
 Mirror of :mod:`opifex.uncertainty.kernels` on the state-owning side:
 
 * :mod:`opifex.uncertainty.kernels.bayesian` — pure JAX Bayesian math
-  (no ``flax.nnx`` imports; see Phase 9 Task 9.3 boundary scan).
+  (no ``flax.nnx`` imports; enforced by the container-pattern boundary scan).
 * :mod:`opifex.uncertainty.layers.bayesian` — trainable Bayesian NNX
   modules that *consume* the pure helpers.
 
