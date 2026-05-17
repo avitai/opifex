@@ -28,7 +28,7 @@ from artifex.generative_models.core.rng import extract_rng_key as artifex_extrac
 from flax import nnx
 
 from opifex.uncertainty.kernels.bayesian import diagonal_gaussian_kl
-from opifex.uncertainty.layers.bayesian import BayesianLinear
+from opifex.uncertainty.layers.bayesian import BayesianLinear, BayesianSpectralConvolution
 
 
 def _make_layer(*, prior_std: float = 1.0, seed: int = 0) -> BayesianLinear:
@@ -181,3 +181,194 @@ def test_no_fixed_prngkey_in_production_path() -> None:
         "directly (GUIDE_ALIGNMENT item 5). Use call-time rngs via "
         f"extract_rng_key. Offending call sites: {offending}"
     )
+
+
+# ---------------------------------------------------------------------------
+# BayesianSpectralConvolution (Phase 2 Task 2.2)
+# ---------------------------------------------------------------------------
+
+
+def _make_spectral_1d(
+    *, in_channels: int = 2, out_channels: int = 3, modes: int = 4, seed: int = 0
+) -> BayesianSpectralConvolution:
+    return BayesianSpectralConvolution(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        modes=(modes,),
+        rngs=nnx.Rngs(seed),
+    )
+
+
+def _make_spectral_2d(
+    *,
+    in_channels: int = 2,
+    out_channels: int = 3,
+    modes: tuple[int, int] = (4, 4),
+    seed: int = 0,
+) -> BayesianSpectralConvolution:
+    return BayesianSpectralConvolution(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        modes=modes,
+        rngs=nnx.Rngs(seed),
+    )
+
+
+def test_bayesian_spectral_initializes_real_and_imag_weight_parameters_2d() -> None:
+    layer = _make_spectral_2d(in_channels=2, out_channels=3, modes=(4, 4))
+    expected_shape = (3, 2, 4, 4 // 2 + 1)
+    assert layer.weight_mean[...].shape == expected_shape
+    assert layer.weight_logvar[...].shape == expected_shape
+    assert layer.weight_imag_mean[...].shape == expected_shape
+    assert layer.weight_imag_logvar[...].shape == expected_shape
+
+
+def test_bayesian_spectral_initializes_real_and_imag_weight_parameters_1d() -> None:
+    layer = _make_spectral_1d(in_channels=2, out_channels=3, modes=4)
+    expected_shape = (3, 2, 4)
+    assert layer.weight_mean[...].shape == expected_shape
+    assert layer.weight_imag_mean[...].shape == expected_shape
+
+
+def test_bayesian_spectral_rejects_unsupported_mode_rank() -> None:
+    with pytest.raises(ValueError, match=r"modes"):
+        BayesianSpectralConvolution(
+            in_channels=1,
+            out_channels=1,
+            modes=(2, 2, 2),
+            rngs=nnx.Rngs(0),
+        )
+
+
+def test_bayesian_spectral_rejects_non_positive_prior_std() -> None:
+    with pytest.raises(ValueError, match=r"prior_std"):
+        BayesianSpectralConvolution(
+            in_channels=1, out_channels=1, modes=(4,), prior_std=0.0, rngs=nnx.Rngs(0)
+        )
+
+
+def test_bayesian_spectral_2d_output_shape_matches_uqno_contract() -> None:
+    layer = _make_spectral_2d(in_channels=2, out_channels=3, modes=(2, 2))
+    x = jnp.ones((1, 2, 8, 8))
+    out = layer(x, sample=False)
+    assert out.shape == (1, 3, 8, 8)
+    assert out.dtype == x.dtype
+
+
+def test_bayesian_spectral_1d_output_shape_matches_uqno_contract() -> None:
+    layer = _make_spectral_1d(in_channels=2, out_channels=3, modes=4)
+    x = jnp.ones((1, 2, 16))
+    out = layer(x, sample=False)
+    assert out.shape == (1, 3, 16)
+
+
+def test_bayesian_spectral_deterministic_mode_returns_identical_outputs() -> None:
+    layer = _make_spectral_2d()
+    x = jnp.ones((1, 2, 8, 8))
+    a = layer(x, sample=False)
+    b = layer(x, sample=False)
+    assert jnp.array_equal(a, b)
+
+
+def test_bayesian_spectral_sampling_with_nnx_rngs_varies_across_calls() -> None:
+    layer = _make_spectral_2d()
+    x = jnp.ones((1, 2, 8, 8))
+    rngs = nnx.Rngs(posterior=0)
+    a = layer(x, sample=True, rngs=rngs)
+    b = layer(x, sample=True, rngs=rngs)
+    assert not jnp.array_equal(a, b)
+
+
+def test_bayesian_spectral_sampling_with_explicit_key_is_deterministic_given_key() -> None:
+    layer = _make_spectral_2d()
+    x = jnp.ones((1, 2, 8, 8))
+    key = jax.random.PRNGKey(7)
+    a = layer(x, sample=True, rngs=key)
+    b = layer(x, sample=True, rngs=key)
+    assert jnp.array_equal(a, b)
+
+
+def test_bayesian_spectral_sampling_without_rngs_raises() -> None:
+    layer = _make_spectral_2d()
+    x = jnp.ones((1, 2, 8, 8))
+    with pytest.raises(ValueError, match=r"posterior"):
+        layer(x, sample=True, rngs=None)
+
+
+def test_bayesian_spectral_rejects_mismatched_input_channels() -> None:
+    layer = _make_spectral_2d(in_channels=2, out_channels=3)
+    x = jnp.ones((1, 5, 8, 8))  # wrong in_channels
+    with pytest.raises(ValueError, match=r"in_channels"):
+        layer(x, sample=False)
+
+
+def test_bayesian_spectral_kl_divergence_includes_real_and_imag_weights() -> None:
+    """Canonical Li 2D FNO has TWO weight tensors (pos-H, neg-H), each complex.
+
+    KL sums real + imag parts for both positive- and negative-H weight bands.
+    """
+    layer = _make_spectral_2d(in_channels=2, out_channels=3)
+    expected = float(
+        diagonal_gaussian_kl(
+            layer.weight_mean[...],
+            layer.weight_logvar[...],
+            prior_mean=0.0,
+            prior_std=1.0,
+        )
+        + diagonal_gaussian_kl(
+            layer.weight_imag_mean[...],
+            layer.weight_imag_logvar[...],
+            prior_mean=0.0,
+            prior_std=1.0,
+        )
+        + diagonal_gaussian_kl(
+            layer.weight_neg_h_mean[...],
+            layer.weight_neg_h_logvar[...],
+            prior_mean=0.0,
+            prior_std=1.0,
+        )
+        + diagonal_gaussian_kl(
+            layer.weight_neg_h_imag_mean[...],
+            layer.weight_neg_h_imag_logvar[...],
+            prior_mean=0.0,
+            prior_std=1.0,
+        )
+    )
+    assert float(layer.kl_divergence()) == pytest.approx(expected, rel=1e-6, abs=1e-7)
+
+
+def test_bayesian_spectral_2d_initializes_positive_and_negative_h_weight_tensors() -> None:
+    """Canonical Li 2D FNO has TWO weight tensors per spectral conv."""
+    layer = _make_spectral_2d(in_channels=2, out_channels=3, modes=(4, 4))
+    expected_shape = (3, 2, 4, 4 // 2 + 1)
+    assert layer.weight_neg_h_mean[...].shape == expected_shape
+    assert layer.weight_neg_h_imag_mean[...].shape == expected_shape
+
+
+def test_bayesian_spectral_1d_does_not_create_negative_h_weights() -> None:
+    """1D rfft has no negative-frequency band — only positive weights exist."""
+    layer = _make_spectral_1d()
+    assert not hasattr(layer, "weight_neg_h_mean")
+
+
+def test_bayesian_spectral_routes_through_extract_rng_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def spy(
+        rng: jax.Array | nnx.Rngs | None,
+        *,
+        streams: tuple[str, ...] = ("sample", "default"),
+        context: str = "sampling",
+    ) -> jax.Array:
+        calls.append(context)
+        return artifex_extract_rng_key(rng, streams=streams, context=context)
+
+    monkeypatch.setattr("opifex.uncertainty.layers.bayesian.extract_rng_key", spy)
+    layer = _make_spectral_2d()
+    x = jnp.ones((1, 2, 8, 8))
+    layer(x, sample=True, rngs=nnx.Rngs(posterior=0))
+    layer(x, sample=True, rngs=jax.random.PRNGKey(0))
+    assert len(calls) == 2
+    assert all("BayesianSpectralConvolution" in c for c in calls)

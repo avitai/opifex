@@ -177,6 +177,7 @@ nav:
       - Deployment: api/deployment.md
       - Benchmarking: api/benchmarking.md
       - Bayesian: api/bayesian.md
+      - Uncertainty (shared platform): api/uncertainty.md
       - Scalability: api/scalability.md
       - Education: api/education.md
       - Discovery: api/discovery.md
