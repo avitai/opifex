@@ -1,0 +1,81 @@
+"""Phase 1 Task 1.5 — adapter protocols + spec containers.
+
+Two protocols and one capability-spec container:
+
+* :class:`DistributionAdapterProtocol` — wraps backend distributions (Artifex
+  primary, Distrax secondary, TFP / bijx / FlowJAX / GPJax / NumPyro through
+  unsupported metadata).
+* :class:`ModelUncertaintyAdapterProtocol` — wraps deterministic / ensemble /
+  dropout / Laplace-style models with capability metadata.
+* :class:`DistributionAdapterSpec` — pattern (A) capability declaration with
+  pinned ``resolution_order`` tuple.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from opifex.uncertainty.registry import UQCapability
+    from opifex.uncertainty.types import PredictiveDistribution
+
+
+@runtime_checkable
+class DistributionAdapterProtocol(Protocol):
+    """Wrap a backend distribution into an Opifex :class:`PredictiveDistribution`.
+
+    Primary adapter target: ``artifex.generative_models.core.distributions.base.Distribution``
+    (verified at ``../artifex/src/artifex/generative_models/core/distributions/base.py``).
+    Secondary target: Distrax-like objects exposing ``sample``, ``log_prob``,
+    ``mean``, ``variance``.
+    """
+
+    def from_distribution(self, distribution: Any) -> PredictiveDistribution:
+        """Wrap ``distribution`` into a :class:`PredictiveDistribution`."""
+        ...
+
+
+@runtime_checkable
+class ModelUncertaintyAdapterProtocol(Protocol):
+    """Wrap a model surface with declared UQ capability metadata.
+
+    Phase 3 implementations cover ``ModelUncertaintyAdapter``,
+    ``DeepEnsembleAdapter``, ``MCDropoutAdapter``,
+    ``BayesianLastLayerAdapterSpec``, ``LaplaceAdapterSpec``, etc.
+    """
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Wrap ``model`` and record adapter strategy + source-package metadata."""
+        ...
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class DistributionAdapterSpec:
+    """Pattern (A) capability declaration for a distribution adapter.
+
+    ``resolution_order`` is a tuple to remain hashable (GUIDE_ALIGNMENT item
+    22a). Order is binding — Phase 2 router walks the tuple left-to-right and
+    selects the first installed backend.
+    """
+
+    name: str
+    primary_target: str
+    resolution_order: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.resolution_order, tuple):
+            raise TypeError("resolution_order must be a tuple (GUIDE_ALIGNMENT item 22a).")
+        if self.primary_target not in self.resolution_order:
+            raise ValueError(
+                f"primary_target {self.primary_target!r} must appear in "
+                f"resolution_order {self.resolution_order!r}."
+            )
+
+
+__all__ = [
+    "DistributionAdapterProtocol",
+    "DistributionAdapterSpec",
+    "ModelUncertaintyAdapterProtocol",
+]
