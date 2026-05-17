@@ -537,21 +537,24 @@ activation = "gelu"  # Often better than tanh for gradient flow
 Opifex provides Bayesian layers and uncertainty quantification tools:
 
 ```python
-from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.uncertainty import BayesianLinear
 from opifex.neural.bayesian import UncertaintyQuantifier
 from flax import nnx
 import jax.numpy as jnp
 
-# BayesianLayer has variational weight distributions
-layer = BayesianLayer(
+# BayesianLinear has variational weight distributions
+layer = BayesianLinear(
     in_features=10,
     out_features=64,
     prior_std=1.0,
     rngs=nnx.Rngs(42),
 )
 
-# Forward pass samples from weight posterior during training
-output = layer(x, training=True, sample=True)
+# Forward pass samples from weight posterior during training; the caller owns
+# the RNG (an ``nnx.Rngs`` advancing the ``posterior`` stream, or an explicit
+# ``jax.Array`` key).
+rngs = nnx.Rngs(posterior=0)
+output = layer(x, training=True, sample=True, rngs=rngs)
 
 # For mean prediction (no sampling)
 output_mean = layer(x, training=False, sample=False)

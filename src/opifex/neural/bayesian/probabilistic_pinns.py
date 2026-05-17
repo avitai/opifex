@@ -26,7 +26,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 from opifex.neural.bayesian.config import FidelityConfig, MultiFidelityConfig
-from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.uncertainty.layers.bayesian import BayesianLinear
 
 
 class MultiFidelityPINN(nnx.Module):
@@ -63,6 +63,9 @@ class MultiFidelityPINN(nnx.Module):
         # Handle rngs
         if rngs is None:
             rngs = nnx.Rngs(0)
+        # Persist the RNG bundle so forward passes can pass it through to
+        # BayesianLinear sampling without a per-call argument from callers.
+        self.rngs = rngs
 
         # Store network architecture parameters
         self.low_fidelity_dims = low_fidelity_dims
@@ -119,7 +122,7 @@ class MultiFidelityPINN(nnx.Module):
     def _create_layer(self, in_dim: int, out_dim: int, use_bayesian: bool, rngs: nnx.Rngs):
         """Create a layer (either Bayesian or Linear) based on the configuration."""
         if use_bayesian:
-            return BayesianLayer(in_dim, out_dim, rngs=rngs)
+            return BayesianLinear(in_dim, out_dim, rngs=rngs)
         return nnx.Linear(in_dim, out_dim, rngs=rngs)
 
     def _build_low_fidelity_network(
@@ -196,14 +199,14 @@ class MultiFidelityPINN(nnx.Module):
         """
         h = x
         for layer in self.low_fidelity_layers:
-            if isinstance(layer, BayesianLayer):
-                h = self.activation(layer(h, training=training))
+            if isinstance(layer, BayesianLinear):
+                h = self.activation(layer(h, training=training, rngs=self.rngs))
             else:
                 h = self.activation(layer(h))
 
         # Output prediction
-        if isinstance(self.low_fidelity_output, BayesianLayer):
-            prediction = self.low_fidelity_output(h, training=training)
+        if isinstance(self.low_fidelity_output, BayesianLinear):
+            prediction = self.low_fidelity_output(h, training=training, rngs=self.rngs)
         else:
             prediction = self.low_fidelity_output(h)
 
@@ -232,14 +235,14 @@ class MultiFidelityPINN(nnx.Module):
         h = correction_input
 
         for layer in self.high_fidelity_networks[0][:-1]:
-            if isinstance(layer, BayesianLayer):
-                h = self.activation(layer(h, training=training))
+            if isinstance(layer, BayesianLinear):
+                h = self.activation(layer(h, training=training, rngs=self.rngs))
             else:
                 h = self.activation(layer(h))
 
         # Correction prediction
-        if isinstance(self.high_fidelity_networks[0][-1], BayesianLayer):
-            correction = self.high_fidelity_networks[0][-1](h, training=training)
+        if isinstance(self.high_fidelity_networks[0][-1], BayesianLinear):
+            correction = self.high_fidelity_networks[0][-1](h, training=training, rngs=self.rngs)
         else:
             correction = self.high_fidelity_networks[0][-1](h)
 
@@ -451,6 +454,7 @@ class ProbabilisticPINN(nnx.Module):
         # Handle rngs
         if rngs is None:
             rngs = nnx.Rngs(0)
+        self.rngs = rngs
 
         # Build network
         layers_temp = []
@@ -458,7 +462,7 @@ class ProbabilisticPINN(nnx.Module):
 
         for hidden_dim in hidden_dims:
             if use_bayesian:
-                layer = BayesianLayer(prev_dim, hidden_dim, rngs=rngs)
+                layer = BayesianLinear(prev_dim, hidden_dim, rngs=rngs)
             else:
                 layer = nnx.Linear(prev_dim, hidden_dim, rngs=rngs)
             layers_temp.append(layer)
@@ -467,7 +471,7 @@ class ProbabilisticPINN(nnx.Module):
 
         # Output layer
         if use_bayesian:
-            self.output_layer = BayesianLayer(prev_dim, output_dim, rngs=rngs)
+            self.output_layer = BayesianLinear(prev_dim, output_dim, rngs=rngs)
         else:
             self.output_layer = nnx.Linear(prev_dim, output_dim, rngs=rngs)
 
@@ -475,13 +479,13 @@ class ProbabilisticPINN(nnx.Module):
         """Forward pass through probabilistic PINN."""
         h = x
         for layer in self.layers:
-            if isinstance(layer, BayesianLayer):
-                h = nnx.tanh(layer(h, training=training))
+            if isinstance(layer, BayesianLinear):
+                h = nnx.tanh(layer(h, training=training, rngs=self.rngs))
             else:
                 h = nnx.tanh(layer(h))
 
-        if isinstance(self.output_layer, BayesianLayer):
-            return self.output_layer(h, training=training)
+        if isinstance(self.output_layer, BayesianLinear):
+            return self.output_layer(h, training=training, rngs=self.rngs)
         return self.output_layer(h)
 
     def predict_with_uncertainty(self, x: jax.Array, num_samples: int = 10) -> dict[str, jax.Array]:

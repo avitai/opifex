@@ -41,10 +41,10 @@ Probabilistic numerics distinguishes between:
 
 ### 1. Bayesian Neural Network Layers
 
-Opifex provides `BayesianLayer` -- a variational Bayesian layer with learnable weight distributions for epistemic uncertainty estimation:
+Opifex provides `BayesianLinear` -- a variational diagonal-Gaussian dense layer with learnable weight distributions for epistemic uncertainty estimation:
 
 ```python
-from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.uncertainty import BayesianLinear
 import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
@@ -52,22 +52,25 @@ import jax.numpy as jnp
 rngs = nnx.Rngs(42)
 
 # Create a Bayesian linear layer
-layer = BayesianLayer(
+layer = BayesianLinear(
     in_features=10,
     out_features=64,
     prior_std=1.0,
     rngs=rngs,
 )
 
-# Forward pass with weight sampling (training mode)
+# Forward pass with weight sampling (training mode). Caller owns the RNG —
+# pass an ``nnx.Rngs`` (which advances its ``posterior`` stream across calls)
+# or an explicit ``jax.Array`` key.
 x = jax.random.normal(jax.random.PRNGKey(0), (32, 10))
-output_sampled = layer(x, training=True, sample=True)
+sample_rngs = nnx.Rngs(posterior=0)
+output_sampled = layer(x, training=True, sample=True, rngs=sample_rngs)
 
 # Forward pass with mean weights (inference mode)
 output_mean = layer(x, training=False, sample=False)
 ```
 
-Each `BayesianLayer` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick during training.
+Each `BayesianLinear` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick during training. `BayesianLinear.kl_divergence()` returns the closed-form diagonal Gaussian KL between the posterior and the prior, summed across weight and bias parameters.
 
 ### 2. Amortized Variational Framework
 
@@ -234,7 +237,7 @@ Combine physical laws with probabilistic modeling using `PhysicsInformedLoss` an
 
 ```python
 from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
-from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.uncertainty import BayesianLinear
 from opifex.neural.base import StandardMLP
 import flax.nnx as nnx
 import jax.numpy as jnp
@@ -244,14 +247,15 @@ rngs = nnx.Rngs(42)
 # Create a model with Bayesian layers for uncertainty
 class BayesianPINN(nnx.Module):
     def __init__(self, *, rngs):
-        self.layer1 = BayesianLayer(2, 64, rngs=rngs)
-        self.layer2 = BayesianLayer(64, 64, rngs=rngs)
-        self.layer3 = BayesianLayer(64, 1, rngs=rngs)
+        self.rngs = rngs
+        self.layer1 = BayesianLinear(2, 64, rngs=rngs)
+        self.layer2 = BayesianLinear(64, 64, rngs=rngs)
+        self.layer3 = BayesianLinear(64, 1, rngs=rngs)
 
     def __call__(self, x):
-        h = nnx.tanh(self.layer1(x))
-        h = nnx.tanh(self.layer2(h))
-        return self.layer3(h)
+        h = nnx.tanh(self.layer1(x, rngs=self.rngs))
+        h = nnx.tanh(self.layer2(h, rngs=self.rngs))
+        return self.layer3(h, rngs=self.rngs)
 
 model = BayesianPINN(rngs=rngs)
 
@@ -315,7 +319,7 @@ model_selection_criteria = {
     "uncertainty_type": {
         "aleatoric_only": "Use heteroscedastic regression",
         "epistemic_only": "Use AmortizedVariationalFramework or BlackJAXIntegration",
-        "both": "Use BayesianLayer-based models or deep ensembles",
+        "both": "Use BayesianLinear-based models or deep ensembles",
     },
     "computational_budget": {
         "low": "Use single model with TemperatureScaling calibration",
