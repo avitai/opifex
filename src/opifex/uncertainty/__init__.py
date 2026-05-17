@@ -34,6 +34,7 @@ Subsequent phases populate ``calibration``, ``conformal``, ``ood``,
 ``sbi``, and ``active``.
 """
 
+from opifex.uncertainty.layers.bayesian import BayesianLinear
 from opifex.uncertainty.objectives import (
     ObjectiveConfig,
     scale_kl,
@@ -61,6 +62,7 @@ from opifex.uncertainty.types import (
 
 
 __all__ = [
+    "BayesianLinear",
     "Calibrator",
     "Conformalizer",
     "DefaultStrategy",
