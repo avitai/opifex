@@ -327,7 +327,7 @@ class AmortizedVariationalFramework(nnx.Module):
             predictions = []
             for i in range(num_samples):
                 # Use parameter injection for true Bayesian sampling
-                pred = self._forward_with_params(x, param_samples[i])
+                pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
                 predictions.append(pred)
 
             # Compute statistics from samples
@@ -353,7 +353,11 @@ class AmortizedVariationalFramework(nnx.Module):
         return mean_prediction, uncertainty
 
     def _forward_with_params(
-        self, x: Float[Array, "batch input_dim"], params_vector: Float[Array, ...]
+        self,
+        x: Float[Array, "batch input_dim"],
+        params_vector: Float[Array, ...],
+        *,
+        rngs: nnx.Rngs,
     ) -> Float[Array, "batch output_dim"]:
         """Forward pass with specific parameter vector.
 
@@ -370,7 +374,7 @@ class AmortizedVariationalFramework(nnx.Module):
 
         # Add small perturbation based on parameter vector to simulate parameter changes
         perturbation_scale = jnp.mean(jnp.abs(params_vector)) * 0.001
-        perturbed_x = x + perturbation_scale * jax.random.normal(jax.random.PRNGKey(0), x.shape)
+        perturbed_x = x + perturbation_scale * jax.random.normal(rngs.sample(), x.shape)
 
         return self.base_model(perturbed_x)  # type: ignore[misc, operator]
 
@@ -428,7 +432,7 @@ class AmortizedVariationalFramework(nnx.Module):
         for i in range(num_samples):
             try:
                 # Forward pass with sampled parameters
-                y_pred = self._forward_with_params(x, param_samples[i])
+                y_pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
                 # Gaussian likelihood (negative MSE)
                 sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)  # sigma^2 = 0.01
                 log_likelihood += sample_log_likelihood
@@ -485,7 +489,7 @@ class AmortizedVariationalFramework(nnx.Module):
         predictions = []
         for i in range(num_samples):
             try:
-                pred = self._forward_with_params(x, param_samples[i])
+                pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
             except Exception:
                 # Fallback to base model with input noise
                 noise_scale = 0.01

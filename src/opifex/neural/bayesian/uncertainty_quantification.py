@@ -11,6 +11,7 @@ import jax.numpy as jnp
 
 
 if TYPE_CHECKING:
+    from flax import nnx
     from jaxtyping import Array, Float
 
     # Define common type variable names for array dimensions
@@ -589,6 +590,8 @@ class DistributionalAleatoricUncertainty:
         mean: Float[Array, "batch output"],
         log_std: Float[Array, "batch output"],
         num_samples: int,
+        *,
+        rngs: nnx.Rngs,
     ) -> Float[Array, "samples batch output"]:
         """Sample from Gaussian distributional output.
 
@@ -596,12 +599,14 @@ class DistributionalAleatoricUncertainty:
             mean: Mean predictions
             log_std: Log standard deviation predictions
             num_samples: Number of samples to draw
+            rngs: Caller-owned RNG bundle; advances its ``sample`` stream once
+                per call to produce reproducible-given-seed Monte-Carlo draws.
 
         Returns:
             Samples from the distributional output
         """
         std = jnp.exp(log_std)
-        eps = jax.random.normal(jax.random.PRNGKey(42), (num_samples, *mean.shape))
+        eps = jax.random.normal(rngs.sample(), (num_samples, *mean.shape))
         return mean + std * eps
 
     def compute_gaussian_uncertainty(

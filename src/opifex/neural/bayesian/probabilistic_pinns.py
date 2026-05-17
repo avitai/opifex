@@ -23,6 +23,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
 
 from opifex.neural.bayesian.config import FidelityConfig, MultiFidelityConfig
@@ -585,8 +586,10 @@ class ProbabilisticPINN(nnx.Module):
         # Clean prediction
         clean_pred = self(x, training=False)
 
-        # Noisy prediction
-        key = jax.random.PRNGKey(42)
+        # Noisy prediction; perturbation key comes from caller-owned rngs
+        # (advancing the ``noise`` stream when present, falling back to
+        # ``default``).
+        key = extract_rng_key(self.rngs, streams=("noise", "default"), context="robust_loss noise")
         noise = jax.random.normal(key, x.shape) * noise_scale
         x_noisy = x + noise
         noisy_pred = self(x_noisy, training=False)
@@ -717,8 +720,12 @@ class RobustPINNOptimizer(nnx.Module):
         Returns:
             Robustness penalty scalar
         """
-        # Generate adversarial noise
-        key = jax.random.PRNGKey(42)  # Fixed seed for reproducibility
+        # Generate adversarial noise from caller-owned rngs.
+        key = extract_rng_key(
+            self.rngs,
+            streams=("noise", "default"),
+            context="robustness penalty noise",
+        )
         noise = jax.random.normal(key, x.shape) * noise_scale
         x_noisy = x + noise
 
@@ -811,8 +818,14 @@ class RobustPINNOptimizer(nnx.Module):
                 pred_result.get("std", jnp.zeros(x_candidates.shape[0])),
             )
         else:
-            # For models without uncertainty, use random selection
-            uncertainties = jax.random.uniform(jax.random.PRNGKey(42), (x_candidates.shape[0],))
+            # For models without uncertainty, fall back to random selection
+            # with caller-owned rngs (no hidden seed).
+            key = extract_rng_key(
+                self.rngs,
+                streams=("active_learning", "default"),
+                context="active learning random selection",
+            )
+            uncertainties = jax.random.uniform(key, (x_candidates.shape[0],))
 
         # Ensure uncertainties is 1D
         if uncertainties.ndim > 1:

@@ -562,7 +562,7 @@ class TestAdvancedUncertaintyDecomposition:
         mean = jax.random.normal(jax.random.PRNGKey(42), (batch_size, output_dim))
         log_std = jax.random.normal(jax.random.PRNGKey(43), (batch_size, output_dim))
 
-        samples = estimator.sample_gaussian(mean, log_std, num_samples=100)
+        samples = estimator.sample_gaussian(mean, log_std, num_samples=100, rngs=nnx.Rngs(0))
         assert samples.shape == (100, batch_size, output_dim)
 
         uncertainty = estimator.compute_gaussian_uncertainty(mean, log_std)
