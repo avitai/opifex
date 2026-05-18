@@ -41,11 +41,17 @@ from opifex.uncertainty.distributions import (
     from_distribution,
 )
 from opifex.uncertainty.inference_backends import (
+    ARTIFEX_FLOW_SPECS,
     BackendDiagnostics,
     BackendResult,
+    BackendRouter,
     BlackJAXBackend,
+    DISTRIBUTION_SPECS,
     InferenceBackendProtocol,
     InferenceBackendSpec,
+    OPTIONAL_FLOW_SPECS,
+    OPTIONAL_SAMPLER_SPECS,
+    OptionalBackendSpec,
     UnsupportedBackendError,
 )
 from opifex.uncertainty.kernels.bayesian import (
@@ -95,9 +101,14 @@ from opifex.uncertainty.types import (
 
 
 __all__ = [
+    "ARTIFEX_FLOW_SPECS",
+    "DISTRIBUTION_SPECS",
+    "OPTIONAL_FLOW_SPECS",
+    "OPTIONAL_SAMPLER_SPECS",
     "ArtifexDistributionAdapter",
     "BackendDiagnostics",
     "BackendResult",
+    "BackendRouter",
     "BayesianLinear",
     "BayesianSpectralConvolution",
     "BlackJAXBackend",
@@ -112,6 +123,7 @@ __all__ = [
     "LikelihoodSpec",
     "ModelUncertaintyAdapterProtocol",
     "ObjectiveConfig",
+    "OptionalBackendSpec",
     "PredictionInterval",
     "PredictionSet",
     "PredictiveDistribution",

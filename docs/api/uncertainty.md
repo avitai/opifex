@@ -15,7 +15,7 @@ adapter/backend interfaces for downstream inference engines.
 | `opifex.uncertainty.layers.bayesian` | Trainable NNX Bayesian layers: `BayesianLinear`, `BayesianSpectralConvolution`. |
 | `opifex.uncertainty.protocols` | Structural protocols: `UncertaintyAwareModule`, `VariationalModule`, `Calibrator`, `Conformalizer`, `UncertaintyEstimator`. |
 | `opifex.uncertainty.registry` | Capability metadata: `UQCapability`, `DefaultStrategy`, `UQRegistry`, `register_uq_capability`. |
-| `opifex.uncertainty.inference_backends` | Backend protocol + base result/spec/diagnostics containers (`InferenceBackendProtocol`, `BackendResult`, `BackendDiagnostics`, `InferenceBackendSpec`, `UnsupportedBackendError`), and `BlackJAXBackend` for HMC / NUTS / MALA posterior sampling. |
+| `opifex.uncertainty.inference_backends` | Backend protocol + base result/spec/diagnostics containers (`InferenceBackendProtocol`, `BackendResult`, `BackendDiagnostics`, `InferenceBackendSpec`, `UnsupportedBackendError`), `BlackJAXBackend` for HMC / NUTS / MALA posterior sampling, `BackendRouter` for Artifex-first family routing, and `OptionalBackendSpec` declarations for TFP / bijx / FlowJAX / Bayeux / NumPyro / GPJax / sbiax / flowMC / oryx / traceax / matfree / kfac-jax. |
 | `opifex.uncertainty.distributions` | `ArtifexDistributionAdapter`, `DistrAxAdapter`, and the `from_distribution(...)` dispatcher that wraps a backend distribution into a `PredictiveDistribution`. |
 | `opifex.uncertainty.adapters` | Distribution / model-uncertainty adapter protocols: `DistributionAdapterProtocol`, `ModelUncertaintyAdapterProtocol`, `DistributionAdapterSpec`. |
 | `opifex.uncertainty.likelihoods` | Backend-neutral log-likelihoods: Gaussian, heteroscedastic Gaussian, Laplace, Student-t, mixture. |
@@ -88,6 +88,34 @@ kl = layer.kl_divergence()
 ```
 
 ## Inference Backends
+
+### `BackendRouter`
+
+Selects the highest-priority available backend for a given family
+(`"flow"` / `"sampler"` / `"distribution"`) using **Artifex-first**
+resolution order. Optional backends remain available by name but raise
+`ImportError` on instantiation when their package is not installed.
+
+```python
+from opifex.uncertainty import BackendRouter
+
+router = BackendRouter()
+sampler_spec = router.resolve("sampler")               # default = BlackJAX
+flow_spec = router.resolve("flow")                     # default = Artifex RealNVP
+dist_spec = router.resolve("distribution")             # default = Artifex Distribution
+print(sampler_spec.name, flow_spec.name, dist_spec.name)
+```
+
+Listing all registered specs for a family:
+
+```python
+from opifex.uncertainty import BackendRouter
+
+router = BackendRouter()
+for spec in router.available("sampler"):
+    status = "installed" if spec.probe() else "needs install"
+    print(f"  {spec.name} ({spec.source_package}) — {status}")
+```
 
 ### `BlackJAXBackend`
 
