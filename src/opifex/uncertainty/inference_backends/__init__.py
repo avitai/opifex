@@ -9,10 +9,14 @@ from opifex.uncertainty.inference_backends.base import (
     InferenceBackendSpec,
     UnsupportedBackendError,
 )
-from opifex.uncertainty.inference_backends.blackjax import BlackJAXBackend
+from opifex.uncertainty.inference_backends.blackjax import (
+    BLACKJAX_BACKEND_SPEC,
+    BlackJAXBackend,
+)
 
 
 __all__ = [
+    "BLACKJAX_BACKEND_SPEC",
     "BackendDiagnostics",
     "BackendResult",
     "BlackJAXBackend",

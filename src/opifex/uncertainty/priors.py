@@ -24,6 +24,21 @@ def diagonal_gaussian_log_prior(
     """Log-density of ``theta`` under ``N(prior_mean, prior_std^2)`` summed over features.
 
     Returns a scalar (the total log-prior over every feature in ``theta``).
+
+    Parameterization is shared with
+    :func:`opifex.uncertainty.kernels.bayesian.diagonal_gaussian_kl`: both
+    accept the prior as ``(prior_mean, prior_std)`` so the same posterior
+    parameters plug into either helper without translation.
+
+    Numerical formulation follows the standard closed-form Gaussian
+    log-density (see Bishop 2006, "Pattern Recognition and Machine
+    Learning", Eq. 2.43). Artifex's distribution package exposes a
+    ``Distribution.log_prob`` method on its ``Normal`` class but no
+    standalone pure-JAX ``gaussian_log_density`` function; constructing a
+    full ``nnx.Module``-backed ``Normal`` per call is too heavy for a
+    pure-JAX kernel, so the formula lives here. If Artifex adds a
+    standalone helper later, this implementation collapses to a
+    thin-wrapper delegation.
     """
     if prior_std <= 0.0:
         raise ValueError(f"prior_std must be > 0; got {prior_std!r}.")

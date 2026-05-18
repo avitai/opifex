@@ -30,16 +30,48 @@ Additional sub-packages cover ``calibration``, ``conformal``, ``ood``,
 ``sbi``, and ``active``.
 """
 
-from opifex.uncertainty.distributions import from_distribution
-from opifex.uncertainty.inference_backends import BlackJAXBackend
+from opifex.uncertainty.adapters import (
+    DistributionAdapterProtocol,
+    DistributionAdapterSpec,
+    ModelUncertaintyAdapterProtocol,
+)
+from opifex.uncertainty.distributions import (
+    ArtifexDistributionAdapter,
+    DistrAxAdapter,
+    from_distribution,
+)
+from opifex.uncertainty.inference_backends import (
+    BackendDiagnostics,
+    BackendResult,
+    BlackJAXBackend,
+    InferenceBackendProtocol,
+    InferenceBackendSpec,
+    UnsupportedBackendError,
+)
+from opifex.uncertainty.kernels.bayesian import (
+    diagonal_gaussian_kl,
+    sample_diagonal_gaussian,
+)
 from opifex.uncertainty.layers.bayesian import (
     BayesianLinear,
     BayesianSpectralConvolution,
+)
+from opifex.uncertainty.likelihoods import (
+    gaussian_log_likelihood,
+    heteroscedastic_gaussian_log_likelihood,
+    laplace_log_likelihood,
+    LikelihoodSpec,
+    mixture_log_likelihood,
+    student_t_log_likelihood,
 )
 from opifex.uncertainty.objectives import (
     ObjectiveConfig,
     scale_kl,
     UQLossComponents,
+)
+from opifex.uncertainty.priors import (
+    diagonal_gaussian_log_prior,
+    PriorSpec,
 )
 from opifex.uncertainty.protocols import (
     Calibrator,
@@ -63,24 +95,44 @@ from opifex.uncertainty.types import (
 
 
 __all__ = [
+    "ArtifexDistributionAdapter",
+    "BackendDiagnostics",
+    "BackendResult",
     "BayesianLinear",
     "BayesianSpectralConvolution",
     "BlackJAXBackend",
     "Calibrator",
     "Conformalizer",
     "DefaultStrategy",
+    "DistrAxAdapter",
+    "DistributionAdapterProtocol",
+    "DistributionAdapterSpec",
+    "InferenceBackendProtocol",
+    "InferenceBackendSpec",
+    "LikelihoodSpec",
+    "ModelUncertaintyAdapterProtocol",
     "ObjectiveConfig",
     "PredictionInterval",
     "PredictionSet",
     "PredictiveDistribution",
     "PredictiveMode",
+    "PriorSpec",
     "UQCapability",
     "UQLossComponents",
     "UQRegistry",
     "UncertaintyAwareModule",
     "UncertaintyEstimator",
+    "UnsupportedBackendError",
     "VariationalModule",
+    "diagonal_gaussian_kl",
+    "diagonal_gaussian_log_prior",
     "from_distribution",
+    "gaussian_log_likelihood",
+    "heteroscedastic_gaussian_log_likelihood",
+    "laplace_log_likelihood",
+    "mixture_log_likelihood",
     "register_uq_capability",
+    "sample_diagonal_gaussian",
     "scale_kl",
+    "student_t_log_likelihood",
 ]

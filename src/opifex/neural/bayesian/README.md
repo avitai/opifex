@@ -18,7 +18,8 @@ This module provides advanced Bayesian machine learning capabilities for scienti
 | `physics_informed_priors.py` | 1,052 | Physics-aware prior distributions | ✅ Complete |
 | `calibration_tools.py` | 810 | Enhanced calibration framework | ✅ Complete |
 | `variational_framework.py` | 519 | Variational inference methods | ✅ Complete |
-| `blackjax_integration.py` | 399 | MCMC sampling integration | ✅ Complete |
+
+MCMC sampling lives in `opifex.uncertainty.inference_backends.blackjax:BlackJAXBackend` (thin adapter over Artifex's HMC / NUTS / MALA wrappers).
 
 ## 🚀 **Core Features**
 

@@ -168,6 +168,13 @@ class UQCapability:
                 "requires_graph_adapter=True must be paired with non-empty notes "
                 "explaining why the graph adapter is needed."
             )
+        if self.native_jax_kernel and self.requires_graph_adapter:
+            raise ValueError(
+                "Contradictory capability: native_jax_kernel=True implies a pure "
+                "JAX kernel safe for direct transforms, which cannot also "
+                "require requires_graph_adapter=True (an NNX graph/state "
+                "adapter). Pick one."
+            )
 
     @classmethod
     def deterministic_baseline(cls) -> UQCapability:

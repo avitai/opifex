@@ -103,7 +103,7 @@ def test_distribution_adapter_supports_jit_for_log_probability() -> None:
     closure constant rather than threaded as a jit argument.
     """
     fake = _FakeDistraxNormal(jnp.zeros(2), jnp.ones(2))
-    jit_log_prob = jax.jit(lambda x: fake.log_prob(x))
+    jit_log_prob = jax.jit(fake.log_prob)
     result = jit_log_prob(jnp.zeros(2))
     assert result.shape == (2,)
 

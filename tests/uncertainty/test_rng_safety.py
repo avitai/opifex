@@ -52,7 +52,7 @@ _KNOWN_MIGRATION_BLOCKED: frozenset[tuple[str, int]] = frozenset(
 
 def _scan_file(path: Path) -> list[tuple[int, str]]:
     """Return ``[(line_no, source_excerpt), ...]`` for every PRNGKey call in ``path``."""
-    if not path.suffix == ".py":
+    if path.suffix != ".py":
         return []
     tree = ast.parse(path.read_text())
     hits: list[tuple[int, str]] = []

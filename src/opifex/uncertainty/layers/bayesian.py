@@ -36,6 +36,13 @@ _POSTERIOR_STREAMS: tuple[str, ...] = ("posterior", "sample", "default")
 class BayesianLinear(nnx.Module):
     """Variational diagonal-Gaussian dense layer.
 
+    Reference: Blundell et al. 2015, "Weight Uncertainty in Neural Networks"
+    (``arXiv:1505.05424``). Per-parameter diagonal-Gaussian posterior with
+    reparameterization-trick sampling and analytic KL against an isotropic
+    Gaussian prior. ``../bayesian-torch`` and ``../blitz-bayesian-deep-learning``
+    serve as PyTorch reference implementations of the same variational layer
+    family.
+
     Weight and bias each carry a ``(mean, log-variance)`` posterior; sampling
     uses the reparameterization trick. Pre-defined ``__call__`` flags:
 

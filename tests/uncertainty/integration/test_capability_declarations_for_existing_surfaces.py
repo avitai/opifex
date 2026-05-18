@@ -106,22 +106,16 @@ def test_capability_declarations_round_trip_through_uq_registry() -> None:
 
 
 def test_capability_contradiction_native_jax_kernel_with_required_graph_adapter() -> None:
-    """A pure JAX kernel cannot also require an NNX graph adapter (would be a contradiction).
+    """A pure JAX kernel cannot also require an NNX graph adapter (contradiction).
 
-    Catching this combination in capability declarations early means downstream
-    capability tests cannot accidentally claim mutually exclusive properties.
+    ``UQCapability.__post_init__`` rejects this combination at construction
+    time. The test pins the cross-field validator so downstream capability
+    declarations cannot claim mutually exclusive properties.
     """
-    cap = UQCapability(
-        native_jax_kernel=True,
-        requires_graph_adapter=True,
-        notes="contradictory; this test asserts the test surfaces the contradiction",
-        default_strategy=DefaultStrategy.DETERMINISTIC,
-    )
-    # Currently the dataclass accepts this combination — a cross-field
-    # validator is required. The test surfaces the gap explicitly so a
-    # subsequent validator has a target to satisfy.
-    if cap.native_jax_kernel and cap.requires_graph_adapter:
-        pytest.xfail(
-            "UQCapability must add a __post_init__ validator that rejects "
-            "(native_jax_kernel AND requires_graph_adapter) as a contradiction."
+    with pytest.raises(ValueError, match=r"native_jax_kernel"):
+        UQCapability(
+            native_jax_kernel=True,
+            requires_graph_adapter=True,
+            notes="non-empty notes to clear the requires_graph_adapter check",
+            default_strategy=DefaultStrategy.DETERMINISTIC,
         )
