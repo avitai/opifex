@@ -493,6 +493,12 @@ docs/development/nnx-migration.md
 
 # Deployment infrastructure (auto-generated scaffolding)
 /deployment/
+/k8s-manifests/
+/terraform-aws/
+/terraform-gcp/
+
+# Codex / external-agent dropfiles
+/.codex
 
 # Benchmark output data and one-off scripts
 benchmark-data/

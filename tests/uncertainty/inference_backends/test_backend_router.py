@@ -86,7 +86,7 @@ def test_router_resolve_by_name_raises_for_unknown_name() -> None:
 def test_router_all_families_listed_in_unknown_family_error() -> None:
     """Error message must list the registered families so callers know what's valid."""
     router = BackendRouter()
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match=r"unknown family") as excinfo:
         router.resolve("not-a-family")
     message = str(excinfo.value)
     for family in ("flow", "sampler", "distribution"):
