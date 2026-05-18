@@ -105,42 +105,50 @@ config = VariationalConfig(
 
 framework = AmortizedVariationalFramework(
     base_model=base_model,
-    config=config,
+    prior_config=PriorConfig(),
+    variational_config=config,
     rngs=rngs,
 )
 ```
 
 The framework includes a `MeanFieldGaussian` posterior and an `UncertaintyEncoder` that maps inputs to uncertainty estimates.
 
-### 3. BlackJAX MCMC Integration
+### 3. BlackJAX MCMC Backend
 
-For full Bayesian posterior sampling, Opifex integrates with BlackJAX:
+For full Bayesian posterior sampling, Opifex provides the `BlackJAXBackend`
+inference backend, which delegates to the BlackJAX HMC / NUTS / MALA
+samplers:
 
 ```python
-from opifex.neural.bayesian import BlackJAXIntegration
-from opifex.neural.base import StandardMLP
+import jax.numpy as jnp
 import flax.nnx as nnx
+from opifex.uncertainty import BlackJAXBackend
 
-rngs = nnx.Rngs(42)
+def log_density(theta):
+    # Replace with the model + likelihood log-density of interest.
+    return -0.5 * jnp.sum(theta * theta)
 
-base_model = StandardMLP(
-    layer_sizes=[10, 32, 32, 1],
-    activation="gelu",
-    rngs=rngs,
-)
+rngs = nnx.Rngs(sample=42)
 
-# Create MCMC sampler (NUTS, HMC, or MALA)
-mcmc = BlackJAXIntegration(
-    base_model=base_model,
-    sampler_type="nuts",       # "nuts", "hmc", or "mala"
-    num_warmup=1000,
-    num_samples=1000,
+backend = BlackJAXBackend(
+    target_log_prob=log_density,
+    init_state=jnp.zeros(10),
+    n_samples=1000,
+    n_burnin=1000,
+    method="nuts",       # "nuts", "hmc", or "mala"
     step_size=1e-3,
-    rngs=rngs,
 )
+
+result = backend.fit(log_density, rngs=rngs)
+samples = result.sampler_state   # shape (n_samples, ...)
+
+# Convert posterior samples into a PredictiveDistribution for downstream use.
+predictive = backend.predict_distribution(jnp.zeros((4, 10)), rngs=rngs)
 ```
 
-This provides NUTS, HMC, and MALA samplers for posterior inference over neural network parameters, enabling rigorous uncertainty quantification without variational approximations.
+The backend conforms to `InferenceBackendProtocol`. Unsupported sampler
+families (SGLD, SGHMC, SMC, ADVI, Pathfinder) raise `UnsupportedBackendError`
+until the upstream BlackJAX adapter grows a wrapper for them.
 
 ### 4. Uncertainty Quantification Utilities
 
@@ -279,7 +287,11 @@ For uncertainty-aware neural operators, wrap an FNO with the `AmortizedVariation
 
 ```python
 from opifex.neural.operators.fno import FourierNeuralOperator
-from opifex.neural.bayesian import AmortizedVariationalFramework, VariationalConfig
+from opifex.neural.bayesian import (
+    AmortizedVariationalFramework,
+    PriorConfig,
+    VariationalConfig,
+)
 import flax.nnx as nnx
 
 rngs = nnx.Rngs(42)
@@ -304,7 +316,8 @@ config = VariationalConfig(
 
 prob_fno = AmortizedVariationalFramework(
     base_model=fno,
-    config=config,
+    prior_config=PriorConfig(),
+    variational_config=config,
     rngs=rngs,
 )
 ```
@@ -318,13 +331,13 @@ prob_fno = AmortizedVariationalFramework(
 model_selection_criteria = {
     "uncertainty_type": {
         "aleatoric_only": "Use heteroscedastic regression",
-        "epistemic_only": "Use AmortizedVariationalFramework or BlackJAXIntegration",
+        "epistemic_only": "Use AmortizedVariationalFramework or BlackJAXBackend",
         "both": "Use BayesianLinear-based models or deep ensembles",
     },
     "computational_budget": {
         "low": "Use single model with TemperatureScaling calibration",
         "medium": "Use AmortizedVariationalFramework with num_samples=10",
-        "high": "Use BlackJAXIntegration with NUTS sampling",
+        "high": "Use BlackJAXBackend with NUTS sampling",
     },
     "data_size": {
         "small": "Use PhysicsInformedPriors with strong constraints",

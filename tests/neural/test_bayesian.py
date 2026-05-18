@@ -8,7 +8,6 @@ from opifex.neural.base import StandardMLP
 from opifex.neural.bayesian import (
     AleatoricUncertainty,
     AmortizedVariationalFramework,
-    BlackJAXIntegration,
     CalibrationTools,
     ConformalPrediction,
     ConservationLawPriors,
@@ -706,107 +705,6 @@ class TestBayesianDataStructures:
         assert jnp.array_equal(hetero_uncertainty, input_var)
 
 
-class TestBlackJAXIntegration:
-    """Test BlackJAX MCMC sampling integration."""
-
-    def test_initialization(self):
-        """Test BlackJAX integration initialization."""
-        rngs = nnx.Rngs(42)
-
-        # Create base model for MCMC sampling
-        base_model = StandardMLP([4, 8, 1], rngs=rngs)
-
-        # Create BlackJAX integration
-        blackjax_sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="nuts",
-            num_warmup=100,
-            num_samples=500,
-            rngs=rngs,
-        )
-
-        assert blackjax_sampler.base_model is base_model
-        assert blackjax_sampler.sampler_type == "nuts"
-        assert blackjax_sampler.num_warmup == 100
-        assert blackjax_sampler.num_samples == 500
-
-    def test_mcmc_sampling(self):
-        """Test MCMC posterior sampling with BlackJAX."""
-        rngs = nnx.Rngs(42)
-
-        # Create simple model
-        base_model = StandardMLP([2, 4, 1], rngs=rngs)
-
-        # Create synthetic data with 2 features to match model input dimension
-        x1 = jnp.linspace(-1, 1, 20)
-        x2 = jnp.linspace(0.5, 1.5, 20)
-        x_data = jnp.column_stack([x1, x2])  # Shape: (20, 2)
-        y_data = (x1**2 + x2).reshape(-1, 1) + 0.1 * jax.random.normal(rngs.sample(), (20, 1))
-
-        # Create BlackJAX sampler
-        sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="nuts",
-            num_warmup=50,
-            num_samples=100,
-            rngs=rngs,
-        )
-
-        # Sample posterior
-        samples = sampler.sample_posterior(x_data, y_data)
-
-        assert samples.shape[0] == 100  # num_samples
-        assert samples.shape[1] > 0  # parameter dimension
-        assert jnp.all(jnp.isfinite(samples))
-
-    def test_posterior_predictive(self):
-        """Test posterior predictive sampling."""
-        rngs = nnx.Rngs(42)
-
-        # Create model and data
-        base_model = StandardMLP([1, 4, 1], rngs=rngs)
-        x_test = jnp.linspace(-1, 1, 10).reshape(-1, 1)
-
-        # Create sampler
-        sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="hmc",
-            num_warmup=20,
-            num_samples=50,
-            rngs=rngs,
-        )
-
-        # Generate synthetic posterior samples
-        num_params = sampler._count_parameters(base_model)
-        posterior_samples = jax.random.normal(rngs.sample(), (50, num_params))
-
-        # Posterior predictive sampling
-        predictions = sampler.posterior_predictive(x_test, posterior_samples)
-
-        assert predictions.shape == (50, 10, 1)  # (num_samples, num_test, output_dim)
-        assert jnp.all(jnp.isfinite(predictions))
-
-    def test_multiple_samplers(self):
-        """Test different MCMC sampler types."""
-        rngs = nnx.Rngs(42)
-        base_model = StandardMLP([2, 1], rngs=rngs)
-
-        # Test different sampler types
-        sampler_types = ["nuts", "hmc", "mala"]
-
-        for sampler_type in sampler_types:
-            sampler = BlackJAXIntegration(
-                base_model=base_model,
-                sampler_type=sampler_type,
-                num_warmup=10,
-                num_samples=20,
-                rngs=rngs,
-            )
-
-            assert sampler.sampler_type == sampler_type
-            # Test that sampler can be initialized without errors
-
-
 class TestCalibrationTools:
     """Test uncertainty calibration tools."""
 
@@ -1380,27 +1278,6 @@ class TestPhysicsAwareUncertaintyPropagation:
 
 class TestProbabilisticIntegration:
     """Test integration between probabilistic components."""
-
-    def test_blackjax_calibration_integration(self):
-        """Test integration between BlackJAX sampling and calibration tools."""
-        rngs = nnx.Rngs(42)
-
-        # Create model and sampler
-        base_model = StandardMLP([2, 4, 1], rngs=rngs)
-        sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="nuts",
-            num_warmup=20,
-            num_samples=50,
-            rngs=rngs,
-        )
-
-        # Create calibration tools
-        calibrator = CalibrationTools(rngs=rngs)
-
-        # This tests that the components can work together
-        assert sampler is not None
-        assert calibrator is not None
 
     def test_physics_prior_variational_integration(self):
         """Test integration between physics priors and variational framework."""

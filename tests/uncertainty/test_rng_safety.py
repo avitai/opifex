@@ -46,12 +46,6 @@ _KNOWN_MIGRATION_BLOCKED: frozenset[tuple[str, int]] = frozenset(
         ("src/opifex/neural/operators/specialized/uqno.py", 105),
         ("src/opifex/neural/operators/specialized/uqno.py", 218),
         ("src/opifex/neural/operators/specialized/uqno.py", 630),
-        # Legacy BlackJAX adapter uses fixed keys for the per-sample input
-        # perturbation and the per-posterior-sample evaluation. The BlackJAX
-        # backend migration to the shared inference-backend surface
-        # eliminates both sites.
-        ("src/opifex/neural/bayesian/blackjax_integration.py", 156),
-        ("src/opifex/neural/bayesian/blackjax_integration.py", 265),
     }
 )
 

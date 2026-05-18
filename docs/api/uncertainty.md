@@ -15,7 +15,8 @@ adapter/backend interfaces for downstream inference engines.
 | `opifex.uncertainty.layers.bayesian` | Trainable NNX Bayesian layers: `BayesianLinear`, `BayesianSpectralConvolution`. |
 | `opifex.uncertainty.protocols` | Structural protocols: `UncertaintyAwareModule`, `VariationalModule`, `Calibrator`, `Conformalizer`, `UncertaintyEstimator`. |
 | `opifex.uncertainty.registry` | Capability metadata: `UQCapability`, `DefaultStrategy`, `UQRegistry`, `register_uq_capability`. |
-| `opifex.uncertainty.inference_backends` | Backend protocol + base result/spec/diagnostics containers (`InferenceBackendProtocol`, `BackendResult`, `BackendDiagnostics`, `InferenceBackendSpec`, `UnsupportedBackendError`). |
+| `opifex.uncertainty.inference_backends` | Backend protocol + base result/spec/diagnostics containers (`InferenceBackendProtocol`, `BackendResult`, `BackendDiagnostics`, `InferenceBackendSpec`, `UnsupportedBackendError`), and `BlackJAXBackend` for HMC / NUTS / MALA posterior sampling. |
+| `opifex.uncertainty.distributions` | `ArtifexDistributionAdapter`, `DistrAxAdapter`, and the `from_distribution(...)` dispatcher that wraps a backend distribution into a `PredictiveDistribution`. |
 | `opifex.uncertainty.adapters` | Distribution / model-uncertainty adapter protocols: `DistributionAdapterProtocol`, `ModelUncertaintyAdapterProtocol`, `DistributionAdapterSpec`. |
 | `opifex.uncertainty.likelihoods` | Backend-neutral log-likelihoods: Gaussian, heteroscedastic Gaussian, Laplace, Student-t, mixture. |
 | `opifex.uncertainty.priors` | Diagonal-Gaussian log prior. |
@@ -86,6 +87,59 @@ sample = layer(x, sample=True, rngs=nnx.Rngs(posterior=0))
 kl = layer.kl_divergence()
 ```
 
+## Inference Backends
+
+### `BlackJAXBackend`
+
+Thin adapter over Artifex's BlackJAX HMC / NUTS / MALA samplers conforming
+to `InferenceBackendProtocol`. Supports `method` in
+`{"hmc", "nuts", "mala"}`; other sampler families raise
+`UnsupportedBackendError`.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from opifex.uncertainty import BlackJAXBackend
+
+
+def log_density(theta):
+    return -0.5 * jnp.sum(theta * theta)
+
+
+backend = BlackJAXBackend(
+    target_log_prob=log_density,
+    init_state=jnp.zeros(10),
+    n_samples=1000,
+    n_burnin=500,
+    method="nuts",
+    step_size=0.1,
+)
+result = backend.fit(log_density, rngs=nnx.Rngs(sample=0))
+samples = result.sampler_state             # (n_samples, ...)
+diagnostics = result.diagnostics           # BackendDiagnostics
+
+# Convert posterior samples into a predictive distribution.
+predictive = backend.predict_distribution(jnp.zeros((4, 10)), rngs=nnx.Rngs(sample=1))
+```
+
+## Distribution Adapters
+
+```python
+from opifex.uncertainty import from_distribution
+from artifex.generative_models.core.distributions.continuous import Normal
+from flax import nnx
+
+# Wrap an Artifex distribution.
+dist = Normal(loc=jnp.zeros(3), scale=jnp.ones(3), rngs=nnx.Rngs(0))
+predictive = from_distribution(dist)       # PredictiveDistribution
+
+# Distrax-like objects (anything exposing sample/log_prob/mean/variance) are
+# accepted as a secondary fallback.
+```
+
+`from_distribution` resolves Artifex `Distribution` first, then falls back
+to Distrax-like objects. Unsupported objects raise `TypeError`.
+
 ## Predictive Value Objects
 
 ```python
@@ -111,7 +165,13 @@ tuple-of-pairs `metadata`.
 ## Objectives
 
 ```python
-from opifex.uncertainty import ObjectiveConfig, UQLossComponents
+import jax.numpy as jnp
+from flax import nnx
+from opifex.uncertainty import (
+    BayesianLinear,
+    ObjectiveConfig,
+    UQLossComponents,
+)
 
 config = ObjectiveConfig(
     kl_weight=1.0,
@@ -126,6 +186,11 @@ config = ObjectiveConfig(
     pac_bayes_weight=1.0,
 )
 
+# Stand-in loss tensors from your training step.
+data_loss = jnp.array(0.5)
+physics_loss = jnp.array(0.3)
+layer = BayesianLinear(in_features=4, out_features=3, rngs=nnx.Rngs(0))
+
 components = UQLossComponents.from_components(
     config=config,
     data=data_loss,
@@ -139,7 +204,11 @@ scalar_for_optimizer = components.total
 ## Canonical KL helper
 
 ```python
+import jax.numpy as jnp
 from opifex.uncertainty.kernels.bayesian import diagonal_gaussian_kl
+
+mean = jnp.zeros(4)
+logvar = jnp.zeros(4)
 
 # Standard N(0, 1) prior delegates to Artifex gaussian_kl_divergence:
 kl = diagonal_gaussian_kl(mean, logvar, prior_mean=0.0, prior_std=1.0)

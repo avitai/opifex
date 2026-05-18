@@ -30,6 +30,8 @@ Additional sub-packages cover ``calibration``, ``conformal``, ``ood``,
 ``sbi``, and ``active``.
 """
 
+from opifex.uncertainty.distributions import from_distribution
+from opifex.uncertainty.inference_backends import BlackJAXBackend
 from opifex.uncertainty.layers.bayesian import (
     BayesianLinear,
     BayesianSpectralConvolution,
@@ -63,6 +65,7 @@ from opifex.uncertainty.types import (
 __all__ = [
     "BayesianLinear",
     "BayesianSpectralConvolution",
+    "BlackJAXBackend",
     "Calibrator",
     "Conformalizer",
     "DefaultStrategy",
@@ -77,6 +80,7 @@ __all__ = [
     "UncertaintyAwareModule",
     "UncertaintyEstimator",
     "VariationalModule",
+    "from_distribution",
     "register_uq_capability",
     "scale_kl",
 ]

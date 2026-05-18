@@ -1,7 +1,5 @@
 """Bayesian neural network components with uncertainty quantification."""
 
-# Import new probabilistic framework components
-from opifex.neural.bayesian.blackjax_integration import BlackJAXIntegration
 from opifex.neural.bayesian.calibration_tools import (
     CalibrationTools,
     ConformalPrediction,
@@ -49,7 +47,6 @@ __all__ = [
     "AdvancedUncertaintyAggregator",
     "AleatoricUncertainty",
     "AmortizedVariationalFramework",
-    "BlackJAXIntegration",
     "CalibrationAssessment",
     "CalibrationMetrics",
     "CalibrationTools",
