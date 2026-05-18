@@ -25,9 +25,9 @@ This document explains the full solution implemented to ensure that Opifex tests
 
 #### GPU Testing Infrastructure (`opifex/core/testing_infrastructure.py`)
 
-The framework includes full GPU testing infrastructure that handles device detection, stability testing, and environment classification:
+The framework includes full GPU testing infrastructure that handles device detection, stability testing, and environment classification (illustrative excerpt from the internal infrastructure module):
 
-```python
+```text
 class EnvironmentType(Enum):
     """GPU environment classification."""
     GPU_SAFE = "gpu_safe"              # GPU available and stable
@@ -98,7 +98,7 @@ The actual conftest.py uses the following hooks:
 - **`pytest_runtest_teardown`**: Clears JAX caches and runs garbage collection after each test. For GPU/CUDA tests, performs a dummy JAX operation to ensure the device is in a clean state.
 - **`pytest_configure`**: Registers custom markers (`gpu_required`, `gpu_preferred`, `cpu_safe`, `slow`, `integration`, `cuda_local`, etc.) and suppresses JAX/CUDA warnings.
 
-```python
+```text
 # Example: GPU tests are skipped automatically when no GPU is present
 @pytest.mark.gpu
 def test_gpu_operation():
@@ -116,7 +116,7 @@ def test_gpu_operation():
 
 #### Enhanced CSG Module (`opifex/geometry/csg.py`)
 
-```python
+```text
 class PeriodicCell:
     """Periodic cell for materials science calculations."""
 
@@ -311,7 +311,7 @@ export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false"
 
 1. **Identify GPU-Dependent Tests**
 
-   ```python
+   ```text
    # Look for tests that use:
    # - Neural operators
    # - GPU-specific operations
@@ -321,7 +321,7 @@ export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false"
 
 2. **Add GPU Markers**
 
-   ```python
+   ```text
    @pytest.mark.gpu_required  # For tests that require GPU
    def test_neural_operator():
        # ... test implementation
@@ -329,7 +329,7 @@ export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false"
 
 3. **Remove CPU Fallbacks**
 
-   ```python
+   ```text
    # Before (remove this):
    try:
        gpu_operation()
@@ -344,7 +344,7 @@ export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false"
 
 1. **Always Mark GPU Requirements**
 
-   ```python
+   ```text
    @pytest.mark.gpu_required
    def test_new_gpu_feature():
        # conftest.py automatically skips gpu-marked tests when no GPU is available
@@ -353,7 +353,7 @@ export XLA_FLAGS="--xla_gpu_strict_conv_algorithm_picker=false"
 
 2. **Use Clear Error Messages**
 
-   ```python
+   ```text
    def gpu_operation():
        try:
            return jax_operation()

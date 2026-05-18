@@ -162,11 +162,19 @@ from opifex.neural.bayesian import (
     UncertaintyComponents,
     CalibrationMetrics,
 )
+from opifex.uncertainty import BayesianLinear
+from flax import nnx
+import jax
 import jax.numpy as jnp
 
-# Given Monte Carlo samples from a Bayesian model
+# Build a small Bayesian model and gather Monte Carlo samples.
+rngs = nnx.Rngs(42)
+model = BayesianLinear(in_features=4, out_features=1, rngs=rngs)
+x = jax.random.normal(jax.random.PRNGKey(0), (8, 4))
+
 # predictions shape: (num_samples, batch_size, output_dim)
-predictions = jnp.stack([model(x) for _ in range(100)])
+sample_rngs = nnx.Rngs(posterior=0)
+predictions = jnp.stack([model(x, rngs=sample_rngs) for _ in range(100)])
 
 # Compute epistemic uncertainty (model uncertainty)
 epistemic_var = EpistemicUncertainty.compute_variance(predictions)
@@ -186,6 +194,8 @@ The `PhysicsInformedPriors` class enforces conservation laws and boundary condit
 ```python
 from opifex.neural.bayesian import PhysicsInformedPriors
 import flax.nnx as nnx
+import jax
+import jax.numpy as jnp
 
 priors = PhysicsInformedPriors(
     conservation_laws=["energy", "momentum"],
@@ -195,6 +205,7 @@ priors = PhysicsInformedPriors(
 )
 
 # Apply physics constraints to sampled parameters
+unconstrained_params = jax.random.normal(jax.random.PRNGKey(0), (16,))
 constrained_params = priors.apply_constraints(unconstrained_params)
 ```
 
@@ -219,13 +230,15 @@ from opifex.neural.bayesian import (
 )
 
 # Temperature scaling for calibration
-calibrator = TemperatureScaling()
+calibrator = TemperatureScaling(rngs=nnx.Rngs(42))
 
-# Conformal prediction for distribution-free coverage guarantees
+# Conformal prediction for distribution-free coverage guarantees.
+# ConformalPredictor wraps any point predictor (PINN, neural operator, etc.).
 from opifex.neural.bayesian import ConformalPredictor, ConformalConfig
+from opifex.neural.base import StandardMLP
 
-config = ConformalConfig()
-conformal = ConformalPredictor(config=config)
+point_model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(0))
+conformal = ConformalPredictor(model=point_model, config=ConformalConfig())
 ```
 
 ### 7. Planned Components
