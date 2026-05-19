@@ -32,7 +32,7 @@ def test_probabilistic_pinn_forward_pass_produces_finite_output() -> None:
         input_dim=2, output_dim=1, hidden_dims=(8, 8), use_bayesian=True, rngs=nnx.Rngs(0)
     )
     x = jnp.ones((4, 2))
-    out = model(x, training=True)
+    out = model(x, deterministic=False)
     assert out.shape == (4, 1)
     assert jnp.all(jnp.isfinite(out))
 
@@ -51,7 +51,7 @@ def test_multi_fidelity_pinn_low_fidelity_forward_uses_bayesian_linear() -> None
     assert bayesian_layers, "MultiFidelityPINN low-fidelity layers must be BayesianLinear"
 
     x = jnp.ones((2, 2))
-    result = model._low_fidelity_forward(x, training=True)
+    result = model._low_fidelity_forward(x, deterministic=False)
     assert "low_fidelity_pred" in result
     assert jnp.all(jnp.isfinite(result["low_fidelity_pred"]))
 

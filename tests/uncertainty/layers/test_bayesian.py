@@ -50,8 +50,8 @@ def test_bayesian_linear_initializes_weight_and_bias_distribution_parameters() -
 def test_deterministic_mode_returns_identical_outputs() -> None:
     layer = _make_layer()
     x = jnp.ones((2, 4))
-    out_a = layer(x, sample=False)
-    out_b = layer(x, sample=False)
+    out_a = layer(x, deterministic=True)
+    out_b = layer(x, deterministic=True)
     assert jnp.array_equal(out_a, out_b)
 
 
@@ -59,8 +59,8 @@ def test_sampling_with_nnx_rngs_produces_different_outputs_when_stream_advances(
     layer = _make_layer()
     x = jnp.ones((2, 4))
     rngs = nnx.Rngs(posterior=42)
-    out_a = layer(x, sample=True, rngs=rngs)
-    out_b = layer(x, sample=True, rngs=rngs)
+    out_a = layer(x, rngs=rngs)
+    out_b = layer(x, rngs=rngs)
     assert not jnp.array_equal(out_a, out_b)
 
 
@@ -68,16 +68,16 @@ def test_sampling_with_explicit_jax_key_is_deterministic_given_key() -> None:
     layer = _make_layer()
     x = jnp.ones((2, 4))
     key = jax.random.PRNGKey(7)
-    out_a = layer(x, sample=True, rngs=key)
-    out_b = layer(x, sample=True, rngs=key)
+    out_a = layer(x, rngs=key)
+    out_b = layer(x, rngs=key)
     assert jnp.array_equal(out_a, out_b)
 
 
 def test_sampling_with_different_explicit_keys_produces_different_outputs() -> None:
     layer = _make_layer()
     x = jnp.ones((2, 4))
-    out_a = layer(x, sample=True, rngs=jax.random.PRNGKey(0))
-    out_b = layer(x, sample=True, rngs=jax.random.PRNGKey(1))
+    out_a = layer(x, rngs=jax.random.PRNGKey(0))
+    out_b = layer(x, rngs=jax.random.PRNGKey(1))
     assert not jnp.array_equal(out_a, out_b)
 
 
@@ -85,7 +85,7 @@ def test_sampling_without_rngs_raises_value_error_with_posterior_hint() -> None:
     layer = _make_layer()
     x = jnp.ones((2, 4))
     with pytest.raises(ValueError, match=r"posterior"):
-        layer(x, sample=True, rngs=None)
+        layer(x, rngs=None)
 
 
 def test_sampling_routes_through_artifex_extract_rng_key(
@@ -106,8 +106,8 @@ def test_sampling_routes_through_artifex_extract_rng_key(
     monkeypatch.setattr("opifex.uncertainty.layers.bayesian.extract_rng_key", spy)
     layer = _make_layer()
     x = jnp.ones((2, 4))
-    layer(x, sample=True, rngs=nnx.Rngs(posterior=0))
-    layer(x, sample=True, rngs=jax.random.PRNGKey(0))
+    layer(x, rngs=nnx.Rngs(posterior=0))
+    layer(x, rngs=jax.random.PRNGKey(0))
     assert len(calls) == 2
     assert all("BayesianLinear" in c for c in calls)
 
@@ -249,7 +249,7 @@ def test_bayesian_spectral_rejects_non_positive_prior_std() -> None:
 def test_bayesian_spectral_2d_output_shape_matches_uqno_contract() -> None:
     layer = _make_spectral_2d(in_channels=2, out_channels=3, modes=(2, 2))
     x = jnp.ones((1, 2, 8, 8))
-    out = layer(x, sample=False)
+    out = layer(x, deterministic=True)
     assert out.shape == (1, 3, 8, 8)
     assert out.dtype == x.dtype
 
@@ -257,15 +257,15 @@ def test_bayesian_spectral_2d_output_shape_matches_uqno_contract() -> None:
 def test_bayesian_spectral_1d_output_shape_matches_uqno_contract() -> None:
     layer = _make_spectral_1d(in_channels=2, out_channels=3, modes=4)
     x = jnp.ones((1, 2, 16))
-    out = layer(x, sample=False)
+    out = layer(x, deterministic=True)
     assert out.shape == (1, 3, 16)
 
 
 def test_bayesian_spectral_deterministic_mode_returns_identical_outputs() -> None:
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
-    a = layer(x, sample=False)
-    b = layer(x, sample=False)
+    a = layer(x, deterministic=True)
+    b = layer(x, deterministic=True)
     assert jnp.array_equal(a, b)
 
 
@@ -273,8 +273,8 @@ def test_bayesian_spectral_sampling_with_nnx_rngs_varies_across_calls() -> None:
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
     rngs = nnx.Rngs(posterior=0)
-    a = layer(x, sample=True, rngs=rngs)
-    b = layer(x, sample=True, rngs=rngs)
+    a = layer(x, rngs=rngs)
+    b = layer(x, rngs=rngs)
     assert not jnp.array_equal(a, b)
 
 
@@ -282,8 +282,8 @@ def test_bayesian_spectral_sampling_with_explicit_key_is_deterministic_given_key
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
     key = jax.random.PRNGKey(7)
-    a = layer(x, sample=True, rngs=key)
-    b = layer(x, sample=True, rngs=key)
+    a = layer(x, rngs=key)
+    b = layer(x, rngs=key)
     assert jnp.array_equal(a, b)
 
 
@@ -291,14 +291,14 @@ def test_bayesian_spectral_sampling_without_rngs_raises() -> None:
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
     with pytest.raises(ValueError, match=r"posterior"):
-        layer(x, sample=True, rngs=None)
+        layer(x, rngs=None)
 
 
 def test_bayesian_spectral_rejects_mismatched_input_channels() -> None:
     layer = _make_spectral_2d(in_channels=2, out_channels=3)
     x = jnp.ones((1, 5, 8, 8))  # wrong in_channels
     with pytest.raises(ValueError, match=r"in_channels"):
-        layer(x, sample=False)
+        layer(x, deterministic=True)
 
 
 def test_bayesian_spectral_kl_divergence_includes_real_and_imag_weights() -> None:
@@ -367,7 +367,7 @@ def test_bayesian_spectral_routes_through_extract_rng_key(
     monkeypatch.setattr("opifex.uncertainty.layers.bayesian.extract_rng_key", spy)
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
-    layer(x, sample=True, rngs=nnx.Rngs(posterior=0))
-    layer(x, sample=True, rngs=jax.random.PRNGKey(0))
+    layer(x, rngs=nnx.Rngs(posterior=0))
+    layer(x, rngs=jax.random.PRNGKey(0))
     assert len(calls) == 2
     assert all("BayesianSpectralConvolution" in c for c in calls)

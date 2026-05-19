@@ -53,7 +53,7 @@ def test_bayesian_linear_kl_divergence_composes_with_uq_loss_components() -> Non
     target = jnp.zeros((8, 3))
     sample_rngs = nnx.Rngs(posterior=0)
 
-    pred = layer(x, training=True, sample=True, rngs=sample_rngs)
+    pred = layer(x, rngs=sample_rngs)
     data_loss = jnp.mean((pred - target) ** 2)
     components = UQLossComponents.from_components(
         config=config, data=data_loss, kl=layer.kl_divergence()

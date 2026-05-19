@@ -18,7 +18,8 @@ Key Features:
 - Epistemic and aleatoric uncertainty estimation
 """
 
-from collections.abc import Callable
+import dataclasses
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import jax
@@ -28,6 +29,26 @@ from flax import nnx
 
 from opifex.neural.bayesian.config import FidelityConfig, MultiFidelityConfig
 from opifex.uncertainty.layers.bayesian import BayesianLinear
+from opifex.uncertainty.objectives import ObjectiveConfig, UQLossComponents
+from opifex.uncertainty.types import PredictiveDistribution, PredictiveMode
+
+
+_PINN_RNG_STREAMS = ("sample", "default")
+
+
+def _coerce_predictive_mode(mode: PredictiveMode | str) -> PredictiveMode:
+    """Coerce ``mode`` to :class:`PredictiveMode`; raise ``ValueError`` on miss.
+
+    Raised messages name the offending mode and the legal values so the
+    caller can correct the call site.
+    """
+    if isinstance(mode, PredictiveMode):
+        return mode
+    try:
+        return PredictiveMode(mode)
+    except (ValueError, TypeError) as exc:
+        valid = sorted(m.value for m in PredictiveMode)
+        raise ValueError(f"Unknown predictive mode {mode!r}; legal values: {valid!r}.") from exc
 
 
 class MultiFidelityPINN(nnx.Module):
@@ -187,13 +208,15 @@ class MultiFidelityPINN(nnx.Module):
             "uncertainty_threshold_hits": 0,
         }
 
-    def _low_fidelity_forward(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
-        """
-        Low-fidelity forward pass with uncertainty estimation.
+    def _low_fidelity_forward(
+        self, x: jax.Array, *, deterministic: bool | None = None
+    ) -> dict[str, jax.Array]:
+        """Low-fidelity forward pass with uncertainty estimation.
 
         Args:
             x: Input tensor
-            training: Whether in training mode
+            deterministic: Per-call override of ``self.deterministic`` for
+                Bayesian-layer mode (mirrors :class:`nnx.Dropout`).
 
         Returns:
             Dictionary with prediction and uncertainty
@@ -201,13 +224,13 @@ class MultiFidelityPINN(nnx.Module):
         h = x
         for layer in self.low_fidelity_layers:
             if isinstance(layer, BayesianLinear):
-                h = self.activation(layer(h, training=training, rngs=self.rngs))
+                h = self.activation(layer(h, deterministic=deterministic, rngs=self.rngs))
             else:
                 h = self.activation(layer(h))
 
         # Output prediction
         if isinstance(self.low_fidelity_output, BayesianLinear):
-            prediction = self.low_fidelity_output(h, training=training, rngs=self.rngs)
+            prediction = self.low_fidelity_output(h, deterministic=deterministic, rngs=self.rngs)
         else:
             prediction = self.low_fidelity_output(h)
 
@@ -216,19 +239,12 @@ class MultiFidelityPINN(nnx.Module):
 
         return {"low_fidelity_pred": prediction, "uncertainty_estimate": uncertainty}
 
-    def _high_fidelity_forward(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
-        """
-        High-fidelity forward pass using first correction network.
-
-        Args:
-            x: Input tensor
-            training: Whether in training mode
-
-        Returns:
-            Dictionary with high and low fidelity predictions
-        """
+    def _high_fidelity_forward(
+        self, x: jax.Array, *, deterministic: bool | None = None
+    ) -> dict[str, jax.Array]:
+        """High-fidelity forward pass using first correction network."""
         # Get low-fidelity prediction first
-        low_result = self._low_fidelity_forward(x, training=training)
+        low_result = self._low_fidelity_forward(x, deterministic=deterministic)
         low_pred = low_result["low_fidelity_pred"]
 
         # High-fidelity correction using first network
@@ -237,13 +253,15 @@ class MultiFidelityPINN(nnx.Module):
 
         for layer in self.high_fidelity_networks[0][:-1]:
             if isinstance(layer, BayesianLinear):
-                h = self.activation(layer(h, training=training, rngs=self.rngs))
+                h = self.activation(layer(h, deterministic=deterministic, rngs=self.rngs))
             else:
                 h = self.activation(layer(h))
 
         # Correction prediction
         if isinstance(self.high_fidelity_networks[0][-1], BayesianLinear):
-            correction = self.high_fidelity_networks[0][-1](h, training=training, rngs=self.rngs)
+            correction = self.high_fidelity_networks[0][-1](
+                h, deterministic=deterministic, rngs=self.rngs
+            )
         else:
             correction = self.high_fidelity_networks[0][-1](h)
 
@@ -258,19 +276,12 @@ class MultiFidelityPINN(nnx.Module):
             "uncertainty_estimate": uncertainty,
         }
 
-    def _adaptive_forward(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
-        """
-        Adaptive forward pass with fidelity selection based on uncertainty.
-
-        Args:
-            x: Input tensor
-            training: Whether in training mode
-
-        Returns:
-            Dictionary with adaptive predictions and statistics
-        """
+    def _adaptive_forward(
+        self, x: jax.Array, *, deterministic: bool | None = None
+    ) -> dict[str, jax.Array]:
+        """Adaptive forward pass with fidelity selection based on uncertainty."""
         # Start with low-fidelity
-        low_result = self._low_fidelity_forward(x, training=training)
+        low_result = self._low_fidelity_forward(x, deterministic=deterministic)
         uncertainty = low_result["uncertainty_estimate"]
 
         # Decide whether to use high-fidelity based on uncertainty threshold
@@ -282,7 +293,7 @@ class MultiFidelityPINN(nnx.Module):
 
         # Apply high-fidelity where needed
         if jnp.any(use_high_fidelity):
-            high_result = self._high_fidelity_forward(x, training=training)
+            high_result = self._high_fidelity_forward(x, deterministic=deterministic)
 
             # Select predictions based on uncertainty
             final_pred = jnp.where(
@@ -316,25 +327,30 @@ class MultiFidelityPINN(nnx.Module):
         }
 
     def __call__(
-        self, x: jax.Array, fidelity_level: str = "adaptive", training: bool = True
+        self,
+        x: jax.Array,
+        fidelity_level: str = "adaptive",
+        *,
+        deterministic: bool | None = None,
     ) -> dict[str, jax.Array]:
-        """
-        Forward pass with fidelity selection.
+        """Forward pass with fidelity selection.
 
         Args:
             x: Input tensor
             fidelity_level: Type of fidelity ('low', 'high', 'adaptive')
-            training: Whether in training mode
+            deterministic: Per-call mode override for Bayesian-layer sampling
+                (mirrors :class:`nnx.Dropout`); falls back to
+                ``self.deterministic`` when ``None``.
 
         Returns:
             Dictionary with predictions and metadata
         """
         if fidelity_level == "low":
-            return self._low_fidelity_forward(x, training=training)
+            return self._low_fidelity_forward(x, deterministic=deterministic)
         if fidelity_level == "high":
-            return self._high_fidelity_forward(x, training=training)
+            return self._high_fidelity_forward(x, deterministic=deterministic)
         if fidelity_level == "adaptive":
-            return self._adaptive_forward(x, training=training)
+            return self._adaptive_forward(x, deterministic=deterministic)
         raise ValueError(f"Unknown fidelity level: {fidelity_level}")
 
     def predict_with_uncertainty(
@@ -355,7 +371,7 @@ class MultiFidelityPINN(nnx.Module):
         uncertainties = []
 
         for _ in range(num_samples):
-            result = self(x, fidelity_level=fidelity_level, training=True)
+            result = self(x, fidelity_level=fidelity_level, deterministic=False)
             pred = result.get("prediction")
             if pred is None:
                 pred = result.get("low_fidelity_pred")
@@ -397,8 +413,8 @@ class MultiFidelityPINN(nnx.Module):
         Returns:
             Tuple of (predictions, uncertainties, info_dict)
         """
-        # Get adaptive results
-        result = self._adaptive_forward(x, training=False)
+        # Get adaptive results — adaptive inference uses posterior means.
+        result = self._adaptive_forward(x, deterministic=True)
 
         predictions = result["prediction"]
         uncertainties = result["uncertainty_estimate"]
@@ -411,19 +427,9 @@ class MultiFidelityPINN(nnx.Module):
 
         return predictions, uncertainties, info
 
-    def _fusion_prediction(self, x: jax.Array, training: bool = True) -> jax.Array:
-        """
-        Internal fusion prediction method for test compatibility.
-
-        Args:
-            x: Input tensor
-            training: Whether in training mode
-
-        Returns:
-            Fused prediction array
-        """
-        # Use adaptive forward for fusion prediction
-        result = self._adaptive_forward(x, training=training)
+    def _fusion_prediction(self, x: jax.Array, *, deterministic: bool | None = None) -> jax.Array:
+        """Internal fusion prediction method for test compatibility."""
+        result = self._adaptive_forward(x, deterministic=deterministic)
         return result["prediction"]
 
 
@@ -442,15 +448,22 @@ class ProbabilisticPINN(nnx.Module):
         use_bayesian: bool = True,
         physics_loss_weight: float = 1.0,
         uncertainty_weight: float = 0.1,
+        deterministic: bool = False,
         *,
         rngs: nnx.Rngs | None = None,
     ):
-        """Initialize probabilistic PINN."""
+        """Initialize probabilistic PINN.
+
+        ``deterministic`` ships as ``False`` so the module is in sampling
+        mode by default; flip via the NNX inference-mode toggle to disable
+        posterior sampling globally (matches :class:`nnx.Dropout`).
+        """
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.use_bayesian = use_bayesian
         self.physics_loss_weight = physics_loss_weight
         self.uncertainty_weight = uncertainty_weight
+        self.deterministic = deterministic
 
         # Handle rngs
         if rngs is None:
@@ -476,18 +489,161 @@ class ProbabilisticPINN(nnx.Module):
         else:
             self.output_layer = nnx.Linear(prev_dim, output_dim, rngs=rngs)
 
-    def __call__(self, x: jax.Array, training: bool = True) -> jax.Array:
-        """Forward pass through probabilistic PINN."""
+    def __call__(self, x: jax.Array, *, deterministic: bool | None = None) -> jax.Array:
+        """Forward pass through probabilistic PINN using ``self.rngs``.
+
+        ``deterministic`` per-call override mirrors :class:`nnx.Dropout`;
+        falls back to ``self.deterministic`` when ``None``.
+        """
+        return self._forward(x, rngs=self.rngs, deterministic=deterministic)
+
+    def _forward(
+        self,
+        x: jax.Array,
+        *,
+        rngs: nnx.Rngs,
+        deterministic: bool | None = None,
+    ) -> jax.Array:
+        """Forward pass routing every Bayesian-layer sample through ``rngs``."""
         h = x
         for layer in self.layers:
             if isinstance(layer, BayesianLinear):
-                h = nnx.tanh(layer(h, training=training, rngs=self.rngs))
+                h = nnx.tanh(layer(h, deterministic=deterministic, rngs=rngs))
             else:
                 h = nnx.tanh(layer(h))
-
         if isinstance(self.output_layer, BayesianLinear):
-            return self.output_layer(h, training=training, rngs=self.rngs)
+            return self.output_layer(h, deterministic=deterministic, rngs=rngs)
         return self.output_layer(h)
+
+    def kl_divergence(self) -> jax.Array:
+        """Sum the per-layer KL divergences for every Bayesian layer.
+
+        Returns ``jnp.array(0.0)`` when ``use_bayesian=False`` (no
+        variational parameters → vacuous KL).
+        """
+        total = jnp.array(0.0)
+        if not self.use_bayesian:
+            return total
+        for layer in self.layers:
+            if isinstance(layer, BayesianLinear):
+                total = total + layer.kl_divergence()
+        if isinstance(self.output_layer, BayesianLinear):
+            total = total + self.output_layer.kl_divergence()
+        return total
+
+    def predict_distribution(
+        self,
+        x: jax.Array,
+        *,
+        rngs: nnx.Rngs,
+        num_samples: int = 10,
+        mode: PredictiveMode = PredictiveMode.PREDICTIVE,
+    ) -> PredictiveDistribution:
+        """Return a :class:`PredictiveDistribution` via MC sampling of the posterior.
+
+        For deterministic models (``use_bayesian=False``) returns a single
+        forward pass tagged with ``method="deterministic"`` and zero
+        epistemic uncertainty per the platform contract.
+        """
+        coerced_mode = _coerce_predictive_mode(mode)
+
+        if not self.use_bayesian:
+            pred = self._forward(x, rngs=rngs, deterministic=True)
+            samples = pred[None, ...]
+            return PredictiveDistribution(
+                mean=pred,
+                samples=samples,
+                variance=jnp.zeros_like(pred),
+                epistemic=jnp.zeros_like(pred),
+                metadata=(("method", "deterministic"), ("num_samples", 1)),
+            )
+
+        key = extract_rng_key(
+            rngs, streams=_PINN_RNG_STREAMS, context="ProbabilisticPINN.predict_distribution"
+        )
+        sample_keys = jax.random.split(key, num_samples)
+        # Force sampling for every MC draw regardless of the module's
+        # deterministic attribute.
+        samples = jnp.stack(
+            [self._forward(x, rngs=nnx.Rngs(sample=sk), deterministic=False) for sk in sample_keys],
+            axis=0,
+        )
+        mean = jnp.mean(samples, axis=0)
+        variance = jnp.var(samples, axis=0)
+        quantiles = {
+            0.025: jnp.quantile(samples, 0.025, axis=0),
+            0.5: jnp.quantile(samples, 0.5, axis=0),
+            0.975: jnp.quantile(samples, 0.975, axis=0),
+        }
+        return PredictiveDistribution(
+            mean=mean,
+            samples=samples,
+            variance=variance,
+            epistemic=variance,
+            quantiles=quantiles,
+            metadata=(("method", coerced_mode.value), ("num_samples", int(num_samples))),
+        )
+
+    def loss_components(
+        self,
+        batch: Mapping[str, Any],
+        *,
+        rngs: nnx.Rngs,
+        objective: ObjectiveConfig,
+    ) -> UQLossComponents:
+        """Compute the per-batch UQ loss components for variational training.
+
+        Required batch fields: ``x``, ``y``. Optional fields used when
+        present: ``pde_residual_fn`` (PDE residual callable),
+        ``boundary_conditions`` (mapping with ``value``/``weight``).
+        """
+        missing = [field for field in ("x", "y") if field not in batch]
+        if missing:
+            raise ValueError(f"batch missing required field(s): {missing!r}")
+        x = batch["x"]
+        y = batch["y"]
+        pde_residual_fn = batch.get("pde_residual_fn")
+        boundary_conditions = batch.get("boundary_conditions")
+
+        # Sampling-forward for variational loss; deterministic=False forces
+        # posterior sampling regardless of the module's inference-mode flag.
+        y_pred = self._forward(x, rngs=rngs, deterministic=False)
+
+        data = jnp.mean((y_pred - y) ** 2)
+        physics_residual = None
+        if pde_residual_fn is not None:
+            residual = pde_residual_fn(x, y_pred)
+            physics_residual = jnp.mean(residual**2)
+        boundary = None
+        if boundary_conditions is not None:
+            bc_value = boundary_conditions.get("value", 0.0)
+            boundary = jnp.mean((y_pred - bc_value) ** 2)
+        kl = self.kl_divergence()
+
+        return UQLossComponents.from_components(
+            config=objective,
+            data=data,
+            physics_residual=physics_residual,
+            boundary=boundary,
+            kl=kl,
+            metadata=(("source", "probabilistic_pinn"),),
+        )
+
+    def negative_elbo(
+        self,
+        batch: Mapping[str, Any],
+        *,
+        rngs: nnx.Rngs,
+        objective: ObjectiveConfig,
+    ) -> UQLossComponents:
+        """Return loss components with the ``negative_elbo`` field populated.
+
+        The total is unchanged; ``negative_elbo`` is set to ``total`` so
+        downstream code can read ``components.negative_elbo`` without
+        recomputing the weight-driven sum.
+        """
+        base = self.loss_components(batch, rngs=rngs, objective=objective)
+        return dataclasses.replace(base, negative_elbo=base.total)
 
     def predict_with_uncertainty(self, x: jax.Array, num_samples: int = 10) -> dict[str, jax.Array]:
         """
@@ -501,18 +657,18 @@ class ProbabilisticPINN(nnx.Module):
             Dictionary with prediction statistics
         """
         if not self.use_bayesian:
-            # For non-Bayesian networks, return single prediction with zero uncertainty
-            pred = self(x, training=False)
+            # Deterministic call — posterior mean only, zero uncertainty.
+            pred = self(x, deterministic=True)
             return {
                 "mean": pred,
                 "std": jnp.zeros_like(pred),
                 "total_uncertainty": jnp.zeros(pred.shape[0]),
             }
 
-        # Monte Carlo sampling for Bayesian networks
+        # Monte Carlo sampling for Bayesian networks.
         predictions = []
         for _ in range(num_samples):
-            pred = self(x, training=True)  # Sample weights
+            pred = self(x, deterministic=False)  # Force sampling
             predictions.append(pred)
 
         predictions_stack = jnp.stack(predictions)
@@ -549,8 +705,9 @@ class ProbabilisticPINN(nnx.Module):
         Returns:
             Physics loss scalar
         """
-        # Forward prediction
-        y_pred = self(x, training=False)
+        # Forward prediction at posterior mean — physics loss should not
+        # add posterior-sampling noise.
+        y_pred = self(x, deterministic=True)
 
         # Compute PDE residual
         residual = pde_residual_fn(x, y_pred)
@@ -583,8 +740,8 @@ class ProbabilisticPINN(nnx.Module):
         Returns:
             Robust loss scalar
         """
-        # Clean prediction
-        clean_pred = self(x, training=False)
+        # Clean prediction at posterior mean.
+        clean_pred = self(x, deterministic=True)
 
         # Noisy prediction; perturbation key comes from caller-owned rngs
         # (advancing the ``noise`` stream when present, falling back to
@@ -592,7 +749,7 @@ class ProbabilisticPINN(nnx.Module):
         key = extract_rng_key(self.rngs, streams=("noise", "default"), context="robust_loss noise")
         noise = jax.random.normal(key, x.shape) * noise_scale
         x_noisy = x + noise
-        noisy_pred = self(x_noisy, training=False)
+        noisy_pred = self(x_noisy, deterministic=True)
 
         # Data loss
         data_loss = jnp.mean((clean_pred - y_true) ** 2)
@@ -663,8 +820,8 @@ class RobustPINNOptimizer(nnx.Module):
         Returns:
             Dictionary with loss components
         """
-        # Forward prediction with type-safe extraction
-        model_output = self.model(x, training=False)
+        # Forward prediction at posterior mean for robust scoring.
+        model_output = self.model(x, deterministic=True)
 
         # Extract prediction Array from Union type safely
         if isinstance(model_output, dict):

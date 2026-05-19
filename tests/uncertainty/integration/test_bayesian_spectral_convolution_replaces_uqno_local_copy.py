@@ -32,7 +32,7 @@ def test_bayesian_spectral_convolution_2d_preserves_uqno_spatial_shape() -> None
         in_channels=2, out_channels=3, modes=(4, 4), prior_std=1.0, rngs=nnx.Rngs(0)
     )
     x = jax.random.normal(jax.random.PRNGKey(0), (1, 2, 16, 16))
-    deterministic = layer(x, sample=False)
+    deterministic = layer(x, deterministic=True)
     assert deterministic.shape == (1, 3, 16, 16)
 
 
@@ -41,7 +41,7 @@ def test_bayesian_spectral_convolution_1d_preserves_uqno_spatial_shape() -> None
         in_channels=2, out_channels=3, modes=(8,), prior_std=1.0, rngs=nnx.Rngs(0)
     )
     x = jax.random.normal(jax.random.PRNGKey(0), (1, 2, 32))
-    deterministic = layer(x, sample=False)
+    deterministic = layer(x, deterministic=True)
     assert deterministic.shape == (1, 3, 32)
 
 
@@ -86,7 +86,7 @@ def test_bayesian_spectral_convolution_sampling_requires_caller_owned_rngs() -> 
     )
     x = jnp.ones((1, 2, 8, 8))
     with pytest.raises(ValueError, match=r"posterior"):
-        layer(x, sample=True, rngs=None)
+        layer(x, rngs=None)
 
 
 def test_bayesian_spectral_convolution_sampling_with_explicit_key_is_deterministic_given_key() -> (
@@ -97,6 +97,6 @@ def test_bayesian_spectral_convolution_sampling_with_explicit_key_is_determinist
     )
     x = jnp.ones((1, 2, 8, 8))
     key = jax.random.PRNGKey(7)
-    a = layer(x, sample=True, rngs=key)
-    b = layer(x, sample=True, rngs=key)
+    a = layer(x, rngs=key)
+    b = layer(x, rngs=key)
     assert jnp.array_equal(a, b)

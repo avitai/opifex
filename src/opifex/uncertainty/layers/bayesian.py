@@ -44,12 +44,14 @@ class BayesianLinear(nnx.Module):
     family.
 
     Weight and bias each carry a ``(mean, log-variance)`` posterior; sampling
-    uses the reparameterization trick. Pre-defined ``__call__`` flags:
+    uses the reparameterization trick.
 
-    * ``training=False`` — return the posterior-mean prediction (no sampling).
-    * ``sample=False`` — same; equivalent to deterministic mode.
-    * ``training=True, sample=True`` — sample weights / bias from the
-      diagonal-Gaussian posterior; ``rngs`` MUST be provided by the caller.
+    Mode handling follows the :class:`nnx.Dropout` convention: the module
+    holds a ``self.deterministic`` flag that the NNX ``train()`` and
+    inference-mode methods flip via ``set_attributes`` recursion. Sampling
+    is enabled when the resolved mode is non-deterministic AND ``rngs`` is
+    supplied. A per-call ``deterministic`` keyword overrides the module
+    flag for one call site (mirrors ``nnx.Dropout.__call__``).
     """
 
     def __init__(
@@ -57,16 +59,23 @@ class BayesianLinear(nnx.Module):
         in_features: int,
         out_features: int,
         prior_std: float = 1.0,
+        deterministic: bool = False,
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """Initialize variational parameters; ``rngs`` initializes parameters only."""
+        """Initialize variational parameters; ``rngs`` initializes parameters only.
+
+        ``deterministic`` defaults to ``False`` so the module ships in
+        training (sampling) mode; switch the module to inference mode to
+        disable sampling globally.
+        """
         if prior_std <= 0.0:
             raise ValueError(f"prior_std must be > 0; got {prior_std!r}.")
 
         self.in_features = in_features
         self.out_features = out_features
         self.prior_std = prior_std
+        self.deterministic = deterministic
 
         self.weight_mean = nnx.Param(
             nnx.initializers.xavier_normal()(rngs.params(), (out_features, in_features))
@@ -79,17 +88,33 @@ class BayesianLinear(nnx.Module):
         self,
         x: jax.Array,
         *,
-        training: bool = True,
-        sample: bool = True,
+        deterministic: bool | None = None,
         rngs: nnx.Rngs | jax.Array | None = None,
     ) -> jax.Array:
-        """Forward pass; samples weights when ``training and sample``."""
-        if training and sample:
+        """Forward pass; samples weights unless the resolved mode is deterministic.
+
+        Resolution order for the mode (mirrors :class:`nnx.Dropout`):
+
+        1. ``deterministic`` keyword (per-call override) when not ``None``.
+        2. ``self.deterministic`` (module attribute set recursively by
+           the NNX inference-mode toggle).
+
+        When the resolved mode is non-deterministic, ``rngs`` MUST be
+        provided so the reparameterization-trick sample has a caller-owned
+        key. When deterministic, ``rngs`` is ignored and the posterior
+        mean is returned.
+        """
+        is_deterministic = deterministic if deterministic is not None else self.deterministic
+        if is_deterministic:
+            weight = self.weight_mean[...]
+            bias = self.bias_mean[...]
+        else:
             if rngs is None:
                 raise ValueError(
                     "BayesianLinear sampling requires caller-owned `rngs` "
                     "(nnx.Rngs with a posterior/sample/default stream, or a "
-                    "jax.Array key)."
+                    "jax.Array key); pass deterministic=True or switch the "
+                    "module to inference mode to skip sampling."
                 )
             key = extract_rng_key(
                 rngs,
@@ -99,9 +124,6 @@ class BayesianLinear(nnx.Module):
             weight_key, bias_key = jax.random.split(key)
             weight = _reparameterize(self.weight_mean[...], self.weight_logvar[...], weight_key)
             bias = _reparameterize(self.bias_mean[...], self.bias_logvar[...], bias_key)
-        else:
-            weight = self.weight_mean[...]
-            bias = self.bias_mean[...]
 
         return jnp.dot(x, weight.T) + bias
 
@@ -165,10 +187,16 @@ class BayesianSpectralConvolution(nnx.Module):
         out_channels: int,
         modes: tuple[int, ...],
         prior_std: float = 1.0,
+        deterministic: bool = False,
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """Initialize complex weight posteriors; ``rngs`` initializes parameters only."""
+        """Initialize complex weight posteriors; ``rngs`` initializes parameters only.
+
+        ``deterministic`` follows the :class:`nnx.Dropout` convention; ships
+        in non-deterministic (sampling) mode and is flipped by the NNX
+        inference-mode toggle via ``set_attributes`` recursion.
+        """
         if prior_std <= 0.0:
             raise ValueError(f"prior_std must be > 0; got {prior_std!r}.")
         if len(modes) not in (1, 2):
@@ -181,6 +209,7 @@ class BayesianSpectralConvolution(nnx.Module):
         self.out_channels = out_channels
         self.modes = modes
         self.prior_std = prior_std
+        self.deterministic = deterministic
 
         if len(modes) == 1:
             base_shape: tuple[int, ...] = (out_channels, in_channels, modes[0])
@@ -206,23 +235,31 @@ class BayesianSpectralConvolution(nnx.Module):
         self,
         x: jax.Array,
         *,
-        training: bool = True,
-        sample: bool = True,
+        deterministic: bool | None = None,
         rngs: nnx.Rngs | jax.Array | None = None,
     ) -> jax.Array:
-        """Apply Bayesian Fourier-spectral convolution to ``x``."""
+        """Apply Bayesian Fourier-spectral convolution to ``x``.
+
+        Mode resolution mirrors :class:`BayesianLinear` (and :class:`nnx.Dropout`):
+        per-call ``deterministic`` keyword overrides the module's
+        ``self.deterministic`` attribute set by the NNX inference-mode toggle.
+        """
         if x.shape[1] != self.in_channels:
             raise ValueError(
                 f"Expected in_channels={self.in_channels}, got {x.shape[1]} from "
                 f"input shape {x.shape!r}."
             )
 
-        if training and sample:
+        is_deterministic = deterministic if deterministic is not None else self.deterministic
+        if is_deterministic:
+            weights = self._mean_weights()
+        else:
             if rngs is None:
                 raise ValueError(
                     "BayesianSpectralConvolution sampling requires caller-owned "
                     "`rngs` (nnx.Rngs with a posterior/sample/default stream, or a "
-                    "jax.Array key)."
+                    "jax.Array key); pass deterministic=True or switch the module "
+                    "to inference mode to skip sampling."
                 )
             key = extract_rng_key(
                 rngs,
@@ -230,8 +267,6 @@ class BayesianSpectralConvolution(nnx.Module):
                 context="BayesianSpectralConvolution sampling",
             )
             weights = self._sample_weights(key)
-        else:
-            weights = self._mean_weights()
 
         return _spectral_convolve(x, weights, modes=self.modes)
 
