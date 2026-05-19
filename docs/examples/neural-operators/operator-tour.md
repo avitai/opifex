@@ -170,7 +170,7 @@ tfno = create_operator(
 uqno = create_operator(
     "UQNO",
     in_channels=2, out_channels=1, hidden_channels=32,
-    modes=(8, 8), use_aleatoric=True, rngs=rngs,
+    modes=(8, 8), rngs=rngs,
 )
 ```
 
@@ -338,22 +338,20 @@ separates epistemic uncertainty (model knowledge gaps) from aleatoric
 uncertainty (inherent data noise).
 
 ```python
-# Create UQNO with aleatoric uncertainty
+# Create UQNO (Bayesian weights; aleatoric is not modeled by this formulation)
 uqno = UncertaintyQuantificationNeuralOperator(
     in_channels=2, out_channels=1, hidden_channels=64,
-    modes=(16, 16), num_layers=4, use_aleatoric=True, rngs=rngs,
+    modes=(16, 16), num_layers=4, rngs=rngs,
 )
 
-# Get uncertainty predictions with 50 Monte Carlo samples
+# Get uncertainty predictions with 50 Monte Carlo posterior samples.
+# rngs is required keyword-only — no hidden fixed key fallback.
 x = jax.random.normal(rng_key, (2, 32, 32, 2))
-uncertainty_results = uqno.predict_with_uncertainty(
-    x, num_samples=50, key=rng_key
-)
+dist = uqno.predict_distribution(x, rngs=nnx.Rngs(sample=0), num_samples=50)
 
-mean_pred = uncertainty_results["mean"]
-epistemic_std = uncertainty_results["epistemic_uncertainty"]
-total_std = uncertainty_results["total_uncertainty"]
-aleatoric_std = uncertainty_results["aleatoric_uncertainty"]
+mean_pred = dist.mean
+# PredictiveDistribution stores variances; take sqrt for std-dev display.
+epistemic_std = jnp.sqrt(dist.epistemic)
 ```
 
 **Terminal Output:**
@@ -639,11 +637,17 @@ tfno = TensorizedFourierNeuralOperator(
 
 ### UQNO uncertainty is all zeros
 
-**Symptom**: `epistemic_uncertainty` returns all zeros from `predict_with_uncertainty()`.
+**Symptom**: ``PredictiveDistribution.epistemic`` is (near-)zero from
+``UQNO.predict_distribution(...)``.
 
-**Cause**: Before training, all Bayesian weight samples produce identical outputs because the model has not learned to use the stochastic components. This is expected behavior.
+**Cause**: Before training, all Bayesian weight samples produce nearly
+identical outputs because the model has not learned to use the
+stochastic components. This is expected behavior.
 
-**Solution**: Train the UQNO on data first using `Trainer.fit()`. After training, the epistemic uncertainty will reflect genuine model uncertainty about predictions in regions with sparse training data.
+**Solution**: Train the UQNO on data first using ``Trainer.fit()`` or
+the ``negative_elbo`` loss surface shown above. After training, the
+``epistemic`` variance reflects genuine model uncertainty about
+predictions in regions with sparse training data.
 
 ### MGNO force conservation error is large
 

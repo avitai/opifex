@@ -145,7 +145,6 @@ class NeuralOperatorDemo:
             out_channels=1,
             hidden_channels=32,
             modes=(8, 8),
-            use_aleatoric=True,
             rngs=self.rngs,
         )
         print(f"  UQNO created: {type(uqno).__name__}")
@@ -388,22 +387,23 @@ class NeuralOperatorDemo:
             hidden_channels=64,
             modes=(16, 16),
             num_layers=4,
-            use_aleatoric=True,
             rngs=self.rngs,
         )
 
         print("UQNO created with Bayesian inference")
 
-        # Get uncertainty predictions
+        # Get uncertainty predictions via the shared predict_distribution surface
         print("Computing uncertainty estimates...")
         start_time = time.time()
-        uncertainty_results = uqno.predict_with_uncertainty(x, num_samples=50, key=self.rng_key)
+        dist = uqno.predict_distribution(x, rngs=nnx.Rngs(sample=0), num_samples=50)
         uncertainty_time = time.time() - start_time
 
-        # Analyze uncertainty
-        mean_pred = uncertainty_results["mean"]
-        epistemic_std = uncertainty_results["epistemic_uncertainty"]
-        total_std = uncertainty_results["total_uncertainty"]
+        mean_pred = dist.mean
+        # PredictiveDistribution stores variances; take sqrt for std-dev display.
+        # predict_distribution always populates epistemic from MC samples.
+        epistemic_std = (
+            jnp.sqrt(dist.epistemic) if dist.epistemic is not None else jnp.zeros_like(mean_pred)
+        )
 
         print("Uncertainty prediction complete")
         print(f"Time: {uncertainty_time * 1000:.2f}ms")
@@ -411,27 +411,12 @@ class NeuralOperatorDemo:
         print(
             f"Epistemic uncertainty: {jnp.mean(epistemic_std):.4f} +/- {jnp.std(epistemic_std):.4f}"
         )
-        print(f"Total uncertainty: {jnp.mean(total_std):.4f} +/- {jnp.std(total_std):.4f}")
-
-        # Check uncertainty decomposition
-        aleatoric_std = uncertainty_results["aleatoric_uncertainty"]
-
-        # Compute uncertainty ratios for analysis
-        epistemic_ratio = jnp.mean(epistemic_std) / jnp.mean(total_std)
-        aleatoric_ratio = jnp.mean(aleatoric_std) / jnp.mean(total_std)
-
-        print(f"Epistemic uncertainty ratio: {epistemic_ratio:.3f}")
-        print(f"Aleatoric uncertainty ratio: {aleatoric_ratio:.3f}")
 
         self.results["uncertainty_demo"] = {
             "input_shape": x.shape,
             "num_samples": 50,
             "uncertainty_time_ms": uncertainty_time * 1000,
             "mean_epistemic_std": float(jnp.mean(epistemic_std)),
-            "mean_aleatoric_std": float(jnp.mean(aleatoric_std)),
-            "mean_total_std": float(jnp.mean(total_std)),
-            "epistemic_ratio": float(epistemic_ratio),
-            "aleatoric_ratio": float(aleatoric_ratio),
         }
 
     def demo_geometry_aware_gino(self):
@@ -877,8 +862,18 @@ def main():
     import json
     from pathlib import Path
 
-    # Create output directory if it doesn't exist
-    output_dir = Path("docs/assets/examples/operator_tour")
+    # Create output directory if it doesn't exist. Anchor to the repo root
+    # by walking up cwd to find pyproject.toml, so the path is stable
+    # regardless of execution context (script, nbconvert, Jupyter kernel —
+    # the last of which does not define ``__file__``).
+    def _find_repo_root() -> Path:
+        here = Path.cwd().resolve()
+        for ancestor in (here, *here.parents):
+            if (ancestor / "pyproject.toml").exists():
+                return ancestor
+        return here
+
+    output_dir = _find_repo_root() / "docs" / "assets" / "examples" / "operator_tour"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define output file path

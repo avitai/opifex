@@ -6,6 +6,16 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#   language_info:
+#     codemirror_mode:
+#       name: ipython
+#       version: 3
+#     file_extension: .py
+#     mimetype: text/x-python
+#     name: python
+#     nbconvert_exporter: python
+#     pygments_lexer: ipython3
+#     version: 3.12.6
 # ---
 
 # %% [markdown]
@@ -15,7 +25,7 @@
 | Property      | Value                                    |
 |---------------|------------------------------------------|
 | Level         | Intermediate                             |
-| Runtime       | ~3 min (GPU) / ~15 min (CPU)             |
+| Runtime       | ~1 min (GPU) / ~5 min (CPU)              |
 | Memory        | ~1.5 GB                                  |
 | Prerequisites | JAX, Flax NNX, Bayesian Neural Networks  |
 
@@ -84,6 +94,27 @@ Key hyperparameters for Bayesian UQNO training.
 """
 
 # %%
+# IMPORTANT — Algorithmic scope of this example
+#
+# This example demonstrates the *opifex UQ API surface* on a Bayesian FNO:
+# constructing the model, training with the shared `negative_elbo` /
+# `loss_components` objectives, evaluating via `predict_distribution`, and
+# inspecting the resulting `PredictiveDistribution`. It is NOT a faithful
+# reproduction of the canonical UQNO (Ma et al. TMLR 2024, arXiv 2402.01960),
+# which is a conformal-prediction method (deterministic base FNO + deterministic
+# residual FNO + `PointwiseQuantileLoss` + scalar conformal calibration), not
+# a mean-field variational Bayesian neural network. Wide mean-field VI on
+# overparameterized neural operators has a known posterior-collapse failure
+# mode (Coker et al., arXiv 2106.07052) that no amount of single-script
+# hyperparameter tuning resolves; a faithful UQNO implementation requires
+# its own architecture and training pipeline. See the Phase 3.6 follow-up
+# task in `memory-bank/implementation-plans/uncertainty-quantification-platform-2026-05-15/`
+# for that work.
+#
+# Hyperparameters mirror the sibling `bayesian_fno.py` tutorial: small N,
+# modest epochs, raw KL weight (`dataset_size=None` inside ObjectiveConfig
+# disables the per-sample 1/N scaling). Runs in ~1 min on GPU.
+
 # Data configuration
 RESOLUTION = 64
 N_TRAIN = 150
@@ -96,16 +127,31 @@ HIDDEN_CHANNELS = 32
 NUM_LAYERS = 4
 
 # Training configuration
-NUM_EPOCHS = 15
+NUM_EPOCHS = 20
 LEARNING_RATE = 1e-3
-KL_WEIGHT = 1e-4  # Weight for KL divergence term in ELBO
+KL_WEIGHT = 1e-4  # raw KL coefficient
 
 # Uncertainty configuration
-MC_SAMPLES = 10  # Monte Carlo samples for uncertainty estimation
+MC_SAMPLES = 10  # Monte Carlo posterior samples for prediction
 
 SEED = 42
 
-OUTPUT_DIR = Path("docs/assets/examples/uqno_darcy")
+
+# Anchor OUTPUT_DIR to the repo root so the example writes the same files
+# whether it's invoked from the repo root, from this example's directory,
+# or as a Jupyter kernel (which sets cwd to the notebook location and does
+# not define ``__file__``). We walk up from cwd until we find the repo's
+# pyproject.toml.
+def _find_repo_root() -> Path:
+    here = Path.cwd().resolve()
+    for ancestor in (here, *here.parents):
+        if (ancestor / "pyproject.toml").exists():
+            return ancestor
+    return here
+
+
+_REPO_ROOT = _find_repo_root()
+OUTPUT_DIR = _REPO_ROOT / "docs" / "assets" / "examples" / "uqno_darcy"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 print()
@@ -117,7 +163,7 @@ print(f"  UQNO: modes={MODES}, hidden={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
 print(f"  KL weight: {KL_WEIGHT}, MC samples: {MC_SAMPLES}")
 
 # %% [markdown]
-"""
+r"""
 ## Load Darcy Flow Data
 
 The Darcy flow equation is an elliptic PDE:
@@ -208,25 +254,15 @@ model = UncertaintyQuantificationNeuralOperator(
     hidden_channels=HIDDEN_CHANNELS,
     modes=MODES,
     num_layers=NUM_LAYERS,
-    use_epistemic=True,
-    use_aleatoric=True,
-    ensemble_size=MC_SAMPLES,
     rngs=nnx.Rngs(SEED),
 )
 
-# Warmup call to initialize dynamic modules (epistemic_head is lazily initialized)
-# This must happen before JIT compilation to establish fixed model structure
-dummy_input = jnp.zeros((1, RESOLUTION, RESOLUTION, in_channels))
-_ = model(dummy_input, training=True)
-
-# Count parameters (after initialization)
 param_count = sum(p.size for p in jax.tree.leaves(nnx.state(model, nnx.Param)))
 print(f"  Total parameters: {param_count:,}")
-print("  Epistemic uncertainty: enabled")
-print("  Aleatoric uncertainty: enabled")
+print("  Epistemic uncertainty: via Monte Carlo posterior sampling")
 
 # %% [markdown]
-"""
+r"""
 ## ELBO Loss Function
 
 The Evidence Lower BOund (ELBO) combines:
@@ -238,59 +274,63 @@ $$\\mathcal{L} = \\mathbb{E}_{q(w)}[\\log p(y|x,w)] - \\beta \\cdot KL(q(w) || p
 
 
 # %%
-def compute_elbo_loss(model, inputs, targets, kl_weight=KL_WEIGHT):
-    """
-    Compute ELBO loss for Bayesian UQNO.
+from opifex.uncertainty.objectives import ObjectiveConfig
 
-    Returns:
-        total_loss: ELBO loss (minimize)
-        metrics: Dictionary with data_loss and kl_div
-    """
-    # Forward pass
-    output = model(inputs, training=True)
-    predictions = output["mean"]
 
-    # Data loss (negative log likelihood ~ MSE)
-    data_loss = jnp.mean((predictions - targets) ** 2)
-
-    # KL divergence from Bayesian layers
-    kl_div = model.kl_divergence()
-
-    # ELBO loss
-    total_loss = data_loss + kl_weight * kl_div
-
-    return total_loss, {"data_loss": data_loss, "kl_div": kl_div}
+OBJECTIVE = ObjectiveConfig(
+    kl_weight=KL_WEIGHT,
+    dataset_size=None,  # disable 1/N scaling; contribution = KL_WEIGHT * KL
+    physics_weight=1.0,
+    data_weight=1.0,
+    boundary_weight=1.0,
+    initial_condition_weight=1.0,
+    regularization_weight=1.0,
+    calibration_weight=1.0,
+    conformal_weight=1.0,
+    pac_bayes_weight=1.0,
+)
 
 
 # %% [markdown]
 """
 ## Training Loop
+
+The training step uses ``model.negative_elbo(batch, rngs=..., objective=...)``
+which returns a ``UQLossComponents`` populated by the shared platform
+surface. ``rngs`` is threaded as a traced argument so ``nnx.value_and_grad``
+can compose with it across trace levels.
 """
 
 # %%
 print()
 print("Training UQNO...")
 
+batches_per_epoch = N_TRAIN // BATCH_SIZE
 opt = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
 
 
 @nnx.jit
-def train_step(model, opt, x, y):
-    """Single training step."""
+def train_step(model, opt, x, y, rngs):
+    """Single training step using the shared negative-ELBO surface.
 
-    def loss_fn(m):
-        loss, _ = compute_elbo_loss(m, x, y)
-        return loss
+    Returns the ELBO total (used for gradients) and the bare data MSE
+    component so the log can show both. Single-sample MC at training
+    time; canonical opifex API demonstration only — see the module
+    docstring for the algorithmic caveats.
+    """
 
-    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    def loss_fn(m, rngs):
+        components = m.negative_elbo({"x": x, "y": y}, rngs=rngs, objective=OBJECTIVE)
+        return components.total, components.data
+
+    (total, data_mse), grads = nnx.value_and_grad(loss_fn, has_aux=True)(model, rngs)
     opt.update(model, grads)
-    return loss
+    return total, data_mse
 
 
 start_time = time.time()
 train_losses = []
 epoch_count = 0
-batches_per_epoch = N_TRAIN // BATCH_SIZE
 
 for batch_count, batch in enumerate(train_loader, start=1):
     # Get and preprocess batch data
@@ -298,42 +338,54 @@ for batch_count, batch in enumerate(train_loader, start=1):
     y = jnp.array(batch["output"])
     x, y = preprocess_batch(x, y, RESOLUTION)
 
-    loss = train_step(model, opt, x, y)
-    train_losses.append(float(loss))
+    total, data_mse = train_step(model, opt, x, y, nnx.Rngs(sample=batch_count))
+    train_losses.append((float(total), float(data_mse)))
 
     if batch_count % batches_per_epoch == 0:
         epoch_count += 1
-        avg_loss = np.mean(train_losses[-batches_per_epoch:])
+        recent = train_losses[-batches_per_epoch:]
+        avg_total = float(np.mean([t for t, _ in recent]))
+        avg_data = float(np.mean([d for _, d in recent]))
         if epoch_count % 3 == 0 or epoch_count == 1:
-            print(f"  Epoch {epoch_count:3d}/{NUM_EPOCHS}: loss = {avg_loss:.6f}")
+            print(
+                f"  Epoch {epoch_count:3d}/{NUM_EPOCHS}: "
+                f"data MSE = {avg_data:.6f}, ELBO total = {avg_total:.6f}"
+            )
 
 train_time = time.time() - start_time
 print(f"Training time: {train_time:.1f}s")
-print(f"Final loss: {train_losses[-1]:.6f}")
+print(f"Final data MSE = {train_losses[-1][1]:.6f}, final ELBO total = {train_losses[-1][0]:.6f}")
 
 # %% [markdown]
 """
 ## Evaluation with Monte Carlo Uncertainty
 
-Use `predict_with_uncertainty()` for Monte Carlo sampling over weight
-distributions to estimate prediction uncertainty.
+``model.predict_distribution(...)`` returns a ``PredictiveDistribution``
+populated by Monte-Carlo posterior sampling. The ``epistemic`` field is
+the marginal variance across samples (take ``sqrt`` for std-dev display).
+``samples`` holds the raw MC draws when downstream code needs them.
 """
 
 # %%
 print()
 print("Evaluating with uncertainty estimation...")
 
-# Get predictions with uncertainty via Monte Carlo
-output = model.predict_with_uncertainty(
-    test_inputs, num_samples=MC_SAMPLES, key=jax.random.PRNGKey(SEED)
+
+@nnx.jit(static_argnames=("num_samples",))
+def jit_predict_distribution(model, x, rngs, *, num_samples):
+    """Jitted wrapper around ``model.predict_distribution`` for fast MC sampling."""
+    return model.predict_distribution(x, rngs=rngs, num_samples=num_samples)
+
+
+dist = jit_predict_distribution(model, test_inputs, nnx.Rngs(sample=SEED), num_samples=MC_SAMPLES)
+predictions = dist.mean
+epistemic_std = (
+    jnp.sqrt(dist.epistemic) if dist.epistemic is not None else jnp.zeros_like(predictions)
 )
+# Aleatoric is not modeled by this UQNO formulation (weight-uncertainty only);
+# total uncertainty equals epistemic for this model.
+total_uncertainty = epistemic_std
 
-predictions = output["mean"]
-epistemic_uncertainty = output["epistemic_uncertainty"]
-aleatoric_uncertainty = output["aleatoric_uncertainty"]
-total_uncertainty = output["total_uncertainty"]
-
-# Compute error metrics
 mse = jnp.mean((predictions - test_targets) ** 2)
 l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(jnp.sum(test_targets**2))
 rmse = jnp.sqrt(mse)
@@ -342,8 +394,7 @@ print()
 print("Results:")
 print(f"  Relative L2 Error:      {float(l2_error):.4f}")
 print(f"  RMSE:                   {float(rmse):.6f}")
-print(f"  Mean Epistemic Std:     {float(jnp.mean(epistemic_uncertainty)):.6f}")
-print(f"  Mean Aleatoric Std:     {float(jnp.mean(aleatoric_uncertainty)):.6f}")
+print(f"  Mean Epistemic Std:     {float(jnp.mean(epistemic_std)):.6f}")
 print(f"  Mean Total Uncertainty: {float(jnp.mean(total_uncertainty)):.6f}")
 
 # %% [markdown]
@@ -421,27 +472,23 @@ ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
-# Row 2: Epistemic, Aleatoric, Total Uncertainty, Calibration
+# Row 2: Epistemic std, Total uncertainty, (empty), Calibration
 ax = axes[1, 0]
-im = ax.imshow(epistemic_uncertainty[sample_idx, :, :, 0], cmap="Purples")
-ax.set_title("Epistemic Uncertainty")
+im = ax.imshow(epistemic_std[sample_idx, :, :, 0], cmap="Purples")
+ax.set_title("Epistemic Std (MC posterior)")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[1, 1]
-im = ax.imshow(aleatoric_uncertainty[sample_idx, :, :, 0], cmap="Greens")
-ax.set_title("Aleatoric Uncertainty")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-plt.colorbar(im, ax=ax, fraction=0.046)
-
-ax = axes[1, 2]
 im = ax.imshow(total_uncertainty[sample_idx, :, :, 0], cmap="Oranges")
 ax.set_title("Total Uncertainty")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
+
+ax = axes[1, 2]
+ax.axis("off")
 
 # Calibration scatter plot
 ax = axes[1, 3]
@@ -475,35 +522,31 @@ print(f"  Saved: {OUTPUT_DIR / 'solution.png'}")
 # %%
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-# Training loss
+# Training loss — data MSE component shrinks; ELBO total includes the KL term.
 ax = axes[0]
-ax.semilogy(train_losses)
+data_losses = [d for _, d in train_losses]
+elbo_totals = [t for t, _ in train_losses]
+ax.semilogy(data_losses, label="data MSE", color="C0")
+ax.semilogy(elbo_totals, label="ELBO total", color="C3", alpha=0.6)
 ax.set_xlabel("Batch")
-ax.set_ylabel("Loss")
-ax.set_title("Training Loss (ELBO)")
+ax.set_ylabel("Loss (log scale)")
+ax.set_title("Training Loss")
+ax.legend()
 ax.grid(True, alpha=0.3)
 
 # Uncertainty distribution
 ax = axes[1]
 ax.hist(
-    epistemic_uncertainty.flatten(),
+    epistemic_std.flatten(),
     bins=50,
     alpha=0.7,
-    label="Epistemic",
+    label="Epistemic Std",
     color="purple",
-    density=True,
-)
-ax.hist(
-    aleatoric_uncertainty.flatten(),
-    bins=50,
-    alpha=0.7,
-    label="Aleatoric",
-    color="green",
     density=True,
 )
 ax.set_xlabel("Uncertainty")
 ax.set_ylabel("Density")
-ax.set_title("Uncertainty Distributions")
+ax.set_title("Uncertainty Distribution")
 ax.legend()
 ax.grid(True, alpha=0.3)
 

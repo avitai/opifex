@@ -37,17 +37,10 @@ _SCANNED_PATHS: tuple[Path, ...] = (
 #
 # The allowlist is intentionally narrow: only known migration-blocked sites
 # qualify, and each is pinned by exact line number.
-_KNOWN_MIGRATION_BLOCKED: frozenset[tuple[str, int]] = frozenset(
-    {
-        # UQNO ships its own copies of BayesianLinear / BayesianSpectralConvolution
-        # and a predict_with_uncertainty fallback that defaults to PRNGKey(0)
-        # when the caller omits the key. The UQNO migration to the shared
-        # Bayesian layers eliminates all three sites.
-        ("src/opifex/neural/operators/specialized/uqno.py", 105),
-        ("src/opifex/neural/operators/specialized/uqno.py", 218),
-        ("src/opifex/neural/operators/specialized/uqno.py", 630),
-    }
-)
+_KNOWN_MIGRATION_BLOCKED: frozenset[tuple[str, int]] = frozenset()
+# No production UQ paths currently require an allowlist entry. The
+# previous UQNO entries were removed when Phase 3 migrated UQNO to the
+# shared Bayesian layers (caller-owned RNG at every stochastic boundary).
 
 
 def _scan_file(path: Path) -> list[tuple[int, str]]:

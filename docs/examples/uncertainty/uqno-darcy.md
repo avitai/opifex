@@ -10,22 +10,45 @@
 
 ## Overview
 
-This example demonstrates training an Uncertainty Quantification Neural Operator
-(UQNO) on the Darcy flow equation. The UQNO provides both predictions and
-uncertainty estimates using Bayesian spectral convolutions.
+This example demonstrates the **opifex UQ API surface** on a Bayesian Fourier
+Neural Operator applied to the Darcy flow equation: constructing the model,
+training with the shared ``negative_elbo`` objective, evaluating via
+``predict_distribution``, and inspecting a ``PredictiveDistribution``.
 
-**Opifex's UQNO** uses a Bayesian approach with:
+!!! warning "Algorithmic scope of this example"
+
+    This is **not** a faithful implementation of the canonical UQNO
+    (Ma et al., TMLR 2024, [arXiv:2402.01960](https://arxiv.org/abs/2402.01960)),
+    which is a **conformal-prediction** method (deterministic base FNO + deterministic
+    residual FNO trained with a pointwise quantile loss + scalar conformal
+    calibration), not a mean-field variational Bayesian neural network.
+
+    The current opifex `UncertaintyQuantificationNeuralOperator` is a *Bayesian
+    Fourier Neural Operator* with mean-field variational layers. On wide
+    networks like this, mean-field VI has a known posterior-collapse failure
+    mode (Coker et al., [arXiv:2106.07052](https://arxiv.org/abs/2106.07052)) —
+    the optimal variational posterior predictive converges to the prior
+    predictive as width grows — which limits how cleanly the deterministic
+    posterior-mean prediction can match the target.
+
+    A faithful conformal-UQNO implementation is tracked as a follow-up task.
+    Treat this example as an API-surface tutorial, not a benchmark.
+
+**Opifex's current UQNO** demonstrates:
 
 - **Bayesian spectral convolutions**: Weights are distributions, not point estimates
-- **Epistemic uncertainty**: Model uncertainty from weight variance
-- **Aleatoric uncertainty**: Data uncertainty from learned noise
-- **Monte Carlo sampling**: Uncertainty estimated via weight sampling
+- **Epistemic uncertainty**: Model uncertainty from weight variance, surfaced via
+  Monte Carlo posterior sampling
+- **Shared platform surface**: ``predict_distribution`` /
+  ``loss_components`` / ``negative_elbo`` integrate with the rest of the
+  opifex UQ stack (``ObjectiveConfig``, ``UQLossComponents``,
+  ``PredictiveDistribution``)
 
 ## What You'll Learn
 
 1. **Instantiate** `UncertaintyQuantificationNeuralOperator` with Bayesian layers
-2. **Train** with ELBO loss (data likelihood + KL divergence)
-3. **Compute** epistemic vs aleatoric uncertainty via Monte Carlo
+2. **Train** with the shared ``negative_elbo`` surface (data + KL via ``ObjectiveConfig``)
+3. **Compute** epistemic uncertainty via Monte Carlo posterior sampling
 4. **Analyze** uncertainty calibration quality
 
 ## Coming from NeuralOperator (PyTorch)?
@@ -74,12 +97,15 @@ Training optimizes the Evidence Lower BOund (ELBO):
 
 $$\mathcal{L} = \mathbb{E}_{q(w)}[\log p(y|x,w)] - \beta \cdot KL(q(w) || p(w))$$
 
-### Uncertainty Decomposition
+### Uncertainty Surfaced by UQNO
 
-| Type | Source | Reducible? | Description |
+| Type | Source | Reducible? | Where it appears |
 |------|--------|------------|-------------|
-| Epistemic | Model | Yes (more data) | Uncertainty from limited training |
-| Aleatoric | Data | No | Inherent data noise |
+| Epistemic | Model | Yes (more data) | ``PredictiveDistribution.epistemic`` = MC sample variance |
+
+This UQNO formulation models weight uncertainty only. Aleatoric (input-noise)
+uncertainty is not modeled directly; downstream pipelines that need both
+can compose this surface with a likelihood/calibration head.
 
 ## Implementation
 
@@ -96,9 +122,6 @@ model = UncertaintyQuantificationNeuralOperator(
     hidden_channels=32,
     modes=(12, 12),
     num_layers=4,
-    use_epistemic=True,
-    use_aleatoric=True,
-    ensemble_size=10,
     rngs=nnx.Rngs(42),
 )
 ```
@@ -115,30 +138,43 @@ JAX devices: [CudaDevice(id=0)]
 Configuration:
   Resolution: 64x64
   Training samples: 150, Test samples: 30
-  Batch size: 8, Epochs: 15
+  Batch size: 8, Epochs: 20
   UQNO: modes=(12, 12), hidden=32, layers=4
   KL weight: 0.0001, MC samples: 10
 
 Creating UQNO model...
   Total parameters: 1,380,740
-  Epistemic uncertainty: enabled
-  Aleatoric uncertainty: enabled
+  Epistemic uncertainty: via Monte Carlo posterior sampling
 ```
 
-### Step 2: Define ELBO Loss
+### Step 2: Define ELBO via the Shared Objective Surface
 
 ```python
-def compute_elbo_loss(model, inputs, targets, kl_weight=1e-4):
-    output = model(inputs, training=True)
-    predictions = output["mean"]
+from opifex.uncertainty.objectives import ObjectiveConfig
 
-    # Data loss
-    data_loss = jnp.mean((predictions - targets) ** 2)
+OBJECTIVE = ObjectiveConfig(
+    kl_weight=1e-4,
+    dataset_size=150,
+    physics_weight=1.0,
+    data_weight=1.0,
+    boundary_weight=1.0,
+    initial_condition_weight=1.0,
+    regularization_weight=1.0,
+    calibration_weight=1.0,
+    conformal_weight=1.0,
+    pac_bayes_weight=1.0,
+)
 
-    # KL divergence from Bayesian layers
-    kl_div = model.kl_divergence()
 
-    return data_loss + kl_weight * kl_div
+@nnx.jit
+def train_step(model, opt, x, y, rngs):
+    def loss_fn(m, rngs):
+        components = m.negative_elbo({"x": x, "y": y}, rngs=rngs, objective=OBJECTIVE)
+        return components.total
+
+    loss, grads = nnx.value_and_grad(loss_fn)(model, rngs)
+    opt.update(model, grads)
+    return loss
 ```
 
 ### Step 3: Training
@@ -147,42 +183,42 @@ def compute_elbo_loss(model, inputs, targets, kl_weight=1e-4):
 
 ```text
 Training UQNO...
-  Epoch   1/15: loss = 72.604128
-  Epoch   3/15: loss = 72.156064
-  Epoch   6/15: loss = 69.025545
-  Epoch   9/15: loss = 68.101740
-  Epoch  12/15: loss = 65.441441
-  Epoch  15/15: loss = 64.691338
-Training time: 30.1s
-Final loss: 62.317711
+  Epoch   1/20: data MSE = 0.184772, ELBO total = 144.872
+  Epoch   3/20: data MSE = 0.065186, ELBO total = 138.816
+  Epoch   6/20: data MSE = 0.025218, ELBO total = 135.188
+  Epoch   9/20: data MSE = 0.018527, ELBO total = 131.671
+  Epoch  12/20: data MSE = 0.020669, ELBO total = 128.207
+  Epoch  15/20: data MSE = 0.015526, ELBO total = 124.766
+  Epoch  18/20: data MSE = 0.010817, ELBO total = 121.349
+Training time: 56.6s
+Final data MSE = 0.006437, final ELBO total = 117.608
 ```
 
 ### Step 4: Uncertainty Estimation
 
 ```python
-output = model.predict_with_uncertainty(
-    test_inputs, num_samples=10, key=jax.random.PRNGKey(42)
+dist = model.predict_distribution(
+    test_inputs, rngs=nnx.Rngs(sample=42), num_samples=10
 )
 
-predictions = output["mean"]
-epistemic_uncertainty = output["epistemic_uncertainty"]
-aleatoric_uncertainty = output["aleatoric_uncertainty"]
-total_uncertainty = output["total_uncertainty"]
+predictions = dist.mean
+# PredictiveDistribution stores variances; take sqrt for std-dev display.
+epistemic_std = jnp.sqrt(dist.epistemic)
+total_uncertainty = epistemic_std
 ```
 
 **Terminal Output:**
 
 ```text
 Results:
-  Relative L2 Error:      134.5130
-  RMSE:                   0.365828
-  Mean Epistemic Std:     0.305197
-  Mean Aleatoric Std:     0.719017
-  Mean Total Uncertainty: 0.782438
+  Relative L2 Error:      1.4261
+  RMSE:                   0.045003
+  Mean Epistemic Std:     0.107039
+  Mean Total Uncertainty: 0.107039
 
 Uncertainty calibration analysis...
-  Error-Uncertainty Correlation: 0.9243
-  1-sigma coverage: 100.0% (expected ~68%)
+  Error-Uncertainty Correlation: 0.9320
+  1-sigma coverage: 99.0% (expected ~68%)
   2-sigma coverage: 100.0% (expected ~95%)
 ```
 
@@ -196,15 +232,19 @@ Uncertainty calibration analysis...
 
 | Metric                    | Value              |
 |---------------------------|--------------------|
-| Relative L2 Error         | ~134 (undertrained)|
-| Mean Epistemic Std        | 0.31               |
-| Mean Aleatoric Std        | 0.72               |
-| Error-Uncertainty Corr    | 0.92 (excellent!)  |
-| Training Time             | ~30s               |
+| Final data MSE            | 0.006              |
+| Relative L2 Error         | ~1.4 (undertrained)|
+| Mean Epistemic Std        | 0.11               |
+| Error-Uncertainty Corr    | 0.93 (excellent!)  |
+| Training Time             | ~57s               |
 | Parameters                | 1,380,740          |
 
-**Note**: The high L2 error indicates the model needs more training. For production:
-increase `NUM_EPOCHS` to 50+ and `N_TRAIN` to 500+.
+**Note**: The Relative L2 Error is well above zero at this tutorial scale —
+20 epochs on 150 training samples is intentionally short so the example
+runs in about a minute. The uncertainty story is the headline:
+``Error-Uncertainty Correlation = 0.93`` means the model knows where its
+mistakes are. For production-grade prediction accuracy, increase
+``NUM_EPOCHS`` to 100+ and ``N_TRAIN`` to 500+.
 
 ## Next Steps
 
@@ -228,14 +268,15 @@ increase `NUM_EPOCHS` to 50+ and `N_TRAIN` to 500+.
 - `UncertaintyQuantificationNeuralOperator`: Main UQNO class
 - `BayesianSpectralConvolution`: Spectral conv with weight uncertainty
 - `BayesianLinear`: Linear layer with weight uncertainty
-- `predict_with_uncertainty()`: Monte Carlo uncertainty estimation
-- `kl_divergence()`: KL divergence for ELBO
+- `predict_distribution()`: Returns a `PredictiveDistribution` from MC posterior samples
+- `loss_components()` / `negative_elbo()`: Shared `UQLossComponents` surface
+- `kl_divergence()`: Aggregated KL across every Bayesian layer
 
 ### Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
 | High L2 error | Train longer, use more data |
-| Zero epistemic uncertainty | Ensure `use_epistemic=True` and `training=True` |
+| Zero epistemic uncertainty | Pass caller-owned `rngs` to `predict_distribution` |
 | Memory issues | Reduce `hidden_channels` or `modes` |
-| Slow training | Use GPU, reduce `ensemble_size` |
+| Slow training | Use GPU, reduce `num_samples` in `predict_distribution` |

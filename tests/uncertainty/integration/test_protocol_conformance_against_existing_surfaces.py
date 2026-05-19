@@ -70,19 +70,18 @@ def test_mean_field_gaussian_conforms_to_variational_module() -> None:
     assert isinstance(layer, VariationalModule)
 
 
-def test_uqno_exposes_predict_with_uncertainty() -> None:
-    """Sanity: pre-existing UQNO exposes ``predict_with_uncertainty(...)``."""
+def test_uqno_predict_distribution_returns_predictive_distribution() -> None:
+    """Post-migration: UQNO exposes the shared ``predict_distribution`` surface."""
+    from opifex.uncertainty.types import PredictiveDistribution
+
     model = _make_uqno()
     x = jax.random.normal(jax.random.PRNGKey(0), (1, 8, 8, 2))
-    out = model.predict_with_uncertainty(x, num_samples=2, key=jax.random.PRNGKey(1))
-    assert {"mean", "epistemic_uncertainty", "aleatoric_uncertainty"} <= set(out.keys())
+    dist = model.predict_distribution(x, rngs=nnx.Rngs(sample=1), num_samples=2)
+    assert isinstance(dist, PredictiveDistribution)
+    assert dist.mean.shape == (1, 8, 8, 1)
 
 
-@pytest.mark.xfail(
-    reason="UQNO does not yet return PredictiveDistribution via predict_distribution(...)",
-    strict=True,
-)
 def test_uqno_conforms_to_uncertainty_aware_module() -> None:
-    """UQNO must rename / wrap ``predict_with_uncertainty`` as ``predict_distribution``."""
+    """UQNO satisfies :class:`UncertaintyAwareModule` via ``predict_distribution``."""
     model: Any = _make_uqno()
     assert isinstance(model, UncertaintyAwareModule)

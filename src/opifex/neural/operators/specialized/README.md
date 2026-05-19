@@ -137,10 +137,12 @@ uqno = UncertaintyQuantificationNeuralOperator(
     out_channels=1,
     hidden_channels=64,
     modes=(16, 16),
-    use_epistemic=True,
-    use_aleatoric=True,
-    rngs=rngs
+    num_layers=4,
+    rngs=rngs,
 )
+# Sample with caller-owned rngs and call the shared UQ surface:
+#   dist = uqno.predict_distribution(x, rngs=nnx.Rngs(sample=0), num_samples=20)
+#   components = uqno.loss_components(batch, rngs=nnx.Rngs(sample=1), objective=objective_config)
 ```
 
 ## 📚 Full Examples
