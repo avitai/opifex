@@ -13,6 +13,7 @@ Designed for maximum speed and memory efficiency while maintaining safety.
 
 import contextlib
 import functools
+import logging
 import time
 from collections.abc import Callable
 from typing import Any
@@ -22,6 +23,14 @@ import jax.numpy as jnp
 from jax import Array
 
 from opifex.core.timing import block_until_ready
+
+
+_logger = logging.getLogger(__name__)
+
+# Hardware probes can fail under partial-init JAX, missing CUDA drivers,
+# or in containerized CI where memory_stats() is unsupported. Catch the
+# concrete shapes those failures take, not bare Exception.
+_HW_PROBE_FAILURE = (AttributeError, KeyError, RuntimeError, TypeError)
 
 
 class RooflineMemoryManager:
@@ -43,7 +52,10 @@ class RooflineMemoryManager:
                         memory_gb = memory_stats.get("bytes_limit", 24 * 1024**3) / (1024**3)
                     else:
                         memory_gb = 24.0  # Reasonable default for modern GPUs
-                except Exception:
+                except _HW_PROBE_FAILURE as exc:
+                    _logger.warning(
+                        "GPU memory_stats() probe failed (%s); using 24 GB default.", exc
+                    )
                     memory_gb = 24.0
 
                 # Detect GPU type for optimal settings
@@ -75,8 +87,8 @@ class RooflineMemoryManager:
                     "platform": "tpu",
                     "supports_tensorcore": False,
                 }
-        except Exception:
-            pass
+        except _HW_PROBE_FAILURE as exc:
+            _logger.warning("Hardware spec probe failed (%s); using CPU fallback.", exc)
 
         # Fallback to CPU specifications
         return {
@@ -194,8 +206,8 @@ class MixedPrecisionOptimizer:
                     "precision": jax.lax.Precision.DEFAULT,
                     "alignment": 128,
                 }
-        except Exception:
-            pass
+        except _HW_PROBE_FAILURE as exc:
+            _logger.warning("TensorCore capability probe failed (%s); using CPU defaults.", exc)
 
         return {
             "supports_tensorcore": False,
@@ -402,7 +414,10 @@ class CachedProgressiveTester:
         try:
             device = jax.devices()[0]
             return f"{device.platform}_{device.device_kind}_{len(jax.devices())}"
-        except Exception:
+        except _HW_PROBE_FAILURE as exc:
+            _logger.warning(
+                "Hardware signature probe failed (%s); returning 'unknown_hardware'.", exc
+            )
             return "unknown_hardware"
 
     @functools.lru_cache(maxsize=128)  # noqa: B019
