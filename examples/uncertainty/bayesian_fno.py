@@ -21,22 +21,35 @@
 
 ## Overview
 
-Train a Fourier Neural Operator (FNO) with Bayesian uncertainty quantification
-using the Amortized Variational Framework. This wraps a standard FNO with
-variational inference to provide prediction uncertainties.
+Wrap a Fourier Neural Operator (FNO) with the
+:class:`opifex.neural.bayesian.AmortizedVariationalFramework` to get
+input-dependent uncertainty estimates around a deterministic FNO
+backbone. The base FNO is trained with MSE loss; the variational
+framework supplies the uncertainty quantification head used at
+inference.
 
 **Key Concepts:**
 - **Variational Posterior**: Approximates the true posterior over weights
 - **Amortization Network**: Predicts posterior parameters from input
-- **ELBO Loss**: Evidence Lower Bound for variational training
 - **Monte Carlo Prediction**: Sample-based uncertainty estimation
+
+**Note on the shared UQ surface.** Modules that ship a built-in ELBO —
+``ProbabilisticPINN`` and ``UncertaintyQuantificationNeuralOperator``
+under the migrated platform — expose ``loss_components`` and
+``negative_elbo`` returning a shared
+:class:`opifex.uncertainty.objectives.UQLossComponents`. Code targeting
+the shared surface should call those methods directly rather than
+assembling ``data_loss + kl_weight * kl`` by hand. This example pre-dates
+the shared surface and demonstrates the amortized-variational pattern;
+``AmortizedVariationalFramework.compute_elbo`` is the framework-internal
+analogue.
 
 ## Learning Goals
 
 1. Wrap an FNO with `AmortizedVariationalFramework`
 2. Configure variational inference with `VariationalConfig`
-3. Train with ELBO loss optimization
-4. Compute and visualize predictive uncertainty
+3. Train the base FNO with MSE loss for stable convergence
+4. Compute and visualize predictive uncertainty via the framework
 """
 
 # %% [markdown]
@@ -231,11 +244,16 @@ print(f"  Amortization network added: {total_params - base_params:,} params")
 """
 ## Training Loop
 
-Train using standard MSE loss. The variational framework can be used for
-uncertainty estimation after training.
+Train the base FNO with standard MSE loss. The variational framework
+sits on top of the trained backbone and supplies the input-dependent
+posterior used for uncertainty at inference time.
 
-Note: Full ELBO training with `compute_elbo()` requires distrax dependency.
-Here we use simplified training for broader compatibility.
+For training the framework with its full ELBO objective, see
+``AmortizedVariationalFramework.compute_elbo``. For other Bayesian
+models that ship the shared platform surface, prefer
+``model.negative_elbo(batch, rngs=..., objective=ObjectiveConfig(...))``
+which returns a ``UQLossComponents`` without any manual KL/data
+assembly.
 """
 
 # %%
@@ -485,13 +503,12 @@ print(f"  Saved: {OUTPUT_DIR / 'analysis.png'}")
 
 **Key Observations:**
 - The base FNO provides good predictions
-- Uncertainty is estimated via input perturbation (simplified approach)
-- Full variational inference requires distrax dependency
-
-**Note:**
-This example uses simplified uncertainty estimation for compatibility.
-For full Bayesian inference with ELBO training, install:
-```
-pip install tf-keras distrax
-```
+- Uncertainty here is estimated via input perturbation through the
+  variational framework — a simplified path that exercises the
+  framework end-to-end without requiring optional dependencies
+- For Bayesian models that ship the shared platform surface
+  (``ProbabilisticPINN``, ``UncertaintyQuantificationNeuralOperator``),
+  call ``model.negative_elbo(...)`` directly; for the
+  ``AmortizedVariationalFramework`` itself, the analogous entry point
+  is ``compute_elbo``
 """

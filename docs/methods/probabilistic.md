@@ -59,18 +59,23 @@ layer = BayesianLinear(
     rngs=rngs,
 )
 
-# Forward pass with weight sampling (training mode). Caller owns the RNG —
-# pass an ``nnx.Rngs`` (which advances its ``posterior`` stream across calls)
-# or an explicit ``jax.Array`` key.
+# Forward pass with weight sampling. Caller owns the RNG — pass an
+# ``nnx.Rngs`` (which advances its ``posterior`` stream across calls)
+# or an explicit ``jax.Array`` key. Mode follows the canonical
+# ``nnx.Dropout`` convention: per-call ``deterministic`` overrides the
+# module's ``self.deterministic`` attribute set by the NNX inference
+# toggle.
 x = jax.random.normal(jax.random.PRNGKey(0), (32, 10))
 sample_rngs = nnx.Rngs(posterior=0)
-output_sampled = layer(x, training=True, sample=True, rngs=sample_rngs)
+output_sampled = layer(x, deterministic=False, rngs=sample_rngs)
 
-# Forward pass with mean weights (inference mode)
-output_mean = layer(x, training=False, sample=False)
+# Forward pass at the posterior mean (no sampling).
+output_mean = layer(x, deterministic=True)
 ```
 
-Each `BayesianLinear` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick during training. `BayesianLinear.kl_divergence()` returns the closed-form diagonal Gaussian KL between the posterior and the prior, summed across weight and bias parameters.
+Each `BayesianLinear` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick when non-deterministic. `BayesianLinear.kl_divergence()` returns the closed-form diagonal Gaussian KL between the posterior and the prior, summed across weight and bias parameters.
+
+For modules built on top of these layers (`ProbabilisticPINN`, `UncertaintyQuantificationNeuralOperator`, etc.) the shared platform exposes built-in objectives — `model.loss_components(batch, *, rngs, objective)` and `model.negative_elbo(batch, *, rngs, objective)` both return a `UQLossComponents` (data, physics_residual, boundary, regularization, kl) computed from an `ObjectiveConfig`. Prefer these over assembling `data_loss + kl_weight * kl_divergence()` by hand.
 
 ### 2. Amortized Variational Framework
 

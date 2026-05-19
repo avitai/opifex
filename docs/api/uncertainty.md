@@ -36,22 +36,27 @@ from opifex.uncertainty import BayesianLinear
 
 layer = BayesianLinear(in_features=4, out_features=3, prior_std=1.0, rngs=nnx.Rngs(0))
 
-# Deterministic mode (no sampling)
+# Posterior-mean mode (no sampling). Mode resolution follows the
+# canonical ``nnx.Dropout`` convention: per-call ``deterministic``
+# overrides ``self.deterministic`` set by the NNX inference toggle.
 x = jnp.ones((2, 4))
-mean_output = layer(x, sample=False)
+mean_output = layer(x, deterministic=True)
 
 # Stochastic mode — caller owns the RNG
 rngs = nnx.Rngs(posterior=42)
-sample = layer(x, sample=True, rngs=rngs)
-also_sample = layer(x, sample=True, rngs=rngs)  # different (stream advanced)
+sample = layer(x, deterministic=False, rngs=rngs)
+also_sample = layer(x, deterministic=False, rngs=rngs)  # different (stream advanced)
 
 # Or pass an explicit JAX key
 import jax
 key = jax.random.PRNGKey(7)
-deterministic = layer(x, sample=True, rngs=key)
-also_deterministic = layer(x, sample=True, rngs=key)  # same (same key)
+deterministic_a = layer(x, deterministic=False, rngs=key)
+deterministic_b = layer(x, deterministic=False, rngs=key)  # same (same key)
 
-# KL divergence (used in ELBO objectives)
+# KL divergence — used by the shared `loss_components` / `negative_elbo`
+# objectives on modules built atop these layers (e.g. ProbabilisticPINN,
+# UncertaintyQuantificationNeuralOperator). Prefer those built-in
+# objectives over assembling ``data_loss + kl_weight * kl`` by hand.
 kl = layer.kl_divergence()  # scalar; sums weight + bias KLs
 ```
 

@@ -34,7 +34,7 @@ approach adds Bayesian capabilities to any existing neural operator.
 |------------------------------------|---------------------------------------------|
 | Point predictions                  | Predictions + uncertainty                   |
 | `model(x)` returns `y`             | Returns mean and variance                   |
-| MSE loss                           | ELBO loss (MSE + KL)                        |
+| MSE loss                           | MSE loss on base FNO + amortized variational head |
 | No uncertainty                     | Epistemic + aleatoric decomposition         |
 
 **Key differences:**
@@ -208,10 +208,17 @@ Uncertainty calibration analysis...
 
 ### Experiments to Try
 
-1. **Full ELBO training**: Install `distrax` for true variational training
-2. **Tune amortization**: Adjust `hidden_dims` in `VariationalConfig`
-3. **More MC samples**: Increase `num_samples` for better uncertainty estimates
-4. **Different base models**: Try TFNO, UNO, or SFNO as base
+1. **Full ELBO training via the framework**: Call
+   `AmortizedVariationalFramework.compute_elbo` directly in the training
+   loop (no `distrax` dependency required for the inner computation).
+2. **Shared platform-surface alternative**: For new Bayesian models
+   (`ProbabilisticPINN`, `UncertaintyQuantificationNeuralOperator`),
+   call `model.negative_elbo(batch, rngs=..., objective=...)` directly
+   — returns a `UQLossComponents` from the shared
+   `opifex.uncertainty.objectives` surface.
+3. **Tune amortization**: Adjust `hidden_dims` in `VariationalConfig`
+4. **More MC samples**: Increase `num_samples` for better uncertainty estimates
+5. **Different base models**: Try TFNO, UNO, or SFNO as base
 
 ### Related Examples
 
@@ -233,17 +240,18 @@ Uncertainty calibration analysis...
 
 | Issue | Solution |
 |-------|----------|
-| `distrax` import error | Install: `uv pip install tf-keras distrax` |
 | Memory issues | Reduce amortization `hidden_dims` |
 | Poor calibration | Use more MC samples, tune perturbation scale |
 | High parameter count | Use smaller amortization network |
 
-### Note on Dependencies
+### Notes
 
-Full variational inference with ELBO training requires:
-
-```bash
-uv pip install tf-keras distrax
-```
-
-This example uses simplified perturbation-based uncertainty for broader compatibility.
+This example uses MSE training on the base FNO + a perturbation-based
+inference pass through the variational framework — a simplified path
+that exercises the wrapper end-to-end without optional dependencies.
+``AmortizedVariationalFramework.compute_elbo`` is the framework-internal
+ELBO if you want to plug it into the training loop directly. For models
+that ship the shared platform surface (``ProbabilisticPINN``,
+``UncertaintyQuantificationNeuralOperator``), call
+``model.negative_elbo(batch, rngs=..., objective=ObjectiveConfig(...))``
+instead — no manual KL/data assembly required.

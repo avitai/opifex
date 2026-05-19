@@ -584,15 +584,16 @@ layer = BayesianLinear(
     rngs=nnx.Rngs(42),
 )
 
-# Forward pass samples from weight posterior during training; the caller owns
-# the RNG (an ``nnx.Rngs`` advancing the ``posterior`` stream, or an explicit
-# ``jax.Array`` key).
+# Forward pass samples from the weight posterior; the caller owns the RNG
+# (an ``nnx.Rngs`` advancing the ``posterior`` stream, or an explicit
+# ``jax.Array`` key). Mode follows the canonical ``nnx.Dropout``
+# convention: per-call ``deterministic`` overrides the module attribute.
 x_in = jnp.ones((8, 10))
 sample_rngs = nnx.Rngs(posterior=0)
-output = layer(x_in, training=True, sample=True, rngs=sample_rngs)
+output = layer(x_in, deterministic=False, rngs=sample_rngs)
 
-# For mean prediction (no sampling)
-output_mean = layer(x_in, training=False, sample=False)
+# For posterior-mean prediction (no sampling)
+output_mean = layer(x_in, deterministic=True)
 ```
 
 For full probabilistic neural operators, use `AmortizedVariationalFramework`:
