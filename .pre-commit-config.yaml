@@ -19,22 +19,22 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
       - id: end-of-file-fixer
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
       - id: check-yaml
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/(.*)|mkdocs\.yml$
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/(.*)|mkdocs\.yml$
       - id: check-added-large-files
         args: ["--maxkb=2000"] # Increased for scientific data files
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
       - id: check-merge-conflict
       - id: check-toml
       - id: check-json
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
       - id: debug-statements
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
       - id: mixed-line-ending
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
   # Workshop-inspired comprehensive Python linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -42,11 +42,11 @@ repos:
     hooks:
       - id: ruff # linter with scientific computing optimizations (auto-fix)
         args: [--fix]
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
         types_or: [python, pyi, jupyter, toml]
       - id: ruff-format # formatter
         types_or: [python, pyi, jupyter, toml]
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
   # GitHub Actions simulation - exact mirror of CI checks
   - repo: local
@@ -56,7 +56,7 @@ repos:
         entry: uv run ruff check --output-format=github
         language: system
         types: [python]
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
         pass_filenames: false
         always_run: true
       - id: ruff-critical-check
@@ -64,7 +64,7 @@ repos:
         entry: uv run ruff check --select=RUF005,B904,F821,F822,F823 --output-format=github
         language: system
         types: [python]
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
         pass_filenames: false
         always_run: true
       - id: check-file-length
@@ -85,7 +85,7 @@ repos:
           - --
         language: system
         types: [python]
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests/|examples/)
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests|examples|example_data)/
 
   # Type checking using project venv (ensures all deps including datarax are available)
   - repo: local
@@ -96,7 +96,7 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
   # Workshop-inspired security scanning
   - repo: https://github.com/PyCQA/bandit
@@ -104,7 +104,7 @@ repos:
     hooks:
       - id: bandit
         args: ["-c", "pyproject.toml"]
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests/)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests|example_data)/
         additional_dependencies: ["bandit[toml]"]
 
   # Workshop-inspired documentation quality
@@ -112,16 +112,23 @@ repos:
     rev: 6.3.0
     hooks:
       - id: pydocstyle
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests/)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests|example_data)/
         additional_dependencies: ["pydocstyle[toml]"]
         args: ["--config=pyproject.toml"]
 
-  # Workshop-inspired notebook quality
+  # Strip notebook output cells before commit (keeps diffs clean)
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
+
+  # Notebook linting via ruff (after stripout to avoid format thrash)
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.9.1
     hooks:
       - id: nbqa-ruff
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
         args: [--fix]
 
   # Workshop-inspired shell script quality
@@ -129,7 +136,7 @@ repos:
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
-        exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
         args: ["-e", "SC1091"] # Allow sourcing files not found by shellcheck
 
   # Workshop-inspired Dockerfile quality (if we add Docker later)
@@ -138,7 +145,7 @@ repos:
   #   rev: v2.13.1-beta
   #   hooks:
   #     - id: hadolint-docker
-  #       exclude: ^(memory-bank|documents|custom_modes|.cursor)/
+  #       exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
 # CI Configuration - no autofix, manual testing before commits
 ci:
