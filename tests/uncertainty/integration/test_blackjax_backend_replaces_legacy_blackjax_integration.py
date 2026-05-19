@@ -91,7 +91,12 @@ def test_blackjax_backend_populates_post_hoc_ess_diagnostic() -> None:
     assert jnp.all(result.diagnostics.ess > 0)
 
 
-def test_blackjax_backend_predict_distribution_returns_predictive_distribution() -> None:
+def test_blackjax_backend_predict_distribution_carries_backend_metadata_for_banana_density() -> (
+    None
+):
+    """Integration sibling of the unit test in test_blackjax_backend.py — verifies
+    the banana-density posterior also emits ``backend == "blackjax"`` metadata.
+    """
     backend = BlackJAXBackend(
         target_log_prob=_banana_log_density,
         init_state=jnp.zeros(2),
