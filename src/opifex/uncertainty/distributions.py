@@ -12,8 +12,8 @@ Adapter resolution order (matches GUIDE_ALIGNMENT
    ``variance``.
 
 Future expansion (TFP-substrate / FlowJAX / bijx / GPJax / NumPyro) plugs
-into the same protocol; their adapter classes follow the same shape but
-land in dedicated Phase 8 / Phase 2 Task 2.6 modules.
+into the same protocol; their adapter classes follow the same shape and
+live alongside :mod:`opifex.uncertainty.inference_backends.optional`.
 """
 
 from __future__ import annotations
@@ -95,17 +95,19 @@ def _artifex_mean(distribution: Distribution) -> jax.Array:
     delegate to an internal wrapped distribution (e.g. ``Normal`` wraps
     ``distrax.Normal``). Both routes are tried in turn.
     """
-    if hasattr(distribution, "mean") and callable(distribution.mean):
-        return jnp.asarray(distribution.mean())
+    mean_fn = getattr(distribution, "mean", None)
+    if callable(mean_fn):
+        return jnp.asarray(mean_fn())
     wrapped = distribution._distribution()
     return jnp.asarray(wrapped.mean())
 
 
 def _artifex_variance(distribution: Distribution) -> jax.Array | None:
     """Return the variance of an Artifex distribution, or ``None`` if unavailable."""
+    variance_fn = getattr(distribution, "variance", None)
     try:
-        if hasattr(distribution, "variance") and callable(distribution.variance):
-            return jnp.asarray(distribution.variance())
+        if callable(variance_fn):
+            return jnp.asarray(variance_fn())
         wrapped = distribution._distribution()
         return jnp.asarray(wrapped.variance())
     except (AttributeError, NotImplementedError):

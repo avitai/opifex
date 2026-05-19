@@ -1,7 +1,7 @@
 """BlackJAX inference backend.
 
 Adapts :func:`artifex.generative_models.core.sampling.blackjax_samplers.hmc_sampling`
-/ ``nuts_sampling`` / ``mala_sampling`` to the Phase 1
+/ ``nuts_sampling`` / ``mala_sampling`` to the
 :class:`opifex.uncertainty.inference_backends.InferenceBackendProtocol`.
 
 The module deliberately imports the BlackJAX samplers through Artifex — the
@@ -66,8 +66,8 @@ class BlackJAXBackend:
     """BlackJAX backend adapter conforming to :class:`InferenceBackendProtocol`.
 
     Wraps Artifex's BlackJAX sampler functions and exposes ``fit`` /
-    ``predict_distribution`` / ``posterior_predictive`` with Phase 1
-    container types.
+    ``predict_distribution`` / ``posterior_predictive`` with the platform's
+    canonical container types.
 
     Args:
         target_log_prob: Scalar-valued log-density callable evaluated at a
@@ -128,8 +128,8 @@ class BlackJAXBackend:
         """Run the configured sampler and return raw posterior samples.
 
         ``target_log_prob`` overrides the constructor-time function when
-        supplied (Phase 1 protocol allows callers to thread the log density
-        through ``fit``).
+        supplied (the inference backend protocol allows callers to thread
+        the log density through ``fit``).
         """
         log_prob_fn = target_log_prob if target_log_prob is not None else self.target_log_prob
         # Route the RNG through Artifex's canonical helper. The Artifex sampler

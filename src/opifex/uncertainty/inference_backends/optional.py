@@ -1,4 +1,4 @@
-"""Optional-backend adapter specs for the Phase 2 router.
+"""Optional-backend adapter specs for the BackendRouter.
 
 Each :class:`OptionalBackendSpec` is a frozen, slotted, hashable dataclass
 describing a single optional inference / flow / distribution backend:

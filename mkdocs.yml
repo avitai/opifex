@@ -190,7 +190,7 @@ nav:
       - GPU Development: development/gpu-development.md
       - Architecture: development/architecture.md
       - Code Quality: development/code-quality.md
-      - Example Documentation Design: development/example_documentation_design.md
+      - Example Documentation Design: development/example-documentation-design.md
   - Deployment:
       - Local Development: deployment/local-development.md
       - AWS Deployment: deployment/aws-deployment.md

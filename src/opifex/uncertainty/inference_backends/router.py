@@ -99,7 +99,7 @@ class BackendRouter:
     def to_inference_backend_spec(
         self, family: str, *, name: str | None = None
     ) -> InferenceBackendSpec:
-        """Convert the resolved spec into the Phase 1 :class:`InferenceBackendSpec`.
+        """Convert the resolved spec into a protocol-shaped :class:`InferenceBackendSpec`.
 
         Bridges the optional-router metadata to the protocol-shaped spec
         consumed by capability declarations.

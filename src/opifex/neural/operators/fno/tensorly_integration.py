@@ -522,9 +522,9 @@ def benchmark_tensorly_integration(
     # TensorLy Tucker decomposition
     tucker_times = []
     for _ in range(num_trials):
-        start = time.time()
+        start = time.monotonic()
         core, factors = TensorLyTuckerInitializer.decompose_tensor(test_tensor, rank)
-        tucker_times.append(time.time() - start)
+        tucker_times.append(time.monotonic() - start)
 
     results["tucker_decomposition_time"] = {
         "mean": np.mean(tucker_times),
@@ -535,13 +535,13 @@ def benchmark_tensorly_integration(
     # Benchmark reconstruction
     recon_times = []
     for _ in range(num_trials):
-        start = time.time()
+        start = time.monotonic()
         # Reconstruct tensor for timing (result not used for benchmarking)
         if tl is not None and tucker_to_tensor is not None:
             tl_core = tl.tensor(np.array(core))
             tl_factors = [tl.tensor(np.array(f)) for f in factors]
             tucker_to_tensor((tl_core, tl_factors))
-        recon_times.append(time.time() - start)
+        recon_times.append(time.monotonic() - start)
 
     results["reconstruction_time"] = {
         "mean": np.mean(recon_times),
