@@ -11,6 +11,7 @@ from opifex.neural.bayesian.probabilistic_pinns import (
     ProbabilisticPINN,
     RobustPINNOptimizer,
 )
+from opifex.uncertainty.objectives import ObjectiveConfig, UQLossComponents
 
 
 def assert_array_shape(obj, expected_shape, name="array"):
@@ -287,155 +288,273 @@ class TestRobustPINNOptimizer:
     """Test RobustPINNOptimizer class."""
 
     def test_robust_optimizer_init(self):
-        """Test RobustPINNOptimizer initialization."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
-        optimizer = RobustPINNOptimizer(model=pinn, learning_rate=1e-3, robustness_weight=0.1)
-
-        assert optimizer.model == pinn
-        assert optimizer.learning_rate == 1e-3
-        assert optimizer.robustness_weight == 0.1
-
-    def test_robust_optimizer_default_values(self):
-        """Test RobustPINNOptimizer with default values."""
-        pinn = ProbabilisticPINN(input_dim=2)
-        optimizer = RobustPINNOptimizer(model=pinn)
-
-        assert optimizer.learning_rate == 1e-3
-        assert optimizer.robustness_weight == 0.1
-
-    def test_compute_loss_components(self):
-        """Test computation of loss components."""
+        """RobustPINNOptimizer wraps the PINN; no instance-stored weights or rngs."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
         optimizer = RobustPINNOptimizer(model=pinn)
 
-        key = random.PRNGKey(42)
-        x = random.normal(key, (5, 2))
-        y_true = random.normal(key, (5, 16))
+        assert optimizer.model is pinn
 
-        def simple_pde_residual(x_input, predictions):
-            return jnp.sum(predictions**2, axis=-1)
-
-        loss_components = optimizer.compute_loss_components(x, y_true, simple_pde_residual)
-
-        assert isinstance(loss_components, dict)
-        assert "data_loss" in loss_components
-        assert "physics_loss" in loss_components
-        assert "robustness_penalty" in loss_components
-        assert "total_loss" in loss_components
-
-    def test_compute_loss_components_with_boundary_conditions(self):
-        """Test loss components with boundary conditions."""
+    def test_compute_loss_components_returns_uq_components(self):
+        """compute_loss_components returns UQLossComponents from a batch."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
         optimizer = RobustPINNOptimizer(model=pinn)
-
-        key = random.PRNGKey(42)
-        x = random.normal(key, (5, 2))
-        y_true = random.normal(key, (5, 16))
-
-        def simple_pde_residual(x_input, predictions):
-            return jnp.sum(predictions**2, axis=-1)
-
-        boundary_conditions = {"type": "dirichlet", "value": 0.0}
-
-        loss_components = optimizer.compute_loss_components(
-            x, y_true, simple_pde_residual, boundary_conditions
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
         )
 
-        assert "total_loss" in loss_components
-        assert isinstance(loss_components["total_loss"], jax.Array)
+        assert isinstance(components, UQLossComponents)
+        assert components.data is not None
+        assert components.physics_residual is not None
+        assert components.regularization is not None
+        assert components.total.shape == ()
 
-    def test_compute_robustness_penalty(self):
-        """Test robustness penalty computation."""
+    def test_compute_loss_components_with_boundary_conditions(self):
+        """Boundary-condition batches populate the boundary component."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
         optimizer = RobustPINNOptimizer(model=pinn)
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(with_bc=True),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
+        )
 
-        key = random.PRNGKey(42)
-        x = random.normal(key, (5, 2))
+        assert components.boundary is not None
+        assert isinstance(components.total, jax.Array)
 
-        penalty = optimizer._compute_robustness_penalty(x, noise_scale=0.01)
+    def test_compute_robustness_penalty(self):
+        """The internal robustness penalty is a finite scalar."""
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        x = random.normal(random.PRNGKey(42), (5, 2))
+
+        penalty = optimizer._compute_robustness_penalty(x, noise_scale=0.01, rngs=nnx.Rngs(11))
 
         assert isinstance(penalty, jax.Array)
         assert penalty.shape == ()
 
     def test_robustness_penalty_different_noise_scales(self):
-        """Test robustness penalty with different noise scales."""
+        """The penalty stays finite across noise scales."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
         optimizer = RobustPINNOptimizer(model=pinn)
+        x = random.normal(random.PRNGKey(42), (5, 2))
 
-        key = random.PRNGKey(42)
-        x = random.normal(key, (5, 2))
-
-        penalty1 = optimizer._compute_robustness_penalty(x, noise_scale=0.001)
-        penalty2 = optimizer._compute_robustness_penalty(x, noise_scale=0.1)
+        penalty1 = optimizer._compute_robustness_penalty(x, noise_scale=0.001, rngs=nnx.Rngs(11))
+        penalty2 = optimizer._compute_robustness_penalty(x, noise_scale=0.1, rngs=nnx.Rngs(11))
 
         assert isinstance(penalty1, jax.Array)
         assert isinstance(penalty2, jax.Array)
 
     def test_uncertainty_guided_sampling(self):
-        """Test uncertainty-guided sampling."""
+        """Uncertainty-guided sampling returns the requested number of points."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
         optimizer = RobustPINNOptimizer(model=pinn)
-
-        key = random.PRNGKey(42)
-        x_candidates = random.normal(key, (20, 2))
+        x_candidates = random.normal(random.PRNGKey(42), (20, 2))
 
         selected_points = optimizer.uncertainty_guided_sampling(
-            x_candidates, num_samples=5, uncertainty_threshold=0.1
+            x_candidates, num_samples=5, rngs=nnx.Rngs(13), uncertainty_threshold=0.1
         )
 
-        assert selected_points.shape[0] == 5
-        assert selected_points.shape[1] == 2
+        assert selected_points.shape == (5, 2)
 
     def test_uncertainty_guided_sampling_different_thresholds(self):
-        """Test uncertainty-guided sampling with different thresholds."""
+        """Threshold variation preserves output shape."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
         optimizer = RobustPINNOptimizer(model=pinn)
+        x_candidates = random.normal(random.PRNGKey(42), (50, 2))
 
-        key = random.PRNGKey(42)
-        x_candidates = random.normal(key, (50, 2))
-
-        # Test with different thresholds
         points1 = optimizer.uncertainty_guided_sampling(
-            x_candidates, num_samples=10, uncertainty_threshold=0.01
+            x_candidates, num_samples=10, rngs=nnx.Rngs(13), uncertainty_threshold=0.01
         )
         points2 = optimizer.uncertainty_guided_sampling(
-            x_candidates, num_samples=10, uncertainty_threshold=1.0
+            x_candidates, num_samples=10, rngs=nnx.Rngs(13), uncertainty_threshold=1.0
         )
 
         assert points1.shape == (10, 2)
         assert points2.shape == (10, 2)
 
 
+def _make_robust_objective(**overrides: float | str | None) -> ObjectiveConfig:
+    base: dict[str, float | str | None] = {
+        "kl_weight": 1.0,
+        "dataset_size": 32,
+        "physics_weight": 1.0,
+        "data_weight": 1.0,
+        "boundary_weight": 1.0,
+        "initial_condition_weight": 1.0,
+        "regularization_weight": 0.1,
+        "calibration_weight": 1.0,
+        "conformal_weight": 1.0,
+        "pac_bayes_weight": 1.0,
+    }
+    base.update(overrides)
+    return ObjectiveConfig(**base)  # type: ignore[arg-type]
+
+
+def _make_robust_batch(
+    *,
+    seed: int = 42,
+    n: int = 5,
+    with_residual: bool = True,
+    with_bc: bool = False,
+) -> dict:
+    key = random.PRNGKey(seed)
+    k_x, k_y = random.split(key)
+    batch: dict = {
+        "x": random.normal(k_x, (n, 2)),
+        "y_true": random.normal(k_y, (n, 16)),
+    }
+    if with_residual:
+        batch["pde_residual_fn"] = lambda _x_in, y_p: jnp.sum(y_p**2, axis=-1)
+    if with_bc:
+        batch["boundary_conditions"] = {"type": "dirichlet", "value": 0.0}
+    return batch
+
+
+class TestRobustPINNOptimizerSharedObjective:
+    """Task 3.3: ``RobustPINNOptimizer.compute_loss_components`` returns
+    :class:`UQLossComponents` built from a shared :class:`ObjectiveConfig`,
+    requires caller-owned ``rngs`` at the method boundary, and never falls
+    back to a hidden fixed key for uncertainty-guided sampling."""
+
+    def test_compute_loss_components_returns_uq_loss_components(self) -> None:
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        batch = _make_robust_batch()
+        objective = _make_robust_objective()
+
+        components = optimizer.compute_loss_components(batch, rngs=nnx.Rngs(7), objective=objective)
+        assert isinstance(components, UQLossComponents)
+        assert jnp.isfinite(components.total)
+        assert components.total.shape == ()
+
+    def test_compute_loss_components_preserves_data_term(self) -> None:
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
+        )
+        assert components.data is not None
+        assert jnp.isfinite(components.data)
+
+    def test_compute_loss_components_preserves_physics_term(self) -> None:
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(with_residual=True),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
+        )
+        assert components.physics_residual is not None
+        assert jnp.isfinite(components.physics_residual)
+
+    def test_compute_loss_components_preserves_regularization_term(self) -> None:
+        """The robustness penalty maps to the ``regularization`` slot."""
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
+        )
+        assert components.regularization is not None
+        assert jnp.isfinite(components.regularization)
+
+    def test_compute_loss_components_preserves_kl_term(self) -> None:
+        """``ProbabilisticPINN.kl_divergence`` is threaded into the KL slot."""
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
+        )
+        assert components.kl is not None
+        expected_kl = float(pinn.kl_divergence())
+        assert float(components.kl) == pytest.approx(expected_kl, rel=1e-6, abs=1e-6)
+
+    def test_compute_loss_components_preserves_boundary_term(self) -> None:
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        components = optimizer.compute_loss_components(
+            _make_robust_batch(with_bc=True),
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(),
+        )
+        assert components.boundary is not None
+        assert jnp.isfinite(components.boundary)
+
+    def test_compute_loss_components_requires_rngs_at_method_boundary(self) -> None:
+        """``rngs`` is required keyword-only; no hidden fallback to instance state."""
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        with pytest.raises(TypeError):
+            optimizer.compute_loss_components(  # type: ignore[call-arg]
+                _make_robust_batch(), objective=_make_robust_objective()
+            )
+
+    def test_compute_loss_components_total_scales_with_objective_weights(self) -> None:
+        """``total`` scales with ``ObjectiveConfig`` weights (shared semantics)."""
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        batch = _make_robust_batch()
+        cmp_low = optimizer.compute_loss_components(
+            batch,
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(
+                data_weight=0.1, physics_weight=0.1, regularization_weight=0.0, kl_weight=0.0
+            ),
+        )
+        cmp_high = optimizer.compute_loss_components(
+            batch,
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(
+                data_weight=10.0, physics_weight=10.0, regularization_weight=10.0, kl_weight=0.0
+            ),
+        )
+        assert float(cmp_high.total) > float(cmp_low.total)
+
+    def test_uncertainty_guided_sampling_requires_rngs_no_hidden_fixed_key(self) -> None:
+        """No hidden ``nnx.Rngs(0)`` fallback — ``rngs`` must be supplied per call."""
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
+        optimizer = RobustPINNOptimizer(model=pinn)
+        x_candidates = random.normal(random.PRNGKey(11), (20, 2))
+        with pytest.raises(TypeError):
+            optimizer.uncertainty_guided_sampling(  # type: ignore[call-arg]
+                x_candidates, num_samples=5
+            )
+
+
 class TestIntegration:
     """Integration tests for probabilistic PINNs."""
 
     def test_complete_training_workflow(self):
-        """Test complete training workflow with probabilistic PINN."""
-        # Initialize PINN
+        """End-to-end training step builds a finite ``UQLossComponents.total``."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
-        optimizer = RobustPINNOptimizer(model=pinn, learning_rate=1e-3)
+        optimizer = RobustPINNOptimizer(model=pinn)
 
-        # Generate training data
         key = random.PRNGKey(42)
         x_train = random.normal(key, (10, 2))
         y_train = random.normal(key, (10, 16))
 
-        # Define PDE residual
-        def heat_equation_residual(x_input, predictions):
-            return jnp.sum(predictions**2, axis=-1)
-
-        # Compute loss components
-        loss_components = optimizer.compute_loss_components(
-            x_train, y_train, heat_equation_residual
+        batch = {
+            "x": x_train,
+            "y_true": y_train,
+            "pde_residual_fn": lambda _x, predictions: jnp.sum(predictions**2, axis=-1),
+        }
+        components = optimizer.compute_loss_components(
+            batch, rngs=nnx.Rngs(7), objective=_make_robust_objective()
         )
 
-        # Check all components are present
-        assert "data_loss" in loss_components
-        assert "physics_loss" in loss_components
-        assert "robustness_penalty" in loss_components
-        assert "total_loss" in loss_components
+        assert isinstance(components, UQLossComponents)
+        assert components.data is not None
+        assert components.physics_residual is not None
+        assert components.regularization is not None
+        assert jnp.isfinite(components.total)
 
-        # Test uncertainty prediction
         uncertainty_result = pinn.predict_with_uncertainty(x_train, num_samples=10)
         assert "mean" in uncertainty_result
         assert "std" in uncertainty_result
@@ -478,32 +597,31 @@ class TestIntegration:
         assert info["high_fidelity_count"] + info["low_fidelity_count"] == 15
 
     def test_robust_optimization_with_uncertainty_sampling(self):
-        """Test robust optimization with uncertainty-guided sampling."""
-        # Initialize system
+        """Uncertainty-guided sampling composes with the shared loss surface."""
         pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
-        optimizer = RobustPINNOptimizer(model=pinn, robustness_weight=0.2)
+        optimizer = RobustPINNOptimizer(model=pinn)
 
-        # Generate large candidate set
         key = random.PRNGKey(42)
         x_candidates = random.normal(key, (100, 2))
         y_train = random.normal(key, (10, 16))
 
-        # Select high-uncertainty points
         selected_points = optimizer.uncertainty_guided_sampling(
-            x_candidates, num_samples=10, uncertainty_threshold=0.1
+            x_candidates, num_samples=10, rngs=nnx.Rngs(13), uncertainty_threshold=0.1
         )
 
-        # Define physics residual
-        def simple_residual(x_input, predictions):
-            return jnp.mean(predictions**2)
-
-        # Compute loss on selected points
-        loss_components = optimizer.compute_loss_components(
-            selected_points, y_train, simple_residual
+        batch = {
+            "x": selected_points,
+            "y_true": y_train,
+            "pde_residual_fn": lambda _x, predictions: jnp.mean(predictions**2),
+        }
+        components = optimizer.compute_loss_components(
+            batch,
+            rngs=nnx.Rngs(7),
+            objective=_make_robust_objective(regularization_weight=0.2),
         )
 
-        assert isinstance(loss_components["total_loss"], jax.Array)
-        assert loss_components["total_loss"].shape == ()
+        assert isinstance(components.total, jax.Array)
+        assert components.total.shape == ()
 
     def test_error_handling_edge_cases(self):
         """Test error handling for edge cases."""

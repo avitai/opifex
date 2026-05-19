@@ -760,6 +760,22 @@ class ProbabilisticPINN(nnx.Module):
         return data_loss + self.uncertainty_weight * robustness_penalty
 
 
+def _extract_prediction_array(model_output: jax.Array | dict[str, Any]) -> jax.Array:
+    """Return a single prediction ``jax.Array`` from a PINN forward output.
+
+    Single-fidelity PINNs return a plain ``jax.Array``; multifidelity PINNs
+    return a dict keyed by ``prediction``, ``mean``, or
+    ``low_fidelity_pred`` depending on fidelity level.
+    """
+    if not isinstance(model_output, dict):
+        return model_output
+    for key in ("prediction", "mean", "low_fidelity_pred"):
+        value = model_output.get(key)
+        if value is not None:
+            return value
+    raise ValueError("Could not extract prediction from model output dict")
+
+
 class RobustPINNOptimizer(nnx.Module):
     """
     Robust optimizer for Physics-Informed Neural Networks.
@@ -768,158 +784,113 @@ class RobustPINNOptimizer(nnx.Module):
     physics loss integration, and adaptive sampling strategies.
     """
 
-    def __init__(
-        self,
-        model: ProbabilisticPINN | MultiFidelityPINN,
-        learning_rate: float = 1e-3,
-        robustness_weight: float = 0.1,
-        physics_weight: float = 1.0,
-        data_weight: float = 1.0,
-        *,
-        rngs: nnx.Rngs | None = None,
-    ):
-        """
-        Initialize robust PINN optimizer.
+    def __init__(self, model: ProbabilisticPINN | MultiFidelityPINN) -> None:
+        """Initialize robust PINN optimizer.
 
-        Args:
-            model: PINN model to optimize
-            learning_rate: Learning rate for optimization
-            robustness_weight: Weight for robustness penalty
-            physics_weight: Weight for physics loss
-            data_weight: Weight for data loss
-            rngs: Random number generator state
+        The optimizer owns no trainable state of its own and no hidden RNG;
+        every stochastic step requires caller-owned ``rngs`` at the method
+        boundary. Loss-component weights live in :class:`ObjectiveConfig`
+        and are passed per call into :meth:`compute_loss_components`.
         """
         self.model = model
-        self.learning_rate = learning_rate
-        self.robustness_weight = robustness_weight
-        self.physics_weight = physics_weight
-        self.data_weight = data_weight
-
-        if rngs is None:
-            rngs = nnx.Rngs(0)
-        self.rngs = rngs
 
     def compute_loss_components(
         self,
-        x: jax.Array,
-        y_true: jax.Array,
-        pde_residual_fn: Callable[[jax.Array, jax.Array], jax.Array],
-        boundary_conditions: dict[str, Any] | None = None,
-        noise_scale: float = 0.01,
-    ) -> dict[str, Any]:
-        """
-        Compute all loss components for robust PINN training.
+        batch: Mapping[str, Any],
+        *,
+        rngs: nnx.Rngs,
+        objective: ObjectiveConfig,
+    ) -> UQLossComponents:
+        """Compute UQ loss components for robust PINN training.
 
-        Args:
-            x: Input coordinates
-            y_true: True values for data loss
-            pde_residual_fn: Function computing PDE residual
-            boundary_conditions: Optional boundary conditions
-            noise_scale: Noise scale for robustness penalty
+        Required batch fields: ``x``, ``y_true``. Optional fields:
+        ``pde_residual_fn`` (callable producing per-point residuals),
+        ``boundary_conditions`` (mapping with ``value``/``weight``),
+        ``noise_scale`` (perturbation magnitude for the robustness penalty;
+        defaults to ``0.01``).
 
-        Returns:
-            Dictionary with loss components
+        Component mapping:
+
+        * ``data`` — supervised MSE between posterior-mean prediction and
+          ``y_true``.
+        * ``physics_residual`` — ``mean(pde_residual_fn(x, y_pred)**2)``
+          when supplied.
+        * ``boundary`` — Dirichlet/etc penalty when ``boundary_conditions``
+          is supplied.
+        * ``regularization`` — perturbation-based robustness penalty.
+        * ``kl`` — ``self.model.kl_divergence()`` when the underlying model
+          exposes a Bayesian KL.
+
+        All component weights are applied by ``ObjectiveConfig`` inside
+        :meth:`UQLossComponents.from_components`.
         """
-        # Forward prediction at posterior mean for robust scoring.
+        missing = [field for field in ("x", "y_true") if field not in batch]
+        if missing:
+            raise ValueError(f"batch missing required field(s): {missing!r}")
+        x = batch["x"]
+        y_true = batch["y_true"]
+        pde_residual_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = batch.get(
+            "pde_residual_fn"
+        )
+        boundary_conditions = batch.get("boundary_conditions")
+        noise_scale = batch.get("noise_scale", 0.01)
+
+        # Posterior-mean prediction for robust scoring.
         model_output = self.model(x, deterministic=True)
+        y_pred = _extract_prediction_array(model_output)
 
-        # Extract prediction Array from Union type safely
-        if isinstance(model_output, dict):
-            y_pred = model_output.get("prediction")
-            if y_pred is None:
-                y_pred = model_output.get("mean")
-            if y_pred is None:
-                y_pred = model_output.get("low_fidelity_pred")
-            if y_pred is None:
-                raise ValueError("Could not extract prediction from model output dict")
-        else:
-            y_pred = model_output
+        data = jnp.mean((y_pred - y_true) ** 2)
 
-        # Data loss (MSE)
-        data_loss = jnp.mean((y_pred - y_true) ** 2)
+        physics_residual = None
+        if pde_residual_fn is not None:
+            residual = pde_residual_fn(x, y_pred)
+            physics_residual = jnp.mean(residual**2)
 
-        # Physics loss
-        pde_residual = pde_residual_fn(x, y_pred)
-        physics_loss = jnp.mean(pde_residual**2)
-
-        # Robustness penalty
-        robustness_penalty = self._compute_robustness_penalty(x, noise_scale)
-
-        # Boundary condition loss (if provided)
-        bc_loss = 0.0
+        boundary = None
         if boundary_conditions is not None:
-            bc_loss = self._compute_boundary_loss(x, y_pred, boundary_conditions)
+            boundary = self._compute_boundary_loss(x, y_pred, boundary_conditions)
 
-        # Total loss
-        total_loss = (
-            self.data_weight * data_loss
-            + self.physics_weight * physics_loss
-            + self.robustness_weight * robustness_penalty
-            + bc_loss
+        regularization = self._compute_robustness_penalty(x, noise_scale, rngs=rngs)
+
+        kl: jax.Array | None = None
+        kl_fn: Callable[[], jax.Array] | None = getattr(self.model, "kl_divergence", None)
+        if kl_fn is not None and callable(kl_fn):
+            kl = kl_fn()
+
+        return UQLossComponents.from_components(
+            config=objective,
+            data=data,
+            physics_residual=physics_residual,
+            boundary=boundary,
+            regularization=regularization,
+            kl=kl,
+            metadata=(("source", "robust_pinn_optimizer"),),
         )
 
-        return {
-            "data_loss": data_loss,
-            "physics_loss": physics_loss,
-            "robustness_penalty": robustness_penalty,
-            "boundary_loss": bc_loss,
-            "total_loss": total_loss,
-        }
+    def _compute_robustness_penalty(
+        self, x: jax.Array, noise_scale: float, *, rngs: nnx.Rngs
+    ) -> jax.Array:
+        """Compute the perturbation-based robustness penalty.
 
-    def _compute_robustness_penalty(self, x: jax.Array, noise_scale: float = 0.01) -> jax.Array:
+        The penalty is the squared sensitivity of the posterior-mean
+        prediction to a Gaussian perturbation drawn from caller-owned
+        ``rngs``; no hidden seed.
         """
-        Compute robustness penalty using adversarial noise.
-
-        Args:
-            x: Input coordinates
-            noise_scale: Scale of adversarial noise
-
-        Returns:
-            Robustness penalty scalar
-        """
-        # Generate adversarial noise from caller-owned rngs.
         key = extract_rng_key(
-            self.rngs,
-            streams=("noise", "default"),
-            context="robustness penalty noise",
+            rngs, streams=("noise", "default"), context="robustness penalty noise"
         )
         noise = jax.random.normal(key, x.shape) * noise_scale
         x_noisy = x + noise
 
-        # Compute predictions for clean and noisy inputs with type safety
         if hasattr(self.model, "predict_with_uncertainty"):
             clean_result = self.model.predict_with_uncertainty(x, num_samples=3)
             noisy_result = self.model.predict_with_uncertainty(x_noisy, num_samples=3)
             clean_pred = clean_result["mean"]
             noisy_pred = noisy_result["mean"]
         else:
-            clean_output = self.model(x)
-            noisy_output = self.model(x_noisy)
+            clean_pred = _extract_prediction_array(self.model(x))
+            noisy_pred = _extract_prediction_array(self.model(x_noisy))
 
-            # Extract Array from Union type safely with None handling
-            if isinstance(clean_output, dict):
-                clean_pred = clean_output.get("prediction")
-                if clean_pred is None:
-                    clean_pred = clean_output.get("mean")
-                if clean_pred is None:
-                    clean_pred = clean_output.get("low_fidelity_pred")
-                if clean_pred is None:
-                    raise ValueError("Could not extract prediction from clean model output")
-            else:
-                clean_pred = clean_output
-
-            if isinstance(noisy_output, dict):
-                noisy_pred = noisy_output.get("prediction")
-                if noisy_pred is None:
-                    noisy_pred = noisy_output.get("mean")
-                if noisy_pred is None:
-                    noisy_pred = noisy_output.get("low_fidelity_pred")
-                if noisy_pred is None:
-                    raise ValueError("Could not extract prediction from noisy model output")
-            else:
-                noisy_pred = noisy_output
-
-        # Robustness penalty is the sensitivity to noise
         return jnp.mean((clean_pred - noisy_pred) ** 2) / (noise_scale**2)
 
     def _compute_boundary_loss(
@@ -954,20 +925,17 @@ class RobustPINNOptimizer(nnx.Module):
         self,
         x_candidates: jax.Array,
         num_samples: int,
+        *,
+        rngs: nnx.Rngs,
         uncertainty_threshold: float = 0.1,
     ) -> jax.Array:
-        """
-        Select points based on uncertainty for adaptive sampling.
+        """Select candidate points by predictive uncertainty.
 
-        Args:
-            x_candidates: Candidate points for sampling
-            num_samples: Number of points to select
-            uncertainty_threshold: Threshold for uncertainty-based selection
-
-        Returns:
-            Selected points with highest uncertainty
+        ``rngs`` is required keyword-only — there is no instance-stored
+        fallback. When the model does not expose
+        ``predict_with_uncertainty``, the active-learning step degrades to
+        a caller-keyed uniform selection rather than a silent fixed seed.
         """
-        # Compute uncertainties for all candidates
         if hasattr(self.model, "predict_with_uncertainty"):
             pred_result = self.model.predict_with_uncertainty(x_candidates, num_samples=10)
             uncertainties = pred_result.get(
@@ -975,20 +943,16 @@ class RobustPINNOptimizer(nnx.Module):
                 pred_result.get("std", jnp.zeros(x_candidates.shape[0])),
             )
         else:
-            # For models without uncertainty, fall back to random selection
-            # with caller-owned rngs (no hidden seed).
             key = extract_rng_key(
-                self.rngs,
+                rngs,
                 streams=("active_learning", "default"),
                 context="active learning random selection",
             )
             uncertainties = jax.random.uniform(key, (x_candidates.shape[0],))
 
-        # Ensure uncertainties is 1D
         if uncertainties.ndim > 1:
             uncertainties = jnp.mean(uncertainties, axis=-1)
 
-        # Select points with highest uncertainty
         top_indices = jnp.argsort(uncertainties)[-num_samples:]
         return x_candidates[top_indices]
 
@@ -1061,14 +1025,12 @@ def create_probabilistic_pinn(
 # Update factory functions to include RobustPINNOptimizer
 def create_robust_pinn_optimizer(
     model: ProbabilisticPINN | MultiFidelityPINN,
-    learning_rate: float = 1e-3,
-    robustness_weight: float = 0.1,
-    rngs: nnx.Rngs | None = None,
 ) -> RobustPINNOptimizer:
-    """Create robust PINN optimizer with default settings."""
-    return RobustPINNOptimizer(
-        model=model,
-        learning_rate=learning_rate,
-        robustness_weight=robustness_weight,
-        rngs=rngs,
-    )
+    """Create a robust PINN optimizer.
+
+    Loss-component weights are no longer instance-stored; pass an
+    :class:`ObjectiveConfig` per call into
+    :meth:`RobustPINNOptimizer.compute_loss_components` and supply
+    caller-owned ``rngs`` for every stochastic step.
+    """
+    return RobustPINNOptimizer(model=model)
