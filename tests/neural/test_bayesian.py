@@ -9,7 +9,6 @@ from opifex.neural.bayesian import (
     AleatoricUncertainty,
     AmortizedVariationalFramework,
     CalibrationTools,
-    ConformalPrediction,
     ConservationLawPriors,
     DomainSpecificPriors,
     EpistemicUncertainty,
@@ -1482,80 +1481,32 @@ class TestEnhancedCalibrationMethods:
         assert jnp.all(calibrated_confidences <= 1.0)
         assert jnp.all(jnp.isfinite(calibrated_confidences))
 
-    def test_conformal_prediction_initialization(self):
-        """Test ConformalPrediction initialization."""
+    def test_conformal_prediction_via_shared_subsystem(self):
+        """ConformalPrediction was migrated; ``SplitConformalRegressor`` is canonical."""
+        from opifex.uncertainty.conformal import SplitConformalRegressor
+
         rngs = nnx.Rngs(42)
-
-        conformal_predictor = ConformalPrediction(alpha=0.05, rngs=rngs)
-
-        assert conformal_predictor.alpha == 0.05
-        assert hasattr(conformal_predictor, "quantile")
-
-    def test_conformal_prediction_intervals(self):
-        """Test conformal prediction interval computation."""
-        rngs = nnx.Rngs(42)
-
-        conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-
-        # Create calibration data
-        num_cal_samples = 100
-        cal_predictions = jax.random.normal(rngs.sample(), (num_cal_samples,))
-        cal_true_values = cal_predictions + 0.5 * jax.random.normal(
-            rngs.sample(), (num_cal_samples,)
-        )
-
-        # Calibrate conformal predictor
-        conformal_predictor.calibrate(cal_predictions, cal_true_values)
-
-        # Create test predictions
-        num_test_samples = 50
-        test_predictions = jax.random.normal(rngs.sample(), (num_test_samples,))
-
-        # Compute prediction intervals
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
-
-        assert lower_bounds.shape == test_predictions.shape
-        assert upper_bounds.shape == test_predictions.shape
-        assert jnp.all(lower_bounds <= upper_bounds)
-        assert jnp.all(jnp.isfinite(lower_bounds))
-        assert jnp.all(jnp.isfinite(upper_bounds))
-
-    def test_conformal_prediction_coverage(self):
-        """Test conformal prediction coverage computation."""
-        rngs = nnx.Rngs(42)
-
-        conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-
-        # Create synthetic test data
         num_samples = 100
         predictions = jax.random.normal(rngs.sample(), (num_samples,))
         true_values = predictions + 0.3 * jax.random.normal(rngs.sample(), (num_samples,))
 
-        # Calibrate with part of the data
-        conformal_predictor.calibrate(predictions[:50], true_values[:50])
-
-        # Test coverage on remaining data
-        test_predictions = predictions[50:]
-        test_true_values = true_values[50:]
-
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
-        coverage = conformal_predictor.compute_coverage(
-            lower_bounds, upper_bounds, test_true_values
-        )
-
-        assert isinstance(coverage, int | float)
+        cp = SplitConformalRegressor(alpha=0.1)
+        state = cp.fit(predictions=predictions[:50], targets=true_values[:50])
+        interval = cp.with_state(state).predict(predictions=predictions[50:])
+        covered = (true_values[50:] >= interval.lower) & (true_values[50:] <= interval.upper)
+        coverage = float(jnp.mean(covered.astype(jnp.float32)))
         assert 0.0 <= coverage <= 1.0
-        # With alpha=0.1, we expect coverage to be around 0.9
-        assert coverage > 0.5  # Reasonable lower bound for this test
+        assert coverage > 0.5
 
     def test_enhanced_calibration_integration(self):
         """Test integration between enhanced calibration methods."""
+        from opifex.uncertainty.conformal import SplitConformalRegressor
+
         rngs = nnx.Rngs(42)
 
-        # Create all enhanced calibration methods
         platt_scaler = PlattScaling(rngs=rngs)
         isotonic_regressor = IsotonicRegression(rngs=rngs)
-        conformal_predictor = ConformalPrediction(rngs=rngs)
+        conformal_regressor = SplitConformalRegressor(alpha=0.1)
 
         # Create synthetic data
         num_samples = 150
@@ -1563,23 +1514,21 @@ class TestEnhancedCalibrationMethods:
         labels = logits > 0  # Remove explicit dtype casting
         predictions = jax.nn.sigmoid(logits)
 
-        # Test that all methods can work with the same data
         platt_scaler.fit(logits[:100], labels[:100])
         isotonic_regressor.fit(predictions[:100], labels[:100])
-        conformal_predictor.calibrate(predictions[:100], labels[:100])
+        state = conformal_regressor.fit(
+            predictions=predictions[:100], targets=labels[:100].astype(jnp.float32)
+        )
+        interval = conformal_regressor.with_state(state).predict(predictions=predictions[100:])
 
-        # Apply all calibration methods
         platt_calibrated = platt_scaler(logits[100:])
         isotonic_calibrated = isotonic_regressor(predictions[100:])
-        conformal_lower, conformal_upper = conformal_predictor.predict_intervals(predictions[100:])
 
-        # All methods should produce valid outputs
         assert jnp.all(jnp.isfinite(platt_calibrated))
         assert jnp.all(jnp.isfinite(isotonic_calibrated))
-        assert jnp.all(jnp.isfinite(conformal_lower))
-        assert jnp.all(jnp.isfinite(conformal_upper))
+        assert jnp.all(jnp.isfinite(interval.lower))
+        assert jnp.all(jnp.isfinite(interval.upper))
 
-        # Outputs should be in valid ranges
         assert jnp.all((platt_calibrated >= 0.0) & (platt_calibrated <= 1.0))
         assert jnp.all((isotonic_calibrated >= 0.0) & (isotonic_calibrated <= 1.0))
-        assert jnp.all(conformal_lower <= conformal_upper)
+        assert jnp.all(interval.lower <= interval.upper)

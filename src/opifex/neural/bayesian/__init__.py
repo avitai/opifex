@@ -2,12 +2,10 @@
 
 from opifex.neural.bayesian.calibration_tools import (
     CalibrationTools,
-    ConformalPrediction,
     IsotonicRegression,
     PlattScaling,
     TemperatureScaling,
 )
-from opifex.neural.bayesian.conformal import ConformalConfig, ConformalPredictor
 from opifex.neural.bayesian.physics_informed_priors import (
     ConservationLawPriors,
     DomainSpecificPriors,
@@ -50,9 +48,6 @@ __all__ = [
     "CalibrationAssessment",
     "CalibrationMetrics",
     "CalibrationTools",
-    "ConformalConfig",
-    "ConformalPrediction",
-    "ConformalPredictor",
     "ConservationLawPriors",
     "DistributionalAleatoricUncertainty",
     "DomainSpecificPriors",

@@ -45,11 +45,11 @@ from flax import nnx
 
 from opifex.neural.bayesian import (
     CalibrationTools,
-    ConformalPrediction,
     IsotonicRegression,
     PlattScaling,
     TemperatureScaling,
 )
+from opifex.uncertainty.conformal import SplitConformalRegressor
 
 
 # %% [markdown]
@@ -257,21 +257,14 @@ def demonstrate_conformal_prediction():
     for coverage in coverage_levels:
         alpha = 1 - coverage
 
-        # Initialize conformal predictor
-        conformal_predictor = ConformalPrediction(alpha=alpha, rngs=rngs)
+        # Use shared subsystem regressor.
+        conformal_regressor = SplitConformalRegressor(alpha=alpha)
+        state = conformal_regressor.fit(predictions=calib_pred, targets=calib_targets)
+        interval = conformal_regressor.with_state(state).predict(predictions=test_pred)
+        lower_bounds, upper_bounds = interval.lower, interval.upper
 
-        # Calibrate using calibration set
-        conformal_predictor.calibrate(calib_pred, calib_targets)
-
-        # Generate prediction intervals for test set
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_pred)
-
-        # Compute empirical coverage
-        empirical_coverage = conformal_predictor.compute_coverage(
-            lower_bounds, upper_bounds, test_targets
-        )
-
-        # Compute average interval width
+        in_interval = (test_targets >= lower_bounds) & (test_targets <= upper_bounds)
+        empirical_coverage = float(jnp.mean(in_interval.astype(jnp.float32)))
         avg_width = jnp.mean(upper_bounds - lower_bounds)
 
         print(f"Target coverage: {coverage:.0%}")
@@ -402,8 +395,9 @@ def demonstrate_integrated_calibration_pipeline():
     _refined_probs = isotonic_regressor(calib_class_probs)
 
     # 4. Apply conformal prediction for regression
-    conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-    conformal_predictor.calibrate(calib_logits, calib_targets)
+    conformal_regressor = SplitConformalRegressor(alpha=0.1)
+    conformal_state = conformal_regressor.fit(predictions=calib_logits, targets=calib_targets)
+    conformal_regressor = conformal_regressor.with_state(conformal_state)
 
     # 5. Enhanced temperature scaling
     temp_scaler = TemperatureScaling(
@@ -420,11 +414,13 @@ def demonstrate_integrated_calibration_pipeline():
     test_refined_probs = isotonic_regressor(test_class_probs)
 
     # Regression pipeline
-    test_lower, test_upper = conformal_predictor.predict_intervals(test_logits)
+    test_interval = conformal_regressor.predict(predictions=test_logits)
+    test_lower, test_upper = test_interval.lower, test_interval.upper
     _test_calibrated, test_uncertainty = temp_scaler(test_logits[:, None], test_X)
 
     # Final assessment
-    final_coverage = conformal_predictor.compute_coverage(test_lower, test_upper, test_targets)
+    test_in_interval = (test_targets >= test_lower) & (test_targets <= test_upper)
+    final_coverage = float(jnp.mean(test_in_interval.astype(jnp.float32)))
 
     # Classification calibration assessment
     def compute_ece(probs, labels):
