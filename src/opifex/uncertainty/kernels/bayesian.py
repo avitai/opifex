@@ -4,9 +4,8 @@ Two binding rules:
 
 * :func:`diagonal_gaussian_kl` MUST delegate to Artifex
   ``gaussian_kl_divergence`` whenever the prior is N(0, 1). The closed-form
-  Gaussian-prior KL is implemented exactly once in the Avitai ecosystem
-  (in Artifex); Opifex's helper is a thin wrapper that extends to parametric
-  ``(prior_mean, prior_std)`` priors only.
+  Gaussian-prior KL lives in Artifex; Opifex's helper is a thin wrapper
+  that extends to parametric ``(prior_mean, prior_std)`` priors only.
 * No ``flax.nnx`` imports in this module — pure JAX only.
 """
 

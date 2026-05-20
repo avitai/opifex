@@ -21,7 +21,7 @@ project's "don't shim" feedback).
 
 All kernels are pure ``jax.Array → jax.Array`` functions; they trace
 cleanly under ``jax.jit`` / ``jax.grad`` / ``jax.vmap`` and contain no
-NNX imports (phase-exit invariant for ``opifex.uncertainty`` metric
+NNX imports (a structural invariant for ``opifex.uncertainty`` metric
 modules).
 """
 

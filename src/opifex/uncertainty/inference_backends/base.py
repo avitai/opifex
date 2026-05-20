@@ -116,8 +116,8 @@ class InferenceBackendProtocol(Protocol):
     def posterior_predictive(self, rngs: nnx.Rngs, x: jax.Array) -> PredictiveDistribution:
         """Return a posterior-predictive distribution sample for inputs ``x``.
 
-        Required surface per audit ``1390`` — distinct from
-        :meth:`predict_distribution` (which may marginalize differently).
+        Distinct from :meth:`predict_distribution` (which may marginalize
+        differently).
         """
         ...
 

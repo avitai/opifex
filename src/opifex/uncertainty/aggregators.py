@@ -90,9 +90,13 @@ class EpistemicUncertainty:
     def compute_variance_of_expected(
         predictions: Float[Array, "samples batch output"],
     ) -> Float[Array, "batch output"]:
-        """Compute variance of expected predictions (pure epistemic uncertainty)."""
-        mean_predictions = jnp.mean(predictions, axis=0)
-        return jnp.var(jnp.broadcast_to(mean_predictions, predictions.shape), axis=0)
+        """Variance over the sample axis — pure epistemic uncertainty.
+
+        Equivalent to :meth:`compute_variance`; kept as a named alias so call
+        sites can express intent (``Var_θ[E[y|θ]]``) when used alongside the
+        aleatoric component ``E_θ[Var[y|θ]]``.
+        """
+        return jnp.var(predictions, axis=0)
 
 
 class AleatoricUncertainty:
@@ -333,46 +337,62 @@ class UncertaintyQuantifier:
         accuracies: Float[Array, "..."],
         n_bins: int,
     ) -> tuple[float, float, dict[str, Array]]:
-        """Compute calibration metrics using reliability binning."""
+        """Compute calibration metrics using reliability binning.
 
+        Pure ``jnp.where``-based masked accumulation — no Python branches on
+        traced arrays, no boolean fancy-indexing; traces under ``jax.jit``.
+        """
         bin_boundaries = jnp.linspace(0.0, 1.0, n_bins + 1)
-        bin_confidences = jnp.zeros(n_bins)
-        bin_accuracies = jnp.zeros(n_bins)
-        bin_counts = jnp.zeros(n_bins)
-
-        # Compute statistics for each bin
-        for i in range(n_bins):
-            # Find samples in this bin
-            in_bin = (confidences >= bin_boundaries[i]) & (confidences < bin_boundaries[i + 1])
-
-            # Handle last bin edge case
-            if i == n_bins - 1:
-                in_bin = in_bin | (confidences == bin_boundaries[i + 1])
-
-            bin_count = jnp.sum(in_bin)
-
-            if bin_count > 0:
-                bin_confidences = bin_confidences.at[i].set(jnp.mean(confidences[in_bin]))
-                bin_accuracies = bin_accuracies.at[i].set(jnp.mean(accuracies[in_bin]))
-                bin_counts = bin_counts.at[i].set(bin_count)
-
-        # Expected Calibration Error
-        bin_weights = bin_counts / jnp.sum(bin_counts)
+        bin_confidences, bin_accuracies, bin_counts = _bin_calibration_stats(
+            confidences=confidences, accuracies=accuracies, bin_boundaries=bin_boundaries
+        )
+        bin_weights = bin_counts / jnp.maximum(jnp.sum(bin_counts), 1.0)
         calibration_errors = jnp.abs(bin_confidences - bin_accuracies)
         ece = float(jnp.sum(bin_weights * calibration_errors))
-
-        # Maximum Calibration Error
         mce = float(jnp.max(calibration_errors))
-
-        # Reliability diagram data
         reliability_data = {
             "bin_confidences": bin_confidences,
             "bin_accuracies": bin_accuracies,
             "bin_counts": bin_counts,
             "bin_boundaries": bin_boundaries,
         }
-
         return ece, mce, reliability_data
+
+
+def _bin_calibration_stats(
+    *,
+    confidences: Float[Array, "n_samples"],  # noqa: F821
+    accuracies: Float[Array, "n_samples"],  # noqa: F821
+    bin_boundaries: Float[Array, "n_bins_plus_1"],  # noqa: F821
+) -> tuple[Array, Array, Array]:  # type: ignore[reportUndefinedVariable]
+    """Vectorised reliability-bin statistics.
+
+    For each bin ``b`` covering ``[lo_b, hi_b)`` (last bin closed),
+    returns the mean confidence, mean accuracy, and sample count using
+    pure ``jnp.where`` masked accumulation. No Python branches on traced
+    arrays, no boolean fancy-indexing — traces under ``jax.jit``.
+    """
+    bin_lowers = bin_boundaries[:-1]
+    bin_uppers = bin_boundaries[1:]
+    n_bins = bin_lowers.shape[0]
+    # (n_samples, n_bins) bin-membership mask.
+    in_bin = (confidences[:, None] >= bin_lowers[None, :]) & (
+        confidences[:, None] < bin_uppers[None, :]
+    )
+    # Close the rightmost bin on the upper edge.
+    last_bin = jax.nn.one_hot(n_bins - 1, n_bins, dtype=jnp.bool_)
+    closed_right = (confidences[:, None] == bin_uppers[None, :]) & last_bin[None, :]
+    in_bin = in_bin | closed_right
+    in_bin_f = in_bin.astype(jnp.float32)
+    counts = jnp.sum(in_bin_f, axis=0)
+    safe_counts = jnp.maximum(counts, 1.0)
+    bin_confidences = jnp.sum(in_bin_f * confidences[:, None], axis=0) / safe_counts
+    bin_accuracies = jnp.sum(in_bin_f * accuracies[:, None], axis=0) / safe_counts
+    # Zero-out bins that had no samples so callers can detect empty bins via counts.
+    nonempty = counts > 0
+    bin_confidences = jnp.where(nonempty, bin_confidences, 0.0)
+    bin_accuracies = jnp.where(nonempty, bin_accuracies, 0.0)
+    return bin_confidences, bin_accuracies, counts
 
 
 class CalibrationAssessment:
@@ -385,21 +405,13 @@ class CalibrationAssessment:
         n_bins: int = 10,
     ) -> float:  # type: ignore[reportUndefinedVariable]
         """Compute Expected Calibration Error (ECE)."""
-        bin_boundaries = jnp.linspace(0, 1, n_bins + 1)
-        bin_lowers = bin_boundaries[:-1]
-        bin_uppers = bin_boundaries[1:]
-
-        ece = 0.0
-        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers, strict=False):
-            # Find points in this bin
-            in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
-            prop_in_bin = jnp.mean(in_bin)
-
-            if prop_in_bin > 0:
-                accuracy_in_bin = jnp.mean(accuracies[in_bin])
-                avg_confidence_in_bin = jnp.mean(confidences[in_bin])
-                ece += jnp.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
-
+        bin_boundaries = jnp.linspace(0.0, 1.0, n_bins + 1)
+        bin_confidences, bin_accuracies, counts = _bin_calibration_stats(
+            confidences=confidences, accuracies=accuracies, bin_boundaries=bin_boundaries
+        )
+        total = jnp.maximum(jnp.sum(counts), 1.0)
+        bin_weights = counts / total
+        ece = jnp.sum(bin_weights * jnp.abs(bin_confidences - bin_accuracies))
         return float(ece)
 
     @staticmethod
@@ -409,22 +421,15 @@ class CalibrationAssessment:
         n_bins: int = 10,
     ) -> float:  # type: ignore[reportUndefinedVariable]
         """Compute Maximum Calibration Error (MCE)."""
-        bin_boundaries = jnp.linspace(0, 1, n_bins + 1)
-        bin_lowers = bin_boundaries[:-1]
-        bin_uppers = bin_boundaries[1:]
-
-        mce = 0.0
-        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers, strict=False):
-            # Find points in this bin
-            in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
-            prop_in_bin = jnp.mean(in_bin)
-
-            if prop_in_bin > 0:
-                accuracy_in_bin = jnp.mean(accuracies[in_bin])
-                avg_confidence_in_bin = jnp.mean(confidences[in_bin])
-                mce = jnp.maximum(mce, jnp.abs(avg_confidence_in_bin - accuracy_in_bin))
-
-        return float(mce)
+        bin_boundaries = jnp.linspace(0.0, 1.0, n_bins + 1)
+        bin_confidences, bin_accuracies, counts = _bin_calibration_stats(
+            confidences=confidences, accuracies=accuracies, bin_boundaries=bin_boundaries
+        )
+        # Mask empty bins out of the max — set their error to -inf so they
+        # never win the argmax / max reduction.
+        errors = jnp.abs(bin_confidences - bin_accuracies)
+        errors = jnp.where(counts > 0, errors, -jnp.inf)
+        return float(jnp.max(errors))
 
     @staticmethod
     def reliability_diagram_data(
@@ -433,37 +438,18 @@ class CalibrationAssessment:
         n_bins: int = 10,
     ) -> dict[str, Array]:  # type: ignore[reportUndefinedVariable]
         """Compute reliability diagram data for visualization."""
-        bin_boundaries = jnp.linspace(0, 1, n_bins + 1)
+        bin_boundaries = jnp.linspace(0.0, 1.0, n_bins + 1)
         bin_lowers = bin_boundaries[:-1]
         bin_uppers = bin_boundaries[1:]
         bin_centers = (bin_lowers + bin_uppers) / 2
-
-        bin_accuracies = []
-        bin_confidences = []
-        bin_counts = []
-
-        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers, strict=False):
-            in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
-            prop_in_bin = jnp.mean(in_bin)
-
-            if prop_in_bin > 0:
-                accuracy_in_bin = float(jnp.mean(accuracies[in_bin]))
-                avg_confidence_in_bin = float(jnp.mean(confidences[in_bin]))
-                count_in_bin = float(jnp.sum(in_bin))
-            else:
-                accuracy_in_bin = 0.0
-                avg_confidence_in_bin = 0.0
-                count_in_bin = 0.0
-
-            bin_accuracies.append(accuracy_in_bin)
-            bin_confidences.append(avg_confidence_in_bin)
-            bin_counts.append(count_in_bin)
-
+        bin_confidences, bin_accuracies, counts = _bin_calibration_stats(
+            confidences=confidences, accuracies=accuracies, bin_boundaries=bin_boundaries
+        )
         return {
             "bin_centers": bin_centers,
-            "bin_accuracies": jnp.array(bin_accuracies),
-            "bin_confidences": jnp.array(bin_confidences),
-            "bin_counts": jnp.array(bin_counts),
+            "bin_accuracies": bin_accuracies,
+            "bin_confidences": bin_confidences,
+            "bin_counts": counts,
         }
 
     def assess_calibration(

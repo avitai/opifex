@@ -30,7 +30,7 @@ from opifex.uncertainty.inference_backends.optional import (
 
 
 # Combine BlackJAX (always-available) with optional samplers; BlackJAX leads
-# the sampler family per Task 2.5's resolution.
+# the sampler family in the resolution order.
 _BLACKJAX_AS_OPTIONAL_SPEC = OptionalBackendSpec(
     name="BlackJAX",
     family="sampler",

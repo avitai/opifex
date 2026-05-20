@@ -5,8 +5,8 @@ Adapts :func:`artifex.generative_models.core.sampling.blackjax_samplers.hmc_samp
 :class:`opifex.uncertainty.inference_backends.InferenceBackendProtocol`.
 
 The module deliberately imports the BlackJAX samplers through Artifex — the
-only legitimate direct ``blackjax`` import in the Avitai ecosystem lives in
-``../artifex/src/artifex/generative_models/core/sampling/blackjax_samplers.py``.
+direct ``blackjax`` import lives in
+``artifex/generative_models/core/sampling/blackjax_samplers.py``.
 RNG ownership is enforced through Artifex's :func:`extract_rng_key` helper
 (named-stream order ``sample`` → ``default``).
 

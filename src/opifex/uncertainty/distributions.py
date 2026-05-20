@@ -3,8 +3,7 @@
 Wraps a backend distribution into an Opifex
 :class:`opifex.uncertainty.types.PredictiveDistribution`.
 
-Adapter resolution order (matches GUIDE_ALIGNMENT
-``DistributionAdapterSpec.resolution_order``):
+Adapter resolution order (mirrors ``DistributionAdapterSpec.resolution_order``):
 
 1. :class:`artifex.generative_models.core.distributions.base.Distribution`
    (primary target).

@@ -10,9 +10,8 @@ dataclass that:
   real implementation lands.
 
 The shared base eliminates per-class duplication while keeping every
-spec a distinct, frozen dataclass type (so pattern (A) per
-``GUIDE_ALIGNMENT.md`` item 5a is preserved and ``isinstance``-based
-dispatch still works at the call site).
+spec a distinct, frozen dataclass type so ``isinstance``-based dispatch
+still works at the call site.
 """
 
 from __future__ import annotations

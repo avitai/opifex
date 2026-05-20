@@ -10,8 +10,8 @@ Domain coverage from the audit's "Required Opifex UQ Capability Matrix":
 * Assimilation — sensor-reliability summary from residual vs supplied
   sensor noise.
 * Likelihood-free, active-learning, PAC-Bayes — surfaced as explicit
-  ``UQCapability`` UNSUPPORTED entries; Phase 8 Task 8.5 flips the
-  flag and ``default_strategy`` when those backends ship.
+  ``UQCapability`` UNSUPPORTED entries; the flag and ``default_strategy``
+  flip when those backends ship.
 
 Each metric returns a `DomainMetricSummary` value object carrying the
 metric name, scalar value, and assumption / tolerance metadata.
@@ -202,12 +202,12 @@ def test_sensor_reliability_summary_chi_squared_under_correct_noise() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 8 deferred capability entries
+# Deferred capability entries
 # ---------------------------------------------------------------------------
 
 
-def test_likelihood_free_capability_is_unsupported_in_phase_5() -> None:
-    """Phase 8 Task 8.5 flips this; Phase 5 records UNSUPPORTED."""
+def test_likelihood_free_capability_is_unsupported() -> None:
+    """Likelihood-free is deferred; the constant records the unsupported state."""
     from opifex.uncertainty.registry import DefaultStrategy
 
     dm = _import_dm()
@@ -215,27 +215,25 @@ def test_likelihood_free_capability_is_unsupported_in_phase_5() -> None:
     assert cap.supports_likelihood_free is False
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
     assert cap.source_package == "opifex"
-    assert "Phase 8" in cap.notes
+    assert "deferred" in cap.notes.lower() or "not yet" in cap.notes.lower()
 
 
-def test_active_learning_capability_is_unsupported_in_phase_5() -> None:
+def test_active_learning_capability_is_unsupported() -> None:
     from opifex.uncertainty.registry import DefaultStrategy
 
     dm = _import_dm()
     cap = dm.UNSUPPORTED_ACTIVE_LEARNING
     assert cap.supports_active_learning is False
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
-    assert "Phase 8" in cap.notes
 
 
-def test_pac_bayes_capability_is_unsupported_in_phase_5() -> None:
+def test_pac_bayes_capability_is_unsupported() -> None:
     from opifex.uncertainty.registry import DefaultStrategy
 
     dm = _import_dm()
     cap = dm.UNSUPPORTED_PAC_BAYES
     assert cap.supports_pac_bayes_certificate is False
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
-    assert "Phase 8" in cap.notes
 
 
 # ---------------------------------------------------------------------------

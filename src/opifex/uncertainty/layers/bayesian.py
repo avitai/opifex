@@ -26,10 +26,10 @@ import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
 
-from opifex.uncertainty.kernels.bayesian import diagonal_gaussian_kl
+from opifex.uncertainty.kernels.bayesian import diagonal_gaussian_kl, sample_diagonal_gaussian
 
 
-# Named-stream resolution order, matching the Avitai canonical convention.
+# Named-stream resolution order for posterior sampling.
 _POSTERIOR_STREAMS: tuple[str, ...] = ("posterior", "sample", "default")
 
 
@@ -122,8 +122,10 @@ class BayesianLinear(nnx.Module):
                 context="BayesianLinear sampling",
             )
             weight_key, bias_key = jax.random.split(key)
-            weight = _reparameterize(self.weight_mean[...], self.weight_logvar[...], weight_key)
-            bias = _reparameterize(self.bias_mean[...], self.bias_logvar[...], bias_key)
+            weight = sample_diagonal_gaussian(
+                self.weight_mean[...], self.weight_logvar[...], weight_key
+            )
+            bias = sample_diagonal_gaussian(self.bias_mean[...], self.bias_logvar[...], bias_key)
 
         return jnp.dot(x, weight.T) + bias
 
@@ -142,13 +144,6 @@ class BayesianLinear(nnx.Module):
             prior_std=self.prior_std,
         )
         return weight_kl + bias_kl
-
-
-def _reparameterize(mean: jax.Array, logvar: jax.Array, key: jax.Array) -> jax.Array:
-    """Reparameterization-trick sample from ``N(mean, exp(logvar))``."""
-    std = jnp.exp(0.5 * logvar)
-    noise = jax.random.normal(key, shape=mean.shape, dtype=mean.dtype)
-    return mean + std * noise
 
 
 class BayesianSpectralConvolution(nnx.Module):
@@ -282,22 +277,24 @@ class BayesianSpectralConvolution(nnx.Module):
         """Sample complex weights via the reparameterization trick."""
         if len(self.modes) == 1:
             real_key, imag_key = jax.random.split(key)
-            real = _reparameterize(self.weight_mean[...], self.weight_logvar[...], real_key)
-            imag = _reparameterize(
+            real = sample_diagonal_gaussian(
+                self.weight_mean[...], self.weight_logvar[...], real_key
+            )
+            imag = sample_diagonal_gaussian(
                 self.weight_imag_mean[...], self.weight_imag_logvar[...], imag_key
             )
             return (real + 1j * imag,)
 
         # 2D: four independent samples (positive/negative H by real/imag).
         keys = jax.random.split(key, 4)
-        pos_real = _reparameterize(self.weight_mean[...], self.weight_logvar[...], keys[0])
-        pos_imag = _reparameterize(
+        pos_real = sample_diagonal_gaussian(self.weight_mean[...], self.weight_logvar[...], keys[0])
+        pos_imag = sample_diagonal_gaussian(
             self.weight_imag_mean[...], self.weight_imag_logvar[...], keys[1]
         )
-        neg_real = _reparameterize(
+        neg_real = sample_diagonal_gaussian(
             self.weight_neg_h_mean[...], self.weight_neg_h_logvar[...], keys[2]
         )
-        neg_imag = _reparameterize(
+        neg_imag = sample_diagonal_gaussian(
             self.weight_neg_h_imag_mean[...], self.weight_neg_h_imag_logvar[...], keys[3]
         )
         return (pos_real + 1j * pos_imag, neg_real + 1j * neg_imag)

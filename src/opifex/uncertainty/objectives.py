@@ -3,10 +3,10 @@
 Container patterns:
 
 * :class:`ObjectiveConfig` — plain
-  ``@dataclass(frozen=True, slots=True, kw_only=True)`` (Avitai canonical
-  config/document pattern). All fields are Python scalars / strings; the
-  container is passed as a hashable static argument to jit'd loss kernels and
-  has zero per-call pytree overhead. Validation runs in ``__post_init__``.
+  ``@dataclass(frozen=True, slots=True, kw_only=True)`` (static-config pattern).
+  All fields are Python scalars / strings; the container is passed as a
+  hashable static argument to jit'd loss kernels and has zero per-call pytree
+  overhead. Validation runs in ``__post_init__``.
 * :class:`UQLossComponents` —
   ``@flax.struct.dataclass(slots=True, kw_only=True)``. Carries scalar loss
   arrays through ``jit``/``grad``/``vmap``. ``metadata`` is the canonical

@@ -1,10 +1,9 @@
 """Aggregated UQ reliability report.
 
-:class:`UQReliabilityReport` is a Pattern-B
-``flax.struct.dataclass(slots=True, kw_only=True)`` that collects
-already-computed metric values from the calibration / conformal /
-forecasting / field / OOD / selective subsystems into a single
-serializable container with explicit provenance metadata.
+:class:`UQReliabilityReport` is a frozen ``flax.struct.dataclass(slots=True,
+kw_only=True)`` that collects already-computed metric values from the
+calibration / conformal / forecasting / field / OOD / selective subsystems
+into a single serializable container with explicit provenance metadata.
 
 The report is a data class + serializer — never an evaluator. It does
 not recompute metrics from raw predictions; callers compute metrics
@@ -15,9 +14,9 @@ metric is populated. Per the project pytree convention, it is NOT called
 from ``__post_init__`` or ``tree_unflatten``.
 
 Convention: failed exchangeability / shift / OOD diagnostics from
-Phase 4 (`opifex.uncertainty.conformal`) and Task 5.3
-(`opifex.uncertainty.ood`) propagate verbatim into the report metadata
-under the ``assumption_warnings`` and ``assumption_status`` keys so
+``opifex.uncertainty.conformal`` and ``opifex.uncertainty.ood`` propagate
+verbatim into the report metadata under the ``assumption_warnings`` and
+``assumption_status`` keys so
 downstream consumers cannot silently convert failed shift checks into
 green coverage claims.
 """

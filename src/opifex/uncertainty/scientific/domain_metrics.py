@@ -2,8 +2,8 @@
 
 Covers PINN / neural-operator / quantum-chemistry / optimization /
 assimilation summary functions plus explicit UNSUPPORTED capability
-entries for the Phase 8 deferred surfaces (likelihood-free,
-active-learning, PAC-Bayes).
+entries for the deferred surfaces (likelihood-free, active-learning,
+PAC-Bayes).
 
 All kernels are pure :class:`jax.Array` transformations; the returned
 :class:`DomainMetricSummary` carries the metric name, scalar value, and
@@ -272,13 +272,13 @@ def sensor_reliability_summary(
 
 
 # ---------------------------------------------------------------------------
-# Phase 8 deferred capability entries
+# Deferred capability entries
 # ---------------------------------------------------------------------------
 
 
-_PHASE_8_NOTES = (
-    "Phase 5 placeholder; Phase 8 Task 8.5 flips supports flag and "
-    "default_strategy to the concrete value when Phase 8 ships."
+_DEFERRED_NOTES = (
+    "Capability not yet implemented; flip the supports_* flag and "
+    "default_strategy to the concrete value when the backend ships."
 )
 
 
@@ -286,7 +286,7 @@ UNSUPPORTED_LIKELIHOOD_FREE = UQCapability(
     supports_likelihood_free=False,
     default_strategy=DefaultStrategy.UNSUPPORTED,
     source_package="opifex",
-    notes=_PHASE_8_NOTES,
+    notes=_DEFERRED_NOTES,
 )
 
 
@@ -294,7 +294,7 @@ UNSUPPORTED_ACTIVE_LEARNING = UQCapability(
     supports_active_learning=False,
     default_strategy=DefaultStrategy.UNSUPPORTED,
     source_package="opifex",
-    notes=_PHASE_8_NOTES,
+    notes=_DEFERRED_NOTES,
 )
 
 
@@ -302,5 +302,5 @@ UNSUPPORTED_PAC_BAYES = UQCapability(
     supports_pac_bayes_certificate=False,
     default_strategy=DefaultStrategy.UNSUPPORTED,
     source_package="opifex",
-    notes=_PHASE_8_NOTES,
+    notes=_DEFERRED_NOTES,
 )

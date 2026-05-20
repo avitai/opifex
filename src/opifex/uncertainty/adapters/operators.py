@@ -7,10 +7,9 @@ axis metadata (spatial / spectral), and the supported metric set
 (L2 / H1 / spatial-coverage / spectral-coverage) — without claiming
 native Bayesian support.
 
-UQNO's native-Bayesian path is handled separately via
-:class:`opifex.neural.operators.specialized.uqno.UncertaintyQuantificationNeuralOperator`;
-its conformal rewrite is tracked under the Task 3.8 follow-up. The
-adapter specs in this module cover the *deterministic-FNO* and
+UQNO's native conformal path is handled separately via
+:class:`opifex.neural.operators.specialized.uqno.UncertaintyQuantificationNeuralOperator`.
+The adapter specs in this module cover the *deterministic-FNO* and
 *deterministic-DeepONet* families when bolted to one of the
 strategy-specific adapters (conformal calibrator, deep ensemble,
 MC-dropout) from :mod:`opifex.uncertainty.adapters.model` and
@@ -133,7 +132,7 @@ class OperatorAdapterSpec:
                 f"{type(self).__name__} declines capabilities with "
                 f"native_bayesian=True. Adapter-mediated UQ on a "
                 f"{self.operator_family!r} operator is not native Bayesian — "
-                f"use UQNO (Task 3.8 conformal rewrite) or wrap a real "
+                f"use the UQNO conformal path or wrap a real "
                 f"BayesianFNO / BayesianDeepONet implementation directly."
             )
         raise NotImplementedError(

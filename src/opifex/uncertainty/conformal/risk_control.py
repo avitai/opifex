@@ -18,8 +18,8 @@ pytree.
 
 For confidence-interval reporting on calibration statistics, we reuse
 ``calibrax.statistics.analyzer.StatisticalAnalyzer.bootstrap_ci`` via the
-:func:`bootstrap_threshold_ci` helper (Sibling Reuse Gate decision —
-percentile bootstrap CI semantics match what we need exactly).
+:func:`bootstrap_threshold_ci` helper — percentile bootstrap CI semantics
+match what we need exactly.
 """
 
 from __future__ import annotations
@@ -48,10 +48,10 @@ if TYPE_CHECKING:
 class RiskControlConfig:
     """Static configuration for distribution-free risk control.
 
-    All fields are scalar (no array data), so this is the
-    Avitai-canonical Pattern A: a plain ``@dataclasses.dataclass`` passed
-    to jitted kernels via ``static_argnames``. Validation happens in
-    ``__post_init__`` and raises ``ValueError`` — never ``assert`` (Rule 6).
+    All fields are scalar (no array data), so this is a plain
+    ``@dataclasses.dataclass`` passed to jitted kernels via
+    ``static_argnames``. Validation happens in ``__post_init__`` and raises
+    ``ValueError`` — never ``assert``.
 
     Args:
         alpha: Target risk level in ``(0, 1)``.
@@ -225,9 +225,7 @@ def bootstrap_threshold_ci(
     """Percentile bootstrap confidence interval for a sequence of samples.
 
     Thin keyword-only wrapper around
-    ``calibrax.statistics.analyzer.StatisticalAnalyzer.bootstrap_ci`` —
-    the Avitai-canonical bootstrap routine reused via the Sibling Reuse
-    Gate decision for Task 4.4.
+    ``calibrax.statistics.analyzer.StatisticalAnalyzer.bootstrap_ci``.
 
     Args:
         samples: Sequence of measurement values (e.g., per-bootstrap

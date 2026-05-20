@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from enum import Enum
 
+import jax
 import jax.numpy as jnp
 
 
@@ -29,7 +30,7 @@ def apply_dirichlet(
     boundary_value: float = 0.0,
     left_boundary: float | None = None,
     right_boundary: float | None = None,
-    weight: float = 1.0,
+    weight: jax.Array | float = 1.0,
 ) -> jnp.ndarray:
     """Apply Dirichlet boundary condition to parameters.
 
@@ -64,7 +65,7 @@ def apply_dirichlet(
 
 def apply_neumann(
     params: jnp.ndarray,
-    weight: float = 1.0,
+    weight: jax.Array | float = 1.0,
 ) -> jnp.ndarray:
     """Apply Neumann boundary condition to parameters.
 
@@ -95,7 +96,7 @@ def apply_neumann(
 
 def apply_periodic(
     params: jnp.ndarray,
-    weight: float = 1.0,
+    weight: jax.Array | float = 1.0,
 ) -> jnp.ndarray:
     """Apply periodic boundary condition to parameters.
 

@@ -11,11 +11,9 @@ Implements:
   container.
 
 **Container pattern.** All three containers use :func:`flax.struct.dataclass`
-with ``slots=True, kw_only=True`` — the Avitai-ecosystem-canonical
-frozen+slotted+keyword-only convention used by ``datarax.core.element_batch.Element``
-and the other Avitai value/config dataclasses. Static metadata fields are
-marked per-field via :func:`flax.struct.field(pytree_node=False)`. The
-``struct.dataclass`` decorator:
+with ``slots=True, kw_only=True`` — the frozen+slotted+keyword-only data-container
+convention. Static metadata fields are marked per-field via
+:func:`flax.struct.field(pytree_node=False)`. The ``struct.dataclass`` decorator:
 
 * sets ``frozen=True`` by default (we additionally request slots+kw_only);
 * registers the class as a JAX PyTree via
@@ -26,8 +24,7 @@ marked per-field via :func:`flax.struct.field(pytree_node=False)`. The
 Choosing ``struct.dataclass`` over the raw
 :func:`jax.tree_util.register_dataclass` decorator keeps the per-field
 ``pytree_node=False`` static annotation local to each field (more
-maintainable than a separate top-level ``meta_fields`` list) and gives DRY
-consistency with the Avitai-sibling Datarax containers.
+maintainable than a separate top-level ``meta_fields`` list).
 
 Variance fields (``variance``, ``epistemic``, ``aleatoric``,
 ``total_uncertainty``) are *variances*, not standard deviations.

@@ -51,6 +51,8 @@ def test_uq_reliability_report_is_frozen_pattern_b_dataclass() -> None:
             ("run_id", "run-0001"),
         ),
     )
+    assert report.calibration_ece is not None
+    assert report.empirical_coverage is not None
     assert float(report.calibration_ece) == pytest.approx(0.05)
     assert float(report.empirical_coverage) == pytest.approx(0.91)
     with pytest.raises(dc.FrozenInstanceError):
@@ -174,6 +176,7 @@ def test_uq_reliability_report_does_not_mutate_inputs() -> None:
     )
     assert float(original_ece) == pytest.approx(0.05)
     # And `report.calibration_ece` reflects the input.
+    assert report.calibration_ece is not None
     assert float(report.calibration_ece) == pytest.approx(0.05)
 
 

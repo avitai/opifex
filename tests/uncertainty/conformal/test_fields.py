@@ -111,8 +111,8 @@ def test_field_calibrator_rejects_unknown_norm() -> None:
     with pytest.raises(ValueError, match=r"(?i)norm"):
         fields.FieldSplitConformalRegressor(
             alpha=0.1,
-            norm="invalid_norm",
-            spatial_axes=(-2, -1),  # type: ignore[arg-type]
+            norm="invalid_norm",  # type: ignore[arg-type]
+            spatial_axes=(-2, -1),
         )
 
 

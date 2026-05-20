@@ -65,22 +65,24 @@ class PhysicsInformedPriors(nnx.Module):
         """
         constrained_params = params
 
-        # Apply conservation law constraints
+        # Apply conservation law constraints — pass traced weight directly.
         for i, law in enumerate(self.conservation_laws):
-            weight = float(self.constraint_weights.value[i])
+            weight = self.constraint_weights[i]
             constrained_params = self._apply_conservation_law(constrained_params, law, weight)
 
-        # Apply boundary condition constraints
+        # Apply boundary condition constraints.
         boundary_start_idx = len(self.conservation_laws)
         for i, condition in enumerate(self.boundary_conditions):
-            weight = float(self.constraint_weights.value[boundary_start_idx + i])
+            weight = self.constraint_weights[boundary_start_idx + i]
             constrained_params = self._apply_boundary_condition(
                 constrained_params, condition, weight
             )
 
         return constrained_params
 
-    def _apply_conservation_law(self, params: jax.Array, law: str, weight: float) -> jax.Array:
+    def _apply_conservation_law(
+        self, params: jax.Array, law: str, weight: jax.Array | float
+    ) -> jax.Array:
         """Apply specific conservation law constraint.
 
         Args:
@@ -124,7 +126,7 @@ class PhysicsInformedPriors(nnx.Module):
         return params
 
     def _apply_boundary_condition(
-        self, params: jax.Array, condition: str, weight: float
+        self, params: jax.Array, condition: str, weight: jax.Array | float
     ) -> jax.Array:
         """Apply specific boundary condition constraint.
 
@@ -150,83 +152,60 @@ class PhysicsInformedPriors(nnx.Module):
 
         return params
 
-    def compute_violation_penalty(self, params: jax.Array) -> float:
+    def compute_violation_penalty(self, params: jax.Array) -> jax.Array:
         """Compute penalty for physics constraint violations.
 
+        Pure jax.Array → scalar — no Python branches on traced contents.
+        Non-finite inputs are clipped to a large finite penalty via
+        ``jnp.where``, avoiding ``TracerBoolConversionError`` under jit/grad.
+
         Args:
-            params: Parameter values to evaluate
+            params: Parameter values to evaluate.
 
         Returns:
-            Violation penalty (higher = more violation)
+            Violation penalty (higher = more violation) as a 0-d ``jax.Array``.
         """
-        penalty = 0.0
-
-        # Check for numerical issues first and return immediately if found
-        has_nan = jnp.any(jnp.isnan(params))
-        has_inf = jnp.any(jnp.isinf(params))
-
-        if has_nan or has_inf:
-            # Return large finite penalty immediately to avoid NaN propagation
-            return 1e6 * self.penalty_weight
-
-        # Check conservation law violations (only if params are finite)
+        penalty = jnp.asarray(0.0)
+        # Conservation law violations.
         for law in self.conservation_laws:
             if law == "energy":
-                # Penalize large deviations from target energy
                 target_energy = params.shape[-1]
                 actual_energy = jnp.sum(params**2)
-                penalty += jnp.abs(actual_energy - target_energy)
-
+                penalty = penalty + jnp.abs(actual_energy - target_energy)
             elif law == "momentum":
-                # Penalize non-zero total momentum
                 total_momentum = jnp.sum(params)
-                penalty += jnp.abs(total_momentum)
-
+                penalty = penalty + jnp.abs(total_momentum)
             elif law == "positivity":
-                # Penalize negative values
-                negative_penalty = jnp.sum(jnp.maximum(-params, 0.0))
-                penalty += negative_penalty
+                penalty = penalty + jnp.sum(jnp.maximum(-params, 0.0))
+        finite_penalty = penalty * self.penalty_weight
+        # Large finite fallback when any input is non-finite — branch-free.
+        non_finite = jnp.any(jnp.isnan(params)) | jnp.any(jnp.isinf(params))
+        return jnp.where(non_finite, 1e6 * self.penalty_weight, finite_penalty)
 
-        return float(penalty * self.penalty_weight)
+    def check_physical_plausibility(self, params: jax.Array) -> jax.Array:
+        """Plausibility score in ``[0, 1]`` for the given parameters.
 
-    def check_physical_plausibility(self, params: jax.Array) -> float:
-        """Check physical plausibility of parameters.
-
-        Args:
-            params: Parameter values to check
-
-        Returns:
-            Plausibility score between 0 (implausible) and 1 (plausible)
+        Pure jax.Array → scalar. All branches use ``jnp.where`` over
+        traced-array predicates so the function traces under jit/grad.
         """
-        # Start with perfect plausibility
-        plausibility = 1.0
-
-        # Check for numerical issues
-        if jnp.any(jnp.isnan(params)) or jnp.any(jnp.isinf(params)):
-            return 0.0
-
-        # Check magnitude plausibility
+        plausibility = jnp.asarray(1.0)
+        # Magnitude penalty (graduated multiplicatively).
         param_magnitude = jnp.linalg.norm(params)
-        if param_magnitude > 1e3:  # Very large parameters
-            plausibility *= 0.1
-        elif param_magnitude > 10:  # Moderately large parameters
-            plausibility *= 0.5
-
-        # Check constraint violations
+        plausibility = jnp.where(param_magnitude > 1e3, plausibility * 0.1, plausibility)
+        # The 10 < |p| <= 1e3 band; "elif" structure done via nested where.
+        in_moderate_band = (param_magnitude > 10.0) & (param_magnitude <= 1e3)
+        plausibility = jnp.where(in_moderate_band, plausibility * 0.5, plausibility)
+        # Conservation-law penalties.
         for law in self.conservation_laws:
             if law == "positivity":
-                # Check if all values are positive
-                if jnp.any(params < 0):
-                    plausibility *= 0.3
-
-            elif law == "boundedness" and jnp.any(jnp.abs(params) > 10):
-                # Check if values are within reasonable bounds
-                plausibility *= 0.5
-
-        return plausibility
-
-
-# Version 3: Physics-Informed Integration - NEW CLASSES
+                plausibility = jnp.where(jnp.any(params < 0), plausibility * 0.3, plausibility)
+            elif law == "boundedness":
+                plausibility = jnp.where(
+                    jnp.any(jnp.abs(params) > 10), plausibility * 0.5, plausibility
+                )
+        # Non-finite inputs zero out the score.
+        non_finite = jnp.any(jnp.isnan(params)) | jnp.any(jnp.isinf(params))
+        return jnp.where(non_finite, jnp.asarray(0.0), plausibility)
 
 
 class ConservationLawPriors(nnx.Module):
@@ -294,9 +273,9 @@ class ConservationLawPriors(nnx.Module):
                 predictions, physics_state, law
             )
 
-            # Scale uncertainty based on constraint violations
-            law_scaling = float(self.uncertainty_scalings.value[i])
-            law_strength = float(self.conservation_strengths.value[i])
+            # Scale uncertainty based on constraint violations.
+            law_scaling = self.uncertainty_scalings[i]
+            law_strength = self.conservation_strengths[i]
 
             physics_contribution = law_scaling * law_strength * jnp.abs(constraint_violation)
             physics_uncertainty = physics_uncertainty + physics_contribution
@@ -401,7 +380,7 @@ class ConservationLawPriors(nnx.Module):
         constrained_params = base_params
 
         for i, law in enumerate(self.conservation_laws):
-            law_strength = float(self.conservation_strengths.value[i]) * constraint_strength
+            law_strength = self.conservation_strengths[i] * constraint_strength
             constrained_params = self._apply_conservation_constraint(
                 constrained_params, law, law_strength
             )
@@ -409,7 +388,7 @@ class ConservationLawPriors(nnx.Module):
         return constrained_params
 
     def _apply_conservation_constraint(
-        self, params: jax.Array, law: str, strength: float
+        self, params: jax.Array, law: str, strength: jax.Array | float
     ) -> jax.Array:
         """Apply conservation constraint to parameters.
 
@@ -574,8 +553,8 @@ class DomainSpecificPriors(nnx.Module):
             raise ValueError(f"Unknown parameter type: {parameter_type}")
 
         param_idx = list(self.parameter_ranges.keys()).index(parameter_type)
-        prior_mean = self.prior_means.value[param_idx]
-        prior_scale = self.prior_scales.value[param_idx]
+        prior_mean = self.prior_means[param_idx]
+        prior_scale = self.prior_scales[param_idx]
 
         param_range = self.parameter_ranges[parameter_type]
         distribution_type = self.distribution_types[parameter_type]
@@ -619,8 +598,8 @@ class DomainSpecificPriors(nnx.Module):
             return jnp.full_like(values, -1e6)
 
         param_idx = list(self.parameter_ranges.keys()).index(parameter_type)
-        prior_mean = self.prior_means.value[param_idx]
-        prior_scale = self.prior_scales.value[param_idx]
+        prior_mean = self.prior_means[param_idx]
+        prior_scale = self.prior_scales[param_idx]
 
         distribution_type = self.distribution_types[parameter_type]
 
@@ -721,8 +700,8 @@ class HierarchicalBayesianFramework(nnx.Module):
             raise ValueError(f"Level {level} exceeds hierarchy depth")
 
         # Sample from the specified level
-        mean = self.level_means[level].value
-        scale = self.level_scales[level].value
+        mean = self.level_means[level][...]
+        scale = self.level_scales[level][...]
 
         key = self.rngs.params()  # Use proper RNG from module
         base_samples = jax.random.normal(key, (*sample_shape, self.level_dimensions[level]))
@@ -745,8 +724,8 @@ class HierarchicalBayesianFramework(nnx.Module):
         propagated_uncertainty = base_uncertainty
 
         for level in range(target_level):
-            weight = self.propagation_weights.value[level]
-            level_scale = jnp.mean(self.level_scales[level].value)
+            weight = self.propagation_weights[level]
+            level_scale = jnp.mean(self.level_scales[level][...])
 
             if self.uncertainty_propagation == "multiplicative":
                 propagated_uncertainty = propagated_uncertainty * (1 + weight * level_scale)
@@ -771,8 +750,8 @@ class HierarchicalBayesianFramework(nnx.Module):
         if level >= len(self.level_dimensions):
             return jnp.full(values.shape[:-1], -1e6)
 
-        mean = self.level_means[level].value
-        scale = self.level_scales[level].value
+        mean = self.level_means[level][...]
+        scale = self.level_scales[level][...]
 
         # Compute log probability for each dimension
         normalized_values = (values - mean) / scale
@@ -895,7 +874,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
         for i, law in enumerate(self.conservation_laws):
             constraint_violation = self._evaluate_physics_constraint(physics_state, law)
 
-            weight = float(self.constraint_weights.value[i])
+            weight = self.constraint_weights[i]
             contribution = weight * jnp.abs(constraint_violation)
             constraint_contributions = constraint_contributions + contribution
 
