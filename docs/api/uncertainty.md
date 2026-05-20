@@ -21,6 +21,7 @@ adapter/backend interfaces for downstream inference engines.
 | `opifex.uncertainty.likelihoods` | Backend-neutral log-likelihoods: Gaussian, heteroscedastic Gaussian, Laplace, Student-t, mixture. |
 | `opifex.uncertainty.priors` | Diagonal-Gaussian log prior. |
 | `opifex.uncertainty.losses` | Uncertainty-aware loss functions: `PointwiseQuantileLoss` (pinball loss for UQNO residual-quantile training, mirrors `neuralop.losses.data_losses.PointwiseQuantileLoss`). |
+| `opifex.uncertainty.calibration` | Calibration metrics and calibrators. Metrics: `gaussian_nll`, `picp`, `mpiw`, `regression_calibration_error` (Opifex-local), plus thin wrappers around CalibraX functionals: `brier_score`, `expected_calibration_error`, `pinball_loss`. Calibrator: `TemperatureScaling` + `TemperatureScalingState` (Guo et al. 2017 temperature scaling for multiclass logits; single-scalar L-BFGS fit on validation NLL). |
 
 ## Trainable Bayesian Layers
 
