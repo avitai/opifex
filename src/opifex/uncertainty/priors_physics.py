@@ -674,12 +674,10 @@ class HierarchicalBayesianFramework(nnx.Module):
             # Scale parameters for this level
             self.level_scales.append(nnx.Param(jnp.ones(dim)))
 
-            # Correlation structure for this level
-            if correlation_structure == "exchangeable":
-                correlation_matrix = jnp.eye(dim)
-            else:
-                correlation_matrix = jnp.eye(dim)
-            self.level_correlations.append(nnx.Param(correlation_matrix))
+            # Correlation structure for this level. Identity is the only
+            # structure currently materialised; the slot is retained so a
+            # non-identity structure can drop in without an API break.
+            self.level_correlations.append(nnx.Param(jnp.eye(dim)))
 
         # Propagation weights between levels
         self.propagation_weights = nnx.Param(jnp.ones(hierarchy_levels - 1))
@@ -727,12 +725,12 @@ class HierarchicalBayesianFramework(nnx.Module):
             weight = self.propagation_weights[level]
             level_scale = jnp.mean(self.level_scales[level][...])
 
+            # "multiplicative" is the only non-additive mode; every other
+            # value (including the canonical "additive") takes the same
+            # additive update.
             if self.uncertainty_propagation == "multiplicative":
                 propagated_uncertainty = propagated_uncertainty * (1 + weight * level_scale)
-            elif self.uncertainty_propagation == "additive":
-                propagated_uncertainty = propagated_uncertainty + weight * level_scale
             else:
-                # Default to additive
                 propagated_uncertainty = propagated_uncertainty + weight * level_scale
 
         return propagated_uncertainty

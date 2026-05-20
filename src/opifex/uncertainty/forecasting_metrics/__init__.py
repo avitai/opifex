@@ -16,9 +16,11 @@ from opifex.uncertainty.forecasting_metrics.crps import crps, fair_crps
 from opifex.uncertainty.forecasting_metrics.ensemble import energy_score
 from opifex.uncertainty.forecasting_metrics.rank_histogram import rank_histogram
 from opifex.uncertainty.forecasting_metrics.reliability import (
+    ensemble_ranked_probability_score,
     event_reliability,
     pit_histogram,
     ranked_probability_score,
+    ranked_probability_skill_score,
 )
 from opifex.uncertainty.forecasting_metrics.spread_skill import spread_skill_ratio
 
@@ -26,10 +28,12 @@ from opifex.uncertainty.forecasting_metrics.spread_skill import spread_skill_rat
 __all__ = [
     "crps",
     "energy_score",
+    "ensemble_ranked_probability_score",
     "event_reliability",
     "fair_crps",
     "pit_histogram",
     "rank_histogram",
     "ranked_probability_score",
+    "ranked_probability_skill_score",
     "spread_skill_ratio",
 ]

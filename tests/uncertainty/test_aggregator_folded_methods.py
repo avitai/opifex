@@ -1,20 +1,15 @@
-"""Tests for methods folded from removed Advanced* wrapper classes.
+"""Contract tests for aggregator methods that orchestrate multi-source UQ.
 
-In Wave 2 / M4, three wrapper classes (``AdvancedUncertaintyAggregator``,
-``AdvancedEpistemicUncertainty``, ``AdvancedAleatoricUncertainty``) were
-deleted as dead code, and their genuinely-unique methods were folded
-into the canonical base classes that own each concern:
+Covers:
 
-* :class:`EpistemicUncertainty` gained
-  :meth:`compute_ensemble_disagreement` (variance / std / range / iqr)
-  and :meth:`compute_predictive_diversity` (pairwise / cosine).
-* :class:`DistributionalAleatoricUncertainty` gained
-  :meth:`compute_laplace_uncertainty`.
-* :class:`MultiSourceUncertaintyAggregator` gained
-  :meth:`adaptive_weighting` (reliability / inverse-variance / entropy /
-  uniform) and :meth:`assess_uncertainty_quality`.
-
-These tests pin the contract so the folded behaviour cannot regress.
+* :meth:`EpistemicUncertainty.compute_ensemble_disagreement` —
+  variance / std / range / iqr modes.
+* :meth:`EpistemicUncertainty.compute_predictive_diversity` —
+  pairwise-distance / cosine modes.
+* :meth:`DistributionalAleatoricUncertainty.compute_laplace_uncertainty`.
+* :meth:`MultiSourceUncertaintyAggregator.adaptive_weighting` —
+  reliability / inverse-variance / entropy / uniform modes.
+* :meth:`MultiSourceUncertaintyAggregator.assess_uncertainty_quality`.
 """
 
 from __future__ import annotations
@@ -68,7 +63,9 @@ def test_predictive_diversity_pairwise_zero_for_identical_predictions() -> None:
 
     # Same prediction across all 5 ensemble members → zero diversity.
     same = jnp.tile(jnp.ones((1, 4, 2)), (5, 1, 1))
-    out = EpistemicUncertainty.compute_predictive_diversity(same, diversity_metric="pairwise_distance")
+    out = EpistemicUncertainty.compute_predictive_diversity(
+        same, diversity_metric="pairwise_distance"
+    )
     assert out.shape == (4,)
     assert jnp.allclose(out, 0.0, atol=1e-6)
 
@@ -77,7 +74,9 @@ def test_predictive_diversity_cosine_zero_for_aligned_predictions() -> None:
     from opifex.uncertainty.aggregators import EpistemicUncertainty
 
     aligned = jnp.tile(jnp.array([[[1.0, 2.0]]]), (5, 4, 1))
-    out = EpistemicUncertainty.compute_predictive_diversity(aligned, diversity_metric="cosine_diversity")
+    out = EpistemicUncertainty.compute_predictive_diversity(
+        aligned, diversity_metric="cosine_diversity"
+    )
     assert out.shape == (4,)
     assert jnp.allclose(out, 0.0, atol=1e-5)
 

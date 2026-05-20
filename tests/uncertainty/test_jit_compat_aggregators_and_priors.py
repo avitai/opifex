@@ -1,20 +1,18 @@
-"""JIT-compatibility regression tests for Wave-1 audit fixes.
+"""JIT-compatibility contract tests for aggregator + physics-prior surfaces.
 
-Pins the fixes made in the Wave-1 audit cleanup:
+Covers:
 
-* `aggregators._bin_calibration_stats` and the three `CalibrationAssessment`
-  methods that call it must trace under ``jax.jit`` (previously they used
-  Python ``if bin_count > 0`` branches on traced arrays + boolean fancy
-  indexing — un-jittable).
-* `aggregators.EpistemicUncertainty.compute_variance_of_expected` must
-  return the actual per-sample variance, not a degenerate zero
-  (previous implementation broadcast the mean back then took variance,
-  giving 0 always).
-* `priors_physics.PhysicsInformedPriors.compute_violation_penalty` and
-  `check_physical_plausibility` must trace under ``jax.jit`` (previously
-  used Python ``if jnp.any(...)`` branches on traced arrays — un-jittable).
-* `priors_physics` must access `nnx.Param` values via canonical ``[...]``
-  indexing — not the deprecated ``.value`` property.
+* :func:`aggregators._bin_calibration_stats` and the
+  :class:`CalibrationAssessment` methods that call it must trace
+  under ``jax.jit`` (no Python branches on traced arrays, no boolean
+  fancy indexing).
+* :meth:`EpistemicUncertainty.compute_variance_of_expected` returns
+  the actual per-sample variance (not a degenerate zero).
+* :meth:`PhysicsInformedPriors.compute_violation_penalty` and
+  :meth:`check_physical_plausibility` trace under ``jax.jit`` and use
+  ``jnp.where`` over traced predicates instead of Python ``if``.
+* :mod:`priors_physics` accesses ``nnx.Param`` values via canonical
+  ``[...]`` indexing rather than the deprecated ``.value`` property.
 """
 
 from __future__ import annotations
@@ -75,7 +73,7 @@ def test_bin_stats_zeroes_empty_bins() -> None:
 
 
 # ---------------------------------------------------------------------------
-# EpistemicUncertainty.compute_variance_of_expected fix (B2 / M18)
+# EpistemicUncertainty.compute_variance_of_expected — full per-sample variance
 # ---------------------------------------------------------------------------
 
 

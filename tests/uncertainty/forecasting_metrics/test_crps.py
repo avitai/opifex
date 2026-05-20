@@ -247,6 +247,8 @@ def test_public_forecasting_metric_surface() -> None:
         "spread_skill_ratio",
         "pit_histogram",
         "ranked_probability_score",
+        "ensemble_ranked_probability_score",
+        "ranked_probability_skill_score",
         "event_reliability",
     }
     missing = expected - set(dir(fm))

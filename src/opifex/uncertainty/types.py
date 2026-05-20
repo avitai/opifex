@@ -86,7 +86,7 @@ def require_fitted_state(state: _StateT | None, *, surface: str) -> _StateT:
     return state
 
 
-def _metadata_dict(items: MetadataItems) -> dict[str, Any]:
+def metadata_to_dict(items: MetadataItems) -> dict[str, Any]:
     """Convert tuple-of-pairs metadata into a mutable dict for ergonomic access."""
     return dict(items)
 
@@ -136,7 +136,7 @@ class PredictionInterval:
 
     def metadata_dict(self) -> dict[str, Any]:
         """Return a fresh ``dict`` view of the immutable metadata tuple."""
-        return _metadata_dict(self.metadata)
+        return metadata_to_dict(self.metadata)
 
     def validate(self) -> None:
         """Eager-validate the interval. Not called from ``__post_init__``."""
@@ -176,7 +176,7 @@ class PredictionSet:
 
     def metadata_dict(self) -> dict[str, Any]:
         """Return a fresh ``dict`` view of the immutable metadata tuple."""
-        return _metadata_dict(self.metadata)
+        return metadata_to_dict(self.metadata)
 
     def validate(self) -> None:
         """Eager-validate the set. Not called from ``__post_init__``."""
@@ -237,7 +237,7 @@ class PredictiveDistribution:
 
     def metadata_dict(self) -> dict[str, Any]:
         """Return a fresh ``dict`` view of the immutable metadata tuple."""
-        return _metadata_dict(self.metadata)
+        return metadata_to_dict(self.metadata)
 
     def quantile(self, alpha: float) -> jax.Array:
         """Return the supplied quantile at level ``alpha``.

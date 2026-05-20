@@ -6,8 +6,12 @@ References (canonical):
   distribution; a calibrated forecast yields a uniform histogram.
 * Epstein 1969, "A scoring system for probability forecasts of ranked
   categories" — ranked probability score (RPS).
+* Murphy 1971, "A note on the ranked probability score" — RPSS skill
+  score against a reference forecast.
 * Murphy 1973, "A new vector partition of the probability score" —
   reliability component of the Brier decomposition.
+* Ferro, Richardson, Weigel 2008 — "fair" finite-ensemble RPS estimator
+  matching WeatherBenchX ``EnsembleRankedProbabilityScore(fair=True)``.
 """
 
 from __future__ import annotations
@@ -75,9 +79,12 @@ def event_reliability(
 ) -> jax.Array:
     """Reliability component of the Brier decomposition (Murphy 1973).
 
-    Bins predicted probabilities, computes the per-bin gap between mean
-    predicted probability and the empirical event frequency, and returns
-    the count-weighted mean absolute gap.
+    Bins predicted probabilities and returns
+    ``REL = (1/n) Σ_k n_k (f_k − o_k)²``
+    where ``n_k`` is the bin count, ``f_k`` the mean forecast in bin ``k``,
+    and ``o_k`` the empirical event frequency in bin ``k`` — the standard
+    squared-gap form that decomposes the Brier score as
+    ``BS = REL − RES + UNC``.
 
     Args:
         predicted_event_probabilities: Forecast P(event) in ``[0, 1]``.
@@ -98,5 +105,71 @@ def event_reliability(
     safe_counts = jnp.maximum(counts, 1.0)
     mean_probs = sum_probs / safe_counts
     mean_events = sum_events / safe_counts
-    gaps = jnp.abs(mean_probs - mean_events)
-    return jnp.sum(counts * gaps) / n
+    squared_gaps = (mean_probs - mean_events) ** 2
+    return jnp.sum(counts * squared_gaps) / n
+
+
+def ensemble_ranked_probability_score(
+    *,
+    samples: jax.Array,
+    targets: jax.Array,
+    thresholds: jax.Array,
+    fair: bool = True,
+) -> jax.Array:
+    """Ranked probability score for an ensemble of continuous samples.
+
+    Bins predictions and targets at the supplied ``thresholds`` to form
+    cumulative probabilities and observed indicators, then sums squared
+    CDF gaps across thresholds. When ``fair=True`` (default), applies the
+    Ferro / Richardson / Weigel 2008 finite-ensemble debiasing:
+
+    ``RPS_fair = Σ_k [(F̂_k − O_k)² − Var(F̂_k, ddof=1) / M]``
+
+    where ``F̂_k`` is the empirical CDF of the prediction ensemble at
+    threshold ``b_k`` and ``M`` is the ensemble size. This matches
+    WeatherBenchX ``EnsembleRankedProbabilityScore(fair=True)`` and
+    yields a score whose expectation does not depend on ``M`` —
+    essential when comparing ensembles of different sizes.
+
+    Args:
+        samples: ``(batch, num_members)`` ensemble predictions of a
+            real-valued scalar.
+        targets: ``(batch,)`` observed values.
+        thresholds: ``(num_thresholds,)`` monotonically increasing
+            threshold values defining the CDF bins.
+        fair: When ``True`` (default), apply Ferro 2008 debiasing.
+
+    Returns:
+        Per-sample RPS of shape ``(batch,)``. Lower is better.
+    """
+    samples_per_threshold = samples[:, :, None] <= thresholds[None, None, :]
+    pred_cdf = jnp.mean(samples_per_threshold.astype(jnp.float32), axis=1)
+    target_cdf = (targets[:, None] <= thresholds[None, :]).astype(jnp.float32)
+    squared_error = (pred_cdf - target_cdf) ** 2
+    if not fair:
+        return jnp.sum(squared_error, axis=-1)
+    num_members = samples.shape[1]
+    pred_cdf_var = jnp.var(samples_per_threshold.astype(jnp.float32), axis=1, ddof=1)
+    bias_correction = pred_cdf_var / num_members
+    return jnp.sum(squared_error - bias_correction, axis=-1)
+
+
+def ranked_probability_skill_score(
+    *,
+    rps: jax.Array,
+    rps_reference: jax.Array,
+) -> jax.Array:
+    """Ranked probability skill score per Murphy 1971.
+
+    ``RPSS = 1 − RPS / RPS_reference``. Skill > 0 indicates the forecast
+    beats the reference (e.g. climatology); skill ≤ 0 indicates the
+    reference does at least as well.
+
+    Args:
+        rps: Forecast RPS, any shape.
+        rps_reference: Reference-forecast RPS, broadcastable to ``rps``.
+
+    Returns:
+        Skill score, same shape as ``rps``. Higher is better.
+    """
+    return 1.0 - rps / rps_reference

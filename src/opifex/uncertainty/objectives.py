@@ -26,7 +26,7 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
-from opifex.uncertainty.types import _metadata_dict, MetadataItems
+from opifex.uncertainty.types import metadata_to_dict, MetadataItems
 
 
 # StrEnum of supported reductions kept inline (small fixed set; avoids a new
@@ -180,7 +180,7 @@ class UQLossComponents:
 
     def metadata_dict(self) -> dict[str, Any]:
         """Return a fresh dict view of ``metadata`` for ergonomic access."""
-        return _metadata_dict(self.metadata)
+        return metadata_to_dict(self.metadata)
 
     def validate(self) -> None:
         """Public validation hook; never called from ``__post_init__``/``tree_unflatten``.
