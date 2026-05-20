@@ -15,6 +15,24 @@ The container is a :func:`flax.struct.dataclass` so it registers as a JAX
 PyTree (per-field array dicts flatten as data leaves; ``metadata`` is
 declared ``pytree_node=False`` and stays static aux_data). Use
 ``solution.replace(field=value)`` for immutable updates.
+
+Two utility functions in this module replace the previous solver-side
+``*Wrapper`` shim classes:
+
+* :func:`aggregate_solver_solutions` — turns a sequence of
+  :class:`Solution` objects (replays of a stochastic solver, ensemble
+  outputs, …) into a single :class:`Solution` whose
+  ``auxiliary_data["uq"]`` carries the
+  :class:`SolutionDistribution`-shaped payload. Supersedes
+  ``BayesianWrapper`` / ``ConformalWrapper`` / ``EnsembleWrapper``.
+* :func:`summarize_stacked_sample_solution` — handles the *generative*
+  case where a single base solver returns one :class:`Solution` whose
+  fields already carry a leading sample axis. Supersedes
+  ``GenerativeWrapper``.
+
+The previous wrapper classes mostly added 3–5 lines of stacking +
+mean/variance on top of the base solver; the function pair replaces
+them with no shim layer.
 """
 
 from __future__ import annotations
@@ -36,6 +54,8 @@ from opifex.uncertainty.types import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from opifex.uncertainty.types import MetadataItems
 
 
@@ -213,3 +233,196 @@ class SolutionDistribution:
             converged=converged,
             stats=dict(stats) if stats is not None else {},
         )
+
+
+def aggregate_solver_solutions(
+    solutions: Sequence[Solution],
+    *,
+    metadata: tuple[tuple[str, object], ...] = (),
+    quantiles: tuple[float, ...] = (),
+) -> Solution:
+    """Aggregate a sequence of :class:`Solution` objects into a single ``Solution``.
+
+    Per-field arrays are stacked along a new leading sample axis and
+    summarised with their mean and (unbiased ``ddof=1``) variance. The
+    raw stacked samples are preserved under ``auxiliary_data["uq"]``
+    along with the metadata tuple, so consumers can recompute alternate
+    quantiles or pull individual replays without re-running the solver.
+
+    Replaces the four solver-side ``*Wrapper`` shim classes that
+    previously sat under ``opifex.solvers.wrappers``. Callers wanting to
+    MC-replay a stochastic solver write the explicit replay loop and
+    pass the resulting list of solutions to this function; ensembles of
+    independent solvers and replay over a single stochastic solver both
+    reduce to the same call. For *generative* solvers that emit a
+    single :class:`Solution` whose fields are already pre-stacked
+    sample arrays, use :func:`summarize_stacked_sample_solution`
+    instead.
+
+    Args:
+        solutions: Non-empty sequence of solutions with identical field
+            keys.
+        metadata: Extra ``(key, value)`` entries appended to the
+            :class:`SolutionDistribution.metadata` tuple alongside the
+            canonical ``("uncertainty_sources", ("ensemble",))`` entry.
+        quantiles: Optional sequence of quantile levels in ``(0, 1)``.
+            When non-empty, per-field quantile arrays are stored under
+            ``auxiliary_data["uq"]["quantiles"]`` keyed by level.
+
+    Returns:
+        A fresh :class:`Solution` whose ``fields`` carry per-field means,
+        ``metrics`` carries an ``"ensemble_size"`` entry and the merged
+        metrics of the first input solution, and ``auxiliary_data["uq"]``
+        carries the full :class:`SolutionDistribution`-shaped payload
+        (samples, variance, metadata, quantiles).
+
+    Raises:
+        ValueError: When ``solutions`` is empty, field keys disagree,
+            or a requested quantile is outside ``(0, 1)``.
+    """
+    if not solutions:
+        raise ValueError("aggregate_solver_solutions requires at least one solution.")
+    for q in quantiles:
+        if not 0.0 < q < 1.0:
+            raise ValueError(f"quantile levels must lie in (0, 1); got {q!r}.")
+
+    base_keys = set(solutions[0].fields.keys())
+    for sol in solutions[1:]:
+        if set(sol.fields.keys()) != base_keys:
+            raise ValueError(
+                "Every solution must expose the same field keys; got "
+                f"{set(sol.fields.keys())!r} vs {base_keys!r}."
+            )
+
+    samples_per_field: dict[str, jax.Array] = {
+        key: jnp.stack([s.fields[key] for s in solutions], axis=0) for key in base_keys
+    }
+    means: dict[str, jax.Array] = {
+        key: jnp.mean(samples, axis=0) for key, samples in samples_per_field.items()
+    }
+    n = len(solutions)
+    variances: dict[str, jax.Array] = {
+        key: jnp.var(samples, axis=0, ddof=1) if n > 1 else jnp.zeros_like(means[key])
+        for key, samples in samples_per_field.items()
+    }
+    quantile_map: dict[float, dict[str, jax.Array]] = {
+        float(q): {
+            key: jnp.quantile(samples, q, axis=0) for key, samples in samples_per_field.items()
+        }
+        for q in quantiles
+    }
+
+    distribution = SolutionDistribution(
+        mean=means,
+        samples=samples_per_field,
+        variance=variances,
+        quantiles=quantile_map,
+        metadata=(
+            ("uncertainty_sources", ("ensemble",)),
+            ("ensemble_size", int(n)),
+            *metadata,
+        ),
+    )
+    merged_metrics = dict(solutions[0].metrics)
+    merged_metrics["ensemble_size"] = n
+    total_time = sum(s.execution_time for s in solutions)
+    return distribution.to_solution(
+        metrics=merged_metrics,
+        execution_time=total_time,
+        converged=all(s.converged for s in solutions),
+    )
+
+
+def summarize_stacked_sample_solution(
+    solution: Solution,
+    *,
+    sample_axis: int = 0,
+    metadata: tuple[tuple[str, object], ...] = (),
+    quantiles: tuple[float, ...] = (),
+) -> Solution:
+    """Compute per-field statistics over a Solution whose fields are pre-stacked samples.
+
+    Used for *generative* solvers that emit a single :class:`Solution`
+    whose multi-dimensional field arrays already carry a leading sample
+    axis (shape ``(num_samples, *field_shape)``). The wrapper computes
+    mean / unbiased variance / optional quantile bands along
+    ``sample_axis`` and packages everything into a fresh
+    :class:`Solution` whose ``auxiliary_data["uq"]`` carries the
+    :class:`SolutionDistribution`-shaped payload.
+
+    Scalar fields are passed through unchanged.
+
+    Args:
+        solution: Generative-solver output. Non-scalar fields must share
+            the same size along ``sample_axis``.
+        sample_axis: Axis carrying the sample index. Default ``0``.
+        metadata: Extra ``(key, value)`` metadata entries.
+        quantiles: Optional quantile levels in ``(0, 1)``.
+
+    Returns:
+        A fresh :class:`Solution` with per-field means in ``fields`` and
+        per-field samples / variance / quantiles in
+        ``auxiliary_data["uq"]``.
+
+    Raises:
+        ValueError: When a requested quantile is outside ``(0, 1)`` or
+            when two non-scalar fields disagree on the sample-axis
+            length.
+    """
+    for q in quantiles:
+        if not 0.0 < q < 1.0:
+            raise ValueError(f"quantile levels must lie in (0, 1); got {q!r}.")
+
+    samples_per_field: dict[str, jax.Array] = {}
+    scalar_fields: dict[str, jax.Array] = {}
+    for key, value in solution.fields.items():
+        if value.ndim > 0:
+            samples_per_field[key] = jnp.moveaxis(value, sample_axis, 0)
+        else:
+            scalar_fields[key] = value
+
+    sample_sizes = {key: arr.shape[0] for key, arr in samples_per_field.items()}
+    if len(set(sample_sizes.values())) > 1:
+        raise ValueError(f"Non-scalar fields must share sample-axis length; got {sample_sizes!r}.")
+
+    means: dict[str, jax.Array] = {
+        **scalar_fields,
+        **{key: jnp.mean(samples, axis=0) for key, samples in samples_per_field.items()},
+    }
+    if samples_per_field:
+        first = next(iter(samples_per_field.values()))
+        ddof = 1 if first.shape[0] > 1 else 0
+        variances: dict[str, jax.Array] | None = {
+            key: jnp.var(samples, axis=0, ddof=ddof) for key, samples in samples_per_field.items()
+        }
+        sample_block: dict[str, jax.Array] | None = samples_per_field
+    else:
+        variances = None
+        sample_block = None
+    quantile_map: dict[float, dict[str, jax.Array]] = {
+        float(q): {
+            key: jnp.quantile(samples, q, axis=0) for key, samples in samples_per_field.items()
+        }
+        for q in quantiles
+    }
+
+    distribution = SolutionDistribution(
+        mean=means,
+        samples=sample_block,
+        variance=variances,
+        quantiles=quantile_map,
+        metadata=(
+            ("uncertainty_sources", ("ensemble",)),
+            ("method", "generative_sampling"),
+            *metadata,
+        ),
+    )
+    merged_metrics = dict(solution.metrics)
+    merged_metrics["uq_method"] = "generative_sampling"
+    if "log_likelihood" in merged_metrics:
+        merged_metrics["mean_log_likelihood"] = merged_metrics["log_likelihood"]
+    return distribution.to_solution(
+        metrics=merged_metrics,
+        execution_time=solution.execution_time,
+        converged=solution.converged,
+    )

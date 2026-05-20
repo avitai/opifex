@@ -243,6 +243,48 @@ must declare a tuple-of-strings `uncertainty_sources` drawn from
 `SolutionDistribution` round-tripped through `as_predictive_distribution(field)`
 does not flap downstream additivity checks.
 
+### `aggregate_solver_solutions` (solver-side Monte-Carlo / ensemble aggregation)
+
+```python
+from opifex.uncertainty.scientific import aggregate_solver_solutions
+
+# Caller writes the explicit replay or ensemble loop.
+replays = [solver.solve(problem, rngs=nnx.Rngs(seed)) for seed in range(num_samples)]
+out = aggregate_solver_solutions(
+    replays,
+    quantiles=(0.05, 0.95),
+    metadata=(("method", "monte_carlo_empirical"),),
+)
+mean_field_u = out.fields["u"]
+band_lower = out.auxiliary_data["uq"]["quantiles"][0.05]["u"]
+band_upper = out.auxiliary_data["uq"]["quantiles"][0.95]["u"]
+```
+
+Stacks per-field arrays across the sequence, reports the mean in
+`Solution.fields`, and stores the full UQ payload (samples, ddof=1
+variance, optional quantile bands, metadata) under
+`auxiliary_data["uq"]`. Replaces four previous wrapper classes
+(`BayesianWrapper` / `ConformalWrapper` / `EnsembleWrapper` /
+`GenerativeWrapper`); deep ensemble, stochastic-replay, and
+empirical-interval flows all reduce to this single call.
+
+### `summarize_stacked_sample_solution` (generative-sampler aggregation)
+
+```python
+from opifex.uncertainty.scientific import summarize_stacked_sample_solution
+
+# Generative base solver returns one Solution whose fields are stacked
+# (num_samples, *field_shape) arrays — typically a Diffusion or
+# Flow-Matching model from Artifex.
+raw = generative_solver.solve(problem)
+out = summarize_stacked_sample_solution(raw, quantiles=(0.05, 0.95))
+```
+
+Aggregates along the sample axis without overwriting the underlying
+batch. Scalar fields pass through unchanged; non-scalar fields land in
+`auxiliary_data["uq"]["samples"]` and a mean lands in
+`Solution.fields[key]`. Replaces the `GenerativeWrapper` class.
+
 ## Objectives
 
 ```python

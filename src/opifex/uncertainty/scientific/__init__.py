@@ -23,7 +23,11 @@ from opifex.uncertainty.scientific.fields import (
     residual_uncertainty_alignment,
     spatial_calibration_error,
 )
-from opifex.uncertainty.scientific.solutions import SolutionDistribution
+from opifex.uncertainty.scientific.solutions import (
+    aggregate_solver_solutions,
+    SolutionDistribution,
+    summarize_stacked_sample_solution,
+)
 
 
 __all__ = [
@@ -33,6 +37,7 @@ __all__ = [
     "DomainMetricSummary",
     "FieldMetadata",
     "SolutionDistribution",
+    "aggregate_solver_solutions",
     "boundary_condition_coverage",
     "chemical_accuracy_coverage",
     "conservation_law_residual_summary",
@@ -45,4 +50,5 @@ __all__ = [
     "sensor_reliability_summary",
     "spatial_calibration_error",
     "spectral_coverage",
+    "summarize_stacked_sample_solution",
 ]

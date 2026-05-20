@@ -9,7 +9,7 @@ The framework is organized into 6 strictly hierarchical layers. Each layer build
 | Layer | Name | Description | Key Components |
 |-------|------|-------------|----------------|
 | **6** | **Orchestration** | Production & Deployment | MLOps, Model Registry, Serving |
-| **5** | **Uncertainty** | UQ & Reliability | `EnsembleWrapper`, `ConformalWrapper`, `GenerativeWrapper` |
+| **5** | **Uncertainty** | UQ & Reliability | `aggregate_solver_solutions`, `summarize_stacked_sample_solution`, `SolutionDistribution`, `opifex.uncertainty.conformal` |
 | **4** | **Unified Solvers** | **The Core Abstraction** | `SciMLSolver` Protocol, `PINNSolver`, `NeuralOperatorSolver` |
 | **3** | **Primitives** | Neural Architectures | `FourierNeuralOperator`, `DeepONet`, `MultiScalePINN` |
 | **2** | **Problem Definition** | Physics & Geometry | `PDEProblem`, `Geometry` Protocol, `Constraint` |
@@ -45,11 +45,12 @@ This is the pivotal abstraction layer. It defines a standard `SciMLSolver` proto
 ### Layer 5: Probabilistic Numerics & Uncertainty
 **A Major Pillar of Opifex.** We treat Uncertainty Quantification (UQ) not as an afterthought, but as a first-class citizen via the **Probabilistic Numerics** paradigm.
 
-- **Bayesian Inference**: `EnsembleWrapper` and Hamiltonian Monte Carlo (HMC) integration for rigorous posterior estimation.
-- **Conformal Prediction**: `ConformalWrapper` provides frequentist coverage guarantees (e.g., "95% confidence that the true solution is within this band").
-- **Generative Modeling**: `GenerativeWrapper` bridges Opifex with **Artifex**, allowing solvers to learn full distributions over solution spaces using Diffusion Models and Flow Matching.
+- **Ensemble / Monte-Carlo aggregation**: `aggregate_solver_solutions(solutions, *, quantiles=..., metadata=...)` packages a list of independent solver runs (deep ensemble or repeated stochastic replays) into a single `Solution` whose `auxiliary_data["uq"]` carries a `SolutionDistribution`-shaped payload (per-field mean, unbiased variance, samples, optional quantile bands).
+- **Generative-sample summary**: `summarize_stacked_sample_solution(solution, *, sample_axis=0, quantiles=...)` handles the case where a single base solver returns pre-stacked sample arrays (Diffusion / Flow-Matching outputs from Artifex); statistics are computed along the sample axis without overwriting the original batch.
+- **Bayesian Inference**: BlackJAX HMC / NUTS / MALA via `opifex.uncertainty.inference_backends.blackjax.BlackJAXBackend` (thin adapter over Artifex's BlackJAX wrappers).
+- **Conformal Prediction**: `opifex.uncertainty.conformal` exposes `SplitConformalRegressor`, `ConformalizedQuantileRegressor`, CV+ / jackknife+, EnbPI / ACI, and field-space conformal calibrators — all with explicit `fit / predict / with_state` cycles and exchangeability diagnostics.
 
-This layer transforms any deterministic `SciMLSolver` into a Probabilistic Solver.
+This layer transforms any deterministic `SciMLSolver` into a Probabilistic Solver by composing the canonical Phase 1 `PredictiveDistribution` contract with these aggregation utilities.
 
 ### Layer 6: Production Ecosystem
 The top layer handles the lifecycle of models, including versioning, serving, and monitoring, bridging the gap between research and production value.
