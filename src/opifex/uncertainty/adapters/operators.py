@@ -46,6 +46,16 @@ _CONFORMAL_METRICS = ("l2", "h1", "spatial_coverage", "spectral_coverage")
 _ENSEMBLE_METRICS = ("l2", "h1", "spatial_coverage")
 _MCDROPOUT_METRICS = ("l2", "spatial_coverage")
 
+# Operator-family identifier strings used as ``operator_family`` values.
+_FNO_FAMILY = "fno"
+_DEEPONET_FAMILY = "deeponet"
+
+# Required-capability tag tuple every operator adapter spec demands.
+_OPERATOR_REQUIRED_CAPABILITIES: tuple[str, ...] = (
+    "native_nnx_module",
+    "supports_function_space",
+)
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class OperatorAdapterSpec:
@@ -154,36 +164,36 @@ class OperatorAdapterSpec:
 class FNOConformalAdapterSpec(OperatorAdapterSpec):
     """FNO + conformal-calibration adapter spec (pre-UQNO-rewrite path)."""
 
-    operator_family: str = "fno"
+    operator_family: str = _FNO_FAMILY
     default_strategy: DefaultStrategy = DefaultStrategy.CONFORMAL
     spatial_axes: tuple[int, ...] = _FNO_SPATIAL_AXES
     spectral_axes: tuple[int, ...] | None = _FNO_SPECTRAL_AXES
     supported_metrics: tuple[str, ...] = _CONFORMAL_METRICS
-    required_capabilities: tuple[str, ...] = ("native_nnx_module", "supports_function_space")
+    required_capabilities: tuple[str, ...] = _OPERATOR_REQUIRED_CAPABILITIES
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class FNODeepEnsembleAdapterSpec(OperatorAdapterSpec):
     """FNO + deep-ensemble adapter spec (member tuple via DeepEnsembleState)."""
 
-    operator_family: str = "fno"
+    operator_family: str = _FNO_FAMILY
     default_strategy: DefaultStrategy = DefaultStrategy.ENSEMBLE
     spatial_axes: tuple[int, ...] = _FNO_SPATIAL_AXES
     spectral_axes: tuple[int, ...] | None = _FNO_SPECTRAL_AXES
     supported_metrics: tuple[str, ...] = _ENSEMBLE_METRICS
-    required_capabilities: tuple[str, ...] = ("native_nnx_module", "supports_function_space")
+    required_capabilities: tuple[str, ...] = _OPERATOR_REQUIRED_CAPABILITIES
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class FNOMCDropoutAdapterSpec(OperatorAdapterSpec):
     """FNO + MC-dropout adapter spec (caller-owned rngs at predict-time)."""
 
-    operator_family: str = "fno"
+    operator_family: str = _FNO_FAMILY
     default_strategy: DefaultStrategy = DefaultStrategy.MC_DROPOUT
     spatial_axes: tuple[int, ...] = _FNO_SPATIAL_AXES
     spectral_axes: tuple[int, ...] | None = _FNO_SPECTRAL_AXES
     supported_metrics: tuple[str, ...] = _MCDROPOUT_METRICS
-    required_capabilities: tuple[str, ...] = ("native_nnx_module", "supports_function_space")
+    required_capabilities: tuple[str, ...] = _OPERATOR_REQUIRED_CAPABILITIES
 
 
 # ---------------------------------------------------------------------------
@@ -195,36 +205,36 @@ class FNOMCDropoutAdapterSpec(OperatorAdapterSpec):
 class DeepONetConformalAdapterSpec(OperatorAdapterSpec):
     """DeepONet + conformal-calibration adapter spec."""
 
-    operator_family: str = "deeponet"
+    operator_family: str = _DEEPONET_FAMILY
     default_strategy: DefaultStrategy = DefaultStrategy.CONFORMAL
     spatial_axes: tuple[int, ...] = _DEEPONET_SPATIAL_AXES
     spectral_axes: tuple[int, ...] | None = None
     supported_metrics: tuple[str, ...] = _CONFORMAL_METRICS
-    required_capabilities: tuple[str, ...] = ("native_nnx_module", "supports_function_space")
+    required_capabilities: tuple[str, ...] = _OPERATOR_REQUIRED_CAPABILITIES
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class DeepONetDeepEnsembleAdapterSpec(OperatorAdapterSpec):
     """DeepONet + deep-ensemble adapter spec."""
 
-    operator_family: str = "deeponet"
+    operator_family: str = _DEEPONET_FAMILY
     default_strategy: DefaultStrategy = DefaultStrategy.ENSEMBLE
     spatial_axes: tuple[int, ...] = _DEEPONET_SPATIAL_AXES
     spectral_axes: tuple[int, ...] | None = None
     supported_metrics: tuple[str, ...] = _ENSEMBLE_METRICS
-    required_capabilities: tuple[str, ...] = ("native_nnx_module", "supports_function_space")
+    required_capabilities: tuple[str, ...] = _OPERATOR_REQUIRED_CAPABILITIES
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class DeepONetMCDropoutAdapterSpec(OperatorAdapterSpec):
     """DeepONet + MC-dropout adapter spec (caller-owned rngs at predict-time)."""
 
-    operator_family: str = "deeponet"
+    operator_family: str = _DEEPONET_FAMILY
     default_strategy: DefaultStrategy = DefaultStrategy.MC_DROPOUT
     spatial_axes: tuple[int, ...] = _DEEPONET_SPATIAL_AXES
     spectral_axes: tuple[int, ...] | None = None
     supported_metrics: tuple[str, ...] = _MCDROPOUT_METRICS
-    required_capabilities: tuple[str, ...] = ("native_nnx_module", "supports_function_space")
+    required_capabilities: tuple[str, ...] = _OPERATOR_REQUIRED_CAPABILITIES
 
 
 __all__ = [

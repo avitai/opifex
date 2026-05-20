@@ -23,6 +23,8 @@ green coverage claims.
 
 from __future__ import annotations
 
+import dataclasses
+import functools
 from typing import Any, TYPE_CHECKING
 
 import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
@@ -57,22 +59,6 @@ class UQReliabilityReport:
     aurc: jax.Array | None = None
     metadata: MetadataItems = struct.field(pytree_node=False, default=())
 
-    _METRIC_FIELDS = (
-        "calibration_ece",
-        "calibration_nll",
-        "brier_score",
-        "empirical_coverage",
-        "mean_interval_width",
-        "interval_score",
-        "crps",
-        "energy_score",
-        "spread_skill_ratio",
-        "ood_auroc",
-        "ood_auprc",
-        "ood_fpr95",
-        "aurc",
-    )
-
     def validate(self) -> None:
         """Raise ``ValueError`` when no metric leaf is populated.
 
@@ -80,7 +66,7 @@ class UQReliabilityReport:
         the pytree unflatten path so transforms that reconstruct the
         container with placeholder values do not spuriously fail.
         """
-        populated = [name for name in self._METRIC_FIELDS if getattr(self, name) is not None]
+        populated = [name for name in _metric_field_names() if getattr(self, name) is not None]
         if not populated:
             raise ValueError(
                 "UQReliabilityReport requires at least one populated metric; "
@@ -97,12 +83,23 @@ class UQReliabilityReport:
         is sequence-like.
         """
         payload: dict[str, Any] = {}
-        for name in self._METRIC_FIELDS:
+        for name in _metric_field_names():
             value = getattr(self, name)
             if value is not None:
                 payload[name] = float(value)
         payload["metadata"] = _metadata_to_jsonable(self.metadata)
         return payload
+
+
+@functools.cache
+def _metric_field_names() -> tuple[str, ...]:
+    """Names of all numeric-metric fields on :class:`UQReliabilityReport`.
+
+    Derived from :func:`dataclasses.fields` so adding or removing a metric
+    field on the report dataclass automatically updates the list — the
+    two sources of truth cannot drift apart.
+    """
+    return tuple(f.name for f in dataclasses.fields(UQReliabilityReport) if f.name != "metadata")
 
 
 def _metadata_to_jsonable(metadata: MetadataItems) -> dict[str, Any]:

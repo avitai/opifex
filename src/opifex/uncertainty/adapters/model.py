@@ -18,7 +18,7 @@ underlying implementation lands.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Protocol, TYPE_CHECKING
+from typing import Protocol, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -26,6 +26,7 @@ from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 
 from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
+from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
@@ -64,7 +65,7 @@ class _WrappedDeterministicModel:
             variance=zeros,
             epistemic=zeros,
             total_uncertainty=zeros,
-            metadata=_method_metadata(
+            metadata=compose_method_metadata(
                 method=self._capability.default_strategy.value,
                 source_package=self._capability.source_package,
                 extra=(("num_samples", 1),),
@@ -101,24 +102,12 @@ class _WrappedMCDropoutModel:
             variance=variance,
             epistemic=variance,
             total_uncertainty=variance,
-            metadata=_method_metadata(
+            metadata=compose_method_metadata(
                 method=self._capability.default_strategy.value,
                 source_package=self._capability.source_package,
                 extra=(("num_samples", int(self._state.num_samples)),),
             ),
         )
-
-
-def _method_metadata(
-    *, method: str, source_package: str, extra: MetadataItems = ()
-) -> MetadataItems:
-    """Compose the standard adapter metadata tuple."""
-    base: list[tuple[str, Any]] = [
-        ("method", method),
-        ("source_package", source_package),
-    ]
-    base.extend(extra)
-    return tuple(base)
 
 
 # ---------------------------------------------------------------------------

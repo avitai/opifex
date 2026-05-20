@@ -32,7 +32,7 @@ from opifex.uncertainty.conformal.scores import (
     conformal_quantile,
     cqr_score,
 )
-from opifex.uncertainty.types import PredictionInterval
+from opifex.uncertainty.types import PredictionInterval, require_fitted_state
 
 
 if TYPE_CHECKING:
@@ -86,12 +86,7 @@ class SplitConformalRegressor:
 
     def predict(self, *, predictions: jax.Array) -> PredictionInterval:
         """Return a :class:`PredictionInterval` of width ``2 * state.quantile``."""
-        state = self._state
-        if state is None:
-            raise RuntimeError(
-                "SplitConformalRegressor.predict called before fit; "
-                "call fit(...) first or .with_state(state)."
-            )
+        state = require_fitted_state(self._state, surface="SplitConformalRegressor.predict")
         lower = predictions - state.quantile
         upper = predictions + state.quantile
         return PredictionInterval(
@@ -148,12 +143,7 @@ class ConformalizedQuantileRegressor:
 
     def predict(self, *, lower: jax.Array, upper: jax.Array) -> PredictionInterval:
         """Return calibrated ``[lo - adj, hi + adj]`` as a :class:`PredictionInterval`."""
-        state = self._state
-        if state is None:
-            raise RuntimeError(
-                "ConformalizedQuantileRegressor.predict called before fit; "
-                "call fit(...) first or .with_state(state)."
-            )
+        state = require_fitted_state(self._state, surface="ConformalizedQuantileRegressor.predict")
         adj = state.quantile_adjustment
         return PredictionInterval(
             lower=lower - adj,
@@ -228,12 +218,7 @@ class GroupedSplitConformalRegressor:
 
     def predict(self, *, predictions: jax.Array, groups: jax.Array) -> PredictionInterval:
         """Return a :class:`PredictionInterval` with per-sample width set by group."""
-        state = self._state
-        if state is None:
-            raise RuntimeError(
-                "GroupedSplitConformalRegressor.predict called before fit; "
-                "call fit(...) first or .with_state(state)."
-            )
+        state = require_fitted_state(self._state, surface="GroupedSplitConformalRegressor.predict")
         per_sample_quantile = _lookup_per_group_quantile(
             groups=groups,
             group_ids=state.group_ids,

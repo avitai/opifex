@@ -31,7 +31,7 @@ import jax.numpy as jnp
 from flax import struct
 
 from opifex.uncertainty.conformal.scores import conformal_quantile
-from opifex.uncertainty.types import PredictionSet
+from opifex.uncertainty.types import PredictionSet, require_fitted_state
 
 
 if TYPE_CHECKING:
@@ -194,12 +194,7 @@ class LACConformalClassifier:
 
     def predict(self, *, probabilities: jax.Array) -> PredictionSet:
         """Return a :class:`PredictionSet` of classes with ``1 - p >= threshold``."""
-        state = self._state
-        if state is None:
-            raise RuntimeError(
-                "LACConformalClassifier.predict called before fit; "
-                "call fit(...) first or .with_state(state)."
-            )
+        state = require_fitted_state(self._state, surface="LACConformalClassifier.predict")
         per_class_scores = 1.0 - probabilities
         values = per_class_scores <= state.threshold
         return PredictionSet(

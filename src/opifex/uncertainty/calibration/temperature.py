@@ -26,6 +26,8 @@ import jax.numpy as jnp
 import optax
 from flax import struct
 
+from opifex.uncertainty.types import require_fitted_state
+
 
 if TYPE_CHECKING:
     from opifex.uncertainty.types import MetadataItems
@@ -127,12 +129,7 @@ class TemperatureScaling:
         Raises:
             RuntimeError: If called before ``fit`` (or ``with_state``).
         """
-        state = self._state
-        if state is None:
-            raise RuntimeError(
-                "TemperatureScaling.predict called before fit; "
-                "call fit(...) first or .with_state(state)."
-            )
+        state = require_fitted_state(self._state, surface="TemperatureScaling.predict")
         return _softmax_with_temperature(logits=logits, temperature=state.temperature)
 
 

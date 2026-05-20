@@ -26,7 +26,7 @@ from flax import struct
 
 from opifex.uncertainty.conformal.scores import conformal_quantile
 from opifex.uncertainty.scientific.fields import FieldMetadata
-from opifex.uncertainty.types import PredictionInterval
+from opifex.uncertainty.types import PredictionInterval, require_fitted_state
 
 
 if TYPE_CHECKING:
@@ -186,12 +186,7 @@ class FieldSplitConformalRegressor:
         chosen norm collapses to a per-sample scalar threshold during
         calibration.
         """
-        state = self._state
-        if state is None:
-            raise RuntimeError(
-                "FieldSplitConformalRegressor.predict called before fit; "
-                "call fit(...) first or .with_state(state)."
-            )
+        state = require_fitted_state(self._state, surface="FieldSplitConformalRegressor.predict")
         return PredictionInterval(
             lower=predictions - state.threshold,
             upper=predictions + state.threshold,

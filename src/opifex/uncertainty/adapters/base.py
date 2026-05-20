@@ -19,7 +19,24 @@ from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from opifex.uncertainty.registry import UQCapability
-    from opifex.uncertainty.types import PredictiveDistribution
+    from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
+
+
+def compose_method_metadata(
+    *, method: str, source_package: str, extra: MetadataItems = ()
+) -> MetadataItems:
+    """Compose the standard adapter metadata tuple.
+
+    Single source of truth used by every adapter (model.py, ensemble.py,
+    …) to attach ``method`` + ``source_package`` provenance to wrapped
+    artefacts.
+    """
+    base: list[tuple[str, Any]] = [
+        ("method", method),
+        ("source_package", source_package),
+    ]
+    base.extend(extra)
+    return tuple(base)
 
 
 @runtime_checkable
@@ -78,4 +95,5 @@ __all__ = [
     "DistributionAdapterProtocol",
     "DistributionAdapterSpec",
     "ModelUncertaintyAdapterProtocol",
+    "compose_method_metadata",
 ]

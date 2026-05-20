@@ -34,6 +34,26 @@ class DomainMetricSummary:
     metadata: MetadataItems = struct.field(pytree_node=False, default=())
 
 
+def _make_summary(
+    *,
+    metric_name: str,
+    value: jax.Array,
+    extra: MetadataItems = (),
+) -> DomainMetricSummary:
+    """Build a :class:`DomainMetricSummary` with the canonical metadata layout.
+
+    Every summary embeds ``("metric_name", name)`` in its metadata tuple
+    so downstream consumers that only see the metadata payload can still
+    recover the metric identity. ``extra`` carries the per-metric
+    diagnostics (thresholds, sample sizes, quantile readouts, …).
+    """
+    return DomainMetricSummary(
+        metric_name=metric_name,
+        value=value,
+        metadata=(("metric_name", metric_name), *extra),
+    )
+
+
 # ---------------------------------------------------------------------------
 # PINN: physics residual + boundary condition coverage
 # ---------------------------------------------------------------------------
@@ -47,15 +67,13 @@ def physics_residual_coverage(
     """Fraction of PDE-residual entries whose magnitude is at most ``threshold``."""
     in_band = (jnp.abs(residuals) <= threshold).astype(jnp.float32)
     coverage = jnp.mean(in_band)
-    metadata: MetadataItems = (
-        ("metric_name", "physics_residual_coverage"),
-        ("threshold", float(threshold)),
-        ("sample_size", int(residuals.shape[0])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="physics_residual_coverage",
         value=coverage,
-        metadata=metadata,
+        extra=(
+            ("threshold", float(threshold)),
+            ("sample_size", int(residuals.shape[0])),
+        ),
     )
 
 
@@ -67,15 +85,13 @@ def boundary_condition_coverage(
     """Fraction of boundary-condition residual entries within ``threshold``."""
     in_band = (jnp.abs(boundary_residuals) <= threshold).astype(jnp.float32)
     coverage = jnp.mean(in_band)
-    metadata: MetadataItems = (
-        ("metric_name", "boundary_condition_coverage"),
-        ("threshold", float(threshold)),
-        ("sample_size", int(boundary_residuals.shape[0])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="boundary_condition_coverage",
         value=coverage,
-        metadata=metadata,
+        extra=(
+            ("threshold", float(threshold)),
+            ("sample_size", int(boundary_residuals.shape[0])),
+        ),
     )
 
 
@@ -108,16 +124,14 @@ def parameter_credible_interval_coverage(
     upper = jnp.quantile(posterior_samples, 1.0 - alpha / 2.0, axis=0)
     covered = (ground_truth >= lower) & (ground_truth <= upper)
     coverage = jnp.mean(covered.astype(jnp.float32))
-    metadata: MetadataItems = (
-        ("metric_name", "parameter_credible_interval_coverage"),
-        ("alpha", float(alpha)),
-        ("num_samples", int(posterior_samples.shape[0])),
-        ("num_params", int(posterior_samples.shape[1])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="parameter_credible_interval_coverage",
         value=coverage,
-        metadata=metadata,
+        extra=(
+            ("alpha", float(alpha)),
+            ("num_samples", int(posterior_samples.shape[0])),
+            ("num_params", int(posterior_samples.shape[1])),
+        ),
     )
 
 
@@ -136,15 +150,13 @@ def spectral_coverage(
     diff = jnp.abs(predicted_spectrum - target_spectrum)
     in_band = (diff <= threshold).astype(jnp.float32)
     coverage = jnp.mean(in_band)
-    metadata: MetadataItems = (
-        ("metric_name", "spectral_coverage"),
-        ("threshold", float(threshold)),
-        ("num_frequencies", int(predicted_spectrum.shape[0])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="spectral_coverage",
         value=coverage,
-        metadata=metadata,
+        extra=(
+            ("threshold", float(threshold)),
+            ("num_frequencies", int(predicted_spectrum.shape[0])),
+        ),
     )
 
 
@@ -167,15 +179,13 @@ def chemical_accuracy_coverage(
     diff = jnp.abs(predicted_energies - true_energies)
     in_band = (diff <= tolerance).astype(jnp.float32)
     coverage = jnp.mean(in_band)
-    metadata: MetadataItems = (
-        ("metric_name", "chemical_accuracy_coverage"),
-        ("tolerance", float(tolerance)),
-        ("num_samples", int(predicted_energies.shape[0])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="chemical_accuracy_coverage",
         value=coverage,
-        metadata=metadata,
+        extra=(
+            ("tolerance", float(tolerance)),
+            ("num_samples", int(predicted_energies.shape[0])),
+        ),
     )
 
 
@@ -199,17 +209,15 @@ def regret_interval_summary(
     regrets = proposed_values - optimal_value
     mean_regret = jnp.mean(regrets)
     quantile_regret = jnp.quantile(regrets, 1.0 - alpha)
-    metadata: MetadataItems = (
-        ("metric_name", "regret_interval_summary"),
-        ("alpha", float(alpha)),
-        ("mean_regret", float(mean_regret)),
-        ("quantile_regret", float(quantile_regret)),
-        ("num_samples", int(proposed_values.shape[0])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="regret_interval_summary",
         value=mean_regret,
-        metadata=metadata,
+        extra=(
+            ("alpha", float(alpha)),
+            ("mean_regret", float(mean_regret)),
+            ("quantile_regret", float(quantile_regret)),
+            ("num_samples", int(proposed_values.shape[0])),
+        ),
     )
 
 
@@ -229,15 +237,13 @@ def feasibility_coverage(
     per_constraint_ok = outputs <= constraint_thresholds
     sample_feasible = jnp.all(per_constraint_ok, axis=-1).astype(jnp.float32)
     coverage = jnp.mean(sample_feasible)
-    metadata: MetadataItems = (
-        ("metric_name", "feasibility_coverage"),
-        ("num_samples", int(outputs.shape[0])),
-        ("num_constraints", int(outputs.shape[1])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="feasibility_coverage",
         value=coverage,
-        metadata=metadata,
+        extra=(
+            ("num_samples", int(outputs.shape[0])),
+            ("num_constraints", int(outputs.shape[1])),
+        ),
     )
 
 
@@ -259,15 +265,13 @@ def sensor_reliability_summary(
     """
     standardized = assimilation_residuals / sensor_noise
     reduced_chi2 = jnp.mean(standardized * standardized)
-    metadata: MetadataItems = (
-        ("metric_name", "sensor_reliability_summary"),
-        ("reduced_chi_squared", float(reduced_chi2)),
-        ("num_samples", int(assimilation_residuals.shape[0])),
-    )
-    return DomainMetricSummary(
+    return _make_summary(
         metric_name="sensor_reliability_summary",
         value=reduced_chi2,
-        metadata=metadata,
+        extra=(
+            ("reduced_chi_squared", float(reduced_chi2)),
+            ("num_samples", int(assimilation_residuals.shape[0])),
+        ),
     )
 
 

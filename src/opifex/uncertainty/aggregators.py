@@ -98,6 +98,59 @@ class EpistemicUncertainty:
         """
         return jnp.var(predictions, axis=0)
 
+    @staticmethod
+    def compute_ensemble_disagreement(
+        ensemble_predictions: Float[Array, "models batch output"],
+        aggregation_method: str = "variance",
+    ) -> Float[Array, "batch output"]:
+        """Epistemic uncertainty from ensemble disagreement under multiple statistics.
+
+        ``aggregation_method`` selects the dispersion statistic — ``variance``
+        (same as :meth:`compute_variance`), ``std`` (standard deviation),
+        ``range`` (max − min), or ``iqr`` (75th − 25th percentile).
+        """
+        if aggregation_method == "variance":
+            return jnp.var(ensemble_predictions, axis=0)
+        if aggregation_method == "std":
+            return jnp.std(ensemble_predictions, axis=0)
+        if aggregation_method == "range":
+            return jnp.max(ensemble_predictions, axis=0) - jnp.min(ensemble_predictions, axis=0)
+        if aggregation_method == "iqr":
+            q75 = jnp.percentile(ensemble_predictions, 75, axis=0)
+            q25 = jnp.percentile(ensemble_predictions, 25, axis=0)
+            return q75 - q25
+        raise ValueError(f"Unknown aggregation method: {aggregation_method}")
+
+    @staticmethod
+    def compute_predictive_diversity(
+        ensemble_predictions: Float[Array, "models batch output"],
+        diversity_metric: str = "pairwise_distance",
+    ) -> Float[Array, "batch"]:
+        """Average diversity across ensemble predictions.
+
+        ``diversity_metric`` selects the comparison:
+
+        * ``pairwise_distance`` — mean L2 distance between every ordered
+          pair of ensemble members (batched along the batch axis).
+        * ``cosine_diversity`` — ``1 − mean cos(member, mean_prediction)``,
+          rewarding angular spread.
+        """
+        if diversity_metric == "pairwise_distance":
+            diffs = ensemble_predictions[:, None] - ensemble_predictions[None, :]
+            distances = jnp.linalg.norm(diffs, axis=-1)
+            n_models = ensemble_predictions.shape[0]
+            mask = jnp.triu(jnp.ones((n_models, n_models)), k=1)
+            pair_count = jnp.maximum(jnp.sum(mask), 1.0)
+            return jnp.sum(distances * mask[:, :, None], axis=(0, 1)) / pair_count
+        if diversity_metric == "cosine_diversity":
+            mean_pred = jnp.mean(ensemble_predictions, axis=0)
+            member_norms = jnp.linalg.norm(ensemble_predictions, axis=-1)
+            mean_norm = jnp.linalg.norm(mean_pred, axis=-1)
+            dots = jnp.sum(ensemble_predictions * mean_pred[None, :, :], axis=-1)
+            cosines = dots / (member_norms * mean_norm + 1e-8)
+            return 1.0 - jnp.mean(cosines, axis=0)
+        raise ValueError(f"Unknown diversity metric: {diversity_metric}")
+
 
 class AleatoricUncertainty:
     """Aleatoric (data) uncertainty estimation."""
@@ -609,6 +662,18 @@ class DistributionalAleatoricUncertainty:
         """
         return jnp.exp(2 * log_std)
 
+    def compute_laplace_uncertainty(
+        self, scale: Float[Array, "batch output"]
+    ) -> Float[Array, "batch output"]:
+        """Std-equivalent uncertainty from a Laplace(0, ``scale``) likelihood.
+
+        A Laplace distribution with scale parameter ``b`` has variance
+        ``2 * b**2`` and std ``b * sqrt(2)``. Returning the std lets the
+        Laplace branch line up with :meth:`compute_gaussian_uncertainty`
+        for callers that switch on the noise model.
+        """
+        return scale * jnp.sqrt(2.0)
+
     def compute_mixture_uncertainty(
         self,
         mixture_weights: Float[Array, "batch components"],
@@ -739,6 +804,73 @@ class MultiSourceUncertaintyAggregator:
 
         return breakdown
 
+    @staticmethod
+    def adaptive_weighting(
+        uncertainty_sources: list[Float[Array, "batch output"]],
+        reliability_scores: list[Float[Array, "batch"]] | None = None,
+        adaptation_method: str = "reliability_based",
+    ) -> Float[Array, "sources batch"]:
+        """Compute per-source, per-sample weights for uncertainty fusion.
+
+        ``adaptation_method``:
+
+        * ``reliability_based`` — weights ∝ per-source reliability scores
+          supplied by the caller (must be non-``None``).
+        * ``inverse_variance`` — weights ∝ ``1 / Var(source)``.
+        * ``entropy_based`` — weights ∝ predictive entropy of each source.
+        * ``uniform`` — flat weights, primarily a baseline.
+        """
+        n_sources = len(uncertainty_sources)
+        batch_size = uncertainty_sources[0].shape[0]
+
+        if adaptation_method == "reliability_based" and reliability_scores is not None:
+            reliability_array = jnp.stack(reliability_scores, axis=0)
+            return reliability_array / (jnp.sum(reliability_array, axis=0, keepdims=True) + 1e-8)
+        if adaptation_method == "inverse_variance":
+            variances = jnp.stack([jnp.var(u, axis=-1) for u in uncertainty_sources], axis=0)
+            inv_variances = 1.0 / (variances + 1e-8)
+            return inv_variances / (jnp.sum(inv_variances, axis=0, keepdims=True) + 1e-8)
+        if adaptation_method == "entropy_based":
+            entropies = jnp.stack(
+                [-jnp.sum(u * jnp.log(u + 1e-8), axis=-1) for u in uncertainty_sources],
+                axis=0,
+            )
+            return entropies / (jnp.sum(entropies, axis=0, keepdims=True) + 1e-8)
+        if adaptation_method == "uniform":
+            return jnp.ones((n_sources, batch_size)) / n_sources
+        raise ValueError(f"Unknown adaptation method: {adaptation_method}")
+
+    @staticmethod
+    def assess_uncertainty_quality(
+        predictions: Float[Array, "batch output"],
+        uncertainties: Float[Array, "batch output"],
+        true_values: Float[Array, "batch output"] | None = None,
+    ) -> dict[str, float]:
+        """Diagnostic summary of an uncertainty estimate.
+
+        Always returns the source-side statistics (``mean_uncertainty``,
+        ``uncertainty_std``, ``uncertainty_range``, ``mean_confidence``).
+        If ``true_values`` is supplied, also returns
+        ``coverage_probability`` (under a 2σ band), ``mean_interval_width``,
+        and ``calibration_error`` (mean ``|y - μ| / σ``).
+        """
+        quality: dict[str, float] = {}
+
+        if true_values is not None:
+            lower_bound = predictions - 2.0 * uncertainties
+            upper_bound = predictions + 2.0 * uncertainties
+            coverage = jnp.mean((true_values >= lower_bound) & (true_values <= upper_bound))
+            quality["coverage_probability"] = float(coverage)
+            quality["mean_interval_width"] = float(jnp.mean(upper_bound - lower_bound))
+            errors = jnp.abs(predictions - true_values)
+            quality["calibration_error"] = float(jnp.mean(errors / (uncertainties + 1e-8)))
+
+        quality["mean_uncertainty"] = float(jnp.mean(uncertainties))
+        quality["uncertainty_std"] = float(jnp.std(uncertainties))
+        quality["uncertainty_range"] = float(jnp.max(uncertainties) - jnp.min(uncertainties))
+        quality["mean_confidence"] = float(jnp.mean(1.0 / (1.0 + uncertainties)))
+        return quality
+
 
 class EnhancedUncertaintyQuantifier:
     """Enhanced uncertainty quantifier with multiple decomposition methods."""
@@ -834,206 +966,3 @@ class EnhancedUncertaintyQuantifier:
             total_uncertainty=total_uncertainty,
             uncertainty_breakdown=uncertainty_breakdown,
         )
-
-
-class AdvancedUncertaintyAggregator:
-    """Advanced uncertainty aggregation with multiple sources and weighting."""
-
-    @staticmethod
-    def weighted_uncertainty_aggregation(
-        uncertainty_sources: list[Float[Array, "batch output"]],
-        weights: Float[Array, "sources"] | None = None,  # noqa: F821
-        aggregation_method: str = "weighted_variance",
-    ) -> Float[Array, "batch output"]:
-        """Aggregate uncertainties from multiple sources with optional weighting."""
-        uncertainties = jnp.stack(uncertainty_sources, axis=0)
-
-        if weights is None:
-            weights = jnp.ones(len(uncertainty_sources)) / len(uncertainty_sources)
-
-        weights = weights / jnp.sum(weights)  # Normalize weights
-
-        if aggregation_method == "weighted_variance":
-            # Aggregate as weighted sum of variances
-            return jnp.sum(weights[:, None, None] * uncertainties**2, axis=0)
-        if aggregation_method == "weighted_mean":
-            # Simple weighted average
-            return jnp.sum(weights[:, None, None] * uncertainties, axis=0)
-        if aggregation_method == "max_weighted":
-            # Maximum weighted uncertainty
-            weighted_uncertainties = weights[:, None, None] * uncertainties
-            return jnp.max(weighted_uncertainties, axis=0)
-        if aggregation_method == "robust_weighted":
-            # Robust aggregation using median
-            weighted_uncertainties = weights[:, None, None] * uncertainties
-            return jnp.median(weighted_uncertainties, axis=0)
-        raise ValueError(f"Unknown aggregation method: {aggregation_method}")
-
-    @staticmethod
-    def adaptive_weighting(
-        uncertainty_sources: list[Float[Array, "batch output"]],
-        reliability_scores: list[Float[Array, "batch"]] | None = None,
-        adaptation_method: str = "reliability_based",
-    ) -> Float[Array, "sources batch"]:
-        """Compute adaptive weights for uncertainty sources based on reliability."""
-        n_sources = len(uncertainty_sources)
-        batch_size = uncertainty_sources[0].shape[0]
-
-        if adaptation_method == "reliability_based" and reliability_scores is not None:
-            # Weight by reliability scores
-            reliability_array = jnp.stack(reliability_scores, axis=0)
-            weights = reliability_array / (jnp.sum(reliability_array, axis=0, keepdims=True) + 1e-8)
-        elif adaptation_method == "inverse_variance":
-            # Weight inversely proportional to variance
-            variances = jnp.stack([jnp.var(u, axis=-1) for u in uncertainty_sources], axis=0)
-            inv_variances = 1.0 / (variances + 1e-8)
-            weights = inv_variances / (jnp.sum(inv_variances, axis=0, keepdims=True) + 1e-8)
-        elif adaptation_method == "entropy_based":
-            # Weight based on predictive entropy
-            entropies = jnp.stack(
-                [-jnp.sum(u * jnp.log(u + 1e-8), axis=-1) for u in uncertainty_sources],
-                axis=0,
-            )
-            weights = entropies / (jnp.sum(entropies, axis=0, keepdims=True) + 1e-8)
-        elif adaptation_method == "uniform":
-            # Uniform weighting
-            weights = jnp.ones((n_sources, batch_size)) / n_sources
-        else:
-            raise ValueError(f"Unknown adaptation method: {adaptation_method}")
-
-        return weights
-
-    @staticmethod
-    def uncertainty_quality_assessment(
-        predictions: Float[Array, "batch output"],
-        uncertainties: Float[Array, "batch output"],
-        true_values: Float[Array, "batch output"] | None = None,
-    ) -> dict[str, float]:
-        """Assess the quality of uncertainty estimates."""
-        quality_metrics = {}
-
-        # Coverage probability (if true values available)
-        if true_values is not None:
-            # Compute prediction intervals
-            lower_bound = predictions - 2 * uncertainties
-            upper_bound = predictions + 2 * uncertainties
-
-            # Check coverage
-            coverage = jnp.mean((true_values >= lower_bound) & (true_values <= upper_bound))
-            quality_metrics["coverage_probability"] = float(coverage)
-
-            # Interval width
-            interval_width = jnp.mean(upper_bound - lower_bound)
-            quality_metrics["mean_interval_width"] = float(interval_width)
-
-            # Calibration error
-            errors = jnp.abs(predictions - true_values)
-            normalized_errors = errors / (uncertainties + 1e-8)
-            quality_metrics["calibration_error"] = float(jnp.mean(normalized_errors))
-
-        # Uncertainty statistics
-        quality_metrics["mean_uncertainty"] = float(jnp.mean(uncertainties))
-        quality_metrics["uncertainty_std"] = float(jnp.std(uncertainties))
-        quality_metrics["uncertainty_range"] = float(
-            jnp.max(uncertainties) - jnp.min(uncertainties)
-        )
-
-        # Prediction confidence
-        prediction_confidence = 1.0 / (1.0 + uncertainties)
-        quality_metrics["mean_confidence"] = float(jnp.mean(prediction_confidence))
-
-        return quality_metrics
-
-
-class AdvancedEpistemicUncertainty:
-    """Advanced epistemic uncertainty estimation methods."""
-
-    @staticmethod
-    def compute_ensemble_disagreement(
-        ensemble_predictions: Float[Array, "models batch output"],
-        aggregation_method: str = "variance",
-    ) -> Float[Array, "batch output"]:
-        """Compute epistemic uncertainty from ensemble disagreement."""
-        if aggregation_method == "variance":
-            return jnp.var(ensemble_predictions, axis=0)
-        if aggregation_method == "std":
-            return jnp.std(ensemble_predictions, axis=0)
-        if aggregation_method == "range":
-            return jnp.max(ensemble_predictions, axis=0) - jnp.min(ensemble_predictions, axis=0)
-        if aggregation_method == "iqr":
-            q75 = jnp.percentile(ensemble_predictions, 75, axis=0)
-            q25 = jnp.percentile(ensemble_predictions, 25, axis=0)
-            return q75 - q25
-        raise ValueError(f"Unknown aggregation method: {aggregation_method}")
-
-    @staticmethod
-    def compute_predictive_diversity(
-        ensemble_predictions: Float[Array, "models batch output"],
-        diversity_metric: str = "pairwise_distance",
-    ) -> Float[Array, "batch output"]:
-        """Compute predictive diversity as a measure of epistemic uncertainty."""
-        if diversity_metric == "pairwise_distance":
-            # Compute average pairwise L2 distance
-            n_models = ensemble_predictions.shape[0]
-            total_distance = jnp.zeros_like(ensemble_predictions[0, :, 0])
-            count = 0
-            for i in range(n_models):
-                for j in range(i + 1, n_models):
-                    distance = jnp.linalg.norm(
-                        ensemble_predictions[i] - ensemble_predictions[j], axis=-1
-                    )
-                    total_distance += distance
-                    count += 1
-            if count > 0:
-                return total_distance / count
-            return jnp.zeros_like(ensemble_predictions[0, :, 0])
-        if diversity_metric == "cosine_diversity":
-            # Compute average cosine diversity
-            mean_pred = jnp.mean(ensemble_predictions, axis=0)
-            cosine_similarities = []
-            for i in range(ensemble_predictions.shape[0]):
-                cos_sim = jnp.sum(ensemble_predictions[i] * mean_pred, axis=-1) / (
-                    jnp.linalg.norm(ensemble_predictions[i], axis=-1)
-                    * jnp.linalg.norm(mean_pred, axis=-1)
-                    + 1e-8
-                )
-                cosine_similarities.append(cos_sim)
-            return 1.0 - jnp.mean(jnp.stack(cosine_similarities), axis=0)
-        raise ValueError(f"Unknown diversity metric: {diversity_metric}")
-
-
-class AdvancedAleatoricUncertainty:
-    """Advanced aleatoric uncertainty estimation methods."""
-
-    @staticmethod
-    def distributional_uncertainty(
-        distribution_params: dict[str, Float[Array, "batch ..."]],
-        distribution_type: str = "gaussian",
-    ) -> Float[Array, "batch output"]:
-        """Compute aleatoric uncertainty from distributional outputs."""
-        if distribution_type == "gaussian":
-            if "log_std" in distribution_params:
-                return jnp.exp(distribution_params["log_std"])
-            if "std" in distribution_params:
-                return distribution_params["std"]
-            if "variance" in distribution_params:
-                return jnp.sqrt(distribution_params["variance"])
-            raise ValueError("Gaussian distribution requires 'log_std', 'std', or 'variance'")
-        if distribution_type == "laplace":
-            if "scale" in distribution_params:
-                return distribution_params["scale"] * jnp.sqrt(2.0)  # Convert to std equivalent
-            raise ValueError("Laplace distribution requires 'scale' parameter")
-        if distribution_type == "mixture":
-            # For mixture distributions, compute weighted variance
-            weights = distribution_params["weights"]
-            means = distribution_params["means"]
-            variances = distribution_params["variances"]
-
-            # Mixture variance formula: E[Var] + Var[E]
-            expected_variance = jnp.sum(weights * variances, axis=-2)
-            variance_of_means = (
-                jnp.sum(weights * means**2, axis=-2) - (jnp.sum(weights * means, axis=-2)) ** 2
-            )
-
-            return jnp.sqrt(expected_variance + variance_of_means)
-        raise ValueError(f"Unknown distribution type: {distribution_type}")

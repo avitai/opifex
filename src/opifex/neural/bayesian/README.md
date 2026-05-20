@@ -18,7 +18,7 @@ This module provides advanced Bayesian machine learning capabilities for scienti
 | `variational_framework.py` | Variational inference methods |
 
 Aggregators (`UncertaintyQuantifier`, `EnhancedUncertaintyQuantifier`,
-`AdvancedUncertaintyAggregator`, etc.) live in
+`MultiSourceUncertaintyAggregator`, etc.) live in
 `opifex.uncertainty.aggregators`. Physics-prior modules
 (`PhysicsInformedPriors`, `ConservationLawPriors`,
 `DomainSpecificPriors`, `HierarchicalBayesianFramework`,
@@ -29,41 +29,35 @@ MCMC sampling lives in `opifex.uncertainty.inference_backends.blackjax:BlackJAXB
 
 ## 🚀 **Core Features**
 
-### 1. Advanced Uncertainty Quantification
+### 1. Uncertainty Quantification
 
 Full uncertainty assessment with multiple uncertainty sources and propagation strategies.
 
 ```python
 import jax
 import jax.numpy as jnp
-from flax import nnx
-from opifex.uncertainty.aggregators import AdvancedUncertaintyAggregator
+from opifex.uncertainty.aggregators import EnhancedUncertaintyQuantifier
 
-# Initialize uncertainty aggregation system. Caller owns the PRNG.
-key = jax.random.key(0)
-uq_system = AdvancedUncertaintyAggregator(
-    model_dim=64,
+quantifier = EnhancedUncertaintyQuantifier(
     ensemble_size=10,
-    uncertainty_sources=['epistemic', 'aleatoric', 'model'],
-    aggregation_strategy='adaptive_weighted',
-    rngs=nnx.Rngs(key)
+    distributional_output=True,
+    multi_source_aggregation=True,
 )
 
-# Generate predictions with uncertainty
-x_test = jax.random.normal(key, (100, 10))
-predictions, uncertainties = uq_system.predict_with_uncertainty(x_test)
+ensemble_predictions = jax.random.normal(jax.random.key(0), (10, 100, 1))
+result = quantifier.enhanced_decompose_uncertainty(
+    ensemble_predictions=ensemble_predictions,
+)
 
-print(f"Predictions shape: {predictions.shape}")
-print(f"Uncertainty breakdown: {uncertainties.keys()}")
-print(f"Total uncertainty: {uncertainties['total'].mean():.4f}")
+print(f"Ensemble epistemic shape: {result.epistemic_ensemble.shape}")
+print(f"Total uncertainty mean: {result.total_uncertainty.mean():.4f}")
 ```
 
 **Features**:
 
-- **Multi-source uncertainty**: Epistemic, aleatoric, and model uncertainty
-- **Adaptive weighting**: Performance-based uncertainty aggregation
-- **Ensemble methods**: Deep ensemble disagreement quantification
-- **Distributional uncertainty**: Support for Gaussian, Laplace, and mixture distributions
+- **Multi-source uncertainty**: Epistemic + aleatoric decomposition
+- **Ensemble methods**: Deep-ensemble disagreement quantification
+- **Distributional uncertainty**: Gaussian / Laplace / mixture distributions
 
 ### 2. Physics-Informed Bayesian Networks
 

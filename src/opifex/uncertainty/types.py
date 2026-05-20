@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from dataclasses import field
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -67,6 +67,23 @@ _VARIANCE_ATOL: float = 1e-6
 
 # Public type alias for the immutable, hashable metadata container.
 MetadataItems = tuple[tuple[str, Any], ...]
+
+
+_StateT = TypeVar("_StateT")
+
+
+def require_fitted_state(state: _StateT | None, *, surface: str) -> _StateT:
+    """Return ``state`` if it has been fitted; raise ``RuntimeError`` otherwise.
+
+    Centralises the predict-before-fit guard so every conformal /
+    calibration surface emits the same message and fails fast with a
+    consistent contract.
+    """
+    if state is None:
+        raise RuntimeError(
+            f"{surface} called before fit; call fit(...) first or .with_state(state)."
+        )
+    return state
 
 
 def _metadata_dict(items: MetadataItems) -> dict[str, Any]:

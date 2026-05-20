@@ -17,13 +17,14 @@ the underlying implementation lands.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 from flax import struct
 
 from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
+from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
@@ -137,24 +138,12 @@ class _WrappedDeepEnsembleModel:
             variance=variance,
             epistemic=variance,
             total_uncertainty=variance,
-            metadata=_method_metadata(
+            metadata=compose_method_metadata(
                 method=self._capability.default_strategy.value,
                 source_package=self._capability.source_package,
                 extra=(("num_members", len(self._state.members)),),
             ),
         )
-
-
-def _method_metadata(
-    *, method: str, source_package: str, extra: MetadataItems = ()
-) -> MetadataItems:
-    """Compose the standard adapter metadata tuple (mirrors ``model.py``)."""
-    base: list[tuple[str, Any]] = [
-        ("method", method),
-        ("source_package", source_package),
-    ]
-    base.extend(extra)
-    return tuple(base)
 
 
 # ---------------------------------------------------------------------------
