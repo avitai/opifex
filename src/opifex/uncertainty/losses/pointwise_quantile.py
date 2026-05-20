@@ -50,12 +50,14 @@ class PointwiseQuantileLoss:
         reduction: Reduction across batch + channel dimensions —
             ``"sum"`` (default, matches reference) or ``"mean"``.
             Spatial dimensions are always averaged before reduction.
+
     """
 
     alpha: float
     reduction: Literal["sum", "mean"] = "sum"
 
     def __post_init__(self) -> None:
+        """Validate ``alpha ∈ (0, 1)`` and a supported ``reduction``."""
         if not (0.0 < self.alpha < 1.0):
             raise ValueError(
                 f"PointwiseQuantileLoss.alpha must lie strictly in (0, 1); got {self.alpha!r}."
@@ -82,6 +84,7 @@ class PointwiseQuantileLoss:
 
         Returns:
             Scalar loss (after the configured reduction).
+
         """
         quantile = 1.0 - self.alpha
         y_abs = jnp.abs(y)

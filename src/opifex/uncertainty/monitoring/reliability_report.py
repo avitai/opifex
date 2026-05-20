@@ -61,6 +61,7 @@ def build_reliability_report(
     Raises:
         ValueError: If no metric value is supplied (delegated to
             :meth:`UQReliabilityReport.validate`).
+
     """
     metadata = (
         ("model_name", inputs.model_name),

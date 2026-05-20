@@ -83,6 +83,7 @@ class BlackJAXBackend:
             negative.
         UnsupportedBackendError: When ``method`` is in the unsupported list
             or is otherwise unknown.
+
     """
 
     def __init__(
@@ -95,6 +96,7 @@ class BlackJAXBackend:
         method: str = "nuts",
         step_size: float = 0.1,
     ) -> None:
+        """Validate sampler configuration and store fields for ``sample``."""
         if n_samples <= 0:
             raise ValueError(f"n_samples must be positive; got {n_samples!r}.")
         if n_burnin < 0:
@@ -242,6 +244,7 @@ def _compute_ess(samples: jax.Array) -> jax.Array:
 
     Returns:
         Array of ESS values with shape ``samples.shape[1:]``.
+
     """
     n = samples.shape[0]
     if n < 4:

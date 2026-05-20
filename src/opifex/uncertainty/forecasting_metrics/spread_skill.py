@@ -37,6 +37,7 @@ def spread_skill_ratio(*, ensemble: jax.Array, targets: jax.Array) -> jax.Array:
         ``nan`` when the bias-corrected MSE is non-positive (which can
         happen for very small samples — the unbiased estimator is not
         guaranteed positive).
+
     """
     n_members = ensemble.shape[1]
     ensemble_mean = jnp.mean(ensemble, axis=1)

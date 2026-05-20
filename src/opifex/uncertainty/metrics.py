@@ -49,6 +49,7 @@ def predictive_entropy(*, ensemble_probabilities: jax.Array) -> jax.Array:
 
     Returns:
         Array of shape ``(*batch,)`` of per-sample predictive entropies.
+
     """
     mean_probs = jnp.mean(ensemble_probabilities, axis=0)
     safe_probs = mean_probs + _ENTROPY_EPS
@@ -69,6 +70,7 @@ def mutual_information(*, ensemble_probabilities: jax.Array) -> jax.Array:
     Returns:
         Array of shape ``(*batch,)`` of per-sample mutual-information
         scores.
+
     """
     safe = ensemble_probabilities + _ENTROPY_EPS
     member_entropies = -jnp.sum(ensemble_probabilities * jnp.log(safe), axis=-1)
@@ -100,6 +102,7 @@ def interval_score(
 
     Returns:
         Per-sample interval scores (same shape as ``targets``).
+
     """
     width = upper - lower
     below = jnp.maximum(0.0, lower - targets)

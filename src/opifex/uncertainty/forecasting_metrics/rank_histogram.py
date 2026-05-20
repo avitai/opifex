@@ -21,6 +21,7 @@ def rank_histogram(*, ensemble: jax.Array, targets: jax.Array) -> jax.Array:
 
     Returns:
         Integer counts of shape ``(n_members + 1,)``.
+
     """
     # Per-sample rank: number of ensemble members strictly less than the target.
     less = (ensemble < targets[:, None]).astype(jnp.int32)

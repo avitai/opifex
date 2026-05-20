@@ -29,7 +29,7 @@ class PhysicsInformedPriors(nnx.Module):
         penalty_weight: float = 1.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize physics-informed priors.
 
         Args:
@@ -38,6 +38,7 @@ class PhysicsInformedPriors(nnx.Module):
             constraint_weights: Optional custom weights for constraints
             penalty_weight: Weight for constraint violation penalties
             rngs: Random number generators
+
         """
         super().__init__()
 
@@ -62,6 +63,7 @@ class PhysicsInformedPriors(nnx.Module):
 
         Returns:
             Constrained parameters that satisfy physics laws
+
         """
         constrained_params = params
 
@@ -92,6 +94,7 @@ class PhysicsInformedPriors(nnx.Module):
 
         Returns:
             Constrained parameters
+
         """
         if law == "energy":
             # Energy conservation: ensure total energy is preserved
@@ -140,6 +143,7 @@ class PhysicsInformedPriors(nnx.Module):
 
         Returns:
             Constrained parameters
+
         """
         if condition == "dirichlet":
             return apply_dirichlet(params, boundary_value=0.0, weight=weight)
@@ -164,6 +168,7 @@ class PhysicsInformedPriors(nnx.Module):
 
         Returns:
             Violation penalty (higher = more violation) as a 0-d ``jax.Array``.
+
         """
         penalty = jnp.asarray(0.0)
         # Conservation law violations.
@@ -224,7 +229,7 @@ class ConservationLawPriors(nnx.Module):
         adaptive_weighting: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize conservation law priors for uncertainty estimation.
 
         Args:
@@ -233,6 +238,7 @@ class ConservationLawPriors(nnx.Module):
             prior_strength: Strength of physics constraints in prior
             adaptive_weighting: Whether to use adaptive constraint weighting
             rngs: Random number generators
+
         """
         super().__init__()
 
@@ -263,6 +269,7 @@ class ConservationLawPriors(nnx.Module):
 
         Returns:
             Physics-aware uncertainty estimates
+
         """
         # Start with model uncertainty
         physics_uncertainty = model_uncertainty
@@ -294,6 +301,7 @@ class ConservationLawPriors(nnx.Module):
 
         Returns:
             Violation magnitude for the law
+
         """
         if law == "energy":
             return self._evaluate_energy_violation(predictions, physics_state)
@@ -376,6 +384,7 @@ class ConservationLawPriors(nnx.Module):
 
         Returns:
             Physics-constrained parameter samples
+
         """
         constrained_params = base_params
 
@@ -399,6 +408,7 @@ class ConservationLawPriors(nnx.Module):
 
         Returns:
             Constrained parameters
+
         """
         if law == "energy":
             # Energy conservation: normalize to preserve energy
@@ -437,7 +447,7 @@ class DomainSpecificPriors(nnx.Module):
         correlation_structure: str = "independent",
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize domain-specific priors.
 
         Args:
@@ -446,6 +456,7 @@ class DomainSpecificPriors(nnx.Module):
             distribution_types: Distribution types for each parameter
             correlation_structure: Correlation structure between parameters
             rngs: Random number generators
+
         """
         super().__init__()
 
@@ -478,6 +489,7 @@ class DomainSpecificPriors(nnx.Module):
 
         Returns:
             Dictionary of parameter ranges
+
         """
         if domain == "quantum_chemistry":
             return {
@@ -518,6 +530,7 @@ class DomainSpecificPriors(nnx.Module):
 
         Returns:
             Dictionary of distribution types
+
         """
         if domain == "quantum_chemistry":
             return {
@@ -548,6 +561,7 @@ class DomainSpecificPriors(nnx.Module):
 
         Returns:
             Samples from domain-specific prior distribution
+
         """
         if parameter_type not in self.parameter_ranges:
             raise ValueError(f"Unknown parameter type: {parameter_type}")
@@ -592,6 +606,7 @@ class DomainSpecificPriors(nnx.Module):
 
         Returns:
             Log probability under domain prior
+
         """
         if parameter_type not in self.parameter_ranges:
             # Return very low probability for unknown parameters
@@ -642,7 +657,7 @@ class HierarchicalBayesianFramework(nnx.Module):
         correlation_structure: str = "exchangeable",
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize hierarchical Bayesian framework.
 
         Args:
@@ -651,6 +666,7 @@ class HierarchicalBayesianFramework(nnx.Module):
             uncertainty_propagation: How uncertainty propagates between levels
             correlation_structure: Correlation structure between levels
             rngs: Random number generators
+
         """
         super().__init__()
 
@@ -693,6 +709,7 @@ class HierarchicalBayesianFramework(nnx.Module):
 
         Returns:
             Hierarchical parameter samples
+
         """
         if level >= len(self.level_dimensions):
             raise ValueError(f"Level {level} exceeds hierarchy depth")
@@ -718,6 +735,7 @@ class HierarchicalBayesianFramework(nnx.Module):
 
         Returns:
             Hierarchically propagated uncertainty
+
         """
         propagated_uncertainty = base_uncertainty
 
@@ -744,6 +762,7 @@ class HierarchicalBayesianFramework(nnx.Module):
 
         Returns:
             Log probability under hierarchical model
+
         """
         if level >= len(self.level_dimensions):
             return jnp.full(values.shape[:-1], -1e6)
@@ -769,6 +788,7 @@ class HierarchicalBayesianFramework(nnx.Module):
 
         Returns:
             Adaptive weights for hierarchy levels
+
         """
         # Compute fit quality for each level
         fit_scores = []
@@ -804,7 +824,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
         correlation_aware: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize physics-aware uncertainty propagation.
 
         Args:
@@ -813,6 +833,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
             uncertainty_inflation: Factor to inflate uncertainty for safety
             correlation_aware: Whether to account for parameter correlations
             rngs: Random number generators
+
         """
         super().__init__()
 
@@ -840,6 +861,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
 
         Returns:
             Physics-constrained uncertainty propagation
+
         """
         # Handle broadcasting for uncertainty propagation
         # input_uncertainty: (batch,) or (batch, input_dim)
@@ -897,6 +919,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
 
         Returns:
             Constraint violation measure
+
         """
         if law == "energy":
             # Simple energy constraint: total energy should be preserved
@@ -930,6 +953,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
 
         Returns:
             Physics-informed confidence measures
+
         """
         # Base confidence from uncertainties
         base_confidence = 1.0 / (1.0 + uncertainties)
@@ -960,6 +984,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
 
         Returns:
             Tuple of (projected_parameters, adjusted_uncertainties)
+
         """
         projected_params = parameters
         adjusted_uncertainties = uncertainties

@@ -38,6 +38,7 @@ def pit_histogram(
 
     Returns:
         Integer counts per bin of shape ``(num_bins,)``.
+
     """
     std = jnp.sqrt(variances)
     pit_values = _norm_cdf(targets, loc=means, scale=std)
@@ -63,6 +64,7 @@ def ranked_probability_score(
 
     Returns:
         Per-sample RPS of shape ``(batch,)``. Lower is better.
+
     """
     num_classes = probabilities.shape[-1]
     cumulative_probs = jnp.cumsum(probabilities, axis=-1)
@@ -93,6 +95,7 @@ def event_reliability(
 
     Returns:
         Scalar reliability score in ``[0, 1]``. Lower is better.
+
     """
     n = predicted_event_probabilities.shape[0]
     bin_idx = jnp.minimum(
@@ -141,6 +144,7 @@ def ensemble_ranked_probability_score(
 
     Returns:
         Per-sample RPS of shape ``(batch,)``. Lower is better.
+
     """
     samples_per_threshold = samples[:, :, None] <= thresholds[None, None, :]
     pred_cdf = jnp.mean(samples_per_threshold.astype(jnp.float32), axis=1)
@@ -171,5 +175,6 @@ def ranked_probability_skill_score(
 
     Returns:
         Skill score, same shape as ``rps``. Higher is better.
+
     """
     return 1.0 - rps / rps_reference

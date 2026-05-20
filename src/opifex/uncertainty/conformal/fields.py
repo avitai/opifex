@@ -30,6 +30,8 @@ from opifex.uncertainty.types import PredictionInterval, require_fitted_state
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from opifex.uncertainty.conformal.exchangeability import ExchangeabilityReport
     from opifex.uncertainty.types import MetadataItems
 
@@ -146,6 +148,7 @@ class FieldSplitConformalRegressor:
                 provided and ``passes is False``, the fitted state records
                 ``assumption_status="exchangeability_failed"`` so downstream
                 consumers do not overclaim distribution-free coverage.
+
         """
         score_fn = _score_fn_for_norm(self.norm)
         scores = score_fn(predictions=predictions, targets=targets, spatial_axes=self.spatial_axes)
@@ -196,7 +199,9 @@ class FieldSplitConformalRegressor:
         )
 
 
-def _score_fn_for_norm(norm: str):
+def _score_fn_for_norm(
+    norm: str,
+) -> Callable[..., jax.Array]:
     """Map a norm identifier to its scoring kernel."""
     if norm == "L2":
         return field_l2_score

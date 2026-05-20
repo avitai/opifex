@@ -74,6 +74,7 @@ def lac_score(
 
     Returns:
         ``(batch,)`` per-sample LAC scores.
+
     """
     if validate:
         _validate_probabilities(probabilities)

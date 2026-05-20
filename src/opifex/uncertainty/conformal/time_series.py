@@ -121,6 +121,7 @@ def aci_update(
     Returns:
         Fresh :class:`AdaptiveConformalState` with the updated
         ``current_alpha``.
+
     """
     covered_int = jnp.asarray(was_covered, dtype=jnp.float32)
     uncovered_indicator = 1.0 - covered_int

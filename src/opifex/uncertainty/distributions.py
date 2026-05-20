@@ -74,6 +74,7 @@ def from_distribution(distribution: Any) -> PredictiveDistribution:
     Raises:
         TypeError: When the supplied object is not recognized as either an
             Artifex ``Distribution`` or a Distrax-like distribution.
+
     """
     if isinstance(distribution, Distribution):
         return ArtifexDistributionAdapter().from_distribution(distribution)

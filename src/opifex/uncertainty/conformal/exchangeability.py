@@ -84,6 +84,7 @@ def check_exchangeability(
     Returns:
         :class:`ExchangeabilityReport` with the p-value, pass flag, and
         metadata.
+
     """
     p_value = ks_two_sample_pvalue(
         calibration_scores=calibration_scores,

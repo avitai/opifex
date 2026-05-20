@@ -176,6 +176,7 @@ class UQCapability:
     notes: str = ""
 
     def __post_init__(self) -> None:
+        """Validate capability invariants (graph-adapter rationale, native-kernel flag)."""
         if self.requires_graph_adapter and not self.notes:
             raise ValueError(
                 "requires_graph_adapter=True must be paired with non-empty notes "

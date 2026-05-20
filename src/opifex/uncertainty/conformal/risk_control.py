@@ -62,6 +62,7 @@ class RiskControlConfig:
         monotonic: ``True`` when the loss is known to be monotonically
             non-increasing in the threshold; required for the RCPS
             finite-sample coverage guarantee.
+
     """
 
     alpha: float
@@ -139,6 +140,7 @@ def rcps_threshold_kernel(
         If no threshold is safe, returns ``thresholds[0]`` (conservative
         fallback) — the metadata-aware wrapper :func:`select_threshold_rcps`
         records this case.
+
     """
     n_samples = losses.shape[0]
     empirical = jnp.mean(losses, axis=0)  # (n_thresholds,)
@@ -176,6 +178,7 @@ def select_threshold_rcps(
         ``calibration_size``, ``num_thresholds``, ``monotonic``, and
         ``coverage_guarantee`` (``"finite_sample"`` when the loss is
         declared monotonic, ``"conservative"`` otherwise).
+
     """
     threshold = rcps_threshold_kernel(
         thresholds=thresholds,
@@ -238,6 +241,7 @@ def bootstrap_threshold_ci(
 
     Returns:
         ``(lower_bound, upper_bound)`` percentile bootstrap interval.
+
     """
     analyzer = StatisticalAnalyzer(bootstrap_resamples=bootstrap_resamples, seed=seed)
     return analyzer.bootstrap_ci(samples, confidence=confidence)

@@ -42,6 +42,7 @@ def picp(
 
     Raises:
         ValueError: If ``validate`` and any interval is inverted.
+
     """
     if validate and bool(jnp.any(upper < lower)):
         raise ValueError("picp: encountered upper < lower in input interval.")
@@ -58,6 +59,7 @@ def mpiw(*, lower: jax.Array, upper: jax.Array) -> jax.Array:
 
     Returns:
         Scalar mean of ``upper - lower`` over all elements.
+
     """
     return jnp.mean(upper - lower)
 
@@ -84,6 +86,7 @@ def regression_calibration_error(
 
     Returns:
         Scalar mean absolute miscalibration over the requested levels.
+
     """
     std = jnp.sqrt(variance)
     # Empirical CDF of the residual at each nominal level: F(target | mean, std).

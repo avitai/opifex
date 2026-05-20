@@ -28,6 +28,7 @@ def max_softmax_probability(*, probabilities: jax.Array) -> jax.Array:
 
     Returns:
         Per-sample max probability of shape ``(batch,)``.
+
     """
     return jnp.max(probabilities, axis=-1)
 
@@ -47,6 +48,7 @@ def fpr95(*, scores: jax.Array, labels: jax.Array) -> jax.Array:
 
     Returns:
         Scalar FPR in ``[0, 1]``. Lower is better.
+
     """
     labels_f = labels.astype(jnp.float32)
     # Sort by descending score.

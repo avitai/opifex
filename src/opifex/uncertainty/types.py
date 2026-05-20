@@ -246,6 +246,7 @@ class PredictiveDistribution:
             KeyError: when ``alpha`` is not in :attr:`quantiles`. The error
                 message lists the available alpha levels for actionable
                 debugging.
+
         """
         try:
             return self.quantiles[alpha]
@@ -261,6 +262,7 @@ class PredictiveDistribution:
 
         Raises:
             ValueError: when :attr:`variance` is ``None``.
+
         """
         if self.variance is None:
             raise ValueError("PredictiveDistribution.std() requires variance to be set.")

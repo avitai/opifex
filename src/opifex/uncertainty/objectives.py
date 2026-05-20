@@ -84,6 +84,7 @@ class ObjectiveConfig:
     reduction: str = "mean"
 
     def __post_init__(self) -> None:
+        """Validate that every loss weight is non-negative."""
         for name, value in (
             ("kl_weight", self.kl_weight),
             ("physics_weight", self.physics_weight),
@@ -187,6 +188,7 @@ class UQLossComponents:
 
         Raises:
             ValueError: If ``total`` is not finite.
+
         """
         if not bool(jnp.all(jnp.isfinite(self.total))):
             raise ValueError("UQLossComponents.total must be finite.")

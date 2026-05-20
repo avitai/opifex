@@ -56,6 +56,7 @@ def jackknife_plus_intervals(
         :class:`PredictionInterval` with ``method="jackknife_plus"`` and
         metadata recording ``method``, ``alpha``, ``loo_size``,
         ``coverage_guarantee="1-2*alpha"``.
+
     """
     if loo_val_predictions.shape[0] != loo_val_targets.shape[0]:
         raise ValueError(
@@ -108,6 +109,7 @@ def cv_plus_intervals(
         :class:`PredictionInterval` with ``method="cv_plus"`` and metadata
         recording ``method``, ``alpha``, ``num_folds``,
         ``calibration_size_per_fold``, ``coverage_guarantee="1-2*alpha"``.
+
     """
     if (
         fold_val_predictions.shape[0] != fold_val_targets.shape[0]
@@ -177,6 +179,7 @@ def weighted_conformal_quantile(
     Returns:
         Scalar weighted quantile threshold (always a score value from
         ``scores``).
+
     """
     normalized = weights / jnp.sum(weights)
     order = jnp.argsort(scores)

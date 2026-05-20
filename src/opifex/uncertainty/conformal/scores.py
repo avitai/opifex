@@ -47,6 +47,7 @@ def conformal_quantile(*, scores: jax.Array, alpha: float) -> jax.Array:
 
     Returns:
         Scalar quantile threshold using the ``'higher'`` rule.
+
     """
     n = scores.shape[0]
     rank = jnp.minimum(jnp.ceil((n + 1) * (1.0 - alpha)) / n, 1.0)

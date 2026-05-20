@@ -47,6 +47,7 @@ def residual_shift_diagnostic(
     Returns:
         :class:`ShiftReport` with the p-value, pass flag, and metadata
         recording method + sample sizes + status / assumption flags.
+
     """
     p_value = ks_two_sample_pvalue(
         calibration_scores=reference_residuals,

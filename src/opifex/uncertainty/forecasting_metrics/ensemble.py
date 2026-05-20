@@ -20,6 +20,7 @@ def energy_score(*, ensemble: jax.Array, targets: jax.Array) -> jax.Array:
 
     Returns:
         Array of shape ``(n_samples,)`` — per-sample energy scores.
+
     """
     forecast_error = jnp.linalg.norm(ensemble - targets[:, None, :], axis=-1)
     mean_forecast_error = jnp.mean(forecast_error, axis=1)

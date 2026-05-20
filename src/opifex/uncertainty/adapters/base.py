@@ -82,6 +82,7 @@ class DistributionAdapterSpec:
     resolution_order: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        """Validate that ``primary_target`` is contained in ``resolution_order``."""
         if not isinstance(self.resolution_order, tuple):
             raise TypeError("resolution_order must be a tuple.")
         if self.primary_target not in self.resolution_order:

@@ -88,6 +88,7 @@ class OperatorAdapterSpec:
     required_capabilities: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        """Validate that ``spectral_axes`` is a subset of ``spatial_axes``."""
         if self.spectral_axes is not None and not set(self.spectral_axes).issubset(
             set(self.spatial_axes)
         ):

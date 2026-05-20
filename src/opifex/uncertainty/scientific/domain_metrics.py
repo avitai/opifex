@@ -119,6 +119,7 @@ def parameter_credible_interval_coverage(
     Returns:
         :class:`DomainMetricSummary` with per-parameter coverage averaged
         across the parameter axis.
+
     """
     lower = jnp.quantile(posterior_samples, alpha / 2.0, axis=0)
     upper = jnp.quantile(posterior_samples, 1.0 - alpha / 2.0, axis=0)
@@ -233,6 +234,7 @@ def feasibility_coverage(
         constraint_thresholds: Shape ``(num_constraints,)``; a sample is
             feasible when ``outputs[i, j] <= constraint_thresholds[j]``
             for every ``j``.
+
     """
     per_constraint_ok = outputs <= constraint_thresholds
     sample_feasible = jnp.all(per_constraint_ok, axis=-1).astype(jnp.float32)

@@ -45,6 +45,7 @@ class UnsupportedBackendError(Exception):
     """
 
     def __init__(self, backend_name: str, *, reason: str) -> None:
+        """Record the unavailable backend and a caller-facing reason string."""
         super().__init__(f"Inference backend {backend_name!r} unavailable: {reason}")
         self.backend_name = backend_name
         self.reason = reason
@@ -136,6 +137,7 @@ class InferenceBackendSpec:
     source_package: str
 
     def __post_init__(self) -> None:
+        """Validate that ``sampler_names`` is the canonical hashable tuple."""
         if not isinstance(self.sampler_names, tuple):
             raise TypeError(
                 f"sampler_names must be a tuple, got {type(self.sampler_names).__name__}. "

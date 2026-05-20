@@ -48,6 +48,7 @@ def abstention_decision(
         :class:`AbstentionDecision` with named ``accepted_mask`` /
         ``rejected_mask`` arrays and metadata recording the threshold
         and per-class counts.
+
     """
     accepted_mask = confidences >= threshold
     rejected_mask = ~accepted_mask

@@ -102,6 +102,7 @@ def function_space_l2_coverage(
 
     Returns:
         Scalar coverage fraction in ``[0, 1]``.
+
     """
     residual = targets - predictions
     l2 = jnp.sqrt(jnp.mean(residual * residual, axis=spatial_axes))
@@ -128,6 +129,7 @@ def conservation_law_residual_summary(
 
     Returns:
         Per-sample L2 norms of shape ``(batch,)``.
+
     """
     return jnp.sqrt(jnp.mean(residual_field * residual_field, axis=spatial_axes))
 
@@ -155,6 +157,7 @@ def residual_uncertainty_alignment(
 
     Returns:
         Scalar Pearson correlation in ``[-1, 1]``.
+
     """
     x = predicted_uncertainty - jnp.mean(predicted_uncertainty)
     y = observed_residual_magnitude - jnp.mean(observed_residual_magnitude)

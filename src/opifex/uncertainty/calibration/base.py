@@ -59,6 +59,7 @@ def gaussian_nll(
 
     Raises:
         ValueError: If ``validate`` and any variance entry is non-positive.
+
     """
     if validate and bool(jnp.any(variance <= 0.0)):
         raise ValueError("gaussian_nll: variance must be strictly positive elementwise.")
@@ -80,6 +81,7 @@ def brier_score(
 
     Returns:
         Scalar Brier score, lower is better.
+
     """
     return _calibrax_brier_score(probabilities, targets)
 
@@ -90,7 +92,7 @@ def expected_calibration_error(
     targets: jax.Array,
     num_bins: int = 10,
 ) -> jax.Array:
-    """Expected calibration error — wraps the CalibraX equal-width-bin estimator.
+    """Compute expected calibration error via the CalibraX equal-width-bin estimator.
 
     Args:
         probabilities: Per-sample probabilities of the positive class.
@@ -99,6 +101,7 @@ def expected_calibration_error(
 
     Returns:
         Scalar ECE, lower is better.
+
     """
     return _calibrax_ece(probabilities, targets, num_bins=num_bins)
 
@@ -118,5 +121,6 @@ def pinball_loss(
 
     Returns:
         Mean pinball loss.
+
     """
     return _calibrax_quantile_loss(predictions, targets, quantile=quantile)

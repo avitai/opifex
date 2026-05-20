@@ -136,6 +136,7 @@ class LikelihoodSpec:
     supports_heteroscedastic: bool = False
 
     def __post_init__(self) -> None:
+        """Validate ``parameter_names`` shape and a non-empty ``name``."""
         if not isinstance(self.parameter_names, tuple):
             raise TypeError("parameter_names must be a tuple.")
         if not self.name:

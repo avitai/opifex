@@ -55,6 +55,7 @@ class BackendRouter:
     _families: dict[str, tuple[OptionalBackendSpec, ...]]
 
     def __init__(self) -> None:
+        """Wire the family → backend-spec routing table used by ``available``."""
         self._families = {
             "flow": ARTIFEX_FLOW_SPECS + OPTIONAL_FLOW_SPECS,
             "sampler": (_BLACKJAX_AS_OPTIONAL_SPEC, *OPTIONAL_SAMPLER_SPECS),

@@ -31,6 +31,7 @@ def risk_coverage_curve(
         ``(coverages, risks)`` where ``coverages = [1/n, 2/n, ..., 1.0]``
         and ``risks[k-1]`` is the mean error on the top-``k``
         highest-confidence samples.
+
     """
     n = confidences.shape[0]
     order = jnp.argsort(-confidences)

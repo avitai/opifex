@@ -99,6 +99,7 @@ class TemperatureScaling:
 
         Returns:
             Fitted :class:`TemperatureScalingState`.
+
         """
 
         def loss(log_temp: jax.Array) -> jax.Array:
@@ -128,6 +129,7 @@ class TemperatureScaling:
 
         Raises:
             RuntimeError: If called before ``fit`` (or ``with_state``).
+
         """
         state = require_fitted_state(self._state, surface="TemperatureScaling.predict")
         return _softmax_with_temperature(logits=logits, temperature=state.temperature)

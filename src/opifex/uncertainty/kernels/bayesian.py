@@ -50,6 +50,7 @@ def diagonal_gaussian_kl(
 
     Raises:
         ValueError: If ``prior_std`` is not strictly positive.
+
     """
     if prior_std <= 0.0:
         raise ValueError(f"prior_std must be > 0, got {prior_std}.")
@@ -78,6 +79,7 @@ def sample_diagonal_gaussian(
 
     Returns:
         A sample with the same shape as ``mean``.
+
     """
     std = jnp.exp(0.5 * logvar)
     noise = jax.random.normal(key, shape=mean.shape, dtype=mean.dtype)

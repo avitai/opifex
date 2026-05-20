@@ -202,7 +202,8 @@ class AleatoricUncertainty:
 class UncertaintyQuantifier:
     """Enhanced uncertainty quantification interface with integration capabilities."""
 
-    def __init__(self, num_samples: int = 100, confidence_level: float = 0.95):
+    def __init__(self, num_samples: int = 100, confidence_level: float = 0.95) -> None:
+        """Record Monte-Carlo budget and confidence level used by the quantifier."""
         self.num_samples = num_samples
         self.confidence_level = confidence_level
 
@@ -212,7 +213,6 @@ class UncertaintyQuantifier:
         aleatoric_variance: Float[Array, "samples batch output"] | None = None,
     ) -> UncertaintyComponents:
         """Decompose total uncertainty into epistemic and aleatoric components."""
-
         # Epistemic uncertainty (model uncertainty)
         epistemic = EpistemicUncertainty.compute_variance(predictions)
 
@@ -236,7 +236,6 @@ class UncertaintyQuantifier:
         inputs: Float[Array, "batch input_dim"] | None = None,
     ) -> UncertaintyComponents:
         """Enhanced uncertainty decomposition with additional context."""
-
         # Basic epistemic uncertainty
         epistemic = EpistemicUncertainty.compute_variance(predictions)
 
@@ -314,7 +313,6 @@ class UncertaintyQuantifier:
         true_values: Float[Array, "batch output"] | None = None,
     ) -> UncertaintyIntegrationResults:
         """Propagate uncertainty through the entire prediction pipeline."""
-
         # Compute mean predictions
         mean_predictions = jnp.mean(predictions, axis=0)
 
@@ -361,7 +359,6 @@ class UncertaintyQuantifier:
         true_values: Float[Array, "batch output"],
     ) -> CalibrationMetrics:
         """Assess how well uncertainties predict actual errors."""
-
         # Compute prediction errors
         errors = jnp.abs(predictions - true_values)
 
@@ -541,11 +538,12 @@ class EnhancedUncertaintyComponents:
 class EnsembleEpistemicUncertainty:
     """Ensemble-based epistemic uncertainty estimation."""
 
-    def __init__(self, num_models: int):
+    def __init__(self, num_models: int) -> None:
         """Initialize ensemble uncertainty estimator.
 
         Args:
             num_models: Number of models in the ensemble
+
         """
         self.num_models = num_models
         self.models: list = []
@@ -555,6 +553,7 @@ class EnsembleEpistemicUncertainty:
 
         Args:
             model: Neural network model to add to ensemble
+
         """
         if len(self.models) >= self.num_models:
             raise ValueError(f"Ensemble already has {self.num_models} models")
@@ -573,6 +572,7 @@ class EnsembleEpistemicUncertainty:
 
         Returns:
             Aggregated predictions
+
         """
         if method == "mean":
             return jnp.mean(ensemble_predictions, axis=0)
@@ -594,6 +594,7 @@ class EnsembleEpistemicUncertainty:
 
         Returns:
             Epistemic uncertainty (variance across models)
+
         """
         return jnp.var(ensemble_predictions, axis=0)
 
@@ -607,6 +608,7 @@ class EnsembleEpistemicUncertainty:
 
         Returns:
             Disagreement metric (pairwise prediction variance)
+
         """
         # Compute pairwise differences
         models, _, _ = ensemble_predictions.shape
@@ -643,13 +645,16 @@ class DistributionalAleatoricUncertainty:
 
         Returns:
             Samples from the distributional output
+
         """
         std = jnp.exp(log_std)
         eps = jax.random.normal(rngs.sample(), (num_samples, *mean.shape))
         return mean + std * eps
 
     def compute_gaussian_uncertainty(
-        self, mean: Float[Array, "batch output"], log_std: Float[Array, "batch output"]
+        self,
+        mean: Float[Array, "batch output"],
+        log_std: Float[Array, "batch output"],
     ) -> Float[Array, "batch output"]:
         """Compute uncertainty from Gaussian distributional parameters.
 
@@ -659,6 +664,7 @@ class DistributionalAleatoricUncertainty:
 
         Returns:
             Aleatoric uncertainty (variance)
+
         """
         return jnp.exp(2 * log_std)
 
@@ -689,6 +695,7 @@ class DistributionalAleatoricUncertainty:
 
         Returns:
             Total uncertainty from mixture model
+
         """
         # Compute weighted mean
         weighted_mean = jnp.sum(mixture_weights[..., None] * means, axis=1)
@@ -729,6 +736,7 @@ class MultiSourceUncertaintyAggregator:
 
         Returns:
             Total aggregated uncertainty
+
         """
         if method == "variance_sum":
             # Sum variances (assumes independence)
@@ -780,6 +788,7 @@ class MultiSourceUncertaintyAggregator:
 
         Returns:
             Dictionary mapping source names to uncertainty values
+
         """
         breakdown = {}
 
@@ -881,7 +890,7 @@ class EnhancedUncertaintyQuantifier:
         distributional_output: bool = True,
         multi_source_aggregation: bool = True,
         confidence_level: float = 0.95,
-    ):
+    ) -> None:
         """Initialize enhanced uncertainty quantifier.
 
         Args:
@@ -889,6 +898,7 @@ class EnhancedUncertaintyQuantifier:
             distributional_output: Whether to use distributional outputs
             multi_source_aggregation: Whether to aggregate multiple uncertainty sources
             confidence_level: Confidence level for intervals
+
         """
         self.ensemble_size = ensemble_size
         self.distributional_output = distributional_output
@@ -918,6 +928,7 @@ class EnhancedUncertaintyQuantifier:
 
         Returns:
             Enhanced uncertainty components with detailed breakdown
+
         """
         # Compute ensemble epistemic uncertainty
         epistemic_ensemble = self.ensemble_estimator.compute_epistemic_uncertainty(

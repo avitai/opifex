@@ -27,6 +27,7 @@ def crps(*, predictions: jax.Array, targets: jax.Array) -> jax.Array:
 
     Returns:
         Scalar mean CRPS. Lower is better.
+
     """
     forecast_error = jnp.mean(jnp.abs(predictions - targets[:, None]), axis=1)
     pairwise = jnp.abs(predictions[:, :, None] - predictions[:, None, :])
