@@ -23,6 +23,7 @@ from opifex.uncertainty.scientific.fields import (
     residual_uncertainty_alignment,
     spatial_calibration_error,
 )
+from opifex.uncertainty.scientific.solutions import SolutionDistribution
 
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "UNSUPPORTED_PAC_BAYES",
     "DomainMetricSummary",
     "FieldMetadata",
+    "SolutionDistribution",
     "boundary_condition_coverage",
     "chemical_accuracy_coverage",
     "conservation_law_residual_summary",

@@ -206,6 +206,43 @@ with optional `samples`, `covariance`, `epistemic`, `aleatoric`,
 `total_uncertainty`, `quantiles`, `interval`, and `prediction_set` fields, plus
 tuple-of-pairs `metadata`.
 
+### `SolutionDistribution` (solver-side, per-field)
+
+```python
+import jax.numpy as jnp
+from opifex.uncertainty.scientific import SolutionDistribution
+
+sd = SolutionDistribution(
+    mean={"u": jnp.zeros((64,)), "p": jnp.ones((64,))},
+    epistemic={"u": jnp.full((64,), 0.1), "p": jnp.full((64,), 0.2)},
+    aleatoric={"u": jnp.full((64,), 0.3), "p": jnp.full((64,), 0.4)},
+    total_uncertainty={"u": jnp.full((64,), 0.4), "p": jnp.full((64,), 0.6)},
+    metadata=(
+        ("uncertainty_sources", ("numerical", "parameter")),
+        ("spatial_axes", (0,)),
+        ("function_space_norm", "L2"),
+        ("covariance_form", "diag"),
+    ),
+)
+sd.validate()  # public preflight; never called during pytree unflatten
+
+# Project a single field back onto the canonical PredictiveDistribution
+# contract so downstream calibration / conformal code consumes either
+# container without solver-specific awareness.
+pd_u = sd.as_predictive_distribution("u")
+```
+
+`SolutionDistribution` is the multi-field solver counterpart of
+`PredictiveDistribution`. Every uncertainty leaf (`samples`, `variance`,
+`covariance`, `epistemic`, `aleatoric`, `total_uncertainty`) is a
+`dict[str, jax.Array]` keyed by field name; `metadata` is static aux_data and
+must declare a tuple-of-strings `uncertainty_sources` drawn from
+``{"numerical", "parameter", "observation", "model_discrepancy", "ensemble",
+"calibration"}``. The same `_VARIANCE_RTOL` / `_VARIANCE_ATOL` tolerances as
+`PredictiveDistribution` apply to per-field variance additivity, so a
+`SolutionDistribution` round-tripped through `as_predictive_distribution(field)`
+does not flap downstream additivity checks.
+
 ## Objectives
 
 ```python
