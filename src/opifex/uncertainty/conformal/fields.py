@@ -11,12 +11,8 @@ The :class:`FieldSplitConformalRegressor` exposes the standard
 :class:`opifex.uncertainty.types.PredictionInterval` so downstream code
 consumes a single typed surface.
 
-TODO(phase5-task-5.2): The :class:`_FieldConformalMetadata` dataclass in
-this module is the Phase 4 temporary location of the canonical field
-metadata schema. Phase 5 Task 5.2 migrates it into
-``opifex.uncertainty.scientific.fields.FieldMetadata`` and deletes this
-copy. Every Phase 4 use site of ``_FieldConformalMetadata`` carries the
-same tag so the Phase 5 grep finds them without ambiguity.
+Field metadata is sourced from :class:`opifex.uncertainty.scientific.fields.FieldMetadata`
+(the canonical Pattern-A schema).
 """
 
 from __future__ import annotations
@@ -29,6 +25,7 @@ import jax.numpy as jnp
 from flax import struct
 
 from opifex.uncertainty.conformal.scores import conformal_quantile
+from opifex.uncertainty.scientific.fields import FieldMetadata
 from opifex.uncertainty.types import PredictionInterval
 
 
@@ -39,30 +36,6 @@ if TYPE_CHECKING:
 
 FieldNorm = Literal["L2", "Linf", "H1"]
 _VALID_NORMS: frozenset[str] = frozenset({"L2", "Linf", "H1"})
-
-
-# ---------------------------------------------------------------------------
-# Field metadata (Phase 4 temporary; Phase 5 Task 5.2 migrates this)
-# ---------------------------------------------------------------------------
-
-
-# TODO(phase5-task-5.2): migrate to scientific.fields.FieldMetadata
-@dc.dataclass(frozen=True, slots=True, kw_only=True)
-class _FieldConformalMetadata:
-    """Minimal field-conformal metadata schema.
-
-    Phase 4 temporary location; Phase 5 Task 5.2 migrates this into
-    :mod:`opifex.uncertainty.scientific.fields` as ``FieldMetadata`` and
-    deletes this copy.
-    """
-
-    grid_axes: tuple[str, ...]
-    time_axis: str | None
-    spatial_axes: tuple[int, ...]
-    norm: str
-    alpha: float
-    calibration_size: int
-    assumption_status: str
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +154,7 @@ class FieldSplitConformalRegressor:
             assumption_status = "exchangeable_assumed"
         else:
             assumption_status = "exchangeability_failed"
-        # TODO(phase5-task-5.2): migrate to scientific.fields.FieldMetadata
-        field_md = _FieldConformalMetadata(
+        field_md = FieldMetadata(
             grid_axes=(),
             time_axis=None,
             spatial_axes=self.spatial_axes,

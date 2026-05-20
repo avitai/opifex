@@ -8,14 +8,11 @@ Score functions:
 
 Returned metadata MUST include: ``grid_axes``, ``time_axis``,
 ``spatial_axes``, ``norm``, ``alpha``, ``calibration_size``,
-``assumption_status``. Phase 5 Task 5.2 migrates this minimal metadata
-dataclass into ``opifex.uncertainty.scientific.fields`` — every use site
-carries a ``TODO(phase5-task-5.2)`` tag.
+``assumption_status``. The metadata schema lives in
+:class:`opifex.uncertainty.scientific.fields.FieldMetadata`.
 """
 
 from __future__ import annotations
-
-import dataclasses as dc
 
 import jax
 import jax.numpy as jnp
@@ -127,36 +124,6 @@ def test_field_calibrator_predict_before_fit_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Metadata dataclass and Phase 5 handoff TODO
-# ---------------------------------------------------------------------------
-
-
-def test_field_conformal_metadata_is_frozen_pattern_a_dataclass() -> None:
-    fields = _import_fields()
-    md = fields._FieldConformalMetadata(
-        grid_axes=("x", "y"),
-        time_axis=None,
-        spatial_axes=(-2, -1),
-        norm="L2",
-        alpha=0.1,
-        calibration_size=256,
-        assumption_status="exchangeable",
-    )
-    assert md.norm == "L2"
-    with pytest.raises(dc.FrozenInstanceError):
-        md.norm = "Linf"  # type: ignore[misc]
-
-
-def test_phase4_field_module_carries_phase5_migration_todo() -> None:
-    """Every use site of the temporary _FieldConformalMetadata dataclass
-    must carry the canonical TODO tag so the Phase 5 grep finds it."""
-    import inspect
-
-    fields = _import_fields()
-    source = inspect.getsource(fields)
-    assert "TODO(phase5-task-5.2)" in source
-
-
 # ---------------------------------------------------------------------------
 # Failed-exchangeability propagation
 # ---------------------------------------------------------------------------
