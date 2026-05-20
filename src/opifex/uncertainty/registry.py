@@ -42,11 +42,19 @@ class DefaultStrategy(StrEnum):
     * ``BAYESIAN`` — Native Bayesian posterior over parameters (e.g., MCMC).
     * ``VARIATIONAL`` — Variational inference (mean-field VI / SVI) ELBO objective.
     * ``ENSEMBLE`` — Deep ensemble of independently trained members.
+    * ``SNAPSHOT_ENSEMBLE`` — Cyclic-LR snapshot ensemble of one training run.
+    * ``BATCH_ENSEMBLE`` — Wen et al. BatchEnsemble (rank-1 perturbations).
     * ``MC_DROPOUT`` — Approximate Bayesian inference via test-time dropout sampling.
+    * ``BAYESIAN_LAST_LAYER`` — Bayesian-only on the final layer of an otherwise
+      deterministic backbone.
     * ``VBLL`` — Variational Bayesian Last Layer (probabilistic last layer only).
     * ``LAPLACE`` — Laplace approximation of the posterior around a MAP/MLE point.
     * ``SNGP`` — Spectral-Normalized Neural Gaussian Process last layer.
     * ``SWAG`` — Stochastic Weight Averaging Gaussian (posterior over weights).
+    * ``DUE`` — Deterministic Uncertainty Estimation (deep kernel + spectral
+      normalization).
+    * ``TEST_TIME_AUGMENTATION`` — TTA averaging predictions across input
+      augmentations.
     * ``CONFORMAL`` — Conformal prediction sets/intervals with finite-sample coverage.
     * ``CALIBRATION`` — Post-hoc calibrator (temperature / Platt / isotonic / beta).
     * ``LIKELIHOOD_FREE_SBI`` — Simulation-based inference (NPE / NLE / NRE).
@@ -63,11 +71,16 @@ class DefaultStrategy(StrEnum):
     BAYESIAN = "bayesian"
     VARIATIONAL = "variational"
     ENSEMBLE = "ensemble"
+    SNAPSHOT_ENSEMBLE = "snapshot_ensemble"
+    BATCH_ENSEMBLE = "batch_ensemble"
     MC_DROPOUT = "mc_dropout"
+    BAYESIAN_LAST_LAYER = "bayesian_last_layer"
     VBLL = "vbll"
     LAPLACE = "laplace"
     SNGP = "sngp"
     SWAG = "swag"
+    DUE = "due"
+    TEST_TIME_AUGMENTATION = "test_time_augmentation"
     CONFORMAL = "conformal"
     CALIBRATION = "calibration"
     LIKELIHOOD_FREE_SBI = "likelihood_free_sbi"
