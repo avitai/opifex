@@ -40,6 +40,14 @@ from opifex.uncertainty.conformal.regression import (
     SplitConformalRegressor,
     SplitConformalState,
 )
+from opifex.uncertainty.conformal.risk_control import (
+    bootstrap_threshold_ci,
+    hoeffding_upper_bound,
+    rcps_threshold_kernel,
+    RiskControlConfig,
+    RiskControllerState,
+    select_threshold_rcps,
+)
 from opifex.uncertainty.conformal.scores import (
     absolute_residual_score,
     conformal_quantile,
@@ -56,15 +64,21 @@ __all__ = [
     "GroupedSplitConformalState",
     "LACConformalClassifier",
     "LACConformalState",
+    "RiskControlConfig",
+    "RiskControllerState",
     "SplitConformalRegressor",
     "SplitConformalState",
     "absolute_residual_score",
     "aps_prediction_set",
     "aps_score",
+    "bootstrap_threshold_ci",
     "check_exchangeability",
     "conformal_quantile",
     "cqr_score",
+    "hoeffding_upper_bound",
     "ks_two_sample_pvalue",
     "lac_score",
     "raps_score",
+    "rcps_threshold_kernel",
+    "select_threshold_rcps",
 ]
