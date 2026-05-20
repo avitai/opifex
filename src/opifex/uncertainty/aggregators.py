@@ -335,7 +335,10 @@ class UncertaintyQuantifier:
                 mean_predictions, uncertainty_components.total, true_values
             )
         else:
-            # Create dummy calibration metrics
+            # No true_values supplied — emit a zero-filled placeholder so the
+            # downstream UncertaintyIntegrationResults still type-checks; the
+            # zeros are not calibration claims, they are sentinel values
+            # downstream consumers must check before using.
             calibration_metrics = CalibrationMetrics(
                 expected_calibration_error=0.0,
                 maximum_calibration_error=0.0,

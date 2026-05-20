@@ -80,11 +80,13 @@ class MultiFidelityPINN(nnx.Module):
             high_fidelity_dims: Hidden dimensions for high fidelity network
             fusion_dims: Hidden dimensions for fusion network
             config: Multi-fidelity configuration (optional, uses defaults if None)
-            rngs: Random number generator state
+            rngs: Caller-owned ``nnx.Rngs`` bundle; required (no hidden fallback).
         """
-        # Handle rngs
         if rngs is None:
-            rngs = nnx.Rngs(0)
+            raise ValueError(
+                "rngs is required; pass a caller-owned nnx.Rngs bundle to "
+                "avoid hidden fixed-seed Monte Carlo paths."
+            )
         # Persist the RNG bundle so forward passes can pass it through to
         # BayesianLinear sampling without a per-call argument from callers.
         self.rngs = rngs
@@ -465,9 +467,11 @@ class ProbabilisticPINN(nnx.Module):
         self.uncertainty_weight = uncertainty_weight
         self.deterministic = deterministic
 
-        # Handle rngs
         if rngs is None:
-            rngs = nnx.Rngs(0)
+            raise ValueError(
+                "rngs is required; pass a caller-owned nnx.Rngs bundle to "
+                "avoid hidden fixed-seed Monte Carlo paths."
+            )
         self.rngs = rngs
 
         # Build network
@@ -977,7 +981,10 @@ def create_multifidelity_pinn(
         Configured MultiFidelityPINN instance
     """
     if rngs is None:
-        rngs = nnx.Rngs(0)
+        raise ValueError(
+            "rngs is required; pass a caller-owned nnx.Rngs bundle so the "
+            "factory does not seed a hidden fixed-key Monte Carlo path."
+        )
 
     # Create configuration from dict if provided
     if config_dict is not None:
@@ -1011,7 +1018,10 @@ def create_probabilistic_pinn(
     if hidden_layers is None:
         hidden_layers = [64, 64, 64]
     if rngs is None:
-        rngs = nnx.Rngs(0)
+        raise ValueError(
+            "rngs is required; pass a caller-owned nnx.Rngs bundle so the "
+            "factory does not seed a hidden fixed-key Monte Carlo path."
+        )
 
     return ProbabilisticPINN(
         input_dim=input_dim,

@@ -266,3 +266,45 @@ def test_blackjax_backend_no_direct_blackjax_import() -> None:
         "legitimate blackjax import lives in artifex's wrapper. Offending: "
         f"{forbidden}"
     )
+
+
+def test_blackjax_backend_module_re_exports_class_sampler_api() -> None:
+    """The audit-mandated Artifex types must be reachable through the
+    opifex backend module so callers can type-annotate over them without a
+    direct Artifex import (parallel-state-container avoidance)."""
+    import opifex.uncertainty.inference_backends.blackjax as backend_mod
+
+    for name in (
+        "BlackJAXHMC",
+        "BlackJAXNUTS",
+        "BlackJAXMALA",
+        "BlackJAXSamplerState",
+        "SamplingAlgorithm",
+    ):
+        assert hasattr(backend_mod, name), (
+            f"{name!r} must be re-exported from opifex.uncertainty.inference_backends.blackjax"
+        )
+
+
+def test_blackjax_sampler_state_round_trips_through_nnx_split_merge() -> None:
+    """The Phase 1 contract requires NNX-state-carrying backends to round-trip
+    sampler state through ``nnx.split``/``nnx.merge``. The Artifex
+    ``BlackJAXSamplerState`` is a NamedTuple of pure ``jax.Array`` leaves, so
+    pytree flatten/unflatten preserves field-for-field equivalence — the
+    contract this test pins."""
+    from artifex.generative_models.core.sampling.blackjax_samplers import (
+        BlackJAXSamplerState,
+    )
+
+    state = BlackJAXSamplerState(
+        x=jnp.array([0.0, 1.0, 2.0]),
+        sampler_state=jnp.array([3.0, 4.0]),
+        key=jax.random.key(0),
+    )
+    leaves, treedef = jax.tree_util.tree_flatten(state)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert isinstance(rebuilt, BlackJAXSamplerState)
+    assert jnp.allclose(rebuilt.x, state.x)
+    assert jnp.allclose(rebuilt.sampler_state, state.sampler_state)
+    # PRNG keys compare via array equality after unflattening.
+    assert jnp.array_equal(rebuilt.key, state.key)

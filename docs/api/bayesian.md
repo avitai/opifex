@@ -9,256 +9,13 @@ the capability registry.
 
 ## Overview
 
-The Bayesian package implements advanced probabilistic methods:
+The Bayesian package implements probabilistic methods:
 
-- **Advanced Uncertainty Quantification**: Multi-source uncertainty aggregation with adaptive weighting
-- **Enhanced Epistemic Uncertainty**: Ensemble disagreement methods and predictive diversity computation
-- **Advanced Aleatoric Uncertainty**: Distributional uncertainty for multiple distribution types
-- **Uncertainty Quality Assessment**: Coverage probability, calibration metrics, and reliability estimation
-- **Bayesian Inference**: MCMC sampling with BlackJAX integration
-- **Calibration Tools**: Temperature scaling, isotonic regression, conformal prediction
-- **Conformal Prediction**: Split conformal method with `ConformalPredictor` for calibrated prediction intervals without distributional assumptions
-
-## Advanced Uncertainty Quantification
-
-### AdvancedUncertaintyAggregator
-
-```python
-class AdvancedUncertaintyAggregator:
-    """Advanced uncertainty aggregation with multiple sources and weighting strategies."""
-```
-
-#### Methods
-
-##### `weighted_uncertainty_aggregation(uncertainty_sources, weights=None, aggregation_method="weighted_variance") -> Array`
-
-Aggregate uncertainties from multiple sources with optional weighting.
-
-```python
-@staticmethod
-def weighted_uncertainty_aggregation(
-    uncertainty_sources: list[Float[Array, "batch output"]],
-    weights: Float[Array, "sources"] | None = None,
-    aggregation_method: str = "weighted_variance",
-) -> Float[Array, "batch output"]:
-    """
-    Aggregate uncertainties from multiple sources with optional weighting.
-
-    Args:
-        uncertainty_sources: List of uncertainty estimates from different sources
-        weights: Optional weights for each source (normalized automatically)
-        aggregation_method: Method for aggregation
-            - "weighted_variance": Weighted sum of variances
-            - "weighted_mean": Simple weighted average
-            - "max_weighted": Maximum weighted uncertainty
-            - "robust_weighted": Robust aggregation using median
-
-    Returns:
-        Aggregated uncertainty estimates
-
-    Example:
-        >>> aggregator = AdvancedUncertaintyAggregator()
-        >>> sources = [ensemble_uncertainty, gaussian_uncertainty]
-        >>> aggregated = aggregator.weighted_uncertainty_aggregation(
-        ...     sources, aggregation_method="weighted_variance"
-        ... )
-    """
-```
-
-##### `adaptive_weighting(uncertainty_sources, reliability_scores=None, adaptation_method="reliability_based") -> Array`
-
-Compute adaptive weights for uncertainty sources based on reliability.
-
-```python
-@staticmethod
-def adaptive_weighting(
-    uncertainty_sources: list[Float[Array, "batch output"]],
-    reliability_scores: list[Float[Array, "batch"]] | None = None,
-    adaptation_method: str = "reliability_based",
-) -> Float[Array, "sources batch"]:
-    """
-    Compute adaptive weights for uncertainty sources based on reliability.
-
-    Args:
-        uncertainty_sources: List of uncertainty estimates
-        reliability_scores: Optional reliability scores for each source
-        adaptation_method: Method for computing adaptive weights
-            - "reliability_based": Weight by reliability scores
-            - "inverse_variance": Weight inversely proportional to variance
-            - "entropy_based": Weight based on predictive entropy
-            - "uniform": Uniform weighting
-
-    Returns:
-        Adaptive weights for each source and batch element
-
-    Example:
-        >>> reliability_scores = [
-        ...     jnp.ones((100,)) * 0.9,  # High reliability
-        ...     jnp.ones((100,)) * 0.7   # Medium reliability
-        ... ]
-        >>> weights = aggregator.adaptive_weighting(
-        ...     sources, reliability_scores, "reliability_based"
-        ... )
-    """
-```
-
-##### `uncertainty_quality_assessment(predictions, uncertainties, true_values=None) -> dict`
-
-Assess the quality of uncertainty estimates.
-
-```python
-@staticmethod
-def uncertainty_quality_assessment(
-    predictions: Float[Array, "batch output"],
-    uncertainties: Float[Array, "batch output"],
-    true_values: Float[Array, "batch output"] | None = None,
-) -> dict[str, float]:
-    """
-    Assess the quality of uncertainty estimates.
-
-    Args:
-        predictions: Model predictions
-        uncertainties: Uncertainty estimates
-        true_values: Optional ground truth values
-
-    Returns:
-        Dictionary containing quality metrics:
-        - coverage_probability: Fraction of true values within prediction intervals
-        - mean_interval_width: Average width of prediction intervals
-        - calibration_error: Normalized prediction errors
-        - mean_uncertainty: Average uncertainty magnitude
-        - uncertainty_std: Standard deviation of uncertainties
-        - uncertainty_range: Range of uncertainty values
-        - mean_confidence: Average prediction confidence
-
-    Example:
-        >>> quality = aggregator.uncertainty_quality_assessment(
-        ...     predictions, uncertainties, true_values
-        ... )
-        >>> print(f"Coverage: {quality['coverage_probability']:.3f}")
-    """
-```
-
-### AdvancedEpistemicUncertainty
-
-```python
-class AdvancedEpistemicUncertainty:
-    """Advanced epistemic uncertainty estimation methods."""
-```
-
-#### Methods
-
-##### `compute_ensemble_disagreement(ensemble_predictions, aggregation_method="variance") -> Array`
-
-Compute epistemic uncertainty from ensemble disagreement.
-
-```python
-@staticmethod
-def compute_ensemble_disagreement(
-    ensemble_predictions: Float[Array, "models batch output"],
-    aggregation_method: str = "variance",
-) -> Float[Array, "batch output"]:
-    """
-    Compute epistemic uncertainty from ensemble disagreement.
-
-    Args:
-        ensemble_predictions: Predictions from multiple models
-        aggregation_method: Method for computing disagreement
-            - "variance": Variance across ensemble
-            - "std": Standard deviation across ensemble
-            - "range": Range (max - min) across ensemble
-            - "iqr": Interquartile range across ensemble
-
-    Returns:
-        Epistemic uncertainty estimates
-
-    Example:
-        >>> epistemic = AdvancedEpistemicUncertainty()
-        >>> ensemble_preds = jax.random.normal(key, (5, 100, 1))
-        >>> uncertainty = epistemic.compute_ensemble_disagreement(
-        ...     ensemble_preds, "variance"
-        ... )
-    """
-```
-
-##### `compute_predictive_diversity(ensemble_predictions, diversity_metric="pairwise_distance") -> Array`
-
-Compute predictive diversity as a measure of epistemic uncertainty.
-
-```python
-@staticmethod
-def compute_predictive_diversity(
-    ensemble_predictions: Float[Array, "models batch output"],
-    diversity_metric: str = "pairwise_distance",
-) -> Float[Array, "batch output"]:
-    """
-    Compute predictive diversity as a measure of epistemic uncertainty.
-
-    Args:
-        ensemble_predictions: Predictions from multiple models
-        diversity_metric: Metric for computing diversity
-            - "pairwise_distance": Average pairwise L2 distance
-            - "cosine_diversity": Average cosine diversity
-
-    Returns:
-        Predictive diversity estimates
-
-    Example:
-        >>> diversity = epistemic.compute_predictive_diversity(
-        ...     ensemble_preds, "pairwise_distance"
-        ... )
-    """
-```
-
-### AdvancedAleatoricUncertainty
-
-```python
-class AdvancedAleatoricUncertainty:
-    """Advanced aleatoric uncertainty estimation methods."""
-```
-
-#### Methods
-
-##### `distributional_uncertainty(distribution_params, distribution_type="gaussian") -> Array`
-
-Compute aleatoric uncertainty from distributional outputs.
-
-```python
-@staticmethod
-def distributional_uncertainty(
-    distribution_params: dict[str, Float[Array, "batch ..."]],
-    distribution_type: str = "gaussian",
-) -> Float[Array, "batch output"]:
-    """
-    Compute aleatoric uncertainty from distributional outputs.
-
-    Args:
-        distribution_params: Parameters of the output distribution
-        distribution_type: Type of distribution
-            - "gaussian": Requires 'log_std', 'std', or 'variance'
-            - "laplace": Requires 'scale' parameter
-            - "mixture": Requires 'weights', 'means', 'variances'
-
-    Returns:
-        Aleatoric uncertainty estimates
-
-    Example:
-        >>> aleatoric = AdvancedAleatoricUncertainty()
-        >>> gaussian_params = {"log_std": log_std_predictions}
-        >>> uncertainty = aleatoric.distributional_uncertainty(
-        ...     gaussian_params, "gaussian"
-        ... )
-
-        >>> mixture_params = {
-        ...     "weights": mixture_weights,
-        ...     "means": mixture_means,
-        ...     "variances": mixture_variances
-        ... }
-        >>> mixture_uncertainty = aleatoric.distributional_uncertainty(
-        ...     mixture_params, "mixture"
-        ... )
-    """
-```
+- **Uncertainty Quantification**: Epistemic / aleatoric decomposition via `EpistemicUncertainty` and `DistributionalAleatoricUncertainty`, with multi-source fusion through `MultiSourceUncertaintyAggregator`
+- **Uncertainty-Quality Assessment**: Coverage probability, calibration metrics, and reliability summaries via `MultiSourceUncertaintyAggregator.assess_uncertainty_quality`
+- **Bayesian Inference**: MCMC sampling through `BlackJAXBackend` (HMC / NUTS / MALA) over Artifex
+- **Calibration Tools**: `TemperatureScaling` (pure value-object form in `opifex.uncertainty.calibration`), plus regression-side `gaussian_nll` / `picp` / `mpiw` / `regression_calibration_error`
+- **Conformal Prediction**: Split conformal regression (`SplitConformalRegressor`), CQR, classification sets (LAC / APS / RAPS), and field / function-space conformal — all under `opifex.uncertainty.conformal`
 
 ## Enhanced Calibration Framework
 
@@ -533,65 +290,53 @@ class EnhancedUncertaintyComponents:
 import jax
 import jax.numpy as jnp
 from opifex.uncertainty.aggregators import (
-    AdvancedUncertaintyAggregator,
-    AdvancedEpistemicUncertainty,
-    AdvancedAleatoricUncertainty,
+    EpistemicUncertainty,
+    DistributionalAleatoricUncertainty,
+    MultiSourceUncertaintyAggregator,
 )
 
 # Generate ensemble predictions
-key = jax.random.PRNGKey(42)
+key = jax.random.key(0)
 ensemble_predictions = jax.random.normal(key, (5, 100, 1))
 
-# Epistemic uncertainty analysis
-epistemic_analyzer = AdvancedEpistemicUncertainty()
-epistemic_uncertainty = epistemic_analyzer.compute_ensemble_disagreement(
-    ensemble_predictions, aggregation_method="variance"
+# Ensemble-disagreement epistemic uncertainty (variance / std / range / iqr modes).
+epistemic = EpistemicUncertainty.compute_ensemble_disagreement(
+    ensemble_predictions, aggregation_method="variance",
 )
 
-# Aleatoric uncertainty analysis
-aleatoric_analyzer = AdvancedAleatoricUncertainty()
-gaussian_params = {"log_std": jax.random.normal(key, (100, 1)) * 0.1}
-aleatoric_uncertainty = aleatoric_analyzer.distributional_uncertainty(
-    gaussian_params, distribution_type="gaussian"
-)
+# Distributional aleatoric uncertainty from log-σ parameters.
+aleatoric_estimator = DistributionalAleatoricUncertainty()
+log_std = jax.random.normal(key, (100, 1)) * 0.1
+mean = jnp.zeros((100, 1))
+aleatoric = aleatoric_estimator.compute_gaussian_uncertainty(mean, log_std)
 
-# Multi-source aggregation
-aggregator = AdvancedUncertaintyAggregator()
-total_uncertainty = aggregator.weighted_uncertainty_aggregation(
-    [epistemic_uncertainty, aleatoric_uncertainty],
-    aggregation_method="weighted_variance"
+# Combine multiple uncertainty sources.
+aggregator = MultiSourceUncertaintyAggregator()
+total = aggregator.aggregate_uncertainties(
+    epistemic_sources=[epistemic],
+    aleatoric_sources=[aleatoric],
+    method="variance_sum",
 )
 ```
 
-### Model Comparison with Uncertainty
+### Uncertainty-Quality Assessment
 
 ```python
+from opifex.uncertainty.aggregators import MultiSourceUncertaintyAggregator
+
+
 def compare_models_with_uncertainty(models_predictions, true_values):
-    """Compare multiple models based on uncertainty quality."""
-    aggregator = AdvancedUncertaintyAggregator()
+    """Compare models on uncertainty quality across coverage and calibration."""
     results = {}
-
     for model_name, predictions in models_predictions.items():
-        # Compute uncertainty
         uncertainty = jnp.std(predictions, axis=0)
-
-        # Assess quality
-        quality = aggregator.uncertainty_quality_assessment(
+        quality = MultiSourceUncertaintyAggregator.assess_uncertainty_quality(
             predictions=jnp.mean(predictions, axis=0),
             uncertainties=uncertainty,
-            true_values=true_values
+            true_values=true_values,
         )
-
         results[model_name] = quality
-
     return results
-
-# Example usage
-models_predictions = {
-    "model_a": ensemble_predictions_a,
-    "model_b": ensemble_predictions_b
-}
-comparison = compare_models_with_uncertainty(models_predictions, true_values)
 ```
 
 ## Integration with Existing Components
@@ -603,7 +348,7 @@ The advanced uncertainty quantification components are designed to work seamless
 - **Physics-Informed Models**: Uncertainty quantification for PINNs and neural operators
 - **Benchmarking**: Uncertainty metrics for model evaluation and comparison
 
-## Physics-Informed Bayesian Components (NEW)
+## Physics-Informed Bayesian Components
 
 ### PhysicsInformedPriors
 

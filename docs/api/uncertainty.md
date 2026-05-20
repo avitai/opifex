@@ -323,3 +323,172 @@ class MyModel:
 registry = UQRegistry()
 assert registry.get("my_model") is cap
 ```
+
+## Protocols
+
+The structural-typing protocols in `opifex.uncertainty.protocols` describe
+what a model surface must offer to interoperate with the rest of the UQ
+platform. None of them require inheritance — any class that exposes the
+named methods passes ``isinstance(model, Protocol)`` via
+``@runtime_checkable``.
+
+```python
+from opifex.uncertainty.protocols import (
+    UncertaintyAwareModule,
+    VariationalModule,
+    UncertaintyEstimator,
+    Calibrator,
+    Conformalizer,
+)
+```
+
+* `UncertaintyAwareModule` — exposes ``predict_distribution(x, *, rngs)
+  -> PredictiveDistribution``; the minimum every UQ-aware model must
+  implement so calibration / conformal code can drive it generically.
+* `VariationalModule` — extends `UncertaintyAwareModule` with
+  ``loss_components(batch, *, rngs, objective) -> UQLossComponents``,
+  ``negative_elbo(batch, *, rngs, objective) -> UQLossComponents`` and
+  ``kl_divergence() -> jax.Array``. Used by Bayesian layers and
+  `ProbabilisticPINN`.
+* `UncertaintyEstimator` — produces uncertainty arrays from raw
+  predictions / ensemble outputs.
+* `Calibrator` — exposes the ``fit(...) / predict(...) / with_state(...)``
+  triple used by calibration tools (`TemperatureScaling`, …).
+* `Conformalizer` — exposes the same triple shape but the predict
+  output is a `PredictionInterval` or `PredictionSet`. Implemented by
+  every class under `opifex.uncertainty.conformal`.
+
+## Inference-Backend and Distribution-Adapter Specs
+
+```python
+from opifex.uncertainty.inference_backends import (
+    InferenceBackendProtocol,
+    InferenceBackendSpec,
+    BackendResult,
+    BackendDiagnostics,
+    UnsupportedBackendError,
+)
+from opifex.uncertainty.adapters import (
+    DistributionAdapterProtocol,
+    DistributionAdapterSpec,
+    ModelUncertaintyAdapterProtocol,
+)
+```
+
+* `InferenceBackendProtocol` — ``fit(...) -> BackendResult`` plus
+  ``posterior_predictive(...) -> PredictiveDistribution`` and
+  ``predict_distribution(...) -> PredictiveDistribution``. Implemented
+  by `BlackJAXBackend`; optional NumPyro / Bayeux / FlowJAX backends
+  follow the same shape.
+* `BackendResult` carries the raw sampler / fitted-state object
+  unchanged (e.g. `BlackJAXSamplerState`) so callers can inspect it.
+* `BackendDiagnostics` — Pattern-B `flax.struct.dataclass(slots=True,
+  kw_only=True)` with `ess`, `r_hat`, `acceptance_rate`, `divergences`,
+  `step_size`, `tree_depth` leaves (all optional). Survives
+  ``flax.struct.replace()`` and pytree round-tripping.
+* `InferenceBackendSpec` — frozen capability declaration with
+  ``sampler_names: tuple[str, ...]``. The router walks the tuple
+  left-to-right and selects the first installed backend.
+* `DistributionAdapterProtocol` and `DistributionAdapterSpec` — wrap
+  backend distribution objects (Artifex `Distribution`, Distrax-like)
+  into the canonical `PredictiveDistribution` value object via
+  `from_distribution(...)`.
+* `ModelUncertaintyAdapterProtocol` — wraps deterministic /
+  ensemble / dropout / Laplace-style models. The concrete adapters live
+  in `opifex.uncertainty.adapters.{model,ensemble,operators}`; deferred
+  spec classes (e.g. `LaplaceAdapterSpec`, `SWAGAdapterSpec`,
+  `FNOConformalAdapterSpec`) raise actionable
+  `NotImplementedError` from `.wrap()` until the backend lands.
+
+## Model UQ Adapters
+
+```python
+from opifex.uncertainty.adapters import (
+    ModelUncertaintyAdapter,
+    DeepEnsembleAdapter,
+    MCDropoutAdapter,
+    DeepEnsembleState,
+    MCDropoutState,
+)
+```
+
+* `ModelUncertaintyAdapter` — wraps a single deterministic callable.
+  Rejects any non-`DefaultStrategy.DETERMINISTIC` capability claim so a
+  raw point estimator cannot silently advertise epistemic uncertainty.
+* `DeepEnsembleAdapter` — aggregates mean / variance over a fixed
+  member tuple (`DeepEnsembleState`).
+* `MCDropoutAdapter` — caller-owned `nnx.Rngs` at predict time;
+  deterministic at `mode="deterministic"`, stochastic at
+  `mode="bayesian"`.
+
+The neural-operator family ships parallel specs in
+`opifex.uncertainty.adapters.operators` (`OperatorAdapterSpec`,
+`FNOConformalAdapterSpec`, `FNODeepEnsembleAdapterSpec`,
+`FNOMCDropoutAdapterSpec`, `DeepONetConformalAdapterSpec`, …) that
+declare operator-family axes (`spatial_axes`, `spectral_axes`),
+supported metrics, and required capabilities.
+
+## Likelihoods
+
+```python
+import jax.numpy as jnp
+from opifex.uncertainty.likelihoods import (
+    gaussian_log_likelihood,
+    heteroscedastic_gaussian_log_likelihood,
+    laplace_log_likelihood,
+    student_t_log_likelihood,
+    mixture_log_likelihood,
+    LikelihoodSpec,
+)
+
+ll = gaussian_log_likelihood(
+    predictions=jnp.zeros((10,)),
+    targets=jnp.zeros((10,)),
+    scale=1.0,
+)
+```
+
+Each helper returns the per-sample log-likelihood as a `jax.Array`. The
+heteroscedastic Gaussian takes a per-sample `scale` array; Student-t
+takes a `df` parameter; the mixture form takes ``(weights, means,
+scales)`` triplets and returns the log-sum-exp likelihood. `LikelihoodSpec`
+is the Pattern-A frozen-dataclass capability container that registers a
+likelihood family with the UQ registry.
+
+## Priors
+
+```python
+from opifex.uncertainty.priors import diagonal_gaussian_log_prior, PriorSpec
+
+log_prior = diagonal_gaussian_log_prior(
+    params=jnp.zeros((4,)),
+    prior_mean=0.0,
+    prior_std=1.0,
+)
+```
+
+`diagonal_gaussian_log_prior` returns the sum-over-features log-prior
+under a diagonal-Gaussian `N(prior_mean, prior_std² I)`. `PriorSpec`
+records the prior family (`name`, `family`, `parameter_names`) for the
+registry, mirroring `LikelihoodSpec`.
+
+## Physics-Informed Priors
+
+`opifex.uncertainty.priors_physics` exposes five NNX-based prior
+modules for physics-aware Bayesian modelling:
+
+* `PhysicsInformedPriors` — hard-constraint projector with
+  conservation-law and boundary-condition application.
+* `ConservationLawPriors` — uncertainty modifier that inflates
+  uncertainty based on per-law violation magnitude.
+* `DomainSpecificPriors` — domain-tailored parameter ranges and
+  distribution families (quantum chemistry, fluid dynamics, …).
+* `HierarchicalBayesianFramework` — multi-level uncertainty
+  propagation across hierarchy levels (`multiplicative` or
+  `additive` modes).
+* `PhysicsAwareUncertaintyPropagation` — confidence adjustment under
+  physics-constraint violations.
+
+Each module follows the canonical NNX convention: parameters declared
+as `nnx.Param`, indexed with `[...]` (not the deprecated `.value`
+property), pure-array methods trace under `jax.jit` / `jax.grad`.

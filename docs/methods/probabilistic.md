@@ -228,22 +228,22 @@ Opifex provides calibration methods to ensure uncertainty estimates are well-cal
 ```python
 from opifex.neural.bayesian import (
     CalibrationTools,
-    TemperatureScaling,
     PlattScaling,
     IsotonicRegression,
-    ConformalPrediction,
 )
+from opifex.uncertainty.calibration import TemperatureScaling
+from opifex.uncertainty.conformal import SplitConformalRegressor
 
-# Temperature scaling for calibration
-calibrator = TemperatureScaling(rngs=nnx.Rngs(42))
+# Temperature scaling for classifier calibration (pure value object).
+calibrator = TemperatureScaling()
+# Caller-driven fit/predict cycle:
+#   state = calibrator.fit(logits=val_logits, targets=val_labels)
+#   probs = calibrator.with_state(state).predict(test_logits)
 
-# Conformal prediction for distribution-free coverage guarantees.
-# ConformalPredictor wraps any point predictor (PINN, neural operator, etc.).
-from opifex.neural.bayesian import ConformalPredictor, ConformalConfig
-from opifex.neural.base import StandardMLP
-
-point_model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(0))
-conformal = ConformalPredictor(model=point_model, config=ConformalConfig())
+# Split-conformal regressor for distribution-free coverage guarantees.
+regressor = SplitConformalRegressor(alpha=0.1)
+# state = regressor.fit(predictions=val_preds, targets=val_targets)
+# interval = regressor.with_state(state).predict(predictions=test_preds)
 ```
 
 ### 7. Planned Components
@@ -371,7 +371,7 @@ After training a probabilistic model, always check calibration:
 
 1. Compute predictions with uncertainty on a held-out set
 2. Use `CalibrationMetrics` to assess expected calibration error
-3. Apply `TemperatureScaling` or `ConformalPredictor` to improve calibration
+3. Apply `TemperatureScaling` or `SplitConformalRegressor` to improve calibration
 4. Verify coverage of confidence intervals matches nominal level
 
 ## Future Directions

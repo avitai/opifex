@@ -78,6 +78,7 @@ def jackknife_plus_intervals(
         ("alpha", float(alpha)),
         ("loo_size", int(loo_val_predictions.shape[0])),
         ("coverage_guarantee", "1-2*alpha"),
+        ("assumption_status", "exchangeable_assumed"),
     )
     return PredictionInterval(
         lower=lower,
@@ -136,6 +137,7 @@ def cv_plus_intervals(
         ("num_folds", int(n_folds)),
         ("calibration_size_per_fold", int(n_per_fold)),
         ("coverage_guarantee", "1-2*alpha"),
+        ("assumption_status", "exchangeable_assumed"),
     )
     return PredictionInterval(
         lower=lower,

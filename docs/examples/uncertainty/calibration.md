@@ -79,11 +79,11 @@ Opifex enhances this with adaptive, per-sample temperatures and optional physics
 ```python
 from opifex.neural.bayesian import (
     CalibrationTools,
-    ConformalPrediction,
     IsotonicRegression,
     PlattScaling,
-    TemperatureScaling,
 )
+from opifex.uncertainty.calibration import TemperatureScaling
+from opifex.uncertainty.conformal import SplitConformalRegressor
 ```
 
 ### Step 2: Generate Synthetic Data
@@ -140,14 +140,11 @@ calibrated_confidences = isotonic_regressor(test_confidences)
 ### Step 5: Apply Conformal Prediction
 
 ```python
-# Initialize conformal predictor for 90% coverage
-conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-
-# Calibrate using calibration set
-conformal_predictor.calibrate(calib_predictions, calib_targets)
-
-# Generate prediction intervals
-lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
+# Split conformal regressor at α=0.1 for 90% coverage.
+regressor = SplitConformalRegressor(alpha=0.1)
+state = regressor.fit(predictions=calib_predictions, targets=calib_targets)
+interval = regressor.with_state(state).predict(predictions=test_predictions)
+lower_bounds, upper_bounds = interval.lower, interval.upper
 
 # Compute empirical coverage
 empirical_coverage = conformal_predictor.compute_coverage(
@@ -196,9 +193,10 @@ isotonic_regressor.fit(calib_probs, calib_labels)
 refined_probs = isotonic_regressor(calibrated_probs)
 
 # 4. Add conformal prediction intervals
-conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-conformal_predictor.calibrate(calib_predictions, calib_targets)
-lower, upper = conformal_predictor.predict_intervals(test_predictions)
+regressor = SplitConformalRegressor(alpha=0.1)
+state = regressor.fit(predictions=calib_predictions, targets=calib_targets)
+interval = regressor.with_state(state).predict(predictions=test_predictions)
+lower, upper = interval.lower, interval.upper
 
 # 5. Apply temperature scaling with physics constraints
 temp_scaler = TemperatureScaling(

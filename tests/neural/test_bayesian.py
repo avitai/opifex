@@ -282,7 +282,7 @@ class TestAmortizedVariationalFramework:
 
         # Test forward pass
         x = jnp.ones((batch_size, 2))
-        mean_output, uncertainty_output = framework(x)
+        mean_output, uncertainty_output = framework(x, rngs=nnx.Rngs(123))
 
         assert mean_output.shape == (batch_size, 1)
         assert uncertainty_output.shape == (batch_size, 1)
@@ -345,7 +345,7 @@ class TestBayesianIntegration:
         assert jnp.isfinite(elbo)
 
         # Test deterministic prediction
-        mean_pred, uncertainty_pred = framework(x)
+        mean_pred, uncertainty_pred = framework(x, rngs=nnx.Rngs(123))
         assert mean_pred.shape == (batch_size, 1)
         assert uncertainty_pred.shape == (batch_size, 1)
 
@@ -379,7 +379,7 @@ class TestBayesianIntegration:
 
             # Test forward pass
             x = jnp.ones((batch_size, input_dim))
-            mean_output, uncertainty_output = framework(x)
+            mean_output, uncertainty_output = framework(x, rngs=nnx.Rngs(123))
 
             assert mean_output.shape == (batch_size, 1)
             assert uncertainty_output.shape == (batch_size, 1)
@@ -1346,7 +1346,7 @@ class TestProbabilisticIntegration:
         )
 
         # Test that all components can work together
-        predictions, uncertainties = framework(x_data[:5], num_samples=10)
+        predictions, uncertainties = framework(x_data[:5], num_samples=10, rngs=nnx.Rngs(123))
 
         assert predictions.shape == (5, 1)
         assert uncertainties.shape == (5, 1)
