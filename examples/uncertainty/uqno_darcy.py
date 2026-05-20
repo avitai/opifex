@@ -6,52 +6,52 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#   language_info:
-#     codemirror_mode:
-#       name: ipython
-#       version: 3
-#     file_extension: .py
-#     mimetype: text/x-python
-#     name: python
-#     nbconvert_exporter: python
-#     pygments_lexer: ipython3
-#     version: 3.12.6
 # ---
 
 # %% [markdown]
 """
-# UQNO on Darcy Flow
+# UQNO on Darcy Flow — Conformal Prediction Bands
 
 | Property      | Value                                    |
 |---------------|------------------------------------------|
 | Level         | Intermediate                             |
-| Runtime       | ~1 min (GPU) / ~5 min (CPU)              |
-| Memory        | ~1.5 GB                                  |
-| Prerequisites | JAX, Flax NNX, Bayesian Neural Networks  |
+| Runtime       | ~3 min (GPU) / ~15 min (CPU)             |
+| Memory        | ~1 GB                                    |
+| Prerequisites | JAX, Flax NNX, Conformal Prediction      |
 
 ## Overview
 
-Train an Uncertainty Quantification Neural Operator (UQNO) on the Darcy flow
-equation to predict both the pressure solution and uncertainty estimates.
+Train an Uncertainty Quantification Neural Operator (UQNO) on the Darcy
+flow equation, then *conformally calibrate* it to produce prediction
+intervals with finite-sample coverage guarantees. The opifex
+implementation is a JAX-native port of the conformal three-stage UQNO
+recipe from Ma, Pitt, Azizzadenesheli, Anandkumar (TMLR 2024,
+[arXiv:2402.01960](https://arxiv.org/abs/2402.01960)); the canonical
+PyTorch reference lives at
+[``neuraloperator/neuralop/models/uqno.py``](https://github.com/neuraloperator/neuraloperator).
+The numerical core — ``PointwiseQuantileLoss``,
+``get_coeff_quantile_idx``, the scaling-factor derivation — is
+cross-checked test-by-test against that reference; opifex-side
+ergonomics layer on top (typed `PredictiveDistribution` /
+`PredictionInterval` returns, explicit `base=` / `residual=`
+constructor, in-class `.calibrate(...)`).
 
-**Opifex's UQNO** uses Bayesian spectral convolutions with learned weight
-distributions, providing:
-- **Epistemic uncertainty**: Model uncertainty from weight distributions
-- **Aleatoric uncertainty**: Data uncertainty from learned noise parameters
-- **Monte Carlo sampling**: Probabilistic predictions via weight sampling
+**Stages:**
+1. **Base solution operator** — a deterministic FNO trained to predict
+   the Darcy pressure field via MSE on `(input, target)` pairs.
+2. **Residual quantile operator** — a *second* deterministic FNO
+   trained against ``PointwiseQuantileLoss`` to predict per-grid-point
+   quantile widths of the base operator's residual.
+3. **Scalar conformal calibration** — on a held-out calibration set,
+   the ratios ``|y - base(x)| / residual(x)`` are reduced to a single
+   ``uncertainty_scaling_factor`` via the canonical
+   ``get_coeff_quantile_idx`` rule. Test-time bands are
+   ``base(x) ± residual(x) * scaling_factor``.
 
-This differs from conformal prediction approaches (e.g., neuraloperator's UQNO)
-which use a two-stage training with base + residual models.
-
-**Reference**: Ma et al. (2024), "Calibrated Uncertainty Quantification for
-Operator Learning via Conformal Prediction", TMLR.
-
-## Learning Goals
-
-1. Use `UncertaintyQuantificationNeuralOperator` for Bayesian predictions
-2. Train with ELBO loss (data likelihood + KL divergence)
-3. Compute epistemic vs aleatoric uncertainty via Monte Carlo
-4. Analyze uncertainty calibration quality
+Conformal prediction gives **distribution-free** finite-sample coverage
+guarantees: the bands cover the true target on at least ``1 - alpha``
+fraction of points (per the chosen ``(alpha, delta)`` configuration),
+regardless of how well the base / residual operators fit the data.
 """
 
 # %% [markdown]
@@ -75,74 +75,24 @@ import optax
 from flax import nnx
 
 from opifex.data.loaders import create_darcy_loader
+from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.neural.operators.specialized.uqno import (
     UncertaintyQuantificationNeuralOperator,
+    UQNOBaseSolutionOperator,
+    UQNOResidualOperator,
 )
+from opifex.uncertainty.losses import PointwiseQuantileLoss
 
 
 print("=" * 70)
-print("Opifex Example: UQNO on Darcy Flow")
+print("Opifex Example: UQNO on Darcy Flow (Conformal Prediction Bands)")
 print("=" * 70)
 print(f"JAX backend: {jax.default_backend()}")
 print(f"JAX devices: {jax.devices()}")
 
-# %% [markdown]
-"""
-## Configuration
 
-Key hyperparameters for Bayesian UQNO training.
-"""
-
-# %%
-# IMPORTANT — Algorithmic scope of this example
-#
-# This example demonstrates the *opifex UQ API surface* on a Bayesian FNO:
-# constructing the model, training with the shared `negative_elbo` /
-# `loss_components` objectives, evaluating via `predict_distribution`, and
-# inspecting the resulting `PredictiveDistribution`. It is NOT a faithful
-# reproduction of the canonical UQNO (Ma et al. TMLR 2024, arXiv 2402.01960),
-# which is a conformal-prediction method (deterministic base FNO + deterministic
-# residual FNO + `PointwiseQuantileLoss` + scalar conformal calibration), not
-# a mean-field variational Bayesian neural network. Wide mean-field VI on
-# overparameterized neural operators has a known posterior-collapse failure
-# mode (Coker et al., arXiv 2106.07052) that no amount of single-script
-# hyperparameter tuning resolves; a faithful UQNO implementation requires
-# its own architecture and training pipeline. See the Phase 3.6 follow-up
-# task in `memory-bank/implementation-plans/uncertainty-quantification-platform-2026-05-15/`
-# for that work.
-#
-# Hyperparameters mirror the sibling `bayesian_fno.py` tutorial: small N,
-# modest epochs, raw KL weight (`dataset_size=None` inside ObjectiveConfig
-# disables the per-sample 1/N scaling). Runs in ~1 min on GPU.
-
-# Data configuration
-RESOLUTION = 64
-N_TRAIN = 150
-N_TEST = 30
-BATCH_SIZE = 8
-
-# Model configuration
-MODES = (12, 12)
-HIDDEN_CHANNELS = 32
-NUM_LAYERS = 4
-
-# Training configuration
-NUM_EPOCHS = 20
-LEARNING_RATE = 1e-3
-KL_WEIGHT = 1e-4  # raw KL coefficient
-
-# Uncertainty configuration
-MC_SAMPLES = 10  # Monte Carlo posterior samples for prediction
-
-SEED = 42
-
-
-# Anchor OUTPUT_DIR to the repo root so the example writes the same files
-# whether it's invoked from the repo root, from this example's directory,
-# or as a Jupyter kernel (which sets cwd to the notebook location and does
-# not define ``__file__``). We walk up from cwd until we find the repo's
-# pyproject.toml.
 def _find_repo_root() -> Path:
+    """Walk up from cwd until we find pyproject.toml — works in scripts AND notebooks."""
     here = Path.cwd().resolve()
     for ancestor in (here, *here.parents):
         if (ancestor / "pyproject.toml").exists():
@@ -154,365 +104,356 @@ _REPO_ROOT = _find_repo_root()
 OUTPUT_DIR = _REPO_ROOT / "docs" / "assets" / "examples" / "uqno_darcy"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+
+# %% [markdown]
+"""
+## Configuration
+"""
+
+# %%
+RESOLUTION = 64
+N_TRAIN_BASE = 200  # Base solution operator training samples
+N_TRAIN_RESIDUAL = 100  # Residual quantile operator training samples
+N_CALIB = 80  # Held-out calibration samples for the scalar scaling factor
+N_TEST = 40
+BATCH_SIZE = 8
+
+# Both operators share the canonical FNO sizing (Li et al.).
+MODES = 12
+HIDDEN_CHANNELS = 32
+NUM_LAYERS = 4
+
+# Training schedules
+BASE_EPOCHS = 30
+RESIDUAL_EPOCHS = 20
+LEARNING_RATE = 1e-3
+
+# Conformal target: 1 - alpha pointwise coverage; delta is the
+# function-level miscoverage budget.
+ALPHA = 0.1
+DELTA = 0.1
+
+SEED = 42
+
 print()
 print("Configuration:")
-print(f"  Resolution: {RESOLUTION}x{RESOLUTION}")
-print(f"  Training samples: {N_TRAIN}, Test samples: {N_TEST}")
-print(f"  Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
-print(f"  UQNO: modes={MODES}, hidden={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
-print(f"  KL weight: {KL_WEIGHT}, MC samples: {MC_SAMPLES}")
+print(f"  Resolution:    {RESOLUTION}x{RESOLUTION}")
+print(f"  Base train:    {N_TRAIN_BASE}, Residual train: {N_TRAIN_RESIDUAL}")
+print(f"  Calibration:   {N_CALIB}, Test: {N_TEST}")
+print(f"  FNO:           modes={MODES}, hidden={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
+print(f"  Base epochs:   {BASE_EPOCHS}, Residual epochs: {RESIDUAL_EPOCHS}")
+print(f"  Conformal:     alpha={ALPHA}, delta={DELTA}")
+
 
 # %% [markdown]
 r"""
 ## Load Darcy Flow Data
 
-The Darcy flow equation is an elliptic PDE:
-$$-\\nabla \\cdot (a(x) \\nabla u(x)) = f(x)$$
-
-where $a(x)$ is the permeability coefficient and $u(x)$ is the pressure.
+The Darcy flow equation is an elliptic PDE
+$-\nabla \cdot (a(x) \nabla u(x)) = f(x)$ where $a(x)$ is the
+permeability coefficient and $u(x)$ is the pressure. The synthetic
+opifex loader yields `(input, output)` pairs at the configured
+resolution.
 """
 
 # %%
 print()
 print("Loading Darcy flow data...")
 
+n_total = N_TRAIN_BASE + N_TRAIN_RESIDUAL + N_CALIB + N_TEST
+
 train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
+    n_samples=n_total,
     batch_size=BATCH_SIZE,
     resolution=RESOLUTION,
     shuffle=True,
     seed=SEED,
     worker_count=0,
     enable_normalization=True,
-    num_epochs=NUM_EPOCHS,
+    num_epochs=max(BASE_EPOCHS, RESIDUAL_EPOCHS) + 4,
 )
 
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=N_TEST,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1,
-    worker_count=0,
-    enable_normalization=True,
-    num_epochs=1,
+# Collect everything once into JAX arrays so we can re-iterate cheaply.
+print("  Materialising dataset into memory...")
+inputs_all: list[jax.Array] = []
+outputs_all: list[jax.Array] = []
+seen = 0
+for batch in train_loader:
+    x_batch = jnp.asarray(np.asarray(batch["input"]))
+    y_batch = jnp.asarray(np.asarray(batch["output"]))
+    if x_batch.ndim == 3:
+        x_batch = x_batch[:, None, ...]
+        y_batch = y_batch[:, None, ...]
+    inputs_all.append(x_batch)
+    outputs_all.append(y_batch)
+    seen += x_batch.shape[0]
+    if seen >= n_total:
+        break
+
+inputs = jnp.concatenate(inputs_all, axis=0)[:n_total]
+outputs = jnp.concatenate(outputs_all, axis=0)[:n_total]
+print(f"  Materialised {inputs.shape[0]} samples (input shape {inputs.shape[1:]})")
+
+# Split into base-train / residual-train / calib / test partitions.
+splits = [N_TRAIN_BASE, N_TRAIN_RESIDUAL, N_CALIB]
+cuts = [sum(splits[: i + 1]) for i in range(len(splits))]
+x_base, x_residual, x_calib, x_test = jnp.split(inputs, cuts, axis=0)
+y_base, y_residual, y_calib, y_test = jnp.split(outputs, cuts, axis=0)
+print(
+    f"  Splits: base={x_base.shape[0]}, residual={x_residual.shape[0]}, "
+    f"calib={x_calib.shape[0]}, test={x_test.shape[0]}"
 )
 
-# Get test batch
-test_batch = next(iter(test_loader))
-test_inputs = jnp.array(test_batch["input"])
-test_targets = jnp.array(test_batch["output"])
-
-print(f"  Test input shape: {test_inputs.shape}")
-print(f"  Test target shape: {test_targets.shape}")
 
 # %% [markdown]
 """
-## Data Preprocessing
+## Stage 1 — Train the Base Solution Operator
 
-Ensure data is in the correct format: (batch, height, width, channels).
-"""
-
-
-# %%
-def preprocess_batch(x, y, resolution):
-    """Ensure correct shape: (batch, H, W, C)."""
-    if x.ndim == 3:
-        x = x[..., jnp.newaxis]
-        y = y[..., jnp.newaxis]
-    elif x.ndim == 4 and x.shape[1] != resolution:
-        # Shape is (batch, C, H, W), transpose to (batch, H, W, C)
-        x = x.transpose(0, 2, 3, 1)
-        y = y.transpose(0, 2, 3, 1)
-    return x, y
-
-
-test_inputs, test_targets = preprocess_batch(test_inputs, test_targets, RESOLUTION)
-
-in_channels = test_inputs.shape[-1]
-out_channels = test_targets.shape[-1]
-
-print(f"  Preprocessed test input: {test_inputs.shape}")
-print(f"  Input channels: {in_channels}, Output channels: {out_channels}")
-
-# %% [markdown]
-"""
-## Create UQNO Model
-
-The UQNO uses Bayesian spectral convolutions where weights are distributions
-(mean + variance) rather than point estimates. This enables uncertainty
-quantification through Monte Carlo sampling.
+A standard deterministic FNO trained with MSE loss on `(input, target)`.
+This is the operator we will later wrap with conformal bands.
 """
 
 # %%
 print()
-print("Creating UQNO model...")
+print("Stage 1: training base solution operator (MSE)...")
 
-model = UncertaintyQuantificationNeuralOperator(
-    in_channels=in_channels,
-    out_channels=out_channels,
+base_fno = FourierNeuralOperator(
+    in_channels=1,
+    out_channels=1,
     hidden_channels=HIDDEN_CHANNELS,
     modes=MODES,
     num_layers=NUM_LAYERS,
     rngs=nnx.Rngs(SEED),
 )
-
-param_count = sum(p.size for p in jax.tree.leaves(nnx.state(model, nnx.Param)))
-print(f"  Total parameters: {param_count:,}")
-print("  Epistemic uncertainty: via Monte Carlo posterior sampling")
-
-# %% [markdown]
-r"""
-## ELBO Loss Function
-
-The Evidence Lower BOund (ELBO) combines:
-- **Data likelihood**: How well predictions match targets (MSE)
-- **KL divergence**: Regularization towards prior distributions
-
-$$\\mathcal{L} = \\mathbb{E}_{q(w)}[\\log p(y|x,w)] - \\beta \\cdot KL(q(w) || p(w))$$
-"""
-
-
-# %%
-from opifex.uncertainty.objectives import ObjectiveConfig
-
-
-OBJECTIVE = ObjectiveConfig(
-    kl_weight=KL_WEIGHT,
-    dataset_size=None,  # disable 1/N scaling; contribution = KL_WEIGHT * KL
-    physics_weight=1.0,
-    data_weight=1.0,
-    boundary_weight=1.0,
-    initial_condition_weight=1.0,
-    regularization_weight=1.0,
-    calibration_weight=1.0,
-    conformal_weight=1.0,
-    pac_bayes_weight=1.0,
-)
-
-
-# %% [markdown]
-"""
-## Training Loop
-
-The training step uses ``model.negative_elbo(batch, rngs=..., objective=...)``
-which returns a ``UQLossComponents`` populated by the shared platform
-surface. ``rngs`` is threaded as a traced argument so ``nnx.value_and_grad``
-can compose with it across trace levels.
-"""
-
-# %%
-print()
-print("Training UQNO...")
-
-batches_per_epoch = N_TRAIN // BATCH_SIZE
-opt = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+base_opt = nnx.Optimizer(base_fno, optax.adam(LEARNING_RATE), wrt=nnx.Param)
 
 
 @nnx.jit
-def train_step(model, opt, x, y, rngs):
-    """Single training step using the shared negative-ELBO surface.
+def base_train_step(
+    model: FourierNeuralOperator,
+    opt: nnx.Optimizer,
+    x: jax.Array,
+    y: jax.Array,
+) -> jax.Array:
+    """Plain MSE training step for the base FNO."""
 
-    Returns the ELBO total (used for gradients) and the bare data MSE
-    component so the log can show both. Single-sample MC at training
-    time; canonical opifex API demonstration only — see the module
-    docstring for the algorithmic caveats.
+    def loss_fn(m: FourierNeuralOperator) -> jax.Array:
+        return jnp.mean((m(x) - y) ** 2)
+
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    opt.update(model, grads)
+    return loss
+
+
+def _shuffle_batches(
+    x: jax.Array, y: jax.Array, *, batch_size: int, key: jax.Array
+) -> tuple[jax.Array, jax.Array]:
+    """Shuffle a dataset and chunk into ``batch_size``-sized batches."""
+    n = x.shape[0]
+    perm = jax.random.permutation(key, n)
+    x = x[perm]
+    y = y[perm]
+    n_full = (n // batch_size) * batch_size
+    x = x[:n_full].reshape(n_full // batch_size, batch_size, *x.shape[1:])
+    y = y[:n_full].reshape(n_full // batch_size, batch_size, *y.shape[1:])
+    return x, y
+
+
+start = time.time()
+base_losses: list[float] = []
+for epoch in range(BASE_EPOCHS):
+    epoch_key = jax.random.fold_in(jax.random.PRNGKey(SEED), epoch)
+    xb, yb = _shuffle_batches(x_base, y_base, batch_size=BATCH_SIZE, key=epoch_key)
+    epoch_loss = 0.0
+    for i in range(xb.shape[0]):
+        loss = base_train_step(base_fno, base_opt, xb[i], yb[i])
+        epoch_loss += float(loss)
+    epoch_loss /= xb.shape[0]
+    base_losses.append(epoch_loss)
+    if epoch % 5 == 0 or epoch == BASE_EPOCHS - 1:
+        print(f"  Base epoch {epoch + 1:3d}/{BASE_EPOCHS}: MSE = {epoch_loss:.6f}")
+print(f"Base training time: {time.time() - start:.1f}s")
+
+
+# %% [markdown]
+"""
+## Stage 2 — Train the Residual Quantile Operator
+
+A *separate* FNO trained against
+:class:`opifex.uncertainty.losses.PointwiseQuantileLoss` on the
+residuals ``base(x) - y_true`` from the (frozen) base operator. The
+target is for the residual operator to predict per-grid-point quantile
+widths consistent with the residual distribution.
+"""
+
+# %%
+print()
+print("Stage 2: training residual quantile operator (PointwiseQuantileLoss)...")
+
+residual_fno = FourierNeuralOperator(
+    in_channels=1,
+    out_channels=1,
+    hidden_channels=HIDDEN_CHANNELS,
+    modes=MODES,
+    num_layers=NUM_LAYERS,
+    rngs=nnx.Rngs(SEED + 1),
+)
+residual_opt = nnx.Optimizer(residual_fno, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+quantile_loss = PointwiseQuantileLoss(alpha=ALPHA, reduction="mean")
+
+
+@nnx.jit
+def residual_train_step(
+    base: FourierNeuralOperator,
+    residual: FourierNeuralOperator,
+    opt: nnx.Optimizer,
+    x: jax.Array,
+    y: jax.Array,
+) -> jax.Array:
+    """Quantile-loss training step for the residual operator.
+
+    The base operator's output is wrapped in ``jax.lax.stop_gradient``
+    so its weights stay frozen for the residual stage (matches the
+    canonical reference's ``no_grad`` + ``eval`` pattern).
     """
 
-    def loss_fn(m, rngs):
-        components = m.negative_elbo({"x": x, "y": y}, rngs=rngs, objective=OBJECTIVE)
-        return components.total, components.data
+    def loss_fn(r: FourierNeuralOperator) -> jax.Array:
+        base_pred = jax.lax.stop_gradient(base(x))
+        quantile_widths = jnp.abs(r(x))
+        return quantile_loss(y_pred=quantile_widths, y=base_pred - y)
 
-    (total, data_mse), grads = nnx.value_and_grad(loss_fn, has_aux=True)(model, rngs)
-    opt.update(model, grads)
-    return total, data_mse
+    loss, grads = nnx.value_and_grad(loss_fn)(residual)
+    opt.update(residual, grads)
+    return loss
 
 
-start_time = time.time()
-train_losses = []
-epoch_count = 0
+start = time.time()
+residual_losses: list[float] = []
+for epoch in range(RESIDUAL_EPOCHS):
+    epoch_key = jax.random.fold_in(jax.random.PRNGKey(SEED + 1), epoch)
+    xb, yb = _shuffle_batches(x_residual, y_residual, batch_size=BATCH_SIZE, key=epoch_key)
+    epoch_loss = 0.0
+    for i in range(xb.shape[0]):
+        loss = residual_train_step(base_fno, residual_fno, residual_opt, xb[i], yb[i])
+        epoch_loss += float(loss)
+    epoch_loss /= xb.shape[0]
+    residual_losses.append(epoch_loss)
+    if epoch % 5 == 0 or epoch == RESIDUAL_EPOCHS - 1:
+        print(f"  Residual epoch {epoch + 1:3d}/{RESIDUAL_EPOCHS}: quantile = {epoch_loss:.6f}")
+print(f"Residual training time: {time.time() - start:.1f}s")
 
-for batch_count, batch in enumerate(train_loader, start=1):
-    # Get and preprocess batch data
-    x = jnp.array(batch["input"])
-    y = jnp.array(batch["output"])
-    x, y = preprocess_batch(x, y, RESOLUTION)
-
-    total, data_mse = train_step(model, opt, x, y, nnx.Rngs(sample=batch_count))
-    train_losses.append((float(total), float(data_mse)))
-
-    if batch_count % batches_per_epoch == 0:
-        epoch_count += 1
-        recent = train_losses[-batches_per_epoch:]
-        avg_total = float(np.mean([t for t, _ in recent]))
-        avg_data = float(np.mean([d for _, d in recent]))
-        if epoch_count % 3 == 0 or epoch_count == 1:
-            print(
-                f"  Epoch {epoch_count:3d}/{NUM_EPOCHS}: "
-                f"data MSE = {avg_data:.6f}, ELBO total = {avg_total:.6f}"
-            )
-
-train_time = time.time() - start_time
-print(f"Training time: {train_time:.1f}s")
-print(f"Final data MSE = {train_losses[-1][1]:.6f}, final ELBO total = {train_losses[-1][0]:.6f}")
 
 # %% [markdown]
 """
-## Evaluation with Monte Carlo Uncertainty
+## Stage 3 — Conformal Calibration + Test-time Bands
 
-``model.predict_distribution(...)`` returns a ``PredictiveDistribution``
-populated by Monte-Carlo posterior sampling. The ``epistemic`` field is
-the marginal variance across samples (take ``sqrt`` for std-dev display).
-``samples`` holds the raw MC draws when downstream code needs them.
+Wrap the trained base + residual operators in
+``UncertaintyQuantificationNeuralOperator``, then derive a scalar
+``uncertainty_scaling_factor`` from the held-out calibration ratios
+``|y - base(x)| / (residual(x) + eps)`` via the canonical
+``get_coeff_quantile_idx`` rule. The fitted calibrator is attached to
+the model and used by ``predict_with_bands``.
 """
 
 # %%
 print()
-print("Evaluating with uncertainty estimation...")
+print("Stage 3: conformal calibration...")
 
-
-@nnx.jit(static_argnames=("num_samples",))
-def jit_predict_distribution(model, x, rngs, *, num_samples):
-    """Jitted wrapper around ``model.predict_distribution`` for fast MC sampling."""
-    return model.predict_distribution(x, rngs=rngs, num_samples=num_samples)
-
-
-dist = jit_predict_distribution(model, test_inputs, nnx.Rngs(sample=SEED), num_samples=MC_SAMPLES)
-predictions = dist.mean
-epistemic_std = (
-    jnp.sqrt(dist.epistemic) if dist.epistemic is not None else jnp.zeros_like(predictions)
+uqno = UncertaintyQuantificationNeuralOperator(
+    base=UQNOBaseSolutionOperator(base_fno),
+    residual=UQNOResidualOperator(residual_fno),
 )
-# Aleatoric is not modeled by this UQNO formulation (weight-uncertainty only);
-# total uncertainty equals epistemic for this model.
-total_uncertainty = epistemic_std
-
-mse = jnp.mean((predictions - test_targets) ** 2)
-l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(jnp.sum(test_targets**2))
-rmse = jnp.sqrt(mse)
+calibrator = uqno.calibrate(x_calib, y_calib, alpha=ALPHA, delta=DELTA)
+uqno = uqno.with_calibrator(calibrator)
+print(f"  domain_idx = {calibrator.domain_idx}")
+print(f"  function_idx = {calibrator.function_idx}")
+print(f"  scaling factor = {float(calibrator.scaling_factor):.6f}")
 
 print()
-print("Results:")
-print(f"  Relative L2 Error:      {float(l2_error):.4f}")
-print(f"  RMSE:                   {float(rmse):.6f}")
-print(f"  Mean Epistemic Std:     {float(jnp.mean(epistemic_std)):.6f}")
-print(f"  Mean Total Uncertainty: {float(jnp.mean(total_uncertainty)):.6f}")
+print("Evaluating coverage on held-out test set...")
+test_dist = uqno.predict_with_bands(x_test)
+# predict_with_bands always returns a populated interval; fall back to
+# a zero-volume interval if the field is unexpectedly None (defensive).
+interval = test_dist.interval
+if interval is None:
+    raise RuntimeError("predict_with_bands returned no interval; check calibration.")
+in_band = (y_test >= interval.lower) & (y_test <= interval.upper)
+pointwise_coverage = float(jnp.mean(in_band))
+mean_width = float(jnp.mean(interval.upper - interval.lower))
+print(f"  Target coverage (1 - alpha) = {1 - ALPHA:.3f}")
+print(f"  Empirical pointwise coverage = {pointwise_coverage:.3f}")
+print(f"  Mean band width             = {mean_width:.6f}")
+
 
 # %% [markdown]
 """
-## Uncertainty Calibration Analysis
+## Visualisation
 
-Well-calibrated uncertainty should correlate with actual prediction errors.
-We analyze this by:
-1. Error-uncertainty correlation
-2. Coverage: fraction of true values within uncertainty bounds
+The plot below shows, for one representative test sample:
+
+* Input permeability $a(x, y)$
+* Target pressure $u(x, y)$
+* Base operator prediction
+* Calibrated lower / upper bands
+* Per-pixel band width (uncertainty heat-map)
 """
 
 # %%
 print()
-print("Uncertainty calibration analysis...")
-
-# Compute per-sample errors
-errors = jnp.abs(predictions - test_targets)
-mean_error_per_sample = jnp.mean(errors, axis=(1, 2, 3))
-mean_uncertainty_per_sample = jnp.mean(total_uncertainty, axis=(1, 2, 3))
-
-# Correlation between error and uncertainty (higher = better calibrated)
-correlation = jnp.corrcoef(mean_error_per_sample.flatten(), mean_uncertainty_per_sample.flatten())[
-    0, 1
-]
-print(f"  Error-Uncertainty Correlation: {float(correlation):.4f}")
-
-# Coverage: fraction of errors within uncertainty bounds
-coverage_1sigma = jnp.mean(errors <= total_uncertainty)
-coverage_2sigma = jnp.mean(errors <= 2 * total_uncertainty)
-
-print(f"  1-sigma coverage: {float(coverage_1sigma) * 100:.1f}% (expected ~68%)")
-print(f"  2-sigma coverage: {float(coverage_2sigma) * 100:.1f}% (expected ~95%)")
-
-# %% [markdown]
-"""
-## Visualization
-"""
-
-# %%
-print()
-print("Creating visualizations...")
+print("Creating visualisations...")
 
 sample_idx = 0
+target = np.asarray(y_test[sample_idx, 0])
+prediction = np.asarray(test_dist.mean[sample_idx, 0])
+lower = np.asarray(interval.lower[sample_idx, 0])
+upper = np.asarray(interval.upper[sample_idx, 0])
+width = upper - lower
+input_perm = np.asarray(x_test[sample_idx, 0])
+in_band_sample = (target >= lower) & (target <= upper)
 
-fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+fig, axes = plt.subplots(2, 3, figsize=(15, 9))
 
-# Row 1: Input, Target, Prediction, Error
 ax = axes[0, 0]
-im = ax.imshow(test_inputs[sample_idx, :, :, 0], cmap="viridis")
+im = ax.imshow(input_perm, cmap="viridis")
 ax.set_title("Input (Permeability)")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[0, 1]
-im = ax.imshow(test_targets[sample_idx, :, :, 0], cmap="RdBu_r")
+im = ax.imshow(target, cmap="RdBu_r")
 ax.set_title("Target (Pressure)")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[0, 2]
-im = ax.imshow(predictions[sample_idx, :, :, 0], cmap="RdBu_r")
-ax.set_title("Prediction")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
+im = ax.imshow(prediction, cmap="RdBu_r")
+ax.set_title("Base Prediction")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
-ax = axes[0, 3]
-error = jnp.abs(predictions[sample_idx, :, :, 0] - test_targets[sample_idx, :, :, 0])
-im = ax.imshow(error, cmap="hot")
-ax.set_title("Absolute Error")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-plt.colorbar(im, ax=ax, fraction=0.046)
-
-# Row 2: Epistemic std, Total uncertainty, (empty), Calibration
 ax = axes[1, 0]
-im = ax.imshow(epistemic_std[sample_idx, :, :, 0], cmap="Purples")
-ax.set_title("Epistemic Std (MC posterior)")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
+im = ax.imshow(lower, cmap="RdBu_r")
+ax.set_title("Lower Band (calibrated)")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[1, 1]
-im = ax.imshow(total_uncertainty[sample_idx, :, :, 0], cmap="Oranges")
-ax.set_title("Total Uncertainty")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
+im = ax.imshow(upper, cmap="RdBu_r")
+ax.set_title("Upper Band (calibrated)")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[1, 2]
-ax.axis("off")
+im = ax.imshow(width, cmap="Oranges")
+ax.set_title(f"Band Width (sample coverage = {float(np.mean(in_band_sample)):.2f})")
+plt.colorbar(im, ax=ax, fraction=0.046)
 
-# Calibration scatter plot
-ax = axes[1, 3]
-ax.scatter(
-    mean_uncertainty_per_sample,
-    mean_error_per_sample,
-    alpha=0.7,
-    c="steelblue",
-    edgecolors="white",
-    linewidths=0.5,
+plt.suptitle(
+    f"UQNO on Darcy Flow — Conformal Bands (alpha={ALPHA}, delta={DELTA}, "
+    f"empirical coverage={pointwise_coverage:.3f})",
+    fontsize=13,
+    y=1.02,
 )
-max_val = max(ax.get_xlim()[1], ax.get_ylim()[1])
-ax.plot([0, max_val], [0, max_val], "r--", label="Perfect calibration")
-ax.set_xlabel("Predicted Uncertainty")
-ax.set_ylabel("Actual Error")
-ax.set_title(f"Calibration (r={float(correlation):.2f})")
-ax.legend()
-
-plt.suptitle("UQNO on Darcy Flow: Predictions and Uncertainty", fontsize=14, y=1.02)
 plt.tight_layout()
 plt.savefig(OUTPUT_DIR / "solution.png", dpi=150, bbox_inches="tight")
 plt.show()
-
 print(f"  Saved: {OUTPUT_DIR / 'solution.png'}")
+
 
 # %% [markdown]
 """
@@ -522,69 +463,51 @@ print(f"  Saved: {OUTPUT_DIR / 'solution.png'}")
 # %%
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-# Training loss — data MSE component shrinks; ELBO total includes the KL term.
 ax = axes[0]
-data_losses = [d for _, d in train_losses]
-elbo_totals = [t for t, _ in train_losses]
-ax.semilogy(data_losses, label="data MSE", color="C0")
-ax.semilogy(elbo_totals, label="ELBO total", color="C3", alpha=0.6)
-ax.set_xlabel("Batch")
-ax.set_ylabel("Loss (log scale)")
-ax.set_title("Training Loss")
+ax.plot(base_losses, label="Base MSE")
+ax.plot(residual_losses, label="Residual quantile", color="C3")
+ax.set_xlabel("Epoch")
+ax.set_ylabel("Loss")
+ax.set_yscale("log")
+ax.set_title("Training Loss (log scale)")
 ax.legend()
 ax.grid(True, alpha=0.3)
 
-# Uncertainty distribution
 ax = axes[1]
-ax.hist(
-    epistemic_std.flatten(),
-    bins=50,
-    alpha=0.7,
-    label="Epistemic Std",
-    color="purple",
-    density=True,
-)
-ax.set_xlabel("Uncertainty")
+band_widths = np.asarray(interval.upper - interval.lower).flatten()
+ax.hist(band_widths, bins=50, color="C1", alpha=0.7)
+ax.set_xlabel("Band width (per pixel)")
 ax.set_ylabel("Density")
-ax.set_title("Uncertainty Distribution")
-ax.legend()
+ax.set_title(f"Calibrated band-width distribution (target coverage {1 - ALPHA:.2f})")
 ax.grid(True, alpha=0.3)
 
-plt.suptitle("UQNO Training Analysis", fontsize=14, y=1.02)
+plt.suptitle("UQNO Training + Calibration Analysis", fontsize=13, y=1.02)
 plt.tight_layout()
 plt.savefig(OUTPUT_DIR / "analysis.png", dpi=150, bbox_inches="tight")
 plt.show()
-
 print(f"  Saved: {OUTPUT_DIR / 'analysis.png'}")
+
 
 # %% [markdown]
 """
-## Summary
+## Summary + Next Steps
 
-| Metric                    | Value              |
-|---------------------------|--------------------|
-| Relative L2 Error         | ~134 (needs tuning)|
-| RMSE                      | ~0.37              |
-| Mean Epistemic Std        | ~0.31              |
-| Mean Aleatoric Std        | ~0.72              |
-| Error-Uncertainty Corr    | ~0.92 (excellent!) |
-| Training Time             | ~30s               |
+UQNO produces *distribution-free* coverage bands via three stages:
 
-**Key Observations:**
-- **Uncertainty quantification works**: High correlation (0.92) between uncertainty and error
-- **Epistemic uncertainty is non-zero**: Bayesian weight sampling produces varied predictions
-- **L2 error is high**: Model needs more training (epochs/data) for accurate predictions
-- The architecture correctly separates epistemic (model) and aleatoric (data) uncertainty
+1. Train a base FNO with any standard regression loss.
+2. Train a residual FNO with ``PointwiseQuantileLoss`` on the
+   residuals of the (frozen) base.
+3. Compute a single scalar ``uncertainty_scaling_factor`` from
+   per-grid ratios on a held-out calibration set; bands at test time
+   are ``base(x) ± residual(x) * scaling_factor``.
 
-**Note on Accuracy:**
-The high L2 error indicates the model is undertrained. For production use:
-- Increase `NUM_EPOCHS` to 50-100
-- Increase `N_TRAIN` to 500+
-- Consider tuning `HIDDEN_CHANNELS`, `MODES`, `NUM_LAYERS`
+The empirical coverage proportion on the held-out test set should land
+near the target ``1 - alpha = {1 - ALPHA:.2f}`` (the exact target
+depends jointly on ``alpha`` and ``delta`` via the canonical
+``get_coeff_quantile_idx`` rule).
 
-**Comparison to Conformal Prediction (neuraloperator UQNO):**
-- Opifex: Bayesian weights, single-stage, ELBO loss, direct uncertainty estimation
-- neuraloperator: Base + residual models, two-stage, quantile loss + calibration
-- Both approaches are valid; conformal provides coverage guarantees, Bayesian provides
-  decomposition into epistemic/aleatoric components
+For higher accuracy, scale up ``N_TRAIN_BASE`` /
+``N_TRAIN_RESIDUAL`` / ``N_CALIB`` and the per-stage epoch counts.
+The canonical Li-style FNO Darcy setup uses ~1000 / ~500 / ~500 with
+~300 epochs per stage.
 """

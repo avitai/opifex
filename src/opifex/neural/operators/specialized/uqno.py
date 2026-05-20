@@ -1,368 +1,428 @@
-"""Uncertainty Quantification Neural Operator (UQNO).
+"""JAX-native port of the conformal Uncertainty Quantification Neural Operator (UQNO).
 
-A Bayesian Fourier Neural Operator that exposes the shared opifex UQ
-surface:
+Mirrors the three-stage conformal pipeline from Ma, Pitt,
+Azizzadenesheli, Anandkumar (TMLR 2024 —
+`arXiv:2402.01960 <https://arxiv.org/abs/2402.01960>`_). The canonical
+PyTorch reference lives at
+``../neuraloperator/neuralop/models/uqno.py`` +
+``../neuraloperator/scripts/train_uqno_darcy.py``; the numerical core
+(``PointwiseQuantileLoss``, ``get_coeff_quantile_idx``, the scaling-factor
+derivation) is cross-checked test-by-test against that reference.
 
-* :meth:`UncertaintyQuantificationNeuralOperator.predict_distribution`
-  returns a :class:`PredictiveDistribution` populated from Monte-Carlo
-  posterior samples; metadata advertises spatial axes so function-space
-  callers can identify the operator output.
-* :meth:`UncertaintyQuantificationNeuralOperator.loss_components` returns
-  a :class:`UQLossComponents` built from
-  :class:`ObjectiveConfig`-driven weights, with the aggregated
-  Bayesian-layer KL in the ``kl`` slot.
-* :meth:`UncertaintyQuantificationNeuralOperator.negative_elbo` mirrors
-  the Phase 3 ``ProbabilisticPINN`` convention, populating the
-  ``negative_elbo`` slot with the weighted total.
+**Differences from the canonical PyTorch implementation:**
 
-All stochastic methods take caller-owned ``nnx.Rngs`` at the boundary;
-the operator owns no hidden RNG state. Bayesian Fourier and linear
-parameters use the canonical shared layers from
-:mod:`opifex.uncertainty.layers.bayesian`.
+* The canonical ``UQNO.__init__(base_model, residual_model=None)``
+  defaults the residual to ``deepcopy(base_model)``. Here both
+  operators are required keyword-only (``base=``, ``residual=``) so
+  the call site is explicit about which model is which.
+* The canonical performs calibration externally in the training
+  script; this port packages :meth:`calibrate` on the class for
+  ergonomics, returning a typed :class:`UQNOConformalCalibrator`.
+* :meth:`predict_with_bands` returns a typed
+  :class:`PredictiveDistribution` with a populated
+  :class:`PredictionInterval`; the canonical returns untyped tensors.
+* JAX/NNX semantics: ``jax.lax.stop_gradient`` replaces
+  ``torch.no_grad()`` + ``model.eval()`` for the base operator inside
+  the residual-stage forward pass.
+
+**Algorithmic core mirrored faithfully:**
+
+1. **Base solution operator** ``G_hat(a, x)`` — a standard deterministic
+   :class:`opifex.neural.operators.fno.base.FourierNeuralOperator`
+   (wrapped here as :class:`UQNOBaseSolutionOperator` for tagging).
+2. **Residual operator** ``E(a, x)`` — a separately-trained
+   :class:`FourierNeuralOperator` (wrapped as
+   :class:`UQNOResidualOperator`) producing per-grid-point quantile
+   widths via the canonical pointwise pinball loss
+   :class:`opifex.uncertainty.losses.PointwiseQuantileLoss`.
+3. **Scalar conformal calibration** — on a held-out calibration set,
+   :meth:`UncertaintyQuantificationNeuralOperator.calibrate` derives a
+   single ``uncertainty_scaling_factor`` from per-grid ratios
+   ``|y - G_hat(x)| / E(x)`` via :func:`get_coeff_quantile_idx`. The
+   fitted factor lives in a :class:`UQNOConformalCalibrator` (a
+   ``flax.struct``-decorated pytree).
+
+At test time,
+:meth:`UncertaintyQuantificationNeuralOperator.predict_with_bands`
+returns a :class:`PredictiveDistribution` whose
+:attr:`PredictiveDistribution.interval` is populated with
+``G_hat(x) ± E(x) * scaling_factor``; ``epistemic`` and ``samples``
+stay ``None`` (conformal is a distribution-free calibration of the
+deterministic predictor, not a Bayesian posterior).
+
+Canonical reference (cross-checked numerically in
+``tests/neural/operators/specialized/test_uqno.py``):
+``../neuraloperator/neuralop/models/uqno.py``;
+``../neuraloperator/scripts/train_uqno_darcy.py`` for the calibration
+recipe.
 """
 
 from __future__ import annotations
 
-import logging
+import math
 from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
-from flax import nnx
+from flax import nnx, struct
 
 from opifex.uncertainty.layers.bayesian import (
     BayesianLinear,
     BayesianSpectralConvolution,
 )
-from opifex.uncertainty.objectives import ObjectiveConfig, UQLossComponents
-from opifex.uncertainty.types import PredictiveDistribution, PredictiveMode
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionInterval,
+    PredictiveDistribution,
+)
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from opifex.neural.operators.fno.base import FourierNeuralOperator
+
+
+# ---------------------------------------------------------------------------
+# Tagged wrappers around the deterministic FNO base + residual
+# ---------------------------------------------------------------------------
+
+
+class UQNOBaseSolutionOperator(nnx.Module):
+    """Thin wrapper tagging an FNO as the UQNO's base solution operator.
+
+    Trained with a standard regression objective (MSE / H1) against
+    ``y_true``. The orchestrator routes its forward through
+    ``jax.lax.stop_gradient`` inside
+    :meth:`UncertaintyQuantificationNeuralOperator.__call__` so the
+    residual-stage gradients never reach this operator's parameters.
+    """
+
+    def __init__(self, fno: FourierNeuralOperator) -> None:
+        self.fno = fno
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Apply the base solution operator to ``x``."""
+        return self.fno(x)
+
+
+class UQNOResidualOperator(nnx.Module):
+    """Thin wrapper tagging an FNO as the UQNO's residual quantile operator.
+
+    Trained with :class:`opifex.uncertainty.losses.PointwiseQuantileLoss`
+    against the residuals of the (frozen) base operator. Conventionally
+    the raw output is passed through ``softplus`` / ``jnp.abs`` so
+    quantile widths are non-negative; the orchestrator's
+    :meth:`UncertaintyQuantificationNeuralOperator.predict_residual`
+    helper applies ``jnp.abs`` as a safe default.
+    """
+
+    def __init__(self, fno: FourierNeuralOperator) -> None:
+        self.fno = fno
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Apply the residual quantile operator to ``x``."""
+        return self.fno(x)
+
+
+# ---------------------------------------------------------------------------
+# Fitted conformal calibrator (flax.struct pytree)
+# ---------------------------------------------------------------------------
+
+
+@struct.dataclass(slots=True, kw_only=True)
+class UQNOConformalCalibrator:
+    """Fitted scalar conformal scaling factor + the alpha/delta used to derive it.
+
+    The scaling factor is a scalar :class:`jax.Array`; the integer
+    ``alpha`` / ``delta`` configuration is stored as
+    ``struct.field(pytree_node=False)`` so it travels as static
+    aux_data and never enters jit traces as a leaf.
+    """
+
+    scaling_factor: jax.Array
+    alpha: float = struct.field(pytree_node=False)
+    delta: float = struct.field(pytree_node=False)
+    domain_idx: int = struct.field(pytree_node=False)
+    function_idx: int = struct.field(pytree_node=False)
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
+
+    def validate(self) -> None:
+        """Public validation hook; not called from ``__post_init__``."""
+        if not 0.0 < float(self.alpha) < 1.0:
+            raise ValueError(f"alpha must lie in (0, 1); got {self.alpha!r}.")
+        if not 0.0 < float(self.delta) < 1.0:
+            raise ValueError(f"delta must lie in (0, 1); got {self.delta!r}.")
+
+
+# ---------------------------------------------------------------------------
+# Conformal-index helper
+# ---------------------------------------------------------------------------
+
+
+def get_coeff_quantile_idx(
+    *, alpha: float, delta: float, n_samples: int, n_gridpts: int
+) -> tuple[int, int]:
+    """Domain + function quantile indices for UQNO conformal calibration.
+
+    Direct JAX-free Python port of the canonical
+    ``get_coeff_quantile_idx`` in
+    ``../neuraloperator/scripts/train_uqno_darcy.py``. Returns the
+    ``(domain_idx, function_idx)`` pair: take the ``domain_idx``-th
+    largest pointwise ratio per function, then the ``function_idx``-th
+    largest of those per-function values across the calibration set.
+
+    Args:
+        alpha: Desired pointwise miscoverage rate in ``(0, 1)``.
+        delta: Desired function-level miscoverage rate in ``(0, 1)``.
+        n_samples: Number of calibration samples.
+        n_gridpts: Number of grid points per sample.
+    """
+    if not 0.0 < float(alpha) < 1.0:
+        raise ValueError(f"alpha must lie in (0, 1); got {alpha!r}.")
+    if not 0.0 < float(delta) < 1.0:
+        raise ValueError(f"delta must lie in (0, 1); got {delta!r}.")
+    if n_samples <= 0:
+        raise ValueError(f"n_samples must be positive; got {n_samples!r}.")
+    if n_gridpts <= 0:
+        raise ValueError(f"n_gridpts must be positive; got {n_gridpts!r}.")
+
+    lb = math.sqrt(-math.log(delta) / (2.0 * n_gridpts))
+    t = (alpha - lb) / 3.0 + lb
+    percentile = alpha - t
+    domain_idx = math.ceil(percentile * n_gridpts)
+    function_percentile = (
+        math.ceil((n_samples + 1) * (delta - math.exp(-2.0 * n_gridpts * t * t))) / n_samples
+    )
+    function_idx = math.ceil(function_percentile * n_samples)
+    return domain_idx, function_idx
+
+
+# ---------------------------------------------------------------------------
+# UQNO orchestrator
+# ---------------------------------------------------------------------------
+
+
+class UncertaintyQuantificationNeuralOperator(nnx.Module):
+    """Three-stage conformal UQNO orchestrator.
+
+    Holds a base solution operator, a residual quantile operator, and
+    an optional fitted :class:`UQNOConformalCalibrator`. Use:
+
+    1. Train ``self.base`` to convergence on the regression task with
+       any standard FNO training loop.
+    2. Train ``self.residual`` against
+       :class:`opifex.uncertainty.losses.PointwiseQuantileLoss` on
+       ``base(x) - y_true`` residuals (gradients through
+       :meth:`__call__` are stopped at the base via
+       ``jax.lax.stop_gradient`` so residual-stage updates do not
+       contaminate the base).
+    3. Call :meth:`calibrate` on a held-out calibration set to obtain
+       a :class:`UQNOConformalCalibrator`; attach it via
+       :meth:`with_calibrator`.
+    4. Call :meth:`predict_with_bands` at test time.
+
+    The class never claims native Bayesian or distributional support;
+    the matching capability declaration is
+    :class:`opifex.uncertainty.adapters.operators.FNOConformalAdapterSpec`.
+    """
+
+    calibrator: nnx.Data[UQNOConformalCalibrator | None]
+
+    def __init__(
+        self,
+        *,
+        base: UQNOBaseSolutionOperator,
+        residual: UQNOResidualOperator,
+        calibrator: UQNOConformalCalibrator | None = None,
+    ) -> None:
+        self.base = base
+        self.residual = residual
+        self.calibrator = calibrator
+
+    # ------------------------------------------------------------------
+    # Forward + per-stage helpers
+    # ------------------------------------------------------------------
+
+    def __call__(self, x: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return ``(solution, quantile_width)`` for ``x``.
+
+        Gradients through the base are stopped via
+        ``jax.lax.stop_gradient`` — residual-stage training that calls
+        this method only updates the residual operator and the
+        calibrator.
+        """
+        solution = jax.lax.stop_gradient(self.base(x))
+        quantile = jnp.abs(self.residual(x))
+        return solution, quantile
+
+    def predict_base(self, x: jax.Array) -> jax.Array:
+        """Apply the base solution operator only."""
+        return self.base(x)
+
+    def predict_residual(self, x: jax.Array) -> jax.Array:
+        """Apply the residual quantile operator (non-negative)."""
+        return jnp.abs(self.residual(x))
+
+    # ------------------------------------------------------------------
+    # Calibration
+    # ------------------------------------------------------------------
+
+    def calibrate(
+        self,
+        x_calib: jax.Array,
+        y_calib: jax.Array,
+        *,
+        alpha: float,
+        delta: float,
+        eps: float = 1e-12,
+    ) -> UQNOConformalCalibrator:
+        """Derive a scalar uncertainty scaling factor on a calibration set.
+
+        Mirrors ``../neuraloperator/scripts/train_uqno_darcy.py``: for
+        every calibration sample, compute per-grid ratios
+        ``|y - base(x)| / (residual(x) + eps)``; take the
+        ``domain_idx``-th largest ratio per function (per-batch);
+        then the ``function_idx``-th largest of those across the
+        batch is the scalar scaling factor.
+
+        Args:
+            x_calib: Calibration inputs, shape ``(n_samples, ...)``.
+            y_calib: Calibration targets, same shape as the base
+                model output.
+            alpha: Target pointwise miscoverage in ``(0, 1)``.
+            delta: Target function-level miscoverage in ``(0, 1)``.
+            eps: Floor added to ``residual(x)`` before division to
+                avoid divide-by-zero on near-zero predicted widths.
+        """
+        base_pred = self.predict_base(x_calib)
+        residual_pred = self.predict_residual(x_calib) + eps
+        ratios = jnp.abs(y_calib - base_pred) / residual_pred  # (n_samples, ...)
+        n_samples = int(ratios.shape[0])
+        n_gridpts = int(jnp.prod(jnp.array(ratios.shape[1:])))
+        flat = ratios.reshape(n_samples, n_gridpts)
+
+        domain_idx, function_idx = get_coeff_quantile_idx(
+            alpha=alpha, delta=delta, n_samples=n_samples, n_gridpts=n_gridpts
+        )
+        # Per-sample: the (domain_idx)-th largest pointwise ratio.
+        domain_k = min(max(domain_idx + 1, 1), n_gridpts)
+        per_sample_topk = jnp.sort(flat, axis=1)[:, -domain_k:]
+        per_sample_value = per_sample_topk[:, 0]  # smallest of top-k == k-th largest
+
+        # Across samples: the (function_idx)-th largest of those.
+        function_k = min(max(function_idx + 1, 1), n_samples)
+        across_topk = jnp.sort(per_sample_value)[-function_k:]
+        scaling_factor = jnp.abs(across_topk[0])
+
+        return UQNOConformalCalibrator(
+            scaling_factor=scaling_factor,
+            alpha=float(alpha),
+            delta=float(delta),
+            domain_idx=int(domain_idx),
+            function_idx=int(function_idx),
+            metadata=(
+                ("source", "uqno_conformal_calibration"),
+                ("n_samples", n_samples),
+                ("n_gridpts", n_gridpts),
+            ),
+        )
+
+    def with_calibrator(
+        self, calibrator: UQNOConformalCalibrator
+    ) -> UncertaintyQuantificationNeuralOperator:
+        """Attach ``calibrator`` to this operator and return ``self``.
+
+        NNX modules support in-place mutation; ``with_*`` is the
+        fluent-attach name (matches the canonical neuraloperator
+        ``uqno_data_proc.set_scale_factor`` pattern in spirit).
+        """
+        self.calibrator = calibrator
+        return self
+
+    # ------------------------------------------------------------------
+    # Test-time prediction with calibrated bands
+    # ------------------------------------------------------------------
+
+    def predict_with_bands(self, x: jax.Array) -> PredictiveDistribution:
+        """Return ``PredictiveDistribution`` with bands ``base ± E * scaling_factor``.
+
+        Requires a fitted :class:`UQNOConformalCalibrator` (attach via
+        :meth:`with_calibrator` or by passing ``calibrator=`` at
+        construction). The metadata records
+        ``("method", "conformal"), ("alpha", alpha), ("delta", delta)``;
+        ``epistemic`` and ``samples`` stay ``None`` (conformal is not
+        Bayesian).
+        """
+        if self.calibrator is None:
+            raise RuntimeError(
+                "UQNO predict_with_bands requires a fitted calibrator. "
+                "Call .calibrate(x_calib, y_calib, alpha=..., delta=...) "
+                "and attach via .with_calibrator(...)."
+            )
+        solution = self.predict_base(x)
+        widths = self.predict_residual(x) * self.calibrator.scaling_factor
+        # ``scaling_factor`` is a traced jax.Array under jit and cannot be
+        # cast to float here — keep it on the calibrator object; the static
+        # alpha/delta are sufficient identifiers for the band semantics.
+        interval = PredictionInterval(
+            lower=solution - widths,
+            upper=solution + widths,
+            coverage=1.0 - self.calibrator.alpha,
+            method="conformal",
+            metadata=(
+                ("alpha", self.calibrator.alpha),
+                ("delta", self.calibrator.delta),
+            ),
+        )
+        return PredictiveDistribution(
+            mean=solution,
+            interval=interval,
+            metadata=(
+                ("method", "conformal"),
+                ("alpha", self.calibrator.alpha),
+                ("delta", self.calibrator.delta),
+                ("source", "uqno"),
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Backwards-incompatibility shims (Task 3.8 rewrite removed these)
+# ---------------------------------------------------------------------------
+
+
+def _legacy_factory_unavailable(name: str) -> Any:
+    """Return a callable that raises a clear "removed" message."""
+
+    def _factory(*_args: Any, **_kwargs: Any) -> Any:
+        raise NotImplementedError(
+            f"{name!r} was removed by the conformal-UQNO rewrite. Compose "
+            f"the new orchestrator manually: "
+            f"UncertaintyQuantificationNeuralOperator("
+            f"base=UQNOBaseSolutionOperator(...), "
+            f"residual=UQNOResidualOperator(...)). See "
+            f"examples/uncertainty/uqno_darcy.py for the full training + "
+            f"calibration recipe."
+        )
+
+    return _factory
+
+
+create_safety_critical_uqno = _legacy_factory_unavailable("create_safety_critical_uqno")
+create_robust_design_uqno = _legacy_factory_unavailable("create_robust_design_uqno")
+create_bayesian_inverse_uqno = _legacy_factory_unavailable("create_bayesian_inverse_uqno")
+UQNOLayer = _legacy_factory_unavailable("UQNOLayer")
 
 
 __all__ = [
     "BayesianLinear",
     "BayesianSpectralConvolution",
+    "UQNOBaseSolutionOperator",
+    "UQNOConformalCalibrator",
     "UQNOLayer",
+    "UQNOResidualOperator",
     "UncertaintyQuantificationNeuralOperator",
     "create_bayesian_inverse_uqno",
     "create_robust_design_uqno",
     "create_safety_critical_uqno",
+    "get_coeff_quantile_idx",
 ]
-
-logger = logging.getLogger(__name__)
-
-_UQNO_RNG_STREAMS = ("sample", "posterior", "default")
-
-
-def _coerce_predictive_mode(mode: PredictiveMode | str) -> PredictiveMode:
-    if isinstance(mode, PredictiveMode):
-        return mode
-    return PredictiveMode(mode)
-
-
-class UQNOLayer(nnx.Module):
-    """Single UQNO block: Bayesian spectral conv + 1×1 local conv + skip.
-
-    The block stays in NCHW (channels-first) layout so the FFT path can
-    operate on the spatial axes directly. Local conv is a non-Bayesian
-    pointwise nnx.Conv mirroring the canonical Li FNO block.
-    """
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        modes: Sequence[int],
-        use_skip_connection: bool = True,
-        *,
-        rngs: nnx.Rngs,
-    ) -> None:
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.use_skip_connection = use_skip_connection
-
-        self.spectral_conv = BayesianSpectralConvolution(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            modes=tuple(modes),
-            rngs=rngs,
-        )
-        self.local_conv = nnx.Conv(
-            in_features=in_channels,
-            out_features=out_channels,
-            kernel_size=(1, 1),
-            padding="SAME",
-            rngs=rngs,
-        )
-        if use_skip_connection and in_channels != out_channels:
-            self.channel_proj: nnx.Conv | None = nnx.Conv(
-                in_features=in_channels,
-                out_features=out_channels,
-                kernel_size=(1, 1),
-                padding="SAME",
-                rngs=rngs,
-            )
-        else:
-            self.channel_proj = None
-
-    def __call__(
-        self,
-        x: jax.Array,
-        *,
-        deterministic: bool | None = None,
-        rngs: nnx.Rngs | jax.Array | None = None,
-    ) -> jax.Array:
-        """Apply the UQNO block.
-
-        ``x`` is NCHW. ``deterministic`` mirrors the shared
-        ``BayesianSpectralConvolution`` convention: when ``True``, the
-        spectral-conv weights collapse to their posterior mean and
-        ``rngs`` is ignored. Otherwise ``rngs`` MUST be supplied.
-        """
-        x_spec = self.spectral_conv(x, deterministic=deterministic, rngs=rngs)
-
-        x_channels_last = x.transpose(0, 2, 3, 1)
-        conv_out = self.local_conv(x_channels_last)
-        x_local = conv_out.transpose(0, 3, 1, 2)
-
-        if self.use_skip_connection:
-            if self.channel_proj is not None:
-                proj_out = self.channel_proj(x.transpose(0, 2, 3, 1))
-                x_skip = proj_out.transpose(0, 3, 1, 2)
-            else:
-                x_skip = x
-        else:
-            x_skip = jnp.zeros_like(x_spec)
-
-        return nnx.gelu(x_spec + x_local + x_skip)
-
-    def kl_divergence(self) -> jax.Array:
-        """KL contribution of the Bayesian spectral conv inside this block."""
-        return self.spectral_conv.kl_divergence()
-
-
-class UncertaintyQuantificationNeuralOperator(nnx.Module):
-    """Bayesian FNO with the shared opifex UQ surface.
-
-    Forward layout is channels-last on the boundary and channels-first
-    through the spectral stack:
-
-    * Input ``x``: ``(batch, height, width, in_channels)`` — channels-last.
-    * Internal: lifts via Bayesian linear, transposes to NCHW, runs the
-      spectral stack, transposes back, projects via Bayesian linear.
-    * Output mean: ``(batch, height, width, out_channels)``.
-    """
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        hidden_channels: int = 64,
-        modes: Sequence[int] = (16, 16),
-        num_layers: int = 4,
-        *,
-        rngs: nnx.Rngs,
-    ) -> None:
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.hidden_channels = hidden_channels
-        self.num_layers = num_layers
-
-        self.lifting = BayesianLinear(in_channels, hidden_channels, rngs=rngs)
-        self.uqno_layers = nnx.List(
-            [
-                UQNOLayer(
-                    in_channels=hidden_channels,
-                    out_channels=hidden_channels,
-                    modes=modes,
-                    rngs=rngs,
-                )
-                for _ in range(num_layers)
-            ]
-        )
-        self.projection = BayesianLinear(hidden_channels, out_channels, rngs=rngs)
-
-    def _forward(
-        self,
-        x: jax.Array,
-        *,
-        rngs: nnx.Rngs | jax.Array | None,
-        deterministic: bool,
-    ) -> jax.Array:
-        """Single forward pass; channels-last in/out, channels-first internal."""
-        if x.ndim != 4:
-            raise ValueError(f"Expected 4D input tensor (batch, H, W, C); got {x.ndim}D")
-
-        x = self.lifting(x, deterministic=deterministic, rngs=rngs)
-        x = x.transpose(0, 3, 1, 2)
-        for layer in self.uqno_layers:
-            x = layer(x, deterministic=deterministic, rngs=rngs)
-        x = x.transpose(0, 2, 3, 1)
-        return self.projection(x, deterministic=deterministic, rngs=rngs)
-
-    def __call__(
-        self,
-        x: jax.Array,
-        *,
-        deterministic: bool | None = None,
-        rngs: nnx.Rngs | jax.Array | None = None,
-    ) -> jax.Array:
-        """Forward pass.
-
-        ``deterministic`` mirrors the shared Bayesian-layer convention: when
-        ``True`` every Bayesian layer collapses to its posterior mean and
-        ``rngs`` is ignored. Otherwise ``rngs`` MUST be supplied so the
-        reparameterization-trick samples have caller-owned keys.
-        """
-        is_deterministic = deterministic if deterministic is not None else False
-        return self._forward(x, rngs=rngs, deterministic=is_deterministic)
-
-    def kl_divergence(self) -> jax.Array:
-        """Aggregate KL across every shared Bayesian layer in the operator."""
-        total = self.lifting.kl_divergence() + self.projection.kl_divergence()
-        for layer in self.uqno_layers:
-            total = total + layer.kl_divergence()
-        return total
-
-    def predict_distribution(
-        self,
-        x: jax.Array,
-        *,
-        rngs: nnx.Rngs,
-        num_samples: int = 10,
-        mode: PredictiveMode | str = PredictiveMode.PREDICTIVE,
-    ) -> PredictiveDistribution:
-        """Return a :class:`PredictiveDistribution` from MC posterior samples.
-
-        Metadata advertises the spatial axes of the input so function-space
-        consumers can dispatch on operator-style outputs. The MC loop runs
-        under ``jax.lax.scan`` so a single jit-trace covers every sample
-        and compile cost is independent of ``num_samples``.
-        """
-        coerced_mode = _coerce_predictive_mode(mode)
-        key = extract_rng_key(
-            rngs,
-            streams=_UQNO_RNG_STREAMS,
-            context="UQNO.predict_distribution",
-        )
-        sample_keys = jax.random.split(key, num_samples)
-
-        def _draw(_carry: None, sample_key: jax.Array) -> tuple[None, jax.Array]:
-            pred = self._forward(x, rngs=nnx.Rngs(sample=sample_key), deterministic=False)
-            return None, pred
-
-        _, samples = jax.lax.scan(_draw, None, sample_keys)
-        mean = jnp.mean(samples, axis=0)
-        variance = jnp.var(samples, axis=0)
-        quantiles = {
-            0.025: jnp.quantile(samples, 0.025, axis=0),
-            0.5: jnp.quantile(samples, 0.5, axis=0),
-            0.975: jnp.quantile(samples, 0.975, axis=0),
-        }
-        return PredictiveDistribution(
-            mean=mean,
-            samples=samples,
-            variance=variance,
-            epistemic=variance,
-            quantiles=quantiles,
-            metadata=(
-                ("method", coerced_mode.value),
-                ("num_samples", int(num_samples)),
-                ("spatial_axes", (1, 2)),
-                ("source", "uqno"),
-            ),
-        )
-
-    def loss_components(
-        self,
-        batch: Mapping[str, Any],
-        *,
-        rngs: nnx.Rngs,
-        objective: ObjectiveConfig,
-    ) -> UQLossComponents:
-        """Compute UQ loss components on a supervised batch.
-
-        Required batch fields: ``x``, ``y``. ``x`` is channels-last
-        ``(batch, H, W, in_channels)``; ``y`` matches the projection
-        output shape ``(batch, H, W, out_channels)``.
-        """
-        missing = [field for field in ("x", "y") if field not in batch]
-        if missing:
-            raise ValueError(f"batch missing required field(s): {missing!r}")
-        x = batch["x"]
-        y = batch["y"]
-
-        y_pred = self._forward(x, rngs=rngs, deterministic=False)
-        data = jnp.mean((y_pred - y) ** 2)
-        kl = self.kl_divergence()
-
-        return UQLossComponents.from_components(
-            config=objective,
-            data=data,
-            kl=kl,
-            metadata=(("source", "uqno"),),
-        )
-
-    def negative_elbo(
-        self,
-        batch: Mapping[str, Any],
-        *,
-        rngs: nnx.Rngs,
-        objective: ObjectiveConfig,
-    ) -> UQLossComponents:
-        """Populate the ``negative_elbo`` slot with the weighted total.
-
-        ``total`` is unchanged; ``negative_elbo`` is set to ``total`` so
-        downstream code can read ``components.negative_elbo`` without
-        recomputing the weighted sum (matches the Task 3.2 PINN convention).
-        """
-        import dataclasses
-
-        base = self.loss_components(batch, rngs=rngs, objective=objective)
-        return dataclasses.replace(base, negative_elbo=base.total)
-
-
-def create_safety_critical_uqno(
-    in_channels: int, out_channels: int, *, rngs: nnx.Rngs
-) -> UncertaintyQuantificationNeuralOperator:
-    """UQNO sized for safety-critical applications (wide + deep stack)."""
-    return UncertaintyQuantificationNeuralOperator(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        hidden_channels=128,
-        modes=(32, 32),
-        num_layers=6,
-        rngs=rngs,
-    )
-
-
-def create_robust_design_uqno(
-    in_channels: int, out_channels: int, *, rngs: nnx.Rngs
-) -> UncertaintyQuantificationNeuralOperator:
-    """UQNO sized for robust engineering design (mid-capacity stack)."""
-    return UncertaintyQuantificationNeuralOperator(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        hidden_channels=96,
-        modes=(24, 24),
-        num_layers=5,
-        rngs=rngs,
-    )
-
-
-def create_bayesian_inverse_uqno(
-    in_channels: int, out_channels: int, *, rngs: nnx.Rngs
-) -> UncertaintyQuantificationNeuralOperator:
-    """UQNO sized for Bayesian inverse problems (more samples downstream)."""
-    return UncertaintyQuantificationNeuralOperator(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        hidden_channels=64,
-        modes=(16, 16),
-        num_layers=4,
-        rngs=rngs,
-    )

@@ -29,13 +29,33 @@ from opifex.uncertainty.protocols import (
 
 
 def _make_uqno() -> UncertaintyQuantificationNeuralOperator:
+    from opifex.neural.operators.fno.base import FourierNeuralOperator
+    from opifex.neural.operators.specialized.uqno import (
+        UQNOBaseSolutionOperator,
+        UQNOResidualOperator,
+    )
+
     return UncertaintyQuantificationNeuralOperator(
-        in_channels=2,
-        out_channels=1,
-        hidden_channels=8,
-        modes=(2, 2),
-        num_layers=2,
-        rngs=nnx.Rngs(0),
+        base=UQNOBaseSolutionOperator(
+            FourierNeuralOperator(
+                in_channels=2,
+                out_channels=1,
+                hidden_channels=8,
+                modes=2,
+                num_layers=2,
+                rngs=nnx.Rngs(0),
+            )
+        ),
+        residual=UQNOResidualOperator(
+            FourierNeuralOperator(
+                in_channels=2,
+                out_channels=1,
+                hidden_channels=8,
+                modes=2,
+                num_layers=2,
+                rngs=nnx.Rngs(1),
+            )
+        ),
     )
 
 
@@ -70,18 +90,30 @@ def test_mean_field_gaussian_conforms_to_variational_module() -> None:
     assert isinstance(layer, VariationalModule)
 
 
-def test_uqno_predict_distribution_returns_predictive_distribution() -> None:
-    """Post-migration: UQNO exposes the shared ``predict_distribution`` surface."""
-    from opifex.uncertainty.types import PredictiveDistribution
+def test_uqno_predict_with_bands_returns_predictive_distribution_with_interval() -> None:
+    """Conformal UQNO exposes ``predict_with_bands`` returning a bounded ``PredictiveDistribution``."""
+    from opifex.uncertainty.types import PredictionInterval, PredictiveDistribution
 
     model = _make_uqno()
-    x = jax.random.normal(jax.random.PRNGKey(0), (1, 8, 8, 2))
-    dist = model.predict_distribution(x, rngs=nnx.Rngs(sample=1), num_samples=2)
+    x_calib = jax.random.normal(jax.random.PRNGKey(0), (8, 2, 8, 8))
+    y_calib = model.predict_base(x_calib) + 0.1 * jax.random.normal(
+        jax.random.PRNGKey(1), (8, 1, 8, 8)
+    )
+    model = model.with_calibrator(model.calibrate(x_calib, y_calib, alpha=0.1, delta=0.1))
+    dist = model.predict_with_bands(jax.random.normal(jax.random.PRNGKey(2), (1, 2, 8, 8)))
     assert isinstance(dist, PredictiveDistribution)
-    assert dist.mean.shape == (1, 8, 8, 1)
+    assert isinstance(dist.interval, PredictionInterval)
+    assert dist.mean.shape == (1, 1, 8, 8)
 
 
-def test_uqno_conforms_to_uncertainty_aware_module() -> None:
-    """UQNO satisfies :class:`UncertaintyAwareModule` via ``predict_distribution``."""
+def test_uqno_does_not_claim_uncertainty_aware_module_native_bayesian_surface() -> None:
+    """Conformal UQNO is honest: it does NOT expose ``predict_distribution``.
+
+    The conformal three-stage operator carries an
+    ``FNOConformalAdapterSpec`` capability declaration (adapter-mediated
+    UQ, ``native_bayesian=False``) — not the protocol surface used by
+    Bayesian / variational modules.
+    """
     model: Any = _make_uqno()
-    assert isinstance(model, UncertaintyAwareModule)
+    assert not hasattr(model, "predict_distribution")
+    assert not isinstance(model, UncertaintyAwareModule)

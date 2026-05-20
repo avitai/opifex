@@ -338,20 +338,40 @@ separates epistemic uncertainty (model knowledge gaps) from aleatoric
 uncertainty (inherent data noise).
 
 ```python
-# Create UQNO (Bayesian weights; aleatoric is not modeled by this formulation)
-uqno = UncertaintyQuantificationNeuralOperator(
-    in_channels=2, out_channels=1, hidden_channels=64,
-    modes=(16, 16), num_layers=4, rngs=rngs,
+# UQNO is the canonical conformal three-stage operator:
+#   1. base FNO trained with MSE,
+#   2. residual FNO trained with PointwiseQuantileLoss,
+#   3. scalar conformal calibration on a held-out set.
+from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.neural.operators.specialized.uqno import (
+    UncertaintyQuantificationNeuralOperator,
+    UQNOBaseSolutionOperator,
+    UQNOResidualOperator,
 )
 
-# Get uncertainty predictions with 50 Monte Carlo posterior samples.
-# rngs is required keyword-only — no hidden fixed key fallback.
-x = jax.random.normal(rng_key, (2, 32, 32, 2))
-dist = uqno.predict_distribution(x, rngs=nnx.Rngs(sample=0), num_samples=50)
+base_fno = FourierNeuralOperator(
+    in_channels=2, out_channels=1, hidden_channels=64,
+    modes=16, num_layers=4, rngs=nnx.Rngs(0),
+)
+residual_fno = FourierNeuralOperator(
+    in_channels=2, out_channels=1, hidden_channels=64,
+    modes=16, num_layers=4, rngs=nnx.Rngs(1),
+)
+uqno = UncertaintyQuantificationNeuralOperator(
+    base=UQNOBaseSolutionOperator(base_fno),
+    residual=UQNOResidualOperator(residual_fno),
+)
 
+# After training base + residual, calibrate on a held-out set:
+calibrator = uqno.calibrate(x_calib, y_calib, alpha=0.1, delta=0.1)
+uqno = uqno.with_calibrator(calibrator)
+
+# At test time, predict_with_bands returns a PredictiveDistribution with
+# a populated PredictionInterval (lower, upper).
+x = jax.random.normal(jax.random.PRNGKey(0), (2, 2, 32, 32))  # channels-first
+dist = uqno.predict_with_bands(x)
 mean_pred = dist.mean
-# PredictiveDistribution stores variances; take sqrt for std-dev display.
-epistemic_std = jnp.sqrt(dist.epistemic)
+band_width = dist.interval.upper - dist.interval.lower
 ```
 
 **Terminal Output:**
@@ -635,19 +655,20 @@ tfno = TensorizedFourierNeuralOperator(
 )
 ```
 
-### UQNO uncertainty is all zeros
+### UQNO bands collapse to (near-)zero
 
-**Symptom**: ``PredictiveDistribution.epistemic`` is (near-)zero from
-``UQNO.predict_distribution(...)``.
+**Symptom**: ``predict_with_bands(...)`` produces interval widths
+near zero, or the empirical coverage on the test set is far below
+``1 - alpha``.
 
-**Cause**: Before training, all Bayesian weight samples produce nearly
-identical outputs because the model has not learned to use the
-stochastic components. This is expected behavior.
+**Cause**: Either the residual operator has not concentrated on the
+true residual distribution yet, or the calibration set is too small
+for the chosen ``(alpha, delta)``.
 
-**Solution**: Train the UQNO on data first using ``Trainer.fit()`` or
-the ``negative_elbo`` loss surface shown above. After training, the
-``epistemic`` variance reflects genuine model uncertainty about
-predictions in regions with sparse training data.
+**Solution**: Train the residual operator longer with
+``PointwiseQuantileLoss`` against ``base(x) - y_true``; supply a
+larger held-out calibration set to ``uqno.calibrate(...)``. The
+canonical Li-style setup uses ~500 calibration samples.
 
 ### MGNO force conservation error is large
 

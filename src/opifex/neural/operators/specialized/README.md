@@ -132,17 +132,29 @@ gino = GeometryInformedNeuralOperator(
 # Uncertainty Quantification Neural Operator for safety-critical systems ✅
 from opifex.neural.operators.specialized import UncertaintyQuantificationNeuralOperator
 
-uqno = UncertaintyQuantificationNeuralOperator(
-    in_channels=2,
-    out_channels=1,
-    hidden_channels=64,
-    modes=(16, 16),
-    num_layers=4,
-    rngs=rngs,
+from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.neural.operators.specialized.uqno import (
+    UQNOBaseSolutionOperator,
+    UQNOResidualOperator,
 )
-# Sample with caller-owned rngs and call the shared UQ surface:
-#   dist = uqno.predict_distribution(x, rngs=nnx.Rngs(sample=0), num_samples=20)
-#   components = uqno.loss_components(batch, rngs=nnx.Rngs(sample=1), objective=objective_config)
+
+# UQNO is a JAX port of the conformal three-stage operator (Ma et al. TMLR 2024,
+# arXiv:2402.01960): a base FNO + a residual quantile FNO + scalar conformal
+# calibration. Train base + residual separately, then calibrate. Opifex-side
+# ergonomics: explicit (base=, residual=) constructor + in-class .calibrate().
+base_fno = FourierNeuralOperator(
+    in_channels=2, out_channels=1, hidden_channels=64, modes=16, num_layers=4, rngs=rngs,
+)
+residual_fno = FourierNeuralOperator(
+    in_channels=2, out_channels=1, hidden_channels=64, modes=16, num_layers=4, rngs=rngs,
+)
+uqno = UncertaintyQuantificationNeuralOperator(
+    base=UQNOBaseSolutionOperator(base_fno),
+    residual=UQNOResidualOperator(residual_fno),
+)
+# After training base (MSE) + residual (PointwiseQuantileLoss):
+#   uqno = uqno.with_calibrator(uqno.calibrate(x_calib, y_calib, alpha=0.1, delta=0.1))
+#   dist = uqno.predict_with_bands(x_test)  # PredictiveDistribution + PredictionInterval
 ```
 
 ## 📚 Full Examples
