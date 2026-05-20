@@ -7,6 +7,10 @@
   :class:`SplitConformalRegressor` / :class:`SplitConformalState`,
   :class:`ConformalizedQuantileRegressor` / :class:`CQRState`,
   :class:`GroupedSplitConformalRegressor` / :class:`GroupedSplitConformalState`.
+* Classification scores and calibrator (`classification`):
+  :func:`lac_score`, :func:`aps_score`, :func:`raps_score`,
+  :func:`aps_prediction_set`,
+  :class:`LACConformalClassifier` / :class:`LACConformalState`.
 * Exchangeability diagnostic (`exchangeability`):
   :class:`ExchangeabilityReport`, :func:`check_exchangeability`,
   :func:`ks_two_sample_pvalue`.
@@ -15,6 +19,14 @@
 from __future__ import annotations
 
 from opifex.uncertainty.conformal.base import ConformalScore
+from opifex.uncertainty.conformal.classification import (
+    aps_prediction_set,
+    aps_score,
+    lac_score,
+    LACConformalClassifier,
+    LACConformalState,
+    raps_score,
+)
 from opifex.uncertainty.conformal.exchangeability import (
     check_exchangeability,
     ExchangeabilityReport,
@@ -42,11 +54,17 @@ __all__ = [
     "ExchangeabilityReport",
     "GroupedSplitConformalRegressor",
     "GroupedSplitConformalState",
+    "LACConformalClassifier",
+    "LACConformalState",
     "SplitConformalRegressor",
     "SplitConformalState",
     "absolute_residual_score",
+    "aps_prediction_set",
+    "aps_score",
     "check_exchangeability",
     "conformal_quantile",
     "cqr_score",
     "ks_two_sample_pvalue",
+    "lac_score",
+    "raps_score",
 ]
