@@ -96,11 +96,7 @@ def test_artifex_flow_specs_present_for_density_estimator_step() -> None:
     assert OPTIONAL_FLOW_SPECS, "OPTIONAL_FLOW_SPECS must not be empty"
     # Confirm at least one optional-flow spec advertises a method name
     # that a flow-MCMC backend can pair with.
-    flow_methods = [
-        method
-        for spec in OPTIONAL_FLOW_SPECS
-        for method in spec.method_names
-    ]
+    flow_methods = [method for spec in OPTIONAL_FLOW_SPECS for method in spec.method_names]
     assert flow_methods, "OPTIONAL_FLOW_SPECS specs must list method names"
 
 
@@ -144,8 +140,7 @@ def test_every_optional_sampler_spec_install_hint_starts_with_uv_pip() -> None:
     so error messages are immediately actionable."""
     for spec in OPTIONAL_SAMPLER_SPECS:
         assert spec.install_hint.startswith(("uv pip install", "pip install")), (
-            f"{spec.name!r} install_hint must start with a pip command; "
-            f"got {spec.install_hint!r}."
+            f"{spec.name!r} install_hint must start with a pip command; got {spec.install_hint!r}."
         )
 
 

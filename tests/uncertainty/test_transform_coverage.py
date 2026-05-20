@@ -105,9 +105,7 @@ def test_bayesian_spectral_convolution_traces_under_nnx_jit_with_traced_rngs() -
     )
 
     @nnx.jit
-    def call(
-        model: BayesianSpectralConvolution, x: jax.Array, rngs: nnx.Rngs
-    ) -> jax.Array:
+    def call(model: BayesianSpectralConvolution, x: jax.Array, rngs: nnx.Rngs) -> jax.Array:
         return model(x, rngs=rngs)
 
     # BayesianSpectralConvolution expects channels-first ``(batch, channels, H, W)``.
@@ -125,9 +123,7 @@ def test_bayesian_spectral_convolution_supports_nnx_value_and_grad() -> None:
         rngs=nnx.Rngs(0),
     )
 
-    def loss_fn(
-        model: BayesianSpectralConvolution, x: jax.Array, rngs: nnx.Rngs
-    ) -> jax.Array:
+    def loss_fn(model: BayesianSpectralConvolution, x: jax.Array, rngs: nnx.Rngs) -> jax.Array:
         return jnp.sum(model(x, rngs=rngs) ** 2)
 
     grad_fn = nnx.value_and_grad(loss_fn, argnums=0)
@@ -203,9 +199,7 @@ def test_energy_score_is_vmap_compatible_across_batch() -> None:
 def test_physics_residual_coverage_traces_under_jit() -> None:
     @jax.jit
     def jitted(residuals: jax.Array) -> jax.Array:
-        return domain_metrics.physics_residual_coverage(
-            residuals=residuals, threshold=0.5
-        ).value
+        return domain_metrics.physics_residual_coverage(residuals=residuals, threshold=0.5).value
 
     out = jitted(jnp.array([0.0, 0.1, 0.6, 0.3]))
     assert out.shape == ()
@@ -246,9 +240,7 @@ def test_risk_coverage_curve_supports_vmap() -> None:
 
 
 def test_physics_informed_priors_supports_nnx_value_and_grad() -> None:
-    prior = PhysicsInformedPriors(
-        conservation_laws=("energy", "momentum"), rngs=nnx.Rngs(0)
-    )
+    prior = PhysicsInformedPriors(conservation_laws=("energy", "momentum"), rngs=nnx.Rngs(0))
 
     def loss(model: PhysicsInformedPriors, params: jax.Array) -> jax.Array:
         return model.compute_violation_penalty(params)

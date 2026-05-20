@@ -37,12 +37,14 @@ from typing import Any, TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
-from artifex.generative_models.core.sampling.base import SamplingAlgorithm  # noqa: F401 — surface re-export
+from artifex.generative_models.core.sampling.base import (
+    SamplingAlgorithm,
+)
 from artifex.generative_models.core.sampling.blackjax_samplers import (
-    BlackJAXHMC,  # noqa: F401 — class-based delegation contract per plan §2.5
-    BlackJAXMALA,  # noqa: F401
-    BlackJAXNUTS,  # noqa: F401
-    BlackJAXSamplerState,  # noqa: F401 — re-exported so callers can type their state directly
+    BlackJAXHMC,
+    BlackJAXMALA,
+    BlackJAXNUTS,
+    BlackJAXSamplerState,
     hmc_sampling,
     mala_sampling,
     nuts_sampling,
