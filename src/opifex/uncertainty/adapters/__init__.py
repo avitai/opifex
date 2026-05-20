@@ -28,6 +28,15 @@ from opifex.uncertainty.adapters.model import (
     SNGPAdapterSpec,
     VBLLAdapterSpec,
 )
+from opifex.uncertainty.adapters.operators import (
+    DeepONetConformalAdapterSpec,
+    DeepONetDeepEnsembleAdapterSpec,
+    DeepONetMCDropoutAdapterSpec,
+    FNOConformalAdapterSpec,
+    FNODeepEnsembleAdapterSpec,
+    FNOMCDropoutAdapterSpec,
+    OperatorAdapterSpec,
+)
 
 
 __all__ = [
@@ -37,13 +46,20 @@ __all__ = [
     "DUEAdapterSpec",
     "DeepEnsembleAdapter",
     "DeepEnsembleState",
+    "DeepONetConformalAdapterSpec",
+    "DeepONetDeepEnsembleAdapterSpec",
+    "DeepONetMCDropoutAdapterSpec",
     "DistributionAdapterProtocol",
     "DistributionAdapterSpec",
+    "FNOConformalAdapterSpec",
+    "FNODeepEnsembleAdapterSpec",
+    "FNOMCDropoutAdapterSpec",
     "LaplaceAdapterSpec",
     "MCDropoutAdapter",
     "MCDropoutState",
     "ModelUncertaintyAdapter",
     "ModelUncertaintyAdapterProtocol",
+    "OperatorAdapterSpec",
     "SNGPAdapterSpec",
     "SWAGAdapterSpec",
     "SWAGState",
