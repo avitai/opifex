@@ -356,7 +356,7 @@ print(f"Graph Neural Operator: nodes {node_features.shape} -> {graph_output.shap
 ### Uncertainty Quantification
 
 ```python
-from opifex.neural.bayesian.uncertainty_quantification import UncertaintyQuantifier
+from opifex.uncertainty.aggregators import UncertaintyQuantifier
 
 # Uncertainty quantifier
 bnn = UncertaintyQuantifier(

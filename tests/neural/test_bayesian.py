@@ -6,24 +6,28 @@ from flax import nnx
 
 from opifex.neural.base import StandardMLP
 from opifex.neural.bayesian import (
-    AleatoricUncertainty,
     AmortizedVariationalFramework,
     CalibrationTools,
-    ConservationLawPriors,
-    DomainSpecificPriors,
-    EpistemicUncertainty,
-    HierarchicalBayesianFramework,
     IsotonicRegression,
     MeanFieldGaussian,
-    PhysicsAwareUncertaintyPropagation,
-    PhysicsInformedPriors,
     PlattScaling,
     PriorConfig,
     TemperatureScaling,
-    UncertaintyComponents,
     UncertaintyEncoder,
-    UncertaintyQuantifier,
     VariationalConfig,
+)
+from opifex.uncertainty.aggregators import (
+    AleatoricUncertainty,
+    EpistemicUncertainty,
+    UncertaintyComponents,
+    UncertaintyQuantifier,
+)
+from opifex.uncertainty.priors_physics import (
+    ConservationLawPriors,
+    DomainSpecificPriors,
+    HierarchicalBayesianFramework,
+    PhysicsAwareUncertaintyPropagation,
+    PhysicsInformedPriors,
 )
 
 
@@ -471,7 +475,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_epistemic_uncertainty_initialization(self):
         """Test initialization of ensemble-based epistemic uncertainty estimator."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -483,7 +487,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_epistemic_uncertainty_add_model(self):
         """Test adding models to ensemble uncertainty estimator."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -501,7 +505,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_prediction_aggregation(self):
         """Test ensemble prediction aggregation methods."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -525,7 +529,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_uncertainty_computation(self):
         """Test ensemble-based uncertainty computation."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -548,7 +552,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_distributional_aleatoric_uncertainty(self):
         """Test distributional modeling of aleatoric uncertainty."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             DistributionalAleatoricUncertainty,
         )
 
@@ -569,7 +573,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_distributional_mixture_uncertainty(self):
         """Test mixture-based distributional uncertainty."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             DistributionalAleatoricUncertainty,
         )
 
@@ -592,7 +596,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_multi_source_uncertainty_aggregation(self):
         """Test multi-source uncertainty aggregation."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             MultiSourceUncertaintyAggregator,
         )
 
@@ -635,7 +639,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_enhanced_uncertainty_decomposition_integration(self):
         """Test integration of advanced uncertainty decomposition methods."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnhancedUncertaintyQuantifier,
         )
 

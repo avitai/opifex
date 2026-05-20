@@ -3,7 +3,7 @@
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.neural.bayesian.physics_informed_priors import (
+from opifex.uncertainty.priors_physics import (
     ConservationLawPriors,
     DomainSpecificPriors,
     PhysicsInformedPriors,

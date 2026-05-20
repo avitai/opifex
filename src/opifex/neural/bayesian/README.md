@@ -11,13 +11,19 @@ This module provides advanced Bayesian machine learning capabilities for scienti
 
 ### **📊 Module Overview**
 
-| Module | Lines | Description | Status |
-|--------|-------|-------------|--------|
-| `uncertainty_quantification.py` | 1,102 | Advanced UQ with multi-source uncertainty | ✅ Complete |
-| `probabilistic_pinns.py` | 1,123 | Physics-informed Bayesian networks | ✅ Complete |
-| `physics_informed_priors.py` | 1,052 | Physics-aware prior distributions | ✅ Complete |
-| `calibration_tools.py` | 810 | Enhanced calibration framework | ✅ Complete |
-| `variational_framework.py` | 519 | Variational inference methods | ✅ Complete |
+| Module | Description |
+|--------|-------------|
+| `probabilistic_pinns.py` | Physics-informed Bayesian networks |
+| `calibration_tools.py` | Calibration helpers (Platt, isotonic, temperature) |
+| `variational_framework.py` | Variational inference methods |
+
+Aggregators (`UncertaintyQuantifier`, `EnhancedUncertaintyQuantifier`,
+`AdvancedUncertaintyAggregator`, etc.) live in
+`opifex.uncertainty.aggregators`. Physics-prior modules
+(`PhysicsInformedPriors`, `ConservationLawPriors`,
+`DomainSpecificPriors`, `HierarchicalBayesianFramework`,
+`PhysicsAwareUncertaintyPropagation`) live in
+`opifex.uncertainty.priors_physics`.
 
 MCMC sampling lives in `opifex.uncertainty.inference_backends.blackjax:BlackJAXBackend` (thin adapter over Artifex's HMC / NUTS / MALA wrappers).
 
@@ -31,11 +37,11 @@ Full uncertainty assessment with multiple uncertainty sources and propagation st
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from opifex.neural.bayesian import AdvancedUncertaintyQuantification
+from opifex.uncertainty.aggregators import AdvancedUncertaintyAggregator
 
-# Initialize uncertainty quantification system
-key = jax.random.PRNGKey(42)
-uq_system = AdvancedUncertaintyQuantification(
+# Initialize uncertainty aggregation system. Caller owns the PRNG.
+key = jax.random.key(0)
+uq_system = AdvancedUncertaintyAggregator(
     model_dim=64,
     ensemble_size=10,
     uncertainty_sources=['epistemic', 'aleatoric', 'model'],

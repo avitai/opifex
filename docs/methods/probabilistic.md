@@ -157,7 +157,7 @@ until the upstream BlackJAX adapter grows a wrapper for them.
 
 ### 4. Uncertainty Quantification Utilities
 
-The `opifex.neural.bayesian.uncertainty_quantification` module provides tools for decomposing and analyzing uncertainty:
+The `opifex.uncertainty.aggregators` module provides tools for decomposing and analyzing uncertainty:
 
 ```python
 from opifex.neural.bayesian import (
