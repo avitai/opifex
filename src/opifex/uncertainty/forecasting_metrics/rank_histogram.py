@@ -26,5 +26,4 @@ def rank_histogram(*, ensemble: jax.Array, targets: jax.Array) -> jax.Array:
     less = (ensemble < targets[:, None]).astype(jnp.int32)
     ranks = jnp.sum(less, axis=1)
     n_members = ensemble.shape[1]
-    counts = jnp.bincount(ranks, length=n_members + 1)
-    return counts
+    return jnp.bincount(ranks, length=n_members + 1)

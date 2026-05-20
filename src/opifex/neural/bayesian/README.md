@@ -197,7 +197,7 @@ print(f"Effective sample size: {diagnostics['ess']:.0f}")
 Multi-level uncertainty modeling with adaptive propagation:
 
 ```python
-from opifex.neural.bayesian import HierarchicalBayesianFramework
+from opifex.uncertainty.priors_physics import HierarchicalBayesianFramework
 
 # Create hierarchical model
 hierarchical_model = HierarchicalBayesianFramework(

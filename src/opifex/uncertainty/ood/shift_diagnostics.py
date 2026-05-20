@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import jax
+import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 from flax import struct
 
 from opifex.uncertainty.conformal.exchangeability import ks_two_sample_pvalue

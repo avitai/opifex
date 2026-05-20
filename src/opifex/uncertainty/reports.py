@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-import jax
+import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 from flax import struct
 
 

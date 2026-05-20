@@ -160,7 +160,7 @@ until the upstream BlackJAX adapter grows a wrapper for them.
 The `opifex.uncertainty.aggregators` module provides tools for decomposing and analyzing uncertainty:
 
 ```python
-from opifex.neural.bayesian import (
+from opifex.uncertainty.aggregators import (
     UncertaintyQuantifier,
     EpistemicUncertainty,
     AleatoricUncertainty,
@@ -197,7 +197,7 @@ print(f"Prediction: {mean_prediction[0]} +/- {total_std[0]}")
 The `PhysicsInformedPriors` class enforces conservation laws and boundary conditions through learnable constraint weights:
 
 ```python
-from opifex.neural.bayesian import PhysicsInformedPriors
+from opifex.uncertainty.priors_physics import PhysicsInformedPriors
 import flax.nnx as nnx
 import jax
 import jax.numpy as jnp

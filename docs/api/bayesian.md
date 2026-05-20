@@ -532,10 +532,10 @@ class EnhancedUncertaintyComponents:
 ```python
 import jax
 import jax.numpy as jnp
-from opifex.neural.bayesian import (
+from opifex.uncertainty.aggregators import (
     AdvancedUncertaintyAggregator,
     AdvancedEpistemicUncertainty,
-    AdvancedAleatoricUncertainty
+    AdvancedAleatoricUncertainty,
 )
 
 # Generate ensemble predictions
@@ -925,7 +925,7 @@ Compute confidence measures that respect physics constraints.
 ### Conservation Law Enforcement
 
 ```python
-from opifex.neural.bayesian import PhysicsInformedPriors
+from opifex.uncertainty.priors_physics import PhysicsInformedPriors
 
 # Initialize physics priors
 physics_priors = PhysicsInformedPriors(
@@ -946,7 +946,7 @@ print(f"Constraint violation penalty: {violation_penalty:.6f}")
 ### Domain-Specific Modeling
 
 ```python
-from opifex.neural.bayesian import DomainSpecificPriors
+from opifex.uncertainty.priors_physics import DomainSpecificPriors
 
 # Quantum chemistry modeling
 quantum_priors = DomainSpecificPriors(
@@ -962,7 +962,7 @@ energies = quantum_priors.sample_domain_priors((50,), "energy")
 ### Hierarchical Uncertainty
 
 ```python
-from opifex.neural.bayesian import HierarchicalBayesianFramework
+from opifex.uncertainty.priors_physics import HierarchicalBayesianFramework
 
 # Multi-level uncertainty modeling
 hierarchical_framework = HierarchicalBayesianFramework(

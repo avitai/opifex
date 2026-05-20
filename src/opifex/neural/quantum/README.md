@@ -294,10 +294,10 @@ neural_dft.set_xc_operator(density_operator)
 Uncertainty quantification for quantum calculations:
 
 ```python
-from opifex.neural.bayesian import AdvancedUncertaintyQuantification
+from opifex.uncertainty.aggregators import AdvancedUncertaintyAggregator
 
 # Add uncertainty to neural functionals
-uq_neural_xc = AdvancedUncertaintyQuantification(
+uq_neural_xc = AdvancedUncertaintyAggregator(
     base_model=neural_xc,
     uncertainty_sources=['epistemic', 'aleatoric'],
     rngs=rngs

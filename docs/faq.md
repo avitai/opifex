@@ -572,7 +572,7 @@ Opifex provides Bayesian layers and uncertainty quantification tools:
 
 ```python
 from opifex.uncertainty import BayesianLinear
-from opifex.neural.bayesian import UncertaintyQuantifier
+from opifex.uncertainty.aggregators import UncertaintyQuantifier
 from flax import nnx
 import jax.numpy as jnp
 

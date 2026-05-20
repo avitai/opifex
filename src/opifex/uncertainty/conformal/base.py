@@ -13,12 +13,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 from flax import struct
 
 
 if TYPE_CHECKING:
-    import jax
-
     from opifex.uncertainty.types import MetadataItems
 
 

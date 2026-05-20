@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING
+
+import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 
 from opifex.uncertainty.reports import UQReliabilityReport
-
-
-if TYPE_CHECKING:
-    import jax
 
 
 @dc.dataclass(frozen=True, slots=True, kw_only=True)
