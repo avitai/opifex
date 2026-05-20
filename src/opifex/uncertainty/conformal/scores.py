@@ -33,15 +33,21 @@ def cqr_score(*, lower: jax.Array, upper: jax.Array, targets: jax.Array) -> jax.
 def conformal_quantile(*, scores: jax.Array, alpha: float) -> jax.Array:
     """Finite-sample-corrected ``(1 - alpha)`` quantile of ``scores``.
 
+    Matches the canonical Angelopoulos & Bates reference implementation
+    (``aangelopoulos/conformal-prediction``,
+    ``notebooks/imagenet-{smallest-sets,aps,raps}.ipynb`` and
+    ``meps-cqr.ipynb``) which uses
+    ``np.quantile(cal_scores, np.ceil((n+1)*(1-alpha))/n, interpolation='higher')``.
+    The ``'higher'`` interpolation rule (a.k.a. ceil-based) preserves the
+    finite-sample coverage bound; default linear interpolation does not.
+
     Args:
         scores: 1-D array of nonconformity scores.
         alpha: Miscoverage level in ``(0, 1)``.
 
     Returns:
-        Scalar quantile threshold. The rank is
-        ``min(ceil((n + 1)(1 - alpha)) / n, 1.0)`` so that conformal
-        coverage holds at level ``1 - alpha`` in finite samples.
+        Scalar quantile threshold using the ``'higher'`` rule.
     """
     n = scores.shape[0]
     rank = jnp.minimum(jnp.ceil((n + 1) * (1.0 - alpha)) / n, 1.0)
-    return jnp.quantile(scores, rank)
+    return jnp.quantile(scores, rank, method="higher")

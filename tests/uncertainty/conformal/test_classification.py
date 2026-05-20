@@ -65,12 +65,20 @@ def test_aps_score_sums_sorted_descending_until_true_class() -> None:
 
 
 def test_aps_score_produces_nested_sets_from_sorted_probabilities() -> None:
-    """For fixed probabilities, increasing the threshold q produces a nested
-    sequence of prediction sets."""
+    """Canonical Angelopoulos APS: include classes whose cumsum (sorted
+    descending) is ``<= threshold``. Increasing threshold → nested sets.
+
+    For probabilities [0.5, 0.3, 0.15, 0.05], cumsum descending is
+    [0.5, 0.8, 0.95, 1.0]:
+        threshold=0.4 → {} (no class has cumsum <= 0.4)
+        threshold=0.5 → {top-1}
+        threshold=0.8 → {top-1, top-2}
+        threshold=1.0 → {all}
+    """
     classification = _import_classification()
     probabilities = jnp.array([[0.5, 0.3, 0.15, 0.05]])
-    set_at_06 = classification.aps_prediction_set(
-        probabilities=probabilities, threshold=jnp.asarray(0.6)
+    set_at_05 = classification.aps_prediction_set(
+        probabilities=probabilities, threshold=jnp.asarray(0.5)
     )
     set_at_08 = classification.aps_prediction_set(
         probabilities=probabilities, threshold=jnp.asarray(0.8)
@@ -78,10 +86,16 @@ def test_aps_score_produces_nested_sets_from_sorted_probabilities() -> None:
     set_at_10 = classification.aps_prediction_set(
         probabilities=probabilities, threshold=jnp.asarray(1.0)
     )
-    # 0.6 → top class (cumsum 0.5+0.3=0.8 first hits ≥0.6 at 2 classes).
-    # Nesting: set_at_06 ⊆ set_at_08 ⊆ set_at_10.
-    assert bool(jnp.all(set_at_06[0] <= set_at_08[0]))
+    # Nesting under increasing threshold.
+    assert bool(jnp.all(set_at_05[0] <= set_at_08[0]))
     assert bool(jnp.all(set_at_08[0] <= set_at_10[0]))
+    # Specific membership: at threshold=0.5, only top-1 (idx 0) is included.
+    assert bool(set_at_05[0, 0]) is True
+    assert int(jnp.sum(set_at_05[0].astype(jnp.int32))) == 1
+    # At threshold=0.8, top-1 and top-2 (idx 0 and idx 1) are included.
+    assert int(jnp.sum(set_at_08[0].astype(jnp.int32))) == 2
+    # At threshold=1.0, all are included.
+    assert int(jnp.sum(set_at_10[0].astype(jnp.int32))) == 4
 
 
 def test_raps_score_preserves_aps_ordering_without_regularisation() -> None:

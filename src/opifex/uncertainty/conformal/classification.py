@@ -104,23 +104,23 @@ def aps_score(
 def aps_prediction_set(*, probabilities: jax.Array, threshold: jax.Array) -> jax.Array:
     """Boolean APS prediction set at the given cumulative-probability threshold.
 
-    Includes all classes within the cumulative sorted-probability ball of
-    radius ``threshold``.
+    Matches the canonical Angelopoulos reference
+    (``aangelopoulos/conformal-prediction/notebooks/imagenet-aps.ipynb``)::
 
-    Returns ``(batch, num_classes)`` boolean array.
+        val_pi = val_smx.argsort(1)[:, ::-1]
+        val_srt = np.take_along_axis(val_smx, val_pi, axis=1).cumsum(axis=1)
+        prediction_sets = np.take_along_axis(
+            val_srt <= qhat, val_pi.argsort(axis=1), axis=1
+        )
+
+    A class is included when its cumulative sorted-descending probability
+    (up to and including itself) is ``<= threshold``. Returns
+    ``(batch, num_classes)`` boolean array in the original class order.
     """
-    sorted_descending = jnp.sort(probabilities, axis=-1)[..., ::-1]
     argsorted = jnp.argsort(-probabilities, axis=-1)
+    sorted_descending = jnp.take_along_axis(probabilities, argsorted, axis=-1)
     cumulative = jnp.cumsum(sorted_descending, axis=-1)
-    # Include the first index whose cumulative sum crosses the threshold.
     included_in_sorted = cumulative <= threshold
-    # Always include the top-1 class.
-    included_in_sorted = included_in_sorted.at[..., 0].set(True)
-    # Then include the class that first crosses the threshold.
-    first_cross = jnp.argmax((cumulative >= threshold).astype(jnp.int32), axis=-1)
-    one_hot = jax.nn.one_hot(first_cross, probabilities.shape[-1], dtype=jnp.bool_)
-    included_in_sorted = included_in_sorted | one_hot
-    # Scatter back into original class order via the inverse permutation.
     inverse_perm = jnp.argsort(argsorted, axis=-1)
     return jnp.take_along_axis(included_in_sorted, inverse_perm, axis=-1)
 
