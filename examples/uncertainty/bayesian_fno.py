@@ -114,7 +114,18 @@ LEARNING_RATE = 1e-3
 
 SEED = 42
 
-OUTPUT_DIR = Path("docs/assets/examples/bayesian_fno")
+
+def _find_repo_root() -> Path:
+    """Walk up from cwd until we find pyproject.toml — works in scripts AND notebooks."""
+    here = Path.cwd().resolve()
+    for ancestor in (here, *here.parents):
+        if (ancestor / "pyproject.toml").exists():
+            return ancestor
+    return here
+
+
+_REPO_ROOT = _find_repo_root()
+OUTPUT_DIR = _REPO_ROOT / "docs" / "assets" / "examples" / "bayesian_fno"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 print()
@@ -248,10 +259,13 @@ Train the base FNO with standard MSE loss. The variational framework
 sits on top of the trained backbone and supplies the input-dependent
 posterior used for uncertainty at inference time.
 
-For training the framework with its full ELBO objective, see
-``AmortizedVariationalFramework.compute_elbo``. For other Bayesian
-models that ship the shared platform surface, prefer
-``model.negative_elbo(batch, rngs=..., objective=ObjectiveConfig(...))``
+``AmortizedVariationalFramework.compute_elbo`` is the framework-internal
+ELBO entry point — it flattens the input through an amortization MLP, so
+its current implementation is suited to flat-input bases rather than the
+spatial ``(batch, C, H, W)`` shape this FNO consumes. Bayesian models
+designed against the shared platform surface (``ProbabilisticPINN`` and
+friends) replace this MSE step with
+``model.negative_elbo(batch, rngs=..., objective=ObjectiveConfig(...))``,
 which returns a ``UQLossComponents`` without any manual KL/data
 assembly.
 """
