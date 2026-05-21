@@ -23,6 +23,11 @@ References
 
 from __future__ import annotations
 
+from opifex.uncertainty.linalg.krylov import (
+    arnoldi_hessenberg,
+    golub_kahan_bidiag,
+    lanczos_tridiag,
+)
 from opifex.uncertainty.linalg.trace import (
     hutch_plus_plus_trace,
     hutchinson_trace,
@@ -31,4 +36,12 @@ from opifex.uncertainty.linalg.trace import (
 )
 
 
-__all__ = ["hutch_plus_plus_trace", "hutchinson_trace", "xnys_trace", "xtrace"]
+__all__ = [
+    "arnoldi_hessenberg",
+    "golub_kahan_bidiag",
+    "hutch_plus_plus_trace",
+    "hutchinson_trace",
+    "lanczos_tridiag",
+    "xnys_trace",
+    "xtrace",
+]
