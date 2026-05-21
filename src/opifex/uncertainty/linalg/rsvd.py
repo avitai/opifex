@@ -81,9 +81,7 @@ def randomized_svd(
 
     sketched_range = jax.vmap(matvec, in_axes=1, out_axes=1)(sketch)
     for _ in range(num_iterations):
-        adjoint_image = jax.vmap(matvec_transpose, in_axes=1, out_axes=1)(
-            sketched_range
-        )
+        adjoint_image = jax.vmap(matvec_transpose, in_axes=1, out_axes=1)(sketched_range)
         sketched_range = jax.vmap(matvec, in_axes=1, out_axes=1)(adjoint_image)
 
     range_basis, _ = jnp.linalg.qr(sketched_range)

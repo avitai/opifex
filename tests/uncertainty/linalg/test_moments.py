@@ -84,9 +84,7 @@ def test_trace_moments_is_jit_compatible() -> None:
         return matrix @ vector
 
     jitted = jax.jit(
-        lambda k: trace_moments(
-            matvec=matvec, dim=3, num_samples=64, powers=(1, 2, 3), key=k
-        )
+        lambda k: trace_moments(matvec=matvec, dim=3, num_samples=64, powers=(1, 2, 3), key=k)
     )
     moments = jitted(jax.random.PRNGKey(4))
     assert len(moments) == 3

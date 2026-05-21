@@ -241,12 +241,8 @@ def golub_kahan_bidiag(
     dim_rows = left_unnorm.shape[0]
     left_init, first_alpha = _safe_normalise(left_unnorm)
 
-    left_basis = (
-        jnp.zeros((num_matvecs, dim_rows), dtype=init_vec.dtype).at[0].set(left_init)
-    )
-    right_basis = (
-        jnp.zeros((num_matvecs, dim_cols), dtype=init_vec.dtype).at[0].set(right_init)
-    )
+    left_basis = jnp.zeros((num_matvecs, dim_rows), dtype=init_vec.dtype).at[0].set(left_init)
+    right_basis = jnp.zeros((num_matvecs, dim_cols), dtype=init_vec.dtype).at[0].set(right_init)
     diag = jnp.zeros((num_matvecs,), dtype=init_vec.dtype).at[0].set(first_alpha)
     off_diag = jnp.zeros((num_matvecs,), dtype=init_vec.dtype)
 
