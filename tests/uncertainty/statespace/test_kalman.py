@@ -36,9 +36,7 @@ def test_kalman_predict_propagates_mean_and_covariance() -> None:
         mean=mean, cov=cov, transition=transition, process_noise=process_noise
     )
     assert jnp.allclose(predicted_mean, transition @ mean, atol=1e-6)
-    assert jnp.allclose(
-        predicted_cov, transition @ cov @ transition.T + process_noise, atol=1e-6
-    )
+    assert jnp.allclose(predicted_cov, transition @ cov @ transition.T + process_noise, atol=1e-6)
 
 
 def test_kalman_update_returns_correct_posterior_for_1d_linear_gaussian() -> None:
@@ -136,7 +134,7 @@ def test_kalman_smoother_lowers_variance_below_filter() -> None:
         initial_mean=jnp.zeros(state_dim),
         initial_cov=jnp.eye(state_dim),
     )
-    smoother_means, smoother_covs = kalman_smoother(
+    _smoother_means, smoother_covs = kalman_smoother(
         filter_means=filter_means,
         filter_covs=filter_covs,
         transitions=transitions,
@@ -185,12 +183,8 @@ def test_kalman_filter_is_jit_compatible() -> None:
     state_dim = 2
     num_steps = 4
     transitions = jnp.broadcast_to(jnp.eye(state_dim), (num_steps, state_dim, state_dim))
-    process_noises = jnp.broadcast_to(
-        0.1 * jnp.eye(state_dim), (num_steps, state_dim, state_dim)
-    )
-    observation_covs = jnp.broadcast_to(
-        0.1 * jnp.eye(state_dim), (num_steps, state_dim, state_dim)
-    )
+    process_noises = jnp.broadcast_to(0.1 * jnp.eye(state_dim), (num_steps, state_dim, state_dim))
+    observation_covs = jnp.broadcast_to(0.1 * jnp.eye(state_dim), (num_steps, state_dim, state_dim))
 
     def call(observations: jax.Array) -> tuple[jax.Array, jax.Array]:
         return kalman_filter(

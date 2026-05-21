@@ -27,6 +27,10 @@ from opifex.uncertainty.statespace.kalman import (
     kalman_smoother,
     kalman_update,
 )
+from opifex.uncertainty.statespace.sqrt_kalman import (
+    sqrt_kalman_predict,
+    sqrt_kalman_update,
+)
 
 
 __all__ = [
@@ -35,4 +39,6 @@ __all__ = [
     "kalman_predict",
     "kalman_smoother",
     "kalman_update",
+    "sqrt_kalman_predict",
+    "sqrt_kalman_update",
 ]

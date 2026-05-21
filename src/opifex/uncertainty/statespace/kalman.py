@@ -174,22 +174,14 @@ def kalman_smoother(
         inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
         next_smoothed_mean, next_smoothed_cov = carry
-        current_filter_mean, current_filter_cov, next_transition, next_process_noise = (
-            inputs
-        )
+        current_filter_mean, current_filter_cov, next_transition, next_process_noise = inputs
         predicted_mean = next_transition @ current_filter_mean
         predicted_cov = (
             next_transition @ current_filter_cov @ next_transition.T + next_process_noise
         )
-        gain = jnp.linalg.solve(
-            predicted_cov, next_transition @ current_filter_cov
-        ).T
-        smoothed_mean = current_filter_mean + gain @ (
-            next_smoothed_mean - predicted_mean
-        )
-        smoothed_cov = current_filter_cov + gain @ (
-            next_smoothed_cov - predicted_cov
-        ) @ gain.T
+        gain = jnp.linalg.solve(predicted_cov, next_transition @ current_filter_cov).T
+        smoothed_mean = current_filter_mean + gain @ (next_smoothed_mean - predicted_mean)
+        smoothed_cov = current_filter_cov + gain @ (next_smoothed_cov - predicted_cov) @ gain.T
         return (smoothed_mean, smoothed_cov), (smoothed_mean, smoothed_cov)
 
     _, (back_means, back_covs) = jax.lax.scan(
@@ -208,9 +200,7 @@ def kalman_smoother(
     return smoothed_means, smoothed_covs
 
 
-def _mvn_logpdf(
-    observation: jax.Array, mean: jax.Array, cov: jax.Array
-) -> jax.Array:
+def _mvn_logpdf(observation: jax.Array, mean: jax.Array, cov: jax.Array) -> jax.Array:
     """Multivariate Gaussian log-density at ``observation``."""
     obs_dim = observation.shape[0]
     cholesky = jnp.linalg.cholesky(cov)
@@ -249,12 +239,8 @@ def kalman_log_likelihood(
         predicted_mean, predicted_cov = kalman_predict(
             mean=mean, cov=cov, transition=transition, process_noise=process_noise
         )
-        innovation_cov = (
-            observation_matrix @ predicted_cov @ observation_matrix.T + observation_cov
-        )
-        step_ll = _mvn_logpdf(
-            observation, observation_matrix @ predicted_mean, innovation_cov
-        )
+        innovation_cov = observation_matrix @ predicted_cov @ observation_matrix.T + observation_cov
+        step_ll = _mvn_logpdf(observation, observation_matrix @ predicted_mean, innovation_cov)
         updated_mean, updated_cov = kalman_update(
             mean=predicted_mean,
             cov=predicted_cov,
