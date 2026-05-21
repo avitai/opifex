@@ -20,6 +20,11 @@ References
 
 from __future__ import annotations
 
+from opifex.uncertainty.statespace.cakf import (
+    cakf_predict,
+    cakf_update,
+    LowRankDowndatedMatrix,
+)
 from opifex.uncertainty.statespace.kalman import (
     kalman_filter,
     kalman_log_likelihood,
@@ -49,7 +54,10 @@ from opifex.uncertainty.statespace.sqrt_kalman import (
 
 
 __all__ = [
+    "LowRankDowndatedMatrix",
     "StateSpaceKernel",
+    "cakf_predict",
+    "cakf_update",
     "cosine_kernel",
     "discretize_lti_sde",
     "kalman_filter",
