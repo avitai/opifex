@@ -119,3 +119,116 @@ def winkler_score(
 ) -> jax.Array:
     """Alias for :func:`interval_score` — Winkler's 1972 original name."""
     return interval_score(lower=lower, upper=upper, targets=targets, alpha=alpha)
+
+
+# ---------------------------------------------------------------------------
+# Probnum-evaluation vendored calibration metrics
+#
+# Vendors the ANEES + NCI + chi-squared confidence-interval primitives from
+# probnum-evaluation/src/probnumeval/timeseries/_calibration_measures.py.
+# That reference is itself a stub (most bodies raise NotImplementedError);
+# the formulas here come directly from the cited Bar-Shalom 2002 and
+# Li+Zhao 2006 IFAC papers.
+# ---------------------------------------------------------------------------
+
+
+def _per_step_mahalanobis(errors: jax.Array, covariances: jax.Array) -> jax.Array:
+    """Per-timestep Mahalanobis distance ``e_t^T P_t^{-1} e_t``."""
+    solved = jax.vmap(jnp.linalg.solve)(covariances, errors)
+    return jnp.einsum("ti,ti->t", errors, solved)
+
+
+def anees(
+    *,
+    predicted_means: jax.Array,
+    predicted_covariances: jax.Array,
+    references: jax.Array,
+) -> jax.Array:
+    r"""Average Normalised Estimation Error Squared.
+
+    For a sequence of predictions ``(m_t, P_t)`` and references ``r_t`` of
+    dimension ``d``,
+
+    .. math::
+
+        \mathrm{ANEES} = \frac{1}{N d} \sum_t (r_t - m_t)^{\top} P_t^{-1} (r_t - m_t).
+
+    Optimal value is ``1``: ``ANEES > 1`` indicates over-confidence (the
+    predicted covariance is too small); ``ANEES < 1`` indicates
+    under-confidence. Cite Bar-Shalom 2002 IFAC.
+
+    Args:
+        predicted_means: Shape ``(num_steps, d)``.
+        predicted_covariances: Shape ``(num_steps, d, d)``.
+        references: Shape ``(num_steps, d)``.
+
+    Returns:
+        Scalar ANEES.
+    """
+    errors = references - predicted_means
+    mahalanobis = _per_step_mahalanobis(errors, predicted_covariances)
+    return jnp.mean(mahalanobis) / errors.shape[-1]
+
+
+def non_credibility_index(
+    *,
+    predicted_means: jax.Array,
+    predicted_covariances: jax.Array,
+    references: jax.Array,
+    reference_covariances: jax.Array,
+) -> jax.Array:
+    r"""Non-Credibility Index of Li & Zhao 2006 IFAC.
+
+    .. math::
+
+        \mathrm{NCI} = \frac{10}{N} \sum_t \log_{10} \bigl(
+            (r_t - m_t)^{\top} P_t^{-1} (r_t - m_t) /
+            (r_t - m_t)^{\top} S_t^{-1} (r_t - m_t) \bigr),
+
+    where ``P_t`` is the predicted covariance and ``S_t`` the reference
+    error covariance. ``NCI = 0`` indicates a calibrated estimator;
+    positive ``NCI`` means the predicted covariance underestimates the
+    true error covariance.
+
+    Args:
+        predicted_means: Shape ``(num_steps, d)``.
+        predicted_covariances: Shape ``(num_steps, d, d)``.
+        references: Shape ``(num_steps, d)``.
+        reference_covariances: True / reference error covariance, shape
+            ``(num_steps, d, d)``.
+
+    Returns:
+        Scalar NCI in decibels.
+    """
+    errors = references - predicted_means
+    predicted_mahalanobis = _per_step_mahalanobis(errors, predicted_covariances)
+    reference_mahalanobis = _per_step_mahalanobis(errors, reference_covariances)
+    ratio = predicted_mahalanobis / reference_mahalanobis
+    return 10.0 * jnp.mean(jnp.log10(ratio))
+
+
+def chi2_confidence_intervals(*, dim: int, percentile: float = 0.99) -> tuple[jax.Array, jax.Array]:
+    """Symmetric ``percentile``-level confidence interval of ``chi^2_dim``.
+
+    Returns the ``(lower, upper)`` quantiles at probability levels
+    ``(1 - percentile) / 2`` and ``1 - (1 - percentile) / 2``. Ports
+    :func:`probnumeval.timeseries._calibration_measures.chi2_confidence_intervals`.
+
+    Args:
+        dim: Degrees of freedom of the chi-squared distribution.
+        percentile: Interval coverage in ``(0, 1)``.
+
+    Returns:
+        ``(lower, upper)`` quantile pair.
+
+    Raises:
+        ValueError: If ``percentile`` is not strictly between 0 and 1.
+    """
+    if not 0.0 < percentile < 1.0:
+        raise ValueError(f"percentile must be in (0, 1); got {percentile!r}.")
+    import scipy.stats
+
+    delta = (1.0 - percentile) / 2.0
+    lower = jnp.asarray(scipy.stats.chi2(df=dim).ppf(delta))
+    upper = jnp.asarray(scipy.stats.chi2(df=dim).ppf(1.0 - delta))
+    return lower, upper
