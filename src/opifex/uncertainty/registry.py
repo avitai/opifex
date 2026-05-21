@@ -90,6 +90,9 @@ class DefaultStrategy(StrEnum):
     KARHUNEN_LOEVE = "karhunen_loeve"
     STOCHASTIC_GALERKIN = "stochastic_galerkin"
     PROBABILISTIC_NUMERICS = "probabilistic_numerics"
+    RANDOMIZED_LINALG = "randomized_linalg"
+    BAYESIAN_QUADRATURE = "bayesian_quadrature"
+    STATE_SPACE_FILTERING = "state_space_filtering"
     UNSUPPORTED = "unsupported"
 
 
