@@ -36,6 +36,7 @@ from opifex.uncertainty.linalg.krylov import (
     lanczos_tridiag,
 )
 from opifex.uncertainty.linalg.logdet import slq_logdet
+from opifex.uncertainty.linalg.lowrank import cholesky_greedy, rp_cholesky
 from opifex.uncertainty.linalg.trace import (
     hutch_plus_plus_trace,
     hutchinson_trace,
@@ -46,6 +47,7 @@ from opifex.uncertainty.linalg.trace import (
 
 __all__ = [
     "arnoldi_hessenberg",
+    "cholesky_greedy",
     "dense_funm_sym_eigh",
     "eig_partial",
     "eigh_partial",
@@ -56,6 +58,7 @@ __all__ = [
     "hutch_plus_plus_trace",
     "hutchinson_trace",
     "lanczos_tridiag",
+    "rp_cholesky",
     "slq_logdet",
     "svd_partial",
     "xnys_trace",
