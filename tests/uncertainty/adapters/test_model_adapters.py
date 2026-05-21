@@ -8,12 +8,15 @@ adapters MUST require caller-owned ``rngs`` at the method boundary — no
 hidden dropout/ensemble seed.
 
 Spec dataclasses for deferred backends (``BayesianLastLayerAdapterSpec``,
-``LaplaceAdapterSpec``, ``SNGPAdapterSpec``, ``VBLLAdapterSpec``,
-``SnapshotEnsembleAdapterSpec``, ``SWAGAdapterSpec``,
-``BatchEnsembleAdapterSpec``, ``DUEAdapterSpec``,
+``SNGPAdapterSpec``, ``VBLLAdapterSpec``, ``SnapshotEnsembleAdapterSpec``,
+``SWAGAdapterSpec``, ``BatchEnsembleAdapterSpec``, ``DUEAdapterSpec``,
 ``TestTimeAugmentationAdapterSpec``) declare capability + source-package
 metadata and raise an actionable ``NotImplementedError`` with backend
 guidance until real implementations are wired.
+
+``LaplaceAdapterSpec`` is concrete and produces a Monte-Carlo predictive
+distribution by sampling parameters from a diagonal Laplace posterior
+built via :func:`opifex.uncertainty.curvature.diagonal_laplace_posterior`.
 
 Fitted-state containers (``DeepEnsembleState``, ``SnapshotEnsembleState``,
 ``SWAGState``, ``BatchEnsembleState``, ``MCDropoutState``) are
@@ -38,7 +41,6 @@ from opifex.uncertainty.adapters import (
     DeepEnsembleAdapter,
     DeepEnsembleState,
     DUEAdapterSpec,
-    LaplaceAdapterSpec,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
@@ -195,7 +197,6 @@ def test_mc_dropout_adapter_requires_caller_owned_rngs() -> None:
 
 _DEFERRED_SPECS: tuple[tuple[type, DefaultStrategy], ...] = (
     (BayesianLastLayerAdapterSpec, DefaultStrategy.BAYESIAN_LAST_LAYER),
-    (LaplaceAdapterSpec, DefaultStrategy.LAPLACE),
     (SNGPAdapterSpec, DefaultStrategy.SNGP),
     (VBLLAdapterSpec, DefaultStrategy.VBLL),
     (SnapshotEnsembleAdapterSpec, DefaultStrategy.SNAPSHOT_ENSEMBLE),

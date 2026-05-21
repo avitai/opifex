@@ -22,6 +22,7 @@ from opifex.uncertainty.adapters.ensemble import (
 from opifex.uncertainty.adapters.model import (
     BayesianLastLayerAdapterSpec,
     LaplaceAdapterSpec,
+    LaplaceState,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
@@ -55,6 +56,7 @@ __all__ = [
     "FNODeepEnsembleAdapterSpec",
     "FNOMCDropoutAdapterSpec",
     "LaplaceAdapterSpec",
+    "LaplaceState",
     "MCDropoutAdapter",
     "MCDropoutState",
     "ModelUncertaintyAdapter",
