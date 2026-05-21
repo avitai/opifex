@@ -23,6 +23,7 @@ References
 
 from __future__ import annotations
 
+from opifex.uncertainty.linalg.eig import eig_partial, eigh_partial, svd_partial
 from opifex.uncertainty.linalg.krylov import (
     arnoldi_hessenberg,
     golub_kahan_bidiag,
@@ -38,10 +39,13 @@ from opifex.uncertainty.linalg.trace import (
 
 __all__ = [
     "arnoldi_hessenberg",
+    "eig_partial",
+    "eigh_partial",
     "golub_kahan_bidiag",
     "hutch_plus_plus_trace",
     "hutchinson_trace",
     "lanczos_tridiag",
+    "svd_partial",
     "xnys_trace",
     "xtrace",
 ]
