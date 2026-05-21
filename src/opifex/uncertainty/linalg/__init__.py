@@ -37,6 +37,7 @@ from opifex.uncertainty.linalg.krylov import (
 )
 from opifex.uncertainty.linalg.logdet import slq_logdet
 from opifex.uncertainty.linalg.lowrank import cholesky_greedy, rp_cholesky
+from opifex.uncertainty.linalg.lstsq import lsmr
 from opifex.uncertainty.linalg.moments import trace_moments
 from opifex.uncertainty.linalg.rsvd import randomized_svd
 from opifex.uncertainty.linalg.trace import (
@@ -60,6 +61,7 @@ __all__ = [
     "hutch_plus_plus_trace",
     "hutchinson_trace",
     "lanczos_tridiag",
+    "lsmr",
     "randomized_svd",
     "rp_cholesky",
     "slq_logdet",

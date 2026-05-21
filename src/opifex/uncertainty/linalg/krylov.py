@@ -235,13 +235,18 @@ def golub_kahan_bidiag(
         ``bidiag`` is ``(num_matvecs, num_matvecs)`` upper bidiagonal.
         The singular values of ``bidiag`` match those of ``A``.
     """
-    dim = init_vec.shape[0]
+    dim_cols = init_vec.shape[0]
     right_init, _ = _safe_normalise(init_vec)
     left_unnorm = matvec(right_init)
+    dim_rows = left_unnorm.shape[0]
     left_init, first_alpha = _safe_normalise(left_unnorm)
 
-    left_basis = jnp.zeros((num_matvecs, dim), dtype=init_vec.dtype).at[0].set(left_init)
-    right_basis = jnp.zeros((num_matvecs, dim), dtype=init_vec.dtype).at[0].set(right_init)
+    left_basis = (
+        jnp.zeros((num_matvecs, dim_rows), dtype=init_vec.dtype).at[0].set(left_init)
+    )
+    right_basis = (
+        jnp.zeros((num_matvecs, dim_cols), dtype=init_vec.dtype).at[0].set(right_init)
+    )
     diag = jnp.zeros((num_matvecs,), dtype=init_vec.dtype).at[0].set(first_alpha)
     off_diag = jnp.zeros((num_matvecs,), dtype=init_vec.dtype)
 
