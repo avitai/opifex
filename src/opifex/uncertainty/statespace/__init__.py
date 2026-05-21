@@ -27,6 +27,16 @@ from opifex.uncertainty.statespace.kalman import (
     kalman_smoother,
     kalman_update,
 )
+from opifex.uncertainty.statespace.kernels import (
+    cosine_kernel,
+    matern12_kernel,
+    matern32_kernel,
+    matern52_kernel,
+    matern72_kernel,
+    periodic_kernel,
+    quasi_periodic_matern12_kernel,
+    StateSpaceKernel,
+)
 from opifex.uncertainty.statespace.lti_sde import discretize_lti_sde
 from opifex.uncertainty.statespace.parallel import (
     kalman_filter_parallel,
@@ -39,6 +49,8 @@ from opifex.uncertainty.statespace.sqrt_kalman import (
 
 
 __all__ = [
+    "StateSpaceKernel",
+    "cosine_kernel",
     "discretize_lti_sde",
     "kalman_filter",
     "kalman_filter_parallel",
@@ -47,6 +59,12 @@ __all__ = [
     "kalman_smoother",
     "kalman_smoother_parallel",
     "kalman_update",
+    "matern12_kernel",
+    "matern32_kernel",
+    "matern52_kernel",
+    "matern72_kernel",
+    "periodic_kernel",
+    "quasi_periodic_matern12_kernel",
     "sqrt_kalman_predict",
     "sqrt_kalman_update",
 ]
