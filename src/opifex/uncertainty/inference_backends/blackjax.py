@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from flax import nnx
 
 _SUPPORTED_METHODS: tuple[str, ...] = ("hmc", "nuts", "mala")
-_UNSUPPORTED_METHODS: tuple[str, ...] = ("sgld", "sghmc", "smc", "advi", "pathfinder")
+_UNSUPPORTED_METHODS: tuple[str, ...] = ("sgld", "sghmc", "smc")
 _POSTERIOR_STREAMS: tuple[str, ...] = ("sample", "default")
 
 

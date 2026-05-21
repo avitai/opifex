@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from opifex.uncertainty.inference_backends.advi import ADVIBackend
 from opifex.uncertainty.inference_backends.base import (
     BackendDiagnostics,
     BackendResult,
@@ -20,7 +21,9 @@ from opifex.uncertainty.inference_backends.optional import (
     OPTIONAL_SAMPLER_SPECS,
     OptionalBackendSpec,
 )
+from opifex.uncertainty.inference_backends.pathfinder import PathfinderBackend
 from opifex.uncertainty.inference_backends.router import BackendRouter
+from opifex.uncertainty.inference_backends.svgd import SVGDBackend
 
 
 __all__ = [
@@ -29,6 +32,7 @@ __all__ = [
     "DISTRIBUTION_SPECS",
     "OPTIONAL_FLOW_SPECS",
     "OPTIONAL_SAMPLER_SPECS",
+    "ADVIBackend",
     "BackendDiagnostics",
     "BackendResult",
     "BackendRouter",
@@ -36,5 +40,7 @@ __all__ = [
     "InferenceBackendProtocol",
     "InferenceBackendSpec",
     "OptionalBackendSpec",
+    "PathfinderBackend",
+    "SVGDBackend",
     "UnsupportedBackendError",
 ]
