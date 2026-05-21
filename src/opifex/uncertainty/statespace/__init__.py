@@ -27,6 +27,10 @@ from opifex.uncertainty.statespace.kalman import (
     kalman_smoother,
     kalman_update,
 )
+from opifex.uncertainty.statespace.parallel import (
+    kalman_filter_parallel,
+    kalman_smoother_parallel,
+)
 from opifex.uncertainty.statespace.sqrt_kalman import (
     sqrt_kalman_predict,
     sqrt_kalman_update,
@@ -35,9 +39,11 @@ from opifex.uncertainty.statespace.sqrt_kalman import (
 
 __all__ = [
     "kalman_filter",
+    "kalman_filter_parallel",
     "kalman_log_likelihood",
     "kalman_predict",
     "kalman_smoother",
+    "kalman_smoother_parallel",
     "kalman_update",
     "sqrt_kalman_predict",
     "sqrt_kalman_update",
