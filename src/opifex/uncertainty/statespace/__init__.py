@@ -27,6 +27,7 @@ from opifex.uncertainty.statespace.kalman import (
     kalman_smoother,
     kalman_update,
 )
+from opifex.uncertainty.statespace.lti_sde import discretize_lti_sde
 from opifex.uncertainty.statespace.parallel import (
     kalman_filter_parallel,
     kalman_smoother_parallel,
@@ -38,6 +39,7 @@ from opifex.uncertainty.statespace.sqrt_kalman import (
 
 
 __all__ = [
+    "discretize_lti_sde",
     "kalman_filter",
     "kalman_filter_parallel",
     "kalman_log_likelihood",
