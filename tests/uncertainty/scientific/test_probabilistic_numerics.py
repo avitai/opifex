@@ -50,21 +50,32 @@ _AXIS_SPECS: tuple[type, ...] = (
 )
 
 
-_ADAPTER_SPECS: tuple[type, ...] = (
+_DEFERRED_ADAPTER_SPECS: tuple[type, ...] = (
     ProbdiffeqAdapterSpec,
     ProbnumAdapterSpec,
     ProbfindiffAdapterSpec,
     DiffeqzooAdapterSpec,
     FenrirAdapterSpec,
     DaltonAdapterSpec,
-    IOUPPriorSpec,
-    MaternPriorSpec,
-    IWPPriorSpec,
     ManifoldUpdateSpec,
     PerturbedStepSolverSpec,
     DenseOutputSamplingSpec,
     ApplyDiffusionSpec,
 )
+
+
+_CONCRETIZED_ADAPTER_SPECS: tuple[type, ...] = (
+    # Task 6.3.11: these three now return concrete (drift, dispersion) SDE
+    # tuples from wrap(); they no longer raise NotImplementedError.
+    IOUPPriorSpec,
+    MaternPriorSpec,
+    IWPPriorSpec,
+)
+
+
+# All non-axis adapter specs (deferred + concretized), used by structural
+# tests that don't care which family the spec is in.
+_ADAPTER_SPECS: tuple[type, ...] = _DEFERRED_ADAPTER_SPECS + _CONCRETIZED_ADAPTER_SPECS
 
 
 def test_catalogue_has_exactly_twenty_one_named_specs() -> None:
@@ -99,13 +110,30 @@ def test_adapter_spec_is_frozen_dataclass_with_probnum_strategy(spec_cls: type) 
         spec.source_package = "tampered"  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("spec_cls", _ADAPTER_SPECS)
-def test_adapter_spec_wrap_raises_actionable_error(spec_cls: type) -> None:
-    """Every adapter spec raises an actionable error from ``wrap``."""
+@pytest.mark.parametrize("spec_cls", _DEFERRED_ADAPTER_SPECS)
+def test_deferred_adapter_spec_wrap_raises_actionable_error(spec_cls: type) -> None:
+    """Each deferred adapter spec raises an actionable error from ``wrap``."""
     spec: Any = spec_cls()
     capability = UQCapability(default_strategy=spec.default_strategy)
     with pytest.raises(NotImplementedError, match=type(spec).__name__):
         spec.wrap(model=None, capability=capability)
+
+
+@pytest.mark.parametrize("spec_cls", _CONCRETIZED_ADAPTER_SPECS)
+def test_concretized_prior_spec_wrap_returns_sde_tuple(spec_cls: type) -> None:
+    """IOUP / Matern / IWP prior specs now return concrete SDE matrices.
+
+    Per Task 6.3.11 these three were promoted from deferred-metadata to
+    concrete builders. ``wrap`` returns a ``(drift, dispersion)`` pair
+    suitable for :func:`opifex.uncertainty.statespace.discretize_lti_sde`.
+    """
+    spec: Any = spec_cls()
+    capability = UQCapability(default_strategy=spec.default_strategy)
+    drift, dispersion = spec.wrap(model=None, capability=capability)
+    assert drift.ndim == 2
+    assert dispersion.ndim == 2
+    assert drift.shape[0] == drift.shape[1]
+    assert drift.shape[0] == dispersion.shape[0]
 
 
 def test_probdiffeq_adapter_spec_exposes_four_axis_fields() -> None:

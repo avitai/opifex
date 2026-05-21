@@ -73,6 +73,7 @@ import warnings
 from typing import Any, Literal
 
 import jax
+import jax.numpy as jnp
 
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
@@ -348,6 +349,9 @@ class IOUPPriorSpec(_PNAdapterSpecBase):
     2023 "Probabilistic Exponential Integrators").
     """
 
+    num_derivatives: int = 1
+    wiener_process_dimension: int = 1
+    rate_parameter: float | jax.Array = 1.0
     source_package: str = "opifex"
     family_tags: tuple[str, ...] = (
         "ioup",
@@ -360,11 +364,66 @@ class IOUPPriorSpec(_PNAdapterSpecBase):
         "(scalar / vector / matrix). arXiv:2305.14978."
     )
 
+    def __post_init__(self) -> None:
+        """Validate ``rate_parameter`` shape against ``wiener_process_dimension``."""
+        rate_array = jnp.asarray(self.rate_parameter)
+        if rate_array.ndim == 1:
+            if rate_array.shape[0] != self.wiener_process_dimension:
+                raise ValueError(
+                    "IOUPPriorSpec: rate_parameter vector length must equal "
+                    f"wiener_process_dimension={self.wiener_process_dimension}; "
+                    f"got shape {rate_array.shape!r}."
+                )
+        elif rate_array.ndim == 2:
+            if rate_array.shape != (
+                self.wiener_process_dimension,
+                self.wiener_process_dimension,
+            ):
+                raise ValueError(
+                    "IOUPPriorSpec: rate_parameter matrix must be "
+                    f"({self.wiener_process_dimension}, "
+                    f"{self.wiener_process_dimension}); "
+                    f"got shape {rate_array.shape!r}."
+                )
+        elif rate_array.ndim > 2:
+            raise ValueError(
+                "IOUPPriorSpec: rate_parameter must be a scalar, 1-D vector, "
+                f"or 2-D matrix; got ndim={rate_array.ndim}."
+            )
+
+    @property
+    def rate_mode(self) -> str:
+        """Return the rate-parameter mode (``scalar`` / ``vector`` / ``matrix``)."""
+        rate_array = jnp.asarray(self.rate_parameter)
+        if rate_array.ndim == 0:
+            return "scalar"
+        if rate_array.ndim == 1:
+            return "vector"
+        return "matrix"
+
+    def build_sde(self) -> tuple[jax.Array, jax.Array]:
+        """Build the ``(drift, dispersion)`` SDE matrices."""
+        from opifex.uncertainty.scientific._priors_sde import ioup_sde
+
+        return ioup_sde(
+            num_derivatives=self.num_derivatives,
+            wiener_process_dimension=self.wiener_process_dimension,
+            rate_parameter=self.rate_parameter,
+        )
+
+    def wrap(self, model: Any, capability: UQCapability) -> tuple[jax.Array, jax.Array]:
+        """Return the ``(drift, dispersion)`` SDE pair for downstream use."""
+        del model, capability
+        return self.build_sde()
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class MaternPriorSpec(_PNAdapterSpecBase):
     """Matérn SDE construction (binomial-coefficient SDE matrix building)."""
 
+    num_derivatives: int = 1
+    wiener_process_dimension: int = 1
+    lengthscale: float = 1.0
     source_package: str = "opifex"
     family_tags: tuple[str, ...] = ("matern_prior",)
     notes: str = (
@@ -372,11 +431,28 @@ class MaternPriorSpec(_PNAdapterSpecBase):
         "building. Cite Särkkä & Solin 2019 §12.3."
     )
 
+    def build_sde(self) -> tuple[jax.Array, jax.Array]:
+        """Build the ``(drift, dispersion)`` SDE matrices."""
+        from opifex.uncertainty.scientific._priors_sde import matern_sde
+
+        return matern_sde(
+            num_derivatives=self.num_derivatives,
+            wiener_process_dimension=self.wiener_process_dimension,
+            lengthscale=self.lengthscale,
+        )
+
+    def wrap(self, model: Any, capability: UQCapability) -> tuple[jax.Array, jax.Array]:
+        """Return the ``(drift, dispersion)`` SDE pair for downstream use."""
+        del model, capability
+        return self.build_sde()
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class IWPPriorSpec(_PNAdapterSpecBase):
     """Integrated Wiener Process prior (probabilistic ODE solver default)."""
 
+    num_derivatives: int = 1
+    wiener_process_dimension: int = 1
     source_package: str = "opifex"
     family_tags: tuple[str, ...] = ("iwp",)
     notes: str = (
@@ -384,6 +460,20 @@ class IWPPriorSpec(_PNAdapterSpecBase):
         "probabilistic ODE solvers. Cite probnum/randprocs/markov/"
         "integrator/_iwp.py."
     )
+
+    def build_sde(self) -> tuple[jax.Array, jax.Array]:
+        """Build the ``(drift, dispersion)`` SDE matrices."""
+        from opifex.uncertainty.scientific._priors_sde import iwp_sde
+
+        return iwp_sde(
+            num_derivatives=self.num_derivatives,
+            wiener_process_dimension=self.wiener_process_dimension,
+        )
+
+    def wrap(self, model: Any, capability: UQCapability) -> tuple[jax.Array, jax.Array]:
+        """Return the ``(drift, dispersion)`` SDE pair for downstream use."""
+        del model, capability
+        return self.build_sde()
 
 
 # ---------------------------------------------------------------------------

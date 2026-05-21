@@ -27,7 +27,9 @@ from flax import nnx, struct
 
 from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.curvature import DiagonalLaplacePosterior
+from opifex.uncertainty.curvature import (
+    DiagonalLaplacePosterior,  # noqa: TC001 — kept eager for consistency
+)
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 

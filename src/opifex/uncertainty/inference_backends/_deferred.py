@@ -19,8 +19,10 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 from flax import nnx  # noqa: TC002
 
-from opifex.uncertainty.inference_backends.base import BackendResult
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.inference_backends.base import BackendResult  # noqa: TC001
+from opifex.uncertainty.types import (
+    PredictiveDistribution,  # noqa: TC001 — kept eager for consistency
+)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
