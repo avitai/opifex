@@ -15,6 +15,15 @@ Algorithms
   residual. Matches the matrix trace exactly when the spectrum is supported
   on a subspace of dimension at most ``num_samples // 3``. Sibling
   reference: ``traceax/src/traceax/_estimators.py`` (``HutchPlusPlusEstimator``).
+* ``xtrace`` — Epperly, Tropp, Webber arXiv:2301.07825. Exchangeable
+  estimator that reuses each random vector in both the sketch and the
+  residual stages via leave-one-out structure. Sibling reference:
+  ``traceax/src/traceax/_estimators.py:170 XTraceEstimator``.
+* ``xnys_trace`` — Epperly+ arXiv:2301.07825 §5. PSD-specialised variant
+  using Nyström approximation instead of randomized SVD. Lower variance
+  than XTrace for symmetric positive-definite operators (curvature /
+  Fisher information matrices). Sibling reference:
+  ``traceax/src/traceax/_estimators.py:241 XNysTraceEstimator``.
 
 References
 ----------
@@ -22,6 +31,8 @@ References
   matrix*.
 * Meyer, Musco, Musco, Woodruff arXiv:2010.09649 — *Hutch++: Optimal
   stochastic trace estimation*.
+* Epperly, Tropp, Webber arXiv:2301.07825 — *XTrace: Making the most of
+  every sample in stochastic trace estimation*.
 """
 
 from __future__ import annotations
@@ -111,4 +122,149 @@ def hutch_plus_plus_trace(
     return exact_trace_component + residual_component
 
 
-__all__ = ["hutch_plus_plus_trace", "hutchinson_trace"]
+def _sphere_sample(key: jax.Array, dim: int, num_samples: int) -> jax.Array:
+    """Sample ``num_samples`` vectors uniformly on the sphere of radius ``sqrt(dim)``.
+
+    Sibling reference: ``traceax/src/traceax/_samplers.py:93 SphereSampler``.
+    Used by XTrace / XNysTrace for the theoretical-analysis isotropy property.
+    """
+    raw = jax.random.normal(key, (dim, num_samples))
+    column_norms = jnp.linalg.norm(raw, axis=0, keepdims=True)
+    return jnp.sqrt(jnp.asarray(dim, dtype=raw.dtype)) * raw / column_norms
+
+
+def xtrace(
+    *,
+    matvec: Callable[[jax.Array], jax.Array],
+    dim: int,
+    num_samples: int,
+    key: jax.Array,
+) -> jax.Array:
+    """Estimate ``trace(A)`` via XTrace (Epperly+ arXiv:2301.07825).
+
+    XTrace enforces exchangeability across the ``m = num_samples // 2``
+    random probes by reusing each probe in both the sketch and the
+    residual stages — implemented efficiently through leave-one-out
+    algebra so the total cost is ``num_samples`` matvecs (``m`` for the
+    sketch, ``m`` for the basis image ``Z = A Q``). The improved scaling
+    uses ``traceax``'s ``_get_scale`` factor that orthogonalises probes
+    against the low-rank approximation.
+
+    Sibling reference (line-by-line port):
+    ``traceax/src/traceax/_estimators.py:170 XTraceEstimator``.
+
+    Args:
+        matvec: callable mapping ``(dim,)`` to ``(dim,)``.
+        dim: matrix dimension ``n`` (static).
+        num_samples: total matvec budget. Static. ``num_samples // 2``
+            sketch matvecs plus the same number of basis-image matvecs.
+        key: PRNG key.
+
+    Returns:
+        Scalar JAX array — the mean of the per-probe XTrace estimates.
+    """
+    half_samples = num_samples // 2
+    samples = _sphere_sample(key, dim, half_samples)
+
+    image = jax.vmap(matvec, in_axes=1, out_axes=1)(samples)
+    basis, upper = jnp.linalg.qr(image)
+    inv_upper_t = jnp.linalg.inv(upper).T
+    inv_upper_col_norms = jnp.linalg.norm(inv_upper_t, axis=0)
+    normalised_inv_upper_t = inv_upper_t / inv_upper_col_norms
+
+    basis_image = jax.vmap(matvec, in_axes=1, out_axes=1)(basis)
+    h_matrix = basis.T @ basis_image
+    w_matrix = basis.T @ samples
+    t_matrix = basis_image.T @ samples
+    hw_matrix = h_matrix @ w_matrix
+
+    sw_diag = jnp.sum(normalised_inv_upper_t * w_matrix, axis=0)
+    tw_diag = jnp.sum(t_matrix * w_matrix, axis=0)
+    shs_diag = jnp.sum(normalised_inv_upper_t * (h_matrix @ normalised_inv_upper_t), axis=0)
+    whw_diag = jnp.sum(w_matrix * hw_matrix, axis=0)
+
+    term1 = sw_diag * jnp.sum((t_matrix - h_matrix.T @ w_matrix) * normalised_inv_upper_t, axis=0)
+    term2 = (sw_diag**2) * shs_diag
+    term3 = sw_diag * jnp.sum(normalised_inv_upper_t * (upper - hw_matrix), axis=0)
+
+    scale = (dim - half_samples + 1) / (dim - jnp.linalg.norm(w_matrix, axis=0) ** 2 + sw_diag**2)
+
+    estimates = (
+        jnp.trace(h_matrix) * jnp.ones(half_samples)
+        - shs_diag
+        + (whw_diag - tw_diag + term1 + term2 + term3) * scale
+    )
+    return jnp.mean(estimates)
+
+
+def xnys_trace(
+    *,
+    matvec: Callable[[jax.Array], jax.Array],
+    dim: int,
+    num_samples: int,
+    key: jax.Array,
+) -> jax.Array:
+    """Estimate ``trace(A)`` via XNysTrace for a PSD operator ``A``.
+
+    Builds a Nyström approximation from ``num_samples`` matvecs and adds
+    an exchangeable residual correction. On a PSD matrix whose rank is at
+    most ``num_samples``, XNysTrace recovers the trace exactly up to
+    numerical roundoff.
+
+    Sibling reference (line-by-line port):
+    ``traceax/src/traceax/_estimators.py:241 XNysTraceEstimator``.
+
+    Args:
+        matvec: callable mapping ``(dim,)`` to ``(dim,)``. Must be a
+            positive-semi-definite operator; the algorithm forms a
+            symmetric Cholesky factor of ``Ω^T A Ω`` internally.
+        dim: matrix dimension ``n`` (static).
+        num_samples: total matvec budget. Static.
+        key: PRNG key.
+
+    Returns:
+        Scalar JAX array — the mean of the per-probe XNysTrace estimates.
+    """
+    samples = _sphere_sample(key, dim, num_samples)
+    image = jax.vmap(matvec, in_axes=1, out_axes=1)(samples)
+
+    shift = (
+        jnp.finfo(image.dtype).eps
+        * jnp.linalg.norm(image, "fro")
+        / jnp.sqrt(jnp.asarray(dim, dtype=image.dtype))
+    )
+    shifted_image = image + samples * shift
+    basis, upper = jnp.linalg.qr(shifted_image)
+
+    gram = samples.T @ shifted_image
+    cholesky_factor = jnp.linalg.cholesky(0.5 * (gram + gram.T)).T
+    sketch_factor = jax.scipy.linalg.solve_triangular(cholesky_factor.T, upper.T, lower=True).T
+
+    sample_basis, sample_upper = jnp.linalg.qr(samples)
+    sample_w_matrix = sample_basis.T @ samples
+    sample_inv_upper_t = jnp.linalg.inv(sample_upper).T
+    sample_inv_upper_col_norms = jnp.linalg.norm(sample_inv_upper_t, axis=0)
+    normalised_sample_inv_upper_t = sample_inv_upper_t / sample_inv_upper_col_norms
+
+    scale = (dim - num_samples + 1) / (
+        dim
+        - jnp.linalg.norm(sample_w_matrix, axis=0) ** 2
+        + jnp.sum(normalised_sample_inv_upper_t * sample_w_matrix, axis=0) ** 2
+    )
+
+    w_matrix = basis.T @ samples
+    residual_factor = jax.scipy.linalg.solve_triangular(
+        cholesky_factor, sketch_factor.T, lower=False
+    ).T / jnp.sqrt(jnp.diag(jnp.linalg.inv(gram)))
+    dsw_diag = jnp.sum(residual_factor * w_matrix, axis=0)
+
+    estimates = (
+        jnp.linalg.norm(sketch_factor, "fro") ** 2
+        - jnp.linalg.norm(residual_factor, axis=0) ** 2
+        + (dsw_diag**2) * scale
+        - shift * dim
+    )
+    return jnp.mean(estimates)
+
+
+__all__ = ["hutch_plus_plus_trace", "hutchinson_trace", "xnys_trace", "xtrace"]

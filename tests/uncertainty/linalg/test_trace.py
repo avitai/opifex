@@ -16,7 +16,12 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.linalg import hutch_plus_plus_trace, hutchinson_trace
+from opifex.uncertainty.linalg import (
+    hutch_plus_plus_trace,
+    hutchinson_trace,
+    xnys_trace,
+    xtrace,
+)
 
 
 def test_hutchinson_trace_converges_to_exact_trace_on_small_spd_matrix() -> None:
@@ -116,4 +121,68 @@ def test_hutch_plus_plus_is_jit_compatible() -> None:
         lambda key: hutch_plus_plus_trace(matvec=matvec, dim=4, num_samples=24, key=key)
     )
     estimate = jitted(jax.random.PRNGKey(2))
+    assert jnp.isfinite(estimate)
+
+
+def test_xtrace_unbiased_on_dense_symmetric_matrix() -> None:
+    """XTrace averages to the exact trace over independent runs.
+
+    Cite: Epperly, Tropp, Webber arXiv:2301.07825. Exchangeable estimator
+    that uses each random vector in both the sketch and residual stages.
+    """
+    rng = jax.random.PRNGKey(2024)
+    raw = jax.random.normal(rng, (10, 10))
+    matrix = 0.5 * (raw + raw.T)
+    exact_trace = jnp.trace(matrix)
+
+    def matvec(vector: jax.Array) -> jax.Array:
+        return matrix @ vector
+
+    keys = jax.random.split(jax.random.PRNGKey(13), 32)
+    estimates = jax.vmap(lambda k: xtrace(matvec=matvec, dim=10, num_samples=20, key=k))(keys)
+    assert jnp.allclose(jnp.mean(estimates), exact_trace, atol=2e-1)
+
+
+def test_xtrace_is_jit_compatible() -> None:
+    """XTrace passes ``jax.jit``."""
+    matrix = jnp.diag(jnp.asarray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+
+    def matvec(vector: jax.Array) -> jax.Array:
+        return matrix @ vector
+
+    jitted = jax.jit(lambda k: xtrace(matvec=matvec, dim=6, num_samples=4, key=k))
+    estimate = jitted(jax.random.PRNGKey(3))
+    assert jnp.isfinite(estimate)
+
+
+def test_xnys_trace_is_exact_on_rank_k_psd_matrix() -> None:
+    """XNysTrace recovers the exact trace of a rank-k PSD matrix.
+
+    Cite: Epperly+ arXiv:2301.07825 §5. The Nyström approximation
+    captures all rank-k content when num_samples >= k, leaving zero
+    residual variance for PSD operators.
+    """
+    rng = jax.random.PRNGKey(31)
+    factor = jax.random.normal(rng, (8, 3))  # rank 3 in 8D
+    matrix = factor @ factor.T  # PSD, rank ≤ 3
+    exact_trace = jnp.trace(matrix)
+
+    def matvec(vector: jax.Array) -> jax.Array:
+        return matrix @ vector
+
+    estimate = xnys_trace(matvec=matvec, dim=8, num_samples=6, key=jax.random.PRNGKey(17))
+    assert jnp.allclose(estimate, exact_trace, atol=1e-3)
+
+
+def test_xnys_trace_is_jit_compatible() -> None:
+    """XNysTrace passes ``jax.jit`` on a PSD operator."""
+    rng = jax.random.PRNGKey(41)
+    factor = jax.random.normal(rng, (6, 4))
+    matrix = factor @ factor.T
+
+    def matvec(vector: jax.Array) -> jax.Array:
+        return matrix @ vector
+
+    jitted = jax.jit(lambda k: xnys_trace(matvec=matvec, dim=6, num_samples=4, key=k))
+    estimate = jitted(jax.random.PRNGKey(7))
     assert jnp.isfinite(estimate)

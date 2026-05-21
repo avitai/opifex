@@ -23,7 +23,12 @@ References
 
 from __future__ import annotations
 
-from opifex.uncertainty.linalg.trace import hutch_plus_plus_trace, hutchinson_trace
+from opifex.uncertainty.linalg.trace import (
+    hutch_plus_plus_trace,
+    hutchinson_trace,
+    xnys_trace,
+    xtrace,
+)
 
 
-__all__ = ["hutch_plus_plus_trace", "hutchinson_trace"]
+__all__ = ["hutch_plus_plus_trace", "hutchinson_trace", "xnys_trace", "xtrace"]
