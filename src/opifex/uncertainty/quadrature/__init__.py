@@ -18,10 +18,28 @@ References
 
 from __future__ import annotations
 
+from opifex.uncertainty.quadrature._specs import (
+    EmukitQuadratureAdapterSpec,
+    FFBQAdapterSpec,
+    SOBERAdapterSpec,
+    VanillaBayesianQuadratureAdapterSpec,
+    WSABILAdapterSpec,
+)
 from opifex.uncertainty.quadrature.bayesian_monte_carlo import (
     bayesian_monte_carlo,
     IntegralEstimate,
 )
+from opifex.uncertainty.quadrature.measures import GaussianMeasure, LebesgueMeasure
 
 
-__all__ = ["IntegralEstimate", "bayesian_monte_carlo"]
+__all__ = [
+    "EmukitQuadratureAdapterSpec",
+    "FFBQAdapterSpec",
+    "GaussianMeasure",
+    "IntegralEstimate",
+    "LebesgueMeasure",
+    "SOBERAdapterSpec",
+    "VanillaBayesianQuadratureAdapterSpec",
+    "WSABILAdapterSpec",
+    "bayesian_monte_carlo",
+]

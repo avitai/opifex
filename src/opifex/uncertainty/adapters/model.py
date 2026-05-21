@@ -133,7 +133,7 @@ class _WrappedLaplaceModel:
         )
         mean = self._state.posterior.mean
         standard_deviation = 1.0 / jnp.sqrt(self._state.posterior.precision_diagonal)
-        noise = jax.random.normal(key, (self._state.num_samples,) + mean.shape)
+        noise = jax.random.normal(key, (self._state.num_samples, *mean.shape))
         parameter_samples = mean + noise * standard_deviation
 
         def _predict(parameters: jax.Array) -> jax.Array:
