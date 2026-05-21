@@ -25,6 +25,7 @@ from opifex.uncertainty.statespace.cakf import (
     cakf_update,
     LowRankDowndatedMatrix,
 )
+from opifex.uncertainty.statespace.diagonal_ek1 import diagonal_ek1_step
 from opifex.uncertainty.statespace.kalman import (
     kalman_filter,
     kalman_log_likelihood,
@@ -59,6 +60,7 @@ __all__ = [
     "cakf_predict",
     "cakf_update",
     "cosine_kernel",
+    "diagonal_ek1_step",
     "discretize_lti_sde",
     "kalman_filter",
     "kalman_filter_parallel",
