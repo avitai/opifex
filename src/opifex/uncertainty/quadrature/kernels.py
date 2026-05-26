@@ -135,8 +135,8 @@ def qk_rbf_lebesgue(
     """
     scaled_diff_upper = (upper - points) / (jnp.sqrt(2.0) * lengthscales)
     scaled_diff_lower = (lower - points) / (jnp.sqrt(2.0) * lengthscales)
-    per_dim = jnp.sqrt(jnp.pi / 2.0) * lengthscales * (
-        erf(scaled_diff_upper) - erf(scaled_diff_lower)
+    per_dim = (
+        jnp.sqrt(jnp.pi / 2.0) * lengthscales * (erf(scaled_diff_upper) - erf(scaled_diff_lower))
     )
     factored = jnp.prod(per_dim, axis=-1)
     return amplitude * density * factored
@@ -220,8 +220,8 @@ def qkq_matern12_product_lebesgue(
     ``QuadratureProductMatern12LebesgueMeasure._qKq_1d`` (line 103).
     """
     interval = upper - lower
-    per_dim = 2.0 * lengthscales * (
-        interval + lengthscales * (jnp.exp(-interval / lengthscales) - 1.0)
+    per_dim = (
+        2.0 * lengthscales * (interval + lengthscales * (jnp.exp(-interval / lengthscales) - 1.0))
     )
     return amplitude * jnp.prod(per_dim)
 
