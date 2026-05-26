@@ -69,6 +69,15 @@ class VanillaBayesianQuadratureAdapterSpec(_BQAdapterSpecBase):
         "bayesian_quadrature.py module."
     )
 
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native closed-form Vanilla BQ callable."""
+        from opifex.uncertainty.quadrature.bayesian_quadrature import (
+            vanilla_bayesian_quadrature,
+        )
+
+        del model, capability
+        return vanilla_bayesian_quadrature
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class WSABILAdapterSpec(_BQAdapterSpecBase):
@@ -82,6 +91,15 @@ class WSABILAdapterSpec(_BQAdapterSpecBase):
         "Coexists with VanillaBayesianQuadratureAdapterSpec in opifex's "
         "bayesian_quadrature.py module."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native WSABI-L bounded-BQ mean callable."""
+        from opifex.uncertainty.quadrature.bayesian_quadrature import (
+            wsabi_l_bayesian_quadrature,
+        )
+
+        del model, capability
+        return wsabi_l_bayesian_quadrature
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
