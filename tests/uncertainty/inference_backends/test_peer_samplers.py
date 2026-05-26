@@ -40,6 +40,18 @@ _PEER_BACKENDS: tuple[type, ...] = (
 )
 
 
+_DEFERRED_PEER_BACKENDS: tuple[type, ...] = (
+    PathfinderBackend,
+    ADVIBackend,
+)
+
+
+_CONCRETIZED_PEER_BACKENDS: tuple[type, ...] = (
+    # Task 6.3.9a: SVGD algorithm now wired through `fit`.
+    SVGDBackend,
+)
+
+
 @pytest.mark.parametrize("backend_cls", _PEER_BACKENDS)
 def test_peer_backend_is_frozen_dataclass_with_capability_metadata(
     backend_cls: type,
@@ -63,10 +75,11 @@ def test_peer_backend_implements_inference_protocol(backend_cls: type) -> None:
     assert isinstance(backend, InferenceBackendProtocol)
 
 
-@pytest.mark.parametrize("backend_cls", _PEER_BACKENDS)
-def test_peer_backend_fit_raises_until_algorithm_lands(backend_cls: type) -> None:
-    """Until the concrete sampling algorithm lands, ``fit`` raises a clear
-    ``NotImplementedError`` naming the backend.
+@pytest.mark.parametrize("backend_cls", _DEFERRED_PEER_BACKENDS)
+def test_deferred_peer_backend_fit_raises_until_algorithm_lands(backend_cls: type) -> None:
+    """Deferred peer backends still raise ``NotImplementedError`` from ``fit``.
+
+    Pathfinder + ADVI ports land in follow-up slices.
     """
     backend = backend_cls()
 
@@ -75,6 +88,42 @@ def test_peer_backend_fit_raises_until_algorithm_lands(backend_cls: type) -> Non
 
     with pytest.raises(NotImplementedError, match=backend.name):
         backend.fit(target_log_prob=target_log_prob, rngs=nnx.Rngs(sampler=0))
+
+
+def test_svgd_backend_fit_returns_particle_cloud_concentrating_around_target_mean() -> None:
+    """``SVGDBackend.fit`` runs the algorithm and returns concentrated particles.
+
+    On a standard-normal target the final particles should have a mean
+    near zero (the target mean).
+    """
+    from opifex.uncertainty.inference_backends.base import BackendResult
+
+    backend = SVGDBackend(
+        init_state=jnp.zeros(2),
+        num_particles=20,
+        num_iterations=200,
+        learning_rate=0.3,
+        init_scale=2.0,
+    )
+
+    def target_log_prob(x: jax.Array) -> jax.Array:
+        return -0.5 * jnp.sum(x**2)
+
+    result = backend.fit(target_log_prob=target_log_prob, rngs=nnx.Rngs(sampler=42))
+    assert isinstance(result, BackendResult)
+    particles = result.sampler_state
+    assert particles.shape == (20, 2)
+    empirical_mean = jnp.mean(particles, axis=0)
+    assert jnp.allclose(empirical_mean, jnp.zeros(2), atol=0.5)
+
+
+def test_svgd_backend_predict_distribution_remains_deferred() -> None:
+    """Until a model-aware adapter exists, prediction hooks still raise."""
+    backend = SVGDBackend()
+    with pytest.raises(NotImplementedError, match="predict_distribution"):
+        backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
+    with pytest.raises(NotImplementedError, match="posterior_predictive"):
+        backend.posterior_predictive(nnx.Rngs(sampler=0), jnp.zeros(1))
 
 
 def test_pathfinder_backend_advertises_quasi_newton_family() -> None:

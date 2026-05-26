@@ -105,9 +105,7 @@ def uncertainty_sampling(
     Returns:
         Acquisition values, shape ``(n,)``.
     """
-    variance = _posterior_variance_at_points(
-        points, train_points, kernel_fn, noise_variance
-    )
+    variance = _posterior_variance_at_points(points, train_points, kernel_fn, noise_variance)
     density = measure_density_fn(points)
     return variance * density**measure_power
 
