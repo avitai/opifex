@@ -55,8 +55,6 @@ _DEFERRED_ADAPTER_SPECS: tuple[type, ...] = (
     ProbnumAdapterSpec,
     ProbfindiffAdapterSpec,
     DiffeqzooAdapterSpec,
-    FenrirAdapterSpec,
-    DaltonAdapterSpec,
     ManifoldUpdateSpec,
     PerturbedStepSolverSpec,
     DenseOutputSamplingSpec,
@@ -64,12 +62,24 @@ _DEFERRED_ADAPTER_SPECS: tuple[type, ...] = (
 )
 
 
-_CONCRETIZED_ADAPTER_SPECS: tuple[type, ...] = (
-    # Task 6.3.11: these three now return concrete (drift, dispersion) SDE
-    # tuples from wrap(); they no longer raise NotImplementedError.
+_CONCRETIZED_PRIOR_SPECS: tuple[type, ...] = (
+    # Task 6.3.11: these three return concrete (drift, dispersion) SDE tuples.
     IOUPPriorSpec,
     MaternPriorSpec,
     IWPPriorSpec,
+)
+
+
+_CONCRETIZED_LIKELIHOOD_SPECS: tuple[type, ...] = (
+    # Task 6.3.10: Fenrir / DALTON wrap() returns a JAX-native log-likelihood
+    # callable suitable for hyperparameter learning via jax.grad / jax.jit.
+    FenrirAdapterSpec,
+    DaltonAdapterSpec,
+)
+
+
+_CONCRETIZED_ADAPTER_SPECS: tuple[type, ...] = (
+    _CONCRETIZED_PRIOR_SPECS + _CONCRETIZED_LIKELIHOOD_SPECS
 )
 
 
@@ -119,7 +129,7 @@ def test_deferred_adapter_spec_wrap_raises_actionable_error(spec_cls: type) -> N
         spec.wrap(model=None, capability=capability)
 
 
-@pytest.mark.parametrize("spec_cls", _CONCRETIZED_ADAPTER_SPECS)
+@pytest.mark.parametrize("spec_cls", _CONCRETIZED_PRIOR_SPECS)
 def test_concretized_prior_spec_wrap_returns_sde_tuple(spec_cls: type) -> None:
     """IOUP / Matern / IWP prior specs now return concrete SDE matrices.
 
@@ -134,6 +144,19 @@ def test_concretized_prior_spec_wrap_returns_sde_tuple(spec_cls: type) -> None:
     assert dispersion.ndim == 2
     assert drift.shape[0] == drift.shape[1]
     assert drift.shape[0] == dispersion.shape[0]
+
+
+@pytest.mark.parametrize("spec_cls", _CONCRETIZED_LIKELIHOOD_SPECS)
+def test_concretized_likelihood_spec_wrap_returns_callable(spec_cls: type) -> None:
+    """Fenrir / DALTON likelihood specs now return JAX-native callables.
+
+    Per Task 6.3.10 these two were promoted from deferred-metadata to
+    concrete log-likelihood combinators usable for hyperparameter learning.
+    """
+    spec: Any = spec_cls()
+    capability = UQCapability(default_strategy=spec.default_strategy)
+    fn = spec.wrap(model=None, capability=capability)
+    assert callable(fn)
 
 
 def test_probdiffeq_adapter_spec_exposes_four_axis_fields() -> None:

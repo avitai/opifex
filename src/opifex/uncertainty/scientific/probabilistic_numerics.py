@@ -306,7 +306,7 @@ class FenrirAdapterSpec(_PNAdapterSpecBase):
     """Fenrir post-solve smoothing data-likelihood (Tronarp+ 2022).
 
     arXiv:2202.01287. The likelihood is vendored adjacent to this spec;
-    cite ``ProbNumDiffEq.jl/src/data_likelihoods/fenrir.jl:30-64``.
+    cite ``ProbNumDiffEq.jl/src/data_likelihoods/fenrir.jl:30-128``.
     """
 
     source_package: str = "opifex"
@@ -315,6 +315,13 @@ class FenrirAdapterSpec(_PNAdapterSpecBase):
         "Fenrir log-likelihood: forward solve + backward smoothing with "
         "data conditioning. arXiv:2202.01287."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native Fenrir log-likelihood callable."""
+        from opifex.uncertainty.scientific._likelihoods import fenrir_data_loglik
+
+        del model, capability
+        return fenrir_data_loglik
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -333,6 +340,13 @@ class DaltonAdapterSpec(_PNAdapterSpecBase):
         "DALTON log-likelihood = data_ll + with_pn_ll - without_pn_ll. "
         "Two solver passes per evaluation. arXiv:2306.05566."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native DALTON log-likelihood combinator."""
+        from opifex.uncertainty.scientific._likelihoods import dalton_data_loglik
+
+        del model, capability
+        return dalton_data_loglik
 
 
 # ---------------------------------------------------------------------------

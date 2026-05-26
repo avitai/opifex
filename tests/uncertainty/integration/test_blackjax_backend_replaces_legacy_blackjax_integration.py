@@ -117,5 +117,7 @@ def test_blackjax_backend_spec_metadata_advertises_full_sampler_family() -> None
     assert BLACKJAX_BACKEND_SPEC.source_package == "artifex"
     for impl in ("hmc", "nuts", "mala"):
         assert impl in BLACKJAX_BACKEND_SPEC.sampler_names
-    for unsupp in ("sgld", "sghmc", "smc", "advi", "pathfinder"):
+    for unsupp in ("sgld", "sghmc", "smc"):
         assert f"unsupported:{unsupp}" in BLACKJAX_BACKEND_SPEC.sampler_names
+    for moved in ("advi", "pathfinder"):
+        assert f"unsupported:{moved}" not in BLACKJAX_BACKEND_SPEC.sampler_names
