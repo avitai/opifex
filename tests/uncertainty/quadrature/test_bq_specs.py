@@ -27,13 +27,12 @@ _CONCRETIZED_BQ_SPECS: tuple[type, ...] = (
     WSABILAdapterSpec,
     # Task 6.3.14a: SOBER kernel-recombination vendored in sober.py.
     SOBERAdapterSpec,
-)
-
-
-_DEFERRED_BQ_SPECS: tuple[type, ...] = (
+    # Task 6.3.14b: Frank-Wolfe BQ vendored in frank_wolfe_bq.py.
     FFBQAdapterSpec,
-    EmukitQuadratureAdapterSpec,
 )
+
+
+_DEFERRED_BQ_SPECS: tuple[type, ...] = (EmukitQuadratureAdapterSpec,)
 
 
 _BQ_SPECS: tuple[type, ...] = _CONCRETIZED_BQ_SPECS + _DEFERRED_BQ_SPECS
@@ -80,11 +79,13 @@ def test_wsabi_l_and_vanilla_bq_coexist_in_bayesian_quadrature_module() -> None:
 
 
 def test_sober_and_ffbq_advertise_separate_modules() -> None:
-    """SOBER and FFBQ live in distinct modules (per the design split)."""
+    """SOBER and FFBQ live in distinct modules (per the design split, fix #190)."""
     sober = SOBERAdapterSpec()
     ffbq = FFBQAdapterSpec()
     assert "sober.py" in sober.notes
-    assert "ffbq.py" in ffbq.notes
+    # FFBQ is Frank-Wolfe BQ per Briol+ 2015; the design notes pin the
+    # file to frank_wolfe_bq.py rather than the legacy mnemonic ffbq.py.
+    assert "frank_wolfe_bq.py" in ffbq.notes
 
 
 def test_emukit_quadrature_spec_is_metadata_only_reference() -> None:

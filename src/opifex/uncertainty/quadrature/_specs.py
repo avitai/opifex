@@ -125,14 +125,28 @@ class SOBERAdapterSpec(_BQAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class FFBQAdapterSpec(_BQAdapterSpecBase):
-    """Frequency-domain Bayesian quadrature."""
+    """Frank-Wolfe Bayesian quadrature (Briol+ 2015 NeurIPS).
+
+    Despite the legacy ``FFBQ`` mnemonic the algorithm is *Frank-Wolfe
+    BQ* (FW-Vanilla, Algorithm 1 in the paper) — not a Fourier-features
+    method. The design notes (fix #190) pin this spec to Briol+ 2015.
+    """
 
     source_package: str = "opifex"
-    family_tags: tuple[str, ...] = ("frequency_domain", "fourier_features")
+    family_tags: tuple[str, ...] = ("frank_wolfe", "convex_iterates", "point_set")
     notes: str = (
-        "FFBQ (frequency-domain Bayesian quadrature). Lives in a "
-        "separate ffbq.py module per the SOBER ↔ FFBQ design split."
+        "FFBQ — Frank-Wolfe Bayesian Quadrature (Briol+ NeurIPS 2015, "
+        "arXiv:1506.02681). FW-Vanilla iterate with mass-redistribution "
+        "step alpha_n = 1/(n+1); MMD = O(1/n). Vendored in "
+        "frank_wolfe_bq.py per the SOBER <-> FFBQ design split (fix #190)."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native Frank-Wolfe BQ callable."""
+        from opifex.uncertainty.quadrature.frank_wolfe_bq import frank_wolfe_bq
+
+        del model, capability
+        return frank_wolfe_bq
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
