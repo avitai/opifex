@@ -140,9 +140,7 @@ def test_svgd_fit_keeps_particle_shape() -> None:
 def test_svgd_fit_compiles_under_jit() -> None:
     """``svgd_fit`` must compile under ``jax.jit`` (with statics)."""
     initial_particles = jnp.linspace(-1.0, 1.0, 12).reshape(6, 2)
-    jitted = jax.jit(
-        svgd_fit, static_argnames=("target_log_prob_fn", "num_iterations")
-    )
+    jitted = jax.jit(svgd_fit, static_argnames=("target_log_prob_fn", "num_iterations"))
     result = jitted(
         initial_particles=initial_particles,
         target_log_prob_fn=lambda x: -0.5 * jnp.sum(x**2),

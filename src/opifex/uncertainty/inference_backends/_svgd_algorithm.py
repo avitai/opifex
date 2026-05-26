@@ -72,9 +72,7 @@ def median_heuristic_bandwidth(particles: jax.Array) -> jax.Array:
     def _pairwise_distance(left: jax.Array, right: jax.Array) -> jax.Array:
         return jnp.linalg.norm(left - right)
 
-    pairwise = jax.vmap(jax.vmap(_pairwise_distance, (None, 0)), (0, None))(
-        particles, particles
-    )
+    pairwise = jax.vmap(jax.vmap(_pairwise_distance, (None, 0)), (0, None))(particles, particles)
     lower_triangular = pairwise[jnp.tril_indices(pairwise.shape[0], k=-1)]
     median_distance = jnp.median(lower_triangular)
     return median_distance**2 / jnp.log(particles.shape[0])

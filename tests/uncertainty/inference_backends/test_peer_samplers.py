@@ -40,15 +40,14 @@ _PEER_BACKENDS: tuple[type, ...] = (
 )
 
 
-_DEFERRED_PEER_BACKENDS: tuple[type, ...] = (
-    PathfinderBackend,
-    ADVIBackend,
-)
+_DEFERRED_PEER_BACKENDS: tuple[type, ...] = (ADVIBackend,)
 
 
 _CONCRETIZED_PEER_BACKENDS: tuple[type, ...] = (
-    # Task 6.3.9a: SVGD algorithm now wired through `fit`.
+    # Task 6.3.9a: SVGD algorithm wired through `fit`.
     SVGDBackend,
+    # Task 6.3.9b: Pathfinder algorithm wired through `fit`.
+    PathfinderBackend,
 )
 
 
@@ -120,6 +119,42 @@ def test_svgd_backend_fit_returns_particle_cloud_concentrating_around_target_mea
 def test_svgd_backend_predict_distribution_remains_deferred() -> None:
     """Until a model-aware adapter exists, prediction hooks still raise."""
     backend = SVGDBackend()
+    with pytest.raises(NotImplementedError, match="predict_distribution"):
+        backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
+    with pytest.raises(NotImplementedError, match="posterior_predictive"):
+        backend.posterior_predictive(nnx.Rngs(sampler=0), jnp.zeros(1))
+
+
+def test_pathfinder_backend_fit_returns_samples_concentrating_around_target_mode() -> None:
+    """``PathfinderBackend.fit`` runs L-BFGS + samples; draws concentrate near the mode.
+
+    On a standard-normal target, Pathfinder draws should have mean
+    near zero.
+    """
+    from opifex.uncertainty.inference_backends.base import BackendResult
+
+    backend = PathfinderBackend(
+        init_state=jnp.array([2.0, -1.5]),
+        num_samples=512,
+        num_elbo_samples=32,
+        maxiter=30,
+        maxcor=6,
+    )
+
+    def target_log_prob(x: jax.Array) -> jax.Array:
+        return -0.5 * jnp.sum(x**2)
+
+    result = backend.fit(target_log_prob=target_log_prob, rngs=nnx.Rngs(sampler=7))
+    assert isinstance(result, BackendResult)
+    samples = result.sampler_state
+    assert samples.shape == (512, 2)
+    empirical_mean = jnp.mean(samples, axis=0)
+    assert jnp.allclose(empirical_mean, jnp.zeros(2), atol=0.2)
+
+
+def test_pathfinder_backend_predict_distribution_remains_deferred() -> None:
+    """Pathfinder's prediction hooks need a model-aware adapter."""
+    backend = PathfinderBackend()
     with pytest.raises(NotImplementedError, match="predict_distribution"):
         backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
     with pytest.raises(NotImplementedError, match="posterior_predictive"):
