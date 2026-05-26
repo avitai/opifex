@@ -153,9 +153,7 @@ def test_fenrir_single_data_point_at_end_equals_predictive_log_density() -> None
     obs_mat = cfg["observation_matrix"]
     pred_mean = obs_mat @ m_end
     pred_cov = obs_mat @ p_end @ obs_mat.T + cfg["observation_cov"]
-    expected_ll = jax.scipy.stats.multivariate_normal.logpdf(
-        cfg["data"][-1], pred_mean, pred_cov
-    )
+    expected_ll = jax.scipy.stats.multivariate_normal.logpdf(cfg["data"][-1], pred_mean, pred_cov)
     assert jnp.allclose(fenrir_ll, expected_ll, atol=1e-6)
 
 

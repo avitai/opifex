@@ -55,10 +55,7 @@ _DEFERRED_ADAPTER_SPECS: tuple[type, ...] = (
     ProbnumAdapterSpec,
     ProbfindiffAdapterSpec,
     DiffeqzooAdapterSpec,
-    ManifoldUpdateSpec,
     PerturbedStepSolverSpec,
-    DenseOutputSamplingSpec,
-    ApplyDiffusionSpec,
 )
 
 
@@ -78,8 +75,17 @@ _CONCRETIZED_LIKELIHOOD_SPECS: tuple[type, ...] = (
 )
 
 
+_CONCRETIZED_ALGORITHM_SPECS: tuple[type, ...] = (
+    # Task 6.3.12: ManifoldUpdate / DenseOutputSampling / ApplyDiffusion
+    # wrap() returns a JAX-native algorithmic primitive.
+    ManifoldUpdateSpec,
+    DenseOutputSamplingSpec,
+    ApplyDiffusionSpec,
+)
+
+
 _CONCRETIZED_ADAPTER_SPECS: tuple[type, ...] = (
-    _CONCRETIZED_PRIOR_SPECS + _CONCRETIZED_LIKELIHOOD_SPECS
+    _CONCRETIZED_PRIOR_SPECS + _CONCRETIZED_LIKELIHOOD_SPECS + _CONCRETIZED_ALGORITHM_SPECS
 )
 
 
@@ -152,6 +158,19 @@ def test_concretized_likelihood_spec_wrap_returns_callable(spec_cls: type) -> No
 
     Per Task 6.3.10 these two were promoted from deferred-metadata to
     concrete log-likelihood combinators usable for hyperparameter learning.
+    """
+    spec: Any = spec_cls()
+    capability = UQCapability(default_strategy=spec.default_strategy)
+    fn = spec.wrap(model=None, capability=capability)
+    assert callable(fn)
+
+
+@pytest.mark.parametrize("spec_cls", _CONCRETIZED_ALGORITHM_SPECS)
+def test_concretized_algorithm_spec_wrap_returns_callable(spec_cls: type) -> None:
+    """ManifoldUpdate / DenseOutputSampling / ApplyDiffusion specs return callables.
+
+    Per Task 6.3.12 these three were promoted from deferred-metadata to
+    concrete JAX-native algorithmic primitives.
     """
     spec: Any = spec_cls()
     capability = UQCapability(default_strategy=spec.default_strategy)

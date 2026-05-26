@@ -507,6 +507,13 @@ class ManifoldUpdateSpec(_PNAdapterSpecBase):
         "residual Jacobian on-the-fly."
     )
 
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native iterated EKF manifold-update callable."""
+        from opifex.uncertainty.scientific._specialised import manifold_update
+
+        del model, capability
+        return manifold_update
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class PerturbedStepSolverSpec(_PNAdapterSpecBase):
@@ -536,6 +543,13 @@ class DenseOutputSamplingSpec(_PNAdapterSpecBase):
         "at arbitrary density. Cite Tronarp+ 2019 arXiv:1810.03440 §5."
     )
 
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the Cholesky-based dense-output Gaussian sampler."""
+        from opifex.uncertainty.scientific._specialised import dense_output_sample
+
+        del model, capability
+        return dense_output_sample
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ApplyDiffusionSpec(_PNAdapterSpecBase):
@@ -552,6 +566,13 @@ class ApplyDiffusionSpec(_PNAdapterSpecBase):
         "Multivariate diffusion machinery — valid only with EK0 or "
         "DiagonalEK1 plus blockdiag covariance."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the scalar / vector diffusion scaling callable."""
+        from opifex.uncertainty.scientific._specialised import apply_diffusion
+
+        del model, capability
+        return apply_diffusion
 
 
 __all__ = [
