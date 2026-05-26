@@ -207,9 +207,9 @@ def test_sober_kernel_recombination_preserves_top_nystrom_eigenfeatures() -> Non
 
     init_weights = jnp.ones(candidates.shape[0]) / candidates.shape[0]
     full_features = init_weights @ (feature_basis @ _rbf_kernel(nystrom_points, candidates)).T
-    thinned_features = weights @ (
-        feature_basis @ _rbf_kernel(nystrom_points, candidates[indices])
-    ).T
+    thinned_features = (
+        weights @ (feature_basis @ _rbf_kernel(nystrom_points, candidates[indices])).T
+    )
 
     assert jnp.allclose(full_features, thinned_features, atol=1e-4)
 
@@ -227,8 +227,7 @@ def test_sober_kernel_recombination_with_non_uniform_initial_weights() -> None:
     num_selected = 4
 
     gram_symmetric = 0.5 * (
-        _rbf_kernel(nystrom_points, nystrom_points)
-        + _rbf_kernel(nystrom_points, nystrom_points).T
+        _rbf_kernel(nystrom_points, nystrom_points) + _rbf_kernel(nystrom_points, nystrom_points).T
     )
     left_vectors, _, _ = jnp.linalg.svd(gram_symmetric, full_matrices=False)
     feature_basis = left_vectors[:, : num_selected - 1].T
@@ -242,9 +241,9 @@ def test_sober_kernel_recombination_with_non_uniform_initial_weights() -> None:
     )
 
     full_features = init_weights @ (feature_basis @ _rbf_kernel(nystrom_points, candidates)).T
-    thinned_features = weights @ (
-        feature_basis @ _rbf_kernel(nystrom_points, candidates[indices])
-    ).T
+    thinned_features = (
+        weights @ (feature_basis @ _rbf_kernel(nystrom_points, candidates[indices])).T
+    )
     assert jnp.allclose(full_features, thinned_features, atol=1e-4)
 
 

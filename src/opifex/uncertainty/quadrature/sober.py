@@ -73,9 +73,7 @@ def caratheodory_recombination(
         weights. ``len(indices) <= n + 1``.
     """
     num_points = features.shape[0]
-    augmented = jnp.concatenate(
-        [jnp.ones((num_points, 1)), features], axis=1
-    )  # (N, n + 1)
+    augmented = jnp.concatenate([jnp.ones((num_points, 1)), features], axis=1)  # (N, n + 1)
     augmented_dim = augmented.shape[1]
 
     if num_points <= augmented_dim:
@@ -91,9 +89,7 @@ def caratheodory_recombination(
         direction = null_space[:, column_index]
         positive_direction_mask = direction > 0.0
         safe_direction = jnp.where(direction > 0.0, direction, 1.0)
-        ratio = jnp.where(
-            positive_direction_mask, mutable_weights / safe_direction, jnp.inf
-        )
+        ratio = jnp.where(positive_direction_mask, mutable_weights / safe_direction, jnp.inf)
         pivot_index = jnp.argmin(ratio)
         pivot_step = mutable_weights[pivot_index] / direction[pivot_index]
         mutable_weights = mutable_weights - pivot_step * direction
