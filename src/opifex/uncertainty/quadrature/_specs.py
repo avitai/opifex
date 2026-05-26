@@ -104,15 +104,23 @@ class WSABILAdapterSpec(_BQAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class SOBERAdapterSpec(_BQAdapterSpecBase):
-    """Stein-thinned discrepancy Bayesian quadrature (point-set method)."""
+    """Kernel-recombination Bayesian quadrature (point-set method)."""
 
     source_package: str = "opifex"
-    family_tags: tuple[str, ...] = ("point_set", "stein_discrepancy", "discrete_mixed")
+    family_tags: tuple[str, ...] = ("point_set", "kernel_recombination", "discrete_mixed")
     notes: str = (
-        "SOBER (Adachi+ 2023, arXiv:2301.11832). Stein-thinned "
-        "point-set quadrature on discrete/mixed spaces. Lives in a "
-        "separate sober.py module per the SOBER ↔ FFBQ design split."
+        "SOBER (Adachi+ 2022 NeurIPS arXiv:2206.04734 + 2023 TMLR "
+        "arXiv:2301.11832). Kernel-recombination via "
+        "Tchernychova-Lyons CAR + Nyström low-rank approximation; "
+        "vendored in sober.py per the SOBER ↔ FFBQ design split."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native SOBER kernel-recombination callable."""
+        from opifex.uncertainty.quadrature.sober import sober_kernel_recombination
+
+        del model, capability
+        return sober_kernel_recombination
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)

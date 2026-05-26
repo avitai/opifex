@@ -25,11 +25,12 @@ _CONCRETIZED_BQ_SPECS: tuple[type, ...] = (
     # Task 6.3.13: Vanilla BQ + WSABI-L vendored in bayesian_quadrature.py.
     VanillaBayesianQuadratureAdapterSpec,
     WSABILAdapterSpec,
+    # Task 6.3.14a: SOBER kernel-recombination vendored in sober.py.
+    SOBERAdapterSpec,
 )
 
 
 _DEFERRED_BQ_SPECS: tuple[type, ...] = (
-    SOBERAdapterSpec,
     FFBQAdapterSpec,
     EmukitQuadratureAdapterSpec,
 )
