@@ -22,7 +22,7 @@ from flax import nnx
 from flax.nnx import Rngs
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class OptimizationProblem:
     """Represents an optimization problem with type, dimension, and constraints.
 
@@ -133,7 +133,7 @@ class ConstraintHandler:
         return jnp.clip(x, lower, upper)
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class SolverConfig:
     """Configuration for parametric programming solver network.
 

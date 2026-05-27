@@ -72,7 +72,7 @@ class AdaptiveLossBalancing(BaseCallback, nnx.Module):
             self.update(relevant_losses)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CurriculumRegularization(BaseCallback):
     """Curriculum Regularization Strategy.
 

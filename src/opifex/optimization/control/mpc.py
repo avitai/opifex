@@ -16,7 +16,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MPCConfig:
     """Configuration for MPC controller."""
 
@@ -32,9 +32,13 @@ class MPCConfig:
 
     def __post_init__(self) -> None:
         if self.prediction_steps is None:
-            self.prediction_steps = self.horizon
+            object.__setattr__(self, "prediction_steps", self.horizon)
         if self.objective_weights is None:
-            self.objective_weights = {"state": 1.0, "control": 0.1, "terminal": 10.0}
+            object.__setattr__(
+                self,
+                "objective_weights",
+                {"state": 1.0, "control": 0.1, "terminal": 10.0},
+            )
 
 
 class MPCResult(NamedTuple):

@@ -36,7 +36,7 @@ class TestType(Enum):
     DOCUMENTATION = "documentation"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ValidationRule:
     """A validation rule for neural functionals."""
 
@@ -49,7 +49,7 @@ class ValidationRule:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ValidationResult:
     """Result of a validation test."""
 
@@ -62,7 +62,7 @@ class ValidationResult:
     error_traceback: str | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FunctionalReport:
     """Complete validation report for a neural functional."""
 

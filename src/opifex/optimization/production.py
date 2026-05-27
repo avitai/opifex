@@ -130,7 +130,7 @@ class OptimizationStrategy(Enum):
     BALANCED = "balanced"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class WorkloadProfile:
     """Profiling data for production workloads."""
 
@@ -143,7 +143,7 @@ class WorkloadProfile:
     model_complexity: str  # "simple", "medium", "complex"
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class PerformanceMetrics:
     """Performance metrics for optimization validation."""
 
@@ -155,7 +155,7 @@ class PerformanceMetrics:
     improvement_factor: float
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class OptimizedModel:
     """Container for optimized model with performance metadata."""
 

@@ -66,7 +66,7 @@ HAS_PSUTIL = has_psutil
 HAS_JAX = has_jax
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MetricConfig:
     """Configuration for custom metrics."""
 

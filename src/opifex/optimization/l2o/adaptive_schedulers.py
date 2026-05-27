@@ -26,7 +26,7 @@ from flax.nnx import Rngs
 from opifex.optimization.l2o.l2o_engine import L2OEngine
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MetaSchedulerConfig:
     """Configuration for adaptive learning rate schedulers.
 
@@ -58,7 +58,7 @@ class MetaSchedulerConfig:
     def __post_init__(self) -> None:
         """Set default values and validate configuration."""
         if self.multiscale_components is None:
-            self.multiscale_components = ["encoder", "solver", "decoder"]
+            object.__setattr__(self, "multiscale_components", ["encoder", "solver", "decoder"])
 
         # Validate learning rate bounds
         if self.min_learning_rate >= self.max_learning_rate:

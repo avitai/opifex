@@ -51,7 +51,7 @@ class RollbackTrigger(Enum):
     HEALTH_CHECK_FAILURE = "health_check_failure"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DeploymentConfig:
     """Configuration for deployment strategies."""
 
@@ -68,7 +68,7 @@ class DeploymentConfig:
     feature_flag_percentage: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DeploymentMetrics:
     """Metrics collected during deployment."""
 
@@ -91,7 +91,7 @@ class DeploymentMetrics:
     physics_consistency: float = 0.0
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class DeploymentState:
     """Current state of a deployment."""
 
@@ -107,7 +107,7 @@ class DeploymentState:
     health_checks_failed: int = 0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RollbackDecision:
     """Decision result for rollback evaluation."""
 

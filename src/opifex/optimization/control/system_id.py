@@ -20,7 +20,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PhysicsConstraint:
     """Represents a physics constraint for system identification.
 
@@ -34,7 +34,7 @@ class PhysicsConstraint:
     weight: float = 1.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class BenchmarkValidationResult:
     """Results from benchmark validation."""
 

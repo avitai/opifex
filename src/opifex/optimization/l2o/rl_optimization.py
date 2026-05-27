@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from opifex.optimization.l2o.parametric_solver import OptimizationProblem
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RLOptimizationConfig:
     """Configuration for reinforcement learning-based optimization.
 
@@ -226,7 +226,7 @@ class StateEncoder(nnx.Module):
         return self.fusion(combined)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Experience:
     """Single experience for replay buffer."""
 
@@ -477,7 +477,13 @@ class RLOptimizationAgent(nnx.Module):
             next_state: Next state
             done: Whether episode is complete
         """
-        experience = Experience(state, action, reward, next_state, done)
+        experience = Experience(
+            state=state,
+            action=action,
+            reward=reward,
+            next_state=next_state,
+            done=done,
+        )
         self.replay_buffer.push(experience)
 
     def train_step(self) -> dict[str, float]:

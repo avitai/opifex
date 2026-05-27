@@ -40,7 +40,7 @@ HAS_PSUTIL = has_psutil
 HAS_JAX = has_jax
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LogContext:
     """Context information for structured logging."""
 
@@ -60,7 +60,7 @@ class LogContext:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LogEntry:
     """Structured log entry for scientific computing workloads."""
 

@@ -139,7 +139,7 @@ def helmholtz_residual(
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PINNConfig:
     """Configuration for PINN solver.
 
@@ -172,7 +172,7 @@ class PINNConfig:
     )
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PINNResult:
     """Result from PINN solver.
 

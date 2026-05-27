@@ -28,7 +28,7 @@ class PhysicsDomain(Enum):
     GENERAL = "general"
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class PhysicsMetrics:
     """Physics-specific performance metrics."""
 
@@ -44,7 +44,7 @@ class PhysicsMetrics:
     boundary_condition_accuracy: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NumericalValidationResult:
     """Result of numerical validation."""
 
@@ -57,7 +57,7 @@ class NumericalValidationResult:
     recommendations: list[str] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ConservationCheckResult:
     """Result of conservation law checking."""
 
@@ -69,7 +69,7 @@ class ConservationCheckResult:
     time_evolution_consistency: bool = True
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ScientificBenchmarkResult:
     """Result of scientific benchmark validation."""
 

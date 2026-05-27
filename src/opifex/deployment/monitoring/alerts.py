@@ -43,7 +43,7 @@ class AlertStatus(Enum):
     SUPPRESSED = "suppressed"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AlertRule:
     """Alert rule configuration."""
 
@@ -68,7 +68,7 @@ class AlertRule:
         }
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class Alert:
     """Individual alert instance."""
 

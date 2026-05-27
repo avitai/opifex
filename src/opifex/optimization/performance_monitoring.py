@@ -26,7 +26,7 @@ class AnomalySeverity(Enum):
     CRITICAL = "critical"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Anomaly:
     """Performance anomaly detection result."""
 
@@ -40,7 +40,7 @@ class Anomaly:
     recommended_action: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PerformanceMetrics:
     """Full performance metrics for monitoring."""
 
@@ -69,7 +69,7 @@ class PerformanceMetrics:
     physics_metrics: dict[str, float] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PredictionResult:
     """Result of performance prediction."""
 

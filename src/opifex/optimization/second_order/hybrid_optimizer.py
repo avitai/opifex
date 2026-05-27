@@ -23,7 +23,7 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple, TYPE_CHECKING
 
 import jax
@@ -63,7 +63,7 @@ class HybridOptimizerState(NamedTuple):
     switched: bool
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class HybridOptimizer:
     """Hybrid Adam→L-BFGS optimizer.
 
@@ -89,15 +89,18 @@ class HybridOptimizer:
     """
 
     config: HybridOptimizerConfig
+    adam: optax.GradientTransformation = field(init=False)
+    lbfgs: optax.GradientTransformation = field(init=False)
 
     def __post_init__(self) -> None:
         """Initialize Adam and L-BFGS optimizers."""
         # Create Adam optimizer
-        self.adam = optax.adam(
+        adam = optax.adam(
             learning_rate=self.config.adam_learning_rate,
             b1=self.config.adam_b1,
             b2=self.config.adam_b2,
         )
+        object.__setattr__(self, "adam", adam)
 
         # Create L-BFGS optimizer
         lbfgs_config = self.config.lbfgs_config
@@ -110,11 +113,12 @@ class HybridOptimizer:
                 max_backtracking_steps=lbfgs_config.max_linesearch_steps,
             )
 
-        self.lbfgs = optax.lbfgs(
+        lbfgs = optax.lbfgs(
             memory_size=lbfgs_config.memory_size,
             scale_init_precond=lbfgs_config.scale_init_precond,
             linesearch=linesearch,
         )
+        object.__setattr__(self, "lbfgs", lbfgs)
 
     def init(self, params: PyTree) -> HybridOptimizerState:
         """Initialize optimizer state.

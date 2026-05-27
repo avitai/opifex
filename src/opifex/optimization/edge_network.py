@@ -42,7 +42,7 @@ class FailoverStrategy(Enum):
     WEIGHTED_DISTRIBUTION = "weighted_distribution"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class EdgeNodeMetrics:
     """Performance metrics for edge nodes."""
 
@@ -61,7 +61,7 @@ class EdgeNodeMetrics:
     last_update: float = field(default_factory=time.time)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LatencyProfile:
     """Latency optimization profile for different workload types."""
 
@@ -73,7 +73,7 @@ class LatencyProfile:
     geographic_distribution: dict[EdgeRegion, float]  # Weight by region
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class CacheEntry:
     """Cache entry for edge model and result caching."""
 
@@ -89,7 +89,7 @@ class CacheEntry:
     compression_ratio: float = 1.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FailoverResult:
     """Result of failover operation."""
 

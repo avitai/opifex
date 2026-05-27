@@ -20,7 +20,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ConstraintSpecification:
     """Represents a constraint specification with type, expression, and coefficients.
 
@@ -158,7 +158,7 @@ class SymbolicConstraintEncoder:
         return jnp.concatenate([type_encoding, coeff_encoding])
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ProjectorConfig:
     """Configuration for ConstraintProjector neural network."""
 
@@ -168,7 +168,7 @@ class ProjectorConfig:
     def __post_init__(self) -> None:
         """Set default hidden sizes if not provided."""
         if self.hidden_sizes is None:
-            self.hidden_sizes = [64, 32]
+            object.__setattr__(self, "hidden_sizes", [64, 32])
 
 
 class ConstraintProjector(nnx.Module):

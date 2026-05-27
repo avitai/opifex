@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PhysicsLossConfig:
     """Configuration for physics-informed loss functions.
 
@@ -77,7 +77,7 @@ class PhysicsLossConfig:
             )
 
         if self.weight_schedule == "step" and self.step_milestones is None:
-            self.step_milestones = []
+            object.__setattr__(self, "step_milestones", [])
 
 
 class PhysicsLossComposer:

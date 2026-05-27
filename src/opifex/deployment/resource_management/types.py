@@ -48,7 +48,7 @@ class OptimizationObjective(Enum):
     MAXIMIZE_AVAILABILITY = "maximize_availability"
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class ResourcePool:
     """Resource pool configuration and status."""
 
@@ -67,7 +67,7 @@ class ResourcePool:
     maintenance_window: str = "02:00-04:00 UTC"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ResourceAllocation:
     """Resource allocation request and result."""
 
@@ -82,7 +82,7 @@ class ResourceAllocation:
     allocation_strategy: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CostOptimization:
     """Cost optimization analysis and recommendations."""
 
@@ -95,7 +95,7 @@ class CostOptimization:
     roi_analysis: dict[str, float]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SustainabilityMetrics:
     """Sustainability and carbon footprint metrics."""
 

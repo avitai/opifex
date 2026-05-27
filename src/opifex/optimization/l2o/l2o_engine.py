@@ -36,7 +36,7 @@ from opifex.optimization.meta_optimization import (
 )
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class L2OEngineConfig:
     """Configuration for the L2O engine integration.
 
@@ -56,7 +56,7 @@ class L2OEngineConfig:
     def __post_init__(self) -> None:
         """Set default values and validate configuration."""
         if self.problem_encoder_layers is None:
-            self.problem_encoder_layers = [64, 32, 16]
+            object.__setattr__(self, "problem_encoder_layers", [64, 32, 16])
 
         valid_solver_types = ["parametric", "gradient", "hybrid"]
         if self.solver_type not in valid_solver_types:

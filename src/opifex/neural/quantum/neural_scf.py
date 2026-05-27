@@ -10,7 +10,7 @@ from jaxtyping import Array
 from opifex.core.quantum.molecular_system import MolecularSystem
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SCFResult:
     """Result of SCF calculation with full convergence information."""
 

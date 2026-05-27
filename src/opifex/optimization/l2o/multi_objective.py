@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from opifex.optimization.l2o.l2o_engine import L2OEngine
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class MultiObjectiveConfig:
     """Configuration for multi-objective L2O optimization.
 

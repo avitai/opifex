@@ -35,7 +35,7 @@ class ServingStatus(Enum):
     ERROR = "error"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DeploymentConfig:
     """Configuration for model deployment."""
 
@@ -72,7 +72,7 @@ class DeploymentConfig:
         return dtype_map[self.precision]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ModelMetadata:
     """Metadata for registered models."""
 
@@ -90,7 +90,7 @@ class ModelMetadata:
     def __post_init__(self) -> None:
         """Set default values and validate."""
         if self.created_at is None:
-            self.created_at = datetime.now(UTC).isoformat()
+            object.__setattr__(self, "created_at", datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary."""

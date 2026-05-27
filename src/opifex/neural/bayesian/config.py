@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FidelityConfig:
     """Configuration for a single fidelity level."""
 
@@ -21,7 +21,7 @@ class FidelityConfig:
     data_weight: float = 1.0
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class MultiFidelityConfig:
     """
     Complete configuration for multi-fidelity PINN with all required keys.

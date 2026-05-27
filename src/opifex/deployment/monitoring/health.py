@@ -53,7 +53,7 @@ class HealthStatus(Enum):
     UNKNOWN = "unknown"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class HealthCheckResult:
     """Result of a health check operation."""
 
@@ -76,7 +76,7 @@ class HealthCheckResult:
         }
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ServiceHealth:
     """Overall service health status."""
 

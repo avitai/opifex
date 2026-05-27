@@ -27,7 +27,7 @@ from opifex.optimization.l2o.l2o_engine import L2OEngine, L2OEngineConfig
 from opifex.optimization.l2o.parametric_solver import OptimizationProblem
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class MAMLConfig:
     """Configuration for Model-Agnostic Meta-Learning (MAML) optimization.
 
@@ -55,7 +55,7 @@ class MAMLConfig:
             raise ValueError("Inner steps must be positive")
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReptileConfig:
     """Configuration for Reptile meta-learning algorithm.
 
@@ -83,7 +83,7 @@ class ReptileConfig:
             )
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GradientBasedMetaLearningConfig:
     """Configuration for gradient-based meta-learning strategies.
 
@@ -103,7 +103,7 @@ class GradientBasedMetaLearningConfig:
     def __post_init__(self) -> None:
         """Set default values and validate configuration."""
         if self.optimizer_network_layers is None:
-            self.optimizer_network_layers = [128, 64, 32]
+            object.__setattr__(self, "optimizer_network_layers", [128, 64, 32])
 
 
 class MAMLOptimizer(nnx.Module):

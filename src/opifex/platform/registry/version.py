@@ -30,7 +30,7 @@ class MergeStrategy(Enum):
     REBASE = "rebase"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Version:
     """Version metadata for a neural functional."""
 
@@ -50,7 +50,7 @@ class Version:
     size_bytes: int = 0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Branch:
     """Branch information for version management."""
 
@@ -64,7 +64,7 @@ class Branch:
     created_at: str = ""
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class VersionDiff:
     """Differences between two versions."""
 

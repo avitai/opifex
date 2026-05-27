@@ -13,7 +13,7 @@ import jax.numpy as jnp
 from opifex.platform.search_types import SearchType
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SearchQuery:
     """Structured search query for neural functionals."""
 
@@ -40,7 +40,7 @@ class SearchQuery:
     search_type: SearchType = SearchType.HYBRID
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SearchResult:
     """Search result with relevance scoring."""
 

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from jaxtyping import Array, Float
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Subdomain:
     """Representation of a subdomain in the computational domain.
 
@@ -73,7 +73,7 @@ class Subdomain:
         return jnp.prod(sizes)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Interface:
     """Representation of an interface between two subdomains.
 

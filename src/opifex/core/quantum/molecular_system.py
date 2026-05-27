@@ -83,7 +83,7 @@ HARTREE_TO_EV = 27.21138602
 EV_TO_HARTREE = 1.0 / HARTREE_TO_EV
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MolecularSystem:
     """
     Standard molecular system representation for Neural DFT.

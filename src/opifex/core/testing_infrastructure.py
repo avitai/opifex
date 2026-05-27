@@ -67,7 +67,7 @@ class CompilationStrategy(Enum):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CUDAEnvironment:
     """Local CUDA environment configuration."""
 
@@ -80,12 +80,12 @@ class CUDAEnvironment:
 
     def __post_init__(self) -> None:
         if self.cuda_library_paths is None:
-            self.cuda_library_paths = []
+            object.__setattr__(self, "cuda_library_paths", [])
         if self.environment_variables is None:
-            self.environment_variables = {}
+            object.__setattr__(self, "environment_variables", {})
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TestEnvironment:
     """Test environment configuration."""
 
@@ -99,7 +99,7 @@ class TestEnvironment:
     process_isolation: bool = False
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GPUTestResult:
     """Result of GPU stability testing."""
 
@@ -109,7 +109,7 @@ class GPUTestResult:
     test_duration_ms: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CompilationResult:
     """Result of model compilation attempt."""
 

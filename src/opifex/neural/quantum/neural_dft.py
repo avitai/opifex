@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DFTResult:
     """Result of neural DFT calculation with full diagnostics.
 

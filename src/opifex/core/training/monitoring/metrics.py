@@ -72,7 +72,7 @@ class TrainingMetrics:
         self.constraint_violations.append(violation)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TrainingState:
     """Enhanced training state management with full physics-aware metrics.
 

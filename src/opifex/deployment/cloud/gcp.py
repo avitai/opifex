@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GCPConfig:
     """Configuration for GCP deployment."""
 

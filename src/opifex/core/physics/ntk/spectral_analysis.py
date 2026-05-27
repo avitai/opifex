@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from jaxtyping import Array, Float
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NTKDiagnostics:
     """Diagnostics from NTK spectral analysis.
 
