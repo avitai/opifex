@@ -180,16 +180,10 @@ def bfgs_sample(
     cholesky_lower = jnp.linalg.cholesky(identity + R_matrix @ gamma @ R_matrix.T)
 
     log_det = jnp.log(jnp.prod(alpha)) + 2.0 * jnp.log(jnp.linalg.det(cholesky_lower))
-    mean = (
-        position
-        + jnp.diag(alpha) @ grad_position
-        + beta @ gamma @ beta.T @ grad_position
-    )
+    mean = position + jnp.diag(alpha) @ grad_position + beta @ gamma @ beta.T @ grad_position
     standard_noise = jax.random.normal(rng_key, (num_samples, param_dim, 1))
-    transformed = (
-        mean[..., None]
-        + jnp.diag(jnp.sqrt(alpha))
-        @ (Q_matrix @ (cholesky_lower - identity) @ (Q_matrix.T @ standard_noise) + standard_noise)
+    transformed = mean[..., None] + jnp.diag(jnp.sqrt(alpha)) @ (
+        Q_matrix @ (cholesky_lower - identity) @ (Q_matrix.T @ standard_noise) + standard_noise
     )
     log_density = -0.5 * (
         log_det
@@ -250,9 +244,10 @@ def _run_lbfgs_with_history(
             alpha=alpha_new,
             update_mask=update_mask,
         )
-        f_delta = jnp.abs(value - new_value) / jnp.asarray(
-            [jnp.abs(value), jnp.abs(new_value), 1.0]
-        ).max()
+        f_delta = (
+            jnp.abs(value - new_value)
+            / jnp.asarray([jnp.abs(value), jnp.abs(new_value), 1.0]).max()
+        )
         not_converged = (
             (jnp.linalg.norm(gradient) > gtol) & (f_delta > ftol) & (iter_index < maxiter)
         )
@@ -360,12 +355,8 @@ def pathfinder_approximate(
 
     path_size = maxiter + 1
     window_index = jnp.arange(path_size)[:, None] + jnp.arange(maxcor)[None, :]
-    history_S = s_padded[window_index.reshape(path_size, maxcor)].reshape(
-        path_size, maxcor, -1
-    )
-    history_Z = z_padded[window_index.reshape(path_size, maxcor)].reshape(
-        path_size, maxcor, -1
-    )
+    history_S = s_padded[window_index.reshape(path_size, maxcor)].reshape(path_size, maxcor, -1)
+    history_Z = z_padded[window_index.reshape(path_size, maxcor)].reshape(path_size, maxcor, -1)
     per_step_keys = jax.random.split(rng_key, path_size)
     elbo, beta, gamma = jax.vmap(_per_iteration)(
         per_step_keys, history_S, history_Z, alpha, position, grad_position
