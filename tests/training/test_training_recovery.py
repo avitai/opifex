@@ -8,9 +8,9 @@ import optax
 import pytest
 from flax import nnx
 
+from opifex.core.training.components.recovery import ErrorRecoveryManager
+from opifex.core.training.monitoring.metrics import TrainingState
 from opifex.neural.base import StandardMLP
-from opifex.training.metrics import TrainingState
-from opifex.training.recovery import ErrorRecoveryManager
 
 
 class TestErrorRecoveryManager:

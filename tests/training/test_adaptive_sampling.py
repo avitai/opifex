@@ -13,7 +13,7 @@ class TestRADConfig:
 
     def test_default_config(self):
         """Should create config with sensible defaults."""
-        from opifex.training.adaptive_sampling import RADConfig
+        from opifex.core.training.components.adaptive_sampling import RADConfig
 
         config = RADConfig()
         assert config.beta > 0  # Exponent for residual weighting
@@ -22,7 +22,7 @@ class TestRADConfig:
 
     def test_custom_beta(self):
         """Should accept custom beta exponent."""
-        from opifex.training.adaptive_sampling import RADConfig
+        from opifex.core.training.components.adaptive_sampling import RADConfig
 
         config = RADConfig(beta=2.0)
         assert config.beta == 2.0
@@ -33,7 +33,7 @@ class TestSamplingDistribution:
 
     def test_compute_sampling_distribution(self):
         """Should compute sampling distribution from residuals."""
-        from opifex.training.adaptive_sampling import compute_sampling_distribution
+        from opifex.core.training.components.adaptive_sampling import compute_sampling_distribution
 
         residuals = jnp.array([1.0, 2.0, 3.0, 4.0])
         probs = compute_sampling_distribution(residuals, beta=1.0)
@@ -43,7 +43,7 @@ class TestSamplingDistribution:
 
     def test_higher_residual_higher_probability(self):
         """Higher residuals should have higher sampling probability."""
-        from opifex.training.adaptive_sampling import compute_sampling_distribution
+        from opifex.core.training.components.adaptive_sampling import compute_sampling_distribution
 
         residuals = jnp.array([1.0, 10.0])
         probs = compute_sampling_distribution(residuals, beta=1.0)
@@ -52,7 +52,7 @@ class TestSamplingDistribution:
 
     def test_beta_controls_sharpness(self):
         """Higher beta should make distribution more peaked."""
-        from opifex.training.adaptive_sampling import compute_sampling_distribution
+        from opifex.core.training.components.adaptive_sampling import compute_sampling_distribution
 
         residuals = jnp.array([1.0, 2.0, 3.0])
 
@@ -64,7 +64,7 @@ class TestSamplingDistribution:
 
     def test_handles_zero_residuals(self):
         """Should handle zero residuals without NaN."""
-        from opifex.training.adaptive_sampling import compute_sampling_distribution
+        from opifex.core.training.components.adaptive_sampling import compute_sampling_distribution
 
         residuals = jnp.array([0.0, 1.0, 2.0])
         probs = compute_sampling_distribution(residuals, beta=1.0)
@@ -78,14 +78,14 @@ class TestRADSampler:
 
     def test_create_sampler(self):
         """Should create RAD sampler."""
-        from opifex.training.adaptive_sampling import RADSampler
+        from opifex.core.training.components.adaptive_sampling import RADSampler
 
         sampler = RADSampler()
         assert sampler is not None
 
     def test_sample_collocation_points(self):
         """Should sample collocation points based on residuals."""
-        from opifex.training.adaptive_sampling import RADSampler
+        from opifex.core.training.components.adaptive_sampling import RADSampler
 
         sampler = RADSampler()
         domain_points = jnp.array([[0.1], [0.2], [0.3], [0.4], [0.5]])
@@ -98,7 +98,7 @@ class TestRADSampler:
 
     def test_sample_with_config(self):
         """Should respect configuration parameters."""
-        from opifex.training.adaptive_sampling import RADConfig, RADSampler
+        from opifex.core.training.components.adaptive_sampling import RADConfig, RADSampler
 
         config = RADConfig(beta=2.0)
         sampler = RADSampler(config=config)
@@ -113,7 +113,7 @@ class TestRADSampler:
 
     def test_sample_2d_domain(self):
         """Should work with 2D domain."""
-        from opifex.training.adaptive_sampling import RADSampler
+        from opifex.core.training.components.adaptive_sampling import RADSampler
 
         sampler = RADSampler()
 
@@ -136,14 +136,14 @@ class TestRARDRefinement:
 
     def test_create_refiner(self):
         """Should create RAR-D refiner."""
-        from opifex.training.adaptive_sampling import RARDRefiner
+        from opifex.core.training.components.adaptive_sampling import RARDRefiner
 
         refiner = RARDRefiner()
         assert refiner is not None
 
     def test_refine_adds_points(self):
         """Should add new points near high-residual regions."""
-        from opifex.training.adaptive_sampling import RARDRefiner
+        from opifex.core.training.components.adaptive_sampling import RARDRefiner
 
         refiner = RARDRefiner(num_new_points=5)
 
@@ -159,7 +159,7 @@ class TestRARDRefinement:
 
     def test_new_points_near_high_residual(self):
         """New points should be near high-residual regions."""
-        from opifex.training.adaptive_sampling import RARDRefiner
+        from opifex.core.training.components.adaptive_sampling import RARDRefiner
 
         refiner = RARDRefiner(num_new_points=10, noise_scale=0.05)
 
@@ -180,7 +180,7 @@ class TestRARDRefinement:
 
     def test_respects_bounds(self):
         """Refined points should stay within bounds."""
-        from opifex.training.adaptive_sampling import RARDRefiner
+        from opifex.core.training.components.adaptive_sampling import RARDRefiner
 
         refiner = RARDRefiner(num_new_points=20)
 
@@ -201,7 +201,7 @@ class TestAdaptiveSamplingIntegration:
 
     def test_with_pinn_residual(self):
         """Should work with PINN residual computation."""
-        from opifex.training.adaptive_sampling import RADSampler
+        from opifex.core.training.components.adaptive_sampling import RADSampler
 
         # Simple model
         class SimpleModel(nnx.Module):
@@ -228,7 +228,7 @@ class TestAdaptiveSamplingIntegration:
 
     def test_sampling_is_jit_compatible(self):
         """Sampling should be JIT compatible."""
-        from opifex.training.adaptive_sampling import RADSampler
+        from opifex.core.training.components.adaptive_sampling import RADSampler
 
         sampler = RADSampler()
         domain_points = jnp.linspace(0, 1, 20).reshape(-1, 1)
@@ -250,7 +250,7 @@ class TestRADConfigValidation:
 
     def test_beta_must_be_positive(self):
         """Beta should be positive."""
-        from opifex.training.adaptive_sampling import RADConfig
+        from opifex.core.training.components.adaptive_sampling import RADConfig
 
         # Should work with positive beta
         config = RADConfig(beta=0.5)

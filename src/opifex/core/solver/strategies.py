@@ -1,7 +1,7 @@
 """Training Strategies and Components for Unified Solver.
 
 This module defines the protocols and concrete implementations for:
-1. TrainingComponent: Modular units that hook into the training loop.
+1. TrainingCallback: Modular units that hook into the training loop.
 2. TrainingStrategy: High-level configurations that compose components.
 """
 
@@ -13,7 +13,7 @@ from typing import Any, Protocol, runtime_checkable
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.core.training.components.base import BaseComponent, TrainingComponent
+from opifex.core.training.components.base import BaseCallback, TrainingCallback
 
 
 @runtime_checkable
@@ -28,12 +28,12 @@ class TrainingStrategy(Protocol):
         """Modify or validate the training configuration."""
         ...
 
-    def create_components(self) -> list[TrainingComponent]:
+    def create_components(self) -> list[TrainingCallback]:
         """Create and return the list of components for this strategy."""
         ...
 
 
-class AdaptiveLossBalancing(BaseComponent, nnx.Module):
+class AdaptiveLossBalancing(BaseCallback, nnx.Module):
     """Adaptive Loss Balancing Strategy (e.g., GradNorm-style).
 
     Adjusts weights of different loss components during training to balance
@@ -73,7 +73,7 @@ class AdaptiveLossBalancing(BaseComponent, nnx.Module):
 
 
 @dataclass
-class CurriculumRegularization(BaseComponent):
+class CurriculumRegularization(BaseCallback):
     """Curriculum Regularization Strategy.
 
     Increases or decreases a regularization parameter (e.g., complexity penalty)

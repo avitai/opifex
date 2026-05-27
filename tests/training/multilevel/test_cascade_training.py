@@ -2,8 +2,8 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.training.multilevel.cascade_training import CascadeTrainer
-from opifex.training.multilevel.multilevel_adam import MultilevelAdam
+from opifex.core.training.strategies.multilevel.cascade_training import CascadeTrainer
+from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
 
 
 class DummyModel(nnx.Module):

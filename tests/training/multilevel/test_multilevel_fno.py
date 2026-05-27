@@ -12,7 +12,7 @@ class TestMultilevelFNOConfig:
 
     def test_default_config(self):
         """Should create config with sensible defaults."""
-        from opifex.training.multilevel.multilevel_fno import MultilevelFNOConfig
+        from opifex.core.training.strategies.multilevel.multilevel_fno import MultilevelFNOConfig
 
         config = MultilevelFNOConfig()
         assert config.num_levels >= 2
@@ -21,7 +21,7 @@ class TestMultilevelFNOConfig:
 
     def test_custom_levels(self):
         """Should accept custom number of levels."""
-        from opifex.training.multilevel.multilevel_fno import MultilevelFNOConfig
+        from opifex.core.training.strategies.multilevel.multilevel_fno import MultilevelFNOConfig
 
         config = MultilevelFNOConfig(num_levels=4, base_modes=16)
         assert config.num_levels == 4
@@ -33,7 +33,7 @@ class TestFNOModeHierarchy:
 
     def test_create_mode_hierarchy(self):
         """Should create hierarchy of mode counts."""
-        from opifex.training.multilevel.multilevel_fno import create_mode_hierarchy
+        from opifex.core.training.strategies.multilevel.multilevel_fno import create_mode_hierarchy
 
         hierarchy = create_mode_hierarchy(
             base_modes=16,
@@ -47,7 +47,7 @@ class TestFNOModeHierarchy:
 
     def test_mode_reduction(self):
         """Mode counts should follow reduction factor."""
-        from opifex.training.multilevel.multilevel_fno import create_mode_hierarchy
+        from opifex.core.training.strategies.multilevel.multilevel_fno import create_mode_hierarchy
 
         hierarchy = create_mode_hierarchy(
             base_modes=16,
@@ -67,7 +67,7 @@ class TestSimpleFNO:
 
     def test_create_simple_fno(self):
         """Should create simple FNO with given modes."""
-        from opifex.training.multilevel.multilevel_fno import SimpleFNO
+        from opifex.core.training.strategies.multilevel.multilevel_fno import SimpleFNO
 
         fno = SimpleFNO(
             modes=8,
@@ -82,7 +82,7 @@ class TestSimpleFNO:
 
     def test_fno_forward_pass(self):
         """FNO should compute forward pass."""
-        from opifex.training.multilevel.multilevel_fno import SimpleFNO
+        from opifex.core.training.strategies.multilevel.multilevel_fno import SimpleFNO
 
         fno = SimpleFNO(
             modes=4,
@@ -105,7 +105,7 @@ class TestFNOHierarchy:
 
     def test_create_fno_hierarchy(self):
         """Should create hierarchy of FNOs with decreasing modes."""
-        from opifex.training.multilevel.multilevel_fno import create_fno_hierarchy
+        from opifex.core.training.strategies.multilevel.multilevel_fno import create_fno_hierarchy
 
         hierarchy = create_fno_hierarchy(
             base_modes=8,
@@ -121,7 +121,7 @@ class TestFNOHierarchy:
 
     def test_hierarchy_modes_decreasing(self):
         """Coarser levels should have fewer modes."""
-        from opifex.training.multilevel.multilevel_fno import create_fno_hierarchy
+        from opifex.core.training.strategies.multilevel.multilevel_fno import create_fno_hierarchy
 
         hierarchy = create_fno_hierarchy(
             base_modes=8,
@@ -142,7 +142,7 @@ class TestFNOTransferOperators:
 
     def test_mode_prolongation(self):
         """Should transfer modes from coarse to fine."""
-        from opifex.training.multilevel.multilevel_fno import (
+        from opifex.core.training.strategies.multilevel.multilevel_fno import (
             prolongate_fno_modes,
             SimpleFNO,
         )
@@ -157,7 +157,7 @@ class TestFNOTransferOperators:
 
     def test_mode_restriction(self):
         """Should transfer modes from fine to coarse."""
-        from opifex.training.multilevel.multilevel_fno import (
+        from opifex.core.training.strategies.multilevel.multilevel_fno import (
             restrict_fno_modes,
             SimpleFNO,
         )
@@ -176,7 +176,7 @@ class TestMultilevelFNOTrainer:
 
     def test_create_trainer(self):
         """Should create multilevel FNO trainer."""
-        from opifex.training.multilevel.multilevel_fno import (
+        from opifex.core.training.strategies.multilevel.multilevel_fno import (
             MultilevelFNOConfig,
             MultilevelFNOTrainer,
         )
@@ -195,7 +195,7 @@ class TestMultilevelFNOTrainer:
 
     def test_get_current_model(self):
         """Should return current level FNO."""
-        from opifex.training.multilevel.multilevel_fno import (
+        from opifex.core.training.strategies.multilevel.multilevel_fno import (
             MultilevelFNOConfig,
             MultilevelFNOTrainer,
         )
@@ -214,7 +214,7 @@ class TestMultilevelFNOTrainer:
 
     def test_advance_level(self):
         """Should advance to finer level."""
-        from opifex.training.multilevel.multilevel_fno import (
+        from opifex.core.training.strategies.multilevel.multilevel_fno import (
             MultilevelFNOConfig,
             MultilevelFNOTrainer,
         )
@@ -241,7 +241,7 @@ class TestMultilevelFNOTraining:
         """Should train coarse FNO first, then fine."""
         import optax
 
-        from opifex.training.multilevel.multilevel_fno import (
+        from opifex.core.training.strategies.multilevel.multilevel_fno import (
             MultilevelFNOConfig,
             MultilevelFNOTrainer,
         )

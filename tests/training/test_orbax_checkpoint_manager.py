@@ -13,7 +13,7 @@ import pytest
 from flax import nnx
 from flax.training import train_state
 
-from opifex.training.orbax_checkpoint_manager import OrbaxCheckpointManager
+from opifex.core.training.components.orbax_manager import OrbaxCheckpointManager
 
 
 def _canonical_path(path: str | Path) -> str:

@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from opifex.core.training.components.base import (
-        TrainingComponent,
+        TrainingCallback,
     )
     from opifex.core.training.config import TrainingConfig
 
@@ -131,7 +131,7 @@ class Trainer(nnx.Module):
         self.custom_losses: dict[str, Callable] = {}
         self.hooks: dict[str, list[Callable]] = {}
         self.hooks: dict[str, list[Callable]] = {}
-        self.components: nnx.List[TrainingComponent] = nnx.List([])
+        self.components: nnx.List[TrainingCallback] = nnx.List([])
 
         # Initialize constraint weights if configured
         self._constraint_weights = nnx.Dict()
@@ -150,7 +150,7 @@ class Trainer(nnx.Module):
                 config=config.distributed_config,
             )
 
-    def add_component(self, component: TrainingComponent) -> None:
+    def add_component(self, component: TrainingCallback) -> None:
         """Add a training component.
 
         Args:

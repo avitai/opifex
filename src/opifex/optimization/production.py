@@ -8,25 +8,34 @@ Selected Architecture: Hybrid Performance Platform + Intelligent Edge + Adaptive
 Optimization
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import time
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine  # noqa: TC003 — used in eager type aliases
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast, Protocol, TypeVar
+from typing import Any, cast, Protocol, TYPE_CHECKING, TypeVar
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 from flax.nnx import Module
 
-from opifex.deployment.resource_management import GlobalResourceManager
-from opifex.optimization.adaptive_deployment import (
+
+if TYPE_CHECKING:
+    # ``GlobalResourceManager`` is the concrete deployment-side implementation,
+    # but optimization only needs the type as a stored handle. Using a
+    # ``TYPE_CHECKING``-gated alias keeps the type information for static
+    # analysers without creating a runtime ``optimization → deployment``
+    # import (Dependency Inversion / layered architecture).
+    from opifex.deployment.resource_management import GlobalResourceManager
+from opifex.optimization.adaptive_deployment import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
     AdaptiveDeploymentSystem,
 )
-from opifex.optimization.edge_network import (
+from opifex.optimization.edge_network import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
     IntelligentEdgeNetwork,
 )
 from opifex.optimization.performance_monitoring import (
@@ -156,6 +165,24 @@ class OptimizedModel:
     optimization_metadata: dict[str, Any]
 
 
+class _JitWrappedModel(Module):
+    """Generic JIT-compiled wrapper around an existing ``Module``.
+
+    All four optimisation strategies below (fused, memory-efficient,
+    latency-tuned, balanced) wrap their input the same way: stash the
+    original module + bind a single jit-compiled forward callable.
+    Inlining four near-identical classes was a Rule 1 (DRY) violation; we
+    keep one generic wrapper and parameterise it by the forward fn.
+    """
+
+    def __init__(self, original_model: Module, forward_fn: Callable[..., Any]):
+        self.original_model = original_model
+        self.forward_fn = forward_fn
+
+    def __call__(self, x: Any) -> Any:
+        return self.forward_fn(x)
+
+
 class AdaptiveJAXOptimizer(nnx.Module):
     """Adaptive JIT optimization for JAX-based neural operators.
 
@@ -204,21 +231,11 @@ class AdaptiveJAXOptimizer(nnx.Module):
     def apply_aggressive_kernel_fusion(self, model: Module) -> Module:
         """Apply aggressive kernel fusion for compute-intensive workloads."""
 
-        # Create JIT-compiled version with aggressive optimization
         @jax.jit
         def fused_forward(x):
             return model(x)  # type: ignore[operator]
 
-        # Create optimized model with fused operations
-        class FusedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.fused_forward = fused_forward
-
-            def __call__(self, x):
-                return self.fused_forward(x)
-
-        return FusedModel(model)
+        return _JitWrappedModel(model, fused_forward)
 
     def apply_memory_optimization(self, model: Module) -> Module:
         """Apply memory optimization for large models."""
@@ -229,20 +246,11 @@ class AdaptiveJAXOptimizer(nnx.Module):
         def memory_efficient_forward(x):
             return model(x)  # type: ignore[operator]
 
-        class MemoryOptimizedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.memory_forward = memory_efficient_forward
-
-            def __call__(self, x):
-                return self.memory_forward(x)
-
-        return MemoryOptimizedModel(model)
+        return _JitWrappedModel(model, memory_efficient_forward)
 
     def apply_latency_optimization(self, model: Module) -> Module:
         """Apply latency optimization for real-time inference."""
 
-        # Pre-compile and optimize for minimal latency
         @jax.jit
         def fast_forward(x):
             return model(x)  # type: ignore[operator]
@@ -251,15 +259,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         dummy_input = jnp.ones((1, 64))  # Typical input shape
         _ = fast_forward(dummy_input)  # Trigger compilation
 
-        class LatencyOptimizedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.fast_forward = fast_forward
-
-            def __call__(self, x):
-                return self.fast_forward(x)
-
-        return LatencyOptimizedModel(model)
+        return _JitWrappedModel(model, fast_forward)
 
     def apply_balanced_optimization(self, model: Module) -> Module:
         """Apply balanced optimization for general workloads."""
@@ -268,15 +268,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         def balanced_forward(x):
             return model(x)  # type: ignore[operator]
 
-        class BalancedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.balanced_forward = balanced_forward
-
-            def __call__(self, x):
-                return self.balanced_forward(x)
-
-        return BalancedModel(model)
+        return _JitWrappedModel(model, balanced_forward)
 
     def benchmark_model_performance(
         self, model: Module, workload: WorkloadProfile

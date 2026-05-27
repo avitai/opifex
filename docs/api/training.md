@@ -133,7 +133,7 @@ trainer = ModularTrainer(
 Production-grade error handling with gradient stability and automatic recovery.
 
 ```python
-from opifex.training.recovery import ErrorRecoveryManager
+from opifex.core.training.components.recovery import ErrorRecoveryManager
 
 error_manager = ErrorRecoveryManager(
     config={
@@ -188,7 +188,7 @@ optimizer_factory = FlexibleOptimizerFactory(
 Physics-aware metrics collection with convergence tracking.
 
 ```python
-from opifex.training.metrics import AdvancedMetricsCollector
+from opifex.core.training.monitoring.metrics import AdvancedMetricsCollector
 
 collector = AdvancedMetricsCollector()
 collector.start_training()
@@ -261,7 +261,7 @@ config = TrainingConfig(
 Enhanced training state with full tracking.
 
 ```python
-from opifex.training.metrics import TrainingState
+from opifex.core.training.monitoring.metrics import TrainingState
 
 # Automatically managed by trainers
 state = trainer.training_state
@@ -321,7 +321,7 @@ into the next training batch. Plugs into any
 
 ```python
 from flax import nnx
-from opifex.training import UncertaintyGuidedTrainer
+from opifex.training.basic_trainer import UncertaintyGuidedTrainer
 
 trainer = UncertaintyGuidedTrainer(
     model=bayesian_model,
@@ -341,7 +341,7 @@ exceeds a configurable threshold.
 
 ```python
 from flax import nnx
-from opifex.training import MultiFidelityUncertaintyTrainer
+from opifex.training.basic_trainer import MultiFidelityUncertaintyTrainer
 
 trainer = MultiFidelityUncertaintyTrainer(
     low_fidelity_model=fast_model,
@@ -359,7 +359,7 @@ small-data regimes where labelling is expensive.
 
 ```python
 from flax import nnx
-from opifex.training import ActiveUncertaintyLearner
+from opifex.training.basic_trainer import ActiveUncertaintyLearner
 
 learner = ActiveUncertaintyLearner(
     model=bayesian_model,

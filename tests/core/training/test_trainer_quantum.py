@@ -16,8 +16,8 @@ from opifex.core.training.physics_configs import (
     ElectronicStructureConfig,
     SCFConfig,
 )
+from opifex.core.training.strategies.quantum import QuantumTrainingManager
 from opifex.core.training.trainer import Trainer
-from opifex.training.quantum_training import QuantumTrainingManager
 
 
 class MockModel(nnx.Module):

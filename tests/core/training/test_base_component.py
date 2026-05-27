@@ -1,14 +1,14 @@
-"""Tests for BaseComponent coverage."""
+"""Tests for BaseCallback coverage."""
 
-from opifex.core.training.components.base import BaseComponent
+from opifex.core.training.components.base import BaseCallback
 
 
-class TestBaseComponent:
+class TestBaseCallback:
     def test_default_methods(self):
         """Verify that default methods run without error (no-ops)."""
-        component = BaseComponent()
+        callback = BaseCallback()
         # Should do nothing
-        component.on_epoch_begin(0, None)
-        component.on_epoch_end(0, None, {})
-        component.on_batch_begin(0, None)
-        component.on_batch_end(0, None, 0.0, {})
+        callback.on_epoch_begin(0, None)
+        callback.on_epoch_end(0, None, {})
+        callback.on_batch_begin(0, None)
+        callback.on_batch_end(0, None, 0.0, {})

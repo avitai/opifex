@@ -49,19 +49,29 @@ def test_strategies_migration():
     assert hasattr(quantum, "QuantumTrainingManager")
 
 
-def test_legacy_shim_imports():
-    """Verify that old imports still work via shim re-exports."""
-    # These imports should NOT fail, but should now point to objects defined in core
-    try:
-        from opifex.training import metrics, mixed_precision, recovery
-    except ImportError:
-        pytest.fail("Legacy shim imports failed")
+def test_legacy_shims_are_gone():
+    """The 15 ``opifex.training.*`` shim modules were deleted per Rule 1.
 
-    # Verify they are actually the SAME objects (identity check)
-    from opifex.core.training.components import recovery as core_recovery
-    from opifex.core.training.monitoring import metrics as core_metrics
-    from opifex.core.training.strategies import mixed_precision as core_mp
+    Importing them must now ``ModuleNotFoundError`` — anything still trying
+    to reach those legacy paths needs to migrate to the canonical
+    ``opifex.core.training.*`` locations. This guards against the shims
+    silently reappearing through stray autoformatter / merge artefacts.
+    """
+    legacy_shims = (
+        "opifex.training.metrics",
+        "opifex.training.mixed_precision",
+        "opifex.training.recovery",
+        "opifex.training.adaptive_sampling",
+        "opifex.training.checkpoint_manager",
+        "opifex.training.orbax_checkpoint_manager",
+        "opifex.training.incremental_trainer",
+        "opifex.training.quantum_training",
+        "opifex.training.flops_counter",
+        "opifex.training.utils",
+        "opifex.training.multilevel",
+    )
+    import importlib
 
-    assert metrics.TrainingMetrics is core_metrics.TrainingMetrics
-    assert mixed_precision.MixedPrecisionTrainer is core_mp.MixedPrecisionTrainer
-    assert recovery.ErrorRecoveryManager is core_recovery.ErrorRecoveryManager
+    for shim in legacy_shims:
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(shim)

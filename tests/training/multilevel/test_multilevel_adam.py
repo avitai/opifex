@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.training.multilevel.multilevel_adam import MultilevelAdam
+from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
 
 
 class SimpleMLP(nnx.Module):

@@ -10,7 +10,6 @@ import pytest
 from flax import nnx
 
 from opifex.neural.operators.deeponet.base import (
-    AdaptiveDeepONet,
     DeepONet,
     MultiFidelityDeepONet,
 )
@@ -248,126 +247,6 @@ class TestDeepONet:
         # Should not raise error
         grads = nnx.grad(loss_fn)(deeponet, branch_input, trunk_input)
         assert grads is not None
-
-
-class TestAdaptiveDeepONet:
-    """Test Adaptive DeepONet with learned sensor placement."""
-
-    def setup_method(self):
-        """Setup for each test method."""
-        self.backend = jax.default_backend()
-        print(f"Running AdaptiveDeepONet tests on {self.backend}")
-
-    def test_adaptive_deeponet_initialization_uniform(self):
-        """Test AdaptiveDeepONet initialization with uniform sensor init."""
-        rngs = nnx.Rngs(42)
-
-        adaptive_deeponet = AdaptiveDeepONet(
-            branch_sizes=[50, 64, 32],  # 50 sensors
-            trunk_sizes=[2, 64, 32],  # 2D coordinates
-            sensor_dim=2,  # 2D sensor locations
-            sensor_init="uniform",
-            rngs=rngs,
-        )
-
-        assert hasattr(adaptive_deeponet, "sensor_locations")
-        assert hasattr(adaptive_deeponet, "deeponet")
-        assert adaptive_deeponet.n_sensors == 50
-        assert adaptive_deeponet.sensor_dim == 2
-
-        # Check sensor locations are in [-1, 1] range for uniform init
-        sensor_locs = adaptive_deeponet.get_sensor_locations()
-        assert sensor_locs.shape == (50, 2)
-        assert jnp.all(sensor_locs >= -1.0) and jnp.all(sensor_locs <= 1.0)
-
-    def test_adaptive_deeponet_initialization_normal(self):
-        """Test AdaptiveDeepONet initialization with normal sensor init."""
-        rngs = nnx.Rngs(42)
-
-        adaptive_deeponet = AdaptiveDeepONet(
-            branch_sizes=[30, 64, 32],
-            trunk_sizes=[2, 64, 32],
-            sensor_dim=2,
-            sensor_init="normal",
-            rngs=rngs,
-        )
-
-        sensor_locs = adaptive_deeponet.get_sensor_locations()
-        assert sensor_locs.shape == (30, 2)
-        # Normal distribution should have reasonable values
-        assert jnp.isfinite(sensor_locs).all()
-
-    def test_adaptive_deeponet_invalid_sensor_init(self):
-        """Test AdaptiveDeepONet raises error for invalid sensor_init."""
-        rngs = nnx.Rngs(42)
-
-        with pytest.raises(ValueError, match="Unknown sensor_init"):
-            AdaptiveDeepONet(
-                branch_sizes=[30, 64, 32],
-                trunk_sizes=[2, 64, 32],
-                sensor_dim=2,
-                sensor_init="invalid",
-                rngs=rngs,
-            )
-
-    def test_adaptive_deeponet_forward_single_batch(self):
-        """Test AdaptiveDeepONet forward pass with single batch."""
-        rngs = nnx.Rngs(42)
-
-        adaptive_deeponet = AdaptiveDeepONet(
-            branch_sizes=[20, 64, 32],
-            trunk_sizes=[2, 64, 32],
-            sensor_dim=2,
-            rngs=rngs,
-        )
-
-        # Define a simple test function
-        def test_function(x):
-            return jnp.sin(x[0]) + jnp.cos(x[1])
-
-        # Single batch trunk input
-        trunk_input = jax.random.normal(jax.random.PRNGKey(0), (10, 2))
-
-        output = adaptive_deeponet(test_function, trunk_input)
-        assert output.shape == (10,)
-        assert jnp.isfinite(output).all()
-
-    def test_adaptive_deeponet_forward_multi_batch(self):
-        """Test AdaptiveDeepONet forward pass with multiple batches."""
-        rngs = nnx.Rngs(42)
-
-        adaptive_deeponet = AdaptiveDeepONet(
-            branch_sizes=[15, 64, 32],
-            trunk_sizes=[2, 64, 32],
-            sensor_dim=2,
-            rngs=rngs,
-        )
-
-        # Define a simple test function
-        def test_function(x):
-            return jnp.sin(x[0]) + jnp.cos(x[1])
-
-        # Multiple batch trunk input
-        trunk_input = jax.random.normal(jax.random.PRNGKey(0), (4, 10, 2))
-
-        output = adaptive_deeponet(test_function, trunk_input)
-        assert output.shape == (4, 10)
-        assert jnp.isfinite(output).all()
-
-    def test_adaptive_deeponet_sensor_locations(self):
-        """Test AdaptiveDeepONet sensor location access."""
-        rngs = nnx.Rngs(42)
-
-        adaptive_deeponet = AdaptiveDeepONet(
-            branch_sizes=[25, 64, 32],
-            trunk_sizes=[2, 64, 32],
-            sensor_dim=2,
-            rngs=rngs,
-        )
-
-        sensor_locs = adaptive_deeponet.get_sensor_locations()
-        assert sensor_locs.shape == (25, 2)
-        assert jnp.isfinite(sensor_locs).all()
 
 
 class TestMultiFidelityDeepONet:

@@ -1,7 +1,12 @@
-"""Base protocols for training components.
+"""Base protocols for training callbacks.
 
-This module defines the fundamental TrainingComponent protocol that allows
-modular extension of the Trainer.
+Defines the ``TrainingCallback`` epoch/batch lifecycle-hook contract used
+by ``Trainer.train`` and ``opifex.core.solver.strategies``. The
+:class:`opifex.core.training.components.lifecycle.TrainingComponent` is a
+separate ``setup``/``step``/``cleanup`` abstraction used by
+``CheckpointComponent``, ``RecoveryComponent``, etc. — keeping the
+callback / component names distinct removes the previous
+duplicate-class collision.
 """
 
 from __future__ import annotations
@@ -10,11 +15,13 @@ from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
-class TrainingComponent(Protocol):
-    """Protocol for modular training components.
+class TrainingCallback(Protocol):
+    """Protocol for epoch / batch training callbacks.
 
-    Components can hook into various stages of the training loop to implement
-    features like adaptive sampling, loss balancing, or curriculum learning.
+    Implementations hook into the four loop phases below to drive features
+    like adaptive sampling, loss balancing, or curriculum learning. See
+    :class:`components.lifecycle.TrainingComponent` for the orthogonal
+    setup/step/cleanup contract used by stateful side-effect components.
     """
 
     def on_epoch_begin(self, epoch: int, state: Any) -> None:
@@ -34,8 +41,8 @@ class TrainingComponent(Protocol):
         ...
 
 
-class BaseComponent:
-    """Base class for components with no-op default implementations."""
+class BaseCallback:
+    """Base class for callbacks with no-op default implementations."""
 
     def on_epoch_begin(self, epoch: int, state: Any) -> None:
         """Called at the beginning of each epoch."""

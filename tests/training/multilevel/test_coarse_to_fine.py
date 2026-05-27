@@ -13,7 +13,7 @@ class TestMultilevelConfig:
 
     def test_default_config(self):
         """Should create config with sensible defaults."""
-        from opifex.training.multilevel.coarse_to_fine import MultilevelConfig
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import MultilevelConfig
 
         config = MultilevelConfig()
         assert config.num_levels >= 2
@@ -22,7 +22,7 @@ class TestMultilevelConfig:
 
     def test_custom_levels(self):
         """Should accept custom number of levels."""
-        from opifex.training.multilevel.coarse_to_fine import MultilevelConfig
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import MultilevelConfig
 
         config = MultilevelConfig(num_levels=4)
         assert config.num_levels == 4
@@ -33,7 +33,9 @@ class TestNetworkHierarchy:
 
     def test_create_hierarchy(self):
         """Should create hierarchy of networks with decreasing width."""
-        from opifex.training.multilevel.coarse_to_fine import create_network_hierarchy
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
+            create_network_hierarchy,
+        )
 
         hierarchy = create_network_hierarchy(
             input_dim=2,
@@ -48,7 +50,9 @@ class TestNetworkHierarchy:
 
     def test_coarser_levels_smaller(self):
         """Coarser levels should have smaller networks."""
-        from opifex.training.multilevel.coarse_to_fine import create_network_hierarchy
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
+            create_network_hierarchy,
+        )
 
         hierarchy = create_network_hierarchy(
             input_dim=2,
@@ -76,7 +80,7 @@ class TestTransferOperators:
 
     def test_prolongation(self):
         """Should transfer parameters from coarse to fine."""
-        from opifex.training.multilevel.coarse_to_fine import (
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
             create_network_hierarchy,
             prolongate,
         )
@@ -100,7 +104,7 @@ class TestTransferOperators:
 
     def test_restriction(self):
         """Should transfer parameters from fine to coarse."""
-        from opifex.training.multilevel.coarse_to_fine import (
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
             create_network_hierarchy,
             restrict,
         )
@@ -128,7 +132,7 @@ class TestCascadeTrainer:
 
     def test_create_trainer(self):
         """Should create cascade trainer."""
-        from opifex.training.multilevel.coarse_to_fine import (
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
             CascadeTrainer,
             MultilevelConfig,
         )
@@ -147,7 +151,7 @@ class TestCascadeTrainer:
 
     def test_get_current_model(self):
         """Should return current level model."""
-        from opifex.training.multilevel.coarse_to_fine import (
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
             CascadeTrainer,
             MultilevelConfig,
         )
@@ -166,7 +170,7 @@ class TestCascadeTrainer:
 
     def test_advance_level(self):
         """Should advance to next level."""
-        from opifex.training.multilevel.coarse_to_fine import (
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
             CascadeTrainer,
             MultilevelConfig,
         )
@@ -191,7 +195,9 @@ class TestMultilevelForward:
 
     def test_forward_pass(self):
         """Should compute forward pass at each level."""
-        from opifex.training.multilevel.coarse_to_fine import create_network_hierarchy
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
+            create_network_hierarchy,
+        )
 
         hierarchy = create_network_hierarchy(
             input_dim=1,
@@ -211,7 +217,9 @@ class TestMultilevelForward:
 
     def test_multilevel_consistency(self):
         """All levels should produce valid outputs for same input."""
-        from opifex.training.multilevel.coarse_to_fine import create_network_hierarchy
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
+            create_network_hierarchy,
+        )
 
         hierarchy = create_network_hierarchy(
             input_dim=2,
@@ -238,7 +246,7 @@ class TestTrainingIntegration:
         """Should train coarse level first, then fine."""
         import optax
 
-        from opifex.training.multilevel.coarse_to_fine import (
+        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
             CascadeTrainer,
             MultilevelConfig,
         )
