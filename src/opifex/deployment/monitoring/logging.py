@@ -278,7 +278,7 @@ class StructuredLogger:
 
             self.info("ELK stack integration configured", operation_type="elk_setup")
 
-        except Exception as e:
+        except (OSError, ValueError, TypeError, KeyError) as e:
             self.warning(f"Failed to configure ELK stack: {e}")
             self.elk_enabled = False
 

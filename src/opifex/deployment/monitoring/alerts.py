@@ -147,7 +147,7 @@ class EmailNotification(NotificationChannel):
 
             return True
 
-        except Exception:
+        except (smtplib.SMTPException, OSError, ConnectionError, TimeoutError):
             # Log error instead of print for production systems
             return False
 
@@ -255,7 +255,7 @@ class SlackNotification(NotificationChannel):
             response.raise_for_status()
             return True
 
-        except Exception:
+        except (requests.RequestException, ConnectionError, TimeoutError, OSError):
             # Log error instead of print for production systems
             return False
 

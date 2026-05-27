@@ -288,10 +288,15 @@ class NeuralDFT(nnx.Module):
         # ``jnp.where`` keeps the branch JIT-traceable.
         total_electrons = jnp.sum(density)
         target_electrons = molecular_system.n_electrons
-        return jnp.where(
-            total_electrons > 1e-12,
-            density * target_electrons / total_electrons,
-            density,
+        # ``jnp.where`` returns ``Array | tuple[Array, ...]`` in stubs (the
+        # tuple branch only when called as the legacy 1-arg ``where``); cast
+        # to ``Array`` since we always pass 3 args here.
+        return jnp.asarray(
+            jnp.where(
+                total_electrons > 1e-12,
+                density * target_electrons / total_electrons,
+                density,
+            )
         )
 
     def _generate_initial_density(self, molecular_system: Any) -> jax.Array:

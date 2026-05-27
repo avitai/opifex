@@ -35,7 +35,7 @@ def safe_compute_energy(model: Any, positions: jax.Array, **kwargs) -> jax.Array
     if hasattr(model, "compute_energy"):
         try:
             return model.compute_energy(positions, **clean_kwargs)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- user-supplied model.compute_energy can raise anything
             # Fallback to standard model call if compute_energy fails
             pass
 
@@ -49,7 +49,7 @@ def safe_compute_energy(model: Any, positions: jax.Array, **kwargs) -> jax.Array
     # Use direct model call without problematic kwargs
     try:
         return model(flat_positions, deterministic=clean_kwargs.get("deterministic", True))
-    except Exception:
+    except Exception:  # noqa: BLE001 -- user-supplied model __call__ can raise anything
         # Final fallback - simplest possible call
         return model(flat_positions)
 

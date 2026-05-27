@@ -133,7 +133,7 @@ class PrometheusMetrics:
                 if self._metrics_enabled:
                     self._initialize_metrics()
                     self.logger.info("Prometheus metrics initialized successfully")
-            except Exception as e:
+            except (ImportError, AttributeError, ValueError, TypeError) as e:
                 self.logger.warning("Failed to initialize Prometheus metrics: %s", e)
                 self._metrics_enabled = False
                 self.registry = None
@@ -320,7 +320,7 @@ class PrometheusMetrics:
                 if hasattr(self, "memory_usage"):
                     self.memory_usage.labels(type="used").set(memory.used)
                     self.memory_usage.labels(type="total").set(memory.total)
-        except Exception as e:
+        except (OSError, AttributeError, RuntimeError) as e:
             self.logger.warning("Failed to update system metrics: %s", e)
 
     def update_gpu_metrics(self) -> None:

@@ -335,7 +335,7 @@ class AmortizedVariationalFramework(nnx.Module):
             mean_prediction = jnp.mean(predictions_array, axis=0)
             uncertainty = jnp.var(predictions_array, axis=0)
 
-        except Exception:
+        except (TypeError, ValueError, AttributeError, RuntimeError):
             # Fallback to simplified approach if parameter injection fails
             samples = []
             for _i in range(num_samples):
@@ -442,7 +442,7 @@ class AmortizedVariationalFramework(nnx.Module):
                 # Gaussian likelihood (negative MSE)
                 sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)  # sigma^2 = 0.01
                 log_likelihood += sample_log_likelihood
-            except Exception:
+            except (TypeError, ValueError, AttributeError, RuntimeError):
                 # Fallback to base model if parameter injection fails
                 y_pred = self.base_model(x)  # type: ignore[misc]
                 sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)
@@ -496,7 +496,7 @@ class AmortizedVariationalFramework(nnx.Module):
         for i in range(num_samples):
             try:
                 pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
-            except Exception:
+            except (TypeError, ValueError, AttributeError, RuntimeError):
                 # Fallback to base model with input noise
                 noise_scale = 0.01
                 noisy_x = x + noise_scale * jax.random.normal(rngs.sample(), x.shape)

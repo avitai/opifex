@@ -308,7 +308,7 @@ class ParametricProgrammingSolver(nnx.Module):
             # Fallback to simpler method for difficult problems
             return self._traditional_fallback(problem_params)
 
-        except Exception:
+        except (ValueError, TypeError, ArithmeticError, FloatingPointError, RuntimeError):
             # Fallback on any numerical issues
             return self._traditional_fallback(problem_params)
 

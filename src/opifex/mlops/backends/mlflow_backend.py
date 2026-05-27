@@ -80,7 +80,7 @@ class MLflowBackend(Experiment):
                 )
             else:
                 self.experiment_id = experiment.experiment_id
-        except Exception:
+        except (RuntimeError, OSError, ConnectionError, ValueError, AttributeError):
             # Fallback to default experiment
             self.experiment_id = "0"
 

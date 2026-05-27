@@ -300,7 +300,7 @@ class MGNOLayer(nnx.Module):
         # FIXED: Multipole expansion with error handling
         try:
             multipole_features = self.multipole_expansion(x, positions)
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
             # Fall back to original features if multipole expansion fails
             multipole_features = x
             logger.warning("Multipole expansion failed, using original features: %s", e)
@@ -308,7 +308,7 @@ class MGNOLayer(nnx.Module):
         # FIXED: Local message passing with error handling
         try:
             local_messages = self._local_message_passing(x, positions)
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
             # Fall back to zeros if local message passing fails
             local_messages = jnp.zeros_like(x)
             logger.warning("Local message passing failed, using zeros: %s", e)
@@ -318,7 +318,7 @@ class MGNOLayer(nnx.Module):
 
         try:
             updated_features = self.update_mlp(update_input)
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
             # Fall back to multipole features if update fails
             updated_features = multipole_features
             logger.warning("Update MLP failed, using multipole features: %s", e)
@@ -442,7 +442,7 @@ class MultipoleGraphNeuralOperator(nnx.Module):
                 if training:
                     x = self.dropout(x)
 
-            except Exception as e:
+            except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
                 logger.warning("Layer %d failed with error: %s", i, e)
                 # Continue with previous features
                 continue
@@ -450,7 +450,7 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         # Output projection
         try:
             output = self.output_proj(x)
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
             logger.warning("Output projection failed: %s", e)
             # Create zero output as fallback
             _batch_size, _num_points = x.shape[:2]

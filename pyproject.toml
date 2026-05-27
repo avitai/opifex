@@ -445,7 +445,7 @@ exclude = [
   "example_data"
 ]
 # Additional type checking rules
-extend-select = ["UP"] # Enforce modern Python syntax
+extend-select = ["UP", "BLE"] # Enforce modern Python syntax + Rule 6 (no blind except Exception)
 fixable = ["ALL"]
 ignore = [
   # Scientific computing and JAX-specific ignores
@@ -550,7 +550,8 @@ order-by-type = false
 "examples/*" = [
   "T201", # Print statements (examples need output)
   "F841", # Unused variables (demonstrations may not use all variables)
-  "E501" # Long lines in example comments
+  "E501", # Long lines in example comments
+  "BLE001" # Broad except acceptable in demonstration code
 ]
 "scripts/*" = [
   "E501", # Line too long (development scripts can be longer)
@@ -560,7 +561,8 @@ order-by-type = false
   "PTH112", # os.path.isdir (legacy compatibility)
   "PTH110", # os.path.exists (legacy compatibility)
   "SIM102", # Nested if statements (readability in scripts)
-  "T201" # Print statements (utility scripts need output)
+  "T201", # Print statements (utility scripts need output)
+  "BLE001" # Broad except acceptable in utility scripts
 ]
 # Core library files with necessary user feedback
 "src/opifex/benchmarking/evaluation_engine.py" = [
@@ -597,7 +599,8 @@ order-by-type = false
   "T201", # Print statements in tests for debugging
   "E501", # Long lines in test descriptions
   "RUF003", # Mathematical symbols in comments
-  "RET504" # Test return patterns
+  "RET504", # Test return patterns
+  "BLE001" # Broad except acceptable in test helpers and fixtures
 ]
 "tests/conftest.py" = [
   "T201", # Print statements (test configuration logging)

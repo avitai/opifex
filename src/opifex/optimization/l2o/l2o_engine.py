@@ -568,7 +568,7 @@ class L2OEngine:
         # hybrid or fallback
         try:
             return self.solve_parametric_problem(problem, problem_params)
-        except Exception:
+        except (ValueError, TypeError, RuntimeError, ArithmeticError):
 
             def loss_fn(x):
                 return jnp.sum(x**2)

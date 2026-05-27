@@ -174,7 +174,7 @@ class InitialCondition:
 
             # Check non-negative derivative order
             return not self.derivative_order < 0
-        except Exception:
+        except (AttributeError, TypeError):
             return False
 
     def evaluate(self, x: jax.Array) -> jax.Array:
@@ -234,7 +234,7 @@ class DirichletBC(BoundaryCondition):
         try:
             # Check if value is callable or numeric
             return callable(self.value) or isinstance(self.value, int | float)
-        except Exception:
+        except (AttributeError, TypeError):
             return False
 
     def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
@@ -346,7 +346,7 @@ class NeumannBC(BoundaryCondition):
         try:
             # Check if value is callable or numeric
             return callable(self.value) or isinstance(self.value, int | float)
-        except Exception:
+        except (AttributeError, TypeError):
             return False
 
     def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
@@ -457,7 +457,10 @@ class RobinBC(BoundaryCondition):
     def validate(self) -> bool:
         """Validate Robin boundary condition."""
         try:
-            # Validate alpha parameter
+            # Validate alpha parameter. The ``(TypeError, IndexError)`` branch
+            # is the "vector-call signature mismatch, retry with scalar" path.
+            # Any other exception from a user-supplied callable means
+            # ``alpha`` isn't usable and ``validate`` must report ``False``.
             if callable(self.alpha):
                 try:
                     test_val = jnp.array([1.0])
@@ -465,12 +468,14 @@ class RobinBC(BoundaryCondition):
                 except (TypeError, IndexError):
                     try:
                         self.alpha(1.0)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 -- user-supplied alpha callable can raise anything
                         return False
+                except Exception:  # noqa: BLE001 -- user-supplied alpha callable can raise anything beyond signature mismatch
+                    return False
             elif not isinstance(self.alpha, int | float):
                 return False
 
-            # Validate beta parameter
+            # Same shape as ``alpha`` above.
             if callable(self.beta):
                 try:
                     test_val = jnp.array([1.0])
@@ -478,8 +483,10 @@ class RobinBC(BoundaryCondition):
                 except (TypeError, IndexError):
                     try:
                         self.beta(1.0)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 -- user-supplied beta callable can raise anything
                         return False
+                except Exception:  # noqa: BLE001 -- user-supplied beta callable can raise anything beyond signature mismatch
+                    return False
             elif not isinstance(self.beta, int | float):
                 return False
 
@@ -491,7 +498,7 @@ class RobinBC(BoundaryCondition):
                 and self.beta == 0.0
             )
 
-        except Exception:
+        except (AttributeError, TypeError):
             return False
 
     def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
@@ -866,7 +873,7 @@ class SymbolicConstraint(Constraint):
         try:
             # Basic validation - check non-empty expression and variables
             return not (not self.expression or not self.variables)
-        except Exception:
+        except (AttributeError, TypeError):
             return False
 
 
@@ -1004,7 +1011,7 @@ class BoundaryConditionCollection:
         """Validate all boundary conditions in collection."""
         try:
             return all(bc.validate() for bc in self.conditions)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- subclassed BC validators may raise arbitrary errors
             return False
 
     def get_boundary_condition(self, boundary: str) -> BoundaryCondition | None:

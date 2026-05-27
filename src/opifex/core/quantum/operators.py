@@ -490,7 +490,7 @@ class MomentumOperator(QuantumOperator):
                 return jnp.real(gradient)
             return gradient
 
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError, FloatingPointError) as e:
             # If all spectral methods fail, fallback to finite difference
             import warnings
 

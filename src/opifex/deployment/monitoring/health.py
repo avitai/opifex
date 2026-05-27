@@ -223,7 +223,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             return HealthCheckResult(
                 name="system_resources",
                 status=HealthStatus.UNHEALTHY,
@@ -280,7 +280,7 @@ class HealthChecker:
                                 else 0,
                             }
                         )
-                except Exception as e:
+                except (RuntimeError, AttributeError, OSError) as e:
                     gpu_details.append(
                         {
                             "device_id": i,
@@ -315,7 +315,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (RuntimeError, AttributeError, OSError) as e:
             return HealthCheckResult(
                 name="gpu_availability",
                 status=HealthStatus.UNHEALTHY,
@@ -345,7 +345,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (AttributeError, OSError, RuntimeError) as e:
             return HealthCheckResult(
                 name="application",
                 status=HealthStatus.UNHEALTHY,
@@ -398,7 +398,7 @@ class HealthChecker:
                 details={"url": url, "timeout_seconds": self.check_timeout},
                 duration_ms=(time.time() - start_time) * 1000,
             )
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, OSError) as e:
             return HealthCheckResult(
                 name=f"dependency_{name}",
                 status=HealthStatus.UNHEALTHY,
@@ -436,7 +436,7 @@ class HealthChecker:
                 try:
                     response_data = response.json()
                     details.update(response_data)
-                except Exception:
+                except (ValueError, TypeError):
                     pass  # Ignore JSON parsing errors
 
             else:
@@ -452,7 +452,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, OSError) as e:
             return HealthCheckResult(
                 name=f"model_{name}",
                 status=HealthStatus.UNHEALTHY,

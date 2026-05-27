@@ -169,7 +169,7 @@ class CheckpointManager:
                     "metadata": checkpoint_data.get("metadata", {}),
                 }
                 checkpoints.append(checkpoint_info)
-            except Exception as e:
+            except (OSError, ValueError, KeyError) as e:
                 # Log corrupted checkpoints instead of silently skipping
                 logger.warning("Skipping corrupted checkpoint %s: %s", filepath, e)
                 continue
@@ -240,7 +240,7 @@ class CheckpointManager:
                 checkpoint_file.unlink()
                 return True
             return False
-        except Exception:
+        except OSError:
             return False
 
     def cleanup_all_checkpoints(self) -> int:
@@ -256,7 +256,7 @@ class CheckpointManager:
             try:
                 filepath.unlink()
                 deleted_count += 1
-            except Exception as e:
+            except OSError as e:
                 logger.warning("Failed to delete checkpoint %s: %s", filepath, e)
                 continue
 
@@ -289,7 +289,7 @@ class CheckpointManager:
 
             # Return condition directly
             return isinstance(checkpoint_data["timestamp"], str)
-        except Exception:
+        except (OSError, ValueError, KeyError, FileNotFoundError):
             return False
 
     def _cleanup_old_checkpoints(self) -> None:

@@ -525,7 +525,7 @@ class Trainer(nnx.Module):
                 return_original_on_missing=False,
             )
             return model, metadata  # pyright: ignore[reportArgumentType]
-        except Exception:
+        except (OSError, ValueError, KeyError, FileNotFoundError):
             return None, {}
 
     def register_custom_loss(self, name: str, loss_fn: Callable) -> None:

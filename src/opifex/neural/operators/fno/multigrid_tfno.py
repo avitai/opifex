@@ -275,7 +275,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
                     "factors": nnx.List([nnx.Param(factor) for factor in factors]),
                 }
             )
-        except Exception:
+        except (ValueError, TypeError, ArithmeticError, RuntimeError):
             # Fallback to standard initialization if TensorLy fails
             return self._init_standard_band(band_shape, ranks, key)
 

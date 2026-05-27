@@ -378,7 +378,7 @@ def is_pytree_registered(cls: type) -> bool:
         test_obj = object.__new__(cls)
         jax.tree_util.tree_map(lambda x: x, test_obj)
         return True
-    except Exception:
+    except (TypeError, AttributeError, ValueError):
         return False
 
 

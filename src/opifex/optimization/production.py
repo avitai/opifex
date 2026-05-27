@@ -606,7 +606,7 @@ class HybridPerformancePlatform(nnx.Module):
                     }
                 )
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- scientific validators are user-supplied; continue pipeline
                 # Log scientific validation error and continue
                 optimized_model.optimization_metadata["scientific_validation_error"] = str(e)
 
@@ -627,7 +627,7 @@ class HybridPerformancePlatform(nnx.Module):
                     "action": "monitor",
                     "reason": "Collecting baseline metrics",
                 }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- predictive scaling backends may raise arbitrary errors
             # Log predictive scaling error and continue
             optimized_model.optimization_metadata["scaling_error"] = str(e)
 

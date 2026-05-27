@@ -646,6 +646,6 @@ class SearchEngine:
                 query="",  # Empty query to get all
                 limit=10000,  # Large limit for development
             )
-        except Exception:
+        except (OSError, ConnectionError, TimeoutError, ValueError, AttributeError):
             # Fallback to empty list if registry is not available
             return []

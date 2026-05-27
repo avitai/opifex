@@ -209,7 +209,7 @@ class PerformanceMonitor:
 
                 await asyncio.sleep(self.collection_interval)
 
-            except Exception:
+            except Exception:  # noqa: BLE001 -- monitoring loop must survive any iteration failure
                 await asyncio.sleep(self.collection_interval)
 
     async def stop_monitoring(self) -> None:
@@ -446,7 +446,7 @@ class PredictiveScaler:
 
             return scaling_decision
 
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, KeyError, ArithmeticError) as e:
             return {
                 "action": "maintain",
                 "target_replicas": self.current_replicas,
@@ -468,5 +468,5 @@ class PredictiveScaler:
 
             return True
 
-        except Exception:
+        except (KeyError, TypeError, ValueError):
             return False
