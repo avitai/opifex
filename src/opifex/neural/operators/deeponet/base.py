@@ -46,7 +46,7 @@ class DeepONet(nnx.Module):
         output_activation: str | None = None,
         use_bias: bool = True,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize DeepONet following modern NNX patterns.
 
         Args:
@@ -244,7 +244,7 @@ class MultiFidelityDeepONet(nnx.Module):
         use_bias: bool = True,
         fusion_strategy: str = "linear",
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Multi-fidelity DeepONet following NNX patterns.
 
         Args:

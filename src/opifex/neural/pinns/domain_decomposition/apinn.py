@@ -69,7 +69,7 @@ class GatingNetwork(nnx.Module):
         *,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize gating network.
 
         Args:
@@ -163,7 +163,7 @@ class APINN(DomainDecompositionPINN):
         config: APINNConfig | None = None,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize APINN.
 
         Args:

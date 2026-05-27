@@ -24,7 +24,7 @@ from opifex.platform.registry.version import (
 class MockRegistryService:
     """Mock registry service for testing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.functionals = {}
 
     async def retrieve_functional(self, functional_id: str, version: str | None = None):

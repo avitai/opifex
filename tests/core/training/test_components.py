@@ -40,7 +40,7 @@ def simple_model():
     """Create a simple test model."""
 
     class SimpleModel(nnx.Module):
-        def __init__(self, *, rngs: nnx.Rngs):
+        def __init__(self, *, rngs: nnx.Rngs) -> None:
             self.linear = nnx.Linear(10, 5, rngs=rngs)
 
         def __call__(self, x: jax.Array) -> jax.Array:

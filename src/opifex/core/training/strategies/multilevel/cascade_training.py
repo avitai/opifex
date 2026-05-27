@@ -39,7 +39,7 @@ class CascadeTrainer:
         optimizer: MultilevelAdam,
         prolongate_fn: ProlongateFn,
         state_transition_fn: StateTransitionFn | None = None,
-    ):
+    ) -> None:
         """Initialize Cascade Trainer.
 
         Args:

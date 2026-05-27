@@ -88,7 +88,7 @@ class VersionManager:
         storage_root: Path,
         registry_service,
         enable_git: bool = True,
-    ):
+    ) -> None:
         """Initialize version manager.
 
         Args:

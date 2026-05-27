@@ -55,7 +55,7 @@ class LearnToOptimize(nnx.Module):
         scf_integration: bool = False,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Learn-to-Optimize meta-optimizer.
 
         Args:

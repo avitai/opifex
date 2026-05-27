@@ -48,14 +48,14 @@ from opifex.mlops.experiment import (
 class MLflowBackend(Experiment):
     """MLflow backend implementation with scientific computing optimizations."""
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig) -> None:
         super().__init__(config)
         self.client = None
         self.experiment_id = None
         self.run_id = None
         self._setup_mlflow()
 
-    def _setup_mlflow(self):
+    def _setup_mlflow(self) -> None:
         """Initialize MLflow client and configuration."""
         # Configure MLflow tracking URI
         tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-tracking-server:5000")
@@ -112,7 +112,7 @@ class MLflowBackend(Experiment):
 
         return self.run_id
 
-    async def _log_initial_config(self):
+    async def _log_initial_config(self) -> None:
         """Log initial experiment configuration and metadata."""
         # Log basic parameters
         params = {
@@ -133,7 +133,7 @@ class MLflowBackend(Experiment):
         if self.config.physics_metadata:
             await self._log_physics_metadata(self.config.physics_metadata)
 
-    async def _log_physics_metadata(self, metadata: PhysicsMetadata):
+    async def _log_physics_metadata(self, metadata: PhysicsMetadata) -> None:
         """Log physics-informed metadata."""
         physics_params = {}
 
@@ -148,7 +148,7 @@ class MLflowBackend(Experiment):
 
         mlflow.log_params(physics_params)
 
-    def _add_basic_physics_params(self, metadata: PhysicsMetadata, params: dict):
+    def _add_basic_physics_params(self, metadata: PhysicsMetadata, params: dict) -> None:
         """Add basic physics parameters to the params dictionary."""
         basic_fields = [
             ("pde_type", "physics.pde_type"),
@@ -169,7 +169,7 @@ class MLflowBackend(Experiment):
         if metadata.grid_resolution:
             params["physics.grid_resolution"] = str(metadata.grid_resolution)
 
-    def _add_physics_collections(self, metadata: PhysicsMetadata, params: dict):
+    def _add_physics_collections(self, metadata: PhysicsMetadata, params: dict) -> None:
         """Add physics collections (laws, symmetries, conditions) to params."""
         collection_fields = [
             ("conservation_laws", "physics.conservation_laws"),
@@ -182,7 +182,7 @@ class MLflowBackend(Experiment):
             if value:
                 params[param_key] = ",".join(value)
 
-    def _add_physics_mappings(self, metadata: PhysicsMetadata, params: dict):
+    def _add_physics_mappings(self, metadata: PhysicsMetadata, params: dict) -> None:
         """Add physics constants and system parameters to params."""
         if metadata.physical_constants:
             for name, value in metadata.physical_constants.items():
@@ -192,7 +192,7 @@ class MLflowBackend(Experiment):
             for name, value in metadata.system_parameters.items():
                 params[f"physics.system.{name}"] = value
 
-    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None):
+    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None) -> None:
         """Log scalar metrics to MLflow."""
         mlflow.log_metrics(metrics, step=step)
         self._metrics.update(metrics)
@@ -205,7 +205,7 @@ class MLflowBackend(Experiment):
         | PINNMetrics
         | QuantumMetrics,
         step: int | None = None,
-    ):
+    ) -> None:
         """Log physics-informed metrics specific to the domain."""
 
         # Convert dataclass to dictionary
@@ -234,7 +234,7 @@ class MLflowBackend(Experiment):
             metrics_dict = metrics.__dict__ if hasattr(metrics, "__dict__") else {}
             await self.log_metrics(metrics_dict, step=step)
 
-    async def log_parameters(self, params: dict[str, Any]):
+    async def log_parameters(self, params: dict[str, Any]) -> None:
         """Log experiment parameters and hyperparameters."""
         # Convert complex types to strings for MLflow compatibility
         mlflow_params = {}
@@ -247,7 +247,7 @@ class MLflowBackend(Experiment):
         mlflow.log_params(mlflow_params)
         self._parameters.update(params)
 
-    async def log_artifact(self, local_path: str, artifact_path: str | None = None):
+    async def log_artifact(self, local_path: str, artifact_path: str | None = None) -> None:
         """Log an artifact (model, plot, data file)."""
         mlflow.log_artifact(local_path, artifact_path)
 
@@ -260,7 +260,7 @@ class MLflowBackend(Experiment):
         model: Any,
         model_name: str,
         physics_metadata: PhysicsMetadata | None = None,
-    ):
+    ) -> None:
         """Log a trained model with scientific metadata."""
 
         # Determine framework and log accordingly
@@ -359,13 +359,13 @@ class MLflowBackend(Experiment):
 
             return {"artifact_path": model_name}
 
-    async def _infer_model_signature(self, model: Any):
+    async def _infer_model_signature(self, model: Any) -> None:
         """Infer MLflow model signature from model."""
         # This would need implementation based on model inspection
         # For now, return None to allow model logging without signature
         return
 
-    async def end(self, status: str = "completed"):
+    async def end(self, status: str = "completed") -> None:
         """End the MLflow run."""
         self.end_time = datetime.now(UTC)
         self.status = status

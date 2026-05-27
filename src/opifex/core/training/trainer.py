@@ -70,7 +70,7 @@ class Trainer(nnx.Module):
         model: nnx.Module,
         config: TrainingConfig,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """Initialize the trainer.
 
         Args:
@@ -129,7 +129,6 @@ class Trainer(nnx.Module):
 
         # Extensibility: custom losses and hooks
         self.custom_losses: dict[str, Callable] = {}
-        self.hooks: dict[str, list[Callable]] = {}
         self.hooks: dict[str, list[Callable]] = {}
         self.components: nnx.List[TrainingCallback] = nnx.List([])
 
@@ -454,8 +453,11 @@ class Trainer(nnx.Module):
                     if val_loss is not None:
                         val_info = f", Val Loss: {val_loss:.6f}"
                 logger.info(
-                    f"Epoch {epoch + 1}/{self.config.num_epochs}: "
-                    f"Train Loss: {avg_train_loss:.6f}{val_info}"
+                    "Epoch %d/%d: Train Loss: %.6f%s",
+                    epoch + 1,
+                    self.config.num_epochs,
+                    avg_train_loss,
+                    val_info,
                 )
 
             # Checkpointing

@@ -40,7 +40,7 @@ class MultiPhysicsDeepONet(nnx.Module):
         num_sensors: int | None = None,
         activation: Callable[[jax.Array], jax.Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Multi-Physics DeepONet.
 
         Args:

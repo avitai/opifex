@@ -29,7 +29,7 @@ class SphericalManifold:
     All operations are JAX-compatible and autodifferentiable.
     """
 
-    def __init__(self, radius: float = 1.0, dimension: int | None = None):
+    def __init__(self, radius: float = 1.0, dimension: int | None = None) -> None:
         """Initialize spherical manifold.
 
         Args:

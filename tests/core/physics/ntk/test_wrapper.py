@@ -16,7 +16,7 @@ class TestNTKWrapperCreation:
 
         # Simple NNX model
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -37,7 +37,7 @@ class TestNTKWrapperCreation:
         from opifex.core.physics.ntk.wrapper import create_ntk_fn_from_nnx
 
         class DeepModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.layers = nnx.List(
                     [
                         nnx.Linear(2, 32, rngs=rngs),
@@ -69,7 +69,7 @@ class TestEmpiricalNTK:
         from opifex.core.physics.ntk.wrapper import compute_empirical_ntk
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -93,7 +93,7 @@ class TestEmpiricalNTK:
         from opifex.core.physics.ntk.wrapper import compute_empirical_ntk
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -113,7 +113,7 @@ class TestEmpiricalNTK:
         from opifex.core.physics.ntk.wrapper import compute_empirical_ntk
 
         class DeepModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.layers = nnx.List(
                     [
                         nnx.Linear(2, 16, rngs=rngs),
@@ -163,7 +163,7 @@ class TestNTKWrapper:
         from opifex.core.physics.ntk.wrapper import NTKWrapper
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -180,7 +180,7 @@ class TestNTKWrapper:
         from opifex.core.physics.ntk.wrapper import NTKWrapper
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -199,7 +199,7 @@ class TestNTKWrapper:
         from opifex.core.physics.ntk.wrapper import NTKConfig, NTKWrapper
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -220,7 +220,7 @@ class TestJacobianComputation:
         from opifex.core.physics.ntk.wrapper import compute_jacobian
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -239,7 +239,7 @@ class TestJacobianComputation:
         from opifex.core.physics.ntk.wrapper import compute_jacobian, flatten_jacobian
 
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -263,7 +263,7 @@ class TestNTKMultiOutput:
         from opifex.core.physics.ntk.wrapper import compute_empirical_ntk
 
         class MultiOutputModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(2, 3, rngs=rngs)
 
             def __call__(self, x):

@@ -69,7 +69,7 @@ class MultiFidelityPINN(nnx.Module):
         config: MultiFidelityConfig | None = None,
         *,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """
         Initialize MultiFidelityPINN with full configuration.
 
@@ -128,13 +128,13 @@ class MultiFidelityPINN(nnx.Module):
         activation: str,
         use_bayesian: bool,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Build low and high fidelity networks."""
         self._set_activation_function(activation)
         self._build_low_fidelity_network(hidden_layers, use_bayesian, rngs)
         self._build_high_fidelity_networks(hidden_layers, use_bayesian, rngs)
 
-    def _set_activation_function(self, activation: str):
+    def _set_activation_function(self, activation: str) -> None:
         """Set the activation function based on the activation string."""
         activation_map = {
             "tanh": nnx.tanh,
@@ -151,7 +151,7 @@ class MultiFidelityPINN(nnx.Module):
 
     def _build_low_fidelity_network(
         self, hidden_layers: list[int], use_bayesian: bool, rngs: nnx.Rngs
-    ):
+    ) -> None:
         """Build the low-fidelity network layers."""
         low_fidelity_layers_temp = []
         prev_dim = self.input_dim
@@ -169,7 +169,7 @@ class MultiFidelityPINN(nnx.Module):
 
     def _build_high_fidelity_networks(
         self, hidden_layers: list[int], use_bayesian: bool, rngs: nnx.Rngs
-    ):
+    ) -> None:
         """Build the high-fidelity correction networks."""
         high_fidelity_networks_temp = []
 
@@ -199,7 +199,7 @@ class MultiFidelityPINN(nnx.Module):
 
         return network_layers
 
-    def _initialize_prediction_stats(self):
+    def _initialize_prediction_stats(self) -> None:
         """Initialize prediction statistics for monitoring."""
         # These will be tracked during training/inference
         self.prediction_stats = {
@@ -453,7 +453,7 @@ class ProbabilisticPINN(nnx.Module):
         deterministic: bool = False,
         *,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """Initialize probabilistic PINN.
 
         ``deterministic`` ships as ``False`` so the module is in sampling

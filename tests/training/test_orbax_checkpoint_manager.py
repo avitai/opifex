@@ -24,7 +24,7 @@ def _canonical_path(path: str | Path) -> str:
 class SimpleTestModel(nnx.Module):
     """Simple test model for checkpoint testing."""
 
-    def __init__(self, features=4, *, rngs=None):
+    def __init__(self, features=4, *, rngs=None) -> None:
         """Initialize simple test model.
 
         Args:

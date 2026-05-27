@@ -36,7 +36,7 @@ class FactorizedFourierLayer(nnx.Module):
         *,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize factorized Fourier layer.
 
         Args:

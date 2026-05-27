@@ -62,7 +62,7 @@ class NeuralODE(nnx.Module):
         *,
         config: UDEConfig | None = None,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize NeuralODE.
 
         Args:
@@ -148,7 +148,7 @@ class UDESolver(nnx.Module):
         *,
         config: UDEConfig | None = None,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize UDE Solver.
 
         Args:
@@ -272,12 +272,12 @@ def create_ude(
     class ResidualMLP(nnx.Module):
         """MLP for the neural residual term."""
 
-        def __init__(self, layers, activation):
+        def __init__(self, layers, activation) -> None:
             super().__init__()
             self.layers = nnx.List(layers)
             self.activation = activation
 
-        def __call__(self, x):
+        def __call__(self, x: Array) -> Array:
             h = x
             for layer in list(self.layers)[:-1]:
                 h = self.activation(layer(h))

@@ -167,7 +167,7 @@ class MetaOptimizerConfig:
     energy_convergence_tracking: bool = False
     chemical_accuracy_target: float = 1e-3
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         valid_algorithms = ["l2o", "adaptive_lr", "warm_start"]
         if self.meta_algorithm not in valid_algorithms:
@@ -246,7 +246,7 @@ class TrainingConfig:
     # Distributed training configuration (optional)
     distributed_config: DistributedConfig | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Update sub-configs with main config values.
 
         This ensures that the main config values are synchronized to the

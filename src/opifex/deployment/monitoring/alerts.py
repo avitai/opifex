@@ -96,7 +96,7 @@ class Alert:
 class NotificationChannel:
     """Base class for notification channels."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
 
     def send_alert(self, alert: Alert) -> bool:
@@ -116,7 +116,7 @@ class EmailNotification(NotificationChannel):
         password: str,
         to_addresses: list[str],
         from_address: str | None = None,
-    ):
+    ) -> None:
         super().__init__(name)
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
@@ -195,7 +195,7 @@ class EmailNotification(NotificationChannel):
 class SlackNotification(NotificationChannel):
     """Slack notification channel."""
 
-    def __init__(self, name: str, webhook_url: str, channel: str = "#alerts"):
+    def __init__(self, name: str, webhook_url: str, channel: str = "#alerts") -> None:
         super().__init__(name)
         self.webhook_url = webhook_url
         self.channel = channel
@@ -263,7 +263,7 @@ class SlackNotification(NotificationChannel):
 class AlertManager:
     """Central alert management system."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules: dict[str, AlertRule] = {}
         self.active_alerts: dict[str, Alert] = {}
         self.notification_channels: list[NotificationChannel] = []

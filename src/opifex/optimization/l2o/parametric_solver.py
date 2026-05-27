@@ -34,7 +34,7 @@ class OptimizationProblem:
     dimension: int
     constraints: dict[str, Any] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate optimization problem parameters."""
         valid_types = ["quadratic", "linear", "nonlinear"]
         if self.problem_type not in valid_types:
@@ -58,7 +58,7 @@ class ConstraintHandler:
         method: str = "penalty",
         penalty_weight: float = 1.0,
         barrier_parameter: float = 0.1,
-    ):
+    ) -> None:
         """Initialize constraint handler.
 
         Args:
@@ -148,7 +148,7 @@ class SolverConfig:
     tolerance: float = 1e-6
     use_traditional_fallback: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default values after initialization."""
         if self.hidden_sizes is None:
             self.hidden_sizes = [128, 128, 64]
@@ -166,7 +166,9 @@ class ParametricProgrammingSolver(nnx.Module):
     - Constraint handler: Ensures solution feasibility
     """
 
-    def __init__(self, config: SolverConfig, input_dim: int, output_dim: int, *, rngs: Rngs):
+    def __init__(
+        self, config: SolverConfig, input_dim: int, output_dim: int, *, rngs: Rngs
+    ) -> None:
         """Initialize parametric programming solver network.
 
         Args:

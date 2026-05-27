@@ -91,7 +91,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
         rank_learning_rate: float = 0.01,
         use_tensorly_init: bool = True,
         memory_optimal_contractions: bool = True,
-    ):
+    ) -> None:
         super().__init__()
 
         self.tensor_shape = tensor_shape  # (in_channels, out_channels, *spatial_modes)
@@ -202,7 +202,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
 
         return frequency_ranks
 
-    def _init_multi_grid_decomposition(self, rngs: nnx.Rngs, use_tensorly_init: bool):
+    def _init_multi_grid_decomposition(self, rngs: nnx.Rngs, use_tensorly_init: bool) -> None:
         """Initialize multi-grid decomposition components."""
         # Create separate decompositions for each frequency band
         # Create separate decompositions for each frequency band
@@ -318,7 +318,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
             }
         )
 
-    def _init_adaptive_rank_learning(self, rngs: nnx.Rngs):
+    def _init_adaptive_rank_learning(self, rngs: nnx.Rngs) -> None:
         """Initialize adaptive rank learning components."""
         # Track rank gradients for each frequency band
         self.rank_gradients = {}
@@ -453,7 +453,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
 
         return output
 
-    def update_adaptive_ranks(self, gradients: dict[str, jax.Array]):
+    def update_adaptive_ranks(self, gradients: dict[str, jax.Array]) -> None:
         """Update ranks based on gradient information for adaptive rank learning."""
         if not self.adaptive_rank_learning:
             return
@@ -585,7 +585,7 @@ class AdaptiveRankMultiGridTFNO(nnx.Module):
         activation: str = "gelu",
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
 
         self.in_channels = in_channels
@@ -820,7 +820,7 @@ class AdaptiveRankMultiGridTFNO(nnx.Module):
 
         return stats
 
-    def update_all_adaptive_ranks(self, gradients: dict[str, Any]):
+    def update_all_adaptive_ranks(self, gradients: dict[str, Any]) -> None:
         """Update adaptive ranks for all spectral layers."""
         for i, layer in enumerate(self.spectral_layers):
             if f"layer_{i}" in gradients:

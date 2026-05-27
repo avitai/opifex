@@ -280,7 +280,7 @@ class NTKSpectralAnalyzer:
         >>> print(f"Condition number: {diagnostics.condition_number}")
     """
 
-    def __init__(self, model: nnx.Module):
+    def __init__(self, model: nnx.Module) -> None:
         """Initialize spectral analyzer.
 
         Args:
@@ -333,6 +333,6 @@ class NTKSpectralAnalyzer:
         """
         return jnp.array([d.effective_rank for d in self.history])
 
-    def clear_history(self):
+    def clear_history(self) -> None:
         """Clear the tracking history."""
         self.history.clear()

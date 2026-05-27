@@ -45,7 +45,7 @@ class WindowFunction(ABC):
     enable partition of unity when combined.
     """
 
-    def __init__(self, subdomain: Subdomain):
+    def __init__(self, subdomain: Subdomain) -> None:
         """Initialize window function.
 
         Args:
@@ -108,7 +108,7 @@ class GaussianWindow(WindowFunction):
     where σ controls the width of the Gaussian.
     """
 
-    def __init__(self, subdomain: Subdomain, sigma: float = 0.25):
+    def __init__(self, subdomain: Subdomain, sigma: float = 0.25) -> None:
         """Initialize Gaussian window.
 
         Args:
@@ -210,7 +210,7 @@ class FBPINN(DomainDecompositionPINN):
         config: FBPINNConfig | None = None,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize FBPINN.
 
         Args:

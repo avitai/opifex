@@ -89,7 +89,7 @@ class ValidationEngine:
         registry_service,
         enable_gpu_testing: bool = True,
         strict_mode: bool = False,
-    ):
+    ) -> None:
         """Initialize validation engine.
 
         Args:

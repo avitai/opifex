@@ -48,7 +48,7 @@ class DeploymentConfig:
     max_concurrent_requests: int = 100
     timeout_seconds: int = 30
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         # Validate port range
         if not (1024 <= self.serving_port <= 65535):
@@ -87,7 +87,7 @@ class ModelMetadata:
     created_at: str | None = None
     description: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default values and validate."""
         if self.created_at is None:
             self.created_at = datetime.now(UTC).isoformat()
@@ -105,7 +105,7 @@ class ModelMetadata:
 class ModelRegistry:
     """Registry for managing model versions and metadata."""
 
-    def __init__(self, storage_path: str | Path):
+    def __init__(self, storage_path: str | Path) -> None:
         """Initialize model registry.
 
         Args:
@@ -125,7 +125,7 @@ class ModelRegistry:
                 return json.load(f)
         return {"models": {}, "versions": {}}
 
-    def _save_registry(self):
+    def _save_registry(self) -> None:
         """Save registry to disk."""
         with open(self.metadata_file, "w") as f:
             json.dump(self._models, f, indent=2)
@@ -192,7 +192,7 @@ class ModelRegistry:
         self._models["versions"][model_name].sort(key=lambda x: x["version"], reverse=True)
 
         self._save_registry()
-        logger.info(f"Registered model {metadata.name} v{metadata.version} with ID {model_id}")
+        logger.info("Registered model %s v%s with ID %s", metadata.name, metadata.version, model_id)
 
         return model_id
 
@@ -221,12 +221,12 @@ class ModelRegistry:
         class MinimalModel(nnx.Module):
             """Minimal model for testing model registry functionality."""
 
-            def __init__(self, rngs, input_shape, output_shape):
+            def __init__(self, rngs, input_shape, output_shape) -> None:
                 input_size = input_shape[-1] if len(input_shape) > 0 else 64
                 output_size = output_shape[-1] if len(output_shape) > 0 else 64
                 self.linear = nnx.Linear(input_size, output_size, rngs=rngs)
 
-            def __call__(self, x):
+            def __call__(self, x: jax.Array) -> jax.Array:
                 return self.linear(x)
 
         # Create model with appropriate dimensions from metadata
@@ -300,7 +300,7 @@ class ModelRegistry:
 class InferenceEngine:
     """High-performance inference engine for Opifex models."""
 
-    def __init__(self, config: DeploymentConfig):
+    def __init__(self, config: DeploymentConfig) -> None:
         """Initialize inference engine.
 
         Args:
@@ -330,7 +330,7 @@ class InferenceEngine:
 
         return {"memory_fraction": 0.8, "preallocate": False}
 
-    def load_model(self, model: nnx.Module, metadata: ModelMetadata):
+    def load_model(self, model: nnx.Module, metadata: ModelMetadata) -> None:
         """Load model for inference.
 
         Args:
@@ -352,7 +352,7 @@ class InferenceEngine:
             _ = self._compiled_predict(dummy_input)
 
         self.is_initialized = True
-        logger.info(f"Loaded model {metadata.name} v{metadata.version}")
+        logger.info("Loaded model %s v%s", metadata.name, metadata.version)
 
     def _predict_fn(self, x: jax.Array) -> jax.Array:
         """Internal prediction function."""
@@ -416,7 +416,7 @@ class InferenceEngine:
 class ModelServer:
     """HTTP server for model serving."""
 
-    def __init__(self, config: DeploymentConfig):
+    def __init__(self, config: DeploymentConfig) -> None:
         """Initialize model server.
 
         Args:
@@ -427,9 +427,9 @@ class ModelServer:
         self.inference_engine: InferenceEngine | None = None
         self._start_time: float | None = None
 
-    def start(self):
+    def start(self) -> None:
         """Start the model server."""
-        logger.info(f"Starting model server on port {self.config.serving_port}")
+        logger.info("Starting model server on port %s", self.config.serving_port)
         self.status = ServingStatus.STARTING
 
         try:
@@ -446,7 +446,7 @@ class ModelServer:
             self.status = ServingStatus.ERROR
             raise
 
-    def _initialize_endpoints(self):
+    def _initialize_endpoints(self) -> None:
         """Initialize server endpoints (FastAPI routes)."""
         # This would set up FastAPI routes in a real implementation
 
@@ -500,7 +500,7 @@ class ModelServer:
             },
         }
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the model server."""
         logger.info("Stopping model server")
         self.status = ServingStatus.STOPPED

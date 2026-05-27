@@ -30,7 +30,7 @@ class FourierEnhancedDeepONet(nnx.Module):
         use_spectral_trunk: bool = False,
         activation: str = "tanh",
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Fourier-Enhanced DeepONet.
 
         Args:

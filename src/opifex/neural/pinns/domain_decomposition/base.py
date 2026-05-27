@@ -105,7 +105,7 @@ class SubdomainNetwork(nnx.Module):
         *,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize subdomain network.
 
         Args:
@@ -159,7 +159,7 @@ class DomainDecompositionPINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Domain Decomposition PINN.
 
         Args:

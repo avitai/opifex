@@ -90,7 +90,7 @@ class HybridOptimizer:
 
     config: HybridOptimizerConfig
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize Adam and L-BFGS optimizers."""
         # Create Adam optimizer
         self.adam = optax.adam(

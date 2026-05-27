@@ -47,7 +47,7 @@ class MultipoleExpansion(nnx.Module):
         stabilization_factor: float = 0.1,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize multipole expansion with numerical stability.
 
@@ -189,7 +189,7 @@ class MGNOLayer(nnx.Module):
         dropout_rate: float = 0.1,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize MGNO layer with stability features.
 
@@ -357,7 +357,7 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         dropout_rate: float = 0.1,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize MGNO with full stability features.
 

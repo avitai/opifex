@@ -27,7 +27,7 @@ class TemperatureScaling(nnx.Module):
         constraint_strength: float = 1.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize temperature scaling.
 
         Args:
@@ -329,7 +329,7 @@ class PlattScaling(nnx.Module):
     binary classification problems.
     """
 
-    def __init__(self, *, rngs: nnx.Rngs):
+    def __init__(self, *, rngs: nnx.Rngs) -> None:
         """Initialize Platt scaling parameters.
 
         Args:
@@ -389,7 +389,7 @@ class IsotonicRegression(nnx.Module):
     from confidence scores to calibrated probabilities.
     """
 
-    def __init__(self, n_bins: int = 100, *, rngs: nnx.Rngs):
+    def __init__(self, n_bins: int = 100, *, rngs: nnx.Rngs) -> None:
         """Initialize isotonic regression.
 
         Args:
@@ -483,7 +483,7 @@ class IsotonicRegression(nnx.Module):
 class CalibrationTools(nnx.Module):
     """Enhanced tools for uncertainty calibration assessment and improvement."""
 
-    def __init__(self, *, rngs: nnx.Rngs):
+    def __init__(self, *, rngs: nnx.Rngs) -> None:
         """Initialize calibration tools.
 
         Args:

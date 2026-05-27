@@ -36,7 +36,7 @@ _HW_PROBE_FAILURE = (AttributeError, KeyError, RuntimeError, TypeError)
 class RooflineMemoryManager:
     """Memory management based on roofline model for optimal hardware utilization."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.hw_specs = self._get_hardware_specs()
         self.operation_cache = {}
 
@@ -173,7 +173,7 @@ class RooflineMemoryManager:
 class MixedPrecisionOptimizer:
     """Hardware-aware mixed precision optimization for maximum performance."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.hardware_config = self._detect_hardware()
 
     def _detect_hardware(self) -> dict[str, Any]:
@@ -272,7 +272,7 @@ class MixedPrecisionOptimizer:
 class AsyncMemoryManager:
     """Asynchronous memory management with prefetching for overlapped computation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.prefetch_queue = {}
 
     def async_device_put(self, array: jax.Array, device: Any, key: str | None = None) -> jax.Array:
@@ -316,7 +316,7 @@ class AsyncMemoryManager:
 class MemoryPoolManager:
     """Memory pool management for efficient buffer reuse."""
 
-    def __init__(self, pool_size_gb: float = 4.0):
+    def __init__(self, pool_size_gb: float = 4.0) -> None:
         self.pool_size_bytes = int(pool_size_gb * 1024**3)
         self.buffer_pools = {}  # (shape, dtype) -> list of buffers
         self.allocated_bytes = 0
@@ -405,7 +405,7 @@ class MemoryPoolManager:
 class CachedProgressiveTester:
     """Progressive testing with caching and roofline analysis prescreening."""
 
-    def __init__(self, memory_manager: RooflineMemoryManager | None = None):
+    def __init__(self, memory_manager: RooflineMemoryManager | None = None) -> None:
         self.memory_manager = memory_manager or RooflineMemoryManager()
         self.hardware_signature = self._get_hardware_signature()
 
@@ -539,7 +539,7 @@ class CachedProgressiveTester:
 class OptimizedGPUManager:
     """Complete optimized GPU manager integrating all optimization techniques."""
 
-    def __init__(self, max_memory_fraction: float = 0.75):
+    def __init__(self, max_memory_fraction: float = 0.75) -> None:
         self.roofline_manager = RooflineMemoryManager()
         self.mixed_precision = MixedPrecisionOptimizer()
         self.async_manager = AsyncMemoryManager()

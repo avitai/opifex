@@ -38,7 +38,7 @@ class DensityMixingNetwork(nnx.Module):
         hidden_dim: int = 64,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize density mixing network.
 
         Args:
@@ -131,7 +131,7 @@ class ConvergencePredictor(nnx.Module):
         hidden_dim: int = 32,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize convergence predictor with enhanced architecture.
 
         Args:
@@ -206,7 +206,7 @@ class NeuralSCFSolver(nnx.Module):
         chemical_accuracy_target: float = 1e-6,  # ~1 kcal/mol
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize neural SCF solver with enhanced capabilities.
 
         Args:

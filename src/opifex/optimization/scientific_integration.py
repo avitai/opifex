@@ -104,7 +104,7 @@ class PhysicsProfiler:
         self,
         domain: PhysicsDomain,
         validation_tolerances: dict[str, float] | None = None,
-    ):
+    ) -> None:
         self.domain = domain
         self.validation_tolerances = validation_tolerances or self._get_default_tolerances()
 
@@ -532,7 +532,11 @@ class PhysicsProfiler:
 class NumericalValidator:
     """Numerical precision and stability validator."""
 
-    def __init__(self, precision_threshold: float = 1e-6, stability_threshold: float = 1e-3):
+    def __init__(
+        self,
+        precision_threshold: float = 1e-6,
+        stability_threshold: float = 1e-3,
+    ) -> None:
         self.precision_threshold = precision_threshold
         self.stability_threshold = stability_threshold
 
@@ -654,7 +658,7 @@ class NumericalValidator:
 class ScientificBenchmarkValidator:
     """Validator for scientific computing benchmarks."""
 
-    def __init__(self, domain: PhysicsDomain):
+    def __init__(self, domain: PhysicsDomain) -> None:
         self.domain = domain
         self.benchmark_thresholds = self._get_benchmark_thresholds()
 
@@ -757,7 +761,7 @@ class ScientificComputingIntegrator:
         physics_profiler: PhysicsProfiler | None = None,
         numerical_validator: NumericalValidator | None = None,
         benchmark_validator: ScientificBenchmarkValidator | None = None,
-    ):
+    ) -> None:
         self.domain = domain
         self.physics_profiler = physics_profiler or PhysicsProfiler(domain)
         self.numerical_validator = numerical_validator or NumericalValidator()

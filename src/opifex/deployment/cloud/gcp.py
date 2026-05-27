@@ -70,7 +70,7 @@ class GCPConfig:
 class GCPDeploymentManager:
     """Manages Opifex framework deployment on Google Cloud Platform."""
 
-    def __init__(self, config: GCPConfig):
+    def __init__(self, config: GCPConfig) -> None:
         """Initialize GCP deployment manager.
 
         Args:

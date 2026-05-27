@@ -18,7 +18,7 @@ from opifex.solvers.neural_operator import (
 class SimpleOperator(nnx.Module):
     """Simple operator model for testing."""
 
-    def __init__(self, key: jax.Array):
+    def __init__(self, key: jax.Array) -> None:
         # Maps (batch, dim) -> (batch, dim)
         self.dense = nnx.Linear(1, 1, rngs=nnx.Rngs(key))
 

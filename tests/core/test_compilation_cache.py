@@ -88,8 +88,15 @@ class TestCompilationCache:
         )
 
     def test_backend_specific_optimizations(self):
-        """Test backend-specific optimization configurations."""
-        import opifex  # noqa: F401 # type: ignore[import-untyped]
+        """Test backend-specific optimization configurations.
+
+        ``setup_jax_optimization`` is opt-in (Rule 13: no hidden import-time
+        side effects) — tests that exercise the JAX-config side effects must
+        invoke it explicitly instead of relying on ``import opifex``.
+        """
+        from opifex import setup_jax_optimization
+
+        setup_jax_optimization()
 
         backend = jax.default_backend()
 
@@ -102,22 +109,24 @@ class TestCompilationCache:
         # CPU backend doesn't need specific matmul precision
 
     def test_environment_variable_override(self, tmp_path):
-        """Test that environment variables can override cache directory."""
-        import importlib
+        """Test that environment variables can override cache directory.
+
+        Since ``setup_jax_optimization`` is opt-in (see Rule 13 in
+        ``__init__.py``), the test invokes it explicitly after pointing
+        ``OPIFEX_XLA_CACHE_DIR`` at the temp dir.
+        """
         import os
 
         # Set custom cache directory
         custom_cache_dir = tmp_path / "custom_xla_cache"
         os.environ["OPIFEX_XLA_CACHE_DIR"] = str(custom_cache_dir)
 
-        # Reload opifex to pick up environment variable
-        import opifex  # type: ignore[import-untyped]
+        try:
+            from opifex import setup_jax_optimization
 
-        importlib.reload(opifex)
+            setup_jax_optimization()
 
-        # Check that custom directory is used
-        assert jax.config.jax_compilation_cache_dir == str(custom_cache_dir)  # type: ignore[attr-defined]
-        assert custom_cache_dir.exists()
-
-        # Clean up
-        del os.environ["OPIFEX_XLA_CACHE_DIR"]
+            assert jax.config.jax_compilation_cache_dir == str(custom_cache_dir)  # type: ignore[attr-defined]
+            assert custom_cache_dir.exists()
+        finally:
+            del os.environ["OPIFEX_XLA_CACHE_DIR"]

@@ -205,7 +205,7 @@ class TestAdaptiveSamplingIntegration:
 
         # Simple model
         class SimpleModel(nnx.Module):
-            def __init__(self, rngs: nnx.Rngs):
+            def __init__(self, rngs: nnx.Rngs) -> None:
                 self.linear = nnx.Linear(1, 1, rngs=rngs)
 
             def __call__(self, x):

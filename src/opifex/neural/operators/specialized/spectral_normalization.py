@@ -38,7 +38,7 @@ class PowerIteration(nnx.Module):
         eps: float = 1e-12,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize power iteration algorithm.
 
         Args:
@@ -125,7 +125,7 @@ class SpectralNorm(nnx.Module):
         eps: float = 1e-12,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral normalization wrapper.
 
         Args:
@@ -195,7 +195,7 @@ class SpectralLinear(nnx.Module):
         eps: float = 1e-12,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral normalized linear layer.
 
         Args:
@@ -266,7 +266,7 @@ class SpectralNormalizedConv(nnx.Module):
         eps: float = 1e-12,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral normalized convolution layer.
 
         Args:
@@ -340,7 +340,7 @@ class AdaptiveSpectralNorm(nnx.Module):
         eps: float = 1e-12,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize adaptive spectral normalization.
 
         Args:
@@ -423,7 +423,7 @@ class SpectralMultiHeadAttention(nnx.Module):
         eps: float = 1e-12,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral normalized multi-head attention.
 
         Args:
@@ -549,7 +549,7 @@ def spectral_norm_summary(
     """
     spectral_norms = []
 
-    def collect_spectral_norms(obj):
+    def collect_spectral_norms(obj) -> None:
         """Recursively collect spectral norms from any object."""
         # Check for spectral normalization layers
         spectral_types = (

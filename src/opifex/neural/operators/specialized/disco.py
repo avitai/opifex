@@ -49,7 +49,7 @@ class DiscreteContinuousConv2d(nnx.Module):
         activation: Callable | None = None,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
 
         self.in_channels = in_channels
@@ -208,7 +208,7 @@ class EquidistantDiscreteContinuousConv2d(DiscreteContinuousConv2d):
         grid_spacing: float = 1.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__(
             in_channels=in_channels,
             out_channels=out_channels,

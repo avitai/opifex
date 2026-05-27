@@ -30,7 +30,7 @@ class HybridSolver:
         classical_solver: SciMLSolver,
         neural_solver: SciMLSolver,
         mode: Literal["additive"] = "additive",
-    ):
+    ) -> None:
         if mode != "additive":
             raise ValueError(
                 f"HybridSolver only supports mode='additive'; got {mode!r}. "

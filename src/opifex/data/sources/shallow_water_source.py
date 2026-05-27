@@ -34,7 +34,7 @@ class ShallowWaterDataSource(grain.RandomAccessDataSource):
         resolution: int = 64,
         time_steps: int = 1,  # Shallow water solver returns final state only
         seed: int = 42,
-    ):
+    ) -> None:
         """Initialize ShallowWater data source."""
         if n_samples <= 0:
             raise ValueError(f"n_samples must be positive, got {n_samples}")

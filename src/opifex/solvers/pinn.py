@@ -228,7 +228,7 @@ class PINNSolver:
         >>> result = solver.solve(geometry, residual_fn, bc_fn, PINNConfig())
     """
 
-    def __init__(self, model: nnx.Module):
+    def __init__(self, model: nnx.Module) -> None:
         """Initialize the PINN solver.
 
         Args:

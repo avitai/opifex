@@ -90,7 +90,7 @@ class Interval(Geometry):
     This is the 1D analog of Rectangle for use with PINNs on 1D PDEs.
     """
 
-    def __init__(self, a: float, b: float):
+    def __init__(self, a: float, b: float) -> None:
         """Initialize 1D interval.
 
         Args:
@@ -180,7 +180,7 @@ class Interval(Geometry):
 class Rectangle(_EnhancedShapeBase):
     """2D rectangle shape for computational domains."""
 
-    def __init__(self, center: Point2D, width: float, height: float):
+    def __init__(self, center: Point2D, width: float, height: float) -> None:
         """
         Initialize rectangle.
 
@@ -324,7 +324,7 @@ class Rectangle(_EnhancedShapeBase):
 class Circle(_EnhancedShapeBase):
     """2D circle shape for computational domains."""
 
-    def __init__(self, center: Point2D, radius: float):
+    def __init__(self, center: Point2D, radius: float) -> None:
         """
         Initialize circle.
 
@@ -400,7 +400,7 @@ class Circle(_EnhancedShapeBase):
 class Polygon(_EnhancedShapeBase):
     """2D polygon shape defined by vertices."""
 
-    def __init__(self, vertices: Points2D):
+    def __init__(self, vertices: Points2D) -> None:
         """
         Initialize polygon from vertices.
 
@@ -609,7 +609,7 @@ class _SDFOperations:
 class CSGUnion(_EnhancedShapeBase):
     """Union of two shapes (A ∪ B) with enhanced algorithms."""
 
-    def __init__(self, shape_a: Shape2D, shape_b: Shape2D):
+    def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
         self.shape_a = shape_a
         self.shape_b = shape_b
         # Check if shapes support distance fields for enhanced operations
@@ -704,7 +704,7 @@ class CSGUnion(_EnhancedShapeBase):
 class CSGIntersection(_EnhancedShapeBase):
     """Intersection of two shapes (A ∩ B) with enhanced algorithms."""
 
-    def __init__(self, shape_a: Shape2D, shape_b: Shape2D):
+    def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
         self.shape_a = shape_a
         self.shape_b = shape_b
         self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
@@ -797,7 +797,7 @@ class CSGIntersection(_EnhancedShapeBase):
 class CSGDifference(_EnhancedShapeBase):
     """Difference of two shapes (A - B) with enhanced algorithms."""
 
-    def __init__(self, shape_a: Shape2D, shape_b: Shape2D):
+    def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
         self.shape_a = shape_a
         self.shape_b = shape_b
         self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
@@ -906,7 +906,7 @@ def sample_boundary_points(shape: Shape2D, n_points: int, key: jax.Array | None 
 class MolecularGeometry:
     """3D molecular geometry with atomic coordinates."""
 
-    def __init__(self, atomic_symbols: list[str], positions: jax.Array):
+    def __init__(self, atomic_symbols: list[str], positions: jax.Array) -> None:
         """Initialize molecular geometry.
 
         Args:
@@ -1035,7 +1035,7 @@ class MolecularGeometry:
 class PeriodicCell:
     """Periodic boundary conditions for materials systems."""
 
-    def __init__(self, lattice_vectors: jax.Array):
+    def __init__(self, lattice_vectors: jax.Array) -> None:
         """Initialize periodic cell.
 
         Args:
@@ -1215,7 +1215,7 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
     """Create smooth union with controllable blending (enhanced feature)."""
 
     class SmoothCSGUnion(_EnhancedShapeBase):
-        def __init__(self, shape_a, shape_b, smoothness):
+        def __init__(self, shape_a, shape_b, smoothness) -> None:
             self.shape_a = shape_a
             self.shape_b = shape_b
             self.smoothness = smoothness
@@ -1258,7 +1258,7 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
 
 
 # Validation and testing support
-def validate_implementation():
+def validate_implementation() -> None:
     """Validate that the enhanced implementation works correctly."""
     import logging
 

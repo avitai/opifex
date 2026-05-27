@@ -24,7 +24,7 @@ class PhysicsAwareAttention(nnx.Module):
         physics_constraints: list[str] | None = None,
         dropout_rate: float = 0.0,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Physics-Aware Attention mechanism.
 
         Args:
@@ -149,7 +149,7 @@ class PhysicsCrossAttention(nnx.Module):
         cross_system_coupling: bool = True,
         dropout_rate: float = 0.0,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Physics-Cross-Attention mechanism.
 
         Args:

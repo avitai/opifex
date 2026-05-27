@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class AppState:
     """Application state container."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.config: DeploymentConfig | None = None
         self.inference_engine: InferenceEngine | None = None
         self.model_registry: ModelRegistry | None = None
@@ -60,7 +60,7 @@ app.add_middleware(
 app_state = AppState()
 
 
-def initialize_components():
+def initialize_components() -> None:
     """Initialize global components."""
     # Create default configuration
     app_state.config = DeploymentConfig(
@@ -82,14 +82,14 @@ def initialize_components():
 
 
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     """Application startup event."""
     logger.info("Starting Opifex Model Serving API")
     initialize_components()
 
 
 @app.on_event("shutdown")
-async def shutdown_event():
+async def shutdown_event() -> None:
     """Application shutdown event."""
     logger.info("Shutting down Opifex Model Serving API")
 
@@ -253,13 +253,13 @@ async def global_exception_handler(request, exc):
     )
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum, frame) -> None:
     """Handle shutdown signals."""
     logger.info("Received signal %s, shutting down...", signum)
     sys.exit(0)
 
 
-def main():
+def main() -> None:
     """Main entry point for the server."""
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)

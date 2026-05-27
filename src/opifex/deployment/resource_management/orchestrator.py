@@ -30,7 +30,7 @@ class ResourceOrchestrator(nnx.Module):
         learning_rate: float = 0.001,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize ResourceOrchestrator with neural network components.
 
         Args:

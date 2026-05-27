@@ -17,7 +17,7 @@ __author__ = "Opifex Team"
 __email__ = "team@opifex.io"
 
 
-def setup_jax_optimization():
+def setup_jax_optimization() -> None:
     """Setup JAX optimizations for improved performance.
 
     This function configures:
@@ -107,10 +107,10 @@ def setup_jax_optimization():
 
     logger = logging.getLogger(__name__)
     logger.info("🚀 Opifex JAX Optimizations Enabled:")
-    logger.info(f"   • Backend: {backend}")
-    logger.info(f"   • XLA Cache: {cache_dir}")
-    logger.info(f"   • Device count: {jax.device_count()}")
-    logger.info(f"   • XLA Flags: {os.environ.get('XLA_FLAGS', 'None')}")
+    logger.info("   • Backend: %s", backend)
+    logger.info("   • XLA Cache: %s", cache_dir)
+    logger.info("   • Device count: %s", jax.device_count())
+    logger.info("   • XLA Flags: %s", os.environ.get("XLA_FLAGS", "None"))
 
 
 # Optional auto-setup: opt-out via ``OPIFEX_AUTO_CONFIGURE=0`` to avoid

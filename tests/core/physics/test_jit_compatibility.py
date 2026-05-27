@@ -206,7 +206,7 @@ class TestNNXModelJIT:
         """Test that PDE residuals work with JIT-compiled NNX models."""
 
         class SimplePINN(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.dense1 = nnx.Linear(2, 10, rngs=rngs)
                 self.dense2 = nnx.Linear(10, 1, rngs=rngs)
 
@@ -238,7 +238,7 @@ class TestGradientThroughPDE:
         """Test backpropagation through Poisson residual computation."""
 
         class SimplePINN(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -267,7 +267,7 @@ class TestGradientThroughPDE:
         """Test JIT-compiled gradient computation through PDE."""
 
         class SimplePINN(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):

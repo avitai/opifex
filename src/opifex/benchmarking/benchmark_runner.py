@@ -136,14 +136,16 @@ class BenchmarkRunner:
             raise ValueError("No benchmarks available for testing")
 
         logger.info(
-            f"Running full benchmark: {len(operators)} operators x {len(benchmarks)} benchmarks"
+            "Running full benchmark: %s operators x %s benchmarks",
+            len(operators),
+            len(benchmarks),
         )
 
         all_results = {}
         validation_reports = {}
 
         for benchmark_name in benchmarks:
-            logger.info(f"Running benchmark: {benchmark_name}")
+            logger.info("Running benchmark: %s", benchmark_name)
             benchmark_config = self.registry.get_benchmark_config(benchmark_name)
 
             benchmark_results = {}
@@ -153,10 +155,12 @@ class BenchmarkRunner:
                 # Check compatibility
                 compatible_ops = self.registry.list_compatible_operators(benchmark_name)
                 if operator_name not in compatible_ops:
-                    logger.debug(f"Skipping {operator_name} (not compatible with {benchmark_name})")
+                    logger.debug(
+                        "Skipping %s (not compatible with %s)", operator_name, benchmark_name
+                    )
                     continue
 
-                logger.info(f"Testing {operator_name}...")
+                logger.info("Testing %s...", operator_name)
 
                 try:
                     # Run benchmark
@@ -301,7 +305,7 @@ class BenchmarkRunner:
         abstract = self._generate_abstract(benchmark_results, domain)
 
         # Collect all results for analysis
-        all_results = []
+        all_results: list[BenchmarkResult] = []
         for _benchmark_name, operator_results in benchmark_results.items():
             all_results.extend(operator_results.values())
 
@@ -612,7 +616,7 @@ class BenchmarkRunner:
         domain_config: DomainConfig,
     ) -> dict[str, Any]:
         """Generate summary statistics for domain results."""
-        all_results = []
+        all_results: list[BenchmarkResult] = []
         for operator_results in benchmark_results.values():
             all_results.extend(operator_results.values())
 
@@ -688,7 +692,7 @@ in scientific computing
         findings = []
 
         # Find best performing operators
-        all_results = []
+        all_results: list[BenchmarkResult] = []
         for operator_results in results.values():
             all_results.extend(operator_results.values())
 
@@ -723,7 +727,7 @@ in scientific computing
         self, results: dict[str, dict[str, BenchmarkResult]]
     ) -> dict[str, Any]:
         """Generate high-level results summary."""
-        all_results = []
+        all_results: list[BenchmarkResult] = []
         for operator_results in results.values():
             all_results.extend(operator_results.values())
 

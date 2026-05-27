@@ -42,7 +42,7 @@ class PerformanceMonitor:
         convergence_patience: int = 10,
         analytics_enabled: bool = False,
         quantum_aware: bool = False,
-    ):
+    ) -> None:
         """Initialize performance monitor.
 
         Args:

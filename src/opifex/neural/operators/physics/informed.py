@@ -42,7 +42,7 @@ class PhysicsInformedOperator(nnx.Module):
         data_weight: float = 1.0,
         use_bias: bool = True,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Physics-Informed Operator following NNX patterns.
 
         Args:

@@ -23,7 +23,7 @@ from opifex.core.training.trainer import Trainer
 class MockModel(nnx.Module):
     """Mock model for quantum testing."""
 
-    def __init__(self, features: int = 32, rngs: nnx.Rngs | None = None):
+    def __init__(self, features: int = 32, rngs: nnx.Rngs | None = None) -> None:
         if rngs is None:
             rngs = nnx.Rngs(0)
         self.linear1 = nnx.Linear(2, features, rngs=rngs)

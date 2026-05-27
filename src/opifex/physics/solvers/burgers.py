@@ -177,7 +177,7 @@ class Burgers2DSolver:
         domain_size: tuple[float, float] = (2.0 * jnp.pi, 2.0 * jnp.pi),
         viscosity: float = 0.01,
         dt_max: float = 0.001,
-    ):
+    ) -> None:
         if not isinstance(resolution, int) or resolution <= 0:
             raise ValueError("resolution must be a positive integer")
         if not (isinstance(viscosity, int | float) and viscosity > 0):

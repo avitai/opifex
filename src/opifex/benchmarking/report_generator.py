@@ -23,7 +23,7 @@ class PDEBenchReportGenerator:
     programmatic access and human readability.
     """
 
-    def __init__(self, report_format: str = "json"):
+    def __init__(self, report_format: str = "json") -> None:
         """Initialize the report generator.
 
         Args:

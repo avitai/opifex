@@ -175,7 +175,7 @@ class _JitWrappedModel(Module):
     keep one generic wrapper and parameterise it by the forward fn.
     """
 
-    def __init__(self, original_model: Module, forward_fn: Callable[..., Any]):
+    def __init__(self, original_model: Module, forward_fn: Callable[..., Any]) -> None:
         self.original_model = original_model
         self.forward_fn = forward_fn
 
@@ -195,7 +195,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         performance_threshold: float = 1.1,
         memory_efficiency_target: float = 0.85,
         cache_size: int = 100,
-    ):
+    ) -> None:
         """Initialize the adaptive JAX optimizer.
 
         Args:
@@ -388,7 +388,7 @@ class IntelligentGPUMemoryManager(nnx.Module):
         fragmentation_threshold: float = 0.15,
         gc_trigger_threshold: float = 0.85,
         pool_sizes: dict[str, tuple[int, int]] | None = None,
-    ):
+    ) -> None:
         """Initialize GPU memory manager.
 
         Args:
@@ -496,7 +496,7 @@ class HybridPerformancePlatform(nnx.Module):
         target_latency_ms: float = 0.5,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
 
         # Core optimization components

@@ -30,7 +30,7 @@ class KubernetesOrchestrator:
         image: str,
         service_port: int = 8000,
         container_port: int = 8000,
-    ):
+    ) -> None:
         """
         Initialize the Kubernetes orchestrator.
 

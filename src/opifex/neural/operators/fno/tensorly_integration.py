@@ -330,7 +330,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
         use_complex: bool = True,
         tensorly_max_iter: int = 50,
         tensorly_tolerance: float = 1e-8,
-    ):
+    ) -> None:
         super().__init__()
 
         self.tensor_shape = tensor_shape
@@ -346,7 +346,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             # Fallback to random initialization
             self._init_random(rngs)
 
-    def _init_with_tensorly(self, rngs: nnx.Rngs, max_iter: int, tolerance: float):
+    def _init_with_tensorly(self, rngs: nnx.Rngs, max_iter: int, tolerance: float) -> None:
         """Initialize using TensorLy decomposition of a random tensor."""
         # Create initial random tensor following the target shape
         init_key = rngs.params()
@@ -388,7 +388,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
         else:
             raise ValueError(f"TensorLy initialization not supported for {self.decomposition_type}")
 
-    def _init_random(self, rngs: nnx.Rngs):
+    def _init_random(self, rngs: nnx.Rngs) -> None:
         """Fallback random initialization when TensorLy is not available."""
         warnings.warn(
             "Using random initialization. Install TensorLy for better initialization.",

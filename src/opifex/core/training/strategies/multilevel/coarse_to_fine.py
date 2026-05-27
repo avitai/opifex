@@ -61,7 +61,7 @@ class MultilevelMLP(nnx.Module):
         *,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize MLP.
 
         Args:
@@ -254,7 +254,7 @@ class CascadeTrainer:
         *,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize cascade trainer.
 
         Args:

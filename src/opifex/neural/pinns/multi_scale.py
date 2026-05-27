@@ -38,7 +38,7 @@ class MultiScalePINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Multi-Scale PINN.
 
         Args:
@@ -253,7 +253,7 @@ class SimplePINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = jnp.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Simple PINN.
 
         Args:

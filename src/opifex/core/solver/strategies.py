@@ -40,7 +40,7 @@ class AdaptiveLossBalancing(BaseCallback, nnx.Module):
     learning rates of different tasks (e.g., PDE residual vs Boundary condition).
     """
 
-    def __init__(self, loss_keys: list[str], alpha: float = 0.5):
+    def __init__(self, loss_keys: list[str], alpha: float = 0.5) -> None:
         self.alpha = alpha  # Smoothing parameter
         # Internal state using nnx.Dict for JIT compatibility
         # Eagerly initialize variables for known keys

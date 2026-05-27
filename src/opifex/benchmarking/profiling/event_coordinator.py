@@ -51,7 +51,7 @@ class ProfilingTimeline:
         profiler_id: str,
         data: dict[str, Any] | None = None,
         duration_ms: float | None = None,
-    ):
+    ) -> None:
         """Add an event to the timeline."""
         with self._lock:
             if self._start_time is None:

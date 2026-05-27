@@ -33,7 +33,7 @@ class TestTrainerJITCompilation:
 
         # Create simple model
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -79,7 +79,7 @@ class TestTrainerJITCompilation:
 
         # Create simple model
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(10, 10, rngs=rngs)
 
             def __call__(self, x):
@@ -130,7 +130,7 @@ class TestTrainerJITCompilation:
 
         # Create simple model
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -184,7 +184,7 @@ class TestTrainingPipelinePerformance:
 
         # Create simple model
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense1 = nnx.Linear(5, 10, rngs=rngs)
                 self.dense2 = nnx.Linear(10, 5, rngs=rngs)
 
@@ -224,7 +224,7 @@ class TestTrainingPipelinePerformance:
 
         # Create tiny model for fast testing
         class TinyModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):

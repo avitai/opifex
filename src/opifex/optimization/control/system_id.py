@@ -61,7 +61,7 @@ class SystemIdentifier(nnx.Module):
         *,
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
-    ):
+    ) -> None:
         super().__init__()
 
         self.state_dim = state_dim
@@ -170,7 +170,7 @@ class PhysicsConstrainedSystemID(SystemIdentifier):
         *,
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
-    ):
+    ) -> None:
         super().__init__(
             state_dim=state_dim,
             input_dim=input_dim,
@@ -266,7 +266,7 @@ class OnlineSystemLearner(SystemIdentifier):
         *,
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
-    ):
+    ) -> None:
         super().__init__(
             state_dim=state_dim,
             input_dim=input_dim,
@@ -385,7 +385,7 @@ class ControlIntegratedSystemID(SystemIdentifier):
         *,
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
-    ):
+    ) -> None:
         super().__init__(
             state_dim=state_dim,
             input_dim=input_dim,
@@ -605,7 +605,7 @@ class SystemDynamicsModel(nnx.Module):
         *,
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
-    ):
+    ) -> None:
         super().__init__()
 
         self.model_type = model_type

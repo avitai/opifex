@@ -10,7 +10,7 @@ class DummyModel(nnx.Module):
     size: int
     param: nnx.Param[jax.Array]
 
-    def __init__(self, size: int, rngs: nnx.Rngs):
+    def __init__(self, size: int, rngs: nnx.Rngs) -> None:
         self.size = size
         self.param = nnx.Param(jax.random.uniform(rngs.params(), (size,)))
 

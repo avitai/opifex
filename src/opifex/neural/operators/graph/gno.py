@@ -28,7 +28,7 @@ class GraphNeuralOperator(nnx.Module):
         edge_dim: int = 0,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Graph Neural Operator.
 
         Args:
@@ -119,7 +119,7 @@ class MessagePassingLayer(nnx.Module):
         *,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize message passing layer.
 
         Args:
@@ -246,7 +246,7 @@ class MollifiedGNO(nnx.Module):
         edge_dim: int = 0,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize MollifiedGNO.
 
         Args:

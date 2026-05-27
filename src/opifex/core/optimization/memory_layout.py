@@ -35,7 +35,7 @@ class MemoryLayout(Enum):
 class LayoutOptimizer:
     """Memory layout optimizer for neural operators."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.backend = jax.default_backend()
         self.optimal_layouts = self._get_optimal_layouts()
         self.conversion_cache = {}
@@ -154,7 +154,7 @@ class OptimizedConvolution(nnx.Module):
         padding: str = "SAME",
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -200,7 +200,7 @@ class OptimizedLinear(nnx.Module):
         out_features: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features

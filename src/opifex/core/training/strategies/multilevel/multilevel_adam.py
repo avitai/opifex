@@ -41,7 +41,7 @@ class MultilevelAdam:
         b2: float = 0.999,
         eps: float = 1e-8,
         eps_root: float = 0.0,
-    ):
+    ) -> None:
         """Initialize Multilevel Adam.
 
         Args:
@@ -60,12 +60,12 @@ class MultilevelAdam:
         )
         self.opt_state = None
 
-    def init(self, model: nnx.Module):
+    def init(self, model: nnx.Module) -> None:
         """Initialize optimizer state for the given model."""
         _, params = nnx.split(model, nnx.Param)
         self.opt_state = self.tx.init(params)  # type: ignore # noqa: PGH003
 
-    def update(self, model: nnx.Module, grads: Any):
+    def update(self, model: nnx.Module, grads: Any) -> None:
         """Perform an optimization step.
 
         Args:
@@ -84,7 +84,7 @@ class MultilevelAdam:
         )
         nnx.update(model, optax.apply_updates(params, updates))  # type: ignore # noqa: PGH003
 
-    def resize_state(self, new_model: nnx.Module, transition_fn: TransitionFn):
+    def resize_state(self, new_model: nnx.Module, transition_fn: TransitionFn) -> None:
         """Resize optimizer state to match a new model structure.
 
         This allows preserving momentum history across levels in multilevel training.

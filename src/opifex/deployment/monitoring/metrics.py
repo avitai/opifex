@@ -95,7 +95,7 @@ class PrometheusMetrics:
         enable_training_metrics: bool = True,
         enable_inference_metrics: bool = True,
         registry: Any | None = None,
-    ):
+    ) -> None:
         """
         Initialize Prometheus metrics system.
 
@@ -134,14 +134,14 @@ class PrometheusMetrics:
                     self._initialize_metrics()
                     self.logger.info("Prometheus metrics initialized successfully")
             except Exception as e:
-                self.logger.warning(f"Failed to initialize Prometheus metrics: {e}")
+                self.logger.warning("Failed to initialize Prometheus metrics: %s", e)
                 self._metrics_enabled = False
                 self.registry = None
         else:
             self.registry = None
             self.logger.warning("Prometheus client not available. Metrics collection disabled.")
 
-    def _initialize_metrics(self):
+    def _initialize_metrics(self) -> None:
         """Initialize standard metrics for neural operators and training."""
         if not self._metrics_enabled or not HAS_PROMETHEUS:
             return
@@ -251,7 +251,7 @@ class PrometheusMetrics:
             return metric
 
         except Exception:
-            self.logger.exception(f"Failed to create custom metric {config.name}")
+            self.logger.exception("Failed to create custom metric %s", config.name)
             return None
 
     def get_custom_metric(self, name: str) -> Any | None:
@@ -266,7 +266,7 @@ class PrometheusMetrics:
         """
         return self.custom_metrics.get(name)
 
-    def record_training_metrics(self, model_type: str, job_id: str, loss: float):
+    def record_training_metrics(self, model_type: str, job_id: str, loss: float) -> None:
         """Record training metrics."""
         if not self._metrics_enabled or not self.enable_training_metrics:
             return
@@ -276,7 +276,9 @@ class PrometheusMetrics:
         except Exception:
             self.logger.exception("Failed to record training metrics")
 
-    def record_inference_metrics(self, model_type: str, model_version: str, duration: float):
+    def record_inference_metrics(
+        self, model_type: str, model_version: str, duration: float
+    ) -> None:
         """Record inference metrics."""
         if not self._metrics_enabled or not self.enable_inference_metrics:
             return
@@ -288,7 +290,9 @@ class PrometheusMetrics:
         except Exception:
             self.logger.exception("Failed to record inference metrics")
 
-    def record_inference_accuracy(self, model_type: str, model_version: str, accuracy: float):
+    def record_inference_accuracy(
+        self, model_type: str, model_version: str, accuracy: float
+    ) -> None:
         """Record model accuracy."""
         if not self._metrics_enabled or not self.enable_inference_metrics:
             return
@@ -300,7 +304,7 @@ class PrometheusMetrics:
         except Exception:
             self.logger.exception("Failed to record accuracy")
 
-    def update_system_metrics(self):
+    def update_system_metrics(self) -> None:
         """Update system resource metrics."""
         if not self._metrics_enabled or not HAS_PROMETHEUS or not HAS_PSUTIL:
             return
@@ -317,9 +321,9 @@ class PrometheusMetrics:
                     self.memory_usage.labels(type="used").set(memory.used)
                     self.memory_usage.labels(type="total").set(memory.total)
         except Exception as e:
-            self.logger.warning(f"Failed to update system metrics: {e}")
+            self.logger.warning("Failed to update system metrics: %s", e)
 
-    def update_gpu_metrics(self):
+    def update_gpu_metrics(self) -> None:
         """Update GPU metrics if available."""
         if not self._metrics_enabled or not has_prometheus or not self.enable_gpu_metrics:
             return
@@ -357,7 +361,7 @@ class PrometheusMetrics:
         try:
             if self.registry is not None and start_http_server is not None:
                 start_http_server(server_port, registry=self.registry)
-                self.logger.info(f"Prometheus metrics server started on port {server_port}")
+                self.logger.info("Prometheus metrics server started on port %s", server_port)
             else:
                 self.logger.error("Cannot start server: registry or start_http_server is None")
         except Exception:
@@ -405,7 +409,7 @@ class CustomMetrics:
     simulations, and domain-specific performance monitoring.
     """
 
-    def __init__(self, prometheus_metrics: PrometheusMetrics):
+    def __init__(self, prometheus_metrics: PrometheusMetrics) -> None:
         """
         Initialize custom metrics.
 
@@ -418,7 +422,7 @@ class CustomMetrics:
         self._initialize_neural_operator_metrics()
         self._initialize_simulation_metrics()
 
-    def _initialize_neural_operator_metrics(self):
+    def _initialize_neural_operator_metrics(self) -> None:
         """Initialize neural operator specific metrics."""
         if not self.prometheus_metrics._metrics_enabled:
             return
@@ -454,7 +458,7 @@ class CustomMetrics:
             deeponet_trunk_config
         )
 
-    def _initialize_simulation_metrics(self):
+    def _initialize_simulation_metrics(self) -> None:
         """Initialize simulation-specific metrics."""
         if not self.prometheus_metrics._metrics_enabled:
             return
@@ -503,14 +507,14 @@ class CustomMetrics:
 
     def record_fno_metrics(
         self, model_id: str, modes: dict[str, int], forward_time: float, resolution: str
-    ):
+    ) -> None:
         """Record FNO-specific metrics."""
         if hasattr(self, "fno_forward_time") and self.fno_forward_time:
             self.fno_forward_time.labels(model_id=model_id, resolution=resolution).observe(
                 forward_time
             )
 
-    def record_deeponet_metrics(self, model_id: str, branch_size: int, trunk_size: int):
+    def record_deeponet_metrics(self, model_id: str, branch_size: int, trunk_size: int) -> None:
         """Record DeepONet-specific metrics."""
         if hasattr(self, "deeponet_branch_size") and self.deeponet_branch_size:
             self.deeponet_branch_size.labels(model_id=model_id).set(branch_size)
@@ -524,7 +528,7 @@ class CustomMetrics:
         step_time: float,
         convergence_iterations: int,
         tolerance: str,
-    ):
+    ) -> None:
         """Record simulation-specific metrics."""
         if hasattr(self, "simulation_step_time") and self.simulation_step_time:
             self.simulation_step_time.labels(
@@ -536,12 +540,14 @@ class CustomMetrics:
                 simulation_type=simulation_type, tolerance=tolerance
             ).observe(convergence_iterations)
 
-    def record_pde_accuracy(self, equation_type: str, method: str, error: float):
+    def record_pde_accuracy(self, equation_type: str, method: str, error: float) -> None:
         """Record PDE accuracy metrics."""
         if hasattr(self, "pde_accuracy") and self.pde_accuracy:
             self.pde_accuracy.labels(equation_type=equation_type, method=method).set(error)
 
-    def record_computational_efficiency(self, algorithm: str, problem_size: str, efficiency: float):
+    def record_computational_efficiency(
+        self, algorithm: str, problem_size: str, efficiency: float
+    ) -> None:
         """Record computational efficiency metrics."""
         if hasattr(self, "computational_efficiency") and self.computational_efficiency:
             self.computational_efficiency.labels(

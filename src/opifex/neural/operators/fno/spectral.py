@@ -32,7 +32,7 @@ class SpectralNeuralOperator(nnx.Module):
         use_adaptive_bounds: bool = False,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral neural operator.
 
         Args:

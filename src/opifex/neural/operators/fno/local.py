@@ -49,7 +49,7 @@ class LocalFourierLayer(nnx.Module):
         mixing_weight: float = 0.5,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize local Fourier layer.
 
@@ -198,7 +198,7 @@ class LocalFourierNeuralOperator(nnx.Module):
         activation: Callable = nnx.gelu,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize Local FNO.
 

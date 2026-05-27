@@ -31,7 +31,7 @@ class CheckpointManager:
         checkpoint_dir: str | Path,
         max_checkpoints: int = 5,
         auto_cleanup: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the CheckpointManager.
 
@@ -171,7 +171,7 @@ class CheckpointManager:
                 checkpoints.append(checkpoint_info)
             except Exception as e:
                 # Log corrupted checkpoints instead of silently skipping
-                logger.warning(f"Skipping corrupted checkpoint {filepath}: {e}")
+                logger.warning("Skipping corrupted checkpoint %s: %s", filepath, e)
                 continue
 
         # Sort by step number
@@ -257,7 +257,7 @@ class CheckpointManager:
                 filepath.unlink()
                 deleted_count += 1
             except Exception as e:
-                logger.warning(f"Failed to delete checkpoint {filepath}: {e}")
+                logger.warning("Failed to delete checkpoint %s: %s", filepath, e)
                 continue
 
         return deleted_count
@@ -292,7 +292,7 @@ class CheckpointManager:
         except Exception:
             return False
 
-    def _cleanup_old_checkpoints(self):
+    def _cleanup_old_checkpoints(self) -> None:
         """Clean up old checkpoints to maintain max_checkpoints limit."""
         checkpoints = self.list_checkpoints()
 

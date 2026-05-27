@@ -222,7 +222,7 @@ class TestSpectralNorm:
 
         # Create a mock layer without kernel or weight attributes
         class InvalidLayer(nnx.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
             def __call__(self, x):
@@ -597,7 +597,7 @@ class TestSpectralNormSummary:
         """Create a model with spectral normalized layers."""
 
         class TestModel(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.layer1 = SpectralLinear(32, 16, rngs=rngs)
                 self.layer2 = SpectralLinear(16, 8, rngs=rngs)
                 self.regular_layer = nnx.Linear(8, 4, rngs=rngs)
@@ -621,7 +621,7 @@ class TestSpectralNormSummary:
         """Test summary with model containing no spectral normalized layers."""
 
         class RegularModel(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.layer1 = nnx.Linear(32, 16, rngs=rngs)
                 self.layer2 = nnx.Linear(16, 8, rngs=rngs)
 
@@ -634,7 +634,7 @@ class TestSpectralNormSummary:
         """Test summary with mix of spectral and regular layers."""
 
         class MixedModel(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.spectral1 = SpectralLinear(32, 16, rngs=rngs)
                 self.regular1 = nnx.Linear(16, 16, rngs=rngs)
                 self.spectral2 = SpectralLinear(16, 8, rngs=rngs)

@@ -19,7 +19,7 @@ from opifex.core.training.trainer import Trainer
 class NeuralOperatorSolver:
     """Solver for data-driven Neural Operators."""
 
-    def __init__(self, model: nnx.Module):
+    def __init__(self, model: nnx.Module) -> None:
         self.model = model
 
     def solve(

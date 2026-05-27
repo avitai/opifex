@@ -239,7 +239,7 @@ class ExperimentConfig:
 class Experiment(ABC):
     """Abstract base class for scientific computing experiments."""
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig) -> None:
         self.config = config
         self.id: str | None = None
         self.start_time: datetime | None = None
@@ -310,11 +310,11 @@ class Experiment(ABC):
 class ExperimentTracker:
     """Factory for creating experiment instances with appropriate backends."""
 
-    def __init__(self, default_backend: str = "auto"):
+    def __init__(self, default_backend: str = "auto") -> None:
         self.default_backend = default_backend
         self._backend_registry: dict[str, type[Experiment]] = {}
 
-    def register_backend(self, name: str, backend_class):
+    def register_backend(self, name: str, backend_class) -> None:
         """Register a new backend implementation."""
         self._backend_registry[name] = backend_class
 

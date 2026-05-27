@@ -6,7 +6,7 @@ from opifex.diagnostics.ntk_computation import compute_gradient_jacobian, comput
 
 
 class SimpleModel(nnx.Module):
-    def __init__(self, key):
+    def __init__(self, key) -> None:
         self.linear = nnx.Linear(2, 1, rngs=nnx.Rngs(key))
 
     def __call__(self, x):

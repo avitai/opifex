@@ -64,7 +64,7 @@ class StandardMLP(nnx.Module):
         rngs: nnx.Rngs,
         kernel_init: Callable = nnx.initializers.xavier_uniform(),
         bias_init: Callable = nnx.initializers.zeros,
-    ):
+    ) -> None:
         """Initialize the StandardMLP following modern NNX patterns.
 
         Args:
@@ -205,7 +205,7 @@ class QuantumMLP(nnx.Module):
         rngs: nnx.Rngs,
         kernel_init: Callable = nnx.initializers.xavier_uniform(),
         bias_init: Callable = nnx.initializers.zeros,
-    ):
+    ) -> None:
         """Initialize Quantum MLP following modern NNX patterns.
 
         Args:

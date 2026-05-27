@@ -50,7 +50,7 @@ class MultiObjectiveConfig:
     adaptive_weights: bool = True
     dominated_solution_filtering: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate multi-objective configuration parameters."""
         if self.num_objectives < 2:
             raise ValueError("Multi-objective optimization requires at least 2 objectives")
@@ -82,7 +82,7 @@ class ParetoFrontierOptimizer(nnx.Module):
         problem_dimension: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize Pareto frontier optimizer.
 
         Args:
@@ -348,7 +348,7 @@ class ObjectiveScalarizer(nnx.Module):
         problem_features_dim: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize objective scalarizer.
 
         Args:
@@ -594,7 +594,7 @@ class MultiObjectiveL2OEngine(nnx.Module):
         problem_dimension: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize multi-objective L2O engine.
 
         Args:

@@ -75,7 +75,7 @@ class AWSConfig:
 class AWSDeploymentManager:
     """Manages Opifex framework deployment on Amazon Web Services."""
 
-    def __init__(self, config: AWSConfig):
+    def __init__(self, config: AWSConfig) -> None:
         """Initialize AWS deployment manager.
 
         Args:

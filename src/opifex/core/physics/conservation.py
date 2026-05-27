@@ -264,7 +264,7 @@ class MultiScalePhysics:
     scale-specific loss computations and configurable weighting.
     """
 
-    def __init__(self, scales: list[str], scale_weights: dict[str, float]):
+    def __init__(self, scales: list[str], scale_weights: dict[str, float]) -> None:
         """Initialize multi-scale physics system.
 
         Args:
@@ -368,7 +368,7 @@ class AdaptiveConstraintWeighting:
         constraints: list[str],
         initial_weights: dict[str, float],
         adaptation_rate: float = 0.1,
-    ):
+    ) -> None:
         """Initialize adaptive weighting system.
 
         Args:
@@ -437,7 +437,7 @@ class ConstraintAggregator:
     and adaptive weighting to create a unified constraint loss function.
     """
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any]) -> None:
         """Initialize constraint aggregator.
 
         Args:

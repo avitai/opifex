@@ -108,7 +108,7 @@ class MolecularSystem:
     cell: Array | None = None  # Shape: (3, 3) for periodic systems
     basis_set: str = "def2-tzvp"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate molecular system after initialization."""
         # Validate array shapes
         if self.positions.shape[0] != len(self.atomic_numbers):

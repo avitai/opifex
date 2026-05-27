@@ -103,7 +103,7 @@ class PerformancePredictor(nnx.Module):
         prediction_horizon: int = 60,  # minutes
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.prediction_horizon = prediction_horizon
 
@@ -136,7 +136,7 @@ class AIAnomalyDetector(nnx.Module):
         anomaly_threshold: float = 0.8,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.anomaly_threshold = anomaly_threshold
 
@@ -174,7 +174,7 @@ class PerformanceMonitor:
         anomaly_detector: AIAnomalyDetector,
         performance_predictor: PerformancePredictor,
         collection_interval: float = 1.0,  # seconds
-    ):
+    ) -> None:
         self.anomaly_detector = anomaly_detector
         self.performance_predictor = performance_predictor
         self.collection_interval = collection_interval
@@ -397,7 +397,7 @@ class PredictiveScaler:
         scale_down_threshold: float = 0.8,
         min_replicas: int = 1,
         max_replicas: int = 10,
-    ):
+    ) -> None:
         self.performance_monitor = performance_monitor
         self.scale_up_threshold = scale_up_threshold
         self.scale_down_threshold = scale_down_threshold

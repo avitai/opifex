@@ -54,7 +54,7 @@ class MetaOptimizer:
         config: MetaOptimizerConfig,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize integrated meta-optimizer system.
 
         Args:
@@ -101,7 +101,7 @@ class MetaOptimizer:
         # Base optimizer
         self._create_base_optimizer()
 
-    def _create_base_optimizer(self):
+    def _create_base_optimizer(self) -> None:
         """Create base optimizer based on configuration."""
         lr = self.config.meta_learning_rate
 

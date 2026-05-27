@@ -53,7 +53,7 @@ class L2OEngineConfig:
     performance_tracking: bool = True
     adaptive_selection: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default values and validate configuration."""
         if self.problem_encoder_layers is None:
             self.problem_encoder_layers = [64, 32, 16]
@@ -78,7 +78,9 @@ class OptimizationProblemEncoder(nnx.Module):
     into dense embeddings that can be processed by neural optimization algorithms.
     """
 
-    def __init__(self, input_dim: int, output_dim: int, hidden_layers: list[int], *, rngs: Rngs):
+    def __init__(
+        self, input_dim: int, output_dim: int, hidden_layers: list[int], *, rngs: Rngs
+    ) -> None:
         """Initialize optimization problem encoder.
 
         Args:
@@ -175,7 +177,7 @@ class ParametricOptimizationSolver(nnx.Module):
         output_dim: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize parametric optimization solver.
 
         Args:
@@ -312,7 +314,7 @@ class L2OEngine:
         meta_config: MetaOptimizerConfig,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize L2O engine.
 
         Args:

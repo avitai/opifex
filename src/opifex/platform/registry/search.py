@@ -60,7 +60,7 @@ class SearchEngine:
         registry_service,
         enable_semantic_search: bool = True,
         similarity_threshold: float = 0.7,
-    ):
+    ) -> None:
         """Initialize search engine.
 
         Args:

@@ -42,7 +42,7 @@ class LatentNeuralOperator(nnx.Module):
         dropout_rate: float = 0.0,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Latent Neural Operator.
 
         Args:

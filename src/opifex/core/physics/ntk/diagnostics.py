@@ -300,7 +300,7 @@ class NTKDiagnosticsCallback:
     def __init__(
         self,
         compute_frequency: int = 100,
-    ):
+    ) -> None:
         """Initialize callback.
 
         Args:

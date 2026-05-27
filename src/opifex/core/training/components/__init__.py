@@ -33,7 +33,7 @@ class CheckpointComponent(TrainingComponent):
     Handles saving and restoring model checkpoints during training.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize checkpoint component.
 
         Args:
@@ -121,7 +121,7 @@ class CheckpointComponent(TrainingComponent):
 class MixedPrecisionState:
     """State for mixed precision training."""
 
-    def __init__(self, loss_scale: float):
+    def __init__(self, loss_scale: float) -> None:
         """Initialize mixed precision state.
 
         Args:
@@ -138,7 +138,7 @@ class MixedPrecisionComponent(TrainingComponent):
     Handles automatic mixed precision with loss scaling and overflow detection.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize mixed precision component.
 
         Args:
@@ -249,7 +249,7 @@ class FlexibleOptimizerFactory(TrainingComponent):
     Uses the centralized opifex.core.training.optimizers module.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize optimizer factory.
 
         Args:
@@ -308,7 +308,7 @@ class RecoveryComponent(TrainingComponent):
     implementation lives in ``recovery.py``.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize recovery component by delegating to ErrorRecoveryManager."""
         super().__init__(config)
         _cls = _get_recovery_base()

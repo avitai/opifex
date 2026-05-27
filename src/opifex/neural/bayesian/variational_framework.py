@@ -87,7 +87,7 @@ class MeanFieldGaussian(nnx.Module):
     variational inference in neural networks.
     """
 
-    def __init__(self, num_params: int, *, rngs: nnx.Rngs):
+    def __init__(self, num_params: int, *, rngs: nnx.Rngs) -> None:
         """Initialize the mean-field Gaussian posterior.
 
         Args:
@@ -165,7 +165,7 @@ class UncertaintyEncoder(nnx.Module):
         output_dim: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize the uncertainty encoder.
 
         Args:
@@ -223,7 +223,7 @@ class AmortizedVariationalFramework(nnx.Module):
         variational_config: VariationalConfig,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize the amortized variational framework.
 
         Args:

@@ -75,7 +75,7 @@ class ModularTrainer:
         config: TrainingConfig,
         components: dict[str, TrainingComponentBase] | None = None,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """Initialize modular trainer.
 
         Args:
@@ -415,7 +415,7 @@ class BasicTrainer:
         model: nnx.Module,
         config: TrainingConfig,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """Initialize the trainer.
 
         Args:
@@ -1175,7 +1175,7 @@ class UncertaintyGuidedTrainer:
         rngs: nnx.Rngs,
         uncertainty_threshold: float = 0.1,
         adaptation_strategy: str = "active_learning",
-    ):
+    ) -> None:
         """Initialize uncertainty-guided trainer.
 
         Args:
@@ -1287,7 +1287,7 @@ class MultiFidelityUncertaintyTrainer:
         uncertainty_quantifier,
         rngs: nnx.Rngs,
         fidelity_ratio: float = 0.1,
-    ):
+    ) -> None:
         """Initialize multi-fidelity uncertainty trainer.
 
         Args:
@@ -1356,7 +1356,7 @@ class ActiveUncertaintyLearner:
         acquisition_size: int = 10,
         diversity_weight: float = 0.0,
         physics_priors=None,
-    ):
+    ) -> None:
         """Initialize active uncertainty learner.
 
         Args:
@@ -1452,7 +1452,7 @@ def create_progress_bar_callback(
     """
     pbar = None
 
-    def progress_callback(epoch: int, metrics: dict[str, Any]):
+    def progress_callback(epoch: int, metrics: dict[str, Any]) -> None:
         nonlocal pbar
 
         train_loss = metrics.get("train_loss")

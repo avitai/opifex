@@ -43,7 +43,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         dropout_rate: float = 0.0,
         use_gradient_checkpointing: bool = True,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Multi-Scale FNO.
 
         Args:

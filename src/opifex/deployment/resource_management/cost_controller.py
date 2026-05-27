@@ -23,7 +23,7 @@ class CostController:
         budget_limit_usd_per_day: float = 10000.0,
         cost_optimization_interval: int = 3600,  # 1 hour
         savings_target_percentage: float = 20.0,
-    ):
+    ) -> None:
         self.budget_limit_usd_per_day = budget_limit_usd_per_day
         self.cost_optimization_interval = cost_optimization_interval
         self.savings_target_percentage = savings_target_percentage

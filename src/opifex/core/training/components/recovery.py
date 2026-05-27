@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class ErrorRecoveryManager(TrainingComponent):
     """Production-grade error handling and recovery mechanisms."""
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize error recovery manager.
 
         Args:

@@ -81,7 +81,7 @@ class MultiFidelityConfig:
         }
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default configurations and validate required keys."""
         # FIXED: Ensure low_fidelity is always initialized
         if self.low_fidelity is None:
@@ -97,7 +97,7 @@ class MultiFidelityConfig:
         # Validate required attributes
         self._validate_config()
 
-    def _validate_config(self):
+    def _validate_config(self) -> None:
         """Validate that all required configuration keys are present."""
         required_keys = [
             "low_fidelity",

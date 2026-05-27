@@ -139,7 +139,7 @@ class GrafanaManager:
         api_key: str | None = None,
         username: str = "admin",
         password: str = "changeme",  # nosec # noqa: S107
-    ):
+    ) -> None:
         """
         Initialize Grafana manager.
 

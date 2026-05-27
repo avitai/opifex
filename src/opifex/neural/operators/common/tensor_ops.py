@@ -358,7 +358,7 @@ class StandardSpectralConv(nnx.Module):
         modes: Sequence[int],
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -501,7 +501,7 @@ class TensorShapeValidator:
                         dim_sizes[dim_label] = size
 
         except Exception:
-            logger.exception(f"Einsum validation failed for equation: {equation}")
+            logger.exception("Einsum validation failed for equation: %s", equation)
             _raise_einsum_dimension_error(
                 f"Equation: {equation}\nOperand shapes: {[op.shape for op in operands]}"
             )
@@ -666,16 +666,18 @@ def validate_tensor_shapes(func):
                     expected = expected(*args, **kwargs)
                 if expected is not None and actual != expected:
                     logger.warning(
-                        f"Output shape {actual} doesn't match expected {expected} "
-                        f"in {func.__name__}"
+                        "Output shape %s doesn't match expected %s in %s",
+                        actual,
+                        expected,
+                        func.__name__,
                     )
 
             return result
 
         except Exception:
-            logger.exception(f"Tensor operation failed in {func.__name__}")
+            logger.exception("Tensor operation failed in %s", func.__name__)
             if args:
-                logger.info(f"Input shapes: {[getattr(arg, 'shape', 'N/A') for arg in args]}")
+                logger.info("Input shapes: %s", [getattr(arg, "shape", "N/A") for arg in args])
             raise
 
     return wrapper
@@ -702,8 +704,8 @@ def safe_einsum(equation: str, *operands: Array, **kwargs) -> Array:
         return jnp.einsum(equation, *operands, **kwargs)
     except Exception:
         logger.exception("Einsum computation failed")
-        logger.info(f"Equation: {equation}")
-        logger.info(f"Operand shapes: {[op.shape for op in operands]}")
+        logger.info("Equation: %s", equation)
+        logger.info("Operand shapes: %s", [op.shape for op in operands])
         raise
 
 

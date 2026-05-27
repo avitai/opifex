@@ -39,7 +39,7 @@ def mock_orchestrator(rngs):
 
     # Create a minimal mock that doesn't require full ResourceOrchestrator
     class MockOrchestrator:
-        def __init__(self):
+        def __init__(self) -> None:
             self.optimization_objective = OptimizationObjective.BALANCE_COST_PERFORMANCE
             self.resource_pools = {}
 

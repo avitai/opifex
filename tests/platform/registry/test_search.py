@@ -18,7 +18,7 @@ from opifex.platform.registry.search import (
 class MockRegistryService:
     """Mock registry service for testing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.functionals = [
             {
                 "id": "func-001",

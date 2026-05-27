@@ -34,7 +34,7 @@ class AdaptiveDeepONet(nnx.Module):
         use_residual_connections: bool = True,
         activation: str = "tanh",
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Adaptive DeepONet.
 
         Args:

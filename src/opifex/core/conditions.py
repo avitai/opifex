@@ -100,7 +100,7 @@ class BoundaryCondition(ABC):
         boundary: str,
         time_dependent: bool = False,
         spatial_dependent: bool = True,
-    ):
+    ) -> None:
         """Initialize boundary condition.
 
         Args:
@@ -148,7 +148,7 @@ class InitialCondition:
         dimension: int = 1,
         derivative_order: int = 0,
         name: str | None = None,
-    ):
+    ) -> None:
         """Initialize initial condition.
 
         Args:
@@ -189,7 +189,7 @@ class InitialCondition:
 class Constraint(ABC):
     """Abstract base class for constraints."""
 
-    def __init__(self, constraint_type: str, tolerance: float = 1e-8):
+    def __init__(self, constraint_type: str, tolerance: float = 1e-8) -> None:
         """Initialize constraint.
 
         Args:
@@ -217,7 +217,7 @@ class DirichletBC(BoundaryCondition):
         boundary: str,
         value: float | Callable[..., jax.Array],
         time_dependent: bool = False,
-    ):
+    ) -> None:
         """Initialize Dirichlet boundary condition.
 
         Args:
@@ -329,7 +329,7 @@ class NeumannBC(BoundaryCondition):
         boundary: str,
         value: float | Callable[..., jax.Array],
         time_dependent: bool = False,
-    ):
+    ) -> None:
         """Initialize Neumann boundary condition.
 
         Args:
@@ -401,7 +401,7 @@ class RobinBC(BoundaryCondition):
         beta: float | Callable[..., float],
         gamma: float | Callable[..., jax.Array],
         time_dependent: bool = False,
-    ):
+    ) -> None:
         """Initialize Robin boundary condition.
 
         Args:
@@ -605,7 +605,7 @@ class WavefunctionBC(BoundaryCondition):
         boundary: str = "all",
         value: complex | None = None,
         norm_value: float | None = None,
-    ):
+    ) -> None:
         """Initialize wavefunction boundary condition.
 
         Args:
@@ -669,7 +669,7 @@ class DensityConstraint(Constraint):
         n_electrons: int | None = None,
         tolerance: float = 1e-8,
         enforcement_method: str = "lagrange",
-    ):
+    ) -> None:
         """Initialize density constraint.
 
         Args:
@@ -721,7 +721,7 @@ class SymmetryConstraint(Constraint):
         symmetry_type: str = "point_group",
         lattice_vectors: jax.Array | None = None,
         enforce_in_loss: bool = True,
-    ):
+    ) -> None:
         """Initialize symmetry constraint.
 
         Args:
@@ -778,7 +778,7 @@ class QuantumInitialCondition(InitialCondition):
         value: Callable[[jax.Array], jax.Array],
         normalization: float = 1.0,
         n_electrons: int | None = None,
-    ):
+    ) -> None:
         """Initialize quantum initial condition.
 
         Args:
@@ -845,7 +845,7 @@ class SymbolicConstraint(Constraint):
         parameters: dict[str, Any] | None = None,
         constraint_type: str = "general",
         tolerance: float = 1e-8,
-    ):
+    ) -> None:
         """Initialize symbolic constraint.
 
         Args:
@@ -881,7 +881,7 @@ class PhysicsConstraint(SymbolicConstraint):
         physics_law: str | None = None,
         parameters: dict[str, Any] | None = None,
         tolerance: float = 1e-6,
-    ):
+    ) -> None:
         """Initialize physics constraint.
 
         Args:
@@ -930,7 +930,7 @@ class QuantumConstraint(PhysicsConstraint):
         parameters: dict[str, Any] | None = None,
         tolerance: float = 1e-8,
         enforcement_method: str = "penalty",
-    ):
+    ) -> None:
         """Initialize quantum constraint.
 
         Args:
@@ -987,7 +987,7 @@ class QuantumConstraint(PhysicsConstraint):
 class BoundaryConditionCollection:
     """Collection and management of boundary conditions."""
 
-    def __init__(self, boundary_conditions: Sequence[BoundaryCondition]):
+    def __init__(self, boundary_conditions: Sequence[BoundaryCondition]) -> None:
         """Initialize boundary condition collection.
 
         Args:

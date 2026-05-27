@@ -16,7 +16,7 @@ class AutoScaler:
     scaling (VPA) for resource optimization based on workload demands.
     """
 
-    def __init__(self, namespace: str, deployment_name: str):
+    def __init__(self, namespace: str, deployment_name: str) -> None:
         """
         Initialize auto-scaler generator.
 

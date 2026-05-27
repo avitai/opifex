@@ -151,7 +151,7 @@ class CPINN(DomainDecompositionPINN):
         config: CPINNConfig | None = None,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize cPINN.
 
         Args:

@@ -59,7 +59,7 @@ class ControlPINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = jnp.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize ControlPINN.
 
         Args:

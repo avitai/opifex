@@ -57,7 +57,7 @@ class ManifoldNeuralOperator(nnx.Module):
         hidden_dim: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize the manifold neural operator."""
         self.manifold = manifold
 
@@ -154,7 +154,7 @@ class RiemannianNeuralOperator(ManifoldNeuralOperator):
         *,
         rngs: nnx.Rngs,
         use_parallel_transport: bool = True,
-    ):
+    ) -> None:
         """
         Initialize Riemannian neural operator.
 
@@ -226,7 +226,7 @@ class HyperbolicNeuralOperator(ManifoldNeuralOperator):
         *,
         rngs: nnx.Rngs,
         use_gyro_operations: bool = True,
-    ):
+    ) -> None:
         """
         Initialize hyperbolic neural operator.
 

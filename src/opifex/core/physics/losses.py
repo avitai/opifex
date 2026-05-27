@@ -67,7 +67,7 @@ class PhysicsLossConfig:
     wavefunction_normalization_weight: float = 0.0
     step_milestones: list[int] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         valid_schedules = ["linear", "exponential", "step"]
         if self.weight_schedule not in valid_schedules:
@@ -91,7 +91,7 @@ class PhysicsLossComposer:
         config: Physics loss configuration
     """
 
-    def __init__(self, config: PhysicsLossConfig):
+    def __init__(self, config: PhysicsLossConfig) -> None:
         """Initialize the physics loss composer.
 
         Args:
@@ -196,7 +196,7 @@ class AdaptiveWeightScheduler:
         final_physics_weight: float = 1.0,
         transition_epochs: int = 1000,
         step_milestones: list[int] | None = None,
-    ):
+    ) -> None:
         """Initialize the adaptive weight scheduler.
 
         Args:
@@ -282,7 +282,7 @@ class ConservationLawEnforcer:
         self,
         conservation_laws: list[str],
         tolerance: float = 1e-6,
-    ):
+    ) -> None:
         """Initialize conservation law enforcer.
 
         Args:
@@ -486,7 +486,7 @@ class ResidualComputer:
         equation_type: str,
         domain_type: str,
         **equation_params,
-    ):
+    ) -> None:
         """Initialize residual computer.
 
         Args:
@@ -574,7 +574,7 @@ class PhysicsInformedLoss:
         equation_type: str,
         domain_type: str,
         **equation_params,
-    ):
+    ) -> None:
         """Initialize integrated physics-informed loss system.
 
         Args:

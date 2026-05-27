@@ -41,7 +41,7 @@ class FourierContinuationExtender(nnx.Module):
         extension_length: int = 32,
         taper_width: float = 0.1,
         smooth_order: int = 8,
-    ):
+    ) -> None:
         super().__init__()
 
         self.extension_type = extension_type
@@ -309,7 +309,7 @@ class PeriodicContinuation(FourierContinuationExtender):
     def __init__(
         self,
         extension_length: int = 32,
-    ):
+    ) -> None:
         super().__init__(
             extension_type="periodic",
             extension_length=extension_length,
@@ -322,7 +322,7 @@ class SymmetricContinuation(FourierContinuationExtender):
     def __init__(
         self,
         extension_length: int = 32,
-    ):
+    ) -> None:
         super().__init__(
             extension_type="symmetric",
             extension_length=extension_length,
@@ -337,7 +337,7 @@ class SmoothContinuation(FourierContinuationExtender):
         extension_length: int = 32,
         taper_width: float = 0.1,
         smooth_order: int = 8,
-    ):
+    ) -> None:
         super().__init__(
             extension_type="smooth",
             extension_length=extension_length,
@@ -365,7 +365,7 @@ class FourierBoundaryHandler(nnx.Module):
         hidden_dim: int = 64,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
 
         self.continuation_methods = continuation_methods

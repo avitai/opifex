@@ -33,7 +33,7 @@ class ConstraintSpecification:
     coefficients: jax.Array
     variables: list[str]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate constraint specification parameters."""
         valid_types = ["equality", "inequality"]
         if self.constraint_type not in valid_types:
@@ -77,7 +77,7 @@ class ConstraintViolationDetector:
     specified constraints and quantify the degree of violation.
     """
 
-    def __init__(self, constraints: list[ConstraintSpecification]):
+    def __init__(self, constraints: list[ConstraintSpecification]) -> None:
         """Initialize detector with constraint specifications.
 
         Args:
@@ -125,7 +125,7 @@ class SymbolicConstraintEncoder:
     representations that can be processed by neural networks.
     """
 
-    def __init__(self, embedding_dim: int = 16):
+    def __init__(self, embedding_dim: int = 16) -> None:
         """Initialize encoder with specified embedding dimension.
 
         Args:
@@ -165,7 +165,7 @@ class ProjectorConfig:
     hidden_sizes: list[int] | None = None
     embedding_dim: int = 16
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default hidden sizes if not provided."""
         if self.hidden_sizes is None:
             self.hidden_sizes = [64, 32]
@@ -178,7 +178,7 @@ class ConstraintProjector(nnx.Module):
     that satisfy the given constraints.
     """
 
-    def __init__(self, input_dim: int, config: ProjectorConfig, rngs: nnx.Rngs):
+    def __init__(self, input_dim: int, config: ProjectorConfig, rngs: nnx.Rngs) -> None:
         """Initialize the constraint projector network.
 
         Args:
@@ -255,7 +255,7 @@ class FeasibilityLearner:
         constraints: list[ConstraintSpecification],
         config: ProjectorConfig | None = None,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """Initialize the feasibility learning system.
 
         Args:

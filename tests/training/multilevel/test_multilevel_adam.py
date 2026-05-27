@@ -5,7 +5,7 @@ from opifex.core.training.strategies.multilevel.multilevel_adam import Multileve
 
 
 class SimpleMLP(nnx.Module):
-    def __init__(self, in_features, out_features, rngs):
+    def __init__(self, in_features, out_features, rngs) -> None:
         self.linear = nnx.Linear(in_features, out_features, rngs=rngs)
 
 
@@ -144,7 +144,7 @@ def test_multilevel_adam_resize_generic_object():
 
     # Create a mock state object that behaves like Adam state but is generic class
     class MockAdamState:
-        def __init__(self, count, mu, nu):
+        def __init__(self, count, mu, nu) -> None:
             self.count = count
             self.mu = mu
             self.nu = nu

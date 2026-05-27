@@ -35,7 +35,7 @@ class KernelNetwork(nnx.Module):
         max_frequency: float = 10.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize kernel network."""
         super().__init__()
         self.freq_dim = freq_dim
@@ -101,7 +101,7 @@ class AmortizedSpectralConvolution(nnx.Module):
         use_kernel_regularization: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize amortized spectral convolution."""
         super().__init__()
         self.in_channels = in_channels
@@ -233,7 +233,7 @@ class AmortizedFourierNeuralOperator(nnx.Module):
         use_kernel_regularization: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Amortized FNO."""
         super().__init__()
         self.in_channels = in_channels
