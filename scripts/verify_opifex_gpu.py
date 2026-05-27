@@ -13,15 +13,25 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import nnx
-
-# Import our enhanced GPU utilities
-from gpu_utils import (
-    configure_jax_env_vars,
-    get_gpu_memory_info,
-    get_optimal_jax_env_vars,
-    print_comprehensive_gpu_info,
-)
 from jax import random
+
+
+try:
+    # Direct script execution: python scripts/verify_opifex_gpu.py
+    from gpu_utils import (
+        configure_jax_env_vars,
+        get_gpu_memory_info,
+        get_optimal_jax_env_vars,
+        print_comprehensive_gpu_info,
+    )
+except ModuleNotFoundError:
+    # Console entry point/module execution: scripts.verify_opifex_gpu:main
+    from scripts.gpu_utils import (
+        configure_jax_env_vars,
+        get_gpu_memory_info,
+        get_optimal_jax_env_vars,
+        print_comprehensive_gpu_info,
+    )
 
 
 def print_system_info() -> None:
