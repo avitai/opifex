@@ -320,11 +320,13 @@ into the next training batch. Plugs into any
 `UncertaintyAwareModule.predict_distribution(...)` surface.
 
 ```python
+from flax import nnx
 from opifex.training import UncertaintyGuidedTrainer
 
 trainer = UncertaintyGuidedTrainer(
     model=bayesian_model,
-    optimizer=optax.adam(1e-3),
+    uncertainty_quantifier=uq,
+    rngs=nnx.Rngs(0),
     uncertainty_threshold=0.1,
 )
 state = trainer.train(dataset, num_epochs=100)
@@ -338,12 +340,14 @@ expensive high-fidelity calls only when the low-fidelity uncertainty
 exceeds a configurable threshold.
 
 ```python
+from flax import nnx
 from opifex.training import MultiFidelityUncertaintyTrainer
 
 trainer = MultiFidelityUncertaintyTrainer(
     low_fidelity_model=fast_model,
     high_fidelity_model=accurate_model,
-    optimizer=optax.adam(1e-3),
+    uncertainty_quantifier=uq,
+    rngs=nnx.Rngs(0),
 )
 ```
 
@@ -354,11 +358,13 @@ candidate pool using the same epistemic-uncertainty proxy. Designed for
 small-data regimes where labelling is expensive.
 
 ```python
+from flax import nnx
 from opifex.training import ActiveUncertaintyLearner
 
 learner = ActiveUncertaintyLearner(
     model=bayesian_model,
-    optimizer=optax.adam(1e-3),
+    uncertainty_quantifier=uq,
+    rngs=nnx.Rngs(0),
     acquisition_size=32,
 )
 ```

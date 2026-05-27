@@ -485,7 +485,9 @@ class ProbabilisticPINN(nnx.Module):
                 layer = nnx.Linear(prev_dim, hidden_dim, rngs=rngs)
             layers_temp.append(layer)
             prev_dim = hidden_dim
-            self.layers = nnx.List(layers_temp)
+        # Assignment outside the loop avoids the NNX hazard of rebinding
+        # ``self.layers`` on every iteration (Rule 0).
+        self.layers = nnx.List(layers_temp)
 
         # Output layer
         if use_bayesian:

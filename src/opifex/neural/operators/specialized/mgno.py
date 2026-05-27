@@ -379,7 +379,8 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         # Input projection
         self.input_proj = nnx.Linear(in_features, hidden_features, rngs=rngs)
 
-        # MGNO layers with stability
+        # MGNO layers with stability — assignment outside the loop avoids
+        # the NNX hazard of rebinding ``self.mgno_layers`` per iteration.
         mgno_layers_temp = []
         for _ in range(num_layers):
             layer = MGNOLayer(
@@ -390,7 +391,7 @@ class MultipoleGraphNeuralOperator(nnx.Module):
                 rngs=rngs,
             )
             mgno_layers_temp.append(layer)
-            self.mgno_layers = nnx.List(mgno_layers_temp)
+        self.mgno_layers = nnx.List(mgno_layers_temp)
 
         # Output projection
         self.output_proj = nnx.Linear(hidden_features, out_features, rngs=rngs)

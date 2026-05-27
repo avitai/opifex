@@ -34,6 +34,25 @@ class TestGCPConfig:
         assert config.security_config["enable_network_policy"] is True
         assert config.security_config["enable_pod_security_policy"] is True
 
+    def test_gcp_config_security_defaults_do_not_open_to_internet(self):
+        """Default ``GCPConfig`` + firewall rules must not expose 0.0.0.0/0 anywhere.
+
+        Rule 8 (Security): defaults must be safe; opt-in to dangerous behaviour.
+        SSH and API firewall rules used to default to 0.0.0.0/0, exposing
+        the cluster to the public internet.
+        """
+        import json as _json
+
+        from opifex.deployment.cloud.gcp import GCPConfig, GCPDeploymentManager
+
+        config = GCPConfig(project_id="test-project")
+        manager = GCPDeploymentManager(config)
+        vpc_config = manager.generate_vpc_config()
+        serialised = _json.dumps({"security": config.security_config, "vpc": vpc_config})
+        assert "0.0.0.0/0" not in serialised, (
+            "GCPConfig defaults must not include the literal 0.0.0.0/0 — security must opt-in."
+        )
+
     def test_custom_config(self):
         """Test custom GCP configuration values."""
         custom_node_config = {

@@ -1172,6 +1172,7 @@ class UncertaintyGuidedTrainer:
         self,
         model: nnx.Module,
         uncertainty_quantifier,
+        rngs: nnx.Rngs,
         uncertainty_threshold: float = 0.1,
         adaptation_strategy: str = "active_learning",
     ):
@@ -1180,12 +1181,17 @@ class UncertaintyGuidedTrainer:
         Args:
             model: Neural network model to train
             uncertainty_quantifier: Uncertainty quantification module
+            rngs: Caller-owned :class:`nnx.Rngs` bundle used for stochastic
+                acquisition / uncertainty sampling. Hard-coded
+                ``PRNGKey(42)`` produced identical "random" predictions on
+                every call, masking convergence bugs (Rule 6 + Rule 8).
             uncertainty_threshold: Threshold for high uncertainty detection
             adaptation_strategy: Strategy for adapting training
                 ("active_learning", "loss_weighting", "convergence_monitoring")
         """
         self.model = model
         self.uncertainty_quantifier = uncertainty_quantifier
+        self.rngs = rngs
         self.uncertainty_threshold = uncertainty_threshold
         self.adaptation_strategy = adaptation_strategy
 
@@ -1202,7 +1208,7 @@ class UncertaintyGuidedTrainer:
         # Generate mock predictions for uncertainty estimation
         batch_size = x_pool.shape[0]
         mock_predictions = jax.random.normal(
-            jax.random.PRNGKey(42),
+            self.rngs(),
             (self.uncertainty_quantifier.num_samples, batch_size, 1),
         )
 
@@ -1227,7 +1233,7 @@ class UncertaintyGuidedTrainer:
 
         # Generate mock predictions for uncertainty estimation
         mock_predictions = jax.random.normal(
-            jax.random.PRNGKey(42),
+            self.rngs(),
             (self.uncertainty_quantifier.num_samples, batch_size, 1),
         )
 
@@ -1254,7 +1260,7 @@ class UncertaintyGuidedTrainer:
 
         # Generate mock predictions for uncertainty estimation
         mock_predictions = jax.random.normal(
-            jax.random.PRNGKey(42),
+            self.rngs(),
             (self.uncertainty_quantifier.num_samples, batch_size, 1),
         )
 
@@ -1279,6 +1285,7 @@ class MultiFidelityUncertaintyTrainer:
         high_fidelity_model: nnx.Module,
         low_fidelity_model: nnx.Module,
         uncertainty_quantifier,
+        rngs: nnx.Rngs,
         fidelity_ratio: float = 0.1,
     ):
         """Initialize multi-fidelity uncertainty trainer.
@@ -1287,11 +1294,16 @@ class MultiFidelityUncertaintyTrainer:
             high_fidelity_model: High fidelity neural network model
             low_fidelity_model: Low fidelity neural network model
             uncertainty_quantifier: Uncertainty quantification module
+            rngs: Caller-owned :class:`nnx.Rngs` bundle for the per-fidelity
+                Monte Carlo draws. Previously hard-coded to ``PRNGKey(42)`` /
+                ``PRNGKey(43)``, which produced identical samples on every
+                call and hid convergence regressions.
             fidelity_ratio: Ratio of high to low fidelity data
         """
         self.high_fidelity_model = high_fidelity_model
         self.low_fidelity_model = low_fidelity_model
         self.uncertainty_quantifier = uncertainty_quantifier
+        self.rngs = rngs
         self.fidelity_ratio = fidelity_ratio
 
     def propagate_multi_fidelity_uncertainty(self, x: jax.Array) -> jax.Array:
@@ -1307,11 +1319,11 @@ class MultiFidelityUncertaintyTrainer:
 
         # Generate mock predictions from both fidelity levels
         high_fidelity_predictions = jax.random.normal(
-            jax.random.PRNGKey(42),
+            self.rngs(),
             (self.uncertainty_quantifier.num_samples, batch_size, 1),
         )
         low_fidelity_predictions = jax.random.normal(
-            jax.random.PRNGKey(43),
+            self.rngs(),
             (self.uncertainty_quantifier.num_samples, batch_size, 1),
         )
 
@@ -1339,6 +1351,7 @@ class ActiveUncertaintyLearner:
         self,
         model: nnx.Module,
         uncertainty_quantifier,
+        rngs: nnx.Rngs,
         sampling_strategy: str = "max_uncertainty",
         acquisition_size: int = 10,
         diversity_weight: float = 0.0,
@@ -1349,6 +1362,9 @@ class ActiveUncertaintyLearner:
         Args:
             model: Neural network model
             uncertainty_quantifier: Uncertainty quantification module
+            rngs: Caller-owned :class:`nnx.Rngs` bundle. Replaces the previous
+                hard-coded ``PRNGKey(42)`` so that acquisition is genuinely
+                stochastic and reproducible *per caller* (Rule 6 + Rule 8).
             sampling_strategy: Strategy for sample acquisition
             acquisition_size: Number of samples to acquire
             diversity_weight: Weight for diversity in sampling
@@ -1356,6 +1372,7 @@ class ActiveUncertaintyLearner:
         """
         self.model = model
         self.uncertainty_quantifier = uncertainty_quantifier
+        self.rngs = rngs
         self.sampling_strategy = sampling_strategy
         self.acquisition_size = acquisition_size
         self.diversity_weight = diversity_weight
@@ -1374,7 +1391,7 @@ class ActiveUncertaintyLearner:
 
         # Generate mock predictions for uncertainty estimation
         mock_predictions = jax.random.normal(
-            jax.random.PRNGKey(42),
+            self.rngs(),
             (self.uncertainty_quantifier.num_samples, batch_size, 1),
         )
 
@@ -1390,9 +1407,11 @@ class ActiveUncertaintyLearner:
             # Simple implementation: select top uncertain, then add diversity
             top_uncertain = jnp.argsort(total_uncertainty)[-self.acquisition_size * 2 :]
             # Random selection from top uncertain samples for diversity
-            key = jax.random.PRNGKey(42)
             selected_indices = jax.random.choice(
-                key, top_uncertain, shape=(self.acquisition_size,), replace=False
+                self.rngs(),
+                top_uncertain,
+                shape=(self.acquisition_size,),
+                replace=False,
             ).tolist()
         elif self.sampling_strategy == "physics_guided_uncertainty":
             # Combine uncertainty with physics constraints

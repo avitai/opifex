@@ -192,7 +192,11 @@ class QuantumMLP(nnx.Module):
         self,
         layer_sizes: list[int],
         activation: str = "tanh",
-        enforce_symmetry: bool = True,
+        # Secure-by-default: symmetry enforcement is not implemented yet
+        # (the previous default ``True`` was a silent no-op — POLA
+        # violation). Callers who set ``enforce_symmetry=True`` get a
+        # fail-fast NotImplementedError instead of a misleading pass-through.
+        enforce_symmetry: bool = False,
         dropout_rate: float = 0.0,
         use_bias: bool = True,
         apply_final_dropout: bool = False,
@@ -237,6 +241,17 @@ class QuantumMLP(nnx.Module):
         # Validate layer sizes
         if len(layer_sizes) < 2:
             raise ValueError("layer_sizes must have at least 2 elements (input and output)")
+
+        # Fail-fast on the unimplemented symmetry path (the previous
+        # default ``enforce_symmetry=True`` silently produced a no-op,
+        # violating POLA).
+        if enforce_symmetry:
+            raise NotImplementedError(
+                "QuantumMLP.enforce_symmetry=True requires permutation / "
+                "rotation symmetry enforcement that is not yet implemented. "
+                "Pass ``enforce_symmetry=False`` to use the network without "
+                "symmetry constraints."
+            )
 
         # Apply quantum-aware initialization scaling if needed
         quantum_kernel_init = self._apply_quantum_scaling(kernel_init)

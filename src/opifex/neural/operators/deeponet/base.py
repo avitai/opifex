@@ -387,7 +387,10 @@ class MultiFidelityDeepONet(nnx.Module):
         self.n_fidelities = n_fidelities
         self.fusion_strategy = fusion_strategy
 
-        # Create separate DeepONets for each fidelity level
+        # Create separate DeepONets for each fidelity level.
+        # Assigning ``self.fidelity_nets`` once after the loop avoids the
+        # NNX hazard of repeatedly rebinding the attribute on each iteration
+        # (Rule 0: correctness time-bomb under refactor).
         fidelity_nets_temp = []
         for _i in range(n_fidelities):
             net = DeepONet(
@@ -399,7 +402,7 @@ class MultiFidelityDeepONet(nnx.Module):
                 rngs=rngs,
             )
             fidelity_nets_temp.append(net)
-            self.fidelity_nets = nnx.List(fidelity_nets_temp)
+        self.fidelity_nets = nnx.List(fidelity_nets_temp)
 
         # Fusion network for combining fidelity outputs
         if fusion_strategy == "linear":

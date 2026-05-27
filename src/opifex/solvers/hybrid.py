@@ -16,14 +16,26 @@ from opifex.core.solver.interface import (
 
 
 class HybridSolver:
-    """Combines two solvers to produce a hybrid solution."""
+    """Combines two solvers to produce a hybrid solution.
+
+    Only the ``"additive"`` mode is implemented. The previous
+    ``"correction"`` value was silently aliased to additive — that
+    POLA-violating shadow has been removed (Rule 0 + Rule 6: fail fast
+    on unsupported configurations instead of returning a misleading
+    result).
+    """
 
     def __init__(
         self,
         classical_solver: SciMLSolver,
         neural_solver: SciMLSolver,
-        mode: Literal["additive", "correction"] = "additive",
+        mode: Literal["additive"] = "additive",
     ):
+        if mode != "additive":
+            raise ValueError(
+                f"HybridSolver only supports mode='additive'; got {mode!r}. "
+                "The 'correction' mode is not yet implemented."
+            )
         self.classical = classical_solver
         self.neural = neural_solver
         self.mode = mode
@@ -52,12 +64,7 @@ class HybridSolver:
                 val_c = sol_classical.fields[key]
                 val_n = sol_neural.fields[key]
 
-                if self.mode == "additive":
-                    combined_fields[key] = val_c + val_n
-                else:
-                    # Default/Correction might imply something else,
-                    # but for now we implement what passed TDD ("additive")
-                    combined_fields[key] = val_c + val_n
+                combined_fields[key] = val_c + val_n
 
         # Merge metrics
         metrics = {

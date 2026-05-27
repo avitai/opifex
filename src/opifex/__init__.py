@@ -113,5 +113,11 @@ def setup_jax_optimization():
     logger.info(f"   • XLA Flags: {os.environ.get('XLA_FLAGS', 'None')}")
 
 
-# Automatically setup optimizations on import
-setup_jax_optimization()
+# Optional auto-setup: opt-out via ``OPIFEX_AUTO_CONFIGURE=0`` to avoid
+# module-level side effects on ``import opifex`` (Rule 13: no hidden
+# side effects at import time). This guard makes tests deterministic
+# under controlled env, while preserving zero-config UX by default.
+# Callers preferring full explicit control should set the env var and
+# invoke :func:`setup_jax_optimization` themselves at process startup.
+if os.environ.get("OPIFEX_AUTO_CONFIGURE", "1") != "0":
+    setup_jax_optimization()

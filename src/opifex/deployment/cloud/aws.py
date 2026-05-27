@@ -62,8 +62,12 @@ class AWSConfig:
                 "scheduler",
             ],
             "enable_private_access": True,
-            "enable_public_access": True,
-            "public_access_cidrs": ["0.0.0.0/0"],
+            # Secure-by-default: callers must explicitly enable public access
+            # AND supply authorized CIDRs. The previous default
+            # `["0.0.0.0/0"]` opened the EKS control plane to the public
+            # internet (Rule 8: defaults safe, opt-in dangerous behaviour).
+            "enable_public_access": False,
+            "public_access_cidrs": [],
         }
     )
 
@@ -319,12 +323,16 @@ class AWSDeploymentManager:
                 "cluster_sg": {
                     "name": f"{self.config.cluster_name}-cluster-sg",
                     "description": "Security group for EKS cluster",
+                    # Secure-by-default: HTTPS ingress restricted to the VPC
+                    # CIDR. Public exposure must be opted into via the
+                    # ``public_access_cidrs`` config field, never via SG
+                    # rules defaulting to 0.0.0.0/0.
                     "ingress": [
                         {
                             "from_port": 443,
                             "to_port": 443,
                             "protocol": "tcp",
-                            "cidr_blocks": ["0.0.0.0/0"],
+                            "cidr_blocks": [self.config.vpc_cidr],
                         }
                     ],
                     "egress": [

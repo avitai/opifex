@@ -61,12 +61,26 @@ def test_multilevel_adam_update_and_resize():
 
     optimizer.resize_state(new_model, transition_fn=simple_pad)
 
+    # Snapshot the post-resize weights so we can verify the update actually
+    # changes them (the original ``assert True`` proved nothing — pytest already
+    # surfaces shape errors as failures). ``nnx.Linear`` defaults to use_bias=True
+    # so ``bias`` is always set here; the explicit None check narrows the type
+    # for static analysers.
+    assert new_model.linear.bias is not None
+    kernel_before = jnp.array(new_model.linear.kernel.value)
+    bias_before = jnp.array(new_model.linear.bias.value)
+
     # Perform update with new model
     grads_new = nnx.grad(lambda m: jnp.mean((m.linear(x) - jnp.ones((1, 4))) ** 2))(new_model)
     optimizer.update(new_model, grads_new)
 
-    # Check if update worked (no shape mismatch errors)
-    assert True
+    # Verify the optimizer actually mutated the new model's parameters at the
+    # prolonged shape (i.e. resize_state plumbed Adam moments through without
+    # mismatch). The kernel must change because grads are non-zero there.
+    assert new_model.linear.bias is not None
+    assert new_model.linear.kernel.value.shape == kernel_before.shape
+    assert new_model.linear.bias.value.shape == bias_before.shape
+    assert not jnp.allclose(new_model.linear.kernel.value, kernel_before)
 
 
 def test_multilevel_adam_masking():

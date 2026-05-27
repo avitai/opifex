@@ -11,9 +11,11 @@ Optimization
 import asyncio
 import contextlib
 import time
+from collections.abc import Callable, Coroutine
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast, Protocol
+from typing import Any, cast, Protocol, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -80,6 +82,34 @@ def get_model_input_features(model: Module) -> int:
 
     except (AttributeError, TypeError) as e:
         raise ValueError(f"Cannot determine input features for model {type(model)}: {e}") from e
+
+
+_AwaitableT = TypeVar("_AwaitableT")
+
+
+def _run_awaitable_sync(
+    coro_factory: Callable[[], Coroutine[Any, Any, _AwaitableT]],
+) -> _AwaitableT:
+    """Execute an async coroutine from a synchronous context safely.
+
+    ``asyncio.run`` raises ``RuntimeError`` when invoked from a thread that
+    already owns an event loop, which is exactly what happens if a caller
+    invokes ``HybridPerformancePlatform.optimize_model`` from inside an
+    async pipeline. To preserve correctness under both calling contexts,
+    we bridge through a worker thread when an active loop is detected —
+    the fresh thread owns its own loop and never deadlocks.
+
+    ``coro_factory`` must be a zero-arg callable that returns a fresh
+    coroutine — coroutines are single-shot, so we need a factory so each
+    branch (or any retry) can build its own instance.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro_factory())
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(coro_factory())).result()
 
 
 class OptimizationStrategy(Enum):
@@ -542,8 +572,7 @@ class HybridPerformancePlatform(nnx.Module):
 
         # Step 3: Version 7.4 - Performance monitoring setup
         with contextlib.suppress(Exception):
-            # Collect current metrics (asyncio.run handles event loop automatically)
-            asyncio.run(self.performance_monitor.collect_current_metrics())  # type: ignore[misc]
+            _run_awaitable_sync(self.performance_monitor.collect_current_metrics)
 
         # Step 4: Version 7.4 - Scientific validation
         if callable(model):
@@ -592,12 +621,14 @@ class HybridPerformancePlatform(nnx.Module):
         # Step 5: Version 7.4 - Predictive scaling recommendations
         try:
             if len(self.performance_monitor.metrics_history) >= 10:
-                scaling_decision = asyncio.run(self.predictive_scaler.evaluate_scaling_decision())  # type: ignore[misc]
+                scaling_decision = _run_awaitable_sync(
+                    self.predictive_scaler.evaluate_scaling_decision
+                )
                 optimized_model.optimization_metadata["scaling_recommendation"] = scaling_decision
             else:
                 # Collect some initial metrics for future scaling decisions
                 for _ in range(5):
-                    metrics = asyncio.run(self.performance_monitor.collect_current_metrics())  # type: ignore[misc]
+                    metrics = _run_awaitable_sync(self.performance_monitor.collect_current_metrics)
                     self.performance_monitor.metrics_history.append(metrics)
 
                 optimized_model.optimization_metadata["scaling_recommendation"] = {

@@ -7,6 +7,7 @@ quantum mechanical calculations. Neural DFT is integrated as a first-class
 paradigm alongside traditional PINNs and Neural Operators.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -18,6 +19,9 @@ from jax import Array
 from opifex.core.quantum import MolecularSystem
 from opifex.core.quantum.molecular_system import create_molecular_system
 from opifex.geometry.base import Geometry
+
+
+_logger = logging.getLogger(__name__)
 
 
 class Problem(Protocol):
@@ -420,10 +424,13 @@ class ElectronicStructureProblem(QuantumProblem):
         try:
             result = neural_dft.compute_energy(self.molecular_system, density=density)
             return float(result.total_energy)
-        except Exception as e:
-            # Fallback to simple approximation for testing
-            # This ensures tests pass while neural components are being developed
-            print(f"Neural DFT computation failed: {e}. Using simple approximation.")
+        except (RuntimeError, ValueError, AttributeError) as e:
+            # Fall back to a simple approximation when neural DFT fails for
+            # a recoverable reason. Programming errors (TypeError, etc.) are
+            # NOT caught — they must propagate (Rule 6: catch only specific
+            # exceptions). Diagnostic goes through the logger, not print
+            # (Rule 12: no print() in library code).
+            _logger.warning("Neural DFT computation failed: %s. Using simple approximation.", e)
 
             # Simple energy approximation based on atomic numbers using JAX-compatible operations
             # Use vectorized operations instead of Python loops and conditionals
@@ -479,7 +486,7 @@ class ElectronicStructureProblem(QuantumProblem):
                 # Vectorized nuclear repulsion calculation
                 nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
             else:
-                nuclear_repulsion = 0.0
+                nuclear_repulsion = jnp.asarray(0.0)
 
             # Total energy = electronic energy (negative) + nuclear repulsion (positive)
             # For single atoms, nuclear_repulsion = 0, so total should be negative

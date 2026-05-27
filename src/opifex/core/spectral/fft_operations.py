@@ -9,6 +9,7 @@ computing accuracy when JAX X64 mode is enabled.
 """
 
 from collections.abc import Sequence
+from typing import cast
 
 import jax
 import jax.numpy as jnp
@@ -153,9 +154,10 @@ def spectral_derivative(
         # Validate single axis bounds
         if not validate_axis_bounds(axis, spatial_dims):
             raise ValueError(f"Axis {axis} out of bounds for {spatial_dims} spatial dimensions")
-        # Normalize negative indices - we know this returns an int
-        normalized_axis = normalize_axis(axis, spatial_dims)
-        assert isinstance(normalized_axis, int)  # Type narrowing  # nosec B101
+        # Normalize negative indices — single-int axis must return a single int.
+        # ``cast`` carries the type-narrowing without an ``assert`` that vanishes
+        # under ``python -O`` (Rule 6: no assert for control flow).
+        normalized_axis = cast("int", normalize_axis(axis, spatial_dims))
         derivative_axes = [normalized_axis]
     else:
         # Handle sequence of axes
@@ -163,9 +165,9 @@ def spectral_derivative(
             raise ValueError(
                 f"One or more axes in {axis} out of bounds for {spatial_dims} spatial dimensions"
             )
-        # Normalize all negative indices and convert to list
-        normalized_axes = normalize_axis(axis, spatial_dims)
-        assert isinstance(normalized_axes, tuple)  # Type narrowing  # nosec B101
+        # Normalize all negative indices and convert to list. Sequence input
+        # must return a tuple (see ``normalize_axis`` contract).
+        normalized_axes = cast("tuple[int, ...]", normalize_axis(axis, spatial_dims))
         derivative_axes = list(normalized_axes)
 
     # Remember if input was real

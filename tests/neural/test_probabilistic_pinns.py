@@ -35,7 +35,7 @@ class TestProbabilisticPINN:
 
     def test_probabilistic_pinn_init_default(self):
         """Test ProbabilisticPINN initialization with default parameters."""
-        pinn = ProbabilisticPINN(input_dim=2)
+        pinn = ProbabilisticPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         assert pinn.physics_loss_weight == 1.0
         assert pinn.uncertainty_weight == 0.1
@@ -62,7 +62,7 @@ class TestProbabilisticPINN:
 
     def test_probabilistic_pinn_forward_pass(self):
         """Test forward pass through ProbabilisticPINN."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         # Create test input
         key = random.PRNGKey(42)
@@ -76,7 +76,7 @@ class TestProbabilisticPINN:
 
     def test_predict_with_uncertainty(self):
         """Test uncertainty quantification prediction."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         # Create test input
         key = random.PRNGKey(42)
@@ -98,14 +98,14 @@ class TestProbabilisticPINN:
 
     def test_physics_loss_basic(self):
         """Test basic physics loss computation."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         # Create test input
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
 
         # Simple PDE residual function (heat equation)
-        def pde_residual_fn(x_input, predictions):
+        def pde_residual_fn(_x_input, predictions):
             return jnp.sum(predictions**2, axis=-1)  # Simplified residual
 
         # Compute physics loss
@@ -116,12 +116,12 @@ class TestProbabilisticPINN:
 
     def test_physics_loss_with_boundary_conditions(self):
         """Test physics loss with boundary conditions."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
 
-        def pde_residual_fn(x_input, predictions):
+        def pde_residual_fn(_x_input, predictions):
             return jnp.sum(predictions**2, axis=-1)
 
         boundary_conditions = {"dirichlet": {"value": 0.0, "location": "boundary"}}
@@ -133,7 +133,7 @@ class TestProbabilisticPINN:
 
     def test_robust_loss(self):
         """Test robust loss computation."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
@@ -146,7 +146,7 @@ class TestProbabilisticPINN:
 
     def test_robust_loss_different_noise_scales(self):
         """Test robust loss with different noise scales."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
@@ -165,7 +165,7 @@ class TestMultiFidelityPINN:
 
     def test_multifidelity_pinn_init_default(self):
         """Test MultiFidelityPINN initialization with default parameters."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         assert hasattr(mf_pinn, "low_fidelity_layers")
         assert hasattr(mf_pinn, "high_fidelity_networks")
@@ -189,7 +189,7 @@ class TestMultiFidelityPINN:
 
     def test_multifidelity_forward_low_fidelity(self):
         """Test forward pass with low fidelity."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
@@ -208,7 +208,7 @@ class TestMultiFidelityPINN:
 
     def test_multifidelity_forward_high_fidelity(self):
         """Test forward pass with high fidelity."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
@@ -220,7 +220,7 @@ class TestMultiFidelityPINN:
 
     def test_multifidelity_forward_fusion(self):
         """Test forward pass with adaptive fidelity."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
@@ -239,7 +239,7 @@ class TestMultiFidelityPINN:
 
     def test_fusion_prediction(self):
         """Test internal fusion prediction method."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (3, 2))
@@ -252,7 +252,7 @@ class TestMultiFidelityPINN:
 
     def test_adaptive_prediction(self):
         """Test adaptive prediction based on uncertainty."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (3, 2))
@@ -269,7 +269,7 @@ class TestMultiFidelityPINN:
 
     def test_adaptive_prediction_different_thresholds(self):
         """Test adaptive prediction with different uncertainty thresholds."""
-        mf_pinn = MultiFidelityPINN(input_dim=2)
+        mf_pinn = MultiFidelityPINN(input_dim=2, rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
@@ -289,14 +289,14 @@ class TestRobustPINNOptimizer:
 
     def test_robust_optimizer_init(self):
         """RobustPINNOptimizer wraps the PINN; no instance-stored weights or rngs."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
 
         assert optimizer.model is pinn
 
     def test_compute_loss_components_returns_uq_components(self):
         """compute_loss_components returns UQLossComponents from a batch."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
         components = optimizer.compute_loss_components(
             _make_robust_batch(),
@@ -312,7 +312,7 @@ class TestRobustPINNOptimizer:
 
     def test_compute_loss_components_with_boundary_conditions(self):
         """Boundary-condition batches populate the boundary component."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
         components = optimizer.compute_loss_components(
             _make_robust_batch(with_bc=True),
@@ -325,7 +325,7 @@ class TestRobustPINNOptimizer:
 
     def test_compute_robustness_penalty(self):
         """The internal robustness penalty is a finite scalar."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
         x = random.normal(random.PRNGKey(42), (5, 2))
 
@@ -336,7 +336,7 @@ class TestRobustPINNOptimizer:
 
     def test_robustness_penalty_different_noise_scales(self):
         """The penalty stays finite across noise scales."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
         x = random.normal(random.PRNGKey(42), (5, 2))
 
@@ -348,7 +348,7 @@ class TestRobustPINNOptimizer:
 
     def test_uncertainty_guided_sampling(self):
         """Uncertainty-guided sampling returns the requested number of points."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
         x_candidates = random.normal(random.PRNGKey(42), (20, 2))
 
@@ -360,7 +360,7 @@ class TestRobustPINNOptimizer:
 
     def test_uncertainty_guided_sampling_different_thresholds(self):
         """Threshold variation preserves output shape."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
         x_candidates = random.normal(random.PRNGKey(42), (50, 2))
 
@@ -533,7 +533,7 @@ class TestIntegration:
 
     def test_complete_training_workflow(self):
         """End-to-end training step builds a finite ``UQLossComponents.total``."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
 
         key = random.PRNGKey(42)
@@ -567,6 +567,7 @@ class TestIntegration:
             low_fidelity_dims=(16, 8),
             high_fidelity_dims=(64, 32),
             fusion_dims=(24,),
+            rngs=nnx.Rngs(0),
         )
 
         # Generate test data
@@ -598,7 +599,7 @@ class TestIntegration:
 
     def test_robust_optimization_with_uncertainty_sampling(self):
         """Uncertainty-guided sampling composes with the shared loss surface."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
         optimizer = RobustPINNOptimizer(model=pinn)
 
         key = random.PRNGKey(42)
@@ -626,7 +627,7 @@ class TestIntegration:
     def test_error_handling_edge_cases(self):
         """Test error handling for edge cases."""
         # Test with very small input dimensions
-        pinn = ProbabilisticPINN(input_dim=1, hidden_dims=(8,))
+        pinn = ProbabilisticPINN(input_dim=1, hidden_dims=(8,), rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (3, 1))
@@ -642,12 +643,12 @@ class TestIntegration:
 
     def test_physics_loss_various_boundary_conditions(self):
         """Test physics loss with various boundary condition types."""
-        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16))
+        pinn = ProbabilisticPINN(input_dim=2, hidden_dims=(32, 16), rngs=nnx.Rngs(0))
 
         key = random.PRNGKey(42)
         x = random.normal(key, (5, 2))
 
-        def simple_residual(x_input, predictions):
+        def simple_residual(_x_input, predictions):
             return jnp.sum(predictions**2, axis=-1)
 
         # Test with different boundary condition formats

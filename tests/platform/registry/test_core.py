@@ -264,14 +264,16 @@ class TestRegistryService:
 
     def test_generate_version_tag(self, registry_service):
         """Test automatic version tag generation."""
+        import re
+
         tag1 = registry_service._generate_version_tag()
         tag2 = registry_service._generate_version_tag()
 
-        assert tag1.startswith("v")
-        assert tag2.startswith("v")
-        assert len(tag1) == 16  # v + YYYYMMDD_HHMMSS
-        # Tags should be different (unless generated at exact same second)
-        assert True  # Allow same second edge case
+        tag_pattern = re.compile(r"^v\d{8}_\d{6}$")
+        assert tag_pattern.fullmatch(tag1), f"tag1={tag1!r} does not match vYYYYMMDD_HHMMSS"
+        assert tag_pattern.fullmatch(tag2), f"tag2={tag2!r} does not match vYYYYMMDD_HHMMSS"
+        # Two tags generated back-to-back may collide within the same second;
+        # what we care about is that both are well-formed (asserted above).
 
     # Test file operations
 

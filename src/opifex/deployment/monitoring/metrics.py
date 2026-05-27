@@ -12,6 +12,7 @@ Provides Prometheus-compatible metrics collection with optional dependencies,
 custom scientific computing metrics, and robust error handling.
 """
 
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
@@ -41,9 +42,9 @@ except ImportError:
     generate_latest = None  # type: ignore[assignment]
     start_http_server = None  # type: ignore[assignment]
 
-# Optional JAX imports
+# Optional JAX imports — presence check for the ``has_jax`` flag below.
 try:
-    import jax
+    import jax  # type: ignore[import-untyped]  # noqa: F401  # pyright: ignore[reportUnusedImport] — presence check only
 
     has_jax = True
 except ImportError:
@@ -323,17 +324,28 @@ class PrometheusMetrics:
         if not self._metrics_enabled or not has_prometheus or not self.enable_gpu_metrics:
             return
 
+        # Real GPU memory reporting requires ``nvidia-ml-py`` (pynvml). When
+        # unavailable, we skip the metric entirely instead of publishing a
+        # fixed mock value — Rule 8 + Rule 0: a hardcoded constant shipped
+        # to Prometheus actively misleads any dashboard consuming it.
         try:
-            if has_jax:
-                devices = jax.devices()
-                for device in devices:
-                    if hasattr(self, "gpu_memory") and hasattr(device, "id"):
-                        # Mock GPU memory usage - in practice would use nvidia-ml-py
-                        self.gpu_memory.labels(device_id=str(device.id)).set(
-                            1024 * 1024 * 1024  # Mock GPU memory value
-                        )
-        except Exception as e:
-            self.logger.warning(f"Failed to update GPU metrics: {e}")
+            import pynvml  # type: ignore[import-not-found,import-untyped]
+        except ImportError:
+            return
+
+        try:
+            pynvml.nvmlInit()
+            device_count = pynvml.nvmlDeviceGetCount()
+            for device_id in range(device_count):
+                handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
+                meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                if hasattr(self, "gpu_memory"):
+                    self.gpu_memory.labels(device_id=str(device_id)).set(meminfo.used)
+        except (pynvml.NVMLError, AttributeError) as exc:
+            self.logger.warning("Failed to read GPU metrics via NVML: %s", exc)
+        finally:
+            with contextlib.suppress(pynvml.NVMLError):
+                pynvml.nvmlShutdown()
 
     def start_metrics_server(self, port: int | None = None) -> None:
         """Start HTTP metrics server for Prometheus scraping."""
