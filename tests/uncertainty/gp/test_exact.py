@@ -123,12 +123,8 @@ def test_predict_exact_gp_matches_rw06_algorithm_21() -> None:
     )
     predictive = predict_exact_gp(state=state, x_test=x_test)
 
-    k_train = rbf_kernel(
-        x_train, x_train, lengthscale=lengthscale, output_scale=output_scale
-    )
-    k_test = rbf_kernel(
-        x_test, x_train, lengthscale=lengthscale, output_scale=output_scale
-    )
+    k_train = rbf_kernel(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
+    k_test = rbf_kernel(x_test, x_train, lengthscale=lengthscale, output_scale=output_scale)
     k_diag = jnp.full((3,), output_scale**2)
     k_train_inv = jnp.linalg.inv(k_train + noise_std**2 * jnp.eye(5))
     expected_mean = k_test @ k_train_inv @ y_train

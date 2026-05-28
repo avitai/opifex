@@ -22,11 +22,21 @@ from opifex.uncertainty.gp.exact import (
     predict_exact_gp,
     rbf_kernel,
 )
+from opifex.uncertainty.gp.kernels import (
+    matern12_kernel,
+    matern32_kernel,
+    matern52_kernel,
+    multi_output_icm_kernel,
+)
 
 
 __all__ = [
     "ExactGPState",
     "fit_exact_gp",
+    "matern12_kernel",
+    "matern32_kernel",
+    "matern52_kernel",
+    "multi_output_icm_kernel",
     "predict_exact_gp",
     "rbf_kernel",
 ]
