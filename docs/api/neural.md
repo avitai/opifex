@@ -71,6 +71,22 @@ shared objective surface without diverging.
 ``uncertainty_guided_sampling(x_candidates, num_samples, *, rngs)``
 selects the highest-uncertainty samples for the next training batch.
 
+### `gp_pinn_predictive_posterior` (GP-PINN)
+
+``opifex.neural.pinns.gp_pinn.gp_pinn_predictive_posterior(*, pinn_forward,
+laplace_posterior, coordinates, gp_adapter_spec)`` returns a
+function-valued GP predictive over a trained PINN via the
+linearised-Laplace equivalence (Immer, Korzepa, Bauer 2021, AISTATS,
+arXiv:2008.08400 §3). The math is identical to LUNO
+(``opifex.uncertainty.curvature.linearized_neural_operator_posterior``)
+and is reused directly; what differs is the *context*: the input is a
+PINN forward consuming spatial / spatio-temporal coordinates, and the
+``gp_adapter_spec`` parameter (a Task 6.3 GP adapter spec such as
+``TinygpAdapterSpec`` or ``GPJaxAdapterSpec``) is recorded in the
+predictive metadata so consumers can resolve the linearised-Laplace ↔
+GP correspondence. When Phase 11 ships concrete GP fit / predict, the
+helper will gain an alternative direct-GP-fit branch.
+
 ### `ProbabilisticFourierNeuralOperator` (PNO)
 
 ``opifex.neural.operators.fno.probabilistic.ProbabilisticFourierNeuralOperator``
