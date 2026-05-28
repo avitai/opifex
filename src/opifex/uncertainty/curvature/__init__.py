@@ -30,6 +30,7 @@ from opifex.uncertainty.curvature.laplace import (
     LaplaceAdapterSpec,
     LaplaceState,
 )
+from opifex.uncertainty.curvature.luno import linearized_neural_operator_posterior
 from opifex.uncertainty.registry import UQRegistry
 
 
@@ -50,4 +51,5 @@ __all__ = [
     "empirical_fisher_diagonal",
     "ggn_vector_product",
     "hessian_vector_product",
+    "linearized_neural_operator_posterior",
 ]
