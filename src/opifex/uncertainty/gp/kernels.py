@@ -47,9 +47,7 @@ def _pairwise_distances(x1: jax.Array, x2: jax.Array) -> jax.Array:
     return jnp.sqrt(jnp.clip(sq_distance, a_min=0.0))
 
 
-def _require_positive_kernel_hparams(
-    *, lengthscale: float, output_scale: float
-) -> None:
+def _require_positive_kernel_hparams(*, lengthscale: float, output_scale: float) -> None:
     if lengthscale <= 0.0:
         raise ValueError(f"lengthscale must be strictly positive; got {lengthscale!r}.")
     if output_scale <= 0.0:
@@ -176,9 +174,74 @@ def multi_output_icm_kernel(
     return _icm
 
 
+def multi_output_lcm_kernel(
+    *,
+    components: tuple[tuple[Callable[..., jax.Array], jax.Array], ...],
+) -> Callable[..., jax.Array]:
+    r"""Linear Coregionalisation Model (LCM) multi-output kernel.
+
+    Generalises ICM to a *sum* of base-kernel / coregionalisation pairs
+    (Alvarez, Rosasco, Lawrence 2012 §3.2):
+
+    .. math::
+
+        k_{LCM}((x, i), (x', j)) = \sum_{q} k_{q}(x, x')\,B_{q}[i, j].
+
+    Each ``B_q`` may be low-rank (rank-1 components reproduce the
+    classical co-kriging linear model) or full-rank. With ``Q = 1`` the
+    LCM collapses to a single ICM block.
+
+    Args:
+        components: A tuple of ``(base_kernel_fn, coregionalisation)``
+            pairs. Each ``coregionalisation`` must be a square
+            ``(T, T)`` array; all components must share the same
+            ``T``.
+
+    Returns:
+        A callable matching the standard kernel signature
+        ``(x1, x2, *, lengthscale, output_scale) -> Gram``.
+
+    Raises:
+        ValueError: If ``components`` is empty, if any
+            ``coregionalisation`` is non-square, or if the components
+            disagree on ``T``.
+    """
+    if len(components) == 0:
+        raise ValueError("multi_output_lcm_kernel requires at least one component.")
+    first_shape = components[0][1].shape
+    if len(first_shape) != 2 or first_shape[0] != first_shape[1]:
+        raise ValueError(
+            f"Each LCM coregionalisation must be a square (T, T) matrix; got {first_shape}."
+        )
+    for _, cor in components[1:]:
+        if cor.shape != first_shape:
+            raise ValueError(
+                "All LCM components must share the same number of tasks T; "
+                f"got mismatched shapes {first_shape} and {cor.shape}."
+            )
+
+    def _lcm(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        features1, task1 = x1[:, :-1], x1[:, -1].astype(jnp.int32)
+        features2, task2 = x2[:, :-1], x2[:, -1].astype(jnp.int32)
+        total = jnp.zeros((x1.shape[0], x2.shape[0]))
+        for base_fn, cor in components:
+            base = base_fn(features1, features2, lengthscale=lengthscale, output_scale=output_scale)
+            total = total + base * cor[task1[:, None], task2[None, :]]
+        return total
+
+    return _lcm
+
+
 __all__ = [
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",
     "multi_output_icm_kernel",
+    "multi_output_lcm_kernel",
 ]

@@ -124,9 +124,7 @@ def test_multi_output_icm_kernel_is_jit_compatible() -> None:
 
 def test_multi_output_icm_gp_fit_predict_uses_task_aware_inputs() -> None:
     """Exact GP fit/predict via ICM kernel returns calibrated multi-output predictive."""
-    x_train = jnp.asarray(
-        [[-1.0, 0], [-0.5, 0], [0.0, 0], [0.5, 0], [1.0, 0], [-0.5, 1], [0.5, 1]]
-    )
+    x_train = jnp.asarray([[-1.0, 0], [-0.5, 0], [0.0, 0], [0.5, 0], [1.0, 0], [-0.5, 1], [0.5, 1]])
     y_train = jnp.asarray([0.0, 1.0, 0.0, -1.0, 0.0, 2.0, -2.0])
     icm = multi_output_icm_kernel(
         base_kernel_fn=rbf_kernel,

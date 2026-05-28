@@ -228,8 +228,47 @@ def predict_exact_gp(
     )
 
 
+def exact_gp_loocv_log_predictive(*, state: ExactGPState) -> jax.Array:
+    r"""Leave-one-out predictive log-likelihood for a fitted exact GP.
+
+    Rasmussen & Williams 2006 §5.4.2 derives the closed form
+
+    .. math::
+
+        \mu_{-i} &= y_{i} - \frac{\alpha_{i}}{[K^{-1}]_{ii}}, \\
+        \sigma_{-i}^{2} &= \frac{1}{[K^{-1}]_{ii}}, \\
+        \log p(y_{i} \mid X, y_{-i})
+        &= -\tfrac{1}{2}\!\left[\log(2\pi)
+            + \log \sigma_{-i}^{2}
+            + \frac{(y_{i} - \mu_{-i})^{2}}{\sigma_{-i}^{2}}\right],
+
+    so all ``n`` leave-one-out terms are recovered from a single
+    Cholesky factorisation (no refitting required).
+
+    Args:
+        state: Fitted :class:`ExactGPState`.
+
+    Returns:
+        Scalar LOOCV log-predictive ``Σ_i log p(y_i | X, y_{-i})``.
+    """
+    # K_inv from the Cholesky factor: K_inv = cho_solve((L, True), I).
+    n = state.alpha.shape[0]
+    identity = jnp.eye(n)
+    k_inv = jax.scipy.linalg.cho_solve((state.cholesky, True), identity)
+    k_inv_diag = jnp.diag(k_inv)
+    loo_variance = 1.0 / k_inv_diag
+    loo_mean = state.y_train - state.alpha / k_inv_diag
+    log_terms = -0.5 * (
+        jnp.log(2.0 * jnp.pi)
+        + jnp.log(loo_variance)
+        + (state.y_train - loo_mean) ** 2 / loo_variance
+    )
+    return jnp.sum(log_terms)
+
+
 __all__ = [
     "ExactGPState",
+    "exact_gp_loocv_log_predictive",
     "fit_exact_gp",
     "predict_exact_gp",
     "rbf_kernel",

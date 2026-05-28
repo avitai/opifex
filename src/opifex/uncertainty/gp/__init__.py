@@ -17,6 +17,7 @@ References
 from __future__ import annotations
 
 from opifex.uncertainty.gp.exact import (
+    exact_gp_loocv_log_predictive,
     ExactGPState,
     fit_exact_gp,
     predict_exact_gp,
@@ -27,16 +28,19 @@ from opifex.uncertainty.gp.kernels import (
     matern32_kernel,
     matern52_kernel,
     multi_output_icm_kernel,
+    multi_output_lcm_kernel,
 )
 
 
 __all__ = [
     "ExactGPState",
+    "exact_gp_loocv_log_predictive",
     "fit_exact_gp",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",
     "multi_output_icm_kernel",
+    "multi_output_lcm_kernel",
     "predict_exact_gp",
     "rbf_kernel",
 ]
