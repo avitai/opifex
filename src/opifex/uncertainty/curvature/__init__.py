@@ -18,6 +18,7 @@ References
 
 from __future__ import annotations
 
+from opifex.uncertainty.curvature._uq_capabilities import CURVATURE_CAPABILITIES
 from opifex.uncertainty.curvature.fisher import empirical_fisher_diagonal
 from opifex.uncertainty.curvature.ggn import ggn_vector_product
 from opifex.uncertainty.curvature.hessian import hessian_vector_product
@@ -25,9 +26,19 @@ from opifex.uncertainty.curvature.laplace import (
     diagonal_laplace_posterior,
     DiagonalLaplacePosterior,
 )
+from opifex.uncertainty.registry import UQRegistry
+
+
+# UQ capability registration — Task 7.2. Singleton :class:`UQRegistry`
+# guarded against duplicate registration on repeat imports (Rule 13).
+_uq_registry: UQRegistry = UQRegistry()
+for _name, _capability in CURVATURE_CAPABILITIES.items():
+    if _name not in _uq_registry:
+        _uq_registry.register(_name, _capability)
 
 
 __all__ = [
+    "CURVATURE_CAPABILITIES",
     "DiagonalLaplacePosterior",
     "diagonal_laplace_posterior",
     "empirical_fisher_diagonal",

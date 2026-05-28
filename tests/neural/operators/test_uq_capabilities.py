@@ -38,8 +38,16 @@ def test_every_operator_has_exactly_one_capability_declaration() -> None:
         assert name in OPERATOR_CAPABILITY_REGISTRY, (
             f"Operator {name!r} missing UQCapability declaration."
         )
-    # No orphan capabilities — registry size matches the operator registry.
-    assert len(OPERATOR_CAPABILITY_REGISTRY) == len(OPERATOR_REGISTRY)
+    # No orphan operator-named capabilities. The shared singleton
+    # :class:`UQRegistry` also carries Task 7.2 model/solver/subpackage
+    # declarations under namespaced keys (``model:`` / ``solver:`` /
+    # ``subpackage:`` / ``backend:`` / ``adapter:`` / ``conformal:`` /
+    # ``calibration:``); the operator-coverage invariant filters those
+    # by checking bare operator-registry names only.
+    registered_operator_names = {
+        name for name in OPERATOR_CAPABILITY_REGISTRY.list_names() if ":" not in name
+    }
+    assert registered_operator_names == set(OPERATOR_REGISTRY)
 
 
 def test_uqno_declares_native_bayesian_function_space_capability() -> None:
