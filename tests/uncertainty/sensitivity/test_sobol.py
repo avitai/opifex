@@ -76,7 +76,7 @@ def test_sobol_first_order_sums_to_one_for_additive_model() -> None:
 
 def test_sobol_invalid_sample_shape_raises_value_error() -> None:
     """Plan exit criterion 4: invalid shapes must raise ``ValueError``."""
-    with pytest.raises(ValueError, match="lower.*upper"):
+    with pytest.raises(ValueError, match=r"lower.*upper"):
         sobol_indices(
             _linear_model,
             num_samples=64,

@@ -14,13 +14,17 @@ posterior intervals).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-import jax
 from flax import nnx  # noqa: TC002 — kept eager for opifex convention
 
 from opifex.uncertainty.types import PredictionInterval  # noqa: TC001
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    import jax
 
 
 _CANONICAL_MESSAGE = "Step 10 stub: see audit Migration Step 10"

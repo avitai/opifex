@@ -19,15 +19,18 @@ Canonical reference:
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, TYPE_CHECKING
 
 import jax
 import jax.flatten_util  # needed for ``jax.flatten_util.ravel_pytree``
 import jax.numpy as jnp
 import jax.scipy as jsp
 import optax
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 # ---------------------------------------------------------------------------

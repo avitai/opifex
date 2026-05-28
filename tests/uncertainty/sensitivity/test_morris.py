@@ -59,7 +59,7 @@ def test_morris_mu_star_is_nonnegative_and_finite() -> None:
 
 def test_morris_invalid_sample_shape_raises_value_error() -> None:
     """Plan exit criterion 4: invalid shapes raise ``ValueError``."""
-    with pytest.raises(ValueError, match="lower.*upper"):
+    with pytest.raises(ValueError, match=r"lower.*upper"):
         morris_screening(
             _influential_vs_constant_model,
             num_trajectories=4,

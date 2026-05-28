@@ -67,7 +67,7 @@ def test_sampling_helpers_raise_on_invalid_shapes() -> None:
             upper=jnp.ones(2),
             rng_key=jax.random.PRNGKey(0),
         )
-    with pytest.raises(ValueError, match="lower.*upper"):
+    with pytest.raises(ValueError, match=r"lower.*upper"):
         random_sample(
             num_samples=8,
             lower=jnp.zeros(2),

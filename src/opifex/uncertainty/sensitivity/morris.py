@@ -20,11 +20,15 @@ implementation (not imported — Task 6.4 forbids it as a dependency).
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -143,8 +147,7 @@ def morris_screening(
         step_signed = unit_step[jnp.arange(dim), order]
         elementary_effects = diffs / step_signed
         # Reorder so position i carries dimension i's effect.
-        ee_by_dim = jnp.zeros(dim).at[order].set(elementary_effects)
-        return ee_by_dim
+        return jnp.zeros(dim).at[order].set(elementary_effects)
 
     effects = jax.vmap(_trajectory_effects)(keys)  # shape (r, d)
 

@@ -14,9 +14,13 @@ diagnostics).
 
 from __future__ import annotations
 
-import jax
+from typing import TYPE_CHECKING
 
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
+
+
+if TYPE_CHECKING:
+    import jax
 
 
 _CANONICAL_MESSAGE = "Step 10 stub: see audit Migration Step 10"

@@ -31,8 +31,7 @@ from opifex.neural.operators import (
     OPERATOR_REGISTRY,
 )
 from opifex.neural.operators._uq_capabilities import _OPERATOR_CAPABILITIES
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
-from opifex.uncertainty.registry import UQRegistry as _UQRegistry
+from opifex.uncertainty.registry import DefaultStrategy, UQCapability, UQRegistry as _UQRegistry
 
 
 @pytest.fixture(autouse=True)

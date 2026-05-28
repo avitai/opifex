@@ -66,7 +66,7 @@ def test_coefficient_posterior_interval_stub_call_raises_step10() -> None:
 
 
 def test_equation_discovery_module_imports_cleanly() -> None:
-    import opifex.uncertainty.scientific.equation_discovery as mod  # noqa: F401, PLC0415
+    import opifex.uncertainty.scientific.equation_discovery as mod
 
     assert hasattr(mod, "BayesianSINDyStub")
     assert hasattr(mod, "TermInclusionProbabilityStub")

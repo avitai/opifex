@@ -76,7 +76,7 @@ def test_chemical_accuracy_coverage_stub_call_raises_step10() -> None:
 
 
 def test_quantum_module_imports_cleanly() -> None:
-    import opifex.uncertainty.scientific.quantum as mod  # noqa: F401, PLC0415
+    import opifex.uncertainty.scientific.quantum as mod
 
     assert hasattr(mod, "EnergyUncertaintyStub")
     assert hasattr(mod, "DensityUncertaintyStub")

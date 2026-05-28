@@ -14,16 +14,19 @@ src/opifex/uncertainty/assimilation`` returns zero matches.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.assimilation.state import AssimilationState
 from opifex.uncertainty.statespace import (
     kalman_predict as _kalman_predict,
     kalman_update as _kalman_update,
 )
+
+
+if TYPE_CHECKING:
+    from opifex.uncertainty.assimilation.state import AssimilationState
 
 
 def predict(

@@ -454,7 +454,7 @@ class RobinBC(BoundaryCondition):
         self.gamma = gamma
         self.condition_type = "robin"
 
-    def validate(self) -> bool:
+    def validate(self) -> bool:  # noqa: PLR0911 — early returns flatten the validation flow; collapsing them would obscure the per-parameter intent
         """Validate Robin boundary condition."""
         try:
             # Validate alpha parameter. The ``(TypeError, IndexError)`` branch
