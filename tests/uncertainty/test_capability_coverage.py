@@ -22,13 +22,15 @@ The plan exit criteria are:
    ``native_jax_kernel=True``,
    ``default_strategy=DefaultStrategy.PROBABILISTIC_NUMERICS``, and
    ``source_package="opifex"``.
-7. Task 7.2 does NOT add capability declarations for scientific-domain
-   surfaces (equation discovery, quantum, optimization/L2O,
-   data-assimilation, monitoring/reporting) — those belong to Task 7.5.
+7. Task 7.2 must own exactly the model / solver / calibration scope —
+   the scientific-domain prefixes belong to Task 7.5 and are validated
+   in ``test_scientific_domain_capabilities.py``.
 
-Closing the catalogue (criterion 7) is enforced by asserting the
-registry currently exposes exactly the union of Task 7.1 + Task 7.2
-names; any Task 7.5 addition will need to extend this expected set.
+Closed-world membership is partitioned: this file asserts the Task 7.1
++ 7.2 names are present and that Task 7.2 does not extend into the
+scientific-domain prefixes claimed by Task 7.5. The complementary
+assertion (every Task 7.5 prefix has a declaration, and no rogue
+prefixes appear) lives in ``test_scientific_domain_capabilities.py``.
 """
 
 from __future__ import annotations
@@ -387,34 +389,43 @@ def test_risk_controller_uses_calibrax_source(uq_registry: UQRegistry) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Scope closure — Task 7.5 surfaces must NOT be registered yet.
+# Scope closure — Task 7.2 surfaces never use Task 7.5 prefixes.
 # ---------------------------------------------------------------------------
 
 
-_TASK_7_5_FORBIDDEN_PREFIXES: tuple[str, ...] = (
-    "equation_discovery:",
+# Prefixes claimed by Task 7.5 (scientific-domain capabilities). Task 7.2's
+# capability tables MUST NOT register names under these prefixes; the
+# complementary "every Task 7.5 prefix is populated" assertion lives in
+# ``test_scientific_domain_capabilities.py``.
+_TASK_7_5_PREFIXES: tuple[str, ...] = (
+    "discovery:",
     "quantum:",
-    "optimization:",
-    "data_assimilation:",
+    "l2o:",
+    "trainer:",
+    "assimilation:",
     "monitoring:",
-    "reporting:",
+    "mlops:",
 )
 
 
-def test_task_7_2_does_not_add_task_7_5_surfaces(uq_registry: UQRegistry) -> None:
-    """Phase 7 Task 7.2 scope excludes scientific-domain surfaces (Task 7.5)."""
-    for name in uq_registry.list_names():
-        for forbidden in _TASK_7_5_FORBIDDEN_PREFIXES:
+def test_task_7_2_tables_do_not_use_task_7_5_prefixes() -> None:
+    """Phase 7 Task 7.2 scope excludes scientific-domain prefixes (Task 7.5)."""
+    task_7_2_names = frozenset(_ALL_TASK_7_X_CAPABILITIES) - frozenset(_OPERATOR_CAPABILITIES)
+    for name in task_7_2_names:
+        for forbidden in _TASK_7_5_PREFIXES:
             assert not name.startswith(forbidden), (
-                f"Capability name {name!r} appears in Task 7.2 scope but its "
-                f"prefix {forbidden!r} belongs to Task 7.5."
+                f"Task 7.2 capability table registers {name!r}, which uses the "
+                f"Task 7.5 prefix {forbidden!r}."
             )
 
 
-def test_registry_contents_match_task_7_1_plus_task_7_2(uq_registry: UQRegistry) -> None:
-    """Closed-world assertion — every registered name is from Task 7.1 or 7.2."""
+def test_task_7_1_plus_7_2_names_are_subset_of_registry(uq_registry: UQRegistry) -> None:
+    """Every Task 7.1 + 7.2 expected name appears in the shared singleton.
+
+    Open-world assertion — the registry MAY hold additional Task 7.5
+    entries (validated by ``test_scientific_domain_capabilities.py``)
+    but the Task 7.1 + 7.2 union must always be present.
+    """
     registered = frozenset(uq_registry.list_names())
-    unexpected = registered - _REGISTRY_EXPECTED
     missing = _REGISTRY_EXPECTED - registered
-    assert not unexpected, f"Unexpected capability names registered: {sorted(unexpected)!r}."
     assert not missing, f"Missing expected capability names: {sorted(missing)!r}."
