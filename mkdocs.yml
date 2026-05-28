@@ -135,6 +135,11 @@ nav:
           - Calibration Methods: examples/uncertainty/calibration.md
           - UQNO on Darcy Flow: examples/uncertainty/uqno-darcy.md
           - Bayesian FNO: examples/uncertainty/bayesian-fno.md
+          - Linalg — matfree PINN calibration: examples/uncertainty/linalg-matfree-pinn.md
+          - Quadrature — Bayesian quadrature evidence: examples/uncertainty/quadrature-evidence.md
+          - Statespace — CAKF smoothing: examples/uncertainty/statespace-cakf.md
+          - Curvature — Laplace classifier: examples/uncertainty/curvature-laplace.md
+          - Probabilistic numerics — Fenrir vs DALTON: examples/uncertainty/probnum-fenrir-dalton.md
       - Quantum Chemistry:
           - Neural DFT (H2 Molecule): examples/quantum-chemistry/neural-dft.md
           - Neural XC Functional: examples/quantum-chemistry/neural-xc-functional.md
