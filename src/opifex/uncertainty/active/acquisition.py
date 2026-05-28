@@ -45,7 +45,7 @@ from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 from jax.scipy.stats import norm as jnorm
 
-from opifex.uncertainty.types import MetadataItems, metadata_to_dict, PredictiveDistribution
+from opifex.uncertainty.types import metadata_to_dict, MetadataItems, PredictiveDistribution
 
 
 # Numerical floors used in entropy / log-prob computations.
@@ -110,9 +110,7 @@ class AcquiredBatch:
     def validate(self) -> None:
         """Eager-validate shapes; not called from ``__post_init__``."""
         if self.indices.ndim != 1:
-            raise ValueError(
-                f"AcquiredBatch.indices must be 1-D; got shape {self.indices.shape}"
-            )
+            raise ValueError(f"AcquiredBatch.indices must be 1-D; got shape {self.indices.shape}")
         if not self.strategy:
             raise ValueError("AcquiredBatch.strategy must be a non-empty string.")
 
@@ -169,9 +167,7 @@ def _log_ei_helper(u: jax.Array) -> jax.Array:
     """
     bound = jnp.asarray(-1.0, dtype=u.dtype)
     u_safe = jnp.where(u < bound, bound, u)
-    log_ei_upper = jnp.log(
-        jnp.maximum(jnorm.pdf(u_safe) + u_safe * jnorm.cdf(u_safe), _LOG_FLOOR)
-    )
+    log_ei_upper = jnp.log(jnp.maximum(jnorm.pdf(u_safe) + u_safe * jnorm.cdf(u_safe), _LOG_FLOOR))
 
     # Asymptotic for u << -1: phi(u) + u * Phi(u) ≈ phi(u) * (1 + u * R(u))
     # where R(u) = Phi(u)/phi(u) ≈ -1/u * (1 - 1/u^2 + 3/u^4 - ...).
@@ -339,24 +335,35 @@ def _dispatch_scores(
     rngs: nnx.Rngs | jax.Array,
     **kwargs: Any,
 ) -> jax.Array:
-    if strategy is AcquisitionStrategy.BALD:
-        return bald(predictive_dist, rngs=rngs)
-    if strategy is AcquisitionStrategy.EI:
-        return expected_improvement(predictive_dist, best_value=kwargs["best_value"])
-    if strategy is AcquisitionStrategy.LOG_EI:
-        return log_expected_improvement(predictive_dist, best_value=kwargs["best_value"])
-    if strategy is AcquisitionStrategy.UCB:
-        return upper_confidence_bound(predictive_dist, beta=kwargs.get("beta", 1.96))
-    if strategy is AcquisitionStrategy.LCB:
-        # The dispatcher selects the *most informative* points by argsort
-        # of the strategy score; for LCB the more-explored direction is
-        # lower, so we negate to keep argsort-descending semantics.
-        return -lower_confidence_bound(predictive_dist, beta=kwargs.get("beta", 1.96))
-    if strategy is AcquisitionStrategy.PI:
-        return probability_of_improvement(predictive_dist, best_value=kwargs["best_value"])
-    if strategy is AcquisitionStrategy.MAX_VARIANCE:
-        return _max_variance_scores(predictive_dist)
-    raise ValueError(f"Unknown acquisition strategy: {strategy!r}")  # pragma: no cover
+    """Dispatch table from strategy enum to acquisition kernel.
+
+    LCB is negated so the downstream ``argsort`` selects "more
+    informative" points (the lower-bound minimum) consistently with
+    every other strategy that produces "higher = more informative".
+    """
+    dispatch: dict[AcquisitionStrategy, Callable[[], jax.Array]] = {
+        AcquisitionStrategy.BALD: lambda: bald(predictive_dist, rngs=rngs),
+        AcquisitionStrategy.EI: lambda: expected_improvement(
+            predictive_dist, best_value=kwargs["best_value"]
+        ),
+        AcquisitionStrategy.LOG_EI: lambda: log_expected_improvement(
+            predictive_dist, best_value=kwargs["best_value"]
+        ),
+        AcquisitionStrategy.UCB: lambda: upper_confidence_bound(
+            predictive_dist, beta=kwargs.get("beta", 1.96)
+        ),
+        AcquisitionStrategy.LCB: lambda: (
+            -lower_confidence_bound(predictive_dist, beta=kwargs.get("beta", 1.96))
+        ),
+        AcquisitionStrategy.PI: lambda: probability_of_improvement(
+            predictive_dist, best_value=kwargs["best_value"]
+        ),
+        AcquisitionStrategy.MAX_VARIANCE: lambda: _max_variance_scores(predictive_dist),
+    }
+    try:
+        return dispatch[strategy]()
+    except KeyError as e:  # pragma: no cover
+        raise ValueError(f"Unknown acquisition strategy: {strategy!r}") from e
 
 
 def acquire(
@@ -390,11 +397,7 @@ def acquire(
 
     scores = _dispatch_scores(predictive_dist, strategy, rngs, **kwargs)
     # Top-K descending. ``jnp.argsort`` is ascending; take the tail.
-    if scores.ndim != 1:
-        # Flatten trailing axes — acquisition is over candidate index axis 0.
-        flat = scores.reshape(scores.shape[0], -1).mean(axis=-1)
-    else:
-        flat = scores
+    flat = scores.reshape(scores.shape[0], -1).mean(axis=-1) if scores.ndim != 1 else scores
     k = min(batch_size, int(flat.shape[0]))
     top_indices = jnp.argsort(flat)[-k:][::-1]
     return AcquiredBatch(

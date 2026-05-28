@@ -10,13 +10,14 @@
 
 from __future__ import annotations
 
+import itertools
+
 import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
 
 from opifex.uncertainty.active.acquisition import (
-    AcquisitionStrategy,
     upper_confidence_bound,
 )
 from opifex.uncertainty.active.experimental_design import (
@@ -125,7 +126,7 @@ class TestBayesianExperimentalDesignLoop:
         assert isinstance(result, BayesianExperimentalDesignResult)
         variances = result.history_variance
         # Mean predictive variance must be non-increasing over rounds.
-        for prev, curr in zip(variances[:-1], variances[1:], strict=True):
+        for prev, curr in itertools.pairwise(variances):
             assert curr <= prev + 1e-7
 
     def test_loop_records_acquired_indices(self) -> None:

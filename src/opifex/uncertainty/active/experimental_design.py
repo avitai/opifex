@@ -25,16 +25,16 @@ Implements:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable  # noqa: TC003 — kept eager for consistency
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import jax
 import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
-from flax import nnx
+from flax import nnx  # noqa: TC002
 
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
 
 
 # ---------------------------------------------------------------------------
@@ -62,11 +62,7 @@ class Surrogate(Protocol):
 
 def _gaussian_log_prob(value: jax.Array, mean: jax.Array, std: jax.Array) -> jax.Array:
     """``log N(value; mean, std^2)`` — vectorised."""
-    return -0.5 * (
-        jnp.log(2.0 * jnp.pi)
-        + 2.0 * jnp.log(std)
-        + ((value - mean) ** 2) / (std**2)
-    )
+    return -0.5 * (jnp.log(2.0 * jnp.pi) + 2.0 * jnp.log(std) + ((value - mean) ** 2) / (std**2))
 
 
 def expected_information_gain(
@@ -135,8 +131,7 @@ def expected_information_gain(
     )  # (outer_n, num_prior)
     log_p_y = jax.scipy.special.logsumexp(log_lik, axis=-1) - jnp.log(num_prior)
 
-    eig = jnp.mean(log_p_y_given_theta[:outer_n] - log_p_y)
-    return eig
+    return jnp.mean(log_p_y_given_theta[:outer_n] - log_p_y)
 
 
 # ---------------------------------------------------------------------------
@@ -209,9 +204,7 @@ def bayesian_experimental_design_loop(
     for _ in range(int(num_rounds)):
         predictive = surrogate.predict(candidates)
         if predictive.variance is None:
-            raise ValueError(
-                "BO loop surrogate must return PredictiveDistribution with variance."
-            )
+            raise ValueError("BO loop surrogate must return PredictiveDistribution with variance.")
         history_variance.append(float(jnp.mean(predictive.variance)))
 
         scores = acquisition(predictive)

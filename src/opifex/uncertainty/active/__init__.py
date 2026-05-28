@@ -37,10 +37,10 @@ was ported from.
 from __future__ import annotations
 
 from opifex.uncertainty.active.acquisition import (
+    acquire,
     AcquiredBatch,
     AcquisitionStrategy,
     ActiveLearningConfig,
-    acquire,
     bald,
     expected_improvement,
     log_expected_improvement,
@@ -54,8 +54,8 @@ from opifex.uncertainty.active.batch_active import (
     q_expected_hypervolume_improvement,
 )
 from opifex.uncertainty.active.experimental_design import (
-    BayesianExperimentalDesignResult,
     bayesian_experimental_design_loop,
+    BayesianExperimentalDesignResult,
     expected_information_gain,
 )
 from opifex.uncertainty.active.pinn_acquisition import pinn_residual_acquisition

@@ -86,7 +86,7 @@ class TestBatchBALD:
         # batch-BALD must break the redundancy: the chosen pair must
         # include the diverse point 2 (which adds independent information
         # about theta) rather than both redundant points {0, 1}.
-        chosen = set(int(i) for i in batch.indices)
+        chosen = {int(i) for i in batch.indices}
         assert chosen != {0, 1}, "batch-BALD failed to break redundancy"
         assert 2 in chosen, "batch-BALD missed the diverse point 2"
 

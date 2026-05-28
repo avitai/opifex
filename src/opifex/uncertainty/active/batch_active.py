@@ -34,7 +34,7 @@ from opifex.uncertainty.active.acquisition import (
     AcquiredBatch,
     bald,
 )
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
 
 
 _VARIANCE_FLOOR: float = 1e-12
@@ -67,7 +67,8 @@ def _joint_mixture_entropy_mc(
     ``num_mc`` samples from the mixture and evaluating
 
     .. math::
-        H[Y_S] \approx -\tfrac{1}{N} \sum_n \log \!\left[\tfrac{1}{K} \sum_k p(y_n \mid \mu_k)\right].
+        H[Y_S] \approx -\tfrac{1}{N} \sum_n
+        \log \!\left[\tfrac{1}{K} \sum_k p(y_n \mid \mu_k)\right].
 
     This estimator correctly captures the BatchBALD redundancy
     correction: when two candidates are perfectly correlated across
@@ -149,9 +150,7 @@ def batch_bald(
         )
     num_candidates = samples.shape[1]
     if batch_size > num_candidates:
-        raise ValueError(
-            f"batch_size={batch_size} exceeds num_candidates={num_candidates}"
-        )
+        raise ValueError(f"batch_size={batch_size} exceeds num_candidates={num_candidates}")
 
     aleatoric = (
         jnp.maximum(predictive_dist.aleatoric, _VARIANCE_FLOOR)
@@ -177,7 +176,7 @@ def batch_bald(
             if c in selected_list:
                 flat_key_idx += 1
                 continue
-            indices_c = jnp.array(selected_list + [c], dtype=jnp.int32)
+            indices_c = jnp.array([*selected_list, c], dtype=jnp.int32)
             member_means = samples[:, indices_c]  # (K, d)
             ale_subset = aleatoric[indices_c]
             joint_h = _joint_mixture_entropy_mc(
@@ -257,42 +256,18 @@ def batch_mc_expected_improvement(
 # ---------------------------------------------------------------------------
 
 
-def _hypervolume_minimisation(points: jax.Array, reference_point: jax.Array) -> jax.Array:
-    """Dominated hypervolume under the *minimisation* convention.
-
-    For each Pareto point ``p`` with ``p <= reference_point`` element-wise,
-    contributes the box volume ``prod(reference_point - p)``. This is the
-    naive sum-of-boxes formula; for 2-D it is exact when the input
-    ``points`` is the non-dominated set sorted by the first objective.
-    """
-    diff = jnp.maximum(reference_point[None, :] - points, 0.0)
-    return jnp.sum(jnp.prod(diff, axis=-1))
-
-
 def _pareto_volume_2d(points: jax.Array, reference_point: jax.Array) -> jax.Array:
     """Exact 2-D Pareto dominated hypervolume (minimisation).
 
-    Sort by objective 0 ascending; the dominated region is a staircase
-    of axis-aligned boxes.
+    Sort by objective 0 ascending and accumulate the staircase boxes
+    bounded by the reference point. For a non-dominated front this is
+    the exact dominated hypervolume; for an arbitrary front it is an
+    upper bound.
     """
     sorted_pts = points[jnp.argsort(points[:, 0])]
-    # Running min of objective 1 from the right would be needed for full
-    # generality; for a non-dominated front it equals the original values.
-    volume = jnp.array(0.0)
-    prev_x = jnp.asarray(reference_point[0])
-
-    def body(carry, pt):
-        prev_x, vol = carry
-        width = prev_x - pt[0]
-        height = reference_point[1] - pt[1]
-        vol = vol + jnp.maximum(width, 0.0) * jnp.maximum(height, 0.0)
-        return (pt[0], vol), None
-
-    # Walk left-to-right for the staircase: boxes extend from x=pt[0] to
-    # the next-larger x along objective 0.
-    # Easier: compute via incremental boxes from sorted_pts.
-    # Boxes: between consecutive sorted points along objective 0, the
-    # height is reference[1] - pt[1] of the current point.
+    # Boxes between consecutive sorted points along objective 0; the
+    # height of the box that starts at ``sorted_pts[i]`` equals
+    # ``reference[1] - sorted_pts[i, 1]``.
     xs = jnp.concatenate([sorted_pts[:, 0], reference_point[0:1]])
     widths = jnp.diff(xs)
     heights = jnp.maximum(reference_point[1] - sorted_pts[:, 1], 0.0)
@@ -337,10 +312,7 @@ def q_expected_hypervolume_improvement(
     if candidate_mean.shape != candidate_std.shape:
         raise ValueError("candidate_mean and candidate_std must share shape.")
     if candidate_mean.ndim != 2:
-        raise ValueError(
-            "q-EHVI expects candidate_mean shape (q, M); got "
-            f"{candidate_mean.shape}"
-        )
+        raise ValueError(f"q-EHVI expects candidate_mean shape (q, M); got {candidate_mean.shape}")
     if candidate_mean.shape[-1] != 2:
         raise NotImplementedError(
             "q-EHVI in opifex currently supports 2-D objective spaces; "

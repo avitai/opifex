@@ -17,9 +17,10 @@ calling their wrapped model. This test module verifies the rewrite:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import jax
 import jax.numpy as jnp
-import pytest
 from flax import nnx
 
 from opifex.training.basic_trainer import (
@@ -28,7 +29,10 @@ from opifex.training.basic_trainer import (
     UncertaintyGuidedTrainer,
 )
 from opifex.uncertainty.aggregators.basic import UncertaintyQuantifier
-from opifex.uncertainty.aggregators.types import UncertaintyComponents
+
+
+if TYPE_CHECKING:
+    from opifex.uncertainty.aggregators.types import UncertaintyComponents
 
 
 class _CountingModel(nnx.Module):

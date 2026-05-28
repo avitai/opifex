@@ -19,7 +19,7 @@ scientific machine learning with full physics-informed capabilities.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable  # noqa: TC003 — kept eager for consistency
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -27,17 +27,9 @@ import jax
 import jax.numpy as jnp
 import optax
 import orbax.checkpoint as ocp
+from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
 from tqdm import tqdm  # type: ignore[import]
-
-from artifex.generative_models.core.rng import extract_rng_key
-
-from opifex.uncertainty.active.acquisition import (
-    AcquisitionStrategy,
-    acquire as _active_acquire,
-)
-from opifex.uncertainty.aggregators.basic import UncertaintyQuantifier
-from opifex.uncertainty.types import PredictiveDistribution
 
 from opifex.core.training.components import (
     FlexibleOptimizerFactory,
@@ -61,6 +53,11 @@ from opifex.core.training.utils_legacy import (
     safe_compute_energy,
     safe_model_call,
 )
+from opifex.uncertainty.active.acquisition import (
+    acquire as _active_acquire,
+    AcquisitionStrategy,
+)
+from opifex.uncertainty.types import PredictiveDistribution
 
 
 # Set up logger for training operations
@@ -69,6 +66,8 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from jaxtyping import Array, Float
+
+    from opifex.uncertainty.aggregators.basic import UncertaintyQuantifier
 
 
 class ModularTrainer:
@@ -1175,6 +1174,13 @@ class BasicTrainer:
         return trainer
 
 
+def _squeeze_output_axis(arr: jax.Array) -> jax.Array:
+    """Drop a trailing singleton output axis if present."""
+    if arr.ndim > 1 and arr.shape[-1] == 1:
+        return arr.squeeze(-1)
+    return arr
+
+
 def _stochastic_ensemble_from_model(
     model: nnx.Module | Callable[[jax.Array], jax.Array],
     x: jax.Array,
@@ -1204,7 +1210,7 @@ def _stochastic_ensemble_from_model(
         # NNX state mutates on each call when the model carries stochastic
         # state; for deterministic models all members start from the same
         # prediction and only differ in the aleatoric-noise overlay below.
-        pred = model(x)
+        pred = model(x)  # type: ignore[operator]  # nnx.Module is callable
         if pred.ndim == 1:
             pred = pred[:, None]
         predictions.append(pred)
@@ -1430,11 +1436,15 @@ class ActiveUncertaintyLearner:
             rngs=self.rngs,
         )
         components = self.uncertainty_quantifier.decompose_uncertainty(predictions)
-        mean = jnp.mean(predictions, axis=0).squeeze(-1) if predictions.shape[-1] == 1 else jnp.mean(predictions, axis=0)
-        variance = components.total.squeeze(-1) if components.total.ndim > 1 and components.total.shape[-1] == 1 else components.total
+        # Drop the trailing singleton output axis so the PredictiveDistribution's
+        # per-candidate shape contract (mean.shape == (batch,) for scalar output)
+        # holds for the active-learning acquisition kernels downstream.
+        mean_full = jnp.mean(predictions, axis=0)
+        mean = mean_full.squeeze(-1) if predictions.shape[-1] == 1 else mean_full
+        variance = _squeeze_output_axis(components.total)
         samples = predictions.squeeze(-1) if predictions.shape[-1] == 1 else predictions
-        epistemic = components.epistemic.squeeze(-1) if components.epistemic.ndim > 1 and components.epistemic.shape[-1] == 1 else components.epistemic
-        aleatoric = components.aleatoric.squeeze(-1) if components.aleatoric.ndim > 1 and components.aleatoric.shape[-1] == 1 else components.aleatoric
+        epistemic = _squeeze_output_axis(components.epistemic)
+        aleatoric = _squeeze_output_axis(components.aleatoric)
         return PredictiveDistribution(
             mean=mean,
             variance=variance,
@@ -1468,6 +1478,8 @@ class ActiveUncertaintyLearner:
         predictive = self._predictive_distribution(x_pool)
 
         if acquisition_fn is not None:
+            if predictive.variance is None:
+                raise RuntimeError("predictive distribution has no variance.")
             scores = acquisition_fn(predictive.mean, predictive.variance)
             top = jnp.argsort(scores)[-self.acquisition_size :]
             return [int(i) for i in top]

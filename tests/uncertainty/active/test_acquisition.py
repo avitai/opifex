@@ -23,9 +23,9 @@ import pytest
 from flax import nnx
 
 from opifex.uncertainty.active.acquisition import (
+    acquire,
     AcquiredBatch,
     AcquisitionStrategy,
-    acquire,
     bald,
     expected_improvement,
     log_expected_improvement,
@@ -238,7 +238,7 @@ class TestAcquireDispatcher:
         # UCB picks the highest mean + beta*std combination.
         manual = pd.mean + 2.0 * jnp.sqrt(pd.variance)
         top_two = jnp.argsort(manual)[-2:]
-        assert set(int(i) for i in result.indices) == set(int(i) for i in top_two)
+        assert {int(i) for i in result.indices} == {int(i) for i in top_two}
         assert result.strategy == AcquisitionStrategy.UCB.value
 
     def test_dispatches_to_bald(self) -> None:

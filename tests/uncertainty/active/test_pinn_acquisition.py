@@ -58,7 +58,7 @@ class TestPINNResidualAcquisition:
 
         # Peak |sin(pi x)| occurs near x = 0.5 — i.e. index 5 of 11 evenly
         # spaced points. Top-3 picks must include index 5.
-        chosen = set(int(i) for i in result.indices)
+        chosen = {int(i) for i in result.indices}
         assert 5 in chosen
         # Boundary indices 0 and 10 have zero residual — must NOT be picked.
         assert 0 not in chosen and 10 not in chosen

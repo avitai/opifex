@@ -16,7 +16,7 @@ pool element. The opifex JAX-native rewrite:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable  # noqa: TC003 — kept eager for consistency
 from typing import Any
 
 import jax
@@ -37,7 +37,7 @@ def _invoke_model(model: nnx.Module | Callable[..., jax.Array], x: jax.Array) ->
     if isinstance(model, nnx.Module):
         graphdef, state = nnx.split(model)
         merged = nnx.merge(graphdef, state)
-        return merged(x)
+        return merged(x)  # type: ignore[operator]  # nnx.Module is callable
     return model(x)
 
 
@@ -78,9 +78,7 @@ def pinn_residual_acquisition(
         residual_norm = jnp.abs(residual)
 
     uncertainty = (
-        uncertainty_fn(predictions)
-        if uncertainty_fn is not None
-        else jnp.zeros_like(residual_norm)
+        uncertainty_fn(predictions) if uncertainty_fn is not None else jnp.zeros_like(residual_norm)
     )
 
     # Combine: rank primarily by residual norm. The convention follows
