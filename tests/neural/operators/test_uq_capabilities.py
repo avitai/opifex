@@ -30,7 +30,25 @@ from opifex.neural.operators import (
     OPERATOR_CAPABILITY_REGISTRY,
     OPERATOR_REGISTRY,
 )
+from opifex.neural.operators._uq_capabilities import _OPERATOR_CAPABILITIES
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.uncertainty.registry import UQRegistry as _UQRegistry
+
+
+@pytest.fixture(autouse=True)
+def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
+    """Re-seed the singleton ``UQRegistry`` with the Task 7.1 entries.
+
+    The registry is a process-global singleton; other suites'
+    ``_reset_registry`` autouse fixtures wipe it between tests. This
+    fixture restores the operator declarations before every test in
+    this module so the suite stays order-independent. Idempotent — only
+    registers names not already present.
+    """
+    registry = _UQRegistry()
+    for name, capability in _OPERATOR_CAPABILITIES.items():
+        if name not in registry:
+            registry.register(name, capability)
 
 
 def test_every_operator_has_exactly_one_capability_declaration() -> None:
