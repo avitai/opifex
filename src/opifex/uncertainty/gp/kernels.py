@@ -238,6 +238,64 @@ def multi_output_lcm_kernel(
     return _lcm
 
 
+def additive_kernel(
+    *,
+    component_kernel_fns: tuple[Callable[..., jax.Array], ...],
+) -> Callable[..., jax.Array]:
+    r"""Additive (OAK-base) kernel — sum of per-dimension univariate kernels.
+
+    .. math::
+
+        k_{\text{add}}(x, x') = \sum_{d=1}^{D} k_{d}(x_{d}, x'_{d}).
+
+    Each ``component_kernel_fns[d]`` is evaluated on the ``d``-th input
+    dimension only; the returned kernel has the standard
+    ``(x1, x2, *, lengthscale, output_scale) -> Gram`` signature. This
+    is the **first-order** (``max_order = 1``) case of the
+    *Orthogonal Additive Kernel* (Lu, Boukouvalas, Hensman 2022 ICML —
+    *Additive Gaussian Processes Revisited*). Higher-order interactions
+    via Newton-Girard recursion + the Gaussian-measure orthogonality
+    constraint are deferred to a follow-up slice; the first-order form
+    already enables ANOVA-style interpretable GPs.
+
+    Args:
+        component_kernel_fns: One kernel callable per input dimension.
+            All callables share the standard kernel signature.
+
+    Returns:
+        A callable matching the standard kernel signature.
+
+    Raises:
+        ValueError: If ``component_kernel_fns`` is empty.
+    """
+    if len(component_kernel_fns) == 0:
+        raise ValueError("additive_kernel requires at least one component kernel.")
+
+    def _additive(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        if x1.shape[-1] != len(component_kernel_fns):
+            raise ValueError(
+                "Input dimensionality must equal the number of components; "
+                f"got {x1.shape[-1]} dims but {len(component_kernel_fns)} components."
+            )
+        total = jnp.zeros((x1.shape[0], x2.shape[0]))
+        for dim_index, component_fn in enumerate(component_kernel_fns):
+            total = total + component_fn(
+                x1[:, dim_index : dim_index + 1],
+                x2[:, dim_index : dim_index + 1],
+                lengthscale=lengthscale,
+                output_scale=output_scale,
+            )
+        return total
+
+    return _additive
+
+
 def deep_kernel(
     *,
     feature_map: Callable[[jax.Array], jax.Array],
@@ -285,6 +343,7 @@ def deep_kernel(
 
 
 __all__ = [
+    "additive_kernel",
     "deep_kernel",
     "matern12_kernel",
     "matern32_kernel",
