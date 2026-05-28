@@ -98,9 +98,7 @@ class ChemicalAccuracyCoverageStub:
 
     def __init__(self, *, tolerance_hartree: float) -> None:
         if tolerance_hartree <= 0.0:
-            raise ValueError(
-                f"tolerance_hartree must be > 0; got {tolerance_hartree}."
-            )
+            raise ValueError(f"tolerance_hartree must be > 0; got {tolerance_hartree}.")
         self.tolerance_hartree = tolerance_hartree
 
     def __call__(self, predictions: jax.Array, references: jax.Array) -> float:

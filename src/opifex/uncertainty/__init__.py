@@ -45,7 +45,6 @@ from opifex.uncertainty.adapters import (
     FNOConformalAdapterSpec,
     FNODeepEnsembleAdapterSpec,
     FNOMCDropoutAdapterSpec,
-    LaplaceAdapterSpec,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
@@ -58,6 +57,10 @@ from opifex.uncertainty.adapters import (
     SWAGState,
     TestTimeAugmentationAdapterSpec,
     VBLLAdapterSpec,
+)
+from opifex.uncertainty.curvature import (
+    LaplaceAdapterSpec,
+    LaplaceState,
 )
 from opifex.uncertainty.distributions import (
     ArtifexDistributionAdapter,
@@ -157,6 +160,7 @@ __all__ = [
     "InferenceBackendProtocol",
     "InferenceBackendSpec",
     "LaplaceAdapterSpec",
+    "LaplaceState",
     "LikelihoodSpec",
     "MCDropoutAdapter",
     "MCDropoutState",

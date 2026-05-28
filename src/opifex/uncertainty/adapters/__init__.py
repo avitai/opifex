@@ -29,8 +29,6 @@ from opifex.uncertainty.adapters.gp import (
 )
 from opifex.uncertainty.adapters.model import (
     BayesianLastLayerAdapterSpec,
-    LaplaceAdapterSpec,
-    LaplaceState,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
@@ -76,8 +74,6 @@ __all__ = [
     "FNOMCDropoutAdapterSpec",
     "GPJaxAdapterSpec",
     "KalmanJaxAdapterSpec",
-    "LaplaceAdapterSpec",
-    "LaplaceState",
     "MCDropoutAdapter",
     "MCDropoutState",
     "MarkovflowAdapterSpec",

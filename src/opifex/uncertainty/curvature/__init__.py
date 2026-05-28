@@ -3,8 +3,10 @@
 Pure-JAX building blocks for second-order methods — Hessian-vector
 products, generalized Gauss-Newton (GGN) products, empirical-Fisher
 diagonal estimators, and the Laplace posterior approximation. The
-``LaplaceAdapter`` in ``opifex.uncertainty.adapters.model`` wires these
-together with the public adapter contract.
+public adapter contract for the diagonal-Laplace posterior
+(:class:`LaplaceAdapterSpec` + :class:`LaplaceState`) is co-located in
+:mod:`.laplace` so the curvature kernels and the spec that consumes
+them live in a single canonical home.
 
 References
 ----------
@@ -25,6 +27,8 @@ from opifex.uncertainty.curvature.hessian import hessian_vector_product
 from opifex.uncertainty.curvature.laplace import (
     diagonal_laplace_posterior,
     DiagonalLaplacePosterior,
+    LaplaceAdapterSpec,
+    LaplaceState,
 )
 from opifex.uncertainty.registry import UQRegistry
 
@@ -40,6 +44,8 @@ for _name, _capability in CURVATURE_CAPABILITIES.items():
 __all__ = [
     "CURVATURE_CAPABILITIES",
     "DiagonalLaplacePosterior",
+    "LaplaceAdapterSpec",
+    "LaplaceState",
     "diagonal_laplace_posterior",
     "empirical_fisher_diagonal",
     "ggn_vector_product",

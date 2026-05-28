@@ -19,8 +19,11 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.uncertainty.adapters import LaplaceAdapterSpec, LaplaceState
-from opifex.uncertainty.curvature import DiagonalLaplacePosterior
+from opifex.uncertainty.curvature import (
+    DiagonalLaplacePosterior,
+    LaplaceAdapterSpec,
+    LaplaceState,
+)
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 

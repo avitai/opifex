@@ -61,16 +61,12 @@ class BayesianSINDyStub:
         if len(library) == 0:
             raise ValueError("library must contain at least one candidate term.")
         if sparsity_threshold <= 0.0:
-            raise ValueError(
-                f"sparsity_threshold must be > 0; got {sparsity_threshold}."
-            )
+            raise ValueError(f"sparsity_threshold must be > 0; got {sparsity_threshold}.")
         self.library = tuple(library)
         self.sparsity_threshold = sparsity_threshold
         self.metadata = metadata
 
-    def fit(
-        self, x: jax.Array, x_dot: jax.Array, *, rngs: nnx.Rngs
-    ) -> PosteriorOverTerms:
+    def fit(self, x: jax.Array, x_dot: jax.Array, *, rngs: nnx.Rngs) -> PosteriorOverTerms:
         """Fit Bayesian SINDy over the library terms; not yet implemented."""
         del x, x_dot, rngs
         raise NotImplementedError(_CANONICAL_MESSAGE)
@@ -107,9 +103,7 @@ class CoefficientPosteriorIntervalStub:
 
     def __init__(self, *, alpha: float = 0.05) -> None:
         if not 0.0 < alpha < 1.0:
-            raise ValueError(
-                f"alpha must lie strictly in (0, 1); got {alpha}."
-            )
+            raise ValueError(f"alpha must lie strictly in (0, 1); got {alpha}.")
         self.alpha = alpha
 
     def __call__(self, posterior_samples: jax.Array) -> PredictionInterval:
