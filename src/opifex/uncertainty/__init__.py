@@ -119,6 +119,10 @@ from opifex.uncertainty.registry import (
     UQCapability,
     UQRegistry,
 )
+from opifex.uncertainty.tempering import (
+    DiffusionTemperingSchedule,
+    TemperingScheduleType,
+)
 from opifex.uncertainty.types import (
     PredictionInterval,
     PredictionSet,
@@ -151,6 +155,7 @@ __all__ = [
     "DeepONetDeepEnsembleAdapterSpec",
     "DeepONetMCDropoutAdapterSpec",
     "DefaultStrategy",
+    "DiffusionTemperingSchedule",
     "DistrAxAdapter",
     "DistributionAdapterProtocol",
     "DistributionAdapterSpec",
@@ -179,6 +184,7 @@ __all__ = [
     "SWAGState",
     "SnapshotEnsembleAdapterSpec",
     "SnapshotEnsembleState",
+    "TemperingScheduleType",
     "TestTimeAugmentationAdapterSpec",
     "UQCapability",
     "UQLossComponents",
