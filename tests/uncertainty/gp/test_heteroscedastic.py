@@ -78,12 +78,8 @@ def test_heteroscedastic_predict_matches_closed_form() -> None:
     )
     predictive = predict_exact_gp(state=state, x_test=x_test)
 
-    k_train = rbf_kernel(
-        x_train, x_train, lengthscale=lengthscale, output_scale=output_scale
-    )
-    k_test = rbf_kernel(
-        x_test, x_train, lengthscale=lengthscale, output_scale=output_scale
-    )
+    k_train = rbf_kernel(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
+    k_test = rbf_kernel(x_test, x_train, lengthscale=lengthscale, output_scale=output_scale)
     k_diag = jnp.full((3,), output_scale**2)
     k_train_inv = jnp.linalg.inv(k_train + jnp.diag(noise_std**2))
     expected_mean = k_test @ k_train_inv @ y_train
@@ -143,9 +139,7 @@ def test_heteroscedastic_fit_is_jit_compatible() -> None:
     x_test = jnp.linspace(-0.5, 0.5, 3).reshape(-1, 1)
 
     @jax.jit
-    def fit_predict(
-        x_t: jax.Array, y_t: jax.Array, sigma: jax.Array, x_q: jax.Array
-    ) -> jax.Array:
+    def fit_predict(x_t: jax.Array, y_t: jax.Array, sigma: jax.Array, x_q: jax.Array) -> jax.Array:
         state = fit_heteroscedastic_exact_gp(
             x_train=x_t,
             y_train=y_t,

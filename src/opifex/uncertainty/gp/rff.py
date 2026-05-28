@@ -91,13 +91,9 @@ def rbf_random_fourier_features(
         ValueError: If ``num_features`` is non-positive or odd.
     """
     if num_features <= 0:
-        raise ValueError(
-            f"num_features must be strictly positive; got {num_features!r}."
-        )
+        raise ValueError(f"num_features must be strictly positive; got {num_features!r}.")
     if num_features % 2 != 0:
-        raise ValueError(
-            f"num_features must be even (cos/sin pairing); got {num_features!r}."
-        )
+        raise ValueError(f"num_features must be even (cos/sin pairing); got {num_features!r}.")
     if lengthscale <= 0.0:
         raise ValueError(f"lengthscale must be strictly positive; got {lengthscale!r}.")
     if output_scale <= 0.0:
@@ -181,9 +177,7 @@ def fit_rff_gp(
     key = extract_rng_key(rngs, streams=_RFF_STREAMS, context="fit_rff_gp")
     num_pairs = num_features // 2
     if num_features <= 0 or num_features % 2 != 0:
-        raise ValueError(
-            f"num_features must be a positive even integer; got {num_features!r}."
-        )
+        raise ValueError(f"num_features must be a positive even integer; got {num_features!r}.")
     omega = jax.random.normal(key, (num_pairs, x_train.shape[-1])) / lengthscale
     projection = x_train @ omega.T
     feature_scale = output_scale * jnp.sqrt(2.0 / num_features)
@@ -192,9 +186,7 @@ def fit_rff_gp(
     )
     gram = features_train.T @ features_train + (noise_std**2) * jnp.eye(num_features)
     gram_cholesky = jnp.linalg.cholesky(gram)
-    alpha = jax.scipy.linalg.cho_solve(
-        (gram_cholesky, True), features_train.T @ y_train
-    )
+    alpha = jax.scipy.linalg.cho_solve((gram_cholesky, True), features_train.T @ y_train)
     return RFFGPState(
         features_train=features_train,
         omega=omega,
@@ -240,9 +232,7 @@ def predict_rff_gp(
         [jnp.cos(projection), jnp.sin(projection)], axis=-1
     )
     mean = features_test @ state.alpha
-    v = jax.scipy.linalg.solve_triangular(
-        state.gram_cholesky, features_test.T, lower=True
-    )
+    v = jax.scipy.linalg.solve_triangular(state.gram_cholesky, features_test.T, lower=True)
     variance = (state.noise_std**2) * jnp.sum(v * v, axis=0)
     return PredictiveDistribution(
         mean=mean,

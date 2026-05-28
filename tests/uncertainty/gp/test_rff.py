@@ -142,9 +142,7 @@ def test_rff_gp_pipeline_is_jit_compatible() -> None:
     x_test = jnp.linspace(-0.5, 0.5, 3).reshape(-1, 1)
 
     @jax.jit
-    def fit_predict(
-        x_t: jax.Array, y_t: jax.Array, x_q: jax.Array, key: jax.Array
-    ) -> jax.Array:
+    def fit_predict(x_t: jax.Array, y_t: jax.Array, x_q: jax.Array, key: jax.Array) -> jax.Array:
         state = fit_rff_gp(
             x_train=x_t,
             y_train=y_t,

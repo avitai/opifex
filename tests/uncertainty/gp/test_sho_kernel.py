@@ -38,17 +38,11 @@ from opifex.uncertainty.gp import (
 )
 
 
-def _closed_form_sho(
-    tau: jax.Array, *, omega: float, quality: float, sigma: float
-) -> jax.Array:
+def _closed_form_sho(tau: jax.Array, *, omega: float, quality: float, sigma: float) -> jax.Array:
     g = jnp.sqrt(4.0 * quality**2 - 1.0)
     coef = omega * jnp.abs(tau) / (2.0 * quality)
     g_coef = g * coef
-    return (
-        sigma**2
-        * jnp.exp(-coef)
-        * (jnp.cos(g_coef) + jnp.sin(g_coef) / g)
-    )
+    return sigma**2 * jnp.exp(-coef) * (jnp.cos(g_coef) + jnp.sin(g_coef) / g)
 
 
 def test_damped_oscillator_kernel_matches_closed_form_at_unit_distance() -> None:

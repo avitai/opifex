@@ -61,9 +61,7 @@ def test_deep_kernel_routes_inputs_through_feature_map_before_base_kernel() -> N
     kernel = deep_kernel(feature_map=feature_map, base_kernel_fn=matern32_kernel)
     x = jnp.linspace(-1.0, 1.0, 4).reshape(-1, 1)
     composed = kernel(x, x, lengthscale=0.5, output_scale=1.0)
-    expected = matern32_kernel(
-        feature_map(x), feature_map(x), lengthscale=0.5, output_scale=1.0
-    )
+    expected = matern32_kernel(feature_map(x), feature_map(x), lengthscale=0.5, output_scale=1.0)
     assert jnp.allclose(composed, expected, atol=1e-6)
 
 
@@ -101,9 +99,7 @@ def test_deep_kernel_is_jit_compatible_with_flax_feature_map() -> None:
     x_test = jnp.linspace(-0.5, 0.5, 3).reshape(-1, 1)
 
     @nnx.jit
-    def fit_predict(
-        feat: nnx.Linear, x_t: jax.Array, y_t: jax.Array, x_q: jax.Array
-    ) -> jax.Array:
+    def fit_predict(feat: nnx.Linear, x_t: jax.Array, y_t: jax.Array, x_q: jax.Array) -> jax.Array:
         state = fit_exact_gp(
             x_train=x_t,
             y_train=y_t,
