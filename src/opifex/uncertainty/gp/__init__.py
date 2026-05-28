@@ -27,6 +27,7 @@ from opifex.uncertainty.gp.exact import (
 from opifex.uncertainty.gp.kernels import (
     additive_kernel,
     deep_kernel,
+    graph_diffusion_kernel,
     matern12_kernel,
     matern32_kernel,
     matern52_kernel,
@@ -57,6 +58,7 @@ __all__ = [
     "fit_exact_gp",
     "fit_heteroscedastic_exact_gp",
     "fit_rff_gp",
+    "graph_diffusion_kernel",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",

@@ -238,6 +238,83 @@ def multi_output_lcm_kernel(
     return _lcm
 
 
+def graph_diffusion_kernel(
+    *,
+    laplacian_eigenvalues: jax.Array,
+    laplacian_eigenvectors: jax.Array,
+) -> Callable[..., jax.Array]:
+    r"""Heat-kernel on a graph via the Laplacian spectral decomposition.
+
+    For a graph with normalised Laplacian ``L = V Λ V^T`` (orthonormal
+    eigenvectors ``V``, eigenvalues ``Λ = diag(λ_k) ≥ 0``), the
+    diffusion (heat) kernel between nodes ``i`` and ``j`` is
+
+    .. math::
+
+        K_{\text{heat}}(i, j) = \sigma_{f}^{2}\,
+            \sum_{k} e^{-\lambda_{k}\,\ell^{2}/2}\,
+            v_{k}[i]\,v_{k}[j].
+
+    The lengthscale plays the role of *diffusion time*: ``t = ℓ²/2``.
+    Larger ``ℓ`` → more diffusion → predictions spread further across
+    the graph (matches the standard "larger lengthscale → broader
+    correlations" GP convention).
+
+    The construction is the Gaussian / squared-exponential entry point
+    of the Matern-on-graphs family (Borovitskiy, Mostowsky, Lindgren,
+    Hensman 2020, arXiv:2006.10160); replacing
+    ``exp(-λ/ℓ²)`` with the spectral Matern density
+    ``(2ν/ℓ² + λ)^{-ν - d/2}`` recovers the full Matern variant.
+
+    The returned callable consumes **integer node indices** in
+    ``(n, 1)`` or ``(n,)`` shape; values must be in
+    ``{0, …, num_nodes - 1}``.
+
+    Args:
+        laplacian_eigenvalues: ``(N,)`` array of Laplacian eigenvalues
+            (typically obtained via ``jnp.linalg.eigh`` on the
+            normalised Laplacian).
+        laplacian_eigenvectors: ``(N, N)`` matrix of orthonormal
+            eigenvectors arranged column-wise.
+
+    Returns:
+        A callable matching the standard kernel signature
+        ``(x1, x2, *, lengthscale, output_scale) -> Gram``.
+
+    Raises:
+        ValueError: If the eigenvalue / eigenvector shapes are
+            inconsistent.
+    """
+    if (
+        laplacian_eigenvalues.shape[0] != laplacian_eigenvectors.shape[0]
+        or laplacian_eigenvectors.shape[0] != laplacian_eigenvectors.shape[1]
+    ):
+        raise ValueError(
+            "Laplacian eigendecomposition shape mismatch: eigenvalues shape "
+            f"{laplacian_eigenvalues.shape}, eigenvectors shape "
+            f"{laplacian_eigenvectors.shape}."
+        )
+
+    def _graph_diffusion(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        indices1 = jnp.squeeze(x1, axis=-1) if x1.ndim == 2 else x1
+        indices2 = jnp.squeeze(x2, axis=-1) if x2.ndim == 2 else x2
+        indices1 = indices1.astype(jnp.int32)
+        indices2 = indices2.astype(jnp.int32)
+        # Heat-kernel Gram: K[i, j] = σ_f² * Σ_k exp(-λ_k ℓ²/2) V[i, k] V[j, k].
+        weights = jnp.exp(-laplacian_eigenvalues * (lengthscale**2) / 2.0)
+        rows = laplacian_eigenvectors[indices1] * weights[None, :]
+        cols = laplacian_eigenvectors[indices2]
+        return (output_scale**2) * rows @ cols.T
+
+    return _graph_diffusion
+
+
 def additive_kernel(
     *,
     component_kernel_fns: tuple[Callable[..., jax.Array], ...],
@@ -345,6 +422,7 @@ def deep_kernel(
 __all__ = [
     "additive_kernel",
     "deep_kernel",
+    "graph_diffusion_kernel",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",
