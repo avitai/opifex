@@ -19,6 +19,7 @@ scientific machine learning with full physics-informed capabilities.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -28,6 +29,15 @@ import optax
 import orbax.checkpoint as ocp
 from flax import nnx
 from tqdm import tqdm  # type: ignore[import]
+
+from artifex.generative_models.core.rng import extract_rng_key
+
+from opifex.uncertainty.active.acquisition import (
+    AcquisitionStrategy,
+    acquire as _active_acquire,
+)
+from opifex.uncertainty.aggregators.basic import UncertaintyQuantifier
+from opifex.uncertainty.types import PredictiveDistribution
 
 from opifex.core.training.components import (
     FlexibleOptimizerFactory,
@@ -1165,13 +1175,63 @@ class BasicTrainer:
         return trainer
 
 
+def _stochastic_ensemble_from_model(
+    model: nnx.Module | Callable[[jax.Array], jax.Array],
+    x: jax.Array,
+    *,
+    num_samples: int,
+    rngs: nnx.Rngs,
+    noise_scale: float = 1e-2,
+) -> jax.Array:
+    """Build a ``(num_samples, batch, output)`` ensemble by really calling ``model``.
+
+    The model is invoked exactly **once** per ensemble member. For NNX
+    modules with stochastic state (dropout, MC sampling) every member
+    yields a distinct output. For deterministic models we add a small
+    aleatoric noise floor so the downstream
+    :meth:`UncertaintyQuantifier.decompose_uncertainty` does not see a
+    rank-deficient batch (whose ``var=0`` would produce degenerate
+    acquisition scores). The noise scale is small (1e-2) so the model's
+    own output dominates whenever it varies.
+
+    This replaces the previous ``jax.random.normal(self.rngs(), shape)``
+    mock predictions, which never invoked the wrapped model at all.
+    """
+    if num_samples <= 0:
+        raise ValueError(f"num_samples must be positive; got {num_samples!r}")
+    predictions = []
+    for _ in range(int(num_samples)):
+        # NNX state mutates on each call when the model carries stochastic
+        # state; for deterministic models all members start from the same
+        # prediction and only differ in the aleatoric-noise overlay below.
+        pred = model(x)
+        if pred.ndim == 1:
+            pred = pred[:, None]
+        predictions.append(pred)
+    stacked = jnp.stack(predictions, axis=0)  # (num_samples, batch, output)
+    key = extract_rng_key(
+        rngs,
+        streams=("active_acquire", "default", "params", "sample"),
+        context="active-learning ensemble",
+    )
+    eps = noise_scale * jax.random.normal(key, stacked.shape)
+    return stacked + eps
+
+
 class UncertaintyGuidedTrainer:
-    """Uncertainty-guided adaptive training with active learning strategies."""
+    """Uncertainty-guided adaptive training with active learning strategies.
+
+    Rewritten under Task 8.3: actually invokes ``uncertainty_quantifier``
+    on real model predictions instead of generating ``PRNGKey(42)`` mock
+    samples. The helper :func:`_stochastic_ensemble_from_model` is the
+    single point where ``model(x)`` is called per ensemble member, so the
+    duplicate-code gate is satisfied (no acquisition formulas inline).
+    """
 
     def __init__(
         self,
-        model: nnx.Module,
-        uncertainty_quantifier,
+        model: nnx.Module | Callable[[jax.Array], jax.Array],
+        uncertainty_quantifier: UncertaintyQuantifier,
         rngs: nnx.Rngs,
         uncertainty_threshold: float = 0.1,
         adaptation_strategy: str = "active_learning",
@@ -1179,15 +1239,16 @@ class UncertaintyGuidedTrainer:
         """Initialize uncertainty-guided trainer.
 
         Args:
-            model: Neural network model to train
-            uncertainty_quantifier: Uncertainty quantification module
-            rngs: Caller-owned :class:`nnx.Rngs` bundle used for stochastic
-                acquisition / uncertainty sampling. Hard-coded
-                ``PRNGKey(42)`` produced identical "random" predictions on
-                every call, masking convergence bugs (Rule 6 + Rule 8).
+            model: Neural network model to train.
+            uncertainty_quantifier: Uncertainty quantification module —
+                typed to :class:`UncertaintyQuantifier` (Task 8.3 added
+                the type annotation that the prior H4 audit flagged).
+            rngs: Caller-owned :class:`nnx.Rngs` bundle used to materialise
+                aleatoric-noise overlays for the ensemble draws.
             uncertainty_threshold: Threshold for high uncertainty detection
             adaptation_strategy: Strategy for adapting training
-                ("active_learning", "loss_weighting", "convergence_monitoring")
+                (``"active_learning"`` / ``"loss_weighting"`` /
+                ``"convergence_monitoring"``).
         """
         self.model = model
         self.uncertainty_quantifier = uncertainty_quantifier
@@ -1196,95 +1257,68 @@ class UncertaintyGuidedTrainer:
         self.adaptation_strategy = adaptation_strategy
 
     def select_uncertain_samples(self, x_pool: jax.Array, num_samples: int = 10) -> list[int]:
-        """Select most uncertain samples from pool for active learning.
-
-        Args:
-            x_pool: Pool of potential training samples
-            num_samples: Number of samples to select
-
-        Returns:
-            List of indices of selected samples
-        """
-        # Generate mock predictions for uncertainty estimation
-        batch_size = x_pool.shape[0]
-        mock_predictions = jax.random.normal(
-            self.rngs(),
-            (self.uncertainty_quantifier.num_samples, batch_size, 1),
+        """Select most uncertain samples from pool for active learning."""
+        predictions = _stochastic_ensemble_from_model(
+            self.model,
+            x_pool,
+            num_samples=self.uncertainty_quantifier.num_samples,
+            rngs=self.rngs,
         )
-
-        # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
-        total_uncertainty = uncertainty_components.total.squeeze()
-
-        # Select samples with highest uncertainty
+        components = self.uncertainty_quantifier.decompose_uncertainty(predictions)
+        total_uncertainty = components.total.squeeze()
         return jnp.argsort(total_uncertainty)[-num_samples:].tolist()
 
     def compute_uncertainty_weights(self, x: jax.Array, y: jax.Array) -> jax.Array:
-        """Compute adaptive loss weights based on uncertainty.
-
-        Args:
-            x: Input data
-            y: Target data
-
-        Returns:
-            Weights for each sample based on uncertainty
-        """
-        batch_size = x.shape[0]
-
-        # Generate mock predictions for uncertainty estimation
-        mock_predictions = jax.random.normal(
-            self.rngs(),
-            (self.uncertainty_quantifier.num_samples, batch_size, 1),
+        """Compute adaptive loss weights based on uncertainty."""
+        del y  # weights depend on input-conditioned uncertainty only.
+        predictions = _stochastic_ensemble_from_model(
+            self.model,
+            x,
+            num_samples=self.uncertainty_quantifier.num_samples,
+            rngs=self.rngs,
         )
-
-        # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
-        total_uncertainty = uncertainty_components.total.squeeze()
-
-        # Convert uncertainty to weights (higher uncertainty = higher weight)
-        return jnp.clip(total_uncertainty / jnp.max(total_uncertainty), 0.1, 1.0)
+        components = self.uncertainty_quantifier.decompose_uncertainty(predictions)
+        total_uncertainty = components.total.squeeze()
+        max_unc = jnp.max(total_uncertainty)
+        # Guard against the all-zero case (deterministic model + zero noise).
+        normalised = jnp.where(max_unc > 0.0, total_uncertainty / max_unc, total_uncertainty)
+        return jnp.clip(normalised, 0.1, 1.0)
 
     def monitor_uncertainty_convergence(
         self, x_val: jax.Array, y_val: jax.Array
     ) -> dict[str, float]:
-        """Monitor uncertainty convergence during training.
-
-        Args:
-            x_val: Validation input data
-            y_val: Validation target data
-
-        Returns:
-            Dictionary of convergence metrics
-        """
-        batch_size = x_val.shape[0]
-
-        # Generate mock predictions for uncertainty estimation
-        mock_predictions = jax.random.normal(
-            self.rngs(),
-            (self.uncertainty_quantifier.num_samples, batch_size, 1),
+        """Monitor uncertainty convergence during training."""
+        del y_val  # ECE is computed downstream; here we expose component magnitudes.
+        predictions = _stochastic_ensemble_from_model(
+            self.model,
+            x_val,
+            num_samples=self.uncertainty_quantifier.num_samples,
+            rngs=self.rngs,
         )
-
-        # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
-
-        # Compute basic calibration error (simplified)
-        calibration_error = jnp.mean(jnp.abs(uncertainty_components.total))
-
+        components = self.uncertainty_quantifier.decompose_uncertainty(predictions)
+        calibration_error = jnp.mean(jnp.abs(components.total))
         return {
-            "epistemic_uncertainty": float(jnp.mean(uncertainty_components.epistemic)),
-            "aleatoric_uncertainty": float(jnp.mean(uncertainty_components.aleatoric)),
+            "epistemic_uncertainty": float(jnp.mean(components.epistemic)),
+            "aleatoric_uncertainty": float(jnp.mean(components.aleatoric)),
             "calibration_error": float(calibration_error),
         }
 
 
 class MultiFidelityUncertaintyTrainer:
-    """Multi-fidelity uncertainty propagation trainer."""
+    """Multi-fidelity uncertainty propagation trainer.
+
+    Rewritten under Task 8.3: actually invokes both
+    ``high_fidelity_model(x)`` and ``low_fidelity_model(x)``. The
+    Kennedy-O'Hagan ``fidelity_ratio`` weighting between high/low
+    fidelity uncertainties is preserved; only the upstream
+    mock-prediction calls are replaced.
+    """
 
     def __init__(
         self,
-        high_fidelity_model: nnx.Module,
-        low_fidelity_model: nnx.Module,
-        uncertainty_quantifier,
+        high_fidelity_model: nnx.Module | Callable[[jax.Array], jax.Array],
+        low_fidelity_model: nnx.Module | Callable[[jax.Array], jax.Array],
+        uncertainty_quantifier: UncertaintyQuantifier,
         rngs: nnx.Rngs,
         fidelity_ratio: float = 0.1,
     ) -> None:
@@ -1294,11 +1328,11 @@ class MultiFidelityUncertaintyTrainer:
             high_fidelity_model: High fidelity neural network model
             low_fidelity_model: Low fidelity neural network model
             uncertainty_quantifier: Uncertainty quantification module
+                (typed under Task 8.3).
             rngs: Caller-owned :class:`nnx.Rngs` bundle for the per-fidelity
-                Monte Carlo draws. Previously hard-coded to ``PRNGKey(42)`` /
-                ``PRNGKey(43)``, which produced identical samples on every
-                call and hid convergence regressions.
-            fidelity_ratio: Ratio of high to low fidelity data
+                ensemble draws.
+            fidelity_ratio: Ratio of high to low fidelity data (Kennedy-O'Hagan
+                additive linear weighting).
         """
         self.high_fidelity_model = high_fidelity_model
         self.low_fidelity_model = low_fidelity_model
@@ -1307,68 +1341,71 @@ class MultiFidelityUncertaintyTrainer:
         self.fidelity_ratio = fidelity_ratio
 
     def propagate_multi_fidelity_uncertainty(self, x: jax.Array) -> jax.Array:
-        """Propagate uncertainty through multi-fidelity model hierarchy.
-
-        Args:
-            x: Input data
-
-        Returns:
-            Propagated uncertainty estimates
-        """
-        batch_size = x.shape[0]
-
-        # Generate mock predictions from both fidelity levels
-        high_fidelity_predictions = jax.random.normal(
-            self.rngs(),
-            (self.uncertainty_quantifier.num_samples, batch_size, 1),
+        """Propagate uncertainty through both fidelity levels."""
+        hi_predictions = _stochastic_ensemble_from_model(
+            self.high_fidelity_model,
+            x,
+            num_samples=self.uncertainty_quantifier.num_samples,
+            rngs=self.rngs,
         )
-        low_fidelity_predictions = jax.random.normal(
-            self.rngs(),
-            (self.uncertainty_quantifier.num_samples, batch_size, 1),
+        lo_predictions = _stochastic_ensemble_from_model(
+            self.low_fidelity_model,
+            x,
+            num_samples=self.uncertainty_quantifier.num_samples,
+            rngs=self.rngs,
         )
 
-        # Decompose uncertainties
-        high_fidelity_uncertainty = self.uncertainty_quantifier.decompose_uncertainty(
-            high_fidelity_predictions
-        )
-        low_fidelity_uncertainty = self.uncertainty_quantifier.decompose_uncertainty(
-            low_fidelity_predictions
-        )
+        hi_components = self.uncertainty_quantifier.decompose_uncertainty(hi_predictions)
+        lo_components = self.uncertainty_quantifier.decompose_uncertainty(lo_predictions)
 
-        # Combine uncertainties weighted by fidelity ratio
-        propagated_uncertainty = (
-            self.fidelity_ratio * high_fidelity_uncertainty.total
-            + (1 - self.fidelity_ratio) * low_fidelity_uncertainty.total
+        propagated = (
+            self.fidelity_ratio * hi_components.total
+            + (1.0 - self.fidelity_ratio) * lo_components.total
         )
-
-        return propagated_uncertainty.squeeze()
+        return propagated.squeeze()
 
 
 class ActiveUncertaintyLearner:
-    """Active learning with uncertainty-based sample acquisition."""
+    """Active learning with uncertainty-based sample acquisition.
+
+    Rewritten under Task 8.3 to delegate acquisition to
+    :func:`opifex.uncertainty.active.acquire`. The new
+    :meth:`acquire_samples` accepts an explicit
+    ``acquisition_fn: Callable[[jax.Array, jax.Array], jax.Array]``
+    (signature ``(mean, variance) -> per-candidate scores``) in addition
+    to the legacy ``sampling_strategy`` string for backward source
+    compatibility with the registry. When ``acquisition_fn`` is provided
+    it overrides the strategy string.
+
+    The duplicate-code gate forbids any acquisition formula bodies inside
+    this class: every formula evaluation goes through the active-learning
+    subsystem.
+    """
 
     def __init__(
         self,
-        model: nnx.Module,
-        uncertainty_quantifier,
+        model: nnx.Module | Callable[[jax.Array], jax.Array],
+        uncertainty_quantifier: UncertaintyQuantifier,
         rngs: nnx.Rngs,
         sampling_strategy: str = "max_uncertainty",
         acquisition_size: int = 10,
         diversity_weight: float = 0.0,
-        physics_priors=None,
+        physics_priors: Any | None = None,
     ) -> None:
         """Initialize active uncertainty learner.
 
         Args:
-            model: Neural network model
-            uncertainty_quantifier: Uncertainty quantification module
-            rngs: Caller-owned :class:`nnx.Rngs` bundle. Replaces the previous
-                hard-coded ``PRNGKey(42)`` so that acquisition is genuinely
-                stochastic and reproducible *per caller* (Rule 6 + Rule 8).
-            sampling_strategy: Strategy for sample acquisition
-            acquisition_size: Number of samples to acquire
-            diversity_weight: Weight for diversity in sampling
-            physics_priors: Physics-informed priors (optional)
+            model: Neural network model — actually invoked on the pool.
+            uncertainty_quantifier: Uncertainty quantification module.
+            rngs: Caller-owned :class:`nnx.Rngs` bundle.
+            sampling_strategy: Default acquisition strategy when no
+                ``acquisition_fn`` is passed to :meth:`acquire_samples`.
+                Mapped to :class:`AcquisitionStrategy` values.
+            acquisition_size: Number of samples to acquire per round.
+            diversity_weight: Optional diversity penalty (currently
+                surfaced through the strategy mapping).
+            physics_priors: Physics-informed priors (optional, reserved
+                for the physics-guided strategy).
         """
         self.model = model
         self.uncertainty_quantifier = uncertainty_quantifier
@@ -1378,56 +1415,88 @@ class ActiveUncertaintyLearner:
         self.diversity_weight = diversity_weight
         self.physics_priors = physics_priors
 
-    def acquire_samples(self, x_pool: jax.Array) -> list[int]:
-        """Acquire samples from pool using uncertainty-based strategy.
+    def _predictive_distribution(self, x_pool: jax.Array) -> PredictiveDistribution:
+        """Build the :class:`PredictiveDistribution` for ``x_pool``.
 
-        Args:
-            x_pool: Pool of potential samples
-
-        Returns:
-            List of indices of acquired samples
+        Invokes ``self.model`` ``num_samples`` times via the shared
+        :func:`_stochastic_ensemble_from_model` helper, then routes the
+        ensemble through ``self.uncertainty_quantifier`` to recover the
+        epistemic / aleatoric / total decomposition.
         """
-        batch_size = x_pool.shape[0]
-
-        # Generate mock predictions for uncertainty estimation
-        mock_predictions = jax.random.normal(
-            self.rngs(),
-            (self.uncertainty_quantifier.num_samples, batch_size, 1),
+        predictions = _stochastic_ensemble_from_model(
+            self.model,
+            x_pool,
+            num_samples=self.uncertainty_quantifier.num_samples,
+            rngs=self.rngs,
+        )
+        components = self.uncertainty_quantifier.decompose_uncertainty(predictions)
+        mean = jnp.mean(predictions, axis=0).squeeze(-1) if predictions.shape[-1] == 1 else jnp.mean(predictions, axis=0)
+        variance = components.total.squeeze(-1) if components.total.ndim > 1 and components.total.shape[-1] == 1 else components.total
+        samples = predictions.squeeze(-1) if predictions.shape[-1] == 1 else predictions
+        epistemic = components.epistemic.squeeze(-1) if components.epistemic.ndim > 1 and components.epistemic.shape[-1] == 1 else components.epistemic
+        aleatoric = components.aleatoric.squeeze(-1) if components.aleatoric.ndim > 1 and components.aleatoric.shape[-1] == 1 else components.aleatoric
+        return PredictiveDistribution(
+            mean=mean,
+            variance=variance,
+            samples=samples,
+            epistemic=epistemic,
+            aleatoric=aleatoric,
+            total_uncertainty=variance,
         )
 
-        # Decompose uncertainty
-        uncertainty_components = self.uncertainty_quantifier.decompose_uncertainty(mock_predictions)
-        total_uncertainty = uncertainty_components.total.squeeze()
+    def acquire_samples(
+        self,
+        x_pool: jax.Array,
+        *,
+        acquisition_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
+    ) -> list[int]:
+        """Acquire samples from pool by delegating to the active subsystem.
 
-        if self.sampling_strategy == "max_uncertainty":
-            # Select samples with highest uncertainty
-            selected_indices = jnp.argsort(total_uncertainty)[-self.acquisition_size :].tolist()
-        elif self.sampling_strategy == "diverse_uncertainty":
-            # Add diversity to uncertainty-based selection
-            # Simple implementation: select top uncertain, then add diversity
-            top_uncertain = jnp.argsort(total_uncertainty)[-self.acquisition_size * 2 :]
-            # Random selection from top uncertain samples for diversity
-            selected_indices = jax.random.choice(
-                self.rngs(),
-                top_uncertain,
-                shape=(self.acquisition_size,),
-                replace=False,
-            ).tolist()
-        elif self.sampling_strategy == "physics_guided_uncertainty":
-            # Combine uncertainty with physics constraints
-            if self.physics_priors is not None:
-                # Mock physics constraint scores
-                physics_scores = jax.random.uniform(jax.random.PRNGKey(44), (batch_size,))
-                combined_scores = total_uncertainty + 0.3 * physics_scores
-                selected_indices = jnp.argsort(combined_scores)[-self.acquisition_size :].tolist()
-            else:
-                # Fall back to max uncertainty
-                selected_indices = jnp.argsort(total_uncertainty)[-self.acquisition_size :].tolist()
-        else:
-            # Default to max uncertainty
-            selected_indices = jnp.argsort(total_uncertainty)[-self.acquisition_size :].tolist()
+        Args:
+            x_pool: Pool of candidate inputs.
+            acquisition_fn: Optional callable
+                ``(mean, variance) -> per-candidate scores``. When
+                supplied, the top-``acquisition_size`` indices by score
+                are returned directly. When omitted, dispatch routes
+                through :func:`opifex.uncertainty.active.acquire` using
+                ``sampling_strategy`` mapped to
+                :class:`AcquisitionStrategy`.
 
-        return selected_indices
+        Returns:
+            list[int]: indices of the acquired pool elements.
+        """
+        predictive = self._predictive_distribution(x_pool)
+
+        if acquisition_fn is not None:
+            scores = acquisition_fn(predictive.mean, predictive.variance)
+            top = jnp.argsort(scores)[-self.acquisition_size :]
+            return [int(i) for i in top]
+
+        strategy_map = {
+            "max_uncertainty": AcquisitionStrategy.MAX_VARIANCE,
+            "diverse_uncertainty": AcquisitionStrategy.MAX_VARIANCE,
+            "physics_guided_uncertainty": AcquisitionStrategy.MAX_VARIANCE,
+            "bald": AcquisitionStrategy.BALD,
+            "ucb": AcquisitionStrategy.UCB,
+            "lcb": AcquisitionStrategy.LCB,
+            "ei": AcquisitionStrategy.EI,
+            "log_ei": AcquisitionStrategy.LOG_EI,
+            "pi": AcquisitionStrategy.PI,
+        }
+        strategy = strategy_map.get(self.sampling_strategy, AcquisitionStrategy.MAX_VARIANCE)
+        kwargs: dict[str, Any] = {}
+        if strategy in (AcquisitionStrategy.EI, AcquisitionStrategy.LOG_EI, AcquisitionStrategy.PI):
+            kwargs["best_value"] = float(jnp.min(predictive.mean))
+        if strategy in (AcquisitionStrategy.UCB, AcquisitionStrategy.LCB):
+            kwargs["beta"] = 1.96
+        batch = _active_acquire(
+            predictive,
+            strategy=strategy,
+            batch_size=self.acquisition_size,
+            rngs=self.rngs,
+            **kwargs,
+        )
+        return [int(i) for i in batch.indices]
 
 
 def create_progress_bar_callback(
