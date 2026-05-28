@@ -21,16 +21,25 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 # Native variational Bayesian PINN. Owns a Bayesian posterior over its
 # own layer weights and trains with a variational ELBO objective.
+# Phase 8 Task 8.5 flipped :attr:`supports_pac_bayes_certificate=True`
+# because the variational posterior owned by ``ProbabilisticPINN``
+# exposes the ``kl_divergence`` method required by
+# :func:`opifex.uncertainty.pac_bayes.pac_bayes_certificate`.
 _PROBABILISTIC_PINN_CAPABILITY = UQCapability(
     native_bayesian=True,
     supports_calibration=True,
+    supports_pac_bayes_certificate=True,
     default_strategy=DefaultStrategy.VARIATIONAL,
     native_nnx_module=True,
+    source_package="opifex",
     notes=(
         "ProbabilisticPINN owns a mean-field variational posterior over "
         "its Bayesian layers (BayesianLinear / BayesianSpectralConvolution) "
         "and supports temperature / Platt / isotonic calibration on its "
-        "predictive distribution."
+        "predictive distribution. The variational posterior exposes "
+        "``kl_divergence`` so PAC-Bayes certificates (Phase 8 Task 8.1) "
+        "can be computed directly via "
+        ":func:`opifex.uncertainty.pac_bayes.pac_bayes_certificate`."
     ),
 )
 
@@ -42,6 +51,7 @@ _MULTI_FIDELITY_PINN_CAPABILITY = (
     UQCapability(
         default_strategy=DefaultStrategy.DETERMINISTIC,
         native_nnx_module=True,
+        source_package="opifex",
         notes=(
             "MultiFidelityPINN composes per-fidelity deterministic PINN "
             "subnets; UQ comes from ensemble / conformal / calibration "

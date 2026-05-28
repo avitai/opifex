@@ -36,6 +36,7 @@ was ported from.
 
 from __future__ import annotations
 
+from opifex.uncertainty.active._uq_capabilities import ACTIVE_CAPABILITIES
 from opifex.uncertainty.active.acquisition import (
     acquire,
     AcquiredBatch,
@@ -59,9 +60,20 @@ from opifex.uncertainty.active.experimental_design import (
     expected_information_gain,
 )
 from opifex.uncertainty.active.pinn_acquisition import pinn_residual_acquisition
+from opifex.uncertainty.registry import UQRegistry
+
+
+# Idempotent capability registration (Rule 13 — no mutable side effects
+# beyond constants + idempotent registry seeding). The :class:`UQRegistry`
+# is a singleton; guard against double-registration on repeat imports.
+_uq_registry: UQRegistry = UQRegistry()
+for _name, _capability in ACTIVE_CAPABILITIES.items():
+    if _name not in _uq_registry:
+        _uq_registry.register(_name, _capability)
 
 
 __all__ = [
+    "ACTIVE_CAPABILITIES",
     "AcquiredBatch",
     "AcquisitionStrategy",
     "ActiveLearningConfig",

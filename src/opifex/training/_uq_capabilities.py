@@ -1,20 +1,21 @@
-"""UQ capability declarations for the training surfaces (Task 7.5).
+"""UQ capability declarations for the training surfaces.
 
 Static, module-level constants — no import-time mutable side effects beyond
 the constants themselves (Rule 13). Imported by
 ``opifex.training.__init__``.
 
-Phase 7 records :class:`UncertaintyGuidedTrainer` and
-:class:`MultiFidelityUncertaintyTrainer` honestly: both currently use a
-hardcoded ``jax.random.PRNGKey(42)`` mock predictor and never call the
-wrapped model (``basic_trainer.py:1168/1274``). The Phase 7 declaration
-therefore sets ``default_strategy=DefaultStrategy.UNSUPPORTED`` with a
-note pointing at Phase 8 Task 8.3 (rewrite to call real uncertainty
-quantifiers) and Phase 8 Task 8.5 (capability-flag flip after the
-rewrite's TDD step passes).
+Phase 7 (Task 7.5) recorded both ``UncertaintyGuidedTrainer`` and
+``MultiFidelityUncertaintyTrainer`` honestly as
+:attr:`DefaultStrategy.UNSUPPORTED` because they used a hardcoded
+``jax.random.PRNGKey(42)`` mock prediction and never called the wrapped
+model. Phase 8 Task 8.3 rewrote both trainers (and added the
+``ActiveUncertaintyLearner``) to invoke the wrapped model + uncertainty
+quantifier for real and to delegate acquisition formulas to
+:mod:`opifex.uncertainty.active.acquisition`. Phase 8 Task 8.5 flips the
+capability flags here accordingly.
 
-Plan reference: ``07-phase-registry-docs-examples.md`` lines 644-657
-(audit gap noted 2026-05-20).
+Plan reference: ``08-phase-pac-bayes-sbi-active-stochastic-fields.md``
+lines 755-790 (capability-flag flip after the Task 8.3 TDD steps pass).
 """
 
 from __future__ import annotations
@@ -23,34 +24,51 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 
 _UNCERTAINTY_GUIDED_TRAINER_CAPABILITY = UQCapability(
-    supports_active_learning=False,
-    default_strategy=DefaultStrategy.UNSUPPORTED,
+    supports_active_learning=True,
+    default_strategy=DefaultStrategy.ACTIVE_LEARNING,
     source_package="opifex",
     notes=(
-        "UncertaintyGuidedTrainer is named for active-learning-driven "
-        "adaptive training, but the current implementation uses a "
-        "hardcoded jax.random.PRNGKey(42) mock prediction and never "
-        "calls the wrapped uncertainty quantifier (basic_trainer.py:1168). "
-        "Phase 8 Task 8.3 rewrites the trainer to call the real "
-        "quantifier; Phase 8 Task 8.5 flips supports_active_learning + "
-        "default_strategy. Declared UNSUPPORTED in Phase 7."
+        "UncertaintyGuidedTrainer drives active-learning sample "
+        "selection. Phase 8 Task 8.3 rewrote it to invoke the wrapped "
+        "model via _stochastic_ensemble_from_model and route the "
+        "predictions through self.uncertainty_quantifier; the formula "
+        "evaluation is delegated to "
+        "opifex.uncertainty.active.acquire so no acquisition body lives "
+        "inside the trainer. Phase 8 Task 8.5 flipped "
+        "supports_active_learning + default_strategy to match the new "
+        "implementation."
     ),
 )
 
 
 _MULTI_FIDELITY_UNCERTAINTY_TRAINER_CAPABILITY = UQCapability(
-    native_distributional=False,
-    default_strategy=DefaultStrategy.UNSUPPORTED,
+    supports_ensemble=True,
+    default_strategy=DefaultStrategy.ENSEMBLE,
     source_package="opifex",
     notes=(
-        "MultiFidelityUncertaintyTrainer is named for multi-fidelity "
-        "uncertainty propagation, but the current implementation uses "
-        "hardcoded jax.random.PRNGKey(42)/PRNGKey(43) mock predictions "
-        "rather than calling the wrapped models (basic_trainer.py:1280). "
-        "Phase 8 Task 8.3 rewrites the trainer to call the real "
-        "models / quantifier; Phase 8 Task 8.5 flips "
-        "native_distributional + default_strategy. Declared UNSUPPORTED "
-        "in Phase 7."
+        "MultiFidelityUncertaintyTrainer propagates uncertainty through "
+        "high/low fidelity model ensembles with Kennedy-O'Hagan "
+        "additive linear weighting (fidelity_ratio). Phase 8 Task 8.3 "
+        "rewrote it to actually invoke both fidelity models via "
+        "_stochastic_ensemble_from_model and combine the resulting "
+        "ensemble decompositions; Phase 8 Task 8.5 flipped "
+        "supports_ensemble + default_strategy to ENSEMBLE."
+    ),
+)
+
+
+_ACTIVE_UNCERTAINTY_LEARNER_CAPABILITY = UQCapability(
+    supports_active_learning=True,
+    default_strategy=DefaultStrategy.ACTIVE_LEARNING,
+    source_package="opifex",
+    notes=(
+        "ActiveUncertaintyLearner ranks pool samples via the "
+        "opifex.uncertainty.active subsystem (named strategies: "
+        "max_uncertainty / bald / expected_improvement / "
+        "physics_guided). Phase 8 Task 8.3 introduced this class as the "
+        "delegated user-facing active-learning surface; the duplicate-"
+        "code gate forbids inlined acquisition formulas, so every "
+        "score call routes through :func:`opifex.uncertainty.active.acquire`."
     ),
 )
 
@@ -58,6 +76,7 @@ _MULTI_FIDELITY_UNCERTAINTY_TRAINER_CAPABILITY = UQCapability(
 TRAINING_CAPABILITIES: dict[str, UQCapability] = {
     "trainer:UncertaintyGuidedTrainer": _UNCERTAINTY_GUIDED_TRAINER_CAPABILITY,
     "trainer:MultiFidelityUncertaintyTrainer": (_MULTI_FIDELITY_UNCERTAINTY_TRAINER_CAPABILITY),
+    "trainer:ActiveUncertaintyLearner": _ACTIVE_UNCERTAINTY_LEARNER_CAPABILITY,
 }
 
 

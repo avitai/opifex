@@ -24,6 +24,7 @@ Canonical references (read-only):
 
 from __future__ import annotations
 
+from opifex.uncertainty.pac_bayes._uq_capabilities import PAC_BAYES_CAPABILITIES
 from opifex.uncertainty.pac_bayes.bounds import (
     catoni_bound,
     kl_bernoulli,
@@ -35,9 +36,20 @@ from opifex.uncertainty.pac_bayes.certificates import (
     PACBayesCertificate,
 )
 from opifex.uncertainty.pac_bayes.objectives import pac_bayes_kl_objective
+from opifex.uncertainty.registry import UQRegistry
+
+
+# Idempotent capability registration (Rule 13 — no mutable side effects
+# beyond constants + idempotent registry seeding). The :class:`UQRegistry`
+# is a singleton; guard against double-registration on repeat imports.
+_uq_registry: UQRegistry = UQRegistry()
+for _name, _capability in PAC_BAYES_CAPABILITIES.items():
+    if _name not in _uq_registry:
+        _uq_registry.register(_name, _capability)
 
 
 __all__ = [
+    "PAC_BAYES_CAPABILITIES",
     "PACBayesCertificate",
     "catoni_bound",
     "kl_bernoulli",

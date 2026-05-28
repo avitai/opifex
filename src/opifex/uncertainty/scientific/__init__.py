@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from opifex.uncertainty.registry import UQRegistry
+from opifex.uncertainty.scientific._uq_capabilities import (
+    SCIENTIFIC_FIELD_CAPABILITIES,
+)
 from opifex.uncertainty.scientific.domain_metrics import (
     boundary_condition_coverage,
     chemical_accuracy_coverage,
@@ -79,7 +83,17 @@ from opifex.uncertainty.scientific.stochastic_galerkin import (
 )
 
 
+# Idempotent capability registration (Rule 13 — no mutable side effects
+# beyond constants + idempotent registry seeding). The :class:`UQRegistry`
+# is a singleton; guard against double-registration on repeat imports.
+_uq_registry: UQRegistry = UQRegistry()
+for _name, _capability in SCIENTIFIC_FIELD_CAPABILITIES.items():
+    if _name not in _uq_registry:
+        _uq_registry.register(_name, _capability)
+
+
 __all__ = [
+    "SCIENTIFIC_FIELD_CAPABILITIES",
     "UNSUPPORTED_ACTIVE_LEARNING",
     "UNSUPPORTED_LIKELIHOOD_FREE",
     "UNSUPPORTED_PAC_BAYES",

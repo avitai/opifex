@@ -1,22 +1,20 @@
-"""UQ capability declarations for the L2O surfaces (Task 7.5).
+"""UQ capability declarations for the L2O surfaces.
 
 Static, module-level constants — no import-time mutable side effects beyond
 the constants themselves (Rule 13). Imported by
 ``opifex.optimization.l2o.__init__``.
 
-Phase 7 records :class:`BayesianSchedulerOptimizer` honestly:
+Phase 7 (Task 7.5) recorded :class:`BayesianSchedulerOptimizer` honestly
+as :attr:`DefaultStrategy.UNSUPPORTED` because the original
+``_bayesian_parameter_suggestion`` used a random exploration heuristic.
+Phase 8 Task 8.3 replaced the heuristic with a real expected-improvement
+acquisition via :func:`opifex.uncertainty.active.expected_improvement`
+(``adaptive_schedulers.py``). Phase 8 Task 8.5 flips
+:attr:`native_bayesian` and :attr:`default_strategy` to advertise the
+real BO-style acquisition surface.
 
-* ``native_bayesian=False`` and
-  ``default_strategy=DefaultStrategy.UNSUPPORTED`` because the current
-  ``_bayesian_parameter_suggestion`` is a random heuristic (see
-  ``adaptive_schedulers.py``).
-* :attr:`notes` points at Phase 8 Task 8.3, which replaces the heuristic
-  with a real GP-backed acquisition function using
-  ``experimental_design.py``. The Bayesian flag flips to ``True`` only
-  after Phase 8 Task 8.5 audits the upgraded implementation.
-
-Plan reference: ``07-phase-registry-docs-examples.md`` lines 632-642 (Task
-6.3 expansion note dated 2026-05-20).
+Plan reference: ``08-phase-pac-bayes-sbi-active-stochastic-fields.md``
+lines 755-790.
 """
 
 from __future__ import annotations
@@ -25,18 +23,20 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 
 _BAYESIAN_SCHEDULER_OPTIMIZER_CAPABILITY = UQCapability(
-    native_bayesian=False,
-    default_strategy=DefaultStrategy.UNSUPPORTED,
+    native_bayesian=True,
+    default_strategy=DefaultStrategy.BAYESIAN,
     native_nnx_module=True,
     source_package="opifex",
     notes=(
-        "BayesianSchedulerOptimizer is named for an upcoming "
-        "GP-acquisition-backed scheduler tuner. The current "
-        "_bayesian_parameter_suggestion implementation is a random "
-        "exploration heuristic (adaptive_schedulers.py); Phase 8 "
-        "Task 8.3 replaces it with a real GP using experimental_design.py "
-        "and Phase 8 Task 8.5 flips native_bayesian + default_strategy "
-        "after the upgrade lands. Declared UNSUPPORTED in Phase 7."
+        "BayesianSchedulerOptimizer tunes scheduler hyperparameters via "
+        "GP-style expected-improvement acquisition. Phase 8 Task 8.3 "
+        "replaced the original random-exploration heuristic with a real "
+        "EI acquisition: ``_score_candidate`` builds a "
+        ":class:`PredictiveDistribution` from the candidate history and "
+        "delegates to :func:`opifex.uncertainty.active.expected_improvement` "
+        "(``adaptive_schedulers.py``). Phase 8 Task 8.5 flipped "
+        "native_bayesian + default_strategy to BAYESIAN to advertise "
+        "the real acquisition surface."
     ),
 )
 

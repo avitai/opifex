@@ -110,6 +110,10 @@ _TASK_7_5_TRAINER_NAMES: frozenset[str] = frozenset(
     {
         "trainer:UncertaintyGuidedTrainer",
         "trainer:MultiFidelityUncertaintyTrainer",
+        # Phase 8 Task 8.5 added the third trainer entry — flipped from
+        # UNSUPPORTED placeholders to ACTIVE_LEARNING after the Task 8.3
+        # rewrite landed.
+        "trainer:ActiveUncertaintyLearner",
     }
 )
 
@@ -230,17 +234,21 @@ def test_quantum_surface_declares_three_adapter_strategies(
 
 
 def test_bayesian_scheduler_optimizer_capability_flags(uq_registry: UQRegistry) -> None:
-    """Phase 7 records BayesianSchedulerOptimizer honestly as UNSUPPORTED.
+    """Phase 8 Task 8.5 flipped BayesianSchedulerOptimizer to BAYESIAN.
 
-    The current ``_bayesian_parameter_suggestion`` is a random heuristic
-    (adaptive_schedulers.py); the Bayesian flag flips in Phase 8 Task 8.5
-    after Phase 8 Task 8.3 lands the real GP-acquisition implementation.
+    Phase 8 Task 8.3 replaced the original random-exploration heuristic
+    with a real EI acquisition that delegates to
+    :func:`opifex.uncertainty.active.expected_improvement`
+    (``adaptive_schedulers.py``); Task 8.5 then advertises the upgraded
+    surface honestly via ``native_bayesian=True`` +
+    :attr:`DefaultStrategy.BAYESIAN`.
     """
     cap = uq_registry.require("l2o:BayesianSchedulerOptimizer")
-    assert cap.native_bayesian is False
-    assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
+    assert cap.native_bayesian is True
+    assert cap.default_strategy is DefaultStrategy.BAYESIAN
     assert cap.native_nnx_module is True
-    # Plan-mandated docstring breadcrumb pointing at Phase 8.
+    # Plan-mandated docstring breadcrumb retains the Phase 8 task IDs so
+    # the audit trail from UNSUPPORTED → BAYESIAN is preserved.
     assert "Phase 8 Task 8.3" in cap.notes
     assert "Phase 8 Task 8.5" in cap.notes
 
@@ -254,35 +262,52 @@ def test_bayesian_scheduler_optimizer_capability_flags(uq_registry: UQRegistry) 
     "name",
     sorted(_TASK_7_5_TRAINER_NAMES),
 )
-def test_trainer_capability_is_unsupported_with_phase_8_note(
-    name: str, uq_registry: UQRegistry
-) -> None:
-    """UncertaintyGuidedTrainer + MultiFidelityUncertaintyTrainer record honestly.
+def test_trainer_capability_records_phase_8_provenance(name: str, uq_registry: UQRegistry) -> None:
+    """All three trainer declarations record their Phase 8 provenance.
 
-    Both classes use a hardcoded ``jax.random.PRNGKey(42)`` mock prediction
-    today (basic_trainer.py:1168/1280); Phase 8 Task 8.3 rewrites them to
-    call the real model and Phase 8 Task 8.5 flips the capability flags.
+    The Phase 7 UNSUPPORTED placeholders flipped in Phase 8 Task 8.5
+    after Task 8.3 rewrote both trainers to invoke the wrapped model +
+    uncertainty quantifier for real and added the
+    :class:`ActiveUncertaintyLearner` entry. The notes string MUST still
+    mention the upgrade path so the audit can trace it.
     """
     cap = uq_registry.require(name)
-    assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
+    assert cap.default_strategy is not DefaultStrategy.UNSUPPORTED
     assert "Phase 8 Task 8.3" in cap.notes
-    assert "Phase 8 Task 8.5" in cap.notes
+    assert cap.source_package == "opifex"
 
 
-def test_uncertainty_guided_trainer_active_learning_flag_off(
+def test_uncertainty_guided_trainer_active_learning_flag_on(
     uq_registry: UQRegistry,
 ) -> None:
-    """Phase 7 records ``supports_active_learning=False``; flips in Phase 8."""
+    """Phase 8 Task 8.5 flipped supports_active_learning ``False → True``."""
     cap = uq_registry.require("trainer:UncertaintyGuidedTrainer")
-    assert cap.supports_active_learning is False
+    assert cap.supports_active_learning is True
+    assert cap.default_strategy is DefaultStrategy.ACTIVE_LEARNING
 
 
-def test_multi_fidelity_uncertainty_trainer_distributional_flag_off(
+def test_multi_fidelity_uncertainty_trainer_strategy_is_ensemble(
     uq_registry: UQRegistry,
 ) -> None:
-    """Phase 7 records ``native_distributional=False``; flips in Phase 8."""
+    """Phase 8 Task 8.5 flipped the strategy to ENSEMBLE.
+
+    Task 8.3 rewrote the trainer to invoke both high/low fidelity
+    models via :func:`_stochastic_ensemble_from_model` and combine
+    their ensemble decompositions with Kennedy-O'Hagan additive linear
+    weighting — the strategy bucket reflects that flavour.
+    """
     cap = uq_registry.require("trainer:MultiFidelityUncertaintyTrainer")
-    assert cap.native_distributional is False
+    assert cap.default_strategy is DefaultStrategy.ENSEMBLE
+    assert cap.supports_ensemble is True
+
+
+def test_active_uncertainty_learner_default_strategy(
+    uq_registry: UQRegistry,
+) -> None:
+    """Task 8.5 added the third trainer entry — ACTIVE_LEARNING default."""
+    cap = uq_registry.require("trainer:ActiveUncertaintyLearner")
+    assert cap.supports_active_learning is True
+    assert cap.default_strategy is DefaultStrategy.ACTIVE_LEARNING
 
 
 # ---------------------------------------------------------------------------
