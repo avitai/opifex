@@ -101,6 +101,6 @@ def test_assimilation_state_is_immutable() -> None:
         time=jnp.array(0.0),
         metadata=_well_formed_metadata(),
     )
-    updated = original.replace(mean=jnp.array([5.0, 5.0]))
+    updated = original.replace(mean=jnp.array([5.0, 5.0]))  # type: ignore[attr-defined]
     assert jnp.array_equal(original.mean, jnp.array([1.0, 2.0]))
     assert jnp.array_equal(updated.mean, jnp.array([5.0, 5.0]))

@@ -14,6 +14,7 @@ src/opifex/uncertainty/assimilation`` returns zero matches.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, TYPE_CHECKING
 
 import jax
@@ -56,7 +57,7 @@ def predict(
         process_noise=process_noise,
     )
     new_t = state.time + 1.0 if new_time is None else jnp.asarray(new_time)
-    return state.replace(mean=predicted_mean, covariance=predicted_cov, time=new_t)
+    return dataclasses.replace(state, mean=predicted_mean, covariance=predicted_cov, time=new_t)
 
 
 def update(
@@ -89,7 +90,7 @@ def update(
         observation_matrix=observation_matrix,
         observation_cov=observation_cov,
     )
-    return state.replace(mean=updated_mean, covariance=updated_cov)
+    return dataclasses.replace(state, mean=updated_mean, covariance=updated_cov)
 
 
 def observation_matrix_from_mask(mask: jax.Array, state_dim: int) -> jax.Array:
@@ -173,7 +174,7 @@ def annotate_metadata(state: AssimilationState, **extra: Any) -> AssimilationSta
     """
     merged = dict(state.metadata)
     merged.update(extra)
-    return state.replace(metadata=tuple(merged.items()))
+    return dataclasses.replace(state, metadata=tuple(merged.items()))
 
 
 __all__ = [

@@ -90,7 +90,7 @@ class HybridOptimizer:
 
     config: HybridOptimizerConfig
     adam: optax.GradientTransformation = field(init=False)
-    lbfgs: optax.GradientTransformation = field(init=False)
+    lbfgs: optax.GradientTransformationExtraArgs = field(init=False)
 
     def __post_init__(self) -> None:
         """Initialize Adam and L-BFGS optimizers."""
