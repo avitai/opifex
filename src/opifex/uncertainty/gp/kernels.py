@@ -238,6 +238,75 @@ def multi_output_lcm_kernel(
     return _lcm
 
 
+def damped_oscillator_kernel(
+    *,
+    quality_factor: float,
+) -> Callable[..., jax.Array]:
+    r"""Underdamped simple-harmonic-oscillator (SHO) kernel.
+
+    Foreman-Mackey, Agol, Ambikasaran, Angus 2017 (AJ,
+    arXiv:1703.09710) introduce the celerite SHO kernel — a damped
+    oscillator with closed-form covariance ideal for time-series GPs.
+    For ``Q > 1/2`` (underdamped) the covariance at lag
+    ``τ = x_1 - x_2`` is
+
+    .. math::
+
+        k(\tau) = \sigma^{2}\,\exp\!\left(-\frac{\omega\,|\tau|}{2 Q}\right)
+            \left[\cos\!\left(\frac{g\,\omega\,|\tau|}{2 Q}\right)
+                  + \frac{1}{g}\sin\!\left(\frac{g\,\omega\,|\tau|}{2 Q}\right)\right]
+
+    where ``g = √(4 Q² − 1)`` and ``ω`` is the natural angular
+    frequency. The opifex implementation maps the standard kernel
+    hyperparameters to ``output_scale = σ`` and ``lengthscale = 1/ω``;
+    the quality factor is closed over by this kernel factory.
+
+    Args:
+        quality_factor: ``Q > 1/2``. Higher ``Q`` produces a sharper
+            oscillator (slower envelope decay, longer oscillation
+            train).
+
+    Returns:
+        Standard kernel callable
+        ``(x1, x2, *, lengthscale, output_scale) -> Gram``.
+
+    Raises:
+        ValueError: If ``quality_factor <= 0.5``.
+
+    Notes
+    -----
+    Only the underdamped regime (``Q > 1/2``) is implemented here.
+    The critically-damped (``Q = 1/2``) and overdamped (``Q < 1/2``)
+    forms are documented in the docstring of the tinygp reference
+    ``../tinygp/src/tinygp/kernels/quasisep.py:SHO`` but are deferred
+    to a follow-up slice. The direct-evaluation form here is
+    ``O(n²)`` per Gram; the celerite *scalable* state-space form
+    (``O(n)`` Kalman-style) is a separate Phase-11 deliverable.
+    """
+    if quality_factor <= 0.5:
+        raise ValueError(
+            "damped_oscillator_kernel requires quality_factor > 0.5 "
+            f"(underdamped regime); got {quality_factor!r}."
+        )
+    g = jnp.sqrt(4.0 * quality_factor**2 - 1.0)
+
+    def _damped_oscillator(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        omega = 1.0 / lengthscale
+        tau = jnp.abs(x1[:, None, :] - x2[None, :, :])
+        tau = jnp.sum(tau, axis=-1)  # (n, m); assumes 1-D time inputs
+        coef = omega * tau / (2.0 * quality_factor)
+        g_coef = g * coef
+        return (output_scale**2) * jnp.exp(-coef) * (jnp.cos(g_coef) + jnp.sin(g_coef) / g)
+
+    return _damped_oscillator
+
+
 def graph_diffusion_kernel(
     *,
     laplacian_eigenvalues: jax.Array,
@@ -306,7 +375,7 @@ def graph_diffusion_kernel(
         indices2 = jnp.squeeze(x2, axis=-1) if x2.ndim == 2 else x2
         indices1 = indices1.astype(jnp.int32)
         indices2 = indices2.astype(jnp.int32)
-        # Heat-kernel Gram: K[i, j] = σ_f² * Σ_k exp(-λ_k ℓ²/2) V[i, k] V[j, k].
+        # Heat-kernel Gram: K[i, j] = sigma_f^2 * sum_k exp(-lambda_k * ell^2/2) V[i, k] V[j, k].
         weights = jnp.exp(-laplacian_eigenvalues * (lengthscale**2) / 2.0)
         rows = laplacian_eigenvectors[indices1] * weights[None, :]
         cols = laplacian_eigenvectors[indices2]
@@ -421,6 +490,7 @@ def deep_kernel(
 
 __all__ = [
     "additive_kernel",
+    "damped_oscillator_kernel",
     "deep_kernel",
     "graph_diffusion_kernel",
     "matern12_kernel",
