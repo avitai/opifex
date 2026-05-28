@@ -135,9 +135,7 @@ def _newton_step(
     cholesky_b = jnp.linalg.cholesky(b_matrix)
     b_vec = w_diag * f + grad
     # a = b - W^{1/2} L^{-T} L^{-1} (W^{1/2} K b)
-    intermediate = jax.scipy.linalg.cho_solve(
-        (cholesky_b, True), sqrt_w * (k_train @ b_vec)
-    )
+    intermediate = jax.scipy.linalg.cho_solve((cholesky_b, True), sqrt_w * (k_train @ b_vec))
     a = b_vec - sqrt_w * intermediate
     f_new = k_train @ a
     log_lik_new, _, _, _ = _bernoulli_log_likelihood_components(f_new, y)
@@ -182,23 +180,19 @@ def fit_bernoulli_laplace_gp(
     initial_f = jnp.zeros_like(y_train, dtype=jnp.float32)
     initial_objective = jnp.asarray(-jnp.inf, dtype=jnp.float32)
     (f_final, _), _ = jax.lax.scan(
-        lambda carry, scan_dummy: _newton_step(
-            carry, scan_dummy, k_train=k_train, y=y_train, n=n
-        ),
+        lambda carry, scan_dummy: _newton_step(carry, scan_dummy, k_train=k_train, y=y_train, n=n),
         (initial_f, initial_objective),
         jnp.arange(num_newton_iterations),
     )
-    log_lik_final, grad_final, _w_final, sqrt_w_final = (
-        _bernoulli_log_likelihood_components(f_final, y_train)
+    log_lik_final, grad_final, _w_final, sqrt_w_final = _bernoulli_log_likelihood_components(
+        f_final, y_train
     )
     b_matrix = jnp.eye(n) + sqrt_w_final[:, None] * k_train * sqrt_w_final[None, :]
     cholesky_b = jnp.linalg.cholesky(b_matrix)
     # RW06 eq. 3.32 marginal: -0.5 * a^T f - 0.5 * log |B| + log p(y|f̂).
     a_final = grad_final  # at the mode, ∇log p(y|f̂) equals the implicit a
     log_marginal = (
-        -0.5 * jnp.dot(a_final, f_final)
-        + log_lik_final
-        - jnp.sum(jnp.log(jnp.diag(cholesky_b)))
+        -0.5 * jnp.dot(a_final, f_final) + log_lik_final - jnp.sum(jnp.log(jnp.diag(cholesky_b)))
     )
     return BernoulliLaplaceGPState(
         x_train=x_train,

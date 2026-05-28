@@ -25,6 +25,7 @@ from opifex.uncertainty.gp.exact import (
     rbf_kernel,
 )
 from opifex.uncertainty.gp.kernels import (
+    deep_kernel,
     matern12_kernel,
     matern32_kernel,
     matern52_kernel,
@@ -48,6 +49,7 @@ __all__ = [
     "BernoulliLaplaceGPState",
     "ExactGPState",
     "RFFGPState",
+    "deep_kernel",
     "exact_gp_loocv_log_predictive",
     "fit_bernoulli_laplace_gp",
     "fit_exact_gp",

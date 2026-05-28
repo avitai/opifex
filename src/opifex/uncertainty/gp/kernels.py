@@ -238,7 +238,54 @@ def multi_output_lcm_kernel(
     return _lcm
 
 
+def deep_kernel(
+    *,
+    feature_map: Callable[[jax.Array], jax.Array],
+    base_kernel_fn: Callable[..., jax.Array],
+) -> Callable[..., jax.Array]:
+    r"""Deep-kernel composition ``k_deep(x, x') = k_base(φ(x), φ(x'))``.
+
+    Wilson, Hu, Salakhutdinov, Xing 2016 (arXiv:1511.02222) introduced
+    *Deep Kernel Learning*: combine a learnable neural feature map
+    ``φ_θ`` with any base kernel ``k_base`` so the resulting kernel
+    inherits the base hyperparameters while the NN provides the
+    representation.
+
+    The opifex composition is a thin wrapper over the existing
+    ``kernel_fn`` API: any callable mapping ``(n, d) -> (n, d')``
+    qualifies as the feature map — Python lambdas, ``flax.nnx``
+    modules, ``nnx.Sequential`` extractors, etc. **No equinox
+    dependency**: opifex uses ``flax.nnx`` for the NN component
+    (matching the rest of the opifex neural backbone).
+
+    Args:
+        feature_map: Callable that lifts ``(n, d) -> (n, d')``.
+        base_kernel_fn: Standard kernel callable
+            ``(x1, x2, *, lengthscale, output_scale) -> (n, m)``.
+
+    Returns:
+        A callable matching the standard kernel signature.
+    """
+
+    def _deep_kernel(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        return base_kernel_fn(
+            feature_map(x1),
+            feature_map(x2),
+            lengthscale=lengthscale,
+            output_scale=output_scale,
+        )
+
+    return _deep_kernel
+
+
 __all__ = [
+    "deep_kernel",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",
