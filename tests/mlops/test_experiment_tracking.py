@@ -177,11 +177,19 @@ class TestMLOpsImports:
         assert isinstance(MLFLOW_AVAILABLE, bool)
 
     def test_metadata_serialization(self):
-        """Test that metadata can be converted to dict."""
+        """Test that metadata can be converted to dict.
+
+        Phase 3c added ``slots=True`` to the metadata dataclasses, which
+        removes ``__dict__``. ``dataclasses.asdict`` is the canonical
+        serialisation entry point for slotted dataclasses (it walks
+        ``__dataclass_fields__`` directly).
+        """
+        from dataclasses import asdict
+
         from opifex.mlops.experiment import PhysicsMetadata
 
         metadata = PhysicsMetadata(pde_type="navier_stokes", dimensionality=2)
-        metadata_dict = metadata.__dict__
+        metadata_dict = asdict(metadata)
         assert isinstance(metadata_dict, dict)
         assert metadata_dict["pde_type"] == "navier_stokes"
         assert metadata_dict["dimensionality"] == 2

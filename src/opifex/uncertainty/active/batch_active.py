@@ -298,14 +298,15 @@ def q_expected_hypervolume_improvement(
       currently exercised by the tests). Higher-dimensional fronts will
       land when the partition-bounds machinery is vendored.
 
-    Arguments:
-
-    * ``candidate_mean`` — shape ``(q, M)`` predictive mean per candidate
-      and per objective.
-    * ``candidate_std`` — shape ``(q, M)`` predictive std.
-    * ``pareto_front`` — shape ``(P, M)`` current non-dominated set.
-    * ``reference_point`` — shape ``(M,)`` reference point.
-    * ``num_samples`` — Monte-Carlo sample count.
+    Args:
+        candidate_mean: Shape ``(q, M)`` predictive mean per candidate
+            and per objective.
+        candidate_std: Shape ``(q, M)`` predictive std.
+        pareto_front: Shape ``(P, M)`` current non-dominated set.
+        reference_point: Shape ``(M,)`` reference point.
+        num_samples: Monte-Carlo sample count.
+        rngs: Caller-owned ``nnx.Rngs`` bundle or a raw ``jax.Array``
+            PRNG key used for the reparameterisation draws.
     """
     if num_samples <= 0:
         raise ValueError(f"num_samples must be positive; got {num_samples!r}")

@@ -50,9 +50,13 @@ class Surrogate(Protocol):
     backends and the Phase 7 ensemble surrogates both qualify.
     """
 
-    def predict(self, candidates: jax.Array) -> PredictiveDistribution: ...
+    def predict(self, candidates: jax.Array) -> PredictiveDistribution:
+        """Return the predictive distribution over ``candidates``."""
+        ...
 
-    def update(self, x: jax.Array, y: jax.Array) -> None: ...
+    def update(self, x: jax.Array, y: jax.Array) -> None:
+        """Condition the surrogate on a new ``(x, y)`` observation pair."""
+        ...
 
 
 # ---------------------------------------------------------------------------
