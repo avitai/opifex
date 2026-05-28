@@ -20,6 +20,7 @@ from opifex.uncertainty.gp.exact import (
     exact_gp_loocv_log_predictive,
     ExactGPState,
     fit_exact_gp,
+    fit_heteroscedastic_exact_gp,
     predict_exact_gp,
     rbf_kernel,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "RFFGPState",
     "exact_gp_loocv_log_predictive",
     "fit_exact_gp",
+    "fit_heteroscedastic_exact_gp",
     "fit_rff_gp",
     "matern12_kernel",
     "matern32_kernel",

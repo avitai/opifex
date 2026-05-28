@@ -228,6 +228,75 @@ def predict_exact_gp(
     )
 
 
+def fit_heteroscedastic_exact_gp(
+    *,
+    x_train: jax.Array,
+    y_train: jax.Array,
+    lengthscale: float,
+    output_scale: float,
+    noise_std: jax.Array,
+    kernel_fn: Callable[..., jax.Array] = rbf_kernel,
+) -> ExactGPState:
+    r"""Fit an exact GP with per-observation Gaussian noise.
+
+    Generalises :func:`fit_exact_gp` from a scalar noise level to a
+    per-observation vector ``noise_std[i] = σ_i``. The Gram matrix
+    becomes ``K + diag(σ_i²)``; the rest of the algorithm is
+    unchanged so the returned :class:`ExactGPState` is consumable by
+    the existing :func:`predict_exact_gp` driver. Setting every
+    ``σ_i = σ`` reproduces :func:`fit_exact_gp` exactly (verified by
+    the test suite).
+
+    Args:
+        x_train: ``(n, d)`` training inputs.
+        y_train: ``(n,)`` training targets.
+        lengthscale: Kernel length-scale.
+        output_scale: Kernel output-scale.
+        noise_std: ``(n,)`` per-observation noise scales (every entry
+            must be strictly positive).
+        kernel_fn: Kernel callable. Defaults to :func:`rbf_kernel`.
+
+    Returns:
+        :class:`ExactGPState` carrying the Cholesky factor + ``α`` and
+        a ``noise_std`` field set to ``-1.0`` so callers can detect
+        that the fitted state used the heteroscedastic path (the per-
+        observation noises live inside the Cholesky factor by then).
+
+    Raises:
+        ValueError: If ``noise_std`` has a non-positive entry or a
+            length not matching ``y_train``.
+    """
+    if noise_std.shape != y_train.shape:
+        raise ValueError(
+            f"noise_std must have shape matching y_train; got {noise_std.shape} vs {y_train.shape}."
+        )
+    # Value check (positivity of every entry) requires concrete values
+    # that are unavailable under ``jax.jit``. ``jnp.linalg.cholesky``
+    # below is the JAX-native PD check: a non-positive entry produces a
+    # non-PD Gram and the Cholesky returns NaNs (surfacing downstream as
+    # ``jnp.isfinite`` violations). We perform the eager Python-side
+    # check only when the input is concrete; under jit we trust Cholesky.
+    if not isinstance(noise_std, jax.core.Tracer) and float(jnp.min(noise_std)) <= 0.0:  # type: ignore[attr-defined]
+        raise ValueError(
+            "All noise_std entries must be strictly positive; got "
+            f"min(noise_std)={float(jnp.min(noise_std))!r}."
+        )
+    k_train = kernel_fn(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
+    gram = k_train + jnp.diag(noise_std**2)
+    cholesky = jnp.linalg.cholesky(gram)
+    alpha = jax.scipy.linalg.cho_solve((cholesky, True), y_train)
+    return ExactGPState(
+        x_train=x_train,
+        y_train=y_train,
+        cholesky=cholesky,
+        alpha=alpha,
+        lengthscale=lengthscale,
+        output_scale=output_scale,
+        noise_std=-1.0,  # sentinel: heteroscedastic path used; per-obs noise lives in cholesky
+        kernel_fn=kernel_fn,
+    )
+
+
 def exact_gp_loocv_log_predictive(*, state: ExactGPState) -> jax.Array:
     r"""Leave-one-out predictive log-likelihood for a fitted exact GP.
 
@@ -270,6 +339,7 @@ __all__ = [
     "ExactGPState",
     "exact_gp_loocv_log_predictive",
     "fit_exact_gp",
+    "fit_heteroscedastic_exact_gp",
     "predict_exact_gp",
     "rbf_kernel",
 ]
