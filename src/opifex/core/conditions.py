@@ -836,14 +836,82 @@ class QuantumInitialCondition(InitialCondition):
 # ============================================================================
 
 
-class SymbolicConstraint(Constraint):
-    """Symbolic constraint expressions."""
+class _SymbolicFields:
+    """Mixin holding the symbolic-expression payload.
 
-    # Add proper type annotations
+    Previously these fields lived on ``SymbolicConstraint`` and were
+    inherited by ``PhysicsConstraint`` → ``QuantumConstraint`` (a 4-deep
+    chain whose intermediate level added nothing structural). Composing
+    via this mixin instead flattens the hierarchy to depth 2 — each
+    concrete class inherits directly from :class:`Constraint`, with the
+    symbolic payload pulled in laterally (Design Principle 7: Composition
+    over Inheritance).
+    """
+
     expression: str
     variables: Sequence[str]
     parameters: dict[str, Any]
     physics_law: str | None
+
+    def _init_symbolic_fields(
+        self,
+        expression: str,
+        variables: Sequence[str],
+        parameters: dict[str, Any] | None,
+        physics_law: str | None,
+    ) -> None:
+        self.expression = expression
+        self.variables = variables
+        self.parameters = parameters or {}
+        self.physics_law = physics_law
+
+    def _symbolic_fields_valid(self) -> bool:
+        try:
+            return not (not self.expression or not self.variables)
+        except (AttributeError, TypeError):
+            return False
+
+
+# Physics-law constraint-type registries, used by the per-class
+# ``validate`` methods below. Centralising them here keeps the validation
+# rules out of the inheritance chain and lets each concrete class
+# describe its own contract independently.
+_PHYSICS_CONSTRAINT_TYPES = frozenset(
+    {
+        "mass_conservation",
+        "energy_conservation",
+        "momentum_conservation",
+        "momentum",
+        "charge_conservation",
+        "continuity_equation",
+        # Include the quantum-side types because tests of the broader
+        # ``PhysicsConstraint`` surface still expect them to validate
+        # cleanly under the umbrella physics constraint.
+        "particle_number",
+        "density_positivity",
+        "wavefunction_normalization",
+        "normalization",
+        "hermiticity",
+        "unitarity",
+        "time_reversal_symmetry",
+    }
+)
+_QUANTUM_CONSTRAINT_TYPES = frozenset(
+    {
+        "particle_number",
+        "density_positivity",
+        "wavefunction_normalization",
+        "normalization",
+        "hermiticity",
+        "unitarity",
+        "time_reversal_symmetry",
+    }
+)
+_ENFORCEMENT_METHODS = frozenset({"penalty", "lagrange", "projection", "soft"})
+
+
+class SymbolicConstraint(_SymbolicFields, Constraint):
+    """Symbolic constraint expressions."""
 
     def __init__(
         self,
@@ -862,23 +930,21 @@ class SymbolicConstraint(Constraint):
             constraint_type: Type of symbolic constraint
             tolerance: Tolerance for constraint satisfaction
         """
-        super().__init__(constraint_type, tolerance)
-        self.expression = expression
-        self.variables = variables
-        self.parameters = parameters or {}
-        self.physics_law = None
+        Constraint.__init__(self, constraint_type, tolerance)
+        self._init_symbolic_fields(expression, variables, parameters, physics_law=None)
 
     def validate(self) -> bool:
         """Validate symbolic constraint."""
-        try:
-            # Basic validation - check non-empty expression and variables
-            return not (not self.expression or not self.variables)
-        except (AttributeError, TypeError):
-            return False
+        return self._symbolic_fields_valid()
 
 
-class PhysicsConstraint(SymbolicConstraint):
-    """Physics-based symbolic constraints."""
+class PhysicsConstraint(_SymbolicFields, Constraint):
+    """Physics-based symbolic constraint.
+
+    Sibling of :class:`SymbolicConstraint` (not a subclass) so the
+    inheritance chain stays flat. Both share the symbolic payload via
+    the :class:`_SymbolicFields` mixin.
+    """
 
     def __init__(
         self,
@@ -899,35 +965,26 @@ class PhysicsConstraint(SymbolicConstraint):
             parameters: Parameters in the constraint
             tolerance: Tolerance for constraint satisfaction
         """
-        super().__init__(expression, variables, parameters, constraint_type, tolerance)
-        self.physics_law = physics_law
-        self.tolerance = tolerance
+        Constraint.__init__(self, constraint_type, tolerance)
+        self._init_symbolic_fields(expression, variables, parameters, physics_law)
 
     def validate(self) -> bool:
         """Validate physics constraint."""
-        valid_types = {
-            "mass_conservation",
-            "energy_conservation",
-            "momentum_conservation",
-            "momentum",
-            "charge_conservation",
-            "continuity_equation",
-            # Add quantum constraint types for inheritance
-            "particle_number",
-            "density_positivity",
-            "wavefunction_normalization",
-            "normalization",  # Standard normalization constraint
-            "hermiticity",
-            "unitarity",  # Add unitarity for QuantumConstraint inheritance
-            "time_reversal_symmetry",
-        }
-        if self.constraint_type not in valid_types:
+        if self.constraint_type not in _PHYSICS_CONSTRAINT_TYPES:
             return False
-        return super().validate()
+        return self._symbolic_fields_valid()
 
 
-class QuantumConstraint(PhysicsConstraint):
-    """Quantum mechanical physics constraints."""
+class QuantumConstraint(_SymbolicFields, Constraint):
+    """Quantum mechanical physics constraint.
+
+    Sibling of :class:`PhysicsConstraint` (not a subclass) so the
+    inheritance chain stays flat. ``physics_law`` is fixed to
+    ``"quantum_mechanics"``; ``enforcement_method`` selects how the
+    constraint is realised at training time.
+    """
+
+    enforcement_method: str
 
     def __init__(
         self,
@@ -948,42 +1005,25 @@ class QuantumConstraint(PhysicsConstraint):
             tolerance: Tolerance for quantum accuracy
             enforcement_method: Method for enforcing constraint
         """
-        # Validate enforcement method immediately
-        valid_methods = {"penalty", "lagrange", "projection", "soft"}
-        if enforcement_method not in valid_methods:
+        if enforcement_method not in _ENFORCEMENT_METHODS:
             raise ValueError(
-                f"Invalid enforcement_method: {enforcement_method}. Must be one of {valid_methods}"
+                f"Invalid enforcement_method: {enforcement_method}. "
+                f"Must be one of {_ENFORCEMENT_METHODS}"
             )
 
-        super().__init__(
-            constraint_type,
-            expression,
-            variables,
-            physics_law="quantum_mechanics",
-            parameters=parameters,
-            tolerance=tolerance,
+        Constraint.__init__(self, constraint_type, tolerance)
+        self._init_symbolic_fields(
+            expression, variables, parameters, physics_law="quantum_mechanics"
         )
         self.enforcement_method = enforcement_method
 
     def validate(self) -> bool:
         """Validate quantum constraint."""
-        valid_types = {
-            "particle_number",
-            "density_positivity",
-            "wavefunction_normalization",
-            "normalization",  # Standard normalization constraint
-            "hermiticity",
-            "unitarity",  # Add unitarity as valid quantum constraint type
-            "time_reversal_symmetry",
-        }
-        if self.constraint_type not in valid_types:
+        if self.constraint_type not in _QUANTUM_CONSTRAINT_TYPES:
             return False
-
-        valid_methods = {"penalty", "lagrange", "projection", "soft"}
-        if self.enforcement_method not in valid_methods:
+        if self.enforcement_method not in _ENFORCEMENT_METHODS:
             return False
-
-        return super().validate()
+        return self._symbolic_fields_valid()
 
 
 # ============================================================================
