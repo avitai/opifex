@@ -30,17 +30,27 @@ from opifex.uncertainty.gp.kernels import (
     multi_output_icm_kernel,
     multi_output_lcm_kernel,
 )
+from opifex.uncertainty.gp.rff import (
+    fit_rff_gp,
+    predict_rff_gp,
+    rbf_random_fourier_features,
+    RFFGPState,
+)
 
 
 __all__ = [
     "ExactGPState",
+    "RFFGPState",
     "exact_gp_loocv_log_predictive",
     "fit_exact_gp",
+    "fit_rff_gp",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
     "predict_exact_gp",
+    "predict_rff_gp",
     "rbf_kernel",
+    "rbf_random_fourier_features",
 ]
