@@ -33,6 +33,12 @@ from opifex.neural.operators.fno.base import (
     FourierNeuralOperator,
     FourierSpectralConvolution,
 )
+
+# NEW: Bayesian / CAKF spectral conv (Phase 10 Task 10.4)
+from opifex.neural.operators.fno.bayesian import (
+    BayesianSpectralConvolution,
+    ComputationAwareSpectralConvolution,
+)
 from opifex.neural.operators.fno.factorized import FactorizedFourierLayer
 
 # NEW: Local FNO with global + local operations
@@ -97,6 +103,8 @@ from opifex.uncertainty.adapters.operators import (
 __all__ = [
     "AmortizedFourierNeuralOperator",
     "AmortizedSpectralConvolution",
+    "BayesianSpectralConvolution",
+    "ComputationAwareSpectralConvolution",
     "FNOConformalAdapterSpec",
     "FNODeepEnsembleAdapterSpec",
     "FNOMCDropoutAdapterSpec",

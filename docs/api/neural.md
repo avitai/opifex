@@ -71,6 +71,24 @@ shared objective surface without diverging.
 ``uncertainty_guided_sampling(x_candidates, num_samples, *, rngs)``
 selects the highest-uncertainty samples for the next training batch.
 
+### `ComputationAwareSpectralConvolution` (CASpec)
+
+``opifex.neural.operators.fno.bayesian.ComputationAwareSpectralConvolution``
+is a sibling of ``BayesianSpectralConvolution`` whose uncertainty over
+the flattened spectral weights is maintained as a *low-rank CAKF
+posterior* — the implicit ``posterior_cov = prior_cov - factor @
+factor^T`` representation of Pförtner+ 2024 (arXiv:2405.08971) and the
+CAGP precursor Wenger+ 2023 (arXiv:2306.07879). The constructor mirrors
+``BayesianSpectralConvolution``; ``__call__`` runs the deterministic
+spectral conv using the BSC posterior-mean weights, and
+``cakf_refine(observation=, observation_matrix=, observation_cov=,
+max_iter=)`` returns a ``_CAKFSpectralRefinement`` carrying the
+updated ``(cakf_mean, cakf_factor)`` pair (rank gained per call ==
+``max_iter``). The same module also re-exports
+``BayesianSpectralConvolution`` from its canonical home at
+``opifex.uncertainty.layers.bayesian`` so callers can import either
+sibling from a single namespace.
+
 ### `gp_pinn_predictive_posterior` (GP-PINN)
 
 ``opifex.neural.pinns.gp_pinn.gp_pinn_predictive_posterior(*, pinn_forward,
