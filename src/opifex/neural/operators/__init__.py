@@ -29,6 +29,14 @@ automatic differentiation, just-in-time compilation, and multi-device paralleliz
 from collections.abc import Sequence
 from typing import Any
 
+# Operator-family UQ adapter spec re-exports (Task 3.7). Specs declare
+# adapter-mediated UQ capabilities (conformal / ensemble / dropout) without
+# claiming native Bayesian support; consumed by registry / docs / future
+# concrete wrappers.
+from opifex.neural.operators._uq_capabilities import (
+    _OPERATOR_CAPABILITIES,
+    OPERATOR_CAPABILITY_CATEGORIES,
+)
 from opifex.neural.operators.deeponet.adaptive import AdaptiveDeepONet
 
 # DeepONet implementations
@@ -148,11 +156,6 @@ from opifex.neural.operators.specialized.uqno import (
 
 # Specialized existing operators
 from opifex.neural.operators.specialized.wavelet import WaveletNeuralOperator
-
-# Operator-family UQ adapter spec re-exports (Task 3.7). Specs declare
-# adapter-mediated UQ capabilities (conformal / ensemble / dropout) without
-# claiming native Bayesian support; consumed by registry / docs / future
-# concrete wrappers.
 from opifex.uncertainty.adapters.operators import (
     DeepONetConformalAdapterSpec,
     DeepONetDeepEnsembleAdapterSpec,
@@ -162,6 +165,7 @@ from opifex.uncertainty.adapters.operators import (
     FNOMCDropoutAdapterSpec,
     OperatorAdapterSpec,
 )
+from opifex.uncertainty.registry import UQCapability, UQRegistry
 
 
 # =============================================================================
@@ -194,6 +198,27 @@ OPERATOR_REGISTRY: dict[str, type] = {
     "GNO": GraphNeuralOperator,
     "OperatorNet": OperatorNetwork,
 }
+
+
+# UQ capability lookup — Task 7.1. Build the singleton registry once at
+# module import after the operator registry is fully populated. Lookup
+# is by operator-registry key (e.g. ``"FNO"``); :meth:`UQRegistry.require`
+# raises an actionable :class:`KeyError` on unknown names.
+OPERATOR_CAPABILITY_REGISTRY: UQRegistry = UQRegistry()
+for _name, _capability in _OPERATOR_CAPABILITIES.items():
+    if _name not in OPERATOR_CAPABILITY_REGISTRY:
+        OPERATOR_CAPABILITY_REGISTRY.register(_name, _capability)
+
+
+def get_operator_capability(operator_type: str) -> UQCapability:
+    """Return the :class:`UQCapability` for ``operator_type``.
+
+    Raises:
+        KeyError: If ``operator_type`` isn't in
+            :data:`OPERATOR_CAPABILITY_REGISTRY`.
+    """
+    return OPERATOR_CAPABILITY_REGISTRY.require(operator_type)
+
 
 # Application-specific operator recommendations
 APPLICATION_RECOMMENDATIONS: dict[str, dict[str, str | Sequence[str]]] = {
@@ -314,11 +339,17 @@ def list_operators(category: str | None = None) -> dict[str, Sequence[str]]:
     Returns:
         Dictionary of operators by category
     """
+    # The "uncertainty_aware" + "adapter_capable" categories are derived
+    # from the per-operator :class:`UQCapability` declarations in
+    # ``_uq_capabilities.OPERATOR_CAPABILITY_CATEGORIES`` (Task 7.1) so
+    # they stay consistent with the registry; the other (purely
+    # structural) categories remain hand-curated.
     categories: dict[str, Sequence[str]] = {
         "fourier_operators": ["FNO", "TFNO", "UFNO", "SFNO", "LocalFNO", "AM-FNO"],
         "deeponet_family": ["DeepONet", "FourierDeepONet", "AdaptiveDeepONet"],
         "graph_operators": ["GNO", "MGNO"],
-        "uncertainty_aware": ["UQNO"],
+        "uncertainty_aware": list(OPERATOR_CAPABILITY_CATEGORIES["uncertainty_aware"]),
+        "adapter_capable": list(OPERATOR_CAPABILITY_CATEGORIES["adapter_capable"]),
         "geometry_aware": ["GINO", "GNO", "MGNO"],
         "parameter_efficient": ["TFNO", "LNO"],
     }
