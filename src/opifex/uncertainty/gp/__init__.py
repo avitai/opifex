@@ -46,12 +46,19 @@ from opifex.uncertainty.gp.rff import (
     rbf_random_fourier_features,
     RFFGPState,
 )
+from opifex.uncertainty.gp.svgp import (
+    fit_svgp,
+    predict_svgp,
+    svgp_collapsed_elbo,
+    SVGPState,
+)
 
 
 __all__ = [
     "BernoulliLaplaceGPState",
     "ExactGPState",
     "RFFGPState",
+    "SVGPState",
     "additive_kernel",
     "damped_oscillator_kernel",
     "deep_kernel",
@@ -60,6 +67,7 @@ __all__ = [
     "fit_exact_gp",
     "fit_heteroscedastic_exact_gp",
     "fit_rff_gp",
+    "fit_svgp",
     "graph_diffusion_kernel",
     "matern12_kernel",
     "matern32_kernel",
@@ -69,6 +77,8 @@ __all__ = [
     "predict_bernoulli_laplace_gp",
     "predict_exact_gp",
     "predict_rff_gp",
+    "predict_svgp",
     "rbf_kernel",
     "rbf_random_fourier_features",
+    "svgp_collapsed_elbo",
 ]
