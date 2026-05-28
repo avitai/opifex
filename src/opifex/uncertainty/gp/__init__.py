@@ -31,6 +31,11 @@ from opifex.uncertainty.gp.kernels import (
     multi_output_icm_kernel,
     multi_output_lcm_kernel,
 )
+from opifex.uncertainty.gp.laplace_classification import (
+    BernoulliLaplaceGPState,
+    fit_bernoulli_laplace_gp,
+    predict_bernoulli_laplace_gp,
+)
 from opifex.uncertainty.gp.rff import (
     fit_rff_gp,
     predict_rff_gp,
@@ -40,9 +45,11 @@ from opifex.uncertainty.gp.rff import (
 
 
 __all__ = [
+    "BernoulliLaplaceGPState",
     "ExactGPState",
     "RFFGPState",
     "exact_gp_loocv_log_predictive",
+    "fit_bernoulli_laplace_gp",
     "fit_exact_gp",
     "fit_heteroscedastic_exact_gp",
     "fit_rff_gp",
@@ -51,6 +58,7 @@ __all__ = [
     "matern52_kernel",
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
+    "predict_bernoulli_laplace_gp",
     "predict_exact_gp",
     "predict_rff_gp",
     "rbf_kernel",
