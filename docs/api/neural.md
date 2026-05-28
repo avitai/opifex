@@ -71,6 +71,23 @@ shared objective surface without diverging.
 ``uncertainty_guided_sampling(x_candidates, num_samples, *, rngs)``
 selects the highest-uncertainty samples for the next training batch.
 
+### `ProbabilisticFourierNeuralOperator` (PNO)
+
+``opifex.neural.operators.fno.probabilistic.ProbabilisticFourierNeuralOperator``
+equips a standard FNO backbone with twin pointwise heads — a mean head
+and a log-variance head — producing a per-location
+heteroscedastic-Gaussian ``PredictiveDistribution`` (Kendall & Gal 2017,
+arXiv:1703.04977 §3.1; companion to the Magnani+ 2024 LUNO
+function-uncertainty thread, arXiv:2406.04317). The training objective
+is the elementwise heteroscedastic-Gaussian negative log-likelihood,
+exposed as ``probabilistic_fno_negative_log_likelihood(model, x, y)``;
+the predictive uncertainty is *aleatoric* by construction. Epistemic
+uncertainty is supplied orthogonally by wrapping a fitted PNO with the
+existing ``LaplaceAdapterSpec`` (``opifex.uncertainty.curvature``) or a
+deep-ensemble adapter (``FNODeepEnsembleAdapterSpec``). The log-variance
+head is clipped to ``[log_variance_floor, log_variance_ceiling]``
+(defaults ``[-10, 10]``) for numerical stability.
+
 ### `UncertaintyQuantificationNeuralOperator` (UQNO)
 
 The conformal neural operator under

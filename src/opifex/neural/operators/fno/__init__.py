@@ -47,6 +47,12 @@ from opifex.neural.operators.fno.local import (
 # Existing variants
 from opifex.neural.operators.fno.multiscale import MultiScaleFourierNeuralOperator
 
+# NEW: Probabilistic FNO with heteroscedastic-Gaussian heads
+from opifex.neural.operators.fno.probabilistic import (
+    probabilistic_fno_negative_log_likelihood,
+    ProbabilisticFourierNeuralOperator,
+)
+
 # Spectral neural operators with normalization
 from opifex.neural.operators.fno.spectral import (
     create_spectral_neural_operator,
@@ -102,6 +108,7 @@ __all__ = [
     "LocalFourierLayer",
     "LocalFourierNeuralOperator",
     "MultiScaleFourierNeuralOperator",
+    "ProbabilisticFourierNeuralOperator",
     "SpectralNeuralOperator",
     "SphericalFourierNeuralOperator",
     "SphericalHarmonicConvolution",
@@ -127,4 +134,5 @@ __all__ = [
     "create_wave_amfno",
     "create_wave_local_fno",
     "create_weather_sfno",
+    "probabilistic_fno_negative_log_likelihood",
 ]
