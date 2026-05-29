@@ -161,9 +161,7 @@ def test_svgp_fit_and_predict_are_jit_compatible() -> None:
     x_test = jnp.linspace(-0.5, 0.5, 4).reshape(-1, 1)
 
     @jax.jit
-    def fit_predict(
-        x_t: jax.Array, y_t: jax.Array, z: jax.Array, x_q: jax.Array
-    ) -> jax.Array:
+    def fit_predict(x_t: jax.Array, y_t: jax.Array, z: jax.Array, x_q: jax.Array) -> jax.Array:
         state = fit_svgp(
             x_train=x_t,
             y_train=y_t,

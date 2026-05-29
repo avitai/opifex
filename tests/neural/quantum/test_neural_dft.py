@@ -34,9 +34,7 @@ def h2_system() -> MolecularSystem:
     return MolecularSystem(positions=positions, atomic_numbers=atomic_numbers)
 
 
-def test_compute_energy_classical_scf_fallback(
-    rngs: nnx.Rngs, h2_system: MolecularSystem
-) -> None:
+def test_compute_energy_classical_scf_fallback(rngs: nnx.Rngs, h2_system: MolecularSystem) -> None:
     """``compute_energy`` must run the classical Roothaan SCF branch.
 
     With ``use_neural_scf=False`` the neural SCF solver is ``None`` and
