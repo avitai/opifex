@@ -424,3 +424,77 @@ def qkq_brownian_lebesgue(
         - 0.5 * lower**2 * (upper - lower)
     )
     return amplitude * density**2 * expression
+
+
+def qk_brownian_gaussian(
+    *,
+    points: jax.Array,
+    amplitude: jax.Array,
+) -> jax.Array:
+    r"""Closed-form ``qK`` for Brownian motion × half-Gaussian on ``[0, ∞)``.
+
+    The Brownian kernel ``k(x, x') = σ² min(x, x')`` integrates
+    against the truncated standard normal ``p(x) = N(0, 1) / Z`` on
+    ``[0, ∞)`` (``Z = ½``) to give
+
+    .. math::
+
+        qK(x') = 2\sigma^{2}\!\left[
+            \frac{1}{\sqrt{2\pi}}\!\left(
+                1 - \exp(-x'^{2}/2)
+            \right)
+            + x'\,\Phi^{c}(x')
+        \right],
+
+    where ``Φ^c`` is the standard-normal survival function. This is
+    the "ambient measure" counterpart to
+    :func:`qk_brownian_lebesgue` (Task 6.3 design notes
+    ``notes/04-task-6.3-expansion-design.md:321-322``); both share
+    the same Brownian kernel and differ only in the integration
+    measure.
+
+    Args:
+        points: ``(n, 1)`` target points (Brownian motion is 1-D).
+        amplitude: Kernel amplitude ``σ²`` (scalar).
+
+    Returns:
+        ``(n,)`` kernel-mean evaluations.
+    """
+    points_1d = jnp.squeeze(points, axis=-1)
+    inv_sqrt_two_pi = 1.0 / jnp.sqrt(2.0 * jnp.pi)
+    survival = jax.scipy.stats.norm.sf(points_1d)
+    kernel_mean = 2.0 * (
+        inv_sqrt_two_pi * (1.0 - jnp.exp(-(points_1d**2) / 2.0)) + points_1d * survival
+    )
+    return amplitude * kernel_mean
+
+
+def qkq_brownian_gaussian(
+    *,
+    amplitude: jax.Array,
+) -> jax.Array:
+    r"""Closed-form ``qKq`` for Brownian × half-Gaussian on ``[0, ∞)``.
+
+    By symmetry, ``qKq = 2 σ² ∫∫_{x < x'} x p(x) p(x') dx dx'``.
+    With the truncated standard-normal density ``p`` on ``[0, ∞)``,
+    the integral reduces to a closed form involving the standard-
+    normal cdf and pdf at ``x = 0``. The numerical value is pinned by
+    the matching 2-D quadrature test
+    (``tests/uncertainty/quadrature/test_brownian_gaussian.py``).
+
+    Args:
+        amplitude: Kernel amplitude ``σ²`` (scalar).
+
+    Returns:
+        Scalar ``qKq`` value.
+    """
+    # qKq = σ² E[min(X, X')] for X, X' iid folded-standard-normal.
+    # Derivation: 8 ∫_0^∞ ∫_0^y x φ(x) φ(y) dx dy
+    #            = (8/√(2π)) [1/2 - ∫_0^∞ φ²(y)·√(2π) dy]
+    #            = (8/√(2π)) [1/2 - 1/(2√2)]
+    #            = 4 (1 - 1/√2) / √(2π)
+    #            = 4/√(2π) - 2/√π     (numerically ≈ 0.4674).
+    # Verified by 2-D trapezoidal quadrature in
+    # tests/uncertainty/quadrature/test_brownian_gaussian.py.
+    kernel_double_mean = 4.0 / jnp.sqrt(2.0 * jnp.pi) - 2.0 / jnp.sqrt(jnp.pi)
+    return amplitude * kernel_double_mean
