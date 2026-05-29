@@ -156,19 +156,13 @@ def fit_svgp(
     m = int(x_inducing.shape[0])
     sigma = noise_std
 
-    k_zz = kernel_fn(
-        x_inducing, x_inducing, lengthscale=lengthscale, output_scale=output_scale
-    )
+    k_zz = kernel_fn(x_inducing, x_inducing, lengthscale=lengthscale, output_scale=output_scale)
     k_zz = k_zz + jitter * jnp.eye(m)
     cholesky_kmm = jnp.linalg.cholesky(k_zz)
 
-    k_zx = kernel_fn(
-        x_inducing, x_train, lengthscale=lengthscale, output_scale=output_scale
-    )
+    k_zx = kernel_fn(x_inducing, x_train, lengthscale=lengthscale, output_scale=output_scale)
     # A = L_z^{-1} K_zx / sigma, shape (m, n).
-    a_matrix = (
-        jax.scipy.linalg.solve_triangular(cholesky_kmm, k_zx, lower=True) / sigma
-    )
+    a_matrix = jax.scipy.linalg.solve_triangular(cholesky_kmm, k_zx, lower=True) / sigma
     # B = I + A A^T, shape (m, m).
     b_matrix = jnp.eye(m) + a_matrix @ a_matrix.T
     cholesky_b = jnp.linalg.cholesky(b_matrix)
@@ -224,8 +218,8 @@ def predict_svgp(*, state: SVGPState, x_test: jax.Array) -> PredictiveDistributi
     )
     # v_test = L_z^{-1} K_zt, shape (m, t).
     v_test = jax.scipy.linalg.solve_triangular(state.cholesky_kmm, k_zt, lower=True)
-    # mean(x*) = v_test^T @ L_B^{-T} L_B^{-1} (A y / σ)
-    #          = (L_B^{-1} v_test)^T @ scaled_alpha   ... but scaled_alpha was already L_B^{-1}(Ay/σ),
+    # mean(x*) = v_test^T @ L_B^{-T} L_B^{-1} (A y / sigma)
+    # scaled_alpha is already L_B^{-1}(Ay/sigma), so we need v_test^T L_B^{-T} scaled_alpha,
     # so we need v_test^T @ L_B^{-T} @ scaled_alpha. Equivalent: (L_B^{-T} scaled_alpha)^T v_test.
     inner = jax.scipy.linalg.solve_triangular(
         state.cholesky_b, state.scaled_alpha, lower=True, trans="T"
@@ -234,9 +228,7 @@ def predict_svgp(*, state: SVGPState, x_test: jax.Array) -> PredictiveDistributi
     # Var(x*) = K(x*, x*) - ||v_test||² + ||L_B^{-1} v_test||²
     kxx_diag = jnp.full((x_test.shape[0],), state.output_scale**2)
     l_b_inv_v = jax.scipy.linalg.solve_triangular(state.cholesky_b, v_test, lower=True)
-    variance = kxx_diag - jnp.sum(v_test * v_test, axis=0) + jnp.sum(
-        l_b_inv_v * l_b_inv_v, axis=0
-    )
+    variance = kxx_diag - jnp.sum(v_test * v_test, axis=0) + jnp.sum(l_b_inv_v * l_b_inv_v, axis=0)
     return PredictiveDistribution(
         mean=mean,
         variance=variance,
@@ -267,12 +259,10 @@ def svgp_collapsed_elbo(*, state: SVGPState) -> jax.Array:
         + state.cached_log_det_b
         + (state.cached_y_squared_norm - state.cached_a_y_inside_norm) / sigma_sq
     )
-    trace_term = (state.cached_kxx_diag_sum - state.cached_trace_aat * sigma_sq) / (
-        2.0 * sigma_sq
-    )
-    # Note: cached_trace_aat = tr(A A^T) where A = L_z^{-1} K_zx / σ, so
-    # tr(K_xz K_zz^{-1} K_zx) = σ² tr(A A^T) and tr(K_xx - Q) / (2 σ²)
-    # = (Σ K_diag - σ² tr(A A^T)) / (2 σ²).
+    trace_term = (state.cached_kxx_diag_sum - state.cached_trace_aat * sigma_sq) / (2.0 * sigma_sq)
+    # Note: cached_trace_aat = tr(A A^T) where A = L_z^{-1} K_zx / sigma, so
+    # tr(K_xz K_zz^{-1} K_zx) = sigma^2 tr(A A^T) and tr(K_xx - Q) / (2 sigma^2)
+    # = (sum K_diag - sigma^2 tr(A A^T)) / (2 sigma^2).
     return log_prob - trace_term
 
 

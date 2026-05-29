@@ -35,10 +35,22 @@ from opifex.uncertainty.gp.kernels import (
     multi_output_icm_kernel,
     multi_output_lcm_kernel,
 )
+from opifex.uncertainty.gp.laplace import (
+    fit_laplace_gp,
+    LaplaceGPState,
+    predict_laplace_latent_moments,
+)
 from opifex.uncertainty.gp.laplace_classification import (
-    BernoulliLaplaceGPState,
     fit_bernoulli_laplace_gp,
     predict_bernoulli_laplace_gp,
+)
+from opifex.uncertainty.gp.laplace_likelihoods import (
+    fit_beta_laplace_gp,
+    fit_poisson_laplace_gp,
+    fit_studentst_laplace_gp,
+    predict_beta_laplace_gp,
+    predict_poisson_laplace_gp,
+    predict_studentst_laplace_gp,
 )
 from opifex.uncertainty.gp.rff import (
     fit_rff_gp,
@@ -55,8 +67,8 @@ from opifex.uncertainty.gp.svgp import (
 
 
 __all__ = [
-    "BernoulliLaplaceGPState",
     "ExactGPState",
+    "LaplaceGPState",
     "RFFGPState",
     "SVGPState",
     "additive_kernel",
@@ -64,9 +76,13 @@ __all__ = [
     "deep_kernel",
     "exact_gp_loocv_log_predictive",
     "fit_bernoulli_laplace_gp",
+    "fit_beta_laplace_gp",
     "fit_exact_gp",
     "fit_heteroscedastic_exact_gp",
+    "fit_laplace_gp",
+    "fit_poisson_laplace_gp",
     "fit_rff_gp",
+    "fit_studentst_laplace_gp",
     "fit_svgp",
     "graph_diffusion_kernel",
     "matern12_kernel",
@@ -75,8 +91,12 @@ __all__ = [
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
     "predict_bernoulli_laplace_gp",
+    "predict_beta_laplace_gp",
     "predict_exact_gp",
+    "predict_laplace_latent_moments",
+    "predict_poisson_laplace_gp",
     "predict_rff_gp",
+    "predict_studentst_laplace_gp",
     "predict_svgp",
     "rbf_kernel",
     "rbf_random_fourier_features",

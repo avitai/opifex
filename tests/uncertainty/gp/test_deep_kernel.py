@@ -92,7 +92,6 @@ def test_deep_kernel_is_jit_compatible_with_flax_feature_map() -> None:
     """End-to-end ``nnx.jit`` compatibility with a ``flax.nnx`` feature map."""
     rngs = nnx.Rngs(1)
     feature_extractor = nnx.Linear(in_features=1, out_features=3, rngs=rngs)
-    kernel = deep_kernel(feature_map=feature_extractor, base_kernel_fn=rbf_kernel)
 
     x_train = jnp.linspace(-1.0, 1.0, 5).reshape(-1, 1)
     y_train = jnp.sin(2.0 * x_train.squeeze(-1))
