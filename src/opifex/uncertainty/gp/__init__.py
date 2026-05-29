@@ -56,6 +56,11 @@ from opifex.uncertainty.gp.laplace_likelihoods import (
     predict_poisson_laplace_gp,
     predict_studentst_laplace_gp,
 )
+from opifex.uncertainty.gp.quasisep import (
+    fit_quasisep_sho_gp,
+    predict_quasisep_sho_gp,
+    QuasisepGPState,
+)
 from opifex.uncertainty.gp.rff import (
     fit_rff_gp,
     predict_rff_gp,
@@ -73,6 +78,7 @@ from opifex.uncertainty.gp.svgp import (
 __all__ = [
     "ExactGPState",
     "LaplaceGPState",
+    "QuasisepGPState",
     "RFFGPState",
     "SVGPState",
     "additive_kernel",
@@ -87,6 +93,7 @@ __all__ = [
     "fit_heteroscedastic_exact_gp",
     "fit_laplace_gp",
     "fit_poisson_laplace_gp",
+    "fit_quasisep_sho_gp",
     "fit_rff_gp",
     "fit_studentst_laplace_gp",
     "fit_svgp",
@@ -103,6 +110,7 @@ __all__ = [
     "predict_exact_gp",
     "predict_laplace_latent_moments",
     "predict_poisson_laplace_gp",
+    "predict_quasisep_sho_gp",
     "predict_rff_gp",
     "predict_studentst_laplace_gp",
     "predict_svgp",
