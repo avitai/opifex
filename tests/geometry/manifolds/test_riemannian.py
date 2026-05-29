@@ -177,14 +177,90 @@ class TestJITCompatibility:
         """Test that parallel_transport can be JIT compiled."""
         jit_transport = jax.jit(self.manifold.parallel_transport)
 
-        # Test compilation and execution
-        result_normal = self.manifold.parallel_transport(
-            self.test_point, self.test_tangent, self.test_vector
-        )
-        result_jit = jit_transport(self.test_point, self.test_tangent, self.test_vector)
+        # Protocol order: (tangent, path_start, path_end).
+        tangent = self.test_vector
+        path_start = self.test_point
+        path_end = self.test_point2
+
+        result_normal = self.manifold.parallel_transport(tangent, path_start, path_end)
+        result_jit = jit_transport(tangent, path_start, path_end)
 
         assert jnp.allclose(result_normal, result_jit, atol=1e-5)
         assert result_jit.shape == (2,)
+
+
+class TestParallelTransportProtocol:
+    """Verify parallel_transport honours the Manifold protocol contract.
+
+    The ``Manifold`` protocol (geometry/manifolds/base.py) declares
+    ``parallel_transport(self, tangent, path_start, path_end)`` where ``tangent``
+    is the vector at ``path_start`` to be transported along the geodesic from
+    ``path_start`` to ``path_end``. ``HyperbolicManifold`` follows this contract;
+    these tests pin ``RiemannianManifold`` to the same signature/semantics so a
+    caller using the ``Manifold`` interface transports the right vector along the
+    right geodesic (Liskov substitutability).
+    """
+
+    def setup_method(self):
+        """Set up a Euclidean manifold where transport is the identity map."""
+        self.manifold = RiemannianManifold(
+            dimension=2,
+            metric_function=euclidean_metric,
+        )
+
+    def test_parallel_transport_matches_protocol_signature(self):
+        """Degenerate path (start == end) returns the tangent unchanged.
+
+        Calling through the protocol order ``(tangent, path_start, path_end)``
+        with ``path_start == path_end`` must return ``tangent`` itself: there is
+        no geodesic to transport along. The old ``(base, tangent, vector)`` order
+        misreads ``tangent`` as the base point and integrates a spurious geodesic,
+        so the result is not equal to the supplied tangent.
+        """
+        tangent = jnp.array([0.3, -0.2])
+        path_start = jnp.array([0.1, 0.2])
+        path_end = path_start
+
+        transported = self.manifold.parallel_transport(tangent, path_start, path_end)
+
+        assert transported.shape == tangent.shape
+        assert jnp.allclose(transported, tangent, atol=1e-5)
+
+    def test_parallel_transport_euclidean_is_identity(self):
+        """On a flat (Euclidean) metric, transport leaves the vector unchanged.
+
+        Christoffel symbols vanish for the Euclidean metric, so parallel transport
+        along any geodesic equals the input vector. This is a hand-computed exact
+        value and only holds when the protocol argument order is respected (the
+        first argument is the vector being transported).
+        """
+        tangent = jnp.array([0.2, 0.5])
+        path_start = jnp.array([0.1, 0.1])
+        path_end = jnp.array([0.4, -0.3])
+
+        transported = self.manifold.parallel_transport(tangent, path_start, path_end)
+
+        assert jnp.allclose(transported, tangent, atol=1e-4)
+
+    def test_parallel_transport_preserves_metric_norm(self):
+        """Transport preserves the Riemannian norm at the endpoint.
+
+        Parallel transport is an isometry: ``||transported||_g(path_end)`` equals
+        ``||tangent||_g(path_start)``. For the Euclidean metric the metric tensor
+        is constant identity, so this reduces to preserving the Euclidean norm.
+        """
+        tangent = jnp.array([0.3, 0.4])
+        path_start = jnp.array([0.0, 0.0])
+        path_end = jnp.array([0.5, 0.2])
+
+        transported = self.manifold.parallel_transport(tangent, path_start, path_end)
+
+        g_start = self.manifold.metric_tensor(path_start)
+        g_end = self.manifold.metric_tensor(path_end)
+        norm_start = jnp.sqrt(jnp.einsum("i,ij,j->", tangent, g_start, tangent))
+        norm_end = jnp.sqrt(jnp.einsum("i,ij,j->", transported, g_end, transported))
+
+        assert jnp.allclose(norm_end, norm_start, atol=1e-4)
 
 
 class TestVMAPCompatibility:

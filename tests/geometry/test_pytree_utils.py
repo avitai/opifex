@@ -5,6 +5,8 @@ This module tests that geometric objects are properly registered as pytrees
 and work correctly with JAX transformations.
 """
 
+import importlib
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -20,7 +22,52 @@ from opifex.geometry.csg import (
 from opifex.geometry.manifolds.riemannian import euclidean_metric, RiemannianManifold
 
 
-# Note: SO3Group, SE3Group, and GraphTopology already have pytree registration in their modules
+# Note: SO3Group and SE3Group have pytree registration in their modules; GraphTopology
+# and the other geometric types are registered centrally in opifex.geometry.pytree_utils.
+
+
+class TestPytreeRegistryHygiene:
+    """Guard the central pytree registry against the resolved registration defects."""
+
+    def test_unused_registration_helpers_are_removed(self):
+        """The YAGNI helpers must not be re-introduced (they had no external callers)."""
+        from opifex.geometry import pytree_utils
+
+        assert not hasattr(pytree_utils, "is_pytree_registered")
+        assert not hasattr(pytree_utils, "list_registered_pytrees")
+
+    def test_graph_pytrees_register_without_being_silently_swallowed(self):
+        """Graph classes must actually register (no broad suppress hiding failures).
+
+        A registered class flattens to a JAX ``CustomNode``; an unregistered one
+        collapses to a single opaque leaf.  We assert the former for every graph
+        class to prove the central registry path completed rather than being
+        aborted by a swallowed duplicate-registration error.
+        """
+        # Importing the geometry package runs the central registry on import.
+        importlib.import_module("opifex.geometry")
+        from opifex.geometry.topology.graphs import (
+            GraphMessagePassing,
+            GraphNeuralOperator,
+            GraphTopology,
+        )
+
+        key = jax.random.PRNGKey(0)
+        nodes = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        edges = jnp.array([[0, 1], [1, 2], [2, 0]])
+        edge_features = jnp.array([[0.1], [0.2], [0.3]])
+        instances = {
+            GraphTopology: GraphTopology(nodes=nodes, edges=edges, edge_features=edge_features),
+            GraphMessagePassing: GraphMessagePassing(
+                node_dim=2, edge_dim=1, hidden_dim=4, output_dim=2, key=key
+            ),
+            GraphNeuralOperator: GraphNeuralOperator(
+                node_dim=2, edge_dim=1, hidden_dim=4, output_dim=2, num_layers=1, key=key
+            ),
+        }
+        for cls, instance in instances.items():
+            treedef = jax.tree_util.tree_structure(instance)
+            assert treedef.num_nodes > 1, f"{cls.__name__} is not registered as a pytree"
 
 
 class TestRiemannianManifoldPytree:

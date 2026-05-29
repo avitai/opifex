@@ -17,6 +17,43 @@ from opifex.geometry.topology.graphs import (
 )
 
 
+class TestGraphTopologyPytreeRegistration:
+    """Guard against the duplicate / order-dependent pytree registration defect.
+
+    ``GraphTopology`` was historically registered as a JAX pytree twice with
+    incompatible flatten schemes (one keeping ``edge_features`` as a traced
+    child, the other relegating it to static ``aux_data``).  Registration is
+    now performed exactly once, with ``edge_features`` as a child so it survives
+    a flatten/unflatten round-trip and remains a differentiable leaf.
+    """
+
+    def test_graphtopology_pytree_roundtrip_preserves_edge_features(self):
+        """Flatten + unflatten must preserve non-None edge_features and stay jittable."""
+        nodes = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        edges = jnp.array([[0, 1], [1, 2], [2, 0]])
+        edge_features = jnp.array([[0.1], [0.2], [0.3]])
+        graph = GraphTopology(nodes=nodes, edges=edges, edge_features=edge_features)
+
+        leaves, treedef = jax.tree_util.tree_flatten(graph)
+        restored = jax.tree_util.tree_unflatten(treedef, leaves)
+
+        assert restored.edge_features is not None
+        assert jnp.array_equal(restored.edge_features, edge_features)
+        assert jnp.array_equal(restored.nodes, nodes)
+        assert jnp.array_equal(restored.edges, edges)
+        assert jnp.array_equal(restored.adjacency_matrix, graph.adjacency_matrix)
+
+        # edge_features must be a traced child (a real leaf), not static aux_data.
+        assert any(
+            getattr(leaf, "shape", None) == edge_features.shape
+            and jnp.array_equal(leaf, edge_features)
+            for leaf in leaves
+        )
+
+        # The registered pytree must be usable as a jit argument.
+        assert float(jax.jit(lambda g: g.nodes.sum())(graph)) == float(nodes.sum())
+
+
 class TestOptimizedGraphTopology:
     """Test optimized graph topology operations."""
 

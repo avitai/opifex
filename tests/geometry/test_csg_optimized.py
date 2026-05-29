@@ -160,6 +160,62 @@ class TestOptimizedCSGOperations:
         assert jnp.allclose(result_normal, result_jit)
 
 
+class TestCSGSDFMembership:
+    """Pin SDF-based ``contains`` membership for the boolean CSG nodes.
+
+    Every concrete shape subclasses ``_EnhancedShapeBase`` (or implements the
+    ``Shape2D`` protocol) and therefore always exposes ``distance()``, so the
+    SDF branch of each ``contains`` is the only reachable path. These tests
+    baseline that membership semantics so the non-SDF fallback dead code can be
+    removed without behaviour change.
+    """
+
+    def test_csg_union_sdf_membership(self):
+        """Union of two disjoint circles: a point inside either circle is in."""
+        circle_a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        circle_b = Circle(center=jnp.array([3.0, 0.0]), radius=1.0)
+        union_shape = CSGUnion(circle_a, circle_b)
+
+        # Centre of each circle is inside the union.
+        assert union_shape.contains(jnp.array([0.0, 0.0])) is True
+        assert union_shape.contains(jnp.array([3.0, 0.0])) is True
+        # Off-axis interior point of the second circle is inside.
+        assert union_shape.contains(jnp.array([2.5, 0.0])) is True
+        # Point in the gap between the disjoint circles is outside.
+        assert union_shape.contains(jnp.array([1.5, 0.0])) is False
+        # Far-away point is outside.
+        assert union_shape.contains(jnp.array([10.0, 10.0])) is False
+
+    def test_csg_intersection_sdf_membership(self):
+        """Intersection of two overlapping circles is the shared lens region."""
+        circle_a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        circle_b = Circle(center=jnp.array([1.0, 0.0]), radius=1.0)
+        intersection_shape = CSGIntersection(circle_a, circle_b)
+
+        # Midpoint of the overlap is inside both circles.
+        assert intersection_shape.contains(jnp.array([0.5, 0.0])) is True
+        # Inside circle A only -> outside the intersection.
+        assert intersection_shape.contains(jnp.array([-0.5, 0.0])) is False
+        # Inside circle B only -> outside the intersection.
+        assert intersection_shape.contains(jnp.array([1.5, 0.0])) is False
+        # Far-away point is outside.
+        assert intersection_shape.contains(jnp.array([10.0, 10.0])) is False
+
+    def test_csg_difference_sdf_membership(self):
+        """Difference A - B: inside A and outside B is in; inside B is out."""
+        circle_a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        circle_b = Circle(center=jnp.array([0.7, 0.0]), radius=0.4)
+        difference_shape = CSGDifference(circle_a, circle_b)
+
+        # Inside A, far from the subtracted disc -> inside the difference.
+        assert difference_shape.contains(jnp.array([-0.5, 0.0])) is True
+        assert difference_shape.contains(jnp.array([0.0, 0.0])) is True
+        # Centre of the subtracted disc -> carved out, outside the difference.
+        assert difference_shape.contains(jnp.array([0.7, 0.0])) is False
+        # Outside A entirely -> outside the difference.
+        assert difference_shape.contains(jnp.array([10.0, 10.0])) is False
+
+
 class TestOptimizedPeriodicCell:
     """Test optimized periodic cell operations."""
 

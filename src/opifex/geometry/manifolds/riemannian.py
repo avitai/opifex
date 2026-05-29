@@ -315,19 +315,33 @@ class RiemannianManifold:
         return jax.vmap(self._jax_log_map_optimization)(bases, points)
 
     def parallel_transport(
-        self, base: ManifoldPoint, tangent: TangentVector, vector: TangentVector
+        self, tangent: TangentVector, path_start: ManifoldPoint, path_end: ManifoldPoint
     ) -> TangentVector:
-        """Parallel transport vector along geodesic.
+        """Parallel transport a tangent vector along a geodesic.
+
+        Follows the ``Manifold`` protocol contract
+        (``geometry/manifolds/base.py``): ``tangent`` is the vector at
+        ``path_start`` and it is transported along the geodesic running from
+        ``path_start`` to ``path_end`` while preserving parallelism with respect
+        to the Levi-Civita connection. The geodesic is identified by its initial
+        velocity ``log_map(path_start, path_end)``, so a degenerate path
+        (``path_start == path_end``) returns ``tangent`` unchanged.
 
         Args:
-            base: Base point
-            tangent: Direction of transport (tangent vector)
-            vector: Vector to transport
+            tangent: Tangent vector at ``path_start`` to transport.
+            path_start: Starting point of the transport.
+            path_end: End point of the transport.
 
         Returns:
-            Parallel transported vector
+            Parallel transported tangent vector at ``path_end``.
         """
-        return self._jax_parallel_transport(base, tangent, vector)
+        velocity = self.log_map(path_start, path_end)
+        same_point = jnp.sum((path_end - path_start) ** 2) < 1e-16
+        return jnp.where(
+            same_point,
+            tangent,
+            self._jax_parallel_transport(path_start, velocity, tangent),
+        )
 
     def _jax_parallel_transport(
         self, base: ManifoldPoint, tangent: TangentVector, vector: TangentVector

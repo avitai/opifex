@@ -64,19 +64,14 @@ class CSGUnion(_EnhancedShapeBase):
     def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
         self.shape_a = shape_a
         self.shape_b = shape_b
-        # Check if shapes support distance fields for enhanced operations
-        self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
 
     def contains(self, point: Point2D) -> bool:
         """Point is in union if it's in either shape."""
-        if self._has_sdf:
-            # Use SDF-based robust evaluation
-            dist_a = self.shape_a.distance(point)
-            dist_b = self.shape_b.distance(point)
-            union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
-            return bool(union_dist <= 0)
-        # Fallback to original method
-        return self.shape_a.contains(point) or self.shape_b.contains(point)
+        # SDF-based robust evaluation (every shape exposes ``distance``).
+        dist_a = self.shape_a.distance(point)
+        dist_b = self.shape_b.distance(point)
+        union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
+        return bool(union_dist <= 0)
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to union boundary."""
@@ -88,42 +83,36 @@ class CSGUnion(_EnhancedShapeBase):
 
     def sample_boundary(self, n: int, key: jax.Array) -> Points2D:
         """Sample boundary points using enhanced filtering."""
-        if self._has_sdf:
-            # Enhanced sampling using distance-based filtering
-            key1, key2, key3 = jax.random.split(key, 3)
+        # Enhanced sampling using distance-based filtering
+        key1, key2, key3 = jax.random.split(key, 3)
 
-            # Oversample from both shapes
-            oversample_factor = 2
-            points_a = self.shape_a.sample_boundary(n * oversample_factor, key1)
-            points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
+        # Oversample from both shapes
+        oversample_factor = 2
+        points_a = self.shape_a.sample_boundary(n * oversample_factor, key1)
+        points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
 
-            # Filter points near the true boundary
-            def is_boundary_point(point):
-                dist_a = self.shape_a.distance(point)
-                dist_b = self.shape_b.distance(point)
-                union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
-                return jnp.abs(union_dist) < 1e-3
+        # Filter points near the true boundary
+        def is_boundary_point(point):
+            dist_a = self.shape_a.distance(point)
+            dist_b = self.shape_b.distance(point)
+            union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
+            return jnp.abs(union_dist) < 1e-3
 
-            all_points = jnp.concatenate([points_a, points_b], axis=0)
-            boundary_mask = jax.vmap(is_boundary_point)(all_points)
-            boundary_points = all_points[boundary_mask]
+        all_points = jnp.concatenate([points_a, points_b], axis=0)
+        boundary_mask = jax.vmap(is_boundary_point)(all_points)
+        boundary_points = all_points[boundary_mask]
 
-            # Sample n if we have more than needed
-            if len(boundary_points) >= n:
-                indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
-                return boundary_points[indices]
-            # If not enough boundary points, fill with regular sampling
-            remaining = n - len(boundary_points)
-            if remaining > 0:
-                extra_a = self.shape_a.sample_boundary(remaining // 2, key1)
-                extra_b = self.shape_b.sample_boundary(remaining - remaining // 2, key2)
-                return jnp.concatenate([boundary_points, extra_a, extra_b], axis=0)
-            return boundary_points
-        # Fallback to original method
-        key1, key2 = jax.random.split(key)
-        points_a = self.shape_a.sample_boundary(n // 2, key1)
-        points_b = self.shape_b.sample_boundary(n - n // 2, key2)
-        return jnp.concatenate([points_a, points_b], axis=0)
+        # Sample n if we have more than needed
+        if len(boundary_points) >= n:
+            indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
+            return boundary_points[indices]
+        # If not enough boundary points, fill with regular sampling
+        remaining = n - len(boundary_points)
+        if remaining > 0:
+            extra_a = self.shape_a.sample_boundary(remaining // 2, key1)
+            extra_b = self.shape_b.sample_boundary(remaining - remaining // 2, key2)
+            return jnp.concatenate([boundary_points, extra_a, extra_b], axis=0)
+        return boundary_points
 
     def sample_interior(self, n: int, key: jax.Array) -> Points2D:
         """Sample points from union interior."""
@@ -135,22 +124,17 @@ class CSGUnion(_EnhancedShapeBase):
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute normal (enhanced approach)."""
-        if self._has_sdf:
 
-            def union_distance(p):
-                dist_a = self.shape_a.distance(p)
-                dist_b = self.shape_b.distance(p)
-                return _SDFOperations.union_sdf(dist_a, dist_b)
+        def union_distance(p):
+            dist_a = self.shape_a.distance(p)
+            dist_b = self.shape_b.distance(p)
+            return _SDFOperations.union_sdf(dist_a, dist_b)
 
-            gradient_fn = jax.grad(union_distance)
-            normal = gradient_fn(point)
-            norm = jnp.linalg.norm(normal)
-            result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
-            return jnp.asarray(result).reshape(2)
-        # Fallback to original method
-        if self.shape_a.contains(point):
-            return self.shape_a.compute_normal(point)
-        return self.shape_b.compute_normal(point)
+        gradient_fn = jax.grad(union_distance)
+        normal = gradient_fn(point)
+        norm = jnp.linalg.norm(normal)
+        result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
+        return jnp.asarray(result).reshape(2)
 
 
 class CSGIntersection(_EnhancedShapeBase):
@@ -159,16 +143,13 @@ class CSGIntersection(_EnhancedShapeBase):
     def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
         self.shape_a = shape_a
         self.shape_b = shape_b
-        self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
 
     def contains(self, point: Point2D) -> bool:
         """Point is in intersection if it's in both shapes."""
-        if self._has_sdf:
-            dist_a = self.shape_a.distance(point)
-            dist_b = self.shape_b.distance(point)
-            intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
-            return bool(intersection_dist <= 0)
-        return self.shape_a.contains(point) and self.shape_b.contains(point)
+        dist_a = self.shape_a.distance(point)
+        dist_b = self.shape_b.distance(point)
+        intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
+        return bool(intersection_dist <= 0)
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to intersection boundary."""
@@ -180,37 +161,30 @@ class CSGIntersection(_EnhancedShapeBase):
 
     def sample_boundary(self, n: int, key: jax.Array) -> Points2D:
         """Sample boundary points (enhanced approach)."""
-        if self._has_sdf:
-            # Similar enhanced sampling as union
-            key1, key2, key3 = jax.random.split(key, 3)
+        # Enhanced sampling using distance-based filtering (as in union).
+        key1, key2, key3 = jax.random.split(key, 3)
 
-            oversample_factor = 3
-            points_a = self.shape_a.sample_boundary(n * oversample_factor, key1)
-            points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
+        oversample_factor = 3
+        points_a = self.shape_a.sample_boundary(n * oversample_factor, key1)
+        points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
 
-            def is_intersection_boundary(point):
-                dist_a = self.shape_a.distance(point)
-                dist_b = self.shape_b.distance(point)
-                intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
-                return jnp.abs(intersection_dist) < 1e-3
+        def is_intersection_boundary(point):
+            dist_a = self.shape_a.distance(point)
+            dist_b = self.shape_b.distance(point)
+            intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
+            return jnp.abs(intersection_dist) < 1e-3
 
-            all_points = jnp.concatenate([points_a, points_b], axis=0)
-            boundary_mask = jax.vmap(is_intersection_boundary)(all_points)
-            boundary_points = all_points[boundary_mask]
+        all_points = jnp.concatenate([points_a, points_b], axis=0)
+        boundary_mask = jax.vmap(is_intersection_boundary)(all_points)
+        boundary_points = all_points[boundary_mask]
 
-            if len(boundary_points) >= n:
-                indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
-                return boundary_points[indices]
-            if len(boundary_points) > 0:
-                return boundary_points
-            # Fallback if no intersection boundary found
-            return jnp.zeros((1, 2))
-        # Simplified implementation for non-SDF shapes
-        key1, _ = jax.random.split(key)
-        points_a = self.shape_a.sample_boundary(n, key1)
-        mask = jax.vmap(self.shape_b.contains)(points_a)
-        valid_points = points_a[mask]
-        return valid_points[:n] if len(valid_points) >= n else points_a[:1]
+        if len(boundary_points) >= n:
+            indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
+            return boundary_points[indices]
+        if len(boundary_points) > 0:
+            return boundary_points
+        # Fallback if no intersection boundary found
+        return jnp.zeros((1, 2))
 
     def sample_interior(self, n: int, key: jax.Array) -> Points2D:
         """Sample points from intersection interior."""
@@ -230,20 +204,17 @@ class CSGIntersection(_EnhancedShapeBase):
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute normal (enhanced approach)."""
-        if self._has_sdf:
 
-            def intersection_distance(p):
-                dist_a = self.shape_a.distance(p)
-                dist_b = self.shape_b.distance(p)
-                return _SDFOperations.intersection_sdf(dist_a, dist_b)
+        def intersection_distance(p):
+            dist_a = self.shape_a.distance(p)
+            dist_b = self.shape_b.distance(p)
+            return _SDFOperations.intersection_sdf(dist_a, dist_b)
 
-            gradient_fn = jax.grad(intersection_distance)
-            normal = gradient_fn(point)
-            norm = jnp.linalg.norm(normal)
-            result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
-            return jnp.asarray(result).reshape(2)
-        # Use normal from first shape as approximation
-        return self.shape_a.compute_normal(point)
+        gradient_fn = jax.grad(intersection_distance)
+        normal = gradient_fn(point)
+        norm = jnp.linalg.norm(normal)
+        result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
+        return jnp.asarray(result).reshape(2)
 
 
 class CSGDifference(_EnhancedShapeBase):
@@ -252,16 +223,13 @@ class CSGDifference(_EnhancedShapeBase):
     def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
         self.shape_a = shape_a
         self.shape_b = shape_b
-        self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
 
     def contains(self, point: Point2D) -> bool:
         """Point is in difference if it's in A but not in B."""
-        if self._has_sdf:
-            dist_a = self.shape_a.distance(point)
-            dist_b = self.shape_b.distance(point)
-            difference_dist = _SDFOperations.difference_sdf(dist_a, dist_b)
-            return bool(difference_dist <= 0)
-        return self.shape_a.contains(point) and not self.shape_b.contains(point)
+        dist_a = self.shape_a.distance(point)
+        dist_b = self.shape_b.distance(point)
+        difference_dist = _SDFOperations.difference_sdf(dist_a, dist_b)
+        return bool(difference_dist <= 0)
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to difference boundary."""
@@ -310,19 +278,17 @@ class CSGDifference(_EnhancedShapeBase):
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute normal from shape A."""
-        if self._has_sdf:
 
-            def difference_distance(p):
-                dist_a = self.shape_a.distance(p)
-                dist_b = self.shape_b.distance(p)
-                return _SDFOperations.difference_sdf(dist_a, dist_b)
+        def difference_distance(p):
+            dist_a = self.shape_a.distance(p)
+            dist_b = self.shape_b.distance(p)
+            return _SDFOperations.difference_sdf(dist_a, dist_b)
 
-            gradient_fn = jax.grad(difference_distance)
-            normal = gradient_fn(point)
-            norm = jnp.linalg.norm(normal)
-            result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
-            return jnp.asarray(result).reshape(2)
-        return self.shape_a.compute_normal(point)
+        gradient_fn = jax.grad(difference_distance)
+        normal = gradient_fn(point)
+        norm = jnp.linalg.norm(normal)
+        result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
+        return jnp.asarray(result).reshape(2)
 
 
 # CSG operation functions (preserving exact API)
@@ -362,21 +328,16 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
             self.shape_a = shape_a
             self.shape_b = shape_b
             self.smoothness = smoothness
-            self._has_sdf = hasattr(shape_a, "distance") and hasattr(shape_b, "distance")
 
         def contains(self, point: Point2D) -> bool:
-            if self._has_sdf:
-                return bool(self.distance(point) <= 0)
-            return self.shape_a.contains(point) or self.shape_b.contains(point)
+            return bool(self.distance(point) <= 0)
 
         def distance(self, point: Point2D) -> Float[jax.Array, ""]:
-            if self._has_sdf:
-                dist_a = self.shape_a.distance(point)
-                dist_b = self.shape_b.distance(point)
-                # Smooth minimum operation
-                h = jnp.maximum(self.smoothness - jnp.abs(dist_a - dist_b), 0.0) / self.smoothness
-                return jnp.minimum(dist_a, dist_b) - h * h * self.smoothness * 0.25
-            return jnp.array(0.0)
+            dist_a = self.shape_a.distance(point)
+            dist_b = self.shape_b.distance(point)
+            # Smooth minimum operation
+            h = jnp.maximum(self.smoothness - jnp.abs(dist_a - dist_b), 0.0) / self.smoothness
+            return jnp.minimum(dist_a, dist_b) - h * h * self.smoothness * 0.25
 
         def sample_boundary(self, n_points: int, key: jax.Array) -> Points2D:
             # Use combined sampling from both shapes
@@ -386,15 +347,10 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
             return jnp.concatenate([points_a, points_b], axis=0)
 
         def compute_normal(self, point: Point2D) -> Point2D:
-            if self._has_sdf:
-                gradient_fn = jax.grad(self.distance)
-                normal = gradient_fn(point)
-                norm = jnp.linalg.norm(normal)
-                result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
-                return jnp.asarray(result).reshape(2)
-            # Fallback
-            if self.shape_a.contains(point):
-                return self.shape_a.compute_normal(point)
-            return self.shape_b.compute_normal(point)
+            gradient_fn = jax.grad(self.distance)
+            normal = gradient_fn(point)
+            norm = jnp.linalg.norm(normal)
+            result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
+            return jnp.asarray(result).reshape(2)
 
     return SmoothCSGUnion(shape_a, shape_b, smoothness)
