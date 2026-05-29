@@ -235,7 +235,8 @@ skips = [
   "B602",
   "B110",
   "B403",
-  "B301"
+  "B301",
+  "B101" # mirrors global ruff S101 ignore (scientific code uses assert for shape/sanity checks); the control-flow asserts in src/opifex/uncertainty/markov/*_likelihoods.py are converted to explicit raises in a later task
 ] # Skip subprocess, assert, and pickle warnings for utility scripts and checkpoint management
 
 # Allow assert statements in test files and scripts only

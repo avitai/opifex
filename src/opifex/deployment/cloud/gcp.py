@@ -225,17 +225,17 @@ class GCPDeploymentManager:
         return {
             "secrets": [
                 {
-                    "secret_id": "opifex-database-password",
+                    "secret_id": "opifex-database-password",  # nosec B105 - secret-manager resource id, not a password
                     "replication": {"automatic": {}},
                 },
                 {
-                    "secret_id": "opifex-api-keys",
+                    "secret_id": "opifex-api-keys",  # nosec B105 - secret-manager resource id, not a password
                     "replication": {
                         "user_managed": {"replicas": [{"location": self.config.region}]}
                     },
                 },
                 {
-                    "secret_id": "opifex-oauth-credentials",
+                    "secret_id": "opifex-oauth-credentials",  # nosec B105 - secret-manager resource id, not a password
                     "replication": {"automatic": {}},
                 },
             ]
