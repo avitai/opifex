@@ -309,6 +309,117 @@ def damped_oscillator_kernel(
     return _damped_oscillator
 
 
+def celerite_complex_kernel(
+    *,
+    sine_amplitude: float,
+    frequency: float,
+) -> Callable[..., jax.Array]:
+    r"""Celerite Complex term — building block of the celerite kernel family.
+
+    Foreman-Mackey, Agol, Ambikasaran, Angus 2017 (AJ,
+    arXiv:1703.09710) and Foreman-Mackey 2018 (RNAAS, *Scalable
+    backpropagation for Gaussian processes using celerite*) define the
+    Complex term as
+
+    .. math::
+
+        k(\tau) = \exp(-c\,|\tau|)\,\bigl[a\,\cos(d\,|\tau|)
+                                          + b\,\sin(d\,|\tau|)\bigr],
+
+    parametrised by ``(a, b, c, d)`` with ``a, c > 0`` and the
+    positive-definiteness constraint ``a c - b d > 0``. The opifex
+    parametrisation maps ``a = output_scale²``, ``c = 1/lengthscale``
+    (matching :func:`matern12_kernel` for the cosine envelope), and
+    closes over ``b = sine_amplitude``, ``d = frequency`` via the
+    factory.
+
+    The Complex term reduces to the celerite **Real term** when
+    ``sine_amplitude = 0, frequency = 0`` — i.e. it collapses to
+    :func:`matern12_kernel`. Sums of Complex terms via
+    :func:`kernel_sum` realise the full celerite kernel family
+    (Foreman-Mackey 2018 §2); the underdamped SHO
+    (:func:`damped_oscillator_kernel`) is one specific Complex-term
+    reparametrisation.
+
+    Reference implementation consulted (READ-ONLY):
+    ``../tinygp/src/tinygp/kernels/quasisep.py:Celerite``.
+
+    Args:
+        sine_amplitude: ``b`` — sine-component amplitude. Constraint:
+            ``output_scale² / lengthscale - sine_amplitude * frequency
+            > 0`` (positive-definiteness; NaN propagates if violated).
+        frequency: ``d`` — oscillation angular frequency.
+
+    Returns:
+        Standard kernel callable
+        ``(x1, x2, *, lengthscale, output_scale) -> (n, m)``.
+    """
+
+    def _celerite_complex(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        _require_positive_kernel_hparams(lengthscale=lengthscale, output_scale=output_scale)
+        tau = jnp.abs(x1[:, None, :] - x2[None, :, :])
+        tau = jnp.sum(tau, axis=-1)  # (n, m); assumes 1-D time inputs
+        decay = jnp.exp(-tau / lengthscale)
+        cosine = (output_scale**2) * jnp.cos(frequency * tau)
+        sine = sine_amplitude * jnp.sin(frequency * tau)
+        return decay * (cosine + sine)
+
+    return _celerite_complex
+
+
+def kernel_sum(
+    *,
+    kernel_fns: tuple[Callable[..., jax.Array], ...],
+) -> Callable[..., jax.Array]:
+    r"""Pointwise sum of kernel callables ``k = Σ_q k_q``.
+
+    A common building block in stationary-kernel composition: sums of
+    Matern12 + celerite-Complex terms reproduce the full celerite
+    family (Foreman-Mackey+ 2017 / Foreman-Mackey 2018); sums of
+    RBF + periodic + linear realise the standard interpretable-GP
+    decomposition (Duvenaud 2014 thesis).
+
+    Each component kernel sees the same ``(x1, x2, lengthscale,
+    output_scale)`` arguments and contributes its full Gram matrix to
+    the sum. Use a closure to fix per-component parameters that
+    differ from the global ``(lengthscale, output_scale)``
+    (e.g. ``celerite_complex_kernel`` already does this for the
+    Complex-term ``(b, d)`` parameters).
+
+    Args:
+        kernel_fns: Tuple of kernel callables, each matching the
+            standard signature.
+
+    Returns:
+        A callable matching the standard kernel signature.
+
+    Raises:
+        ValueError: If ``kernel_fns`` is empty.
+    """
+    if len(kernel_fns) == 0:
+        raise ValueError("kernel_sum requires at least one kernel callable.")
+
+    def _sum(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        total = kernel_fns[0](x1, x2, lengthscale=lengthscale, output_scale=output_scale)
+        for component_fn in kernel_fns[1:]:
+            total = total + component_fn(x1, x2, lengthscale=lengthscale, output_scale=output_scale)
+        return total
+
+    return _sum
+
+
 def graph_diffusion_kernel(
     *,
     laplacian_eigenvalues: jax.Array,
@@ -702,10 +813,12 @@ def orthogonal_additive_kernel(
 
 __all__ = [
     "additive_kernel",
+    "celerite_complex_kernel",
     "constrained_rbf_kernel",
     "damped_oscillator_kernel",
     "deep_kernel",
     "graph_diffusion_kernel",
+    "kernel_sum",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",

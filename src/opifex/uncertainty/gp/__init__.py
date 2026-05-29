@@ -26,10 +26,12 @@ from opifex.uncertainty.gp.exact import (
 )
 from opifex.uncertainty.gp.kernels import (
     additive_kernel,
+    celerite_complex_kernel,
     constrained_rbf_kernel,
     damped_oscillator_kernel,
     deep_kernel,
     graph_diffusion_kernel,
+    kernel_sum,
     matern12_kernel,
     matern32_kernel,
     matern52_kernel,
@@ -74,6 +76,7 @@ __all__ = [
     "RFFGPState",
     "SVGPState",
     "additive_kernel",
+    "celerite_complex_kernel",
     "constrained_rbf_kernel",
     "damped_oscillator_kernel",
     "deep_kernel",
@@ -88,6 +91,7 @@ __all__ = [
     "fit_studentst_laplace_gp",
     "fit_svgp",
     "graph_diffusion_kernel",
+    "kernel_sum",
     "matern12_kernel",
     "matern32_kernel",
     "matern52_kernel",
