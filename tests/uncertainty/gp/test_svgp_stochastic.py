@@ -42,6 +42,7 @@ from opifex.uncertainty.gp import (
     fit_bernoulli_laplace_gp,
     fit_svgp,
     init_stochastic_svgp_state,
+    natural_gradient_step,
     poisson_log_likelihood,
     predict_bernoulli_laplace_gp,
     predict_stochastic_svgp,
@@ -451,3 +452,186 @@ def test_poisson_log_likelihood_matches_exp_link_definition() -> None:
     y = jnp.array([1.0, 3.0, 2.0])
     expected = y * f - jnp.exp(f) - jax.scipy.special.gammaln(y + 1.0)
     assert jnp.allclose(poisson_log_likelihood(f, y), expected, atol=1e-7)
+
+
+# -----------------------------------------------------------------------------
+# Natural-gradient updates (Salimbeni+ 2018) — D3 sub-item (b)
+# -----------------------------------------------------------------------------
+
+
+def test_natural_gradient_step_returns_finite_state() -> None:
+    """One nat-grad step from initial (μ_w=0, L_w=I) produces a finite state."""
+    rng = jax.random.PRNGKey(31)
+    x_train = jax.random.uniform(rng, (15, 1), minval=-1.5, maxval=1.5)
+    y_train = jnp.sign(jnp.sin(2.0 * x_train.squeeze(-1)))
+    state = init_stochastic_svgp_state(
+        x_inducing=jnp.linspace(-1.5, 1.5, 6).reshape(-1, 1),
+        lengthscale=0.5,
+        output_scale=1.0,
+        log_likelihood_fn=bernoulli_log_likelihood,
+    )
+    new_state = natural_gradient_step(
+        state=state,
+        x_batch=x_train,
+        y_batch=y_train,
+        dataset_size=x_train.shape[0],
+        learning_rate=0.5,
+    )
+    assert isinstance(new_state, StochasticSVGPState)
+    assert jnp.all(jnp.isfinite(new_state.whitened_mean))
+    assert jnp.all(jnp.isfinite(new_state.whitened_root_cov))
+    # L_w must remain lower-triangular with positive diagonal.
+    assert jnp.allclose(new_state.whitened_root_cov, jnp.tril(new_state.whitened_root_cov))
+    assert jnp.all(jnp.diag(new_state.whitened_root_cov) > 0.0)
+
+
+def test_natural_gradient_step_increases_elbo() -> None:
+    """A single nat-grad step with a reasonable learning rate increases the ELBO."""
+    rng = jax.random.PRNGKey(41)
+    x_train = jax.random.uniform(rng, (20, 1), minval=-1.5, maxval=1.5)
+    y_train = jnp.sign(jnp.sin(2.0 * x_train.squeeze(-1)))
+    state = init_stochastic_svgp_state(
+        x_inducing=jnp.linspace(-1.5, 1.5, 6).reshape(-1, 1),
+        lengthscale=0.5,
+        output_scale=1.0,
+        log_likelihood_fn=bernoulli_log_likelihood,
+    )
+    elbo_before = stochastic_svgp_elbo(
+        state=state,
+        x_batch=x_train,
+        y_batch=y_train,
+        dataset_size=x_train.shape[0],
+    )
+    new_state = natural_gradient_step(
+        state=state,
+        x_batch=x_train,
+        y_batch=y_train,
+        dataset_size=x_train.shape[0],
+        learning_rate=0.5,
+    )
+    elbo_after = stochastic_svgp_elbo(
+        state=new_state,
+        x_batch=x_train,
+        y_batch=y_train,
+        dataset_size=x_train.shape[0],
+    )
+    assert float(elbo_after) > float(elbo_before)
+
+
+def test_natural_gradient_converges_faster_than_adam_on_gaussian_likelihood() -> None:
+    """At equal step counts, nat-grad lands at a higher ELBO than Adam (Salimbeni+ 2018)."""
+    import optax  # local import keeps top-level optax dep scoped to convergence tests
+
+    rng = jax.random.PRNGKey(53)
+    x_train = jnp.linspace(-1.0, 1.0, 12).reshape(-1, 1)
+    y_train = jnp.sin(2.0 * x_train.squeeze(-1)) + 0.05 * jax.random.normal(rng, (12,))
+    noise_var = 0.01
+
+    def gaussian_log_lik(f: jax.Array, y: jax.Array) -> jax.Array:
+        return -0.5 * jnp.log(2.0 * jnp.pi * noise_var) - 0.5 * (y - f) ** 2 / noise_var
+
+    initial_state = init_stochastic_svgp_state(
+        x_inducing=x_train,
+        lengthscale=0.5,
+        output_scale=1.0,
+        log_likelihood_fn=gaussian_log_lik,
+    )
+    num_steps = 8
+
+    # Natural gradient path.
+    nat_state = initial_state
+    for _ in range(num_steps):
+        nat_state = natural_gradient_step(
+            state=nat_state,
+            x_batch=x_train,
+            y_batch=y_train,
+            dataset_size=x_train.shape[0],
+            learning_rate=0.8,
+        )
+    nat_elbo = stochastic_svgp_elbo(
+        state=nat_state,
+        x_batch=x_train,
+        y_batch=y_train,
+        dataset_size=x_train.shape[0],
+    )
+
+    # Adam path (same number of steps, tuned LR).
+    def loss(mu_w: jax.Array, l_w: jax.Array) -> jax.Array:
+        new_state = StochasticSVGPState(
+            x_inducing=initial_state.x_inducing,
+            whitened_mean=mu_w,
+            whitened_root_cov=l_w,
+            lengthscale=initial_state.lengthscale,
+            output_scale=initial_state.output_scale,
+            kernel_fn=initial_state.kernel_fn,
+            log_likelihood_fn=initial_state.log_likelihood_fn,
+            jitter=initial_state.jitter,
+        )
+        return -stochastic_svgp_elbo(
+            state=new_state,
+            x_batch=x_train,
+            y_batch=y_train,
+            dataset_size=x_train.shape[0],
+        )
+
+    grad_fn = jax.jit(jax.grad(loss, argnums=(0, 1)))
+    optimizer = optax.adam(5e-2)
+    mu_w = initial_state.whitened_mean
+    l_w = initial_state.whitened_root_cov
+    opt_state = optimizer.init((mu_w, l_w))
+    for _ in range(num_steps):
+        grad_mu, grad_l = grad_fn(mu_w, l_w)
+        grad_l_tril = jnp.tril(grad_l)
+        updates, opt_state = optimizer.update((grad_mu, grad_l_tril), opt_state)
+        update_mu = jnp.asarray(updates[0])  # type: ignore[index]
+        update_l = jnp.asarray(updates[1])  # type: ignore[index]
+        mu_w = mu_w + update_mu
+        l_w = jnp.tril(l_w + update_l)
+    adam_state = StochasticSVGPState(
+        x_inducing=initial_state.x_inducing,
+        whitened_mean=mu_w,
+        whitened_root_cov=l_w,
+        lengthscale=initial_state.lengthscale,
+        output_scale=initial_state.output_scale,
+        kernel_fn=initial_state.kernel_fn,
+        log_likelihood_fn=initial_state.log_likelihood_fn,
+        jitter=initial_state.jitter,
+    )
+    adam_elbo = stochastic_svgp_elbo(
+        state=adam_state,
+        x_batch=x_train,
+        y_batch=y_train,
+        dataset_size=x_train.shape[0],
+    )
+
+    # Salimbeni+ 2018 §4 claim: nat-grad converges in O(1) - O(10) steps; Adam needs
+    # 100x more for the same ELBO. With 8 steps, nat-grad should clearly dominate.
+    assert float(nat_elbo) > float(adam_elbo)
+
+
+def test_natural_gradient_step_is_jit_compatible() -> None:
+    """The natural-gradient update compiles under ``jax.jit``."""
+    x_train = jnp.linspace(-1.0, 1.0, 12).reshape(-1, 1)
+    y_train = jnp.sign(jnp.sin(2.0 * x_train.squeeze(-1)))
+    x_inducing = jnp.linspace(-1.0, 1.0, 5).reshape(-1, 1)
+
+    @jax.jit
+    def one_step(x_b: jax.Array, y_b: jax.Array) -> jax.Array:
+        state = init_stochastic_svgp_state(
+            x_inducing=x_inducing,
+            lengthscale=0.5,
+            output_scale=1.0,
+            log_likelihood_fn=bernoulli_log_likelihood,
+        )
+        new_state = natural_gradient_step(
+            state=state,
+            x_batch=x_b,
+            y_batch=y_b,
+            dataset_size=x_b.shape[0],
+            learning_rate=0.5,
+        )
+        return new_state.whitened_mean
+
+    out = one_step(x_train, y_train)
+    assert out.shape == (5,)
+    assert jnp.all(jnp.isfinite(out))

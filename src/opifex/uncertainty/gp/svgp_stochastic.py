@@ -411,11 +411,149 @@ def poisson_log_likelihood(f: jax.Array, y: jax.Array) -> jax.Array:
     return y * f - jnp.exp(f) - jax.scipy.special.gammaln(y + 1.0)
 
 
+# -----------------------------------------------------------------------------
+# Natural-gradient updates (Salimbeni+ 2018) — D3 sub-item (b)
+# -----------------------------------------------------------------------------
+
+
+def natural_gradient_step(
+    *,
+    state: StochasticSVGPState,
+    x_batch: jax.Array,
+    y_batch: jax.Array,
+    dataset_size: int,
+    learning_rate: float,
+    num_quadrature_points: int = 20,
+) -> StochasticSVGPState:
+    r"""One Salimbeni+ 2018 natural-gradient update of ``(μ_w, L_w)``.
+
+    For the whitened variational Gaussian ``q(u_w) = N(μ_w, S_w)`` with
+    ``S_w = L_w L_w^{T}``, the natural parameters are
+
+    .. math::
+
+        \theta_{1} = S_{w}^{-1}\,\mu_{w},
+        \qquad \theta_{2} = -\tfrac{1}{2}\,S_{w}^{-1},
+
+    and the expectation parameters are
+    ``η_1 = μ_w``, ``η_2 = S_w + μ_w μ_w^{T}``. Salimbeni,
+    Eleftheriadis, Hensman 2018 (AISTATS — *Natural Gradients in
+    Practice*) shows that the natural-gradient step on ``θ`` equals
+    the regular gradient on ``η``:
+
+    .. math::
+
+        \theta_{1}^{\text{new}} &= \theta_{1} + \rho\,\bigl(
+            \partial \mathcal{L}/\partial \mu_{w}
+            - 2\,(\partial \mathcal{L}/\partial S_{w})\,\mu_{w}\bigr),\\
+        \theta_{2}^{\text{new}} &= \theta_{2} + \rho\,
+            \partial \mathcal{L}/\partial S_{w}.
+
+    After the update we recover ``(μ_w, L_w)`` via
+    ``S_w = (-2 \theta_{2})^{-1}``, ``μ_w = S_w \theta_{1}``,
+    ``L_w = chol(S_w)``. The natural-gradient direction is the
+    Fisher-information-preconditioned direction; Salimbeni+ 2018 §4
+    reports 10x-100x faster convergence than Adam on the variational
+    parameters for non-Gaussian likelihoods.
+
+    Performance: each step costs one regular ``jax.grad`` pass plus
+    three ``O(m^{3})`` linear-algebra operations
+    (``S_w`` inverse, ``S_w_new`` recovery, Cholesky). For ``m`` up
+    to a few hundred, this is dominated by the gradient pass.
+
+    Args:
+        state: Current variational state.
+        x_batch: ``(b, d)`` minibatch inputs.
+        y_batch: ``(b,)`` minibatch targets.
+        dataset_size: Full-dataset size ``N`` for the ELBO scaling.
+        learning_rate: Natural-gradient step size ``ρ``. For the
+            Gaussian-likelihood + conjugate case, ``ρ = 1`` reaches
+            the variational optimum in a single step
+            (Salimbeni+ 2018 Algorithm 1). For non-Gaussian
+            likelihoods use ``ρ ≈ 0.1 - 1.0`` and decay over
+            iterations.
+        num_quadrature_points: Gauss-Hermite quadrature nodes for
+            the ELBO data-fit term. Defaults to ``20``.
+
+    Returns:
+        :class:`StochasticSVGPState` with updated ``(μ_w, L_w)``;
+        every other field is unchanged.
+    """
+    num_inducing = state.whitened_mean.shape[0]
+    jitter_identity = state.jitter * jnp.eye(num_inducing)
+
+    initial_s_w = state.whitened_root_cov @ state.whitened_root_cov.T
+
+    def elbo_in_mu_and_s(mu_w_arg: jax.Array, s_w_arg: jax.Array) -> jax.Array:
+        l_w_arg = jnp.linalg.cholesky(s_w_arg + jitter_identity)
+        wrapped_state = StochasticSVGPState(
+            x_inducing=state.x_inducing,
+            whitened_mean=mu_w_arg,
+            whitened_root_cov=l_w_arg,
+            lengthscale=state.lengthscale,
+            output_scale=state.output_scale,
+            kernel_fn=state.kernel_fn,
+            log_likelihood_fn=state.log_likelihood_fn,
+            jitter=state.jitter,
+        )
+        return stochastic_svgp_elbo(
+            state=wrapped_state,
+            x_batch=x_batch,
+            y_batch=y_batch,
+            dataset_size=dataset_size,
+            num_quadrature_points=num_quadrature_points,
+        )
+
+    grad_mu, grad_s = jax.grad(elbo_in_mu_and_s, argnums=(0, 1))(state.whitened_mean, initial_s_w)
+    # Symmetrise the gradient w.r.t. S (the elbo depends on S only
+    # through L_w = chol(S), so the autodiff gradient w.r.t. S is the
+    # standard symmetric form modulo numerical noise — symmetrise to
+    # ensure exact symmetry).
+    grad_s_sym = 0.5 * (grad_s + grad_s.T)
+
+    # Expectation-parameter gradient (Salimbeni+ 2018 eq. 7-8):
+    # ∂L/∂η_1 = ∂L/∂μ - 2 (∂L/∂S) μ
+    # ∂L/∂η_2 = ∂L/∂S
+    grad_eta_1 = grad_mu - 2.0 * grad_s_sym @ state.whitened_mean
+    grad_eta_2 = grad_s_sym
+
+    # Current natural parameters in the whitened space.
+    initial_s_inv = jnp.linalg.inv(initial_s_w + jitter_identity)
+    initial_s_inv_sym = 0.5 * (initial_s_inv + initial_s_inv.T)
+    theta_1 = initial_s_inv_sym @ state.whitened_mean
+    theta_2 = -0.5 * initial_s_inv_sym
+
+    # Natural-gradient step.
+    theta_1_new = theta_1 + learning_rate * grad_eta_1
+    theta_2_new = theta_2 + learning_rate * grad_eta_2
+    theta_2_new_sym = 0.5 * (theta_2_new + theta_2_new.T)
+
+    # Recover (μ_w, S_w, L_w) from the updated natural parameters.
+    new_s_inv = -2.0 * theta_2_new_sym
+    new_s_inv_sym = 0.5 * (new_s_inv + new_s_inv.T)
+    new_s_w = jnp.linalg.inv(new_s_inv_sym + jitter_identity)
+    new_s_w_sym = 0.5 * (new_s_w + new_s_w.T)
+    new_mu_w = new_s_w_sym @ theta_1_new
+    new_l_w = jnp.linalg.cholesky(new_s_w_sym + jitter_identity)
+
+    return StochasticSVGPState(
+        x_inducing=state.x_inducing,
+        whitened_mean=new_mu_w,
+        whitened_root_cov=new_l_w,
+        lengthscale=state.lengthscale,
+        output_scale=state.output_scale,
+        kernel_fn=state.kernel_fn,
+        log_likelihood_fn=state.log_likelihood_fn,
+        jitter=state.jitter,
+    )
+
+
 __all__ = [
     "LogLikelihoodFn",
     "StochasticSVGPState",
     "bernoulli_log_likelihood",
     "init_stochastic_svgp_state",
+    "natural_gradient_step",
     "poisson_log_likelihood",
     "predict_stochastic_svgp",
     "stochastic_svgp_elbo",

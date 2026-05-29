@@ -76,6 +76,7 @@ from opifex.uncertainty.gp.svgp import (
 from opifex.uncertainty.gp.svgp_stochastic import (
     bernoulli_log_likelihood,
     init_stochastic_svgp_state,
+    natural_gradient_step,
     poisson_log_likelihood,
     predict_stochastic_svgp,
     stochastic_svgp_elbo,
@@ -115,6 +116,7 @@ __all__ = [
     "matern52_kernel",
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
+    "natural_gradient_step",
     "orthogonal_additive_kernel",
     "poisson_log_likelihood",
     "predict_bernoulli_laplace_gp",
