@@ -303,11 +303,179 @@ def predict_gaussian_markov_pep_gp(
     )
 
 
+# -----------------------------------------------------------------------------
+# Student-t (location-scale, robust regression — closes deferral D8)
+# -----------------------------------------------------------------------------
+
+
+def _studentst_per_obs_log_likelihood_factory(*, df: float, scale: float):
+    r"""Per-observation Student-t log-likelihood ``(f, y) -> log p(y|f)``.
+
+    Matches the closed-form Student-t density in
+    :func:`opifex.uncertainty.gp.laplace_likelihoods._studentst_components_factory`.
+    """
+    df_arr = jnp.asarray(df)
+    scale_sq = jnp.asarray(scale) ** 2
+    df_times_scale_sq = df_arr * scale_sq
+    log_const = (
+        jax.scipy.special.gammaln(0.5 * (df_arr + 1.0))
+        - jax.scipy.special.gammaln(0.5 * df_arr)
+        - 0.5 * (jnp.log(scale_sq) + jnp.log(df_arr) + jnp.log(jnp.pi))
+    )
+
+    def _log_lik(f: jax.Array, y: jax.Array) -> jax.Array:
+        residual_sq = (y - f) ** 2
+        return log_const - 0.5 * (df_arr + 1.0) * jnp.log(1.0 + residual_sq / df_times_scale_sq)
+
+    return _log_lik
+
+
+def fit_studentst_markov_pep_gp(
+    *,
+    times: jax.Array,
+    observations: jax.Array,
+    state_space_kernel: StateSpaceKernel,
+    df: float = 4.0,
+    scale: float = 1.0,
+    power: float = 0.5,
+    num_iterations: int = 25,
+    learning_rate: float = 0.5,
+    num_quadrature_points: int = 20,
+) -> MarkovPEPGPState:
+    """Robust regression on a Markov-GP prior via Power EP with Student-t likelihood."""
+    return fit_markov_pep_gp(
+        times=times,
+        observations=observations,
+        state_space_kernel=state_space_kernel,
+        log_likelihood_fn=_studentst_per_obs_log_likelihood_factory(df=df, scale=scale),
+        power=power,
+        num_iterations=num_iterations,
+        learning_rate=learning_rate,
+        num_quadrature_points=num_quadrature_points,
+    )
+
+
+def predict_studentst_markov_pep_gp(
+    *,
+    state: MarkovPEPGPState,
+    times_test: jax.Array,
+    df: float = 4.0,
+    scale: float = 1.0,
+) -> PredictiveDistribution:
+    r"""Predict ``y*`` under the Student-t response.
+
+    Latent mean ``μ``; response variance is the latent variance plus the
+    Student-t marginal variance ``scale² ν / (ν - 2)`` (finite for ``ν > 2``).
+    """
+    latent = predict_markov_pep_gp(state=state, times_test=times_test)
+    latent_variance = _latent_variance(latent)
+    df_arr = jnp.asarray(df)
+    scale_sq = jnp.asarray(scale) ** 2
+    response_variance = latent_variance + scale_sq * df_arr / (df_arr - 2.0)
+    return _replace_metadata_pep(
+        PredictiveDistribution(
+            mean=latent.mean,
+            variance=response_variance,
+            epistemic=latent_variance,
+            total_uncertainty=response_variance,
+        ),
+        estimator="studentst_markov_pep_gp",
+        likelihood="studentst",
+        link="identity",
+    )
+
+
+# -----------------------------------------------------------------------------
+# Beta (unit-interval regression, logit link — closes deferral D8)
+# -----------------------------------------------------------------------------
+
+
+def _beta_per_obs_log_likelihood_factory(*, scale: float):
+    r"""Per-observation Beta log-likelihood with logit link.
+
+    Matches the closed-form Beta density in
+    :func:`opifex.uncertainty.gp.laplace_likelihoods._beta_components_factory`.
+    """
+    scale_arr = jnp.asarray(scale)
+
+    def _log_lik(f: jax.Array, y: jax.Array) -> jax.Array:
+        mean = jax.nn.sigmoid(f)
+        alpha = mean * scale_arr
+        beta = scale_arr - alpha
+        y_clipped = jnp.clip(y, a_min=1e-6, a_max=1.0 - 1e-6)
+        return (
+            (alpha - 1.0) * jnp.log(y_clipped)
+            + (beta - 1.0) * jnp.log(1.0 - y_clipped)
+            + jax.scipy.special.gammaln(scale_arr)
+            - jax.scipy.special.gammaln(alpha)
+            - jax.scipy.special.gammaln(beta)
+        )
+
+    return _log_lik
+
+
+def fit_beta_markov_pep_gp(
+    *,
+    times: jax.Array,
+    observations: jax.Array,
+    state_space_kernel: StateSpaceKernel,
+    scale: float = 10.0,
+    power: float = 0.5,
+    num_iterations: int = 25,
+    learning_rate: float = 0.5,
+    num_quadrature_points: int = 20,
+) -> MarkovPEPGPState:
+    """Beta regression on a Markov-GP prior via Power EP with logit link."""
+    return fit_markov_pep_gp(
+        times=times,
+        observations=observations,
+        state_space_kernel=state_space_kernel,
+        log_likelihood_fn=_beta_per_obs_log_likelihood_factory(scale=scale),
+        power=power,
+        num_iterations=num_iterations,
+        learning_rate=learning_rate,
+        num_quadrature_points=num_quadrature_points,
+    )
+
+
+def predict_beta_markov_pep_gp(
+    *,
+    state: MarkovPEPGPState,
+    times_test: jax.Array,
+    scale: float = 10.0,
+) -> PredictiveDistribution:
+    r"""Predict Beta response mean ``E[y*] = sigmoid(latent_mean)``.
+
+    Predictive variance under the unit-interval link uses the standard
+    Beta(α, β) marginal variance ``mean (1 - mean) / (scale + 1)`` at
+    ``mean = sigmoid(latent_mean)``.
+    """
+    latent = predict_markov_pep_gp(state=state, times_test=times_test)
+    latent_variance = _latent_variance(latent)
+    response_mean = jax.nn.sigmoid(latent.mean)
+    response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
+    return _replace_metadata_pep(
+        PredictiveDistribution(
+            mean=response_mean,
+            variance=response_variance,
+            epistemic=latent_variance,
+            total_uncertainty=response_variance,
+        ),
+        estimator="beta_markov_pep_gp",
+        likelihood="beta",
+        link="logit",
+    )
+
+
 __all__ = [
     "fit_bernoulli_markov_pep_gp",
+    "fit_beta_markov_pep_gp",
     "fit_gaussian_markov_pep_gp",
     "fit_poisson_markov_pep_gp",
+    "fit_studentst_markov_pep_gp",
     "predict_bernoulli_markov_pep_gp",
+    "predict_beta_markov_pep_gp",
     "predict_gaussian_markov_pep_gp",
     "predict_poisson_markov_pep_gp",
+    "predict_studentst_markov_pep_gp",
 ]

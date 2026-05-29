@@ -42,11 +42,15 @@ from opifex.uncertainty.markov.markov_pep import (
 )
 from opifex.uncertainty.markov.markov_pep_likelihoods import (
     fit_bernoulli_markov_pep_gp,
+    fit_beta_markov_pep_gp,
     fit_gaussian_markov_pep_gp,
     fit_poisson_markov_pep_gp,
+    fit_studentst_markov_pep_gp,
     predict_bernoulli_markov_pep_gp,
+    predict_beta_markov_pep_gp,
     predict_gaussian_markov_pep_gp,
     predict_poisson_markov_pep_gp,
+    predict_studentst_markov_pep_gp,
 )
 from opifex.uncertainty.markov.markov_pl import (
     fit_markov_pl_gp,
@@ -55,11 +59,15 @@ from opifex.uncertainty.markov.markov_pl import (
 )
 from opifex.uncertainty.markov.markov_pl_likelihoods import (
     fit_bernoulli_markov_pl_gp,
+    fit_beta_markov_pl_gp,
     fit_gaussian_markov_pl_gp,
     fit_poisson_markov_pl_gp,
+    fit_studentst_markov_pl_gp,
     predict_bernoulli_markov_pl_gp,
+    predict_beta_markov_pl_gp,
     predict_gaussian_markov_pl_gp,
     predict_poisson_markov_pl_gp,
+    predict_studentst_markov_pl_gp,
 )
 from opifex.uncertainty.markov.markov_vi import (
     fit_markov_vi_gp,
@@ -90,6 +98,8 @@ __all__ = [
     "fit_bernoulli_markov_pl_gp",
     "fit_bernoulli_markov_vi_gp",
     "fit_beta_markov_laplace_gp",
+    "fit_beta_markov_pep_gp",
+    "fit_beta_markov_pl_gp",
     "fit_beta_markov_vi_gp",
     "fit_gaussian_markov_laplace_gp",
     "fit_gaussian_markov_pep_gp",
@@ -104,12 +114,16 @@ __all__ = [
     "fit_poisson_markov_pl_gp",
     "fit_poisson_markov_vi_gp",
     "fit_studentst_markov_laplace_gp",
+    "fit_studentst_markov_pep_gp",
+    "fit_studentst_markov_pl_gp",
     "fit_studentst_markov_vi_gp",
     "predict_bernoulli_markov_laplace_gp",
     "predict_bernoulli_markov_pep_gp",
     "predict_bernoulli_markov_pl_gp",
     "predict_bernoulli_markov_vi_gp",
     "predict_beta_markov_laplace_gp",
+    "predict_beta_markov_pep_gp",
+    "predict_beta_markov_pl_gp",
     "predict_beta_markov_vi_gp",
     "predict_gaussian_markov_laplace_gp",
     "predict_gaussian_markov_pep_gp",
@@ -124,5 +138,7 @@ __all__ = [
     "predict_poisson_markov_pl_gp",
     "predict_poisson_markov_vi_gp",
     "predict_studentst_markov_laplace_gp",
+    "predict_studentst_markov_pep_gp",
+    "predict_studentst_markov_pl_gp",
     "predict_studentst_markov_vi_gp",
 ]

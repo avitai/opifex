@@ -243,11 +243,145 @@ def predict_gaussian_markov_pl_gp(
     )
 
 
+# -----------------------------------------------------------------------------
+# Student-t (location-scale, robust regression — closes deferral D9)
+# -----------------------------------------------------------------------------
+
+
+def _studentst_conditional_moments_factory(*, df: float, scale: float):
+    r"""``f -> (f, scale**2 * df / (df - 2))`` for location-scale Student-t (df > 2)."""
+    df_arr = jnp.asarray(df)
+    scale_sq = jnp.asarray(scale) ** 2
+    response_variance = scale_sq * df_arr / (df_arr - 2.0)
+
+    def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
+        return f, jnp.full_like(f, response_variance)
+
+    return _moments
+
+
+def fit_studentst_markov_pl_gp(
+    *,
+    times: jax.Array,
+    observations: jax.Array,
+    state_space_kernel: StateSpaceKernel,
+    df: float = 4.0,
+    scale: float = 1.0,
+    num_iterations: int = 20,
+    num_quadrature_points: int = 20,
+) -> MarkovPLGPState:
+    r"""Robust regression on a Markov-GP prior via Posterior Linearisation.
+
+    For a location-scale Student-t with ``df > 2``, ``E[y|f] = f`` and
+    the response variance is constant, so the SLR linearisation collapses
+    to a Gaussian observation model with that constant variance.
+    """
+    return fit_markov_pl_gp(
+        times=times,
+        observations=observations,
+        state_space_kernel=state_space_kernel,
+        conditional_moments_fn=_studentst_conditional_moments_factory(df=df, scale=scale),
+        num_iterations=num_iterations,
+        num_quadrature_points=num_quadrature_points,
+    )
+
+
+def predict_studentst_markov_pl_gp(
+    *,
+    state: MarkovPLGPState,
+    times_test: jax.Array,
+    df: float = 4.0,
+    scale: float = 1.0,
+) -> PredictiveDistribution:
+    r"""Predict ``y*`` under the Student-t response (df > 2 finite variance)."""
+    latent = predict_markov_pl_gp(state=state, times_test=times_test)
+    latent_variance = _latent_variance(latent)
+    df_arr = jnp.asarray(df)
+    scale_sq = jnp.asarray(scale) ** 2
+    response_variance = latent_variance + scale_sq * df_arr / (df_arr - 2.0)
+    return _replace_metadata_pl(
+        PredictiveDistribution(
+            mean=latent.mean,
+            variance=response_variance,
+            epistemic=latent_variance,
+            total_uncertainty=response_variance,
+        ),
+        estimator="studentst_markov_pl_gp",
+        likelihood="studentst",
+        link="identity",
+    )
+
+
+# -----------------------------------------------------------------------------
+# Beta (unit-interval regression, logit link — closes deferral D9)
+# -----------------------------------------------------------------------------
+
+
+def _beta_conditional_moments_factory(*, scale: float):
+    r"""``f -> (sigmoid(f), sigmoid(f) (1 - sigmoid(f)) / (scale + 1))``."""
+    scale_arr = jnp.asarray(scale)
+
+    def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
+        mean = jax.nn.sigmoid(f)
+        variance = mean * (1.0 - mean) / (scale_arr + 1.0)
+        return mean, variance
+
+    return _moments
+
+
+def fit_beta_markov_pl_gp(
+    *,
+    times: jax.Array,
+    observations: jax.Array,
+    state_space_kernel: StateSpaceKernel,
+    scale: float = 10.0,
+    num_iterations: int = 20,
+    num_quadrature_points: int = 20,
+) -> MarkovPLGPState:
+    """Beta regression on a Markov-GP prior via Posterior Linearisation."""
+    return fit_markov_pl_gp(
+        times=times,
+        observations=observations,
+        state_space_kernel=state_space_kernel,
+        conditional_moments_fn=_beta_conditional_moments_factory(scale=scale),
+        num_iterations=num_iterations,
+        num_quadrature_points=num_quadrature_points,
+    )
+
+
+def predict_beta_markov_pl_gp(
+    *,
+    state: MarkovPLGPState,
+    times_test: jax.Array,
+    scale: float = 10.0,
+) -> PredictiveDistribution:
+    r"""Predict Beta response mean ``sigmoid(latent_mean)`` + Beta marginal variance."""
+    latent = predict_markov_pl_gp(state=state, times_test=times_test)
+    latent_variance = _latent_variance(latent)
+    response_mean = jax.nn.sigmoid(latent.mean)
+    response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
+    return _replace_metadata_pl(
+        PredictiveDistribution(
+            mean=response_mean,
+            variance=response_variance,
+            epistemic=latent_variance,
+            total_uncertainty=response_variance,
+        ),
+        estimator="beta_markov_pl_gp",
+        likelihood="beta",
+        link="logit",
+    )
+
+
 __all__ = [
     "fit_bernoulli_markov_pl_gp",
+    "fit_beta_markov_pl_gp",
     "fit_gaussian_markov_pl_gp",
     "fit_poisson_markov_pl_gp",
+    "fit_studentst_markov_pl_gp",
     "predict_bernoulli_markov_pl_gp",
+    "predict_beta_markov_pl_gp",
     "predict_gaussian_markov_pl_gp",
     "predict_poisson_markov_pl_gp",
+    "predict_studentst_markov_pl_gp",
 ]
