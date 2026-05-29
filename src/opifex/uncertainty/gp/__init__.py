@@ -26,6 +26,7 @@ from opifex.uncertainty.gp.exact import (
 )
 from opifex.uncertainty.gp.kernels import (
     additive_kernel,
+    carma_kernel,
     celerite_complex_kernel,
     constrained_rbf_kernel,
     damped_oscillator_kernel,
@@ -93,6 +94,7 @@ __all__ = [
     "StochasticSVGPState",
     "additive_kernel",
     "bernoulli_log_likelihood",
+    "carma_kernel",
     "celerite_complex_kernel",
     "constrained_rbf_kernel",
     "damped_oscillator_kernel",

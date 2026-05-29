@@ -811,8 +811,152 @@ def orthogonal_additive_kernel(
     return _oak
 
 
+def _carma_roots(poly_coefficients: jax.Array) -> jax.Array:
+    """Roots of the AR characteristic polynomial, sorted by real part."""
+    roots = jnp.roots(poly_coefficients[::-1], strip_zeros=False)
+    return roots[jnp.argsort(roots.real)]
+
+
+def _carma_acvf(
+    *,
+    ar_roots: jax.Array,
+    alpha: jax.Array,
+    beta: jax.Array,
+) -> jax.Array:
+    r"""Compute the autocovariance-function (ACVF) coefficients per Kelly+ 2014.
+
+    Returns a length-``p`` complex array ``acf`` such that
+
+    .. math::
+
+        k(\tau) = \mathrm{Re}\!\left[
+            \sum_{j=1}^{p} \mathrm{acf}_{j}\,\exp(\rho_{j}\,|\tau|)
+        \right]
+
+    where ``ρ_j`` are the AR roots (all with negative real parts for
+    a stationary process). Direct port of
+    ``../tinygp/src/tinygp/kernels/quasisep.py:carma_acvf`` lines
+    973-1012.
+
+    Args:
+        ar_roots: ``(p,)`` complex array of AR-polynomial roots.
+        alpha: ``(p,)`` real AR coefficients.
+        beta: ``(q + 1,)`` real MA coefficients with ``q + 1 ≤ p``.
+
+    Returns:
+        ``(p,)`` complex ACVF coefficients.
+    """
+    p = alpha.shape[0]
+    q_plus_one = beta.shape[0]
+    sigma = beta[0]
+    normalised_beta = beta / sigma
+
+    complex_dtype = jnp.complex64
+    ar_roots_complex = ar_roots.astype(complex_dtype)
+    num_left = jnp.zeros(p, dtype=complex_dtype)
+    num_right = jnp.zeros(p, dtype=complex_dtype)
+    for k in range(q_plus_one):
+        num_left = num_left + normalised_beta[k] * jnp.power(ar_roots_complex, k)
+        num_right = num_right + normalised_beta[k] * jnp.power(-ar_roots_complex, k)
+
+    denom = -2.0 * ar_roots.real.astype(complex_dtype)
+    root_index = jnp.arange(p)
+    for j in range(1, p):
+        rolled_roots = ar_roots_complex[jnp.roll(root_index, j)]
+        denom = (
+            denom * (rolled_roots - ar_roots_complex) * (jnp.conj(rolled_roots) + ar_roots_complex)
+        )
+
+    return (sigma**2) * num_left * num_right / denom
+
+
+def carma_kernel(
+    *,
+    alpha: jax.Array,
+    beta: jax.Array,
+) -> Callable[..., jax.Array]:
+    r"""Direct-evaluation CARMA(p, q) kernel (Kelly+ 2014 arXiv:1402.5978).
+
+    Continuous-time autoregressive moving-average process. The kernel
+    is a closed-form sum of real-and-complex exponential terms:
+
+    .. math::
+
+        k(\tau) = \sigma_{\text{out}}^{2}\,
+            \mathrm{Re}\!\left[
+                \sum_{j=1}^{p} \mathrm{acf}_{j}\,
+                \exp(\rho_{j}\,|\tau|\,/\,\ell)
+            \right],
+
+    where ``ρ_j`` are the AR roots and ``acf_j`` the ACVF
+    coefficients derived from ``(α, β)`` per Kelly+ 2014 eq. 4.
+    Reduces to known cases at low orders:
+
+    * CARMA(1, 0) ≡ Matern-1/2 with ``ℓ_eff = 1/α_0``.
+    * CARMA(2, 1) ≡ Celerite Complex term (Foreman-Mackey+ 2017).
+
+    The opifex implementation ships the direct ``O(n²)`` Gram. The
+    scalable ``O(n)`` state-space quasiseparable port is filed as a
+    deferred follow-up in
+    ``memory-bank/.../notes/06-task-11.1-deferred-items.md`` (D7).
+
+    Args:
+        alpha: ``(p,)`` array of AR coefficients ``α_0, …, α_{p-1}``.
+            The implicit highest-order coefficient ``α_p = 1`` is
+            appended internally. For stationarity all roots of the
+            AR polynomial must have negative real parts (the factory
+            does not enforce this — NaN propagates if violated).
+        beta: ``(q + 1,)`` array of MA coefficients ``β_0, …, β_q``
+            with ``q + 1 ≤ p``. ``β_0`` is absorbed as the overall
+            amplitude factor.
+
+    Returns:
+        Standard kernel callable
+        ``(x1, x2, *, lengthscale, output_scale) -> (n, m)`` where
+        ``lengthscale`` rescales the lag (``τ → τ / ℓ``) and
+        ``output_scale²`` multiplies the kernel amplitude.
+
+    Raises:
+        ValueError: If ``len(beta) > len(alpha)`` (MA order exceeds
+            AR order, violating Kelly+ 2014 Eq. 1).
+
+    Reference implementation consulted (READ-ONLY):
+    ``../tinygp/src/tinygp/kernels/quasisep.py:CARMA`` (lines
+    672-885) + the ``carma_roots`` / ``carma_acvf`` helpers.
+    """
+    if beta.shape[0] > alpha.shape[0]:
+        raise ValueError(
+            "CARMA(p, q) requires q + 1 ≤ p (Kelly+ 2014 Eq. 1); "
+            f"got len(beta) = {beta.shape[0]} > len(alpha) = {alpha.shape[0]}."
+        )
+    augmented_alpha = jnp.append(alpha, 1.0)
+    ar_roots = _carma_roots(augmented_alpha)
+    acf = _carma_acvf(ar_roots=ar_roots, alpha=alpha, beta=beta)
+
+    def _carma(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        _require_positive_kernel_hparams(lengthscale=lengthscale, output_scale=output_scale)
+        tau = jnp.abs(x1[:, None, :] - x2[None, :, :])
+        tau = jnp.sum(tau, axis=-1) / lengthscale  # (n, m); assumes 1-D time inputs
+        # Per-component contribution: acf[j] * exp(ar_roots[j] * tau)
+        # ar_roots has negative real part for stationarity so exp decays.
+        ar_roots_complex = ar_roots.astype(jnp.complex64)
+        acf_complex = acf.astype(jnp.complex64)
+        exponents = ar_roots_complex[None, None, :] * tau[..., None].astype(jnp.complex64)
+        contributions = acf_complex[None, None, :] * jnp.exp(exponents)
+        return (output_scale**2) * jnp.real(jnp.sum(contributions, axis=-1))
+
+    return _carma
+
+
 __all__ = [
     "additive_kernel",
+    "carma_kernel",
     "celerite_complex_kernel",
     "constrained_rbf_kernel",
     "damped_oscillator_kernel",
