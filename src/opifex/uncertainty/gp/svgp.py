@@ -72,6 +72,40 @@ from opifex.uncertainty.types import PredictiveDistribution
 _SVGP_SOURCE_PACKAGE = "opifex.uncertainty.gp"
 
 
+def _kernel_diagonal(
+    kernel_fn: Callable[..., jax.Array],
+    x: jax.Array,
+    *,
+    lengthscale: float,
+    output_scale: float,
+) -> jax.Array:
+    r"""Return per-point ``K(x_i, x_i)`` of shape ``(n,)`` via ``jax.vmap``.
+
+    For stationary single-output kernels this equals ``output_scale^2``
+    at every point (and the vmap collapses to a trivial repeat). For
+    **multi-output ICM/LCM kernels** (slices 2-3) the diagonal varies
+    per point — ``k_base(x, x) * B[task, task]`` for ICM, the
+    component sum for LCM — so the per-point evaluation is required
+    for the ``K_{xx}``-diagonal term in the Titsias collapsed ELBO
+    and the predictive variance.
+
+    Args:
+        kernel_fn: Any callable matching the standard kernel signature
+            ``(x1, x2, *, lengthscale, output_scale) -> Gram``.
+        x: Inputs of shape ``(n, d)``.
+        lengthscale: Kernel length-scale.
+        output_scale: Kernel output-scale.
+
+    Returns:
+        ``(n,)`` array of diagonal entries.
+    """
+    return jax.vmap(
+        lambda xi: kernel_fn(
+            xi[None], xi[None], lengthscale=lengthscale, output_scale=output_scale
+        )[0, 0]
+    )(x)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SVGPState:
     """Fitted state for the Titsias-collapsed sparse-variational GP.
@@ -174,9 +208,14 @@ def fit_svgp(
     cached_y_squared_norm = jnp.dot(y_train, y_train)
     cached_a_y_inside_norm = jnp.dot(scaled_alpha, scaled_alpha)
     cached_trace_aat = jnp.sum(a_matrix * a_matrix)
-    # diag K_xx = output_scale^2 for stationary kernels. For non-stationary
-    # kernels we evaluate kernel_fn on the diagonal explicitly.
-    kxx_diag = jnp.full((n,), output_scale**2)
+    # diag K_xx via per-point vmap of kernel_fn. For stationary single-output
+    # kernels this equals output_scale^2 everywhere; for multi-output ICM/LCM
+    # kernels each diagonal entry is k_base(x_i, x_i) * B[task_i, task_i] (or
+    # the LCM sum thereof), which varies per point. The vmap form handles
+    # both transparently.
+    kxx_diag = _kernel_diagonal(
+        kernel_fn, x_train, lengthscale=lengthscale, output_scale=output_scale
+    )
     cached_kxx_diag_sum = jnp.sum(kxx_diag)
     cached_log_det_b = 2.0 * jnp.sum(jnp.log(jnp.diag(cholesky_b)))
     return SVGPState(
@@ -226,7 +265,12 @@ def predict_svgp(*, state: SVGPState, x_test: jax.Array) -> PredictiveDistributi
     )
     mean = v_test.T @ inner
     # Var(x*) = K(x*, x*) - ||v_test||² + ||L_B^{-1} v_test||²
-    kxx_diag = jnp.full((x_test.shape[0],), state.output_scale**2)
+    kxx_diag = _kernel_diagonal(
+        state.kernel_fn,
+        x_test,
+        lengthscale=state.lengthscale,
+        output_scale=state.output_scale,
+    )
     l_b_inv_v = jax.scipy.linalg.solve_triangular(state.cholesky_b, v_test, lower=True)
     variance = kxx_diag - jnp.sum(v_test * v_test, axis=0) + jnp.sum(l_b_inv_v * l_b_inv_v, axis=0)
     return PredictiveDistribution(
