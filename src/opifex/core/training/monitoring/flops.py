@@ -32,6 +32,7 @@ class FlopsCounter:
         self.enable_profiling = enable_profiling
         self.total_flops = 0
         self.operation_counts = {}
+        self.profile_data = {}
 
     def count_forward_flops(
         self, model: nnx.Module, inputs: jnp.ndarray, **kwargs
