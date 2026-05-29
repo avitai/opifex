@@ -26,6 +26,7 @@ from opifex.uncertainty.gp.exact import (
 )
 from opifex.uncertainty.gp.kernels import (
     additive_kernel,
+    constrained_rbf_kernel,
     damped_oscillator_kernel,
     deep_kernel,
     graph_diffusion_kernel,
@@ -34,6 +35,7 @@ from opifex.uncertainty.gp.kernels import (
     matern52_kernel,
     multi_output_icm_kernel,
     multi_output_lcm_kernel,
+    orthogonal_additive_kernel,
 )
 from opifex.uncertainty.gp.laplace import (
     fit_laplace_gp,
@@ -72,6 +74,7 @@ __all__ = [
     "RFFGPState",
     "SVGPState",
     "additive_kernel",
+    "constrained_rbf_kernel",
     "damped_oscillator_kernel",
     "deep_kernel",
     "exact_gp_loocv_log_predictive",
@@ -90,6 +93,7 @@ __all__ = [
     "matern52_kernel",
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
+    "orthogonal_additive_kernel",
     "predict_bernoulli_laplace_gp",
     "predict_beta_laplace_gp",
     "predict_exact_gp",

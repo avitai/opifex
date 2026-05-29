@@ -39,6 +39,8 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty.gp.exact import rbf_kernel
+
 
 def _pairwise_distances(x1: jax.Array, x2: jax.Array) -> jax.Array:
     """Return the ``(n, m)`` Euclidean pairwise-distance matrix."""
@@ -488,8 +490,219 @@ def deep_kernel(
     return _deep_kernel
 
 
+def constrained_rbf_kernel(
+    *,
+    input_mean: float = 0.0,
+    input_std: float = 1.0,
+) -> Callable[..., jax.Array]:
+    r"""RBF kernel projected to be orthogonal to constants under ``N(μ, ζ²)``.
+
+    Lu, Boukouvalas, Hensman 2022 (ICML, *Additive Gaussian Processes
+    Revisited*) eq. 10 gives the closed-form Gaussian-measure
+    projection of the squared-exponential kernel onto the orthogonal
+    complement of the constants. For ``p(x) = N(μ, ζ²)``:
+
+    .. math::
+
+        \tilde{k}(x, x')
+            &= k(x, x') - \frac{\mu_{k}(x)\,\mu_{k}(x')}{m_{k}}, \\
+        \mu_{k}(x) &= \int k(x, y)\,p(y)\,\mathrm{d}y
+            = \frac{\sigma_{f}^{2}\,\ell}{\sqrt{\ell^{2} + \zeta^{2}}}\,
+              \exp\!\left(-\frac{(x - \mu)^{2}}{2(\ell^{2} + \zeta^{2})}\right), \\
+        m_{k}      &= \int \mu_{k}(x)\,p(x)\,\mathrm{d}x
+            = \frac{\sigma_{f}^{2}\,\ell}{\sqrt{\ell^{2} + 2\zeta^{2}}},
+
+    yielding the projection
+
+    .. math::
+
+        \tilde{k}(x, x') = k(x, x')
+            - \frac{\sigma_{f}^{2}\,\ell\,\sqrt{\ell^{2} + 2\zeta^{2}}}
+                   {\ell^{2} + \zeta^{2}}\,
+              \exp\!\left(-\frac{(x - \mu)^{2} + (x' - \mu)^{2}}
+                                 {2(\ell^{2} + \zeta^{2})}\right).
+
+    This is the canonical Gaussian-measure-orthogonal base kernel for
+    the Orthogonal Additive Kernel (:func:`orthogonal_additive_kernel`).
+    For ``μ = 0``, ``ζ = 1`` the formula matches GPJax's
+    ``additive/oak.py:_constrained_se_kernel`` line-for-line.
+
+    Args:
+        input_mean: Gaussian input-measure mean ``μ``. Defaults to ``0``.
+        input_std: Gaussian input-measure std ``ζ > 0``. Defaults to ``1``.
+
+    Returns:
+        A callable matching the standard kernel signature.
+    """
+    if input_std <= 0.0:
+        raise ValueError(f"input_std must be strictly positive; got {input_std!r}.")
+
+    def _constrained_rbf(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        base = rbf_kernel(x1, x2, lengthscale=lengthscale, output_scale=output_scale)
+        ell_sq = lengthscale * lengthscale
+        std_sq = input_std * input_std
+        coefficient = (
+            output_scale
+            * output_scale
+            * lengthscale
+            * jnp.sqrt(ell_sq + 2.0 * std_sq)
+            / (ell_sq + std_sq)
+        )
+        denominator = 2.0 * (ell_sq + std_sq)
+        x1_centered_sq = jnp.sum((x1 - input_mean) ** 2, axis=-1, keepdims=True)
+        x2_centered_sq = jnp.sum((x2 - input_mean) ** 2, axis=-1, keepdims=True)
+        projection = coefficient * jnp.exp(-(x1_centered_sq + x2_centered_sq.T) / denominator)
+        return base - projection
+
+    return _constrained_rbf
+
+
+def _newton_girard_elementary_symmetric(per_dim_values: jax.Array, *, max_order: int) -> jax.Array:
+    r"""Vectorised Newton-Girard recursion for elementary symmetric polynomials.
+
+    Given ``z`` of shape ``(..., D)`` and ``max_order ≤ D``, computes
+    ``e_0, e_1, …, e_{max_order}`` along a new trailing axis via
+
+    .. math::
+
+        e_{0} = 1,\qquad
+        e_{n} = \frac{1}{n}\sum_{k=1}^{n} (-1)^{k-1}\,e_{n-k}\,s_{k},
+        \quad
+        s_{k} = \sum_{d=1}^{D} z_{d}^{k}.
+
+    The recursion is unrolled in Python (``max_order`` is a static
+    constructor-level constant) so the entire kernel compiles cleanly
+    under ``jax.jit``.
+    """
+    if max_order == 0:
+        return jnp.ones((*per_dim_values.shape[:-1], 1), dtype=per_dim_values.dtype)
+    power_terms: list[jax.Array] = [per_dim_values]
+    for _ in range(2, max_order + 1):
+        power_terms.append(power_terms[-1] * per_dim_values)
+    power_sums = jnp.stack([jnp.sum(term, axis=-1) for term in power_terms], axis=-1)
+    signs = (-1.0) ** jnp.arange(max_order, dtype=per_dim_values.dtype)
+    signed_power_sums = signs * power_sums
+    leading_shape = per_dim_values.shape[:-1]
+    elementary: list[jax.Array] = [jnp.ones(leading_shape, dtype=per_dim_values.dtype)]
+    for order in range(1, max_order + 1):
+        contributions = jnp.stack(
+            [signed_power_sums[..., j] * elementary[order - 1 - j] for j in range(order)],
+            axis=-1,
+        )
+        elementary.append(jnp.sum(contributions, axis=-1) / order)
+    return jnp.stack(elementary, axis=-1)
+
+
+def orthogonal_additive_kernel(
+    *,
+    base_kernel_fns: tuple[Callable[..., jax.Array], ...],
+    max_order: int,
+    order_variances: jax.Array,
+) -> Callable[..., jax.Array]:
+    r"""Higher-order Orthogonal Additive Kernel (Lu+ 2022 ICML).
+
+    Extends :func:`additive_kernel` (``max_order = 1``) to the full
+    OAK construction:
+
+    .. math::
+
+        k_{\text{OAK}}(\mathbf{x}, \mathbf{x}')
+          = \sum_{\ell = 0}^{D_{\text{tilde}}}\sigma_{\ell}^{2}\,
+                e_{\ell}\!\bigl(
+                    \tilde{k}_{1}(x_{1}, x'_{1}),\dots,\tilde{k}_{D}(x_{D}, x'_{D})
+                \bigr),
+
+    where ``D_{tilde} = max_order``, ``e_ℓ`` is the ``ℓ``-th elementary
+    symmetric polynomial of the ``D`` per-dimension *constrained* base
+    kernels (orthogonal to constants under the chosen input measure),
+    and ``σ²_ℓ ≥ 0`` are the per-order variances. ``e_ℓ`` is evaluated
+    in ``O(D · max_order)`` via the **Newton-Girard recursion**
+    ``e_n = (1/n) Σ_{k=1}^{n} (-1)^{k-1} e_{n-k} s_k`` with
+    ``s_k = Σ_d k̃_d^k``.
+
+    Use :func:`constrained_rbf_kernel` for the canonical Gaussian-
+    measure base; any callable matching the standard kernel signature
+    and integrating to zero against the chosen input measure works.
+
+    Args:
+        base_kernel_fns: Tuple of ``D`` per-dimension base kernels.
+            Each must satisfy the standard kernel signature
+            ``(x1, x2, *, lengthscale, output_scale) -> (n, m)`` and
+            be orthogonal to constants under the desired input
+            measure (use :func:`constrained_rbf_kernel` for the
+            Gaussian-measure default).
+        max_order: Maximum interaction order
+            ``0 ≤ max_order ≤ D``. ``max_order = 1`` recovers
+            :func:`additive_kernel`; ``max_order = D`` enables full
+            ANOVA decomposition.
+        order_variances: ``(max_order + 1,)`` non-negative variances
+            ``σ²_0, σ²_1, …, σ²_{max_order}``. ``σ²_0`` is the
+            constant-offset variance; ``σ²_1`` weights first-order
+            terms; ``σ²_D`` weights the full-product interaction.
+
+    Returns:
+        A callable matching the standard kernel signature.
+
+    Raises:
+        ValueError: If ``base_kernel_fns`` is empty, ``max_order`` is
+            outside ``[0, D]``, or ``order_variances`` has the wrong
+            shape.
+    """
+    if len(base_kernel_fns) == 0:
+        raise ValueError("orthogonal_additive_kernel requires at least one base kernel.")
+    num_dimensions = len(base_kernel_fns)
+    if max_order < 0 or max_order > num_dimensions:
+        raise ValueError(
+            "max_order must satisfy 0 <= max_order <= number of base kernels "
+            f"({num_dimensions}); got {max_order}."
+        )
+    if order_variances.shape != (max_order + 1,):
+        raise ValueError(
+            f"order_variances must have shape (max_order + 1,) = ({max_order + 1},); "
+            f"got {order_variances.shape}."
+        )
+
+    def _oak(
+        x1: jax.Array,
+        x2: jax.Array,
+        *,
+        lengthscale: float,
+        output_scale: float,
+    ) -> jax.Array:
+        if x1.shape[-1] != num_dimensions:
+            raise ValueError(
+                "Input dimensionality must equal the number of base kernels; "
+                f"got {x1.shape[-1]} dims but {num_dimensions} base kernels."
+            )
+        per_dim_grams = jnp.stack(
+            [
+                base_kernel_fn(
+                    x1[:, dim_index : dim_index + 1],
+                    x2[:, dim_index : dim_index + 1],
+                    lengthscale=lengthscale,
+                    output_scale=output_scale,
+                )
+                for dim_index, base_kernel_fn in enumerate(base_kernel_fns)
+            ],
+            axis=-1,
+        )
+        elementary_symmetric = _newton_girard_elementary_symmetric(
+            per_dim_grams, max_order=max_order
+        )
+        return jnp.einsum("ijk,k->ij", elementary_symmetric, order_variances)
+
+    return _oak
+
+
 __all__ = [
     "additive_kernel",
+    "constrained_rbf_kernel",
     "damped_oscillator_kernel",
     "deep_kernel",
     "graph_diffusion_kernel",
@@ -498,4 +711,5 @@ __all__ = [
     "matern52_kernel",
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
+    "orthogonal_additive_kernel",
 ]
