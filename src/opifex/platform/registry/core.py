@@ -115,7 +115,7 @@ class RegistryService:
 
         db_metadata = FunctionalMetadata(
             functional_id=functional_id,
-            metadata=validated_metadata,
+            metadata_json=validated_metadata,
             checksum=checksum,
             file_size=len(serialized_data),
             storage_path=str(storage_path),
