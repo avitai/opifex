@@ -33,6 +33,7 @@ from opifex.uncertainty.multi_fidelity.linear import (
     LinearMultiFidelityGPState,
     predict_linear_multi_fidelity_gp,
 )
+from opifex.uncertainty.multi_fidelity.mumbo import mumbo_acquisition
 from opifex.uncertainty.multi_fidelity.nonlinear import (
     fit_nonlinear_multi_fidelity_gp,
     NonLinearMultiFidelityGPState,
@@ -46,6 +47,7 @@ __all__ = [
     "fit_linear_multi_fidelity_gp",
     "fit_nonlinear_multi_fidelity_gp",
     "linear_multi_fidelity_kernel",
+    "mumbo_acquisition",
     "predict_linear_multi_fidelity_gp",
     "predict_nonlinear_multi_fidelity_gp",
 ]
