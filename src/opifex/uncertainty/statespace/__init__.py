@@ -24,6 +24,8 @@ from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.statespace._uq_capabilities import STATESPACE_CAPABILITIES
 from opifex.uncertainty.statespace.cakf import (
     cakf_predict,
+    cakf_smooth,
+    cakf_step,
     cakf_update,
     LowRankDowndatedMatrix,
 )
@@ -45,7 +47,11 @@ from opifex.uncertainty.statespace.kernels import (
     quasi_periodic_matern12_kernel,
     StateSpaceKernel,
 )
-from opifex.uncertainty.statespace.lti_sde import discretize_lti_sde
+from opifex.uncertainty.statespace.lti_sde import (
+    discretize_lti_sde,
+    process_noise_covariance,
+    state_transition_matrix,
+)
 from opifex.uncertainty.statespace.parallel import (
     kalman_filter_parallel,
     kalman_smoother_parallel,
@@ -69,6 +75,8 @@ __all__ = [
     "LowRankDowndatedMatrix",
     "StateSpaceKernel",
     "cakf_predict",
+    "cakf_smooth",
+    "cakf_step",
     "cakf_update",
     "cosine_kernel",
     "diagonal_ek1_step",
@@ -85,7 +93,9 @@ __all__ = [
     "matern52_kernel",
     "matern72_kernel",
     "periodic_kernel",
+    "process_noise_covariance",
     "quasi_periodic_matern12_kernel",
     "sqrt_kalman_predict",
     "sqrt_kalman_update",
+    "state_transition_matrix",
 ]
