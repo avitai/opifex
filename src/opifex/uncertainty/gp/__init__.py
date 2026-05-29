@@ -73,6 +73,14 @@ from opifex.uncertainty.gp.svgp import (
     svgp_collapsed_elbo,
     SVGPState,
 )
+from opifex.uncertainty.gp.svgp_stochastic import (
+    bernoulli_log_likelihood,
+    init_stochastic_svgp_state,
+    poisson_log_likelihood,
+    predict_stochastic_svgp,
+    stochastic_svgp_elbo,
+    StochasticSVGPState,
+)
 
 
 __all__ = [
@@ -81,7 +89,9 @@ __all__ = [
     "QuasisepGPState",
     "RFFGPState",
     "SVGPState",
+    "StochasticSVGPState",
     "additive_kernel",
+    "bernoulli_log_likelihood",
     "celerite_complex_kernel",
     "constrained_rbf_kernel",
     "damped_oscillator_kernel",
@@ -98,6 +108,7 @@ __all__ = [
     "fit_studentst_laplace_gp",
     "fit_svgp",
     "graph_diffusion_kernel",
+    "init_stochastic_svgp_state",
     "kernel_sum",
     "matern12_kernel",
     "matern32_kernel",
@@ -105,6 +116,7 @@ __all__ = [
     "multi_output_icm_kernel",
     "multi_output_lcm_kernel",
     "orthogonal_additive_kernel",
+    "poisson_log_likelihood",
     "predict_bernoulli_laplace_gp",
     "predict_beta_laplace_gp",
     "predict_exact_gp",
@@ -112,9 +124,11 @@ __all__ = [
     "predict_poisson_laplace_gp",
     "predict_quasisep_sho_gp",
     "predict_rff_gp",
+    "predict_stochastic_svgp",
     "predict_studentst_laplace_gp",
     "predict_svgp",
     "rbf_kernel",
     "rbf_random_fourier_features",
+    "stochastic_svgp_elbo",
     "svgp_collapsed_elbo",
 ]
