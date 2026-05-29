@@ -51,7 +51,8 @@ Specialised algorithmic specs:
   solver (deferred algorithm; spec is ecosystem-aware).
 * :class:`DenseOutputSamplingSpec` — joint posterior sampling at
   arbitrary density via interpolate-then-sample (Tronarp+ 2019).
-* :class:`ApplyDiffusionSpec` — multivariate diffusion machinery
+* :class:`DynamicMVDiffusionSpec` / :class:`FixedMVDiffusionSpec` —
+  multivariate diffusion machinery (time-dependent / time-invariant)
   (valid only with EK0 or DiagonalEK1 plus blockdiag covariance).
 
 References
@@ -552,30 +553,6 @@ class DenseOutputSamplingSpec(_PNAdapterSpecBase):
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class ApplyDiffusionSpec(_PNAdapterSpecBase):
-    """Multivariate diffusion machinery.
-
-    Valid only in combination with EK0 or DiagonalEK1 plus the
-    ``blockdiag`` covariance factorisation per Julia
-    ``algorithms.jl:108-129``.
-    """
-
-    source_package: str = "opifex"
-    family_tags: tuple[str, ...] = ("apply_diffusion", "multivariate_diffusion")
-    notes: str = (
-        "Multivariate diffusion machinery — valid only with EK0 or "
-        "DiagonalEK1 plus blockdiag covariance."
-    )
-
-    def wrap(self, model: Any, capability: UQCapability) -> Any:
-        """Return the scalar / vector diffusion scaling callable."""
-        from opifex.uncertainty.scientific._specialised import apply_diffusion
-
-        del model, capability
-        return apply_diffusion
-
-
-@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class DynamicMVDiffusionSpec(_PNAdapterSpecBase):
     """Time-dependent multivariate diffusion (Julia ``diffusions/typedefs.jl:39-67``).
 
@@ -737,7 +714,6 @@ class DataUpdateCallbackSpec(_PNAdapterSpecBase):
 
 
 __all__ = [
-    "ApplyDiffusionSpec",
     "CalibrationSpec",
     "CorrectionSpec",
     "CubatureRuleSpec",

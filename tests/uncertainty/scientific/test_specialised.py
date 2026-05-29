@@ -29,8 +29,8 @@ from opifex.uncertainty.scientific._specialised import (
     manifold_update,
 )
 from opifex.uncertainty.scientific.probabilistic_numerics import (
-    ApplyDiffusionSpec,
     DenseOutputSamplingSpec,
+    DynamicMVDiffusionSpec,
     ManifoldUpdateSpec,
 )
 
@@ -308,9 +308,9 @@ def test_dense_output_sampling_spec_wrap_returns_sample_callable() -> None:
     assert fn is dense_output_sample
 
 
-def test_apply_diffusion_spec_wrap_returns_apply_diffusion_callable() -> None:
-    """``ApplyDiffusionSpec.wrap`` returns the diffusion scaler."""
-    spec: Any = ApplyDiffusionSpec()
+def test_dynamic_mv_diffusion_spec_wrap_returns_apply_diffusion_callable() -> None:
+    """``DynamicMVDiffusionSpec.wrap`` returns the diffusion scaler."""
+    spec: Any = DynamicMVDiffusionSpec()
     capability = UQCapability(default_strategy=spec.default_strategy)
     fn = spec.wrap(model=None, capability=capability)
     assert callable(fn)
