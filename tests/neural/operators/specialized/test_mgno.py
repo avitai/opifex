@@ -138,3 +138,96 @@ class TestMultipoleGraphNeuralOperator:
         grad_norms = [jnp.linalg.norm(leaf) for leaf in grad_leaves if hasattr(leaf, "shape")]
         assert len(grad_norms) > 0
         assert any(norm > 1e-8 for norm in grad_norms)
+
+    def test_mgno_forward_is_jit_and_vmap_compatible(self, rngs, rng_key):
+        """Forward pass must trace under jit/vmap (no data-dependent Python branching).
+
+        The pre-fix implementation used ``if jnp.any(jnp.isnan(...))`` control flow,
+        which concretises a traced array and raises ``TracerBoolConversionError``
+        under ``nnx.jit``/``jax.vmap``. Every operator must support these transforms,
+        and the transformed result must match the eager result on valid input.
+        """
+        mgno = MultipoleGraphNeuralOperator(
+            in_features=4,
+            out_features=3,
+            hidden_features=16,
+            num_layers=2,
+            max_degree=2,
+            rngs=rngs,
+        )
+
+        batch_size, num_nodes = 2, 32
+        k_feat, k_pos = jax.random.split(rng_key)
+        features = jax.random.normal(k_feat, (batch_size, num_nodes, 4))
+        positions = jax.random.normal(k_pos, (batch_size, num_nodes, 3))
+
+        eager_out = mgno(features, positions)
+
+        @nnx.jit
+        def jitted_forward(model, feats, pos):
+            return model(feats, pos)
+
+        # Must not raise TracerBoolConversionError.
+        jit_out = jitted_forward(mgno, features, positions)
+        assert jit_out.shape == (batch_size, num_nodes, 3)
+        assert jnp.all(jnp.isfinite(jit_out))
+        # atol=1e-4 tolerates GPU kernel-fusion reassociation between the fused
+        # (jit) and unfused (eager) execution paths; tight enough to prove the
+        # jitted path computes the same function.
+        assert jnp.allclose(eager_out, jit_out, atol=1e-4)
+
+        # vmap over an explicit leading sample axis (per-sample unbatched forward).
+        graphdef, state = nnx.split(mgno)
+
+        def forward_single(single_feats, single_pos):
+            model = nnx.merge(graphdef, state)
+            return model(single_feats[None, ...], single_pos[None, ...])[0]
+
+        vmapped_out = jax.vmap(forward_single)(features, positions)
+        assert vmapped_out.shape == (batch_size, num_nodes, 3)
+        assert jnp.all(jnp.isfinite(vmapped_out))
+        # vmapped single-sample path matches the natively batched eager path.
+        assert jnp.allclose(eager_out, vmapped_out, atol=1e-5)
+
+    def test_mgno_does_not_silently_zero_fill_on_failure(self, rngs, rng_key):
+        """Failures must propagate, never be swallowed into an all-zero prediction.
+
+        The pre-fix implementation wrapped each layer and the output projection in
+        ``try/except ... -> continue`` / ``-> jnp.zeros(...)``, so a genuinely failing
+        layer was silently skipped and a failing projection returned a valid-looking
+        all-zero output. After the fail-fast fix the error must propagate instead.
+        """
+        mgno = MultipoleGraphNeuralOperator(
+            in_features=4,
+            out_features=3,
+            hidden_features=16,
+            num_layers=2,
+            max_degree=2,
+            rngs=rngs,
+        )
+
+        batch_size, num_nodes = 2, 32
+        k_feat, k_pos = jax.random.split(rng_key)
+        features = jax.random.normal(k_feat, (batch_size, num_nodes, 4))
+        positions = jax.random.normal(k_pos, (batch_size, num_nodes, 3))
+
+        # Sanity: a valid forward pass yields a non-zero, finite prediction (not a
+        # zero-fill fallback).
+        valid_out = mgno(features, positions)
+        assert jnp.all(jnp.isfinite(valid_out))
+        assert jnp.any(valid_out != 0.0)
+
+        # Force a layer to raise. With the per-layer try/except removed the error
+        # must propagate rather than being swallowed and the layer skipped.
+        sentinel = "mgno-layer-deliberate-failure"
+
+        def _raise(*_args, **_kwargs):
+            raise RuntimeError(sentinel)
+
+        original_call = type(mgno.mgno_layers[0]).__call__
+        try:
+            type(mgno.mgno_layers[0]).__call__ = _raise  # type: ignore[method-assign]
+            with pytest.raises(RuntimeError, match=sentinel):
+                mgno(features, positions)
+        finally:
+            type(mgno.mgno_layers[0]).__call__ = original_call  # type: ignore[method-assign]
