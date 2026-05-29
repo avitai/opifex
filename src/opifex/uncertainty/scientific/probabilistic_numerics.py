@@ -575,16 +575,182 @@ class ApplyDiffusionSpec(_PNAdapterSpecBase):
         return apply_diffusion
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class DynamicMVDiffusionSpec(_PNAdapterSpecBase):
+    """Time-dependent multivariate diffusion (Julia ``diffusions/typedefs.jl:39-67``).
+
+    The diffusion matrix ``D(t)`` varies with the solver's grid time.
+    Sibling spec :class:`FixedMVDiffusionSpec` covers the time-
+    independent counterpart. Both share
+    :func:`opifex.uncertainty.scientific._specialised.apply_diffusion`
+    as the underlying math layer; the spec classes advertise the
+    distinct capability metadata for the adapter registry.
+    """
+
+    source_package: str = "opifex"
+    family_tags: tuple[str, ...] = (
+        "apply_diffusion",
+        "multivariate_diffusion",
+        "time_dependent",
+    )
+    notes: str = (
+        "Time-dependent multivariate diffusion D(t). Valid with EK0 or "
+        "DiagonalEK1 + blockdiag covariance factorisation."
+    )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the time-dependent diffusion scaling callable."""
+        from opifex.uncertainty.scientific._specialised import apply_diffusion
+
+        del model, capability
+        return apply_diffusion
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class FixedMVDiffusionSpec(_PNAdapterSpecBase):
+    """Time-independent multivariate diffusion (Julia ``diffusions/typedefs.jl:68-103``).
+
+    The diffusion matrix ``D`` is held constant across the solver's
+    grid. Companion to :class:`DynamicMVDiffusionSpec`; preferred when
+    the SDE driving the prior is genuinely homogeneous in time.
+    """
+
+    source_package: str = "opifex"
+    family_tags: tuple[str, ...] = (
+        "apply_diffusion",
+        "multivariate_diffusion",
+        "time_invariant",
+    )
+    notes: str = (
+        "Time-invariant multivariate diffusion D. Valid with EK0 or "
+        "DiagonalEK1 + blockdiag covariance factorisation."
+    )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the time-invariant diffusion scaling callable."""
+        from opifex.uncertainty.scientific._specialised import apply_diffusion
+
+        del model, capability
+        return apply_diffusion
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class ExpEKSpec(_PNAdapterSpecBase):
+    """Exponential extended Kalman correction (Tronarp+ 2019 §5).
+
+    Replaces the linearisation in the standard EK0/EK1 correction with
+    an exponential integrator step for the residual Jacobian — yields
+    higher-order convergence on stiff IVPs without a Rosenbrock
+    quadrature step. Spec exists to advertise capability metadata to
+    user-installed ProbNum-family adapters; the JAX-native math layer
+    is in :mod:`opifex.uncertainty.scientific._specialised`.
+    """
+
+    source_package: str = "opifex"
+    family_tags: tuple[str, ...] = (
+        "exp_ek",
+        "exponential_correction",
+        "stiff_ivp",
+    )
+    notes: str = (
+        "Exponential extended Kalman correction (Tronarp+ 2019 §5). "
+        "Higher-order convergence on stiff IVPs; preferred over EK1 "
+        "for moderately stiff dynamics."
+    )
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class RosenbrockExpEKSpec(_PNAdapterSpecBase):
+    """Rosenbrock-style exponential EK correction.
+
+    Combines the Rosenbrock-Wanner one-step correction with the
+    exponential EK linearisation (Bosch+ 2021 §4.2). Suited to very
+    stiff IVPs where ExpEK still over-shoots and a full Newton step is
+    too expensive.
+    """
+
+    source_package: str = "opifex"
+    family_tags: tuple[str, ...] = (
+        "rosenbrock_exp_ek",
+        "exponential_correction",
+        "stiff_ivp",
+        "rosenbrock_wanner",
+    )
+    notes: str = (
+        "Rosenbrock-Wanner one-step correction combined with the "
+        "exponential EK linearisation; targets very stiff IVPs."
+    )
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class DiagonalEK1Spec(_PNAdapterSpecBase):
+    """Diagonal EK1 correction with structured Jacobian (Krämer+ 2022).
+
+    Approximates the EK1 Jacobian by its diagonal — preserves
+    asymptotic convergence order while reducing per-step linear-algebra
+    cost from ``O(d^2)`` to ``O(d)``. The underlying math is in
+    :mod:`opifex.uncertainty.statespace.diagonal_ek1`; this spec
+    advertises the capability for the ProbNum adapter registry.
+    """
+
+    source_package: str = "opifex"
+    family_tags: tuple[str, ...] = (
+        "diagonal_ek1",
+        "structured_jacobian",
+        "linear_cost_correction",
+    )
+    notes: str = (
+        "Diagonal-Jacobian EK1 correction (Krämer+ 2022). Reduces "
+        "per-step cost to O(d) while preserving EK1 convergence order."
+    )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the diagonal-EK1 single-step callable."""
+        from opifex.uncertainty.statespace.diagonal_ek1 import diagonal_ek1_step
+
+        del model, capability
+        return diagonal_ek1_step
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class DataUpdateCallbackSpec(_PNAdapterSpecBase):
+    """Solver-step callback for online data assimilation (probdiffeq pattern).
+
+    Advertises the capability for adapters to register a callback that
+    fires inside the solver loop and conditions the running posterior
+    on incoming observations. Used to integrate Task 6.7 assimilation
+    primitives (:func:`opifex.uncertainty.assimilation.update`) with
+    ProbNum-family ODE solvers without modifying the solver core.
+    """
+
+    source_package: str = "opifex"
+    family_tags: tuple[str, ...] = (
+        "data_update_callback",
+        "online_assimilation",
+        "solver_step_callback",
+    )
+    notes: str = (
+        "Solver-step callback for assimilating observations inside a "
+        "ProbNum-family ODE solver. Routes through Task 6.7 "
+        "assimilation primitives."
+    )
+
+
 __all__ = [
     "ApplyDiffusionSpec",
     "CalibrationSpec",
     "CorrectionSpec",
     "CubatureRuleSpec",
     "DaltonAdapterSpec",
+    "DataUpdateCallbackSpec",
     "DenseOutputSamplingSpec",
+    "DiagonalEK1Spec",
     "DiffeqzooAdapterSpec",
     "DiffusionSpec",
+    "DynamicMVDiffusionSpec",
+    "ExpEKSpec",
     "FenrirAdapterSpec",
+    "FixedMVDiffusionSpec",
     "IOUPPriorSpec",
     "IWPPriorSpec",
     "InitSchemeSpec",
@@ -594,6 +760,7 @@ __all__ = [
     "ProbdiffeqAdapterSpec",
     "ProbfindiffAdapterSpec",
     "ProbnumAdapterSpec",
+    "RosenbrockExpEKSpec",
     "SsmFactSpec",
     "StrategySpec",
     "TornadoxAdapterSpec",
