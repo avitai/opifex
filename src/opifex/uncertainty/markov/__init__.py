@@ -35,20 +35,50 @@ from opifex.uncertainty.markov.markov_laplace_likelihoods import (
     predict_poisson_markov_laplace_gp,
     predict_studentst_markov_laplace_gp,
 )
+from opifex.uncertainty.markov.markov_vi import (
+    fit_markov_vi_gp,
+    MarkovVIGPState,
+    predict_markov_vi_gp,
+)
+from opifex.uncertainty.markov.markov_vi_likelihoods import (
+    fit_bernoulli_markov_vi_gp,
+    fit_beta_markov_vi_gp,
+    fit_gaussian_markov_vi_gp,
+    fit_poisson_markov_vi_gp,
+    fit_studentst_markov_vi_gp,
+    predict_bernoulli_markov_vi_gp,
+    predict_beta_markov_vi_gp,
+    predict_gaussian_markov_vi_gp,
+    predict_poisson_markov_vi_gp,
+    predict_studentst_markov_vi_gp,
+)
 
 
 __all__ = [
     "MarkovLaplaceGPState",
+    "MarkovVIGPState",
     "fit_bernoulli_markov_laplace_gp",
+    "fit_bernoulli_markov_vi_gp",
     "fit_beta_markov_laplace_gp",
+    "fit_beta_markov_vi_gp",
     "fit_gaussian_markov_laplace_gp",
+    "fit_gaussian_markov_vi_gp",
     "fit_markov_laplace_gp",
+    "fit_markov_vi_gp",
     "fit_poisson_markov_laplace_gp",
+    "fit_poisson_markov_vi_gp",
     "fit_studentst_markov_laplace_gp",
+    "fit_studentst_markov_vi_gp",
     "predict_bernoulli_markov_laplace_gp",
+    "predict_bernoulli_markov_vi_gp",
     "predict_beta_markov_laplace_gp",
+    "predict_beta_markov_vi_gp",
     "predict_gaussian_markov_laplace_gp",
+    "predict_gaussian_markov_vi_gp",
     "predict_markov_laplace_gp",
+    "predict_markov_vi_gp",
     "predict_poisson_markov_laplace_gp",
+    "predict_poisson_markov_vi_gp",
     "predict_studentst_markov_laplace_gp",
+    "predict_studentst_markov_vi_gp",
 ]
