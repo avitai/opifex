@@ -6,6 +6,7 @@ multiple cloud providers.
 """
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -14,6 +15,9 @@ from opifex.deployment.resource_management.gpu_manager import GPUPoolManager
 from opifex.deployment.resource_management.orchestrator import ResourceOrchestrator
 from opifex.deployment.resource_management.sustainability import SustainabilityTracker
 from opifex.deployment.resource_management.types import CloudProvider, ResourceType
+
+
+logger = logging.getLogger(__name__)
 
 
 class GlobalResourceManager:
@@ -111,11 +115,15 @@ class GlobalResourceManager:
             0.85,  # Estimated renewable energy percentage
         )
 
-        # Step 4: Optimize for sustainability if requested
+        # Step 4: Optimize for sustainability if requested. The carbon-ranked
+        # pool list is surfaced to the caller so it can re-allocate against
+        # greener options if desired.
+        sustainability_ranked_pools = None
         if sustainability_priority:
             available_pools = list(self.resource_orchestrator.resource_pools.values())
-            self.sustainability_tracker.optimize_for_sustainability(available_pools)
-            # Would re-allocate if better sustainable options are found
+            sustainability_ranked_pools = self.sustainability_tracker.optimize_for_sustainability(
+                available_pools
+            )
 
         return {
             "allocation": allocation,
@@ -124,6 +132,7 @@ class GlobalResourceManager:
             "carbon_footprint_kg": allocation.carbon_footprint_kg,
             "performance_estimate": allocation.performance_estimate,
             "sustainability_optimized": sustainability_priority,
+            "sustainability_ranked_pools": sustainability_ranked_pools,
             "allocation_strategy": allocation.allocation_strategy,
         }
 
@@ -145,9 +154,16 @@ class GlobalResourceManager:
             # Update sustainability metrics
             self.sustainability_tracker.calculate_sustainability_metrics()
 
-            # Log monitoring results
+            # Surface over-budget conditions instead of swallowing them.
             if budget_alerts["budget_warning"]:
-                pass  # Would log warning in production
+                logger.warning(
+                    "Budget warning: daily spending %.2f USD exceeds %.0f%% of the "
+                    "%.2f USD limit (utilization %.1f%%)",
+                    budget_alerts["daily_spending"],
+                    80.0,
+                    budget_alerts["budget_limit"],
+                    budget_alerts["utilization_percentage"],
+                )
 
             await asyncio.sleep(300)  # Monitor every 5 minutes
 

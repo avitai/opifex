@@ -8,10 +8,11 @@ This module integrates all other managers for end-to-end resource management.
 
 import asyncio
 import contextlib
+import logging
 
 import pytest
 
-from opifex.deployment.resource_management.types import ResourceType
+from opifex.deployment.resource_management.types import CloudProvider, ResourceType
 
 
 # Import after extraction
@@ -368,3 +369,81 @@ class TestEdgeCases:
         # Should return valid structure even with no activity
         assert status["status"] == "operational"
         assert status["resource_orchestration"]["active_allocations"] == 0
+
+
+class TestBudgetWarningLogging:
+    """Test that over-budget conditions are surfaced, not silently swallowed."""
+
+    @pytest.mark.asyncio
+    async def test_budget_warning_logs_warning(self, global_resource_manager_with_setup, caplog):
+        """Test that a budget_warning condition emits a WARNING log entry.
+
+        Drives one iteration of start_resource_monitoring after pushing the
+        cost controller over its 80% warning threshold, and asserts that the
+        over-budget condition is logged at WARNING level instead of being
+        swallowed by a bare ``pass``.
+        """
+        manager = global_resource_manager_with_setup
+
+        # Force the warning threshold: spend > 80% of the daily budget limit.
+        manager.cost_controller.budget_limit_usd_per_day = 100.0
+        manager.cost_controller.track_resource_cost(
+            "alloc-over-budget",
+            cost_usd_per_hour=90.0,  # 90 > 0.8 * 100 -> budget_warning is True
+            duration_hours=1.0,
+            provider=CloudProvider.AWS,
+            resource_type=ResourceType.GPU_A100,
+        )
+        assert manager.cost_controller.check_budget_alerts()["budget_warning"] is True
+
+        # Run a single monitoring iteration: start the loop, let the first pass
+        # execute (it yields at ``await asyncio.sleep(300)``), then stop it.
+        with caplog.at_level(logging.WARNING):
+            monitoring_task = asyncio.create_task(manager.start_resource_monitoring())
+            await asyncio.sleep(0.1)
+            await manager.stop_resource_monitoring()
+            monitoring_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await monitoring_task
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings, "expected a WARNING log for the over-budget condition"
+        assert any("budget" in r.getMessage().lower() for r in warnings)
+
+
+class TestSustainabilityRanking:
+    """Test that the sustainability optimization result is not discarded."""
+
+    @pytest.mark.asyncio
+    async def test_sustainability_ranking_in_result(
+        self, global_resource_manager_with_setup, sample_resource_requirements
+    ):
+        """Test that optimize_for_sustainability output is surfaced in the result.
+
+        The sustainability-priority path computes a carbon-ranked pool list; its
+        return value must be consumed (exposed to the caller) rather than
+        discarded.
+        """
+        result = await global_resource_manager_with_setup.allocate_resources_with_intelligence(
+            sample_resource_requirements, sustainability_priority=True
+        )
+
+        assert "sustainability_ranked_pools" in result
+        ranked = result["sustainability_ranked_pools"]
+        assert ranked is not None
+        # The orchestrator fixture registers three pools; all must be ranked.
+        assert len(ranked) == len(
+            global_resource_manager_with_setup.resource_orchestrator.resource_pools
+        )
+
+    @pytest.mark.asyncio
+    async def test_sustainability_ranking_absent_when_disabled(
+        self, global_resource_manager_with_setup, sample_resource_requirements
+    ):
+        """Test that no ranking is produced when sustainability priority is off."""
+        result = await global_resource_manager_with_setup.allocate_resources_with_intelligence(
+            sample_resource_requirements, sustainability_priority=False
+        )
+
+        assert result["sustainability_optimized"] is False
+        assert result["sustainability_ranked_pools"] is None

@@ -12,7 +12,7 @@ import sys
 import time
 import uuid
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
@@ -283,10 +283,14 @@ class StructuredLogger:
             self.elk_enabled = False
 
     def update_context(self, **kwargs) -> None:
-        """Update logging context."""
-        for key, value in kwargs.items():
-            if hasattr(self.context, key):
-                setattr(self.context, key, value)
+        """Update logging context.
+
+        ``LogContext`` is a frozen dataclass, so the context is rebuilt
+        immutably (via :func:`dataclasses.replace`) and rebound rather than
+        mutated in place. Unknown keys are ignored to keep the call permissive.
+        """
+        updates = {key: value for key, value in kwargs.items() if hasattr(self.context, key)}
+        self.context = replace(self.context, **updates)
 
     def _log(
         self,

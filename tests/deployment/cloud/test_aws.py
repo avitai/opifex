@@ -235,6 +235,37 @@ class TestAWSDeploymentManager:
         assert len(cluster_sg["ingress"]) == 1
         assert cluster_sg["ingress"][0]["from_port"] == 443
 
+    def test_vpc_config_cluster_tag_keys_are_interpolated(self):
+        """``kubernetes.io/cluster/<name>`` tag KEYS must interpolate the cluster name.
+
+        EKS uses the ``kubernetes.io/cluster/<cluster-name>`` resource tag for
+        subnet auto-discovery. The KEY (not just the value) must contain the
+        actual cluster name. Regression guard for a missing f-prefix that emitted
+        the literal template text ``{self.config.cluster_name}`` into the tag key.
+        """
+        name = "interp-check-cluster"
+        manager = AWSDeploymentManager(AWSConfig(cluster_name=name))
+        vpc_config = manager.generate_vpc_config()
+
+        expected_key = f"kubernetes.io/cluster/{name}"
+        literal_unrendered = "kubernetes.io/cluster/{self.config.cluster_name}"
+
+        # VPC-level tags carry the "shared" ownership tag.
+        vpc_tags = vpc_config["vpc"]["tags"]
+        assert expected_key in vpc_tags
+        assert vpc_tags[expected_key] == "shared"
+        assert literal_unrendered not in vpc_tags
+
+        # Every private and public subnet carries the "owned" ownership tag.
+        for subnet in vpc_config["private_subnets"] + vpc_config["public_subnets"]:
+            subnet_tags = subnet["tags"]
+            assert expected_key in subnet_tags
+            assert subnet_tags[expected_key] == "owned"
+            assert literal_unrendered not in subnet_tags
+
+        # The unrendered template must not appear anywhere in the serialised config.
+        assert "{self.config.cluster_name}" not in json.dumps(vpc_config)
+
     def test_generate_secrets_manager_config(self, deployment_manager):
         """Test Secrets Manager configuration generation."""
         secrets_config = deployment_manager.generate_secrets_manager_config()

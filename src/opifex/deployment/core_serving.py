@@ -19,6 +19,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import orbax.checkpoint as ocp  # type: ignore[import-untyped]
 from flax import nnx
 
 
@@ -102,8 +103,36 @@ class ModelMetadata:
         return cls(**data)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _ModelTemplate:
+    """In-memory reconstruction template for a registered model.
+
+    Pairs the module structure (``graphdef``) with an abstract, shape/dtype
+    copy of its weight state (``abstract_state``). The latter is the restore
+    target handed to Orbax; merging the restored state with ``graphdef``
+    yields the original concrete module.
+    """
+
+    graphdef: nnx.GraphDef[nnx.Module]
+    abstract_state: nnx.State
+
+
 class ModelRegistry:
-    """Registry for managing model versions and metadata."""
+    """Registry for managing model versions and metadata.
+
+    Model weights are serialized to disk via Orbax (the registry persists
+    ``nnx.state(model)``). The structural template needed to reconstruct an
+    arbitrary :class:`flax.nnx.Module` — its ``nnx.GraphDef`` — is *not*
+    generically disk-serializable (NNX modules capture local initializer
+    closures that ``pickle`` / ``msgpack`` cannot encode), so it is held on
+    the registry instance keyed by ``model_id``. Consequently
+    :meth:`get_model` reconstructs the registered model only within the
+    process that registered it; across a fresh process it raises
+    :class:`NotImplementedError` rather than fabricating a model.
+    """
+
+    #: Sub-directory (under each model's directory) holding the Orbax state.
+    _STATE_DIRNAME = "state"
 
     def __init__(self, storage_path: str | Path) -> None:
         """Initialize model registry.
@@ -117,6 +146,13 @@ class ModelRegistry:
         # Metadata storage
         self.metadata_file = self.storage_path / "registry.json"
         self._models = self._load_registry()
+
+        # In-memory reconstruction templates keyed by model_id: the module
+        # structure (``nnx.GraphDef``) and an abstract (shape/dtype) copy of
+        # the weight state used as the Orbax restore target. Held in memory
+        # because an arbitrary module's GraphDef captures local initializer
+        # closures and is not disk-serializable.
+        self._templates: dict[str, _ModelTemplate] = {}
 
     def _load_registry(self) -> dict[str, Any]:
         """Load registry from disk."""
@@ -146,13 +182,26 @@ class ModelRegistry:
         model_dir = self.storage_path / model_id
         model_dir.mkdir(exist_ok=True)
 
-        # For testing purposes, we'll just store model metadata and class info
-        # In production, this would use proper model serialization
+        # Serialize the real model: split into structure (graphdef) + weights
+        # (state). The weights are persisted to disk via Orbax; the structural
+        # template is held in memory because it is not generically
+        # disk-serializable (NNX captures local initializer closures).
+        graphdef, state = nnx.split(model)
+        abstract_state = jax.tree_util.tree_map(
+            lambda leaf: jax.ShapeDtypeStruct(leaf.shape, leaf.dtype), state
+        )
+        self._templates[model_id] = _ModelTemplate(graphdef=graphdef, abstract_state=abstract_state)
+        state_dir = (model_dir / self._STATE_DIRNAME).resolve()
+        with ocp.StandardCheckpointer() as checkpointer:
+            checkpointer.save(state_dir, state)
+
+        # Record the class identity for diagnostics / honest error messages.
         model_info_path = model_dir / "model_info.json"
         model_class_info = {
             "model_class_name": model.__class__.__name__,
             "model_module": model.__class__.__module__,
             "model_id": model_id,
+            "state_path": str(state_dir),
             "input_shape": metadata.input_shape,
             "output_shape": metadata.output_shape,
         }
@@ -172,6 +221,7 @@ class ModelRegistry:
             "model_type": metadata.model_type,
             "model_path": str(model_dir),
             "metadata_path": str(metadata_path),
+            "state_path": str(state_dir),
             "registered_at": datetime.now(UTC).isoformat(),
         }
 
@@ -197,44 +247,57 @@ class ModelRegistry:
         return model_id
 
     def get_model(self, model_id: str) -> tuple[nnx.Module, ModelMetadata]:
-        """Retrieve model and metadata by ID.
+        """Retrieve the registered model and its metadata by ID.
+
+        The model's weights are restored from the Orbax state persisted at
+        registration and merged back into the structural template
+        (``nnx.GraphDef``) captured for ``model_id``. The returned module
+        therefore reproduces the registered model exactly — calling it on
+        the same input yields the same outputs.
 
         Args:
             model_id: Model identifier
 
         Returns:
-            Tuple of (model, metadata)
+            Tuple of ``(model, metadata)`` where ``model`` is the
+            reconstructed :class:`flax.nnx.Module`.
+
+        Raises:
+            ValueError: If ``model_id`` is not registered.
+            NotImplementedError: If the structural template for ``model_id``
+                is unavailable (e.g. the registry was reloaded in a fresh
+                process). The weights are persisted but cannot be merged
+                without the in-memory ``GraphDef``; a model is never
+                fabricated from metadata alone.
         """
         if model_id not in self._models["models"]:
             raise ValueError(f"Model ID {model_id} not found")
 
         model_info = self._models["models"][model_id]
 
-        # Load metadata first
+        # Load metadata first.
         metadata_path = model_info["metadata_path"]
         with open(metadata_path) as f:
             metadata_dict = json.load(f)
         metadata = ModelMetadata.from_dict(metadata_dict)
 
-        # For testing purposes, create a minimal working model
-        # In production, this would use proper model reconstruction
-        class MinimalModel(nnx.Module):
-            """Minimal model for testing model registry functionality."""
+        template = self._templates.get(model_id)
+        if template is None:
+            raise NotImplementedError(
+                "model deserialization not available for model_id "
+                f"{model_id!r}: weight state is persisted but the structural "
+                "template was not captured in this process. Cross-process "
+                "model reconstruction requires a follow-up design (persist a "
+                "portable model template / factory)."
+            )
 
-            def __init__(self, rngs, input_shape, output_shape) -> None:
-                input_size = input_shape[-1] if len(input_shape) > 0 else 64
-                output_size = output_shape[-1] if len(output_shape) > 0 else 64
-                self.linear = nnx.Linear(input_size, output_size, rngs=rngs)
-
-            def __call__(self, x: jax.Array) -> jax.Array:
-                return self.linear(x)
-
-        # Create model with appropriate dimensions from metadata
-        model = MinimalModel(
-            rngs=nnx.Rngs(0),
-            input_shape=metadata.input_shape,
-            output_shape=metadata.output_shape,
-        )
+        # Restore the persisted weights into the abstract state template,
+        # then merge with the graphdef to obtain the concrete registered model.
+        with ocp.StandardCheckpointer() as checkpointer:
+            restored_state = checkpointer.restore(
+                Path(model_info["state_path"]), target=template.abstract_state
+            )
+        model = nnx.merge(template.graphdef, restored_state)
 
         return model, metadata
 

@@ -211,9 +211,76 @@ class TestModelRegistry:
             # Retrieve model
             retrieved_model, retrieved_metadata = registry.get_model(model_id)
             assert retrieved_metadata.name == "test_fno"
-            # The registry returns a MinimalModel for testing purposes
+            # The registry reconstructs the registered model (same class structure)
             assert hasattr(retrieved_model, "linear")
             assert callable(retrieved_model)
+
+    def test_get_model_roundtrips_registered_weights(self):
+        """get_model must return the SAME weights that were registered.
+
+        Regression for the serving-registry correctness hole where
+        ``get_model`` fabricated a fresh ``nnx.Rngs(0)``-initialised model
+        with RANDOM weights instead of deserialising the registered one.
+        """
+        if ModelRegistry is None:
+            pytest.skip("ModelRegistry not yet implemented")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry = ModelRegistry(storage_path=temp_dir)
+
+            # Build a model whose weights are clearly NOT the default init,
+            # so a random/default-init reconstruction is guaranteed to differ.
+            original = SimpleTestModel(rngs=nnx.Rngs(0))
+            shifted = jax.tree_util.tree_map(lambda leaf: leaf + 3.0, nnx.state(original))
+            nnx.update(original, shifted)
+
+            metadata = ModelMetadata(
+                name="roundtrip_fno",
+                version="1.0.0",
+                model_type="fno",
+                input_shape=(64,),
+                output_shape=(64,),
+            )
+
+            model_id = registry.register_model(original, metadata)
+            loaded, _ = registry.get_model(model_id)
+
+            probe = jnp.linspace(-1.0, 1.0, 64).reshape(1, 64)
+            expected = original(probe)
+            actual = loaded(probe)  # type: ignore[operator]  # nnx.Module is callable
+
+            assert jnp.allclose(actual, expected, atol=1e-6), (
+                "get_model returned a different model than was registered"
+            )
+
+    def test_get_model_raises_without_template_instead_of_fabricating(self):
+        """When the structural template is missing, fail honestly.
+
+        Across a fresh process the in-memory ``GraphDef`` template is gone;
+        ``get_model`` must raise ``NotImplementedError`` rather than return a
+        fabricated / random model.
+        """
+        if ModelRegistry is None:
+            pytest.skip("ModelRegistry not yet implemented")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry = ModelRegistry(storage_path=temp_dir)
+            model = SimpleTestModel(rngs=nnx.Rngs(0))
+            metadata = ModelMetadata(
+                name="no_template",
+                version="1.0.0",
+                model_type="fno",
+                input_shape=(64,),
+                output_shape=(64,),
+            )
+            model_id = registry.register_model(model, metadata)
+
+            # Simulate a fresh process: weights persist on disk, but the
+            # in-memory reconstruction template is unavailable.
+            registry._templates.clear()
+
+            with pytest.raises(NotImplementedError, match="model deserialization"):
+                registry.get_model(model_id)
 
     def test_model_versioning(self):
         """Test model versioning functionality."""
@@ -495,14 +562,16 @@ class TestServingIntegration:
 
             registry = ModelRegistry(storage_path=temp_dir)
 
-            # Mock model
+            # Mock model — SimpleTestModel is Linear(64, 64); metadata and
+            # serving input below match that shape so get_model can return
+            # the real reconstructed model (not a fabricated stand-in).
             mock_model = SimpleTestModel(rngs=nnx.Rngs(0))
             mock_metadata = ModelMetadata(
                 name="integration_test",
                 version="1.0.0",
                 model_type="fno",
-                input_shape=(8,),
-                output_shape=(8,),
+                input_shape=(64,),
+                output_shape=(64,),
             )
 
             # Register model
@@ -518,7 +587,7 @@ class TestServingIntegration:
             server.inference_engine = engine
 
             # Test prediction
-            input_data = {"data": [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]]}
+            input_data = {"data": [[1.0] * 64]}
             result = server.predict(input_data)
 
             assert "predictions" in result
