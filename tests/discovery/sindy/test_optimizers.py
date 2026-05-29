@@ -60,6 +60,32 @@ class TestSTLSQ:
         coef = STLSQ().fit(x, y)
         assert isinstance(coef, jnp.ndarray)
 
+    def test_result_depends_on_max_iter(self):
+        """STLSQ keeps refitting until the support stabilizes (Brunton 2016).
+
+        Regression test for a dead convergence check that compared the support
+        against itself, breaking after a single refit regardless of ``max_iter``.
+        This problem requires a multi-iteration thresholding cascade: the first
+        refit drops one term, and the *second* refit (only reachable when
+        ``max_iter`` is large enough) drops a further term as the remaining
+        coefficients shift. ``max_iter=1`` must therefore differ from a large
+        ``max_iter``, and the converged solution must be strictly sparser.
+        """
+        key = jax.random.PRNGKey(57)
+        k_features, k_coef, k_noise = jax.random.split(key, 3)
+        x = jax.random.normal(k_features, (500, 8))
+        true_coef = jax.random.uniform(k_coef, (8,), minval=-1.0, maxval=1.0)
+        y = (x @ true_coef)[:, None] + 0.01 * jax.random.normal(k_noise, (500, 1))
+
+        coef_one = STLSQ(threshold=0.5, alpha=0.05, max_iter=1).fit(x, y)
+        coef_many = STLSQ(threshold=0.5, alpha=0.05, max_iter=20).fit(x, y)
+
+        nnz_one = int(jnp.sum(jnp.abs(coef_one) > 0))
+        nnz_many = int(jnp.sum(jnp.abs(coef_many) > 0))
+        # A single refit cannot reach the converged support on this cascade.
+        assert not jnp.allclose(coef_one, coef_many)
+        assert nnz_many < nnz_one
+
 
 class TestSR3:
     """Tests for Sparse Relaxed Regularized Regression."""

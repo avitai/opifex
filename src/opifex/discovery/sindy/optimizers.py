@@ -74,16 +74,22 @@ class STLSQ:
         xty = x.T @ y
         coef = jnp.linalg.solve(xtx, xty).T  # (n_targets, n_features)
 
-        # Iterative thresholding
+        # Iterative thresholding (Brunton, Proctor & Kutz 2016, eq. 2.4):
+        # alternately hard-threshold and least-squares-refit until the support
+        # (the set of nonzero coefficients) stops changing between iterations.
+        previous_support: jnp.ndarray | None = None
         for _ in range(self.max_iter):
-            # Hard threshold
+            # Hard threshold the current coefficients.
             mask = jnp.abs(coef) >= self.threshold
-            coef_new = coef * mask
 
-            # Check convergence (support unchanged)
-            old_support = jnp.abs(coef) >= self.threshold
-            if jnp.array_equal(mask, old_support) and _ > 0:
+            # Converged once the support matches the PREVIOUS iteration's support.
+            # Comparing against a separately captured previous support (rather
+            # than the current coefficients) is what makes this check meaningful.
+            if previous_support is not None and bool(jnp.array_equal(mask, previous_support)):
                 break
+            previous_support = mask
+
+            coef_new = coef * mask
 
             # Re-fit on active features (per target)
             for target_idx in range(n_targets):
