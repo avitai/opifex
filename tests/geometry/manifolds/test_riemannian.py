@@ -12,6 +12,7 @@ import pytest
 from opifex.geometry.manifolds.riemannian import (
     euclidean_metric,
     hyperbolic_metric,
+    product_metric,
     RiemannianManifold,
     spherical_metric,
 )
@@ -582,6 +583,58 @@ class TestPerformanceBenchmarks:
 
         assert result.shape == (batch_size, 3, 3)
         assert jnp.all(jnp.isfinite(result))
+
+
+class TestProductMetric:
+    """Test product_metric for product manifolds with arbitrary factor dims."""
+
+    def test_product_metric_handles_non_2d_factors(self):
+        """Product of a 3D and a 1D factor must slice each factor's real dim.
+
+        Builds M = E^3 x S^1(radius=2). The block-diagonal metric must be:
+        top-left 3x3 = identity (Euclidean on coords [0:3]), bottom-right 1x1
+        = radius^2 = 4 (spherical on coord [3:4]). The hardcoded "2D for now"
+        slicing fed exactly two coordinates to every factor, producing two 2x2
+        blocks from the wrong coordinate slices -- this test pins the fix.
+        """
+        radius = 2.0
+        # Each factor carries its real dimension: (metric_fn, dim).
+        metric_fn = product_metric(
+            (euclidean_metric, 3),
+            (spherical_metric(radius), 1),
+        )
+
+        # Distinct coordinate values so a wrong slice would be observable.
+        point = jnp.array([0.1, 0.2, 0.3, 0.4])
+        metric = metric_fn(point)
+
+        # Full metric is 4x4 block-diagonal: 3 (Euclidean) + 1 (spherical).
+        assert metric.shape == (4, 4)
+
+        # Euclidean factor occupies the leading 3x3 block (identity).
+        assert jnp.allclose(metric[:3, :3], jnp.eye(3))
+
+        # Spherical factor occupies the trailing 1x1 block: radius^2 = 4.
+        assert jnp.allclose(metric[3:, 3:], jnp.array([[radius**2]]))
+
+        # Off-diagonal coupling blocks must be exactly zero (block-diagonal).
+        assert jnp.allclose(metric[:3, 3:], jnp.zeros((3, 1)))
+        assert jnp.allclose(metric[3:, :3], jnp.zeros((1, 3)))
+
+    def test_product_metric_jit_compatibility(self):
+        """metric_fn from product_metric must be jit-compilable (smoke check)."""
+        metric_fn = product_metric(
+            (euclidean_metric, 3),
+            (spherical_metric(2.0), 1),
+        )
+        jit_metric = jax.jit(metric_fn)
+
+        point = jnp.array([0.1, 0.2, 0.3, 0.4])
+        result_normal = metric_fn(point)
+        result_jit = jit_metric(point)
+
+        assert jnp.allclose(result_normal, result_jit)
+        assert result_jit.shape == (4, 4)
 
 
 if __name__ == "__main__":

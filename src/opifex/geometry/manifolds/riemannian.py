@@ -445,24 +445,37 @@ def spherical_metric(radius: float = 1.0):
     return metric_fn
 
 
-def product_metric(*metrics):
-    """Product metric for product manifolds."""
+def product_metric(
+    *factors: tuple[Callable[[ManifoldPoint], MetricTensor], int],
+):
+    """Product metric for product manifolds.
+
+    Each factor is a ``(metric_function, dimension)`` pair. The factor's
+    ``dimension`` is the number of coordinates that factor consumes, so the
+    point is split into contiguous slices of the declared sizes and each
+    sub-metric is assembled into a block-diagonal tensor. Factor dimensions
+    are explicit precisely because the metric functions infer their shape from
+    the coordinate slice they receive -- an incorrect split would otherwise
+    silently produce a wrong metric.
+
+    Args:
+        *factors: One ``(metric_function, dimension)`` pair per manifold factor.
+
+    Returns:
+        A metric function mapping a point of the summed dimension to the
+        block-diagonal product metric tensor.
+    """
 
     def metric_fn(point: ManifoldPoint) -> MetricTensor:
-        total_dim = 0
         metric_blocks = []
 
         start_idx = 0
-        for metric in metrics:
-            # Assume each metric function expects points of its own dimension
-            # This is simplified - real implementation would need dimension info
-            sub_point = point[..., start_idx : start_idx + 2]  # Assume 2D for now
-            sub_metric = metric(sub_point)
-            metric_blocks.append(sub_metric)
-            start_idx += 2
-            total_dim += 2
+        for factor_metric, factor_dim in factors:
+            sub_point = point[..., start_idx : start_idx + factor_dim]
+            metric_blocks.append(factor_metric(sub_point))
+            start_idx += factor_dim
 
-        # Block diagonal matrix
+        # Block diagonal matrix combining each factor's sub-metric.
         return jax.scipy.linalg.block_diag(*metric_blocks)
 
     return metric_fn
