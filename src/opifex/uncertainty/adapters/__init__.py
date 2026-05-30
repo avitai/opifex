@@ -9,14 +9,14 @@ from opifex.uncertainty.adapters.base import (
     ModelUncertaintyAdapterProtocol,
 )
 from opifex.uncertainty.adapters.ensemble import (
-    BatchEnsembleAdapterSpec,
+    BatchEnsembleAdapter,
     BatchEnsembleState,
     DeepEnsembleAdapter,
     DeepEnsembleState,
     DUEAdapterSpec,
-    SnapshotEnsembleAdapterSpec,
+    SnapshotEnsembleAdapter,
     SnapshotEnsembleState,
-    SWAGAdapterSpec,
+    SWAGAdapter,
     SWAGState,
     TestTimeAugmentationAdapterSpec,
 )
@@ -57,7 +57,7 @@ for _name, _capability in ADAPTER_CAPABILITIES.items():
 
 __all__ = [
     "ADAPTER_CAPABILITIES",
-    "BatchEnsembleAdapterSpec",
+    "BatchEnsembleAdapter",
     "BatchEnsembleState",
     "BayesianLastLayerAdapterSpec",
     "BayesnewtonAdapterSpec",
@@ -81,9 +81,9 @@ __all__ = [
     "ModelUncertaintyAdapterProtocol",
     "OperatorAdapterSpec",
     "SNGPAdapterSpec",
-    "SWAGAdapterSpec",
+    "SWAGAdapter",
     "SWAGState",
-    "SnapshotEnsembleAdapterSpec",
+    "SnapshotEnsembleAdapter",
     "SnapshotEnsembleState",
     "TestTimeAugmentationAdapterSpec",
     "TinygpAdapterSpec",

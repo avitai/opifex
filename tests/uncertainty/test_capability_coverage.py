@@ -170,9 +170,9 @@ _TASK_7_2_ADAPTER_NAMES: frozenset[str] = frozenset(
         "adapter:VBLLAdapterSpec",
         # Phase 4 ensemble adapter specs.
         "adapter:DeepEnsembleAdapter",
-        "adapter:SnapshotEnsembleAdapterSpec",
-        "adapter:SWAGAdapterSpec",
-        "adapter:BatchEnsembleAdapterSpec",
+        "adapter:SnapshotEnsembleAdapter",
+        "adapter:SWAGAdapter",
+        "adapter:BatchEnsembleAdapter",
         "adapter:DUEAdapterSpec",
         "adapter:TestTimeAugmentationAdapterSpec",
         # Phase 4 calibration / conformal concrete calibrators.

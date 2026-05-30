@@ -198,7 +198,7 @@ _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.SNAPSHOT_ENSEMBLE,
     source_package="opifex",
     notes=(
-        "SnapshotEnsembleAdapterSpec — Huang et al. ICLR 2017. Cyclic "
+        "SnapshotEnsembleAdapter — Huang et al. ICLR 2017. Cyclic "
         "LR schedule produces M snapshots from one training run."
     ),
 )
@@ -211,7 +211,7 @@ _SWAG_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.SWAG,
     source_package="opifex",
     notes=(
-        "SWAGAdapterSpec — Maddox et al. NeurIPS 2019. Stochastic "
+        "SWAGAdapter — Maddox et al. NeurIPS 2019. Stochastic "
         "Weight Averaging Gaussian posterior over weights."
     ),
 )
@@ -224,7 +224,7 @@ _BATCH_ENSEMBLE_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.BATCH_ENSEMBLE,
     source_package="opifex",
     notes=(
-        "BatchEnsembleAdapterSpec — Wen et al. ICLR 2020. Rank-1 "
+        "BatchEnsembleAdapter — Wen et al. ICLR 2020. Rank-1 "
         "ensemble perturbations shared across a single base network."
     ),
 )
@@ -372,9 +372,9 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     "adapter:VBLLAdapterSpec": _VBLL_ADAPTER_CAPABILITY,
     # Phase 4 ensemble adapter specs.
     "adapter:DeepEnsembleAdapter": _DEEP_ENSEMBLE_ADAPTER_CAPABILITY,
-    "adapter:SnapshotEnsembleAdapterSpec": _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY,
-    "adapter:SWAGAdapterSpec": _SWAG_ADAPTER_CAPABILITY,
-    "adapter:BatchEnsembleAdapterSpec": _BATCH_ENSEMBLE_ADAPTER_CAPABILITY,
+    "adapter:SnapshotEnsembleAdapter": _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY,
+    "adapter:SWAGAdapter": _SWAG_ADAPTER_CAPABILITY,
+    "adapter:BatchEnsembleAdapter": _BATCH_ENSEMBLE_ADAPTER_CAPABILITY,
     "adapter:DUEAdapterSpec": _DUE_ADAPTER_CAPABILITY,
     "adapter:TestTimeAugmentationAdapterSpec": _TTA_ADAPTER_CAPABILITY,
     # Phase 4 calibration / conformal concrete calibrators.
