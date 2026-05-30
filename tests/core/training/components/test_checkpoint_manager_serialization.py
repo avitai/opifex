@@ -42,9 +42,7 @@ class TestCheckpointSerializationSafety:
             original_state = nnx.state(model)
             metadata = {"epoch": 7, "learning_rate": 0.001, "note": "safe-serializer"}
 
-            checkpoint_path = manager.save_checkpoint(
-                model, step=100, loss=0.25, metadata=metadata
-            )
+            checkpoint_path = manager.save_checkpoint(model, step=100, loss=0.25, metadata=metadata)
 
             loaded = manager.load_checkpoint(checkpoint_path)
 
@@ -57,12 +55,10 @@ class TestCheckpointSerializationSafety:
             original_leaves = jax.tree_util.tree_leaves(original_state)
             restored_leaves = jax.tree_util.tree_leaves(restored_state)
             assert len(restored_leaves) == len(original_leaves)
-            for original_leaf, restored_leaf in zip(
-                original_leaves, restored_leaves, strict=True
-            ):
-                assert jnp.allclose(
-                    jnp.asarray(restored_leaf), jnp.asarray(original_leaf)
-                ), "restored array does not match original"
+            for original_leaf, restored_leaf in zip(original_leaves, restored_leaves, strict=True):
+                assert jnp.allclose(jnp.asarray(restored_leaf), jnp.asarray(original_leaf)), (
+                    "restored array does not match original"
+                )
 
             # Plain-Python metadata must survive the round-trip.
             assert loaded["step"] == 100

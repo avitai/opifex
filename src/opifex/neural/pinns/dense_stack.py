@@ -67,12 +67,8 @@ class DenseStack(nnx.Module):
         """
         super().__init__()
         self.activation = activation
-        self._compute_dtype = (
-            None if compute_dtype is None else canonicalize_dtype(compute_dtype)
-        )
-        resolved_param_dtype = (
-            None if compute_dtype is None else canonicalize_dtype(param_dtype)
-        )
+        self._compute_dtype = None if compute_dtype is None else canonicalize_dtype(compute_dtype)
+        resolved_param_dtype = None if compute_dtype is None else canonicalize_dtype(param_dtype)
 
         dims = [input_dim, *hidden_dims, output_dim]
         linear_kwargs: dict[str, Any] = {}
