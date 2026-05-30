@@ -34,6 +34,8 @@ from enum import StrEnum
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty.statespace.kalman import kalman_smoother
+
 
 class CAKFPolicy(StrEnum):
     """Search-direction policy for the CAKF update step.
@@ -305,36 +307,14 @@ def cakf_smooth(
         ``(smoothed_means, smoothed_covs)`` matching the
         :func:`opifex.uncertainty.statespace.kalman_smoother` shape.
     """
-    num_steps = filter_means.shape[0]
-    last_mean = filter_means[-1]
-    last_cov = filter_covs[-1]
-
-    def body(
-        carry: tuple[jax.Array, jax.Array],
-        inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
-    ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
-        next_smoothed_mean, next_smoothed_cov = carry
-        current_filter_mean, current_filter_cov, next_transition, next_process_noise = inputs
-        predicted_mean = next_transition @ current_filter_mean
-        predicted_cov = (
-            next_transition @ current_filter_cov @ next_transition.T + next_process_noise
-        )
-        gain = jnp.linalg.solve(predicted_cov, next_transition @ current_filter_cov).T
-        smoothed_mean = current_filter_mean + gain @ (next_smoothed_mean - predicted_mean)
-        smoothed_cov = current_filter_cov + gain @ (next_smoothed_cov - predicted_cov) @ gain.T
-        return (smoothed_mean, smoothed_cov), (smoothed_mean, smoothed_cov)
-
-    _, (back_means, back_covs) = jax.lax.scan(
-        body,
-        (last_mean, last_cov),
-        (
-            filter_means[: num_steps - 1],
-            filter_covs[: num_steps - 1],
-            transitions[1:num_steps],
-            process_noises[1:num_steps],
-        ),
-        reverse=True,
+    # The CAKS backward recursion is the standard Rauch-Tung-Striebel pass over
+    # the CAKF-filtered moments (the implicit ``Sigma_t = Sigma_prior_t -
+    # M_t M_t^T`` posterior covariance is returned in dense form to this
+    # smoother). It is therefore byte-identical to ``kalman_smoother``; delegate
+    # to the single shared implementation (Rule 1 — DRY).
+    return kalman_smoother(
+        filter_means=filter_means,
+        filter_covs=filter_covs,
+        transitions=transitions,
+        process_noises=process_noises,
     )
-    smoothed_means = jnp.concatenate([back_means, last_mean[None, :]], axis=0)
-    smoothed_covs = jnp.concatenate([back_covs, last_cov[None, :, :]], axis=0)
-    return smoothed_means, smoothed_covs

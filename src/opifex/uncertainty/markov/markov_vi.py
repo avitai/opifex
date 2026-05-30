@@ -49,8 +49,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.laplace import LikelihoodComponentsFn  # noqa: TC001
+from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
 from opifex.uncertainty.markov.markov_laplace import _build_state_space_sequence
 from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import (
@@ -58,7 +60,7 @@ from opifex.uncertainty.statespace import (
     kalman_smoother,
     StateSpaceKernel,
 )
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _MARKOV_VI_SOURCE_PACKAGE = "opifex.uncertainty.markov"
@@ -273,39 +275,16 @@ def predict_markov_vi_gp(
     Laplace and VI posteriors once the smoothed state trajectory has
     been computed at the training grid.
     """
-    observation_matrix = state.state_space_kernel.measurement
-    times_train = state.times
-    smoothed_state_means = state.smoothed_state_means
-    smoothed_state_covs = state.smoothed_state_covariances
-    stationary_cov = state.state_space_kernel.stationary_cov
-    state_dim = state.state_space_kernel.state_dim
-
-    bucket_indices = jnp.searchsorted(times_train, times_test, side="right") - 1
-
-    def predict_one(test_time: jax.Array, bucket_index: jax.Array) -> tuple[jax.Array, jax.Array]:
-        is_before_first = bucket_index < 0
-        clipped_index = jnp.maximum(bucket_index, 0)
-        anchor_mean = jnp.where(
-            is_before_first, jnp.zeros(state_dim), smoothed_state_means[clipped_index]
-        )
-        anchor_cov = jnp.where(is_before_first, stationary_cov, smoothed_state_covs[clipped_index])
-        anchor_time = jnp.where(is_before_first, test_time, times_train[clipped_index])
-        delta = test_time - anchor_time
-        transition_matrix = state.state_space_kernel.state_transition(delta)
-        process_noise = stationary_cov - transition_matrix @ stationary_cov @ transition_matrix.T
-        predicted_state_mean = transition_matrix @ anchor_mean
-        predicted_state_cov = transition_matrix @ anchor_cov @ transition_matrix.T + process_noise
-        latent_mean = (observation_matrix @ predicted_state_mean).squeeze(-1)
-        latent_variance = (
-            observation_matrix @ predicted_state_cov @ observation_matrix.T
-        ).squeeze()
-        return latent_mean, latent_variance
-
-    test_means, test_variances = jax.vmap(predict_one)(times_test, bucket_indices)
-    test_variances = jnp.clip(test_variances, a_min=_PSEUDO_NOISE_FLOOR)
-    return PredictiveDistribution(
-        mean=test_means,
-        variance=test_variances,
+    test_means, test_variances = interpolate_smoothed_state(
+        state_space_kernel=state.state_space_kernel,
+        times_train=state.times,
+        smoothed_state_means=state.smoothed_state_means,
+        smoothed_state_covs=state.smoothed_state_covariances,
+        times_test=times_test,
+    )
+    return gaussian_process_predictive(
+        test_means,
+        test_variances,
         epistemic=test_variances,
         total_uncertainty=test_variances,
         metadata=compose_method_metadata(
