@@ -18,6 +18,7 @@ from opifex.neural.operators.common.tensor_ops import (
     safe_spectral_multiply,
     standardized_fft,
     standardized_ifft,
+    TensorShapeValidator,
     validate_channel_compatibility,
     validate_operator_config,
     validate_tensor_shape,
@@ -154,6 +155,51 @@ class TestSafeEinsum:
         result = safe_einsum("ij,jk->ik", a, b)
         assert result.shape == (3, 5)
         assert jnp.allclose(result, jnp.full((3, 5), 4.0))
+
+
+class TestValidateEinsum:
+    """Tests for TensorShapeValidator.validate_einsum exception fidelity."""
+
+    def test_valid_equation_passes(self):
+        """A consistent einsum equation validates without raising."""
+        a = jnp.ones((3, 4))
+        b = jnp.ones((4, 5))
+        TensorShapeValidator.validate_einsum("ij,jk->ik", a, b)
+
+    def test_operand_count_mismatch_keeps_specific_message(self):
+        """A wrong operand count raises the SPECIFIC operand-count message."""
+        a = jnp.ones((3, 4))
+        with pytest.raises(ValueError, match=r"expects 2 operands, but 1 were provided"):
+            TensorShapeValidator.validate_einsum("ij,jk->ik", a)
+
+    def test_operand_rank_mismatch_keeps_specific_message(self):
+        """A rank mismatch raises the SPECIFIC per-operand dimension message."""
+        a = jnp.ones((3, 4))
+        b = jnp.ones((4,))  # spec 'jk' expects 2 dims, operand has 1
+        with pytest.raises(ValueError, match=r"Operand 1 has 1 dimensions"):
+            TensorShapeValidator.validate_einsum("ij,jk->ik", a, b)
+
+    def test_inconsistent_dimension_keeps_specific_message(self):
+        """An inconsistent shared dimension raises the SPECIFIC inconsistency message."""
+        a = jnp.ones((3, 4))
+        b = jnp.ones((7, 5))  # 'j' is 4 in a but 7 in b
+        with pytest.raises(ValueError, match=r"Dimension 'j' has inconsistent sizes: 4 vs 7"):
+            TensorShapeValidator.validate_einsum("ij,jk->ik", a, b)
+
+    def test_non_array_operand_not_relabelled_as_dimension_error(self):
+        """An operand lacking .shape is a genuine bug, not a dimension mismatch.
+
+        The validator must NOT swallow the underlying AttributeError and relabel
+        it as a vague dimension error. It should surface a distinct, chained error
+        that names the malformed operand rather than the collapsed generic message.
+        """
+        good = jnp.ones((3, 4))
+        bad = object()  # no .shape attribute
+        with pytest.raises(ValueError, match=r"not a valid array") as exc_info:
+            TensorShapeValidator.validate_einsum("ij,jk->ik", good, bad)  # type: ignore[arg-type]
+        # The original AttributeError must be preserved in the chain, proving the
+        # real bug was not silently discarded.
+        assert isinstance(exc_info.value.__cause__, AttributeError)
 
 
 class TestSafeSpectralConv:

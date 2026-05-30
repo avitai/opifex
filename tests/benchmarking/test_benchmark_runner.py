@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from opifex.benchmarking.benchmark_runner import (
+    BenchmarkFailure,
     BenchmarkRunner,
     DomainResults,
     PublicationReport,
@@ -175,3 +176,74 @@ class TestBenchmarkRunnerErrors:
 
         with pytest.raises(ValueError, match="No benchmarks available"):
             runner.run_comprehensive_benchmark()
+
+
+class TestBenchmarkRunnerFailureRecording:
+    """A failing benchmark must be recorded and surfaced, not silently masked."""
+
+    def _build_runner(self, temp_directory, failing_operator):
+        """Construct a runner whose _run_single_benchmark fails for one operator."""
+        mock_registry = MagicMock()
+        mock_registry.list_available_operators.return_value = ["good_op", "bad_op"]
+        mock_registry.list_available_benchmarks.return_value = ["bench1"]
+        mock_registry.list_compatible_operators.return_value = ["good_op", "bad_op"]
+        mock_registry.get_benchmark_config.return_value = MagicMock()
+
+        runner = BenchmarkRunner(
+            registry=mock_registry,
+            evaluator=MagicMock(),
+            validator=MagicMock(),
+            analyzer=MagicMock(),
+            results_manager=MagicMock(),
+            output_dir=str(temp_directory),
+        )
+
+        good_result = MagicMock(name="good_result")
+
+        def fake_single(operator_name, _config):
+            if operator_name == failing_operator:
+                raise RuntimeError("operator blew up during execution")
+            return good_result
+
+        runner._run_single_benchmark = MagicMock(side_effect=fake_single)
+        runner._validate_result = MagicMock(return_value=MagicMock())
+        return runner, good_result
+
+    def test_failing_operator_does_not_abort_suite(self, temp_directory):
+        """The healthy operator still produces a result despite the failure."""
+        runner, good_result = self._build_runner(temp_directory, failing_operator="bad_op")
+
+        results = runner.run_comprehensive_benchmark(generate_analysis=False)
+
+        # Loop continued: the good operator's result is present.
+        assert results["bench1"]["good_op"] is good_result
+        # The failing operator left no successful result.
+        assert "bad_op" not in results["bench1"]
+
+    def test_failing_operator_is_recorded_not_masked(self, temp_directory):
+        """The failure is captured on the runner so callers can inspect it."""
+        runner, _ = self._build_runner(temp_directory, failing_operator="bad_op")
+
+        runner.run_comprehensive_benchmark(generate_analysis=False)
+
+        assert len(runner.failed_runs) == 1
+        failure = runner.failed_runs[0]
+        assert isinstance(failure, BenchmarkFailure)
+        assert failure.benchmark_name == "bench1"
+        assert failure.operator_name == "bad_op"
+        assert isinstance(failure.error, RuntimeError)
+        assert "blew up" in str(failure.error)
+
+    def test_failures_logged_via_logger_exception(self, temp_directory, caplog):
+        """The failure is logged at ERROR level with a traceback."""
+        import logging
+
+        runner, _ = self._build_runner(temp_directory, failing_operator="bad_op")
+
+        with caplog.at_level(logging.ERROR):
+            runner.run_comprehensive_benchmark(generate_analysis=False)
+
+        assert any(
+            "bad_op" in record.message and record.levelno == logging.ERROR
+            for record in caplog.records
+        )

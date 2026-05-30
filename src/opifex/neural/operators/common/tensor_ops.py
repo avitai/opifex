@@ -455,56 +455,66 @@ class TensorShapeValidator:
         Raises:
             ValueError: If tensor dimensions don't match equation requirements
         """
-        try:
-            # Parse einsum equation
-            if "->" in equation:
-                inputs, _ = equation.split("->")
-                input_specs = inputs.split(",")
-            else:
-                input_specs = equation.split(",")
+        # Parse einsum equation. Splitting a ``str`` cannot raise, so it stays
+        # outside any exception guard.
+        if "->" in equation:
+            inputs, _ = equation.split("->")
+            input_specs = inputs.split(",")
+        else:
+            input_specs = equation.split(",")
 
-            # Validate number of operands matches equation
-            if len(operands) != len(input_specs):
+        # The only step that can legitimately raise an *unexpected* exception is
+        # reading ``.shape`` from a malformed operand (e.g. a non-array). Guard
+        # exactly that, catch the specific ``AttributeError``, and chain it so the
+        # real bug is surfaced rather than relabelled as a dimension mismatch.
+        operand_shapes: list[tuple[int, ...]] = []
+        for i, operand in enumerate(operands):
+            try:
+                shape = tuple(operand.shape)
+            except AttributeError as error:
+                raise ValueError(
+                    f"Operand {i} is not a valid array with a `.shape` attribute "
+                    f"(got {type(operand).__name__}). Equation: {equation}"
+                ) from error
+            operand_shapes.append(shape)
+
+        # Validate number of operands matches equation. These dimension errors are
+        # raised deliberately with precise messages and must propagate unchanged.
+        if len(operands) != len(input_specs):
+            _raise_einsum_dimension_error(
+                f"Einsum equation expects {len(input_specs)} operands, "
+                f"but {len(operands)} were provided. Equation: {equation}"
+            )
+
+        # Validate each operand's dimensions.
+        for i, (shape, input_spec) in enumerate(zip(operand_shapes, input_specs, strict=False)):
+            spec = input_spec.strip()
+            expected_dims = len(spec)
+            actual_dims = len(shape)
+
+            if actual_dims != expected_dims:
                 _raise_einsum_dimension_error(
-                    f"Einsum equation expects {len(input_specs)} operands, "
-                    f"but {len(operands)} were provided. Equation: {equation}"
+                    f"Operand {i} has {actual_dims} dimensions "
+                    f"{shape}, but einsum spec '{spec}' expects "
+                    f"{expected_dims} dimensions. Full equation: {equation}"
                 )
 
-            # Validate each operand's dimensions
-            for i, (operand, input_spec) in enumerate(zip(operands, input_specs, strict=False)):
-                spec = input_spec.strip()
-                expected_dims = len(spec)
-                actual_dims = len(operand.shape)
-
-                if actual_dims != expected_dims:
-                    _raise_einsum_dimension_error(
-                        f"Operand {i} has {actual_dims} dimensions "
-                        f"{operand.shape}, but einsum spec '{spec}' expects "
-                        f"{expected_dims} dimensions. Full equation: {equation}"
-                    )
-
-            # Collect dimension sizes for consistency checking
-            dim_sizes: dict[str, int] = {}
-            for operand, input_spec in zip(operands, input_specs, strict=False):
-                spec = input_spec.strip()
-                for dim_idx, dim_label in enumerate(spec):
-                    size = operand.shape[dim_idx]
-                    if dim_label in dim_sizes:
-                        if dim_sizes[dim_label] != size:
-                            _raise_einsum_dimension_error(
-                                f"Dimension '{dim_label}' has inconsistent "
-                                f"sizes: {dim_sizes[dim_label]} vs {size}. "
-                                f"Equation: {equation}, Operand shapes: "
-                                f"{[op.shape for op in operands]}"
-                            )
-                    else:
-                        dim_sizes[dim_label] = size
-
-        except Exception:
-            logger.exception("Einsum validation failed for equation: %s", equation)
-            _raise_einsum_dimension_error(
-                f"Equation: {equation}\nOperand shapes: {[op.shape for op in operands]}"
-            )
+        # Collect dimension sizes for consistency checking.
+        dim_sizes: dict[str, int] = {}
+        for shape, input_spec in zip(operand_shapes, input_specs, strict=False):
+            spec = input_spec.strip()
+            for dim_idx, dim_label in enumerate(spec):
+                size = shape[dim_idx]
+                if dim_label in dim_sizes:
+                    if dim_sizes[dim_label] != size:
+                        _raise_einsum_dimension_error(
+                            f"Dimension '{dim_label}' has inconsistent "
+                            f"sizes: {dim_sizes[dim_label]} vs {size}. "
+                            f"Equation: {equation}, Operand shapes: "
+                            f"{operand_shapes}"
+                        )
+                else:
+                    dim_sizes[dim_label] = size
 
     @staticmethod
     def validate_attention_dims(query: Array, key: Array, value: Array) -> None:
