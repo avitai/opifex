@@ -167,7 +167,7 @@ class GrafanaManager:
     def create_dashboard(self, dashboard: Dashboard) -> dict[str, Any]:
         """Create dashboard in Grafana."""
         # Simulate API response if requests not available
-        if not HAS_REQUESTS:
+        if requests is None:
             return {
                 "status": "success",
                 "message": f"Dashboard '{dashboard.title}' created (simulation mode)",
@@ -175,14 +175,26 @@ class GrafanaManager:
                 "url": f"{self.grafana_url}/d/{dashboard.uid}",
             }
 
-        # Implementation would use requests here with payload
-        # payload = {
-        #     "dashboard": dashboard.to_dict(),
-        #     "overwrite": True,
-        #     "message": f"Created {dashboard.title} dashboard",
-        # }
-        # TODO: Implement actual API call with payload
-        return {"status": "created", "uid": dashboard.uid}
+        payload = {
+            "dashboard": dashboard.to_dict(),
+            "overwrite": True,
+            "message": f"Created {dashboard.title} dashboard",
+        }
+        request_kwargs: dict[str, Any] = {
+            "json": payload,
+            "headers": self.headers,
+            "timeout": 30,
+        }
+        # Basic-auth credentials are only set when no API key is configured.
+        if self.api_key is None:
+            request_kwargs["auth"] = self.auth
+
+        response = requests.post(
+            f"{self.grafana_url}/api/dashboards/db",
+            **request_kwargs,
+        )
+        response.raise_for_status()
+        return response.json()
 
 
 def create_neural_operator_dashboard() -> Dashboard:
