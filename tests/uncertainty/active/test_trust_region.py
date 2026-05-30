@@ -131,3 +131,88 @@ def test_batch_trust_region_box_holds_multiple_independent_regions() -> None:
     # Stacked shape: (num_regions, dim).
     assert lowers.shape == (2, 2)
     assert uppers.shape == (2, 2)
+
+
+def test_all_box_types_share_identical_bounds_clip() -> None:
+    """TrustRegionBox / TREGOBox / TURBOBox must return identical clipped bounds.
+
+    The clip geometry is centralised in ``_clip_box_bounds``; all three box
+    types delegate to it, so on identical centre / length / search-space
+    inputs they must agree exactly.
+    """
+    from opifex.uncertainty.active.trust_region import TREGOBox, TrustRegionBox, TURBOBox
+
+    center = jnp.array([0.95, 0.05])
+    length = jnp.asarray(0.4)
+    lower_bound = jnp.array([0.0, 0.0])
+    upper_bound = jnp.array([1.0, 1.0])
+
+    trb = TrustRegionBox(
+        center=center,
+        length=length,
+        search_space_lower=lower_bound,
+        search_space_upper=upper_bound,
+    )
+    trego = TREGOBox(
+        center=center,
+        length=length,
+        search_space_lower=lower_bound,
+        search_space_upper=upper_bound,
+        success_count=0,
+        failure_count=0,
+        success_threshold=3,
+        failure_threshold=3,
+        shrink_factor=0.5,
+        expand_factor=2.0,
+    )
+    turbo = TURBOBox(
+        center=center,
+        length=length,
+        search_space_lower=lower_bound,
+        search_space_upper=upper_bound,
+    )
+
+    trb_lower, trb_upper = trb.bounds()
+    trego_lower, trego_upper = trego.bounds()
+    turbo_lower, turbo_upper = turbo.bounds()
+
+    # Reference clip captured before the refactor (documented baseline).
+    assert jnp.allclose(trb_lower, jnp.array([0.75, 0.0]))
+    assert jnp.allclose(trb_upper, jnp.array([1.0, 0.25]))
+    # All three box types agree exactly.
+    assert jnp.allclose(trego_lower, trb_lower)
+    assert jnp.allclose(trego_upper, trb_upper)
+    assert jnp.allclose(turbo_lower, trb_lower)
+    assert jnp.allclose(turbo_upper, trb_upper)
+
+
+def test_clip_box_bounds_jit_vmap() -> None:
+    """The ``_clip_box_bounds`` helper is jit- and vmap-clean."""
+    import jax
+
+    from opifex.uncertainty.active.trust_region import _clip_box_bounds
+
+    lower_bound = jnp.array([0.0, 0.0])
+    upper_bound = jnp.array([1.0, 1.0])
+
+    # jit: identical result to the eager call on a single box.
+    center = jnp.array([0.95, 0.05])
+    length = jnp.asarray(0.4)
+    eager_lower, eager_upper = _clip_box_bounds(center, length, lower_bound, upper_bound)
+    jit_lower, jit_upper = jax.jit(_clip_box_bounds)(center, length, lower_bound, upper_bound)
+    assert jnp.allclose(jit_lower, eager_lower)
+    assert jnp.allclose(jit_upper, eager_upper)
+
+    # vmap over a batch of centres / lengths sharing the global search space.
+    centers = jnp.array([[0.95, 0.05], [0.3, 0.3], [0.5, 0.9]])
+    lengths = jnp.array([0.4, 0.2, 0.6])
+    batched = jax.vmap(_clip_box_bounds, in_axes=(0, 0, None, None))
+    lowers, uppers = batched(centers, lengths, lower_bound, upper_bound)
+    assert lowers.shape == (3, 2)
+    assert uppers.shape == (3, 2)
+    # Row 0 matches the single-box eager result.
+    assert jnp.allclose(lowers[0], eager_lower)
+    assert jnp.allclose(uppers[0], eager_upper)
+    # Clipping is respected across the batch.
+    assert jnp.all(lowers >= lower_bound)
+    assert jnp.all(uppers <= upper_bound)
