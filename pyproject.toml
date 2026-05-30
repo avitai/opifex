@@ -32,17 +32,9 @@ dependencies = [
   # tensor decomposition for neural operators
   "matplotlib>=3.7.0",
   # visualization
-  "plotly>=5.15.0",
-  # visualization
-  "pydantic>=2.0.0",
-  # data validation
-  "typer>=0.9.0",
-  # CLI
   "jaxtyping>=0.2.20",
   # type hints
   "beartype>=0.15.0",
-  "lineax>=0.0.8",
-  # model-sampler integration
   "orbax-checkpoint>=0.11.13",
   # checkpointing
   "distrax>=0.1.0,<0.2.0",
@@ -99,6 +91,7 @@ dev = [
   "pytest-xdist>=3.8.0",
   # Development tools
   "bandit>=1.7.5",
+  "import-linter>=2.0",
   "ipykernel>=6.29.5",
   "jupytext>=1.16.0",
   "meshio>=5.3.0",
@@ -259,6 +252,30 @@ packages = ["src/opifex"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+# Import architecture contracts (import-linter). Conservative, known-clean rules
+# guarding the layering boundary; run via ``uv run lint-imports``.
+[tool.importlinter]
+root_package = "opifex"
+
+[[tool.importlinter.contracts]]
+forbidden_modules = ["opifex.training"]
+name = "core does not import the top-level training package"
+source_modules = ["opifex.core"]
+type = "forbidden"
+
+[[tool.importlinter.contracts]]
+forbidden_modules = [
+  "opifex.platform",
+  "opifex.deployment",
+  "opifex.mlops",
+  "opifex.benchmarking",
+  "opifex.visualization",
+  "opifex.discovery"
+]
+name = "core does not import application/serving/infra layers"
+source_modules = ["opifex.core"]
+type = "forbidden"
 
 [tool.opifex]
 

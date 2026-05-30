@@ -98,6 +98,18 @@ repos:
         pass_filenames: false
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
+  # Import architecture contracts (import-linter) — enforce layering boundaries
+  - repo: local
+    hooks:
+      - id: lint-imports
+        name: lint-imports
+        entry: uv run lint-imports
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
+
   # Workshop-inspired security scanning
   - repo: https://github.com/PyCQA/bandit
     rev: 1.8.3
