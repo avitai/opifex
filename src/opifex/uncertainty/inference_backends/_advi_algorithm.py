@@ -19,7 +19,7 @@ Canonical reference:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, NamedTuple, TYPE_CHECKING
 
 import jax
@@ -176,10 +176,11 @@ def step(
     logdensity_fn: Callable[[Any], jax.Array],
     optimizer: optax.GradientTransformation,
     num_samples: int = 5,
-    objective: Objective = field(default_factory=KL),
+    objective: Objective | None = None,
     stl_estimator: bool = True,
 ) -> tuple[MFVIState, MFVIInfo]:
     """Apply one stochastic-gradient ELBO step to the mean-field state."""
+    objective = KL() if objective is None else objective
     parameters = (state.mu, state.rho)
 
     def sample_fn(key: jax.Array, params: tuple[Any, Any], n: int) -> Any:
