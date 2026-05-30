@@ -7,15 +7,15 @@ diffusion-advection solutions on-demand, following Grain's interface requirement
 
 from typing import Any, SupportsIndex
 
-import grain.python as grain
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from opifex.data.sources._base import GrainPDESource
 from opifex.physics.solvers.diffusion_advection import solve_diffusion_advection_2d
 
 
-class DiffusionDataSource(grain.RandomAccessDataSource):
+class DiffusionDataSource(GrainPDESource):
     """
     Grain-compliant data source for diffusion-advection equation.
 
@@ -56,10 +56,6 @@ class DiffusionDataSource(grain.RandomAccessDataSource):
         self.dimension = dimension
         self.seed = seed
 
-    def __len__(self) -> int:
-        """Return total number of samples."""
-        return self.n_samples
-
     def _generate_initial_condition_2d(self, key):
         """Generate 2D initial condition."""
         x = jnp.linspace(0, 1, self.resolution)
@@ -94,19 +90,7 @@ class DiffusionDataSource(grain.RandomAccessDataSource):
 
     def __getitem__(self, index: SupportsIndex | slice) -> dict[str, Any]:
         """Generate sample deterministically from index."""
-        if isinstance(index, slice):
-            raise TypeError("Slicing not supported, use integer index")
-
-        if not isinstance(index, int):
-            raise TypeError(f"Index must be an integer, got {type(index)}")
-
-        if index < 0 or index >= self.n_samples:
-            raise IndexError(
-                f"Index {index} out of bounds for source with {self.n_samples} samples"
-            )
-
-        # Deterministic key from index
-        key = jax.random.PRNGKey(self.seed + index)
+        index, key = self._resolve_key(index)
         key_ic, key_diff, key_vx, key_vy = jax.random.split(key, 4)
 
         # Always generate 2D initial condition (for existing solver compatibility)
