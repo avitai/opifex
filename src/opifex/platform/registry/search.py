@@ -9,7 +9,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-import jax
 import jax.numpy as jnp
 
 from opifex.platform.search_types import SearchType
@@ -172,16 +171,7 @@ class SearchEngine:
                 overlap = len(ref_tags & func_tags)
                 if overlap > 0:
                     suggestions.append(
-                        SearchResult(
-                            functional_id=functional["id"],
-                            name=functional["name"],
-                            description=functional["description"],
-                            functional_type=functional["type"],
-                            author_id=functional["author_id"],
-                            tags=functional.get("tags", []),
-                            relevance_score=overlap / max(len(ref_tags), len(func_tags)),
-                            metadata=functional.get("metadata", {}),
-                        )
+                        self._to_result(functional, overlap / max(len(ref_tags), len(func_tags)))
                     )
 
             # Sort by relevance and return top results
@@ -200,18 +190,7 @@ class SearchEngine:
             similarity = self._cosine_similarity(ref_embedding, func_embedding)
 
             if similarity >= self.similarity_threshold:
-                suggestions.append(
-                    SearchResult(
-                        functional_id=functional["id"],
-                        name=functional["name"],
-                        description=functional["description"],
-                        functional_type=functional["type"],
-                        author_id=functional["author_id"],
-                        tags=functional.get("tags", []),
-                        relevance_score=float(similarity),
-                        metadata=functional.get("metadata", {}),
-                    )
-                )
+                suggestions.append(self._to_result(functional, float(similarity)))
 
         # Sort by similarity and return top results
         suggestions.sort(key=lambda x: x.relevance_score, reverse=True)
@@ -263,18 +242,7 @@ class SearchEngine:
         for functional in all_functionals:
             score = self._calculate_text_score(functional, keywords)
             if score > 0:
-                results.append(
-                    SearchResult(
-                        functional_id=functional["id"],
-                        name=functional["name"],
-                        description=functional["description"],
-                        functional_type=functional["type"],
-                        author_id=functional["author_id"],
-                        tags=functional.get("tags", []),
-                        relevance_score=score,
-                        metadata=functional.get("metadata", {}),
-                    )
-                )
+                results.append(self._to_result(functional, score))
 
         # Sort by relevance score
         results.sort(key=lambda x: x.relevance_score, reverse=True)
@@ -306,18 +274,7 @@ class SearchEngine:
             similarity = self._cosine_similarity(query_embedding, func_embedding)
 
             if similarity >= self.similarity_threshold:
-                results.append(
-                    SearchResult(
-                        functional_id=functional["id"],
-                        name=functional["name"],
-                        description=functional["description"],
-                        functional_type=functional["type"],
-                        author_id=functional["author_id"],
-                        tags=functional.get("tags", []),
-                        relevance_score=float(similarity),
-                        metadata=functional.get("metadata", {}),
-                    )
-                )
+                results.append(self._to_result(functional, float(similarity)))
 
         # Sort by similarity
         results.sort(key=lambda x: x.relevance_score, reverse=True)
@@ -337,20 +294,8 @@ class SearchEngine:
         # Get all functionals
         all_functionals = await self._get_all_functionals()
 
-        # Convert to search results
-        results = [
-            SearchResult(
-                functional_id=functional["id"],
-                name=functional["name"],
-                description=functional["description"],
-                functional_type=functional["type"],
-                author_id=functional["author_id"],
-                tags=functional.get("tags", []),
-                relevance_score=1.0,  # All matches are equally relevant
-                metadata=functional.get("metadata", {}),
-            )
-            for functional in all_functionals
-        ]
+        # Convert to search results (all matches are equally relevant).
+        results = [self._to_result(functional, 1.0) for functional in all_functionals]
 
         # Apply filters
         return self._apply_filters(results, query)
@@ -393,6 +338,28 @@ class SearchEngine:
 
         # Remove duplicates while preserving order
         return list(dict.fromkeys(keywords))
+
+    @staticmethod
+    def _to_result(functional: dict[str, Any], relevance_score: float) -> SearchResult:
+        """Build a SearchResult from a functional record and a relevance score.
+
+        Args:
+            functional: Functional metadata record from the registry
+            relevance_score: Computed relevance score for the result
+
+        Returns:
+            SearchResult populated from the functional record
+        """
+        return SearchResult(
+            functional_id=functional["id"],
+            name=functional["name"],
+            description=functional["description"],
+            functional_type=functional["type"],
+            author_id=functional["author_id"],
+            tags=functional.get("tags", []),
+            relevance_score=relevance_score,
+            metadata=functional.get("metadata", {}),
+        )
 
     def _calculate_text_score(self, functional: dict[str, Any], keywords: list[str]) -> float:
         """Calculate text relevance score for a functional.
@@ -500,28 +467,28 @@ class SearchEngine:
         return filtered
 
     def _generate_embedding(self, text: str) -> jnp.ndarray:
-        """Generate neural embedding for text.
+        """Generate a bag-of-words embedding for text.
+
+        Each extracted keyword is hashed into a fixed-size vector so that two
+        phrases sharing the same keyword set yield identical embeddings, giving
+        semantic search meaningful word-overlap similarity. A production system
+        would replace this with a neural model such as BERT/SciBERT.
 
         Args:
             text: Input text
 
         Returns:
-            Neural embedding vector
+            Unit-normalised embedding vector
         """
-        # Simple hash-based embedding for demonstration
-        # In production, this would use a neural model like BERT
+        embedding_dim = 256
+        embedding = jnp.zeros(embedding_dim)
 
-        if not text.strip():
-            return jnp.zeros(256)
+        # Accumulate a hashed one-hot per keyword (order-independent).
+        for keyword in self._extract_keywords(text):
+            hash_index = hash(keyword) % embedding_dim
+            embedding = embedding.at[hash_index].add(1.0)
 
-        # Create a simple hash-based embedding
-        hash_value = hash(text.lower())
-
-        # Generate deterministic random embedding from hash
-        key = jax.random.PRNGKey(abs(hash_value) % (2**31))
-        embedding = jax.random.normal(key, (256,))
-
-        # Normalize to unit vector
+        # Normalize to unit vector (empty text stays the zero vector).
         norm = jnp.linalg.norm(embedding)
         return embedding / norm if norm > 0 else embedding
 
