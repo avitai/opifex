@@ -30,6 +30,8 @@ from typing import Any, TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
+from opifex.core.physics.conservation import symmetry_violation
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -269,9 +271,16 @@ class AdaptiveWeightScheduler:
 class ConservationLawEnforcer:
     """Conservation law enforcement for physics constraints.
 
-    This class implements enforcement of various conservation laws
-    including mass, momentum, energy, and quantum mechanical
-    conservation principles.
+    This class enforces conservation laws as single-state self-consistency
+    residuals (mass divergence proxy, momentum/energy variation, quantum
+    particle-number/charge trace variation). These are distinct from the
+    two-argument ``(y_pred, y_true)`` violation functions in
+    ``opifex.core.physics.conservation`` and have no counterpart there.
+
+    The ``symmetry`` law *does* match the single source of truth and
+    therefore dispatches directly to
+    ``opifex.core.physics.conservation.symmetry_violation`` (which applies
+    tolerance gating, unlike the legacy inline body).
 
     Attributes:
         conservation_laws: List of conservation laws to enforce
@@ -334,8 +343,8 @@ class ConservationLawEnforcer:
             "charge": lambda: self._compute_charge_conservation(
                 self._extract_state_component(state, default_shape="matrix")
             ),
-            "symmetry": lambda: self._compute_symmetry_conservation(
-                self._extract_state_component(state)
+            "symmetry": lambda: symmetry_violation(
+                self._extract_state_component(state), tolerance=self.tolerance
             ),
         }
 
@@ -440,27 +449,6 @@ class ConservationLawEnforcer:
         if density_matrix.ndim >= 2:
             charge_density = jnp.abs(jnp.trace(density_matrix, axis1=-2, axis2=-1))
             return jnp.var(charge_density)
-        return jnp.array(0.0)
-
-    def _compute_symmetry_conservation(self, field: jax.Array) -> jax.Array:
-        """Compute symmetry preservation for physical fields.
-
-        Tests whether a field preserves reflection symmetry: f(x) = f(-x).
-        This is important for many physical systems with spatial symmetries.
-
-        Args:
-            field: Physical field to test for symmetry
-
-        Returns:
-            Symmetry preservation residual (0 = perfect symmetry)
-        """
-        # Check reflection symmetry by comparing field with its flip
-        # For a symmetric field: f(x) = f(-x), the residual should be small
-        if field.ndim >= 1:
-            # Flip along the last spatial dimension
-            flipped_field = jnp.flip(field, axis=-1)
-            # Compute mean squared difference
-            return jnp.mean((field - flipped_field) ** 2)
         return jnp.array(0.0)
 
 
