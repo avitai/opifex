@@ -5,11 +5,71 @@ uncertainty estimates from probabilistic models, including temperature scaling
 and reliability diagram computation.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import TypeVar
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
+
+
+_Params = TypeVar("_Params")
+
+
+def _gradient_descent(
+    loss_fn: Callable[[_Params], jax.Array],
+    init_params: _Params,
+    *,
+    n_steps: int,
+    lr: float,
+    project: Callable[[_Params], _Params] | None = None,
+    update: Callable[[_Params, _Params], _Params] | None = None,
+    on_step: Callable[[_Params], None] | None = None,
+) -> _Params:
+    """Run a fixed-iteration gradient-descent loop over an arbitrary pytree.
+
+    Centralises the ``for _ in range(n_steps): g = grad(loss)(p); p = step(p, g);
+    p = project(p)`` skeleton that the temperature-scaling and Platt calibrators
+    previously re-implemented four times. The step rule, projection and a
+    per-iteration observer are injected so each call site keeps its original
+    behaviour exactly.
+
+    Args:
+        loss_fn: Scalar loss as a function of the parameter pytree. Gradients
+            are taken with :func:`jax.grad`, so ``init_params`` may be a scalar
+            array or a tuple/pytree of arrays.
+        init_params: Initial parameter pytree.
+        n_steps: Number of gradient-descent iterations (fixed, not adaptive).
+        lr: Learning rate used by the default plain-SGD update. Ignored when a
+            custom ``update`` is supplied.
+        project: Optional projection applied to the parameters after every
+            update (e.g. a positivity floor). ``None`` leaves them unconstrained.
+        update: Optional custom update mapping ``(params, grads) -> params``
+            (e.g. momentum). Defaults to plain SGD ``p - lr * g`` applied
+            leaf-wise via :func:`jax.tree.map`.
+        on_step: Optional side-effecting observer invoked with the *current*
+            parameters at the start of each iteration, before the gradient
+            step. Used to record per-step diagnostics.
+
+    Returns:
+        The parameter pytree after ``n_steps`` iterations.
+    """
+    params = init_params
+    step = (
+        update
+        if update is not None
+        else (lambda current, grads: jax.tree.map(lambda p, g: p - lr * g, current, grads))
+    )
+
+    for _ in range(n_steps):
+        if on_step is not None:
+            on_step(params)
+        grads = jax.grad(loss_fn)(params)
+        params = step(params, grads)
+        if project is not None:
+            params = project(params)
+
+    return params
 
 
 class TemperatureScaling(nnx.Module):
@@ -204,27 +264,46 @@ class TemperatureScaling(nnx.Module):
             return -jnp.mean(log_probs[jnp.arange(len(labels)), labels])
 
         # Enhanced optimization with momentum for adaptive mode
-        current_temp = self.temperature[...]
+        positivity_floor = lambda temp: jnp.maximum(temp, 0.01)  # Ensure positive
 
         if self.adaptive:
-            # Use momentum-based optimization
-            for _ in range(200):  # More iterations for better convergence
-                grad = jax.grad(calibration_loss)(current_temp)
-
-                # Update velocity with momentum
-                self.velocity[...] = self.momentum[...] * self.velocity[...] + grad
-
-                # Update temperature
-                current_temp = current_temp - self.learning_rate * self.velocity[...]
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
+            # Momentum-based optimization: 200 steps for better convergence.
+            current_temp = _gradient_descent(
+                calibration_loss,
+                self.temperature[...],
+                n_steps=200,
+                lr=self.learning_rate,
+                update=self._momentum_update,
+                project=positivity_floor,
+            )
         else:
-            # Simple gradient-based optimization
-            for _ in range(100):  # Fixed number of optimization steps
-                grad = jax.grad(calibration_loss)(current_temp)
-                current_temp = current_temp - self.learning_rate * grad
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
+            # Plain SGD: a fixed number of optimization steps.
+            current_temp = _gradient_descent(
+                calibration_loss,
+                self.temperature[...],
+                n_steps=100,
+                lr=self.learning_rate,
+                project=positivity_floor,
+            )
 
         return float(current_temp)
+
+    def _momentum_update(self, current_temp: jax.Array, grad: jax.Array) -> jax.Array:
+        """Momentum gradient step that mutates the persistent velocity state.
+
+        Reproduces the historical adaptive update exactly: the velocity is
+        advanced as ``momentum * velocity + grad`` before the temperature is
+        moved by ``-learning_rate * velocity``.
+
+        Args:
+            current_temp: Current temperature scalar.
+            grad: Loss gradient at ``current_temp``.
+
+        Returns:
+            Updated temperature scalar (before projection).
+        """
+        self.velocity[...] = self.momentum[...] * self.velocity[...] + grad
+        return current_temp - self.learning_rate * self.velocity[...]
 
     def optimize_temperature_with_physics_constraints(
         self, predictions: jax.Array, targets: jax.Array, inputs: jax.Array
@@ -259,35 +338,25 @@ class TemperatureScaling(nnx.Module):
                 constraint_penalty,
             )
 
-        # Optimize temperature
-        current_temp = self.temperature[...]
+        scalar_loss = lambda temp: physics_aware_loss(temp)[0]
+        positivity_floor = lambda temp: jnp.maximum(temp, 0.01)  # Ensure positive
 
-        if self.adaptive:
-            # Use momentum-based optimization with physics constraints
-            for _ in range(150):  # More iterations for physics-aware optimization
-                _loss_value, constraint_penalty = physics_aware_loss(current_temp)
-                grad = jax.grad(lambda t: physics_aware_loss(t)[0])(current_temp)
+        def record_penalty(temp: jax.Array) -> None:
+            """Append the current-step constraint penalty to the history."""
+            self.constraint_penalty_history.append(float(physics_aware_loss(temp)[1]))
 
-                # Store constraint penalty in history
-                self.constraint_penalty_history.append(float(constraint_penalty))
-
-                # Update velocity with momentum
-                self.velocity[...] = self.momentum[...] * self.velocity[...] + grad
-
-                # Update temperature
-                current_temp = current_temp - self.learning_rate * self.velocity[...]
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
-        else:
-            # Simple gradient-based optimization with physics constraints
-            for _ in range(100):
-                _loss_value, constraint_penalty = physics_aware_loss(current_temp)
-                grad = jax.grad(lambda t: physics_aware_loss(t)[0])(current_temp)
-
-                # Store constraint penalty in history
-                self.constraint_penalty_history.append(float(constraint_penalty))
-
-                current_temp = current_temp - self.learning_rate * grad
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
+        # Momentum-based when adaptive (150 steps), else plain SGD (100 steps).
+        update = self._momentum_update if self.adaptive else None
+        n_steps = 150 if self.adaptive else 100
+        current_temp = _gradient_descent(
+            scalar_loss,
+            self.temperature[...],
+            n_steps=n_steps,
+            lr=self.learning_rate,
+            update=update,
+            project=positivity_floor,
+            on_step=record_penalty,
+        )
 
         # Keep history bounded
         if len(self.constraint_penalty_history) > 100:
@@ -361,25 +430,25 @@ class PlattScaling(nnx.Module):
             max_iterations: Maximum number of optimization iterations
         """
 
-        def loss_fn(a_param, b_param):
-            """Binary cross-entropy loss for Platt scaling."""
+        def loss_fn(params: tuple[jax.Array, jax.Array]) -> jax.Array:
+            """Binary cross-entropy loss for Platt scaling over ``(a, b)``."""
+            a_param, b_param = params
             probs = jax.nn.sigmoid(a_param * logits + b_param)
             # Clip probabilities to avoid log(0)
             probs = jnp.clip(probs, 1e-8, 1.0 - 1e-8)
             return -jnp.mean(labels * jnp.log(probs) + (1 - labels) * jnp.log(1 - probs))
 
-        # Optimize A and B parameters
-        current_A, current_B = self.a[...], self.b[...]
-        learning_rate = 0.01
-
-        for _ in range(max_iterations):
-            grads = jax.grad(loss_fn, argnums=(0, 1))(current_A, current_B)
-            current_A -= learning_rate * grads[0]
-            current_B -= learning_rate * grads[1]
+        # Optimize the (A, B) parameter pair with plain SGD.
+        current_a, current_b = _gradient_descent(
+            loss_fn,
+            (self.a[...], self.b[...]),
+            n_steps=max_iterations,
+            lr=0.01,
+        )
 
         # Update parameters
-        self.a = nnx.Param(current_A)
-        self.b = nnx.Param(current_B)
+        self.a = nnx.Param(current_a)
+        self.b = nnx.Param(current_b)
 
 
 class IsotonicRegression(nnx.Module):

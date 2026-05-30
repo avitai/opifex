@@ -19,13 +19,21 @@ import jax.numpy as jnp
 from flax import nnx
 
 from opifex.neural.bayesian.calibration_tools import (
+    _gradient_descent,
     CalibrationTools,
     IsotonicRegression,
     PlattScaling,
+    TemperatureScaling,
 )
 
 
 _MONOTONIC_EPS = 1e-5
+
+# Characterisation tolerance for the gradient-descent dedup (Task 12.3.8).
+# The shared ``_gradient_descent`` helper must reproduce the byte-for-byte
+# fitted values of the four hand-rolled SGD loops it replaces, so the
+# tolerance is as tight as float32 round-trips allow.
+_FIT_EQUIVALENCE_ATOL = 1e-5
 
 
 def test_pav_single_pass_failure_case_is_monotonic() -> None:
@@ -127,3 +135,136 @@ def test_isotonic_method_matches_class() -> None:
 
     assert calibrated.shape == confidences.shape
     assert jnp.allclose(calibrated, expected, atol=_MONOTONIC_EPS)
+
+
+# ---------------------------------------------------------------------------
+# Task 12.3.8 — shared fixed-iteration gradient-descent loop.
+#
+# The four hand-rolled ``for _ in range(N): g = grad(loss)(p); p -= lr*g; ...``
+# loops (simple/adaptive temperature scaling, simple/adaptive physics-aware
+# temperature scaling, and Platt fitting) are replaced by a single
+# ``_gradient_descent`` helper. These characterisation tests pin the exact
+# fitted scalars produced by the pre-refactor loops so the dedup is proven
+# behaviour-preserving (golden values were captured from HEAD before the
+# helper existed).
+# ---------------------------------------------------------------------------
+
+
+def _temperature_logits_labels() -> tuple[jax.Array, jax.Array]:
+    """Fixed (logits, labels) for the temperature-scaling characterisation."""
+    logits = jax.random.normal(jax.random.PRNGKey(1), (64, 3))
+    labels = jax.random.randint(jax.random.PRNGKey(2), (64,), 0, 3)
+    return logits, labels
+
+
+def _physics_predictions_targets_inputs() -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Fixed (predictions, targets, inputs) for the physics characterisation."""
+    inputs = jax.random.uniform(jax.random.PRNGKey(3), (40, 2))
+    predictions = jax.random.normal(jax.random.PRNGKey(4), (40, 1))
+    targets = jnp.abs(jax.random.normal(jax.random.PRNGKey(5), (40, 1)))
+    return predictions, targets, inputs
+
+
+def test_optimize_temperature_simple_matches_golden() -> None:
+    """Plain-SGD temperature scaling reproduces its pre-dedup fitted value."""
+    logits, labels = _temperature_logits_labels()
+    calibrator = TemperatureScaling(rngs=nnx.Rngs(0))
+
+    fitted = calibrator.optimize_temperature(logits, labels)
+
+    assert jnp.isclose(fitted, 1.2994803190231323, atol=_FIT_EQUIVALENCE_ATOL)
+
+
+def test_optimize_temperature_adaptive_matches_golden() -> None:
+    """Momentum-SGD temperature scaling reproduces its pre-dedup fitted value."""
+    logits, labels = _temperature_logits_labels()
+    calibrator = TemperatureScaling(adaptive=True, rngs=nnx.Rngs(0))
+
+    fitted = calibrator.optimize_temperature(logits, labels)
+
+    assert jnp.isclose(fitted, 2.5726025104522705, atol=_FIT_EQUIVALENCE_ATOL)
+
+
+def test_optimize_temperature_physics_simple_matches_golden() -> None:
+    """Plain-SGD physics-aware scaling reproduces value and history length."""
+    predictions, targets, inputs = _physics_predictions_targets_inputs()
+    calibrator = TemperatureScaling(physics_constraints=("positivity",), rngs=nnx.Rngs(0))
+
+    fitted = calibrator.optimize_temperature_with_physics_constraints(predictions, targets, inputs)
+
+    assert jnp.isclose(fitted, 1.4705876111984253, atol=_FIT_EQUIVALENCE_ATOL)
+    # The 100-step loop appends one penalty per step; history stays bounded.
+    assert len(calibrator.constraint_penalty_history) == 100
+
+
+def test_optimize_temperature_physics_adaptive_matches_golden() -> None:
+    """Momentum-SGD physics-aware scaling reproduces value and bounded history."""
+    predictions, targets, inputs = _physics_predictions_targets_inputs()
+    calibrator = TemperatureScaling(
+        physics_constraints=("positivity", "boundedness"),
+        adaptive=True,
+        constraint_strength=0.5,
+        rngs=nnx.Rngs(0),
+    )
+
+    fitted = calibrator.optimize_temperature_with_physics_constraints(predictions, targets, inputs)
+
+    assert jnp.isclose(fitted, 1.5693259239196777, atol=_FIT_EQUIVALENCE_ATOL)
+    # The 150-step loop truncates the penalty history to the last 100 entries.
+    assert len(calibrator.constraint_penalty_history) == 100
+
+
+def test_platt_fit_matches_golden() -> None:
+    """Two-parameter Platt SGD reproduces its pre-dedup (a, b) fit."""
+    logits = jax.random.normal(jax.random.PRNGKey(6), (100,))
+    labels = (logits > 0).astype(jnp.float32)
+    scaler = PlattScaling(rngs=nnx.Rngs(0))
+
+    scaler.fit(logits, labels)
+
+    assert jnp.isclose(float(scaler.a[...]), -0.4867066740989685, atol=_FIT_EQUIVALENCE_ATOL)
+    assert jnp.isclose(float(scaler.b[...]), 0.07027804851531982, atol=_FIT_EQUIVALENCE_ATOL)
+
+
+def test_gradient_descent_helper_minimises_quadratic() -> None:
+    """The shared helper drives a convex scalar loss toward its minimum."""
+
+    def loss_fn(x: jax.Array) -> jax.Array:
+        return (x - 3.0) ** 2
+
+    fitted = _gradient_descent(loss_fn, jnp.asarray(0.0), n_steps=200, lr=0.1)
+
+    assert jnp.isclose(fitted, 3.0, atol=1e-3)
+
+
+def test_gradient_descent_helper_applies_projection() -> None:
+    """A projection callback constrains every iterate (here, a lower bound)."""
+
+    def loss_fn(x: jax.Array) -> jax.Array:
+        # Minimiser at x = -5, but the projection floors iterates at 0.5.
+        return (x + 5.0) ** 2
+
+    fitted = _gradient_descent(
+        loss_fn,
+        jnp.asarray(1.0),
+        n_steps=100,
+        lr=0.1,
+        project=lambda x: jnp.maximum(x, 0.5),
+    )
+
+    assert float(fitted) >= 0.5
+
+
+def test_gradient_descent_helper_is_jit_compatible() -> None:
+    """The pure-JAX helper composes under ``jax.jit`` with identical output."""
+
+    def loss_fn(x: jax.Array) -> jax.Array:
+        return (x - 2.0) ** 2
+
+    def run(init: jax.Array) -> jax.Array:
+        return _gradient_descent(loss_fn, init, n_steps=50, lr=0.1)
+
+    eager = run(jnp.asarray(0.0))
+    jitted = jax.jit(run)(jnp.asarray(0.0))
+
+    assert bool(jnp.allclose(eager, jitted, rtol=1e-6, atol=1e-7))
