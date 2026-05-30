@@ -26,6 +26,8 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.neural.pinns.dense_stack import DenseStack
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -117,22 +119,17 @@ class SubdomainNetwork(nnx.Module):
         """
         self.activation = activation
 
-        layers = []
-        dims = [input_dim, *hidden_dims, output_dim]
-
-        for i in range(len(dims) - 1):
-            layers.append(nnx.Linear(dims[i], dims[i + 1], rngs=rngs))
-
-        # Use nnx.List for FLAX NNX 0.12.0 compatibility
-        self.layers = nnx.List(layers)
+        self.layers = DenseStack(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=hidden_dims,
+            activation=activation,
+            rngs=rngs,
+        )
 
     def __call__(self, x: Float[Array, ...]) -> Float[Array, "batch out"]:
         """Forward pass through the network."""
-        h = x
-        for layer in list(self.layers)[:-1]:
-            h = layer(h)
-            h = self.activation(h)
-        return list(self.layers)[-1](h)
+        return self.layers(x)
 
 
 class DomainDecompositionPINN(nnx.Module):

@@ -19,7 +19,8 @@ import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array
 
-from opifex.neural.dtypes import as_compute_array, canonicalize_dtype
+from opifex.neural.dtypes import canonicalize_dtype
+from opifex.neural.pinns.dense_stack import DenseStack
 
 
 def gauss_legendre_quadrature(n: int) -> tuple[Array, Array]:
@@ -146,30 +147,15 @@ class VPINN(nnx.Module):
 
         dims = list(hidden_dims or self.config.hidden_dims)
 
-        # Build MLP
-        layers = []
-        in_features = input_dim
-        for h in dims:
-            layers.append(
-                nnx.Linear(
-                    in_features,
-                    h,
-                    dtype=self.compute_dtype,
-                    param_dtype=self.param_dtype,
-                    rngs=rngs,
-                )
-            )
-            in_features = h
-        layers.append(
-            nnx.Linear(
-                in_features,
-                output_dim,
-                dtype=self.compute_dtype,
-                param_dtype=self.param_dtype,
-                rngs=rngs,
-            )
+        self.layers = DenseStack(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=dims,
+            activation=activation,
+            compute_dtype=self.compute_dtype,
+            param_dtype=self.param_dtype,
+            rngs=rngs,
         )
-        self.layers = nnx.List(layers)
 
     def __call__(self, x: Array) -> Array:
         """Forward pass: x -> u(x).
@@ -180,10 +166,7 @@ class VPINN(nnx.Module):
         Returns:
             Solution prediction (batch_size, output_dim).
         """
-        h = as_compute_array(x, self.compute_dtype)
-        for layer in list(self.layers)[:-1]:
-            h = self.activation(layer(h))
-        return list(self.layers)[-1](h).astype(self.compute_dtype)
+        return self.layers(x)
 
     def variational_residual(
         self,

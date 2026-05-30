@@ -13,6 +13,8 @@ import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array
 
+from opifex.neural.pinns.dense_stack import DenseStack
+
 
 class MultiScalePINN(nnx.Module):
     """Multi-Scale Physics-Informed Neural Network.
@@ -268,14 +270,13 @@ class SimplePINN(nnx.Module):
         self.output_dim = output_dim
         self.activation = activation
 
-        # Build layers
-        layers = []
-        in_features = input_dim
-        for h in hidden_dims:
-            layers.append(nnx.Linear(in_features, h, rngs=rngs))
-            in_features = h
-        layers.append(nnx.Linear(in_features, output_dim, rngs=rngs))
-        self.layers = nnx.List(layers)
+        self.layers = DenseStack(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=hidden_dims,
+            activation=activation,
+            rngs=rngs,
+        )
 
     def __call__(self, x: Array) -> Array:
         """Forward pass: x -> u(x).
@@ -286,10 +287,7 @@ class SimplePINN(nnx.Module):
         Returns:
             Solution prediction (batch_size, output_dim)
         """
-        h = x
-        for layer in list(self.layers)[:-1]:
-            h = self.activation(layer(h))
-        return list(self.layers)[-1](h)
+        return self.layers(x)
 
 
 def create_poisson_pinn(
