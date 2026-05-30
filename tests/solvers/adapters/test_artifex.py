@@ -1,52 +1,49 @@
-"""Tests for ArtifexSolverAdapter.
+"""Tests for :class:`ArtifexSolverAdapter`.
 
-Verifies that the adapter correctly interfaces between SciMLSolver protocol and Artifex models.
-Adheres to TDD: Mocks are used to simulate Artifex behavior.
-
-Note: artifex is a required dependency (in pyproject.toml), so we don't test
-for the "not installed" case.
+The Avitai Artifex generative backend exposes no stable ``DDPMModel`` with a
+``sample(rngs, condition, num_samples)`` interface (the only ``sample`` methods
+live on modality wrappers with an incompatible ``sample(n_samples, **kwargs)``
+signature, and ``artifex.generative_models.models`` does not even import). The
+adapter therefore follows the canonical "not wired" convention used elsewhere in
+opifex (e.g. ``opifex.platform.registry.core`` and the inference-backend
+sampler hooks) and raises :class:`NotImplementedError` from both entry points
+rather than returning a placeholder ``Solution(converged=True)`` (a
+Principle-of-Least-Astonishment trap) or an implicit ``None``.
 """
 
 from unittest.mock import MagicMock
 
-import jax.numpy as jnp
+import pytest
+from flax import nnx
 
 from opifex.core.problems import create_optimization_problem
-from opifex.core.solver.interface import Solution
 from opifex.solvers.adapters.artifex import ArtifexSolverAdapter
 
 
-def test_artifex_adapter_initialization():
-    """Test initialization succeeds with a valid model."""
+def test_artifex_adapter_initialization() -> None:
+    """Initialisation stores the supplied generative model unchanged."""
     mock_model = MagicMock()
     adapter = ArtifexSolverAdapter(mock_model)
     assert adapter.model is mock_model
 
 
-def test_artifex_adapter_solve_flow():
-    """Test the complete solve flow with a mocked Artifex model."""
+def test_artifex_adapter_solve_raises_not_implemented() -> None:
+    """``solve`` raises ``NotImplementedError`` until the backend is wired.
 
-    # Mock Artifex Model
-    mock_model = MagicMock()
-    # Setup sample method return
-    # Assuming sample returns a JAX array or similar
-    mock_samples = jnp.ones((1, 10))
-    mock_model.sample.return_value = mock_samples
-
-    adapter = ArtifexSolverAdapter(mock_model)
-
-    # Create dummy problem
+    It must NOT return a dummy ``Solution(converged=True)``: a no-op that
+    reports convergence is a silent-success trap.
+    """
+    adapter = ArtifexSolverAdapter(MagicMock())
     problem = create_optimization_problem(1, lambda x: x)
 
-    # Solve
-    solution = adapter.solve(problem)
+    with pytest.raises(NotImplementedError, match="artifex solver adapter not implemented"):
+        adapter.solve(problem)
 
-    # Verify Adapter calls model.sample
-    # The adapter logic currently drafts calling .sample()
-    # We check if it actually did.
-    assert mock_model.sample.called or hasattr(mock_model, "sample")
 
-    # Verify Solution object
-    assert isinstance(solution, Solution)
-    assert solution.fields is not None
-    # assert "u" in solution.fields # Depends on implementation mapping
+def test_artifex_adapter_sample_batch_raises_not_implemented() -> None:
+    """``sample_batch`` raises ``NotImplementedError`` instead of returning ``None``."""
+    adapter = ArtifexSolverAdapter(MagicMock())
+    problem = create_optimization_problem(1, lambda x: x)
+
+    with pytest.raises(NotImplementedError, match="artifex solver adapter not implemented"):
+        adapter.sample_batch(problem, num_samples=4, rngs=nnx.Rngs(0))
