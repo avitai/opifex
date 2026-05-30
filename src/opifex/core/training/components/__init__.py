@@ -25,6 +25,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 from opifex.core.training.components.lifecycle import TrainingComponent
+from opifex.core.training.strategies.mixed_precision_ops import check_for_overflow
 
 
 class CheckpointComponent(TrainingComponent):
@@ -200,18 +201,17 @@ class MixedPrecisionComponent(TrainingComponent):
     def check_overflow(self, grads: dict[str, jax.Array]) -> bool:
         """Check for NaN or Inf in gradients.
 
+        Delegates to the shared
+        :func:`opifex.core.training.strategies.mixed_precision_ops.check_for_overflow`
+        primitive so the overflow-detection logic has a single source of truth.
+
         Args:
             grads: Gradient dictionary
 
         Returns:
             True if overflow detected, False otherwise
         """
-
-        def is_finite(x):
-            return jnp.all(jnp.isfinite(x))
-
-        finite_checks = jax.tree.map(is_finite, grads)
-        return not jax.tree.reduce(lambda a, b: a and b, finite_checks, True)
+        return check_for_overflow(grads)
 
     def update_loss_scale(self, has_overflow: bool) -> None:
         """Update loss scale based on overflow.

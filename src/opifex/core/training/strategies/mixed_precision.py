@@ -13,6 +13,7 @@ Key Features:
 - Integration with existing Opifex training infrastructure
 """
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -21,8 +22,12 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
+from opifex.core.training.config import TrainingConfig
 from opifex.core.training.monitoring.metrics import TrainingMetrics
-from opifex.training.basic_trainer import BasicTrainer, TrainingConfig
+from opifex.core.training.strategies.mixed_precision_ops import check_for_overflow
+
+
+logger = logging.getLogger(__name__)
 
 
 class MixedPrecisionConfig:
@@ -129,16 +134,6 @@ def align_for_tensorcore(x: jax.Array, alignment: int = 8) -> jax.Array:
     return jnp.pad(x, pad_width, mode="constant", constant_values=0)
 
 
-def check_for_overflow(grads: Any) -> bool:
-    """Check if gradients contain NaN or Inf values."""
-
-    def is_finite(x):
-        return jnp.all(jnp.isfinite(x))
-
-    finite_checks = jax.tree.map(is_finite, grads)
-    return not jax.tree.reduce(lambda a, b: a and b, finite_checks, True)
-
-
 def scale_gradients(grads: Any, loss_scale: float) -> Any:
     """Scale gradients by loss scale factor."""
     return jax.tree.map(lambda g: g / loss_scale, grads)
@@ -173,8 +168,15 @@ def update_loss_scale(
     )
 
 
-class MixedPrecisionTrainer(BasicTrainer):
-    """Mixed precision trainer for neural operators."""
+class MixedPrecisionTrainer:
+    """Mixed precision trainer for neural operators.
+
+    A self-contained training strategy (it does not inherit from the
+    application-layer ``BasicTrainer``): ``opifex.core`` must never depend on
+    the higher-level ``opifex.training`` package. The trainer manages its own
+    mixed-precision policy, loss scaling and overflow handling; the model and
+    optimizer are passed explicitly to :meth:`train_step`.
+    """
 
     def __init__(
         self,
@@ -189,7 +191,8 @@ class MixedPrecisionTrainer(BasicTrainer):
             config: Training configuration
             mp_config: Mixed precision configuration
         """
-        super().__init__(model, config)
+        self.model = model
+        self.config = config
 
         self.mp_config = mp_config or MixedPrecisionConfig()
         self.mp_state = MixedPrecisionState(self.mp_config.loss_scale)
@@ -200,9 +203,6 @@ class MixedPrecisionTrainer(BasicTrainer):
         # Convert model to mixed precision
         self._convert_model_to_mixed_precision()
 
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.info("🔧 Mixed Precision Training Initialized:")
         logger.info("   • Compute dtype: %s", self.mp_config.compute_dtype)
         logger.info("   • Parameter dtype: %s", self.mp_config.param_dtype)
