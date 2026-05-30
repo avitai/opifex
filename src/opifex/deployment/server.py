@@ -1,6 +1,11 @@
 """Opifex Model Serving Server.
 
 Production-ready FastAPI server for Opifex model deployment.
+
+Import-time side effects are avoided (Rule 13): importing this module builds
+no FastAPI app, registers no middleware, and does not reconfigure logging. The
+application is constructed by the :func:`create_app` factory, and the process
+is launched via :func:`main` (``python -m opifex.deployment.server``).
 """
 
 import logging
@@ -21,11 +26,6 @@ from opifex.deployment.core_serving import (
 )
 
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, os.getenv("OPIFEX_LOG_LEVEL", "INFO")),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -38,30 +38,18 @@ class AppState:
         self.model_registry: ModelRegistry | None = None
 
 
-# Global application state
-app = FastAPI(
-    title="Opifex Model Serving API",
-    description="Production-ready API for Opifex framework model serving",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
-
-# CORS middleware for cross-origin requests
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Application state
-app_state = AppState()
+def _raise_service_unavailable(detail: str) -> None:
+    """Raise HTTP 503 Service Unavailable exception."""
+    raise HTTPException(status_code=503, detail=detail)
 
 
-def initialize_components() -> None:
-    """Initialize global components."""
+def _raise_bad_request(detail: str) -> None:
+    """Raise HTTP 400 Bad Request exception."""
+    raise HTTPException(status_code=400, detail=detail)
+
+
+def initialize_components(app_state: AppState) -> None:
+    """Initialize serving components into ``app_state`` from the environment."""
     # Create default configuration
     app_state.config = DeploymentConfig(
         model_name=os.getenv("OPIFEX_MODEL_NAME", "default"),
@@ -81,176 +69,208 @@ def initialize_components() -> None:
     logger.info("Opifex components initialized successfully")
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Application startup event."""
-    logger.info("Starting Opifex Model Serving API")
-    initialize_components()
+def _register_lifecycle(app: FastAPI, app_state: AppState) -> None:
+    """Wire startup/shutdown handlers that initialise ``app_state``."""
+
+    @app.on_event("startup")
+    async def startup_event() -> None:  # pyright: ignore[reportUnusedFunction]
+        """Application startup event."""
+        logger.info("Starting Opifex Model Serving API")
+        initialize_components(app_state)
+
+    @app.on_event("shutdown")
+    async def shutdown_event() -> None:  # pyright: ignore[reportUnusedFunction]
+        """Application shutdown event."""
+        logger.info("Shutting down Opifex Model Serving API")
 
 
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    """Application shutdown event."""
-    logger.info("Shutting down Opifex Model Serving API")
+def _register_status_routes(app: FastAPI, app_state: AppState) -> None:
+    """Register status/info routes (health, root, models, metrics, errors)."""
 
+    @app.get("/health")
+    async def health_check():  # pyright: ignore[reportUnusedFunction]
+        """Health check endpoint.
 
-def _raise_service_unavailable(detail: str) -> None:
-    """Raise HTTP 503 Service Unavailable exception."""
-    raise HTTPException(status_code=503, detail=detail)
+        Returns:
+            Health status information
+        """
+        try:
+            uptime = 0.0  # Calculate actual uptime in production
 
+            return {
+                "status": "healthy",
+                "service": "opifex-model-serving",
+                "version": "1.0.0",
+                "uptime_seconds": uptime,
+                "components": {
+                    "inference_engine": app_state.inference_engine is not None,
+                    "model_registry": app_state.model_registry is not None,
+                    "model_loaded": (
+                        app_state.inference_engine is not None
+                        and app_state.inference_engine.is_initialized
+                    ),
+                },
+            }
+        except Exception as e:
+            logger.exception("Health check failed")
+            raise HTTPException(status_code=503, detail="Service unhealthy") from e
 
-def _raise_bad_request(detail: str) -> None:
-    """Raise HTTP 400 Bad Request exception."""
-    raise HTTPException(status_code=400, detail=detail)
+    @app.get("/")
+    async def root():  # pyright: ignore[reportUnusedFunction]
+        """Root endpoint with API information.
 
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint.
-
-    Returns:
-        Health status information
-    """
-    try:
-        uptime = 0.0  # Calculate actual uptime in production
-
+        Returns:
+            API information
+        """
         return {
-            "status": "healthy",
-            "service": "opifex-model-serving",
+            "service": "Opifex Model Serving API",
             "version": "1.0.0",
-            "uptime_seconds": uptime,
-            "components": {
-                "inference_engine": app_state.inference_engine is not None,
-                "model_registry": app_state.model_registry is not None,
-                "model_loaded": (
-                    app_state.inference_engine is not None
-                    and app_state.inference_engine.is_initialized
-                ),
-            },
-        }
-    except Exception as e:
-        logger.exception("Health check failed")
-        raise HTTPException(status_code=503, detail="Service unhealthy") from e
-
-
-@app.get("/")
-async def root():
-    """Root endpoint with API information.
-
-    Returns:
-        API information
-    """
-    return {
-        "service": "Opifex Model Serving API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/health",
-        "models": "/models",
-    }
-
-
-@app.get("/models")
-async def list_models():
-    """List available models.
-
-    Returns:
-        List of available models
-    """
-    try:
-        registry = app_state.model_registry
-        if registry is None:
-            _raise_service_unavailable("Model registry not available")
-            return None  # This will never execute but helps type checker
-
-        models = registry.list_models()
-        return {"models": models}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Failed to list models")
-        raise HTTPException(status_code=500, detail="Failed to list models") from e
-
-
-@app.post("/predict")
-async def predict(input_data: dict[str, Any]):
-    """Prediction endpoint.
-
-    Args:
-        input_data: Input data for prediction
-
-    Returns:
-        Prediction results
-    """
-    try:
-        engine = app_state.inference_engine
-        if engine is None:
-            _raise_service_unavailable("Inference engine not available")
-            return None  # This will never execute but helps type checker
-
-        if not engine.is_initialized:
-            _raise_service_unavailable("Model not loaded")
-
-        # Validate input
-        if "data" not in input_data:
-            _raise_bad_request("Input must contain 'data' field")
-
-        # Perform prediction using core serving logic
-        import jax.numpy as jnp
-
-        data = jnp.array(input_data["data"])
-        predictions = engine.predict(data)
-
-        # Format response
-        return {
-            "predictions": predictions.tolist(),
-            "metadata": {
-                "model_name": app_state.config.model_name if app_state.config else "unknown",
-                "batch_size": data.shape[0],
-                "input_shape": list(data.shape),
-                "output_shape": list(predictions.shape),
-            },
+            "docs": "/docs",
+            "health": "/health",
+            "models": "/models",
         }
 
-    except HTTPException:
-        raise
-    except ValueError as e:
-        logger.exception("Validation error")
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("Prediction failed")
-        raise HTTPException(status_code=500, detail="Prediction failed") from e
+    @app.get("/models")
+    async def list_models():  # pyright: ignore[reportUnusedFunction]
+        """List available models.
+
+        Returns:
+            List of available models
+        """
+        try:
+            registry = app_state.model_registry
+            if registry is None:
+                _raise_service_unavailable("Model registry not available")
+                return None  # This will never execute but helps type checker
+
+            models = registry.list_models()
+            return {"models": models}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Failed to list models")
+            raise HTTPException(status_code=500, detail="Failed to list models") from e
+
+    @app.get("/metrics")
+    async def get_metrics():  # pyright: ignore[reportUnusedFunction]
+        """Get performance metrics.
+
+        Returns:
+            Performance metrics
+        """
+        try:
+            engine = app_state.inference_engine
+            if engine is None:
+                _raise_service_unavailable("Inference engine not available")
+                return None  # This will never execute but helps type checker
+
+            metrics = engine.get_performance_metrics()
+            return {"metrics": metrics}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Failed to get metrics")
+            raise HTTPException(status_code=500, detail="Failed to get metrics") from e
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):  # pyright: ignore[reportUnusedFunction]
+        """Global exception handler."""
+        logger.exception("Unhandled exception: %s", exc)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
 
 
-@app.get("/metrics")
-async def get_metrics():
-    """Get performance metrics.
+def _register_inference_routes(app: FastAPI, app_state: AppState) -> None:
+    """Register the prediction route, closing over the per-app ``app_state``."""
+
+    @app.post("/predict")
+    async def predict(input_data: dict[str, Any]):  # pyright: ignore[reportUnusedFunction]
+        """Prediction endpoint.
+
+        Args:
+            input_data: Input data for prediction
+
+        Returns:
+            Prediction results
+        """
+        try:
+            engine = app_state.inference_engine
+            if engine is None:
+                _raise_service_unavailable("Inference engine not available")
+                return None  # This will never execute but helps type checker
+
+            if not engine.is_initialized:
+                _raise_service_unavailable("Model not loaded")
+
+            # Validate input
+            if "data" not in input_data:
+                _raise_bad_request("Input must contain 'data' field")
+
+            # Perform prediction using core serving logic
+            import jax.numpy as jnp
+
+            data = jnp.array(input_data["data"])
+            predictions = engine.predict(data)
+
+            # Format response
+            return {
+                "predictions": predictions.tolist(),
+                "metadata": {
+                    "model_name": app_state.config.model_name if app_state.config else "unknown",
+                    "batch_size": data.shape[0],
+                    "input_shape": list(data.shape),
+                    "output_shape": list(predictions.shape),
+                },
+            }
+
+        except HTTPException:
+            raise
+        except ValueError as e:
+            logger.exception("Validation error")
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            logger.exception("Prediction failed")
+            raise HTTPException(status_code=500, detail="Prediction failed") from e
+
+
+def create_app() -> FastAPI:
+    """Build and return the Opifex model-serving FastAPI application.
+
+    Constructs the app, attaches CORS middleware, wires startup/shutdown
+    lifecycle handlers, and registers all routes. The per-app :class:`AppState`
+    is stored on ``app.state.app_state`` so handlers and tests can reach it
+    without a module-level global (Rule 13: import builds nothing).
 
     Returns:
-        Performance metrics
+        A fully configured :class:`fastapi.FastAPI` instance.
     """
-    try:
-        engine = app_state.inference_engine
-        if engine is None:
-            _raise_service_unavailable("Inference engine not available")
-            return None  # This will never execute but helps type checker
-
-        metrics = engine.get_performance_metrics()
-        return {"metrics": metrics}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Failed to get metrics")
-        raise HTTPException(status_code=500, detail="Failed to get metrics") from e
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler."""
-    logger.exception("Unhandled exception: %s", exc)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
+    app = FastAPI(
+        title="Opifex Model Serving API",
+        description="Production-ready API for Opifex framework model serving",
+        version="1.0.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
     )
+
+    # CORS middleware for cross-origin requests
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure properly for production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    app_state = AppState()
+    app.state.app_state = app_state
+
+    _register_lifecycle(app, app_state)
+    _register_status_routes(app, app_state)
+    _register_inference_routes(app, app_state)
+
+    return app
 
 
 def signal_handler(signum, frame) -> None:
@@ -261,6 +281,12 @@ def signal_handler(signum, frame) -> None:
 
 def main() -> None:
     """Main entry point for the server."""
+    # Configure logging for the running process (not at import time).
+    logging.basicConfig(
+        level=getattr(logging, os.getenv("OPIFEX_LOG_LEVEL", "INFO").upper()),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -273,9 +299,11 @@ def main() -> None:
 
     logger.info("Starting Opifex server on %s:%s", host, port)
 
-    # Start server
+    # Start server. The import-string factory target lets uvicorn build the app
+    # in each worker process while keeping module import side-effect-free.
     uvicorn.run(
-        "opifex.deployment.server:app",
+        "opifex.deployment.server:create_app",
+        factory=True,
         host=host,
         port=port,
         workers=workers,

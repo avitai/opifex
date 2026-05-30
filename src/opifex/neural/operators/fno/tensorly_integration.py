@@ -13,7 +13,6 @@ This module provides:
 4. Seamless conversion between TensorLy and JAX tensors
 """
 
-import os
 import warnings
 from collections.abc import Sequence
 
@@ -23,16 +22,15 @@ import numpy as np
 from flax import nnx
 
 
-# Handle TensorLy import with graceful fallback
+# Handle TensorLy import with graceful fallback. Importing is side-effect-free
+# (Rule 13): no process environment is mutated and the TensorLy backend is NOT
+# selected here. Backend/env configuration is deferred to
+# :func:`_ensure_tensorly_configured`, invoked lazily by each decomposition.
 try:
-    # Force CPU for TensorLy to avoid GPU solver issues
-    os.environ.setdefault("JAX_PLATFORM_NAME", "cpu")
     import tensorly as tl  # type: ignore[import-untyped]
     from tensorly.decomposition import parafac, tucker  # type: ignore[import-untyped]
     from tensorly.tucker_tensor import tucker_to_tensor  # type: ignore[import-untyped]
 
-    # Set JAX backend for TensorLy
-    tl.set_backend("jax")
     _tensorly_available = True
 
 except ImportError:
@@ -50,6 +48,27 @@ except ImportError:
 
 # Set module-level availability flag
 TENSORLY_AVAILABLE = _tensorly_available
+
+
+def _ensure_tensorly_configured() -> None:
+    """Select the JAX backend for TensorLy on first use (lazy, idempotent).
+
+    Moved out of module import (Rule 13: importing must mutate nothing
+    global). The previous import-time ``os.environ.setdefault`` that pinned
+    the whole process to CPU is removed — JAX's platform is selected by the
+    environment / ``activate.sh`` before JAX initialises, so re-pinning it
+    after the fact had no effect on JAX and only mutated the process env.
+
+    Idempotency is read from TensorLy's own backend state (no module-level
+    mutable flag): ``set_backend`` is called only when the active backend is
+    not already ``"jax"``. Callers run this immediately before any TensorLy
+    operation.
+    """
+    if tl is None:
+        return
+    current = str(tl.get_backend()) if hasattr(tl, "get_backend") else ""
+    if current != "jax":
+        tl.set_backend("jax")
 
 
 class TensorLyTuckerInitializer:
@@ -81,6 +100,8 @@ class TensorLyTuckerInitializer:
         """
         if not TENSORLY_AVAILABLE:
             raise RuntimeError("TensorLy not available for advanced decomposition")
+
+        _ensure_tensorly_configured()
 
         # Convert JAX tensor to TensorLy format
         if tl is not None:
@@ -138,6 +159,7 @@ class TensorLyTuckerInitializer:
                 reconstructed = jnp.tensordot(reconstructed, factor, axes=1)
         # Use TensorLy's reconstruction
         elif tl is not None and tucker_to_tensor is not None:
+            _ensure_tensorly_configured()
             tl_core = tl.tensor(np.array(core))
             tl_factors = [tl.tensor(np.array(f)) for f in factors]
             tl_reconstructed = tucker_to_tensor((tl_core, tl_factors))
@@ -174,6 +196,8 @@ class TensorLyCPInitializer:
         """Decompose tensor using TensorLy's CP/PARAFAC algorithm."""
         if not TENSORLY_AVAILABLE:
             raise RuntimeError("TensorLy not available for advanced decomposition")
+
+        _ensure_tensorly_configured()
 
         # Convert to TensorLy format
         if tl is not None:
@@ -438,6 +462,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
         if self.decomposition_type == "tucker":
             if TENSORLY_AVAILABLE and tl is not None and tucker_to_tensor is not None:
                 # Use TensorLy reconstruction for accuracy
+                _ensure_tensorly_configured()
                 tl_core = tl.tensor(np.array(self.core.value))
                 tl_factors = [tl.tensor(np.array(f.value)) for f in self.factors]
                 return jnp.array(tucker_to_tensor((tl_core, tl_factors)))
@@ -505,6 +530,8 @@ def benchmark_tensorly_integration(
     """Benchmark TensorLy integration performance."""
     if not TENSORLY_AVAILABLE:
         return {"error": "TensorLy not available"}
+
+    _ensure_tensorly_configured()
 
     import time
 
