@@ -12,6 +12,11 @@ samples without any further normalisation.
 
 MCMC routes through :class:`opifex.uncertainty.inference_backends.BlackJAXBackend`.
 
+The fitted-state container, backend resolution, training loop, and MCMC
+predictive block are shared with NPE / NLE via
+:mod:`opifex.uncertainty.sbi._base`; NRE keeps only its classifier module,
+binary-cross-entropy loss, and log-ratio posterior closures.
+
 References
 ----------
 * Hermans, Begy, Louppe (2020) — Likelihood-free MCMC with Amortized
@@ -24,7 +29,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable  # noqa: TC003 — eager per opifex convention
-from typing import Any
+from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -32,45 +37,28 @@ import optax
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 
-from opifex.uncertainty.inference_backends.blackjax import BlackJAXBackend
-from opifex.uncertainty.sbi.posterior_estimation import (
+from opifex.uncertainty.sbi._base import (
+    _DEFAULT_BACKEND_NAME,
+    _mcmc_posterior_predictive,
     _resolve_sbi_backend,
-    _trigger_optional_backend_import,
+    _SAMPLE_STREAMS,
+    _SBIFittedState,
+    _simulate_training_data,
+    _train_loop,
+    _TRAIN_STREAMS,
 )
-from opifex.uncertainty.sbi.simulators import sample_joint, Simulator
+from opifex.uncertainty.sbi.simulators import Simulator  # noqa: TC001 — eager per opifex convention
 from opifex.uncertainty.types import (
-    metadata_to_dict,
-    MetadataItems,
     PredictiveDistribution,
     require_fitted_state,
 )
 
 
-_DEFAULT_BACKEND_NAME: str = "RealNVP"
-_TRAIN_STREAMS: tuple[str, ...] = ("sbi_train", "params", "default")
-_SAMPLE_STREAMS: tuple[str, ...] = ("sbi_sample", "sample", "default")
-
-
 @struct.dataclass(slots=True, kw_only=True)
-class NREState:
+class NREState(_SBIFittedState):
     """Fitted-state container for :class:`NeuralRatioEstimator` (pattern (B))."""
 
-    train_losses: jax.Array
-    num_simulations: jax.Array
-    metadata: MetadataItems = struct.field(pytree_node=False, default=())
-
-    def metadata_dict(self) -> dict[str, Any]:
-        """Return a fresh ``dict`` view of the immutable metadata tuple."""
-        return metadata_to_dict(self.metadata)
-
-    def validate(self) -> None:
-        """Eager-validate the fitted state."""
-        if self.train_losses.ndim != 1 or self.train_losses.shape[0] == 0:
-            raise ValueError(
-                f"train_losses must be 1-d non-empty; got shape={self.train_losses.shape}."
-            )
-        if bool(jnp.all(jnp.isnan(self.train_losses))):
-            raise ValueError("train_losses is entirely NaN — NRE training diverged.")
+    _method_label: ClassVar[str] = "NRE"
 
 
 class _RatioClassifier(nnx.Module):
@@ -139,13 +127,12 @@ class NeuralRatioEstimator:
             ImportError: When the requested optional backend is not installed.
 
         """
-        if self.backend != _DEFAULT_BACKEND_NAME:
-            _trigger_optional_backend_import(self.backend)
-
-        batch = sample_joint(simulator, num_simulations=num_simulations, rngs=rngs)
-        data = batch.data.value
-        theta = data["theta"]
-        x = data["x"]
+        theta, x = _simulate_training_data(
+            simulator=simulator,
+            num_simulations=num_simulations,
+            backend=self.backend,
+            rngs=rngs,
+        )
         train_key = extract_rng_key(
             rngs, streams=_TRAIN_STREAMS, context="NeuralRatioEstimator.fit"
         )
@@ -161,14 +148,17 @@ class NeuralRatioEstimator:
             rngs=nnx.Rngs(params=init_key),
         )
         optimizer = nnx.Optimizer(classifier, optax.adam(self.learning_rate), wrt=nnx.Param)
-        losses = _train_ratio_classifier(
-            classifier=classifier,
-            optimizer=optimizer,
-            theta_pos=theta,
-            x_pos=x,
-            theta_neg=theta_neg,
-            x_neg=x,
-            num_steps=self.num_steps,
+
+        def loss_fn(model: _RatioClassifier) -> jax.Array:
+            logit_pos = model(theta, x)
+            logit_neg = model(theta_neg, x)
+            # BCE-with-logits for {pos: 1, neg: 0}.
+            loss_pos = jnp.mean(jax.nn.softplus(-logit_pos))
+            loss_neg = jnp.mean(jax.nn.softplus(logit_neg))
+            return loss_pos + loss_neg
+
+        losses = _train_loop(
+            model=classifier, optimizer=optimizer, loss_fn=loss_fn, num_steps=self.num_steps
         )
         self._classifier = classifier
         self.state = NREState(
@@ -198,24 +188,18 @@ class NeuralRatioEstimator:
             log_ratio = jnp.squeeze(classifier(theta_batch, x_batch), axis=0)
             return log_ratio + log_prior(theta)
 
-        init_state = jnp.zeros((self.theta_dim,))
-        sampler = BlackJAXBackend(
-            target_log_prob=log_posterior,
-            init_state=init_state,
-            n_samples=max(num_samples, self.mcmc_samples),
-            n_burnin=self.mcmc_burnin,
-            method=self.mcmc_method,
-            step_size=self.mcmc_step_size,
-        )
         sample_key = extract_rng_key(
             rngs, streams=_SAMPLE_STREAMS, context="NeuralRatioEstimator.predict_distribution"
         )
-        result = sampler.fit(log_posterior, rngs=nnx.Rngs(sample=sample_key))
-        samples = jnp.asarray(result.sampler_state)[-num_samples:]
-        return PredictiveDistribution(
-            mean=jnp.mean(samples, axis=0),
-            variance=jnp.var(samples, axis=0),
-            samples=samples,
+        return _mcmc_posterior_predictive(
+            log_posterior=log_posterior,
+            theta_dim=self.theta_dim,
+            num_samples=num_samples,
+            mcmc_samples=self.mcmc_samples,
+            mcmc_burnin=self.mcmc_burnin,
+            mcmc_method=self.mcmc_method,
+            mcmc_step_size=self.mcmc_step_size,
+            sample_key=sample_key,
             metadata=(
                 ("method", "nre"),
                 ("backend", self.backend),
@@ -223,36 +207,6 @@ class NeuralRatioEstimator:
                 ("num_samples", num_samples),
             ),
         )
-
-
-def _train_ratio_classifier(
-    *,
-    classifier: _RatioClassifier,
-    optimizer: nnx.Optimizer,
-    theta_pos: jax.Array,
-    x_pos: jax.Array,
-    theta_neg: jax.Array,
-    x_neg: jax.Array,
-    num_steps: int,
-) -> jax.Array:
-    """Train classifier with the BCE log-density-ratio loss for ``num_steps``."""
-
-    @nnx.jit
-    def step(model: _RatioClassifier, opt: nnx.Optimizer) -> jax.Array:
-        def loss_fn(m: _RatioClassifier) -> jax.Array:
-            logit_pos = m(theta_pos, x_pos)
-            logit_neg = m(theta_neg, x_neg)
-            # BCE-with-logits for {pos: 1, neg: 0}.
-            loss_pos = jnp.mean(jax.nn.softplus(-logit_pos))
-            loss_neg = jnp.mean(jax.nn.softplus(logit_neg))
-            return loss_pos + loss_neg
-
-        loss, grads = nnx.value_and_grad(loss_fn)(model)
-        opt.update(model, grads)
-        return loss
-
-    losses = [step(classifier, optimizer) for _ in range(num_steps)]
-    return jnp.stack(losses)
 
 
 __all__ = ["NREState", "NeuralRatioEstimator"]

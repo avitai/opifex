@@ -6,11 +6,15 @@ and to refresh its provenance metadata. Centralising construction here keeps
 the field set and metadata shape in a single place (Rule 1 — DRY) so that
 adding or renaming a field touches exactly one site.
 
-Two functions:
+Three functions:
 
 * :func:`gaussian_process_predictive` — the canonical constructor for a
   Gaussian-process predictive carrying ``mean`` / ``variance`` plus optional
   ``epistemic`` / ``total_uncertainty`` variance decompositions and metadata.
+* :func:`sample_based_predictive` — the canonical constructor for a
+  Monte-Carlo / sampler predictive carrying ``samples`` plus the empirical
+  ``mean`` / ``variance`` reduced over the leading sample axis (the shape the
+  SBI ``predict_distribution`` paths build).
 * :func:`replace_predictive_metadata` — immutable metadata refresh that keeps
   every array field untouched and only re-stamps the
   ``compose_method_metadata`` provenance tuple via :func:`dataclasses.replace`.
@@ -24,7 +28,8 @@ from __future__ import annotations
 
 import dataclasses
 
-import jax  # noqa: TC002 — pyproject dep, kept eager (annotations only under future import)
+import jax
+import jax.numpy as jnp
 
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy
@@ -59,6 +64,38 @@ def gaussian_process_predictive(
         variance=variance,
         epistemic=epistemic,
         total_uncertainty=total_uncertainty,
+        metadata=metadata,
+    )
+
+
+def sample_based_predictive(
+    samples: jax.Array,
+    *,
+    metadata: MetadataItems = (),
+) -> PredictiveDistribution:
+    """Assemble a sampler :class:`PredictiveDistribution` from posterior draws.
+
+    Reduces ``samples`` to its empirical ``mean`` and ``variance`` over the
+    leading sample axis (axis ``0``) and stores the raw draws on the
+    ``samples`` field — byte-for-byte the object the SBI ``predict_distribution``
+    paths (NPE flow-sampling, NLE/NRE MCMC) build today. Centralising the
+    moment reduction here keeps the sample-to-moment convention in one place
+    (Rule 1 — DRY).
+
+    Args:
+        samples: Posterior draws, shape ``(num_samples, ...)``; axis ``0`` is
+            the sample axis reduced for ``mean`` / ``variance``.
+        metadata: Immutable, hashable provenance tuple. Defaults to ``()``.
+
+    Returns:
+        A :class:`PredictiveDistribution` carrying ``samples`` plus the
+        empirical ``mean`` / ``variance``; all other container fields take
+        their dataclass defaults.
+    """
+    return PredictiveDistribution(
+        mean=jnp.mean(samples, axis=0),
+        variance=jnp.var(samples, axis=0),
+        samples=samples,
         metadata=metadata,
     )
 
@@ -114,4 +151,5 @@ def replace_predictive_metadata(
 __all__ = [
     "gaussian_process_predictive",
     "replace_predictive_metadata",
+    "sample_based_predictive",
 ]

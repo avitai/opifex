@@ -23,6 +23,7 @@ import pytest
 from opifex.uncertainty._predictive import (
     gaussian_process_predictive,
     replace_predictive_metadata,
+    sample_based_predictive,
 )
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.markov._likelihood_support import (
@@ -76,6 +77,44 @@ def test_gaussian_process_predictive_optional_components_default_none() -> None:
     assert built.epistemic is None
     assert built.total_uncertainty is None
     assert built.metadata == ()
+
+
+# -----------------------------------------------------------------------------
+# sample_based_predictive
+# -----------------------------------------------------------------------------
+
+
+def test_sample_based_predictive_reduces_samples_to_empirical_moments() -> None:
+    """``mean`` / ``variance`` match the hand-written ``jnp.mean/var(samples, 0)``."""
+    samples = jnp.asarray([[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]])
+    built = sample_based_predictive(samples, metadata=(("method", "npe"),))
+    stored_variance = built.variance
+    stored_samples = built.samples
+    assert stored_variance is not None
+    assert stored_samples is not None
+    assert jnp.array_equal(built.mean, jnp.mean(samples, axis=0))
+    assert jnp.array_equal(stored_variance, jnp.var(samples, axis=0))
+    assert jnp.array_equal(stored_samples, samples)
+    assert built.metadata == (("method", "npe"),)
+
+
+def test_sample_based_predictive_defaults_empty_metadata() -> None:
+    built = sample_based_predictive(jnp.zeros((4, 2)))
+    assert built.metadata == ()
+
+
+def test_sample_based_predictive_is_jit_compatible() -> None:
+    """The sampler factory assembles a predictive inside a jitted function."""
+
+    @jax.jit
+    def build(samples: jax.Array) -> jax.Array:
+        predictive = sample_based_predictive(samples)
+        recovered_variance = predictive.variance
+        assert recovered_variance is not None
+        return predictive.mean.sum() + recovered_variance.sum()
+
+    out = build(jnp.asarray([[1.0, 2.0], [3.0, 4.0]]))
+    assert jnp.isfinite(out)
 
 
 # -----------------------------------------------------------------------------
