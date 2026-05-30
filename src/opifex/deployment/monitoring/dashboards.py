@@ -189,8 +189,12 @@ class GrafanaManager:
         if self.api_key is None:
             request_kwargs["auth"] = self.auth
 
+        # Pass the timeout explicitly so static analysis can see it (bandit B113);
+        # it is otherwise carried only inside request_kwargs.
+        timeout_seconds = request_kwargs.pop("timeout")
         response = requests.post(
             f"{self.grafana_url}/api/dashboards/db",
+            timeout=timeout_seconds,
             **request_kwargs,
         )
         response.raise_for_status()
