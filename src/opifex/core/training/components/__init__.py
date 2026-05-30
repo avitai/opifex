@@ -109,9 +109,7 @@ class CheckpointComponent(TrainingComponent):
             if checkpoint["step"] == step:
                 return checkpoint
 
-        # Return mock checkpoint structure for testing
-        # In production, this would raise an error or return from disk
-        return {"step": step, "model_state": {}, "training_state": {}}
+        raise ValueError(f"No checkpoint found for step {step}")
 
     def cleanup(self) -> None:
         """Clear checkpoint memory."""

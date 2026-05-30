@@ -188,7 +188,10 @@ class TestCheckpointComponent:
 
     def test_checkpoint_component_restore(self, simple_model, training_state):
         """Test checkpoint restore functionality."""
-        config = {"checkpoint_dir": "/tmp/test_checkpoints"}  # noqa: S108
+        config = {
+            "checkpoint_dir": "/tmp/test_checkpoints",  # noqa: S108
+            "save_frequency": 1,
+        }
         component = CheckpointComponent(config=config)
 
         # Save checkpoint first

@@ -1,9 +1,30 @@
 """Tests for memory layout optimization."""
 
+import importlib
+
 from opifex.core.optimization.memory_layout import (
     LayoutOptimizer,
     MemoryLayout,
 )
+
+
+class TestRemovedSymbols:
+    """Guards against resurrecting deleted no-op stubs."""
+
+    def test_optimize_neural_operator_layout_removed(self):
+        """The speculative no-op ``optimize_neural_operator_layout`` is gone.
+
+        It returned the model unchanged and had no production caller, so it was
+        deleted (YAGNI). Assert it is no longer importable from either the module
+        or the package, and is absent from both ``__all__`` exports.
+        """
+        module = importlib.import_module("opifex.core.optimization.memory_layout")
+        package = importlib.import_module("opifex.core.optimization")
+
+        assert not hasattr(module, "optimize_neural_operator_layout")
+        assert not hasattr(package, "optimize_neural_operator_layout")
+        assert "optimize_neural_operator_layout" not in module.__all__
+        assert "optimize_neural_operator_layout" not in package.__all__
 
 
 class TestMemoryLayout:

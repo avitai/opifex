@@ -81,3 +81,25 @@ class TestOptimizeMemoryLayout:
         result = optimize_memory_layout_for_fusion(x, target_layout="NCHW")
         assert result.shape == (2, 3, 8, 8)
         assert jnp.allclose(result, x)
+
+
+class TestFusionStubFunctionsRemoved:
+    """The speculative no-op fusion stubs must not be importable."""
+
+    def test_fusion_stub_functions_removed(self):
+        """``analyze_fusion_opportunities`` / ``apply_fusion_optimizations`` are gone.
+
+        Both were no-op stubs returning fabricated metrics / the unchanged model.
+        They were deleted (YAGNI), so they must no longer be importable from either
+        the module or the package, nor appear in any ``__all__``.
+        """
+        import opifex.core.optimization as optimization_package
+        from opifex.core.optimization import fusion_optimizer
+
+        removed_names = ("analyze_fusion_opportunities", "apply_fusion_optimizations")
+
+        for name in removed_names:
+            assert not hasattr(fusion_optimizer, name), f"module still exports {name}"
+            assert not hasattr(optimization_package, name), f"package still exports {name}"
+            assert name not in fusion_optimizer.__all__, f"{name} still in module __all__"
+            assert name not in optimization_package.__all__, f"{name} still in package __all__"

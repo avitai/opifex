@@ -7,8 +7,6 @@ performance enhancements.
 """
 
 from opifex.core.optimization.fusion_optimizer import (
-    analyze_fusion_opportunities,
-    apply_fusion_optimizations,
     create_fused_computation_graph,
     fused_conv_activation,
     fused_elementwise_chain,
@@ -23,7 +21,6 @@ from opifex.core.optimization.memory_layout import (
     create_layout_optimization_report,
     LayoutOptimizer,
     MemoryLayout,
-    optimize_neural_operator_layout,
     OptimizedConvolution,
     OptimizedLinear,
 )
@@ -38,8 +35,6 @@ __all__ = [
     "MemoryLayout",
     "OptimizedConvolution",
     "OptimizedLinear",
-    "analyze_fusion_opportunities",
-    "apply_fusion_optimizations",
     "benchmark_layout_performance",
     "create_fused_computation_graph",
     "create_layout_optimization_report",
@@ -48,5 +43,4 @@ __all__ = [
     "fused_linear_activation",
     "fused_spectral_conv_activation",
     "optimize_memory_layout_for_fusion",
-    "optimize_neural_operator_layout",
 ]
