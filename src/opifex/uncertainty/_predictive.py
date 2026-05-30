@@ -27,6 +27,7 @@ wrappers).
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable  # noqa: TC003 — kept eager per opifex convention
 
 import jax
 import jax.numpy as jnp
@@ -100,6 +101,80 @@ def sample_based_predictive(
     )
 
 
+def predictive_from_parameter_samples(
+    parameter_samples: jax.Array,
+    x: jax.Array,
+    *,
+    predict_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
+    metadata: MetadataItems = (),
+) -> PredictiveDistribution:
+    r"""Map parameter-space posterior draws to a :class:`PredictiveDistribution`.
+
+    The inference backends (BlackJAX / ADVI / SVGD / Pathfinder) all return
+    posterior draws in *parameter* space (shape ``(num_samples, d)``). This is
+    the single canonical adapter that turns those draws into a predictive
+    distribution at the inputs ``x`` (Rule 1 — DRY), used by every backend's
+    ``predict_distribution`` / ``posterior_predictive`` hook.
+
+    Two paths:
+
+    * **Model-aware** (``predict_fn`` supplied). This is the *genuine* Bayesian
+      posterior predictive: the model forward map is marginalised over the
+      posterior parameter draws,
+      :math:`p(y \mid x, \mathcal{D}) = \int p(y \mid x, \theta)\,
+      p(\theta \mid \mathcal{D})\, d\theta`, here approximated by the Monte-Carlo
+      average over the draws
+      :math:`\{\theta_s\}_{s=1}^{S} \sim p(\theta \mid \mathcal{D})`
+      (Gelman et al. 2013, *Bayesian Data Analysis* 3rd ed., §3.2). The forward
+      model is vmapped over the leading sample axis and the per-draw predictions
+      are reduced to their empirical mean / variance via
+      :func:`sample_based_predictive`.
+    * **Lightweight** (``predict_fn is None``). A parameter-moment stand-in for
+      the case where the target log-density does not depend on a separate
+      predictive model: the posterior parameter mean / variance are broadcast to
+      ``x.shape``. This is *not* the true predictive — it is a placeholder that
+      keeps the moment shapes consistent and reproduces
+      :class:`opifex.uncertainty.inference_backends.blackjax.BlackJAXBackend`'s
+      lightweight form byte-for-byte.
+
+    Args:
+        parameter_samples: Posterior parameter draws, shape ``(num_samples, d)``;
+            axis ``0`` is the sample axis.
+        x: Inputs at which to evaluate the predictive, shape ``(batch, ...)``.
+        predict_fn: Optional forward model with signature
+            ``predict_fn(params_vector, x) -> predictions``. When supplied the
+            model-aware path is taken; when ``None`` the lightweight stand-in is
+            returned. Defaults to ``None``.
+        metadata: Immutable, hashable provenance tuple. Defaults to ``()``.
+
+    Returns:
+        A :class:`PredictiveDistribution`. The model-aware path stores the
+        per-draw predictions on ``samples`` with the empirical ``mean`` /
+        ``variance``; the lightweight path stores the broadcast parameter
+        moments plus the broadcast draws.
+    """
+    if predict_fn is not None:
+        predictions = jax.vmap(lambda params: predict_fn(params, x))(parameter_samples)
+        return sample_based_predictive(predictions, metadata=metadata)
+
+    mean = jnp.broadcast_to(jnp.mean(parameter_samples, axis=0), x.shape)
+    variance = jnp.broadcast_to(jnp.var(parameter_samples, axis=0), x.shape)
+    broadcast_samples = (
+        jnp.broadcast_to(
+            parameter_samples[:, None, :],
+            (parameter_samples.shape[0], *x.shape),
+        )
+        if x.shape and parameter_samples.ndim == 2
+        else parameter_samples
+    )
+    return PredictiveDistribution(
+        mean=mean,
+        variance=variance,
+        samples=broadcast_samples,
+        metadata=metadata,
+    )
+
+
 def replace_predictive_metadata(
     predictive: PredictiveDistribution,
     *,
@@ -150,6 +225,7 @@ def replace_predictive_metadata(
 
 __all__ = [
     "gaussian_process_predictive",
+    "predictive_from_parameter_samples",
     "replace_predictive_metadata",
     "sample_based_predictive",
 ]

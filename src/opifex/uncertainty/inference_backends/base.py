@@ -26,6 +26,8 @@ from flax import nnx, struct
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import jax
 
     from opifex.uncertainty.types import PredictiveDistribution
@@ -110,15 +112,34 @@ class InferenceBackendProtocol(Protocol):
         """Run inference; return typed backend state + diagnostics."""
         ...
 
-    def predict_distribution(self, x: jax.Array, *, rngs: nnx.Rngs) -> PredictiveDistribution:
-        """Return a predictive distribution for inputs ``x``."""
+    def predict_distribution(
+        self,
+        x: jax.Array,
+        *,
+        rngs: nnx.Rngs,
+        predict_fn: Callable[..., jax.Array] | None = None,
+    ) -> PredictiveDistribution:
+        """Return a predictive distribution for inputs ``x``.
+
+        ``predict_fn`` is an optional forward model
+        ``predict_fn(params_vector, x) -> predictions`` selecting the
+        model-aware (genuine Bayesian posterior-predictive) path; when omitted
+        a backend-specific lightweight stand-in is returned. The argument is
+        optional and backward-compatible — existing callers need not pass it.
+        """
         ...
 
-    def posterior_predictive(self, rngs: nnx.Rngs, x: jax.Array) -> PredictiveDistribution:
+    def posterior_predictive(
+        self,
+        rngs: nnx.Rngs,
+        x: jax.Array,
+        predict_fn: Callable[..., jax.Array] | None = None,
+    ) -> PredictiveDistribution:
         """Return a posterior-predictive distribution sample for inputs ``x``.
 
         Distinct from :meth:`predict_distribution` (which may marginalize
-        differently).
+        differently). ``predict_fn`` is the same optional forward model as on
+        :meth:`predict_distribution`.
         """
         ...
 
