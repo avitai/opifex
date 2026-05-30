@@ -49,9 +49,10 @@ from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _EXACT_GP_SOURCE_PACKAGE = "opifex.uncertainty.gp"
@@ -212,9 +213,9 @@ def predict_exact_gp(
     v = jax.scipy.linalg.solve_triangular(state.cholesky, k_cross, lower=True)
     k_diag = jnp.full((x_test.shape[0],), state.output_scale**2)
     variance = k_diag - jnp.sum(v * v, axis=0)
-    return PredictiveDistribution(
-        mean=mean,
-        variance=variance,
+    return gaussian_process_predictive(
+        mean,
+        variance,
         epistemic=variance,
         total_uncertainty=variance,
         metadata=compose_method_metadata(

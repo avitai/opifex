@@ -43,10 +43,11 @@ from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp import rbf_kernel
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _LINEAR_MF_SOURCE_PACKAGE = "opifex.uncertainty.multi_fidelity"
@@ -277,9 +278,9 @@ def predict_linear_multi_fidelity_gp(
     v_solve = jax.scipy.linalg.solve_triangular(state.cholesky, k_cross.T, lower=True)
     variance = jnp.diag(k_test) - jnp.sum(v_solve**2, axis=0)
     variance = jnp.clip(variance, a_min=_PSEUDO_NOISE_FLOOR)
-    return PredictiveDistribution(
-        mean=mean,
-        variance=variance,
+    return gaussian_process_predictive(
+        mean,
+        variance,
         epistemic=variance,
         total_uncertainty=variance,
         metadata=compose_method_metadata(

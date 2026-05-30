@@ -45,6 +45,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
 from opifex.uncertainty.gp.laplace import (
@@ -54,7 +55,7 @@ from opifex.uncertainty.gp.laplace import (
     predict_laplace_latent_moments,
 )
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _LAPLACE_LIK_SOURCE_PACKAGE = "opifex.uncertainty.gp"
@@ -154,9 +155,9 @@ def predict_poisson_laplace_gp(
     latent_mean, latent_variance = predict_laplace_latent_moments(state=state, x_test=x_test)
     intensity_mean = jnp.exp(latent_mean + 0.5 * latent_variance)
     intensity_variance = (intensity_mean**2) * (jnp.expm1(latent_variance))
-    return PredictiveDistribution(
-        mean=intensity_mean,
-        variance=intensity_variance,
+    return gaussian_process_predictive(
+        intensity_mean,
+        intensity_variance,
         epistemic=latent_variance,
         total_uncertainty=intensity_variance,
         metadata=compose_method_metadata(
@@ -299,9 +300,9 @@ def predict_studentst_laplace_gp(
     df_arr = jnp.asarray(df)
     scale_sq = jnp.asarray(scale) ** 2
     response_variance = latent_variance + scale_sq * df_arr / (df_arr - 2.0)
-    return PredictiveDistribution(
-        mean=latent_mean,
-        variance=response_variance,
+    return gaussian_process_predictive(
+        latent_mean,
+        response_variance,
         epistemic=latent_variance,
         total_uncertainty=response_variance,
         metadata=compose_method_metadata(
@@ -450,9 +451,9 @@ def predict_beta_laplace_gp(
     kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * latent_variance / 8.0)
     response_mean = jax.nn.sigmoid(kappa * latent_mean)
     response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
-    return PredictiveDistribution(
-        mean=response_mean,
-        variance=response_variance,
+    return gaussian_process_predictive(
+        response_mean,
+        response_variance,
         epistemic=latent_variance,
         total_uncertainty=response_variance,
         metadata=compose_method_metadata(

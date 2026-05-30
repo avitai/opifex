@@ -51,12 +51,13 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.curvature.laplace import (
     DiagonalLaplacePosterior,  # noqa: TC001 — kept eager for consistency
 )
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _LUNO_SOURCE_PACKAGE = "opifex.uncertainty.curvature"
@@ -108,9 +109,9 @@ def linearized_neural_operator_posterior(
             ("paper", "Magnani+ 2024 arXiv:2406.04317"),
         ),
     )
-    return PredictiveDistribution(
-        mean=mean,
-        variance=variance,
+    return gaussian_process_predictive(
+        mean,
+        variance,
         epistemic=variance,
         total_uncertainty=variance,
         metadata=metadata,

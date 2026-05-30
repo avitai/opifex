@@ -55,9 +55,10 @@ import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx  # noqa: TC002 — kept eager for consistency
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _RFF_STREAMS = ("params", "sample", "default")
@@ -234,9 +235,9 @@ def predict_rff_gp(
     mean = features_test @ state.alpha
     v = jax.scipy.linalg.solve_triangular(state.gram_cholesky, features_test.T, lower=True)
     variance = (state.noise_std**2) * jnp.sum(v * v, axis=0)
-    return PredictiveDistribution(
-        mean=mean,
-        variance=variance,
+    return gaussian_process_predictive(
+        mean,
+        variance,
         epistemic=variance,
         total_uncertainty=variance,
         metadata=compose_method_metadata(

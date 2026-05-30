@@ -63,10 +63,11 @@ from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _SVGP_SOURCE_PACKAGE = "opifex.uncertainty.gp"
@@ -273,9 +274,9 @@ def predict_svgp(*, state: SVGPState, x_test: jax.Array) -> PredictiveDistributi
     )
     l_b_inv_v = jax.scipy.linalg.solve_triangular(state.cholesky_b, v_test, lower=True)
     variance = kxx_diag - jnp.sum(v_test * v_test, axis=0) + jnp.sum(l_b_inv_v * l_b_inv_v, axis=0)
-    return PredictiveDistribution(
-        mean=mean,
-        variance=variance,
+    return gaussian_process_predictive(
+        mean,
+        variance,
         epistemic=variance,
         total_uncertainty=variance,
         metadata=compose_method_metadata(

@@ -42,6 +42,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
 from opifex.uncertainty.gp.laplace import (
@@ -50,7 +51,7 @@ from opifex.uncertainty.gp.laplace import (
     predict_laplace_latent_moments,
 )
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _LAPLACE_GP_SOURCE_PACKAGE = "opifex.uncertainty.gp"
@@ -148,9 +149,9 @@ def predict_bernoulli_laplace_gp(
     # MacKay's probit approximation for the class probability.
     kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * latent_variance / 8.0)
     class_probability = jax.nn.sigmoid(kappa * latent_mean)
-    return PredictiveDistribution(
-        mean=class_probability,
-        variance=latent_variance,
+    return gaussian_process_predictive(
+        class_probability,
+        latent_variance,
         epistemic=latent_variance,
         total_uncertainty=latent_variance,
         metadata=compose_method_metadata(
