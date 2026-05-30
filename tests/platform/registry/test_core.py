@@ -5,19 +5,27 @@ access control, and error handling using TDD approach.
 """
 
 import asyncio
+import copy
 import json
 import shutil
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from opifex.platform.registry.core import RegistryService
+from opifex.platform.registry.exceptions import (
+    AccessDenied,
+    FunctionalNotFound,
+    FunctionalTooLarge,
+    RegistryError,
+    ValidationError,
+)
 from opifex.platform.registry.models import FunctionalMetadata
 
 
@@ -489,6 +497,133 @@ class TestRegistryService:
             assert functional_dir.exists()
             version_files = list((functional_dir / "versions").glob("*.json"))
             assert len(version_files) == 1
+
+
+class TestRegistryDomainExceptions:
+    """Service layer must raise framework-agnostic domain exceptions.
+
+    Regression for the R3 layering violation: ``core.py`` imported
+    ``fastapi.HTTPException`` and raised HTTP transport errors from the
+    domain service. Validation, access control and lookup failures are
+    domain concerns and must surface :class:`RegistryError` subclasses so
+    the service stays independent of any web framework. Translation to
+    HTTP status codes belongs to the route layer (see ``test_api``).
+    """
+
+    @pytest.fixture
+    def mock_db_session(self):
+        """Mock database session for testing."""
+        return Mock()
+
+    @pytest.fixture
+    def registry_service(self, mock_db_session):
+        """Registry service instance backed by a temporary storage dir."""
+        temp_dir = tempfile.mkdtemp()
+        try:
+            yield RegistryService(
+                db_session=mock_db_session,
+                storage_path=temp_dir,
+                max_file_size=1024 * 1024,
+            )
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_validate_metadata_missing_field_raises_validation_error(self, registry_service):
+        """Missing required field raises the domain ``ValidationError``."""
+        with pytest.raises(ValidationError, match="Missing required field: name"):
+            registry_service._validate_metadata({"type": "l2o"})
+
+    def test_validate_metadata_invalid_type_raises_validation_error(self, registry_service):
+        """Invalid functional type raises the domain ``ValidationError``."""
+        with pytest.raises(ValidationError, match="Invalid type"):
+            registry_service._validate_metadata({"name": "Test", "type": "nope"})
+
+    def test_validation_error_is_registry_error(self, registry_service):
+        """All registry domain errors share the ``RegistryError`` base."""
+        with pytest.raises(RegistryError):
+            registry_service._validate_metadata({"type": "l2o"})
+
+    def test_serialize_too_large_raises_functional_too_large(self, registry_service):
+        """Oversized payloads raise the domain ``FunctionalTooLarge`` error."""
+        oversized = {"blob": "x" * (registry_service.max_file_size + 1)}
+        with pytest.raises(FunctionalTooLarge, match="too large"):
+            asyncio.run(registry_service._serialize_functional(oversized))
+
+    @pytest.mark.asyncio
+    async def test_retrieve_missing_functional_raises_functional_not_found(self, registry_service):
+        """A missing functional raises the domain ``FunctionalNotFound`` error."""
+        registry_service._get_functional_by_id = AsyncMock(return_value=None)
+        with pytest.raises(FunctionalNotFound, match="not found"):
+            await registry_service.retrieve_functional(str(uuid.uuid4()))
+
+    @pytest.mark.asyncio
+    async def test_retrieve_private_functional_raises_access_denied(self, registry_service):
+        """A private functional for the wrong user raises ``AccessDenied``."""
+        private = Mock(is_public=False, author_id="owner-1")
+        registry_service._get_functional_by_id = AsyncMock(return_value=private)
+        with pytest.raises(AccessDenied, match="Access denied"):
+            await registry_service.retrieve_functional(str(uuid.uuid4()), user_id="intruder")
+
+    @pytest.mark.asyncio
+    async def test_delete_unauthorized_raises_access_denied(self, registry_service):
+        """Deleting another user's functional raises ``AccessDenied``."""
+        owned = Mock(author_id="owner-1")
+        registry_service._get_functional_by_id = AsyncMock(return_value=owned)
+        with pytest.raises(AccessDenied, match="Not authorized"):
+            await registry_service.delete_functional(str(uuid.uuid4()), user_id="intruder")
+
+    def test_no_fastapi_dependency_in_core_module(self):
+        """The domain service module must not import the web framework."""
+        import opifex.platform.registry.core as core_module
+
+        source = Path(core_module.__file__).read_text(encoding="utf-8")
+        assert "fastapi" not in source, "core.py must not reference fastapi"
+        # The module object must not have leaked an HTTPException symbol.
+        assert not hasattr(core_module, "HTTPException")
+
+
+class TestRegistryMetadataNonMutation:
+    """``_validate_metadata`` must not mutate the caller's dict (POLA / R5)."""
+
+    @pytest.fixture
+    def registry_service(self):
+        """Registry service instance backed by a temporary storage dir."""
+        temp_dir = tempfile.mkdtemp()
+        try:
+            yield RegistryService(db_session=Mock(), storage_path=temp_dir)
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_validate_metadata_does_not_mutate_caller_dict(self, registry_service):
+        """Validation returns a normalised copy without touching the argument."""
+        original = {
+            "name": "Test",
+            "type": "l2o",
+            "tags": ["  Optimization  ", "MACHINE-Learning"],
+        }
+        snapshot = copy.deepcopy(original)
+
+        result = registry_service._validate_metadata(original)
+
+        # The caller's dict is unchanged (raw, un-normalised tags preserved).
+        assert original == snapshot
+        assert original["tags"] == ["  Optimization  ", "MACHINE-Learning"]
+        # The returned copy carries the normalised tags.
+        assert result["tags"] == ["optimization", "machine-learning"]
+        # A genuinely new object, not the same reference.
+        assert result is not original
+        assert result["tags"] is not original["tags"]
+
+    def test_validate_metadata_without_tags_returns_copy(self, registry_service):
+        """Metadata without tags still returns a fresh, equal copy."""
+        original = {"name": "Test", "type": "l2o"}
+        snapshot = copy.deepcopy(original)
+
+        result = registry_service._validate_metadata(original)
+
+        assert original == snapshot
+        assert result is not original
+        assert result["name"] == "Test"
 
 
 class _SqliteRegistryService(RegistryService):

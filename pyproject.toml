@@ -590,6 +590,11 @@ order-by-type = false
   "E501", # Long scientific comments
   "RET504" # Scientific computing return patterns
 ]
+# Domain exceptions intentionally named for the concept they model
+# (FunctionalNotFound, AccessDenied, ...) rather than an -Error suffix.
+"src/opifex/platform/registry/exceptions.py" = [
+  "N818" # Exception names model domain conditions, not an Error suffix
+]
 # Add visualization complexity ignores to existing per-file-ignores section
 "src/opifex/visualization/**/*.py" = [
   "PLR0912", # Too many branches - acceptable for comprehensive plotting

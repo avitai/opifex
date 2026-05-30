@@ -22,11 +22,18 @@ from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException
 from flax import nnx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from opifex.platform.registry.exceptions import (
+    AccessDenied,
+    FunctionalNotFound,
+    FunctionalTooLarge,
+    SerializationError,
+    ValidationError,
+    VersionNotFound,
+)
 from opifex.platform.registry.models import (
     FunctionalMetadata,
     FunctionalVersion,
@@ -78,7 +85,9 @@ class RegistryService:
             Unique functional ID
 
         Raises:
-            HTTPException: If validation fails or storage errors occur
+            ValidationError: If the supplied metadata is invalid.
+            FunctionalTooLarge: If the serialised functional exceeds the
+                configured size limit.
         """
         # Generate unique functional ID
         functional_id = str(uuid.uuid4())
@@ -154,21 +163,22 @@ class RegistryService:
             Dictionary containing functional data and metadata
 
         Raises:
-            HTTPException: If functional not found or access denied
+            FunctionalNotFound: If the functional or version does not exist.
+            AccessDenied: If the requesting user lacks read access.
         """
         # Get functional metadata
         functional = await self._get_functional_by_id(functional_id)
         if not functional:
-            raise HTTPException(status_code=404, detail="Functional not found")
+            raise FunctionalNotFound("Functional not found")
 
         # Check access permissions
         if not self._check_access_permission(functional, user_id):
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise AccessDenied("Access denied")
 
         # Get specific version or latest
         version = await self._get_functional_version(functional_id, version_tag)
         if not version:
-            raise HTTPException(status_code=404, detail="Version not found")
+            raise VersionNotFound("Version not found")
 
         # Load functional data
         functional_data = await self._load_functional_file(functional_id, version.version_tag)
@@ -257,16 +267,17 @@ class RegistryService:
             True if deletion successful
 
         Raises:
-            HTTPException: If not authorized or functional not found
+            FunctionalNotFound: If the functional does not exist.
+            AccessDenied: If the requesting user is not the author.
         """
         # Get functional and check ownership
         functional = await self._get_functional_by_id(functional_id)
         if not functional:
-            raise HTTPException(status_code=404, detail="Functional not found")
+            raise FunctionalNotFound("Functional not found")
 
         if functional.author_id != user_id:
             # Only the author can delete; admin override not yet implemented
-            raise HTTPException(status_code=403, detail="Not authorized to delete this functional")
+            raise AccessDenied("Not authorized to delete this functional")
 
         if version_tag:
             # Delete specific version
@@ -280,24 +291,28 @@ class RegistryService:
     # Private helper methods
 
     def _validate_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Validate and sanitize functional metadata."""
+        """Validate metadata and return a normalised copy.
+
+        The caller's dictionary is never mutated (POLA / R5): a new dict is
+        built with sanitised tags and returned. Validation failures surface
+        as :class:`~opifex.platform.registry.exceptions.ValidationError`.
+        """
         required_fields = ["name", "type"]
         for field in required_fields:
             if field not in metadata:
-                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+                raise ValidationError(f"Missing required field: {field}")
 
         # Validate functional type
         valid_types = ["l2o", "neural_operator", "pinn", "neural_dft", "custom"]
         if metadata["type"] not in valid_types:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid type. Must be one of: {valid_types}"
-            )
+            raise ValidationError(f"Invalid type. Must be one of: {valid_types}")
 
-        # Sanitize tags
-        if "tags" in metadata:
-            metadata["tags"] = [tag.strip().lower() for tag in metadata["tags"]]
+        # Build a normalised copy without mutating the caller's dict.
+        normalised = {**metadata}
+        if "tags" in normalised:
+            normalised["tags"] = [tag.strip().lower() for tag in normalised["tags"]]
 
-        return metadata
+        return normalised
 
     async def _serialize_functional(self, functional: nnx.Module | dict[str, Any]) -> bytes:
         """Serialize neural functional for storage."""
@@ -327,9 +342,8 @@ class RegistryService:
 
         # Check size limit
         if len(json_bytes) > self.max_file_size:
-            raise HTTPException(
-                status_code=413,
-                detail=(f"Functional too large: {len(json_bytes)} bytes > {self.max_file_size}"),
+            raise FunctionalTooLarge(
+                f"Functional too large: {len(json_bytes)} bytes > {self.max_file_size}"
             )
 
         return json_bytes
@@ -369,7 +383,7 @@ class RegistryService:
         file_path = self.storage_path / functional_id / "versions" / f"{version_tag}.json"
 
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Functional file not found")
+            raise VersionNotFound("Functional file not found")
 
         # Read file asynchronously
         def read_file():
@@ -381,9 +395,7 @@ class RegistryService:
         try:
             return json.loads(data.decode("utf-8"))
         except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to parse functional data: {e}"
-            ) from e
+            raise SerializationError(f"Failed to parse functional data: {e}") from e
 
     def _check_access_permission(self, functional: NeuralFunctional, user_id: str | None) -> bool:
         """Check if user has access to functional."""
