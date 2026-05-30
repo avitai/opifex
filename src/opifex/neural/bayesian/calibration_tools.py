@@ -457,27 +457,56 @@ class IsotonicRegression(nnx.Module):
         self.calibration_map[...] = calibrated_values
 
     def _pool_adjacent_violators(self, y: jax.Array) -> jax.Array:
-        """Pool adjacent violators algorithm for isotonic regression.
+        """Pool adjacent violators algorithm (PAVA) for isotonic regression.
+
+        Computes the non-decreasing sequence closest to ``y`` (in the
+        equal-weight least-squares sense) by repeatedly merging adjacent
+        out-of-order blocks and replacing each block by its mean until no
+        violations remain. This is the standard pool-adjacent-violators
+        algorithm; see scikit-learn's ``sklearn.isotonic`` /
+        ``_inplace_contiguous_isotonic_regression`` and Best & Chakravarti
+        (1990), "Active set algorithms for isotonic regression".
+
+        The previous single forward pass averaged each adjacent pair at
+        most once and therefore left order violations in place (e.g.
+        ``[3, 2, 1] -> [2.5, 1.75, 1.75]``, still decreasing). Iterating to
+        convergence guarantees the output is non-decreasing.
 
         Args:
-            y: Input values to make monotonic
+            y: Input values to make monotonic.
 
         Returns:
-            Monotonic version of input values
+            Monotonic (non-decreasing) version of input values.
         """
-        # Simple implementation of PAV algorithm
-        n = len(y)
-        result = jnp.copy(y)
+        # The input is a small, eagerly-evaluated per-bin array (length
+        # ``n_bins``), so a host-side block-merge loop is appropriate and
+        # keeps the routine exact and JAX-transform-free.
+        values = [float(v) for v in y]
+        # Each block tracks (sum, weight) so its mean is sum / weight.
+        block_sums: list[float] = []
+        block_weights: list[float] = []
 
-        # Find violations and pool adjacent values
-        for i in range(n - 1):
-            if result[i] > result[i + 1]:
-                # Pool values to maintain monotonicity
-                pooled_value = (result[i] + result[i + 1]) / 2
-                result = result.at[i].set(pooled_value)
-                result = result.at[i + 1].set(pooled_value)
+        for value in values:
+            block_sums.append(value)
+            block_weights.append(1.0)
+            # Merge while the last block violates monotonicity against the
+            # block before it (mean of previous block > mean of last block).
+            while (
+                len(block_sums) > 1
+                and block_sums[-2] / block_weights[-2] > block_sums[-1] / block_weights[-1]
+            ):
+                merged_sum = block_sums.pop() + block_sums.pop()
+                merged_weight = block_weights.pop() + block_weights.pop()
+                block_sums.append(merged_sum)
+                block_weights.append(merged_weight)
 
-        return result
+        # Expand block means back to a per-element array.
+        result: list[float] = []
+        for block_sum, block_weight in zip(block_sums, block_weights, strict=True):
+            block_mean = block_sum / block_weight
+            result.extend([block_mean] * int(block_weight))
+
+        return jnp.asarray(result, dtype=y.dtype)
 
 
 class CalibrationTools(nnx.Module):
@@ -490,6 +519,9 @@ class CalibrationTools(nnx.Module):
             rngs: Random number generators
         """
         super().__init__()
+        # Retained so the Platt / isotonic helpers can instantiate the
+        # canonical calibrator modules they delegate to.
+        self.rngs = rngs
 
     def assess_calibration(
         self,
@@ -639,74 +671,46 @@ class CalibrationTools(nnx.Module):
         labels: jax.Array,
         validation_logits: jax.Array,
     ) -> tuple[float, float]:
-        """Apply Platt scaling for probability calibration.
+        """Fit Platt scaling and return its ``(slope, intercept)`` parameters.
+
+        Delegates to :class:`PlattScaling` (the single source of truth for
+        Platt calibration) so there is exactly one fitting implementation.
+        The returned ``slope`` / ``intercept`` are the fitted sigmoid
+        parameters ``a`` / ``b`` from ``P(y=1|f) = sigmoid(a * f + b)``.
 
         Args:
-            logits: Training logits for fitting scaling parameters
-            labels: Training labels
-            validation_logits: Validation logits to calibrate
+            logits: Training logits for fitting scaling parameters.
+            labels: Training labels.
+            validation_logits: Validation logits (accepted for API
+                compatibility; the fitted parameters are independent of
+                them).
 
         Returns:
-            Tuple of (slope, intercept) scaling parameters
+            Tuple of ``(slope, intercept)`` scaling parameters.
         """
-        # Simplified Platt scaling implementation
-        # In practice, would use scipy.optimize for better fitting
-
-        # Note: In full implementation, convert labels to +1/-1 for binary
-        # binary_labels = 2 * labels - 1  # Unused in simplified implementation
-
-        # Initial parameters
-        slope = jnp.array(1.0)
-        intercept = jnp.array(0.0)
-
-        # Simple gradient-based optimization
-        learning_rate = 0.01
-        for _ in range(100):
-            # Apply current scaling
-            scaled_logits = slope * logits + intercept
-            probs = jax.nn.sigmoid(scaled_logits)
-
-            # Compute gradients of cross-entropy loss
-            residuals = probs - jnp.asarray(labels > 0.5)
-
-            slope_grad = jnp.mean(residuals * logits)
-            intercept_grad = jnp.mean(residuals)
-
-            # Update parameters
-            slope -= learning_rate * slope_grad
-            intercept -= learning_rate * intercept_grad
-
-        return float(slope), float(intercept)
+        del validation_logits  # Parameters depend only on the training fit.
+        scaler = PlattScaling(rngs=self.rngs)
+        scaler.fit(logits, labels)
+        return float(scaler.a[...]), float(scaler.b[...])
 
     def isotonic_regression_calibration(
         self,
         confidences: jax.Array,
         accuracies: jax.Array,
     ) -> jax.Array:
-        """Apply isotonic regression for calibration.
+        """Fit isotonic regression and return calibrated confidences.
+
+        Delegates to :class:`IsotonicRegression` (the single source of
+        truth, which uses a convergent pool-adjacent-violators fit) so
+        there is exactly one isotonic implementation.
 
         Args:
-            confidences: Predicted confidence values
-            accuracies: Binary accuracy indicators
+            confidences: Predicted confidence values.
+            accuracies: Binary accuracy indicators.
 
         Returns:
-            Calibrated confidence values
+            Calibrated confidence values, aligned with ``confidences``.
         """
-        # Simplified isotonic regression - in practice would use sklearn
-        # Sort by confidence
-        sorted_indices = jnp.argsort(confidences)
-        sorted_confidences = confidences[sorted_indices]
-        sorted_accuracies = accuracies[sorted_indices]
-
-        # Apply smoothing to create monotonic calibration mapping
-        window_size = max(1, len(confidences) // 20)  # 5% window
-        calibrated = jnp.zeros_like(sorted_confidences)
-
-        for i in range(len(sorted_confidences)):
-            start_idx = max(0, i - window_size // 2)
-            end_idx = min(len(sorted_confidences), i + window_size // 2 + 1)
-            calibrated = calibrated.at[i].set(jnp.mean(sorted_accuracies[start_idx:end_idx]))
-
-        # Map back to original order
-        inverse_indices = jnp.argsort(sorted_indices)
-        return calibrated[inverse_indices]
+        regressor = IsotonicRegression(rngs=self.rngs)
+        regressor.fit(confidences, accuracies)
+        return regressor(confidences)
