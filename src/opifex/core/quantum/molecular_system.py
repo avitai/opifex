@@ -12,6 +12,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 
@@ -151,19 +152,17 @@ class MolecularSystem:
         return len(self.atomic_numbers)
 
     @property
-    def n_electrons(self) -> int | jax.Array:
-        """Total number of electrons."""
-        # Use JAX-compatible computation that works with JIT
-        try:
-            # Try to convert to Python int if not in JIT context
-            return int(jnp.sum(self.atomic_numbers) - self.charge)
-        except (
-            jax.errors.TracerIntegerConversionError,
-            jax.errors.ConcretizationTypeError,
-        ):
-            # In JIT context, return the JAX array directly
-            # The caller should handle this appropriately
-            return jnp.sum(self.atomic_numbers) - self.charge
+    def n_electrons(self) -> int:
+        """Total electron count -- static structural metadata.
+
+        Derived from the (static) atomic numbers via NumPy so it stays a concrete
+        Python ``int`` even when accessed inside ``jax.jit`` on an eagerly built
+        system: NumPy reductions do not trace, unlike ``jnp.sum`` which would
+        yield a tracer and break array sizing / control flow under ``jit``. See
+        ``memory-bank/guides/jax_guide.md`` (static metadata) and
+        ``flax-nnx-guide.md`` (counts/shapes are static attributes).
+        """
+        return int(np.asarray(self.atomic_numbers).sum()) - self.charge
 
     @property
     def is_periodic(self) -> bool:
