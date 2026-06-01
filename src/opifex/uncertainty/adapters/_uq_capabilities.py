@@ -248,14 +248,16 @@ _DUE_ADAPTER_CAPABILITY = UQCapability(
 
 
 _TTA_ADAPTER_CAPABILITY = UQCapability(
+    supports_ensemble=True,
     supports_calibration=True,
     native_nnx_module=True,
     default_strategy=DefaultStrategy.TEST_TIME_AUGMENTATION,
     source_package="opifex",
     notes=(
-        "TestTimeAugmentationAdapterSpec — Wang et al. Neurocomputing "
-        "2019. Average predictions across input augmentations at "
-        "evaluation time."
+        "TestTimeAugmentationAdapter — Wang et al. Neurocomputing 2019. "
+        "Forward a deterministic model over a fixed tuple of deterministic "
+        "input augmentations and aggregate the predictive mean/variance "
+        "across the augmentation axis (an ensemble over augmentations)."
     ),
 )
 
@@ -379,7 +381,7 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     "adapter:SWAGAdapter": _SWAG_ADAPTER_CAPABILITY,
     "adapter:BatchEnsembleAdapter": _BATCH_ENSEMBLE_ADAPTER_CAPABILITY,
     "adapter:DUEAdapterSpec": _DUE_ADAPTER_CAPABILITY,
-    "adapter:TestTimeAugmentationAdapterSpec": _TTA_ADAPTER_CAPABILITY,
+    "adapter:TestTimeAugmentationAdapter": _TTA_ADAPTER_CAPABILITY,
     # Phase 4 calibration / conformal concrete calibrators.
     "calibration:TemperatureScaling": _TEMPERATURE_SCALING_CAPABILITY,
     "conformal:SplitConformalRegressor": _SPLIT_CONFORMAL_REGRESSOR_CAPABILITY,

@@ -174,7 +174,7 @@ _TASK_7_2_ADAPTER_NAMES: frozenset[str] = frozenset(
         "adapter:SWAGAdapter",
         "adapter:BatchEnsembleAdapter",
         "adapter:DUEAdapterSpec",
-        "adapter:TestTimeAugmentationAdapterSpec",
+        "adapter:TestTimeAugmentationAdapter",
         # Phase 4 calibration / conformal concrete calibrators.
         "calibration:TemperatureScaling",
         "conformal:SplitConformalRegressor",

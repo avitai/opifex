@@ -1,15 +1,18 @@
 """Ensemble adapters for deterministic-model UQ.
 
-Includes the deep-ensemble, snapshot-ensemble, SWAG, and BatchEnsemble
-adapters plus the DUE / TTA specs (deferred).
+Includes the deep-ensemble, snapshot-ensemble, SWAG, BatchEnsemble, and
+test-time-augmentation (TTA) adapters plus the DUE spec (deferred).
 
 The deep / snapshot ensemble adapters aggregate the mean and (sample)
 variance across a fixed tuple of deterministic-member callables. SWAG
 samples weights from a low-rank-plus-diagonal Gaussian posterior and
 forwards each draw; BatchEnsemble forwards over ``M`` rank-1 fast-weight
-members of a single shared kernel. Fitted-state containers travel as
-``flax.struct.dataclass`` pytrees (pattern (B)) so they can ride through
-``jax.tree_util``-aware transforms.
+members of a single shared kernel. Test-time augmentation forwards a single
+deterministic model over a fixed tuple of deterministic input augmentations
+and aggregates across the augmentation axis (an ensemble over
+augmentations). Fitted-state containers travel as ``flax.struct.dataclass``
+pytrees (pattern (B)) so they can ride through ``jax.tree_util``-aware
+transforms.
 
 References:
     * Deep ensembles — Lakshminarayanan, Pritzel, Blundell, "Simple and
@@ -24,11 +27,13 @@ References:
     * BatchEnsemble — Wen, Tran, Ba, "BatchEnsemble: An Alternative
       Approach to Efficient Ensemble and Lifelong Learning", ICLR 2020
       (arXiv:2002.06715).
+    * Test-time augmentation — Wang, Aitchison, Rutherford, …, "Aleatoric
+      uncertainty estimation with test-time augmentation for medical image
+      segmentation with convolutional neural networks", Neurocomputing 2019.
 
-Spec dataclasses for backends that are not yet wired (DUE, TTA) declare
-their capability metadata and raise an actionable
-:class:`NotImplementedError` from ``wrap`` until the underlying
-implementation lands.
+The DUE spec dataclass remains deferred: it declares its capability
+metadata and raises an actionable :class:`NotImplementedError` from
+``wrap`` until the underlying implementation lands.
 """
 
 from __future__ import annotations
@@ -168,6 +173,83 @@ class BatchEnsembleState:
             raise ValueError("BatchEnsembleState.alpha and gamma must agree on the member axis.")
 
 
+@struct.dataclass(slots=True, kw_only=True)
+class TestTimeAugmentationState:
+    """Deterministic test-time augmentation (TTA) fitted state.
+
+    A single deterministic model is evaluated on a fixed tuple of
+    deterministic input augmentations (identity, flips, scales, …) and the
+    predictions are aggregated across augmentations — conceptually an
+    ensemble over augmentations (Wang et al., Neurocomputing 2019). Both
+    ``model_fn`` and the augmentation callables are static
+    (``pytree_node=False``) and deterministic, so the wrapper carries no RNG
+    and composes with ``jit`` / ``grad`` / ``vmap``.
+
+    ``augmentations`` each map ``x -> augmented_x`` (same shape as ``x``);
+    ``model_fn`` maps ``x -> y``.
+    """
+
+    model_fn: Callable[[jax.Array], jax.Array] = struct.field(pytree_node=False)
+    augmentations: tuple[Callable[[jax.Array], jax.Array], ...] = struct.field(pytree_node=False)
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
+
+    def validate(self) -> None:
+        """Raise if fewer than two augmentations are configured.
+
+        A single augmentation produces a degenerate one-member ensemble with
+        zero spread; require at least two to yield a non-trivial variance.
+        """
+        if len(self.augmentations) < 2:
+            raise ValueError(
+                "TestTimeAugmentationState requires at least 2 augmentations to yield a "
+                f"non-trivial across-augmentation variance; got {len(self.augmentations)}. "
+                "Supply two or more augmentation callables (e.g. identity plus flips/scales)."
+            )
+
+
+# ---------------------------------------------------------------------------
+# Shared aggregation helper (Rule 1: DRY)
+# ---------------------------------------------------------------------------
+
+
+def _predictive_from_member_samples(
+    *,
+    samples: jax.Array,
+    capability: UQCapability,
+    extra_metadata: MetadataItems,
+    include_zero_aleatoric: bool = False,
+) -> PredictiveDistribution:
+    """Aggregate a stack of member predictions into a :class:`PredictiveDistribution`.
+
+    Members live on ``axis=0`` (shape ``(num_members, batch, ...)``). The
+    predictive mean and (sample) variance are taken across that member axis;
+    the variance is reported as both the marginal ``variance`` and the
+    ``epistemic`` / ``total_uncertainty`` components, matching the
+    deep-ensemble aggregation contract. Single source of truth for every
+    member-aggregating wrapper in this module.
+
+    When ``include_zero_aleatoric`` is set, an explicit zero ``aleatoric``
+    array is emitted so that the variance-additivity invariant
+    ``total_uncertainty == epistemic + aleatoric`` is satisfied with a
+    materialised aleatoric term (used by the test-time-augmentation wrapper).
+    """
+    mean = jnp.mean(samples, axis=0)
+    variance = jnp.var(samples, axis=0)
+    return PredictiveDistribution(
+        mean=mean,
+        samples=samples,
+        variance=variance,
+        epistemic=variance,
+        aleatoric=jnp.zeros_like(mean) if include_zero_aleatoric else None,
+        total_uncertainty=variance,
+        metadata=compose_method_metadata(
+            method=capability.default_strategy.value,
+            source_package=capability.source_package,
+            extra=extra_metadata,
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Wrapped ensemble model
 # ---------------------------------------------------------------------------
@@ -182,19 +264,10 @@ class _WrappedDeepEnsembleModel:
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
         member_outputs = jnp.stack([member(x) for member in self._state.members], axis=0)
-        mean = jnp.mean(member_outputs, axis=0)
-        variance = jnp.var(member_outputs, axis=0)
-        return PredictiveDistribution(
-            mean=mean,
+        return _predictive_from_member_samples(
             samples=member_outputs,
-            variance=variance,
-            epistemic=variance,
-            total_uncertainty=variance,
-            metadata=compose_method_metadata(
-                method=self._capability.default_strategy.value,
-                source_package=self._capability.source_package,
-                extra=(("num_members", len(self._state.members)),),
-            ),
+            capability=self._capability,
+            extra_metadata=(("num_members", len(self._state.members)),),
         )
 
 
@@ -212,19 +285,10 @@ class _WrappedSnapshotEnsembleModel:
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
         snapshot_outputs = jnp.stack([snapshot(x) for snapshot in self._state.members], axis=0)
-        mean = jnp.mean(snapshot_outputs, axis=0)
-        variance = jnp.var(snapshot_outputs, axis=0)
-        return PredictiveDistribution(
-            mean=mean,
+        return _predictive_from_member_samples(
             samples=snapshot_outputs,
-            variance=variance,
-            epistemic=variance,
-            total_uncertainty=variance,
-            metadata=compose_method_metadata(
-                method=self._capability.default_strategy.value,
-                source_package=self._capability.source_package,
-                extra=(("num_snapshots", len(self._state.members)),),
-            ),
+            capability=self._capability,
+            extra_metadata=(("num_snapshots", len(self._state.members)),),
         )
 
 
@@ -278,19 +342,10 @@ class _WrappedSWAGModel:
             return None, self._state.forward_fn(flat_params, x)
 
         _, samples = jax.lax.scan(_forward, None, weight_samples)
-        mean = jnp.mean(samples, axis=0)
-        variance = jnp.var(samples, axis=0)
-        return PredictiveDistribution(
-            mean=mean,
+        return _predictive_from_member_samples(
             samples=samples,
-            variance=variance,
-            epistemic=variance,
-            total_uncertainty=variance,
-            metadata=compose_method_metadata(
-                method=self._capability.default_strategy.value,
-                source_package=self._capability.source_package,
-                extra=(("num_samples", int(self._state.num_samples)),),
-            ),
+            capability=self._capability,
+            extra_metadata=(("num_samples", int(self._state.num_samples)),),
         )
 
 
@@ -315,19 +370,46 @@ class _WrappedBatchEnsembleModel:
             return ((x * alpha_m) @ self._state.shared_kernel) * gamma_m
 
         member_outputs = jax.vmap(_member_forward)(self._state.alpha, self._state.gamma)
-        mean = jnp.mean(member_outputs, axis=0)
-        variance = jnp.var(member_outputs, axis=0)
-        return PredictiveDistribution(
-            mean=mean,
+        return _predictive_from_member_samples(
             samples=member_outputs,
-            variance=variance,
-            epistemic=variance,
-            total_uncertainty=variance,
-            metadata=compose_method_metadata(
-                method=self._capability.default_strategy.value,
-                source_package=self._capability.source_package,
-                extra=(("num_members", int(self._state.alpha.shape[0])),),
-            ),
+            capability=self._capability,
+            extra_metadata=(("num_members", int(self._state.alpha.shape[0])),),
+        )
+
+
+class _WrappedTestTimeAugmentationModel:
+    """Predict by forwarding each input augmentation + cross-augmentation mean/variance.
+
+    Forwards the deterministic ``model_fn`` over every augmented copy of the
+    input and aggregates the predictive mean / variance across the
+    augmentation axis — the same member-aggregation as a deep ensemble
+    (torch-uncertainty
+    ``routines/classification.py`` lines 439/446: ``rearrange(logits,
+    "(m b) c -> b m c")`` then ``probs_per_est.mean(dim=1)``).
+
+    This is the **regression** mean+across-augmentation-variance form,
+    consistent with the other model adapters in this module; ``aleatoric``
+    is identically zero (the deterministic model contributes no
+    observation-noise term) so ``total_uncertainty == epistemic``. The
+    **classification** analogue is the predictive-entropy / mutual-information
+    decomposition ``MI = H(mean_m p_m) − mean_m H(p_m)`` (torch-uncertainty
+    ``metrics/classification/mutual_information.py`` lines 89-93); no
+    classification path is fabricated here.
+    """
+
+    def __init__(self, state: TestTimeAugmentationState, capability: UQCapability) -> None:
+        self._state = state
+        self._capability = capability
+
+    def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        preds = jnp.stack(
+            [self._state.model_fn(aug(x)) for aug in self._state.augmentations], axis=0
+        )
+        return _predictive_from_member_samples(
+            samples=preds,
+            capability=self._capability,
+            extra_metadata=(("num_augmentations", len(self._state.augmentations)),),
+            include_zero_aleatoric=True,
         )
 
 
@@ -431,11 +513,28 @@ class DUEAdapterSpec(_DeferredAdapterSpec):
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class TestTimeAugmentationAdapterSpec(_DeferredAdapterSpec):
-    """Test-time augmentation: average predictions across input augmentations."""
+class TestTimeAugmentationAdapter:
+    """Test-time augmentation: average predictions across input augmentations.
 
-    default_strategy: DefaultStrategy = DefaultStrategy.TEST_TIME_AUGMENTATION
-    required_capabilities: tuple[str, ...] = ()
+    Wang, Aitchison, Rutherford, … (Neurocomputing 2019). Forward the
+    deterministic ``model_fn`` over a fixed tuple of deterministic input
+    augmentations and aggregate the predictive mean/variance across the
+    augmentation axis — identical aggregation to :class:`DeepEnsembleAdapter`.
+    No RNG: the wrapper is jit/grad/vmap-friendly.
+    """
+
+    def wrap(
+        self, model: TestTimeAugmentationState, capability: UQCapability
+    ) -> _WrappedTestTimeAugmentationModel:
+        """Wrap a :class:`TestTimeAugmentationState`; rejects non-``TEST_TIME_AUGMENTATION``."""
+        if capability.default_strategy is not DefaultStrategy.TEST_TIME_AUGMENTATION:
+            raise ValueError(
+                f"TestTimeAugmentationAdapter requires default_strategy="
+                f"{DefaultStrategy.TEST_TIME_AUGMENTATION!r}; got "
+                f"{capability.default_strategy!r}."
+            )
+        model.validate()
+        return _WrappedTestTimeAugmentationModel(state=model, capability=capability)
 
 
 __all__ = [
@@ -448,5 +547,6 @@ __all__ = [
     "SWAGState",
     "SnapshotEnsembleAdapter",
     "SnapshotEnsembleState",
-    "TestTimeAugmentationAdapterSpec",
+    "TestTimeAugmentationAdapter",
+    "TestTimeAugmentationState",
 ]

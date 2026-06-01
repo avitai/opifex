@@ -18,7 +18,8 @@ from opifex.uncertainty.adapters.ensemble import (
     SnapshotEnsembleState,
     SWAGAdapter,
     SWAGState,
-    TestTimeAugmentationAdapterSpec,
+    TestTimeAugmentationAdapter,
+    TestTimeAugmentationState,
 )
 from opifex.uncertainty.adapters.gp import (
     BayesnewtonAdapterSpec,
@@ -88,7 +89,8 @@ __all__ = [
     "SWAGState",
     "SnapshotEnsembleAdapter",
     "SnapshotEnsembleState",
-    "TestTimeAugmentationAdapterSpec",
+    "TestTimeAugmentationAdapter",
+    "TestTimeAugmentationState",
     "TinygpAdapterSpec",
     "VBLLAdapter",
     "VBLLState",

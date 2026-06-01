@@ -8,12 +8,13 @@ adapters MUST require caller-owned ``rngs`` at the method boundary — no
 hidden dropout/ensemble seed.
 
 Spec dataclasses for deferred backends (``SNGPAdapterSpec``,
-``DUEAdapterSpec``, ``TestTimeAugmentationAdapterSpec``) declare
-capability + source-package metadata and raise an actionable
-``NotImplementedError`` with backend guidance until real implementations
-are wired. The Snapshot-ensemble, SWAG, and BatchEnsemble adapters are
-concrete — their behaviour is covered in ``test_ensemble_adapters.py``;
-the VBLL adapter is concrete and covered in ``test_vbll_adapter.py``.
+``DUEAdapterSpec``) declare capability + source-package metadata and raise
+an actionable ``NotImplementedError`` with backend guidance until real
+implementations are wired. The Snapshot-ensemble, SWAG, and BatchEnsemble
+adapters are concrete — their behaviour is covered in
+``test_ensemble_adapters.py``; the test-time-augmentation adapter is
+concrete and covered in ``test_tta_adapter.py``; the VBLL adapter is
+concrete and covered in ``test_vbll_adapter.py``.
 
 ``LaplaceAdapterSpec`` is concrete and produces a Monte-Carlo predictive
 distribution by sampling parameters from a diagonal Laplace posterior
@@ -47,7 +48,6 @@ from opifex.uncertainty.adapters import (
     SnapshotEnsembleState,
     SNGPAdapterSpec,
     SWAGState,
-    TestTimeAugmentationAdapterSpec,
 )
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import PredictiveDistribution
@@ -194,7 +194,6 @@ def test_mc_dropout_adapter_requires_caller_owned_rngs() -> None:
 _DEFERRED_SPECS: tuple[tuple[type, DefaultStrategy], ...] = (
     (SNGPAdapterSpec, DefaultStrategy.SNGP),
     (DUEAdapterSpec, DefaultStrategy.DUE),
-    (TestTimeAugmentationAdapterSpec, DefaultStrategy.TEST_TIME_AUGMENTATION),
 )
 
 
