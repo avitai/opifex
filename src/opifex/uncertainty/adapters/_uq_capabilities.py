@@ -139,8 +139,9 @@ _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.BAYESIAN_LAST_LAYER,
     source_package="opifex",
     notes=(
-        "BayesianLastLayerAdapterSpec — Bayesian-only final layer "
-        "(BayesianLinear) over a deterministic backbone."
+        "BayesianLastLayerAdapter — Bayesian-only final layer over a "
+        "frozen backbone; analytic GLM / neural-linear predictive "
+        "(Ober & Rasmussen 2019; Snoek et al. 2015)."
     ),
 )
 
@@ -367,7 +368,7 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     # Phase 4 model-uncertainty adapter specs.
     "adapter:LaplaceAdapterSpec": _LAPLACE_ADAPTER_CAPABILITY,
     "adapter:MCDropoutAdapter": _MC_DROPOUT_ADAPTER_CAPABILITY,
-    "adapter:BayesianLastLayerAdapterSpec": _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY,
+    "adapter:BayesianLastLayerAdapter": _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY,
     "adapter:SNGPAdapterSpec": _SNGP_ADAPTER_CAPABILITY,
     "adapter:VBLLAdapterSpec": _VBLL_ADAPTER_CAPABILITY,
     # Phase 4 ensemble adapter specs.

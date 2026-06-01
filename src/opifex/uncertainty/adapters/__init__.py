@@ -28,7 +28,8 @@ from opifex.uncertainty.adapters.gp import (
     TinygpAdapterSpec,
 )
 from opifex.uncertainty.adapters.model import (
-    BayesianLastLayerAdapterSpec,
+    BayesianLastLayerAdapter,
+    BayesianLastLayerState,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
@@ -59,7 +60,8 @@ __all__ = [
     "ADAPTER_CAPABILITIES",
     "BatchEnsembleAdapter",
     "BatchEnsembleState",
-    "BayesianLastLayerAdapterSpec",
+    "BayesianLastLayerAdapter",
+    "BayesianLastLayerState",
     "BayesnewtonAdapterSpec",
     "DUEAdapterSpec",
     "DeepEnsembleAdapter",

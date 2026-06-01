@@ -165,7 +165,7 @@ _TASK_7_2_ADAPTER_NAMES: frozenset[str] = frozenset(
         # Phase 4 model-uncertainty adapter specs.
         "adapter:LaplaceAdapterSpec",
         "adapter:MCDropoutAdapter",
-        "adapter:BayesianLastLayerAdapterSpec",
+        "adapter:BayesianLastLayerAdapter",
         "adapter:SNGPAdapterSpec",
         "adapter:VBLLAdapterSpec",
         # Phase 4 ensemble adapter specs.

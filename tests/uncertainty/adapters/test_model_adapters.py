@@ -7,8 +7,8 @@ member/sample count, source-package, and assumption metadata. Stochastic
 adapters MUST require caller-owned ``rngs`` at the method boundary — no
 hidden dropout/ensemble seed.
 
-Spec dataclasses for deferred backends (``BayesianLastLayerAdapterSpec``,
-``SNGPAdapterSpec``, ``VBLLAdapterSpec``, ``DUEAdapterSpec``,
+Spec dataclasses for deferred backends (``SNGPAdapterSpec``,
+``VBLLAdapterSpec``, ``DUEAdapterSpec``,
 ``TestTimeAugmentationAdapterSpec``) declare capability + source-package
 metadata and raise an actionable ``NotImplementedError`` with backend
 guidance until real implementations are wired. The Snapshot-ensemble,
@@ -37,7 +37,6 @@ from flax import nnx
 
 from opifex.uncertainty.adapters import (
     BatchEnsembleState,
-    BayesianLastLayerAdapterSpec,
     DeepEnsembleAdapter,
     DeepEnsembleState,
     DUEAdapterSpec,
@@ -194,7 +193,6 @@ def test_mc_dropout_adapter_requires_caller_owned_rngs() -> None:
 
 
 _DEFERRED_SPECS: tuple[tuple[type, DefaultStrategy], ...] = (
-    (BayesianLastLayerAdapterSpec, DefaultStrategy.BAYESIAN_LAST_LAYER),
     (SNGPAdapterSpec, DefaultStrategy.SNGP),
     (VBLLAdapterSpec, DefaultStrategy.VBLL),
     (DUEAdapterSpec, DefaultStrategy.DUE),
