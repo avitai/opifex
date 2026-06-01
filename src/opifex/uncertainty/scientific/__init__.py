@@ -20,6 +20,10 @@ from opifex.uncertainty.scientific.domain_metrics import (
     UNSUPPORTED_LIKELIHOOD_FREE,
     UNSUPPORTED_PAC_BAYES,
 )
+from opifex.uncertainty.scientific.equation_discovery import (
+    BayesianSINDy,
+    PosteriorOverTerms,
+)
 from opifex.uncertainty.scientific.fields import (
     conservation_law_residual_summary,
     FieldMetadata,
@@ -102,6 +106,7 @@ __all__ = [
     "UNSUPPORTED_ACTIVE_LEARNING",
     "UNSUPPORTED_LIKELIHOOD_FREE",
     "UNSUPPORTED_PAC_BAYES",
+    "BayesianSINDy",
     "CalibrationSpec",
     "CorrectionSpec",
     "CubatureRuleSpec",
@@ -128,6 +133,7 @@ __all__ = [
     "PerturbedStepSolverSpec",
     "PolynomialChaosBasis",
     "PolynomialChaosConfig",
+    "PosteriorOverTerms",
     "ProbdiffeqAdapterSpec",
     "ProbfindiffAdapterSpec",
     "ProbnumAdapterSpec",
