@@ -316,15 +316,24 @@ def pytest_runtest_makereport(item, call):
 
 @pytest.fixture(scope="function", autouse=True)
 def reset_jax_config():
-    """Pin ``jax_enable_x64`` to False around every test.
+    """Pin JAX numerical config around every test.
 
-    Defensive bookend against x64 leakage when ``with jax.enable_x64(True):``
-    contexts are reordered across files by pytest-randomly. Keeps test
-    ordering hermetic so dtype assertions remain stable on CI.
+    * ``jax_enable_x64`` -> False: defensive bookend against x64 leakage when
+      ``with jax.enable_x64(True):`` contexts are reordered across files by
+      pytest-randomly. Keeps ordering hermetic so dtype assertions stay stable.
+    * ``jax_default_matmul_precision`` -> "high": GPU float32 matmuls otherwise
+      use TF32 (~1e-3), which breaks numerically tight assertions (state-space
+      rotation orthogonality, jit-vs-eager invariance). "high" is error-corrected
+      3xTF32 (Ootomo & Yokota 2022) -- full-fp32 accuracy at tensor-core speed,
+      mirroring the GPU branch of ``opifex.setup_jax_optimization``. Pinned via the
+      live config (not an env-var default) because a plugin imports jax before
+      pytest-env runs, locking in JAX's config first. No effect on CPU or float64.
     """
     jax.config.update("jax_enable_x64", False)
+    jax.config.update("jax_default_matmul_precision", "high")
     yield
     jax.config.update("jax_enable_x64", False)
+    jax.config.update("jax_default_matmul_precision", "high")
 
 
 @pytest.fixture(scope="session", autouse=True)
