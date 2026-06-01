@@ -1,11 +1,11 @@
 """Concrete model-uncertainty adapters for deterministic-model UQ.
 
 Includes deterministic, MC-dropout, Bayesian-last-layer,
-Variational-Bayesian-last-layer (VBLL), and DUE (Deterministic Uncertainty
-Estimation) adapters, plus the deferred SNGP spec. The concrete
-diagonal-Laplace adapter (``LaplaceAdapterSpec`` + ``LaplaceState``) lives in
-:mod:`opifex.uncertainty.curvature.laplace` — it is co-located with the
-curvature primitives it consumes.
+Variational-Bayesian-last-layer (VBLL), DUE (Deterministic Uncertainty
+Estimation), and SNGP (Spectral-normalized Neural Gaussian Process)
+adapters. The concrete diagonal-Laplace adapter (``LaplaceAdapterSpec`` +
+``LaplaceState``) lives in :mod:`opifex.uncertainty.curvature.laplace` — it is
+co-located with the curvature primitives it consumes.
 
 The deterministic adapter is the bookkeeping wrapper that produces a
 zero-epistemic :class:`PredictiveDistribution` from a deterministic
@@ -77,10 +77,35 @@ References for the DUE predictive:
   at TRAIN time):
   :mod:`opifex.neural.operators.specialized.spectral_normalization`.
 
-Spec dataclasses for backends that are not yet wired (SNGP) declare
-their capability metadata and raise an actionable
-:class:`NotImplementedError` from ``wrap`` until the underlying
-implementation lands.
+The :class:`SNGPAdapter` wraps an ALREADY-FITTED Spectral-normalized
+Neural Gaussian Process last layer (Liu et al. 2020, arXiv:2006.10108). A
+fixed random-Fourier-feature (RFF) map ``phi(x)`` feeds a
+Laplace-approximated GP whose predictive variance is a distance-aware
+uncertainty signal. The wrapped state carries the frozen ``feature_fn``,
+the last-layer weights ``beta`` (``output_weights``), and the Laplace
+precision matrix ``Sigma^{-1}`` (``precision_matrix``). The predictive mean
+is ``phi @ beta`` and the per-sample epistemic variance is computed by the
+edward2 Cholesky-solve formula ``ridge * sum((L^{-1} phi^T)**2)`` for
+``L = cholesky(Sigma^{-1})`` — then delegated to the SHARED
+:func:`_gaussian_linear_head_predictive` assembly (Rule 1: DRY), exactly as
+the Bayesian-last-layer and VBLL adapters do. The Laplace precision is built
+faithfully by :func:`fit_sngp_precision` (a direct port of edward2's
+``LaplaceRandomFeatureCovariance`` initial + exact-update logic), NOT from
+scratch. SNGP emits a regression mean + variance predictive (consistent with
+the other model adapters); the classification mean-field-logit adjustment is
+exposed honestly as :func:`sngp_mean_field_logits` (an edward2 port) but is
+NOT fabricated into the regression predict path.
+
+References for the SNGP predictive:
+
+* Liu, J., Lin, Z., Padhy, S., Tran, D., Bedrax-Weiss, T. & Lakshminarayanan,
+  B. 2020 — *Simple and Principled Uncertainty Estimation with Deterministic
+  Deep Learning via Distance Awareness* (SNGP), arXiv:2006.10108.
+* JAX reference (ported, not invented): ``LaplaceRandomFeatureCovariance``
+  (``../edward2/edward2/jax/nn/random_feature.py``:217-405 —
+  ``update_precision_matrix``:311-362 and
+  ``compute_predictive_covariance``:364-405) and ``mean_field_logits``
+  (``../edward2/edward2/jax/nn/utils.py``:54-101).
 """
 
 from __future__ import annotations
@@ -93,7 +118,6 @@ import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 
-from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.svgp import predict_svgp, SVGPState
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
@@ -242,6 +266,134 @@ def _gaussian_linear_head_predictive(
             extra=(("num_samples", num_samples),),
         ),
     )
+
+
+_SNGP_SUPPORTED_LIKELIHOODS = ("gaussian", "binary_logistic", "poisson")
+_MEAN_FIELD_SUPPORTED_LIKELIHOODS = ("logistic", "binary_logistic", "poisson")
+
+
+def fit_sngp_precision(
+    features: jax.Array,
+    *,
+    ridge_penalty: float = 1.0,
+    logits: jax.Array | None = None,
+    likelihood: str = "gaussian",
+) -> jax.Array:
+    """Build the SNGP Laplace precision matrix from training random features.
+
+    Faithful port of edward2's ``LaplaceRandomFeatureCovariance`` initial +
+    exact (momentum-free) update path
+    (``../edward2/edward2/jax/nn/random_feature.py``:
+    ``initial_precision_matrix``:307-309 and
+    ``update_precision_matrix``:311-362). With training random features
+    ``phi_tr`` of shape ``(n, D)`` the precision is built as a single
+    exact pass over the data (the edward2 ``momentum is None`` branch,
+    :354-356)::
+
+        initial    = ridge_penalty * I_D
+        phi_adj    = sqrt(prob_multiplier) * phi_tr
+        batch_prec = phi_adj.T @ phi_adj
+        precision  = initial + batch_prec
+
+    where ``prob_multiplier`` is the Laplace-approximation weight per the
+    likelihood (edward2 :342-348):
+
+    * ``gaussian`` -> ``1``;
+    * ``binary_logistic`` -> ``p * (1 - p)`` with ``p = sigmoid(logits)``;
+    * ``poisson`` -> ``exp(logits)``.
+
+    Args:
+        features: Training random features ``phi_tr`` of shape ``(n, D)``.
+        ridge_penalty: Ridge factor ``s`` stabilising the precision
+            eigenvalues (``> 0``); also the predictive-variance scale.
+        logits: Predictive logits of shape ``(n,)`` or ``(n, 1)``. Required
+            for the non-Gaussian likelihoods; unused for ``gaussian``.
+        likelihood: One of ``gaussian`` / ``binary_logistic`` / ``poisson``.
+
+    Returns:
+        The symmetric positive-definite Laplace precision matrix
+        ``Sigma^{-1}`` of shape ``(D, D)``.
+
+    Raises:
+        ValueError: If ``likelihood`` is unsupported, or if ``logits`` is
+            ``None`` for a non-Gaussian likelihood.
+    """
+    if likelihood not in _SNGP_SUPPORTED_LIKELIHOODS:
+        raise ValueError(
+            f"SNGP likelihood must be one of {_SNGP_SUPPORTED_LIKELIHOODS}; got {likelihood!r}."
+        )
+    hidden_features = features.shape[-1]
+    initial = ridge_penalty * jnp.eye(hidden_features, dtype=features.dtype)
+    # prob_multiplier — the Laplace-approximation weight (edward2 :342-348).
+    if likelihood == "gaussian":
+        prob_multiplier: jax.Array | float = 1.0
+    else:
+        if logits is None:
+            raise ValueError(f"SNGP likelihood={likelihood!r} requires logits; got None.")
+        logits_column = jnp.reshape(logits, (features.shape[0], -1))
+        if likelihood == "binary_logistic":
+            probability = jax.nn.sigmoid(logits_column)
+            prob_multiplier = probability * (1.0 - probability)
+        else:  # poisson
+            prob_multiplier = jnp.exp(logits_column)
+    features_adjusted = jnp.sqrt(prob_multiplier) * features
+    batch_precision = features_adjusted.T @ features_adjusted
+    return initial + batch_precision
+
+
+def sngp_mean_field_logits(
+    logits: jax.Array,
+    variances: jax.Array,
+    *,
+    mean_field_factor: float,
+    likelihood: str = "logistic",
+) -> jax.Array:
+    """Adjust classification logits by the SNGP mean-field approximation.
+
+    Faithful port of edward2's ``mean_field_logits``
+    (``../edward2/edward2/jax/nn/utils.py``:54-101). Scales the logits down
+    by a per-sample factor so the softmax approximates the posterior mean of
+    the Gaussian-approximated latent posterior (Liu et al. 2020). For a
+    negative ``mean_field_factor`` the logits are returned unchanged (edward2
+    :85-86). The scaling coefficient is (edward2 :92-95)::
+
+        logistic / binary_logistic -> sqrt(1 + variances * mean_field_factor)
+        poisson                    -> exp(-variances * mean_field_factor / 2)
+
+    and is broadcast over the trailing logit-class axis (edward2 :97-99).
+
+    This helper is the honest classification counterpart to the SNGP
+    regression predictive; the regression predict path
+    (:class:`_WrappedSNGPModel`) does NOT call it (binding rule 4).
+
+    Args:
+        logits: Predictive logits of shape ``(batch, num_classes)``.
+        variances: Per-sample predictive variances of shape ``(batch,)``.
+        mean_field_factor: Mean-field scale factor; ``< 0`` disables the
+            adjustment.
+        likelihood: One of ``logistic`` / ``binary_logistic`` / ``poisson``.
+
+    Returns:
+        Uncertainty-adjusted logits of shape ``(batch, num_classes)``.
+
+    Raises:
+        ValueError: If ``likelihood`` is unsupported.
+    """
+    if likelihood not in _MEAN_FIELD_SUPPORTED_LIKELIHOODS:
+        raise ValueError(
+            "SNGP mean-field likelihood must be one of "
+            f"{_MEAN_FIELD_SUPPORTED_LIKELIHOODS}; got {likelihood!r}."
+        )
+    if mean_field_factor < 0:
+        return logits
+    if likelihood == "poisson":
+        logits_scale = jnp.exp(-variances * mean_field_factor / 2.0)
+    else:
+        logits_scale = jnp.sqrt(1.0 + variances * mean_field_factor)
+    # Broadcast the per-sample scale over the trailing logit-class axis.
+    while logits_scale.ndim < logits.ndim:
+        logits_scale = jnp.expand_dims(logits_scale, axis=-1)
+    return logits / logits_scale
 
 
 @struct.dataclass(slots=True, kw_only=True)
@@ -524,6 +676,126 @@ class _WrappedDUEModel:
         )
 
 
+@struct.dataclass(slots=True, kw_only=True)
+class SNGPState:
+    """Fitted-state pytree for the SNGP predictive (RFF + Laplace GP head).
+
+    Bundles a FROZEN deterministic random-Fourier-feature (RFF) map
+    ``phi(x)`` with the fitted last-layer weights and the Laplace precision
+    matrix of the GP head. SNGP (Liu et al. 2020, arXiv:2006.10108) replaces a
+    deterministic network's final layer with a random-feature Gaussian-process
+    approximation whose predictive variance is a distance-aware uncertainty
+    signal.
+
+    The RFF map is FIXED (not trained at predict time); the precision matrix is
+    built once over the training features via :func:`fit_sngp_precision` (a
+    faithful port of edward2's ``LaplaceRandomFeatureCovariance``). At predict
+    time the mean is ``phi @ output_weights`` and the per-sample epistemic
+    variance is the edward2 Cholesky-solve diagonal ``ridge * sum((L^{-1}
+    phi^T)**2)`` for ``L = cholesky(precision_matrix, lower=True)``.
+
+    Attributes:
+        feature_fn: Frozen deterministic RFF map ``x -> phi(x)`` with ``phi``
+            of shape ``(batch, D)``. Static (not a pytree leaf): it carries no
+            traced parameters at predict time.
+        output_weights: Last-layer weights ``beta`` of shape ``(D, n_outputs)``
+            (a pytree leaf).
+        precision_matrix: The Laplace precision matrix ``Sigma^{-1}`` of shape
+            ``(D, D)`` (a pytree leaf).
+        ridge_penalty: Ridge factor ``s`` (``> 0``) stabilising the precision
+            and scaling the predictive variance. Static aux_data so it can
+            serve as a JIT-cache key.
+        observation_noise_variance: Aleatoric noise variance ``sigma^2``
+            (``>= 0``), broadcast over outputs. Static aux_data.
+        metadata: Immutable, hashable static aux_data.
+    """
+
+    feature_fn: _FeatureFnProtocol = struct.field(pytree_node=False)
+    output_weights: jax.Array = struct.field()
+    precision_matrix: jax.Array = struct.field()
+    ridge_penalty: float = struct.field(pytree_node=False, default=1.0)
+    observation_noise_variance: float = struct.field(pytree_node=False, default=0.0)
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
+
+    def validate(self) -> None:
+        """Public hook; never called from ``__post_init__``/``tree_unflatten``."""
+        precision_shape = self.precision_matrix.shape
+        if self.precision_matrix.ndim != 2 or precision_shape[0] != precision_shape[1]:
+            raise ValueError(
+                "SNGPState.precision_matrix must be a square (D, D) matrix; "
+                f"got shape {precision_shape}."
+            )
+        hidden_features = self.output_weights.shape[0]
+        if precision_shape[0] != hidden_features:
+            raise ValueError(
+                "SNGPState.precision_matrix dimension "
+                f"{precision_shape[0]} must equal output_weights.shape[0]="
+                f"{hidden_features}."
+            )
+        if self.ridge_penalty <= 0.0:
+            raise ValueError(f"SNGPState.ridge_penalty must be > 0; got {self.ridge_penalty!r}.")
+        if self.observation_noise_variance < 0.0:
+            raise ValueError(
+                "SNGPState.observation_noise_variance must be "
+                f">= 0; got {self.observation_noise_variance!r}."
+            )
+
+
+class _WrappedSNGPModel:
+    """Bookkeeping wrapper around a fitted SNGP RFF + Laplace-GP head.
+
+    Evaluates the CLOSED-FORM SNGP regression predictive over the frozen RFF
+    features. The per-sample epistemic variance is the edward2
+    ``compute_predictive_covariance`` Cholesky-solve diagonal
+    (``../edward2/edward2/jax/nn/random_feature.py``:393-404); the
+    mean/epistemic/aleatoric/total assembly is delegated to the shared
+    :func:`_gaussian_linear_head_predictive` helper (Rule 1: DRY).
+    """
+
+    def __init__(self, state: SNGPState, capability: UQCapability) -> None:
+        self._state = state
+        self._capability = capability
+
+    def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the analytic SNGP regression predictive distribution.
+
+        For ``phi = feature_fn(x)`` (shape ``(batch, D)``):
+
+        * ``mean = phi @ output_weights`` — shape ``(batch, n_outputs)``.
+        * epistemic: per-sample scalar from the edward2 chol-solve formula
+          (``compute_predictive_covariance``:393-404)::
+
+              chol = cholesky(precision_matrix, lower=True)
+              y    = solve_triangular(chol, phi.T, lower=True)
+              q    = ridge_penalty * sum(y**2, axis=0)
+
+          equal to ``ridge_penalty * diag(phi @ inv(precision) @ phi.T)`` but
+          computed via the stabler triangular solve. Broadcast over outputs.
+        * aleatoric: ``observation_noise_variance`` broadcast to
+          ``(batch, n_outputs)``.
+        * ``total_uncertainty = epistemic + aleatoric`` (also ``variance``).
+        * ``samples = mean[None, ...]`` — one representative draw.
+
+        This adapter emits the regression mean + variance form (consistent with
+        the other model adapters). The classification mean-field-logit
+        adjustment is available as :func:`sngp_mean_field_logits` but is NOT
+        applied here (binding rule 4): there is intentionally no fabricated
+        classification path.
+        """
+        phi = self._state.feature_fn(x)
+        mean = phi @ self._state.output_weights
+        # edward2 compute_predictive_covariance: chol-solve diagonal.
+        chol = jax.scipy.linalg.cholesky(self._state.precision_matrix, lower=True)
+        y = jax.scipy.linalg.solve_triangular(chol, phi.T, lower=True)
+        epistemic_scalar = self._state.ridge_penalty * jnp.sum(y**2, axis=0)
+        return _gaussian_linear_head_predictive(
+            mean,
+            epistemic_scalar,
+            self._state.observation_noise_variance,
+            capability=self._capability,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Adapters (the objects with ``.wrap(model, capability) -> Wrapped*``)
 # ---------------------------------------------------------------------------
@@ -549,7 +821,7 @@ class ModelUncertaintyAdapter:
                 f"{DefaultStrategy.DETERMINISTIC!r}; got "
                 f"{capability.default_strategy!r}. Use a real adapter "
                 f"(DeepEnsembleAdapter / MCDropoutAdapter / LaplaceAdapterSpec / "
-                f"BayesianLastLayerAdapter / VBLLAdapter / SNGPAdapterSpec) "
+                f"BayesianLastLayerAdapter / VBLLAdapter / SNGPAdapter) "
                 f"to advertise epistemic uncertainty."
             )
         return _WrappedDeterministicModel(model=model, capability=capability)
@@ -708,17 +980,47 @@ class DUEAdapter:
         return _WrappedDUEModel(state=model, capability=capability)
 
 
-# ---------------------------------------------------------------------------
-# Spec stubs for deferred backends
-# ---------------------------------------------------------------------------
-
-
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class SNGPAdapterSpec(_DeferredAdapterSpec):
-    """Spectral-Normalized Neural Gaussian Process last layer."""
+class SNGPAdapter:
+    """SNGP adapter — RFF + Laplace-GP last layer, single forward pass.
 
-    default_strategy: DefaultStrategy = DefaultStrategy.SNGP
-    required_capabilities: tuple[str, ...] = ("native_nnx_module",)
+    Wraps an ALREADY-FITTED Spectral-normalized Neural Gaussian Process last
+    layer (Liu et al. 2020). A FIXED random-Fourier-feature map ``phi(x)``
+    feeds a Laplace-approximated GP head whose predictive variance is a
+    distance-aware uncertainty signal. A single forward pass yields the
+    predictive mean ``phi @ output_weights`` and the per-sample epistemic
+    variance via the edward2 Cholesky-solve diagonal; the
+    mean/epistemic/aleatoric/total assembly is delegated to the SHARED
+    :func:`_gaussian_linear_head_predictive` helper (Rule 1: DRY), exactly as
+    :class:`BayesianLastLayerAdapter` and :class:`VBLLAdapter` do.
+
+    **Scope (bounded honestly).** This adapter does NOT train the feature map
+    or fit the precision matrix. The RFF map is fixed; the Laplace precision is
+    built once via :func:`fit_sngp_precision` (a faithful edward2 port) and
+    passed through :class:`SNGPState`. The adapter emits a regression mean +
+    variance predictive (consistent with the other model adapters); the
+    classification mean-field-logit adjustment is exposed honestly as
+    :func:`sngp_mean_field_logits` but is NOT applied in the predict path.
+
+    References
+    ----------
+    * Liu, J. et al. 2020 — *Simple and Principled Uncertainty Estimation with
+      Deterministic Deep Learning via Distance Awareness* (SNGP),
+      arXiv:2006.10108.
+    * JAX reference (ported, not invented): ``LaplaceRandomFeatureCovariance``
+      (``../edward2/edward2/jax/nn/random_feature.py``:217-405) and
+      ``mean_field_logits`` (``../edward2/edward2/jax/nn/utils.py``:54-101).
+    """
+
+    def wrap(self, model: SNGPState, capability: UQCapability) -> _WrappedSNGPModel:
+        """Wrap an :class:`SNGPState`; rejects any non-``SNGP`` capability."""
+        if capability.default_strategy is not DefaultStrategy.SNGP:
+            raise ValueError(
+                f"SNGPAdapter requires default_strategy="
+                f"{DefaultStrategy.SNGP!r}; got "
+                f"{capability.default_strategy!r}."
+            )
+        return _WrappedSNGPModel(state=model, capability=capability)
 
 
 __all__ = [
@@ -729,7 +1031,10 @@ __all__ = [
     "MCDropoutAdapter",
     "MCDropoutState",
     "ModelUncertaintyAdapter",
-    "SNGPAdapterSpec",
+    "SNGPAdapter",
+    "SNGPState",
     "VBLLAdapter",
     "VBLLState",
+    "fit_sngp_precision",
+    "sngp_mean_field_logits",
 ]

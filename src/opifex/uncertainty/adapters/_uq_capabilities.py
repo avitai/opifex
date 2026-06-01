@@ -153,9 +153,13 @@ _SNGP_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.SNGP,
     source_package="opifex",
     notes=(
-        "SNGPAdapterSpec — Spectral-Normalized Neural Gaussian Process "
-        "last layer (Liu et al. NeurIPS 2020) for distance-aware "
-        "uncertainty and OOD detection."
+        "SNGPAdapter — Spectral-Normalized Neural Gaussian Process last "
+        "layer (Liu et al. NeurIPS 2020) for distance-aware uncertainty "
+        "and OOD detection. Wraps a fitted fixed-RFF feature map + "
+        "last-layer weights + Laplace precision matrix (built via "
+        "fit_sngp_precision, a faithful edward2 port); the regression "
+        "predictive reuses the shared Gaussian-linear-head assembly with "
+        "epistemic variance from the edward2 chol-solve diagonal."
     ),
 )
 
@@ -375,7 +379,7 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     "adapter:LaplaceAdapterSpec": _LAPLACE_ADAPTER_CAPABILITY,
     "adapter:MCDropoutAdapter": _MC_DROPOUT_ADAPTER_CAPABILITY,
     "adapter:BayesianLastLayerAdapter": _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY,
-    "adapter:SNGPAdapterSpec": _SNGP_ADAPTER_CAPABILITY,
+    "adapter:SNGPAdapter": _SNGP_ADAPTER_CAPABILITY,
     "adapter:VBLLAdapter": _VBLL_ADAPTER_CAPABILITY,
     # Phase 4 ensemble adapter specs.
     "adapter:DeepEnsembleAdapter": _DEEP_ENSEMBLE_ADAPTER_CAPABILITY,
