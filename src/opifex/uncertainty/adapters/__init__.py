@@ -34,7 +34,8 @@ from opifex.uncertainty.adapters.model import (
     MCDropoutState,
     ModelUncertaintyAdapter,
     SNGPAdapterSpec,
-    VBLLAdapterSpec,
+    VBLLAdapter,
+    VBLLState,
 )
 from opifex.uncertainty.adapters.operators import (
     DeepONetConformalAdapterSpec,
@@ -89,5 +90,6 @@ __all__ = [
     "SnapshotEnsembleState",
     "TestTimeAugmentationAdapterSpec",
     "TinygpAdapterSpec",
-    "VBLLAdapterSpec",
+    "VBLLAdapter",
+    "VBLLState",
 ]

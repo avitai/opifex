@@ -1,10 +1,10 @@
 """Concrete model-uncertainty adapters for deterministic-model UQ.
 
-Includes deterministic, MC-dropout, and Bayesian-last-layer adapters,
-plus the deferred SNGP / VBLL specs. The concrete diagonal-Laplace
-adapter (``LaplaceAdapterSpec`` + ``LaplaceState``) lives in
-:mod:`opifex.uncertainty.curvature.laplace` — it is co-located with the
-curvature primitives it consumes.
+Includes deterministic, MC-dropout, Bayesian-last-layer, and
+Variational-Bayesian-last-layer (VBLL) adapters, plus the deferred SNGP
+spec. The concrete diagonal-Laplace adapter (``LaplaceAdapterSpec`` +
+``LaplaceState``) lives in :mod:`opifex.uncertainty.curvature.laplace` —
+it is co-located with the curvature primitives it consumes.
 
 The deterministic adapter is the bookkeeping wrapper that produces a
 zero-epistemic :class:`PredictiveDistribution` from a deterministic
@@ -12,15 +12,24 @@ callable. The MC-dropout adapter exposes a stochastic model through
 caller-owned ``nnx.Rngs`` — no hidden dropout seed — and returns the
 sample-mean and sample-variance.
 
-The :class:`BayesianLastLayerAdapter` applies a Bayesian treatment to
-ONLY the final linear layer over frozen backbone features ``phi(x)``.
-A Gaussian posterior ``N(weight_mean, weight_covariance)`` over the
-last-layer weights yields a CLOSED-FORM (analytic) predictive — no
-Monte-Carlo sampling. This is the GLM / linearised-Laplace pushforward
-for a linear head, equivalently the neural-linear model. It is DISTINCT
-from the full-network diagonal-Laplace adapter in
-:mod:`opifex.uncertainty.curvature.laplace`, which Monte-Carlo-samples
-parameters; this adapter evaluates the analytic last-layer predictive.
+The :class:`BayesianLastLayerAdapter` and :class:`VBLLAdapter` both
+apply a Gaussian-posterior treatment to ONLY the final linear layer
+over frozen backbone features ``phi(x)`` and share the same
+closed-form Gaussian-linear-head predictive assembly
+(:func:`_gaussian_linear_head_predictive`). They differ only in how the
+epistemic term is parameterised:
+
+* :class:`BayesianLastLayerAdapter` carries a full SPD covariance
+  ``Sigma`` and computes ``phi Sigma phi^T`` directly — the GLM /
+  linearised-Laplace pushforward for a linear head (the neural-linear
+  model). It is DISTINCT from the full-network diagonal-Laplace adapter
+  in :mod:`opifex.uncertainty.curvature.laplace`, which
+  Monte-Carlo-samples parameters; this adapter evaluates the analytic
+  last-layer predictive.
+* :class:`VBLLAdapter` carries the lower-triangular Cholesky factor
+  ``L`` of ``Sigma = L L^T`` and computes the per-sample epistemic
+  scalar as ``sum((phi @ L)**2)`` — the numerically stabler L-form used
+  by the JAX reference's ``DenseNormal.covariance_weighted_inner_prod``.
 
 References for the Bayesian-last-layer predictive:
 
@@ -33,8 +42,15 @@ References for the Bayesian-last-layer predictive:
 * GLM / linearised pushforward output covariance ``J Sigma J^T``:
   ``../laplax/laplax/eval/pushforward.py``.
 
-Spec dataclasses for backends that are not yet wired (SNGP, VBLL)
-declare their capability metadata and raise an actionable
+References for the VBLL predictive:
+
+* Harrison, J., Willes, J. & Snoek, J. 2024 — *Variational Bayesian Last
+  Layers*, arXiv:2404.11599.
+* JAX reference (regression only): ``../vbll/vbll/jax/layers/regression.py``
+  and ``../vbll/vbll/jax/utils/distributions.py`` (``DenseNormal``).
+
+Spec dataclasses for backends that are not yet wired (SNGP) declare
+their capability metadata and raise an actionable
 :class:`NotImplementedError` from ``wrap`` until the underlying
 implementation lands.
 """
@@ -144,6 +160,61 @@ class _FeatureFnProtocol(Protocol):
     def __call__(self, x: jax.Array) -> jax.Array: ...
 
 
+def _gaussian_linear_head_predictive(
+    mean: jax.Array,
+    epistemic_scalar: jax.Array,
+    observation_noise_variance: float,
+    *,
+    capability: UQCapability,
+    num_samples: int = 1,
+) -> PredictiveDistribution:
+    """Assemble the closed-form Gaussian-linear-head predictive.
+
+    Single source of truth shared by :class:`_WrappedBayesianLastLayerModel`
+    and :class:`_WrappedVBLLModel`. Each wrapper computes its own
+    per-sample epistemic variance scalar (BLL: ``phi Sigma phi^T`` via
+    ``einsum``; VBLL: ``sum((phi @ L)**2)``) and delegates the common
+    ``PredictiveDistribution`` construction here, so the
+    mean/epistemic/aleatoric/total/samples/metadata assembly lives in one
+    place (Rule 1: DRY).
+
+    Args:
+        mean: Predictive mean ``phi @ weight_mean`` of shape
+            ``(batch, n_outputs)``.
+        epistemic_scalar: Per-sample epistemic *variance* scalar of shape
+            ``(batch,)`` (equals ``phi Sigma phi^T``). Broadcast over the
+            ``n_outputs`` axis.
+        observation_noise_variance: Aleatoric noise variance ``sigma^2``
+            (``>= 0``), broadcast to ``(batch, n_outputs)``.
+        capability: Declared UQ capability — supplies the ``method`` +
+            ``source_package`` provenance metadata.
+        num_samples: Number of representative draws recorded in metadata
+            (the closed-form predictive emits the mean as a single draw).
+
+    Returns:
+        A :class:`PredictiveDistribution` with ``variance ==
+        total_uncertainty == epistemic + aleatoric`` and
+        ``samples = mean[None, ...]``.
+    """
+    ones = jnp.ones((1, mean.shape[-1]))
+    epistemic = epistemic_scalar[:, None] * ones
+    aleatoric = observation_noise_variance * jnp.ones_like(mean)
+    total_uncertainty = epistemic + aleatoric
+    return PredictiveDistribution(
+        mean=mean,
+        samples=mean[None, ...],
+        variance=total_uncertainty,
+        epistemic=epistemic,
+        aleatoric=aleatoric,
+        total_uncertainty=total_uncertainty,
+        metadata=compose_method_metadata(
+            method=capability.default_strategy.value,
+            source_package=capability.source_package,
+            extra=(("num_samples", num_samples),),
+        ),
+    )
+
+
 @struct.dataclass(slots=True, kw_only=True)
 class BayesianLastLayerState:
     """Fitted-state pytree for the Bayesian-last-layer predictive.
@@ -222,26 +293,132 @@ class _WrappedBayesianLastLayerModel:
           ``(batch, n_outputs)``.
         * ``total_uncertainty = epistemic + aleatoric`` (also ``variance``).
         * ``samples = mean[None, ...]`` — one representative draw.
+
+        The mean/epistemic/aleatoric/total assembly is delegated to the
+        shared :func:`_gaussian_linear_head_predictive` helper; only the
+        epistemic ``phi Sigma phi^T`` quadratic is computed here.
         """
         phi = self._state.feature_fn(x)
         mean = phi @ self._state.weight_mean
-        ones = jnp.ones((1, mean.shape[-1]))
-        quadratic = jnp.einsum("bi,ij,bj->b", phi, self._state.weight_covariance, phi)
-        epistemic = quadratic[:, None] * ones
-        aleatoric = self._state.observation_noise_variance * jnp.ones_like(mean)
-        total_uncertainty = epistemic + aleatoric
-        return PredictiveDistribution(
-            mean=mean,
-            samples=mean[None, ...],
-            variance=total_uncertainty,
-            epistemic=epistemic,
-            aleatoric=aleatoric,
-            total_uncertainty=total_uncertainty,
-            metadata=compose_method_metadata(
-                method=self._capability.default_strategy.value,
-                source_package=self._capability.source_package,
-                extra=(("num_samples", 1),),
-            ),
+        epistemic_scalar = jnp.einsum("bi,ij,bj->b", phi, self._state.weight_covariance, phi)
+        return _gaussian_linear_head_predictive(
+            mean,
+            epistemic_scalar,
+            self._state.observation_noise_variance,
+            capability=self._capability,
+        )
+
+
+@struct.dataclass(slots=True, kw_only=True)
+class VBLLState:
+    """Fitted-state pytree for the Variational-Bayesian-last-layer predictive.
+
+    Bundles a frozen feature backbone with a Gaussian variational
+    posterior ``q(W) = N(weight_mean, Sigma_W)`` over the final linear
+    layer's input weights, where ``Sigma_W = L L^T`` and ``L`` is the
+    lower-triangular Cholesky factor ``weight_covariance_cholesky``.
+    Carrying ``L`` (rather than the dense ``Sigma``) matches the JAX
+    reference's ``DenseNormal`` parameterisation
+    (``../vbll/vbll/jax/utils/distributions.py:128-130``) and keeps the
+    epistemic computation numerically stable.
+
+    Attributes:
+        feature_fn: Frozen deterministic backbone ``x -> phi(x)`` with
+            ``phi`` of shape ``(batch, n_features)``. Static (not a
+            pytree leaf).
+        weight_mean: Posterior mean of the last-layer weights with shape
+            ``(n_features, n_outputs)`` (a pytree leaf).
+        weight_covariance_cholesky: Lower-triangular Cholesky factor
+            ``L`` of the shared posterior covariance ``Sigma_W = L L^T``
+            over the input weights, with shape
+            ``(n_features, n_features)`` (a pytree leaf).
+        observation_noise_variance: Aleatoric noise variance ``sigma^2``
+            (``>= 0``), broadcast over outputs. Static aux_data so it can
+            serve as a JIT-cache key.
+        metadata: Immutable, hashable static aux_data.
+    """
+
+    feature_fn: _FeatureFnProtocol = struct.field(pytree_node=False)
+    weight_mean: jax.Array = struct.field()
+    weight_covariance_cholesky: jax.Array = struct.field()
+    observation_noise_variance: float = struct.field(pytree_node=False, default=0.0)
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
+
+    def validate(self) -> None:
+        """Public hook; never called from ``__post_init__``/``tree_unflatten``."""
+        cholesky = self.weight_covariance_cholesky
+        cholesky_shape = cholesky.shape
+        if cholesky.ndim != 2 or cholesky_shape[0] != cholesky_shape[1]:
+            raise ValueError(
+                "VBLLState.weight_covariance_cholesky must be a square "
+                f"(n_features, n_features) matrix; got shape {cholesky_shape}."
+            )
+        if not bool(jnp.allclose(cholesky, jnp.tril(cholesky))):
+            raise ValueError(
+                "VBLLState.weight_covariance_cholesky must be lower-triangular "
+                "(it is the Cholesky factor L of Sigma_W = L @ L.T)."
+            )
+        n_features = self.weight_mean.shape[0]
+        if cholesky_shape[0] != n_features:
+            raise ValueError(
+                "VBLLState.weight_covariance_cholesky dimension "
+                f"{cholesky_shape[0]} must equal weight_mean.shape[0]="
+                f"{n_features}."
+            )
+        if self.observation_noise_variance < 0.0:
+            raise ValueError(
+                "VBLLState.observation_noise_variance must be "
+                f">= 0; got {self.observation_noise_variance!r}."
+            )
+
+
+class _WrappedVBLLModel:
+    """Bookkeeping wrapper around a fitted VBLL variational posterior.
+
+    Evaluates the CLOSED-FORM (analytic) regression predictive of the
+    Variational Bayesian Last Layer over frozen backbone features. This
+    matches the JAX reference's regression predictive; classification
+    (MC-softmax marginalization) is out of scope — see :class:`VBLLAdapter`.
+    """
+
+    def __init__(self, state: VBLLState, capability: UQCapability) -> None:
+        self._state = state
+        self._capability = capability
+
+    def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the analytic VBLL regression predictive distribution.
+
+        For ``phi = feature_fn(x)`` (shape ``(batch, n_features)``) and the
+        lower-triangular Cholesky factor ``L`` of ``Sigma_W = L L^T``:
+
+        * ``mean = phi @ weight_mean`` — shape ``(batch, n_outputs)``.
+        * epistemic: per-sample scalar ``q[b] = sum_k ((L^T phi[b])_k)**2``
+          computed as ``Lt_phi = phi @ L``;
+          ``epistemic_scalar = sum(Lt_phi**2, axis=-1)`` — the
+          ``DenseNormal.covariance_weighted_inner_prod`` form
+          (``../vbll/vbll/jax/utils/distributions.py:157-160``), equal to
+          ``phi Sigma_W phi^T`` but numerically stabler. Broadcast over
+          outputs.
+        * aleatoric: ``observation_noise_variance`` broadcast to
+          ``(batch, n_outputs)`` — the additive Gaussian ``noise()`` term
+          of the reference predictive
+          (``../vbll/vbll/jax/layers/regression.py:61-62``).
+        * ``total_uncertainty = epistemic + aleatoric`` (also ``variance``).
+        * ``samples = mean[None, ...]`` — one representative draw.
+
+        The mean/epistemic/aleatoric/total assembly is delegated to the
+        shared :func:`_gaussian_linear_head_predictive` helper.
+        """
+        phi = self._state.feature_fn(x)
+        mean = phi @ self._state.weight_mean
+        # L-form epistemic: covariance_weighted_inner_prod via L^T phi.
+        lt_phi = phi @ self._state.weight_covariance_cholesky
+        epistemic_scalar = jnp.sum(lt_phi**2, axis=-1)
+        return _gaussian_linear_head_predictive(
+            mean,
+            epistemic_scalar,
+            self._state.observation_noise_variance,
+            capability=self._capability,
         )
 
 
@@ -270,7 +447,7 @@ class ModelUncertaintyAdapter:
                 f"{DefaultStrategy.DETERMINISTIC!r}; got "
                 f"{capability.default_strategy!r}. Use a real adapter "
                 f"(DeepEnsembleAdapter / MCDropoutAdapter / LaplaceAdapterSpec / "
-                f"BayesianLastLayerAdapter / SNGPAdapterSpec / VBLLAdapterSpec) "
+                f"BayesianLastLayerAdapter / VBLLAdapter / SNGPAdapterSpec) "
                 f"to advertise epistemic uncertainty."
             )
         return _WrappedDeterministicModel(model=model, capability=capability)
@@ -353,6 +530,45 @@ class BayesianLastLayerAdapter:
         return _WrappedBayesianLastLayerModel(state=model, capability=capability)
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class VBLLAdapter:
+    """Variational Bayesian Last Layer adapter — analytic regression predictive.
+
+    Applies a variational Bayesian treatment to ONLY the final linear
+    layer over frozen backbone features ``phi(x)``. A Gaussian
+    variational posterior ``q(W) = N(weight_mean, L L^T)`` over the
+    last-layer weights yields a CLOSED-FORM (analytic) regression
+    predictive — no Monte-Carlo sampling. The epistemic term uses the
+    Cholesky L-form ``sum((phi @ L)**2)`` of
+    ``DenseNormal.covariance_weighted_inner_prod``.
+
+    **Scope (bounded honestly).** This is the regression closed-form
+    predictive matching the JAX reference. Classification (MC-softmax
+    marginalization) is OUT OF SCOPE for this adapter — the JAX reference
+    (``../vbll/vbll/jax/layers/regression.py``) implements regression
+    only. There is intentionally no classification path here.
+
+    References
+    ----------
+    * Harrison, J., Willes, J. & Snoek, J. 2024 — *Variational Bayesian
+      Last Layers*, arXiv:2404.11599.
+    * ``DenseNormal.covariance_weighted_inner_prod``:
+      ``../vbll/vbll/jax/utils/distributions.py:157-160``.
+    * Closed-form predictive ``(W() @ x).squeeze + noise()``:
+      ``../vbll/vbll/jax/layers/regression.py:61-62``.
+    """
+
+    def wrap(self, model: VBLLState, capability: UQCapability) -> _WrappedVBLLModel:
+        """Wrap a :class:`VBLLState`; rejects any non-``VBLL`` capability."""
+        if capability.default_strategy is not DefaultStrategy.VBLL:
+            raise ValueError(
+                f"VBLLAdapter requires default_strategy="
+                f"{DefaultStrategy.VBLL!r}; got "
+                f"{capability.default_strategy!r}."
+            )
+        return _WrappedVBLLModel(state=model, capability=capability)
+
+
 # ---------------------------------------------------------------------------
 # Spec stubs for deferred backends
 # ---------------------------------------------------------------------------
@@ -366,14 +582,6 @@ class SNGPAdapterSpec(_DeferredAdapterSpec):
     required_capabilities: tuple[str, ...] = ("native_nnx_module",)
 
 
-@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class VBLLAdapterSpec(_DeferredAdapterSpec):
-    """Variational Bayesian Last Layer."""
-
-    default_strategy: DefaultStrategy = DefaultStrategy.VBLL
-    required_capabilities: tuple[str, ...] = ("native_nnx_module",)
-
-
 __all__ = [
     "BayesianLastLayerAdapter",
     "BayesianLastLayerState",
@@ -381,5 +589,6 @@ __all__ = [
     "MCDropoutState",
     "ModelUncertaintyAdapter",
     "SNGPAdapterSpec",
-    "VBLLAdapterSpec",
+    "VBLLAdapter",
+    "VBLLState",
 ]

@@ -57,7 +57,8 @@ from opifex.uncertainty.adapters import (
     SWAGAdapter,
     SWAGState,
     TestTimeAugmentationAdapterSpec,
-    VBLLAdapterSpec,
+    VBLLAdapter,
+    VBLLState,
 )
 from opifex.uncertainty.curvature import (
     LaplaceAdapterSpec,
@@ -194,7 +195,8 @@ __all__ = [
     "UncertaintyAwareModule",
     "UncertaintyEstimator",
     "UnsupportedBackendError",
-    "VBLLAdapterSpec",
+    "VBLLAdapter",
+    "VBLLState",
     "VariationalModule",
     "diagonal_gaussian_kl",
     "diagonal_gaussian_log_prior",

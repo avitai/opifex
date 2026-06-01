@@ -166,9 +166,11 @@ _VBLL_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.VBLL,
     source_package="opifex",
     notes=(
-        "VBLLAdapterSpec — Variational Bayesian Last Layer (Harrison "
-        "et al. NeurIPS 2023). Probabilistic last layer with a "
-        "variational objective."
+        "VBLLAdapter — Variational Bayesian Last Layer (Harrison, Willes "
+        "& Snoek 2024, arXiv:2404.11599). Closed-form regression "
+        "predictive over a frozen backbone with a Gaussian variational "
+        "posterior q(W) = N(mean, L Lᵀ); epistemic via the Cholesky "
+        "L-form sum((phi @ L)**2). Regression only."
     ),
 )
 
@@ -370,7 +372,7 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     "adapter:MCDropoutAdapter": _MC_DROPOUT_ADAPTER_CAPABILITY,
     "adapter:BayesianLastLayerAdapter": _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY,
     "adapter:SNGPAdapterSpec": _SNGP_ADAPTER_CAPABILITY,
-    "adapter:VBLLAdapterSpec": _VBLL_ADAPTER_CAPABILITY,
+    "adapter:VBLLAdapter": _VBLL_ADAPTER_CAPABILITY,
     # Phase 4 ensemble adapter specs.
     "adapter:DeepEnsembleAdapter": _DEEP_ENSEMBLE_ADAPTER_CAPABILITY,
     "adapter:SnapshotEnsembleAdapter": _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY,

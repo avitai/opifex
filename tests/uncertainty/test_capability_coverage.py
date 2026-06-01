@@ -167,7 +167,7 @@ _TASK_7_2_ADAPTER_NAMES: frozenset[str] = frozenset(
         "adapter:MCDropoutAdapter",
         "adapter:BayesianLastLayerAdapter",
         "adapter:SNGPAdapterSpec",
-        "adapter:VBLLAdapterSpec",
+        "adapter:VBLLAdapter",
         # Phase 4 ensemble adapter specs.
         "adapter:DeepEnsembleAdapter",
         "adapter:SnapshotEnsembleAdapter",
