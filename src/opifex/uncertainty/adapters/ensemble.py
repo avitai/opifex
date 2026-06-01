@@ -1,7 +1,10 @@
 """Ensemble adapters for deterministic-model UQ.
 
 Includes the deep-ensemble, snapshot-ensemble, SWAG, BatchEnsemble, and
-test-time-augmentation (TTA) adapters plus the DUE spec (deferred).
+test-time-augmentation (TTA) adapters. The DUE (Deterministic Uncertainty
+Estimation) adapter is concrete and lives in
+:mod:`opifex.uncertainty.adapters.model` alongside the other deep-kernel /
+last-layer adapters it shares the wrapped-model contract with.
 
 The deep / snapshot ensemble adapters aggregate the mean and (sample)
 variance across a fixed tuple of deterministic-member callables. SWAG
@@ -30,10 +33,6 @@ References:
     * Test-time augmentation — Wang, Aitchison, Rutherford, …, "Aleatoric
       uncertainty estimation with test-time augmentation for medical image
       segmentation with convolutional neural networks", Neurocomputing 2019.
-
-The DUE spec dataclass remains deferred: it declares its capability
-metadata and raises an actionable :class:`NotImplementedError` from
-``wrap`` until the underlying implementation lands.
 """
 
 from __future__ import annotations
@@ -46,7 +45,6 @@ import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 
-from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
@@ -505,14 +503,6 @@ class BatchEnsembleAdapter:
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class DUEAdapterSpec(_DeferredAdapterSpec):
-    """DUE: Deep kernel + spectral-normalized feature extractor + GP head."""
-
-    default_strategy: DefaultStrategy = DefaultStrategy.DUE
-    required_capabilities: tuple[str, ...] = ("native_nnx_module",)
-
-
-@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class TestTimeAugmentationAdapter:
     """Test-time augmentation: average predictions across input augmentations.
 
@@ -540,7 +530,6 @@ class TestTimeAugmentationAdapter:
 __all__ = [
     "BatchEnsembleAdapter",
     "BatchEnsembleState",
-    "DUEAdapterSpec",
     "DeepEnsembleAdapter",
     "DeepEnsembleState",
     "SWAGAdapter",

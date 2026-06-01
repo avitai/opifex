@@ -1,7 +1,7 @@
 """Shared base for deferred-backend adapter specs (pattern A).
 
 Every "deferred" adapter (Bayesian-last-layer, Laplace, SNGP, VBLL,
-Snapshot-ensemble, SWAG, BatchEnsemble, DUE, TTA) ships a frozen
+Snapshot-ensemble, SWAG, BatchEnsemble, TTA) ships a frozen
 dataclass that:
 
 * declares the :class:`DefaultStrategy` it represents,

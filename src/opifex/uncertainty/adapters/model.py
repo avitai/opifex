@@ -1,10 +1,11 @@
 """Concrete model-uncertainty adapters for deterministic-model UQ.
 
-Includes deterministic, MC-dropout, Bayesian-last-layer, and
-Variational-Bayesian-last-layer (VBLL) adapters, plus the deferred SNGP
-spec. The concrete diagonal-Laplace adapter (``LaplaceAdapterSpec`` +
-``LaplaceState``) lives in :mod:`opifex.uncertainty.curvature.laplace` —
-it is co-located with the curvature primitives it consumes.
+Includes deterministic, MC-dropout, Bayesian-last-layer,
+Variational-Bayesian-last-layer (VBLL), and DUE (Deterministic Uncertainty
+Estimation) adapters, plus the deferred SNGP spec. The concrete
+diagonal-Laplace adapter (``LaplaceAdapterSpec`` + ``LaplaceState``) lives in
+:mod:`opifex.uncertainty.curvature.laplace` — it is co-located with the
+curvature primitives it consumes.
 
 The deterministic adapter is the bookkeeping wrapper that produces a
 zero-epistemic :class:`PredictiveDistribution` from a deterministic
@@ -49,6 +50,33 @@ References for the VBLL predictive:
 * JAX reference (regression only): ``../vbll/vbll/jax/layers/regression.py``
   and ``../vbll/vbll/jax/utils/distributions.py`` (``DenseNormal``).
 
+The :class:`DUEAdapter` wraps an ALREADY-FITTED deep-kernel feature
+extractor + inducing-point sparse variational GP (SVGP). DUE (van Amersfoort
+et al. 2021) feeds a spectral-normalized / bi-Lipschitz feature map ``f(x)``
+into an SVGP and reads off the GP predictive mean + variance in a single
+forward pass. This adapter REUSES opifex's
+:func:`opifex.uncertainty.gp.predict_svgp` (the Titsias-collapsed SVGP
+predictive, grounded in GPJax's ``VariationalGaussian.predict``) over the
+features — it does NOT reimplement GP math. The adapter does NOT train the
+feature extractor either: the spectral-normalization / bi-Lipschitz feature
+training is upstream
+(:mod:`opifex.neural.operators.specialized.spectral_normalization` —
+``SpectralNorm`` / ``SpectralLinear``). The wrapped state carries the frozen
+feature map and the fitted :class:`opifex.uncertainty.gp.SVGPState` over the
+features; ``predict_distribution`` re-tags the SVGP predictive's provenance to
+the DUE strategy.
+
+References for the DUE predictive:
+
+* van Amersfoort, J., Smith, L., Jesson, A., Key, O. & Gal, Y. 2021 —
+  *On Feature Collapse and Deep Kernel Learning for Single Forward Pass
+  Uncertainty* (DUE), arXiv:2102.11409.
+* SVGP predictive reused as-is: :func:`opifex.uncertainty.gp.predict_svgp`
+  (Titsias 2009 collapsed SVGP, GPJax-grounded).
+* Spectral-normalization / bi-Lipschitz feature primitives (upstream, used
+  at TRAIN time):
+  :mod:`opifex.neural.operators.specialized.spectral_normalization`.
+
 Spec dataclasses for backends that are not yet wired (SNGP) declare
 their capability metadata and raise an actionable
 :class:`NotImplementedError` from ``wrap`` until the underlying
@@ -67,6 +95,7 @@ from flax import nnx, struct
 
 from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
 from opifex.uncertainty.adapters.base import compose_method_metadata
+from opifex.uncertainty.gp.svgp import predict_svgp, SVGPState
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
@@ -422,6 +451,79 @@ class _WrappedVBLLModel:
         )
 
 
+@struct.dataclass(slots=True, kw_only=True)
+class DUEState:
+    """Fitted-state pytree for the DUE predictive (deep kernel + SVGP).
+
+    Bundles a FROZEN deterministic feature extractor with the fitted
+    inducing-point sparse variational GP posterior over the FEATURES. DUE
+    (van Amersfoort et al. 2021, arXiv:2102.11409) feeds a spectral-normalized
+    / bi-Lipschitz feature map ``f(x)`` into an SVGP and reads off the GP
+    predictive mean + variance in a single forward pass.
+
+    The feature extractor is trained UPSTREAM (the spectral-normalization /
+    bi-Lipschitz training lives in
+    :mod:`opifex.neural.operators.specialized.spectral_normalization`); this
+    state carries the already-fitted ``feature_fn`` (static) and the
+    already-fitted :class:`opifex.uncertainty.gp.SVGPState` over the features
+    (a nested pytree leaf carrier, NOT static).
+
+    Attributes:
+        feature_fn: Frozen deterministic feature map ``x -> f(x)`` with
+            ``f(x)`` of shape ``(batch, n_features)``. Static (not a pytree
+            leaf): it carries no traced parameters at predict time.
+        svgp_state: The fitted :class:`opifex.uncertainty.gp.SVGPState` whose
+            posterior lives over the FEATURES ``f(x)``. A nested pytree node
+            (its Cholesky factors / inducing inputs / coefficient vector ride
+            ``jax.tree_util`` transforms).
+        metadata: Immutable, hashable static aux_data.
+    """
+
+    feature_fn: _FeatureFnProtocol = struct.field(pytree_node=False)
+    svgp_state: SVGPState = struct.field()
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
+
+
+class _WrappedDUEModel:
+    """Bookkeeping wrapper around a fitted DUE deep-kernel + SVGP posterior.
+
+    Evaluates the SVGP predictive over the frozen features in a single forward
+    pass and re-tags the predictive's provenance metadata to the DUE strategy.
+    The GP predictive is REUSED as-is from
+    :func:`opifex.uncertainty.gp.predict_svgp` (Titsias-collapsed SVGP); no GP
+    math is reimplemented here.
+    """
+
+    def __init__(self, state: DUEState, capability: UQCapability) -> None:
+        self._state = state
+        self._capability = capability
+
+    def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the SVGP-over-features predictive, re-tagged to DUE.
+
+        For ``features = feature_fn(x)`` (shape ``(batch, n_features)``):
+
+        * ``dist = predict_svgp(state=svgp_state, x_test=features)`` — the
+          Titsias-collapsed SVGP predictive mean / variance / epistemic.
+        * the returned distribution is IDENTICAL to ``dist`` in every array
+          field; only the static ``metadata`` tuple is re-stamped, advertising
+          ``method == "due"``, the DUE ``source_package``, and the inducing
+          count, via :func:`dataclasses.replace` (the typed equivalent of the
+          flax-struct ``.replace`` immutable update, which copies every array
+          field unchanged and re-stamps only metadata).
+        """
+        features = self._state.feature_fn(x)
+        dist = predict_svgp(state=self._state.svgp_state, x_test=features)
+        return dataclasses.replace(
+            dist,
+            metadata=compose_method_metadata(
+                method=self._capability.default_strategy.value,
+                source_package=self._capability.source_package,
+                extra=(("num_inducing", int(self._state.svgp_state.x_inducing.shape[0])),),
+            ),
+        )
+
+
 # ---------------------------------------------------------------------------
 # Adapters (the objects with ``.wrap(model, capability) -> Wrapped*``)
 # ---------------------------------------------------------------------------
@@ -569,6 +671,43 @@ class VBLLAdapter:
         return _WrappedVBLLModel(state=model, capability=capability)
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class DUEAdapter:
+    """DUE adapter — deep-kernel feature extractor + SVGP, single forward pass.
+
+    Wraps an ALREADY-FITTED frozen feature map ``f(x)`` and the fitted
+    inducing-point sparse variational GP posterior over the features. A single
+    forward pass yields the GP predictive mean + variance (van Amersfoort et
+    al. 2021). The GP predictive is REUSED from
+    :func:`opifex.uncertainty.gp.predict_svgp` (Titsias-collapsed SVGP,
+    GPJax-grounded) — no GP math is reimplemented.
+
+    **Scope (bounded honestly).** This adapter does NOT train the feature
+    extractor. The spectral-normalization / bi-Lipschitz feature training that
+    makes the deep kernel distance-aware is upstream
+    (:mod:`opifex.neural.operators.specialized.spectral_normalization` —
+    ``SpectralNorm`` / ``SpectralLinear``); the caller fits the feature map +
+    SVGP and passes both through :class:`DUEState`.
+
+    References
+    ----------
+    * van Amersfoort, J., Smith, L., Jesson, A., Key, O. & Gal, Y. 2021 —
+      *On Feature Collapse and Deep Kernel Learning for Single Forward Pass
+      Uncertainty* (DUE), arXiv:2102.11409.
+    * SVGP predictive reused as-is: :func:`opifex.uncertainty.gp.predict_svgp`.
+    """
+
+    def wrap(self, model: DUEState, capability: UQCapability) -> _WrappedDUEModel:
+        """Wrap a :class:`DUEState`; rejects any non-``DUE`` capability."""
+        if capability.default_strategy is not DefaultStrategy.DUE:
+            raise ValueError(
+                f"DUEAdapter requires default_strategy="
+                f"{DefaultStrategy.DUE!r}; got "
+                f"{capability.default_strategy!r}."
+            )
+        return _WrappedDUEModel(state=model, capability=capability)
+
+
 # ---------------------------------------------------------------------------
 # Spec stubs for deferred backends
 # ---------------------------------------------------------------------------
@@ -585,6 +724,8 @@ class SNGPAdapterSpec(_DeferredAdapterSpec):
 __all__ = [
     "BayesianLastLayerAdapter",
     "BayesianLastLayerState",
+    "DUEAdapter",
+    "DUEState",
     "MCDropoutAdapter",
     "MCDropoutState",
     "ModelUncertaintyAdapter",

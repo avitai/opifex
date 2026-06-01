@@ -240,9 +240,11 @@ _DUE_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.DUE,
     source_package="opifex",
     notes=(
-        "DUEAdapterSpec — Deterministic Uncertainty Estimation (van "
-        "Amersfoort et al. ICML 2021). Deep kernel + spectral "
-        "normalization for distance-aware uncertainty."
+        "DUEAdapter — Deterministic Uncertainty Estimation (van "
+        "Amersfoort et al. ICML 2021). Wraps a fitted spectral-normalized "
+        "deep-kernel feature extractor + inducing-point SVGP; reuses "
+        "opifex.uncertainty.gp.predict_svgp for the single-forward-pass "
+        "distance-aware predictive."
     ),
 )
 
@@ -380,7 +382,7 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     "adapter:SnapshotEnsembleAdapter": _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY,
     "adapter:SWAGAdapter": _SWAG_ADAPTER_CAPABILITY,
     "adapter:BatchEnsembleAdapter": _BATCH_ENSEMBLE_ADAPTER_CAPABILITY,
-    "adapter:DUEAdapterSpec": _DUE_ADAPTER_CAPABILITY,
+    "adapter:DUEAdapter": _DUE_ADAPTER_CAPABILITY,
     "adapter:TestTimeAugmentationAdapter": _TTA_ADAPTER_CAPABILITY,
     # Phase 4 calibration / conformal concrete calibrators.
     "calibration:TemperatureScaling": _TEMPERATURE_SCALING_CAPABILITY,
