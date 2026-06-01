@@ -24,6 +24,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import pytest
+from flax import nnx
 
 from opifex.uncertainty.adapters import (
     DeepONetConformalAdapterSpec,
@@ -32,9 +33,11 @@ from opifex.uncertainty.adapters import (
     FNOConformalAdapterSpec,
     FNODeepEnsembleAdapterSpec,
     FNOMCDropoutAdapterSpec,
+    MCDropoutState,
     OperatorAdapterSpec,
 )
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.uncertainty.types import metadata_to_dict, PredictiveDistribution
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +58,21 @@ _DEEPONET_SPECS: tuple[tuple[type, DefaultStrategy, str], ...] = (
 )
 
 _ALL_OPERATOR_SPECS = _FNO_SPECS + _DEEPONET_SPECS
+
+# Conformal specs redirect to the dedicated conformal path (FieldSplitConformalRegressor
+# / UQNO); ensemble + MC-dropout specs wire to the concrete adapters.
+_CONFORMAL_SPECS: tuple[tuple[type, DefaultStrategy, str], ...] = (
+    (FNOConformalAdapterSpec, DefaultStrategy.CONFORMAL, "fno"),
+    (DeepONetConformalAdapterSpec, DefaultStrategy.CONFORMAL, "deeponet"),
+)
+_ENSEMBLE_SPECS: tuple[tuple[type, str, tuple[int, ...], tuple[int, ...] | None], ...] = (
+    (FNODeepEnsembleAdapterSpec, "fno", (1, 2), (1, 2)),
+    (DeepONetDeepEnsembleAdapterSpec, "deeponet", (1,), None),
+)
+_MCDROPOUT_SPECS: tuple[tuple[type, str, tuple[int, ...], tuple[int, ...] | None], ...] = (
+    (FNOMCDropoutAdapterSpec, "fno", (1, 2), (1, 2)),
+    (DeepONetMCDropoutAdapterSpec, "deeponet", (1,), None),
+)
 
 
 @pytest.mark.parametrize(("spec_cls", "expected_strategy", "expected_family"), _ALL_OPERATOR_SPECS)
@@ -145,15 +163,20 @@ def test_operator_adapter_capability_flags_match_strategy(
 
 
 # ---------------------------------------------------------------------------
-# Unsupported-backend errors
+# CONFORMAL: redirect to the dedicated conformal path (honest boundary)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("spec_cls", "_strategy", "expected_family"), _ALL_OPERATOR_SPECS)
-def test_operator_adapter_wrap_raises_named_unsupported_error(
+@pytest.mark.parametrize(("spec_cls", "_strategy", "expected_family"), _CONFORMAL_SPECS)
+def test_conformal_operator_wrap_redirects_to_conformal_path(
     spec_cls: type, _strategy: DefaultStrategy, expected_family: str
 ) -> None:
-    """Until wired to a real adapter, ``wrap`` must name the missing backend."""
+    """Conformal operator UQ uses calibration data, not the ``wrap`` contract.
+
+    ``wrap`` raises an actionable error redirecting callers to the dedicated
+    conformal calibrators (field split-conformal / UQNO), naming the operator
+    family + the conformal strategy + the calibrator surfaces to use.
+    """
     spec: Any = spec_cls()
     capability = spec.recommended_capability()
     with pytest.raises(NotImplementedError) as exc_info:
@@ -161,6 +184,9 @@ def test_operator_adapter_wrap_raises_named_unsupported_error(
     message = str(exc_info.value)
     assert expected_family in message
     assert spec.default_strategy.value in message
+    # Redirect must name the concrete conformal surfaces, not a generic stub.
+    assert "FieldSplitConformalRegressor" in message
+    assert "UncertaintyQuantificationNeuralOperator" in message
 
 
 def test_operator_adapter_wrap_rejects_native_bayesian_capability() -> None:
@@ -174,6 +200,150 @@ def test_operator_adapter_wrap_rejects_native_bayesian_capability() -> None:
     )
     with pytest.raises(ValueError, match="native_bayesian"):
         spec.wrap(model=lambda x: x, capability=bogus_capability)
+
+
+# ---------------------------------------------------------------------------
+# ENSEMBLE: wire to DeepEnsembleAdapter + enrich function-space metadata
+# ---------------------------------------------------------------------------
+
+
+def _sum_operator(x: jax.Array) -> jax.Array:
+    """Tiny operator stand-in: reduce the channel axis (keepdims)."""
+    return jnp.sum(x, axis=-1, keepdims=True)
+
+
+def _scaled_sum_operator(x: jax.Array) -> jax.Array:
+    """Second ensemble member with a different output (non-zero spread)."""
+    return 2.0 * jnp.sum(x, axis=-1, keepdims=True)
+
+
+@pytest.mark.parametrize(
+    ("spec_cls", "expected_family", "expected_spatial", "expected_spectral"), _ENSEMBLE_SPECS
+)
+def test_ensemble_operator_wrap_delegates_and_enriches_metadata(
+    spec_cls: type,
+    expected_family: str,
+    expected_spatial: tuple[int, ...],
+    expected_spectral: tuple[int, ...] | None,
+) -> None:
+    """FNO/DeepONet + ENSEMBLE wraps a member tuple and records function-space provenance.
+
+    Mean equals the member-mean; epistemic spread is positive; metadata
+    carries ``operator_family`` / ``spatial_axes`` (+ ``spectral_axes`` for
+    FNO) and the ensemble method tag from the delegated adapter.
+    """
+    spec: Any = spec_cls()
+    capability = spec.recommended_capability()
+    members = (_sum_operator, _scaled_sum_operator)
+    wrapped = spec.wrap(model=members, capability=capability)
+
+    x = jnp.arange(2 * 3, dtype=jnp.float32).reshape(2, 3)
+    dist = wrapped.predict_distribution(x)
+    assert isinstance(dist, PredictiveDistribution)
+
+    member_mean = 0.5 * (_sum_operator(x) + _scaled_sum_operator(x))
+    assert jnp.allclose(dist.mean, member_mean)
+    assert dist.epistemic is not None
+    assert float(jnp.sum(dist.epistemic)) > 0.0
+
+    meta = metadata_to_dict(dist.metadata)
+    assert meta["method"] == "ensemble"
+    assert meta["operator_family"] == expected_family
+    assert meta["spatial_axes"] == expected_spatial
+    if expected_spectral is None:
+        assert meta.get("spectral_axes") is None
+    else:
+        assert meta["spectral_axes"] == expected_spectral
+    # Function-space provenance + the delegated adapter's bookkeeping coexist.
+    assert "supported_metrics" in meta
+    assert int(meta["num_members"]) == 2
+
+
+def test_ensemble_operator_wrap_rejects_wrong_capability_strategy() -> None:
+    """A capability whose strategy is not ENSEMBLE is rejected by the delegate."""
+    spec = FNODeepEnsembleAdapterSpec()
+    wrong = UQCapability(
+        default_strategy=DefaultStrategy.MC_DROPOUT,
+        supports_function_space=True,
+        supports_ensemble=True,
+    )
+    with pytest.raises(ValueError, match="ENSEMBLE"):
+        spec.wrap(model=(_sum_operator, _scaled_sum_operator), capability=wrong)
+
+
+# ---------------------------------------------------------------------------
+# MC_DROPOUT: wire to MCDropoutAdapter + enrich function-space metadata
+# ---------------------------------------------------------------------------
+
+
+def test_mc_dropout_operator_wrap_delegates_and_preserves_rngs() -> None:
+    """FNO + MC_DROPOUT wraps an ``MCDropoutState``; predict-time rngs are caller-owned."""
+    spec = FNOMCDropoutAdapterSpec()
+    capability = spec.recommended_capability()
+
+    def stochastic_operator(x: jax.Array, *, rngs: nnx.Rngs) -> jax.Array:
+        noise = jax.random.normal(rngs.dropout(), (*x.shape[:-1], 1))
+        return jnp.sum(x, axis=-1, keepdims=True) + noise
+
+    state = MCDropoutState(model_fn=stochastic_operator, num_samples=8)
+    wrapped = spec.wrap(model=state, capability=capability)
+
+    x = jnp.ones((2, 3), dtype=jnp.float32)
+    dist = wrapped.predict_distribution(x, rngs=nnx.Rngs(dropout=7))
+    assert isinstance(dist, PredictiveDistribution)
+    assert dist.epistemic is not None
+    assert float(jnp.sum(dist.epistemic)) > 0.0
+
+    meta = metadata_to_dict(dist.metadata)
+    assert meta["method"] == "mc_dropout"
+    assert meta["operator_family"] == "fno"
+    assert meta["spatial_axes"] == (1, 2)
+    assert meta["spectral_axes"] == (1, 2)
+    assert int(meta["num_samples"]) == 8
+
+
+def test_mc_dropout_operator_wrap_requires_rngs_at_predict_time() -> None:
+    """Predict-time ``rngs`` is mandatory — calling without it raises ``TypeError``."""
+    spec = DeepONetMCDropoutAdapterSpec()
+    capability = spec.recommended_capability()
+
+    def stochastic_operator(x: jax.Array, *, rngs: nnx.Rngs) -> jax.Array:
+        return jnp.sum(x, axis=-1, keepdims=True) + jax.random.normal(rngs.dropout(), (x.shape[0], 1))
+
+    state = MCDropoutState(model_fn=stochastic_operator, num_samples=4)
+    wrapped = spec.wrap(model=state, capability=capability)
+    with pytest.raises(TypeError):
+        wrapped.predict_distribution(jnp.ones((2, 3)))  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# JAX/NNX transform compatibility for the wired ensemble path (REQUIRED)
+# ---------------------------------------------------------------------------
+
+
+def test_ensemble_operator_wrap_predict_is_jit_grad_vmap_compatible() -> None:
+    """The wired ensemble ``predict_distribution`` composes with jit / grad / vmap."""
+    spec = FNODeepEnsembleAdapterSpec()
+    capability = spec.recommended_capability()
+    wrapped = spec.wrap(model=(_sum_operator, _scaled_sum_operator), capability=capability)
+
+    def mean_sum(x: jax.Array) -> jax.Array:
+        return jnp.sum(wrapped.predict_distribution(x).mean)
+
+    x = jnp.ones((2, 3), dtype=jnp.float32)
+
+    # jit
+    jitted = jax.jit(mean_sum)
+    assert bool(jnp.isfinite(jitted(x)))
+    # grad
+    grad_value = jax.grad(mean_sum)(x)
+    assert grad_value.shape == x.shape
+    assert bool(jnp.all(jnp.isfinite(grad_value)))
+    # vmap over a leading ensemble-of-batches axis
+    batched = jnp.stack([x, 2.0 * x], axis=0)
+    vmapped = jax.vmap(lambda b: wrapped.predict_distribution(b).mean)(batched)
+    assert vmapped.shape[0] == 2
+    assert bool(jnp.all(jnp.isfinite(vmapped)))
 
 
 # ---------------------------------------------------------------------------
