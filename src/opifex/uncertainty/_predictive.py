@@ -101,6 +101,68 @@ def sample_based_predictive(
     )
 
 
+def ensemble_predictive(
+    samples: jax.Array,
+    *,
+    method: str,
+    source_package: str = "opifex",
+    extra_metadata: MetadataItems = (),
+    include_zero_aleatoric: bool = False,
+) -> PredictiveDistribution:
+    """Aggregate a stack of member predictions into a :class:`PredictiveDistribution`.
+
+    Members live on ``axis=0`` (shape ``(num_members, batch, ...)``). The
+    predictive mean and (sample) variance are taken across that member axis;
+    the variance is reported as the marginal ``variance`` *and* the
+    ``epistemic`` / ``total_uncertainty`` components — the deep-ensemble
+    member-aggregation contract. This is the single source of truth for every
+    "stack-of-predictions → epistemic-decomposed predictive" site (the ensemble
+    model adapters and the quantum-chemistry UQ surfaces), keeping the
+    mean/variance reduction and the variance-decomposition layout in one place
+    (Rule 1 — DRY).
+
+    Unlike :func:`sample_based_predictive` (which leaves the variance
+    decomposition unset), this constructor populates the epistemic / total
+    variance fields because the spread *across members* is, by construction,
+    epistemic uncertainty.
+
+    Args:
+        samples: Member predictions, shape ``(num_members, ...)``; axis ``0`` is
+            the member axis reduced for ``mean`` / ``variance``.
+        method: Method tag stamped into the provenance metadata under
+            ``"method"``.
+        source_package: ``source_package`` provenance tag. Defaults to
+            ``"opifex"``.
+        extra_metadata: Additional immutable, hashable metadata pairs appended
+            after the standard ``method`` / ``source_package`` entries.
+            Defaults to ``()``.
+        include_zero_aleatoric: When set, an explicit zero ``aleatoric`` array
+            is emitted so the variance-additivity invariant
+            ``total_uncertainty == epistemic + aleatoric`` is satisfied with a
+            materialised aleatoric term. Defaults to ``False``.
+
+    Returns:
+        A :class:`PredictiveDistribution` carrying ``mean`` / ``samples`` plus
+        the across-member ``variance`` reported as both the marginal variance
+        and the ``epistemic`` / ``total_uncertainty`` decomposition.
+    """
+    mean = jnp.mean(samples, axis=0)
+    variance = jnp.var(samples, axis=0)
+    return PredictiveDistribution(
+        mean=mean,
+        samples=samples,
+        variance=variance,
+        epistemic=variance,
+        aleatoric=jnp.zeros_like(mean) if include_zero_aleatoric else None,
+        total_uncertainty=variance,
+        metadata=compose_method_metadata(
+            method=method,
+            source_package=source_package,
+            extra=extra_metadata,
+        ),
+    )
+
+
 def predictive_from_parameter_samples(
     parameter_samples: jax.Array,
     x: jax.Array,
@@ -224,6 +286,7 @@ def replace_predictive_metadata(
 
 
 __all__ = [
+    "ensemble_predictive",
     "gaussian_process_predictive",
     "predictive_from_parameter_samples",
     "replace_predictive_metadata",

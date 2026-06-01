@@ -45,13 +45,14 @@ import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 
-from opifex.uncertainty.adapters.base import compose_method_metadata
+from opifex.uncertainty._predictive import ensemble_predictive
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
-from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
 
 _SWAG_STREAMS = ("sample", "default")
@@ -220,31 +221,24 @@ def _predictive_from_member_samples(
     """Aggregate a stack of member predictions into a :class:`PredictiveDistribution`.
 
     Members live on ``axis=0`` (shape ``(num_members, batch, ...)``). The
-    predictive mean and (sample) variance are taken across that member axis;
-    the variance is reported as both the marginal ``variance`` and the
-    ``epistemic`` / ``total_uncertainty`` components, matching the
-    deep-ensemble aggregation contract. Single source of truth for every
-    member-aggregating wrapper in this module.
+    capability supplies the ``method`` (its ``default_strategy`` value) and
+    ``source_package`` provenance; the actual mean / variance reduction and
+    variance decomposition are delegated to the shared
+    :func:`opifex.uncertainty._predictive.ensemble_predictive` constructor so
+    the aggregation lives in exactly one place (Rule 1 — DRY) and is shared
+    with the quantum-chemistry UQ surfaces.
 
     When ``include_zero_aleatoric`` is set, an explicit zero ``aleatoric``
     array is emitted so that the variance-additivity invariant
     ``total_uncertainty == epistemic + aleatoric`` is satisfied with a
     materialised aleatoric term (used by the test-time-augmentation wrapper).
     """
-    mean = jnp.mean(samples, axis=0)
-    variance = jnp.var(samples, axis=0)
-    return PredictiveDistribution(
-        mean=mean,
-        samples=samples,
-        variance=variance,
-        epistemic=variance,
-        aleatoric=jnp.zeros_like(mean) if include_zero_aleatoric else None,
-        total_uncertainty=variance,
-        metadata=compose_method_metadata(
-            method=capability.default_strategy.value,
-            source_package=capability.source_package,
-            extra=extra_metadata,
-        ),
+    return ensemble_predictive(
+        samples,
+        method=capability.default_strategy.value,
+        source_package=capability.source_package,
+        extra_metadata=extra_metadata,
+        include_zero_aleatoric=include_zero_aleatoric,
     )
 
 
