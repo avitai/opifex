@@ -28,9 +28,18 @@ from opifex.neural.atomistic.backbones import (
     SchNetConfig,
 )
 from opifex.neural.atomistic.base import AtomisticModel
+from opifex.neural.atomistic.scale_shift import AtomicScaleShift, fit_atomic_scale_shift
+from opifex.neural.atomistic.training import (
+    AtomisticBatch,
+    energy_forces_loss,
+    fit_atomistic,
+    make_atomistic_train_step,
+)
 
 
 __all__ = [
+    "AtomicScaleShift",
+    "AtomisticBatch",
     "AtomisticModel",
     "NequIP",
     "NequIPConfig",
@@ -38,4 +47,8 @@ __all__ = [
     "PaiNNConfig",
     "SchNet",
     "SchNetConfig",
+    "energy_forces_loss",
+    "fit_atomic_scale_shift",
+    "fit_atomistic",
+    "make_atomistic_train_step",
 ]
