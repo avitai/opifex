@@ -15,7 +15,7 @@
 | Property      | Value                                          |
 |---------------|------------------------------------------------|
 | Level         | Intermediate                                   |
-| Runtime       | ~5 min (CPU/GPU)                               |
+| Runtime       | ~5 min (CPU) / ~1 min (GPU)                    |
 | Memory        | ~2 GB                                          |
 | Prerequisites | JAX, Flax NNX, Neural Operators basics         |
 
@@ -26,9 +26,16 @@ combines U-Net's multi-scale encoder-decoder architecture with Fourier
 spectral convolutions, enabling operator learning with **zero-shot
 super-resolution** capabilities.
 
+This example uses the standard operator-learning recipe — grid positional
+embedding, Gaussian input/output normalization, and the relative-L2 loss —
+to reach a low relative L2 error on Darcy flow.
+
 This example demonstrates:
 
 - **create_uno** factory for quick model construction
+- **GridEmbedding2D** positional encoding fed as extra input channels
+- **Gaussian normalization** of inputs and outputs
+- **relative-L2 loss** via `LossConfig`, the standard operator-learning objective
 - **Grain DataLoader** for efficient streaming data
 - **Trainer.fit()** for end-to-end training with validation
 - **Zero-shot super-resolution** inference at higher resolutions
@@ -37,9 +44,9 @@ This example demonstrates:
 
 1. Create a UNO with `create_uno` factory
 2. Load Darcy flow data with `create_darcy_loader` (Grain-based)
-3. Train with Opifex's `Trainer.fit()` API
-4. Evaluate predictions and visualize results
-5. Demonstrate zero-shot super-resolution
+3. Apply grid embedding, normalization, and the relative-L2 loss
+4. Train with Opifex's `Trainer.fit()` API
+5. Evaluate predictions and demonstrate zero-shot super-resolution
 """
 
 # %% [markdown]
@@ -57,12 +64,18 @@ warnings.filterwarnings("ignore")
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from flax import nnx
 
+
+mpl.use("Agg")
+import matplotlib.pyplot as plt
+
 from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
+from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.specialized import create_uno
 
 
@@ -75,15 +88,22 @@ print(f"JAX devices: {jax.devices()}")
 # %% [markdown]
 """
 ## Configuration
+
+We follow the standard operator-learning recipe: ~1000 training samples,
+Gaussian normalization, the relative-L2 loss, and enough epochs for the
+spectral weights to converge.
 """
 
 # %%
 RESOLUTION = 32
-N_TRAIN = 200
-N_TEST = 50
-BATCH_SIZE = 16
-NUM_EPOCHS = 20
-LEARNING_RATE = 5e-4
+N_TRAIN = 1000
+N_TEST = 100
+BATCH_SIZE = 32
+NUM_EPOCHS = 120
+LEARNING_RATE = 1e-3
+HIDDEN_CHANNELS = 32
+MODES = 12
+N_LAYERS = 3
 SEED = 42
 
 OUTPUT_DIR = Path("docs/assets/examples/uno_darcy")
@@ -92,6 +112,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
 print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
 print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
+print(f"UNO config: hidden={HIDDEN_CHANNELS}, modes={MODES}, layers={N_LAYERS}")
 
 # %% [markdown]
 """
@@ -153,53 +174,117 @@ print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
 
 # %% [markdown]
 """
-## Model Creation
+## Normalization
 
-The `create_uno` factory creates a U-Net Neural Operator with spectral
-convolutions. The UNO architecture uses a U-Net encoder-decoder structure
-combined with Fourier layers for multi-scale operator learning.
-
-You can also use `UNeuralOperator` directly for more control:
-
-```python
-from opifex.neural.operators.specialized.uno import UNeuralOperator
-
-model = UNeuralOperator(
-    input_channels=1, output_channels=1,
-    hidden_channels=32, modes=12, n_layers=3,
-    use_spectral=True, activation=nnx.gelu,
-    rngs=nnx.Rngs(42),
-)
-```
+Neural operators train best on standardized fields. We fit Gaussian statistics
+on the training set, normalize all splits, and un-normalize predictions before
+computing physical-space errors.
 """
 
 # %%
+x_mean, x_std = X_train.mean(), X_train.std()
+y_mean, y_std = Y_train.mean(), Y_train.std()
+
+X_train_n = (X_train - x_mean) / x_std
+Y_train_n = (Y_train - y_mean) / y_std
+X_test_n = (X_test - x_mean) / x_std
+Y_test_n = (Y_test - y_mean) / y_std
+
+print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+# %% [markdown]
+"""
+## Model Creation
+
+The `create_uno` factory creates a U-Net Neural Operator with spectral
+convolutions. We wrap it with `GridEmbedding2D`, which appends normalized
+``(x, y)`` coordinate channels to the permeability input — the standard
+positional encoding that lets spectral operators resolve boundary-value
+problems. The grid embedding works directly on UNO's channels-last input.
+"""
+
+
+# %%
+class UNOWithGrid(nnx.Module):
+    """UNO with a 2D grid positional embedding on the (channels-last) input."""
+
+    def __init__(
+        self,
+        input_channels: int,
+        output_channels: int,
+        hidden_channels: int,
+        modes: int,
+        n_layers: int,
+        *,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Build the grid embedding and the underlying UNO.
+
+        Args:
+            input_channels: Number of physical input channels (before the grid).
+            output_channels: Number of output channels.
+            hidden_channels: Base number of UNO hidden channels.
+            modes: Number of Fourier modes for the spectral layers.
+            n_layers: Number of U-Net encoder/decoder stages.
+            rngs: Random number generators.
+        """
+        super().__init__()
+        self.grid_embedding = GridEmbedding2D(
+            in_channels=input_channels,
+            grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
+        )
+        self.uno = create_uno(
+            input_channels=self.grid_embedding.out_channels,
+            output_channels=output_channels,
+            hidden_channels=hidden_channels,
+            modes=modes,
+            n_layers=n_layers,
+            rngs=rngs,
+        )
+
+    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:
+        """Append grid coordinates, then apply the UNO.
+
+        Args:
+            x: Input of shape (batch, height, width, input_channels).
+            deterministic: Whether to run the UNO in deterministic mode.
+
+        Returns:
+            Output of shape (batch, height, width, output_channels).
+        """
+        x_embedded = self.grid_embedding(x)
+        return self.uno(x_embedded, deterministic=deterministic)
+
+
 print()
-print("Creating UNO model...")
+print("Creating UNO model with grid embedding...")
 in_channels = X_train.shape[-1]
 out_channels = Y_train.shape[-1]
 
-model = create_uno(
+model = UNOWithGrid(
     input_channels=in_channels,
     output_channels=out_channels,
-    hidden_channels=32,
-    modes=12,
-    n_layers=3,
+    hidden_channels=HIDDEN_CHANNELS,
+    modes=MODES,
+    n_layers=N_LAYERS,
     rngs=nnx.Rngs(SEED),
 )
 
 params = nnx.state(model, nnx.Param)
 param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
-print("Model: UNO (hidden=32, modes=12, layers=3)")
-print(f"Input channels: {in_channels}, Output channels: {out_channels}")
+print(f"Model: UNO + GridEmbedding2D (hidden={HIDDEN_CHANNELS}, modes={MODES}, layers={N_LAYERS})")
+print(f"Input channels: {in_channels} (+ 2 grid coords = {in_channels + 2} after embedding)")
+print(f"Output channels: {out_channels}")
 print(f"Total parameters: {param_count:,}")
 
 # %% [markdown]
 """
 ## Training with Opifex Trainer
 
-We use Opifex's `Trainer` with `TrainingConfig`. The `Trainer.fit()` method
-handles batched training with JIT compilation, validation, and progress logging.
+We use Opifex's `Trainer` with the relative-L2 loss (`loss_type="relative_l2"`),
+the standard operator-learning objective. The `Trainer.fit()` method handles
+batched training with JIT compilation, validation, and progress logging.
 """
 
 # %%
@@ -211,6 +296,7 @@ config = TrainingConfig(
     batch_size=BATCH_SIZE,
     validation_frequency=5,
     verbose=True,
+    loss_config=LossConfig(loss_type="relative_l2"),
 )
 
 trainer = Trainer(
@@ -219,14 +305,14 @@ trainer = Trainer(
     rngs=nnx.Rngs(SEED),
 )
 
-print(f"Optimizer: Adam (lr={LEARNING_RATE})")
+print(f"Optimizer: Adam (lr={LEARNING_RATE}), loss: relative L2")
 print()
 print("Starting training...")
 start_time = time.time()
 
 trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train), jnp.array(Y_train)),
-    val_data=(jnp.array(X_test), jnp.array(Y_test)),
+    train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
+    val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),
 )
 
 training_time = time.time() - start_time
@@ -238,16 +324,32 @@ print(f"Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
 """
 ## Evaluation
 
-Evaluate the trained UNO on the test set by computing MSE and relative L2 error.
+Predictions are un-normalized back to physical pressure before measuring the
+relative L2 error. The test set is run through the model in batches to bound
+memory use at higher resolutions.
 """
 
 # %%
 print()
 print("Evaluating on test set...")
-X_test_jnp = jnp.array(X_test)
+X_test_jnp = jnp.array(X_test_n)
 Y_test_jnp = jnp.array(Y_test)
 
-predictions = trained_model(X_test_jnp, deterministic=True)
+
+def predict_in_batches(
+    forward: nnx.Module,
+    inputs: jax.Array,
+    batch_size: int = 128,
+) -> jax.Array:
+    """Run the model over the inputs in batches to bound memory use."""
+    outputs = [
+        forward(inputs[i : i + batch_size], deterministic=True)
+        for i in range(0, inputs.shape[0], batch_size)
+    ]
+    return jnp.concatenate(outputs, axis=0)
+
+
+predictions = predict_in_batches(trained_model, X_test_jnp) * y_std + y_mean
 
 test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 
@@ -257,7 +359,7 @@ Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
 per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)
 mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 
-print(f"Test MSE:         {test_mse:.6f}")
+print(f"Test MSE:         {test_mse:.6e}")
 print(f"Test Relative L2: {mean_rel_l2:.6f}")
 print(f"Min Relative L2:  {float(jnp.min(per_sample_rel_l2)):.6f}")
 print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
@@ -267,7 +369,8 @@ print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
 ## Zero-Shot Super-Resolution
 
 UNO can generalize to different resolutions without retraining. Here we test
-inference at 2x the training resolution.
+inference at 2x the training resolution. The input is normalized with the
+training statistics and the prediction is un-normalized for comparison.
 """
 
 # %%
@@ -275,7 +378,7 @@ print()
 target_resolution = RESOLUTION * 2
 print(f"Testing zero-shot super-resolution: {RESOLUTION} -> {target_resolution}")
 
-# Take one test sample and upsample the input
+# Take one test sample and upsample the (normalized) input
 x_sample = X_test_jnp[0:1]
 x_high_res = jax.image.resize(
     x_sample,
@@ -283,8 +386,8 @@ x_high_res = jax.image.resize(
     method="bilinear",
 )
 
-# Predict at high resolution
-y_pred_high = trained_model(x_high_res, deterministic=True)
+# Predict at high resolution, then un-normalize
+y_pred_high = trained_model(x_high_res, deterministic=True) * y_std + y_mean
 
 # Upsample ground truth for comparison
 y_true_high = jax.image.resize(
@@ -318,12 +421,12 @@ fig, axes = plt.subplots(n_vis, 4, figsize=(16, 4 * n_vis))
 fig.suptitle("UNO Darcy Flow Predictions (Opifex)", fontsize=14, fontweight="bold")
 
 for row, idx in enumerate(indices):
-    x_sample = X_test[idx, :, :, 0]
+    x_field = X_test[idx, :, :, 0]
     y_true = Y_test[idx, :, :, 0]
     y_pred = np.array(predictions[idx, :, :, 0])
     error = np.abs(y_pred - y_true)
 
-    im0 = axes[row, 0].imshow(x_sample, cmap="viridis")
+    im0 = axes[row, 0].imshow(x_field, cmap="viridis")
     axes[row, 0].set_title(f"Input {row + 1}: Permeability")
     axes[row, 0].axis("off")
     plt.colorbar(im0, ax=axes[row, 0], shrink=0.8)
@@ -378,8 +481,8 @@ print(f"Super-resolution saved to {OUTPUT_DIR / 'uno_superresolution.png'}")
 ## Results Summary
 
 After running this example you should observe:
-- Decreasing training loss over epochs on Darcy flow data
-- Reasonable predictions mapping permeability to pressure fields
+- A decreasing relative-L2 training loss over epochs on Darcy flow data
+- Accurate predictions mapping permeability to pressure fields
 - Zero-shot super-resolution capability at higher resolutions
 
 ## Next Steps
@@ -395,6 +498,6 @@ After running this example you should observe:
 print()
 print("=" * 70)
 print(f"UNO Darcy Flow example completed in {training_time:.1f}s")
-print(f"Test MSE: {test_mse:.6f}, Relative L2: {mean_rel_l2:.6f}")
+print(f"Test MSE: {test_mse:.6e}, Relative L2: {mean_rel_l2:.6f}")
 print(f"Results saved to: {OUTPUT_DIR}")
 print("=" * 70)

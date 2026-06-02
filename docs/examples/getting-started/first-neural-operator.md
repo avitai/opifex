@@ -24,7 +24,7 @@ This example demonstrates:
 
 1. **Load** Darcy flow data with `create_darcy_loader()`
 2. **Create** an FNO model with `FourierNeuralOperator` and `GridEmbedding2D`
-3. **Train** with `Trainer.fit()` in 20 epochs
+3. **Train** with `Trainer.fit()` for 200 epochs
 4. **Evaluate** zero-shot super-resolution capabilities
 
 ## Files
@@ -83,7 +83,7 @@ Loading Darcy flow data...
   Training data (32x32): X=(992, 1, 32, 32), Y=(992, 1, 32, 32)
   Test data (32x32): X=(100, 1, 32, 32), Y=(100, 1, 32, 32)
   Test data (64x64): X=(100, 1, 64, 64), Y=(100, 1, 64, 64) <- UNSEEN resolution!
-  Normalization: Y_mean=0.0501, Y_std=0.0346
+  Normalization: Y_mean=0.0543, Y_std=0.0380
 ```
 
 ### Step 2: Create FNO with Grid Embedding
@@ -126,7 +126,7 @@ Creating FNO model with grid embedding...
   Fourier modes: 12x12
   Hidden channels: 32
   Spectral layers: 4
-  Parameters: 53,537
+  Parameters: 2,368,001
 ```
 
 ### Step 3: Train
@@ -136,12 +136,13 @@ from opifex.core.training import Trainer, TrainingConfig
 
 trainer = Trainer(
     model=model,
-    config=TrainingConfig(num_epochs=20, learning_rate=1e-2, batch_size=32),
+    config=TrainingConfig(num_epochs=200, learning_rate=1e-2, batch_size=32),
     rngs=nnx.Rngs(42),
 )
 
 trained_model, metrics = trainer.fit(
     train_data=(jnp.array(X_train), jnp.array(Y_train)),
+    val_data=(jnp.array(X_test_32), jnp.array(Y_test_32)),
 )
 ```
 
@@ -151,7 +152,7 @@ trained_model, metrics = trainer.fit(
 Training on 32x32 resolution...
 --------------------------------------------------
 --------------------------------------------------
-Training completed in 17.5s
+Training completed in 18.2s
 ```
 
 ### Step 4: Zero-Shot Super-Resolution Test
@@ -172,8 +173,8 @@ rel_l2_64 = compute_relative_l2(predictions_64, Y_test_64)
 ======================================================================
 ZERO-SHOT SUPER-RESOLUTION TEST
 ======================================================================
-  Test at 32x32 (training resolution): 12.30% relative L2
-  Test at 64x64 (ZERO-SHOT, 2x): 102.67% relative L2
+  Test at 32x32 (training resolution): 2.01% relative L2
+  Test at 64x64 (ZERO-SHOT, 2x): 5.92% relative L2
 
 NOTE: The 64x64 test uses different samples, so high error is expected.
 True zero-shot super-resolution requires testing the same physics at
@@ -189,8 +190,8 @@ Compare predictions at both resolutions:
 
 The visualization shows:
 
-- **Row 1 (32x32)**: Training resolution with 12.3% error - model captures the pressure field
-- **Row 2 (64x64)**: Zero-shot test at 2x resolution on different samples (high error expected)
+- **Row 1 (32x32)**: Training resolution with 2.0% error - model captures the pressure field
+- **Row 2 (64x64)**: Zero-shot test at 2x resolution on different samples (~6% error)
 
 The FNO Prediction column uses the same color scale as Ground Truth for fair comparison.
 
@@ -198,11 +199,11 @@ The FNO Prediction column uses the same color scale as Ground Truth for fair com
 
 | Metric                | Value      |
 |-----------------------|------------|
-| Parameters            | 53,537     |
-| Training Time         | 17.5s      |
-| Epochs                | 20         |
-| Test Error (32x32)    | 12.30%     |
-| Test Error (64x64)    | 102.67%    |
+| Parameters            | 2,368,001  |
+| Training Time         | 18.2s      |
+| Epochs                | 200        |
+| Test Error (32x32)    | 2.01%      |
+| Test Error (64x64)    | 5.92%      |
 
 **Note**: The 64x64 test uses different physics samples than training. For true
 zero-shot super-resolution (same sample at different resolutions), see the
@@ -256,7 +257,7 @@ X = X.transpose(0, 3, 1, 2)  # Convert to (batch, channels, height, width)
 
 ```python
 config = TrainingConfig(
-    num_epochs=20,
+    num_epochs=200,
     learning_rate=1e-3,  # Try 1e-3 or 1e-2
     batch_size=32,
 )
