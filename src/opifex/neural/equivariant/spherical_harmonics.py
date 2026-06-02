@@ -36,7 +36,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float  # noqa: TC002
 
-from opifex.geometry.algebra.wigner import clebsch_gordan
+from opifex.geometry.algebra.wigner import clebsch_gordan_numpy
 from opifex.neural.equivariant.irreps import Irreps, IrrepsArray
 
 
@@ -72,7 +72,7 @@ def _normalized_coupling(degree: int, normalization: str) -> np.ndarray:
         Scaled real Clebsch-Gordan tensor of shape ``(2l1+1, 2l2+1, 2l+1)``.
     """
     l1, l2 = _split_degree(degree)
-    coupling = np.asarray(clebsch_gordan(l1, l2, degree))
+    coupling = clebsch_gordan_numpy(l1, l2, degree)
     north_pole = coupling[l1, l2, :]
     norm = math.sqrt(float(np.sum(north_pole**2)))
     four_pi = 4 * math.pi

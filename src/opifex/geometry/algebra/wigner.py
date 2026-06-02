@@ -175,11 +175,18 @@ def _change_basis_real_to_complex(degree: int) -> np.ndarray:
 
 
 @functools.cache
-def _clebsch_gordan_numpy(l1: int, l2: int, l3: int) -> np.ndarray:
-    r"""Cached real-basis SO(3) Clebsch-Gordan tensor as a NumPy array.
+def clebsch_gordan_numpy(l1: int, l2: int, l3: int) -> np.ndarray:
+    r"""Cached real-basis SO(3) Clebsch-Gordan tensor as a concrete NumPy array.
 
     Ported from ``../e3nn-jax/e3nn_jax/_src/so3.py::_clebsch_gordan``: rotate the
     SU(2) coupling into the real basis via the ``Q_l`` change of basis.
+
+    Use this (rather than :func:`clebsch_gordan`) for *static* / compile-time
+    computations -- e.g. spherical-harmonic normalization constants -- because it
+    returns a concrete ``numpy.ndarray`` that is safe under ``np.asarray`` even
+    when first evaluated inside a ``jax`` trace. The ``jax``-array wrapper
+    :func:`clebsch_gordan` may stage as a (constant) tracer inside ``jit`` and so
+    must not be passed to ``np.asarray``.
 
     Args:
         l1: Degree of the first irrep.
@@ -254,7 +261,7 @@ def clebsch_gordan(l1: int, l2: int, l3: int) -> Float[Array, "d1 d2 d3"]:
     """
     if min(l1, l2, l3) < 0:
         raise ValueError(f"Degrees must be non-negative, got (l1={l1}, l2={l2}, l3={l3})")
-    return jnp.asarray(_clebsch_gordan_numpy(l1, l2, l3))
+    return jnp.asarray(clebsch_gordan_numpy(l1, l2, l3))
 
 
 def _log_coordinates_from_matrix(rotation: Float[Array, "3 3"]) -> Float[Array, 3]:
