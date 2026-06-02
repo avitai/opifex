@@ -853,11 +853,20 @@ def _homogenization_residual(
     """
     Compute homogenization PDE residual: -∇·(a(x)∇u) = f.
 
-    Mathematical formulation (homogenization theory):
+    Mathematical formulation (variable-coefficient divergence form):
         -∇·(a(x)∇u) = f
 
-    Using product rule:
+    Expanding the flux divergence with the product rule:
         ∇·(a∇u) = ∇a·∇u + a∇²u
+
+    The ∇a·∇u term is non-zero whenever a varies in space; dropping it (i.e.
+    using the constant-coefficient approximation -aΔu - f) is incorrect for a
+    spatially-varying coefficient. This implementation therefore evaluates the
+    divergence of the conservative flux field F(x) = a(x)∇u(x) directly via
+    autodiff, so ∇·(a∇u) = ∇·F retains both terms exactly. This is the same
+    conservative/flux form discretized by the project's Darcy solver
+    (opifex.physics.solvers.darcy, a conservative 5-point scheme), so the PINN
+    residual and the finite-difference ground truth are consistent.
 
     Models composite materials with periodic microstructure where a(x)
     is a coefficient with fine-scale periodicity.
@@ -866,6 +875,10 @@ def _homogenization_residual(
         - Bensoussan, Lions, Papanicolaou (1978)
           "Asymptotic Analysis for Periodic Structures"
         - Allaire (1992) "Homogenization and Two-Scale Convergence"
+        - Bank & Weiser (1985) "Some a posteriori error estimators for
+          elliptic partial differential equations", Math. Comp. 44(170),
+          283-301 — the a-posteriori error-estimator family for
+          -∇·(a∇u) = f, which relies on the same divergence-form residual.
 
     Args:
         model: Neural network or callable returning u(x)
@@ -889,31 +902,25 @@ def _homogenization_residual(
     Note:
         JIT-compatible: No try/except, no Python control flow.
     """
-    # Compute gradient and Laplacian using AutoDiffEngine
-    grad_u = autodiff_engine.compute_gradient(model, x)
-    laplacian_u = autodiff_engine.compute_laplacian(model, x)
-    # Homogenization is real-valued - ensure real output
-    laplacian_u = jnp.real(laplacian_u)
+    # Default coefficient to the constant unit field a(x) ≡ 1.
+    coefficient = (lambda _x: jnp.ones(_x.shape[0])) if coefficient_fn is None else coefficient_fn
 
-    # Default coefficient to 1.0
-    coeff = jnp.ones(x.shape[0]) if coefficient_fn is None else jnp.squeeze(coefficient_fn(x))
+    def flux(points: Float[Array, "batch spatial_dim"]) -> Float[Array, "batch spatial_dim"]:
+        """Conservative flux F(x) = a(x) ∇u(x), shape (batch, spatial_dim)."""
+        # a(x) is real-valued; broadcast it against the (batch, spatial_dim) gradient.
+        coeff = jnp.real(jnp.reshape(coefficient(points), (points.shape[0], 1)))
+        grad_u = jnp.real(autodiff_engine.compute_gradient(model, points))
+        return coeff * grad_u
 
-    # Compute gradient of coefficient
-    # For now, assume constant coefficient (∇a = 0) for simplicity and JIT compatibility
-    # TODO: Add proper varying coefficient support with literature-backed methods
-    # See: Bank & Weiser (1985) "Some a posteriori error estimators"
-    grad_coeff = jnp.zeros_like(grad_u)
-
-    # Divergence: ∇·(a∇u) = ∇a·∇u + a∇²u
-    div_term = jnp.sum(grad_coeff * grad_u, axis=-1) + coeff * laplacian_u
+    # ∇·(a∇u) = ∇a·∇u + a∇²u, computed directly as the divergence of the flux field so
+    # the variable-coefficient ∇a·∇u term is retained exactly (no constant-a shortcut).
+    div_flux = jnp.real(autodiff_engine.compute_divergence(flux, x))
 
     # Handle source term - default to zero
     source = jnp.zeros(x.shape[0]) if source_term is None else source_term
 
-    # Residual: -∇·(a∇u) - f
-    # Standard form: -∇·(a∇u) = f
-    # Residual is: LHS - RHS = -∇·(a∇u) - f
-    return -div_term - source
+    # Residual: -∇·(a∇u) - f. Standard form -∇·(a∇u) = f gives residual = LHS - RHS.
+    return -div_flux - source
 
 
 def _two_scale_residual(
