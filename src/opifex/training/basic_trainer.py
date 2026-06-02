@@ -488,20 +488,44 @@ class BasicTrainer:
         )
         return create_optimizer(optimizer_config)
 
+    @staticmethod
+    def _make_checkpoint_manager(checkpoint_dir: Path, max_to_keep: int) -> ocp.CheckpointManager:
+        """Build an Orbax manager for the BasicTrainer composite schema.
+
+        The BasicTrainer persists model arrays, optax optimizer state, scalar
+        step/epoch counters, and JSON metrics as separate composite items, so
+        it configures dedicated item handlers. Centralizing the construction
+        keeps that schema defined in exactly one place.
+
+        Args:
+            checkpoint_dir: Directory in which checkpoints are stored.
+            max_to_keep: Maximum number of checkpoints to retain.
+
+        Returns:
+            A configured :class:`orbax.checkpoint.CheckpointManager`.
+        """
+        return ocp.CheckpointManager(
+            checkpoint_dir,
+            item_handlers={
+                "model": ocp.StandardCheckpointHandler(),
+                "optimizer_state": ocp.StandardCheckpointHandler(),
+                "step": ocp.JsonCheckpointHandler(),
+                "epoch": ocp.JsonCheckpointHandler(),
+                "metrics": ocp.JsonCheckpointHandler(),
+            },
+            options=ocp.CheckpointManagerOptions(
+                max_to_keep=max_to_keep,
+                save_interval_steps=1,
+            ),
+        )
+
     def _setup_checkpointing(self) -> None:
         """Setup checkpointing infrastructure."""
         checkpoint_dir = Path(self.config.checkpoint_config.checkpoint_dir).resolve()
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create checkpoint manager options
-        options = ocp.CheckpointManagerOptions(
-            max_to_keep=self.config.checkpoint_config.max_to_keep,
-            save_interval_steps=1,
-        )
-
-        self.checkpoint_manager = ocp.CheckpointManager(
-            directory=str(checkpoint_dir),  # Convert to absolute path string
-            options=options,
+        self.checkpoint_manager = self._make_checkpoint_manager(
+            checkpoint_dir, self.config.checkpoint_config.max_to_keep
         )
 
     def set_physics_loss(self, physics_loss: Any) -> None:
@@ -1057,20 +1081,8 @@ class BasicTrainer:
         checkpoint_dir = Path(self.config.checkpoint_config.checkpoint_dir).resolve()
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create checkpoint manager with proper handlers for scalar values
-        checkpoint_manager = ocp.CheckpointManager(
-            checkpoint_dir,
-            item_handlers={
-                "model": ocp.StandardCheckpointHandler(),
-                "optimizer_state": ocp.StandardCheckpointHandler(),
-                "step": ocp.JsonCheckpointHandler(),  # Use JsonCheckpointHandler
-                "epoch": ocp.JsonCheckpointHandler(),  # Use JsonCheckpointHandler
-                "metrics": ocp.JsonCheckpointHandler(),
-            },
-            options=ocp.CheckpointManagerOptions(
-                max_to_keep=self.config.checkpoint_config.max_to_keep,
-                save_interval_steps=1,
-            ),
+        checkpoint_manager = self._make_checkpoint_manager(
+            checkpoint_dir, self.config.checkpoint_config.max_to_keep
         )
 
         # Prepare checkpoint data with scalar values instead of arrays
@@ -1112,21 +1124,7 @@ class BasicTrainer:
         if not checkpoint_dir.exists():
             raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_path}")
 
-        # Create checkpoint manager with proper handlers
-        checkpoint_manager = ocp.CheckpointManager(
-            checkpoint_dir,
-            item_handlers={
-                "model": ocp.StandardCheckpointHandler(),
-                "optimizer_state": ocp.StandardCheckpointHandler(),
-                "step": ocp.JsonCheckpointHandler(),  # Use JsonCheckpointHandler
-                "epoch": ocp.JsonCheckpointHandler(),  # Use JsonCheckpointHandler
-                "metrics": ocp.JsonCheckpointHandler(),
-            },
-            options=ocp.CheckpointManagerOptions(
-                max_to_keep=5,
-                save_interval_steps=1,
-            ),
-        )
+        checkpoint_manager = BasicTrainer._make_checkpoint_manager(checkpoint_dir, max_to_keep=5)
 
         # Get latest checkpoint step
         latest_step = checkpoint_manager.latest_step()

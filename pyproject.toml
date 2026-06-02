@@ -319,9 +319,7 @@ exclude = [
   ".cursor",
   "examples", # Exclude example files from strict type checking
   "example_data", # Protected data directory
-  "src/opifex/training/orbax_checkpoint_manager.py", # Exclude due to Orbax type stub issues
-  "src/opifex/training/trainers/physics_informed_trainer.py", # Exclude due to return type issues
-  "tests/training/test_orbax_checkpoint_manager.py" # Exclude due to unused variable warnings
+  "src/opifex/training/trainers/physics_informed_trainer.py" # Exclude due to return type issues
 ]
 include = ["src", "tests"]
 pythonPlatform = "Linux"

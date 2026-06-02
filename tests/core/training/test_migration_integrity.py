@@ -20,8 +20,7 @@ def test_components_migration():
     try:
         from opifex.core.training.components import (
             adaptive_sampling,
-            checkpoint_manager,
-            orbax_manager,
+            checkpoint_store,
             recovery,
         )
     except ImportError:
@@ -29,8 +28,8 @@ def test_components_migration():
 
     assert hasattr(adaptive_sampling, "RADSampler")
     assert hasattr(recovery, "ErrorRecoveryManager")
-    assert hasattr(checkpoint_manager, "CheckpointManager")
-    assert hasattr(orbax_manager, "OrbaxCheckpointManager")
+    assert hasattr(checkpoint_store, "CheckpointStore")
+    assert hasattr(checkpoint_store, "OrbaxCheckpointStore")
 
 
 def test_strategies_migration():

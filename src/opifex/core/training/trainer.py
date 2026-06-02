@@ -24,8 +24,8 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.core.training.components.orbax_manager import (
-    OrbaxCheckpointManager,
+from opifex.core.training.components.checkpoint_store import (
+    OrbaxCheckpointStore,
 )
 from opifex.core.training.monitoring.metrics import (
     TrainingState,
@@ -124,10 +124,10 @@ class Trainer(nnx.Module):
             rngs=self.rngs,
         )
 
-        # Initialize checkpoint manager if configured
-        self.checkpoint_manager = None
+        # Initialize checkpoint store if configured
+        self.checkpoint_store = None
         if config.checkpoint_config.checkpoint_dir:
-            self.checkpoint_manager = OrbaxCheckpointManager(
+            self.checkpoint_store = OrbaxCheckpointStore(
                 checkpoint_dir=config.checkpoint_config.checkpoint_dir,
                 max_to_keep=config.checkpoint_config.max_to_keep,
             )
@@ -497,10 +497,7 @@ class Trainer(nnx.Module):
                 )
 
             # Checkpointing
-            if (
-                self.checkpoint_manager is not None
-                and epoch % self.config.checkpoint_frequency == 0
-            ):
+            if self.checkpoint_store is not None and epoch % self.config.checkpoint_frequency == 0:
                 self.save_checkpoint(step=epoch, loss=avg_train_loss)
 
             final_metrics["final_train_loss"] = avg_train_loss
@@ -521,9 +518,9 @@ class Trainer(nnx.Module):
             physics_metadata: Optional physics-specific metadata
 
         Returns:
-            Path to saved checkpoint, or None if no checkpoint manager
+            Path to saved checkpoint, or None if no checkpoint store
         """
-        if self.checkpoint_manager is None:
+        if self.checkpoint_store is None:
             return None
 
         additional_metadata = {
@@ -531,8 +528,8 @@ class Trainer(nnx.Module):
             "epoch": self.state.epoch,
         }
 
-        checkpoint_path = self.checkpoint_manager.save_checkpoint(
-            model=self.model,
+        checkpoint_path = self.checkpoint_store.save(
+            self.model,
             step=step,
             loss=loss,
             physics_metadata=physics_metadata,
@@ -550,11 +547,11 @@ class Trainer(nnx.Module):
         Returns:
             Tuple of (model, metadata) or (None, {}) if not found
         """
-        if self.checkpoint_manager is None:
+        if self.checkpoint_store is None:
             return None, {}
 
         try:
-            model, metadata = self.checkpoint_manager.load_checkpoint(
+            model, metadata = self.checkpoint_store.restore(
                 target_model=self.model,
                 step=step,
                 # Return None if checkpoint doesn't exist
