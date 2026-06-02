@@ -21,12 +21,14 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import optax
+import pytest
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
 from opifex.core.training import OptimizerConfig
+from opifex.core.training.optimizers import create_optimizer
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.training import (
@@ -113,6 +115,25 @@ class TestAtomisticBatch:
         assert batch.energies.shape == (4,)
         assert batch.forces.shape == (4, 3, 3)
 
+    def test_from_arrays_matches_from_systems(self) -> None:
+        """The array-batch path mirrors the system path for stacked loader data."""
+        systems, energies, forces = _synthetic_dataset(num_configs=4)
+        positions = jnp.stack([system.positions for system in systems])
+        from_systems = AtomisticBatch.from_systems(systems, energies, forces)
+        from_arrays = AtomisticBatch.from_arrays(positions, _ATOMIC_NUMBERS, energies, forces)
+        assert jnp.array_equal(from_arrays.positions, from_systems.positions)
+        assert jnp.array_equal(from_arrays.atomic_numbers, from_systems.atomic_numbers)
+        assert jnp.array_equal(from_arrays.energies, from_systems.energies)
+        assert jnp.array_equal(from_arrays.forces, from_systems.forces)
+
+    def test_from_arrays_rejects_unbatched_positions(self) -> None:
+        """A missing leading batch axis fails fast."""
+        single = jnp.zeros((3, 3))
+        with pytest.raises(ValueError, match="batch >= 1"):
+            AtomisticBatch.from_arrays(
+                single, _ATOMIC_NUMBERS, jnp.zeros((1,)), jnp.zeros((1, 3, 3))
+            )
+
 
 class TestEnergyForcesLoss:
     def test_loss_is_non_negative_scalar(self) -> None:
@@ -194,3 +215,42 @@ class TestFitAtomistic:
         final = float(energy_forces_loss(model, systems, energies, forces))
         assert len(history) == 15
         assert final < initial
+
+    def test_device_accumulation_matches_per_step_host_sync(self) -> None:
+        """The once-per-epoch device accumulation equals per-step ``float`` syncing.
+
+        ``fit_atomistic`` keeps the per-step loss on device and syncs to host
+        once per epoch (avoiding ~1 ms/step of host blocking under JAX async
+        dispatch). This must be numerically identical to the previous behaviour
+        of ``float(train_step(...))`` per step, accumulated on the host. Both
+        paths run from an identically-seeded model + optimiser over the same
+        batches, so their per-epoch loss histories must match to float precision.
+        """
+        systems, energies, forces = _synthetic_dataset()
+        batches = [
+            AtomisticBatch.from_systems(systems[:3], energies[:3], forces[:3]),
+            AtomisticBatch.from_systems(systems[3:], energies[3:], forces[3:]),
+        ]
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+        num_epochs = 8
+
+        # Library path: device accumulation, one host sync per epoch.
+        device_history = fit_atomistic(_build_model(), batches, config, num_epochs=num_epochs)
+
+        # Reference path: per-step host sync (the previous behaviour), same init.
+        reference_model = _build_model()
+        reference_optimizer = nnx.Optimizer(
+            reference_model, create_optimizer(config), wrt=nnx.Param
+        )
+        reference_step = make_atomistic_train_step(reference_model, reference_optimizer)
+        reference_history: list[float] = []
+        for _ in range(num_epochs):
+            epoch_losses = [
+                float(reference_step(reference_model, reference_optimizer, batch))
+                for batch in batches
+            ]
+            reference_history.append(sum(epoch_losses) / len(epoch_losses))
+
+        assert len(device_history) == len(reference_history)
+        for device_loss, reference_loss in zip(device_history, reference_history, strict=True):
+            assert device_loss == pytest.approx(reference_loss, rel=1e-5, abs=1e-6)

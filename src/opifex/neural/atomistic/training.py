@@ -89,6 +89,46 @@ class AtomisticBatch:
             forces=jnp.asarray(forces),
         )
 
+    @classmethod
+    def from_arrays(
+        cls,
+        positions: Float[Array, "batch n_atoms 3"],
+        atomic_numbers: Array,
+        energies: Float[Array, " batch"],
+        forces: Float[Array, "batch n_atoms 3"],
+    ) -> AtomisticBatch:
+        """Build a batch from already-stacked arrays (the dataset-loader path).
+
+        Loaders such as :func:`opifex.data.loaders.create_rmd17_loader` emit
+        configurations as stacked arrays sharing one ``atomic_numbers`` vector, so
+        no per-configuration :class:`MolecularSystem` round-trip is needed; this
+        is the array-batch complement of :meth:`from_systems`.
+
+        Args:
+            positions: Atomic positions, shape ``(batch, n_atoms, 3)``.
+            atomic_numbers: Shared nuclear charges, shape ``(n_atoms,)``.
+            energies: Reference total energies, shape ``(batch,)``.
+            forces: Reference forces, shape ``(batch, n_atoms, 3)``.
+
+        Returns:
+            The stacked :class:`AtomisticBatch`.
+
+        Raises:
+            ValueError: If ``positions`` has no leading batch axis (is empty).
+        """
+        positions = jnp.asarray(positions)
+        if positions.ndim != 3 or positions.shape[0] == 0:
+            raise ValueError(
+                "AtomisticBatch.from_arrays requires positions of shape "
+                f"(batch, n_atoms, 3) with batch >= 1, got {positions.shape}."
+            )
+        return cls(
+            positions=positions,
+            atomic_numbers=jnp.asarray(atomic_numbers),
+            energies=jnp.asarray(energies),
+            forces=jnp.asarray(forces),
+        )
+
 
 def _batch_loss(
     model: AtomisticModel,
@@ -213,8 +253,15 @@ def fit_atomistic(
     )
     history: list[float] = []
     for _ in range(num_epochs):
-        epoch_losses = [float(train_step(model, optimizer, batch)) for batch in batches]
-        history.append(sum(epoch_losses) / len(epoch_losses))
+        # Keep the per-step loss on device and accumulate it; sync to host once
+        # per epoch (the single ``float`` below) instead of once per step. JAX
+        # dispatches asynchronously, so ``float(loss)`` per step blocks the host
+        # on every step and can serialise the otherwise-overlapped device queue;
+        # one host sync per epoch follows the JAX async-dispatch discipline.
+        epoch_loss_sum = jnp.zeros(())
+        for batch in batches:
+            epoch_loss_sum = epoch_loss_sum + train_step(model, optimizer, batch)
+        history.append(float(epoch_loss_sum) / len(batches))
     return history
 
 
