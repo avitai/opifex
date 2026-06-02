@@ -167,43 +167,50 @@ class TestSolveDarcyFlow:
         with pytest.raises(ValueError, match="positive integer"):
             solve_darcy_flow(jnp.ones((32, 32)), -1)
 
-    def test_jit_compatible(self):
-        """Solver should work correctly under JIT compilation."""
+    def test_deterministic(self):
+        """The solver should be deterministic: same input -> identical output."""
         from opifex.physics.solvers.darcy import solve_darcy_flow
 
         resolution = 16
         coeff = jnp.ones((resolution, resolution))
 
-        # Call directly (already JIT compiled via decorator)
-        u1 = solve_darcy_flow(coeff, resolution, max_iter=50)
+        u1 = solve_darcy_flow(coeff, resolution)
+        u2 = solve_darcy_flow(coeff, resolution)
 
-        # Should produce same result when called again
-        u2 = solve_darcy_flow(coeff, resolution, max_iter=50)
+        assert jnp.allclose(u1, u2), "Solver should be deterministic"
 
-        assert jnp.allclose(u1, u2), "JIT compilation should be deterministic"
+    def test_residual_below_tolerance(self):
+        """The returned field must actually solve the discrete PDE (small residual).
 
-    def test_convergence_with_iterations(self):
-        """Solution should converge as iterations increase."""
+        A direct (float64) solve produces the accurate solution: the conservative
+        finite-difference residual ``A u - h^2 f`` on the interior must be ~0.
+        The previous Jacobi solver at its default iteration count left a >50%
+        residual, which silently produced wrong training labels.
+        """
+        import numpy as np
+
         from opifex.physics.solvers.darcy import solve_darcy_flow
 
-        resolution = 32
-        coeff = jnp.ones((resolution, resolution))
+        resolution = 48
+        rng = np.random.default_rng(0)
+        # High-contrast permeability (ill-conditioned) is where the old solver failed.
+        coeff = jnp.asarray(np.where(rng.standard_normal((resolution, resolution)) > 0, 12.0, 3.0))
+        u = np.asarray(solve_darcy_flow(coeff, resolution))
 
-        # Jacobi converges slowly - need many iterations to see convergence
-        u_500 = solve_darcy_flow(coeff, resolution, max_iter=500)
-        u_1000 = solve_darcy_flow(coeff, resolution, max_iter=1000)
-        u_2000 = solve_darcy_flow(coeff, resolution, max_iter=2000)
-
-        # Difference between successive solution snapshots should decrease
-        diff_1 = jnp.linalg.norm(u_1000 - u_500)
-        diff_2 = jnp.linalg.norm(u_2000 - u_1000)
-
-        # As we approach convergence, changes should get smaller
-        assert diff_2 < diff_1, (
-            f"Solution should converge. diff_500_1000={diff_1}, diff_1000_2000={diff_2}"
+        a = np.asarray(coeff)
+        h2 = (1.0 / (resolution - 1)) ** 2
+        a_e = 0.5 * (a[1:-1, 1:-1] + a[1:-1, 2:])
+        a_w = 0.5 * (a[1:-1, :-2] + a[1:-1, 1:-1])
+        a_n = 0.5 * (a[:-2, 1:-1] + a[1:-1, 1:-1])
+        a_s = 0.5 * (a[1:-1, 1:-1] + a[2:, 1:-1])
+        a_sum = a_e + a_w + a_n + a_s
+        residual = (
+            a_sum * u[1:-1, 1:-1]
+            - (a_e * u[1:-1, 2:] + a_w * u[1:-1, :-2] + a_n * u[:-2, 1:-1] + a_s * u[2:, 1:-1])
+            - h2
         )
-
-        # Also verify the solutions are approaching a stable value
-        # (both differences should be small compared to the solution norm)
-        rel_diff = diff_2 / (jnp.linalg.norm(u_2000) + 1e-10)
-        assert rel_diff < 0.1, f"Solution should stabilize. Relative diff: {rel_diff}"
+        # float32 storage of the (float64-exact) solution floors the measurable
+        # residual at ~1e-5; 1e-4 cleanly separates an accurate solve from the old
+        # Jacobi solver, whose residual at its default iteration count was ~5e-1.
+        rel_residual = np.linalg.norm(residual) / (h2 * np.sqrt(residual.size))
+        assert rel_residual < 1e-4, f"Solver residual too large: {rel_residual}"
