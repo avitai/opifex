@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import jax
+
+
+logger = logging.getLogger(__name__)
 
 
 def safe_model_call(model: Any, x: jax.Array, **kwargs) -> jax.Array:
@@ -35,9 +39,16 @@ def safe_compute_energy(model: Any, positions: jax.Array, **kwargs) -> jax.Array
     if hasattr(model, "compute_energy"):
         try:
             return model.compute_energy(positions, **clean_kwargs)
-        except Exception:  # noqa: BLE001 -- user-supplied model.compute_energy can raise anything
-            # Fallback to standard model call if compute_energy fails
-            pass
+        except (TypeError, AttributeError) as error:
+            # The model exposes ``compute_energy`` but its calling convention
+            # does not match (wrong signature / missing attribute). Fall back to
+            # a standard ``__call__`` instead. Any other exception (e.g. a value
+            # error raised inside the model) is a genuine failure and propagates.
+            logger.debug(
+                "compute_energy on %s incompatible (%s); falling back to standard model call",
+                type(model).__name__,
+                error,
+            )
 
     # Fallback for standard models - flatten positions and pass through
     if positions.ndim == 3:  # batched
@@ -49,8 +60,15 @@ def safe_compute_energy(model: Any, positions: jax.Array, **kwargs) -> jax.Array
     # Use direct model call without problematic kwargs
     try:
         return model(flat_positions, deterministic=clean_kwargs.get("deterministic", True))
-    except Exception:  # noqa: BLE001 -- user-supplied model __call__ can raise anything
-        # Final fallback - simplest possible call
+    except TypeError as error:
+        # The model does not accept a ``deterministic`` keyword. Retry with the
+        # simplest possible positional-only call. A TypeError is the only
+        # signature-mismatch signal here; other exceptions are real failures.
+        logger.debug(
+            "Model %s rejected 'deterministic' kwarg (%s); retrying without it",
+            type(model).__name__,
+            error,
+        )
         return model(flat_positions)
 
 

@@ -101,3 +101,67 @@ class TestSafeComputeForces:
         model = EnergyModel(rngs=nnx.Rngs(0))
         with pytest.raises(ValueError, match="Unsupported positions shape"):
             safe_compute_forces(model, jnp.ones((6,)))
+
+
+class _SentinelError(RuntimeError):
+    """Distinct exception used to assert that real failures propagate."""
+
+
+class TestSafeComputeEnergyErrorPropagation:
+    """compute_energy fallback must only catch signature mismatches."""
+
+    def test_propagates_non_signature_errors_from_compute_energy(self):
+        """A genuine error inside compute_energy is NOT swallowed by the fallback."""
+
+        class FailingEnergyModel:
+            def compute_energy(self, positions, **kwargs):
+                raise _SentinelError("genuine failure inside compute_energy")
+
+            def __call__(self, x, **kwargs):  # would mask the real error if used
+                return jnp.zeros((x.shape[0],))
+
+        model = FailingEnergyModel()
+        with pytest.raises(_SentinelError, match="genuine failure"):
+            safe_compute_energy(model, jnp.ones((2, 3, 2)))
+
+    def test_falls_back_on_signature_mismatch(self, caplog):
+        """A TypeError/AttributeError from compute_energy triggers the logged fallback."""
+
+        class BadSignatureModel:
+            def compute_energy(self, positions):  # rejects clean_kwargs -> TypeError
+                raise TypeError("unexpected keyword argument")
+
+            def __call__(self, x, deterministic=True):
+                return jnp.zeros((x.shape[0],))
+
+        model = BadSignatureModel()
+        # 3D positions flatten to (batch, features); keeps the batch dimension.
+        with caplog.at_level("DEBUG", logger="opifex.core.training.utils_legacy"):
+            result = safe_compute_energy(model, jnp.ones((2, 3, 2)), deterministic=True)
+        assert result.shape == (2,)
+        assert any("falling back to standard model call" in r.message for r in caplog.records)
+
+    def test_deterministic_kwarg_fallback_propagates_non_typeerror(self):
+        """Final __call__ fallback only retries on TypeError, not other errors."""
+
+        class StrictModel:
+            def __call__(self, x, deterministic=True):
+                # deterministic kwarg accepted, but model raises a real error.
+                raise _SentinelError("real numerical failure")
+
+        model = StrictModel()
+        with pytest.raises(_SentinelError, match="real numerical failure"):
+            safe_compute_energy(model, jnp.ones((2, 6)))
+
+    def test_deterministic_kwarg_fallback_retries_on_typeerror(self, caplog):
+        """When the model rejects the deterministic kwarg, retry without it (logged)."""
+
+        class NoKwargModel:
+            def __call__(self, x):  # no deterministic kwarg -> TypeError on first try
+                return jnp.zeros((x.shape[0],))
+
+        model = NoKwargModel()
+        with caplog.at_level("DEBUG", logger="opifex.core.training.utils_legacy"):
+            result = safe_compute_energy(model, jnp.ones((2, 3, 2)))
+        assert result.shape == (2,)
+        assert any("retrying without it" in r.message for r in caplog.records)
