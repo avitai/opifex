@@ -7,6 +7,7 @@ and model registry. Follows JAX/Flax NNX best practices for scientific computing
 workloads.
 """
 
+import importlib
 import json
 import logging
 import time
@@ -121,14 +122,21 @@ class ModelRegistry:
     """Registry for managing model versions and metadata.
 
     Model weights are serialized to disk via Orbax (the registry persists
-    ``nnx.state(model)``). The structural template needed to reconstruct an
-    arbitrary :class:`flax.nnx.Module` — its ``nnx.GraphDef`` — is *not*
-    generically disk-serializable (NNX modules capture local initializer
-    closures that ``pickle`` / ``msgpack`` cannot encode), so it is held on
-    the registry instance keyed by ``model_id``. Consequently
-    :meth:`get_model` reconstructs the registered model only within the
-    process that registered it; across a fresh process it raises
-    :class:`NotImplementedError` rather than fabricating a model.
+    ``nnx.state(model)``). Reconstruction is **cross-process**: alongside the
+    weight state the registry persists the module's fully-qualified
+    ``module:class`` reference plus the keyword arguments needed to build an
+    *abstract* (shape/dtype-only) copy of the module. On
+    :meth:`get_model` the class is imported, an abstract module is built via
+    :func:`flax.nnx.eval_shape`, and the persisted weights are restored into
+    it — so a model registered by one process is reproduced exactly by any
+    other process pointed at the same storage directory.
+
+    An in-memory ``GraphDef`` template is also retained per ``model_id`` as a
+    fast path within the registering process; it is never required for
+    correctness. The on-disk ``module:class`` reference is the cross-process
+    contract. When the class cannot be imported (e.g. it was removed or
+    renamed) reconstruction fails fast with an import error rather than
+    fabricating a model.
     """
 
     #: Sub-directory (under each model's directory) holding the Orbax state.
@@ -166,17 +174,29 @@ class ModelRegistry:
         with open(self.metadata_file, "w") as f:
             json.dump(self._models, f, indent=2)
 
-    def register_model(self, model: nnx.Module, metadata: ModelMetadata) -> str:
+    def register_model(
+        self,
+        model: nnx.Module,
+        metadata: ModelMetadata,
+        init_kwargs: dict[str, Any] | None = None,
+    ) -> str:
         """Register a model with metadata.
 
         Args:
-            model: The model to register
-            metadata: Model metadata
+            model: The model to register.
+            metadata: Model metadata.
+            init_kwargs: Keyword arguments (excluding ``rngs``) needed to
+                build an abstract copy of ``type(model)`` for cross-process
+                reconstruction. Must be JSON-serializable. Required only when
+                the module's ``__init__`` takes configuration beyond ``rngs``;
+                defaults to empty. The values must reproduce the registered
+                module's *structure* (shapes/dtypes), not its weights.
 
         Returns:
-            model_id: Unique identifier for the registered model
+            model_id: Unique identifier for the registered model.
         """
         model_id = str(uuid.uuid4())
+        reconstruction_kwargs = dict(init_kwargs) if init_kwargs else {}
 
         # Create model directory
         model_dir = self.storage_path / model_id
@@ -195,11 +215,16 @@ class ModelRegistry:
         with ocp.StandardCheckpointer() as checkpointer:
             checkpointer.save(state_dir, state)
 
-        # Record the class identity for diagnostics / honest error messages.
+        # Persist the cross-process reconstruction contract: the
+        # fully-qualified ``module:class`` reference plus the abstract-init
+        # kwargs. Any process can import the class, rebuild an abstract module
+        # via ``nnx.eval_shape``, and restore the persisted weights into it.
         model_info_path = model_dir / "model_info.json"
         model_class_info = {
+            "model_qualname": f"{model.__class__.__module__}:{model.__class__.__qualname__}",
             "model_class_name": model.__class__.__name__,
             "model_module": model.__class__.__module__,
+            "init_kwargs": reconstruction_kwargs,
             "model_id": model_id,
             "state_path": str(state_dir),
             "input_shape": metadata.input_shape,
@@ -246,29 +271,92 @@ class ModelRegistry:
 
         return model_id
 
+    @staticmethod
+    def _resolve_model_class(qualname: str) -> type[nnx.Module]:
+        """Import and return the ``nnx.Module`` subclass named by ``qualname``.
+
+        Args:
+            qualname: A ``module:Class`` reference (dotted attribute access is
+                supported after the colon, e.g. ``pkg.mod:Outer.Inner``).
+
+        Returns:
+            The resolved class object.
+
+        Raises:
+            ValueError: If ``qualname`` is malformed.
+            ImportError: If the module cannot be imported.
+            AttributeError: If the class is absent from the module.
+            TypeError: If the resolved object is not an ``nnx.Module`` subclass.
+        """
+        if ":" not in qualname:
+            raise ValueError(f"Malformed model qualname {qualname!r}; expected 'module:Class'")
+        module_name, _, attr_path = qualname.partition(":")
+        module = importlib.import_module(module_name)
+        obj: Any = module
+        for part in attr_path.split("."):
+            obj = getattr(obj, part)
+        if not (isinstance(obj, type) and issubclass(obj, nnx.Module)):
+            raise TypeError(f"Resolved object {qualname!r} is not an nnx.Module subclass")
+        return obj
+
+    def _build_abstract_template(self, model_info: dict[str, Any]) -> _ModelTemplate:
+        """Reconstruct an abstract structural template from persisted info.
+
+        The module's class is imported from the persisted ``module:class``
+        reference and an abstract (shape/dtype-only) instance is built via
+        :func:`flax.nnx.eval_shape`, using the persisted ``init_kwargs`` and a
+        fresh ``nnx.Rngs``. No weights are materialized — the result is the
+        Orbax restore target.
+
+        Raises:
+            ImportError, AttributeError, ValueError, TypeError: If the class
+                cannot be resolved or instantiated abstractly. Reconstruction
+                fails fast rather than fabricating a model.
+        """
+        model_path = Path(model_info["model_path"])
+        info_path = model_path / "model_info.json"
+        with open(info_path) as f:
+            class_info = json.load(f)
+
+        qualname = class_info["model_qualname"]
+        init_kwargs = class_info.get("init_kwargs", {})
+        model_class = self._resolve_model_class(qualname)
+
+        # ``model_class`` is resolved dynamically; NNX modules conventionally
+        # accept an ``rngs`` keyword for parameter initialization (supplied here
+        # only to build the abstract structure — no weights are materialized).
+        def _build_abstract() -> nnx.Module:
+            return model_class(rngs=nnx.Rngs(0), **init_kwargs)  # type: ignore[call-arg]
+
+        abstract_model = nnx.eval_shape(_build_abstract)
+        graphdef, abstract_state = nnx.split(abstract_model)
+        return _ModelTemplate(graphdef=graphdef, abstract_state=abstract_state)
+
     def get_model(self, model_id: str) -> tuple[nnx.Module, ModelMetadata]:
         """Retrieve the registered model and its metadata by ID.
 
         The model's weights are restored from the Orbax state persisted at
-        registration and merged back into the structural template
-        (``nnx.GraphDef``) captured for ``model_id``. The returned module
-        therefore reproduces the registered model exactly — calling it on
-        the same input yields the same outputs.
+        registration and merged into a structural template. The template is
+        taken from the in-memory cache when available (fast path within the
+        registering process); otherwise it is rebuilt cross-process by
+        importing the persisted ``module:class`` reference and constructing an
+        abstract module via :func:`flax.nnx.eval_shape`. The returned module
+        reproduces the registered model exactly — calling it on the same input
+        yields the same outputs.
 
         Args:
-            model_id: Model identifier
+            model_id: Model identifier.
 
         Returns:
             Tuple of ``(model, metadata)`` where ``model`` is the
             reconstructed :class:`flax.nnx.Module`.
 
         Raises:
-            ValueError: If ``model_id`` is not registered.
-            NotImplementedError: If the structural template for ``model_id``
-                is unavailable (e.g. the registry was reloaded in a fresh
-                process). The weights are persisted but cannot be merged
-                without the in-memory ``GraphDef``; a model is never
-                fabricated from metadata alone.
+            ValueError: If ``model_id`` is not registered or its persisted
+                class reference is malformed.
+            ImportError: If the persisted module cannot be imported.
+            AttributeError: If the persisted class is absent from its module.
+            TypeError: If the persisted reference is not an ``nnx.Module``.
         """
         if model_id not in self._models["models"]:
             raise ValueError(f"Model ID {model_id} not found")
@@ -281,15 +369,11 @@ class ModelRegistry:
             metadata_dict = json.load(f)
         metadata = ModelMetadata.from_dict(metadata_dict)
 
+        # Prefer the in-memory template (fast path); otherwise reconstruct the
+        # abstract structure cross-process from the persisted class reference.
         template = self._templates.get(model_id)
         if template is None:
-            raise NotImplementedError(
-                "model deserialization not available for model_id "
-                f"{model_id!r}: weight state is persisted but the structural "
-                "template was not captured in this process. Cross-process "
-                "model reconstruction requires a follow-up design (persist a "
-                "portable model template / factory)."
-            )
+            template = self._build_abstract_template(model_info)
 
         # Restore the persisted weights into the abstract state template,
         # then merge with the graphdef to obtain the concrete registered model.
