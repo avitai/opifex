@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 from calibrax.core import BenchmarkResult
+from calibrax.statistics import paired_significance_test
 
 from opifex.benchmarking._shared import ACCURACY_METRIC_KEYS
 
@@ -201,10 +202,52 @@ class PDEBenchReportGenerator:
                 results["aleatoric_uncertainty"]
             )
 
-        # Significance tests (placeholder for future implementation)
-        analysis["significance_tests"]["status"] = "Not computed"
+        analysis["significance_tests"] = self._compute_significance(results)
 
         return analysis
+
+    @staticmethod
+    def _compute_significance(results: dict[str, Any]) -> dict[str, Any]:
+        """Run a paired significance test of the model against a baseline.
+
+        Benchmark comparisons evaluate the model and a baseline on the *same*
+        test samples, so the two per-sample error sequences are paired. This
+        method applies the Wilcoxon signed-rank test (the non-parametric paired
+        test; see Wilcoxon, 1945, "Individual Comparisons by Ranking Methods",
+        Biometrics Bulletin 1(6):80-83) via
+        :func:`calibrax.statistics.paired_significance_test`.
+
+        Args:
+            results: Evaluation results. The test runs only when both
+                ``per_sample_errors`` (model) and ``baseline_per_sample_errors``
+                (paired baseline) are present and of equal, non-empty length.
+
+        Returns:
+            A dict with ``status`` of ``"computed"`` (plus ``p_value``,
+            ``statistic``, ``effect_size``, ``significant`` and ``method``) when
+            paired data is available, otherwise ``{"status": "not_tested", ...}``
+            with an honest reason. No silent or fabricated p-values.
+        """
+        model_errors = results.get("per_sample_errors")
+        baseline_errors = results.get("baseline_per_sample_errors")
+
+        if model_errors is None or baseline_errors is None:
+            return {
+                "status": "not_tested",
+                "reason": "paired per-sample errors not provided",
+            }
+
+        model_seq = [float(x) for x in model_errors]
+        baseline_seq = [float(x) for x in baseline_errors]
+
+        if not model_seq or len(model_seq) != len(baseline_seq):
+            return {
+                "status": "not_tested",
+                "reason": "paired samples are empty or of unequal length",
+            }
+
+        result = paired_significance_test(model_seq, baseline_seq)
+        return {"status": "computed", **result.to_dict()}
 
     def _generate_baseline_comparison(
         self, baseline_comparisons: dict[str, Any] | None

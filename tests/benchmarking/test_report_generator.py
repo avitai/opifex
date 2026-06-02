@@ -260,12 +260,59 @@ class TestStatisticalAnalysis:
         assert analysis["uncertainty_quantification"]["epistemic"] == 0.1
         assert analysis["uncertainty_quantification"]["aleatoric"] == 0.2
 
-    def test_significance_tests_placeholder(self):
-        """Test that significance tests show 'Not computed' status."""
+    def test_significance_tests_absent_without_paired_errors(self):
+        """Significance reports an honest 'not_tested' status when no paired data."""
         results = {}
         analysis = self.generator._generate_statistical_analysis(results)
 
-        assert analysis["significance_tests"]["status"] == "Not computed"
+        assert analysis["significance_tests"]["status"] == "not_tested"
+
+    def test_significance_tests_paired_wilcoxon_detects_separation(self):
+        """A constant per-sample improvement yields a significant Wilcoxon result.
+
+        The model errors are uniformly smaller than the baseline errors, so the
+        paired Wilcoxon signed-rank test must return a small p-value and flag the
+        difference as significant.
+        """
+        baseline_errors = [0.50, 0.45, 0.60, 0.55, 0.48, 0.52, 0.58, 0.49]
+        model_errors = [e - 0.20 for e in baseline_errors]
+        results = {
+            "per_sample_errors": model_errors,
+            "baseline_per_sample_errors": baseline_errors,
+        }
+
+        analysis = self.generator._generate_statistical_analysis(results)
+        sig = analysis["significance_tests"]
+
+        assert sig["status"] == "computed"
+        assert sig["method"] == "wilcoxon"
+        assert sig["p_value"] < 0.05
+        assert sig["significant"] is True
+
+    def test_significance_tests_no_separation_not_significant(self):
+        """Identical paired samples are not flagged as significant."""
+        errors = [0.5, 0.4, 0.6, 0.55, 0.48, 0.52, 0.58, 0.49]
+        results = {
+            "per_sample_errors": list(errors),
+            "baseline_per_sample_errors": list(errors),
+        }
+
+        analysis = self.generator._generate_statistical_analysis(results)
+        sig = analysis["significance_tests"]
+
+        assert sig["status"] == "computed"
+        assert sig["significant"] is False
+
+    def test_significance_tests_mismatched_lengths_not_tested(self):
+        """Unequal-length paired samples report 'not_tested' rather than raising."""
+        results = {
+            "per_sample_errors": [0.1, 0.2, 0.3],
+            "baseline_per_sample_errors": [0.4, 0.5],
+        }
+
+        analysis = self.generator._generate_statistical_analysis(results)
+
+        assert analysis["significance_tests"]["status"] == "not_tested"
 
 
 class TestRecommendationsGeneration:
