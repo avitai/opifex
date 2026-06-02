@@ -68,6 +68,13 @@ from opifex.uncertainty.gp.rff import (
     rbf_random_fourier_features,
     RFFGPState,
 )
+from opifex.uncertainty.gp.spatiotemporal import (
+    fit_spatiotemporal_vgp,
+    predict_spatiotemporal_vgp,
+    separable_spatiotemporal_kernel,
+    spatiotemporal_vgp_log_marginal,
+    SpatioTemporalGPState,
+)
 from opifex.uncertainty.gp.svgp import (
     fit_svgp,
     predict_svgp,
@@ -91,6 +98,7 @@ __all__ = [
     "QuasisepGPState",
     "RFFGPState",
     "SVGPState",
+    "SpatioTemporalGPState",
     "StochasticSVGPState",
     "additive_kernel",
     "bernoulli_log_likelihood",
@@ -108,6 +116,7 @@ __all__ = [
     "fit_poisson_laplace_gp",
     "fit_quasisep_sho_gp",
     "fit_rff_gp",
+    "fit_spatiotemporal_vgp",
     "fit_studentst_laplace_gp",
     "fit_svgp",
     "graph_diffusion_kernel",
@@ -128,11 +137,14 @@ __all__ = [
     "predict_poisson_laplace_gp",
     "predict_quasisep_sho_gp",
     "predict_rff_gp",
+    "predict_spatiotemporal_vgp",
     "predict_stochastic_svgp",
     "predict_studentst_laplace_gp",
     "predict_svgp",
     "rbf_kernel",
     "rbf_random_fourier_features",
+    "separable_spatiotemporal_kernel",
+    "spatiotemporal_vgp_log_marginal",
     "stochastic_svgp_elbo",
     "svgp_collapsed_elbo",
 ]
