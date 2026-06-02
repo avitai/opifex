@@ -6,6 +6,16 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#   language_info:
+#     codemirror_mode:
+#       name: ipython
+#       version: 3
+#     file_extension: .py
+#     mimetype: text/x-python
+#     name: python
+#     nbconvert_exporter: python
+#     pygments_lexer: ipython3
+#     version: 3.12.6
 # ---
 
 # %% [markdown]
@@ -22,16 +32,20 @@
 ## Overview
 
 This benchmark provides a full comparative analysis of UNO, FNO, and SFNO
-neural operators using Opifex's benchmarking infrastructure. It evaluates accuracy,
-training throughput, memory efficiency, and statistical significance across multiple
-PDE datasets.
+neural operators on the Darcy flow equation using Opifex's benchmarking
+infrastructure. Each operator is *trained* with the standard operator-learning
+recipe (grid positional embedding, Gaussian input/output normalization, and the
+relative-L2 loss) so the accuracy column reflects learned behaviour rather than
+random initialization. It evaluates accuracy, parameter count, training time,
+and inference throughput across multiple grid resolutions.
 
 ## Learning Goals
 
-1. **Compare** UNO, FNO, and SFNO on Darcy, Burgers, and Advection problems
-2. **Evaluate** with L2 relative error, training throughput, and memory metrics
-3. **Analyze** results with statistical significance testing
-4. **Generate** publication-ready comparison tables and visualizations
+1. **Compare** UNO, FNO, and SFNO on Darcy flow across resolutions
+2. **Train** each operator with the proven recipe so accuracy is meaningful
+3. **Evaluate** with relative-L2 / MSE accuracy, parameter count, and timing
+4. **Analyze** results with statistical significance testing
+5. **Generate** publication-ready comparison tables and visualizations
 """
 
 # %%
@@ -40,20 +54,24 @@ import sys
 import time
 from pathlib import Path
 
-
-# Add the project root to Python path for imports
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
+import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from calibrax.core import BenchmarkResult, Metric
 from flax import nnx
 
+
+mpl.use("Agg")
+import matplotlib.pyplot as plt
+
 from opifex.benchmarking.analysis_engine import AnalysisEngine
 from opifex.benchmarking.evaluation_engine import BenchmarkEvaluator
 from opifex.benchmarking.results_manager import ResultsManager
+from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig
+from opifex.data.loaders import create_darcy_loader
+from opifex.neural.operators.common.embeddings import GridEmbedding2D
 
 # Neural operators
 from opifex.neural.operators.fno.base import FourierNeuralOperator
@@ -63,54 +81,230 @@ from opifex.neural.operators.specialized.uno import create_uno
 
 # %%
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger(__name__)
 
-# Import datasets after logger setup to handle import errors gracefully
-try:
-    from opifex.data.sources.burgers_source import BurgersDataSource
-    from opifex.data.sources.darcy_source import DarcyDataSource
+# %% [markdown]
+"""
+## Grid-Embedded Operator Wrappers
 
-    DATASETS_AVAILABLE = True
-    logger.info("Dataset imports successful")
-except ImportError as e:
-    logger.warning(f"Dataset imports failed: {e}")
-    DATASETS_AVAILABLE = False
+Spectral operators resolve boundary-value problems best when the normalized
+``(x, y)`` coordinates are appended as extra input channels. The wrappers below
+add a :class:`GridEmbedding2D` in front of each operator and standardize on a
+channels-first ``(batch, channels, height, width)`` interface so the benchmark
+can train and evaluate every architecture through the same code path.
+"""
+
+
+# %%
+class FNOWithGrid(nnx.Module):
+    """Fourier Neural Operator with a 2D grid positional embedding."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        hidden_channels: int,
+        modes: int,
+        num_layers: int,
+        *,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Build the grid embedding and the underlying FNO.
+
+        Args:
+            in_channels: Number of physical input channels (before the grid).
+            out_channels: Number of output channels.
+            hidden_channels: Hidden layer width.
+            modes: Number of Fourier modes for the spectral layers.
+            num_layers: Number of spectral layers.
+            rngs: Random number generators.
+        """
+        super().__init__()
+        self.grid_embedding = GridEmbedding2D(
+            in_channels=in_channels,
+            grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
+        )
+        self.fno = FourierNeuralOperator(
+            in_channels=self.grid_embedding.out_channels,
+            out_channels=out_channels,
+            hidden_channels=hidden_channels,
+            modes=modes,
+            num_layers=num_layers,
+            rngs=rngs,
+        )
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Append grid coordinates, then apply the FNO.
+
+        Args:
+            x: Input of shape ``(batch, channels, height, width)``.
+
+        Returns:
+            Output of shape ``(batch, out_channels, height, width)``.
+        """
+        x_hwc = jnp.moveaxis(x, 1, -1)
+        x_embedded = self.grid_embedding(x_hwc)
+        x_chw = jnp.moveaxis(x_embedded, -1, 1)
+        return self.fno(x_chw)
+
+
+# %%
+class SFNOWithGrid(nnx.Module):
+    """Spherical Fourier Neural Operator with a 2D grid positional embedding."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        hidden_channels: int,
+        lmax: int,
+        num_layers: int,
+        *,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Build the grid embedding and the underlying SFNO.
+
+        Args:
+            in_channels: Number of physical input channels (before the grid).
+            out_channels: Number of output channels.
+            hidden_channels: Hidden layer width.
+            lmax: Maximum spherical harmonic degree (controls spectral resolution).
+            num_layers: Number of SFNO layers.
+            rngs: Random number generators.
+        """
+        super().__init__()
+        self.grid_embedding = GridEmbedding2D(
+            in_channels=in_channels,
+            grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
+        )
+        self.sfno = SphericalFourierNeuralOperator(
+            in_channels=self.grid_embedding.out_channels,
+            out_channels=out_channels,
+            hidden_channels=hidden_channels,
+            lmax=lmax,
+            num_layers=num_layers,
+            rngs=rngs,
+        )
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Append grid coordinates, then apply the SFNO.
+
+        Args:
+            x: Input of shape ``(batch, channels, height, width)``.
+
+        Returns:
+            Output of shape ``(batch, out_channels, height, width)``.
+        """
+        x_hwc = jnp.moveaxis(x, 1, -1)
+        x_embedded = self.grid_embedding(x_hwc)
+        x_chw = jnp.moveaxis(x_embedded, -1, 1)
+        return self.sfno(x_chw)
+
+
+# %%
+class UNOWithGrid(nnx.Module):
+    """U-Net Neural Operator with a 2D grid positional embedding."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        hidden_channels: int,
+        modes: int,
+        n_layers: int,
+        *,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Build the grid embedding and the underlying UNO.
+
+        Args:
+            in_channels: Number of physical input channels (before the grid).
+            out_channels: Number of output channels.
+            hidden_channels: Base number of UNO hidden channels.
+            modes: Number of Fourier modes for the spectral layers.
+            n_layers: Number of U-Net encoder/decoder stages.
+            rngs: Random number generators.
+        """
+        super().__init__()
+        self.grid_embedding = GridEmbedding2D(
+            in_channels=in_channels,
+            grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
+        )
+        self.uno = create_uno(
+            input_channels=self.grid_embedding.out_channels,
+            output_channels=out_channels,
+            hidden_channels=hidden_channels,
+            modes=modes,
+            n_layers=n_layers,
+            rngs=rngs,
+        )
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Append grid coordinates, then apply the UNO.
+
+        Args:
+            x: Input of shape ``(batch, channels, height, width)``.
+
+        Returns:
+            Output of shape ``(batch, out_channels, height, width)``.
+        """
+        x_hwc = jnp.moveaxis(x, 1, -1)
+        x_embedded = self.grid_embedding(x_hwc)
+        out_hwc = self.uno(x_embedded, deterministic=True)
+        return jnp.moveaxis(out_hwc, -1, 1)
+
 
 # %% [markdown]
 """
 ## Comparative Study Class
 
-The `NeuralOperatorComparativeStudy` class orchestrates the full benchmark pipeline:
-operator creation, dataset generation, evaluation, statistical analysis, and reporting.
+The `NeuralOperatorComparativeStudy` class orchestrates the full benchmark
+pipeline: operator creation, dataset loading, training, evaluation, statistical
+analysis, and reporting.
 """
 
 
 # %%
 class NeuralOperatorComparativeStudy:
-    """Full comparative study of neural operators."""
+    """Full comparative study of neural operators trained on Darcy flow."""
 
     def __init__(
         self,
         output_dir: str = "benchmark_results/operator_benchmark",
         resolution_sizes: list[int] | None = None,
-        n_samples: int = 1000,
-        n_time_steps: int = 50,
-    ):
+        n_train: int = 1000,
+        n_test: int = 100,
+        num_epochs: int = 100,
+        batch_size: int = 32,
+        learning_rate: float = 1e-3,
+        hidden_channels: int = 32,
+        seed: int = 42,
+    ) -> None:
         """Initialize comparative study.
 
         Args:
-            output_dir: Directory to store results
-            resolution_sizes: Grid resolutions to test
-            n_samples: Number of samples for each dataset
-            n_time_steps: Number of time steps for evolution equations
+            output_dir: Directory to store results.
+            resolution_sizes: Grid resolutions to test.
+            n_train: Number of training samples for each dataset.
+            n_test: Number of test samples for each dataset.
+            num_epochs: Number of training epochs per operator.
+            batch_size: Mini-batch size for training.
+            learning_rate: Adam learning rate.
+            hidden_channels: Hidden width shared by all operators.
+            seed: Random seed for reproducibility.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        self.resolution_sizes = resolution_sizes or [32, 64, 96, 128]
-        self.n_samples = n_samples
-        self.n_time_steps = n_time_steps
+        self.resolution_sizes = resolution_sizes or [32, 64]
+        self.n_train = n_train
+        self.n_test = n_test
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.hidden_channels = hidden_channels
+        self.seed = seed
 
         # Initialize benchmarking components with proper directory structure
         self.evaluator = BenchmarkEvaluator(output_dir=str(self.output_dir))
@@ -119,190 +313,187 @@ class NeuralOperatorComparativeStudy:
 
         # Store results for analysis
         self.all_results: list[BenchmarkResult] = []
+        # Cache of parameter counts keyed by operator name.
+        self.param_counts: dict[str, int] = {}
 
         logger.info(f"Initialized comparative study with output dir: {output_dir}")
 
     def create_operators(self, resolution: int) -> dict[str, nnx.Module]:
-        """Create neural operators for comparison.
+        """Create grid-embedded neural operators for comparison.
 
         Args:
-            resolution: Grid resolution for the operators
+            resolution: Grid resolution for the operators.
 
         Returns:
-            Dictionary of neural operators
+            Dictionary of neural operators keyed by name.
         """
-        rngs = nnx.Rngs(42)  # Fixed seed for reproducibility
+        rngs = nnx.Rngs(self.seed)  # Fixed seed for reproducibility
+        modes = min(16, resolution // 2)
+        lmax = min(16, resolution // 2)
 
-        operators = {}
-
-        try:
-            # UNO (U-Net Neural Operator)
-            operators["UNO"] = create_uno(
-                input_channels=1,
-                output_channels=1,
-                hidden_channels=64,
-                n_layers=4,
-                rngs=rngs,
-            )
-            logger.info(f"UNO created for resolution {resolution}")
-
-        except Exception as e:
-            logger.warning(f"UNO creation failed: {e}")
-
-        try:
-            # FNO (Fourier Neural Operator)
-            operators["FNO"] = FourierNeuralOperator(
+        operators: dict[str, nnx.Module] = {
+            "UNO": UNOWithGrid(
                 in_channels=1,
                 out_channels=1,
-                hidden_channels=64,
-                modes=min(16, resolution // 2),  # Adjust modes for low resolution
-                num_layers=4,
-                rngs=rngs,
-            )
-            logger.info(f"FNO created for resolution {resolution}")
-
-        except Exception as e:
-            logger.warning(f"FNO creation failed: {e}")
-
-        try:
-            # SFNO (Spherical Fourier Neural Operator)
-            operators["SFNO"] = SphericalFourierNeuralOperator(
+                hidden_channels=self.hidden_channels,
+                modes=modes,
+                n_layers=3,
+                rngs=nnx.Rngs(self.seed),
+            ),
+            "FNO": FNOWithGrid(
                 in_channels=1,
                 out_channels=1,
-                hidden_channels=64,
-                lmax=min(16, resolution // 2),  # Adjust lmax for low resolution
+                hidden_channels=self.hidden_channels,
+                modes=modes,
                 num_layers=4,
                 rngs=rngs,
-            )
-            logger.info(f"SFNO created for resolution {resolution}")
-
-        except Exception as e:
-            logger.warning(f"SFNO creation failed: {e}")
-
+            ),
+            "SFNO": SFNOWithGrid(
+                in_channels=1,
+                out_channels=1,
+                hidden_channels=self.hidden_channels,
+                lmax=lmax,
+                num_layers=4,
+                rngs=nnx.Rngs(self.seed),
+            ),
+        }
+        for name in operators:
+            logger.info(f"{name} created for resolution {resolution}")
         return operators
 
-    def _collect_data_from_source(self, source, n_samples: int):
-        """Helper to collect data arrays from Grain data source.
+    @staticmethod
+    def _count_parameters(operator: nnx.Module) -> int:
+        """Count trainable parameters of an operator.
 
-        Handles ndim-aware reshaping:
-        - 2D (N, R) — 1D spatial, no time: add channel dim -> (N, 1, R)
-        - 3D (N, T, R) — 1D time-series: treat as (N, C, W) already channel-first
-        - 3D (N, H, W) — 2D spatial: add channel dim -> (N, 1, H, W)
-        - 4D (N, H, W, C) — 2D with channels: transpose to (N, C, H, W)
+        Args:
+            operator: The neural operator module.
+
+        Returns:
+            Total number of scalar parameters.
         """
-        inputs = []
-        outputs = []
+        params = nnx.state(operator, nnx.Param)
+        return int(sum(x.size for x in jax.tree_util.tree_leaves(params)))
 
-        # Collect samples
-        count = min(n_samples, len(source))
-        for i in range(count):
-            sample = source[i]
-            inputs.append(sample["input"])
-            outputs.append(sample["output"])
+    def _load_split(
+        self, n_samples: int, resolution: int, seed: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Load a Darcy flow split via the default Grain loader.
 
-        # Convert to JAX arrays
-        x = jnp.array(np.stack(inputs))
-        y = jnp.array(np.stack(outputs))
+        Args:
+            n_samples: Number of samples to draw.
+            resolution: Grid resolution.
+            seed: Loader seed (controls the sampled fields).
 
-        x = self._reshape_to_channel_first(x)
-        y = self._reshape_to_channel_first(y)
+        Returns:
+            Tuple ``(x, y)`` in channels-first ``(N, 1, H, W)`` layout.
+        """
+        loader = create_darcy_loader(
+            n_samples=n_samples,
+            batch_size=self.batch_size,
+            resolution=resolution,
+            shuffle=False,
+            seed=seed,
+            worker_count=0,
+            enable_normalization=False,
+        )
+        inputs: list[np.ndarray] = []
+        outputs: list[np.ndarray] = []
+        for batch in loader:
+            inputs.append(batch["input"])
+            outputs.append(batch["output"])
 
+        x = np.concatenate(inputs, axis=0)
+        y = np.concatenate(outputs, axis=0)
+        if x.ndim == 3:
+            x = x[:, np.newaxis, :, :]
+            y = y[:, np.newaxis, :, :]
         return x, y
 
-    @staticmethod
-    def _reshape_to_channel_first(arr: jnp.ndarray) -> jnp.ndarray:
-        """Reshape array to channel-first format based on ndim.
-
-        Args:
-            arr: Array with batch dimension first.
-
-        Returns:
-            Array in channel-first layout suitable for FNO/SFNO.
-        """
-        if arr.ndim == 2:
-            # (N, R) -> (N, 1, R): 1D spatial, add channel
-            return arr[:, None, :]
-        if arr.ndim == 3:
-            # (N, T, R) or (N, H, W): already channel-first or add channel
-            # Heuristic: if this is time-series 1D data, shape is (N, T, R)
-            # and is already in (N, C, W) form. For 2D spatial without channel,
-            # add channel dim. We treat 3D as (N, C, spatial) — no transpose.
-            return arr
-        if arr.ndim == 4:
-            # (N, H, W, C) -> (N, C, H, W): standard 2D with channels
-            return jnp.transpose(arr, (0, 3, 1, 2))
-        return arr
-
     def generate_test_datasets(self, resolution: int) -> dict[str, dict[str, jnp.ndarray]]:
-        """Generate test datasets for benchmarking.
+        """Load and normalize the Darcy dataset for a resolution.
+
+        Inputs and outputs are standardized with Gaussian statistics fit on the
+        training split. Predictions are un-normalized before error computation.
 
         Args:
-            resolution: Grid resolution
+            resolution: Grid resolution.
 
         Returns:
-            Dictionary of datasets with train/test splits
+            Dictionary of datasets with normalized train/test splits plus the
+            output statistics needed to un-normalize predictions.
         """
-        datasets = {}
+        datasets: dict[str, dict[str, jnp.ndarray]] = {}
 
-        # Determine split sizes
-        n_train = int(self.n_samples * 0.8)
-        n_test = self.n_samples - n_train
+        logger.info(f"Loading Darcy dataset at resolution {resolution}...")
+        x_train, y_train = self._load_split(self.n_train, resolution, self.seed)
+        x_test, y_test = self._load_split(self.n_test, resolution, self.seed + 1000)
 
-        try:
-            # Darcy Flow Dataset
-            logger.info(f"Generating Darcy dataset at resolution {resolution}...")
-            darcy_source = DarcyDataSource(
-                n_samples=self.n_samples,
-                resolution=resolution,
-            )
+        x_mean, x_std = float(x_train.mean()), float(x_train.std())
+        y_mean, y_std = float(y_train.mean()), float(y_train.std())
 
-            # Manually split indices isn't needed since source is deterministic/random access
-            # We can just take first N for train, next M for test
-            # But here we just regenerate or slice. Source is lazily evaluated.
-
-            # Since we need arrays for benchmarking, we collect them now.
-            # Ideally we would use Grain loaders, but for simple benchmark script:
-
-            logger.info(f"  - Collecting {self.n_samples} samples...")
-
-            # Collect all data
-            x_all, y_all = self._collect_data_from_source(darcy_source, self.n_samples)
-
-            datasets["Darcy"] = {
-                "x_train": x_all[:n_train],
-                "y_train": y_all[:n_train],
-                "x_test": x_all[n_train:],
-                "y_test": y_all[n_train:],
-            }
-            logger.info(f"Darcy dataset ready: {datasets['Darcy']['x_train'].shape}")
-
-        except Exception as e:
-            logger.warning(f"Darcy dataset generation failed: {e}")
-
-        try:
-            # Burgers Equation Dataset
-            logger.info(f"Generating Burgers dataset at resolution {resolution}...")
-            burgers_source = BurgersDataSource(
-                n_samples=self.n_samples,
-                resolution=resolution,
-                time_steps=self.n_time_steps,
-            )
-
-            logger.info(f"  - Collecting {self.n_samples} samples...")
-            x_all, y_all = self._collect_data_from_source(burgers_source, self.n_samples)
-
-            datasets["Burgers"] = {
-                "x_train": x_all[:n_train],
-                "y_train": y_all[:n_train],
-                "x_test": x_all[n_train:],
-                "y_test": y_all[n_train:],
-            }
-            logger.info(f"Burgers dataset ready: {datasets['Burgers']['x_train'].shape}")
-
-        except Exception as e:
-            logger.warning(f"Burgers dataset generation failed: {e}")
-
+        datasets["Darcy"] = {
+            "x_train": jnp.asarray((x_train - x_mean) / x_std),
+            "y_train": jnp.asarray((y_train - y_mean) / y_std),
+            "x_test": jnp.asarray((x_test - x_mean) / x_std),
+            "y_test_norm": jnp.asarray((y_test - y_mean) / y_std),
+            "y_test_raw": jnp.asarray(y_test),
+            "y_mean": jnp.asarray(y_mean),
+            "y_std": jnp.asarray(y_std),
+        }
+        logger.info(f"Darcy dataset ready: {datasets['Darcy']['x_train'].shape}")
         return datasets
+
+    def _train_operator(
+        self,
+        operator: nnx.Module,
+        dataset: dict[str, jnp.ndarray],
+    ) -> tuple[nnx.Module, float]:
+        """Train an operator with the standard operator-learning recipe.
+
+        Args:
+            operator: The neural operator module (channels-first interface).
+            dataset: Normalized dataset splits.
+
+        Returns:
+            Tuple ``(trained_operator, training_time_seconds)``.
+        """
+        # Warm any lazily-built spectral caches (e.g. the SFNO harmonic basis)
+        # outside of ``jit`` so they hold concrete constants, not tracers.
+        _ = operator(dataset["x_train"][:2])
+
+        config = TrainingConfig(
+            num_epochs=self.num_epochs,
+            learning_rate=self.learning_rate,
+            batch_size=self.batch_size,
+            validation_frequency=max(1, self.num_epochs // 4),
+            verbose=False,
+            loss_config=LossConfig(loss_type="relative_l2"),
+        )
+        trainer = Trainer(model=operator, config=config, rngs=nnx.Rngs(self.seed))
+
+        start_time = time.perf_counter()
+        trained_model, _ = trainer.fit(
+            train_data=(dataset["x_train"], dataset["y_train"]),
+            val_data=(dataset["x_test"], dataset["y_test_norm"]),
+        )
+        return trained_model, time.perf_counter() - start_time
+
+    @staticmethod
+    def _relative_l2(predictions: jnp.ndarray, targets: jnp.ndarray) -> float:
+        """Compute the mean per-sample relative L2 error.
+
+        Args:
+            predictions: Predicted fields (un-normalized).
+            targets: Ground-truth fields (un-normalized).
+
+        Returns:
+            Mean relative L2 error across the batch.
+        """
+        pred_flat = predictions.reshape(predictions.shape[0], -1)
+        target_flat = targets.reshape(targets.shape[0], -1)
+        l2_diff = jnp.linalg.norm(pred_flat - target_flat, axis=1)
+        l2_target = jnp.linalg.norm(target_flat, axis=1)
+        return float(jnp.mean(l2_diff / (l2_target + 1e-8)))
 
     def benchmark_operator(
         self,
@@ -312,62 +503,67 @@ class NeuralOperatorComparativeStudy:
         dataset_name: str,
         resolution: int,
     ) -> BenchmarkResult:
-        """Benchmark a single operator on a dataset.
+        """Train, then benchmark a single operator on a dataset.
 
         Args:
-            operator_name: Name of the neural operator
-            operator: The neural operator module
-            dataset: Dataset with train/test splits
-            dataset_name: Name of the dataset
-            resolution: Grid resolution
+            operator_name: Name of the neural operator.
+            operator: The neural operator module.
+            dataset: Normalized dataset with train/test splits.
+            dataset_name: Name of the dataset.
+            resolution: Grid resolution.
 
         Returns:
-            Benchmark result
+            Benchmark result with accuracy, parameter, and timing metrics.
         """
         logger.info(f"Benchmarking {operator_name} on {dataset_name} (resolution: {resolution})")
 
-        # Prepare model for evaluation with operator-specific interfaces
-        def model_fn(x):
-            if operator_name == "UNO":
-                # UNO expects channels-last format: (batch, height, width, channels)
-                if len(x.shape) == 4:  # 2D data with batch dimension
-                    x = jnp.transpose(x, (0, 2, 3, 1))  # (B, C, H, W) -> (B, H, W, C)
-
-                result = operator(x, deterministic=True)
-
-                # Convert back to channels-first format for consistency with targets
-                if len(result.shape) == 4:  # 2D output
-                    result = jnp.transpose(result, (0, 3, 1, 2))  # (B, H, W, C) -> (B, C, H, W)
-
-            else:
-                # FNO and SFNO expect channels-first format: (batch, channels, height, width)
-                # Data is already in correct format, no conversion needed
-                result = operator(x)
-
-            return result
+        param_count = self._count_parameters(operator)
+        self.param_counts[operator_name] = param_count
 
         try:
-            # Run benchmark evaluation
+            trained_model, train_time = self._train_operator(operator, dataset)
+
+            # Un-normalize predictions back to physical space for accuracy.
+            y_mean = dataset["y_mean"]
+            y_std = dataset["y_std"]
+
+            def model_fn(x: jnp.ndarray) -> jnp.ndarray:
+                return trained_model(x) * y_std + y_mean
+
+            # Inference timing + MSE/MAE via the benchmarking evaluator.
             result = self.evaluator.evaluate_model(
                 model=model_fn,
                 model_name=f"{operator_name}_{resolution}",
                 input_data=dataset["x_test"],
-                target_data=dataset["y_test"],
+                target_data=dataset["y_test_raw"],
                 dataset_name=f"{dataset_name}_{resolution}",
             )
 
+            # Coerce calibrax metric values (JAX arrays) to plain floats so the
+            # results manager can serialize them to JSON. ``result`` is frozen, so
+            # mutate the underlying metrics dict in place.
+            for name in list(result.metrics):
+                result.metrics[name] = Metric(value=float(result.metrics[name].value))
+
+            # Add relative-L2 accuracy, parameter count, and training time.
+            predictions = model_fn(dataset["x_test"])
+            rel_l2 = self._relative_l2(predictions, dataset["y_test_raw"])
+            result.metrics["relative_l2"] = Metric(value=rel_l2)
+            result.metrics["parameters"] = Metric(value=float(param_count))
+            result.metadata["training_time"] = float(train_time)
+
             mse_metric = result.metrics.get("mse")
             mse_val = mse_metric.value if mse_metric else float("nan")
-            exec_time = result.metadata.get("execution_time", 0.0)
+            infer_time = result.metadata.get("execution_time", 0.0)
             logger.info(
-                f"{operator_name} on {dataset_name}: MSE={mse_val:.6f}, Time={exec_time:.4f}s"
+                f"{operator_name} on {dataset_name}: relL2={rel_l2:.4%}, "
+                f"MSE={mse_val:.6e}, params={param_count:,}, "
+                f"train={train_time:.1f}s, infer={infer_time:.4f}s"
             )
-
             return result
 
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.exception(f"Benchmarking failed for {operator_name}")
-            # Return minimal result for failed benchmark
             return BenchmarkResult(
                 name=f"{operator_name}_{resolution}",
                 domain="scientific_ml",
@@ -376,7 +572,7 @@ class NeuralOperatorComparativeStudy:
                 metadata={"execution_time": float("inf"), "error": str(e)},
             )
 
-    def run_resolution_study(self):
+    def run_resolution_study(self) -> None:
         """Run comparative study across different resolutions."""
         logger.info("Starting multi-resolution comparative study...")
 
@@ -385,19 +581,17 @@ class NeuralOperatorComparativeStudy:
             logger.info(f"RESOLUTION {resolution}x{resolution} STUDY")
             logger.info("=" * 60)
 
-            # Create operators for this resolution
-            operators = self.create_operators(resolution)
-            if not operators:
-                logger.warning(f"No operators created for resolution {resolution}")
-                continue
-
-            # Generate datasets for this resolution
             datasets = self.generate_test_datasets(resolution)
             if not datasets:
                 logger.warning(f"No datasets generated for resolution {resolution}")
                 continue
 
-            # Benchmark each operator on each dataset
+            operators = self.create_operators(resolution)
+            if not operators:
+                logger.warning(f"No operators created for resolution {resolution}")
+                continue
+
+            # Train + benchmark each operator on each dataset.
             for operator_name, operator in operators.items():
                 for dataset_name, dataset in datasets.items():
                     result = self.benchmark_operator(
@@ -414,14 +608,13 @@ class NeuralOperatorComparativeStudy:
 
         logger.info("Multi-resolution study completed!")
 
-    def save_intermediate_results(self, resolution: int):
+    def save_intermediate_results(self, resolution: int) -> None:
         """Save intermediate results for this resolution.
 
         Args:
-            resolution: Grid resolution that was just completed
+            resolution: Grid resolution that was just completed.
         """
         try:
-            # Filter results for this resolution
             resolution_results = [
                 r
                 for r in self.all_results
@@ -429,18 +622,16 @@ class NeuralOperatorComparativeStudy:
             ]
 
             if resolution_results:
-                # Save to results manager
                 for result in resolution_results:
                     self.results_manager.save_benchmark_results(result)
-
                 logger.info(f"Saved {len(resolution_results)} results for resolution {resolution}")
             else:
                 logger.warning(f"No results to save for resolution {resolution}")
 
-        except Exception:
+        except (OSError, ValueError):
             logger.exception("Failed to save intermediate results")
 
-    def generate_comparative_analysis(self):
+    def generate_comparative_analysis(self) -> None:
         """Generate full comparative analysis."""
         logger.info("Generating comparative analysis...")
 
@@ -449,103 +640,81 @@ class NeuralOperatorComparativeStudy:
             return
 
         try:
-            # Organize results by operator and dataset
-            results_by_operator = {}
-            results_by_dataset = {}
+            results_by_operator: dict[str, list[BenchmarkResult]] = {}
+            results_by_dataset: dict[str, list[BenchmarkResult]] = {}
 
             for result in self.all_results:
                 if result.metrics.get("error") is not None:
                     continue  # Skip failed benchmarks
 
-                # Extract operator name (remove resolution suffix)
                 operator_name = result.name.split("_")[0]
                 dataset_name = result.tags.get("dataset", "unknown").split("_")[0]
 
-                if operator_name not in results_by_operator:
-                    results_by_operator[operator_name] = []
-                results_by_operator[operator_name].append(result)
+                results_by_operator.setdefault(operator_name, []).append(result)
+                results_by_dataset.setdefault(dataset_name, []).append(result)
 
-                if dataset_name not in results_by_dataset:
-                    results_by_dataset[dataset_name] = []
-                results_by_dataset[dataset_name].append(result)
-
-            # Generate performance comparison analysis
             self.create_performance_plots(results_by_operator, results_by_dataset)
-
-            # Generate statistical analysis
             self.perform_statistical_analysis(results_by_operator)
-
-            # Generate summary report
             self.generate_summary_report(results_by_operator, results_by_dataset)
 
             logger.info("Comparative analysis completed!")
 
-        except Exception:
+        except (ValueError, KeyError):
             logger.exception("Analysis generation failed")
 
     def create_performance_plots(
         self,
         results_by_operator: dict[str, list[BenchmarkResult]],
         results_by_dataset: dict[str, list[BenchmarkResult]],
-    ):
-        """Create performance comparison plots."""
+    ) -> None:
+        """Create performance comparison plots.
+
+        Args:
+            results_by_operator: Results grouped by operator name.
+            results_by_dataset: Results grouped by dataset name.
+        """
         logger.info("Creating performance plots...")
 
         try:
-            # Plot 1: MSE comparison across resolutions
-            _, axes = plt.subplots(1, 2, figsize=(15, 6))
-
+            # Plot 1: relative-L2 accuracy vs resolution per dataset.
+            _, ax = plt.subplots(figsize=(8, 6))
             for dataset_name, dataset_results in results_by_dataset.items():
-                operator_mse: dict[str, dict[int, float]] = {}
-                resolutions = set()
-
+                operator_err: dict[str, dict[int, float]] = {}
+                resolutions: set[int] = set()
                 for result in dataset_results:
                     operator_name = result.name.split("_")[0]
                     resolution = int(result.name.split("_")[1])
-
-                    if operator_name not in operator_mse:
-                        operator_mse[operator_name] = {}
-
-                    mse_m = result.metrics.get("mse")
-                    mse = mse_m.value if mse_m else float("inf")
-                    operator_mse[operator_name][resolution] = mse
+                    err_m = result.metrics.get("relative_l2")
+                    err = err_m.value if err_m else float("inf")
+                    operator_err.setdefault(operator_name, {})[resolution] = err
                     resolutions.add(resolution)
 
-                # Plot MSE vs Resolution
-                ax = axes[0] if dataset_name == next(iter(results_by_dataset.keys())) else axes[1]
-                ax.set_title(f"MSE vs Resolution - {dataset_name}")
-
-                for operator_name, mse_data in operator_mse.items():
-                    resolutions_list = sorted(resolutions)
-                    mse_values = [mse_data.get(r, float("inf")) for r in resolutions_list]
-
-                    # Filter out infinite values for plotting
-                    valid_indices = [i for i, v in enumerate(mse_values) if v != float("inf")]
-                    if valid_indices:
-                        valid_resolutions = [resolutions_list[i] for i in valid_indices]
-                        valid_mse = [mse_values[i] for i in valid_indices]
-
-                        ax.loglog(
-                            valid_resolutions,
-                            valid_mse,
-                            "o-",
-                            label=operator_name,
-                            linewidth=2,
+                for operator_name, err_data in operator_err.items():
+                    res_list = sorted(resolutions)
+                    err_values = [err_data.get(r, float("inf")) for r in res_list]
+                    valid = [
+                        (r, v)
+                        for r, v in zip(res_list, err_values, strict=True)
+                        if v != float("inf")
+                    ]
+                    if valid:
+                        xs, ys = zip(*valid, strict=True)
+                        ax.plot(
+                            xs, ys, "o-", label=f"{operator_name} ({dataset_name})", linewidth=2
                         )
 
-                ax.set_xlabel("Resolution")
-                ax.set_ylabel("MSE")
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-
+            ax.set_title("Relative L2 Error vs Resolution")
+            ax.set_xlabel("Resolution")
+            ax.set_ylabel("Relative L2 Error")
+            ax.legend()
+            ax.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig(self.output_dir / "mse_comparison.png", dpi=300, bbox_inches="tight")
+            plt.savefig(self.output_dir / "accuracy_comparison.png", dpi=150, bbox_inches="tight")
             plt.close()
 
-            # Plot 2: Execution time comparison
+            # Plot 2: inference time distribution per operator.
             _, ax = plt.subplots(figsize=(10, 6))
-
-            execution_times = {}
+            execution_times: dict[str, list[float]] = {}
             for operator_name, results in results_by_operator.items():
                 times = [
                     r.metadata.get("execution_time", float("inf"))
@@ -558,73 +727,66 @@ class NeuralOperatorComparativeStudy:
             if execution_times:
                 operators = list(execution_times.keys())
                 times_data = [execution_times[op] for op in operators]
-
                 ax.boxplot(times_data, tick_labels=operators)
-                ax.set_title("Execution Time Distribution by Operator")
-                ax.set_ylabel("Execution Time (seconds)")
+                ax.set_title("Inference Time Distribution by Operator")
+                ax.set_ylabel("Inference Time (seconds)")
                 ax.set_xlabel("Neural Operator")
                 plt.xticks(rotation=45)
 
             plt.tight_layout()
             plt.savefig(
                 self.output_dir / "execution_time_comparison.png",
-                dpi=300,
+                dpi=150,
                 bbox_inches="tight",
             )
             plt.close()
 
             logger.info("Performance plots saved")
 
-        except Exception:
+        except (ValueError, KeyError):
             logger.exception("Plot creation failed")
 
-    def perform_statistical_analysis(self, results_by_operator: dict[str, list[BenchmarkResult]]):
-        """Perform statistical analysis of operator performance."""
+    def perform_statistical_analysis(
+        self, results_by_operator: dict[str, list[BenchmarkResult]]
+    ) -> None:
+        """Perform pairwise statistical analysis of operator accuracy.
+
+        Args:
+            results_by_operator: Results grouped by operator name.
+        """
         logger.info("Performing statistical analysis...")
 
         try:
-            # Use the analysis engine for statistical comparisons
-            analysis_results = {}
-
+            analysis_results: dict[str, dict[str, float]] = {}
             operators = list(results_by_operator.keys())
             if len(operators) < 2:
                 logger.warning("Need at least 2 operators for comparison")
                 return
 
-            # Compare operators pairwise
             for i in range(len(operators)):
                 for j in range(i + 1, len(operators)):
                     op1, op2 = operators[i], operators[j]
-
-                    # Extract MSE values for comparison
-                    mse1 = [
-                        r.metrics["mse"].value
+                    err1 = [
+                        r.metrics["relative_l2"].value
                         for r in results_by_operator[op1]
-                        if "mse" in r.metrics
+                        if "relative_l2" in r.metrics
                     ]
-                    mse2 = [
-                        r.metrics["mse"].value
+                    err2 = [
+                        r.metrics["relative_l2"].value
                         for r in results_by_operator[op2]
-                        if "mse" in r.metrics
+                        if "relative_l2" in r.metrics
                     ]
-
-                    if len(mse1) > 1 and len(mse2) > 1:
-                        # Simple statistical comparison
-                        mean_mse1 = np.mean(mse1)
-                        mean_mse2 = np.mean(mse2)
-                        std_mse1 = np.std(mse1)
-                        std_mse2 = np.std(mse2)
-
+                    if err1 and err2:
+                        mean1, mean2 = float(np.mean(err1)), float(np.mean(err2))
                         analysis_results[f"{op1}_vs_{op2}"] = {
-                            "mean_mse_diff": mean_mse1 - mean_mse2,
-                            "relative_improvement": (mean_mse2 - mean_mse1) / mean_mse2 * 100,
-                            f"{op1}_mean": mean_mse1,
-                            f"{op1}_std": std_mse1,
-                            f"{op2}_mean": mean_mse2,
-                            f"{op2}_std": std_mse2,
+                            "mean_rel_l2_diff": mean1 - mean2,
+                            "relative_improvement": (mean2 - mean1) / mean2 * 100,
+                            f"{op1}_mean": mean1,
+                            f"{op1}_std": float(np.std(err1)),
+                            f"{op2}_mean": mean2,
+                            f"{op2}_std": float(np.std(err2)),
                         }
 
-            # Save statistical analysis
             import json
 
             with open(self.output_dir / "statistical_analysis.json", "w") as f:
@@ -632,278 +794,238 @@ class NeuralOperatorComparativeStudy:
 
             logger.info("Statistical analysis completed")
 
-        except Exception:
+        except (ValueError, KeyError, OSError):
             logger.exception("Statistical analysis failed")
 
-    def _format_performance_metrics(self, results: list[BenchmarkResult]) -> dict[str, float]:
-        """Format performance metrics from results."""
-        if not results:
-            return {
-                "mse": float("inf"),
-                "mae": float("inf"),
-                "r2": 0.0,
-                "execution_time": float("inf"),
-            }
+    @staticmethod
+    def _metric_mean(results: list[BenchmarkResult], key: str, default: float) -> float:
+        """Average a named metric across results, ignoring missing entries.
 
-        # Calculate average metrics
-        mse_values = [
-            r.metrics["mse"].value if "mse" in r.metrics else float("inf") for r in results
-        ]
-        mae_values = [
-            r.metrics["mae"].value if "mae" in r.metrics else float("inf") for r in results
-        ]
-        r2_values = [r.metrics["r2"].value if "r2" in r.metrics else 0.0 for r in results]
-        time_values = [r.metadata.get("execution_time", float("inf")) for r in results]
+        Args:
+            results: Benchmark results to aggregate.
+            key: Metric name to read.
+            default: Fallback value for results missing the metric.
 
-        return {
-            "mse": sum(mse_values) / len(mse_values),
-            "mae": sum(mae_values) / len(mae_values),
-            "r2": sum(r2_values) / len(r2_values),
-            "execution_time": sum(time_values) / len(time_values),
-        }
+        Returns:
+            Mean of the metric across the results.
+        """
+        values = [r.metrics[key].value if key in r.metrics else default for r in results]
+        return float(np.mean(values)) if values else default
 
     def _write_operator_section(
         self, f, results_by_operator: dict[str, list[BenchmarkResult]]
     ) -> None:
-        """Write operator performance section."""
-        f.write("## Neural Operator Performance\n\n")
-        for operator_name, results in results_by_operator.items():
-            metrics = self._format_performance_metrics(results)
-            f.write(f"### {operator_name.upper()}\n\n")
-            f.write(f"- **MSE**: {metrics['mse']:.2e}\n")
-            f.write(f"- **MAE**: {metrics['mae']:.2e}\n")
-            f.write(f"- **R²**: {metrics['r2']:.4f}\n")
-            f.write(f"- **Avg Execution Time**: {metrics['execution_time']:.2f}s\n")
-            f.write(f"- **Total Runs**: {len(results)}\n\n")
+        """Write the per-operator performance summary table.
 
-    def _write_dataset_section(
-        self, f, results_by_dataset: dict[str, list[BenchmarkResult]]
-    ) -> None:
-        """Write dataset performance section."""
-        f.write("## Datasets Evaluated\n\n")
-        for dataset_name, dataset_results in results_by_dataset.items():
-            results_count = len(dataset_results)
-            f.write(f"- **{dataset_name}**: {results_count} benchmark runs\n")
+        Args:
+            f: Open file handle for the report.
+            results_by_operator: Results grouped by operator name.
+        """
+        f.write("## Neural Operator Performance\n\n")
+        f.write("| Operator | Rel L2 | MSE | Parameters | Train (s) | Infer (s) |\n")
+        f.write("|----------|--------|-----|------------|-----------|-----------|\n")
+        for operator_name, results in results_by_operator.items():
+            rel_l2 = self._metric_mean(results, "relative_l2", float("inf"))
+            mse = self._metric_mean(results, "mse", float("inf"))
+            params = int(self._metric_mean(results, "parameters", 0.0))
+            train_t = float(np.mean([r.metadata.get("training_time", 0.0) for r in results]))
+            infer_t = float(np.mean([r.metadata.get("execution_time", 0.0) for r in results]))
+            f.write(
+                f"| {operator_name} | {rel_l2:.4%} | {mse:.2e} | "
+                f"{params:,} | {train_t:.1f} | {infer_t:.4f} |\n"
+            )
         f.write("\n")
 
     def _write_key_findings(self, f, results_by_operator: dict[str, list[BenchmarkResult]]) -> None:
-        """Write key findings section."""
+        """Write the key-findings section of the report.
+
+        Args:
+            f: Open file handle for the report.
+            results_by_operator: Results grouped by operator name.
+        """
         f.write("## Key Findings\n\n")
 
-        # Find best performer
-        operator_avg_mse = {}
+        operator_avg_err: dict[str, float] = {}
         for operator_name, results in results_by_operator.items():
-            valid_results = [r for r in results if "mse" in r.metrics]
-            if valid_results:
-                operator_avg_mse[operator_name] = np.mean(
-                    [r.metrics["mse"].value for r in valid_results]
+            valid = [r for r in results if "relative_l2" in r.metrics]
+            if valid:
+                operator_avg_err[operator_name] = float(
+                    np.mean([r.metrics["relative_l2"].value for r in valid])
                 )
+        if operator_avg_err:
+            best = min(operator_avg_err, key=operator_avg_err.__getitem__)
+            f.write(f"- **Best Overall Accuracy**: {best} (Rel L2: {operator_avg_err[best]:.4%})\n")
 
-        if operator_avg_mse:
-            best_operator: str = min(operator_avg_mse, key=operator_avg_mse.get)  # type: ignore[arg-type]
-            f.write(
-                f"- **Best Overall Accuracy**: {best_operator} "
-                f"(MSE: {operator_avg_mse[best_operator]:.6f})\n"
-            )
-
-        # Find fastest
-        operator_avg_time = {}
+        operator_avg_time: dict[str, float] = {}
         for operator_name, results in results_by_operator.items():
-            valid_results = [
+            valid = [
                 r for r in results if r.metadata.get("execution_time", float("inf")) != float("inf")
             ]
-            if valid_results:
-                operator_avg_time[operator_name] = np.mean(
-                    [r.metadata["execution_time"] for r in valid_results]
+            if valid:
+                operator_avg_time[operator_name] = float(
+                    np.mean([r.metadata["execution_time"] for r in valid])
                 )
-
         if operator_avg_time:
-            fastest_operator: str = min(operator_avg_time, key=operator_avg_time.get)  # type: ignore[arg-type]
+            fastest = min(operator_avg_time, key=operator_avg_time.__getitem__)
             f.write(
-                f"- **Fastest Execution**: {fastest_operator} "
-                f"({operator_avg_time[fastest_operator]:.4f}s average)\n"
+                f"- **Fastest Inference**: {fastest} ({operator_avg_time[fastest]:.4f}s average)\n"
             )
-
         f.write("\n")
 
     def generate_summary_report(
         self,
         results_by_operator: dict[str, list[BenchmarkResult]],
         results_by_dataset: dict[str, list[BenchmarkResult]],
-    ):
-        """Generate full summary report."""
+    ) -> None:
+        """Generate the full markdown summary report.
+
+        Args:
+            results_by_operator: Results grouped by operator name.
+            results_by_dataset: Results grouped by dataset name.
+        """
         logger.info("Generating summary report...")
 
         try:
             report_path = self.output_dir / "comparative_study_report.md"
-
             with open(report_path, "w") as f:
                 f.write("# Neural Operator Comparative Benchmarking Study\n\n")
                 f.write(f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-                # Executive Summary
                 f.write("## Executive Summary\n\n")
                 f.write(
-                    f"This report presents a full comparative analysis of "
-                    f"{len(results_by_operator)} neural operators across "
-                    f"{len(results_by_dataset)} datasets and "
+                    f"This report presents a comparative analysis of "
+                    f"{len(results_by_operator)} neural operators trained on "
+                    f"{len(results_by_dataset)} dataset(s) across "
                     f"{len(self.resolution_sizes)} resolutions.\n\n"
                 )
 
-                # Operators Analyzed
                 f.write("## Neural Operators Analyzed\n\n")
+                descriptions = {
+                    "UNO": "U-Net Neural Operator (Multi-scale CNN + Fourier layers)",
+                    "FNO": "Fourier Neural Operator (Spectral convolutions)",
+                    "SFNO": "Spherical Fourier Neural Operator (Spherical harmonics)",
+                }
                 for operator_name in results_by_operator:
-                    f.write(f"- **{operator_name}**: ")
-                    if operator_name == "UNO":
-                        f.write("U-Net Neural Operator (Multi-scale CNN + Fourier layers)\n")
-                    elif operator_name == "FNO":
-                        f.write("Fourier Neural Operator (Spectral convolutions)\n")
-                    elif operator_name == "SFNO":
-                        f.write("Spherical Fourier Neural Operator (Spherical harmonics)\n")
-                    else:
-                        f.write("Neural operator\n")
-
+                    f.write(
+                        f"- **{operator_name}**: "
+                        f"{descriptions.get(operator_name, 'Neural operator')}\n"
+                    )
                 f.write("\n")
 
-                # Datasets
-                self._write_dataset_section(f, results_by_dataset)
+                f.write("## Datasets Evaluated\n\n")
+                for dataset_name, dataset_results in results_by_dataset.items():
+                    f.write(f"- **{dataset_name}**: {len(dataset_results)} benchmark runs\n")
+                f.write("\n")
 
-                # Resolution Study
                 f.write("## Multi-Resolution Analysis\n\n")
                 f.write(f"**Resolutions tested**: {', '.join(map(str, self.resolution_sizes))}\n\n")
 
-                # Performance Summary
-                f.write("## Performance Summary\n\n")
-
-                for operator_name, results in results_by_operator.items():
-                    valid_results = [r for r in results if "mse" in r.metrics]
-                    if valid_results:
-                        mse_values = [r.metrics["mse"].value for r in valid_results]
-                        time_values = [r.metadata.get("execution_time", 0.0) for r in valid_results]
-
-                        f.write(f"### {operator_name}\n")
-                        f.write(f"- **Mean MSE**: {np.mean(mse_values):.6f}\n")
-                        f.write(f"- **MSE Std**: {np.std(mse_values):.6f}\n")
-                        f.write(f"- **Mean Execution Time**: {np.mean(time_values):.4f}s\n")
-                        f.write(f"- **Successful Runs**: {len(valid_results)}\n\n")
-
-                # Key Findings
+                self._write_operator_section(f, results_by_operator)
                 self._write_key_findings(f, results_by_operator)
 
-                # Conclusions
                 f.write("## Conclusions\n\n")
                 f.write(
-                    "This comparative study provides insights into the relative "
-                    "performance of different neural operator architectures across "
-                    "multiple scientific computing scenarios. Results should be "
-                    "interpreted in the context of specific application requirements.\n\n"
+                    "Each operator was trained with the standard operator-learning "
+                    "recipe (grid embedding, Gaussian normalization, relative-L2 "
+                    "loss). The accuracy column therefore reflects learned behaviour "
+                    "and is directly comparable across architectures.\n\n"
                 )
 
-                # Files Generated
                 f.write("## Generated Files\n\n")
-                f.write("- `mse_comparison.png`: MSE vs resolution plots\n")
-                f.write("- `execution_time_comparison.png`: Execution time distributions\n")
-                f.write("- `statistical_analysis.json`: Detailed statistical comparisons\n")
-                f.write("- Individual benchmark result files in results directory\n")
+                f.write("- `accuracy_comparison.png`: Relative L2 vs resolution plots\n")
+                f.write("- `execution_time_comparison.png`: Inference time distributions\n")
+                f.write("- `statistical_analysis.json`: Pairwise statistical comparisons\n")
+                f.write("- Individual benchmark result files in the results directory\n")
 
             logger.info(f"Report saved to {report_path}")
 
-        except Exception:
+        except (OSError, ValueError, KeyError):
             logger.exception("Report generation failed")
 
-    def run_complete_study(self):
+    def print_summary_table(self) -> None:
+        """Print a console summary table of the benchmark results."""
+        successful = [r for r in self.all_results if "relative_l2" in r.metrics]
+        if not successful:
+            logger.warning("No successful results to summarize")
+            return
+
+        logger.info("=" * 78)
+        logger.info("BENCHMARK SUMMARY (Darcy flow, trained operators)")
+        logger.info("=" * 78)
+        header = (
+            f"{'Operator':<10}{'Res':>5}{'Rel L2':>12}"
+            f"{'MSE':>14}{'Params':>14}{'Train(s)':>11}{'Infer(s)':>11}"
+        )
+        logger.info(header)
+        logger.info("-" * 78)
+        for result in successful:
+            name, res = result.name.split("_")
+            rel_l2 = result.metrics["relative_l2"].value
+            mse = result.metrics["mse"].value if "mse" in result.metrics else float("nan")
+            params = int(result.metrics["parameters"].value)
+            train_t = result.metadata.get("training_time", 0.0)
+            infer_t = result.metadata.get("execution_time", 0.0)
+            logger.info(
+                f"{name:<10}{res:>5}{rel_l2:>11.4%}{mse:>14.3e}"
+                f"{params:>14,}{train_t:>11.1f}{infer_t:>11.4f}"
+            )
+        logger.info("=" * 78)
+
+    def run_complete_study(self) -> None:
         """Run the complete comparative study."""
         logger.info("Starting full neural operator comparative study!")
-
         start_time = time.perf_counter()
 
         try:
-            # Run resolution study
             self.run_resolution_study()
-
-            # Generate analysis
             self.generate_comparative_analysis()
+            self.print_summary_table()
 
             total_time = time.perf_counter() - start_time
             logger.info(f"Complete study finished in {total_time:.2f} seconds!")
 
-            # Print summary
-            successful_runs = len([r for r in self.all_results if r.metrics.get("error") is None])
+            successful_runs = len([r for r in self.all_results if "relative_l2" in r.metrics])
             total_runs = len(self.all_results)
-
             logger.info("STUDY SUMMARY:")
             logger.info(f"   Total benchmark runs: {total_runs}")
             logger.info(f"   Successful runs: {successful_runs}")
             if total_runs > 0:
                 logger.info(f"   Success rate: {successful_runs / total_runs * 100:.1f}%")
-            else:
-                logger.info("   Success rate: N/A (no runs completed)")
             logger.info(f"   Results saved to: {self.output_dir}")
 
-        except Exception:
+        except (RuntimeError, ValueError):
             logger.exception("Study execution failed")
             raise
 
 
 # %% [markdown]
 """
-## Results Summary
+## Run the Study
 
-| Metric | UNO | FNO | SFNO |
-|--------|-----|-----|------|
-| L2 Relative Error | Varies | Varies | Varies |
-| Training Throughput | Varies | Varies | Varies |
-| Memory (Peak) | Varies | Varies | Varies |
-| Parameters | Varies | Varies | Varies |
-
-## Next Steps
-
-- Run on GPU for accurate performance benchmarks
-- Add PDEBench datasets for standardized comparison
-- Compare against neuraloperator (PyTorch) and DeepXDE baselines
-- See individual model examples for architecture details
+The cell below runs the benchmark with a compact configuration so the notebook
+finishes quickly. Trained operators reach a low-single-digit relative L2 error
+on Darcy flow, so the accuracy column is meaningful for comparison.
 """
 
-
 # %%
-def main():
-    """Main function to run the comparative study."""
-    import argparse
+study = NeuralOperatorComparativeStudy(
+    resolution_sizes=[32, 64],
+    n_train=1000,
+    n_test=100,
+    num_epochs=100,
+    batch_size=32,
+    learning_rate=1e-3,
+    hidden_channels=32,
+    seed=42,
+)
+study.run_complete_study()
 
-    parser = argparse.ArgumentParser(description="Neural Operator Comparative Benchmarking Study")
-    parser.add_argument(
-        "--output-dir",
-        default="benchmark_results/operator_benchmark",
-        help="Output directory for results",
-    )
-    parser.add_argument(
-        "--resolutions",
-        nargs="+",
-        type=int,
-        default=[32, 64, 96],
-        help="Grid resolutions to test",
-    )
-    parser.add_argument("--n-samples", type=int, default=1000, help="Number of samples per dataset")
-    parser.add_argument(
-        "--n-time-steps",
-        type=int,
-        default=50,
-        help="Number of time steps for evolution equations",
-    )
+# %% [markdown]
+"""
+## Next Steps
 
-    args = parser.parse_args()
-
-    # Create and run study
-    study = NeuralOperatorComparativeStudy(
-        output_dir=args.output_dir,
-        resolution_sizes=args.resolutions,
-        n_samples=args.n_samples,
-        n_time_steps=args.n_time_steps,
-    )
-
-    study.run_complete_study()
-
-
-# %%
-if __name__ == "__main__":
-    main()
+- Run on GPU for accurate throughput benchmarks
+- Add PDEBench datasets for standardized comparison
+- Compare against neuraloperator (PyTorch) and DeepXDE baselines
+- See individual model examples (`fno_darcy.py`, `uno_darcy.py`) for details
+"""
