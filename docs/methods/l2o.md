@@ -403,9 +403,16 @@ results = l2o_engine.compare_all_solvers(problem, problem_params)
 for solver_name, metrics in results.items():
     print(f"{solver_name}:")
     print(f"  Time: {metrics['time']:.4f}s")
+    print(f"  Objective: {metrics['objective_value']:.4e}")
     if 'speedup' in metrics:
         print(f"  Speedup: {metrics['speedup']:.1f}x")
 ```
+
+Each entry reports only measured quantities: wall-clock `time`, the objective
+value `sum(x**2)` evaluated on the produced `solution`, and (for the learned
+solvers) a `speedup` measured against the traditional baseline run in the same
+call. No accuracy is reported, because the problem specification carries no
+ground-truth optimum to compare against.
 
 ### Typical Performance Gains
 

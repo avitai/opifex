@@ -145,13 +145,17 @@ class WorkloadProfile:
 
 @dataclass(slots=True, kw_only=True)
 class PerformanceMetrics:
-    """Performance metrics for optimization validation."""
+    """Measured performance metrics for an optimized model.
+
+    All fields are directly measured. GPU utilization and energy efficiency are
+    intentionally omitted: measuring them requires device/power telemetry (e.g.
+    NVML) that is not a dependency of this framework, so reporting them here would
+    be a fabricated value rather than a measurement.
+    """
 
     latency_ms: float
     throughput_rps: float
     memory_usage_gb: float
-    gpu_utilization: float
-    energy_efficiency: float
     improvement_factor: float
 
 
@@ -271,9 +275,25 @@ class AdaptiveJAXOptimizer(nnx.Module):
         return _JitWrappedModel(model, balanced_forward)
 
     def benchmark_model_performance(
-        self, model: Module, workload: WorkloadProfile
+        self, model: Module, workload: WorkloadProfile, improvement_factor: float = 1.0
     ) -> PerformanceMetrics:
-        """Benchmark model performance for given workload."""
+        """Benchmark a single model on the given workload.
+
+        Latency is measured by timing repeated forward passes; throughput is
+        derived from that latency. Memory usage is estimated from the workload
+        footprint. ``improvement_factor`` defaults to ``1.0`` (no baseline to
+        compare against in a single-model benchmark) and should be supplied by
+        the caller when a measured baseline latency is available.
+
+        Args:
+            model: Model to benchmark.
+            workload: Workload profile defining batch size and footprint.
+            improvement_factor: Measured speedup relative to a baseline model
+                (baseline_latency / this_latency); ``1.0`` when no baseline.
+
+        Returns:
+            Measured performance metrics for the model.
+        """
 
         # Get the correct input dimension using our robust utility function
         try:
@@ -306,17 +326,10 @@ class AdaptiveJAXOptimizer(nnx.Module):
         # Estimate memory usage (simplified)
         memory_usage = workload.memory_footprint * 0.8  # Optimization typically reduces memory
 
-        # Placeholder values for other metrics
-        gpu_utilization = 0.85
-        energy_efficiency = 0.9
-        improvement_factor = 1.0
-
         return PerformanceMetrics(
             latency_ms=avg_latency,
             throughput_rps=throughput,
             memory_usage_gb=memory_usage,
-            gpu_utilization=gpu_utilization,
-            energy_efficiency=energy_efficiency,
             improvement_factor=improvement_factor,
         )
 
@@ -336,6 +349,11 @@ class AdaptiveJAXOptimizer(nnx.Module):
         if cache_key in self.optimization_cache:
             return self.optimization_cache[cache_key]
 
+        # Measure the baseline (un-optimized) model so the reported improvement
+        # factor is a real latency ratio rather than an assumed constant.
+        baseline_metrics = self.benchmark_model_performance(model, workload)
+        baseline_latency = baseline_metrics.latency_ms
+
         # Analyze workload and select strategy
         strategy = self.analyze_workload_patterns(workload)
 
@@ -349,8 +367,12 @@ class AdaptiveJAXOptimizer(nnx.Module):
         else:  # BALANCED
             optimized_model = self.apply_balanced_optimization(model)
 
-        # Benchmark performance
+        # Benchmark the optimized model and compute the measured improvement
+        # factor as baseline_latency / optimized_latency.
         performance_metrics = self.benchmark_model_performance(optimized_model, workload)
+        performance_metrics.improvement_factor = baseline_latency / max(
+            performance_metrics.latency_ms, 1e-9
+        )
 
         # Create optimized model container
         optimized_container = OptimizedModel(
@@ -361,6 +383,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
                 "workload_profile": workload,
                 "optimization_timestamp": time.time(),
                 "jax_backend": jax.default_backend(),
+                "baseline_latency_ms": baseline_latency,
             },
         )
 
@@ -648,8 +671,6 @@ class HybridPerformancePlatform(nnx.Module):
             latency_ms=optimized_model.performance_metrics.latency_ms,
             throughput_rps=optimized_model.performance_metrics.throughput_rps,
             memory_usage_gb=optimized_model.performance_metrics.memory_usage_gb,
-            gpu_utilization=optimized_model.performance_metrics.gpu_utilization,
-            energy_efficiency=optimized_model.performance_metrics.energy_efficiency,
             improvement_factor=optimized_model.performance_metrics.improvement_factor,
         )
 

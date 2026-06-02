@@ -342,7 +342,7 @@ class TestL2OEngine:
         assert all(jnp.isfinite(sol).all() for sol in solutions)
 
     def test_performance_comparison_framework(self, l2o_engine):
-        """Test full performance comparison capabilities."""
+        """Test that solver comparison reports only measured (non-fabricated) metrics."""
         problem = OptimizationProblem("quadratic", 5)
         problem_params = jnp.ones(20)
 
@@ -352,12 +352,42 @@ class TestL2OEngine:
         assert "gradient_l2o" in comparison
         assert "traditional_baseline" in comparison
 
-        for solver_name, results in comparison.items():
+        # No fabricated "accuracy" key on any path; only measured quantities.
+        for results in comparison.values():
+            assert "accuracy" not in results
             assert "solution" in results
-            assert "time" in results
-            assert "accuracy" in results
-            if solver_name != "traditional_baseline":
-                assert "speedup" in results
+            assert jnp.isfinite(results["solution"]).all()
+            # Wall-clock time is actually measured: positive and finite.
+            assert results["time"] > 0
+            assert jnp.isfinite(results["time"])
+            # Objective value is computed from the solver's own solution.
+            assert "objective_value" in results
+            assert jnp.isfinite(results["objective_value"])
+            assert results["objective_value"] >= 0  # sum(x**2) is non-negative
+
+        # The traditional baseline is run for real, so its solution is not all-zero.
+        baseline = comparison["traditional_baseline"]
+        assert "speedup" not in baseline  # speedup is relative to the baseline itself
+
+        # Learned solvers report a real speedup measured against the baseline time.
+        baseline_time = baseline["time"]
+        for solver_name in ("parametric_solver", "gradient_l2o"):
+            results = comparison[solver_name]
+            assert "speedup" in results
+            expected_speedup = baseline_time / results["time"]
+            assert results["speedup"] == pytest.approx(expected_speedup, rel=1e-6)
+
+    def test_solver_comparison_objective_matches_solution(self, l2o_engine):
+        """The reported objective value equals sum(x**2) of the reported solution."""
+        problem = OptimizationProblem("quadratic", 5)
+        problem_params = jnp.ones(20)
+
+        comparison = l2o_engine.compare_all_solvers(problem, problem_params)
+
+        for results in comparison.values():
+            solution = results["solution"]
+            expected_objective = float(jnp.sum(solution**2))
+            assert results["objective_value"] == pytest.approx(expected_objective, rel=1e-5)
 
     def test_adaptive_algorithm_selection(self, l2o_engine):
         """Test adaptive selection of optimization algorithms."""

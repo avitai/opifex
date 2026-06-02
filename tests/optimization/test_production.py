@@ -5,6 +5,8 @@ including the Hybrid Performance Platform, adaptive JIT optimization,
 and intelligent GPU memory management.
 """
 
+from dataclasses import fields
+
 import jax.numpy as jnp
 import pytest
 from flax import nnx
@@ -126,22 +128,24 @@ class TestPerformanceMetrics:
     """Test PerformanceMetrics data structure."""
 
     def test_performance_metrics_creation(self):
-        """Test basic performance metrics creation."""
+        """Test basic performance metrics creation (measured fields only)."""
         metrics = PerformanceMetrics(
             latency_ms=5.2,
             throughput_rps=192.3,
             memory_usage_gb=1.8,
-            gpu_utilization=0.87,
-            energy_efficiency=0.92,
             improvement_factor=1.35,
         )
 
         assert metrics.latency_ms == 5.2
         assert metrics.throughput_rps == 192.3
         assert metrics.memory_usage_gb == 1.8
-        assert metrics.gpu_utilization == 0.87
-        assert metrics.energy_efficiency == 0.92
         assert metrics.improvement_factor == 1.35
+
+    def test_performance_metrics_has_no_unmeasured_telemetry(self):
+        """GPU utilization and energy efficiency are not reported (no telemetry)."""
+        field_names = {f.name for f in fields(PerformanceMetrics)}
+        assert "gpu_utilization" not in field_names
+        assert "energy_efficiency" not in field_names
 
 
 class TestAdaptiveJAXOptimizer:
@@ -263,8 +267,10 @@ class TestAdaptiveJAXOptimizer:
         assert metrics.latency_ms > 0
         assert metrics.throughput_rps >= 0
         assert metrics.memory_usage_gb > 0
-        assert 0 <= metrics.gpu_utilization <= 1
-        assert 0 <= metrics.energy_efficiency <= 1
+        # Throughput is derived from the measured latency: throughput = 1000 / latency.
+        assert metrics.throughput_rps == pytest.approx(1000.0 / metrics.latency_ms, rel=1e-6)
+        # A single-model benchmark has no baseline, so improvement_factor is exactly 1.0.
+        assert metrics.improvement_factor == 1.0
 
     def test_optimize_neural_operator(self, sample_model, sample_workload):
         """Test complete neural operator optimization."""
@@ -275,6 +281,10 @@ class TestAdaptiveJAXOptimizer:
         assert isinstance(optimized_container, OptimizedModel)
         assert optimized_container.optimization_type == OptimizationStrategy.BALANCED
         assert isinstance(optimized_container.performance_metrics, PerformanceMetrics)
+        # improvement_factor is a real measured ratio of baseline/optimized latency.
+        assert optimized_container.performance_metrics.improvement_factor > 0
+        assert jnp.isfinite(optimized_container.performance_metrics.improvement_factor)
+        assert "baseline_latency_ms" in optimized_container.optimization_metadata
         assert "workload_profile" in optimized_container.optimization_metadata
         assert "optimization_timestamp" in optimized_container.optimization_metadata
         assert "jax_backend" in optimized_container.optimization_metadata
