@@ -13,14 +13,18 @@ Implements:
   ``trieste/acquisition/function/function.py:1364``
   (``batch_monte_carlo_expected_improvement.__call__``); see the function
   docstring.
-* :func:`q_expected_hypervolume_improvement` — q-EHVI multi-objective
-  acquisition. Ported from
-  ``trieste/acquisition/function/multi_objective.py:253``
-  (``BatchMonteCarloExpectedHypervolumeImprovement``); see the function
-  docstring. The exact partition-bounds machinery from trieste is
-  replaced by a Monte-Carlo dominated-volume estimator (sufficient for
-  the API contract; deferred to a future task to vendor the
-  ``prepare_default_non_dominated_partition_bounds`` JAX rewrite).
+* :func:`q_expected_hypervolume_improvement` — general-``M`` q-EHVI
+  multi-objective acquisition (Daulton, Balandat & Bakshy 2020,
+  *Differentiable Expected Hypervolume Improvement for Parallel
+  Multi-Objective Bayesian Optimization*, NeurIPS, arXiv:2006.05078).
+  Ported from ``trieste/acquisition/function/multi_objective.py:211``
+  (``batch_ehvi``); see the function docstring. A JAX-native grid box
+  decomposition of the non-dominated region (replacing trieste's
+  ``prepare_default_non_dominated_partition_bounds``) feeds the
+  inclusion-exclusion per-box improvement formula, Monte-Carlo averaged
+  over the diagonal-Gaussian posterior. The exact 2-D staircase formula
+  is retained as a fast special case and the general path is verified to
+  agree with it at ``M = 2``.
 """
 
 from __future__ import annotations
@@ -274,6 +278,192 @@ def _pareto_volume_2d(points: jax.Array, reference_point: jax.Array) -> jax.Arra
     return jnp.sum(jnp.maximum(widths, 0.0) * heights)
 
 
+def _axis_cartesian_indices(num_edges: int, num_objectives: int) -> jax.Array:
+    """Cartesian product of per-axis grid indices.
+
+    Returns an ``(num_edges ** num_objectives, num_objectives)`` integer
+    array enumerating every grid cell of the box decomposition. The
+    shape is static once ``num_edges`` and ``num_objectives`` are known,
+    so the downstream computation is ``jit``-compatible.
+    """
+    axes = [jnp.arange(num_edges) for _ in range(num_objectives)]
+    grids = jnp.meshgrid(*axes, indexing="ij")
+    return jnp.stack([g.reshape(-1) for g in grids], axis=-1)
+
+
+def _grid_cell_bounds(
+    front: jax.Array,
+    reference_point: jax.Array,
+    *,
+    anti_ideal: jax.Array | None,
+) -> tuple[jax.Array, jax.Array]:
+    """Lower/upper corners of every grid cell in the box decomposition.
+
+    The grid uses each objective's sorted front coordinates (clipped at
+    the reference point) as the lower cell edges; consecutive edges form
+    the cell widths, the final edge being the reference point. When
+    ``anti_ideal`` is supplied it is prepended as an extra edge per axis
+    so the cells also tile the slab below the front down to the
+    anti-ideal point — this is the form required for the non-dominated
+    decomposition (its lower extent must reach below any candidate so
+    improvements past the front's best are captured). Cells with
+    repeated coordinates collapse to zero width and drop out naturally,
+    which keeps the cell count static (``P`` or ``P + 1`` per axis) and
+    the whole routine ``jit``-safe.
+    """
+    sorted_coords = jnp.minimum(jnp.sort(front, axis=0), reference_point[None, :])
+    if anti_ideal is not None:
+        capped_anti_ideal = jnp.minimum(anti_ideal, reference_point)
+        lower_edges = jnp.concatenate([capped_anti_ideal[None, :], sorted_coords], axis=0)
+    else:
+        lower_edges = sorted_coords
+    lower_edges = jnp.minimum(lower_edges, reference_point[None, :])
+    upper_edges = jnp.minimum(
+        jnp.concatenate([lower_edges[1:, :], reference_point[None, :]], axis=0),
+        reference_point[None, :],
+    )
+
+    num_edges, num_objectives = lower_edges.shape
+    cell_idx = _axis_cartesian_indices(num_edges, num_objectives)
+    lower = jnp.take_along_axis(lower_edges.T, cell_idx.T, axis=1).T
+    upper = jnp.take_along_axis(upper_edges.T, cell_idx.T, axis=1).T
+    return lower, upper
+
+
+def _cells_dominated_by_front(front: jax.Array, lower: jax.Array, upper: jax.Array) -> jax.Array:
+    """Boolean mask: cells whose centre is dominated by some front point.
+
+    Under minimisation a point ``z`` is dominated by front point ``p``
+    when ``all(p <= z)``. Each grid cell is non-degenerate and lies
+    wholly on one side of every front coordinate, so its centre is a
+    valid representative for the whole cell.
+    """
+    centre = 0.5 * (lower + upper)
+    return jnp.any(jnp.all(front[None, :, :] <= centre[:, None, :], axis=-1), axis=-1)
+
+
+def dominated_hypervolume(front: jax.Array, reference_point: jax.Array) -> jax.Array:
+    r"""General-``M`` dominated hypervolume via a grid box decomposition.
+
+    Computes the volume of ``\{z : z \le r, \exists p \in P. p \preceq z\}``
+    (minimisation) — the region dominated by the Pareto front ``P``
+    below the reference point ``r``. The dominated region is tiled by an
+    axis-aligned grid whose lines are the front's per-objective
+    coordinates plus the reference point; a cell is summed when its
+    centre is dominated by some front point.
+
+    This is the JAX-native analogue of trieste's
+    ``Pareto.hypervolume_indicator`` box decomposition
+    (``trieste/acquisition/multi_objective/pareto.py``) and the grid
+    decomposition described by Daulton, Balandat & Bakshy (2020,
+    arXiv:2006.05078). The ``M = 2`` case is routed to the exact
+    staircase :func:`_pareto_volume_2d` (the fast special-case path);
+    higher ``M`` generalises that staircase to a hyper-rectangle grid and
+    is unit-tested to agree with it at ``M = 2``. Dominated (redundant)
+    front points contribute no extra volume.
+
+    Args:
+        front: Shape ``(P, M)`` Pareto front (need not be screened of
+            dominated points).
+        reference_point: Shape ``(M,)`` upper bound of the hypervolume.
+
+    Returns:
+        Scalar dominated hypervolume.
+    """
+    if front.shape[-1] == 2:
+        return _pareto_volume_2d(front, reference_point)
+    return _dominated_hypervolume_grid(front, reference_point)
+
+
+def _dominated_hypervolume_grid(front: jax.Array, reference_point: jax.Array) -> jax.Array:
+    """General-``M`` dominated hypervolume via the grid box decomposition.
+
+    The dimension-agnostic core of :func:`dominated_hypervolume`; the
+    public entry point routes ``M = 2`` to the faster staircase formula
+    and dispatches everything else here. Kept separate so the general
+    path can be unit-tested for agreement with the exact 2-D formula.
+    """
+    lower, upper = _grid_cell_bounds(front, reference_point, anti_ideal=None)
+    widths = jnp.maximum(upper - lower, 0.0)
+    cell_volume = jnp.prod(widths, axis=-1)
+    non_degenerate = jnp.all(widths > 0.0, axis=-1)
+    keep = _cells_dominated_by_front(front, lower, upper) & non_degenerate
+    return jnp.sum(jnp.where(keep, cell_volume, 0.0))
+
+
+def _non_dominated_partition_bounds(
+    front: jax.Array, reference_point: jax.Array, anti_ideal: jax.Array
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Box decomposition of the non-dominated region below the reference.
+
+    Returns ``(lower, upper, keep)``: the lower/upper corners of every
+    grid cell and a boolean mask selecting the cells that lie in the
+    non-dominated region (below ``reference_point`` and *not* dominated
+    by any front point). The ``anti_ideal`` point fixes the lower extent
+    of the partition; it must be at or below every candidate sample so
+    that improvements pushing past the front's best on any objective are
+    captured. This is the JAX-native replacement for trieste's
+    ``prepare_default_non_dominated_partition_bounds``
+    (``trieste/acquisition/multi_objective/partition.py``) and feeds the
+    inclusion-exclusion q-EHVI formula of Daulton et al. (2020).
+    """
+    lower, upper = _grid_cell_bounds(front, reference_point, anti_ideal=anti_ideal)
+    non_degenerate = jnp.all((upper - lower) > 0.0, axis=-1)
+    keep = (~_cells_dominated_by_front(front, lower, upper)) & non_degenerate
+    return lower, upper, keep
+
+
+def _qehvi_inclusion_exclusion(
+    samples: jax.Array,
+    lower: jax.Array,
+    upper: jax.Array,
+    keep: jax.Array,
+) -> jax.Array:
+    r"""Per-sample q-EHVI via the Daulton et al. (2020) inclusion-exclusion.
+
+    For each non-empty subset ``J`` of the ``q`` batch points the joint
+    improvement over a partition cell ``[l, u)`` is the box
+    ``\prod_m \max(u_m - \max(z^J_m, l_m), 0)`` where ``z^J`` is the
+    per-objective maximum (worst value) across the subset. Summing these
+    over cells with the alternating inclusion-exclusion sign
+    ``(-1)^{|J| + 1}`` yields the hypervolume jointly dominated by the
+    batch beyond the current front (Daulton, Balandat & Bakshy 2020,
+    arXiv:2006.05078, Eq. 1; trieste ``batch_ehvi``).
+
+    Args:
+        samples: ``(S, q, M)`` posterior draws for the candidate batch.
+        lower: ``(C, M)`` lower corners of the partition cells.
+        upper: ``(C, M)`` upper corners of the partition cells.
+        keep: ``(C,)`` mask selecting non-dominated cells.
+
+    Returns:
+        ``(S,)`` per-sample hypervolume improvement.
+    """
+    _, batch_size, _ = samples.shape
+
+    def subset_contribution(subset_mask: jax.Array) -> jax.Array:
+        # ``subset_mask`` is a (q,) boolean selecting the subset J. The
+        # per-objective worst value across J uses ``where`` so excluded
+        # points cannot lower the overlap vertex.
+        masked = jnp.where(subset_mask[None, :, None], samples, -jnp.inf)
+        overlap = jnp.max(masked, axis=1)  # (S, M)
+        clipped = jnp.maximum(overlap[:, None, :], lower[None, :, :])  # (S, C, M)
+        lengths = jnp.maximum(upper[None, :, :] - clipped, 0.0)
+        cell_volume = jnp.where(keep[None, :], jnp.prod(lengths, axis=-1), 0.0)
+        return jnp.sum(cell_volume, axis=-1)  # (S,)
+
+    # Enumerate all 2^q - 1 non-empty subsets as bit masks; sign follows
+    # the inclusion-exclusion cardinality rule.
+    bit_positions = jnp.arange(batch_size)
+    subset_codes = jnp.arange(1, 2**batch_size)
+    subset_masks = ((subset_codes[:, None] >> bit_positions[None, :]) & 1).astype(bool)
+    cardinality = jnp.sum(subset_masks, axis=-1)
+    signs = jnp.where(cardinality % 2 == 1, 1.0, -1.0)
+
+    contributions = jax.vmap(subset_contribution)(subset_masks)  # (num_subsets, S)
+    return jnp.sum(signs[:, None] * contributions, axis=0)
+
+
 def q_expected_hypervolume_improvement(
     *,
     candidate_mean: jax.Array,
@@ -283,20 +473,42 @@ def q_expected_hypervolume_improvement(
     num_samples: int,
     rngs: nnx.Rngs | jax.Array,
 ) -> jax.Array:
-    r"""Monte-Carlo q-EHVI multi-objective acquisition.
+    r"""Monte-Carlo q-EHVI multi-objective acquisition (general ``M``).
 
-    Ported from ``trieste/acquisition/function/multi_objective.py:253``
-    (``BatchMonteCarloExpectedHypervolumeImprovement``). The trieste
-    implementation samples the joint predictive over the candidate batch
-    via a model reparam sampler and computes the hypervolume
-    contribution against a non-dominated partition of the reference
-    region. The opifex port:
+    Implements the parallel Expected Hypervolume Improvement of Daulton,
+    Balandat & Bakshy (2020), *Differentiable Expected Hypervolume
+    Improvement for Parallel Multi-Objective Bayesian Optimization*
+    (NeurIPS, arXiv:2006.05078). Ported from trieste's ``batch_ehvi``
+    (``trieste/acquisition/function/multi_objective.py:211``). The
+    acquisition value is
 
-    * Replaces the model sampler with an explicit reparameterisation
-      ``y = mean + std * eps`` (diagonal Gaussian per candidate).
-    * Uses the exact 2-D dominated-hypervolume formula (the only case
-      currently exercised by the tests). Higher-dimensional fronts will
-      land when the partition-bounds machinery is vendored.
+    .. math::
+        \alpha_{\text{qEHVI}}(\mathcal{X})
+        = \mathbb{E}\!\Big[
+            \sum_{\emptyset \ne J \subseteq \{1,\dots,q\}}
+            (-1)^{|J|+1}
+            \sum_{k} \prod_{m} \max\!\big(u^{(k)}_m
+                - \max_{j \in J} \max(z^{(j)}_m, l^{(k)}_m), 0\big)
+        \Big],
+
+    where ``\{[l^{(k)}, u^{(k)})\}_k`` is a box decomposition of the
+    non-dominated region below the reference point and the expectation is
+    over the posterior of the batch.
+
+    The opifex port:
+
+    * Replaces trieste's model reparam sampler with an explicit
+      diagonal-Gaussian reparameterisation ``y = mean + std * eps``,
+      ``eps ~ N(0, I)`` (the active subsystem operates on
+      :class:`PredictiveDistribution` moments, not a model object).
+    * Replaces trieste's ``prepare_default_non_dominated_partition_bounds``
+      with a JAX-native grid box decomposition
+      (:func:`_non_dominated_partition_bounds`) so the whole acquisition
+      stays ``jit``/``grad``/``vmap`` compatible for any ``M``.
+
+    The exact 2-D staircase (:func:`_pareto_volume_2d`) is retained as a
+    fast special case for the dominated-hypervolume helper and the
+    general path is unit-tested to agree with it at ``M = 2``.
 
     Args:
         candidate_mean: Shape ``(q, M)`` predictive mean per candidate
@@ -307,6 +519,9 @@ def q_expected_hypervolume_improvement(
         num_samples: Monte-Carlo sample count.
         rngs: Caller-owned ``nnx.Rngs`` bundle or a raw ``jax.Array``
             PRNG key used for the reparameterisation draws.
+
+    Returns:
+        Scalar Monte-Carlo estimate of the q-EHVI (non-negative).
     """
     if num_samples <= 0:
         raise ValueError(f"num_samples must be positive; got {num_samples!r}")
@@ -314,11 +529,6 @@ def q_expected_hypervolume_improvement(
         raise ValueError("candidate_mean and candidate_std must share shape.")
     if candidate_mean.ndim != 2:
         raise ValueError(f"q-EHVI expects candidate_mean shape (q, M); got {candidate_mean.shape}")
-    if candidate_mean.shape[-1] != 2:
-        raise NotImplementedError(
-            "q-EHVI in opifex currently supports 2-D objective spaces; "
-            "vendor trieste's partition-bounds for higher dimensions."
-        )
 
     key = extract_rng_key(
         rngs,
@@ -329,15 +539,13 @@ def q_expected_hypervolume_improvement(
     eps = jax.random.normal(key, (num_samples, q, m))
     samples = candidate_mean[None, ...] + candidate_std[None, ...] * eps  # (S, q, M)
 
-    baseline = _pareto_volume_2d(pareto_front, reference_point)
-
-    def _hv_with_candidates(candidate_batch: jax.Array) -> jax.Array:
-        merged = jnp.concatenate([pareto_front, candidate_batch], axis=0)
-        return _pareto_volume_2d(merged, reference_point)
-
-    new_volumes = jax.vmap(_hv_with_candidates)(samples)  # (S,)
-    improvement = jnp.maximum(new_volumes - baseline, 0.0)
-    return jnp.mean(improvement)
+    # The partition's lower extent must sit below every candidate sample
+    # and front point so candidate improvements past the front's best on
+    # any objective are tiled by the decomposition.
+    anti_ideal = jnp.minimum(jnp.min(pareto_front, axis=0), jnp.min(samples, axis=(0, 1)))
+    lower, upper, keep = _non_dominated_partition_bounds(pareto_front, reference_point, anti_ideal)
+    per_sample = _qehvi_inclusion_exclusion(samples, lower, upper, keep)
+    return jnp.mean(jnp.maximum(per_sample, 0.0))
 
 
 # -----------------------------------------------------------------------------

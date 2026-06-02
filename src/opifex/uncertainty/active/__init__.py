@@ -52,6 +52,7 @@ from opifex.uncertainty.active.acquisition import (
 from opifex.uncertainty.active.batch_active import (
     batch_bald,
     batch_mc_expected_improvement,
+    dominated_hypervolume,
     q_expected_hypervolume_improvement,
 )
 from opifex.uncertainty.active.experimental_design import (
@@ -83,6 +84,7 @@ __all__ = [
     "batch_bald",
     "batch_mc_expected_improvement",
     "bayesian_experimental_design_loop",
+    "dominated_hypervolume",
     "expected_improvement",
     "expected_information_gain",
     "log_expected_improvement",
