@@ -12,10 +12,9 @@ This package implements neural network architectures for scientific machine lear
 **Implemented Components**:
 
 - [x] **StandardMLP Class** - Multi-layer perceptron with configurable architecture
-- [x] **QuantumMLP Class** - Quantum-aware neural networks for molecular systems
-- [x] **Energy Computation** - Direct molecular energy calculation capabilities
-- [x] **Force Computation** - Automatic differentiation for molecular forces
-- [x] **Symmetry Enforcement** - Permutation symmetry for molecular systems
+- [x] **Atomistic Models** (`opifex.neural.atomistic`) - Machine-learning
+      interatomic potentials (SchNet / PaiNN / NequIP backbones with energy /
+      forces / stress heads) for molecular and materials systems
 - [x] **Precision Support** - Both float32 and float64 for chemical accuracy
 - [x] **Dropout Support** - Configurable dropout for regularization
 - [x] **Custom Initialization** - Physics-informed weight initialization
@@ -53,7 +52,7 @@ This package implements neural network architectures for scientific machine lear
 import jax
 import jax.numpy as jnp
 import flax.nnx as nnx
-from opifex.neural.base import StandardMLP, QuantumMLP
+from opifex.neural.base import StandardMLP
 from opifex.neural.activations import get_activation, register_activation
 
 # Create a standard MLP
@@ -88,47 +87,40 @@ print(f"Classification output shape: {y_class.shape}")  # (16, 5)
 print(f"Probabilities sum: {jnp.sum(y_class, axis=1)}")  # Should be ~1.0
 ```
 
-### 2. Quantum-Aware Neural Networks
+### 2. Atomistic Machine-Learning Potentials
+
+Molecular and materials property prediction uses the `opifex.neural.atomistic`
+machine-learning interatomic potentials: a permutation- and E(3)-aware backbone
+produces per-atom embeddings, and typed heads read them out into energy, forces
+and stress. See the [Atomistic Potentials guide](../../../docs/methods/atomistic-potentials.md).
 
 ```python
-from opifex.neural.base import QuantumMLP
-from opifex.core.quantum.molecular_system import create_molecular_system
+from flax import nnx
 
-# Create molecular system
-water_positions = jnp.array([
-    [0.0000,  0.0000,  0.1173],   # O
-    [0.0000,  0.7572, -0.4692],   # H
-    [0.0000, -0.7572, -0.4692]    # H
-])
+from opifex.core.quantum.molecular_system import create_water_molecule
+from opifex.core.quantum.protocols import RadiusNeighborList
+from opifex.core.quantum.registry import BackboneRegistry
+from opifex.neural.atomistic import AtomisticModel
+from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 
-water_system = create_molecular_system(
-    atomic_symbols=["O", "H", "H"],
-    positions=water_positions,
-    charge=0,
-    spin=0
+# Importing the backbones package registers "schnet" / "painn" / "nequip".
+import opifex.neural.atomistic.backbones  # noqa: F401
+
+rngs = nnx.Rngs(0)
+
+# Build a SchNet-backed potential with energy and (conservative) force heads.
+backbone = BackboneRegistry().require("schnet")(rngs=rngs)
+model = AtomisticModel(
+    backbone=backbone,
+    heads={"energy": EnergyHead(feature_dim=64, rngs=rngs), "forces": ForcesHead()},
+    neighbor_list=RadiusNeighborList(cutoff=5.0),
+    max_edges=64,
 )
 
-# Quantum MLP for molecular energy prediction
-quantum_model = QuantumMLP(
-    layer_sizes=[9, 128, 128, 64, 1],  # 3 atoms × 3 coordinates = 9 inputs
-    n_atoms=3,
-    activation="swish",
-    enforce_symmetry=True,  # Permutation symmetry for identical atoms
-    rngs=rngs
-)
-
-# Compute molecular energy
-coordinates = water_system.positions.flatten()  # (9,)
-energy = quantum_model(coordinates[None, :])  # Add batch dimension
-print(f"Molecular energy: {energy[0, 0]:.6f} Ha")
-
-# Compute forces via automatic differentiation
-def energy_fn(coords):
-    return quantum_model(coords.reshape(1, -1))[0, 0]
-
-forces = -jax.grad(energy_fn)(coordinates.reshape(-1))
-forces_per_atom = forces.reshape(3, 3)  # (n_atoms, 3)
-print(f"Forces on atoms:\n{forces_per_atom}")
+# Predict every configured property in one call.
+prediction = model(create_water_molecule())
+print(f"Energy: {prediction['energy']}")            # scalar invariant energy
+print(f"Forces: {prediction['forces'].shape}")      # (n_atoms, 3), -dE/dR
 ```
 
 ### 3. Custom Activation Functions
@@ -1238,7 +1230,7 @@ All neural architectures have been comprehensively designed during creative phas
 import jax
 import jax.numpy as jnp
 import flax.nnx as nnx
-from opifex.neural.base import StandardMLP, QuantumMLP
+from opifex.neural.base import StandardMLP
 from opifex.neural.activations import get_activation, register_activation
 
 # Basic usage example

@@ -12,9 +12,8 @@ The foundation of scientific neural networks with enhanced capabilities:
 
 ```python
 import jax
-import jax.numpy as jnp
 from flax import nnx
-from opifex.neural.base import StandardMLP, QuantumMLP
+from opifex.neural.base import StandardMLP
 
 # Create RNG for reproducible initialization
 key = jax.random.PRNGKey(42)
@@ -33,20 +32,12 @@ model = StandardMLP(
 x = jax.random.normal(jax.random.PRNGKey(0), (32, 2))
 output = model(x)
 print(f"Standard MLP: {x.shape} -> {output.shape}")
-
-# Quantum-aware MLP for molecular systems
-quantum_model = QuantumMLP(
-    layer_sizes=[3, 128, 128, 1],  # 3D coordinates -> energy
-    activation="swish",
-    enforce_symmetry=True,
-    rngs=rngs
-)
-
-# Molecular coordinates (10 atoms in 3D)
-coords = jax.random.normal(jax.random.PRNGKey(1), (10, 3))
-energy = quantum_model(coords)
-print(f"Molecular energy: {energy}")
 ```
+
+For molecular and materials systems, build a machine-learning interatomic
+potential from `opifex.neural.atomistic` (SchNet / PaiNN / NequIP backbones with
+energy / forces / stress heads) instead of a plain MLP; see the
+[Atomistic Potentials guide](../methods/atomistic-potentials.md).
 
 **Available Activations (22 unique functions):**
 

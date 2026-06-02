@@ -96,7 +96,8 @@ Specialized architectures for scientific computing:
 **Available Architectures:**
 
 - **StandardMLP**: Multi-layer perceptrons with scientific activations
-- **QuantumMLP**: Quantum-aware networks for molecular systems
+- **AtomisticModel**: Machine-learning interatomic potentials for molecular and
+  materials systems (`opifex.neural.atomistic`)
 - **FourierNeuralOperator**: Learn mappings between function spaces
 - **DeepONet**: Deep operator networks for operator learning
 - **PhysicsInformedOperator**: Physics-aware neural operators
@@ -250,26 +251,38 @@ deeponet = DeepONet(
 - **GINO**: Graph-informed neural operators
 - **DISCO**: Discrete-continuous convolutions
 
-### Neural Density Functional Theory
+### Atomistic Machine-Learning Potentials
 
-Quantum mechanical calculations using neural networks:
+Predict molecular and materials properties (energy, forces, stress) with a
+machine-learning interatomic potential assembled from a backbone and typed heads:
 
 ```python
-from opifex.neural.base import QuantumMLP
+from flax import nnx
 
-# Quantum-aware neural network
-quantum_net = QuantumMLP(
-    layer_sizes=[3, 128, 128, 1],  # 3D coordinates -> energy
-    activation="tanh",
-    enforce_symmetry=True,
-    rngs=rngs
+from opifex.core.quantum.molecular_system import create_water_molecule
+from opifex.core.quantum.protocols import RadiusNeighborList
+from opifex.core.quantum.registry import BackboneRegistry
+from opifex.neural.atomistic import AtomisticModel
+from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
+
+# Importing the backbones package registers "schnet" / "painn" / "nequip".
+import opifex.neural.atomistic.backbones  # noqa: F401
+
+rngs = nnx.Rngs(0)
+backbone = BackboneRegistry().require("schnet")(rngs=rngs)
+model = AtomisticModel(
+    backbone=backbone,
+    heads={"energy": EnergyHead(feature_dim=64, rngs=rngs), "forces": ForcesHead()},
+    neighbor_list=RadiusNeighborList(cutoff=5.0),
+    max_edges=64,
 )
 
-# Molecular energy calculation
-coordinates = jax.random.normal(jax.random.PRNGKey(2), (10, 3))  # 10 atoms
-energy = quantum_net(coordinates)
-print(f"Molecular energy: {energy}")
+prediction = model(create_water_molecule())
+print(f"Energy: {prediction['energy']}; forces shape: {prediction['forces'].shape}")
 ```
+
+See the [Atomistic Potentials guide](../methods/atomistic-potentials.md) for the
+full backbone/head design.
 
 ### Probabilistic Numerics
 
