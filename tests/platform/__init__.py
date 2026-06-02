@@ -2,9 +2,6 @@
 
 Contains full test suites for:
 - Neural functional registry
-- Collaboration platform
-- Community dashboard
-- Platform benchmarking integration
 
 Tests follow TDD approach with unit, integration, and end-to-end coverage.
 """
