@@ -4,8 +4,8 @@ JAX/Flax NNX implementation of grid embeddings for neural operators,
 based on neuraloperator reference implementation.
 
 This module provides:
-- GridEmbedding2D: Simple 2D positional embedding
-- GridEmbeddingND: N-dimensional positional embedding
+- GridEmbeddingND: N-dimensional positional embedding (1D/2D/3D and beyond)
+- GridEmbedding2D: Two-dimensional specialization of GridEmbeddingND
 - Utility functions for regular grid generation
 
 All implementations are optimized for JAX transformations and Flax NNX patterns.
@@ -27,96 +27,33 @@ class EmbeddingBase(nnx.Module, ABC):
         """Number of output channels after embedding."""
 
 
-class GridEmbedding2D(EmbeddingBase):
-    """GridEmbedding2D applies simple positional embedding as a regular 2D grid.
-
-    Expects inputs of shape (batch, height, width, channels).
-
-    Based on neuraloperator GridEmbedding2D but adapted for JAX/Flax NNX.
-
-    Args:
-        in_channels: Number of input channels
-        grid_boundaries: Coordinate boundaries [[x_min, x_max], [y_min, y_max]]
-    """
-
-    def __init__(
-        self,
-        in_channels: int,
-        grid_boundaries: list[list[float]] | None = None,
-    ) -> None:
-        super().__init__()
-        if grid_boundaries is None:
-            grid_boundaries = [[0.0, 1.0], [0.0, 1.0]]
-        self.in_channels = in_channels
-        self.grid_boundaries = grid_boundaries
-
-    @property
-    def out_channels(self) -> int:
-        """Number of output channels after embedding (input + 2 coordinate channels)."""
-        return self.in_channels + 2
-
-    def _generate_grid(self, spatial_shape: tuple[int, int]) -> tuple[jax.Array, jax.Array]:
-        """Generate 2D coordinate grid.
-
-        Args:
-            spatial_shape: Spatial dimensions (height, width)
-
-        Returns:
-            Tuple of (x_grid, y_grid) coordinate arrays
-        """
-        h, w = spatial_shape
-        x_coords = jnp.linspace(self.grid_boundaries[0][0], self.grid_boundaries[0][1], w)
-        y_coords = jnp.linspace(self.grid_boundaries[1][0], self.grid_boundaries[1][1], h)
-
-        # Create coordinate grids
-        x_grid, y_grid = jnp.meshgrid(x_coords, y_coords, indexing="xy")
-
-        return x_grid, y_grid
-
-    def get_grid(self, spatial_shape: tuple[int, int]) -> tuple[jax.Array, jax.Array]:
-        """Get coordinate grid for given spatial dimensions."""
-        return self._generate_grid(spatial_shape)
-
-    def __call__(self, x: jax.Array) -> jax.Array:
-        """
-        Embed grid coordinates into input tensor.
-
-        Args:
-            x: Input tensor of shape (batch, height, width, in_channels)
-
-        Returns:
-            Tensor with embedded coordinates of shape
-            (batch, height, width, in_channels + 2)
-        """
-        batch_size = x.shape[0]
-        spatial_shape = x.shape[1:3]  # (height, width)
-
-        # Generate coordinate grids
-        x_grid, y_grid = self._generate_grid((spatial_shape[0], spatial_shape[1]))
-
-        # Expand grids to match batch size
-        x_grid_expanded = jnp.expand_dims(x_grid, axis=(0, -1))  # (1, h, w, 1)
-        y_grid_expanded = jnp.expand_dims(y_grid, axis=(0, -1))  # (1, h, w, 1)
-
-        # Broadcast to match batch size
-        x_grid_broadcasted = jnp.broadcast_to(x_grid_expanded, (batch_size, *spatial_shape, 1))
-        y_grid_broadcasted = jnp.broadcast_to(y_grid_expanded, (batch_size, *spatial_shape, 1))
-
-        # Concatenate input with coordinate grids
-        return jnp.concatenate([x, x_grid_broadcasted, y_grid_broadcasted], axis=-1)
-
-
 class GridEmbeddingND(EmbeddingBase):
-    """GridEmbeddingND applies simple positional embedding as a regular N-D grid.
+    """Append one normalized coordinate channel per spatial axis (any N-D grid).
 
-    Expects inputs of shape (batch, d1, d2, ..., dn, channels).
+    For an input of shape ``(batch, d_1, ..., d_n, channels)`` this concatenates
+    ``dim`` extra channels along the last axis, where appended channel ``k`` is
+    the coordinate that varies along spatial axis ``k`` and spans
+    ``grid_boundaries[k]`` from its lower to its upper bound (``indexing="ij"``).
+    Works for 1D, 2D, and 3D (and beyond).
 
-    Based on neuraloperator GridEmbeddingND but adapted for JAX/Flax NNX.
+    Spectral convolutions are translation-equivariant, so injecting absolute
+    grid coordinates is the standard way to give a neural operator position
+    awareness (Li et al., 2020).
+
+    Reference: ``neuralop.layers.embeddings.GridEmbeddingND`` from the
+    `neuraloperator <https://github.com/neuraloperator/neuraloperator>`_ library,
+    adapted to JAX/Flax NNX. The channels-last layout follows opifex's own
+    ``fno._positional.append_grid_coordinates`` convention transposed to the
+    framework's channels-last operator inputs. Unlike the PyTorch reference,
+    which uses ``linspace(start, stop, res + 1)[:-1]`` (left-closed cells), this
+    implementation includes both endpoints so the corner coordinates equal the
+    configured boundaries exactly.
 
     Args:
-        in_channels: Number of input channels
-        dim: Number of spatial dimensions
-        grid_boundaries: List of coordinate boundaries for each dimension
+        in_channels: Number of input channels.
+        dim: Number of spatial dimensions.
+        grid_boundaries: Per-axis ``[start, end]`` coordinate bounds; defaults
+            to ``[[0.0, 1.0]] * dim``. Must have length ``dim``.
     """
 
     def __init__(
@@ -128,88 +65,85 @@ class GridEmbeddingND(EmbeddingBase):
         super().__init__()
         if grid_boundaries is None:
             grid_boundaries = [[0.0, 1.0] for _ in range(dim)]
+        if len(grid_boundaries) != dim:
+            msg = f"Expected grid_boundaries to have length {dim}, got {len(grid_boundaries)}"
+            raise ValueError(msg)
         self.in_channels = in_channels
         self.dim = dim
         self.grid_boundaries = grid_boundaries
 
-        # Validate input dimensions
-        if len(self.grid_boundaries) != dim:
-            msg = f"Expected grid_boundaries to have length {dim}, got {len(self.grid_boundaries)}"
-            raise RuntimeError(msg)
-
     @property
     def out_channels(self) -> int:
-        """Number of output channels after embedding (input + dim coordinate channels).
-
-        Returns:
-            int: Number of output channels after embedding
-        """
+        """Number of output channels after embedding (input + dim coordinate channels)."""
         return self.in_channels + self.dim
 
     def _generate_grid(self, spatial_shape: tuple[int, ...]) -> list[jax.Array]:
-        """Generate N-D coordinate grid.
+        """Generate the per-axis N-D coordinate meshgrid.
 
         Args:
-            spatial_shape: Spatial dimensions (d1, d2, ..., dn)
+            spatial_shape: Spatial dimensions ``(d_1, ..., d_n)``.
 
         Returns:
-            List of coordinate arrays for each dimension
+            One coordinate array per spatial axis, each of shape ``spatial_shape``.
         """
         if len(spatial_shape) != self.dim:
             msg = f"Expected {self.dim} spatial dimensions, got {len(spatial_shape)}"
-            raise RuntimeError(msg)
+            raise ValueError(msg)
 
-        # Create coordinate arrays for each dimension
-        coord_arrays = []
-        for _, (size, (start, end)) in enumerate(
-            zip(spatial_shape, self.grid_boundaries, strict=False)
-        ):
-            coords = jnp.linspace(start, end, size)
-            coord_arrays.append(coords)
-
-        # Create N-D meshgrid
+        coord_arrays = [
+            jnp.linspace(start, end, size)
+            for size, (start, end) in zip(spatial_shape, self.grid_boundaries, strict=True)
+        ]
         return list(jnp.meshgrid(*coord_arrays, indexing="ij"))
 
     def get_grid(self, spatial_shape: tuple[int, ...]) -> list[jax.Array]:
-        """Get coordinate grid for given spatial dimensions.
-
-        Args:
-            spatial_shape: Spatial dimensions (d1, d2, ..., dn)
-
-        Returns:
-            List of coordinate arrays for each dimension
-        """
+        """Return the per-axis coordinate meshgrid for ``spatial_shape``."""
         return self._generate_grid(spatial_shape)
 
     def __call__(self, x: jax.Array) -> jax.Array:
-        """
-        Embed grid coordinates into input tensor.
+        """Embed grid coordinates into the input tensor.
 
         Args:
-            x: Input tensor of shape (batch, *spatial_dims, in_channels)
+            x: Input tensor of shape ``(batch, *spatial_dims, in_channels)``.
 
         Returns:
-            Tensor with embedded coordinates of shape
-            (batch, *spatial_dims, in_channels + dim)
+            Tensor of shape ``(batch, *spatial_dims, in_channels + dim)`` with the
+            per-axis coordinate channels appended along the last axis.
         """
         batch_size = x.shape[0]
         spatial_shape = x.shape[1:-1]  # All dimensions except batch and channels
 
-        # Generate coordinate grids
         grids = self._generate_grid(spatial_shape)
-
-        # Prepare coordinate tensors for concatenation
-        grid_tensors = []
-        for grid in grids:
-            # Add batch and channel dimensions: (spatial_dims,) -> (1, *spatial_dims, 1)
-            grid_expanded = jnp.expand_dims(grid, axis=(0, -1))
-
-            # Broadcast to match batch size
-            grid_broadcasted = jnp.broadcast_to(grid_expanded, (batch_size, *spatial_shape, 1))
-            grid_tensors.append(grid_broadcasted)
-
-        # Concatenate input with all coordinate grids
+        grid_tensors = [
+            jnp.broadcast_to(
+                jnp.expand_dims(grid, axis=(0, -1)),  # (spatial,) -> (1, *spatial, 1)
+                (batch_size, *spatial_shape, 1),
+            )
+            for grid in grids
+        ]
         return jnp.concatenate([x, *grid_tensors], axis=-1)
+
+
+class GridEmbedding2D(GridEmbeddingND):
+    """Two-dimensional specialization of :class:`GridEmbeddingND`.
+
+    Expects inputs of shape ``(batch, height, width, channels)`` and appends two
+    coordinate channels: one varying along the height axis, one along the width
+    axis (matching the N-D / neuraloperator ``indexing="ij"`` convention). Kept
+    as a thin alias for the 2D case used throughout the examples.
+
+    Args:
+        in_channels: Number of input channels.
+        grid_boundaries: Per-axis ``[start, end]`` bounds ``[[h0, h1], [w0, w1]]``;
+            defaults to ``[[0.0, 1.0], [0.0, 1.0]]``.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        grid_boundaries: list[list[float]] | None = None,
+    ) -> None:
+        super().__init__(in_channels=in_channels, dim=2, grid_boundaries=grid_boundaries)
 
 
 class SinusoidalEmbedding(EmbeddingBase):
@@ -281,7 +215,9 @@ class SinusoidalEmbedding(EmbeddingBase):
         if self.embedding_type == "nerf":
             freqs = 2.0 ** jnp.arange(0, self.num_frequencies) * jnp.pi
         elif self.embedding_type == "transformer":
-            freqs = jnp.arange(0, self.num_frequencies) / (self.num_frequencies * 2)
+            # Reference: neuraloperator SinusoidalEmbedding.forward
+            # (neuralop/layers/embeddings.py L278): exponent = arange(L) / L * 2.
+            freqs = jnp.arange(0, self.num_frequencies) / self.num_frequencies * 2
             freqs = (1.0 / self.max_positions) ** freqs
 
         # Compute frequency encodings
