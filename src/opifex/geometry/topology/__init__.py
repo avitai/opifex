@@ -5,16 +5,10 @@ geometric computations.
 """
 
 from opifex.geometry.topology.base import SimplicialComplex, TopologicalSpace
-from opifex.geometry.topology.graphs import (
-    GraphMessagePassing,
-    GraphNeuralOperator,
-    GraphTopology,
-)
+from opifex.geometry.topology.graphs import GraphTopology
 
 
 __all__ = [
-    "GraphMessagePassing",
-    "GraphNeuralOperator",
     "GraphTopology",
     "SimplicialComplex",
     "TopologicalSpace",

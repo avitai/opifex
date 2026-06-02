@@ -37,37 +37,24 @@ class TestPytreeRegistryHygiene:
         assert not hasattr(pytree_utils, "list_registered_pytrees")
 
     def test_graph_pytrees_register_without_being_silently_swallowed(self):
-        """Graph classes must actually register (no broad suppress hiding failures).
+        """GraphTopology must actually register (no broad suppress hiding failures).
 
         A registered class flattens to a JAX ``CustomNode``; an unregistered one
-        collapses to a single opaque leaf.  We assert the former for every graph
-        class to prove the central registry path completed rather than being
-        aborted by a swallowed duplicate-registration error.
+        collapses to a single opaque leaf.  We assert the former to prove the
+        central registry path completed rather than being aborted by a swallowed
+        duplicate-registration error.
         """
         # Importing the geometry package runs the central registry on import.
         importlib.import_module("opifex.geometry")
-        from opifex.geometry.topology.graphs import (
-            GraphMessagePassing,
-            GraphNeuralOperator,
-            GraphTopology,
-        )
+        from opifex.geometry.topology.graphs import GraphTopology
 
-        key = jax.random.PRNGKey(0)
         nodes = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
         edges = jnp.array([[0, 1], [1, 2], [2, 0]])
         edge_features = jnp.array([[0.1], [0.2], [0.3]])
-        instances = {
-            GraphTopology: GraphTopology(nodes=nodes, edges=edges, edge_features=edge_features),
-            GraphMessagePassing: GraphMessagePassing(
-                node_dim=2, edge_dim=1, hidden_dim=4, output_dim=2, key=key
-            ),
-            GraphNeuralOperator: GraphNeuralOperator(
-                node_dim=2, edge_dim=1, hidden_dim=4, output_dim=2, num_layers=1, key=key
-            ),
-        }
-        for cls, instance in instances.items():
-            treedef = jax.tree_util.tree_structure(instance)
-            assert treedef.num_nodes > 1, f"{cls.__name__} is not registered as a pytree"
+        instance = GraphTopology(nodes=nodes, edges=edges, edge_features=edge_features)
+
+        treedef = jax.tree_util.tree_structure(instance)
+        assert treedef.num_nodes > 1, "GraphTopology is not registered as a pytree"
 
 
 class TestRiemannianManifoldPytree:
