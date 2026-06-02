@@ -21,6 +21,7 @@ from opifex.core.physics.autodiff_engine import (
 from opifex.core.physics.boundaries import (
     apply_boundary_condition,
     apply_dirichlet,
+    apply_mixed,
     apply_neumann,
     apply_periodic,
     apply_robin,
@@ -62,6 +63,7 @@ __all__ = [
     "ResidualComputer",
     "apply_boundary_condition",
     "apply_dirichlet",
+    "apply_mixed",
     "apply_neumann",
     "apply_periodic",
     "apply_robin",

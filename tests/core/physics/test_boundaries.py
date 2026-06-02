@@ -10,6 +10,7 @@ import pytest
 from opifex.core.physics.boundaries import (
     apply_boundary_condition,
     apply_dirichlet,
+    apply_mixed,
     apply_neumann,
     apply_periodic,
     apply_robin,
@@ -491,3 +492,274 @@ class TestEdgeCases:
         # Boundaries should be set regardless of NaN in interior
         assert result[0] == 0.0
         assert result[-1] == 0.0
+
+
+class TestNeumannNonzeroDerivative:
+    """Test Neumann BC with a non-zero prescribed outward normal derivative.
+
+    Reference: deepxde NeumannBC residual ``du/dn - g`` with the outward normal
+    convention (left normal points in -x, right normal points in +x).
+    """
+
+    def test_neumann_nonzero_left_outward_normal(self):
+        """Left outward-normal derivative -(u1-u0)/dx must equal target g."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        target = 0.5
+        result = apply_neumann(params, normal_derivative=target, dx=1.0)
+
+        # Outward normal on the left edge points in -x:
+        # du/dn|_left = -(u[1] - u[0]) / dx == target
+        achieved = -(result[1] - result[0]) / 1.0
+        assert jnp.isclose(achieved, target)
+
+    def test_neumann_nonzero_right_outward_normal(self):
+        """Right outward-normal derivative (u_-1 - u_-2)/dx must equal target g."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        target = 0.5
+        result = apply_neumann(params, normal_derivative=target, dx=1.0)
+
+        # Outward normal on the right edge points in +x:
+        # du/dn|_right = (u[-1] - u[-2]) / dx == target
+        achieved = (result[-1] - result[-2]) / 1.0
+        assert jnp.isclose(achieved, target)
+
+    def test_neumann_nonzero_respects_dx(self):
+        """The prescribed flux must be scaled by the grid spacing dx."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        target = 2.0
+        dx = 0.25
+        result = apply_neumann(params, normal_derivative=target, dx=dx)
+
+        # u[0] = u[1] + g * dx (since du/dn|_left = -(u1-u0)/dx = g)
+        assert jnp.isclose(result[0], result[1] + target * dx)
+
+    def test_neumann_zero_derivative_unchanged_by_new_param(self):
+        """Default g=0 reproduces the historical zero-derivative behaviour."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_neumann(params)
+
+        assert result[0] == params[1]
+        assert result[-1] == params[-2]
+
+
+class TestRobinNeumannLimitNonzeroFlux:
+    """Robin BC with alpha=0 and non-zero gamma must enforce du/dn = gamma/beta.
+
+    Previously this path silently returned the input unchanged (no constraint).
+    """
+
+    def test_robin_neumann_limit_applies_nonzero_flux(self):
+        """alpha=0, beta!=0, gamma!=0 enforces the prescribed normal derivative."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        beta = 2.0
+        gamma = 1.0
+        result = apply_robin(params, alpha=0.0, beta=beta, gamma=gamma)
+
+        # Equivalent to Neumann with du/dn = gamma / beta on both edges.
+        expected = gamma / beta
+        achieved_left = -(result[1] - result[0])
+        achieved_right = result[-1] - result[-2]
+        assert jnp.isclose(achieved_left, expected)
+        assert jnp.isclose(achieved_right, expected)
+
+    def test_robin_neumann_limit_not_silent_noop(self):
+        """The Neumann-limit must actually modify the boundaries (not a no-op)."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_robin(params, alpha=0.0, beta=1.0, gamma=3.0)
+
+        assert not jnp.allclose(result, params)
+
+
+class TestApplyMixed:
+    """Test genuine per-boundary mixed boundary conditions.
+
+    Reference: deepxde dispatches each boundary segment by its declared BC type
+    (DirichletBC / NeumannBC / RobinBC ``error`` methods). The mixed handler must
+    apply the proper per-side constraint, never silently substitute Dirichlet.
+    """
+
+    def test_mixed_dirichlet_left_neumann_right(self):
+        """Dirichlet on the left edge, Neumann on the right edge."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_mixed(
+            params,
+            left_type=BoundaryType.DIRICHLET,
+            right_type=BoundaryType.NEUMANN,
+            left_kwargs={"boundary_value": 0.0},
+        )
+
+        # Left: Dirichlet value fixed to 0.0
+        assert jnp.isclose(result[0], 0.0)
+        # Right: zero-derivative Neumann -> right equals its neighbour
+        assert jnp.isclose(result[-1], result[-2])
+        # Interior untouched
+        assert jnp.allclose(result[1:-1], params[1:-1])
+
+    def test_mixed_neumann_left_dirichlet_right(self):
+        """Neumann on the left edge, Dirichlet on the right edge."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_mixed(
+            params,
+            left_type=BoundaryType.NEUMANN,
+            right_type=BoundaryType.DIRICHLET,
+            right_kwargs={"boundary_value": 7.0},
+        )
+
+        assert jnp.isclose(result[0], result[1])  # zero-derivative Neumann left
+        assert jnp.isclose(result[-1], 7.0)  # Dirichlet right
+        assert jnp.allclose(result[1:-1], params[1:-1])
+
+    def test_mixed_does_not_fall_back_to_dirichlet(self):
+        """A Neumann edge must use the derivative rule, not a Dirichlet value."""
+        params = jnp.array([10.0, 2.0, 3.0, 4.0, 20.0])
+        result = apply_mixed(
+            params,
+            left_type=BoundaryType.NEUMANN,
+            right_type=BoundaryType.NEUMANN,
+        )
+
+        # If this silently fell back to Dirichlet it would set 0.0 at the edges.
+        assert result[0] != 0.0
+        assert result[-1] != 0.0
+        assert jnp.isclose(result[0], params[1])
+        assert jnp.isclose(result[-1], params[-2])
+
+    def test_mixed_robin_left_dirichlet_right(self):
+        """Robin on the left edge, Dirichlet on the right edge."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_mixed(
+            params,
+            left_type=BoundaryType.ROBIN,
+            right_type=BoundaryType.DIRICHLET,
+            left_kwargs={"alpha": 1.0, "beta": 0.0, "gamma": 4.0},
+            right_kwargs={"boundary_value": 9.0},
+        )
+
+        # Robin with beta=0 -> Dirichlet limit u = gamma/alpha = 4.0 on the left.
+        assert jnp.isclose(result[0], 4.0)
+        assert jnp.isclose(result[-1], 9.0)
+
+    def test_mixed_accepts_string_types(self):
+        """Per-side types may be given as strings."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_mixed(
+            params,
+            left_type="dirichlet",
+            right_type="neumann",
+            left_kwargs={"boundary_value": 2.0},
+        )
+
+        assert jnp.isclose(result[0], 2.0)
+        assert jnp.isclose(result[-1], result[-2])
+
+    def test_mixed_unknown_per_side_type_raises(self):
+        """An unknown per-side BC type must raise (fail-fast, no fallback)."""
+        params = jnp.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match="Unknown boundary type"):
+            apply_mixed(params, left_type="bogus", right_type="dirichlet")
+
+    def test_mixed_unsupported_per_side_type_raises(self):
+        """Per-side MIXED/PERIODIC are not valid single-edge constraints."""
+        params = jnp.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match="not a valid per-boundary"):
+            apply_mixed(params, left_type=BoundaryType.MIXED, right_type=BoundaryType.DIRICHLET)
+        with pytest.raises(ValueError, match="not a valid per-boundary"):
+            apply_mixed(params, left_type=BoundaryType.DIRICHLET, right_type=BoundaryType.PERIODIC)
+
+
+class TestApplyBoundaryConditionMixedDispatch:
+    """The unified dispatcher must route MIXED to genuine per-boundary handling."""
+
+    def test_mixed_via_enum_dispatches_to_apply_mixed(self):
+        """MIXED via the unified API applies per-side constraints, not Dirichlet."""
+        params = jnp.array([10.0, 2.0, 3.0, 4.0, 20.0])
+        result = apply_boundary_condition(
+            params,
+            BoundaryType.MIXED,
+            left_type=BoundaryType.DIRICHLET,
+            right_type=BoundaryType.NEUMANN,
+            left_kwargs={"boundary_value": 0.0},
+        )
+
+        assert jnp.isclose(result[0], 0.0)
+        assert jnp.isclose(result[-1], result[-2])
+
+    def test_mixed_via_string_dispatches_to_apply_mixed(self):
+        """MIXED via string applies per-side constraints."""
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = apply_boundary_condition(
+            params,
+            "mixed",
+            left_type="neumann",
+            right_type="dirichlet",
+            right_kwargs={"boundary_value": 1.0},
+        )
+
+        assert jnp.isclose(result[0], result[1])
+        assert jnp.isclose(result[-1], 1.0)
+
+    def test_unknown_type_still_raises(self):
+        """Unknown top-level type still fails fast."""
+        params = jnp.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match="Unknown boundary type"):
+            apply_boundary_condition(params, "not_a_type")
+
+
+class TestMixedJAXCompatibility:
+    """jit/grad/vmap smoke tests for the mixed boundary residual function."""
+
+    def test_mixed_jit_compatible(self):
+        """apply_mixed is JIT-compatible (types are static, arrays traced)."""
+        import jax
+
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        @jax.jit
+        def constrain(x):
+            return apply_mixed(
+                x,
+                left_type=BoundaryType.DIRICHLET,
+                right_type=BoundaryType.NEUMANN,
+                left_kwargs={"boundary_value": 0.0},
+            )
+
+        result = constrain(params)
+        assert jnp.isclose(result[0], 0.0)
+        assert jnp.isclose(result[-1], result[-2])
+
+    def test_mixed_vmap_compatible(self):
+        """apply_mixed vmaps over a batch of parameter arrays."""
+        import jax
+
+        batch = jnp.array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]])
+
+        def constrain(x):
+            return apply_mixed(
+                x,
+                left_type=BoundaryType.DIRICHLET,
+                right_type=BoundaryType.NEUMANN,
+                left_kwargs={"boundary_value": 0.0},
+            )
+
+        result = jax.vmap(constrain)(batch)
+        assert jnp.allclose(result[:, 0], 0.0)
+        assert jnp.allclose(result[:, -1], result[:, -2])
+
+    def test_mixed_grad_compatible(self):
+        """apply_mixed is differentiable through the boundary projection."""
+        import jax
+
+        params = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        def loss_fn(x):
+            constrained = apply_mixed(
+                x,
+                left_type=BoundaryType.NEUMANN,
+                right_type=BoundaryType.DIRICHLET,
+                right_kwargs={"boundary_value": 0.0},
+            )
+            return jnp.sum(constrained**2)
+
+        gradients = jax.grad(loss_fn)(params)
+        assert gradients.shape == params.shape
+        assert jnp.isfinite(gradients).all()
