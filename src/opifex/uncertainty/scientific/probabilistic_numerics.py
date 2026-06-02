@@ -518,14 +518,32 @@ class ManifoldUpdateSpec(_PNAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class PerturbedStepSolverSpec(_PNAdapterSpecBase):
-    """Perturbed-step solver (Conrad+ 2017) — deferred to Phase 8/9."""
+    r"""Perturbed-step probabilistic ODE solver (Conrad+ 2017).
+
+    Wraps a deterministic one-step integrator (Euler / RK4) and, after
+    every step, adds a calibrated mean-zero Gaussian state perturbation
+    :math:`\xi_k \sim \mathcal{N}(0, \sigma^2 h^{2p+1} I)` scaled to
+    the integrator's order :math:`p`, yielding an ensemble whose spread
+    quantifies discretisation uncertainty while the mean retains the
+    base solver's order-:math:`p` convergence (Theorem 2.2). Cite
+    Conrad, Girolami, Särkkä, Stuart, Zygalakis 2017 (Statistics and
+    Computing 27, arXiv:1506.04592).
+    """
 
     source_package: str = "opifex"
     family_tags: tuple[str, ...] = ("perturbed_step", "stochastic_perturbation")
     notes: str = (
-        "Conrad+ 2017 perturbed-step ODE solver. Algorithm deferred to "
-        "Phase 8/9; spec is ecosystem-aware."
+        "Conrad+ 2017 perturbed-step ODE solver. Adds a per-step "
+        "Gaussian state perturbation with covariance sigma^2 h^(2p+1) "
+        "scaled to the base integrator's order p."
     )
+
+    def wrap(self, model: Any, capability: UQCapability) -> Any:
+        """Return the JAX-native perturbed-step ensemble ODE solver."""
+        from opifex.uncertainty.scientific._specialised import perturbed_step_solve
+
+        del model, capability
+        return perturbed_step_solve
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
