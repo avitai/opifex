@@ -34,6 +34,7 @@ from opifex.uncertainty.scientific.fields import (
 from opifex.uncertainty.scientific.polynomial_chaos import (
     evaluate_basis,
     fit_pce_coefficients,
+    gauss_quadrature,
     KarhunenLoeveExpansion,
     KLEConfig,
     pce_mean_variance,
@@ -169,6 +170,7 @@ __all__ = [
     "fit_galerkin_surrogate",
     "fit_pce_coefficients",
     "function_space_l2_coverage",
+    "gauss_quadrature",
     "parameter_credible_interval_coverage",
     "pce_mean_variance",
     "pce_summary",
