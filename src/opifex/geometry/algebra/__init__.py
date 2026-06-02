@@ -5,6 +5,7 @@ geometric deep learning applications.
 """
 
 from opifex.geometry.algebra.groups import SE3Group, SO3Group
+from opifex.geometry.algebra.wigner import clebsch_gordan, wigner_d
 
 
-__all__ = ["SE3Group", "SO3Group"]
+__all__ = ["SE3Group", "SO3Group", "clebsch_gordan", "wigner_d"]
