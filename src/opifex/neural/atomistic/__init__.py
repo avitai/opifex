@@ -6,17 +6,36 @@ This package hosts the assembled atomistic models following the convergent
 * :class:`~opifex.neural.atomistic.base.AtomisticModel` -- the reusable assembly
   (orchestrates a backbone + heads + neighbour list; owns the conservative
   force/stress autodiff closures);
-* :mod:`opifex.neural.atomistic.heads` -- energy / forces / stress readouts.
+* :mod:`opifex.neural.atomistic.heads` -- energy / forces / stress readouts;
+* :mod:`opifex.neural.atomistic.backbones` -- the concrete embedding producers
+  :class:`SchNet` (invariant), :class:`PaiNN` (equivariant ``l <= 1``) and
+  :class:`NequIP` (E(3) tensor-product).
 
-Concrete backbones (SchNet, PaiNN, NequIP, MACE) are a later wave: they plug into
-:class:`AtomisticModel` via the
+The backbones plug into :class:`AtomisticModel` via the
 :class:`opifex.core.quantum.protocols.Backbone` protocol and the
-``opifex.core.quantum.registry`` family registries, without editing this package
-(Open-Closed). The package is domain-pure: it imports no infrastructure (ASE /
-training / serving live in their own layers).
+``opifex.core.quantum.registry`` family registries, without editing the assembly
+(Open-Closed). A MACE-style higher-body-order backbone is a documented future
+wave. The package is domain-pure: it imports no infrastructure (ASE / training /
+serving live in their own layers).
 """
 
+from opifex.neural.atomistic.backbones import (
+    NequIP,
+    NequIPConfig,
+    PaiNN,
+    PaiNNConfig,
+    SchNet,
+    SchNetConfig,
+)
 from opifex.neural.atomistic.base import AtomisticModel
 
 
-__all__ = ["AtomisticModel"]
+__all__ = [
+    "AtomisticModel",
+    "NequIP",
+    "NequIPConfig",
+    "PaiNN",
+    "PaiNNConfig",
+    "SchNet",
+    "SchNetConfig",
+]
