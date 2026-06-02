@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.neural.operators.physics._conservation import conservation_residual_loss
+
 
 class PhysicsAwareAttention(nnx.Module):
     """Physics-aware attention mechanism with constraint enforcement.
@@ -435,39 +437,52 @@ class PhysicsCrossAttention(nnx.Module):
         physics_info: jax.Array | None = None,
         training: bool = False,
     ) -> tuple[jax.Array, jax.Array]:
-        """Forward pass with conservation loss computation.
+        """Forward pass returning the output and its conservation-law residual.
+
+        The conservation loss is the squared flux divergence of the predicted
+        field (see :meth:`_compute_conservation_loss`); it is always computed
+        from the output, independent of ``physics_info``.
 
         Args:
-            x: Input tensor
-            physics_info: Physics constraint information
-            training: Whether in training mode
+            x: Input tensor.
+            physics_info: Optional physics constraint information passed to the
+                forward pass.
+            training: Whether in training mode.
 
         Returns:
-            Tuple of (output, conservation_loss)
+            Tuple of ``(output, conservation_loss)``.
         """
         output = self.__call__(x, physics_info=physics_info, training=training)
-
-        # Compute conservation loss
-        if physics_info is not None:
-            conservation_loss = self._compute_conservation_loss(output, physics_info)
-        else:
-            conservation_loss = jnp.array(0.0)
-
+        conservation_loss = self._compute_conservation_loss(output)
         return output, conservation_loss
 
-    def _compute_conservation_loss(
-        self,
-        output: jax.Array,
-        physics_info: jax.Array,
-    ) -> jax.Array:
-        """Compute conservation loss for physics constraints."""
-        # Simple conservation loss - in practice this would implement
-        # specific conservation law enforcement
+    def _compute_conservation_loss(self, output: jax.Array) -> jax.Array:
+        """Compute the local conservation-law residual of the output field.
 
-        # Handle multi-system case
-        physics_input = output.mean(axis=1) if output.ndim == 4 else output
+        Enforces the continuity / conservation law in flux form ``∇·F = 0``
+        (Landau & Lifshitz, *Fluid Mechanics*, §1) by treating the embedding
+        channels of the attention output as components of a conserved flux
+        ``F`` and the sequence axis as the spatial grid. The loss penalises the
+        squared discrete divergence ``mean((∇·F)²)`` computed with second-order
+        central finite differences, matching ``neuraloperator``'s
+        ``FiniteDiff.divergence`` reference, scaled by ``conservation_weight``.
 
-        physics_weights = self.physics_projection(physics_input)
+        A divergence-free (constant along the sequence) field yields ~0 loss; a
+        field with non-zero divergence yields the corresponding positive value.
 
-        # L2 regularization on physics weights
-        return jnp.mean(physics_weights**2) * self.conservation_weight
+        Args:
+            output: Attention output, ``(batch, seq_len, embed_dim)`` for a
+                single system or ``(batch, num_systems, seq_len, embed_dim)``
+                for the multi-system case (averaged over systems).
+
+        Returns:
+            Scalar mean-squared conservation residual scaled by the
+            conservation weight.
+        """
+        # Reduce the multi-system case to (batch, seq_len, embed_dim).
+        field = output.mean(axis=1) if output.ndim == 4 else output
+
+        # Sequence axis (1) is the spatial grid; embedding channels are the
+        # flux components. Unit spacing: the sequence index is the grid index.
+        residual = conservation_residual_loss(field, spatial_axis=1, spacing=1.0)
+        return residual * self.conservation_weight

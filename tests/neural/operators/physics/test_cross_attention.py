@@ -329,3 +329,84 @@ class TestPhysicsCrossAttention:
 
         assert output.shape == (batch_size, seq_len, 64)
         assert jnp.all(jnp.isfinite(output))
+
+
+class TestConservationResidualLoss:
+    """Test the genuine flux-divergence conservation loss in cross-attention."""
+
+    @staticmethod
+    def _model() -> PhysicsCrossAttention:
+        """Build a small single-system cross-attention module."""
+        return PhysicsCrossAttention(
+            embed_dim=8,
+            num_heads=2,
+            physics_constraints=["energy", "momentum"],
+            num_physics_systems=1,
+            conservation_weight=0.5,
+            rngs=nnx.Rngs(0),
+        )
+
+    def test_divergence_free_field_gives_zero_loss(self):
+        """A field constant along the sequence axis is divergence-free -> ~0."""
+        model = self._model()
+        # Constant across seq_len -> zero spatial divergence.
+        field = jnp.broadcast_to(jax.random.normal(jax.random.PRNGKey(1), (4, 1, 8)), (4, 16, 8))
+        loss = model._compute_conservation_loss(field)
+        assert loss < 1e-10
+
+    def test_nonzero_divergence_gives_positive_loss(self):
+        """A field varying along the sequence axis gives a positive loss."""
+        model = self._model()
+        seq = jnp.linspace(0.0, 1.0, 16)
+        # Linearly varying along the sequence axis -> non-zero divergence.
+        field = jnp.broadcast_to(seq[None, :, None], (4, 16, 8))
+        loss = model._compute_conservation_loss(field)
+        assert loss > 0.0
+        assert jnp.isfinite(loss)
+
+    def test_conservation_weight_scales_loss(self):
+        """The loss scales linearly with conservation_weight."""
+        seq = jnp.linspace(0.0, 1.0, 16)
+        field = jnp.broadcast_to(seq[None, :, None], (4, 16, 8))
+
+        model_a = PhysicsCrossAttention(
+            embed_dim=8,
+            num_heads=2,
+            physics_constraints=["energy"],
+            num_physics_systems=1,
+            conservation_weight=0.2,
+            rngs=nnx.Rngs(0),
+        )
+        model_b = PhysicsCrossAttention(
+            embed_dim=8,
+            num_heads=2,
+            physics_constraints=["energy"],
+            num_physics_systems=1,
+            conservation_weight=0.4,
+            rngs=nnx.Rngs(0),
+        )
+        loss_a = model_a._compute_conservation_loss(field)
+        loss_b = model_b._compute_conservation_loss(field)
+        assert jnp.isclose(loss_b, 2.0 * loss_a)
+
+    def test_jit_grad_vmap(self):
+        """Conservation loss is jit/grad/vmap compatible through the module."""
+        model = self._model()
+        x = jax.random.normal(jax.random.PRNGKey(2), (4, 16, 8))
+
+        @nnx.jit
+        def loss_fn(m, inputs):
+            _, loss = m.forward_with_conservation(inputs)
+            return loss
+
+        jitted = loss_fn(model, x)
+        assert jnp.isfinite(jitted)
+
+        grads = nnx.grad(loss_fn)(model, x)
+        grad_leaves = jax.tree_util.tree_leaves(grads)
+        assert any(jnp.linalg.norm(leaf) > 0.0 for leaf in grad_leaves)
+
+        fields = jax.random.normal(jax.random.PRNGKey(3), (5, 4, 16, 8))
+        batched = jax.vmap(model._compute_conservation_loss)(fields)
+        assert batched.shape == (5,)
+        assert jnp.all(jnp.isfinite(batched))
