@@ -11,6 +11,7 @@ Full test suite for Version 2 TensorLy integration including:
 import jax
 import jax.numpy as jnp
 import pytest
+from flax import nnx
 
 
 # Import the module we're testing
@@ -304,6 +305,56 @@ class TestIntegrationWithoutTensorLy:
             pytest.skip("TensorLy unavailable - testing fallback behavior")
         else:
             pass
+
+
+class TestEnhancedCPAndTT:
+    """TensorLyEnhancedDecomposition CP/TT delegate to the shared low-rank core.
+
+    The reconstruct / contraction path is pure JAX (no TensorLy init needed),
+    so it is always testable. ``use_tensorly_init=False`` exercises the
+    learnable-factor path that mirrors :mod:`_factorized`.
+    """
+
+    def _module(self, decomposition_type, rank):
+        from opifex.neural.operators.fno.tensorly_integration import (
+            TensorLyEnhancedDecomposition,
+        )
+
+        return TensorLyEnhancedDecomposition(
+            tensor_shape=(4, 3, 8, 8),
+            rank=rank,
+            decomposition_type=decomposition_type,
+            rngs=nnx.Rngs(0),
+            use_tensorly_init=False,
+            use_complex=True,
+        )
+
+    def _dense_contract(self, x, weight):
+        symbols = "abcdefghijklmnopqrstuvwxyz"
+        x_syms = symbols[: x.ndim]
+        out_sym = symbols[x.ndim]
+        weight_syms = out_sym + x_syms[1] + x_syms[2:]
+        out_syms = x_syms[0] + out_sym + x_syms[2:]
+        return jnp.einsum(f"{x_syms},{weight_syms}->{out_syms}", x, weight)
+
+    @pytest.mark.parametrize(("decomposition_type", "rank"), [("cp", 3), ("tt", 3)])
+    def test_compression_ratio_is_real(self, decomposition_type, rank):
+        """get_compression_ratio reports genuine compression (> 1) for CP and TT."""
+        module = self._module(decomposition_type, rank)
+        assert module.get_compression_ratio() > 1.0
+
+    @pytest.mark.parametrize(("decomposition_type", "rank"), [("cp", 3), ("tt", 3)])
+    def test_multiply_factorized_matches_reconstruct(self, decomposition_type, rank):
+        """CP/TT multiply_factorized equals contracting x with reconstruct()."""
+        module = self._module(decomposition_type, rank)
+        x = 0.3 * jax.random.normal(jax.random.PRNGKey(0), (2, 3, 8, 8))
+        x = x + 1j * 0.3 * jax.random.normal(jax.random.PRNGKey(1), (2, 3, 8, 8))
+
+        factorized = module.multiply_factorized(x)
+        dense = self._dense_contract(x, module.reconstruct())
+
+        assert factorized.shape == (2, 4, 8, 8)
+        assert jnp.allclose(factorized, dense, rtol=1e-3, atol=1e-4)
 
 
 class TestModuleStructure:

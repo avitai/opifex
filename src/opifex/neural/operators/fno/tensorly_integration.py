@@ -1,16 +1,20 @@
-"""
-TensorLy Integration for Enhanced Tensor Decomposition
+"""TensorLy-backed initialization for low-rank tensor decompositions.
 
-Version 2: Integration of TensorLy's battle-tested algorithms with JAX-first approach.
-Following the rationale's recommendation for "composition over inheritance" -
-leveraging mature tensor decomposition libraries while maintaining
-high-performance JAX computation.
+Combines TensorLy's mature decomposition algorithms (used to *initialize* the
+learnable factors) with JAX-optimized runtime computation. The CP / Tucker / TT
+reconstruct and factorized-contraction math is shared with :mod:`tensorized`
+through :mod:`._factorized` (Rule 1: no duplicated decomposition logic).
 
 This module provides:
-1. TensorLy-powered decomposition initialization
-2. JAX-optimized factorized multiplication
-3. Memory-optimal tensor contractions
-4. Seamless conversion between TensorLy and JAX tensors
+
+1. TensorLy-powered decomposition initializers (Tucker / CP / TT).
+2. JAX factorized multiplication and reconstruction delegating to
+   :mod:`._factorized`.
+3. Memory-optimal Tucker contractions for the Multi-Grid TFNO.
+4. Conversion utilities between TensorLy and JAX tensors.
+
+Complex factors use the real/imag-split convention (optax #196); see
+:mod:`tensorized` for the rationale.
 """
 
 import warnings
@@ -21,6 +25,18 @@ import jax.numpy as jnp
 import numpy as np
 from flax import nnx
 
+from opifex.neural.operators.fno._factorized import (
+    contract_cp,
+    contract_tt,
+    cp_factor_std,
+    cp_parameter_count,
+    cp_to_tensor,
+    tt_factor_std,
+    tt_parameter_count,
+    tt_ranks,
+    tt_to_tensor,
+)
+
 
 # Handle TensorLy import with graceful fallback. Importing is side-effect-free
 # (Rule 13): no process environment is mutated and the TensorLy backend is NOT
@@ -28,7 +44,11 @@ from flax import nnx
 # :func:`_ensure_tensorly_configured`, invoked lazily by each decomposition.
 try:
     import tensorly as tl  # type: ignore[import-untyped]
-    from tensorly.decomposition import parafac, tucker  # type: ignore[import-untyped]
+    from tensorly.decomposition import (  # type: ignore[import-untyped]
+        parafac,
+        tensor_train,
+        tucker,
+    )
     from tensorly.tucker_tensor import tucker_to_tensor  # type: ignore[import-untyped]
 
     _tensorly_available = True
@@ -44,6 +64,7 @@ except ImportError:
     tl = None
     tucker = None
     parafac = None
+    tensor_train = None
     tucker_to_tensor = None
 
 # Set module-level availability flag
@@ -229,6 +250,44 @@ class TensorLyCPInitializer:
             raise RuntimeError(f"TensorLy CP decomposition failed: {e}") from e
 
 
+class TensorLyTTInitializer:
+    """TensorLy-powered Tensor-Train (TT) decomposition initializer.
+
+    Mirrors :class:`TensorLyCPInitializer` but returns the list of 3D TT cores
+    produced by ``tensorly.decomposition.tensor_train``.
+    """
+
+    @staticmethod
+    def decompose_tensor(
+        tensor: jax.Array,
+        max_rank: int,
+    ) -> list[jax.Array]:
+        """Decompose ``tensor`` into TT cores via TensorLy's ``tensor_train``.
+
+        Args:
+            tensor: Input tensor to decompose (internal ``(in, out, *modes)`` layout).
+            max_rank: Maximum internal TT rank.
+
+        Returns:
+            List of 3D TT cores ``(rank_k, dim_k, rank_{k+1})`` as JAX arrays.
+        """
+        if not TENSORLY_AVAILABLE:
+            raise RuntimeError("TensorLy not available for advanced decomposition")
+
+        _ensure_tensorly_configured()
+
+        if tl is None or tensor_train is None:
+            raise RuntimeError("TensorLy not available")
+
+        tl_tensor = tl.tensor(np.array(tensor))
+        ranks = tt_ranks(tensor.shape, max_rank)
+        try:
+            factors = tensor_train(tl_tensor, rank=list(ranks))
+            return [jnp.array(core) for core in factors]
+        except Exception as e:
+            raise RuntimeError(f"TensorLy TT decomposition failed: {e}") from e
+
+
 class MemoryOptimalContractions:
     """Memory-optimal tensor contractions inspired by Multi-Grid TFNO research.
 
@@ -370,73 +429,88 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             # Fallback to random initialization
             self._init_random(rngs)
 
+    @property
+    def _internal_dims(self) -> tuple[int, ...]:
+        """Factor/core dimensions in the internal ``(in, out, *modes)`` layout.
+
+        The public ``tensor_shape`` is ``(out, in, *modes)``; CP/TT factors and the
+        shared :mod:`._factorized` contractions use ``(in, out, *modes)``.
+        """
+        shape = tuple(self.tensor_shape)
+        return (shape[1], shape[0], *shape[2:])
+
+    def _store_split_factors(self, factors: Sequence[jax.Array]) -> None:
+        """Store a list of (possibly complex) factors/cores as real/imag params."""
+        self.factors_real = nnx.List([nnx.Param(jnp.real(f)) for f in factors])
+        self.factors_imag = nnx.List([nnx.Param(jnp.imag(f)) for f in factors])
+
     def _init_with_tensorly(self, rngs: nnx.Rngs, max_iter: int, tolerance: float) -> None:
-        """Initialize using TensorLy decomposition of a random tensor."""
-        # Create initial random tensor following the target shape
+        """Initialize learnable factors from a TensorLy decomposition.
+
+        For Tucker the legacy ``(out, in, *modes)`` factor layout is kept (it feeds
+        :meth:`MemoryOptimalContractions.contract_tucker_spectral`). CP and TT
+        decompose a random tensor in the internal ``(in, out, *modes)`` layout so
+        the factors plug directly into :mod:`._factorized`.
+        """
         init_key = rngs.params()
-        if self.use_complex:
-            real_key, imag_key = jax.random.split(init_key)
-            real = jax.random.normal(real_key, self.tensor_shape)
-            imag = jax.random.normal(imag_key, self.tensor_shape)
-            init_tensor = jnp.complex_(real + 1j * imag)
-        else:
-            init_tensor = jax.random.normal(init_key, self.tensor_shape)
 
         if self.decomposition_type == "tucker":
-            # Use TensorLy Tucker decomposition
+            init_tensor = self._random_init_tensor(init_key, self.tensor_shape)
             core, factors = TensorLyTuckerInitializer.decompose_tensor(
                 init_tensor, self.rank, max_iter=max_iter, tolerance=tolerance
             )
-
             self.core = nnx.Param(core)
             self.factors = nnx.List([nnx.Param(factor) for factor in factors])
 
-            # Validate initialization quality (validation disabled for production)
-            # error = TensorLyTuckerInitializer.validate_decomposition(
-            #     init_tensor, core, factors
-            # )
-            # Log TensorLy Tucker initialization error (commented for production)
-            # print(f"TensorLy Tucker initialization error: {error:.2e}")
-
         elif self.decomposition_type == "cp":
-            # Use TensorLy CP decomposition - ensure rank is a scalar
+            init_tensor = self._random_init_tensor(init_key, self._internal_dims)
             rank_value = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
-
+            self.rank = rank_value  # normalize so get_compression_ratio uses the int rank
             weights, factors = TensorLyCPInitializer.decompose_tensor(
                 init_tensor, rank_value, max_iter=max_iter, tolerance=tolerance
             )
+            self.weights_real = nnx.Param(jnp.real(weights))
+            self.weights_imag = nnx.Param(jnp.imag(weights))
+            self._store_split_factors(factors)
 
-            self.weights = nnx.Param(weights)
-            self.factors = nnx.List([nnx.Param(factor) for factor in factors])
+        elif self.decomposition_type == "tt":
+            init_tensor = self._random_init_tensor(init_key, self._internal_dims)
+            max_rank = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
+            self.rank = max_rank  # normalize so get_compression_ratio uses the int rank
+            cores = TensorLyTTInitializer.decompose_tensor(init_tensor, max_rank)
+            self._store_split_factors(cores)
 
         else:
             raise ValueError(f"TensorLy initialization not supported for {self.decomposition_type}")
 
-    def _init_random(self, rngs: nnx.Rngs) -> None:
-        """Fallback random initialization when TensorLy is not available."""
-        warnings.warn(
-            "Using random initialization. Install TensorLy for better initialization.",
-            stacklevel=2,
-        )
+    def _random_init_tensor(self, key: jax.Array, shape: Sequence[int]) -> jax.Array:
+        """Sample a random (complex if ``use_complex``) tensor of the given shape."""
+        if self.use_complex:
+            real_key, imag_key = jax.random.split(key)
+            return jnp.complex_(
+                jax.random.normal(real_key, tuple(shape))
+                + 1j * jax.random.normal(imag_key, tuple(shape))
+            )
+        return jax.random.normal(key, tuple(shape))
 
-        # Simple random initialization as fallback
-        # Uses the existing initialization logic from tensorized.py
-        # For brevity, implementing minimal version here
+    def _init_random(self, rngs: nnx.Rngs) -> None:
+        """Initialize learnable factors directly (no TensorLy decomposition).
+
+        Used both as the TensorLy-unavailable fallback and as the standard
+        learnable-factor path (``use_tensorly_init=False``). CP and TT factors
+        follow the tltorch standard deviations so the reconstructed tensor has a
+        small, well-scaled magnitude.
+        """
         init_key = rngs.params()
 
         if self.decomposition_type == "tucker":
-            # Random Tucker factors
             keys = jax.random.split(init_key, len(self.tensor_shape) + 1)
-
-            # Compute ranks
             if isinstance(self.rank, float):
                 ranks = [max(1, int(self.rank * dim)) for dim in self.tensor_shape]
             elif isinstance(self.rank, int):
                 ranks = [self.rank] * len(self.tensor_shape)
             else:
                 ranks = list(self.rank)
-
-            # Core and factors
             self.core = nnx.Param(jax.random.normal(keys[0], ranks))
             self.factors = nnx.List(
                 [
@@ -444,21 +518,77 @@ class TensorLyEnhancedDecomposition(nnx.Module):
                     for i in range(len(self.tensor_shape))
                 ]
             )
+
+        elif self.decomposition_type == "cp":
+            dims = self._internal_dims
+            order = len(dims)
+            rank_value = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
+            rank_value = max(1, rank_value)
+            self.rank = rank_value
+            std = cp_factor_std(rank_value, order)
+            keys = jax.random.split(init_key, order)
+            factors = [
+                jax.random.normal(keys[i], (dim, rank_value)) * std for i, dim in enumerate(dims)
+            ]
+            self.weights_real = nnx.Param(jnp.ones((rank_value,)))
+            self.weights_imag = nnx.Param(jnp.zeros((rank_value,)))
+            self._store_split_factors(factors)
+
+        elif self.decomposition_type == "tt":
+            dims = self._internal_dims
+            order = len(dims)
+            max_rank = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
+            ranks = tt_ranks(dims, max(1, max_rank))
+            std = tt_factor_std(ranks, order)
+            keys = jax.random.split(init_key, order)
+            cores = [
+                jax.random.normal(keys[i], (ranks[i], dims[i], ranks[i + 1])) * std
+                for i in range(order)
+            ]
+            self._store_split_factors(cores)
+
         else:
             raise NotImplementedError(f"Random initialization for {self.decomposition_type}")
 
+    def _cp_parts(self) -> tuple[jax.Array, list[jax.Array]]:
+        """Complex CP weights and factors in the internal ``(in, out, *modes)`` layout."""
+        weights = self.weights_real[...] + 1j * self.weights_imag[...]
+        factors = [
+            r[...] + 1j * im[...]
+            for r, im in zip(self.factors_real, self.factors_imag, strict=False)
+        ]
+        return weights, factors
+
+    def _tt_cores(self) -> list[jax.Array]:
+        """Complex TT cores in the internal ``(in, out, *modes)`` layout."""
+        return [
+            r[...] + 1j * im[...]
+            for r, im in zip(self.factors_real, self.factors_imag, strict=False)
+        ]
+
     def multiply_factorized(self, input_tensor: jax.Array) -> jax.Array:
-        """High-performance factorized multiplication using JAX."""
+        """Contract ``input_tensor`` with the factorized weight.
+
+        Args:
+            input_tensor: ``(batch, in_channels, *modes)``.
+
+        Returns:
+            ``(batch, out_channels, *modes)``.
+        """
         if self.decomposition_type == "tucker":
-            # Extract values from parameters
             factor_values = [f.value for f in self.factors]
             return MemoryOptimalContractions.contract_tucker_spectral(
                 input_tensor, self.core.value, factor_values
             )
+        if self.decomposition_type == "cp":
+            weights, factors = self._cp_parts()
+            return contract_cp(input_tensor, weights, factors)
+        if self.decomposition_type == "tt":
+            return contract_tt(input_tensor, self._tt_cores())
         raise NotImplementedError(f"Factorized multiplication for {self.decomposition_type}")
 
     def reconstruct(self) -> jax.Array:
-        """Reconstruct full tensor from factors."""
+        """Reconstruct the full weight tensor as ``(out_channels, in_channels, *modes)``."""
         if self.decomposition_type == "tucker":
             if TENSORLY_AVAILABLE and tl is not None and tucker_to_tensor is not None:
                 # Use TensorLy reconstruction for accuracy
@@ -466,38 +596,34 @@ class TensorLyEnhancedDecomposition(nnx.Module):
                 tl_core = tl.tensor(np.array(self.core.value))
                 tl_factors = [tl.tensor(np.array(f.value)) for f in self.factors]
                 return jnp.array(tucker_to_tensor((tl_core, tl_factors)))
-            # Fallback JAX reconstruction
+            # Fallback JAX reconstruction (chained mode products)
             result = self.core.value
             for i, factor in enumerate(self.factors):
-                # JAX/Flax parameter compatibility - extract value for tensordot
                 result = jnp.tensordot(result, factor.value, axes=([i], [1]))  # type: ignore[arg-type]
             return result
         if self.decomposition_type == "cp":
-            # Fallback JAX reconstruction for CP decomposition
-            if hasattr(self, "weights") and hasattr(self, "factors"):
-                # Basic CP reconstruction
-                result = (
-                    self.weights.value[0] if hasattr(self.weights, "value") else self.weights[0]
-                )
-                for factor in self.factors:
-                    factor_value = factor.value if hasattr(factor, "value") else factor
-                    result = result * factor_value[0]  # Simplified CP reconstruction
-                return result
-            # Return zeros if no proper decomposition
-            return jnp.zeros(self.tensor_shape)
-
+            weights, factors = self._cp_parts()
+            return jnp.swapaxes(cp_to_tensor(weights, factors), 0, 1)
+        if self.decomposition_type == "tt":
+            return jnp.swapaxes(tt_to_tensor(self._tt_cores()), 0, 1)
         raise NotImplementedError(f"Reconstruction for {self.decomposition_type}")
 
     def get_compression_ratio(self) -> float:
-        """Calculate compression ratio achieved."""
+        """Compression ratio = dense parameters / factorized parameters (``> 1``)."""
         original_params = int(np.prod(self.tensor_shape))
 
         if self.decomposition_type == "tucker":
             core_params = int(np.prod(self.core.value.shape))
             factor_params = sum(int(np.prod(f.value.shape)) for f in self.factors)
             factorized_params = core_params + factor_params
+        elif self.decomposition_type == "cp":
+            rank = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
+            factorized_params = cp_parameter_count(self._internal_dims, rank)
+        elif self.decomposition_type == "tt":
+            max_rank = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
+            factorized_params = tt_parameter_count(self._internal_dims, max(1, max_rank))
         else:
-            factorized_params = original_params  # No compression fallback
+            raise NotImplementedError(f"Compression ratio for {self.decomposition_type}")
 
         return float(original_params / factorized_params)
 
@@ -604,6 +730,7 @@ __all__ = [
     "MemoryOptimalContractions",
     "TensorLyCPInitializer",
     "TensorLyEnhancedDecomposition",
+    "TensorLyTTInitializer",
     "TensorLyTuckerInitializer",
     "benchmark_tensorly_integration",
     "create_tensorly_enhanced_tucker",

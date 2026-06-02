@@ -54,8 +54,8 @@ class TestTensorizedFourierNeuralOperator:
         )
 
         # Test model was created successfully
-        assert model.factorization == "tucker"
-        assert hasattr(model, "tfno_layers")
+        assert model.factorization_type == "tucker"
+        assert hasattr(model, "fourier_layers")
 
     def test_tucker_fno_forward_pass(self, sample_data_2d):
         """Test Tucker FNO forward pass."""
@@ -87,8 +87,8 @@ class TestTensorizedFourierNeuralOperator:
             rngs=nnx.Rngs(1),
         )
 
-        assert model.factorization == "cp"
-        assert hasattr(model, "tfno_layers")
+        assert model.factorization_type == "cp"
+        assert hasattr(model, "fourier_layers")
 
     def test_cp_fno_forward_pass(self, sample_data_2d):
         """Test CP FNO forward pass."""
@@ -120,8 +120,8 @@ class TestTensorizedFourierNeuralOperator:
             rngs=nnx.Rngs(2),
         )
 
-        assert model.factorization == "tt"
-        assert hasattr(model, "tfno_layers")
+        assert model.factorization_type == "tt"
+        assert hasattr(model, "fourier_layers")
 
     def test_tt_fno_forward_pass(self, sample_data_2d):
         """Test Tensor Train FNO forward pass."""
@@ -236,7 +236,7 @@ class TestTensorizedFourierNeuralOperator:
         )
 
         # Get compression stats from one of the layers
-        stats = model.tfno_layers[0].get_compression_stats()
+        stats = model.fourier_layers[0].get_compression_stats()
 
         assert isinstance(stats, dict)
         assert "compression_ratio" in stats
@@ -294,7 +294,7 @@ class TestSpectralConvolutionNotIdentity:
         assert jnp.all(jnp.isfinite(output)), "Output should be finite"
 
     def test_spectral_convolution_transforms_data(self):
-        """TensorizedSpectralConvolution should transform Fourier coefficients."""
+        """TensorizedSpectralConvolution maps a real field to a transformed real field."""
         conv = TensorizedSpectralConvolution(
             in_channels=3,
             out_channels=4,
@@ -304,17 +304,16 @@ class TestSpectralConvolutionNotIdentity:
             rngs=nnx.Rngs(42),
         )
 
-        key = jax.random.PRNGKey(0)
-        # Simulate Fourier-transformed input
-        x_ft = jax.random.normal(key, (2, 3, 16, 16)) + 1j * jax.random.normal(
-            jax.random.PRNGKey(1), (2, 3, 16, 16)
-        )
+        # The convolution consumes a real spatial field and applies the FFT internally.
+        x = jax.random.normal(jax.random.PRNGKey(0), (2, 3, 16, 16))
 
-        output = conv(x_ft)
+        output = conv(x)
 
-        # Output should have correct shape (out_channels=4) and same spatial dims
+        # Output has out_channels=4, same spatial dims, and is a genuine real transform.
         assert output.shape == (2, 4, 16, 16), f"Expected (2, 4, 16, 16), got {output.shape}"
         assert jnp.all(jnp.isfinite(output)), "Output should be finite"
+        assert jnp.isrealobj(output), "Spectral convolution of a real field must be real"
+        assert float(jnp.std(output)) > 0.0, "Output must not collapse to a constant"
 
     def test_tfno_spectral_layers_contribute(self, sample_data_2d=None):
         """Verify TFNO spectral layers contribute to output beyond projections."""
