@@ -1,8 +1,34 @@
-"""Neural exchange-correlation functional for density functional theory.
+r"""Neural exchange-correlation functional for density functional theory.
 
-Implements modern neural XC functionals with attention mechanisms for capturing
-non-local correlations and enhanced physics constraint enforcement for
-chemical accuracy.
+Implements a meta-GGA-style neural exchange-correlation (XC) functional with an
+attention mechanism for non-local correlation and a genuine *exact-constraint*
+layer. The functional is written in the enhancement-factor form of every
+constraint-based functional (PBE, SCAN) and of the constraint-respecting
+machine-learned functionals (DM21):
+
+.. math::
+    \varepsilon_{xc}(\rho, |\nabla\rho|) =
+        \varepsilon_x^{\text{unif}}(\rho)\,F_{xc}\big(\text{dimensionless features}\big),
+
+with :math:`\varepsilon_x^{\text{unif}}=-C_x\rho^{1/3}` and a Lieb-Oxford-bounded
+enhancement factor :math:`F_{xc}\in[0, 1+\kappa]`. The exact constraints
+(uniform coordinate scaling, the uniform-electron-gas limit, the Lieb-Oxford
+bound and exchange spin scaling) are enforced by
+:mod:`opifex.neural.quantum.dft._constraints`; see that module for the formulas
+and references.
+
+The functional derivative (the XC potential) is the GGA pair
+:math:`(\partial e_{xc}/\partial\rho,\,\partial e_{xc}/\partial\sigma)` with
+:math:`\sigma=|\nabla\rho|^2`, obtained by automatic differentiation -- both
+channels are live (the density-gradient channel is not zeroed).
+
+References
+----------
+* J. P. Perdew, K. Burke, M. Ernzerhof, *Phys. Rev. Lett.* **77**, 3865 (1996).
+* J. Sun, A. Ruzsinszky, J. P. Perdew, *Phys. Rev. Lett.* **115**, 036402 (2015)
+  -- the SCAN exact-constraint set.
+* J. Kirkpatrick et al., *Science* **374**, 1385 (2021), arXiv:2102.06179 (DM21).
+* E. H. Lieb, S. Oxford, *Int. J. Quantum Chem.* **19**, 427 (1981).
 """
 
 import math
@@ -11,6 +37,8 @@ from collections.abc import Callable, Sequence
 import jax
 import jax.numpy as jnp
 from flax import nnx
+
+from opifex.neural.quantum.dft._constraints import constrained_xc_energy_density
 
 
 class MultiHeadAttention(nnx.Module):
@@ -294,133 +322,158 @@ class NeuralXCFunctional(nnx.Module):
         if dropout_rate > 0.0:
             self.dropout = nnx.Dropout(rate=dropout_rate, rngs=rngs)
 
-        # Final output layer (XC energy per particle)
-        self.output_layer = nnx.Linear(hidden_sizes[-1], 1, rngs=rngs)
-
-        # Enhanced physics constraint enforcement  handling
-        self.constraint_scale = nnx.Param(jnp.array(1.0))
-        self.exchange_weight = nnx.Param(jnp.array(0.7))  # Typical exchange fraction
-        self.correlation_weight = nnx.Param(jnp.array(0.3))
-
-        # Numerical stability parameters  handling
-        self.energy_clamp_min = nnx.Param(jnp.array(-10.0))  # Reasonable XC energy bounds
-        self.energy_clamp_max = nnx.Param(jnp.array(0.0))
-
-    def _enforce_physics_constraints(
-        self, xc_energy: jax.Array, density: jax.Array, *, deterministic: bool = False
-    ) -> jax.Array:
-        """Enforce physics constraints on XC energy with enhanced validation.
-
-        Args:
-            xc_energy: Raw XC energy per particle
-            density: Electron density
-            deterministic: Whether to use deterministic computation
-
-        Returns:
-            Constrained XC energy satisfying physical principles
-        """
-        # Ensure XC energy is negative (attractive) with proper scaling
-        constrained_energy = -jnp.abs(xc_energy) * self.constraint_scale
-
-        # Clamp energy to reasonable physical bounds
-        constrained_energy = jnp.clip(
-            constrained_energy, self.energy_clamp_min.value, self.energy_clamp_max.value
+        # Final layer outputs the *raw enhancement signal* (one scalar per grid
+        # point), which the exact-constraint layer squashes into a
+        # Lieb-Oxford-bounded enhancement factor. Initialised to zero so the
+        # untrained functional reduces exactly to the uniform-gas (LDA) limit.
+        self.output_layer = nnx.Linear(
+            hidden_sizes[-1],
+            1,
+            kernel_init=nnx.initializers.zeros,
+            bias_init=nnx.initializers.zeros,
+            rngs=rngs,
         )
 
-        # Scale appropriately with density for numerical stability
-        eps = jnp.finfo(jnp.float64).eps
-        density_factor = jnp.tanh(density + eps)
+    def _raw_enhancement_signal(
+        self, density: jax.Array, gradients: jax.Array, *, deterministic: bool
+    ) -> jax.Array:
+        r"""Network output: the unbounded enhancement signal per grid point.
 
-        # Apply physics-based density scaling
-        # XC energy per particle should scale properly with density
-        scaled_energy = constrained_energy * density_factor
+        Built from physics-informed features (which include the dimensionless
+        reduced gradient :math:`s`), passed through the attention/MLP trunk. The
+        exact-constraint layer turns this into a bounded enhancement factor.
+        """
+        features = self.feature_extractor(density, gradients, deterministic=deterministic)
+        if self.use_attention:
+            attention_output = self.attention(features, deterministic=deterministic)
+            features = features + attention_output  # Residual connection
 
-        # Ensure smooth behavior at low densities
-        low_density_cutoff = 1e-8
-        smooth_factor = jnp.where(density < low_density_cutoff, density / low_density_cutoff, 1.0)
+        x = features
+        for i, layer in enumerate(self.layers):
+            layer_output = layer(x)
+            if layer_output.shape == x.shape and i > 0:
+                layer_output = layer_output + x  # Residual connection for depth
+            x = self.activation(layer_output)
+            if self.dropout_rate > 0.0:
+                x = self.dropout(x, deterministic=deterministic)
 
-        return scaled_energy * smooth_factor
+        return jnp.squeeze(self.output_layer(x), axis=-1)
 
     def __call__(
         self, density: jax.Array, gradients: jax.Array, *, deterministic: bool = False
     ) -> jax.Array:
-        """Compute XC energy per particle with enhanced physics constraints.
+        r"""Compute the constraint-satisfying XC energy per particle.
+
+        The network produces a raw enhancement signal which the exact-constraint
+        layer maps to :math:`\varepsilon_{xc}=\varepsilon_x^{\text{unif}}(\rho)
+        F_{xc}` with :math:`F_{xc}\in[0,1+\kappa]` (Lieb-Oxford bounded), so the
+        output obeys uniform coordinate scaling, the uniform-gas limit and the
+        Lieb-Oxford bound by construction.
 
         Args:
-            density: Electron density [batch, grid_points]
-            gradients: Density gradients [batch, grid_points, 3]
-            deterministic: Whether to use deterministic computation
+            density: Electron density [batch, grid_points].
+            gradients: Density gradients [batch, grid_points, 3].
+            deterministic: Whether to use deterministic computation.
 
         Returns:
-            XC energy per particle [batch, grid_points]
+            XC energy per particle [batch, grid_points].
         """
-        # Input validation
         if density.ndim != 2:
             raise ValueError(f"Expected 2D density tensor, got {density.ndim}D")
         if gradients.ndim != 3:
             raise ValueError(f"Expected 3D gradient tensor, got {gradients.ndim}D")
 
-        # Extract physics-informed features
-        features = self.feature_extractor(density, gradients, deterministic=deterministic)
+        raw = self._raw_enhancement_signal(density, gradients, deterministic=deterministic)
+        sigma = jnp.sum(gradients**2, axis=-1)
+        return constrained_xc_energy_density(raw, density, sigma)
 
-        # Apply attention for non-local correlations
-        if self.use_attention:
-            attention_output = self.attention(features, deterministic=deterministic)
-            features = features + attention_output  # Residual connection
+    def energy_density_from_sigma(
+        self, density: jax.Array, sigma: jax.Array, *, deterministic: bool = True
+    ) -> jax.Array:
+        r"""XC energy per particle as a function of ``rho`` and ``sigma=|grad rho|^2``.
 
-            # Process through neural network layers with skip connections
-        x = features
-        for i, layer in enumerate(self.layers):
-            # Apply linear layer
-            layer_output = layer(x)
+        The GGA-native interface used on a real molecular grid and for the AD XC
+        potential: the gradient direction is irrelevant to a (semi-)local
+        functional, so the dimensionless features depend only on
+        :math:`(\rho,\sigma)`. The Cartesian gradient is reconstructed along a
+        single axis with magnitude :math:`\sqrt\sigma` purely to reuse the
+        feature extractor; the resulting energy density is identical for any
+        direction.
 
-            # Add residual connection for deeper layers
-            if layer_output.shape == x.shape and i > 0:
-                layer_output = layer_output + x
+        Args:
+            density: Electron density [Shape: (n_points,)].
+            sigma: Squared density gradient ``|grad rho|^2`` [Shape: (n_points,)].
+            deterministic: Whether to use deterministic computation.
 
-            x = self.activation(layer_output)
+        Returns:
+            XC energy per particle [Shape: (n_points,)].
+        """
+        # Floor the sqrt argument so d/dsigma is finite at sigma = 0 (the bare
+        # square root has an infinite derivative there); the floor is far below
+        # any physically resolved gradient magnitude.
+        magnitude = jnp.sqrt(jnp.clip(sigma, 0.0, None) + 1.0e-24)
+        zeros = jnp.zeros_like(magnitude)
+        gradient = jnp.stack([magnitude, zeros, zeros], axis=-1)[None, ...]
+        raw = self._raw_enhancement_signal(density[None, :], gradient, deterministic=deterministic)[
+            0
+        ]
+        return constrained_xc_energy_density(raw, density, sigma)
 
-            # Apply dropout if available
-            if self.dropout_rate > 0.0:
-                x = self.dropout(x, deterministic=deterministic)
+    def xc_potential_components(
+        self, density: jax.Array, sigma: jax.Array, *, deterministic: bool = True
+    ) -> tuple[jax.Array, jax.Array]:
+        r"""GGA XC potential pair :math:`(v_\rho, v_\sigma)` by autodiff.
 
-        # Final output layer without activation
-        xc_energy_raw = self.output_layer(x)
+        Returns both functional derivatives of the XC energy density
+        :math:`\rho\,\varepsilon_{xc}(\rho,\sigma)`:
 
-        # Remove last dimension and apply physics constraints
-        xc_energy_raw = jnp.squeeze(xc_energy_raw, axis=-1)
-        return self._enforce_physics_constraints(
-            xc_energy_raw, density, deterministic=deterministic
-        )
+        .. math::
+            v_\rho = \frac{\partial(\rho\varepsilon_{xc})}{\partial\rho},\qquad
+            v_\sigma = \frac{\partial(\rho\varepsilon_{xc})}{\partial\sigma}.
+
+        Both channels are live -- the density-gradient (:math:`\sigma`) channel
+        is differentiated, not zeroed -- so the GGA potential is correct.
+
+        Args:
+            density: Electron density [Shape: (n_points,)].
+            sigma: Squared density gradient ``|grad rho|^2`` [Shape: (n_points,)].
+            deterministic: Whether to use deterministic computation.
+
+        Returns:
+            The pair ``(v_rho, v_sigma)`` each [Shape: (n_points,)].
+        """
+
+        def energy_density(rho: jax.Array, sig: jax.Array) -> jax.Array:
+            per_particle = self.energy_density_from_sigma(rho, sig, deterministic=deterministic)
+            return jnp.sum(rho * per_particle)
+
+        v_rho = jax.grad(energy_density, argnums=0)(density, sigma)
+        v_sigma = jax.grad(energy_density, argnums=1)(density, sigma)
+        return v_rho, v_sigma
 
     def compute_functional_derivative(
         self, density: jax.Array, gradients: jax.Array, *, deterministic: bool = False
     ) -> jax.Array:
-        """Compute functional derivative of XC energy with respect to density.
+        r"""Density-channel functional derivative ``d(rho eps_xc)/d rho``.
+
+        Computes the *live* GGA density-channel potential at fixed
+        :math:`\sigma=|\nabla\rho|^2`. The full GGA potential additionally needs
+        the :math:`\sigma` channel; use :meth:`xc_potential_components` for both.
 
         Args:
-            density: Electron density
-            gradients: Density gradients
-            deterministic: Whether to use deterministic computation
+            density: Electron density [batch, grid_points] or [grid_points].
+            gradients: Density gradients [..., 3].
+            deterministic: Whether to use deterministic computation.
 
         Returns:
-            Functional derivative ∂E_xc/∂ρ with enhanced numerical stability
+            ``d(rho eps_xc)/d rho`` with the same shape as ``density``.
         """
-
-        def xc_energy_fn(rho):
-            # Create approximate gradients for derivative computation
-            grad_shape = (*rho.shape, 3)
-            grads = jnp.zeros(grad_shape)
-            return jnp.sum(self(rho, grads, deterministic=deterministic) * rho)
-
-        # Compute derivative using JAX automatic differentiation
-        derivative = jax.grad(xc_energy_fn)(density)
-
-        # Apply numerical stability measures
-        eps = jnp.finfo(jnp.float64).eps
-        result = jnp.where(jnp.abs(derivative) < eps, jnp.sign(derivative) * eps, derivative)
-        # Ensure we return a single Array, not a tuple
-        return jnp.asarray(result)
+        flat_density = density.reshape(-1)
+        flat_sigma = jnp.sum(gradients**2, axis=-1).reshape(-1)
+        v_rho, _ = self.xc_potential_components(
+            flat_density, flat_sigma, deterministic=deterministic
+        )
+        return v_rho.reshape(density.shape)
 
     def assess_chemical_accuracy(
         self,

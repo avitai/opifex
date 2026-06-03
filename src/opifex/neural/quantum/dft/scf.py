@@ -54,9 +54,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+from flax import nnx  # noqa: TC002
 from jax import Array
 
 from opifex.core.quantum.basis import AtomicOrbitalBasis
@@ -70,12 +72,17 @@ from opifex.neural.quantum.dft._energy import (
     converged_density_implicit,
     converged_density_unrolled,
     Functional,
+    NeuralXCSpec,
     total_energy,
 )
 from opifex.neural.quantum.dft.grid import (
     build_molecular_grid_traceable,
     MolecularGridTemplate,
 )
+
+
+if TYPE_CHECKING:
+    from opifex.neural.quantum.neural_xc import NeuralXCFunctional
 
 
 class SolverMode(StrEnum):
@@ -129,8 +136,14 @@ class SCFSolver:
     Args:
         system: The molecular system to solve.
         basis: The AO basis (defaults to STO-3G built from the system).
-        functional: The exchange-correlation functional (``"lda"`` or ``"pbe"``).
+        functional: The exchange-correlation functional
+            (``"lda"``, ``"pbe"`` or ``"neural"``).
         mode: ``"diis"`` for the DIIS SCF or ``"direct"`` for direct minimisation.
+        neural_functional: A learned XC functional; required (and selects the
+            ``"neural"`` functional) when ``functional == "neural"``.
+        grid_template: A pre-built molecular-grid template; defaults to the
+            standard Becke grid for ``system``. Supplying a coarser template
+            trades XC-integration accuracy for speed (e.g. in tests).
         max_iterations: Maximum SCF / fixed-point / minimisation iterations.
         convergence_tolerance: RMS density-change convergence threshold.
         diis_space: Number of Fock/error matrices retained for DIIS.
@@ -143,6 +156,8 @@ class SCFSolver:
         *,
         functional: Functional | str = Functional.LDA,
         mode: SolverMode | str = SolverMode.DIIS,
+        neural_functional: NeuralXCFunctional | None = None,
+        grid_template: MolecularGridTemplate | None = None,
         max_iterations: int = 100,
         convergence_tolerance: float = 1.0e-8,
         diis_space: int = 8,
@@ -154,13 +169,27 @@ class SCFSolver:
             raise ValueError("Closed-shell RKS requires an even electron count")
         self._system = system
         self._basis = basis or AtomicOrbitalBasis.from_molecular_system(system)
-        self._functional = Functional(functional)
+        # A learned functional selects the NEURAL path; an explicit functional
+        # without a neural module must not be NEURAL.
+        if neural_functional is not None:
+            self._functional = Functional.NEURAL
+        else:
+            self._functional = Functional(functional)
+        if self._functional is Functional.NEURAL and neural_functional is None:
+            raise ValueError("functional='neural' requires a neural_functional")
+        self._neural_spec: NeuralXCSpec | None = (
+            NeuralXCSpec.from_functional(neural_functional)
+            if neural_functional is not None
+            else None
+        )
         self._mode = SolverMode(mode)
         self._max_iterations = max_iterations
         self._convergence_tolerance = convergence_tolerance
         self._diis_space = diis_space
         self._n_occupied = system.n_electrons // 2
-        self._grid_template: MolecularGridTemplate = build_molecular_grid_traceable(system)
+        self._grid_template: MolecularGridTemplate = (
+            grid_template if grid_template is not None else build_molecular_grid_traceable(system)
+        )
 
     @property
     def functional(self) -> Functional:
@@ -193,6 +222,23 @@ class SCFSolver:
         Returns:
             The scalar converged total energy (Hartree).
         """
+        return self._energy_from_positions(
+            positions, self._neural_spec, differentiable=differentiable
+        )
+
+    def _energy_from_positions(
+        self,
+        positions: Array,
+        neural_spec: NeuralXCSpec | None,
+        *,
+        differentiable: str = "implicit",
+    ) -> Array:
+        """Converged total energy for ``positions`` with an explicit XC spec.
+
+        Threading ``neural_spec`` explicitly (rather than only reading
+        ``self._neural_spec``) lets the learned-XC training loop differentiate
+        the converged energy with respect to the *traced* parameter state.
+        """
         integrals = self._integrals(positions)
         if differentiable == "unroll":
             density = converged_density_unrolled(
@@ -200,6 +246,7 @@ class SCFSolver:
                 self._functional,
                 self._n_occupied,
                 n_steps=self._max_iterations,
+                neural_spec=neural_spec,
             )
         else:
             density = converged_density_implicit(
@@ -208,8 +255,31 @@ class SCFSolver:
                 self._n_occupied,
                 tolerance=self._convergence_tolerance,
                 max_steps=self._max_iterations,
+                neural_spec=neural_spec,
             )
-        return total_energy(density, integrals, self._functional)
+        return total_energy(density, integrals, self._functional, neural_spec)
+
+    def energy_from_state(self, state: nnx.State, positions: Array | None = None) -> Array:
+        """Converged total energy as a differentiable function of the XC state.
+
+        The entry point for learned-XC training: ``jax.grad`` of this with
+        respect to ``state`` gives the exact ``dE/dtheta`` through the
+        implicit-diff SCF (the implicit function theorem differentiates the
+        converged fixed point, not the iterations).
+
+        Args:
+            state: The neural XC parameter state (an ``nnx.State`` pytree, as
+                produced by :func:`flax.nnx.split`).
+            positions: Geometry to evaluate at (defaults to the system geometry).
+
+        Returns:
+            The scalar converged total energy (Hartree).
+        """
+        if self._neural_spec is None:
+            raise ValueError("energy_from_state requires a neural functional")
+        spec = NeuralXCSpec(graphdef=self._neural_spec.graphdef, state=state)
+        where = self._system.positions if positions is None else positions
+        return self._energy_from_positions(where, spec)
 
     def energy(self) -> Array:
         """Converged total energy at the system's nuclear geometry."""
@@ -264,12 +334,13 @@ class SCFSolver:
             self._basis.n_atomic_orbitals,
             tolerance=self._convergence_tolerance,
             max_steps=self._max_iterations,
+            neural_spec=self._neural_spec,
         )
-        fock, _, _ = build_fock(density, integrals, self._functional)
+        fock, _, _ = build_fock(density, integrals, self._functional, self._neural_spec)
         density, coefficients, orbital_energies = _density_from_fock_impl(
             fock, integrals.orthogonaliser, self._n_occupied
         )
-        energy = total_energy(density, integrals, self._functional)
+        energy = total_energy(density, integrals, self._functional, self._neural_spec)
         return SCFResult(
             total_energy=energy,
             orbital_energies=orbital_energies,
@@ -297,8 +368,8 @@ class SCFSolver:
 
         for iteration in range(1, self._max_iterations + 1):
             iterations_run = iteration
-            fock, _, _ = build_fock(density, integrals, self._functional)
-            energy = total_energy(density, integrals, self._functional)
+            fock, _, _ = build_fock(density, integrals, self._functional, self._neural_spec)
+            energy = total_energy(density, integrals, self._functional, self._neural_spec)
 
             error = fock @ density @ overlap - overlap @ density @ fock
             fock_history.append(fock)

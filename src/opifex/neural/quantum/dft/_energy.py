@@ -35,9 +35,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import optimistix as optx
+from flax import nnx
 from jax import Array
 
 from opifex.core.quantum.backend import JaxGaussianBackend
@@ -52,11 +54,47 @@ from opifex.neural.quantum.dft.xc import (
 )
 
 
+if TYPE_CHECKING:
+    from opifex.neural.quantum.neural_xc import NeuralXCFunctional
+
+
 class Functional(StrEnum):
     """Supported exchange-correlation functionals."""
 
     LDA = "lda"
     PBE = "pbe"
+    NEURAL = "neural"
+
+
+@dataclass(frozen=True, slots=True)
+class NeuralXCSpec:
+    """A learned XC functional split into a static graph and traced parameters.
+
+    The implicit-diff SCF and the total-energy functions are pure functions of
+    (possibly traced) arrays; an :class:`nnx.Module` cannot be passed through
+    them directly. Splitting the :class:`~opifex.neural.quantum.neural_xc.NeuralXCFunctional`
+    into its static ``graphdef`` and its parameter ``state`` (the documented
+    ``nnx.split`` round-trip) lets the parameters flow as differentiable leaves
+    through :func:`optimistix.fixed_point` and :func:`jax.grad`, so ``dE/dtheta``
+    is exact via the implicit function theorem -- the learned-XC training path.
+
+    Attributes:
+        graphdef: The static NNX graph definition of the functional.
+        state: The functional's parameter state (traceable pytree leaves).
+    """
+
+    graphdef: nnx.GraphDef
+    state: nnx.State
+
+    @classmethod
+    def from_functional(cls, functional: NeuralXCFunctional) -> NeuralXCSpec:
+        """Split a :class:`NeuralXCFunctional` into ``(graphdef, state)``."""
+        graphdef, state = nnx.split(functional)
+        return cls(graphdef=graphdef, state=state)
+
+    def merge(self) -> NeuralXCFunctional:
+        """Reconstruct the live :class:`NeuralXCFunctional` from the split."""
+        return nnx.merge(self.graphdef, self.state)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -123,14 +161,48 @@ def _pbe_xc(density: Array, ao_values: Array, ao_gradients: Array, weights: Arra
     return _XCResult(energy=energy, matrix=matrix)
 
 
+def _neural_xc(
+    density: Array,
+    ao_values: Array,
+    ao_gradients: Array,
+    weights: Array,
+    neural_spec: NeuralXCSpec,
+) -> _XCResult:
+    r"""Learned (GGA-form) exchange-correlation energy and matrix on the grid.
+
+    Identical assembly to :func:`_pbe_xc` but with the energy density and the
+    :math:`(v_\rho, v_\sigma)` potential pair coming from the merged neural
+    functional. The neural parameters enter through ``neural_spec.state`` so the
+    energy is differentiable with respect to them (the learned-XC training path).
+    """
+    functional = neural_spec.merge()
+    rho, grad_rho = _density_on_grid(density, ao_values, ao_gradients)
+    rho = jnp.clip(rho, 0.0, None)
+    sigma = jnp.sum(grad_rho**2, axis=-1)
+
+    energy = jnp.sum(weights * rho * functional.energy_density_from_sigma(rho, sigma))
+    v_rho, v_sigma = functional.xc_potential_components(rho, sigma)
+
+    local = jnp.einsum("g,gm,gn->mn", weights * v_rho, ao_values, ao_values)
+    weighted_grad = (weights * 2.0 * v_sigma)[:, None] * grad_rho  # (g, 3)
+    gradient_term = jnp.einsum("gc,gm,gnc->mn", weighted_grad, ao_values, ao_gradients)
+    matrix = local + gradient_term + gradient_term.T
+    return _XCResult(energy=energy, matrix=matrix)
+
+
 def _build_xc(
     density: Array,
     ao_values: Array,
     ao_gradients: Array,
     weights: Array,
     functional: Functional,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> _XCResult:
     """Dispatch the exchange-correlation build on the functional."""
+    if functional is Functional.NEURAL:
+        if neural_spec is None:
+            raise ValueError("Functional.NEURAL requires a NeuralXCSpec")
+        return _neural_xc(density, ao_values, ao_gradients, weights, neural_spec)
     if functional is Functional.PBE:
         return _pbe_xc(density, ao_values, ao_gradients, weights)
     return _lda_xc(density, ao_values, weights)
@@ -192,7 +264,7 @@ def assemble_integrals(
     orthogonaliser = _symmetric_orthogonaliser(overlap)
 
     grid = grid_template.build(positions)
-    if functional is Functional.PBE:
+    if functional in (Functional.PBE, Functional.NEURAL):
         ao_values, ao_gradients = moved_basis.evaluate_with_gradients(grid.points)
     else:
         ao_values = moved_basis.evaluate(grid.points)
@@ -231,7 +303,10 @@ def _density_from_fock(
 
 
 def build_fock(
-    density: Array, integrals: _Integrals, functional: Functional
+    density: Array,
+    integrals: _Integrals,
+    functional: Functional,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> tuple[Array, Array, _XCResult]:
     """Build ``F = h_core + J + V_xc`` and return ``(fock, coulomb, xc)``."""
     coulomb = _coulomb_matrix(integrals.eri, density)
@@ -241,6 +316,7 @@ def build_fock(
         integrals.ao_gradients,
         integrals.grid_weights,
         functional,
+        neural_spec,
     )
     fock = integrals.core_hamiltonian + coulomb + xc.matrix
     return fock, coulomb, xc
@@ -250,6 +326,7 @@ def total_energy(
     density: Array,
     integrals: _Integrals,
     functional: Functional,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> Array:
     """Proper Kohn-Sham total energy for a given density and integrals."""
     coulomb = _coulomb_matrix(integrals.eri, density)
@@ -259,6 +336,7 @@ def total_energy(
         integrals.ao_gradients,
         integrals.grid_weights,
         functional,
+        neural_spec,
     )
     one_electron = jnp.sum(density * integrals.core_hamiltonian)
     hartree = 0.5 * jnp.sum(density * coulomb)
@@ -266,10 +344,14 @@ def total_energy(
 
 
 def _scf_step(
-    density: Array, integrals: _Integrals, functional: Functional, n_occupied: int
+    density: Array,
+    integrals: _Integrals,
+    functional: Functional,
+    n_occupied: int,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> Array:
     """One Roothaan/Kohn-Sham step ``D -> D'`` (the SCF fixed-point map)."""
-    fock, _, _ = build_fock(density, integrals, functional)
+    fock, _, _ = build_fock(density, integrals, functional, neural_spec)
     new_density, _, _ = _density_from_fock(fock, integrals.orthogonaliser, n_occupied)
     return new_density
 
@@ -281,12 +363,15 @@ def converged_density_implicit(
     *,
     tolerance: float,
     max_steps: int,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> Array:
     """Converged density matrix via the implicit-function-theorem fixed point.
 
     Wraps the Roothaan step with :func:`optimistix.fixed_point` whose default
     :class:`~optimistix.ImplicitAdjoint` differentiates the converged fixed point
-    by the implicit function theorem (no backprop through the iterations).
+    by the implicit function theorem (no backprop through the iterations). With a
+    ``neural_spec`` the learned XC parameters flow as differentiable leaves, so
+    ``dE/dtheta`` is exact via the same implicit adjoint.
     """
     initial = _density_from_fock(integrals.core_hamiltonian, integrals.orthogonaliser, n_occupied)[
         0
@@ -294,7 +379,7 @@ def converged_density_implicit(
     solver = optx.FixedPointIteration(rtol=tolerance, atol=tolerance)
 
     def step(density: Array, _: None) -> Array:
-        return _scf_step(density, integrals, functional, n_occupied)
+        return _scf_step(density, integrals, functional, n_occupied, neural_spec)
 
     solution = optx.fixed_point(step, solver, initial, max_steps=max_steps, throw=False)
     return solution.value
@@ -306,6 +391,7 @@ def converged_density_unrolled(
     n_occupied: int,
     *,
     n_steps: int,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> Array:
     """Converged density via a fixed number of differentiable SCF steps.
 
@@ -316,7 +402,7 @@ def converged_density_unrolled(
         0
     ]
     for _ in range(n_steps):
-        density = _scf_step(density, integrals, functional, n_occupied)
+        density = _scf_step(density, integrals, functional, n_occupied, neural_spec)
     return density
 
 
@@ -342,6 +428,7 @@ def converged_density_direct(
     *,
     tolerance: float,
     max_steps: int,
+    neural_spec: NeuralXCSpec | None = None,
 ) -> Array:
     r"""Converged density via direct energy minimisation over orbital coefficients.
 
@@ -356,7 +443,7 @@ def converged_density_direct(
     def energy_of_parameters(parameters: Array, _: None) -> Array:
         coefficients = _cayley_orthonormal(parameters, reference, n_occupied)
         density = 2.0 * coefficients @ coefficients.T
-        return total_energy(density, integrals, functional)
+        return total_energy(density, integrals, functional, neural_spec)
 
     # Initialise from the core-Hamiltonian guess (orthonormal-basis identity).
     initial = jnp.eye(n_ao, dtype=reference.dtype)
@@ -370,6 +457,7 @@ def converged_density_direct(
 
 __all__ = [
     "Functional",
+    "NeuralXCSpec",
     "assemble_integrals",
     "build_fock",
     "converged_density_direct",

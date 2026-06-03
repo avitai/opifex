@@ -3,9 +3,11 @@
 Public surface:
 
 * :class:`~opifex.neural.quantum.dft.scf.SCFSolver` -- restricted Kohn-Sham
-  (RKS) self-consistent-field driver (LDA and PBE; DIIS and direct-minimisation
-  modes) with implicit-differentiation analytic nuclear forces, plus its
-  :class:`SCFResult`, the :class:`Functional` and :class:`SolverMode` enums.
+  (RKS) self-consistent-field driver (LDA, PBE and the learned ``neural``
+  functional; DIIS and direct-minimisation modes) with
+  implicit-differentiation analytic nuclear forces and exact
+  exchange-correlation-parameter gradients, plus its :class:`SCFResult`, the
+  :class:`Functional` and :class:`SolverMode` enums.
 * LDA and PBE exchange-correlation primitives in
   :mod:`opifex.neural.quantum.dft.xc`.
 * The Becke-partitioned molecular quadrature grid (eager and the
