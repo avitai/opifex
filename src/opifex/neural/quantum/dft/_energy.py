@@ -45,6 +45,7 @@ from jax import Array
 from opifex.core.quantum.backend import JaxGaussianBackend
 from opifex.core.quantum.basis import AtomicOrbitalBasis  # noqa: TC001
 from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.neural.quantum.dft._fixed_point import AndersonAcceleration
 from opifex.neural.quantum.dft.grid import MolecularGridTemplate  # noqa: TC001
 from opifex.neural.quantum.dft.xc import (
     lda_energy_density,
@@ -356,6 +357,37 @@ def _scf_step(
     return new_density
 
 
+def scf_fixed_point(
+    integrals: _Integrals,
+    functional: Functional,
+    n_occupied: int,
+    *,
+    tolerance: float,
+    max_steps: int,
+    neural_spec: NeuralXCSpec | None = None,
+) -> optx.Solution:
+    """Solve the Kohn-Sham density fixed point with Anderson acceleration.
+
+    The single self-consistency engine shared by the differentiable energy path
+    (:func:`converged_density_implicit`) and the forward solve
+    (:meth:`opifex.neural.quantum.dft.scf.SCFSolver.solve`). Returns the full
+    :class:`optimistix.Solution` so callers can read the converged density
+    (``.value``), iteration count (``.stats``) and convergence status
+    (``.result``). The differentiated function is the bare Roothaan step, so the
+    default :class:`~optimistix.ImplicitAdjoint` yields the exact
+    implicit-function-theorem gradient regardless of the forward iteration path.
+    """
+    initial = _density_from_fock(integrals.core_hamiltonian, integrals.orthogonaliser, n_occupied)[
+        0
+    ]
+    solver = AndersonAcceleration(rtol=tolerance, atol=tolerance)
+
+    def step(density: Array, _: None) -> Array:
+        return _scf_step(density, integrals, functional, n_occupied, neural_spec)
+
+    return optx.fixed_point(step, solver, initial, max_steps=max_steps, throw=False)
+
+
 def converged_density_implicit(
     integrals: _Integrals,
     functional: Functional,
@@ -365,24 +397,27 @@ def converged_density_implicit(
     max_steps: int,
     neural_spec: NeuralXCSpec | None = None,
 ) -> Array:
-    """Converged density matrix via the implicit-function-theorem fixed point.
+    r"""Converged density matrix via the implicit-function-theorem fixed point.
 
-    Wraps the Roothaan step with :func:`optimistix.fixed_point` whose default
-    :class:`~optimistix.ImplicitAdjoint` differentiates the converged fixed point
-    by the implicit function theorem (no backprop through the iterations). With a
+    Solves the Roothaan step :math:`D \to f(D)` with
+    :class:`~opifex.neural.quantum.dft._fixed_point.AndersonAcceleration` -- plain
+    Roothaan iteration charge-sloshes and fails to converge (water/LDA stalls at a
+    residual of :math:`\sim 0.9`), whereas Anderson mixing converges in a handful
+    of steps. The solver is only the *forward* iterator: :func:`optimistix.fixed_point`
+    differentiates the bare step ``f`` via the default
+    :class:`~optimistix.ImplicitAdjoint`, so the implicit-function-theorem gradient
+    is exact and independent of how the forward solve converged. With a
     ``neural_spec`` the learned XC parameters flow as differentiable leaves, so
     ``dE/dtheta`` is exact via the same implicit adjoint.
     """
-    initial = _density_from_fock(integrals.core_hamiltonian, integrals.orthogonaliser, n_occupied)[
-        0
-    ]
-    solver = optx.FixedPointIteration(rtol=tolerance, atol=tolerance)
-
-    def step(density: Array, _: None) -> Array:
-        return _scf_step(density, integrals, functional, n_occupied, neural_spec)
-
-    solution = optx.fixed_point(step, solver, initial, max_steps=max_steps, throw=False)
-    return solution.value
+    return scf_fixed_point(
+        integrals,
+        functional,
+        n_occupied,
+        tolerance=tolerance,
+        max_steps=max_steps,
+        neural_spec=neural_spec,
+    ).value
 
 
 def converged_density_unrolled(

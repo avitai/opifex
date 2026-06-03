@@ -8,15 +8,21 @@ Slater+VWN5 and the PBE GGA).
 Forward SCF
 -----------
 The Kohn-Sham equations are solved by symmetric-orthogonalisation fixed-point
-iteration with DIIS acceleration:
+iteration with Anderson acceleration (Pulay DIIS on the density residual --
+:class:`~opifex.neural.quantum.dft._fixed_point.AndersonAcceleration`):
 
 #. Orthogonalise with Lowdin's :math:`S^{-1/2}`.
 #. Build the Fock matrix :math:`F(D) = h_\text{core} + J[D] + V_{xc}[D]` with the
    Coulomb matrix :math:`J_{\mu\nu} = \sum_{\lambda\sigma} (\mu\nu|\lambda\sigma)
    D_{\lambda\sigma}` and the LDA/GGA :math:`V_{xc}` on a real molecular grid.
-#. DIIS-extrapolate the Fock matrix from the error :math:`e = F D S - S D F`.
 #. Solve :math:`F' C' = C' \varepsilon`, back-transform, occupy the lowest
-   :math:`n_\text{occ}` orbitals, form :math:`D = 2 C_\text{occ} C_\text{occ}^\top`.
+   :math:`n_\text{occ}` orbitals, form the Roothaan step
+   :math:`D' = 2 C_\text{occ} C_\text{occ}^\top`.
+#. Anderson-mix a short history of densities to converge the residual
+   :math:`D' - D`; plain Roothaan iteration charge-sloshes and stalls.
+
+The forward solve and the differentiable energy path share this one
+fixed-point engine, so both are jit-compatible and converge identically.
 
 A direct-minimisation (SCF-free) mode is available behind the same interface:
 the Kohn-Sham energy is minimised directly over a QR-orthonormalised coefficient
@@ -40,7 +46,9 @@ The reported total energy is the proper Kohn-Sham energy
 
 References
 ----------
-* P. Pulay, *Chem. Phys. Lett.* **73**, 393 (1980) -- DIIS.
+* P. Pulay, *Chem. Phys. Lett.* **73**, 393 (1980) -- DIIS; D. G. Anderson,
+  *J. ACM* **12**, 547 (1965) -- Anderson acceleration (the density-space DIIS
+  used here).
 * X. Zhang, G. K.-L. Chan, *J. Chem. Phys.* **157**, 204801 (2022),
   arXiv:2207.13836 -- implicit differentiation of the SCF fixed point (PySCFAD).
 * L. Y. Yao et al., arXiv:2411.05033 (jrystal / DWD) -- direct minimisation.
@@ -57,9 +65,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import jax
-import jax.numpy as jnp
 from flax import nnx  # noqa: TC002
 from jax import Array
+from optimistix import RESULTS
 
 from opifex.core.quantum.basis import AtomicOrbitalBasis
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
@@ -73,6 +81,7 @@ from opifex.neural.quantum.dft._energy import (
     converged_density_unrolled,
     Functional,
     NeuralXCSpec,
+    scf_fixed_point,
     total_energy,
 )
 from opifex.neural.quantum.dft.grid import (
@@ -113,23 +122,6 @@ class SCFResult:
     converged: bool
 
 
-def _diis_extrapolate(fock_history: list[Array], error_history: list[Array]) -> Array:
-    """Pulay DIIS extrapolation of the Fock matrix from stored error vectors."""
-    n = len(fock_history)
-    b_matrix = jnp.zeros((n + 1, n + 1))
-    for i in range(n):
-        for j in range(n):
-            b_matrix = b_matrix.at[i, j].set(jnp.sum(error_history[i] * error_history[j]))
-    b_matrix = b_matrix.at[n, :n].set(-1.0)
-    b_matrix = b_matrix.at[:n, n].set(-1.0)
-    rhs = jnp.zeros(n + 1).at[n].set(-1.0)
-    coefficients = jnp.linalg.solve(b_matrix, rhs)[:n]
-    extrapolated = jnp.zeros_like(fock_history[0])
-    for i in range(n):
-        extrapolated = extrapolated + coefficients[i] * fock_history[i]
-    return extrapolated
-
-
 class SCFSolver:
     """Restricted Kohn-Sham (RKS) self-consistent-field solver.
 
@@ -138,7 +130,8 @@ class SCFSolver:
         basis: The AO basis (defaults to STO-3G built from the system).
         functional: The exchange-correlation functional
             (``"lda"``, ``"pbe"`` or ``"neural"``).
-        mode: ``"diis"`` for the DIIS SCF or ``"direct"`` for direct minimisation.
+        mode: ``"diis"`` for the Anderson-accelerated self-consistent SCF (Pulay
+            DIIS on the density residual) or ``"direct"`` for direct minimisation.
         neural_functional: A learned XC functional; required (and selects the
             ``"neural"`` functional) when ``functional == "neural"``.
         grid_template: A pre-built molecular-grid template; defaults to the
@@ -146,7 +139,6 @@ class SCFSolver:
             trades XC-integration accuracy for speed (e.g. in tests).
         max_iterations: Maximum SCF / fixed-point / minimisation iterations.
         convergence_tolerance: RMS density-change convergence threshold.
-        diis_space: Number of Fock/error matrices retained for DIIS.
     """
 
     def __init__(
@@ -160,7 +152,6 @@ class SCFSolver:
         grid_template: MolecularGridTemplate | None = None,
         max_iterations: int = 100,
         convergence_tolerance: float = 1.0e-8,
-        diis_space: int = 8,
     ) -> None:
         """Initialise the solver, its integral backend and the grid template."""
         if system.multiplicity != 1:
@@ -185,7 +176,6 @@ class SCFSolver:
         self._mode = SolverMode(mode)
         self._max_iterations = max_iterations
         self._convergence_tolerance = convergence_tolerance
-        self._diis_space = diis_space
         self._n_occupied = system.n_electrons // 2
         self._grid_template: MolecularGridTemplate = (
             grid_template if grid_template is not None else build_molecular_grid_traceable(system)
@@ -322,7 +312,7 @@ class SCFSolver:
         """
         if self._mode is SolverMode.DIRECT:
             return self._solve_direct()
-        return self._solve_diis()
+        return self._solve_self_consistent()
 
     def _solve_direct(self) -> SCFResult:
         """Direct-minimisation forward solve (SCF-free path)."""
@@ -350,53 +340,36 @@ class SCFSolver:
             converged=True,
         )
 
-    def _solve_diis(self) -> SCFResult:
-        """DIIS forward solve at the system's nuclear geometry."""
+    def _solve_self_consistent(self) -> SCFResult:
+        """Anderson-accelerated self-consistent forward solve.
+
+        Drives the Kohn-Sham density to the fixed point with the same
+        :class:`~opifex.neural.quantum.dft._fixed_point.AndersonAcceleration`
+        engine as the differentiable energy path (Anderson mixing is Pulay DIIS
+        applied to the density residual), then reconstructs the orbitals and
+        total energy from the converged density.
+        """
         integrals = self._integrals(self._system.positions)
-        overlap = integrals.overlap
-        orthogonaliser = integrals.orthogonaliser
-
-        density, coefficients, orbital_energies = _density_from_fock_impl(
-            integrals.core_hamiltonian, orthogonaliser, self._n_occupied
+        solution = scf_fixed_point(
+            integrals,
+            self._functional,
+            self._n_occupied,
+            tolerance=self._convergence_tolerance,
+            max_steps=self._max_iterations,
+            neural_spec=self._neural_spec,
         )
-
-        fock_history: list[Array] = []
-        error_history: list[Array] = []
-        energy = jnp.asarray(0.0)
-        converged = False
-        iterations_run = 0
-
-        for iteration in range(1, self._max_iterations + 1):
-            iterations_run = iteration
-            fock, _, _ = build_fock(density, integrals, self._functional, self._neural_spec)
-            energy = total_energy(density, integrals, self._functional, self._neural_spec)
-
-            error = fock @ density @ overlap - overlap @ density @ fock
-            fock_history.append(fock)
-            error_history.append(error)
-            if len(fock_history) > self._diis_space:
-                fock_history.pop(0)
-                error_history.pop(0)
-            extrapolated = (
-                _diis_extrapolate(fock_history, error_history) if len(fock_history) > 1 else fock
-            )
-
-            new_density, coefficients, orbital_energies = _density_from_fock_impl(
-                extrapolated, orthogonaliser, self._n_occupied
-            )
-            density_change = jnp.sqrt(jnp.mean((new_density - density) ** 2))
-            density = new_density
-            if float(density_change) < self._convergence_tolerance:
-                converged = True
-                break
-
+        fock, _, _ = build_fock(solution.value, integrals, self._functional, self._neural_spec)
+        density, coefficients, orbital_energies = _density_from_fock_impl(
+            fock, integrals.orthogonaliser, self._n_occupied
+        )
+        energy = total_energy(density, integrals, self._functional, self._neural_spec)
         return SCFResult(
             total_energy=energy,
             orbital_energies=orbital_energies,
             density_matrix=density,
             coefficients=coefficients,
-            n_iterations=iterations_run,
-            converged=converged,
+            n_iterations=int(solution.stats["num_steps"]),
+            converged=bool(solution.result == RESULTS.successful),
         )
 
 
