@@ -1,0 +1,381 @@
+r"""Contracted-Gaussian atomic-orbital basis sets for molecular DFT.
+
+This module turns a :class:`~opifex.core.quantum.molecular_system.MolecularSystem`
+plus a basis-set name into an :class:`AtomicOrbitalBasis`: the flat list of
+contracted Cartesian-Gaussian shells (one per ``(atom, l)`` block) together with
+the atomic-orbital (AO) offset table required by the McMurchie-Davidson integral
+engine in :mod:`opifex.core.quantum.backend`.
+
+Only the **STO-3G** minimal basis is provided for now, with hardcoded
+contracted-GTO exponents and contraction coefficients for H, C, N and O. The
+numbers are the standard EMSL Basis Set Exchange / PySCF STO-3G values (Hehre,
+Stewart & Pople, *J. Chem. Phys.* **51**, 2657 (1969)); they are validated
+indirectly by the integral tests against ``pyscf.gto.M(...).intor(...)``.
+
+Primitive normalisation convention
+----------------------------------
+Each primitive Cartesian Gaussian is individually normalised, and the contracted
+combination is then renormalised so that the contracted AO has unit self-overlap
+(the PySCF / standard quantum-chemistry convention). The renormalisation is
+folded into the stored contraction coefficients so the integral engine never has
+to renormalise again.
+
+References
+----------
+* T. Helgaker, P. Jorgensen, J. Olsen, *Molecular Electronic-Structure Theory*,
+  Wiley (2000), Ch. 9 (Gaussian basis functions and their normalisation).
+* W. J. Hehre, R. F. Stewart, J. A. Pople, *J. Chem. Phys.* **51**, 2657 (1969)
+  (the STO-NG contraction coefficients).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import jax.numpy as jnp
+import numpy as np
+from jax import Array
+
+from opifex.core.quantum.molecular_system import ATOMIC_SYMBOLS, MolecularSystem
+
+
+# ---------------------------------------------------------------------------
+# STO-3G primitive data (EMSL / PySCF values).
+#
+# Each entry is a list of shells; each shell is ``(l, [(exponent, coeff), ...])``
+# where ``coeff`` is the *contraction* coefficient against the individually
+# normalised primitive (the STO-NG convention -- the same set of coefficients is
+# reused across elements per l-block).
+# ---------------------------------------------------------------------------
+_STO3G: dict[str, list[tuple[int, list[tuple[float, float]]]]] = {
+    "H": [
+        (
+            0,
+            [
+                (3.42525091, 0.15432897),
+                (0.62391373, 0.53532814),
+                (0.16885540, 0.44463454),
+            ],
+        ),
+    ],
+    "C": [
+        (
+            0,
+            [
+                (71.6168370, 0.15432897),
+                (13.0450960, 0.53532814),
+                (3.5305122, 0.44463454),
+            ],
+        ),
+        (
+            0,
+            [
+                (2.9412494, -0.09996723),
+                (0.6834831, 0.39951283),
+                (0.2222899, 0.70011547),
+            ],
+        ),
+        (
+            1,
+            [
+                (2.9412494, 0.15591627),
+                (0.6834831, 0.60768372),
+                (0.2222899, 0.39195739),
+            ],
+        ),
+    ],
+    "N": [
+        (
+            0,
+            [
+                (99.1061690, 0.15432897),
+                (18.0523120, 0.53532814),
+                (4.8856602, 0.44463454),
+            ],
+        ),
+        (
+            0,
+            [
+                (3.7804559, -0.09996723),
+                (0.8784966, 0.39951283),
+                (0.2857144, 0.70011547),
+            ],
+        ),
+        (
+            1,
+            [
+                (3.7804559, 0.15591627),
+                (0.8784966, 0.60768372),
+                (0.2857144, 0.39195739),
+            ],
+        ),
+    ],
+    "O": [
+        (
+            0,
+            [
+                (130.7093200, 0.15432897),
+                (23.8088610, 0.53532814),
+                (6.4436083, 0.44463454),
+            ],
+        ),
+        (
+            0,
+            [
+                (5.0331513, -0.09996723),
+                (1.1695961, 0.39951283),
+                (0.3803890, 0.70011547),
+            ],
+        ),
+        (
+            1,
+            [
+                (5.0331513, 0.15591627),
+                (1.1695961, 0.60768372),
+                (0.3803890, 0.39195739),
+            ],
+        ),
+    ],
+}
+
+# Cartesian angular-momentum component lists, ordered to match PySCF's Cartesian
+# ordering for s and p shells: s -> (x=y=z=0); p -> (x), (y), (z).
+_CART_COMPONENTS: dict[int, tuple[tuple[int, int, int], ...]] = {
+    0: ((0, 0, 0),),
+    1: ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+}
+
+
+def _double_factorial(value: int) -> int:
+    """Return the double factorial ``value!!`` for ``value >= -1``."""
+    result = 1
+    while value > 1:
+        result *= value
+        value -= 2
+    return result
+
+
+def _primitive_norm(exponent: float, angular: tuple[int, int, int]) -> float:
+    r"""Normalisation constant of a single Cartesian primitive Gaussian.
+
+    For a primitive ``x^l y^m z^n exp(-a r^2)`` the normalisation is
+
+    .. math::
+        N = (2a/\pi)^{3/4}
+            \frac{(4a)^{(l+m+n)/2}}
+                 {\sqrt{(2l-1)!!\,(2m-1)!!\,(2n-1)!!}}
+
+    (Helgaker, Jorgensen & Olsen, eq. 9.2.4).
+    """
+    l_x, l_y, l_z = angular
+    total = l_x + l_y + l_z
+    numerator = (2.0 * exponent / np.pi) ** 0.75 * (4.0 * exponent) ** (total / 2.0)
+    denominator = np.sqrt(
+        _double_factorial(2 * l_x - 1)
+        * _double_factorial(2 * l_y - 1)
+        * _double_factorial(2 * l_z - 1)
+    )
+    return float(numerator / denominator)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class GaussianShell:
+    """A single contracted Cartesian-Gaussian shell centred on one atom.
+
+    Attributes:
+        atom_index: Index of the atom this shell is centred on.
+        angular_momentum: Total angular momentum ``l`` (0 = s, 1 = p, ...).
+        center: Cartesian centre in Bohr [Shape: (3,)].
+        exponents: Primitive Gaussian exponents [Shape: (n_prim,)].
+        coefficients: Contraction coefficients for *l-axis-aligned* primitives,
+            already including primitive normalisation and contracted
+            renormalisation [Shape: (n_prim,)].
+        ao_offset: Index of the first AO produced by this shell in the flat AO
+            ordering.
+    """
+
+    atom_index: int
+    angular_momentum: int
+    center: Array
+    exponents: Array
+    coefficients: Array
+    ao_offset: int
+
+    @property
+    def n_primitives(self) -> int:
+        """Number of primitive Gaussians in the contraction."""
+        return int(self.exponents.shape[0])
+
+    @property
+    def n_cartesian(self) -> int:
+        """Number of Cartesian AO components in this shell (1 for s, 3 for p)."""
+        return len(_CART_COMPONENTS[self.angular_momentum])
+
+    @property
+    def cartesian_components(self) -> tuple[tuple[int, int, int], ...]:
+        """Cartesian ``(l_x, l_y, l_z)`` powers for each AO in this shell."""
+        return _CART_COMPONENTS[self.angular_momentum]
+
+
+def _contracted_self_overlap(
+    exponents: np.ndarray, normalised_coeffs: np.ndarray, angular: tuple[int, int, int]
+) -> float:
+    r"""Self-overlap of a contraction of normalised primitives along one axis.
+
+    Uses the closed-form same-centre Gaussian overlap
+
+    .. math::
+        \langle a | b \rangle =
+            \left(\frac{\pi}{a+b}\right)^{3/2}
+            \frac{(2l-1)!!\,(2m-1)!!\,(2n-1)!!}{(2(a+b))^{l+m+n}}
+
+    summed over primitive pairs with their normalisation constants folded in.
+    """
+    l_x, l_y, l_z = angular
+    total = l_x + l_y + l_z
+    angular_factor = (
+        _double_factorial(2 * l_x - 1)
+        * _double_factorial(2 * l_y - 1)
+        * _double_factorial(2 * l_z - 1)
+    )
+    overlap = 0.0
+    for i, exp_i in enumerate(exponents):
+        for j, exp_j in enumerate(exponents):
+            combined = exp_i + exp_j
+            pair = (np.pi / combined) ** 1.5 * angular_factor / (2.0 * combined) ** total
+            overlap += normalised_coeffs[i] * normalised_coeffs[j] * pair
+    return float(overlap)
+
+
+def _build_shell_coefficients(
+    exponents: np.ndarray, raw_coeffs: np.ndarray, angular_momentum: int
+) -> np.ndarray:
+    """Fold primitive normalisation and contracted renormalisation into coeffs.
+
+    The l-axis-aligned Cartesian component ``(l, 0, 0)`` is used as the reference
+    for the contracted renormalisation; the per-primitive normalisation it
+    carries is shared by every Cartesian component of the shell because primitive
+    normalisation depends only on the total angular momentum for axis-aligned
+    powers.
+    """
+    reference_angular = (angular_momentum, 0, 0)
+    norms = np.array([_primitive_norm(float(exp), reference_angular) for exp in exponents])
+    normalised = raw_coeffs * norms
+    self_overlap = _contracted_self_overlap(exponents, normalised, reference_angular)
+    return normalised / np.sqrt(self_overlap)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AtomicOrbitalBasis:
+    """A contracted-Gaussian AO basis built from a molecular system.
+
+    Attributes:
+        shells: Flat tuple of contracted shells, in atom-major order.
+        n_atomic_orbitals: Total number of Cartesian AOs.
+        basis_name: The basis-set name this object was built from.
+    """
+
+    shells: tuple[GaussianShell, ...]
+    n_atomic_orbitals: int
+    basis_name: str
+
+    @classmethod
+    def from_molecular_system(
+        cls, system: MolecularSystem, basis_name: str = "sto-3g"
+    ) -> AtomicOrbitalBasis:
+        """Build an :class:`AtomicOrbitalBasis` for ``system``.
+
+        Args:
+            system: The molecular system providing atom centres and elements.
+            basis_name: The basis-set name (only ``"sto-3g"`` is supported).
+
+        Returns:
+            The assembled AO basis.
+
+        Raises:
+            ValueError: If ``basis_name`` is unsupported or an element has no
+                tabulated basis data.
+        """
+        normalised_name = basis_name.lower()
+        if normalised_name != "sto-3g":
+            raise ValueError(f"Unsupported basis set {basis_name!r}; only 'sto-3g' is available")
+
+        positions = np.asarray(system.positions, dtype=np.float64)
+        atomic_numbers = [int(z) for z in system.atomic_numbers]
+
+        shells: list[GaussianShell] = []
+        ao_offset = 0
+        for atom_index, atomic_number in enumerate(atomic_numbers):
+            symbol = ATOMIC_SYMBOLS.get(atomic_number)
+            element_shells = _STO3G.get(symbol) if symbol is not None else None
+            if element_shells is None:
+                raise ValueError(
+                    f"No STO-3G data for element Z={atomic_number}"
+                    f" (symbol={symbol}); tabulated: {sorted(_STO3G)}"
+                )
+            center = jnp.asarray(positions[atom_index])
+            for angular_momentum, primitives in element_shells:
+                exponents = np.array([exp for exp, _ in primitives])
+                raw_coeffs = np.array([coeff for _, coeff in primitives])
+                coefficients = _build_shell_coefficients(exponents, raw_coeffs, angular_momentum)
+                shell = GaussianShell(
+                    atom_index=atom_index,
+                    angular_momentum=angular_momentum,
+                    center=center,
+                    exponents=jnp.asarray(exponents),
+                    coefficients=jnp.asarray(coefficients),
+                    ao_offset=ao_offset,
+                )
+                shells.append(shell)
+                ao_offset += shell.n_cartesian
+
+        return cls(
+            shells=tuple(shells),
+            n_atomic_orbitals=ao_offset,
+            basis_name=normalised_name,
+        )
+
+    @property
+    def n_shells(self) -> int:
+        """Number of contracted shells."""
+        return len(self.shells)
+
+    def evaluate(self, points: Array) -> Array:
+        r"""Evaluate every AO at a set of Cartesian points.
+
+        Each contracted Cartesian AO is
+
+        .. math::
+            \phi(r) = (x-X)^{l_x}(y-Y)^{l_y}(z-Z)^{l_z}
+                      \sum_p c_p \, e^{-a_p |r-R|^2}.
+
+        Args:
+            points: Cartesian points in Bohr [Shape: (n_points, 3)].
+
+        Returns:
+            AO values [Shape: (n_points, n_atomic_orbitals)] in the flat AO
+            ordering.
+        """
+        columns: list[Array] = []
+        for shell in self.shells:
+            offset = shell.center
+            displacement = points - offset[None, :]
+            r2 = jnp.sum(displacement**2, axis=-1)
+            radial = jnp.sum(
+                shell.coefficients[None, :] * jnp.exp(-shell.exponents[None, :] * r2[:, None]),
+                axis=-1,
+            )
+            for power in shell.cartesian_components:
+                angular = (
+                    displacement[:, 0] ** power[0]
+                    * displacement[:, 1] ** power[1]
+                    * displacement[:, 2] ** power[2]
+                )
+                columns.append(angular * radial)
+        return jnp.stack(columns, axis=-1)
+
+
+__all__ = [
+    "AtomicOrbitalBasis",
+    "GaussianShell",
+]
