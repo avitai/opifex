@@ -3,7 +3,7 @@
 | Metadata | Value |
 |----------|-------|
 | **Level** | Advanced |
-| **Runtime** | ~57 min (GPU) |
+| **Runtime** | ~12 min (GPU, scan-fused) |
 | **Prerequisites** | JAX, Flax NNX, E(3)-equivariant networks, MLIPs |
 | **Format** | Python + Jupyter |
 | **Memory** | ~3 GB RAM |
@@ -29,9 +29,10 @@ stack and changes no library internals:
   split, so the network learns only the small, well-conditioned interaction
   energy.
 - `NequIP` + `EnergyHead` + `ForcesHead` assemble into an `AtomisticModel`.
-- `make_atomistic_train_step` builds the jitted energy+forces training step
-  (`nnx.value_and_grad` + `optimizer.update`); the force term trains the model
-  through grad-of-grad autodiff.
+- `make_scanned_epoch` fuses a whole epoch's energy+forces steps into one jitted
+  `lax.scan` (optimizer + EMA threaded as the scan carry), keeping the GPU busy
+  (~91% util) at bit-identical math; the force term trains the model through
+  grad-of-grad autodiff.
 - `create_optimizer` supplies AdamW with a cosine learning-rate schedule.
 - `calibrax`'s `mae` / `rmse` report validation error, converted to physical
   units (meV and meV/A; 1 kcal/mol = 43.364 meV).
@@ -150,14 +151,17 @@ model = AtomisticModel(
 
 ## Training
 
-`make_atomistic_train_step` returns an `nnx.jit` step that computes the weighted
-energy+forces loss, its gradient with `nnx.value_and_grad`, and applies the AdamW
-update in place. Forces carry `3 * n_atoms` labels per structure and dominate the
-chemistry of the potential-energy surface, so NequIP / MACE weight the force term
-heavily — but too large a force weight *starves the absolute-energy term*: the
+`make_scanned_epoch` fuses **a whole epoch's training steps into one jitted
+`jax.lax.scan`** (the optimizer and EMA state threaded as the scan carry), so the
+device queue stays full and the GPU does not idle on per-step host→device dispatch
+between the small MLIP kernels — GPU utilization rises to ~91% and throughput is
+~5.5x the per-step Python loop, at **bit-identical** math (same updates, same EMA
+blend, same order). Forces carry `3 * n_atoms` labels per structure and dominate
+the chemistry of the potential-energy surface, so NequIP / MACE weight the force
+term heavily — but too large a force weight *starves the absolute-energy term*: the
 relative energies and forces converge while the constant energy offset never does.
 The example therefore trains in **two phases**, both built from the same thin
-`make_atomistic_train_step` and sharing one optimizer (so the cosine schedule
+`make_scanned_epoch` and sharing one model and optimizer (so the cosine schedule
 advances continuously across the boundary):
 
 1. an **energy warm-up** — the first **80 epochs** at a moderate force weight
@@ -167,16 +171,17 @@ advances continuously across the boundary):
    (`force_weight = 150`) that refines the forces without letting the energy term
    diverge again.
 
-Switching the weight rebuilds the jitted step once (a single recompile). The force
+Switching the weight rebuilds the jitted epoch once (a single recompile). The force
 error keeps falling through the low-learning-rate tail of the cosine schedule, so
 AdamW uses a *deep* cosine decay (to ~`1e-3` of the peak rate) with global-norm
 gradient clipping over the whole **550-epoch** run; the clip keeps the
 force-weighted grad-of-grad objective stable.
 
 ```python
+import jax
 from opifex.core.training import OptimizerConfig
 from opifex.core.training.optimizers import create_optimizer
-from opifex.neural.atomistic import make_atomistic_train_step
+from opifex.neural.atomistic import AtomisticBatch, make_scanned_epoch
 
 WARMUP_EPOCHS, MAIN_EPOCHS = 80, 470
 num_epochs = WARMUP_EPOCHS + MAIN_EPOCHS  # 550
@@ -191,62 +196,70 @@ optimizer = nnx.Optimizer(
     )),
     wrt=nnx.Param,
 )
-# Two jitted steps from the same factory, one per phase weight, sharing the one
-# optimizer so the single cosine schedule spans the whole two-phase run.
-warmup_step = make_atomistic_train_step(
-    model, optimizer, energy_weight=1.0, force_weight=5.0
+# Two scan-fused epochs from the same factory, one per phase weight, sharing the
+# one model + optimizer so the single cosine schedule spans the whole run. Both
+# thread the EMA shadow (decay 0.99) through the scan carry.
+warmup_epoch = make_scanned_epoch(
+    model, optimizer, energy_weight=1.0, force_weight=5.0, ema_decay=0.99
 )
-main_step = make_atomistic_train_step(
-    model, optimizer, energy_weight=1.0, force_weight=150.0
+main_epoch = make_scanned_epoch(
+    model, optimizer, energy_weight=1.0, force_weight=150.0, ema_decay=0.99
 )
+# Stack the epoch's batches once into a pytree with a leading num_steps axis, and
+# seed the EMA carry from the initial model params.
+stacked_train = AtomisticBatch.stack(train_batches)
+ema_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
 
 for epoch in range(num_epochs):
-    train_step = warmup_step if epoch < WARMUP_EPOCHS else main_step
-    for batch in train_batches:
-        train_step(model, optimizer, batch)
-        ema.update(model)  # blend the live weights into the EMA shadow each step
+    scanned_epoch = warmup_epoch if epoch < WARMUP_EPOCHS else main_epoch
+    # One jitted lax.scan over the whole epoch; returns the updated EMA carry and
+    # the per-step losses (synced to host once per epoch).
+    ema_state, losses = scanned_epoch(model, optimizer, stacked_train, ema_state)
 ```
 
 Because the forces are the energy gradient, the force term differentiates a
 gradient — the backbone is jit / grad / vmap clean for exactly this grad-of-grad
-path.
+path, and the scan is over training *steps* (each a full fwd+bwd), so the
+grad-of-grad is unaffected.
 
 Following NequIP/MACE, the example keeps an **exponential moving average of the
-weights** (`ParamEMA`, decay `0.99` — the NequIP `ema_decay` default and the MACE
-`--ema_decay` default) and evaluates against the *smoothed* weights, not the noisy
-last-step ones. Seeded once from the initial model (`ema = ParamEMA(model,
-decay=0.99)`), the library `ParamEMA` holds a shadow `nnx.Param` state, is updated
-after every step (`ema.update(model)`, shown above), and exposes
-`ema.swap_in(model)` (a context that loads the averaged weights for evaluation and
-restores the live weights) and `ema.copy_to(model)` (load the averaged weights
-permanently for the final report). All validation metrics and parity plots below
-are reported against the EMA weights.
+weights** (decay `0.99` — the NequIP `ema_decay` default and the MACE `--ema_decay`
+default) and evaluates against the *smoothed* weights, not the noisy last-step ones.
+The EMA shadow is threaded through the scan carry and blended inside the scan body
+(`ema = 0.99 * ema + 0.01 * params` each step), so `make_scanned_epoch` returns the
+updated `ema_state` per epoch (seeded once from the initial model params, shown
+above). For the periodic EMA eval the shadow is temporarily loaded into the model
+(`nnx.update(model, ema_state)`) and the live weights restored afterwards, so the
+training trajectory is untouched; the final report loads the EMA weights
+permanently. All validation metrics and parity plots below are reported against the
+EMA weights.
 
 ## Results
 
 Validation error on the 1000-configuration aspirin test split, measured on a
-single GPU run of this example (550 epochs, ~57 min on one RTX 4090) and evaluated
-against the EMA (smoothed) weights. The published column is the canonical rMD17
-@1000 benchmark — models trained on 950 configurations and validated on 50 — from
-Batzner et al. 2022 (NequIP, Nat. Commun.) as tabulated in Batatia et al. 2022
-(MACE, NeurIPS, Table 1), which reports NequIP and MACE on the same split:
+single GPU run of this example (550 scan-fused epochs, ~12 min on one RTX 4090 at
+~91% GPU utilization) and evaluated against the EMA (smoothed) weights. The
+published column is the canonical rMD17 @1000 benchmark — models trained on 950
+configurations and validated on 50 — from Batzner et al. 2022 (NequIP, Nat.
+Commun.) as tabulated in Batatia et al. 2022 (MACE, NeurIPS, Table 1), which
+reports NequIP and MACE on the same split:
 
 | Metric | This example | NequIP @1000 | MACE @1000 |
 |--------|-------------:|-------------:|-----------:|
-| Energy MAE  | **7.29 meV**   | ~2.3 meV   | ~2.2 meV   |
-| Energy RMSE | 10.68 meV      | —          | —          |
-| Force MAE   | **20.19 meV/A** | ~8 meV/A  | ~6.6 meV/A |
-| Force RMSE  | 31.47 meV/A    | —          | —          |
+| Energy MAE  | **6.29 meV**   | ~2.3 meV   | ~2.2 meV   |
+| Energy RMSE | 8.85 meV       | —          | —          |
+| Force MAE   | **19.05 meV/A** | ~8 meV/A  | ~6.6 meV/A |
+| Force RMSE  | 30.12 meV/A    | —          | —          |
 
 This opifex NequIP is a two-body (`correlation = 1`) tensor-product potential,
 without MACE's higher-body-order symmetric contraction. The two-phase loss
 (energy warm-up then heavier-force main phase) and the EMA evaluation weights
-**converge the absolute energy offset**: the energy MAE of **7.29 meV** is stable
+**converge the absolute energy offset**: the energy MAE of **6.29 meV** is stable
 and single-digit-meV, ~3x the published ~2.3 meV NequIP reference rather than the
 hundreds-of-meV offset a single very large force weight leaves behind. On the same
-@1000 aspirin benchmark the force MAE of **20.19 meV/A** **approaches — but does
+@1000 aspirin benchmark the force MAE of **19.05 meV/A** **approaches — but does
 not yet match** — the published ~8 meV/A NequIP accuracy, within a small factor
-(~2.5x). Both targets now land in the same ballpark instead of the energy term
+(~2.4x). Both targets now land in the same ballpark instead of the energy term
 being starved by the force term.
 
 The remaining gap reflects the smaller model (`l_max = 2`, five layers, two-body
