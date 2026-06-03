@@ -429,31 +429,37 @@ class L2OMetrics:
 
 ### NeuralDFTMetrics
 
-Metrics for Neural Density Functional Theory.
+Metrics for Kohn-Sham DFT experiments (errors against a reference calculation).
 
 ```python
 from opifex.mlops import NeuralDFTMetrics
 
 @dataclass
 class NeuralDFTMetrics:
-    """
-    Metrics for neural DFT calculations.
+    """Metrics specific to neural density functional theory experiments."""
 
-    Attributes:
-        total_energy_error: Total energy prediction error
-        density_error: Electron density error
-        xc_energy_error: Exchange-correlation energy error
-        scf_iterations: Self-consistent field iterations
-        convergence_achieved: Whether SCF converged
-        forces_mae: Mean absolute error in forces
-    """
+    # DFT accuracy metrics (required)
+    total_energy_error_hartree: float
+    forces_error_ev_per_angstrom: float
+    density_mse: float
+    exchange_correlation_error: float
 
-    total_energy_error: float
-    density_error: float
-    xc_energy_error: float
+    # Chemical accuracy (required)
+    atomization_energy_error_kcal_per_mol: float
+    bond_length_error_angstrom: float
+
+    # Physical constraints satisfaction (required)
+    particle_number_conservation: float
+    density_positivity_violation: float
+    symmetry_preservation: float
+
+    # Computational efficiency (required)
     scf_iterations: int
-    convergence_achieved: bool
-    forces_mae: Optional[float] = None
+    scf_convergence_time: float
+    density_optimization_time: float
+
+    # Optional metrics
+    vibrational_frequency_error_cm_minus_1: float | None = None
 ```
 
 ## Backend Integration

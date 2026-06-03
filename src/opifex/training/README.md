@@ -18,7 +18,7 @@ This package provides full training infrastructure for scientific machine learni
 ### Quantum Training 📋 **PLANNED FOR FUTURE SPRINTS**
 
 - **`quantum_trainer.py`**: Quantum-aware training algorithms 📋 **PLANNED**
-- **`scf_trainer.py`**: Self-consistent field training for Neural DFT 📋 **PLANNED**
+- **`scf_trainer.py`**: Learned-XC training over the Kohn-Sham SCF (`opifex.neural.quantum.dft`) 📋 **PLANNED**
 
 ## Implementation Status: Advanced Training Infrastructure COMPLETED ✅ READY FOR PRODUCTION
 
@@ -147,7 +147,7 @@ This package provides full training infrastructure for scientific machine learni
 - [ ] **Neural Operator Training**: Specialized training algorithms for FNO, DeepONet, Graph Neural Operators
 - [ ] **Operator Constraint Training**: Physics-informed training for neural operators
 - [ ] **Advanced Quantum-Aware Trainer**: Specialized training algorithms for quantum mechanical systems
-- [ ] **Enhanced SCF Training Integration**: Self-consistent field training for Neural DFT workflows
+- [ ] **Enhanced SCF Training Integration**: Learned-XC training over the Kohn-Sham SCF (`opifex.neural.quantum.dft`)
 - [ ] **Probabilistic Training**: Bayesian neural networks and uncertainty quantification
 - [ ] **Multi-Fidelity Training**: Hybrid classical-quantum training strategies
 

@@ -91,7 +91,7 @@ class HamiltonianOperator(QuantumOperator):
     """
 
     # Soft-Coulomb regularisation (Bohr^2) removing the 1/r singularity on the
-    # grid; matches NeuralSCFSolver._nuclear_potential in neural.quantum.neural_scf.
+    # grid (standard soft-Coulomb model-atom regularisation).
     _SOFT_COULOMB_EPS: float = 1e-2
     # Padding (Bohr) added either side of the outermost nucleus when deriving the
     # 1D potential grid from the molecular geometry.
@@ -211,9 +211,7 @@ class HamiltonianOperator(QuantumOperator):
 
         The grid extent is derived from the nuclear geometry (rather than being
         a hardcoded interval), so it always brackets every nucleus with a fixed
-        padding either side. Mirrors the radial projection used by
-        ``NeuralSCFSolver._atom_centres_on_grid`` in
-        ``opifex.neural.quantum.neural_scf``.
+        padding either side.
         """
         centres = jnp.linalg.norm(self.molecular_system.positions, axis=1)
         half_extent = jnp.max(jnp.abs(centres)) + self._GRID_PADDING_BOHR
@@ -225,10 +223,8 @@ class HamiltonianOperator(QuantumOperator):
         Summed over every nucleus so the potential depends on both the nuclear
         charges and the geometry of ``self.molecular_system``. The softening term
         removes the Coulomb singularity on the grid (standard soft-Coulomb
-        regularisation). This is the same formulation implemented by
-        ``NeuralSCFSolver._nuclear_potential`` in
-        ``opifex.neural.quantum.neural_scf`` (cf. Javadi-Abhari et al. soft-Coulomb
-        model atoms).
+        model-atom regularisation; cf. Javadi-Abhari et al. soft-Coulomb model
+        atoms).
         """
         grid = self._soft_coulomb_grid(len(wavefunction))
         centres = jnp.linalg.norm(self.molecular_system.positions, axis=1)

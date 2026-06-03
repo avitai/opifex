@@ -110,7 +110,7 @@ print(f"FNO: {x.shape} -> {y.shape}")  # (4, 1, 64, 64) -> (4, 1, 64, 64)
 - **[Examples Overview](examples/index.md)** - Runnable examples and demonstrations
 - **[Neural Operators](examples/neural-operators/fno-darcy.md)** - FNO, TFNO, DeepONet, and more
 - **[PINNs](examples/pinns/heat-equation.md)** - Physics-informed neural networks
-- **[Quantum Chemistry](examples/quantum-chemistry/neural-dft.md)** - Neural DFT and molecular examples
+- **[Quantum Chemistry](examples/quantum-chemistry/neural-xc-functional.md)** - Kohn-Sham DFT and learned exchange-correlation
 
 ### Development
 

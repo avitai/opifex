@@ -1,144 +1,127 @@
-# Neural Density Functional Theory
+# Differentiable Kohn-Sham DFT
 
 ## Overview
 
-The **Neural Density Functional Theory (Neural DFT)** framework in Opifex combines traditional DFT methodology with neural network enhancements to achieve chemical accuracy with improved efficiency. It integrates neural exchange-correlation (XC) functionals and neural-enhanced Self-Consistent Field (SCF) solvers into a unified, high-precision framework.
+Opifex provides a native-JAX molecular Kohn-Sham density-functional theory (DFT)
+solver and a trainable neural exchange-correlation (XC) functional. The
+restricted Kohn-Sham (RKS) self-consistent-field (SCF) driver is built on the
+McMurchie-Davidson Gaussian-integral backend; the converged total energy is a
+pure, differentiable function of the nuclear coordinates, so analytic forces
+come from differentiating the SCF fixed point.
 
-Key features include:
+Key features:
 
-- **Neural XC Functionals**: Deep learning models that capture non-local electron correlations using attention mechanisms.
-- **Neural SCF Solver**: Accelerated convergence using intelligent density mixing and convergence prediction.
-- **Chemical Accuracy**: Built-in diagnostics and optimization targets for achieving 1 kcal/mol accuracy.
-- **Flax NNX Integration**: Fully compatible with JAX transformations and modern neural network patterns.
+- **Real Kohn-Sham SCF**: LDA (Slater + VWN5) and PBE GGA functionals with DIIS
+  acceleration and a direct-minimisation mode.
+- **Analytic forces**: Implicit differentiation of the converged SCF fixed point
+  (the PySCFAD rationale) gives exact, memory-cheap `F = -dE/dR`.
+- **Trainable XC**: A constrained `NeuralXCFunctional` can replace the analytic
+  XC inside the same SCF, with exact `dE/dtheta` for end-to-end learning.
+- **Flax NNX / JAX**: Fully compatible with `jit`, `grad`, and `vmap`.
 
 ## Core Components
 
-### Neural DFT Driver
+### SCF solver
 
-The `NeuralDFT` class is the main entry point for performing calculations. It orchestrates the interaction between the molecular system, the XC functional, and the SCF solver.
+`SCFSolver` is the entry point. It assembles the integrals and molecular grid
+from a `MolecularSystem`, runs the RKS SCF, and exposes the differentiable
+energy and analytic forces. The closed-shell RKS solver requires an even
+electron count, and the bundled STO-3G minimal basis covers H, C, N and O.
 
 ```python
 import jax
 import jax.numpy as jnp
-from flax import nnx
-from opifex.neural.quantum import NeuralDFT
 
-# Initialize RNGs
-rngs = nnx.Rngs(0)
+from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.neural.quantum.dft import SCFSolver
 
-# Create Neural DFT driver
-dft_driver = NeuralDFT(
-    grid_size=1000,
-    convergence_threshold=1e-8,
-    max_scf_iterations=100,
-    xc_functional_type="neural",  # Use neural XC functional
-    mixing_strategy="neural",     # Use neural density mixing
-    chemical_accuracy_target=1e-6, # ~1 kcal/mol
-    rngs=rngs
-)
+with jax.enable_x64(True):
+    # H2 at the equilibrium bond length (positions in Bohr).
+    system = MolecularSystem(
+        atomic_numbers=jnp.array([1, 1]),
+        positions=jnp.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.4]]),
+        basis_set="sto-3g",
+    )
+    solver = SCFSolver(system, functional="lda")
+
+    result = solver.solve()                  # SCFResult
+    energy = solver.energy()                 # converged total energy (Hartree)
+    energy, forces = solver.energy_and_forces()
 ```
 
-### Neural XC Functional
+The LDA energies are validated against PySCF in the test suite; for example,
+H2 LDA/STO-3G agrees with `pyscf.dft.RKS` to about 1e-7 Hartree.
 
-The `NeuralXCFunctional` replaces traditional approximations (like LDA or GGA) with a neural network that learns the exchange-correlation energy density from electron density and its gradients. It uses:
+### Neural XC functional
 
-- **Density Feature Extraction**: Captures local and semi-local physics.
-- **Multi-Head Attention**: Models long-range non-local interactions.
-- **Physics Constraints**: Enforces exact conditions and bounds.
+`NeuralXCFunctional` is a constrained, attention-based exchange-correlation
+functional that drives the same real SCF through the `neural_functional`
+argument. `jax.grad` of `SCFSolver.energy_from_state` gives an exact
+`dE/dtheta` through the implicit-diff SCF, so the learned-XC training loop is
+end to end.
 
-### Neural SCF Solver
+```python
+import flax.nnx as nnx
 
-The `NeuralSCFSolver` accelerates the iterative solution of the Kohn-Sham equations:
+from opifex.neural.quantum import NeuralXCFunctional
+from opifex.neural.quantum.dft import SCFSolver
 
-- **Density Mixing Network**: Predicts optimal mixing of densities between iterations to suppress charge sloshing.
-- **Convergence Predictor**: Estimates the probability of convergence and remaining iterations.
+functional = NeuralXCFunctional(
+    hidden_sizes=(256, 256, 128),
+    use_attention=True,
+    num_attention_heads=4,
+    rngs=nnx.Rngs(0),
+)
+
+solver = SCFSolver(system, neural_functional=functional)
+graphdef, state = nnx.split(functional)
+gradient = jax.grad(solver.energy_from_state)(state)  # exact dE/dtheta
+```
 
 ## Usage Examples
 
-### 1. Basic Energy Calculation
+### Energy and forces from the problem API
 
-Calculate the ground state energy of a molecular system.
-
-```python
-from opifex.core.quantum.molecular_system import create_molecular_system
-
-# Define a molecule (e.g., H2)
-h2_system = create_molecular_system(
-    atoms=[('H', (0.0, 0.0, 0.0)), ('H', (0.74, 0.0, 0.0))],
-    charge=0,
-    multiplicity=1
-)
-
-# Compute energy
-result = dft_driver.compute_energy(h2_system)
-
-print(f"Total Energy: {result.total_energy:.6f} Ha")
-print(f"Converged: {result.converged}")
-print(f"Iterations: {result.iterations}")
-```
-
-### 2. Customizing Components
-
-You can customize the neural components for specific research needs.
+The `ElectronicStructureProblem` wraps the SCF behind the unified problem
+interface. Its energy and forces are the real Kohn-Sham quantities.
 
 ```python
-from opifex.neural.quantum import NeuralXCFunctional, NeuralSCFSolver
+import jax
 
-# Custom XC Functional
-custom_xc = NeuralXCFunctional(
-    hidden_sizes=[256, 256, 128],
-    use_attention=True,
-    num_attention_heads=4,
-    rngs=rngs
-)
+from opifex.core.problems import create_molecular_system, create_neural_dft_problem
 
-# Custom SCF Solver
-custom_scf = NeuralSCFSolver(
-    convergence_threshold=1e-9,
-    mixing_strategy="neural",
-    rngs=rngs
-)
+with jax.enable_x64(True):
+    h2 = create_molecular_system([("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))])
+    problem = create_neural_dft_problem(molecular_system=h2)  # functional_type -> LDA/PBE
 
-# Inject into driver (if supported by API or subclassing)
-# Note: Currently NeuralDFT initializes its own components based on config.
-# To use custom components, you would typically modify the driver or
-# use the components directly in a custom loop.
+    energy = problem.compute_energy()   # ~ -1.12 Hartree (LDA/STO-3G)
+    forces = problem.compute_forces()   # analytic -dE/dR
 ```
 
-### 3. Chemical Accuracy Prediction
+### JAX transforms
 
-The framework provides tools to assess the reliability of the results.
+The differentiable energy is `jit` / `grad` / `vmap` compatible. Build the
+solver eagerly first (its AO basis and grid are static structural metadata) so
+the transform only traces the nuclear positions.
 
 ```python
-# Predict accuracy
-accuracy_metrics = dft_driver.predict_chemical_accuracy(h2_system)
-
-print(f"Predicted Error: {accuracy_metrics['predicted_error_kcal_mol']:.2f} kcal/mol")
-print(f"Within Chemical Accuracy: {accuracy_metrics['within_chemical_accuracy_prediction']}")
+with jax.enable_x64(True):
+    _ = problem.scf_solver  # eager build before tracing
+    positions = problem.molecular_system.positions
+    energy = jax.jit(problem._energy_from_positions)(positions)
 ```
 
-## Advanced Configuration
+## Physics Constraints
 
-### Precision Settings
+The neural functional enforces exact constraints so it generalises:
 
-For quantum chemistry, numerical precision is critical. `NeuralDFT` supports high-precision modes.
-
-```python
-dft_high_prec = NeuralDFT(
-    enable_high_precision=True,  # Use float64 where critical
-    convergence_threshold=1e-10,
-    rngs=rngs
-)
-```
-
-### Physics Constraints
-
-The neural functional enforces physics constraints to ensure generalizability.
-
-- **Positivity**: Electron density is strictly non-negative.
-- **Symmetry**: Respects rotational and translational symmetries (via invariant features).
-- **Asymptotic Behavior**: Correct long-range decay of potentials.
+- **Positivity**: the exchange-correlation enhancement keeps the energy density
+  physical.
+- **Symmetry**: invariant density / gradient features respect rotational and
+  translational symmetry.
+- **LDA limit**: the network initialises to the analytic LDA functional.
 
 ## API Reference
 
-For detailed API documentation, see [Neural Quantum API](../api/neural.md#opifex.neural.quantum).
+For detailed API documentation, see
+[Neural Quantum API](../api/neural.md#opifex.neural.quantum).

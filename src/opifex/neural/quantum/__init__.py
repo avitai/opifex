@@ -1,8 +1,18 @@
-"""Neural quantum chemistry modules for scientific machine learning."""
+"""Neural quantum chemistry modules for scientific machine learning.
+
+The public surface is the learned exchange-correlation functional
+(:class:`~opifex.neural.quantum.neural_xc.NeuralXCFunctional`) and the
+differentiable Kohn-Sham density-functional theory solver in
+:mod:`opifex.neural.quantum.dft` (:class:`~opifex.neural.quantum.dft.SCFSolver`).
+"""
 
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
-from opifex.neural.quantum.neural_dft import NeuralDFT
-from opifex.neural.quantum.neural_scf import NeuralSCFSolver
+from opifex.neural.quantum.dft import (
+    Functional,
+    SCFResult,
+    SCFSolver,
+    SolverMode,
+)
 from opifex.neural.quantum.neural_xc import NeuralXCFunctional
 from opifex.uncertainty.registry import UQRegistry
 
@@ -17,7 +27,9 @@ for _name, _capability in QUANTUM_CAPABILITIES.items():
 
 __all__ = [
     "QUANTUM_CAPABILITIES",
-    "NeuralDFT",
-    "NeuralSCFSolver",
+    "Functional",
     "NeuralXCFunctional",
+    "SCFResult",
+    "SCFSolver",
+    "SolverMode",
 ]
