@@ -37,6 +37,7 @@ from opifex.neural.atomistic.training import (
     energy_forces_loss,
     fit_atomistic,
     make_atomistic_train_step,
+    make_scanned_epoch,
     ParamEMA,
 )
 from opifex.neural.equivariant import scatter_sum
@@ -443,3 +444,150 @@ class TestFitAtomisticEMA:
             not bool(jnp.allclose(raw, ema, atol=1e-5))
             for raw, ema in zip(raw_leaves, ema_leaves, strict=True)
         )
+
+
+class TestAtomisticBatchStack:
+    """``AtomisticBatch.stack`` builds the leading-step-axis pytree for ``lax.scan``."""
+
+    def test_stack_adds_leading_step_axis(self) -> None:
+        systems, energies, forces = _synthetic_dataset(num_configs=6)
+        batches = [
+            AtomisticBatch.from_systems(systems[:3], energies[:3], forces[:3]),
+            AtomisticBatch.from_systems(systems[3:], energies[3:], forces[3:]),
+        ]
+        stacked = AtomisticBatch.stack(batches)
+        # Two steps, each a batch of 3 water configs.
+        assert stacked.positions.shape == (2, 3, 3, 3)
+        assert stacked.energies.shape == (2, 3)
+        assert stacked.forces.shape == (2, 3, 3, 3)
+        # ``atomic_numbers`` is shared, not stacked.
+        assert stacked.atomic_numbers.shape == (3,)
+        assert jnp.array_equal(stacked.atomic_numbers, _ATOMIC_NUMBERS)
+
+    def test_stack_rejects_empty(self) -> None:
+        with pytest.raises(ValueError, match="at least one batch"):
+            AtomisticBatch.stack([])
+
+    def test_stack_rejects_mismatched_composition(self) -> None:
+        systems, energies, forces = _synthetic_dataset(num_configs=4)
+        good = AtomisticBatch.from_systems(systems[:2], energies[:2], forces[:2])
+        other = AtomisticBatch.from_arrays(
+            jnp.stack([s.positions for s in systems[2:]]),
+            jnp.asarray([7, 1, 1]),  # different composition
+            energies[2:],
+            forces[2:],
+        )
+        with pytest.raises(ValueError, match="same composition"):
+            AtomisticBatch.stack([good, other])
+
+    def test_stack_rejects_mismatched_shape(self) -> None:
+        systems, energies, forces = _synthetic_dataset(num_configs=5)
+        a = AtomisticBatch.from_systems(systems[:2], energies[:2], forces[:2])
+        b = AtomisticBatch.from_systems(systems[2:], energies[2:], forces[2:])  # batch 3 != 2
+        with pytest.raises(ValueError, match="equal-shaped"):
+            AtomisticBatch.stack([a, b])
+
+
+class TestScannedEpochCorrectness:
+    """The fused ``lax.scan`` epoch is bit-comparable to the per-step Python loop.
+
+    The fused path (:func:`make_scanned_epoch` / ``fit_atomistic(fused=True)``)
+    exists purely to remove per-step host->device dispatch gaps that starve the
+    GPU; it must change *no* math. These tests pin that the per-epoch loss
+    trajectory, the EMA shadow and the final weights match the explicit per-step
+    loop, and that the second-order conservative-force gradient still flows inside
+    the scan.
+    """
+
+    def _two_batches(self) -> list[AtomisticBatch]:
+        systems, energies, forces = _synthetic_dataset(num_configs=6)
+        return [
+            AtomisticBatch.from_systems(systems[:3], energies[:3], forces[:3]),
+            AtomisticBatch.from_systems(systems[3:], energies[3:], forces[3:]),
+        ]
+
+    def test_fused_loss_trajectory_matches_per_step(self) -> None:
+        """Fused and per-step epoch loss histories match to float precision."""
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+        num_epochs = 6
+
+        per_step = fit_atomistic(
+            _build_model(), batches, config, num_epochs=num_epochs, force_weight=1.0, fused=False
+        )
+        fused = fit_atomistic(
+            _build_model(), batches, config, num_epochs=num_epochs, force_weight=1.0, fused=True
+        )
+        assert len(fused) == len(per_step)
+        for fused_loss, per_step_loss in zip(fused, per_step, strict=True):
+            assert fused_loss == pytest.approx(per_step_loss, rel=1e-5, abs=1e-6)
+
+    def test_fused_final_weights_match_per_step(self) -> None:
+        """The fused path leaves identical (raw) weights to the per-step loop."""
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+
+        per_step_model = _build_model()
+        fit_atomistic(per_step_model, batches, config, num_epochs=6, force_weight=1.0, fused=False)
+        fused_model = _build_model()
+        fit_atomistic(fused_model, batches, config, num_epochs=6, force_weight=1.0, fused=True)
+
+        for per_step_leaf, fused_leaf in zip(
+            _param_leaves(per_step_model), _param_leaves(fused_model), strict=True
+        ):
+            assert jnp.allclose(per_step_leaf, fused_leaf, rtol=1e-5, atol=1e-6)
+
+    def test_fused_ema_weights_match_per_step(self) -> None:
+        """The EMA shadow fused inside the scan matches the per-step EMA exactly."""
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+        decay = 0.9
+
+        per_step_model = _build_model()
+        fit_atomistic(
+            per_step_model,
+            batches,
+            config,
+            num_epochs=6,
+            force_weight=1.0,
+            ema_decay=decay,
+            fused=False,
+        )
+        fused_model = _build_model()
+        fit_atomistic(
+            fused_model,
+            batches,
+            config,
+            num_epochs=6,
+            force_weight=1.0,
+            ema_decay=decay,
+            fused=True,
+        )
+        for per_step_leaf, fused_leaf in zip(
+            _param_leaves(per_step_model), _param_leaves(fused_model), strict=True
+        ):
+            assert jnp.allclose(per_step_leaf, fused_leaf, rtol=1e-5, atol=1e-6)
+
+    def test_scanned_epoch_force_grad_is_finite_and_reduces(self) -> None:
+        """The grad-of-grad force term works inside the scan (finite, decreasing)."""
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+        history = fit_atomistic(
+            _build_model(), batches, config, num_epochs=12, force_weight=1.0, fused=True
+        )
+        assert all(bool(jnp.isfinite(jnp.asarray(loss))) for loss in history)
+        assert history[-1] < history[0]
+
+    def test_scanned_epoch_is_jit_and_returns_per_step_losses(self) -> None:
+        """``make_scanned_epoch`` is jitted and returns one loss per step."""
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+        model = _build_model()
+        optimizer = nnx.Optimizer(model, create_optimizer(config), wrt=nnx.Param)
+        scanned = make_scanned_epoch(model, optimizer, force_weight=1.0)
+        stacked = AtomisticBatch.stack(batches)
+
+        ema_state, losses = scanned(model, optimizer, stacked, None)
+        assert ema_state is None
+        assert losses.shape == (len(batches),)
+        assert bool(jnp.all(jnp.isfinite(losses)))
