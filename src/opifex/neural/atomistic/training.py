@@ -439,7 +439,16 @@ def make_scanned_epoch(
         stacked_epoch: AtomisticBatch,
         ema_state: nnx.State | None,
     ) -> tuple[nnx.State | None, Array]:
-        graphdef, state = nnx.split((model, optimizer))
+        # Split the mutable variables (model ``nnx.Param`` + optimiser state, all
+        # ``nnx.Variable`` subclasses) from the static remainder. The static
+        # partition holds the bare-array leaves of *frozen* sub-pytrees -- e.g. the
+        # :class:`~opifex.neural.atomistic.scale_shift.AtomicScaleShift` readout and
+        # the Bessel ``_frequencies`` -- which are constant during training and live
+        # inside ``flax.struct.dataclass(frozen=True)`` nodes that reject in-place
+        # writes. Only ``variables`` is threaded through the scan carry and written
+        # back; ``static`` is closed over and never updated (the Flax NNX
+        # filtered-split idiom, ``flax`` ``docs_nnx/nnx_basics.md`` "Splitting").
+        graphdef, variables, static = nnx.split((model, optimizer), nnx.Variable, ...)
         atomic_numbers = stacked_epoch.atomic_numbers
         # Scan only over the per-step arrays; ``atomic_numbers`` is shared and
         # closed over (it has no leading step axis and must not be sliced).
@@ -449,8 +458,8 @@ def make_scanned_epoch(
             carry: tuple[nnx.State, nnx.State | None],
             step_arrays: tuple[Array, Array, Array],
         ) -> tuple[tuple[nnx.State, nnx.State | None], Array]:
-            state, ema_state = carry
-            step_model, step_optimizer = nnx.merge(graphdef, state)
+            variables, ema_state = carry
+            step_model, step_optimizer = nnx.merge(graphdef, variables, static)
             positions, energies, forces = step_arrays
             batch = AtomisticBatch(
                 positions=positions,
@@ -463,13 +472,14 @@ def make_scanned_epoch(
             if ema_state is not None:
                 live_state = nnx.state(step_model, nnx.Param)
                 ema_state = _ema_blend(ema_state, live_state, decay_array)
-            _, new_state = nnx.split((step_model, step_optimizer))
-            return (new_state, ema_state), loss
+            _, new_variables, _ = nnx.split((step_model, step_optimizer), nnx.Variable, ...)
+            return (new_variables, ema_state), loss
 
-        (final_state, final_ema), losses = jax.lax.scan(step, (state, ema_state), per_step)
-        # Propagate the post-scan state into the (jitted-argument) live objects;
-        # ``nnx.jit`` carries this mutation back out to the caller's references.
-        nnx.update((model, optimizer), final_state)
+        (final_variables, final_ema), losses = jax.lax.scan(step, (variables, ema_state), per_step)
+        # Propagate the post-scan mutable variables into the (jitted-argument) live
+        # objects; ``nnx.jit`` carries this mutation back out to the caller's
+        # references. The static partition is unchanged, so it is not written back.
+        nnx.update((model, optimizer), final_variables)
         return final_ema, losses
 
     return scanned_epoch

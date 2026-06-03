@@ -34,6 +34,7 @@ from opifex.neural.atomistic.training import (
     energy_forces_loss,
     fit_atomistic,
     make_atomistic_train_step,
+    make_scanned_epoch,
     ParamEMA,
 )
 
@@ -53,4 +54,5 @@ __all__ = [
     "fit_atomic_scale_shift",
     "fit_atomistic",
     "make_atomistic_train_step",
+    "make_scanned_epoch",
 ]

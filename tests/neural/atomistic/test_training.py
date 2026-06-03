@@ -31,6 +31,7 @@ from opifex.core.training import OptimizerConfig
 from opifex.core.training.optimizers import create_optimizer
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
+from opifex.neural.atomistic.scale_shift import AtomicScaleShift
 from opifex.neural.atomistic.training import (
     _ema_blend,
     AtomisticBatch,
@@ -73,6 +74,30 @@ def _build_model() -> AtomisticModel:
     backbone = _ToyBackbone(rngs=rngs)
     heads: dict[str, object] = {
         "energy": EnergyHead(feature_dim=8, rngs=rngs),
+        "forces": ForcesHead(),
+    }
+    return AtomisticModel(
+        backbone=backbone,
+        heads=heads,  # type: ignore[arg-type]
+        neighbor_list=RadiusNeighborList(cutoff=3.0),
+        max_edges=32,
+    )
+
+
+def _build_model_with_scale_shift() -> AtomisticModel:
+    """A model whose ``EnergyHead`` carries a non-identity ``AtomicScaleShift``.
+
+    The :class:`~opifex.neural.atomistic.scale_shift.AtomicScaleShift` is a
+    ``flax.struct.dataclass(frozen=True)`` whose bare-array leaves end up in the
+    static (non-``nnx.Variable``) partition of the model graph -- exactly the
+    real-example configuration (``examples/atomistic/nequip_md17.py`` fits a
+    scale-shift) that the fused-scan state round-trip must not try to write back.
+    """
+    rngs = nnx.Rngs(0)
+    backbone = _ToyBackbone(rngs=rngs)
+    scale_shift = AtomicScaleShift(scale=jnp.asarray(2.0), shift=jnp.asarray(-1.5))
+    heads: dict[str, object] = {
+        "energy": EnergyHead(feature_dim=8, scale_shift=scale_shift, rngs=rngs),
         "forces": ForcesHead(),
     }
     return AtomisticModel(
@@ -591,3 +616,47 @@ class TestScannedEpochCorrectness:
         assert ema_state is None
         assert losses.shape == (len(batches),)
         assert bool(jnp.all(jnp.isfinite(losses)))
+
+    def test_fused_runs_with_frozen_scale_shift(self) -> None:
+        """The fused scan handles a model carrying a frozen ``AtomicScaleShift``.
+
+        The scan state round-trip splits and re-merges the ``(model, optimizer)``
+        graph; an ``EnergyHead`` with a non-identity ``AtomicScaleShift`` puts the
+        struct's bare-array leaves in the static (non-``nnx.Variable``) partition.
+        Writing the full state back would raise ``Cannot set key 'scale' on
+        immutable node of type AtomicScaleShift``; only the mutable variables may
+        be updated. This pins that real-example configuration end to end.
+        """
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+        history = fit_atomistic(
+            _build_model_with_scale_shift(),
+            batches,
+            config,
+            num_epochs=8,
+            force_weight=1.0,
+            ema_decay=0.9,
+            fused=True,
+        )
+        assert all(bool(jnp.isfinite(jnp.asarray(loss))) for loss in history)
+        assert history[-1] < history[0]
+
+    def test_fused_matches_per_step_with_frozen_scale_shift(self) -> None:
+        """With a frozen scale-shift, fused and per-step paths stay bit-comparable.
+
+        The frozen ``AtomicScaleShift`` is constant during training, so threading
+        only the mutable variables through the scan must leave the same weights as
+        the per-step loop -- the fused path changes no math.
+        """
+        batches = self._two_batches()
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+
+        per_step_model = _build_model_with_scale_shift()
+        fit_atomistic(per_step_model, batches, config, num_epochs=8, force_weight=1.0, fused=False)
+        fused_model = _build_model_with_scale_shift()
+        fit_atomistic(fused_model, batches, config, num_epochs=8, force_weight=1.0, fused=True)
+
+        for per_step_leaf, fused_leaf in zip(
+            _param_leaves(per_step_model), _param_leaves(fused_model), strict=True
+        ):
+            assert jnp.allclose(per_step_leaf, fused_leaf, rtol=1e-5, atol=1e-6)
