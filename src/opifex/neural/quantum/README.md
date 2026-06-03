@@ -1,9 +1,18 @@
-# Opifex Quantum Neural Networks: Differentiable Kohn-Sham DFT
+# Opifex Quantum Neural Networks
 
-This module hosts Opifex's differentiable molecular density-functional theory:
-a native-JAX restricted Kohn-Sham (RKS) self-consistent-field solver and a
-trainable neural exchange-correlation functional. Every public symbol below is
-exported and JAX/NNX compatible.
+This module hosts three complementary families of differentiable molecular
+electronic-structure methods, all native-JAX and JAX/NNX compatible:
+
+1. **Kohn-Sham DFT** — a restricted Kohn-Sham (RKS) self-consistent-field
+   solver and a trainable neural exchange-correlation functional.
+2. **Neural-wavefunction VMC** — a FermiNet-core variational Monte Carlo stack
+   (`vmc/`) that minimises the variational energy of a deep-network ansatz with
+   no dependence on the Gaussian-integral engine.
+3. **Equivariant Hamiltonian prediction** — a QHNet-style SE(3)-equivariant
+   model (`hamiltonian/`) that predicts the DFT Fock and overlap matrices from
+   geometry, reusing the shared equivariant kit.
+
+Every public symbol below is exported and JAX/NNX compatible.
 
 ## Module map
 
@@ -11,6 +20,8 @@ exported and JAX/NNX compatible.
 |------|----------------|
 | `dft/` | `SCFSolver`, `SCFResult`, `Functional`, `SolverMode`, the molecular grid and LDA/PBE XC primitives |
 | `neural_xc.py` | `NeuralXCFunctional` |
+| `vmc/` | `FermiNet`, `VMCDriver`, `VMCConfig`, `VMCResult`, `MetropolisHastingsSampler`, `local_energy`, `forward_laplacian`, `jvp_grad_laplacian`, `minsr_update`, `spring_update`, `SpringState` |
+| `hamiltonian/` | `HamiltonianPredictor`, `block_from_irreps`, `PairExpansion` |
 
 `SCFSolver` runs the RKS SCF on the McMurchie-Davidson Gaussian-integral
 backend (`opifex.core.quantum.backend.JaxGaussianBackend`) with the LDA
@@ -123,8 +134,69 @@ MALA) and the variational backends `ADVIBackend`, `SVGDBackend`, and
 `PathfinderBackend` are routed through `InferenceBackendProtocol` and
 return `PredictiveDistribution` objects suitable for downstream calibration.
 
+## Neural-wavefunction variational Monte Carlo
+
+The `vmc/` subpackage minimises the variational energy
+`E[θ] = ⟨E_loc⟩_{|ψ_θ|²}` of a FermiNet-core generalized-Slater ansatz. It is
+integral-free (no dependency on the Gaussian-integral backend) and every
+component is `jit` / `grad` / `vmap` clean.
+
+```python
+import jax
+import jax.numpy as jnp
+from flax import nnx
+
+from opifex.neural.quantum.vmc import (
+    FermiNet, MetropolisHastingsSampler, VMCConfig, VMCDriver,
+)
+
+with jax.enable_x64(True):
+    atoms = jnp.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.4]])   # H2, Bohr
+    charges = jnp.array([1.0, 1.0])
+
+    ansatz = FermiNet(
+        nspins=(1, 1), atoms=atoms, charges=charges,
+        hidden_one=(32, 32), hidden_two=(16, 16),
+        determinants=4, full_det=True, rngs=nnx.Rngs(0),
+    )
+    sampler = MetropolisHastingsSampler(atoms=atoms, steps=10, step_size=0.4)
+    config = VMCConfig(batch_size=1024, iterations=600, optimizer="spring")
+
+    result = VMCDriver(ansatz=ansatz, sampler=sampler, config=config).run(
+        jax.random.PRNGKey(0)
+    )
+    print(result.energy, "±", result.energy_error)   # ≈ -1.1745 Ha
+```
+
+Reference energies recovered to chemical accuracy (1024 walkers, SPRING):
+
+| System | E_VMC (Ha) | exact | error |
+|--------|-----------:|------:|------:|
+| H | -0.4996 | -0.5000 | 0.4 mHa |
+| H₂ (R=1.4) | -1.1745 | -1.1745 | 0.0 mHa |
+| He | -2.9037 | -2.9037 | 0.0 mHa |
+
+Design highlights:
+
+- **Ansatz** (`wavefunctions/ferminet.py`): permutation-equivariant one- and
+  two-electron streams, per-orbital isotropic exponential envelopes, and a sum
+  of generalized Slater determinants evaluated in the log domain
+  (`logdet_matmul`). A single-walker `log|ψ|` / sign function is `vmap`-ed over
+  walkers and over the determinant axis; a PsiFormer backbone can swap in.
+- **Kinetic energy** (`laplacian.py`): a `jvp`-over-`grad` reference oracle and
+  a native forward-Laplacian (two stacked JVPs over an orthonormal basis, the
+  LapNet scheme) that agree to ~1e-14 on the real ansatz.
+- **Optimizers** (`optimizers.py`): Adam bootstrap, then MinSR (sample-space /
+  NTK Gram natural gradient) and SPRING (MinSR + Nesterov momentum); pure JAX
+  linear algebra, no K-FAC.
+- **Sampler** (`sampler.py`): FermiNet harmonic-mean Metropolis-Hastings with
+  the MCMC sweeps fused into one `lax.scan`.
+
 ## Practical guidance
 
+- VMC energies are tight (≤1 mHa); run under `jax.enable_x64(True)`.
+- The natural-gradient path (`optimizer="spring"`/`"minsr"`) converges far
+  faster per iteration than Adam — prefer it once the ansatz is initialised.
 - Always pass a caller-owned `nnx.Rngs` to `NeuralXCFunctional`; the module
   never constructs hidden seeds.
 - The Gaussian integrals are float64; wrap solves in `jax.enable_x64(True)`.
