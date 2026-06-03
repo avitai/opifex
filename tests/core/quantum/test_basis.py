@@ -110,3 +110,74 @@ def test_basis_matches_pyscf_shell_structure() -> None:
     assert basis.n_atomic_orbitals == mol.nao_nr()
     # PySCF reports 5 shells for water STO-3G (O: 1s,2s,2p; H: 1s; H: 1s).
     assert basis.n_shells == mol.nbas
+
+
+def test_evaluate_with_gradients_returns_value_and_gradient() -> None:
+    """``evaluate_with_gradients`` returns the AO values and their gradients."""
+    import numpy as np
+
+    with jax.enable_x64(True):
+        basis = AtomicOrbitalBasis.from_molecular_system(_water_system())
+        points = jnp.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [1.0, -0.5, 0.2]])
+        values, gradients = basis.evaluate_with_gradients(points)
+        plain = basis.evaluate(points)
+    assert values.shape == (points.shape[0], basis.n_atomic_orbitals)
+    assert gradients.shape == (points.shape[0], basis.n_atomic_orbitals, 3)
+    np.testing.assert_allclose(np.asarray(values), np.asarray(plain), atol=1e-12)
+
+
+def test_evaluate_with_gradients_matches_autodiff() -> None:
+    """The analytic AO gradients match the AD jacobian of ``evaluate``."""
+    import numpy as np
+
+    with jax.enable_x64(True):
+        basis = AtomicOrbitalBasis.from_molecular_system(_water_system())
+        points = jnp.array([[0.1, 0.2, 0.3], [0.4, -0.5, 0.6]])
+        _, gradients = basis.evaluate_with_gradients(points)
+
+        def single_point(point: jnp.ndarray) -> jnp.ndarray:
+            return basis.evaluate(point[None, :])[0]
+
+        ad_jacobian = jax.vmap(jax.jacobian(single_point))(points)
+    np.testing.assert_allclose(np.asarray(gradients), np.asarray(ad_jacobian), atol=1e-9)
+
+
+def test_with_positions_recentres_shells() -> None:
+    """``with_positions`` rebuilds shell centres from new (traced) positions."""
+    import numpy as np
+
+    with jax.enable_x64(True):
+        system = _h2_system()
+        basis = AtomicOrbitalBasis.from_molecular_system(system)
+        new_positions = system.positions + jnp.array([0.0, 0.0, 0.1])
+        moved = basis.with_positions(new_positions)
+    assert moved.n_atomic_orbitals == basis.n_atomic_orbitals
+    assert moved.n_shells == basis.n_shells
+    for shell, original in zip(moved.shells, basis.shells, strict=True):
+        np.testing.assert_allclose(
+            np.asarray(shell.center),
+            np.asarray(new_positions[original.atom_index]),
+            atol=1e-12,
+        )
+        # Exponents and coefficients (the static structure) are unchanged.
+        np.testing.assert_allclose(
+            np.asarray(shell.exponents), np.asarray(original.exponents), atol=1e-12
+        )
+
+
+def test_with_positions_is_differentiable() -> None:
+    """Overlap built from a recentred basis carries gradients w.r.t. positions."""
+    import numpy as np
+
+    from opifex.core.quantum.backend import JaxGaussianBackend
+
+    with jax.enable_x64(True):
+        system = _h2_system()
+        basis = AtomicOrbitalBasis.from_molecular_system(system)
+
+        def overlap_trace(positions: jnp.ndarray) -> jnp.ndarray:
+            moved = basis.with_positions(positions)
+            return jnp.trace(JaxGaussianBackend(system, moved).overlap())
+
+        gradient = jax.grad(overlap_trace)(system.positions)
+    assert np.all(np.isfinite(np.asarray(gradient)))

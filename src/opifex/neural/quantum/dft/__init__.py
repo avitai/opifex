@@ -3,30 +3,56 @@
 Public surface:
 
 * :class:`~opifex.neural.quantum.dft.scf.SCFSolver` -- restricted Kohn-Sham
-  (RKS) LDA self-consistent-field driver and its :class:`SCFResult`.
-* LDA exchange-correlation primitives in
+  (RKS) self-consistent-field driver (LDA and PBE; DIIS and direct-minimisation
+  modes) with implicit-differentiation analytic nuclear forces, plus its
+  :class:`SCFResult`, the :class:`Functional` and :class:`SolverMode` enums.
+* LDA and PBE exchange-correlation primitives in
   :mod:`opifex.neural.quantum.dft.xc`.
-* The Becke-partitioned molecular quadrature grid in
-  :mod:`opifex.neural.quantum.dft.grid`.
+* The Becke-partitioned molecular quadrature grid (eager and the
+  position-traceable template) in :mod:`opifex.neural.quantum.dft.grid`.
 """
 
-from opifex.neural.quantum.dft.grid import build_molecular_grid, MolecularGrid
-from opifex.neural.quantum.dft.scf import SCFResult, SCFSolver
+from opifex.neural.quantum.dft.grid import (
+    build_molecular_grid,
+    build_molecular_grid_traceable,
+    MolecularGrid,
+    MolecularGridTemplate,
+)
+from opifex.neural.quantum.dft.scf import (
+    Functional,
+    SCFResult,
+    SCFSolver,
+    SolverMode,
+)
 from opifex.neural.quantum.dft.xc import (
     lda_energy_density,
     lda_exchange_correlation_potential,
+    pbe_correlation_energy_density,
+    pbe_energy_density,
+    pbe_exchange_correlation_potential,
+    pbe_exchange_energy_density,
+    pw92_correlation_energy_density,
     slater_exchange_energy_density,
     vwn_correlation_energy_density,
 )
 
 
 __all__ = [
+    "Functional",
     "MolecularGrid",
+    "MolecularGridTemplate",
     "SCFResult",
     "SCFSolver",
+    "SolverMode",
     "build_molecular_grid",
+    "build_molecular_grid_traceable",
     "lda_energy_density",
     "lda_exchange_correlation_potential",
+    "pbe_correlation_energy_density",
+    "pbe_energy_density",
+    "pbe_exchange_correlation_potential",
+    "pbe_exchange_energy_density",
+    "pw92_correlation_energy_density",
     "slater_exchange_energy_density",
     "vwn_correlation_energy_density",
 ]

@@ -340,6 +340,39 @@ class AtomicOrbitalBasis:
         """Number of contracted shells."""
         return len(self.shells)
 
+    def with_positions(self, positions: Array) -> AtomicOrbitalBasis:
+        """Return a copy with shell centres taken from ``positions``.
+
+        The exponents, contraction coefficients, angular momenta and AO offsets
+        (the static basis structure) are preserved; only the per-shell centre is
+        re-sourced from ``positions[atom_index]``. Because the (possibly traced)
+        ``positions`` array flows straight into each shell centre, the integrals
+        built from the returned basis are differentiable with respect to the
+        nuclear coordinates -- this is the seam analytic forces rely on.
+
+        Args:
+            positions: Nuclear positions in Bohr [Shape: (n_atoms, 3)].
+
+        Returns:
+            A new :class:`AtomicOrbitalBasis` centred at ``positions``.
+        """
+        moved = tuple(
+            GaussianShell(
+                atom_index=shell.atom_index,
+                angular_momentum=shell.angular_momentum,
+                center=positions[shell.atom_index],
+                exponents=shell.exponents,
+                coefficients=shell.coefficients,
+                ao_offset=shell.ao_offset,
+            )
+            for shell in self.shells
+        )
+        return AtomicOrbitalBasis(
+            shells=moved,
+            n_atomic_orbitals=self.n_atomic_orbitals,
+            basis_name=self.basis_name,
+        )
+
     def evaluate(self, points: Array) -> Array:
         r"""Evaluate every AO at a set of Cartesian points.
 
@@ -373,6 +406,72 @@ class AtomicOrbitalBasis:
                 )
                 columns.append(angular * radial)
         return jnp.stack(columns, axis=-1)
+
+    def evaluate_with_gradients(self, points: Array) -> tuple[Array, Array]:
+        r"""Evaluate every AO and its Cartesian gradient at a set of points.
+
+        Differentiating :meth:`evaluate` analytically gives, for each contracted
+        AO :math:`\phi = g(r)\,R(r)` with angular factor
+        :math:`g = \prod_c (r_c-X_c)^{l_c}` and radial sum
+        :math:`R = \sum_p c_p e^{-a_p|r-R|^2}`,
+
+        .. math::
+            \frac{\partial\phi}{\partial r_c} =
+                \frac{\partial g}{\partial r_c} R
+              + g\,\frac{\partial R}{\partial r_c},\quad
+            \frac{\partial R}{\partial r_c} =
+                \sum_p c_p (-2 a_p)(r_c-X_c) e^{-a_p|r-R|^2},
+
+        and :math:`\partial g/\partial r_c = l_c (r_c-X_c)^{l_c-1}
+        \prod_{d\neq c}(r_d-X_d)^{l_d}` (zero when :math:`l_c=0`). The gradient
+        of the density on a grid is then assembled from these AO gradients.
+
+        Args:
+            points: Cartesian points in Bohr [Shape: (n_points, 3)].
+
+        Returns:
+            A pair ``(values, gradients)`` where ``values`` has shape
+            ``(n_points, n_atomic_orbitals)`` and ``gradients`` has shape
+            ``(n_points, n_atomic_orbitals, 3)`` (the last axis is ``d/dr_c``).
+        """
+        value_columns: list[Array] = []
+        gradient_columns: list[Array] = []
+        for shell in self.shells:
+            offset = shell.center
+            displacement = points - offset[None, :]
+            r2 = jnp.sum(displacement**2, axis=-1)
+            exponentials = jnp.exp(-shell.exponents[None, :] * r2[:, None])
+            radial = jnp.sum(shell.coefficients[None, :] * exponentials, axis=-1)
+            # d(radial)/dr_c = sum_p c_p (-2 a_p)(r_c - X_c) exp(...).
+            radial_factor = jnp.sum(
+                shell.coefficients[None, :] * (-2.0 * shell.exponents[None, :]) * exponentials,
+                axis=-1,
+            )
+            radial_gradient = radial_factor[:, None] * displacement  # (n_points, 3)
+
+            for power in shell.cartesian_components:
+                axis_powers = [displacement[:, axis] ** power[axis] for axis in range(3)]
+                angular = axis_powers[0] * axis_powers[1] * axis_powers[2]
+                value_columns.append(angular * radial)
+
+                angular_gradient_axes = []
+                for axis in range(3):
+                    if power[axis] == 0:
+                        derivative = jnp.zeros_like(displacement[:, axis])
+                    else:
+                        derivative = power[axis] * displacement[:, axis] ** (power[axis] - 1)
+                        for other in range(3):
+                            if other != axis:
+                                derivative = derivative * axis_powers[other]
+                    angular_gradient_axes.append(derivative)
+                angular_gradient = jnp.stack(angular_gradient_axes, axis=-1)
+
+                gradient = angular_gradient * radial[:, None] + angular[:, None] * radial_gradient
+                gradient_columns.append(gradient)
+
+        values = jnp.stack(value_columns, axis=-1)
+        gradients = jnp.stack(gradient_columns, axis=1)
+        return values, gradients
 
 
 __all__ = [

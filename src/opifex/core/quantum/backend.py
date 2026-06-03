@@ -674,16 +674,26 @@ class JaxGaussianBackend:
         return eri
 
     def nuclear_repulsion(self) -> Array:
-        """Return the nuclear-repulsion energy ``sum_{A<B} Z_A Z_B / R_AB``."""
+        """Return the nuclear-repulsion energy ``sum_{A<B} Z_A Z_B / R_AB``.
+
+        The squared inter-nuclear distance is computed only on the strict upper
+        triangle (``i < j``); the diagonal, where ``R_AB = 0``, is replaced with
+        a finite value *before* the square root so the gradient with respect to
+        the nuclear positions stays finite (the standard ``jnp.where`` masked
+        ``sqrt`` is gradient-unsafe at zero -- needed for analytic forces).
+        """
         positions = self._nuclear_positions
         charges = self._nuclear_charges
         diff = positions[:, None, :] - positions[None, :, :]
-        distances = jnp.sqrt(jnp.sum(diff**2, axis=-1))
+        squared = jnp.sum(diff**2, axis=-1)
         charge_products = charges[:, None] * charges[None, :]
         n_atoms = positions.shape[0]
         upper = jnp.triu(jnp.ones((n_atoms, n_atoms), dtype=bool), k=1)
-        safe_distances = jnp.where(upper, distances, 1.0)
-        contributions = jnp.where(upper, charge_products / safe_distances, 0.0)
+        # Guard the squared distance before the sqrt so no NaN gradient leaks in
+        # from the (masked-out) diagonal / lower triangle.
+        safe_squared = jnp.where(upper, squared, 1.0)
+        distances = jnp.sqrt(safe_squared)
+        contributions = jnp.where(upper, charge_products / distances, 0.0)
         return jnp.sum(contributions)
 
 

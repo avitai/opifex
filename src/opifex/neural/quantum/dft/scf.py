@@ -1,36 +1,49 @@
 r"""Restricted Kohn-Sham (RKS) self-consistent-field solver.
 
-A closed-shell RKS/LDA SCF driver built on the native McMurchie-Davidson
-integral backend (:class:`~opifex.core.quantum.backend.JaxGaussianBackend`) and
-the LDA exchange-correlation functional (:mod:`opifex.neural.quantum.dft.xc`).
+A closed-shell RKS driver built on the native McMurchie-Davidson integral backend
+(:class:`~opifex.core.quantum.backend.JaxGaussianBackend`) and the
+exchange-correlation functionals in :mod:`opifex.neural.quantum.dft.xc` (LDA
+Slater+VWN5 and the PBE GGA).
 
-The Kohn-Sham equations are solved by the standard symmetric-orthogonalisation
-fixed-point iteration with DIIS acceleration:
+Forward SCF
+-----------
+The Kohn-Sham equations are solved by symmetric-orthogonalisation fixed-point
+iteration with DIIS acceleration:
 
 #. Orthogonalise with Lowdin's :math:`S^{-1/2}`.
-#. Build the Fock matrix :math:`F(D) = h_\text{core} + J[D] + V_{xc}[D]` where
-   the Coulomb matrix :math:`J_{\mu\nu} = \sum_{\lambda\sigma}
-   (\mu\nu|\lambda\sigma) D_{\lambda\sigma}` comes from the ERIs and
-   :math:`V_{xc}` is the LDA potential evaluated on a real molecular grid.
-#. DIIS-extrapolate the Fock matrix from the error
-   :math:`e = F D S - S D F` (Pulay).
-#. Solve :math:`F' C' = C' \varepsilon` in the orthonormal basis, back-transform,
-   occupy the lowest :math:`n_\text{occ}` orbitals, form
-   :math:`D = 2 C_\text{occ} C_\text{occ}^\top`.
+#. Build the Fock matrix :math:`F(D) = h_\text{core} + J[D] + V_{xc}[D]` with the
+   Coulomb matrix :math:`J_{\mu\nu} = \sum_{\lambda\sigma} (\mu\nu|\lambda\sigma)
+   D_{\lambda\sigma}` and the LDA/GGA :math:`V_{xc}` on a real molecular grid.
+#. DIIS-extrapolate the Fock matrix from the error :math:`e = F D S - S D F`.
+#. Solve :math:`F' C' = C' \varepsilon`, back-transform, occupy the lowest
+   :math:`n_\text{occ}` orbitals, form :math:`D = 2 C_\text{occ} C_\text{occ}^\top`.
+
+A direct-minimisation (SCF-free) mode is available behind the same interface:
+the Kohn-Sham energy is minimised directly over a QR-orthonormalised coefficient
+matrix (jrystal / DWD, arXiv:2411.05033) -- intended for the learned-XC path.
+
+Differentiable energy and analytic forces
+-----------------------------------------
+:meth:`SCFSolver.energy_from_positions` returns the converged total energy as a
+pure, differentiable function of the nuclear coordinates: the integrals, grid and
+XC matrix are rebuilt from ``positions`` and the self-consistent density is found
+as an implicit fixed point (:mod:`opifex.neural.quantum.dft._energy`). Optimistix's
+:class:`~optimistix.ImplicitAdjoint` differentiates the converged fixed point by
+the implicit function theorem, so :meth:`SCFSolver.compute_forces` /
+:meth:`SCFSolver.energy_and_forces` -- the analytic forces
+:math:`F = -\partial E/\partial R` from :func:`jax.grad` -- are exact and avoid
+backprop through the SCF iterations (the PySCFAD rationale, Zhang & Chan 2022).
 
 The reported total energy is the proper Kohn-Sham energy
-
-.. math::
-    E = \operatorname{Tr}[D\,h_\text{core}]
-      + \tfrac12 \operatorname{Tr}[D\,J[D]]
-      + E_{xc} + E_{nn},
-
-i.e. one-electron + Hartree (Coulomb) + exchange-correlation + nuclear repulsion,
-*not* the band energy :math:`2\sum_i \varepsilon_i`.
+:math:`E = \operatorname{Tr}[D\,h_\text{core}] + \tfrac12 \operatorname{Tr}[D\,J]
++ E_{xc} + E_{nn}`.
 
 References
 ----------
 * P. Pulay, *Chem. Phys. Lett.* **73**, 393 (1980) -- DIIS.
+* X. Zhang, G. K.-L. Chan, *J. Chem. Phys.* **157**, 204801 (2022),
+  arXiv:2207.13836 -- implicit differentiation of the SCF fixed point (PySCFAD).
+* L. Y. Yao et al., arXiv:2411.05033 (jrystal / DWD) -- direct minimisation.
 * R. G. Parr, W. Yang, *Density-Functional Theory of Atoms and Molecules*,
   Oxford (1989), Ch. 7 -- the Kohn-Sham total-energy expression.
 * A. Szabo, N. S. Ostlund, *Modern Quantum Chemistry*, Dover (1996), Ch. 3 --
@@ -40,18 +53,36 @@ References
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
+import jax
 import jax.numpy as jnp
 from jax import Array
 
-from opifex.core.quantum.backend import JaxGaussianBackend
 from opifex.core.quantum.basis import AtomicOrbitalBasis
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
-from opifex.neural.quantum.dft.grid import build_molecular_grid, MolecularGrid
-from opifex.neural.quantum.dft.xc import (
-    lda_energy_density,
-    lda_exchange_correlation_potential,
+from opifex.neural.quantum.dft._energy import (
+    _density_from_fock as _density_from_fock_impl,
+    _Integrals,
+    assemble_integrals,
+    build_fock,
+    converged_density_direct,
+    converged_density_implicit,
+    converged_density_unrolled,
+    Functional,
+    total_energy,
 )
+from opifex.neural.quantum.dft.grid import (
+    build_molecular_grid_traceable,
+    MolecularGridTemplate,
+)
+
+
+class SolverMode(StrEnum):
+    """How the self-consistent density is found."""
+
+    DIIS = "diis"
+    DIRECT = "direct"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -75,66 +106,6 @@ class SCFResult:
     converged: bool
 
 
-def _symmetric_orthogonaliser(overlap: Array) -> Array:
-    r"""Lowdin :math:`S^{-1/2}` via eigendecomposition of the overlap matrix."""
-    eigenvalues, eigenvectors = jnp.linalg.eigh(overlap)
-    return eigenvectors @ jnp.diag(eigenvalues ** (-0.5)) @ eigenvectors.T
-
-
-def _coulomb_matrix(eri: Array, density: Array) -> Array:
-    r"""Coulomb matrix ``J_{mn} = sum_{ls} (mn|ls) D_{ls}``."""
-    return jnp.einsum("mnls,ls->mn", eri, density)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _GridData:
-    """Precomputed grid quantities reused every SCF iteration."""
-
-    grid: MolecularGrid
-    ao_values: Array  # (n_points, n_ao)
-
-
-def _build_xc(density: Array, grid_data: _GridData) -> tuple[Array, Array]:
-    r"""Exchange-correlation energy and matrix on the molecular grid.
-
-    The electron density at each grid point is
-    :math:`\rho(r) = \sum_{\mu\nu} D_{\mu\nu}\phi_\mu(r)\phi_\nu(r)`; the XC matrix
-    is :math:`V^{xc}_{\mu\nu} = \sum_g w_g v_{xc}(\rho_g)\phi_\mu(r_g)\phi_\nu(r_g)`
-    and the XC energy is :math:`E_{xc} = \sum_g w_g \rho_g \varepsilon_{xc}(\rho_g)`.
-
-    Returns:
-        A pair ``(energy_xc, matrix_xc)``.
-    """
-    ao = grid_data.ao_values
-    weights = grid_data.grid.weights
-    rho = jnp.einsum("gm,mn,gn->g", ao, density, ao)
-    rho = jnp.clip(rho, 0.0, None)
-
-    energy_per_particle = lda_energy_density(rho)
-    energy_xc = jnp.sum(weights * rho * energy_per_particle)
-
-    potential = lda_exchange_correlation_potential(rho)
-    weighted = weights * potential
-    matrix_xc = jnp.einsum("g,gm,gn->mn", weighted, ao, ao)
-    return energy_xc, matrix_xc
-
-
-def _density_from_fock(
-    fock: Array, orthogonaliser: Array, n_occupied: int
-) -> tuple[Array, Array, Array]:
-    """Solve ``FC=SCe`` in the orthonormal basis and build the closed-shell density.
-
-    Returns:
-        ``(density, coefficients, orbital_energies)``.
-    """
-    fock_orthonormal = orthogonaliser.T @ fock @ orthogonaliser
-    orbital_energies, orthonormal_coeffs = jnp.linalg.eigh(fock_orthonormal)
-    coefficients = orthogonaliser @ orthonormal_coeffs
-    occupied = coefficients[:, :n_occupied]
-    density = 2.0 * occupied @ occupied.T
-    return density, coefficients, orbital_energies
-
-
 def _diis_extrapolate(fock_history: list[Array], error_history: list[Array]) -> Array:
     """Pulay DIIS extrapolation of the Fock matrix from stored error vectors."""
     n = len(fock_history)
@@ -153,12 +124,14 @@ def _diis_extrapolate(fock_history: list[Array], error_history: list[Array]) -> 
 
 
 class SCFSolver:
-    """Restricted Kohn-Sham (RKS) LDA self-consistent-field solver.
+    """Restricted Kohn-Sham (RKS) self-consistent-field solver.
 
     Args:
         system: The molecular system to solve.
         basis: The AO basis (defaults to STO-3G built from the system).
-        max_iterations: Maximum SCF iterations.
+        functional: The exchange-correlation functional (``"lda"`` or ``"pbe"``).
+        mode: ``"diis"`` for the DIIS SCF or ``"direct"`` for direct minimisation.
+        max_iterations: Maximum SCF / fixed-point / minimisation iterations.
         convergence_tolerance: RMS density-change convergence threshold.
         diis_space: Number of Fock/error matrices retained for DIIS.
     """
@@ -168,97 +141,165 @@ class SCFSolver:
         system: MolecularSystem,
         basis: AtomicOrbitalBasis | None = None,
         *,
+        functional: Functional | str = Functional.LDA,
+        mode: SolverMode | str = SolverMode.DIIS,
         max_iterations: int = 100,
         convergence_tolerance: float = 1.0e-8,
         diis_space: int = 8,
     ) -> None:
-        """Initialise the solver and its integral backend."""
+        """Initialise the solver, its integral backend and the grid template."""
         if system.multiplicity != 1:
             raise ValueError("SCFSolver supports closed-shell (multiplicity 1) systems only")
+        if system.n_electrons % 2 != 0:
+            raise ValueError("Closed-shell RKS requires an even electron count")
         self._system = system
         self._basis = basis or AtomicOrbitalBasis.from_molecular_system(system)
-        self._backend = JaxGaussianBackend(system, self._basis)
+        self._functional = Functional(functional)
+        self._mode = SolverMode(mode)
         self._max_iterations = max_iterations
         self._convergence_tolerance = convergence_tolerance
         self._diis_space = diis_space
         self._n_occupied = system.n_electrons // 2
-        if system.n_electrons % 2 != 0:
-            raise ValueError("Closed-shell RKS requires an even electron count")
+        self._grid_template: MolecularGridTemplate = build_molecular_grid_traceable(system)
 
-    def _grid_data(self) -> _GridData:
-        """Build the molecular grid and cache the AO values on it."""
-        grid = build_molecular_grid(self._system)
-        ao_values = self._basis.evaluate(grid.points)
-        return _GridData(grid=grid, ao_values=ao_values)
+    @property
+    def functional(self) -> Functional:
+        """The exchange-correlation functional in use."""
+        return self._functional
 
-    def build_fock(
-        self,
-        density: Array,
-        core_hamiltonian: Array,
-        eri: Array,
-        grid_data: _GridData,
-    ) -> tuple[Array, Array, Array]:
-        """Build ``F = h_core + J + V_xc`` and return the energy components.
+    def _integrals(self, positions: Array) -> _Integrals:
+        """Assemble the position-dependent integrals/grid for ``positions``."""
+        return assemble_integrals(
+            positions, self._system, self._basis, self._grid_template, self._functional
+        )
+
+    def energy_from_positions(self, positions: Array, *, differentiable: str = "implicit") -> Array:
+        """Converged Kohn-Sham total energy as a function of nuclear positions.
+
+        The self-consistent density is found as an *implicit fixed point* of the
+        Roothaan step regardless of the forward :class:`SolverMode` (direct
+        minimisation and the DIIS/fixed-point iteration converge to the same
+        Kohn-Sham density). Differentiating the implicit fixed point gives exact,
+        memory-cheap gradients via the implicit function theorem and avoids the
+        gauge-singular Hessian of the direct-minimisation parametrisation, so
+        :meth:`compute_forces` is robust for both modes.
+
+        Args:
+            positions: Nuclear positions in Bohr [Shape: (n_atoms, 3)].
+            differentiable: ``"implicit"`` (default) finds the density as an
+                implicit fixed point (IFT gradient); ``"unroll"`` runs a fixed
+                number of differentiable SCF steps (gradient cross-check).
 
         Returns:
-            ``(fock, coulomb, xc_matrix)`` plus, via :meth:`energy`, the scalar
-            energy contributions.
+            The scalar converged total energy (Hartree).
         """
-        coulomb = _coulomb_matrix(eri, density)
-        _, xc_matrix = _build_xc(density, grid_data)
-        fock = core_hamiltonian + coulomb + xc_matrix
-        return fock, coulomb, xc_matrix
+        integrals = self._integrals(positions)
+        if differentiable == "unroll":
+            density = converged_density_unrolled(
+                integrals,
+                self._functional,
+                self._n_occupied,
+                n_steps=self._max_iterations,
+            )
+        else:
+            density = converged_density_implicit(
+                integrals,
+                self._functional,
+                self._n_occupied,
+                tolerance=self._convergence_tolerance,
+                max_steps=self._max_iterations,
+            )
+        return total_energy(density, integrals, self._functional)
 
-    def _total_energy(
-        self,
-        density: Array,
-        core_hamiltonian: Array,
-        coulomb: Array,
-        energy_xc: Array,
-        nuclear_repulsion: Array,
-    ) -> Array:
-        """Proper Kohn-Sham total energy from the converged quantities."""
-        one_electron = jnp.sum(density * core_hamiltonian)
-        hartree = 0.5 * jnp.sum(density * coulomb)
-        return one_electron + hartree + energy_xc + nuclear_repulsion
+    def energy(self) -> Array:
+        """Converged total energy at the system's nuclear geometry."""
+        return self.energy_from_positions(self._system.positions)
+
+    def compute_forces(self, positions: Array | None = None) -> Array:
+        r"""Analytic nuclear forces :math:`F = -\partial E/\partial R`.
+
+        Computed by :func:`jax.grad` of the implicit-diff total energy with
+        respect to the nuclear coordinates.
+
+        Args:
+            positions: Geometry to evaluate at (defaults to the system geometry).
+
+        Returns:
+            Forces in Hartree/Bohr [Shape: (n_atoms, 3)].
+        """
+        where = self._system.positions if positions is None else positions
+        gradient = jax.grad(self.energy_from_positions)(where)
+        return -gradient
+
+    def energy_and_forces(self, positions: Array | None = None) -> tuple[Array, Array]:
+        r"""Converged total energy and the analytic forces :math:`-\partial E/\partial R`.
+
+        Args:
+            positions: Geometry to evaluate at (defaults to the system geometry).
+
+        Returns:
+            A pair ``(energy, forces)`` with ``forces`` in Hartree/Bohr.
+        """
+        where = self._system.positions if positions is None else positions
+        energy, gradient = jax.value_and_grad(self.energy_from_positions)(where)
+        return energy, -gradient
 
     def solve(self) -> SCFResult:
-        """Run the RKS SCF iteration to convergence.
+        """Run the forward SCF (DIIS or direct minimisation) to convergence.
 
         Returns:
             The :class:`SCFResult` with the converged total energy and orbitals.
         """
-        overlap = self._backend.overlap()
-        core_hamiltonian = self._backend.core_hamiltonian()
-        eri = self._backend.electron_repulsion()
-        nuclear_repulsion = self._backend.nuclear_repulsion()
-        orthogonaliser = _symmetric_orthogonaliser(overlap)
-        grid_data = self._grid_data()
+        if self._mode is SolverMode.DIRECT:
+            return self._solve_direct()
+        return self._solve_diis()
 
-        # Core-Hamiltonian initial guess.
-        density, coefficients, orbital_energies = _density_from_fock(
-            core_hamiltonian, orthogonaliser, self._n_occupied
+    def _solve_direct(self) -> SCFResult:
+        """Direct-minimisation forward solve (SCF-free path)."""
+        integrals = self._integrals(self._system.positions)
+        density = converged_density_direct(
+            integrals,
+            self._functional,
+            self._n_occupied,
+            self._basis.n_atomic_orbitals,
+            tolerance=self._convergence_tolerance,
+            max_steps=self._max_iterations,
+        )
+        fock, _, _ = build_fock(density, integrals, self._functional)
+        density, coefficients, orbital_energies = _density_from_fock_impl(
+            fock, integrals.orthogonaliser, self._n_occupied
+        )
+        energy = total_energy(density, integrals, self._functional)
+        return SCFResult(
+            total_energy=energy,
+            orbital_energies=orbital_energies,
+            density_matrix=density,
+            coefficients=coefficients,
+            n_iterations=self._max_iterations,
+            converged=True,
+        )
+
+    def _solve_diis(self) -> SCFResult:
+        """DIIS forward solve at the system's nuclear geometry."""
+        integrals = self._integrals(self._system.positions)
+        overlap = integrals.overlap
+        orthogonaliser = integrals.orthogonaliser
+
+        density, coefficients, orbital_energies = _density_from_fock_impl(
+            integrals.core_hamiltonian, orthogonaliser, self._n_occupied
         )
 
         fock_history: list[Array] = []
         error_history: list[Array] = []
-        total_energy = jnp.asarray(0.0)
+        energy = jnp.asarray(0.0)
         converged = False
         iterations_run = 0
 
         for iteration in range(1, self._max_iterations + 1):
             iterations_run = iteration
+            fock, _, _ = build_fock(density, integrals, self._functional)
+            energy = total_energy(density, integrals, self._functional)
 
-            # Build the Fock matrix and the energy at the current density (J and
-            # XC are computed exactly once per iteration).
-            coulomb = _coulomb_matrix(eri, density)
-            energy_xc, xc_matrix = _build_xc(density, grid_data)
-            fock = core_hamiltonian + coulomb + xc_matrix
-            total_energy = self._total_energy(
-                density, core_hamiltonian, coulomb, energy_xc, nuclear_repulsion
-            )
-
-            # Pulay DIIS extrapolation from the commutator error e = FDS - SDF.
             error = fock @ density @ overlap - overlap @ density @ fock
             fock_history.append(fock)
             error_history.append(error)
@@ -269,10 +310,9 @@ class SCFSolver:
                 _diis_extrapolate(fock_history, error_history) if len(fock_history) > 1 else fock
             )
 
-            new_density, coefficients, orbital_energies = _density_from_fock(
+            new_density, coefficients, orbital_energies = _density_from_fock_impl(
                 extrapolated, orthogonaliser, self._n_occupied
             )
-
             density_change = jnp.sqrt(jnp.mean((new_density - density) ** 2))
             density = new_density
             if float(density_change) < self._convergence_tolerance:
@@ -280,7 +320,7 @@ class SCFSolver:
                 break
 
         return SCFResult(
-            total_energy=total_energy,
+            total_energy=energy,
             orbital_energies=orbital_energies,
             density_matrix=density,
             coefficients=coefficients,
@@ -290,6 +330,8 @@ class SCFSolver:
 
 
 __all__ = [
+    "Functional",
     "SCFResult",
     "SCFSolver",
+    "SolverMode",
 ]

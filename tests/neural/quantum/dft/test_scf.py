@@ -87,29 +87,24 @@ def test_h2_lda_energy_matches_pyscf_rks() -> None:
 @pytest.mark.slow
 def test_single_fock_build_is_jittable() -> None:
     """A single Fock build compiles under ``jax.jit`` (jit smoke)."""
-    from opifex.core.quantum.backend import JaxGaussianBackend
     from opifex.core.quantum.basis import AtomicOrbitalBasis
+    from opifex.neural.quantum.dft._energy import build_fock, Functional
 
     with jax.enable_x64(True):
         system = _h2_system()
         basis = AtomicOrbitalBasis.from_molecular_system(system)
         solver = SCFSolver(system, basis)
-        backend = JaxGaussianBackend(system, basis)
-        core = backend.core_hamiltonian()
-        eri = backend.electron_repulsion()
-        overlap = backend.overlap()
-        grid_data = solver._grid_data()
+        integrals = solver._integrals(system.positions)
         n_ao = basis.n_atomic_orbitals
         density = jnp.eye(n_ao)
 
         def fock_only(matrix: jnp.ndarray) -> jnp.ndarray:
-            return solver.build_fock(matrix, core, eri, grid_data)[0]
+            return build_fock(matrix, integrals, Functional.LDA)[0]
 
         eager = fock_only(density)
         jitted = jax.jit(fock_only)(density)
         max_diff = float(jnp.max(jnp.abs(eager - jitted)))
         # The Fock matrix must be symmetric.
         symmetry = float(jnp.max(jnp.abs(eager - eager.T)))
-        _ = overlap
     assert max_diff < 1e-10
     assert symmetry < 1e-10

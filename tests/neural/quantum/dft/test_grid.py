@@ -32,6 +32,34 @@ def test_grid_weights_are_positive() -> None:
     assert np.all(np.asarray(grid.weights) >= 0.0)
 
 
+def test_traceable_grid_matches_eager_grid() -> None:
+    """The position-traceable grid reproduces the eager (numpy) grid exactly."""
+    from opifex.neural.quantum.dft.grid import build_molecular_grid_traceable
+
+    with jax.enable_x64(True):
+        system = _h2_system()
+        eager = build_molecular_grid(system)
+        template = build_molecular_grid_traceable(system)
+        traceable = template.build(system.positions)
+    np.testing.assert_allclose(np.asarray(traceable.points), np.asarray(eager.points), atol=1e-12)
+    np.testing.assert_allclose(np.asarray(traceable.weights), np.asarray(eager.weights), atol=1e-12)
+
+
+def test_traceable_grid_points_are_differentiable() -> None:
+    """The traceable grid points carry gradients w.r.t. nuclear positions."""
+    from opifex.neural.quantum.dft.grid import build_molecular_grid_traceable
+
+    with jax.enable_x64(True):
+        system = _h2_system()
+        template = build_molecular_grid_traceable(system)
+
+        def total_weight(positions: jnp.ndarray) -> jnp.ndarray:
+            return jnp.sum(template.build(positions).weights)
+
+        gradient = jax.grad(total_weight)(system.positions)
+    assert np.all(np.isfinite(np.asarray(gradient)))
+
+
 def test_grid_integrates_gaussian_density() -> None:
     r"""Integrating a normalised Gaussian density recovers unit charge.
 
