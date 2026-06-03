@@ -266,6 +266,54 @@ def _build_shell_coefficients(
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class FlatPrimitives:
+    r"""Flat array-of-primitives view of an AO basis (MESS batching layout).
+
+    A *primitive* here is one Cartesian component of one primitive Gaussian: a
+    ``p``-shell with three primitives expands to nine flat primitives (three
+    Cartesian components :math:`\times` three radial primitives). Stacking every
+    primitive into 1-D arrays lets the McMurchie-Davidson integral kernels be
+    evaluated with a single :func:`jax.vmap` over primitive pairs/quartets and
+    contracted to AOs with :func:`jax.ops.segment_sum` (the
+    ``graphcore-research/mess`` pattern), replacing the eager shell loops.
+
+    The split between *traced* and *static* fields is deliberate: the geometry
+    and Gaussian parameters (``center``, ``alpha``, ``coeff``) are JAX arrays so
+    the integrals stay differentiable w.r.t. nuclear positions and the build is
+    ``jit``-traceable, while the angular-momentum powers (``lmn``), the
+    primitive->AO map (``orbital_index``) and ``max_total_l`` are NumPy / Python
+    so they parametrise the (unrolled, static) recurrences without becoming
+    tracers.
+
+    Attributes:
+        center: Primitive centres in Bohr [Shape: (n_prim, 3)] (traced).
+        alpha: Primitive exponents [Shape: (n_prim,)] (traced).
+        coeff: Contraction coefficients with primitive + contracted
+            normalisation folded in [Shape: (n_prim,)] (traced).
+        lmn: Cartesian angular-momentum powers [Shape: (n_prim, 3)]
+            (NumPy-static int).
+        orbital_index: Contracted-AO index of each primitive [Shape: (n_prim,)]
+            (NumPy-static int).
+        num_orbitals: Number of contracted Cartesian AOs.
+        max_total_l: Maximum total angular momentum of any primitive (static;
+            sizes the McMurchie-Davidson Hermite tables).
+    """
+
+    center: Array
+    alpha: Array
+    coeff: Array
+    lmn: np.ndarray
+    orbital_index: np.ndarray
+    num_orbitals: int
+    max_total_l: int
+
+    @property
+    def num_primitives(self) -> int:
+        """Number of flat primitives (Cartesian-component granularity)."""
+        return int(self.alpha.shape[0])
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AtomicOrbitalBasis:
     """A contracted-Gaussian AO basis built from a molecular system.
 
@@ -278,6 +326,44 @@ class AtomicOrbitalBasis:
     shells: tuple[GaussianShell, ...]
     n_atomic_orbitals: int
     basis_name: str
+
+    def flat_primitives(self) -> FlatPrimitives:
+        """Return the flat array-of-primitives view of this basis.
+
+        Expands every contracted shell into its Cartesian components and
+        primitive Gaussians, stacking centres/exponents/coefficients into 1-D
+        JAX arrays (traced) and the angular powers / primitive->AO map into
+        NumPy arrays (static). See :class:`FlatPrimitives` for the layout.
+
+        Returns:
+            The :class:`FlatPrimitives` view.
+        """
+        centers: list[Array] = []
+        alphas: list[Array] = []
+        coeffs: list[Array] = []
+        lmn_rows: list[tuple[int, int, int]] = []
+        orbital_index: list[int] = []
+        ao_index = 0
+        max_total_l = 0
+        for shell in self.shells:
+            n_prim = shell.n_primitives
+            for power in shell.cartesian_components:
+                centers.append(jnp.broadcast_to(shell.center, (n_prim, 3)))
+                alphas.append(shell.exponents)
+                coeffs.append(shell.coefficients)
+                lmn_rows.extend([power] * n_prim)
+                orbital_index.extend([ao_index] * n_prim)
+                max_total_l = max(max_total_l, sum(power))
+                ao_index += 1
+        return FlatPrimitives(
+            center=jnp.concatenate(centers, axis=0),
+            alpha=jnp.concatenate(alphas, axis=0),
+            coeff=jnp.concatenate(coeffs, axis=0),
+            lmn=np.asarray(lmn_rows, dtype=np.int32),
+            orbital_index=np.asarray(orbital_index, dtype=np.int32),
+            num_orbitals=self.n_atomic_orbitals,
+            max_total_l=int(max_total_l),
+        )
 
     @classmethod
     def from_molecular_system(
@@ -476,5 +562,6 @@ class AtomicOrbitalBasis:
 
 __all__ = [
     "AtomicOrbitalBasis",
+    "FlatPrimitives",
     "GaussianShell",
 ]
