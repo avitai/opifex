@@ -32,10 +32,12 @@ from opifex.core.training.optimizers import create_optimizer
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.training import (
+    _ema_blend,
     AtomisticBatch,
     energy_forces_loss,
     fit_atomistic,
     make_atomistic_train_step,
+    ParamEMA,
 )
 from opifex.neural.equivariant import scatter_sum
 
@@ -254,3 +256,190 @@ class TestFitAtomistic:
         assert len(device_history) == len(reference_history)
         for device_loss, reference_loss in zip(device_history, reference_history, strict=True):
             assert device_loss == pytest.approx(reference_loss, rel=1e-5, abs=1e-6)
+
+
+def _param_leaves(model: AtomisticModel) -> list[Array]:
+    """Flatten a model's ``nnx.Param`` state into a deterministic leaf list."""
+    return jax.tree.leaves(nnx.state(model, nnx.Param))
+
+
+class TestParamEMA:
+    """The reusable EMA-of-parameters primitive (NequIP/MACE eval convention)."""
+
+    def test_rejects_decay_out_of_range(self) -> None:
+        """A decay outside ``[0, 1)`` fails fast."""
+        model = _build_model()
+        with pytest.raises(ValueError, match=r"decay must be in"):
+            ParamEMA(model, decay=1.0)
+
+    def test_update_matches_ema_recurrence(self) -> None:
+        """``update`` realises ``ema = d*ema + (1-d)*params`` over every leaf.
+
+        After two manual optimiser steps the shadow must equal the hand-computed
+        EMA of the three parameter snapshots (initial, post-step-1, post-step-2).
+        """
+        decay = 0.9
+        model = _build_model()
+        optimizer = nnx.Optimizer(model, optax.adam(5e-2), wrt=nnx.Param)
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        train_step = make_atomistic_train_step(model, optimizer)
+
+        params0 = _param_leaves(model)
+        ema = ParamEMA(model, decay=decay)
+        # Shadow is seeded with the initial params.
+        for shadow, theta0 in zip(jax.tree.leaves(ema.state), params0, strict=True):
+            assert jnp.allclose(shadow, theta0)
+
+        train_step(model, optimizer, batch)
+        params1 = _param_leaves(model)
+        ema.update(model)
+        train_step(model, optimizer, batch)
+        params2 = _param_leaves(model)
+        ema.update(model)
+
+        # ema1 = d*params0 + (1-d)*params1 ; ema2 = d*ema1 + (1-d)*params2.
+        for theta0, theta1, theta2, shadow in zip(
+            params0, params1, params2, jax.tree.leaves(ema.state), strict=True
+        ):
+            expected1 = decay * theta0 + (1.0 - decay) * theta1
+            expected2 = decay * expected1 + (1.0 - decay) * theta2
+            assert jnp.allclose(shadow, expected2, atol=1e-6)
+
+    def test_copy_to_loads_shadow_into_model(self) -> None:
+        """``copy_to`` overwrites the live params with the EMA shadow."""
+        decay = 0.8
+        model = _build_model()
+        optimizer = nnx.Optimizer(model, optax.adam(5e-2), wrt=nnx.Param)
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        train_step = make_atomistic_train_step(model, optimizer)
+
+        ema = ParamEMA(model, decay=decay)
+        for _ in range(5):
+            train_step(model, optimizer, batch)
+            ema.update(model)
+        shadow_leaves = jax.tree.leaves(ema.state)
+
+        ema.copy_to(model)
+        for live, shadow in zip(_param_leaves(model), shadow_leaves, strict=True):
+            assert jnp.allclose(live, shadow)
+
+    def test_swap_in_restores_live_params(self) -> None:
+        """``swap_in`` evaluates with EMA weights then restores the live ones."""
+        decay = 0.95
+        model = _build_model()
+        optimizer = nnx.Optimizer(model, optax.adam(5e-2), wrt=nnx.Param)
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        train_step = make_atomistic_train_step(model, optimizer)
+
+        ema = ParamEMA(model, decay=decay)
+        for _ in range(5):
+            train_step(model, optimizer, batch)
+            ema.update(model)
+        live_before = _param_leaves(model)
+        shadow_leaves = jax.tree.leaves(ema.state)
+
+        with ema.swap_in(model):
+            inside = _param_leaves(model)
+            for current, shadow in zip(inside, shadow_leaves, strict=True):
+                assert jnp.allclose(current, shadow)
+        # The live params are restored on exit.
+        for after, before in zip(_param_leaves(model), live_before, strict=True):
+            assert jnp.allclose(after, before)
+
+    def test_update_uses_jitted_pure_arithmetic(self) -> None:
+        """``update`` delegates the EMA blend to the jitted, pure ``_ema_blend``.
+
+        The per-step blend is side-effect-free pytree arithmetic, so the same
+        result is reproducible by calling the underlying jitted function directly
+        on the shadow + live state -- proving the cheap path is jit-compiled.
+        """
+        decay = 0.99
+        model = _build_model()
+        optimizer = nnx.Optimizer(model, optax.adam(5e-2), wrt=nnx.Param)
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        train_step = make_atomistic_train_step(model, optimizer)
+        ema = ParamEMA(model, decay=decay)
+
+        shadow_before = ema.state
+        train_step(model, optimizer, batch)
+        live_state = nnx.state(model, nnx.Param)
+        expected = _ema_blend(shadow_before, live_state, jnp.asarray(decay))
+        ema.update(model)
+
+        for got, want in zip(jax.tree.leaves(ema.state), jax.tree.leaves(expected), strict=True):
+            assert jnp.allclose(got, want, atol=1e-6)
+            assert bool(jnp.all(jnp.isfinite(got)))
+
+    def test_eval_under_jit_with_ema_params(self) -> None:
+        """A jitted forward pass against the EMA weights gives a finite loss."""
+        decay = 0.99
+        model = _build_model()
+        optimizer = nnx.Optimizer(model, optax.adam(5e-2), wrt=nnx.Param)
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        train_step = make_atomistic_train_step(model, optimizer)
+        ema = ParamEMA(model, decay=decay)
+        for _ in range(8):
+            train_step(model, optimizer, batch)
+            ema.update(model)
+
+        @nnx.jit
+        def eval_loss(m: AtomisticModel, b: AtomisticBatch) -> Array:
+            return energy_forces_loss(m, systems, b.energies, b.forces, force_weight=1.0)
+
+        with ema.swap_in(model):
+            ema_loss = float(eval_loss(model, batch))
+        assert jnp.isfinite(ema_loss)
+
+
+class TestFitAtomisticEMA:
+    """``fit_atomistic`` EMA integration (opt-in ``ema_decay``)."""
+
+    def test_ema_none_leaves_raw_weights(self) -> None:
+        """``ema_decay=None`` reproduces the no-EMA behaviour exactly."""
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+
+        baseline = _build_model()
+        history = fit_atomistic(baseline, [batch], config, num_epochs=10)
+
+        explicit_none = _build_model()
+        history_none = fit_atomistic(explicit_none, [batch], config, num_epochs=10, ema_decay=None)
+
+        assert len(history) == 10
+        for raw, none in zip(_param_leaves(baseline), _param_leaves(explicit_none), strict=True):
+            assert jnp.allclose(raw, none)
+        for loss_a, loss_b in zip(history, history_none, strict=True):
+            assert loss_a == pytest.approx(loss_b, rel=1e-6, abs=1e-7)
+
+    def test_ema_path_differs_from_raw_and_is_finite(self) -> None:
+        """With ``ema_decay`` set, the model ends on smoothed (different) weights.
+
+        The same seed and batches are trained twice -- once raw, once with EMA --
+        so the only difference is that the EMA run loads the averaged weights on
+        return; those must differ from the raw last-step weights yet stay finite.
+        """
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
+
+        raw_model = _build_model()
+        fit_atomistic(raw_model, [batch], config, num_epochs=12)
+
+        ema_model = _build_model()
+        history = fit_atomistic(ema_model, [batch], config, num_epochs=12, ema_decay=0.9)
+
+        assert len(history) == 12
+        raw_leaves = _param_leaves(raw_model)
+        ema_leaves = _param_leaves(ema_model)
+        assert all(bool(jnp.all(jnp.isfinite(leaf))) for leaf in ema_leaves)
+        # At least one leaf must differ -- the EMA lags the noisy last-step weights.
+        assert any(
+            not bool(jnp.allclose(raw, ema, atol=1e-5))
+            for raw, ema in zip(raw_leaves, ema_leaves, strict=True)
+        )

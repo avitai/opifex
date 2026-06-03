@@ -34,6 +34,7 @@ from opifex.neural.atomistic.training import (
     energy_forces_loss,
     fit_atomistic,
     make_atomistic_train_step,
+    ParamEMA,
 )
 
 
@@ -45,6 +46,7 @@ __all__ = [
     "NequIPConfig",
     "PaiNN",
     "PaiNNConfig",
+    "ParamEMA",
     "SchNet",
     "SchNetConfig",
     "energy_forces_loss",
