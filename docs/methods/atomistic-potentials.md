@@ -71,8 +71,14 @@ prediction = model(water)  # {"energy": (), "forces": (3, 3)}
 ```
 
 The energy is invariant and the forces are equivariant under rotation, translation, and
-permutation of identical atoms. Train the model with the standard `Trainer` against
+permutation of identical atoms. Train the model with the energy+forces objective in
+`opifex.neural.atomistic.training` (`make_atomistic_train_step` / `fit_atomistic`) against
 reference energies and forces.
+
+For an end-to-end example — downloading the rMD17 aspirin benchmark, normalizing energies,
+and training NequIP toward the published rMD17 @1000 energy/force accuracy with
+visualization — see
+[NequIP on rMD17 (Aspirin)](../examples/atomistic/nequip-md17.md).
 
 ## Extending
 
