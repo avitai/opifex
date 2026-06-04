@@ -6,6 +6,9 @@ like AdaptiveLossBalancing and CurriculumRegularization.
 
 from typing import Protocol
 
+import jax.numpy as jnp
+from flax import nnx
+
 from opifex.core.solver.strategies import (
     AdaptiveLossBalancing,
     CurriculumRegularization,
@@ -59,27 +62,65 @@ class TestAdaptiveLossBalancing:
 
 
 class TestCurriculumRegularization:
-    """Test Curriculum Regularization strategy."""
+    """Test Curriculum Regularization strategy.
+
+    The callback anneals a bound loss-term weight (an ``nnx.Variable`` shared
+    with the trainer's ``loss_fn``) along a linear schedule. The behavioural
+    contract is that ``on_epoch_begin`` actually writes the scheduled value into
+    that weight and that the write is visible across an ``nnx.jit`` boundary.
+    """
 
     def test_initialization(self):
-        """Test initialization."""
-        strategy = CurriculumRegularization()
+        """Bind to a loss-term weight Variable and expose schedule bounds."""
+        weight = nnx.Variable(jnp.array(0.0))
+        strategy = CurriculumRegularization(target_weight=weight)
         assert isinstance(strategy, TrainingCallback)
         assert strategy.start_val == 0.0
 
     def test_parameter_progression(self):
-        """Test regularization parameter progression over epochs."""
-        strategy = CurriculumRegularization(start_val=0.0, end_val=1.0, total_epochs=10)
-        val_0 = strategy.get_value(epoch=0)
-        val_5 = strategy.get_value(epoch=5)
-        val_10 = strategy.get_value(epoch=10)
+        """Linear schedule (clamped) matches optax.linear_schedule."""
+        weight = nnx.Variable(jnp.array(0.0))
+        strategy = CurriculumRegularization(
+            target_weight=weight, start_val=0.0, end_val=1.0, total_epochs=10
+        )
+        assert strategy.get_value(epoch=0) == 0.0
+        assert strategy.get_value(epoch=5) == 0.5
+        assert strategy.get_value(epoch=10) == 1.0
+        assert strategy.get_value(epoch=20) == 1.0  # clamped past transition
 
-        assert val_0 == 0.0
-        assert val_5 == 0.5
-        assert val_10 == 1.0
+    def test_on_epoch_begin_applies_schedule_to_target(self):
+        """on_epoch_begin must WRITE the scheduled value into the bound weight."""
+        weight = nnx.Variable(jnp.array(0.0))
+        strategy = CurriculumRegularization(
+            target_weight=weight, start_val=0.0, end_val=1.0, total_epochs=10
+        )
+        strategy.on_epoch_begin(epoch=5, state=None)
+        assert float(weight.value) == 0.5
+        strategy.on_epoch_begin(epoch=10, state=None)
+        assert float(weight.value) == 1.0
 
-    def test_on_epoch_begin_coverage(self):
-        """Verify on_epoch_begin runs (coverage check)."""
-        strategy = CurriculumRegularization()
-        # Should run without error and hit the logic
-        strategy.on_epoch_begin(0, None)
+    def test_weight_update_visible_across_jit_boundary(self):
+        """Eager per-epoch update is picked up by a subsequent nnx.jit step.
+
+        This pins the transform-compatibility contract: mutating the bound
+        ``nnx.Variable`` outside the jitted step (as the trainer does in its
+        epoch loop) is reflected inside ``nnx.jit`` without recompilation.
+        """
+        weight = nnx.Variable(jnp.array(0.0))
+        strategy = CurriculumRegularization(
+            target_weight=weight, start_val=0.0, end_val=1.0, total_epochs=10
+        )
+
+        @nnx.jit
+        def weighted_loss(weight_var: nnx.Variable, x: jnp.ndarray) -> jnp.ndarray:
+            return weight_var.value * jnp.sum(x**2)
+
+        x = jnp.array([1.0, 2.0])  # sum(x**2) == 5.0
+
+        strategy.on_epoch_begin(epoch=0, state=None)  # weight -> 0.0
+        loss_start = weighted_loss(weight, x)
+        strategy.on_epoch_begin(epoch=10, state=None)  # weight -> 1.0
+        loss_end = weighted_loss(weight, x)
+
+        assert float(loss_start) == 0.0
+        assert float(loss_end) == 5.0
