@@ -391,6 +391,44 @@ class NeumannBC(BoundaryCondition):
         return apply_neumann(params, weight=weight)
 
 
+def _validate_coefficient_callable(coefficient: float | Callable[..., Any], name: str) -> None:
+    """Validate a Robin coefficient is numeric or a callable accepting array/scalar input.
+
+    Raises ``TypeError`` for a non-numeric non-callable, and ``ValueError`` for a
+    callable that accepts neither an array nor a scalar argument.
+    """
+    if callable(coefficient):
+        try:
+            coefficient(jnp.array([1.0]))
+        except (TypeError, IndexError):
+            try:
+                coefficient(1.0)
+            except Exception as e:
+                raise ValueError(f"{name} function must accept array or scalar input") from e
+    elif not isinstance(coefficient, int | float):
+        raise TypeError(f"{name} must be callable or numeric")
+
+
+def _is_valid_coefficient(coefficient: float | Callable[..., Any]) -> bool:
+    """Return whether a Robin coefficient is numeric or a usable callable.
+
+    Mirrors :func:`_validate_coefficient_callable` but reports validity as a
+    boolean instead of raising, for use in :meth:`RobinBC.validate`.
+    """
+    if callable(coefficient):
+        try:
+            coefficient(jnp.array([1.0]))
+        except (TypeError, IndexError):
+            try:
+                coefficient(1.0)
+            except Exception:  # noqa: BLE001 -- user-supplied callable can raise anything
+                return False
+        except Exception:  # noqa: BLE001 -- user callable can raise beyond a signature mismatch
+            return False
+        return True
+    return isinstance(coefficient, int | float)
+
+
 class RobinBC(BoundaryCondition):
     """Robin (mixed) boundary condition: alpha*u + beta*du/dn = gamma on boundary."""
 
@@ -412,37 +450,11 @@ class RobinBC(BoundaryCondition):
             time_dependent: Whether condition varies with time
         """
         try:
-            # Validate alpha parameter
-            if callable(alpha):
-                try:
-                    # Try array input first, fall back to scalar if needed
-                    test_val = jnp.array([1.0])
-                    alpha(test_val)
-                except (TypeError, IndexError):
-                    try:
-                        alpha(1.0)  # Fall back to scalar test
-                    except Exception as e:
-                        raise ValueError("alpha function must accept array or scalar input") from e
-            elif not isinstance(alpha, int | float):
-                raise TypeError("alpha must be callable or numeric")  # noqa: TRY301
-
-            if callable(beta):
-                try:
-                    # Try array input first, fall back to scalar if needed
-                    test_val = jnp.array([1.0])
-                    beta(test_val)
-                except (TypeError, IndexError):
-                    try:
-                        beta(1.0)  # Fall back to scalar test
-                    except Exception as e:
-                        raise ValueError("beta function must accept array or scalar input") from e
-            elif not isinstance(beta, int | float):
-                raise TypeError("beta must be callable or numeric")  # noqa: TRY301
-
-            # Only validate zero constraint for constant values
+            _validate_coefficient_callable(alpha, "alpha")
+            _validate_coefficient_callable(beta, "beta")
+            # Only validate the zero constraint for constant values.
             if not callable(alpha) and not callable(beta) and alpha == 0.0 and beta == 0.0:
                 raise ValueError("Both alpha and beta cannot be zero")  # noqa: TRY301
-
         except ValueError:
             raise  # Re-raise ValueError messages
         except Exception as e:
@@ -454,50 +466,20 @@ class RobinBC(BoundaryCondition):
         self.gamma = gamma
         self.condition_type = "robin"
 
-    def validate(self) -> bool:  # noqa: PLR0911 — early returns flatten the validation flow; collapsing them would obscure the per-parameter intent
+    def validate(self) -> bool:
         """Validate Robin boundary condition."""
         try:
-            # Validate alpha parameter. The ``(TypeError, IndexError)`` branch
-            # is the "vector-call signature mismatch, retry with scalar" path.
-            # Any other exception from a user-supplied callable means
-            # ``alpha`` isn't usable and ``validate`` must report ``False``.
-            if callable(self.alpha):
-                try:
-                    test_val = jnp.array([1.0])
-                    self.alpha(test_val)
-                except (TypeError, IndexError):
-                    try:
-                        self.alpha(1.0)
-                    except Exception:  # noqa: BLE001 -- user-supplied alpha callable can raise anything
-                        return False
-                except Exception:  # noqa: BLE001 -- user-supplied alpha callable can raise anything beyond signature mismatch
-                    return False
-            elif not isinstance(self.alpha, int | float):
+            if not _is_valid_coefficient(self.alpha):
                 return False
-
-            # Same shape as ``alpha`` above.
-            if callable(self.beta):
-                try:
-                    test_val = jnp.array([1.0])
-                    self.beta(test_val)
-                except (TypeError, IndexError):
-                    try:
-                        self.beta(1.0)
-                    except Exception:  # noqa: BLE001 -- user-supplied beta callable can raise anything
-                        return False
-                except Exception:  # noqa: BLE001 -- user-supplied beta callable can raise anything beyond signature mismatch
-                    return False
-            elif not isinstance(self.beta, int | float):
+            if not _is_valid_coefficient(self.beta):
                 return False
-
-            # Check zero constraint for constant values - return negated condition
+            # Zero constraint applies only to constant coefficients.
             return not (
                 not callable(self.alpha)
                 and not callable(self.beta)
                 and self.alpha == 0.0
                 and self.beta == 0.0
             )
-
         except (AttributeError, TypeError):
             return False
 
