@@ -193,7 +193,7 @@ class Trainer(nnx.Module):
             return jnp.mean(numerator / denominator)
         raise ValueError(f"Unsupported data loss_type: {loss_type!r}")
 
-    def training_step(  # noqa: PLR0915
+    def training_step(
         self,
         x: jax.Array,
         y: jax.Array,
@@ -216,127 +216,24 @@ class Trainer(nnx.Module):
         # Set model to training mode
         self.model.train()
 
-        def loss_fn(model):  # noqa: PLR0912
-            """Compute loss with optional physics components."""
-            # Apply gradient checkpointing (rematerialization) if configured
-            if self.config.gradient_checkpointing:
-                from artifex.generative_models.core.gradient_checkpointing import (
-                    apply_remat,
-                )
-
-                forward_fn = apply_remat(
-                    lambda m: m(x),
-                    policy=self.config.gradient_checkpoint_policy,
-                )
-                y_pred = forward_fn(model)
-            else:
-                y_pred = model(x)
-
-            # Base data loss (selected by loss_config.loss_type)
-            data_loss = self._compute_data_loss(y_pred, y)
-
-            total_loss = data_loss
-            loss_components = {"data_loss": data_loss}
-
-            # Add boundary loss if configured
-            if (
-                boundary_data is not None
-                and self.config.boundary_config is not None
-                and self.config.boundary_config.enforce
-            ):
-                x_boundary, y_boundary = boundary_data
-                y_pred_boundary = self.model(x_boundary)  # pyright: ignore[reportCallIssue]
-                boundary_loss = jnp.mean((y_pred_boundary - y_boundary) ** 2)
-                weighted_boundary = boundary_loss * self.config.boundary_config.weight
-                total_loss = total_loss + weighted_boundary
-                loss_components["boundary_loss"] = boundary_loss
-
-            # Add multi-scale physics loss if configured
-            if self.config.multiscale_config is not None:
-                scales = self.config.multiscale_config.scales
-                if scales:
-                    multiscale_loss = jnp.array(0.0)
-                    for scale in scales:
-                        scale_weight = self.config.multiscale_config.weights.get(
-                            scale, 1.0 / len(scales)
-                        )
-                        scale_loss = self._compute_scale_specific_loss(x, y_pred, y, scale)
-                        multiscale_loss = multiscale_loss + scale_weight * scale_loss
-                        loss_components[f"{scale}_loss"] = scale_loss
-                    total_loss = total_loss + multiscale_loss
-                    loss_components["multiscale_loss"] = multiscale_loss
-
-            # Add constraint loss if configured
-            if self.config.constraint_config is not None:
-                constraints = self.config.constraint_config.constraints
-                if constraints:
-                    # _constraint_weights is initialized in __init__
-                    for constraint in constraints:
-                        # Use the nnx.Variable value for the weight
-                        # Using .get for safety, though init ensures it exists
-                        if constraint in self._constraint_weights:
-                            weight = self._constraint_weights[constraint].value
-                        else:
-                            # Fallback if dynamically added
-                            # (shouldn't happen with current config)
-                            weight = jnp.array(1.0)
-
-                        constraint_loss = self._compute_constraint_specific_loss(
-                            x, y_pred, y, constraint
-                        )
-                        total_loss = total_loss + weight * constraint_loss
-                        loss_components[f"{constraint}_loss"] = constraint_loss
-
-            # Add conservation loss if configured
-            if self.config.conservation_config is not None:
-                laws = self.config.conservation_config.laws
-                if laws:
-                    # Simple conservation loss (can be extended)
-                    conservation_loss = jnp.mean(jnp.square(y_pred))
-                    total_loss = total_loss + conservation_loss * 0.1
-                    loss_components["conservation_loss"] = conservation_loss
-                    for law in laws:
-                        loss_components[f"{law}_conservation"] = conservation_loss
-
-            # Apply custom losses
-            for loss_name, custom_loss_fn in self.custom_losses.items():
-                custom_loss = custom_loss_fn(self.model, x, y_pred, y)
-                total_loss = total_loss + custom_loss
-                loss_components[f"{loss_name}_loss"] = custom_loss
-
-            return total_loss, loss_components
-
-        # Gradients w.r.t. the model; has_aux carries the loss-component dict.
-        (loss, loss_components), grads = nnx.value_and_grad(loss_fn, has_aux=True)(self.model)
+        # One fused forward+loss+grad pass; ``y_pred`` is surfaced via has_aux so
+        # the adaptive-weight update below reuses it instead of a second forward.
+        (loss, (loss_components, y_pred)), grads = nnx.value_and_grad(
+            lambda model: self._loss_fn(model, x, y, boundary_data), has_aux=True
+        )(self.model)
 
         # The nnx optimizer manages parameter and optimizer state internally.
         self.optimizer.update(self.model, grads)
-
-        # Update step counter
         self.state.step += 1
 
-        # Compute gradient norm
-        grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
+        metrics = self._build_step_metrics(loss, grads, loss_components)
 
-        # Collect metrics (keep as JAX arrays for JIT compatibility)
-        metrics = {
-            "loss": loss,
-            "step": self.state.step,
-            "learning_rate": self.config.learning_rate,
-            "gradient_norm": grad_norm,
-            **loss_components,
-        }
-
-        # Update adaptive weights (outside of gradient computation)
+        # Update adaptive weights, reusing the forward pass from the loss above.
         if (
             self.config.constraint_config is not None
             and self.config.constraint_config.adaptive_weighting
         ):
-            # Get predictions for adaptive weight update
-            y_pred_adaptive = self.model(x)  # pyright: ignore[reportCallIssue]
-            # _update_adaptive_weights should update self._constraint_weights
-            # nnx.Variables
-            self._update_adaptive_weights(x, y_pred_adaptive, y)
+            self._update_adaptive_weights(x, y_pred, y)
 
         # Execute hooks
         self._execute_hooks("training_step_end", metrics)
@@ -347,6 +244,128 @@ class Trainer(nnx.Module):
             component.on_batch_end(self.state.step, self.state, loss, metrics)
 
         return loss, metrics
+
+    def _loss_fn(
+        self,
+        model: nnx.Module,
+        x: jax.Array,
+        y: jax.Array,
+        boundary_data: tuple[jax.Array, jax.Array] | None,
+    ) -> tuple[jax.Array, tuple[dict[str, Any], jax.Array]]:
+        """Compute the total training loss and its per-component breakdown.
+
+        Returns ``(total_loss, (loss_components, y_pred))``. ``y_pred`` is
+        surfaced through ``has_aux`` so the post-gradient adaptive-weight update
+        can reuse it rather than running a second forward pass.
+        """
+        if self.config.gradient_checkpointing:
+            from artifex.generative_models.core.gradient_checkpointing import apply_remat
+
+            forward_fn = apply_remat(lambda m: m(x), policy=self.config.gradient_checkpoint_policy)
+            y_pred = forward_fn(model)
+        else:
+            y_pred = model(x)  # pyright: ignore[reportCallIssue]
+
+        total_loss = self._compute_data_loss(y_pred, y)
+        loss_components: dict[str, Any] = {"data_loss": total_loss}
+
+        for term, components in (
+            self._boundary_loss_term(model, boundary_data),
+            self._multiscale_loss_term(x, y_pred, y),
+            self._constraint_loss_term(x, y_pred, y),
+            self._conservation_loss_term(y_pred),
+            self._custom_loss_terms(model, x, y_pred, y),
+        ):
+            total_loss = total_loss + term
+            loss_components.update(components)
+
+        return total_loss, (loss_components, y_pred)
+
+    def _boundary_loss_term(
+        self, model: nnx.Module, boundary_data: tuple[jax.Array, jax.Array] | None
+    ) -> tuple[jax.Array, dict[str, Any]]:
+        """Weighted boundary-condition penalty (zero when not configured)."""
+        if not (
+            boundary_data is not None
+            and self.config.boundary_config is not None
+            and self.config.boundary_config.enforce
+        ):
+            return jnp.array(0.0), {}
+        x_boundary, y_boundary = boundary_data
+        y_pred_boundary = model(x_boundary)  # pyright: ignore[reportCallIssue]
+        boundary_loss = jnp.mean((y_pred_boundary - y_boundary) ** 2)
+        weighted_boundary = boundary_loss * self.config.boundary_config.weight
+        return weighted_boundary, {"boundary_loss": boundary_loss}
+
+    def _multiscale_loss_term(
+        self, x: jax.Array, y_pred: jax.Array, y: jax.Array
+    ) -> tuple[jax.Array, dict[str, Any]]:
+        """Weighted multi-scale physics loss (zero when not configured)."""
+        if self.config.multiscale_config is None or not self.config.multiscale_config.scales:
+            return jnp.array(0.0), {}
+        scales = self.config.multiscale_config.scales
+        components: dict[str, Any] = {}
+        multiscale_loss = jnp.array(0.0)
+        for scale in scales:
+            scale_weight = self.config.multiscale_config.weights.get(scale, 1.0 / len(scales))
+            scale_loss = self._compute_scale_specific_loss(x, y_pred, y, scale)
+            multiscale_loss = multiscale_loss + scale_weight * scale_loss
+            components[f"{scale}_loss"] = scale_loss
+        components["multiscale_loss"] = multiscale_loss
+        return multiscale_loss, components
+
+    def _constraint_loss_term(
+        self, x: jax.Array, y_pred: jax.Array, y: jax.Array
+    ) -> tuple[jax.Array, dict[str, Any]]:
+        """Weighted constraint loss using adaptive weights (zero when not configured)."""
+        if self.config.constraint_config is None or not self.config.constraint_config.constraints:
+            return jnp.array(0.0), {}
+        components: dict[str, Any] = {}
+        constraint_total = jnp.array(0.0)
+        for constraint in self.config.constraint_config.constraints:
+            if constraint in self._constraint_weights:
+                weight = self._constraint_weights[constraint].value
+            else:
+                weight = jnp.array(1.0)
+            constraint_loss = self._compute_constraint_specific_loss(x, y_pred, y, constraint)
+            constraint_total = constraint_total + weight * constraint_loss
+            components[f"{constraint}_loss"] = constraint_loss
+        return constraint_total, components
+
+    def _conservation_loss_term(self, y_pred: jax.Array) -> tuple[jax.Array, dict[str, Any]]:
+        """Conservation-law penalty (zero when not configured)."""
+        if self.config.conservation_config is None or not self.config.conservation_config.laws:
+            return jnp.array(0.0), {}
+        conservation_loss = jnp.mean(jnp.square(y_pred))
+        components: dict[str, Any] = {"conservation_loss": conservation_loss}
+        for law in self.config.conservation_config.laws:
+            components[f"{law}_conservation"] = conservation_loss
+        return conservation_loss * 0.1, components
+
+    def _custom_loss_terms(
+        self, model: nnx.Module, x: jax.Array, y_pred: jax.Array, y: jax.Array
+    ) -> tuple[jax.Array, dict[str, Any]]:
+        """Sum of registered custom loss terms (zero when none registered)."""
+        components: dict[str, Any] = {}
+        custom_total = jnp.array(0.0)
+        for loss_name, custom_loss_fn in self.custom_losses.items():
+            custom_loss = custom_loss_fn(model, x, y_pred, y)
+            custom_total = custom_total + custom_loss
+            components[f"{loss_name}_loss"] = custom_loss
+        return custom_total, components
+
+    def _build_step_metrics(
+        self, loss: jax.Array, grads: Any, loss_components: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Assemble the per-step metrics dict (arrays kept for JIT compatibility)."""
+        grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
+        return {
+            "loss": loss,
+            "step": self.state.step,
+            "learning_rate": self.config.learning_rate,
+            "gradient_norm": grad_norm,
+            **loss_components,
+        }
 
     def validation_step(self, x: jax.Array, y: jax.Array) -> tuple[jax.Array, dict[str, Any]]:
         """Execute validation step without parameter updates.
@@ -389,33 +408,14 @@ class Trainer(nnx.Module):
             Tuple of (trained_model, metrics_summary)
         """
         x_train, y_train = train_data
-        num_samples = x_train.shape[0]
-        batch_size = self.config.batch_size
+        final_metrics: dict[str, Any] = {}
 
-        final_metrics = {}
-        initial_loss_recorded = False
-
-        # ✅ JIT Compile training step outside the loop
-        # We must explicitly pass 'self' (the module) to the jitted function
-        # to ensure proper state management and tracing.
+        # JIT-compile the training step once, outside the loop. ``self`` (the
+        # module) is passed explicitly so nnx threads model/optimizer state and
+        # XLA fuses forward+loss+grad+update into a single program per step.
         @nnx.jit
         def train_step_jit(trainer_instance, x, y, bd):
             return trainer_instance.training_step(x, y, bd)
-
-        # If distributed, prepare shard_batch import
-        if self._distributed_manager is not None:
-            from opifex.distributed.training import shard_batch
-
-        # Helper to optionally shard a batch
-        def _maybe_shard(x_batch, y_batch):
-            if self._distributed_manager is not None:
-                mesh = self._distributed_manager.mesh
-                return shard_batch(
-                    {"x": x_batch, "y": y_batch},
-                    mesh=mesh,
-                    data_axis=self.config.distributed_config.mesh_axis_names[0],  # type: ignore[union-attr]
-                )
-            return {"x": x_batch, "y": y_batch}
 
         for epoch in range(self.config.num_epochs):
             self.state.epoch = epoch
@@ -427,72 +427,106 @@ class Trainer(nnx.Module):
             # Set model to training mode (nnx.Module method)
             self.train()
 
-            # Training epoch
-            epoch_losses = []
-            for i in range(0, num_samples, batch_size):
-                x_batch = x_train[i : i + batch_size]
-                y_batch = y_train[i : i + batch_size]
-
-                # Optionally shard batch for distributed training
-                sharded = _maybe_shard(x_batch, y_batch)
-
-                # Use JIT-compiled step, passing 'self'
-                loss, _ = train_step_jit(self, sharded["x"], sharded["y"], boundary_data)
-                epoch_losses.append(float(loss))  # float() is safe here (outside JIT)
+            # One host transfer per epoch: the running loss sum stays on-device
+            # so successive jitted steps dispatch asynchronously instead of
+            # blocking on a per-batch ``float()``.
+            avg_train_loss = float(
+                self._run_training_epoch(x_train, y_train, boundary_data, train_step_jit)
+            )
 
             # Component hook: on_epoch_end
-            # final_metrics_epoch entries might be floats (from val)
-            # or Tracers (from train mean)
-            # If train_loss is Tracer, this might fail if component expects float.
-            # But on_epoch_end is outside of JIT loop (in fit), so we can float() it.
-            final_metrics_epoch = {"train_loss": sum(epoch_losses) / len(epoch_losses)}
             for component in self.components:
-                component.on_epoch_end(epoch, self.state, final_metrics_epoch)
+                component.on_epoch_end(epoch, self.state, {"train_loss": avg_train_loss})
 
-            avg_train_loss = final_metrics_epoch["train_loss"]
-
-            # Record initial loss (first epoch)
-            if not initial_loss_recorded:
+            # Record the initial loss on the first epoch only.
+            if "initial_train_loss" not in final_metrics:
                 final_metrics["initial_train_loss"] = avg_train_loss
-                initial_loss_recorded = True
 
-            # Validation
-            if val_data is not None and epoch % self.config.validation_frequency == 0:
-                # Set model to evaluation mode
-                self.model.eval()
-
-                x_val, y_val = val_data
-                val_loss, _ = self.validation_step(x_val, y_val)
-                final_metrics["final_val_loss"] = float(val_loss)
-
-            # Progress callback
-            if self.config.progress_callback is not None:
-                self.config.progress_callback(
-                    epoch, {"train_loss": avg_train_loss, **final_metrics}
-                )
-
-            # Verbose logging
-            if self.config.verbose:
-                val_info = ""
-                if val_data is not None and epoch % self.config.validation_frequency == 0:
-                    val_loss = final_metrics.get("final_val_loss")
-                    if val_loss is not None:
-                        val_info = f", Val Loss: {val_loss:.6f}"
-                logger.info(
-                    "Epoch %d/%d: Train Loss: %.6f%s",
-                    epoch + 1,
-                    self.config.num_epochs,
-                    avg_train_loss,
-                    val_info,
-                )
-
-            # Checkpointing
-            if self.checkpoint_store is not None and epoch % self.config.checkpoint_frequency == 0:
-                self.save_checkpoint(step=epoch, loss=avg_train_loss)
-
+            self._run_epoch_validation(val_data, epoch, final_metrics)
+            self._finalize_epoch(epoch, avg_train_loss, val_data, final_metrics)
             final_metrics["final_train_loss"] = avg_train_loss
 
         return self.model, final_metrics
+
+    def _run_training_epoch(
+        self,
+        x_train: jax.Array,
+        y_train: jax.Array,
+        boundary_data: tuple[jax.Array, jax.Array] | None,
+        train_step_jit: Any,
+    ) -> jax.Array:
+        """Run one training epoch and return the mean batch loss (kept on-device).
+
+        Per-batch losses are accumulated on the accelerator and transferred to
+        the host once (by the caller), so consecutive jitted steps dispatch
+        asynchronously rather than serialising on a per-batch ``float()``.
+        """
+        num_samples = x_train.shape[0]
+        batch_size = self.config.batch_size
+        loss_sum = jnp.array(0.0)
+        num_batches = 0
+        for start in range(0, num_samples, batch_size):
+            sharded = self._shard_batch(
+                x_train[start : start + batch_size], y_train[start : start + batch_size]
+            )
+            loss, _ = train_step_jit(self, sharded["x"], sharded["y"], boundary_data)
+            loss_sum = loss_sum + loss
+            num_batches += 1
+        return loss_sum / num_batches
+
+    def _shard_batch(self, x_batch: jax.Array, y_batch: jax.Array) -> dict[str, jax.Array]:
+        """Shard a batch across the distributed mesh, or pass through otherwise."""
+        if self._distributed_manager is None:
+            return {"x": x_batch, "y": y_batch}
+        from opifex.distributed.training import shard_batch
+
+        return shard_batch(
+            {"x": x_batch, "y": y_batch},
+            mesh=self._distributed_manager.mesh,
+            data_axis=self.config.distributed_config.mesh_axis_names[0],  # type: ignore[union-attr]
+        )
+
+    def _run_epoch_validation(
+        self,
+        val_data: tuple[jax.Array, jax.Array] | None,
+        epoch: int,
+        final_metrics: dict[str, Any],
+    ) -> None:
+        """Run validation on the configured cadence, recording the final val loss."""
+        if val_data is None or epoch % self.config.validation_frequency != 0:
+            return
+        self.model.eval()
+        x_val, y_val = val_data
+        val_loss, _ = self.validation_step(x_val, y_val)
+        final_metrics["final_val_loss"] = float(val_loss)
+
+    def _finalize_epoch(
+        self,
+        epoch: int,
+        avg_train_loss: float,
+        val_data: tuple[jax.Array, jax.Array] | None,
+        final_metrics: dict[str, Any],
+    ) -> None:
+        """Emit the progress callback, verbose log, and checkpoint for an epoch."""
+        if self.config.progress_callback is not None:
+            self.config.progress_callback(epoch, {"train_loss": avg_train_loss, **final_metrics})
+
+        if self.config.verbose:
+            val_info = ""
+            if val_data is not None and epoch % self.config.validation_frequency == 0:
+                val_loss = final_metrics.get("final_val_loss")
+                if val_loss is not None:
+                    val_info = f", Val Loss: {val_loss:.6f}"
+            logger.info(
+                "Epoch %d/%d: Train Loss: %.6f%s",
+                epoch + 1,
+                self.config.num_epochs,
+                avg_train_loss,
+                val_info,
+            )
+
+        if self.checkpoint_store is not None and epoch % self.config.checkpoint_frequency == 0:
+            self.save_checkpoint(step=epoch, loss=avg_train_loss)
 
     def save_checkpoint(
         self,
