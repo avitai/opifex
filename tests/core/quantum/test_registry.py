@@ -8,6 +8,8 @@ names. Tests reset each singleton for isolation.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from opifex.core.quantum.registry import (
@@ -20,11 +22,35 @@ from opifex.core.quantum.registry import (
 )
 
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
 @pytest.fixture(autouse=True)
-def _reset_registries() -> None:  # pyright: ignore[reportUnusedFunction]
-    AtomisticModelRegistry.reset()
-    BackboneRegistry.reset()
-    PropertyHeadRegistry.reset()
+def _reset_registries() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Give each test empty registries, then restore the import-time state.
+
+    The registries are process-wide singletons populated by import-time
+    ``register_*`` decorators, so they need a clean slate per test. A bare
+    ``reset()`` would, however, leak the wipe to every later test module whose
+    backbones/heads self-registered at import (those decorators do not re-run --
+    the modules are already cached). Snapshot first, reset for isolation, then
+    restore on teardown so the wipe cannot escape this file.
+    """
+    registries = (AtomisticModelRegistry, BackboneRegistry, PropertyHeadRegistry)
+    saved = {
+        registry: {name: registry().get(name) for name in registry().list_names()}
+        for registry in registries
+    }
+    for registry in registries:
+        registry.reset()
+    try:
+        yield
+    finally:
+        for registry in registries:
+            registry.reset()
+            for name, item in saved[registry].items():
+                registry().register(name, item)
 
 
 class TestRegistration:
