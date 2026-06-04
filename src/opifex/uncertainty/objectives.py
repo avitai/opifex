@@ -220,28 +220,30 @@ class UQLossComponents:
         """
         zero = jnp.array(0.0)
         contributions: list[jax.Array] = []
-        if data is not None:
-            contributions.append(config.data_weight * data)
-        if negative_log_likelihood is not None:
-            contributions.append(config.data_weight * negative_log_likelihood)
-        if physics_residual is not None:
-            contributions.append(config.physics_weight * physics_residual)
-        if boundary is not None:
-            contributions.append(config.boundary_weight * boundary)
-        if initial_condition is not None:
-            contributions.append(config.initial_condition_weight * initial_condition)
-        if regularization is not None:
-            contributions.append(config.regularization_weight * regularization)
+        # Components scaled by a single config weight, kept in evaluation order so
+        # the floating-point summation is identical to the explicit form.
+        leading_terms = (
+            (data, config.data_weight),
+            (negative_log_likelihood, config.data_weight),
+            (physics_residual, config.physics_weight),
+            (boundary, config.boundary_weight),
+            (initial_condition, config.initial_condition_weight),
+            (regularization, config.regularization_weight),
+        )
+        contributions.extend(weight * value for value, weight in leading_terms if value is not None)
+        # KL is dataset-scaled; the negative ELBO is already a complete objective.
         if kl is not None:
             contributions.append(config.kl_weight * scale_kl(kl, config))
         if negative_elbo is not None:
             contributions.append(negative_elbo)
-        if calibration is not None:
-            contributions.append(config.calibration_weight * calibration)
-        if conformal is not None:
-            contributions.append(config.conformal_weight * conformal)
-        if pac_bayes is not None:
-            contributions.append(config.pac_bayes_weight * pac_bayes)
+        trailing_terms = (
+            (calibration, config.calibration_weight),
+            (conformal, config.conformal_weight),
+            (pac_bayes, config.pac_bayes_weight),
+        )
+        contributions.extend(
+            weight * value for value, weight in trailing_terms if value is not None
+        )
 
         total = sum(contributions, start=zero) if contributions else zero
         return cls(
