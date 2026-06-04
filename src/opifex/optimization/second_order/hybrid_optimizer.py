@@ -265,36 +265,41 @@ class HybridOptimizer:
             return True
 
         if criterion == SwitchCriterion.LOSS_VARIANCE:
-            # Switch when loss variance is below threshold
-            # Only use finite values in history
-            finite_mask = jnp.isfinite(loss_history)
-            if not jnp.any(finite_mask):
-                return False
-            finite_losses = jnp.where(finite_mask, loss_history, 0.0)
-            count = jnp.sum(finite_mask)
-            if count < 2:
-                return False
-            variance = jnp.var(finite_losses, where=finite_mask)
-            return float(variance) < self.config.loss_variance_threshold
-
+            return self._switch_on_loss_variance(loss_history)
         if criterion == SwitchCriterion.GRADIENT_NORM:
-            # Switch when gradient norm is below threshold
-            grad_norm = _compute_grad_norm(grads)
-            return float(grad_norm) < self.config.gradient_norm_threshold
-
+            return self._switch_on_gradient_norm(grads)
         if criterion == SwitchCriterion.RELATIVE_IMPROVEMENT:
-            # Switch when relative improvement is below threshold
-            finite_mask = jnp.isfinite(loss_history)
-            if not jnp.any(finite_mask):
-                return False
-            first_loss = loss_history[0]
-            last_loss = loss_history[-1]
-            if not (jnp.isfinite(first_loss) and jnp.isfinite(last_loss)):
-                return False
-            rel_improvement = jnp.abs(first_loss - last_loss) / (jnp.abs(first_loss) + 1e-8)
-            return float(rel_improvement) < self.config.relative_improvement_threshold
+            return self._switch_on_relative_improvement(loss_history)
 
         return False
+
+    def _switch_on_loss_variance(self, loss_history: Float[Array, ...]) -> bool:
+        """Switch when the finite-loss variance falls below the threshold."""
+        finite_mask = jnp.isfinite(loss_history)
+        if not jnp.any(finite_mask):
+            return False
+        finite_losses = jnp.where(finite_mask, loss_history, 0.0)
+        if jnp.sum(finite_mask) < 2:
+            return False
+        variance = jnp.var(finite_losses, where=finite_mask)
+        return float(variance) < self.config.loss_variance_threshold
+
+    def _switch_on_gradient_norm(self, grads: PyTree) -> bool:
+        """Switch when the gradient norm falls below the threshold."""
+        grad_norm = _compute_grad_norm(grads)
+        return float(grad_norm) < self.config.gradient_norm_threshold
+
+    def _switch_on_relative_improvement(self, loss_history: Float[Array, ...]) -> bool:
+        """Switch when the relative loss improvement falls below the threshold."""
+        finite_mask = jnp.isfinite(loss_history)
+        if not jnp.any(finite_mask):
+            return False
+        first_loss = loss_history[0]
+        last_loss = loss_history[-1]
+        if not (jnp.isfinite(first_loss) and jnp.isfinite(last_loss)):
+            return False
+        rel_improvement = jnp.abs(first_loss - last_loss) / (jnp.abs(first_loss) + 1e-8)
+        return float(rel_improvement) < self.config.relative_improvement_threshold
 
     @property
     def is_using_lbfgs(self) -> bool:
