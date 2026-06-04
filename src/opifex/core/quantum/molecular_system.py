@@ -116,50 +116,54 @@ class MolecularSystem:
 
     def __post_init__(self) -> None:
         """Validate molecular system after initialization."""
-        # Validate array shapes
         if self.positions.shape[0] != len(self.atomic_numbers):
             raise ValueError("Number of positions must match number of atoms")
         if self.positions.shape[1] != 3:
             raise ValueError("Positions must be 3D coordinates")
-
-        # Validate physical constraints
         if self.multiplicity < 1:
             raise ValueError("Multiplicity must be positive")
 
-        # Use JAX-compatible validation that works with JIT
-        # Only perform validation if not in a JIT context
+        self._validate_atomic_numbers()
+        if self.cell is not None:
+            self._validate_cell(self.cell)
+
+    def _validate_atomic_numbers(self) -> None:
+        """Check atomic numbers lie in (0, 118]; skipped while tracing.
+
+        Under a JAX transform the atomic numbers are tracers that cannot be made
+        concrete, so the range check is skipped and inputs are assumed valid.
+        """
         try:
-            # Convert to Python scalars for validation to avoid tracing issues
             atomic_numbers_py = [int(z) for z in self.atomic_numbers]
-            if any(z <= 0 for z in atomic_numbers_py):
-                raise ValueError("Atomic numbers must be positive")
-            if any(z > 118 for z in atomic_numbers_py):
-                raise ValueError("Atomic numbers must be <= 118")
         except (
             jax.errors.TracerIntegerConversionError,
             jax.errors.ConcretizationTypeError,
         ):
-            # Skip validation when in JIT context - assume inputs are valid
-            pass
+            return
+        if any(z <= 0 for z in atomic_numbers_py):
+            raise ValueError("Atomic numbers must be positive")
+        if any(z > 118 for z in atomic_numbers_py):
+            raise ValueError("Atomic numbers must be <= 118")
 
-        # Validate periodic cell if provided
-        if self.cell is not None:
-            if self.cell.shape != (3, 3):
-                raise ValueError("Periodic cell must be 3x3 matrix")
-            # Convert determinant to a Python scalar for validation. Under a JAX
-            # transform (e.g. ``jax.grad`` for strain-displacement stress) the
-            # cell is a tracer and cannot be made concrete; skip the check then,
-            # exactly as the atomic-number validation above does.
-            try:
-                det_value = float(jnp.linalg.det(self.cell))
-            except (
-                jax.errors.TracerArrayConversionError,
-                jax.errors.ConcretizationTypeError,
-            ):
-                pass
-            else:
-                if det_value <= 0:
-                    raise ValueError("Periodic cell must have positive determinant")
+    def _validate_cell(self, cell: jax.Array) -> None:
+        """Validate a periodic cell's shape and positive determinant.
+
+        Under a JAX transform (e.g. ``jax.grad`` for strain-displacement stress)
+        the cell is a tracer and its determinant cannot be made concrete; the
+        determinant check is then skipped, exactly as the atomic-number
+        validation is.
+        """
+        if cell.shape != (3, 3):
+            raise ValueError("Periodic cell must be 3x3 matrix")
+        try:
+            det_value = float(jnp.linalg.det(cell))
+        except (
+            jax.errors.TracerArrayConversionError,
+            jax.errors.ConcretizationTypeError,
+        ):
+            return
+        if det_value <= 0:
+            raise ValueError("Periodic cell must have positive determinant")
 
     @property
     def n_atoms(self) -> int:
