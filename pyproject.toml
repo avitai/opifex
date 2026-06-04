@@ -545,7 +545,8 @@ select = [
   "PL", # pylint
   "TRY", # tryceratops
   "NPY", # NumPy-specific rules
-  "RUF" # Ruff-specific rules
+  "RUF", # Ruff-specific rules
+  "C901" # mccabe cyclomatic complexity (Rule 2 / SRP)
 ]
 unfixable = []
 
@@ -561,6 +562,9 @@ known-third-party = ["jax", "flax", "numpy", "scipy"]
 lines-after-imports = 2
 order-by-type = false
 
+[tool.ruff.lint.mccabe]
+max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
+
 # Per-file ignores for development scripts
 [tool.ruff.lint.per-file-ignores]
 # Example files with print statements for demonstration
@@ -568,7 +572,8 @@ order-by-type = false
   "T201", # Print statements (examples need output)
   "F841", # Unused variables (demonstrations may not use all variables)
   "E501", # Long lines in example comments
-  "BLE001" # Broad except acceptable in demonstration code
+  "BLE001", # Broad except acceptable in demonstration code
+  "C901" # Demonstration scripts may inline multi-stage walkthroughs
 ]
 "scripts/*" = [
   "E501", # Line too long (development scripts can be longer)
@@ -618,7 +623,8 @@ order-by-type = false
   "E501", # Long lines in test descriptions
   "RUF003", # Mathematical symbols in comments
   "RET504", # Test return patterns
-  "BLE001" # Broad except acceptable in test helpers and fixtures
+  "BLE001", # Broad except acceptable in test helpers and fixtures
+  "C901" # Test bodies may exercise many branches/parametrisations inline
 ]
 "tests/conftest.py" = [
   "T201", # Print statements (test configuration logging)
