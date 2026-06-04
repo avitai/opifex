@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import jax.scipy as jsp
 import pytest
 
 from opifex.uncertainty.aggregators import (
@@ -27,7 +28,47 @@ from opifex.uncertainty.aggregators import (
     EnhancedUncertaintyQuantifier,
     EpistemicUncertainty,
     MultiSourceUncertaintyAggregator,
+    UncertaintyQuantifier,
 )
+
+
+# ---------------------------------------------------------------------------
+# UncertaintyQuantifier — exact Gaussian prediction intervals
+# ---------------------------------------------------------------------------
+
+
+def test_prediction_intervals_use_exact_gaussian_quantile() -> None:
+    """Half-width must be the exact Gaussian quantile for any confidence level.
+
+    The previous lookup-table implementation returned a wrong ``z = 1.0``
+    fallback for any level below 0.90; the interval must instead use
+    ``norm.ppf(1 - alpha/2)`` (the in-repo convention, e.g.
+    ``reliability/failure_probability.py``).
+    """
+    quantifier = UncertaintyQuantifier()
+    mean = jnp.zeros((1, 1))
+    variance = jnp.ones((1, 1))  # std == 1 so the half-width equals the z-score
+
+    # 0.80 is OFF the old lookup table -> old code returned z = 1.0 (wrong).
+    lower, upper = quantifier.compute_prediction_intervals(mean, variance, confidence_level=0.80)
+    expected_z = float(jsp.stats.norm.ppf(0.90))  # 1 - 0.20/2 = 0.90 -> ~1.2816
+    assert float(upper[0, 0]) == pytest.approx(expected_z, abs=1e-4)
+    assert float(lower[0, 0]) == pytest.approx(-expected_z, abs=1e-4)
+
+    # Standard 95% level still recovers ~1.96.
+    _, upper_95 = quantifier.compute_prediction_intervals(mean, variance, confidence_level=0.95)
+    assert float(upper_95[0, 0]) == pytest.approx(1.959964, abs=1e-4)
+
+
+def test_prediction_intervals_jit_compatible() -> None:
+    """compute_prediction_intervals must be jittable over (mean, variance)."""
+    quantifier = UncertaintyQuantifier()
+    jitted = jax.jit(
+        lambda m, v: quantifier.compute_prediction_intervals(m, v, confidence_level=0.95)
+    )
+    _, upper = jitted(jnp.zeros((2, 3)), jnp.ones((2, 3)))
+    assert upper.shape == (2, 3)
+    assert float(upper[0, 0]) == pytest.approx(1.959964, abs=1e-4)
 
 
 # ---------------------------------------------------------------------------
