@@ -17,6 +17,7 @@ Key Features:
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -531,6 +532,54 @@ class SpectralMultiHeadAttention(nnx.Module):
         return self.out_proj(out, training=training)
 
 
+def _extract_spectral_layer_weight(obj: Any) -> Any:
+    """Return the kernel/weight value of a spectral layer's inner module, or None."""
+    for attr_name in ("linear", "conv", "layer"):
+        if hasattr(obj, attr_name):
+            layer = getattr(obj, attr_name)
+            weight = getattr(layer, "kernel", getattr(layer, "weight", None))
+            if weight is not None:
+                return weight.value
+    return None
+
+
+def _spectral_norm_children(obj: Any) -> list[Any]:
+    """Return the child objects of obj to recurse into for spectral-norm collection."""
+    if isinstance(obj, list | tuple):
+        return list(obj)
+    if not hasattr(obj, "__dict__"):
+        return []
+    children: list[Any] = []
+    for attr_name in dir(obj):
+        if attr_name.startswith("_"):
+            continue
+        try:
+            attr = getattr(obj, attr_name)
+        except (AttributeError, TypeError):
+            continue
+        if isinstance(attr, nnx.Module | list | tuple):
+            children.append(attr)
+    return children
+
+
+def _collect_spectral_norms(obj: Any, spectral_norms: list[float]) -> None:
+    """Recursively append spectral norms of spectral layers reachable from obj."""
+    spectral_types = (
+        SpectralNorm,
+        SpectralLinear,
+        SpectralNormalizedConv,
+        AdaptiveSpectralNorm,
+    )
+    if isinstance(obj, spectral_types) and hasattr(obj, "power_iter"):
+        weight = _extract_spectral_layer_weight(obj)
+        if weight is not None:
+            spectral_norm, _ = obj.power_iter(weight, training=False)
+            spectral_norms.append(float(spectral_norm))
+
+    for child in _spectral_norm_children(obj):
+        _collect_spectral_norms(child, spectral_norms)
+
+
 def spectral_norm_summary(
     model: nnx.Module,
 ) -> dict[str, float | int | str]:
@@ -542,49 +591,8 @@ def spectral_norm_summary(
     Returns:
         Dictionary with spectral norm statistics
     """
-    spectral_norms = []
-
-    def collect_spectral_norms(obj) -> None:
-        """Recursively collect spectral norms from any object."""
-        # Check for spectral normalization layers
-        spectral_types = (
-            SpectralNorm,
-            SpectralLinear,
-            SpectralNormalizedConv,
-            AdaptiveSpectralNorm,
-        )
-
-        if isinstance(obj, spectral_types) and hasattr(obj, "power_iter"):
-            # Extract weight from layer - simplified logic
-            weight = None
-            for attr_name in ["linear", "conv", "layer"]:
-                if hasattr(obj, attr_name):
-                    layer = getattr(obj, attr_name)
-                    weight = getattr(layer, "kernel", getattr(layer, "weight", None))
-                    if weight is not None:
-                        weight = weight.value
-                        break
-
-            if weight is not None:
-                spectral_norm, _ = obj.power_iter(weight, training=False)
-                spectral_norms.append(float(spectral_norm))
-
-        # Recursively process containers and modules
-        if isinstance(obj, list | tuple):
-            for item in obj:
-                collect_spectral_norms(item)
-        elif hasattr(obj, "__dict__"):
-            for attr_name in dir(obj):
-                if not attr_name.startswith("_"):
-                    try:
-                        attr = getattr(obj, attr_name)
-                        if isinstance(attr, nnx.Module | list | tuple):
-                            collect_spectral_norms(attr)
-                    except (AttributeError, TypeError):
-                        pass
-
-    # Start collection from the model
-    collect_spectral_norms(model)
+    spectral_norms: list[float] = []
+    _collect_spectral_norms(model, spectral_norms)
 
     if not spectral_norms:
         return {
