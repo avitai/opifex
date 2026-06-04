@@ -1,14 +1,4 @@
-# FILE PLACEMENT: opifex/neural/operators/fno/ufno.py
-#
-# U-Net Style Fourier Neural Operator (U-FNO) Implementation
-# Multi-scale encoder-decoder architecture for hierarchical problems
-#
-# This file should be placed at: opifex/neural/operators/fno/ufno.py
-# After placement, update opifex/neural/operators/fno/__init__.py to include:
-# from .ufno import UFourierNeuralOperator, UFNOEncoderBlock, UFNODecoderBlock
-
-"""
-U-Net style Fourier Neural Operator (U-FNO) with clean architecture.
+"""U-Net style Fourier Neural Operator (U-FNO) with clean architecture.
 
 Redesigned with standardized tensor operations for consistent behavior.
 """

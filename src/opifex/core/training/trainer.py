@@ -306,21 +306,11 @@ class Trainer(nnx.Module):
 
             return total_loss, loss_components
 
-        # ✅ SIMPLIFIED: Compute gradients with model (not params)
-        # has_aux=True to handle tuple return (loss, loss_components)
+        # Gradients w.r.t. the model; has_aux carries the loss-component dict.
         (loss, loss_components), grads = nnx.value_and_grad(loss_fn, has_aux=True)(self.model)
 
-        # ✅ BREAKING CHANGE: Simplified optimizer update (67% code reduction!)
-        # OLD (6 lines):
-        #   params = nnx.state(self.model)
-        #   (loss, _), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
-        #   updates, new_opt_state = self.optimizer.update(grads, self.state.opt_state)
-        #   new_params = optax.apply_updates(params, updates)
-        #   nnx.update(self.model, new_params)
-        #   self.state.opt_state = new_opt_state
-
-        # NEW (1 line):
-        self.optimizer.update(self.model, grads)  # ✅ Automatic state management!
+        # The nnx optimizer manages parameter and optimizer state internally.
+        self.optimizer.update(self.model, grads)
 
         # Update step counter
         self.state.step += 1

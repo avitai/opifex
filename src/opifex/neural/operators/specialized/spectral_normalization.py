@@ -531,11 +531,6 @@ class SpectralMultiHeadAttention(nnx.Module):
         return self.out_proj(out, training=training)
 
 
-# SpectralNeuralOperator moved to FNO spectral module where it belongs architecturally
-# Import it from the correct location if needed:
-# from ..fno.spectral import SpectralNeuralOperator, create_spectral_neural_operator
-
-
 def spectral_norm_summary(
     model: nnx.Module,
 ) -> dict[str, float | int | str]:

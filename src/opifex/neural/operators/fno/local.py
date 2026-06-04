@@ -1,14 +1,4 @@
-# FILE PLACEMENT: opifex/neural/operators/fno/local.py
-#
-# Local Fourier Neural Operator Implementation
-# Combines global Fourier operations with local convolutions
-#
-# This file should be placed at: opifex/neural/operators/fno/local.py
-# After placement, update opifex/neural/operators/fno/__init__.py to include:
-# from .local import LocalFourierNeuralOperator, LocalFourierLayer
-
-"""
-Local Fourier Neural Operator (Local FNO) implementation.
+"""Local Fourier Neural Operator (Local FNO) implementation.
 
 This module provides FNO variants that combine global Fourier operations
 with local convolutions to capture both global patterns and local features.
