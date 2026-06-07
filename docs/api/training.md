@@ -534,7 +534,7 @@ Coarse-to-fine training hierarchies for accelerated convergence.
 
 ### Width-Based Hierarchy (MLPs)
 
-::: opifex.training.multilevel.coarse_to_fine
+::: opifex.core.training.strategies.multilevel.coarse_to_fine
     options:
         show_root_heading: true
         show_source: false
@@ -547,7 +547,7 @@ Coarse-to-fine training hierarchies for accelerated convergence.
 
 ### Mode-Based Hierarchy (FNOs)
 
-::: opifex.training.multilevel.multilevel_fno
+::: opifex.core.training.strategies.multilevel.multilevel_fno
     options:
         show_root_heading: true
         show_source: false
@@ -565,7 +565,7 @@ For usage examples and best practices, see the [Multilevel Training Guide](../me
 
 Residual-based sampling strategies for efficient PINN training.
 
-::: opifex.training.adaptive_sampling
+::: opifex.core.training.components.adaptive_sampling
     options:
         show_root_heading: true
         show_source: false
