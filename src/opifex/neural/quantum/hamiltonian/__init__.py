@@ -27,12 +27,14 @@ from opifex.neural.quantum.hamiltonian.predictor import (
     HamiltonianPredictor,
     HamiltonianPredictorConfig,
 )
+from opifex.neural.quantum.hamiltonian.so2_convolution import SO2EdgeConvolution
 
 
 __all__ = [
     "HamiltonianPredictor",
     "HamiltonianPredictorConfig",
     "PairExpansion",
+    "SO2EdgeConvolution",
     "block_from_irreps",
     "pair_feature_irreps",
 ]

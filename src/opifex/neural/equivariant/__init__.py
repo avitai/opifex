@@ -6,6 +6,13 @@ shared across opifex's quantum-SciML families (interatomic potentials,
 equivariant Hamiltonian prediction).
 """
 
+from opifex.neural.equivariant.cartesian import (
+    CARTESIAN_IRREPS,
+    CartesianLinear,
+    CartesianTensor,
+    from_irreps_array,
+    to_irreps_array,
+)
 from opifex.neural.equivariant.gate import Gate, gate
 from opifex.neural.equivariant.graph import (
     radius_graph,
@@ -29,7 +36,10 @@ from opifex.neural.equivariant.tensor_product import (
 
 
 __all__ = [
+    "CARTESIAN_IRREPS",
     "BesselBasis",
+    "CartesianLinear",
+    "CartesianTensor",
     "EquivariantLinear",
     "FullyConnectedTensorProduct",
     "Gate",
@@ -39,6 +49,7 @@ __all__ = [
     "IrrepsArray",
     "TensorProduct",
     "cosine_cutoff",
+    "from_irreps_array",
     "gate",
     "polynomial_cutoff",
     "radius_graph",
@@ -46,4 +57,5 @@ __all__ = [
     "scatter_mean",
     "scatter_sum",
     "spherical_harmonics",
+    "to_irreps_array",
 ]
