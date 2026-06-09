@@ -60,8 +60,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
@@ -133,6 +133,97 @@ class HamiltonianPredictorConfig:
 
 def _pair_type_key(l_i: int, l_j: int) -> str:
     return f"{l_i}_{l_j}"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _PairTypeScatterPlan:
+    """Static, vectorised assembly plan for all blocks of one ``(l_i, l_j)`` type.
+
+    Every field is a compile-time-constant ``numpy`` array (jit-safe static
+    metadata), so :meth:`HamiltonianPredictor._assemble` can replace the per-block
+    Python loop with one gather, one batched :class:`PairExpansion`, one batched
+    rank-select and one scatter per pair type. The number of pair types is a small
+    constant (``~len(degrees)^2``), so the outer Python loop over types is *not* a
+    compile-time unroll of the block count.
+
+    Attributes:
+        key: The ``"{l_i}_{l_j}"`` expansion-dictionary key.
+        source_index: For each block, the index into the source-feature array
+            (atom index for diagonal blocks, edge slot for off-diagonal blocks);
+            shape ``(n_blocks,)``.
+        rank_i: Row-shell rank of each block among same-``l_i`` shells; shape
+            ``(n_blocks,)``.
+        rank_j: Column-shell rank of each block; shape ``(n_blocks,)``.
+        row_index: Flattened destination row indices of every block element; shape
+            ``(n_blocks * (2 l_i + 1) * (2 l_j + 1),)``.
+        col_index: Flattened destination column indices; same shape as
+            ``row_index``.
+    """
+
+    key: str
+    source_index: np.ndarray
+    rank_i: np.ndarray
+    rank_j: np.ndarray
+    row_index: np.ndarray
+    col_index: np.ndarray
+
+
+def _build_scatter_plans(
+    specs: tuple[tuple[int, int, int, int, int, int, int], ...],
+) -> tuple[_PairTypeScatterPlan, ...]:
+    """Group per-block specs by ``(l_i, l_j)`` into vectorised scatter plans.
+
+    Each spec is ``(row_offset, col_offset, l_i, l_j, rank_i, rank_j,
+    source_index)``. Blocks of the same angular-momentum pair type share an
+    expansion and a fixed ``(2 l_i + 1, 2 l_j + 1)`` shape, so they are batched
+    together; the flattened ``(row, col)`` destination grids let one ``.at[].set``
+    place every block of the type at once.
+
+    Args:
+        specs: The per-block specs (diagonal or off-diagonal).
+
+    Returns:
+        One :class:`_PairTypeScatterPlan` per distinct ``(l_i, l_j)`` present,
+        in sorted key order for determinism.
+    """
+    grouped: dict[tuple[int, int], list[tuple[int, int, int, int, int]]] = {}
+    for row_offset, col_offset, l_i, l_j, rank_i, rank_j, source_index in specs:
+        grouped.setdefault((l_i, l_j), []).append(
+            (row_offset, col_offset, rank_i, rank_j, source_index)
+        )
+
+    plans: list[_PairTypeScatterPlan] = []
+    for (l_i, l_j), entries in sorted(grouped.items()):
+        dim_i = 2 * l_i + 1
+        dim_j = 2 * l_j + 1
+        row_offsets = np.fromiter((e[0] for e in entries), dtype=np.int32)
+        col_offsets = np.fromiter((e[1] for e in entries), dtype=np.int32)
+        rank_i = np.fromiter((e[2] for e in entries), dtype=np.int32)
+        rank_j = np.fromiter((e[3] for e in entries), dtype=np.int32)
+        source_index = np.fromiter((e[4] for e in entries), dtype=np.int32)
+        # Per-block (di, dj) intra-block grids broadcast against per-block offsets.
+        # Both grids span the full (n_blocks, dim_i, dim_j) element space so the
+        # row varies along dim_i and the column along dim_j for every block.
+        within_rows = np.arange(dim_i, dtype=np.int32)[None, :, None]
+        within_cols = np.arange(dim_j, dtype=np.int32)[None, None, :]
+        block_shape = (len(entries), dim_i, dim_j)
+        row_index = np.broadcast_to(row_offsets[:, None, None] + within_rows, block_shape).reshape(
+            -1
+        )
+        col_index = np.broadcast_to(col_offsets[:, None, None] + within_cols, block_shape).reshape(
+            -1
+        )
+        plans.append(
+            _PairTypeScatterPlan(
+                key=_pair_type_key(l_i, l_j),
+                source_index=source_index,
+                rank_i=rank_i,
+                rank_j=rank_j,
+                row_index=row_index,
+                col_index=col_index,
+            )
+        )
+    return tuple(plans)
 
 
 class HamiltonianPredictor(nnx.Module):
@@ -275,6 +366,11 @@ class HamiltonianPredictor(nnx.Module):
             )
             for b in plan.off_diagonal_blocks
         )
+        # Vectorised, per-pair-type scatter plans (static numpy index arrays) so
+        # ``_assemble`` is one gather + one batched expansion + one scatter per
+        # angular-momentum pair type, never a per-block Python unroll.
+        self._diagonal_scatter = _build_scatter_plans(self._diagonal_specs)
+        self._off_scatter = _build_scatter_plans(self._off_specs)
 
     @staticmethod
     def _complete_edge_slots(n_atoms: int) -> dict[tuple[int, int], int]:
@@ -391,27 +487,63 @@ class HamiltonianPredictor(nnx.Module):
         return from_chunks(message.irreps, scaled, message.array.shape[:-1], message.array.dtype)
 
     # --------------------------------------------------------------- assembly ---
+    @staticmethod
+    def _scatter_pair_type(
+        matrix: Array,
+        expansion: PairExpansion,
+        source: IrrepsArray,
+        plan: _PairTypeScatterPlan,
+    ) -> Array:
+        """Place every block of one ``(l_i, l_j)`` type into ``matrix`` at once.
+
+        Gathers the ``n_blocks`` source features named by ``plan.source_index`` in
+        one indexing op, runs a single batched :class:`PairExpansion` over the
+        stack, selects the per-block ``(rank_i, rank_j)`` shell pair with one
+        batched gather, then scatters all block elements with a single
+        ``.at[].set``. Blocks of distinct shell pairs occupy disjoint AO regions,
+        so the scatter never overlaps and ``.set`` is exact.
+
+        Args:
+            matrix: The dense AO matrix being assembled.
+            expansion: The shared expansion module for this pair type.
+            source: The node (diagonal) or edge (off-diagonal) feature array.
+            plan: The static scatter plan for this pair type.
+
+        Returns:
+            ``matrix`` with this pair type's blocks written in.
+        """
+        source_index = jnp.asarray(plan.source_index)
+        stacked = IrrepsArray(source.irreps, source.array[source_index])
+        # (n_blocks, mul_i, mul_j, 2l_i+1, 2l_j+1); leading axis batches the einsum.
+        blocks = expansion(stacked)
+        block_indices = jnp.arange(blocks.shape[0])
+        # Select each block's (rank_i, rank_j) shell pair -> (n_blocks, di, dj).
+        selected = blocks[block_indices, jnp.asarray(plan.rank_i), jnp.asarray(plan.rank_j)]
+        return matrix.at[jnp.asarray(plan.row_index), jnp.asarray(plan.col_index)].set(
+            selected.reshape(-1)
+        )
+
     def _assemble(self, node_features: IrrepsArray, edge_features: IrrepsArray) -> Array:
-        """Scatter node (diagonal) and edge (off-diagonal) blocks into a dense matrix."""
+        """Scatter node (diagonal) and edge (off-diagonal) blocks into a dense matrix.
+
+        Vectorised by angular-momentum pair type: a Python loop over the handful of
+        distinct ``(l_i, l_j)`` types (not the thousands of blocks) drives, per
+        type, one gather, one batched :class:`PairExpansion` and one scatter. The
+        diagonal blocks read node features at the receiver atom; the off-diagonal
+        blocks read edge features at the precomputed sender=j -> receiver=i slot;
+        the shell ranks select the right same-``l`` shell pair (e.g. oxygen 1s vs
+        2s).
+        """
         dtype = node_features.array.dtype
         matrix = jnp.zeros((self._n_ao, self._n_ao), dtype=dtype)
-
-        # Diagonal (intra-atom) blocks from node features. The expansion returns a
-        # (mul_i, mul_j, 2l_i+1, 2l_j+1) tensor; the shell ranks select the right
-        # same-``l`` shell pair (e.g. oxygen 1s vs 2s).
-        for row_offset, col_offset, l_i, l_j, rank_i, rank_j, atom_i in self._diagonal_specs:
-            expansion = self.node_expansions[_pair_type_key(l_i, l_j)]
-            feature = IrrepsArray(node_features.irreps, node_features.array[atom_i])
-            block = expansion(feature)[rank_i, rank_j]
-            matrix = jax.lax.dynamic_update_slice(matrix, block, (row_offset, col_offset))
-
-        # Off-diagonal (inter-atom) blocks from the complete directed graph: the
-        # block H[i, j] is fed by the edge sender=j -> receiver=i (precomputed slot).
-        for row_offset, col_offset, l_i, l_j, rank_i, rank_j, edge_slot in self._off_specs:
-            expansion = self.edge_expansions[_pair_type_key(l_i, l_j)]
-            feature = IrrepsArray(edge_features.irreps, edge_features.array[edge_slot])
-            block = expansion(feature)[rank_i, rank_j]
-            matrix = jax.lax.dynamic_update_slice(matrix, block, (row_offset, col_offset))
+        for plan in self._diagonal_scatter:
+            matrix = self._scatter_pair_type(
+                matrix, self.node_expansions[plan.key], node_features, plan
+            )
+        for plan in self._off_scatter:
+            matrix = self._scatter_pair_type(
+                matrix, self.edge_expansions[plan.key], edge_features, plan
+            )
         return matrix
 
     def __call__(self, system: MolecularSystem) -> dict[str, Array]:
