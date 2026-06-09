@@ -710,6 +710,7 @@ class GradientBasedMetaLearner(nnx.Module):
         scaled_update = learned_lr * learned_update
 
         # Apply momentum if enabled
+        momentum_coeff = None
         if self.config.momentum_adaptation and self.momentum_network is not None:
             momentum_coeff = self.momentum_network(input_features).squeeze()
             momentum_update = momentum_coeff * previous_update

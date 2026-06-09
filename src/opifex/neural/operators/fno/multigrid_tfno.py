@@ -25,13 +25,18 @@ from flax import nnx
 
 
 # Optional TensorLy integration for enhanced initialization
+# ``Any`` so the imports and the absent-dependency fallbacks unify to bound names.
+MemoryOptimalContractions: Any
+TensorLyTuckerInitializer: Any
 try:
-    from opifex.neural.operators.fno.tensorly_integration import (
+    from opifex.neural.operators.fno.tensorly_integration import (  # type: ignore[no-redef]
         MemoryOptimalContractions,
         TENSORLY_AVAILABLE,
         TensorLyTuckerInitializer,
     )
 except ImportError:
+    MemoryOptimalContractions = None
+    TensorLyTuckerInitializer = None
     _tensorly_available = False
 else:
     _tensorly_available = TENSORLY_AVAILABLE

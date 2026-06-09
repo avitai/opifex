@@ -366,7 +366,7 @@ reportUnusedFunction = "warning"
 reportUnusedImport = true
 reportUnusedVariable = "warning"
 # Type checking configuration - relax for JAX ecosystem
-typeCheckingMode = "basic" # Changed from "strict" to "basic" for JAX compatibility
+typeCheckingMode = "standard" # JAX-compatible standard-mode gate (enforces reportPossiblyUnboundVariable)
 venv = ".venv"
 venvPath = "."
 

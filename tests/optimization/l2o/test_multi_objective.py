@@ -69,6 +69,10 @@ class TestMultiObjectiveConfig:
         with pytest.raises(ValueError, match="must be positive"):
             MultiObjectiveConfig(pareto_points_target=0)
 
+        # Test non-positive iteration budget (would leave loss_value unbound)
+        with pytest.raises(ValueError, match="Max Pareto iterations must be >= 1"):
+            MultiObjectiveConfig(max_pareto_iterations=0)
+
         # Test invalid scalarization strategy
         with pytest.raises(ValueError, match="Invalid scalarization strategy"):
             MultiObjectiveConfig(scalarization_strategy="invalid")

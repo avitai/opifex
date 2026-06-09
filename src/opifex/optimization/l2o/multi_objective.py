@@ -56,6 +56,8 @@ class MultiObjectiveConfig:
             raise ValueError("Multi-objective optimization requires at least 2 objectives")
         if self.pareto_points_target <= 0:
             raise ValueError("Pareto points target must be positive")
+        if self.max_pareto_iterations < 1:
+            raise ValueError("Max Pareto iterations must be >= 1")
         valid_strategies = ["learned", "weighted_sum", "chebyshev", "achievement"]
         if self.scalarization_strategy not in valid_strategies:
             raise ValueError(
@@ -239,8 +241,11 @@ class ParetoFrontierOptimizer(nnx.Module):
         # Optimize frontier network using JAX
         optimizer = nnx.Optimizer(self.frontier_network, optax.adam(1e-3), wrt=nnx.Param)
 
+        # ``max_pareto_iterations >= 1`` is enforced by MultiObjectiveConfig, so the
+        # loop runs at least once; the initializer keeps ``loss_value`` provably bound.
         best_loss = float("inf")
         iteration_count = 0
+        loss_value = jnp.asarray(float("inf"))
         for _iteration in range(self.config.max_pareto_iterations):
             loss_value, grads = nnx.value_and_grad(pareto_loss_fn)(self.frontier_network)
 

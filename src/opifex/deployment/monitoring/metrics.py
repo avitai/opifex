@@ -16,7 +16,7 @@ import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NoReturn
 
 
 # Optional Prometheus imports with graceful fallback
@@ -555,6 +555,6 @@ class CustomMetrics:
             ).set(efficiency)
 
 
-def _raise_unsupported_metric_error(metric_type: str) -> None:
+def _raise_unsupported_metric_error(metric_type: str) -> NoReturn:
     """Helper function to raise unsupported metric type error."""
     raise ValueError(f"Unsupported metric type: {metric_type}")

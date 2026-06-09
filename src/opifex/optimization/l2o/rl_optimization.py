@@ -650,6 +650,13 @@ class RLOptimizationEngine(nnx.Module):
             Optimization results with RL metrics
         """
         # Initialize optimization state
+        iteration_budget = min(max_iterations, self.config.max_episode_length)
+        if iteration_budget < 1:
+            raise ValueError(
+                "max_iterations and config.max_episode_length must both be >= 1; "
+                f"got max_iterations={max_iterations}, "
+                f"max_episode_length={self.config.max_episode_length}"
+            )
         convergence_history = jnp.array([])
         resource_usage = {
             "time_remaining": 1.0,
@@ -664,7 +671,14 @@ class RLOptimizationEngine(nnx.Module):
         episode_reward = 0.0
         optimization_results = []
 
-        for iteration in range(min(max_iterations, self.config.max_episode_length)):
+        # Bound before the loop: ``iteration_budget >= 1`` guarantees the loop body
+        # runs and overwrites these, but explicit initialization keeps the post-loop
+        # use provably defined.
+        iteration = 0
+        action_type = "continue_optimization"
+        step_result: dict[str, Any] = {}
+
+        for iteration in range(iteration_budget):
             # Select action
             action = self.rl_agent.select_action(state, training=training)
 

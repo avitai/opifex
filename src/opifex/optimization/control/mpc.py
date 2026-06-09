@@ -296,6 +296,7 @@ class RealTimeOptimizer(nnx.Module):
         # Pre-compute gradient function
         grad_fn = jax.grad(objective)
 
+        constraint_grad_fn = None
         if constraints is not None:
             constraint_grad_fn = jax.grad(lambda x: jnp.sum(constraints(x) ** 2))
 
@@ -305,7 +306,7 @@ class RealTimeOptimizer(nnx.Module):
             grad = grad_fn(x)
 
             # Apply constraints if any
-            if constraints is not None:
+            if constraint_grad_fn is not None:
                 constraint_grad = constraint_grad_fn(x)
                 grad = grad + 0.1 * constraint_grad
 
@@ -353,6 +354,7 @@ class RealTimeOptimizer(nnx.Module):
         # Pre-compute gradient function
         grad_fn = jax.grad(objective)
 
+        constraint_grad_fn = None
         if constraints is not None:
             constraint_grad_fn = jax.grad(lambda x: jnp.sum(constraints(x) ** 2))
 
@@ -370,7 +372,7 @@ class RealTimeOptimizer(nnx.Module):
             grad = grad_fn(x)
 
             # Apply constraints if any
-            if constraints is not None:
+            if constraint_grad_fn is not None:
                 constraint_grad = constraint_grad_fn(x)
                 grad = grad + 0.1 * constraint_grad
 

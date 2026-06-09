@@ -288,7 +288,9 @@ class TestPhysicsInformedOperator:
             data_weight = initial_data_weight * (1 - 0.05 * epoch)
             return max(physics_weight, 0.01), max(data_weight, 0.1)
 
-        # Simulate training epochs
+        # Simulate training epochs. ``updated_pino`` is rebound each epoch; seed it
+        # with the original instance so the post-loop assertions are provably bound.
+        updated_pino = pino
         for epoch in range(3):
             new_physics_weight, new_data_weight = adaptive_weight_schedule(
                 epoch, initial_physics_weight, initial_data_weight

@@ -689,6 +689,7 @@ class L2OEngine:
         best_params = params
         best_loss = physics_loss_fn(params)
 
+        momentum = jnp.zeros_like(params)
         for step in range(steps):
             # Compute gradients
             loss_val, grads = jax.value_and_grad(physics_loss_fn)(params)

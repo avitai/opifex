@@ -627,6 +627,15 @@ class TestRLOptimizationEngine:
         assert isinstance(result["iterations"], int)
         assert result["iterations"] <= 10
 
+    def test_solve_with_rl_rejects_nonpositive_iteration_budget(self):
+        """Zero/negative iteration budget must fail fast, not leave state unbound."""
+        config = RLOptimizationConfig(max_episode_length=10)
+        engine = RLOptimizationEngine(config, rngs=nnx.Rngs(0))
+        problem = OptimizationProblem(problem_type="quadratic", dimension=3, constraints=None)
+
+        with pytest.raises(ValueError, match="must both be >= 1"):
+            engine.solve_with_rl(problem, max_iterations=0, training=False)
+
     def test_rl_optimization_engine_training_mode(self):
         """Test RL engine in training mode."""
         config = RLOptimizationConfig(max_episode_length=5, batch_size=2)

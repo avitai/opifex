@@ -19,6 +19,7 @@ Complex factors use the real/imag-split convention (optax #196); see
 
 import warnings
 from collections.abc import Sequence
+from typing import NoReturn
 
 import jax
 import jax.numpy as jnp
@@ -654,6 +655,8 @@ def benchmark_tensorly_integration(
     num_trials: int = 5,
 ) -> dict:
     """Benchmark TensorLy integration performance."""
+    if num_trials < 1:
+        raise ValueError(f"num_trials must be >= 1, got {num_trials}")
     if not TENSORLY_AVAILABLE:
         return {"error": "TensorLy not available"}
 
@@ -672,9 +675,13 @@ def benchmark_tensorly_integration(
     key = jax.random.PRNGKey(42)
     test_tensor = jax.random.normal(key, tensor_shape)
 
-    # TensorLy Tucker decomposition
+    # TensorLy Tucker decomposition. The first trial establishes ``core``/``factors``
+    # (guaranteed bound since ``num_trials >= 1``); remaining trials add timing samples.
     tucker_times = []
-    for _ in range(num_trials):
+    start = time.monotonic()
+    core, factors = TensorLyTuckerInitializer.decompose_tensor(test_tensor, rank)
+    tucker_times.append(time.monotonic() - start)
+    for _ in range(num_trials - 1):
         start = time.monotonic()
         core, factors = TensorLyTuckerInitializer.decompose_tensor(test_tensor, rank)
         tucker_times.append(time.monotonic() - start)
@@ -737,11 +744,11 @@ __all__ = [
 ]
 
 
-def _raise_tucker_unavailable() -> None:
+def _raise_tucker_unavailable() -> NoReturn:
     """Helper to raise Tucker decomposition unavailable error."""
     raise RuntimeError("Tucker decomposition not available")
 
 
-def _raise_parafac_unavailable() -> None:
+def _raise_parafac_unavailable() -> NoReturn:
     """Helper to raise PARAFAC decomposition unavailable error."""
     raise RuntimeError("PARAFAC decomposition not available")

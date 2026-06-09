@@ -14,26 +14,35 @@ from enum import Enum
 from typing import Any
 
 
-# Optional dependencies with proper type checking
+# Optional dependencies. Each module is declared ``Any`` so the absent-dependency
+# fallback (``= None``) and the imported module unify to a single bound name; the
+# ``HAS_*`` flags gate every use-site at runtime.
+psutil: Any
+jax: Any
+requests: Any
+
 try:
-    import psutil  # type: ignore[import-untyped]
+    import psutil  # type: ignore[no-redef]
 
     HAS_PSUTIL = True
 except ImportError:
+    psutil = None
     HAS_PSUTIL = False  # type: ignore[misc]
 
 try:
-    import jax  # type: ignore[import-untyped]
+    import jax  # type: ignore[no-redef]
 
     HAS_JAX = True
 except ImportError:
+    jax = None
     HAS_JAX = False  # type: ignore[misc]
 
 try:
-    import requests  # type: ignore[import-untyped]
+    import requests  # type: ignore[no-redef]
 
     HAS_REQUESTS = True
 except ImportError:
+    requests = None
     HAS_REQUESTS = False  # type: ignore[misc]
 
 try:

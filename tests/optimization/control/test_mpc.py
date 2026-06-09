@@ -720,6 +720,7 @@ class TestMPCPerformance:
         start_time = time.time()
 
         num_iterations = 100
+        result = _  # Seed from the warm-up run so the post-loop use is provably bound.
         for _ in range(num_iterations):
             result = mpc.compute_control(current_state, reference)  # type: ignore[reportCallIssue]
             jax.block_until_ready(result)  # Ensure computation is complete

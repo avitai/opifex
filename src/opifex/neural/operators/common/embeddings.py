@@ -219,6 +219,8 @@ class SinusoidalEmbedding(EmbeddingBase):
             # (neuralop/layers/embeddings.py L278): exponent = arange(L) / L * 2.
             freqs = jnp.arange(0, self.num_frequencies) / self.num_frequencies * 2
             freqs = (1.0 / self.max_positions) ** freqs
+        else:  # pragma: no cover - embedding_type validated in __init__
+            raise AssertionError(f"unreachable: embedding_type={self.embedding_type!r}")
 
         # Compute frequency encodings
         # x: (batch, n_points, channels), freqs: (num_frequencies,)

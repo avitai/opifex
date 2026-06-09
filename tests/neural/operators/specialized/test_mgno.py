@@ -9,7 +9,52 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.neural.operators.specialized.mgno import MultipoleGraphNeuralOperator
+from opifex.neural.operators.specialized.mgno import (
+    MultipoleExpansion,
+    MultipoleGraphNeuralOperator,
+)
+
+
+class TestMultipoleExpansionAngular:
+    """Exercise the angular branches of the multipole moment computation.
+
+    The 3D branch (``coord_dim >= 3``) was previously unreachable because the
+    ``coord_dim >= 2`` check matched first, and it referenced an undefined
+    ``theta``. These tests pin the corrected per-dimension behavior.
+    """
+
+    @pytest.mark.parametrize("coord_dim", [1, 2, 3])
+    def test_moments_finite_across_coord_dims(self, coord_dim):
+        """1D/2D/3D positions all yield finite, correctly shaped moments."""
+        rngs = nnx.Rngs(0)
+        channels, max_order = 4, 3
+        expansion = MultipoleExpansion(channels=channels, max_order=max_order, rngs=rngs)
+
+        batch, num_points = 2, 5
+        x = jax.random.normal(jax.random.PRNGKey(1), (batch, num_points, channels))
+        positions = jax.random.normal(jax.random.PRNGKey(2), (batch, num_points, coord_dim))
+
+        moments = expansion._compute_stable_multipole_moments(x, positions)
+
+        assert moments.shape == (batch, num_points, channels, max_order + 1)
+        assert jnp.all(jnp.isfinite(moments))
+
+    def test_3d_uses_polar_angle(self):
+        """3D angular factor differs from 2D, confirming the polar (phi) term is active."""
+        rngs = nnx.Rngs(0)
+        expansion = MultipoleExpansion(channels=3, max_order=2, rngs=rngs)
+
+        x = jnp.ones((1, 4, 3))
+        key = jax.random.PRNGKey(7)
+        pos_3d = jax.random.normal(key, (1, 4, 3))
+        pos_2d = pos_3d[..., :2]
+
+        moments_3d = expansion._compute_stable_multipole_moments(x, pos_3d)
+        moments_2d = expansion._compute_stable_multipole_moments(x, pos_2d)
+
+        assert jnp.all(jnp.isfinite(moments_3d))
+        # The added polar-angle factor makes 3D moments differ from the 2D ones.
+        assert not jnp.allclose(moments_3d, moments_2d)
 
 
 class TestMultipoleGraphNeuralOperator:

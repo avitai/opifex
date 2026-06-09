@@ -190,5 +190,7 @@ def wavenumber_grid(
     elif spatial_dims == 3:
         k0, k1, k2 = jnp.meshgrid(k_arrays[0], k_arrays[1], k_arrays[2], indexing="ij")
         k_mag = jnp.sqrt(k0**2 + k1**2 + k2**2)
+    else:  # pragma: no cover - guarded by the 1 <= spatial_dims <= 3 check above
+        raise AssertionError(f"unreachable: spatial_dims={spatial_dims} not in {{1, 2, 3}}")
 
     return k_mag
