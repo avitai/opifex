@@ -28,6 +28,13 @@ from opifex.neural.atomistic.backbones import (
     SchNetConfig,
 )
 from opifex.neural.atomistic.base import AtomisticModel
+from opifex.neural.atomistic.foundation import (
+    FineTuneConfig,
+    freeze_backbone,
+    remap_element_table,
+    trainable_filter,
+)
+from opifex.neural.atomistic.lora import apply_lora, LoRALinear
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift, fit_atomic_scale_shift
 from opifex.neural.atomistic.training import (
     AtomisticBatch,
@@ -43,6 +50,8 @@ __all__ = [
     "AtomicScaleShift",
     "AtomisticBatch",
     "AtomisticModel",
+    "FineTuneConfig",
+    "LoRALinear",
     "NequIP",
     "NequIPConfig",
     "PaiNN",
@@ -50,9 +59,13 @@ __all__ = [
     "ParamEMA",
     "SchNet",
     "SchNetConfig",
+    "apply_lora",
     "energy_forces_loss",
     "fit_atomic_scale_shift",
     "fit_atomistic",
+    "freeze_backbone",
     "make_atomistic_train_step",
     "make_scanned_epoch",
+    "remap_element_table",
+    "trainable_filter",
 ]

@@ -80,6 +80,43 @@ and training NequIP toward the published rMD17 @1000 energy/force accuracy with
 visualization — see
 [NequIP on rMD17 (Aspirin)](../examples/atomistic/nequip-md17.md).
 
+## Property heads
+
+Each `PropertyHead` owns a single property family (`opifex.neural.atomistic.heads`):
+
+- **`EnergyHead`** — invariant total energy `E = Σ_i ε_i`.
+- **`ForcesHead`** — conservative forces `F = −∇_r E` (autodiff).
+- **`StressHead`** — virial / stress via strain-displacement autodiff.
+- **`ChargeHead`** — per-atom partial charges with total-charge conservation
+  (`Σ_i q_i = Q`).
+- **`DipoleHead`** — molecular dipole `μ = Σ_i q_i r_i` (rotationally equivariant).
+- **`EvidentialEnergyHead`** — single-pass uncertainty (below).
+
+## Single-pass uncertainty (evidential)
+
+`EvidentialEnergyHead` predicts the Normal-Inverse-Gamma parameters of a Deep Evidential
+Regression output (Amini et al. 2020; evidential interatomic potentials,
+[arXiv:2407.13994](https://arxiv.org/abs/2407.13994)), giving **per-prediction epistemic and
+aleatoric uncertainty in one forward pass** — no ensemble or dropout sampling. `EvidentialAdapter`
+(or `opifex.uncertainty.nig_to_predictive_distribution`) maps its output to the platform
+`PredictiveDistribution`, so it plugs into the existing `opifex.uncertainty` machinery
+(calibration, active learning).
+
+## Fine-tuning foundation models
+
+`opifex.neural.atomistic.foundation` provides the transfer-learning mechanism:
+`remap_element_table` remaps a pretrained checkpoint's per-element parameters onto a new element
+set, `freeze_backbone` / `trainable_filter` keep the backbone fixed while training new heads, and
+`LoRALinear` / `apply_lora` add low-rank equivariant adapters (`W_eff = W + (α/r)·B·A`, after
+MACE's `lora.py`) for parameter-efficient fine-tuning.
+
+## ASE calculator / MD
+
+`opifex.deployment.ase_calculator.OpifexCalculator` wraps any `AtomisticModel` as an ASE
+`Calculator`, driving ASE relaxations and molecular dynamics on the jitted forward path
+(energies in eV, forces in eV/Å, stress as the Voigt 6-vector). Requires the optional `ase`
+dependency.
+
 ## Extending
 
 - **A new architecture** — implement the `Backbone` protocol and decorate it with
