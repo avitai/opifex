@@ -197,3 +197,36 @@ def test_twelve_atom_predictor_jit_grad_vmap_compatible() -> None:
     assert jnp.all(jnp.isfinite(batched))
     for single in batched:
         assert jnp.allclose(single, single.T)
+
+
+def test_predictor_survives_repeated_nnx_jit_calls() -> None:
+    """``nnx.jit`` over the predictor stays valid across repeated calls.
+
+    A training loop calls the jitted step on the same module instance every
+    step; on the second call NNX checks the graphdef *metadata* for equality, and
+    it rejects array-valued metadata. The static assembly scatter plans must
+    therefore be hashable (tuple) fields, not arrays -- this guards that contract
+    (the per-step batched QH9 training path) which a single jit call cannot catch.
+    """
+    system = _water()
+    basis = AtomicOrbitalBasis.from_molecular_system(system, basis_name="sto-3g")
+    config = HamiltonianPredictorConfig(
+        hidden_irreps="8x0e + 8x1o + 4x2e", num_interactions=2, cutoff=6.0
+    )
+    predictor = HamiltonianPredictor(basis=basis, config=config, rngs=nnx.Rngs(0))
+
+    @nnx.jit
+    def call(module: HamiltonianPredictor, positions: jax.Array) -> jax.Array:
+        moved = MolecularSystem(
+            atomic_numbers=system.atomic_numbers,
+            positions=positions,
+            basis_set=system.basis_set,
+        )
+        return module(moved)["hamiltonian"]
+
+    first = call(predictor, system.positions)
+    # Second call on the same instance triggers the graphdef metadata equality
+    # check that previously raised "arrays cannot be passed as metadata fields".
+    second = call(predictor, system.positions + 0.01)
+    assert first.shape == second.shape == (basis.n_atomic_orbitals,) * 2
+    assert jnp.all(jnp.isfinite(first)) and jnp.all(jnp.isfinite(second))

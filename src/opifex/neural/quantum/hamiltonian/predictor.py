@@ -139,12 +139,15 @@ def _pair_type_key(l_i: int, l_j: int) -> str:
 class _PairTypeScatterPlan:
     """Static, vectorised assembly plan for all blocks of one ``(l_i, l_j)`` type.
 
-    Every field is a compile-time-constant ``numpy`` array (jit-safe static
-    metadata), so :meth:`HamiltonianPredictor._assemble` can replace the per-block
-    Python loop with one gather, one batched :class:`PairExpansion`, one batched
-    rank-select and one scatter per pair type. The number of pair types is a small
-    constant (``~len(degrees)^2``), so the outer Python loop over types is *not* a
-    compile-time unroll of the block count.
+    Every field is a compile-time-constant tuple of ``int`` indices (converted to
+    a device array at use), so :meth:`HamiltonianPredictor._assemble` can replace
+    the per-block Python loop with one gather, one batched :class:`PairExpansion`,
+    one batched rank-select and one scatter per pair type. The number of pair
+    types is a small constant (``~len(degrees)^2``), so the outer Python loop over
+    types is *not* a compile-time unroll of the block count. Tuple fields (not
+    arrays) keep the frozen plan hashable with simple equality, so it is a valid
+    Flax-NNX graphdef metadata field across ``nnx.jit`` calls (NNX rejects
+    array-valued metadata).
 
     Attributes:
         key: The ``"{l_i}_{l_j}"`` expansion-dictionary key.
@@ -161,11 +164,11 @@ class _PairTypeScatterPlan:
     """
 
     key: str
-    source_index: np.ndarray
-    rank_i: np.ndarray
-    rank_j: np.ndarray
-    row_index: np.ndarray
-    col_index: np.ndarray
+    source_index: tuple[int, ...]
+    rank_i: tuple[int, ...]
+    rank_j: tuple[int, ...]
+    row_index: tuple[int, ...]
+    col_index: tuple[int, ...]
 
 
 def _build_scatter_plans(
@@ -216,11 +219,11 @@ def _build_scatter_plans(
         plans.append(
             _PairTypeScatterPlan(
                 key=_pair_type_key(l_i, l_j),
-                source_index=source_index,
-                rank_i=rank_i,
-                rank_j=rank_j,
-                row_index=row_index,
-                col_index=col_index,
+                source_index=tuple(source_index.tolist()),
+                rank_i=tuple(rank_i.tolist()),
+                rank_j=tuple(rank_j.tolist()),
+                row_index=tuple(row_index.tolist()),
+                col_index=tuple(col_index.tolist()),
             )
         )
     return tuple(plans)
