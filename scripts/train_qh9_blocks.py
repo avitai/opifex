@@ -32,12 +32,18 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, TYPE_CHECKING
 
 import jax
 import numpy as np
 import orbax.checkpoint as ocp
 from flax import nnx
 
+from opifex.data.sources.qh9_block_stream import (
+    create_qh9_block_stream_loader,
+    QH9BlockStreamConfig,
+    QH9BlockStreamLoaders,
+)
 from opifex.data.sources.qh9_blocks import (
     BlockBatchConfig,
     create_qh9_block_loader,
@@ -60,6 +66,18 @@ _DEFAULT_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 _DEFAULT_OUT = Path("/mnt/ssd2/Data/qh9/runs/blocks1")
 
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
+class _BatchSource(Protocol):
+    """A re-iterable, sized source of padded batch dicts (eager tuple or stream)."""
+
+    def __iter__(self) -> Iterator[dict[str, jax.Array]]: ...
+
+    def __len__(self) -> int: ...
+
+
 # ---------------------------------------------------------------------------
 # CLI arguments
 # ---------------------------------------------------------------------------
@@ -79,6 +97,7 @@ class TrainArgs:
     num_interactions: int
     out: Path
     val_every: int
+    stream: bool
 
 
 def _parse_args(argv: list[str] | None) -> TrainArgs:
@@ -98,6 +117,12 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     parser.add_argument("--num-interactions", type=int, default=3, dest="num_interactions")
     parser.add_argument("--out", type=Path, default=_DEFAULT_OUT)
     parser.add_argument("--val-every", type=int, default=1, dest="val_every")
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Stream molecules from sqlite out-of-core (datarax StreamingSourceBase) "
+        "instead of decoding all into RAM -- required for the full 130k dataset.",
+    )
     namespace = parser.parse_args(argv)
     return TrainArgs(
         db=namespace.db,
@@ -112,6 +137,7 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
         num_interactions=namespace.num_interactions,
         out=namespace.out,
         val_every=namespace.val_every,
+        stream=namespace.stream,
     )
 
 
@@ -176,7 +202,7 @@ class _EpochResult:
 
 
 def _train_epoch(
-    batches: tuple[dict[str, jax.Array], ...],
+    batches: _BatchSource,
     predictor: BlockHamiltonianPredictor,
     optimizer: nnx.Optimizer,
     train_step,
@@ -233,7 +259,7 @@ def _train_epoch(
 
 
 def _evaluate(
-    batches: tuple[dict[str, jax.Array], ...],
+    batches: _BatchSource,
     predictor: BlockHamiltonianPredictor,
     eval_step,
 ) -> float | None:
@@ -278,18 +304,27 @@ def _save_checkpoint(
 # ---------------------------------------------------------------------------
 def _startup_summary(
     args: TrainArgs,
-    loaders: QH9BlockLoaders,
+    loaders: QH9BlockLoaders | QH9BlockStreamLoaders,
     predictor: BlockHamiltonianPredictor,
     n_params: int,
 ) -> None:
     """Log a clear startup summary of the run."""
-    n_train_mol = sum(_molecule_count(batch) for batch in loaders.train)
-    n_val_mol = sum(_molecule_count(batch) for batch in loaders.val)
+    # Report batch counts (cheap for both eager and streaming); the exact
+    # molecule count is avoided for streaming so the summary never forces a full
+    # out-of-core pass over the dataset.
+    n_train_batches = len(loaders.train)
+    n_val_batches = len(loaders.val)
     logger.info("QH9 block-form Hamiltonian training driver (heterogeneous batch)")
     logger.info("  database          : %s", args.db)
+    logger.info("  loader            : %s", "streaming (out-of-core)" if args.stream else "eager")
     logger.info("  limit             : %s", "all" if args.limit is None else args.limit)
-    logger.info("  train molecules   : %d  (%d padded batches)", n_train_mol, len(loaders.train))
-    logger.info("  val   molecules   : %d  (%d padded batches)", n_val_mol, len(loaders.val))
+    logger.info(
+        "  train batches     : %d  (<= %d molecules, batch %d)",
+        n_train_batches,
+        n_train_batches * args.batch_size,
+        args.batch_size,
+    )
+    logger.info("  val   batches     : %d", n_val_batches)
     logger.info(
         "  padded shape      : %d atoms x %d edges  (per-mol %d/%d x batch %d)",
         args.max_atoms * args.batch_size,
@@ -323,12 +358,25 @@ def _run(args: TrainArgs) -> dict[str, object]:
     concatenation is sized at ``max_atoms * batch_size`` atoms and
     ``max_edges * batch_size`` edges -- one fixed shape that compiles once.
     """
-    config = BlockBatchConfig(
-        max_atoms=args.max_atoms * args.batch_size,
-        max_edges=args.max_edges * args.batch_size,
-        batch_size=args.batch_size,
-    )
-    loaders = create_qh9_block_loader(config=config, db_path=args.db, limit=args.limit)
+    max_atoms = args.max_atoms * args.batch_size
+    max_edges = args.max_edges * args.batch_size
+    if args.stream:
+        stream_config = QH9BlockStreamConfig(
+            max_atoms=max_atoms,
+            max_edges=max_edges,
+            batch_size=args.batch_size,
+            shuffle=True,
+        )
+        loaders = create_qh9_block_stream_loader(
+            config=stream_config, db_path=args.db, limit=args.limit
+        )
+    else:
+        config = BlockBatchConfig(
+            max_atoms=max_atoms,
+            max_edges=max_edges,
+            batch_size=args.batch_size,
+        )
+        loaders = create_qh9_block_loader(config=config, db_path=args.db, limit=args.limit)
 
     predictor = _build_predictor(args)
     n_params = sum(int(x.size) for x in jax.tree_util.tree_leaves(nnx.state(predictor, nnx.Param)))
