@@ -184,7 +184,8 @@ quantum-chemistry = [
   # Quantum chemistry benchmarks and validation
   "qcelemental>=0.25.0", # Quantum chemistry data and constants
   "qcengine>=0.26.0", # Quantum chemistry program executor
-  "basis-set-exchange>=0.9.0" # Basis set data
+  "basis-set-exchange>=0.9.0", # Basis set data
+  "kfac-jax>=0.0.8" # K-FAC natural-gradient preconditioner for VMC
 ]
 scientific-data = [
   # Scientific data loading — PDEBench HDF5, VTK mesh I/O, grain pipelines

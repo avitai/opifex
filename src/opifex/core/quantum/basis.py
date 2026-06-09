@@ -6,11 +6,21 @@ contracted Cartesian-Gaussian shells (one per ``(atom, l)`` block) together with
 the atomic-orbital (AO) offset table required by the McMurchie-Davidson integral
 engine in :mod:`opifex.core.quantum.backend`.
 
-Only the **STO-3G** minimal basis is provided for now, with hardcoded
-contracted-GTO exponents and contraction coefficients for H, C, N and O. The
-numbers are the standard EMSL Basis Set Exchange / PySCF STO-3G values (Hehre,
-Stewart & Pople, *J. Chem. Phys.* **51**, 2657 (1969)); they are validated
-indirectly by the integral tests against ``pyscf.gto.M(...).intor(...)``.
+Two basis sets are provided, both with hardcoded contracted-GTO exponents and
+contraction coefficients for H, C, N and O:
+
+* **STO-3G** -- the minimal basis (s, p only). The numbers are the standard EMSL
+  Basis Set Exchange / PySCF STO-3G values (Hehre, Stewart & Pople, *J. Chem.
+  Phys.* **51**, 2657 (1969)).
+* **def2-SVP** -- the split-valence polarised basis of Weigend & Ahlrichs
+  (*Phys. Chem. Chem. Phys.* **7**, 3297 (2005)). This adds polarisation
+  ``d``-shells (``l = 2``) on the heavy atoms (and a ``p``-shell on H), so the
+  Cartesian->spherical transform in :mod:`opifex.core.quantum._spherical` is
+  required to recover the standard 5-component spherical ``d`` AOs.
+
+Both sets are validated indirectly by the integral tests against
+``pyscf.gto.M(...).intor(...)``; the def2-SVP primitives are sourced verbatim
+from ``pyscf.gto.basis.load('def2-svp', ...)`` so they match the oracle exactly.
 
 Primitive normalisation convention
 ----------------------------------
@@ -138,11 +148,120 @@ _STO3G: dict[str, list[tuple[int, list[tuple[float, float]]]]] = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# def2-SVP primitive data (Weigend & Ahlrichs, PCCP 7, 3297 (2005)).
+#
+# Sourced verbatim from ``pyscf.gto.basis.load('def2-svp', element)`` (PySCF
+# 2.13.0) so the exponents and contraction coefficients match the oracle
+# exactly. Same ``(l, [(exponent, coeff), ...])`` layout as ``_STO3G``; the
+# coefficients are contraction coefficients against individually normalised
+# primitives, renormalised to unit contracted self-overlap by
+# :func:`_build_shell_coefficients`.
+#
+# Shell composition (heavy atoms gain a polarisation d-shell, H gains a p-shell):
+# H -> 2s, 1p; C/N/O -> 3s, 2p, 1d.
+# ---------------------------------------------------------------------------
+_DEF2_SVP: dict[str, list[tuple[int, list[tuple[float, float]]]]] = {
+    "H": [
+        (
+            0,
+            [
+                (13.010701, 0.019682158),
+                (1.9622572, 0.13796524),
+                (0.44453796, 0.47831935),
+            ],
+        ),
+        (0, [(0.12194962, 1.0)]),
+        (1, [(0.8, 1.0)]),
+    ],
+    "C": [
+        (
+            0,
+            [
+                (1238.4016938, 0.0054568832082),
+                (186.29004992, 0.040638409211),
+                (42.251176346, 0.18025593888),
+                (11.676557932, 0.46315121755),
+                (3.5930506482, 0.44087173314),
+            ],
+        ),
+        (0, [(0.40245147363, 1.0)]),
+        (0, [(0.13090182668, 1.0)]),
+        (
+            1,
+            [
+                (9.4680970621, 0.038387871728),
+                (2.0103545142, 0.21117025112),
+                (0.54771004707, 0.51328172114),
+            ],
+        ),
+        (1, [(0.15268613795, 1.0)]),
+        (2, [(0.8, 1.0)]),
+    ],
+    "N": [
+        (
+            0,
+            [
+                (1712.8415853, -0.0053934125305),
+                (257.64812677, -0.040221581118),
+                (58.458245853, -0.1793114499),
+                (16.198367905, -0.46376317823),
+                (5.0052600809, -0.44171422662),
+            ],
+        ),
+        (0, [(0.58731856571, 1.0)]),
+        (0, [(0.18764592253, 1.0)]),
+        (
+            1,
+            [
+                (13.571470233, -0.040072398852),
+                (2.9257372874, -0.21807045028),
+                (0.79927750754, -0.51294466049),
+            ],
+        ),
+        (1, [(0.21954348034, 1.0)]),
+        (2, [(1.0, 1.0)]),
+    ],
+    "O": [
+        (
+            0,
+            [
+                (2266.1767785, -0.0053431809926),
+                (340.87010191, -0.03989003923),
+                (77.363135167, -0.17853911985),
+                (21.47964494, -0.46427684959),
+                (6.6589433124, -0.44309745172),
+            ],
+        ),
+        (0, [(0.80975975668, 1.0)]),
+        (0, [(0.25530772234, 1.0)]),
+        (
+            1,
+            [
+                (17.721504317, 0.043394573193),
+                (3.863550544, 0.23094120765),
+                (1.0480920883, 0.51375311064),
+            ],
+        ),
+        (1, [(0.27641544411, 1.0)]),
+        (2, [(1.2, 1.0)]),
+    ],
+}
+
+# Registry of supported basis sets, keyed by their normalised (lower-case) name.
+_BASIS_SETS: dict[str, dict[str, list[tuple[int, list[tuple[float, float]]]]]] = {
+    "sto-3g": _STO3G,
+    "def2-svp": _DEF2_SVP,
+}
+
 # Cartesian angular-momentum component lists, ordered to match PySCF's Cartesian
-# ordering for s and p shells: s -> (x=y=z=0); p -> (x), (y), (z).
+# ordering: s -> (0,0,0); p -> x, y, z; d -> xx, xy, xz, yy, yz, zz (the
+# lexicographic descending-l_x ordering ``mol.cart_labels()`` reports for
+# ``def2-svp`` -- ``3dxx, 3dxy, 3dxz, 3dyy, 3dyz, 3dzz``).
 _CART_COMPONENTS: dict[int, tuple[tuple[int, int, int], ...]] = {
     0: ((0, 0, 0),),
     1: ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+    2: ((2, 0, 0), (1, 1, 0), (1, 0, 1), (0, 2, 0), (0, 1, 1), (0, 0, 2)),
 }
 
 
@@ -208,7 +327,7 @@ class GaussianShell:
 
     @property
     def n_cartesian(self) -> int:
-        """Number of Cartesian AO components in this shell (1 for s, 3 for p)."""
+        """Number of Cartesian AO components (1 for s, 3 for p, 6 for d)."""
         return len(_CART_COMPONENTS[self.angular_momentum])
 
     @property
@@ -373,7 +492,8 @@ class AtomicOrbitalBasis:
 
         Args:
             system: The molecular system providing atom centres and elements.
-            basis_name: The basis-set name (only ``"sto-3g"`` is supported).
+            basis_name: The basis-set name. Supported values are ``"sto-3g"``
+                (s, p only) and ``"def2-svp"`` (adds polarisation d-shells).
 
         Returns:
             The assembled AO basis.
@@ -383,8 +503,11 @@ class AtomicOrbitalBasis:
                 tabulated basis data.
         """
         normalised_name = basis_name.lower()
-        if normalised_name != "sto-3g":
-            raise ValueError(f"Unsupported basis set {basis_name!r}; only 'sto-3g' is available")
+        basis_data = _BASIS_SETS.get(normalised_name)
+        if basis_data is None:
+            raise ValueError(
+                f"Unsupported basis set {basis_name!r}; available: {sorted(_BASIS_SETS)}"
+            )
 
         positions = np.asarray(system.positions, dtype=np.float64)
         atomic_numbers = [int(z) for z in system.atomic_numbers]
@@ -393,11 +516,11 @@ class AtomicOrbitalBasis:
         ao_offset = 0
         for atom_index, atomic_number in enumerate(atomic_numbers):
             symbol = ATOMIC_SYMBOLS.get(atomic_number)
-            element_shells = _STO3G.get(symbol) if symbol is not None else None
+            element_shells = basis_data.get(symbol) if symbol is not None else None
             if element_shells is None:
                 raise ValueError(
-                    f"No STO-3G data for element Z={atomic_number}"
-                    f" (symbol={symbol}); tabulated: {sorted(_STO3G)}"
+                    f"No {normalised_name.upper()} data for element Z={atomic_number}"
+                    f" (symbol={symbol}); tabulated: {sorted(basis_data)}"
                 )
             center = jnp.asarray(positions[atom_index])
             for angular_momentum, primitives in element_shells:

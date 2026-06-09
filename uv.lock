@@ -3496,6 +3496,26 @@ wheels = [
 ]
 
 [[package]]
+name = "kfac-jax"
+version = "0.0.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "absl-py" },
+    { name = "distrax" },
+    { name = "dm-tree" },
+    { name = "immutabledict" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "numpy" },
+    { name = "optax" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/03/73/6c7ba1aa665afc3041a9e03d8d7cabb9cb59de1a8cb2c72ef09f5921ce54/kfac_jax-0.0.8.tar.gz", hash = "sha256:7a95d2081af2319f1314abaec5b808151923c10f5499400f49dead1f01c058cb", size = 154837, upload-time = "2026-02-25T00:40:55.336Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/f8/b61a20e4dd3e71ac9bf8b126387c1e00fd9309ec05ea80ee008bcc9c74c3/kfac_jax-0.0.8-py3-none-any.whl", hash = "sha256:0592f5bef991f27820f05b0641f0d281be8b5eadc403ceb730f685b75f431ac6", size = 167682, upload-time = "2026-02-25T00:40:53.69Z" },
+]
+
+[[package]]
 name = "kiwisolver"
 version = "1.4.9"
 source = { registry = "https://pypi.org/simple" }
@@ -5320,6 +5340,7 @@ opifex-dev = [
     { name = "jax", extra = ["cuda12-local"] },
     { name = "jaxlib" },
     { name = "jupytext" },
+    { name = "kfac-jax" },
     { name = "meshio" },
     { name = "netcdf4" },
     { name = "nvidia-cublas-cu12" },
@@ -5381,6 +5402,7 @@ profiling = [
 ]
 quantum-chemistry = [
     { name = "basis-set-exchange" },
+    { name = "kfac-jax" },
     { name = "qcelemental" },
     { name = "qcengine" },
 ]
@@ -5439,6 +5461,7 @@ requires-dist = [
     { name = "jaxlib", marker = "extra == 'gpu'", specifier = "==0.8.0" },
     { name = "jaxtyping", specifier = ">=0.2.20" },
     { name = "jupytext", marker = "extra == 'dev'", specifier = ">=1.16.0" },
+    { name = "kfac-jax", marker = "extra == 'quantum-chemistry'", specifier = ">=0.0.8" },
     { name = "matplotlib", specifier = ">=3.7.0" },
     { name = "meshio", marker = "extra == 'dev'", specifier = ">=5.3.0" },
     { name = "meshio", marker = "extra == 'scientific-data'", specifier = ">=5.3.0" },
