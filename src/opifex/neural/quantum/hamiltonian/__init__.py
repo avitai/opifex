@@ -27,6 +27,15 @@ from opifex.neural.quantum.hamiltonian.predictor import (
     HamiltonianPredictor,
     HamiltonianPredictorConfig,
 )
+from opifex.neural.quantum.hamiltonian.qh9_training import (
+    fit_qh9,
+    fit_qh9_examples,
+    fock_loss,
+    predict_spherical_fock,
+    QH9FitResult,
+    QH9TrainConfig,
+    spherical_transform_for,
+)
 from opifex.neural.quantum.hamiltonian.so2_convolution import SO2EdgeConvolution
 
 
@@ -34,7 +43,14 @@ __all__ = [
     "HamiltonianPredictor",
     "HamiltonianPredictorConfig",
     "PairExpansion",
+    "QH9FitResult",
+    "QH9TrainConfig",
     "SO2EdgeConvolution",
     "block_from_irreps",
+    "fit_qh9",
+    "fit_qh9_examples",
+    "fock_loss",
     "pair_feature_irreps",
+    "predict_spherical_fock",
+    "spherical_transform_for",
 ]

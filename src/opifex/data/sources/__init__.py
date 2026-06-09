@@ -9,6 +9,17 @@ from opifex.data.sources.burgers_source import BurgersDataSource
 from opifex.data.sources.darcy_source import DarcyDataSource
 from opifex.data.sources.diffusion_source import DiffusionDataSource
 from opifex.data.sources.navier_stokes_source import NavierStokesDataSource
+from opifex.data.sources.qh9_source import (
+    create_qh9_loader,
+    load_qh9_data,
+    matrix_transform_def2svp,
+    qh9_random_split,
+    QH9Config,
+    QH9Data,
+    QH9Example,
+    QH9Loaders,
+    read_qh9_sqlite,
+)
 from opifex.data.sources.rmd17_source import (
     create_rmd17_loader,
     download_rmd17_molecule,
@@ -33,13 +44,22 @@ __all__ = [
     "NavierStokesDataSource",
     "PDEBenchConfig",
     "PDEBenchSource",
+    "QH9Config",
+    "QH9Data",
+    "QH9Example",
+    "QH9Loaders",
     "RMD17Config",
     "RMD17Data",
     "RMD17Loaders",
     "ShallowWaterDataSource",
     "VTKMeshConfig",
     "VTKMeshSource",
+    "create_qh9_loader",
     "create_rmd17_loader",
     "download_rmd17_molecule",
+    "load_qh9_data",
+    "matrix_transform_def2svp",
     "parse_rmd17_npz",
+    "qh9_random_split",
+    "read_qh9_sqlite",
 ]
