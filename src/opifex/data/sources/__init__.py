@@ -10,10 +10,12 @@ from opifex.data.sources.darcy_source import DarcyDataSource
 from opifex.data.sources.diffusion_source import DiffusionDataSource
 from opifex.data.sources.navier_stokes_source import NavierStokesDataSource
 from opifex.data.sources.qh9_source import (
+    BucketBy,
     create_qh9_loader,
     load_qh9_data,
     matrix_transform_def2svp,
     qh9_random_split,
+    QH9BucketPipeline,
     QH9Config,
     QH9Data,
     QH9Example,
@@ -38,12 +40,14 @@ from opifex.data.sources.shallow_water_source import ShallowWaterDataSource
 
 
 __all__ = [
+    "BucketBy",
     "BurgersDataSource",
     "DarcyDataSource",
     "DiffusionDataSource",
     "NavierStokesDataSource",
     "PDEBenchConfig",
     "PDEBenchSource",
+    "QH9BucketPipeline",
     "QH9Config",
     "QH9Data",
     "QH9Example",

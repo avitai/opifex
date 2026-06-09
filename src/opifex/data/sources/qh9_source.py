@@ -46,6 +46,31 @@ The QH9-Stable *random* split is reproduced exactly:
 ``np.random.RandomState(seed=43).permutation(n)`` partitioned ``0.8 / 0.1 / 0.1``
 with integer truncation (the test split absorbs the remainder).
 
+Size-bucketed batching
+----------------------
+QH9 molecules are heterogeneous (``n_atoms`` 3..29; AO count varies with
+composition), so they cannot be collated into one dense tensor without ragged
+padding. This loader groups molecules into *buckets* of identical shape and
+wraps each bucket in a datarax :class:`~datarax.pipeline.Pipeline` driven by a
+:class:`~datarax.sources.MemorySource` -- the canonical opifex data-pipeline
+reuse pattern (mirroring :mod:`opifex.data.sources.rmd17_source`). Two bucketing
+keys are offered (:class:`QH9Config.bucket_by`):
+
+* ``"signature"`` (default) -- bucket by the exact atomic-number *sequence*
+  (composition **and** order). All molecules in a signature bucket share the
+  same ``n_atoms``, the same ``n_ao``, and -- because the def2-SVP shell plan is
+  fixed by the Z sequence -- the **same predictor static plan**, so one compile
+  serves the whole bucket and *no intra-bucket padding* is needed (the emitted
+  ``mask`` is all-true). This is the key the batched train step requires.
+* ``"n_atoms"`` -- coarser buckets keyed only by atom count. The Fock matrices
+  within a bucket are right/bottom-padded to the bucket's maximum ``n_ao`` and a
+  boolean ``mask`` (true on real AO entries, false on padding) is emitted so the
+  masked Fock loss never sees the padding.
+
+Each bucket pipeline yields batches of stacked
+``{"atomic_numbers", "positions", "fock", "mask", "molecule_id", "n_ao"}``
+arrays with a leading batch axis for molecules of one bucket.
+
 No download happens at import time; the loader reads an existing
 ``QH9Stable.db`` (default ``/mnt/ssd2/Data/qh9/raw/QH9Stable.db``).
 """
@@ -54,11 +79,16 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import jax.numpy as jnp
 import numpy as np
+from datarax.pipeline import Pipeline
+from datarax.sources import MemorySource, MemorySourceConfig
+from flax import nnx
 from jaxtyping import Float, Int  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
@@ -66,6 +96,9 @@ from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR, MolecularSyst
 
 
 logger = logging.getLogger(__name__)
+
+BucketBy = Literal["signature", "n_atoms"]
+"""Bucketing key: exact Z sequence (``"signature"``) or atom count (``"n_atoms"``)."""
 
 # Default location of the (externally downloaded) QH9-Stable database.
 _DEFAULT_DATA_DIR: Path = Path("/mnt/ssd2/Data/qh9")
@@ -125,16 +158,23 @@ class QH9Config:
     Attributes:
         data_dir: Directory containing ``raw/QH9Stable.db`` (default
             ``/mnt/ssd2/Data/qh9``).
-        batch_size: Molecules emitted per training mini-batch (the harness
-            iterates molecule-by-molecule because per-molecule AO counts differ;
-            this is the logical grouping size for shuffling/epoching).
+        batch_size: Molecules emitted per bucket mini-batch. Molecules are first
+            grouped into same-shape buckets (see ``bucket_by``); each bucket's
+            datarax pipeline then emits ``batch_size`` molecules per batch.
+        bucket_by: Bucketing key -- ``"signature"`` (exact Z sequence; one
+            predictor compile serves the whole bucket, no padding) or
+            ``"n_atoms"`` (atom count; Fock matrices padded to bucket-max AO with
+            a validity mask).
         seed: Seed reproducing the QH9-Stable random split (fixed at 43 to match
-            the reference; exposed for completeness).
-        shuffle: Whether the training split is shuffled each epoch.
+            the reference; exposed for completeness). Also seeds the per-bucket
+            shuffle stream.
+        shuffle: Whether the training-split bucket pipelines are shuffled each
+            epoch.
     """
 
     data_dir: Path = field(default_factory=lambda: _DEFAULT_DATA_DIR)
-    batch_size: int = 1
+    batch_size: int = 8
+    bucket_by: BucketBy = "signature"
     seed: int = _SPLIT_SEED
     shuffle: bool = True
 
@@ -142,6 +182,8 @@ class QH9Config:
         """Validate the configuration, failing fast on bad values."""
         if self.batch_size < 1:
             raise ValueError(f"batch_size must be >= 1, got {self.batch_size}.")
+        if self.bucket_by not in ("signature", "n_atoms"):
+            raise ValueError(f"bucket_by must be 'signature' or 'n_atoms', got {self.bucket_by!r}.")
 
     @property
     def database_path(self) -> Path:
@@ -201,39 +243,70 @@ class QH9Data:
 
 
 @dataclass(frozen=True)
-class QH9Loaders:
-    """Train/val/test example sequences plus metadata for QH9-Stable.
+class QH9BucketPipeline:
+    """A datarax :class:`~datarax.pipeline.Pipeline` over one same-shape bucket.
 
-    Each split is a tuple of :class:`QH9Example` (molecules have heterogeneous
-    AO counts, so they are not collated into a single dense batch tensor; the
-    training harness iterates per molecule).
+    All molecules wrapped by this pipeline share an identical shape: the same
+    ``n_atoms`` and (for ``"signature"`` buckets) the same atomic-number
+    sequence, hence the same ``n_ao`` and the same predictor static plan. The
+    pipeline emits batches of stacked
+    ``{"atomic_numbers", "positions", "fock", "mask", "molecule_id", "n_ao"}``.
 
     Attributes:
-        train: Training-split examples.
-        val: Validation-split examples.
-        test: Test-split examples.
+        pipeline: The datarax pipeline iterating this bucket (batched, optionally
+            shuffled). Iterate with ``for batch in bucket.pipeline:``.
+        signature: The bucket's atomic-number sequence (the ``"signature"``
+            bucketing key; for ``"n_atoms"`` buckets it is the sequence of the
+            first molecule and is informational only).
+        n_atoms: Atom count shared by every molecule in the bucket.
+        n_ao: Padded AO dimension of the bucket's Fock/mask tensors.
+        n_examples: Number of molecules in the bucket.
+    """
+
+    pipeline: Pipeline
+    signature: tuple[int, ...]
+    n_atoms: int
+    n_ao: int
+    n_examples: int
+
+
+@dataclass(frozen=True)
+class QH9Loaders:
+    """Train/val/test bucket-pipelines plus metadata for QH9-Stable.
+
+    Molecules have heterogeneous AO counts, so a split cannot be a single dense
+    datarax pipeline (a :class:`~datarax.sources.MemorySource` requires uniform
+    array shapes). Each split is therefore a tuple of :class:`QH9BucketPipeline`,
+    one per same-shape bucket; together they cover the split's molecules. This is
+    the datarax analogue of :class:`opifex.data.sources.rmd17_source.RMD17Loaders`
+    (a single homogeneous molecule needs only one bucket).
+
+    Attributes:
+        train: Training-split bucket pipelines (shuffled per ``QH9Config``).
+        val: Validation-split bucket pipelines (sequential).
+        test: Test-split bucket pipelines (sequential).
         units: Mapping of quantity name to its physical unit string.
     """
 
-    train: tuple[QH9Example, ...]
-    val: tuple[QH9Example, ...]
-    test: tuple[QH9Example, ...]
+    train: tuple[QH9BucketPipeline, ...]
+    val: tuple[QH9BucketPipeline, ...]
+    test: tuple[QH9BucketPipeline, ...]
     units: dict[str, str]
 
     @property
     def n_train(self) -> int:
-        """Number of training molecules."""
-        return len(self.train)
+        """Number of training molecules (summed over buckets)."""
+        return sum(bucket.n_examples for bucket in self.train)
 
     @property
     def n_val(self) -> int:
-        """Number of validation molecules."""
-        return len(self.val)
+        """Number of validation molecules (summed over buckets)."""
+        return sum(bucket.n_examples for bucket in self.val)
 
     @property
     def n_test(self) -> int:
-        """Number of test molecules."""
-        return len(self.test)
+        """Number of test molecules (summed over buckets)."""
+        return sum(bucket.n_examples for bucket in self.test)
 
 
 # =============================================================================
@@ -460,27 +533,197 @@ def load_qh9_data(
     )
 
 
+# =============================================================================
+# Size-bucketed batching (datarax MemorySource + Pipeline per bucket)
+# =============================================================================
+
+
+def _bucket_key(example: QH9Example, bucket_by: BucketBy) -> tuple[int, ...]:
+    """Return the bucketing key for an example.
+
+    Args:
+        example: A decoded QH9 molecule.
+        bucket_by: ``"signature"`` (exact atomic-number sequence) or
+            ``"n_atoms"`` (atom count only).
+
+    Returns:
+        A hashable key: the Z sequence for ``"signature"``, or the singleton
+        ``(n_atoms,)`` for ``"n_atoms"``.
+    """
+    if bucket_by == "signature":
+        return tuple(int(z) for z in example.atomic_numbers)
+    return (example.n_atoms,)
+
+
+def _group_examples(
+    examples: tuple[QH9Example, ...],
+    bucket_by: BucketBy,
+) -> list[tuple[QH9Example, ...]]:
+    """Group examples into same-shape buckets, preserving first-seen order.
+
+    Args:
+        examples: Decoded molecules for one split (in split order).
+        bucket_by: The bucketing key (see :func:`_bucket_key`).
+
+    Returns:
+        A list of buckets; each bucket is a tuple of examples sharing the key.
+        Buckets are ordered by first appearance for determinism.
+    """
+    groups: dict[tuple[int, ...], list[QH9Example]] = defaultdict(list)
+    for example in examples:
+        groups[_bucket_key(example, bucket_by)].append(example)
+    return [tuple(bucket) for bucket in groups.values()]
+
+
+def _stack_bucket(
+    bucket: tuple[QH9Example, ...],
+) -> tuple[dict[str, NDArray], int, int]:
+    """Stack a bucket's molecules into padded, batched NumPy arrays.
+
+    Atomic numbers and positions share a fixed ``n_atoms`` within a bucket and
+    are stacked directly. Fock matrices are bottom/right padded to the bucket's
+    maximum ``n_ao`` (a no-op for ``"signature"`` buckets, where every molecule
+    already has the same ``n_ao``) and a boolean ``mask`` marks the real AO
+    block of each molecule.
+
+    Args:
+        bucket: Molecules sharing a bucket key (non-empty).
+
+    Returns:
+        Tuple of ``(stacked_dict, n_atoms, n_ao)`` where ``stacked_dict`` maps
+        ``{"atomic_numbers", "positions", "fock", "mask", "molecule_id",
+        "n_ao"}`` to leading-batch-axis arrays.
+    """
+    n_atoms = bucket[0].n_atoms
+    n_ao_max = max(example.n_ao for example in bucket)
+
+    atomic_numbers = np.stack([np.asarray(ex.atomic_numbers, dtype=np.int32) for ex in bucket])
+    positions = np.stack(
+        [np.asarray(ex.system.positions, dtype=np.float64).reshape(n_atoms, 3) for ex in bucket]
+    )
+
+    fock = np.zeros((len(bucket), n_ao_max, n_ao_max), dtype=np.float64)
+    mask = np.zeros((len(bucket), n_ao_max, n_ao_max), dtype=bool)
+    for index, example in enumerate(bucket):
+        n_ao = example.n_ao
+        fock[index, :n_ao, :n_ao] = np.asarray(example.fock, dtype=np.float64)
+        mask[index, :n_ao, :n_ao] = True
+
+    stacked: dict[str, NDArray] = {
+        "atomic_numbers": atomic_numbers,
+        "positions": positions,
+        "fock": fock,
+        "mask": mask,
+        "molecule_id": np.asarray([ex.molecule_id for ex in bucket], dtype=np.int64),
+        "n_ao": np.asarray([ex.n_ao for ex in bucket], dtype=np.int64),
+    }
+    return stacked, n_atoms, n_ao_max
+
+
+def _build_bucket_pipeline(
+    bucket: tuple[QH9Example, ...],
+    *,
+    batch_size: int,
+    shuffle: bool,
+    seed: int,
+) -> QH9BucketPipeline:
+    """Wrap one same-shape bucket in a datarax ``MemorySource`` + ``Pipeline``.
+
+    Mirrors :func:`opifex.data.sources.rmd17_source._build_pipeline`: the bucket
+    is a dict of stacked arrays handed to a :class:`~datarax.sources.MemorySource`
+    (which owns the per-epoch shuffle permutation, seeded by the pipeline's
+    ``nnx.Rngs``) and iterated by a :class:`~datarax.pipeline.Pipeline` with no
+    transform stages. The pipeline drives iteration through the source's
+    ``get_batch_at(position, batch_size, key)`` contract.
+
+    Args:
+        bucket: Molecules sharing a bucket key (non-empty).
+        batch_size: Molecules per emitted batch.
+        shuffle: Whether to shuffle iteration order within the bucket.
+        seed: Seed for the source shuffle stream and the pipeline rngs.
+
+    Returns:
+        A :class:`QH9BucketPipeline` for the bucket.
+    """
+    stacked, n_atoms, n_ao = _stack_bucket(bucket)
+    source = MemorySource(
+        MemorySourceConfig(shuffle=shuffle),
+        data=stacked,
+        rngs=nnx.Rngs(shuffle=seed),
+    )
+    pipeline = Pipeline(
+        source=source,
+        stages=[],
+        batch_size=batch_size,
+        rngs=nnx.Rngs(seed),
+    )
+    signature = tuple(int(z) for z in bucket[0].atomic_numbers)
+    return QH9BucketPipeline(
+        pipeline=pipeline,
+        signature=signature,
+        n_atoms=n_atoms,
+        n_ao=n_ao,
+        n_examples=len(bucket),
+    )
+
+
+def _build_split_pipelines(
+    examples: tuple[QH9Example, ...],
+    *,
+    bucket_by: BucketBy,
+    batch_size: int,
+    shuffle: bool,
+    seed: int,
+) -> tuple[QH9BucketPipeline, ...]:
+    """Group a split into buckets and wrap each in a datarax pipeline.
+
+    Args:
+        examples: Decoded molecules for the split (in split order).
+        bucket_by: Bucketing key.
+        batch_size: Molecules per emitted batch.
+        shuffle: Whether to shuffle within each bucket.
+        seed: Base seed; each bucket gets a distinct derived stream so they do
+            not share a permutation.
+
+    Returns:
+        One :class:`QH9BucketPipeline` per bucket.
+    """
+    buckets = _group_examples(examples, bucket_by)
+    return tuple(
+        _build_bucket_pipeline(
+            bucket,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            seed=seed + index,
+        )
+        for index, bucket in enumerate(buckets)
+    )
+
+
 def create_qh9_loader(
     *,
     config: QH9Config | None = None,
     db_path: Path | None = None,
     limit: int | None = None,
 ) -> QH9Loaders:
-    """Create train/val/test example sequences for QH9-Stable.
+    """Create size-bucketed train/val/test datarax pipelines for QH9-Stable.
 
-    Reads an existing ``QH9Stable.db`` (no download), decodes every molecule
-    into an opifex :class:`MolecularSystem` plus def2-SVP spherical Fock target,
-    and partitions them with the reference random split.
+    Reads an existing ``QH9Stable.db`` (no download), decodes every molecule into
+    an opifex :class:`MolecularSystem` plus def2-SVP spherical Fock target,
+    partitions them with the reference random split, then groups each split into
+    same-shape buckets and wraps every bucket in a datarax
+    :class:`~datarax.sources.MemorySource` driven by a
+    :class:`~datarax.pipeline.Pipeline` (see the module docstring).
 
     Args:
         config: Loader configuration. Defaults to :class:`QH9Config` (database
-            under ``/mnt/ssd2/Data/qh9``).
+            under ``/mnt/ssd2/Data/qh9``, signature buckets, batch size 8).
         db_path: Explicit database path, overriding ``config.database_path``.
             The constructor hook used by network-free tests.
         limit: Optional cap on decoded rows (quick smoke-tests).
 
     Returns:
-        A :class:`QH9Loaders` bundle (train/val/test molecule sequences).
+        A :class:`QH9Loaders` bundle (train/val/test bucket pipelines).
 
     Raises:
         FileNotFoundError: If the resolved database path does not exist.
@@ -490,10 +733,32 @@ def create_qh9_loader(
 
     data = load_qh9_data(resolved_path, seed=resolved_config.seed, limit=limit)
     examples = data.examples
+    train_examples = tuple(examples[i] for i in data.train_indices)
+    val_examples = tuple(examples[i] for i in data.val_indices)
+    test_examples = tuple(examples[i] for i in data.test_indices)
+
     return QH9Loaders(
-        train=tuple(examples[i] for i in data.train_indices),
-        val=tuple(examples[i] for i in data.val_indices),
-        test=tuple(examples[i] for i in data.test_indices),
+        train=_build_split_pipelines(
+            train_examples,
+            bucket_by=resolved_config.bucket_by,
+            batch_size=resolved_config.batch_size,
+            shuffle=resolved_config.shuffle,
+            seed=resolved_config.seed,
+        ),
+        val=_build_split_pipelines(
+            val_examples,
+            bucket_by=resolved_config.bucket_by,
+            batch_size=resolved_config.batch_size,
+            shuffle=False,
+            seed=resolved_config.seed,
+        ),
+        test=_build_split_pipelines(
+            test_examples,
+            bucket_by=resolved_config.bucket_by,
+            batch_size=resolved_config.batch_size,
+            shuffle=False,
+            seed=resolved_config.seed,
+        ),
         units={
             "positions": "Bohr",
             "fock": "Hartree",
@@ -502,6 +767,8 @@ def create_qh9_loader(
 
 
 __all__ = [
+    "BucketBy",
+    "QH9BucketPipeline",
     "QH9Config",
     "QH9Data",
     "QH9Example",

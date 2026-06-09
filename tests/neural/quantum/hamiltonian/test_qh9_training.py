@@ -17,15 +17,20 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optax
 from flax import nnx
 
 from opifex.core.quantum.basis import AtomicOrbitalBasis
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.neural.quantum.hamiltonian import HamiltonianPredictor, HamiltonianPredictorConfig
 from opifex.neural.quantum.hamiltonian.qh9_training import (
+    batched_fock_loss,
     fit_qh9,
+    fit_qh9_bucket,
     fock_loss,
+    make_batched_train_step,
     predict_spherical_fock,
+    predict_spherical_fock_batch,
     QH9TrainConfig,
     spherical_transform_for,
 )
@@ -177,4 +182,106 @@ def test_single_train_step_runs_and_loss_decreases() -> None:
     assert result.final_loss < float(history[0])
     assert float(history[-1]) < float(history[len(history) // 2]) < float(history[0])
     # And drops substantially from its first value (overfit-one-batch).
+    assert result.final_loss < 0.5 * float(history[0])
+
+
+# =============================================================================
+# Batched bucket training: vmap over a same-signature bucket fills the GPU
+# =============================================================================
+
+
+def _water_atoms() -> jax.Array:
+    """The shared atomic-number sequence of a water-signature bucket."""
+    return jnp.asarray([8, 1, 1], dtype=jnp.int32)
+
+
+def _water_positions_batch(batch: int = 4) -> jax.Array:
+    """A batch of perturbed water geometries sharing the water Z signature."""
+    base = jnp.asarray([[0.0, 0.0, 0.0], [0.0, 1.43, 1.11], [0.0, -1.43, 1.11]], dtype=jnp.float64)
+    rng = np.random.default_rng(0)
+    deltas = rng.standard_normal((batch, 3, 3)).astype(np.float64) * 0.05
+    return jnp.asarray(np.asarray(base)[None] + deltas)
+
+
+def _teacher_targets_batch(atoms: jax.Array, positions: jax.Array, *, seed: int = 7) -> jax.Array:
+    """Realisable per-molecule spherical Fock targets from a teacher predictor."""
+    system0 = MolecularSystem(atomic_numbers=atoms, positions=positions[0], basis_set="def2-svp")
+    teacher = _predictor(system0, seed=seed)
+    transform = spherical_transform_for(system0)
+    return jax.lax.stop_gradient(predict_spherical_fock_batch(teacher, atoms, positions, transform))
+
+
+def test_batched_fock_loss_sums_per_molecule_errors() -> None:
+    """The batched loss is the sum of per-molecule masked-mean errors."""
+    predictions = jnp.zeros((2, 2, 2))
+    targets = jnp.asarray([[[1.0, 1.0], [1.0, 1.0]], [[2.0, 2.0], [2.0, 2.0]]])
+    # Unmasked MAE per molecule: 1.0 and 2.0 -> sum 3.0.
+    assert float(batched_fock_loss(predictions, targets, kind="mae")) == 3.0
+    mask = jnp.asarray([[[1.0, 0.0], [0.0, 1.0]], [[1.0, 0.0], [0.0, 1.0]]])
+    # Masked diagonals only: still 1.0 + 2.0 = 3.0 (means over 2 valid entries).
+    assert float(batched_fock_loss(predictions, targets, kind="mae", mask=mask)) == 3.0
+
+
+def test_batched_prediction_matches_per_molecule_prediction() -> None:
+    """vmap over a bucket reproduces the per-molecule spherical Fock predictions."""
+    atoms = _water_atoms()
+    positions = _water_positions_batch(batch=3)
+    system0 = MolecularSystem(atomic_numbers=atoms, positions=positions[0], basis_set="def2-svp")
+    predictor = _predictor(system0)
+    transform = spherical_transform_for(system0)
+
+    batched = predict_spherical_fock_batch(predictor, atoms, positions, transform)
+    assert batched.shape == (3, 24, 24)
+    single = predict_spherical_fock(
+        predictor,
+        MolecularSystem(atomic_numbers=atoms, positions=positions[1], basis_set="def2-svp"),
+        transform,
+    )
+    # The vmap path batches the trunk matmuls, which XLA may dispatch at a
+    # slightly different precision than the single-molecule path (GPU float32 /
+    # TF32); the predictions agree to a physically-meaningful tolerance.
+    np.testing.assert_allclose(np.asarray(batched[1]), np.asarray(single), atol=5e-3)
+
+
+def test_batched_train_step_is_jit_and_grad_clean() -> None:
+    """One batched train step runs under jit with finite loss and gradients."""
+    atoms = _water_atoms()
+    positions = _water_positions_batch(batch=4)
+    system0 = MolecularSystem(atomic_numbers=atoms, positions=positions[0], basis_set="def2-svp")
+    predictor = _predictor(system0, seed=0)
+    transform = spherical_transform_for(system0)
+    targets = _teacher_targets_batch(atoms, positions, seed=7)
+    mask = jnp.ones_like(targets)
+
+    optimizer = nnx.Optimizer(predictor, optax.adam(1e-2), wrt=nnx.Param)
+    train_step = make_batched_train_step(
+        transform, atoms, loss_kind="mse", property_name="hamiltonian"
+    )
+    loss = train_step(predictor, optimizer, positions, targets, mask)
+    assert jnp.isfinite(loss)
+
+
+def test_batched_fit_decreases_loss_on_overfit_bucket() -> None:
+    """A batched fit over a same-signature water bucket reduces the summed loss."""
+    atoms = _water_atoms()
+    positions = _water_positions_batch(batch=4)
+    targets = _teacher_targets_batch(atoms, positions, seed=7)
+    mask = jnp.ones_like(targets)
+
+    system0 = MolecularSystem(atomic_numbers=atoms, positions=positions[0], basis_set="def2-svp")
+    student = _predictor(system0, seed=0)
+
+    result = fit_qh9_bucket(
+        student,
+        atoms,
+        positions,
+        targets,
+        mask=mask,
+        config=QH9TrainConfig(learning_rate=1e-2, num_steps=150, loss_kind="mse"),
+    )
+    history = np.asarray(result.loss_history)
+    assert history.shape == (150,)
+    assert np.all(np.isfinite(history))
+    assert result.final_loss < float(history[0])
+    assert float(history[-1]) < float(history[len(history) // 2]) < float(history[0])
     assert result.final_loss < 0.5 * float(history[0])

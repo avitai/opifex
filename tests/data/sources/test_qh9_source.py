@@ -30,6 +30,8 @@ from opifex.core.quantum._spherical import spherical_count
 from opifex.core.quantum.basis import AtomicOrbitalBasis
 from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR, MolecularSystem
 from opifex.data.sources.qh9_source import (
+    _group_examples,
+    _stack_bucket,
     create_qh9_loader,
     load_qh9_data,
     matrix_transform_def2svp,
@@ -42,6 +44,9 @@ from opifex.data.sources.qh9_source import (
 # QH9-native AO block sizes (5 for H/He, 14 for second-row elements).
 _H2_ATOMS = np.array([1, 1], dtype=np.int32)
 _H2O_ATOMS = np.array([8, 1, 1], dtype=np.int32)
+# A second 3-atom composition (HCN) -- same n_atoms as water, different AO count
+# and different Z signature, so it exercises n_atoms-bucket padding/masking.
+_HCN_ATOMS = np.array([1, 6, 7], dtype=np.int32)
 
 
 def _native_ao(atoms: np.ndarray) -> int:
@@ -96,6 +101,45 @@ def synthetic_qh9_db(tmp_path: Path) -> Path:
             _random_symmetric(_native_ao(_H2O_ATOMS), seed=2).tobytes(),
         ),
     ]
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("CREATE TABLE data (id INTEGER, N INTEGER, Z BLOB, pos BLOB, Ham BLOB)")
+        connection.executemany("INSERT INTO data VALUES (?, ?, ?, ?, ?)", rows)
+        connection.commit()
+    return db_path
+
+
+def _make_row(molecule_id: int, atoms: np.ndarray, seed: int) -> tuple:
+    """Build one synthetic QH9 row (id, N, Z, pos, Ham) for ``atoms``."""
+    rng = np.random.default_rng(seed)
+    positions = rng.standard_normal((len(atoms), 3)).astype(np.float64)
+    return (
+        molecule_id,
+        len(atoms),
+        atoms.tobytes(),
+        positions.tobytes(),
+        _random_symmetric(_native_ao(atoms), seed=seed).tobytes(),
+    )
+
+
+@pytest.fixture
+def multi_size_qh9_db(tmp_path: Path) -> Path:
+    """A SYNTHETIC QH9-Stable db spanning three Z signatures across two sizes.
+
+    Three H2O molecules + two H2 molecules + one HCN molecule (NOT real QH9
+    data). H2O and HCN share ``n_atoms == 3`` but differ in composition (so in
+    AO count and Z signature), letting the tests distinguish ``"signature"`` from
+    ``"n_atoms"`` bucketing and exercise n_atoms padding/masking.
+    """
+    db_path = tmp_path / "QH9Stable.db"
+    specs = [
+        (_H2O_ATOMS, 10),
+        (_H2O_ATOMS, 11),
+        (_H2O_ATOMS, 12),
+        (_H2_ATOMS, 20),
+        (_H2_ATOMS, 21),
+        (_HCN_ATOMS, 30),
+    ]
+    rows = [_make_row(index, atoms, seed) for index, (atoms, seed) in enumerate(specs)]
     with sqlite3.connect(db_path) as connection:
         connection.execute("CREATE TABLE data (id INTEGER, N INTEGER, Z BLOB, pos BLOB, Ham BLOB)")
         connection.executemany("INSERT INTO data VALUES (?, ?, ?, ?, ?)", rows)
@@ -255,3 +299,82 @@ def test_create_qh9_loader_via_config(synthetic_qh9_db: Path) -> None:
     target.write_bytes(synthetic_qh9_db.read_bytes())
     loaders = create_qh9_loader(config=config)
     assert loaders.n_train + loaders.n_val + loaders.n_test == 2
+
+
+# =============================================================================
+# Size-bucketed batching: grouping, padding + mask, datarax pipeline shapes
+# =============================================================================
+
+
+def test_signature_bucketing_groups_by_z_sequence(multi_size_qh9_db: Path) -> None:
+    """``"signature"`` bucketing separates H2O, H2 and HCN into three buckets."""
+    examples = read_qh9_sqlite(multi_size_qh9_db)
+    buckets = _group_examples(examples, "signature")
+    sizes = sorted(len(bucket) for bucket in buckets)
+    assert sizes == [1, 2, 3]  # HCN (1), H2 (2), H2O (3)
+    for bucket in buckets:
+        signatures = {tuple(int(z) for z in ex.atomic_numbers) for ex in bucket}
+        assert len(signatures) == 1  # every molecule shares the bucket's Z sequence
+
+
+def test_n_atoms_bucketing_merges_same_size_compositions(multi_size_qh9_db: Path) -> None:
+    """``"n_atoms"`` bucketing merges H2O and HCN (both 3-atom) into one bucket."""
+    examples = read_qh9_sqlite(multi_size_qh9_db)
+    buckets = _group_examples(examples, "n_atoms")
+    sizes = sorted(len(bucket) for bucket in buckets)
+    # 3-atom bucket = 3 H2O + 1 HCN = 4; 2-atom bucket = 2 H2.
+    assert sizes == [2, 4]
+
+
+def test_stack_bucket_signature_needs_no_padding(multi_size_qh9_db: Path) -> None:
+    """A signature bucket stacks without padding: the mask is all-true."""
+    examples = read_qh9_sqlite(multi_size_qh9_db)
+    water_bucket = next(b for b in _group_examples(examples, "signature") if len(b) == 3)
+    stacked, n_atoms, n_ao = _stack_bucket(water_bucket)
+    assert n_atoms == 3
+    assert n_ao == _spherical_ao(_H2O_ATOMS)
+    assert stacked["positions"].shape == (3, 3, 3)
+    assert stacked["fock"].shape == (3, n_ao, n_ao)
+    assert stacked["mask"].shape == (3, n_ao, n_ao)
+    assert bool(stacked["mask"].all())  # homogeneous bucket -> no padding
+
+
+def test_stack_bucket_n_atoms_pads_and_masks(multi_size_qh9_db: Path) -> None:
+    """An n_atoms bucket pads the smaller composition and masks the padding."""
+    examples = read_qh9_sqlite(multi_size_qh9_db)
+    three_atom = next(b for b in _group_examples(examples, "n_atoms") if len(b) == 4)
+    stacked, n_atoms, n_ao = _stack_bucket(three_atom)
+    assert n_atoms == 3
+    per_molecule_ao = [int(value) for value in stacked["n_ao"]]
+    assert n_ao == max(per_molecule_ao)
+    # Each molecule's valid region equals its real AO count squared; padding is
+    # masked out and carries zero target.
+    for index, real_ao in enumerate(per_molecule_ao):
+        assert int(stacked["mask"][index].sum()) == real_ao * real_ao
+        if real_ao < n_ao:
+            np.testing.assert_array_equal(stacked["fock"][index, real_ao:, :], 0.0)
+            np.testing.assert_array_equal(stacked["fock"][index, :, real_ao:], 0.0)
+
+
+def test_bucket_pipeline_yields_batched_dicts_of_right_shape(multi_size_qh9_db: Path) -> None:
+    """Each datarax bucket pipeline yields stacked, correctly-shaped batches."""
+    loaders = create_qh9_loader(
+        db_path=multi_size_qh9_db,
+        config=QH9Config(batch_size=2, bucket_by="signature", shuffle=False),
+    )
+    all_buckets = loaders.train + loaders.val + loaders.test
+    assert all_buckets  # at least one bucket across the splits
+    bucket = next(b for b in all_buckets if b.n_examples >= 1)
+    batch = next(iter(bucket.pipeline))
+    assert set(batch) == {"atomic_numbers", "positions", "fock", "mask", "molecule_id", "n_ao"}
+    n_batch = batch["positions"].shape[0]
+    assert batch["positions"].shape == (n_batch, bucket.n_atoms, 3)
+    assert batch["fock"].shape == (n_batch, bucket.n_ao, bucket.n_ao)
+    assert batch["mask"].shape == (n_batch, bucket.n_ao, bucket.n_ao)
+    assert batch["atomic_numbers"].shape == (n_batch, bucket.n_atoms)
+
+
+def test_loader_buckets_cover_every_molecule(multi_size_qh9_db: Path) -> None:
+    """The bucket pipelines partition all six synthetic molecules across splits."""
+    loaders = create_qh9_loader(db_path=multi_size_qh9_db, config=QH9Config(bucket_by="signature"))
+    assert loaders.n_train + loaders.n_val + loaders.n_test == 6

@@ -32,11 +32,11 @@ import jax.numpy as jnp
 import numpy as np  # noqa: TC002
 import optax
 from flax import nnx
-from jaxtyping import Array, Float  # noqa: TC002
+from jaxtyping import Array, Float, Int  # noqa: TC002
 
 from opifex.core.quantum._spherical import apply_matrix, build_block_transform
 from opifex.core.quantum.basis import AtomicOrbitalBasis
-from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.neural.quantum.hamiltonian.predictor import HamiltonianPredictor  # noqa: TC001
 
 
@@ -259,6 +259,224 @@ def fit_qh9(
     return QH9FitResult(loss_history=loss_history, final_loss=final_loss)
 
 
+def batched_fock_loss(
+    predictions: Float[Array, "batch n_ao n_ao"],
+    targets: Float[Array, "batch n_ao n_ao"],
+    *,
+    kind: LossKind = "mae",
+    mask: Float[Array, "batch n_ao n_ao"] | None = None,
+) -> Float[Array, ""]:
+    r"""Masked mean Fock-matrix error summed over a same-shape bucket batch.
+
+    The per-molecule masked errors (see :func:`fock_loss`) are summed over the
+    batch so a larger bucket batch contributes a proportionally larger gradient
+    signal -- the quantity that fills the GPU. Each molecule's error is reduced
+    only over its valid (unmasked) AO entries, so padding introduced to batch a
+    ``"n_atoms"`` bucket never contributes.
+
+    Args:
+        predictions: Predicted Fock matrices, shape ``(batch, n_ao, n_ao)``.
+        targets: Reference Fock matrices, shape ``(batch, n_ao, n_ao)``.
+        kind: ``"mae"`` (mean ``|.|``) or ``"mse"`` (mean ``(.)^2``).
+        mask: Optional ``{0, 1}`` per-molecule AO-validity mask.
+
+    Returns:
+        The scalar sum of per-molecule masked-mean errors.
+
+    Raises:
+        ValueError: If ``kind`` is neither ``"mae"`` nor ``"mse"``.
+    """
+    residual = predictions - targets
+    if kind == "mae":
+        elementwise = jnp.abs(residual)
+    elif kind == "mse":
+        elementwise = residual**2
+    else:
+        raise ValueError(f"loss kind must be 'mae' or 'mse', got {kind!r}.")
+
+    if mask is None:
+        return jnp.sum(jnp.mean(elementwise, axis=(1, 2)))
+    per_molecule_total = jnp.sum(elementwise * mask, axis=(1, 2))
+    per_molecule_count = jnp.clip(jnp.sum(mask, axis=(1, 2)), a_min=1.0)
+    return jnp.sum(per_molecule_total / per_molecule_count)
+
+
+def predict_spherical_fock_batch(
+    predictor: HamiltonianPredictor,
+    atomic_numbers: Int[Array, " n_atoms"],
+    positions: Float[Array, "batch n_atoms 3"],
+    transform: Float[Array, "n_cart n_sph"],
+    *,
+    basis_set: str = "def2-svp",
+    property_name: str = "hamiltonian",
+) -> Float[Array, "batch n_sph n_sph"]:
+    """Predict spherical Fock matrices for one same-shape bucket via ``vmap``.
+
+    Every molecule in the bucket shares the same atomic-number sequence (so the
+    same static predictor plan and the same Cartesian->spherical ``transform``);
+    only the positions vary. The predictor is therefore mapped over the batched
+    ``positions`` with :func:`flax.nnx.vmap` -- a single compile serves the whole
+    bucket, in contrast to the per-molecule ``rebind`` + recompile of
+    :func:`fit_qh9_examples`.
+
+    Args:
+        predictor: The bucket-bound predictor (already ``rebind``-ed to the
+            bucket's basis).
+        atomic_numbers: The bucket's shared atomic-number sequence, ``(n_atoms,)``
+            (closed over -- static across the batch).
+        positions: Batched atomic positions (Bohr), ``(batch, n_atoms, 3)``.
+        transform: Cartesian->spherical transform for the bucket.
+        basis_set: Basis-set label stored on the reconstructed systems.
+        property_name: The predictor output key holding the matrix.
+
+    Returns:
+        Batched spherical Fock matrices, shape ``(batch, n_sph, n_sph)``.
+    """
+
+    def predict_one(
+        module: HamiltonianPredictor, single_positions: Float[Array, "n_atoms 3"]
+    ) -> Float[Array, "n_sph n_sph"]:
+        system = MolecularSystem(
+            atomic_numbers=atomic_numbers,
+            positions=single_positions,
+            charge=0,
+            multiplicity=1,
+            basis_set=basis_set,
+        )
+        return predict_spherical_fock(module, system, transform, property_name=property_name)
+
+    return nnx.vmap(predict_one, in_axes=(None, 0))(predictor, positions)
+
+
+def make_batched_train_step(
+    transform: Float[Array, "n_cart n_sph"],
+    atomic_numbers: Int[Array, " n_atoms"],
+    *,
+    loss_kind: LossKind,
+    property_name: str,
+    basis_set: str = "def2-svp",
+):
+    """Build a jitted batched QH9 Fock train step for one same-shape bucket.
+
+    The returned closure runs one ``nnx.value_and_grad`` + ``optimizer.update``
+    on the summed masked spherical Fock loss over a whole bucket batch, mapping
+    the predictor over the batch's positions with :func:`flax.nnx.vmap` (one
+    compile for the bucket). Static bucket settings (transform, atomic numbers,
+    loss kind) are closed over; only the predictor, its optimizer, and the
+    batch's positions / targets / mask are traced -- this is the GPU-filling
+    counterpart of the single-molecule :func:`make_train_step`.
+
+    Args:
+        transform: Cartesian->spherical transform shared by the bucket.
+        atomic_numbers: The bucket's shared atomic-number sequence (closed over).
+        loss_kind: ``"mae"`` or ``"mse"``.
+        property_name: The predictor output key holding the matrix.
+        basis_set: Basis-set label for the reconstructed systems.
+
+    Returns:
+        A jitted ``(predictor, optimizer, positions, targets, mask) -> loss``
+        step.
+    """
+
+    def loss_fn(
+        module: HamiltonianPredictor,
+        positions: Float[Array, "batch n_atoms 3"],
+        targets: Float[Array, "batch n_ao n_ao"],
+        mask: Float[Array, "batch n_ao n_ao"] | None,
+    ) -> Float[Array, ""]:
+        predictions = predict_spherical_fock_batch(
+            module,
+            atomic_numbers,
+            positions,
+            transform,
+            basis_set=basis_set,
+            property_name=property_name,
+        )
+        return batched_fock_loss(predictions, targets, kind=loss_kind, mask=mask)
+
+    @nnx.jit
+    def train_step(
+        module: HamiltonianPredictor,
+        opt: nnx.Optimizer,
+        positions: Float[Array, "batch n_atoms 3"],
+        targets: Float[Array, "batch n_ao n_ao"],
+        mask: Float[Array, "batch n_ao n_ao"] | None,
+    ) -> Float[Array, ""]:
+        loss, grads = nnx.value_and_grad(loss_fn)(module, positions, targets, mask)
+        opt.update(module, grads)
+        return loss
+
+    return train_step
+
+
+def fit_qh9_bucket(
+    predictor: HamiltonianPredictor,
+    atomic_numbers: Int[Array, " n_atoms"],
+    positions: Float[Array, "batch n_atoms 3"],
+    targets: Float[Array, "batch n_ao n_ao"],
+    *,
+    config: QH9TrainConfig | None = None,
+    mask: Float[Array, "batch n_ao n_ao"] | None = None,
+    basis_set: str = "def2-svp",
+) -> QH9FitResult:
+    """Overfit ``predictor`` to one same-shape bucket batch (batched step).
+
+    Binds the predictor to the bucket's shared basis once, then runs
+    ``config.num_steps`` batched Adam steps (one ``vmap``-ed forward over the
+    whole bucket per step) on the summed masked spherical Fock loss. This is the
+    batched analogue of :func:`fit_qh9`; it is what saturates the GPU.
+
+    Args:
+        predictor: The Hamiltonian predictor to fit (modified in place; bound to
+            the bucket basis internally).
+        atomic_numbers: The bucket's shared atomic-number sequence, ``(n_atoms,)``.
+        positions: Batched atomic positions (Bohr), ``(batch, n_atoms, 3)``.
+        targets: Batched spherical Fock targets, ``(batch, n_ao, n_ao)``.
+        config: Fit hyper-parameters. Defaults to :class:`QH9TrainConfig`.
+        mask: Optional ``{0, 1}`` per-molecule AO-validity mask.
+        basis_set: Basis-set label for the reconstructed systems.
+
+    Returns:
+        A :class:`QH9FitResult` with the per-step summed-loss history.
+    """
+    resolved = config if config is not None else QH9TrainConfig()
+    atomic_numbers_array = jnp.asarray(atomic_numbers, dtype=jnp.int32)
+    positions_array = jnp.asarray(positions)
+    targets_array = jnp.asarray(targets)
+    mask_array = None if mask is None else jnp.asarray(mask, dtype=positions_array.dtype)
+
+    template = MolecularSystem(
+        atomic_numbers=atomic_numbers_array,
+        positions=positions_array[0],
+        charge=0,
+        multiplicity=1,
+        basis_set=basis_set,
+    )
+    basis = AtomicOrbitalBasis.from_molecular_system(template, basis_name=basis_set)
+    bound = predictor.rebind(basis)
+    transform = spherical_transform_for(template)
+
+    optimizer = nnx.Optimizer(bound, optax.adam(resolved.learning_rate), wrt=nnx.Param)
+    train_step = make_batched_train_step(
+        transform,
+        atomic_numbers_array,
+        loss_kind=resolved.loss_kind,
+        property_name=resolved.property_name,
+        basis_set=basis_set,
+    )
+
+    losses: list[Array] = []
+    for step in range(resolved.num_steps):
+        loss = train_step(bound, optimizer, positions_array, targets_array, mask_array)
+        losses.append(loss)
+        if step % max(1, resolved.num_steps // 10) == 0:
+            logger.info("QH9 batched fit step %d: loss=%.3e", step, float(loss))
+
+    loss_history = jnp.stack(losses) if losses else jnp.zeros((0,))
+    final_loss = float(loss_history[-1]) if losses else float("nan")
+    return QH9FitResult(loss_history=loss_history, final_loss=final_loss)
+
+
 def fit_qh9_examples(
     predictor: HamiltonianPredictor,
     examples: Sequence[tuple[MolecularSystem, np.ndarray]],
@@ -298,10 +516,14 @@ __all__ = [
     "LossKind",
     "QH9FitResult",
     "QH9TrainConfig",
+    "batched_fock_loss",
     "fit_qh9",
+    "fit_qh9_bucket",
     "fit_qh9_examples",
     "fock_loss",
+    "make_batched_train_step",
     "make_train_step",
     "predict_spherical_fock",
+    "predict_spherical_fock_batch",
     "spherical_transform_for",
 ]
