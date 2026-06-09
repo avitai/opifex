@@ -9,6 +9,13 @@ from opifex.data.sources.burgers_source import BurgersDataSource
 from opifex.data.sources.darcy_source import DarcyDataSource
 from opifex.data.sources.diffusion_source import DiffusionDataSource
 from opifex.data.sources.navier_stokes_source import NavierStokesDataSource
+from opifex.data.sources.qh9_blocks import (
+    BlockBatchConfig,
+    collate_block_batch,
+    create_qh9_block_loader,
+    cut_fock_to_blocks,
+    QH9BlockLoaders,
+)
 from opifex.data.sources.qh9_source import (
     BucketBy,
     create_qh9_loader,
@@ -40,6 +47,7 @@ from opifex.data.sources.shallow_water_source import ShallowWaterDataSource
 
 
 __all__ = [
+    "BlockBatchConfig",
     "BucketBy",
     "BurgersDataSource",
     "DarcyDataSource",
@@ -47,6 +55,7 @@ __all__ = [
     "NavierStokesDataSource",
     "PDEBenchConfig",
     "PDEBenchSource",
+    "QH9BlockLoaders",
     "QH9BucketPipeline",
     "QH9Config",
     "QH9Data",
@@ -58,8 +67,11 @@ __all__ = [
     "ShallowWaterDataSource",
     "VTKMeshConfig",
     "VTKMeshSource",
+    "collate_block_batch",
+    "create_qh9_block_loader",
     "create_qh9_loader",
     "create_rmd17_loader",
+    "cut_fock_to_blocks",
     "download_rmd17_molecule",
     "load_qh9_data",
     "matrix_transform_def2svp",
