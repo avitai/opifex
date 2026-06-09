@@ -14,13 +14,15 @@ Reference schema (the authority this loader matches byte-for-byte):
 
 Raw schema
 ----------
-The database has a single table ``data``; each row is
-``(id: int, num_nodes: int, atoms: bytes, pos: bytes, Ham: bytes)`` with
+The database has a single table ``data``; each row is positionally
+``(id: int, N: int, Z: bytes, pos: bytes, Ham: bytes)`` (the real QH9-Stable
+column names are ``id, N, Z, pos, Ham``; the reference reads them positionally
+via ``SELECT *``, never by name) with
 
-* ``atoms``  -- ``int32`` atomic numbers, length ``num_nodes``;
-* ``pos``    -- ``float64`` Cartesian coordinates ``(num_nodes, 3)`` in Angstrom;
+* ``Z``      -- ``int32`` atomic numbers, length ``N``;
+* ``pos``    -- ``float64`` Cartesian coordinates ``(N, 3)`` in Angstrom;
 * ``Ham``    -- ``float64`` Fock matrix ``(n_ao, n_ao)`` flattened row-major,
-  where ``n_ao = sum(5 if Z <= 2 else 14 for Z in atoms)`` (the QH9 native AO
+  where ``n_ao = sum(5 if Z <= 2 else 14 for Z in Z)`` (the QH9 native AO
   block sizes: 5 for H/He, 14 for the second-row elements).
 
 AO-ordering convention
@@ -375,7 +377,9 @@ def read_qh9_sqlite(
     if not db_path.exists():
         raise FileNotFoundError(f"QH9-Stable database not found: {db_path}")
 
-    query = "SELECT id, num_nodes, atoms, pos, Ham FROM data ORDER BY id"
+    # Real QH9-Stable columns are (id, N, Z, pos, Ham); read positionally via
+    # ``SELECT *`` (as the reference does) so we are agnostic to column names.
+    query = "SELECT * FROM data ORDER BY id"
     if limit is not None:
         query += f" LIMIT {int(limit)}"
 

@@ -3,7 +3,8 @@ r"""Tests for the native QH9-Stable dataset loader.
 QH9 (Yu et al. 2023, "QH9", arXiv:2306.04922; reference
 ``/mnt/ssd2/Works/AIRS/OpenDFT/QHBench/QH9/datasets.py``) ships converged
 def2-SVP Fock matrices in a SQLite ``.db`` with a single ``data`` table whose
-rows are ``(id, num_nodes, atoms:int32, pos:float64 Angstrom, Ham:float64)``.
+rows are ``(id, N, Z:int32, pos:float64 Angstrom, Ham:float64)`` (verified
+against the real 130,831-row QH9Stable.db: columns ``id, N, Z, pos, Ham``).
 
 These tests build a TINY SYNTHETIC sqlite fixture (clearly labelled -- it is
 NOT real QH9 data and carries no benchmark meaning) of two fake molecules (H2,
@@ -73,7 +74,7 @@ def synthetic_qh9_db(tmp_path: Path) -> Path:
     NOT real QH9 data -- random symmetric Fock blobs of the correct
     QH9-native def2-SVP size, purely to exercise the production decode path
     without any download. Mirrors the reference row schema
-    ``(id, num_nodes, atoms, pos, Ham)`` with the exact dtypes
+    ``(id, N, Z, pos, Ham)`` with the exact dtypes
     (``atoms`` int32, ``pos``/``Ham`` float64).
     """
     db_path = tmp_path / "QH9Stable.db"
@@ -96,9 +97,7 @@ def synthetic_qh9_db(tmp_path: Path) -> Path:
         ),
     ]
     with sqlite3.connect(db_path) as connection:
-        connection.execute(
-            "CREATE TABLE data (id INTEGER, num_nodes INTEGER, atoms BLOB, pos BLOB, Ham BLOB)"
-        )
+        connection.execute("CREATE TABLE data (id INTEGER, N INTEGER, Z BLOB, pos BLOB, Ham BLOB)")
         connection.executemany("INSERT INTO data VALUES (?, ?, ?, ?, ?)", rows)
         connection.commit()
     return db_path
