@@ -24,7 +24,7 @@ The deployment infrastructure is provided as Python modules, not as ready-made Y
 | `opifex.deployment.server` | FastAPI model serving server |
 | `opifex.deployment.core_serving` | `InferenceEngine`, `ModelRegistry`, `DeploymentConfig` |
 
-Source: [`src/opifex/deployment/cloud/aws.py`](../../src/opifex/deployment/cloud/aws.py)
+Source: [`src/opifex/deployment/cloud/aws.py`](https://github.com/avitai/opifex/blob/main/src/opifex/deployment/cloud/aws.py)
 
 ## Prerequisites
 
@@ -176,7 +176,7 @@ The generated deployment includes:
 - Resource requests and limits
 - Optional `nodeSelector` for GPU node targeting
 
-Source: [`src/opifex/deployment/kubernetes/manifest_generator.py`](../../src/opifex/deployment/kubernetes/manifest_generator.py)
+Source: [`src/opifex/deployment/kubernetes/manifest_generator.py`](https://github.com/avitai/opifex/blob/main/src/opifex/deployment/kubernetes/manifest_generator.py)
 
 Additional Kubernetes modules:
 
@@ -184,7 +184,7 @@ Additional Kubernetes modules:
 - `ResourceManager` -- namespace and quota management
 - `KubernetesOrchestrator` -- orchestration for production deployments
 
-Source: [`src/opifex/deployment/kubernetes/__init__.py`](../../src/opifex/deployment/kubernetes/__init__.py)
+Source: [`src/opifex/deployment/kubernetes/__init__.py`](https://github.com/avitai/opifex/blob/main/src/opifex/deployment/kubernetes/__init__.py)
 
 ## Deployment Workflow
 

@@ -88,6 +88,7 @@ nav:
       - Neural Density Functional Theory: methods/neural-dft.md
       - Variational Monte Carlo: methods/variational-monte-carlo.md
       - Hamiltonian Prediction: methods/hamiltonian-prediction.md
+      - Atomistic Potentials: methods/atomistic-potentials.md
       - Probabilistic Numerics: methods/probabilistic.md
       - Learn-to-Optimize: methods/l2o.md
       - Second-Order Optimization: methods/second-order-optimization.md
@@ -207,12 +208,17 @@ nav:
   - Benchmarks: benchmarks.md
   - FAQ: faq.md
 
+# Generated example assets are linked from their parent example pages, not
+# standalone nav entries -- keep them out of the "not in nav" orphan check.
+not_in_nav: |
+  /assets/examples/**
+
 # Plugins configuration remains the same
 plugins:
   - search:
       separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - mkdocstrings:
-      enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
+      enabled: true
       handlers:
         python:
           paths: [src/opifex]
@@ -310,7 +316,7 @@ extra:
       link: https://pypi.org/project/opifex/
   analytics:
     provider: google
-    property: !ENV [GOOGLE_ANALYTICS_KEY, ""]
+    property: ""
   consent:
     title: Cookie consent
     description: >-

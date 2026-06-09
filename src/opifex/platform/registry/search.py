@@ -11,6 +11,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
+from opifex.platform.registry.core import RegistryService
 from opifex.platform.search_types import SearchType
 
 
@@ -56,7 +57,7 @@ class SearchEngine:
 
     def __init__(
         self,
-        registry_service,
+        registry_service: RegistryService,
         enable_semantic_search: bool = True,
         similarity_threshold: float = 0.7,
     ) -> None:

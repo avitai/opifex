@@ -6,12 +6,13 @@ import importlib
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _pyproject() -> dict[str, object]:
+def _pyproject() -> dict[str, Any]:
     return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
 
 
@@ -37,9 +38,7 @@ def test_docs_extra_declares_mkdocs_toolchain() -> None:
 def test_local_docs_commands_select_docs_extra() -> None:
     """Local MkDocs commands should select the existing docs extra explicitly."""
 
-    installation = (
-        REPO_ROOT / "docs" / "getting-started" / "installation.md"
-    ).read_text()
+    installation = (REPO_ROOT / "docs" / "getting-started" / "installation.md").read_text()
 
     assert "uv run --extra docs mkdocs serve" in installation
     assert "uv run --extra docs mkdocs build" in installation
