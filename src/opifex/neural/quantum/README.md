@@ -21,7 +21,7 @@ Every public symbol below is exported and JAX/NNX compatible.
 | `dft/` | `SCFSolver`, `SCFResult`, `Functional`, `SolverMode`, the molecular grid and LDA/PBE XC primitives |
 | `neural_xc.py` | `NeuralXCFunctional` |
 | `vmc/` | `FermiNet`, `VMCDriver`, `VMCConfig`, `VMCResult`, `MetropolisHastingsSampler`, `local_energy`, `forward_laplacian`, `jvp_grad_laplacian`, `minsr_update`, `spring_update`, `SpringState` |
-| `hamiltonian/` | `HamiltonianPredictor`, `block_from_irreps`, `PairExpansion` |
+| `hamiltonian/` | `BlockHamiltonianPredictor`, `BlockHamiltonianConfig`, `HamiltonianBlockExpansion`, `qh9_block_loss` |
 
 `SCFSolver` runs the RKS SCF on the McMurchie-Davidson Gaussian-integral
 backend (`opifex.core.quantum.backend.JaxGaussianBackend`) with the LDA

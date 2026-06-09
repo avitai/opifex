@@ -32,6 +32,7 @@ from opifex.geometry.algebra.wigner import wigner_d
 from opifex.neural.quantum.hamiltonian._orbital_layout import (
     atom_orbital_counts,
     BLOCK_IRREPS,
+    block_validity_mask,
     FULL_ORBITALS,
 )
 from opifex.neural.quantum.hamiltonian.block_predictor import (
@@ -246,6 +247,48 @@ def test_assemble_matrix_is_symmetric_and_correctly_sized() -> None:
     assert expected_ao == 24
     assert matrix.shape == (expected_ao, expected_ao)
     assert jnp.allclose(matrix, matrix.T, atol=1e-5)
+
+
+def _assembled_ao_wigner(atomic_numbers: jax.Array, rotation: jax.Array) -> jax.Array:
+    """Build the ``(n_ao, n_ao)`` block-diagonal Wigner-D of an assembled matrix.
+
+    The assembled dense matrix orders AOs atom-major, each atom contributing its
+    populated slots of the 14-dim ``BLOCK_IRREPS`` block. The matching rotation is
+    therefore block-diagonal over atoms, each atom's block being the full
+    ``(14, 14)`` ``D_14`` restricted to that atom's valid AO slots (whole shells,
+    so the restriction is exact).
+    """
+    full = _wigner_block(rotation)
+    diag_mask = block_validity_mask(atomic_numbers)
+    per_atom: list[jax.Array] = []
+    for atom in range(int(atomic_numbers.shape[0])):
+        valid = jnp.where(jnp.diagonal(diag_mask[atom]))[0]
+        per_atom.append(full[jnp.ix_(valid, valid)])
+    return jax.scipy.linalg.block_diag(*per_atom)
+
+
+def test_assembled_matrix_is_equivariant() -> None:
+    r"""The assembled dense matrix obeys ``H(R r) = D(R) H(r) D(R)^T`` (Q4 gate)."""
+    jax.config.update("jax_enable_x64", True)
+    predictor = _predictor(seed=4)
+    atomic_numbers, positions, edge_index, node_batch = _single_batch(*_water())
+    rotation = _random_rotation(11)
+
+    base_out = predictor(atomic_numbers, positions, edge_index, node_batch)
+    rotated_out = predictor(atomic_numbers, positions @ rotation.T, edge_index, node_batch)
+    base = predictor.assemble_matrix(
+        base_out["diagonal_blocks"], base_out["off_diagonal_blocks"], atomic_numbers, edge_index
+    )
+    rotated = predictor.assemble_matrix(
+        rotated_out["diagonal_blocks"],
+        rotated_out["off_diagonal_blocks"],
+        atomic_numbers,
+        edge_index,
+    )
+    wigner = _assembled_ao_wigner(atomic_numbers, rotation)
+    expected = wigner @ base @ wigner.T
+    residual = float(jnp.max(jnp.abs(rotated - expected)))
+    assert residual < 1e-5, residual
 
 
 # ----------------------------------------------------------- transform compatibility

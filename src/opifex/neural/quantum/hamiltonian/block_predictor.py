@@ -14,8 +14,8 @@ Because the blocks are fixed-size (the def2-SVP second-row layout
 ``3x0e + 2x1e + 1x2e``) and the NequIP convolution scatters messages **only over
 within-molecule edges**, one compiled forward (for a given padded ``(A, E)``)
 runs over *any* concatenation of molecules -- no per-composition assembly plan and
-no per-molecule recompile. This replaces the old per-composition dense assembly of
-:class:`~opifex.neural.quantum.hamiltonian.predictor.HamiltonianPredictor`.
+no per-molecule recompile (the per-composition dense-assembly predictor it
+replaced has been removed).
 
 Architecture (QHNet forward, ``divelab/AIRS`` ``QHNet.forward``)
 ---------------------------------------------------------------
@@ -315,8 +315,7 @@ class BlockHamiltonianPredictor(nnx.Module):
 
         The sender feature is tensored with the edge spherical harmonics and
         radially modulated (the NequIP edge message), and a mixed receiver feature
-        is added -- the same construction used by
-        :class:`~opifex.neural.quantum.hamiltonian.predictor.HamiltonianPredictor`.
+        is added (the QHNet off-diagonal edge-message construction).
         """
         senders, receivers = edge_index[0], edge_index[1]
         sender_features = IrrepsArray(node_features.irreps, node_features.array[senders])

@@ -25,38 +25,41 @@ model that bakes this law in never has to learn the symmetry from data and needs
 far fewer training examples — a single converged geometry is enough geometric
 supervision to test that the architecture can represent a real matrix.
 
-## Design: trunk → blocks → assemble → symmetrize
+## Design: trunk → fixed-size blocks → assemble → symmetrize
 
-`opifex.neural.quantum.hamiltonian.HamiltonianPredictor` (registered
-`@register_property_head("hamiltonian")`) builds the dense matrix in four stages,
-every primitive reused from the equivariant kit:
+`opifex.neural.quantum.hamiltonian.BlockHamiltonianPredictor` builds the matrix
+in fixed-size **blocks**, every primitive reused from the equivariant kit:
 
 1. **Steerable trunk.** The NequIP tensor-product message passing
    (`opifex.neural.atomistic.backbones.nequip`) produces a *full steerable*
    per-atom feature (an `IrrepsArray`, not just the scalar readout the energy head
    uses). The trunk is shared with the
    [Atomistic Potentials](atomistic-potentials.md) family.
-2. **Node head — diagonal blocks `H_ii`.** For every intra-atom shell pair
-   `(l_i, l_j)` an equivariant `PairExpansion` turns the atom's node feature into
-   the `(2 l_i + 1) x (2 l_j + 1)` on-site block.
+2. **Node head — diagonal blocks `H_ii`.** A shared `HamiltonianBlockExpansion`
+   turns each atom's node feature and invariant embedding into the full
+   `(14, 14)` def2-SVP on-site block (`BLOCK_IRREPS = 3x0e + 2x1e + 1x2e`), which
+   the forward symmetrizes (`D + D^T`).
 3. **Edge head — off-diagonal blocks `H_ij`.** For every directed atom pair a
    mixed sender/receiver edge feature (a radially-modulated tensor product of the
    sender's features with the edge spherical harmonics, combined with the
-   receiver's features) is expanded per shell-pair type into the off-site block.
-4. **Scatter and symmetrize.** Blocks are written into the dense matrix at their
-   static `(row_offset, col_offset)` AO positions, then `H = H~ + H~^T` makes the
-   matrix Hermitian. The off-diagonal contribution naturally realises
-   `H_ij = H_ji^T` because the directed graph contains both `(i, j)` and `(j, i)`
-   and the transpose of the `(j, i)` block lands on the `(i, j)` sub-matrix
-   (QHNet's `transpose_edge_index` symmetrization).
+   receiver's features) is expanded by the *same* head into the `(14, 14)`
+   off-site block.
+4. **Mask, scatter and symmetrize.** `assemble_matrix` masks each `(14, 14)`
+   block to its element's valid AO slots (`block_validity_mask` — hydrogen keeps
+   `2s + 1p`, C/N/O/F all 14), scatters it to the per-atom AO offsets
+   (`atom_orbital_counts`), writes off-diagonal blocks at both `(i, j)` and
+   `(j, i)`, then `H = H~ + H~^T` makes the matrix Hermitian (QHNet's
+   `transpose_edge_index` symmetrization).
 
 Because every stage is equivariant, the assembled matrix obeys
 `H(R x) = D(R) H(x) D(R)^T` **for any weights**, so the symmetry is structural,
-not learned. The per-block shapes are static (one shared `PairExpansion` per
-angular-momentum pair type), so the predictor is `jit`/`grad`/`vmap` clean over
-geometry.
+not learned. The blocks are a *fixed* `(14, 14)` per atom / per edge and the
+NequIP convolution scatters only over within-molecule edges, so **any
+concatenation of heterogeneous molecules runs through one compiled forward** — no
+per-composition assembly plan and no per-molecule recompile. The predictor is
+`jit`/`grad`/`vmap` clean over geometry.
 
-## The block expansion (`block_from_irreps`)
+## The block expansion (`HamiltonianBlockExpansion`)
 
 The heart of the predictor is the *inverse* use of the Clebsch-Gordan tensor that
 drives the tensor product. A tensor product **couples** two irreps `l_i ⊗ l_j`
@@ -81,10 +84,10 @@ The public surface lives in `opifex.neural.quantum.hamiltonian`:
 
 | Symbol | Role |
 |--------|------|
-| `pair_feature_irreps(l_i, l_j)` | the steerable layout `sum_L 1 x L` a block expands from (triangle rule, parity `(-1)^L`) |
-| `block_from_irreps(feature, l_i, l_j)` | the last-index Clebsch-Gordan contraction: steerable feature → dense `(2l_i+1, 2l_j+1)` block |
-| `PairExpansion` | learnable expansion into `mul_i x mul_j` blocks; the multiplicity axes distinguish same-`l` shells (e.g. oxygen `1s`/`2s`) |
-| `HamiltonianPredictor` | the registered `"hamiltonian"` head assembling node + edge blocks into a symmetric matrix |
+| `BLOCK_IRREPS` | the 14-dim row/col representation of a Fock block (`3x0e + 2x1e + 1x2e`) |
+| `HamiltonianBlockExpansion` | the shared block head: last-index Clebsch-Gordan contraction of a steerable feature into a `(14, 14)` block, driven by an invariant embedding |
+| `block_validity_mask` / `atom_orbital_counts` | the per-element AO mask (hydrogen `2s + 1p`, C/N/O/F all 14) and populated-AO counts assembly uses |
+| `BlockHamiltonianPredictor` | the heterogeneous-batchable predictor: per-atom diagonal + per-edge off-diagonal blocks, with `assemble_matrix` building the symmetric dense matrix |
 
 ## Example
 
@@ -92,70 +95,58 @@ The public surface lives in `opifex.neural.quantum.hamiltonian`:
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.core.quantum.basis import AtomicOrbitalBasis
-from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.neural.quantum.hamiltonian import (
-    HamiltonianPredictor, HamiltonianPredictorConfig,
+    BlockHamiltonianConfig, BlockHamiltonianPredictor,
 )
 
-water = MolecularSystem(
-    atomic_numbers=jnp.array([8, 1, 1]),
-    positions=jnp.array([[0.0, 0.0, 0.0], [0.0, 1.43, 1.11], [0.0, -1.43, 1.11]]),
-    basis_set="sto-3g",
-)
-basis = AtomicOrbitalBasis.from_molecular_system(water, basis_name="sto-3g")
-predictor = HamiltonianPredictor(
-    basis=basis,
-    config=HamiltonianPredictorConfig(
-        hidden_irreps="32x0e + 24x1o + 16x2e",  # must carry every degree the s/p blocks reach
+predictor = BlockHamiltonianPredictor(
+    config=BlockHamiltonianConfig(
+        hidden_irreps="32x0e + 16x1o + 8x2e",  # must carry every degree the s/p/d blocks reach
         sh_lmax=2,
         num_interactions=2,
-        cutoff=8.0,                               # Bohr
-        property_name="hamiltonian",              # or "overlap" for S
+        cutoff=20.0,                            # Bohr
     ),
     rngs=nnx.Rngs(0),
 )
-prediction = predictor(water)["hamiltonian"]   # (7, 7), symmetric and equivariant
+
+# A flat concatenated batch: (A,) atomic numbers, (A, 3) positions (Bohr) and a
+# (2, E) within-molecule directed (senders, receivers) edge index. Water (O,H,H).
+atomic_numbers = jnp.array([8, 1, 1])
+positions = jnp.array([[0.0, 0.0, 0.0], [0.0, 1.43, 1.11], [0.0, -1.43, 1.11]])
+edge_index = jnp.array([[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 0, 1]], dtype=jnp.int32)
+
+blocks = predictor(atomic_numbers, positions, edge_index)
+# blocks["diagonal_blocks"]: (3, 14, 14), blocks["off_diagonal_blocks"]: (6, 14, 14)
+matrix = predictor.assemble_matrix(
+    blocks["diagonal_blocks"], blocks["off_diagonal_blocks"], atomic_numbers, edge_index
+)   # (24, 24), symmetric and equivariant (O 14 + H 5 + H 5)
 ```
 
-A single trained predictor generalises across molecules: `predictor.rebind(basis)`
-returns a copy bound to another molecule's AO basis, sharing the trunk and
-per-pair-type expansion weights and swapping only the static block plan (a jit
-recompile for the new atom/orbital count, as for any static-shape change).
+A single trained predictor generalises across molecules with **no rebinding**:
+the same weights and the same compiled forward run over any concatenation of
+molecules (only the padded atom/edge counts are static), so heterogeneous QH9
+batches need no per-composition recompile.
 
-## Validation against PySCF
+## Training against QH9
 
-The reference target is the converged restricted-Hartree-Fock Fock matrix and AO
-overlap from [PySCF](https://pyscf.org/), run with `cart=True` so its Cartesian-AO
-ordering matches opifex's STO-3G shell/AO layout exactly (atom-major; `s` shells
-then `p` in `(x, y, z)`). Fitting the predictor to a single water geometry
-reproduces the Fock matrix to a fraction of a milli-Hartree, and the
-molecular-orbital energies of the predicted `H` (with the true `S`) match the RHF
-eigenvalues — a physics-level check that the matrix is usable for the downstream
-generalised eigenproblem, not just close in norm.
+The training target is the QH9 benchmark: converged B3LYP/def2-SVP Fock matrices
+for the QM9 molecules (Yu et al. 2023, QH9). `opifex.data.sources.qh9_blocks` /
+`qh9_block_stream` read the QH9-Stable SQLite database directly (no `torch`),
+apply the def2-SVP convention transform into opifex's spherical AO ordering, cut
+each Fock matrix into the per-atom / per-edge `(14, 14)` blocks the predictor
+emits, and collate heterogeneous molecules into one flat batch. The masked block
+loss `qh9_block_loss` (with `make_block_train_step` / `make_block_eval_step`)
+compares only the valid AO slots. `scripts/train_qh9_blocks.py` wires the data
+pipeline, predictor and loss into an end-to-end training run.
 
-For an end-to-end run — PySCF ground truth, building and fitting the predictor,
-reporting `H`/`S` MAE and orbital energies, and verifying the block-wise
-equivariance under random rotations with `wigner_d` — see
+For a thin, untrained demo of the block mechanics — building the predictor,
+running a concatenated batch of two molecules, assembling a symmetric dense Fock,
+and verifying the assembled-matrix equivariance `H(R x) = D(R) H(x) D(R)^T` with
+`wigner_d` — see
 [Equivariant DFT Hamiltonian Prediction](../examples/quantum-chemistry/hamiltonian-prediction.md).
-
-## STO-3G needs no Cartesian-to-spherical transform
-
-opifex's STO-3G covers H/C/N/O, whose shells are `s` and `p` only (`l ∈ {0, 1}`).
-For `s` and `p` the Cartesian AO components coincide with the real
-spherical-harmonic (irrep) components in the identical `(x, y, z)` order used by
-`wigner_d`, so the predicted blocks land directly in opifex's AO ordering and no
-Cartesian-to-spherical transform is needed. This is what makes the STO-3G example
-fully self-contained.
 
 ## Extending
 
-- **Larger bases with `d` orbitals (def2-SVP and up).** For `l ≥ 2` the number of
-  Cartesian components (`GaussianShell.n_cartesian`) exceeds `2l + 1`, so the
-  predicted spherical blocks must be mapped to the basis's Cartesian AOs through a
-  Cartesian↔solid-harmonic transform before comparison with the integral engine.
-  That transform belongs with the basis module and is the main step to reach the
-  QH9 benchmark.
 - **SO(2)-frame convolution (QHNetV2).** Yu et al. 2025
   ([arXiv:2506.09398](https://arxiv.org/abs/2506.09398)), building on eSCN
   (Passaro & Zitnick 2023, [arXiv:2302.03655](https://arxiv.org/abs/2302.03655)),
@@ -164,10 +155,10 @@ fully self-contained.
   scalability lever for large bases. The present trunk uses the full `SO(3)`
   tensor product; the SO(2)-frame upgrade is a drop-in replacement for the edge
   tensor product.
-- **The QH9 benchmark.** QH9 (Yu et al. 2023,
-  [arXiv:2306.09549](https://arxiv.org/abs/2306.09549)) provides converged DFT
-  Hamiltonians for QM9 molecules at the B3LYP/def2-SVP level — the standard
-  training/evaluation target once the def2-SVP transform is in place.
+- **Overlap matrix `S` and larger bases.** The block head emits the def2-SVP
+  Fock blocks; a second head with the same mechanism predicts the AO overlap `S`
+  (which obeys the identical transformation law), and the `BLOCK_IRREPS` layout
+  extends to bases beyond def2-SVP by widening the per-atom block irreps.
 
 ## See also
 
