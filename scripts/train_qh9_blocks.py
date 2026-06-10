@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shutil
 import sys
 import time
 from collections.abc import Iterator  # noqa: TC003
@@ -66,6 +67,7 @@ from opifex.neural.quantum.hamiltonian.block_training import (
     make_fused_block_eval_step,
     make_fused_block_train_step,
 )
+from opifex.neural.quantum.hamiltonian.qh9_eval import load_predictor_checkpoint
 
 
 logger = logging.getLogger("train_qh9_blocks")
@@ -123,6 +125,7 @@ class TrainArgs:
     num_interactions: int
     out: Path
     val_every: int
+    resume: bool
 
 
 def _parse_args(argv: list[str] | None) -> TrainArgs:
@@ -142,6 +145,15 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     parser.add_argument("--num-interactions", type=int, default=3, dest="num_interactions")
     parser.add_argument("--out", type=Path, default=_DEFAULT_OUT)
     parser.add_argument("--val-every", type=int, default=1, dest="val_every")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Restore the highest completed-epoch checkpoint under {out}/checkpoints and "
+            "continue training (appending to train.log + metrics.json). The optimizer "
+            "moments and LR schedule restart fresh (only parameters are checkpointed)."
+        ),
+    )
     namespace = parser.parse_args(argv)
     return TrainArgs(
         db=namespace.db,
@@ -156,16 +168,21 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
         num_interactions=namespace.num_interactions,
         out=namespace.out,
         val_every=namespace.val_every,
+        resume=namespace.resume,
     )
 
 
-def _configure_logging(out_dir: Path) -> None:
-    """Configure flushed logging to ``{out}/train.log`` and stdout."""
+def _configure_logging(out_dir: Path, *, append: bool) -> None:
+    """Configure flushed logging to ``{out}/train.log`` and stdout.
+
+    A resumed run appends to the existing ``train.log`` so the original epochs'
+    history is preserved across the relaunch.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S")
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
-    file_handler = logging.FileHandler(out_dir / "train.log", mode="w")
+    file_handler = logging.FileHandler(out_dir / "train.log", mode="a" if append else "w")
     file_handler.setFormatter(formatter)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
@@ -299,16 +316,115 @@ def _molecule_count(batch: dict[str, jax.Array]) -> int:
 # ---------------------------------------------------------------------------
 # Checkpointing
 # ---------------------------------------------------------------------------
+def _save_params(checkpoint_dir: Path, predictor: BlockHamiltonianPredictor, name: str) -> None:
+    """Orbax-checkpoint the predictor parameter state under ``checkpoint_dir/name``."""
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    params = nnx.state(predictor, nnx.Param)
+    pure = nnx.to_pure_dict(params)
+    target = checkpoint_dir / name
+    with ocp.StandardCheckpointer() as checkpointer:
+        checkpointer.save(target.absolute(), pure, force=True)
+
+
 def _save_checkpoint(
     checkpoint_dir: Path, predictor: BlockHamiltonianPredictor, epoch: int
 ) -> None:
     """Orbax-checkpoint the best-val parameter state at ``epoch``."""
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    params = nnx.state(predictor, nnx.Param)
-    pure = nnx.to_pure_dict(params)
-    target = checkpoint_dir / f"best_epoch_{epoch}"
-    with ocp.StandardCheckpointer() as checkpointer:
-        checkpointer.save(target.absolute(), pure, force=True)
+    _save_params(checkpoint_dir, predictor, f"best_epoch_{epoch}")
+
+
+def _save_last_checkpoint(
+    checkpoint_dir: Path, predictor: BlockHamiltonianPredictor, epoch: int
+) -> None:
+    """Checkpoint the *last completed* epoch, keeping only the most recent one.
+
+    Best-val checkpoints lag whenever validation plateaus, so resume relies on this
+    rolling per-epoch snapshot to continue from the genuinely last finished epoch
+    rather than re-training back to the last improvement.
+    """
+    if checkpoint_dir.exists():
+        for previous in checkpoint_dir.glob("last_epoch_*"):
+            shutil.rmtree(previous)
+    _save_params(checkpoint_dir, predictor, f"last_epoch_{epoch}")
+
+
+def _latest_resume_checkpoint(checkpoint_dir: Path) -> tuple[Path, int] | None:
+    """Return the highest completed-epoch checkpoint (and its epoch), or ``None``.
+
+    Considers both the rolling ``last_epoch_*`` snapshot and the ``best_epoch_*``
+    history; on a tie the ``last_epoch_*`` snapshot wins (it is the most recent
+    parameter state, including non-improving epochs).
+    """
+    if not checkpoint_dir.exists():
+        return None
+    candidates: list[tuple[int, bool, Path]] = []
+    for path in checkpoint_dir.iterdir():
+        for prefix in ("last_epoch_", "best_epoch_"):
+            if path.name.startswith(prefix):
+                epoch = int(path.name.removeprefix(prefix))
+                candidates.append((epoch, prefix == "last_epoch_", path))
+    if not candidates:
+        return None
+    epoch, _, path = max(candidates, key=lambda item: (item[0], item[1]))
+    return path, epoch
+
+
+def _read_prior_metrics(
+    out_dir: Path, before_epoch: int
+) -> tuple[list[dict[str, object]], float | None]:
+    """Load completed epoch records (< ``before_epoch``) and the best val-MAE so far.
+
+    Returns the carried-forward per-epoch records and the minimum recorded
+    validation Hamiltonian-MAE, so a resumed run extends ``metrics.json`` and only
+    checkpoints a *new* best.
+    """
+    metrics_path = out_dir / "metrics.json"
+    if not metrics_path.exists():
+        return [], None
+    with metrics_path.open(encoding="utf-8") as handle:
+        record = json.load(handle)
+    prior = [row for row in record.get("epochs", []) if int(row["epoch"]) < before_epoch]
+    val_maes = [
+        float(row["val_hamiltonian_mae_hartree"])
+        for row in prior
+        if row.get("val_hamiltonian_mae_hartree") is not None
+    ]
+    return prior, (min(val_maes) if val_maes else None)
+
+
+def _maybe_resume(
+    args: TrainArgs,
+    predictor: BlockHamiltonianPredictor,
+    checkpoint_dir: Path,
+) -> tuple[BlockHamiltonianPredictor, int, float | None, list[dict[str, object]]]:
+    """Restore the latest checkpoint when ``--resume`` is set, else a fresh start.
+
+    Returns the (possibly restored) predictor, the epoch to start from, the best
+    validation Hamiltonian-MAE recorded so far, and the carried-forward per-epoch
+    records. Only parameters are checkpointed, so the optimizer moments and the
+    learning-rate schedule restart fresh on resume.
+    """
+    if not args.resume:
+        return predictor, 1, None, []
+    resumed = _latest_resume_checkpoint(checkpoint_dir)
+    if resumed is None:
+        logger.info(
+            "--resume given but no checkpoint under %s; starting fresh from epoch 1.",
+            checkpoint_dir,
+        )
+        return predictor, 1, None, []
+    checkpoint_path, completed_epoch = resumed
+    predictor = load_predictor_checkpoint(predictor, checkpoint_path)
+    start_epoch = completed_epoch + 1
+    prior_records, best_val = _read_prior_metrics(args.out, before_epoch=start_epoch)
+    logger.info(
+        "resuming from epoch %d (restored %s; best val so far %s Ha). "
+        "Optimizer moments + LR schedule restart fresh.",
+        start_epoch,
+        checkpoint_path.name,
+        "n/a" if best_val is None else f"{best_val:.6e}",
+    )
+    return predictor, start_epoch, best_val, prior_records
 
 
 # ---------------------------------------------------------------------------
@@ -374,9 +490,20 @@ def _run(args: TrainArgs) -> dict[str, object]:
     n_params = sum(int(x.size) for x in jax.tree_util.tree_leaves(nnx.state(predictor, nnx.Param)))
     _startup_summary(args, splits, predictor, n_params)
 
+    checkpoint_dir = args.out / "checkpoints"
+    predictor, start_epoch, best_val, prior_records = _maybe_resume(args, predictor, checkpoint_dir)
+
     if len(splits.train) == 0:
         logger.warning("empty training split (tiny --limit); nothing to train.")
         return {"epochs": [], "best_val_hamiltonian_mae_hartree": None}
+
+    if start_epoch > args.epochs:
+        logger.info(
+            "already trained %d epochs (>= --epochs %d); nothing to do.",
+            start_epoch - 1,
+            args.epochs,
+        )
+        return _metrics_record(args, n_params, best_val, prior_records)
 
     train_batches = _PaddedBatches(splits.train, args.batch_size)
     val_batches = _PaddedBatches(splits.val, args.batch_size)
@@ -388,12 +515,10 @@ def _run(args: TrainArgs) -> dict[str, object]:
     train_step = make_fused_block_train_step(decode_op, cut_op, num_molecules=args.batch_size)
     eval_step = make_fused_block_eval_step(decode_op, cut_op)
 
-    checkpoint_dir = args.out / "checkpoints"
-    best_val: float | None = None
-    epoch_records: list[dict[str, object]] = []
+    epoch_records: list[dict[str, object]] = list(prior_records)
     log_every = max(len(train_batches) // 10, 1)
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         result = _train_epoch(
             train_batches,
             predictor,
@@ -437,8 +562,21 @@ def _run(args: TrainArgs) -> dict[str, object]:
                     best_val = val_mae
                     _save_checkpoint(checkpoint_dir, predictor, epoch)
                     logger.info("epoch %d  new best val H-MAE -> checkpointed.", epoch)
+        # Rolling last-completed-epoch snapshot so a crash resumes from here, not
+        # only from the last best-val improvement.
+        _save_last_checkpoint(checkpoint_dir, predictor, epoch)
         epoch_records.append(record)
 
+    return _metrics_record(args, n_params, best_val, epoch_records)
+
+
+def _metrics_record(
+    args: TrainArgs,
+    n_params: int,
+    best_val: float | None,
+    epoch_records: list[dict[str, object]],
+) -> dict[str, object]:
+    """Assemble the ``metrics.json`` record from the run's config and epoch metrics."""
     return {
         "config": {
             "limit": args.limit,
@@ -460,7 +598,7 @@ def _run(args: TrainArgs) -> dict[str, object]:
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point for the QH9 block-form Hamiltonian training driver."""
     args = _parse_args(argv)
-    _configure_logging(args.out)
+    _configure_logging(args.out, append=args.resume)
     metrics = _run(args)
     metrics_path = args.out / "metrics.json"
     with metrics_path.open("w", encoding="utf-8") as handle:
