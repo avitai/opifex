@@ -88,6 +88,7 @@ class TuckerDecomposition(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
+        """Initialise the Tucker core and factor matrices for the given tensor shape."""
         super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
@@ -113,6 +114,7 @@ class TuckerDecomposition(nnx.Module):
         self.factors_imag = nnx.List(factor_imag)
 
     def _complex_parts(self) -> tuple[jax.Array, list[jax.Array]]:
+        """Assemble the complex Tucker core and factor matrices from real/imag parts."""
         core = self.core_real[...] + 1j * self.core_imag[...]
         factors = [
             r[...] + 1j * im[...]
@@ -160,6 +162,7 @@ class CPDecomposition(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
+        """Initialise the CP rank-one factor matrices for the given tensor shape."""
         super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
@@ -186,6 +189,7 @@ class CPDecomposition(nnx.Module):
         self.factors_imag = nnx.List(factor_imag)
 
     def _complex_parts(self) -> tuple[jax.Array, list[jax.Array]]:
+        """Assemble the complex CP weights and factor matrices from real/imag parts."""
         weights = self.weights_real[...] + 1j * self.weights_imag[...]
         factors = [
             r[...] + 1j * im[...]
@@ -226,6 +230,7 @@ class TensorTrainDecomposition(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
+        """Initialise the tensor-train cores for the given tensor shape."""
         super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
@@ -251,6 +256,7 @@ class TensorTrainDecomposition(nnx.Module):
         self.cores_imag = nnx.List(core_imag)
 
     def _complex_cores(self) -> list[jax.Array]:
+        """Assemble the complex tensor-train cores from their real/imag parts."""
         return [
             r[...] + 1j * im[...] for r, im in zip(self.cores_real, self.cores_imag, strict=False)
         ]

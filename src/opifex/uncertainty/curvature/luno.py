@@ -90,6 +90,7 @@ def linearized_neural_operator_posterior(
     posterior_variance = 1.0 / laplace_posterior.precision_diagonal
 
     def _predict(theta: jax.Array) -> jax.Array:
+        """Evaluate the neural operator at parameters ``theta`` for the linearisation point."""
         return model_fn(theta, x)
 
     mean = _predict(laplace_posterior.mean)

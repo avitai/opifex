@@ -132,6 +132,7 @@ class NeuralPosteriorEstimator:
         optimizer = nnx.Optimizer(flow, optax.adam(self.learning_rate), wrt=nnx.Param)
 
         def loss_fn(model: ConditionalRealNVP) -> jax.Array:
+            """Negative mean log-posterior of ``theta`` under the flow conditioned on ``x``."""
             return -jnp.mean(model.log_prob(theta, condition=x))
 
         return _train_loop(model=flow, optimizer=optimizer, loss_fn=loss_fn, num_steps=num_steps)

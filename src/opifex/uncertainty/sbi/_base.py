@@ -226,6 +226,7 @@ def _train_loop(
 
     @nnx.jit
     def step(m: _ModelT, opt: nnx.Optimizer) -> jax.Array:
+        """Run one gradient-descent training step and return the batch loss."""
         loss, grads = nnx.value_and_grad(loss_fn)(m)
         opt.update(m, grads)
         return loss

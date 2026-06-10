@@ -177,6 +177,7 @@ def fit_markov_laplace_gp(
         carry: tuple[jax.Array, jax.Array, jax.Array],
         _: jax.Array,
     ) -> tuple[tuple[jax.Array, jax.Array, jax.Array], None]:
+        """Run one Newton step via a pseudo-Gaussian Kalman smoother pass."""
         latent_mean, _smoothed_state_means, _smoothed_state_covs = carry
         _, grad, w_diag, _sqrt_w = log_likelihood_components_fn(latent_mean, observations)
         # Pseudo-Gaussian observation: y_pseudo_i = f_i + grad_i / W_i.

@@ -103,6 +103,7 @@ class PolynomialChaosConfig:
     order: int
 
     def __post_init__(self) -> None:
+        """Validate the polynomial family and order at construction time."""
         if self.family not in _SUPPORTED_FAMILIES:
             raise ValueError(
                 f"Unsupported PCE family: {self.family!r}. "
@@ -129,6 +130,7 @@ class KLEConfig:
     truncation_policy: str = "leading"
 
     def __post_init__(self) -> None:
+        """Validate the mode count and truncation policy at construction time."""
         if self.num_modes <= 0:
             raise ValueError(f"num_modes must be positive; got {self.num_modes}.")
         if self.truncation_policy not in {"leading"}:
@@ -150,12 +152,14 @@ def _legendre_basis(degree: int, x: jax.Array) -> jax.Array:
         raise ValueError(f"degree must be >= 0; got {degree}.")
 
     def cond(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
+        """Continue the recurrence until the target Legendre degree is reached."""
         n, _, _ = carry
         return n < degree
 
     def body(
         carry: tuple[jax.Array, jax.Array, jax.Array],
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Advance the Legendre three-term recurrence by one degree."""
         n, p_prev, p_curr = carry
         n_next = n + 1
         p_next = ((2 * n_next - 1) * x * p_curr - (n_next - 1) * p_prev) / n_next
@@ -184,12 +188,14 @@ def _hermite_basis(degree: int, x: jax.Array) -> jax.Array:
         raise ValueError(f"degree must be >= 0; got {degree}.")
 
     def cond(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
+        """Continue the recurrence until the target Hermite degree is reached."""
         n, _, _ = carry
         return n < degree
 
     def body(
         carry: tuple[jax.Array, jax.Array, jax.Array],
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Advance the Hermite three-term recurrence by one degree."""
         n, h_prev, h_curr = carry
         n_next = n + 1
         h_next = x * h_curr - n * h_prev
@@ -473,6 +479,7 @@ def evaluate_basis(
         raise ValueError("degrees must contain at least one non-empty entry.")
 
     def basis_one(degree: int, values: jax.Array) -> jax.Array:
+        """Evaluate the scalar orthogonal polynomial of one degree at the inputs."""
         return _scalar_basis_one(family, degree, values, alpha=alpha, beta=beta)
 
     if x.ndim == 1:
@@ -1181,6 +1188,7 @@ class StochasticCollocationSurrogate:
         denom_prod = jnp.prod(denom, axis=1)  # (K,)
 
         def lagrange_at(xi_value: jax.Array) -> jax.Array:
+            """Evaluate all Lagrange cardinal basis functions at one query point."""
             numer = jnp.where(eye > 0, 1.0, xi_value - nodes_j)
             numer_prod = jnp.prod(numer, axis=1)  # (K,)
             basis = numer_prod / denom_prod

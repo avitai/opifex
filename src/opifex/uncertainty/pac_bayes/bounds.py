@@ -203,6 +203,7 @@ def quadratic_bound(
     def body(
         state: tuple[jax.Array, jax.Array], _: None
     ) -> tuple[tuple[jax.Array, jax.Array], None]:
+        """Perform one bisection step of the KL-inversion root-find."""
         lo, hi = state
         mid = 0.5 * (lo + hi)
         value = kl_bernoulli(risk, mid)

@@ -182,6 +182,7 @@ def _gauss_hermite_log_partition_and_derivatives(
     nodes, weights = _gauss_hermite_nodes_weights(num_quadrature_points)
 
     def per_obs_log_partition(m: jax.Array, v: jax.Array, y: jax.Array) -> jax.Array:
+        """Return the tilted log-partition for one observation's cavity."""
         return _log_partition_per_observation(
             m,
             v,
@@ -335,6 +336,7 @@ def fit_markov_pep_gp(
     def compute_log_partition_pack(
         cavity_means: jax.Array, cavity_variances: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Return the log-partition and its first two derivatives over all cavities."""
         if log_partition_fn is not None:
             return log_partition_fn(cavity_means, cavity_variances, observations, power)
         return _gauss_hermite_log_partition_and_derivatives(
@@ -350,6 +352,7 @@ def fit_markov_pep_gp(
         carry: tuple[jax.Array, jax.Array],
         _: jax.Array,
     ) -> tuple[tuple[jax.Array, jax.Array], None]:
+        """Run one power-EP sweep, updating the site parameters."""
         site_eta_1, site_eta_2 = carry
         _, _, post_means, post_variances = _kalman_with_sites(
             site_eta_1=site_eta_1,

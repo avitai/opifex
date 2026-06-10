@@ -81,6 +81,7 @@ class ActiveLearningConfig:
     extra_streams: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        """Validate the batch size and acquisition strategy at construction time."""
         if self.batch_size <= 0:
             raise ValueError(f"batch_size must be positive; got {self.batch_size!r}")
         if not isinstance(self.strategy, AcquisitionStrategy):
@@ -121,6 +122,7 @@ class AcquiredBatch:
 
 
 def _require_variance(pd: PredictiveDistribution) -> jax.Array:
+    """Return the floored predictive variance, raising if it is absent."""
     if pd.variance is None:
         raise ValueError("acquisition requires PredictiveDistribution.variance")
     return jnp.maximum(pd.variance, _VARIANCE_FLOOR)

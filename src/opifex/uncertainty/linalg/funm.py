@@ -159,6 +159,7 @@ def funm_chebyshev(
         _step: int,
         state: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Advance the Chebyshev recurrence by one term, accumulating the result."""
         value_state, t2_n_state, t1_n_state, t2_x_state, t1_x_state = state
         next_t2_n = 2.0 * nodes * t2_n_state - t1_n_state
         next_t1_n = t2_n_state

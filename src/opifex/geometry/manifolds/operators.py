@@ -97,11 +97,13 @@ class ManifoldNeuralOperator(nnx.Module):
 
         # Vectorized mapping to tangent space using vmap
         def map_to_tangent(point):
+            """Map one manifold point into the tangent space at the reference point."""
             valid_point = self._ensure_valid_point(point)
             return self.manifold.log_map(reference_point, valid_point)
 
         # Vectorized mapping from tangent space using vmap
         def map_from_tangent(tangent_vec):
+            """Map one tangent vector back onto the manifold via the exponential map."""
             manifold_point = self.manifold.exp_map(reference_point, tangent_vec)
             return self._ensure_valid_point(manifold_point)
 

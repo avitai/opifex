@@ -442,6 +442,7 @@ def _qehvi_inclusion_exclusion(
     _, batch_size, _ = samples.shape
 
     def subset_contribution(subset_mask: jax.Array) -> jax.Array:
+        """Return the acquisition contribution of one selected candidate subset."""
         # ``subset_mask`` is a (q,) boolean selecting the subset J. The
         # per-objective worst value across J uses ``where`` so excluded
         # points cannot lower the overlap vertex.
@@ -618,6 +619,7 @@ def fantasizer(
     scores = initial_scores + tiebreak_noise
 
     def step(carry: jax.Array, _: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Greedily select the highest-scoring remaining candidate index."""
         idx = jnp.argmax(carry)
         new_carry = carry.at[idx].set(-jnp.inf)
         return new_carry, idx

@@ -105,7 +105,9 @@ class _LaplaceModelProtocol(Protocol):
     Laplace posterior; ``x`` is the input batch.
     """
 
-    def __call__(self, parameters: jax.Array, x: jax.Array) -> jax.Array: ...
+    def __call__(self, parameters: jax.Array, x: jax.Array) -> jax.Array:
+        """Evaluate the model on inputs ``x`` for the given parameter vector."""
+        ...
 
 
 @struct.dataclass(slots=True, kw_only=True)
@@ -150,6 +152,7 @@ class _WrappedLaplaceModel:
     """
 
     def __init__(self, state: LaplaceState, capability: UQCapability) -> None:
+        """Store the fitted Laplace state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
@@ -166,6 +169,7 @@ class _WrappedLaplaceModel:
         parameter_samples = mean + noise * standard_deviation
 
         def _predict(parameters: jax.Array) -> jax.Array:
+            """Evaluate the model at one sampled parameter vector."""
             return self._state.model_fn(parameters, x)
 
         samples = jax.vmap(_predict)(parameter_samples)

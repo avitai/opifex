@@ -52,6 +52,7 @@ def cholesky_greedy(*, matrix: jax.Array, rank: int) -> jax.Array:
     residual_diag = jnp.diag(matrix)
 
     def body(step: int, state: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
+        """Add one greedily-pivoted Cholesky column for the current rank step."""
         factor_state, diag_state = state
         pivot = jnp.argmax(diag_state)
         pivot_value = diag_state[pivot]
@@ -94,6 +95,7 @@ def rp_cholesky(*, matrix: jax.Array, rank: int, key: jax.Array) -> jax.Array:
     def body(
         step: int, state: tuple[jax.Array, jax.Array, jax.Array]
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Add one randomly-pivoted Cholesky column for the current rank step."""
         factor_state, diag_state, key_state = state
         key_state, subkey = jax.random.split(key_state)
         diag_sum = jnp.sum(diag_state)

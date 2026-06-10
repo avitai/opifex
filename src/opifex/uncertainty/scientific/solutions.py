@@ -171,6 +171,7 @@ class SolutionDistribution:
             )
 
         def _project(leaf: _FieldArraysOptional) -> jax.Array | None:
+            """Select the requested field from one statistic leaf, or ``None``."""
             return None if leaf is None else leaf[field]
 
         interval = None if self.interval is None else self.interval.get(field)

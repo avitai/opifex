@@ -120,6 +120,7 @@ class BackendRouter:
         )
 
     def _require_known_family(self, family: str) -> None:
+        """Raise if ``family`` is not a registered backend family."""
         if family not in self._families:
             raise ValueError(
                 f"unknown family {family!r}. Registered families: "

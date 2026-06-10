@@ -69,6 +69,7 @@ def jvp_grad_laplacian(
     n = flat.shape[0]
 
     def flat_fn(x: Array) -> Array:
+        """Evaluate the wavefunction on a flattened coordinate vector."""
         return fn(x.reshape(positions.shape))
 
     value = flat_fn(flat)
@@ -77,6 +78,7 @@ def jvp_grad_laplacian(
     eye = jnp.eye(n, dtype=flat.dtype)
 
     def diagonal_entry(i: int, total: Array) -> Array:
+        """Accumulate the ``i``-th Hessian diagonal entry into the running trace."""
         return total + hvp(eye[i])[i]
 
     laplacian = jax.lax.fori_loop(0, n, diagonal_entry, jnp.zeros((), dtype=flat.dtype))
@@ -116,6 +118,7 @@ def forward_laplacian(
     n = flat.shape[0]
 
     def flat_fn(x: Array) -> Array:
+        """Evaluate the wavefunction on a flattened coordinate vector."""
         return fn(x.reshape(positions.shape))
 
     def first_directional(x: Array, direction: Array) -> tuple[Array, Array]:

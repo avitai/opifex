@@ -131,6 +131,7 @@ def lanczos_tridiag(
     def body(
         step: int, state: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Perform one Lanczos iteration, extending the tridiagonal factorisation."""
         basis_state, diag_state, off_diag_state, current_unit, previous_unit = state
         image = matvec(current_unit)
         alpha = jnp.dot(current_unit, image)
@@ -183,6 +184,7 @@ def arnoldi_hessenberg(
     hessenberg = jnp.zeros((num_matvecs, num_matvecs), dtype=init_vec.dtype)
 
     def body(step: int, state: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
+        """Perform one Arnoldi iteration, extending the Hessenberg factorisation."""
         basis_state, hessenberg_state = state
         current_unit = basis_state[step]
         image = matvec(current_unit)
@@ -249,6 +251,7 @@ def golub_kahan_bidiag(
     def body(
         step: int, state: tuple[jax.Array, jax.Array, jax.Array, jax.Array]
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Perform one Golub-Kahan iteration, extending the bidiagonalisation."""
         left_state, right_state, diag_state, off_diag_state = state
         previous_right = right_state[step - 1]
         previous_left = left_state[step - 1]

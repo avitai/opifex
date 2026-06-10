@@ -65,6 +65,7 @@ class _RatioClassifier(nnx.Module):
     """Simple MLP classifier ``(theta, x) -> logit`` (log-density ratio)."""
 
     def __init__(self, theta_dim: int, x_dim: int, hidden_dim: int, *, rngs: nnx.Rngs) -> None:
+        """Build a three-layer MLP mapping concatenated ``(theta, x)`` to a logit."""
         super().__init__()
         in_dim = theta_dim + x_dim
         self.linear1 = nnx.Linear(in_features=in_dim, out_features=hidden_dim, rngs=rngs)
@@ -72,6 +73,7 @@ class _RatioClassifier(nnx.Module):
         self.linear3 = nnx.Linear(in_features=hidden_dim, out_features=1, rngs=rngs)
 
     def __call__(self, theta: jax.Array, x: jax.Array) -> jax.Array:
+        """Return the classifier logit (log-density ratio) for ``(theta, x)``."""
         h = jnp.concatenate([theta, x], axis=-1)
         h = nnx.relu(self.linear1(h))
         h = nnx.relu(self.linear2(h))
@@ -112,6 +114,7 @@ class NeuralRatioEstimator:
     _classifier: _RatioClassifier | None = dataclasses.field(default=None, init=False)
 
     def __post_init__(self) -> None:
+        """Validate the configured MCMC backend at construction time."""
         _resolve_sbi_backend(self.backend)
 
     def fit(
@@ -150,6 +153,7 @@ class NeuralRatioEstimator:
         optimizer = nnx.Optimizer(classifier, optax.adam(self.learning_rate), wrt=nnx.Param)
 
         def loss_fn(model: _RatioClassifier) -> jax.Array:
+            """Binary cross-entropy distinguishing joint pairs from marginal pairs."""
             logit_pos = model(theta, x)
             logit_neg = model(theta_neg, x)
             # BCE-with-logits for {pos: 1, neg: 0}.
@@ -183,6 +187,7 @@ class NeuralRatioEstimator:
         )
 
         def log_posterior(theta: jax.Array) -> jax.Array:
+            """Return the unnormalised log-posterior ``log r(theta, x_obs) + log prior``."""
             theta_batch = theta[None, :]
             x_batch = observation[None, :]
             log_ratio = jnp.squeeze(classifier(theta_batch, x_batch), axis=0)

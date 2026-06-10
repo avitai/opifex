@@ -210,6 +210,7 @@ def _studentst_components_factory(*, df: float, scale: float) -> LikelihoodCompo
     def _components(
         f: jax.Array, y: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Return the Student-t log-likelihood, gradient, and Fisher curvature terms."""
         residual = y - f
         residual_sq = residual * residual
         u_form = 1.0 + residual_sq / df_times_scale_sq
@@ -350,6 +351,7 @@ def _beta_components_factory(*, scale: float) -> LikelihoodComponentsFn:
     def _components(
         f: jax.Array, y: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Return the Beta log-likelihood, gradient, and Fisher curvature terms."""
         mean = jax.nn.sigmoid(f)
         alpha = mean * scale_arr
         beta = scale_arr - alpha

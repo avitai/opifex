@@ -147,6 +147,7 @@ def _slr_linearisation(
     nodes, weights = _gauss_hermite_nodes_weights(num_quadrature_points)
 
     def per_obs_mu(m: jax.Array, v: jax.Array) -> jax.Array:
+        """Return the expected conditional mean under one observation's marginal."""
         return _expected_conditional_mean_scalar(
             m,
             v,
@@ -156,6 +157,7 @@ def _slr_linearisation(
         )
 
     def per_obs_response_and_cross(m: jax.Array, v: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the response variance and input-output cross-covariance for one observation."""
         sigma_points = m + jnp.sqrt(jnp.maximum(v, _PSEUDO_NOISE_FLOOR)) * nodes
         cond_mean, cond_var = conditional_moments_fn(sigma_points)
         mu = jnp.sum(weights * cond_mean)
@@ -261,6 +263,7 @@ def fit_markov_pl_gp(
         carry: tuple[jax.Array, jax.Array],
         _: jax.Array,
     ) -> tuple[tuple[jax.Array, jax.Array], None]:
+        """Run one posterior-linearisation sweep, refreshing the Gaussian posterior."""
         post_mean, post_var = carry
         mu, omega, slope = _slr_linearisation(
             mean_f=post_mean,

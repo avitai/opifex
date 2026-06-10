@@ -118,6 +118,7 @@ class _OperatorFunctionSpaceWrapper:
     """
 
     def __init__(self, *, wrapped: Any, function_space_metadata: MetadataItems) -> None:
+        """Store the wrapped operator and its function-space metadata."""
         self._wrapped = wrapped
         self._function_space_metadata = function_space_metadata
 

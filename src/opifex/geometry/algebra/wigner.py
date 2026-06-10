@@ -65,6 +65,7 @@ def _su2_clebsch_gordan_coefficient(
         return 0
 
     def factorial(value: float) -> int:
+        """Return the factorial of the nearest integer to ``value``."""
         return math.factorial(round(value))
 
     v_min = int(max(-j1 + j2 + m3, -j1 + m1, 0))

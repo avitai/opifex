@@ -50,6 +50,7 @@ def _pairwise_distances(x1: jax.Array, x2: jax.Array) -> jax.Array:
 
 
 def _require_positive_kernel_hparams(*, lengthscale: float, output_scale: float) -> None:
+    """Validate that lengthscale and output scale are strictly positive."""
     if lengthscale <= 0.0:
         raise ValueError(f"lengthscale must be strictly positive; got {lengthscale!r}.")
     if output_scale <= 0.0:
@@ -165,6 +166,7 @@ def multi_output_icm_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the intrinsic-coregionalisation-model (ICM) covariance."""
         features1, task1 = x1[:, :-1], x1[:, -1].astype(jnp.int32)
         features2, task2 = x2[:, :-1], x2[:, -1].astype(jnp.int32)
         base = base_kernel_fn(
@@ -229,6 +231,7 @@ def multi_output_lcm_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the linear-coregionalisation-model (LCM) covariance."""
         features1, task1 = x1[:, :-1], x1[:, -1].astype(jnp.int32)
         features2, task2 = x2[:, :-1], x2[:, -1].astype(jnp.int32)
         total = jnp.zeros((x1.shape[0], x2.shape[0]))
@@ -299,6 +302,7 @@ def damped_oscillator_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the damped-harmonic-oscillator (SHO) covariance."""
         omega = 1.0 / lengthscale
         tau = jnp.abs(x1[:, None, :] - x2[None, :, :])
         tau = jnp.sum(tau, axis=-1)  # (n, m); assumes 1-D time inputs
@@ -362,6 +366,7 @@ def celerite_complex_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the celerite complex-exponential covariance."""
         _require_positive_kernel_hparams(lengthscale=lengthscale, output_scale=output_scale)
         tau = jnp.abs(x1[:, None, :] - x2[None, :, :])
         tau = jnp.sum(tau, axis=-1)  # (n, m); assumes 1-D time inputs
@@ -412,6 +417,7 @@ def kernel_sum(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the sum of the component kernel covariances."""
         total = kernel_fns[0](x1, x2, lengthscale=lengthscale, output_scale=output_scale)
         for component_fn in kernel_fns[1:]:
             total = total + component_fn(x1, x2, lengthscale=lengthscale, output_scale=output_scale)
@@ -484,6 +490,7 @@ def graph_diffusion_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the graph-diffusion covariance between node indices."""
         indices1 = jnp.squeeze(x1, axis=-1) if x1.ndim == 2 else x1
         indices2 = jnp.squeeze(x2, axis=-1) if x2.ndim == 2 else x2
         indices1 = indices1.astype(jnp.int32)
@@ -537,6 +544,7 @@ def additive_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the additive covariance summed over per-dimension kernels."""
         if x1.shape[-1] != len(component_kernel_fns):
             raise ValueError(
                 "Input dimensionality must equal the number of components; "
@@ -591,6 +599,7 @@ def deep_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the deep-kernel covariance on neural-network-warped inputs."""
         return base_kernel_fn(
             feature_map(x1),
             feature_map(x2),
@@ -655,6 +664,7 @@ def constrained_rbf_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the RBF covariance with a positivity-constrained output."""
         base = rbf_kernel(x1, x2, lengthscale=lengthscale, output_scale=output_scale)
         ell_sq = lengthscale * lengthscale
         std_sq = input_std * input_std
@@ -786,6 +796,7 @@ def orthogonal_additive_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the orthogonal-additive-kernel (OAK) covariance."""
         if x1.shape[-1] != num_dimensions:
             raise ValueError(
                 "Input dimensionality must equal the number of base kernels; "
@@ -940,6 +951,7 @@ def carma_kernel(
         lengthscale: float,
         output_scale: float,
     ) -> jax.Array:
+        """Evaluate the CARMA-process covariance between time inputs."""
         _require_positive_kernel_hparams(lengthscale=lengthscale, output_scale=output_scale)
         tau = jnp.abs(x1[:, None, :] - x2[None, :, :])
         tau = jnp.sum(tau, axis=-1) / lengthscale  # (n, m); assumes 1-D time inputs

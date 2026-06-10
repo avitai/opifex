@@ -77,6 +77,7 @@ class FactorizedFourierLayer(nnx.Module):
 
         # Improved Xavier initialization for factor matrices
         def init_factor_matrix(shape, key):
+            """Xavier-initialise one factor matrix of the decomposition."""
             fan_in, fan_out = shape
             std = jnp.sqrt(2.0 / (fan_in + fan_out)) / jnp.sqrt(2)  # Complex adjustment
             real = jax.random.normal(key, shape) * std
@@ -85,6 +86,7 @@ class FactorizedFourierLayer(nnx.Module):
 
         # Specialized initialization for core tensor
         def init_core_tensor(shape, key):
+            """Initialise the Tucker core tensor with element-count-scaled variance."""
             # For 3D core tensor, use total number of elements for initialization
             total_elements = jnp.prod(jnp.array(shape))
             std = jnp.sqrt(2.0 / total_elements) / jnp.sqrt(2)
@@ -113,6 +115,7 @@ class FactorizedFourierLayer(nnx.Module):
 
         # Improved initialization with proper scaling
         def init_cp_factor(shape, key):
+            """Initialise one CP-decomposition factor matrix with fan-in scaling."""
             fan_in = shape[0]
             fan_out = rank
             std = jnp.sqrt(2.0 / (fan_in + fan_out + self.modes)) / jnp.sqrt(2)

@@ -80,6 +80,7 @@ class RiemannianManifold:
         """
 
         def metric_at_point(p):
+            """Evaluate the metric tensor at a single manifold point."""
             return self.metric_tensor(p)
 
         # Compute partial derivatives of metric tensor
@@ -115,6 +116,7 @@ class RiemannianManifold:
 
         # Compute Christoffel symbols and their derivatives
         def christoffel_at_point(p):
+            """Evaluate the Christoffel symbols at a single manifold point."""
             return self.christoffel_symbols(p)
 
         gamma = self.christoffel_symbols(point)
@@ -210,6 +212,7 @@ class RiemannianManifold:
 
         # Integrate using lax.fori_loop for JIT compatibility
         def integration_step(_, state):
+            """Advance the geodesic ODE state by one RK4 step."""
             return rk4_step(state, dt)
 
         final_state = jax.lax.fori_loop(0, n_steps, integration_step, initial_state)
@@ -245,6 +248,7 @@ class RiemannianManifold:
         max_iterations = 100
 
         def update_step(_, carry):
+            """Run one fixed-point iteration of the logarithmic-map solve."""
             tangent_vec, _ = carry
 
             # Compute gradient and loss
@@ -384,6 +388,7 @@ class RiemannianManifold:
 
         # Integrate using lax.fori_loop
         def integration_step(_, state):
+            """Advance the geodesic ODE state by one RK4 step."""
             return rk4_step(state, dt)
 
         final_state = jax.lax.fori_loop(0, n_steps, integration_step, initial_state)
@@ -424,6 +429,7 @@ def hyperbolic_metric(_: float = -1.0):
     """Hyperbolic metric in Poincaré disk model."""
 
     def metric_fn(point: ManifoldPoint) -> MetricTensor:
+        """Return the Poincaré-disk hyperbolic metric tensor at ``point``."""
         # Poincaré disk metric: g_ij = (4 / (1 - |x|²)²) δ_ij
         norm_sq = jnp.sum(point**2, axis=-1, keepdims=True)
         factor = 4.0 / (1.0 - norm_sq) ** 2
@@ -437,6 +443,7 @@ def spherical_metric(radius: float = 1.0):
     """Spherical metric tensor."""
 
     def metric_fn(point: ManifoldPoint) -> MetricTensor:
+        """Return the spherical metric tensor at ``point``."""
         # For sphere embedded in R³, metric in spherical coordinates
         # This is a simplified version - full implementation would depend on coordinates
         dim = point.shape[-1]
@@ -467,6 +474,7 @@ def product_metric(
     """
 
     def metric_fn(point: ManifoldPoint) -> MetricTensor:
+        """Return the block-diagonal product metric tensor at ``point``."""
         metric_blocks = []
 
         start_idx = 0

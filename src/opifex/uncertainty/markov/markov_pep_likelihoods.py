@@ -157,6 +157,7 @@ def _gaussian_per_obs_log_likelihood_factory(*, noise_std: float):
     noise_var = noise_std * noise_std
 
     def _log_lik(f: jax.Array, y: jax.Array) -> jax.Array:
+        """Return the Gaussian log-likelihood of ``y`` given latent ``f``."""
         return -0.5 * jnp.log(2.0 * jnp.pi * noise_var) - 0.5 * (y - f) ** 2 / noise_var
 
     return _log_lik
@@ -190,6 +191,7 @@ def _gaussian_log_partition_factory(*, noise_std: float) -> LogZAndDerivativesFn
         observations: jax.Array,
         power: float,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Return the power-EP Gaussian log-partition and its first two derivatives."""
         denom = cavity_variances * power + noise_var
         log_Z = (
             -0.5 * power * (log_2pi + jnp.log(noise_var))
@@ -286,6 +288,7 @@ def _studentst_per_obs_log_likelihood_factory(*, df: float, scale: float):
     )
 
     def _log_lik(f: jax.Array, y: jax.Array) -> jax.Array:
+        """Return the Student-t log-likelihood of ``y`` given latent ``f``."""
         residual_sq = (y - f) ** 2
         return log_const - 0.5 * (df_arr + 1.0) * jnp.log(1.0 + residual_sq / df_times_scale_sq)
 
@@ -362,6 +365,7 @@ def _beta_per_obs_log_likelihood_factory(*, scale: float):
     scale_arr = jnp.asarray(scale)
 
     def _log_lik(f: jax.Array, y: jax.Array) -> jax.Array:
+        """Return the Beta log-likelihood of ``y`` given latent ``f`` (logit link)."""
         mean = jax.nn.sigmoid(f)
         alpha = mean * scale_arr
         beta = scale_arr - alpha

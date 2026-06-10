@@ -157,6 +157,7 @@ def fenrir_data_loglik(
         carry: tuple[jax.Array, jax.Array],
         inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
+        """Run one backward smoothing step and accumulate its log-likelihood term."""
         next_mean_post, next_cov_post = carry
         m_filt, p_filt, transition, process_noise, observation, mask = inputs
         predicted_mean = transition @ m_filt

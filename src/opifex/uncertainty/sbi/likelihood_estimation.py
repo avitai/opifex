@@ -100,6 +100,7 @@ class NeuralLikelihoodEstimator:
     _flow: ConditionalRealNVP | None = dataclasses.field(default=None, init=False)
 
     def __post_init__(self) -> None:
+        """Validate the configured MCMC backend at construction time."""
         _resolve_sbi_backend(self.backend)
 
     def fit(
@@ -137,6 +138,7 @@ class NeuralLikelihoodEstimator:
         optimizer = nnx.Optimizer(flow, optax.adam(self.learning_rate), wrt=nnx.Param)
 
         def loss_fn(model: ConditionalRealNVP) -> jax.Array:
+            """Negative mean log-likelihood of ``x`` under the flow conditioned on ``theta``."""
             return -jnp.mean(model.log_prob(x, condition=theta))
 
         losses = _train_loop(
@@ -165,6 +167,7 @@ class NeuralLikelihoodEstimator:
         )
 
         def log_posterior(theta: jax.Array) -> jax.Array:
+            """Return the unnormalised log-posterior ``log lik(x_obs|theta) + log prior``."""
             theta_batch = theta[None, :]
             x_batch = observation[None, :]
             log_lik = jnp.squeeze(flow.log_prob(x_batch, condition=theta_batch), axis=0)

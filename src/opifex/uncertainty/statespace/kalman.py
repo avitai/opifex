@@ -121,6 +121,7 @@ def kalman_filter(
         carry: tuple[jax.Array, jax.Array],
         inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
+        """Run one filter step: predict, then update with the current observation."""
         mean, cov = carry
         observation, transition, process_noise, observation_cov = inputs
         predicted_mean, predicted_cov = kalman_predict(
@@ -173,6 +174,7 @@ def kalman_smoother(
         carry: tuple[jax.Array, jax.Array],
         inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
+        """Run one backward RTS smoothing step from the next state to the current one."""
         next_smoothed_mean, next_smoothed_cov = carry
         current_filter_mean, current_filter_cov, next_transition, next_process_noise = inputs
         predicted_mean = next_transition @ current_filter_mean
@@ -234,6 +236,7 @@ def kalman_log_likelihood(
         carry: tuple[jax.Array, jax.Array, jax.Array],
         inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[tuple[jax.Array, jax.Array, jax.Array], None]:
+        """Run one filter step and accumulate the innovation log-likelihood term."""
         mean, cov, ll = carry
         observation, transition, process_noise, observation_cov = inputs
         predicted_mean, predicted_cov = kalman_predict(

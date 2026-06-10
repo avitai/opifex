@@ -70,6 +70,7 @@ def matern12_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     stationary_cov = jnp.asarray([[variance]])
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
         return jnp.broadcast_to(jnp.exp(-dt / lengthscale)[..., None, None], (1, 1))
 
     return StateSpaceKernel(
@@ -92,6 +93,7 @@ def matern32_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     stationary_cov = jnp.asarray([[variance, 0.0], [0.0, 3.0 * variance / lengthscale**2]])
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
         inner = dt * jnp.asarray([[lam, 1.0], [-(lam**2), -lam]]) + jnp.eye(2)
         return jnp.exp(-dt * lam) * inner
 
@@ -124,6 +126,7 @@ def matern52_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     )
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
         dtlam = dt * lam
         matrix = jnp.asarray(
             [
@@ -174,6 +177,7 @@ def matern72_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     )
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
         lam2 = lam * lam
         lam3 = lam2 * lam
         dtlam = dt * lam
@@ -230,6 +234,7 @@ def cosine_kernel(*, frequency: float) -> StateSpaceKernel:
     stationary_cov = jnp.eye(2)
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
         angle = frequency * dt
         cos = jnp.cos(angle)
         sin = jnp.sin(angle)
@@ -273,7 +278,10 @@ def periodic_kernel(
     stationary_cov = jnp.kron(jnp.diag(q2), jnp.eye(2))
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
+
         def single_rotation(angle: jax.Array) -> jax.Array:
+            """Return the 2x2 rotation block for one harmonic at the given angle."""
             cos = jnp.cos(angle)
             sin = jnp.sin(angle)
             return jnp.asarray([[cos, -sin], [sin, cos]])
@@ -345,6 +353,7 @@ def quasi_periodic_matern12_kernel(
     stationary_cov = jnp.kron(matern.stationary_cov, periodic.stationary_cov)
 
     def state_transition(dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix over a step ``dt``."""
         return jnp.kron(matern.state_transition(dt), periodic.state_transition(dt))
 
     return StateSpaceKernel(

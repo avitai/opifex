@@ -279,6 +279,9 @@ name = "core does not import application/serving/infra layers"
 source_modules = ["opifex.core"]
 type = "forbidden"
 
+[tool.interrogate]
+fail-under = 95
+
 [tool.opifex]
 
 [tool.opifex.cuda]

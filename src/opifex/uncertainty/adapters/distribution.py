@@ -90,6 +90,7 @@ class BijxAdapterSpec(_DistributionAdapterSpecBase):
 
     @classmethod
     def _package_name(cls) -> str:
+        """Return the importable package name for this backend."""
         return "bijx"
 
 
@@ -120,6 +121,7 @@ class FlowJAXAdapterSpec(_DistributionAdapterSpecBase):
 
     @classmethod
     def _package_name(cls) -> str:
+        """Return the importable package name for this backend."""
         return "flowjax"
 
 
@@ -149,6 +151,7 @@ class DistraxAdapterSpec(_DistributionAdapterSpecBase):
 
     @classmethod
     def _package_name(cls) -> str:
+        """Return the importable package name for this backend."""
         return "distrax"
 
 

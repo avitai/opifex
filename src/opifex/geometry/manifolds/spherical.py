@@ -197,12 +197,14 @@ class SphericalManifold:
 
 # JAX pytree registration
 def _spherical_manifold_tree_flatten(manifold):
+    """Flatten a spherical manifold into its radius leaf and dimension aux data."""
     children = (manifold.radius,)
     aux_data = (manifold._dimension,)
     return children, aux_data
 
 
 def _spherical_manifold_tree_unflatten(aux_data, children):
+    """Reconstruct a spherical manifold from its radius leaf and dimension aux data."""
     (radius,) = children
     (dimension,) = aux_data
     return SphericalManifold(radius=radius, dimension=dimension)

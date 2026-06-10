@@ -99,6 +99,7 @@ def lbfgs_recover_alpha(
     def _compute_next_alpha(
         s_step_inner: jax.Array, z_step_inner: jax.Array, alpha_inner: jax.Array
     ) -> jax.Array:
+        """Update the diagonal inverse-Hessian estimate from one L-BFGS pair."""
         a = z_step_inner.T @ jnp.diag(alpha_inner) @ z_step_inner
         b = z_step_inner.T @ s_step_inner
         c = s_step_inner.T @ jnp.diag(1.0 / alpha_inner) @ s_step_inner
@@ -226,6 +227,7 @@ def _run_lbfgs_with_history(
     def step(
         carry: tuple[tuple[jax.Array, optax.OptState], _LBFGSHistory], iter_index: jax.Array
     ) -> tuple[tuple[tuple[jax.Array, optax.OptState], _LBFGSHistory], _LBFGSHistory]:
+        """Run one L-BFGS iteration and append its position/gradient to the history."""
         (params, state), previous_history = carry
         value, gradient = value_and_grad_fn(params, state=state)
         updates, new_state = solver.update(
@@ -253,10 +255,12 @@ def _run_lbfgs_with_history(
         )
 
         def _take_step(carry_in: tuple[tuple[jax.Array, optax.OptState], _LBFGSHistory]):
+            """Accept the new L-BFGS state when the step is valid."""
             del carry_in
             return (new_params, new_state), new_history
 
         def _stay(carry_in: tuple[tuple[jax.Array, optax.OptState], _LBFGSHistory]):
+            """Keep the previous L-BFGS state when the step is rejected."""
             existing_inner, existing_history = carry_in
             return existing_inner, existing_history
 
@@ -314,6 +318,7 @@ def pathfinder_approximate(
     """
 
     def objective_fn(position: jax.Array) -> jax.Array:
+        """Return the negative log-density, the quantity L-BFGS minimises."""
         return -log_density_fn(position)
 
     history = _run_lbfgs_with_history(
@@ -339,6 +344,7 @@ def pathfinder_approximate(
         theta: jax.Array,
         theta_grad: jax.Array,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Build the Gaussian approximation at one L-BFGS iterate and evaluate its ELBO."""
         beta, gamma = lbfgs_inverse_hessian_factors(history_S.T, history_Z.T, alpha_l)
         phi, log_q = bfgs_sample(
             rng_key=per_key,

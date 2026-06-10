@@ -57,11 +57,13 @@ def ggn_vector_product(
     """
 
     def model_of_parameters(theta: jax.Array) -> jax.Array:
+        """Evaluate the model on the fixed input batch as a function of ``theta``."""
         return model(theta, inputs)
 
     outputs, jacobian_v = jax.jvp(model_of_parameters, (parameters,), (vector,))
 
     def loss_of_outputs(output_values: jax.Array) -> jax.Array:
+        """Evaluate the loss on the fixed targets as a function of model outputs."""
         return loss(output_values, targets)
 
     loss_gradient = jax.grad(loss_of_outputs)

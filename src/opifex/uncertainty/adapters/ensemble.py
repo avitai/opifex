@@ -108,7 +108,9 @@ class _SWAGForwardProtocol(Protocol):
     ``ravel_pytree``) so this adapter stays a pure-array kernel.
     """
 
-    def __call__(self, flat_params: jax.Array, x: jax.Array) -> jax.Array: ...
+    def __call__(self, flat_params: jax.Array, x: jax.Array) -> jax.Array:
+        """Evaluate the base model on inputs ``x`` given flattened parameters."""
+        ...
 
 
 @struct.dataclass(slots=True, kw_only=True)
@@ -251,10 +253,12 @@ class _WrappedDeepEnsembleModel:
     """Predict via per-member forward pass + cross-member mean/variance."""
 
     def __init__(self, state: DeepEnsembleState, capability: UQCapability) -> None:
+        """Store the fitted ensemble state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the ensemble predictive mean and variance at inputs ``x``."""
         member_outputs = jnp.stack([member(x) for member in self._state.members], axis=0)
         return _predictive_from_member_samples(
             samples=member_outputs,
@@ -272,10 +276,12 @@ class _WrappedSnapshotEnsembleModel:
     """
 
     def __init__(self, state: SnapshotEnsembleState, capability: UQCapability) -> None:
+        """Store the fitted snapshot-ensemble state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the ensemble predictive mean and variance at inputs ``x``."""
         snapshot_outputs = jnp.stack([snapshot(x) for snapshot in self._state.members], axis=0)
         return _predictive_from_member_samples(
             samples=snapshot_outputs,
@@ -302,6 +308,7 @@ class _WrappedSWAGModel:
     """
 
     def __init__(self, state: SWAGState, capability: UQCapability) -> None:
+        """Store the fitted SWAG state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
@@ -325,12 +332,14 @@ class _WrappedSWAGModel:
         return first_moment[None, :] + diag_term + lowrank_term
 
     def predict_distribution(self, x: jax.Array, *, rngs: nnx.Rngs) -> PredictiveDistribution:
+        """Return the SWAG predictive distribution by sampling the weight posterior at ``x``."""
         key = extract_rng_key(
             rngs, streams=_SWAG_STREAMS, context="SWAGAdapter.predict_distribution"
         )
         weight_samples = self._sample_weights(key)
 
         def _forward(_carry: None, flat_params: jax.Array) -> tuple[None, jax.Array]:
+            """Evaluate the base model for one sampled weight vector."""
             return None, self._state.forward_fn(flat_params, x)
 
         _, samples = jax.lax.scan(_forward, None, weight_samples)
@@ -353,12 +362,16 @@ class _WrappedBatchEnsembleModel:
     """
 
     def __init__(self, state: BatchEnsembleState, capability: UQCapability) -> None:
+        """Store the fitted BatchEnsemble state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the ensemble predictive mean and variance at inputs ``x``."""
+
         # Vectorise the rank-1 forward over the member axis (alpha/gamma rows).
         def _member_forward(alpha_m: jax.Array, gamma_m: jax.Array) -> jax.Array:
+            """Evaluate one BatchEnsemble member via its rank-1 fast-weight factors."""
             return ((x * alpha_m) @ self._state.shared_kernel) * gamma_m
 
         member_outputs = jax.vmap(_member_forward)(self._state.alpha, self._state.gamma)
@@ -390,10 +403,12 @@ class _WrappedTestTimeAugmentationModel:
     """
 
     def __init__(self, state: TestTimeAugmentationState, capability: UQCapability) -> None:
+        """Store the test-time-augmentation state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the ensemble predictive mean and variance at inputs ``x``."""
         preds = jnp.stack(
             [self._state.model_fn(aug(x)) for aug in self._state.augmentations], axis=0
         )

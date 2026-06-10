@@ -65,6 +65,7 @@ def slq_logdet(
     probes = 2.0 * bernoulli.astype(jnp.float32) - 1.0
 
     def per_probe_estimate(probe: jax.Array) -> jax.Array:
+        """Return the Lanczos-quadrature log-determinant estimate for one probe vector."""
         length = jnp.linalg.norm(probe)
         _basis, diag, off_diag = lanczos_tridiag(
             matvec=matvec, init_vec=probe, num_matvecs=num_matvecs

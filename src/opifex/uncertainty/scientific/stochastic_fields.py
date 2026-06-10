@@ -90,6 +90,7 @@ def sample_pce_field(
     phi = evaluate_basis(family=basis.family, degrees=degrees, x=grid)
 
     def one_sample(key: jax.Array) -> jax.Array:
+        """Draw one random-field realisation from the polynomial-chaos expansion."""
         noise = jax.random.normal(key, shape=basis.coefficients.shape)
         # Scale the noise by the orthonormal projection so the noise has
         # the same variance scaling as the deterministic PCE expansion.

@@ -80,6 +80,7 @@ def _build_trajectory(rng_key: jax.Array, dim: int, num_levels: int) -> tuple[ja
     signs = jax.random.choice(sign_key, jnp.array([+1.0, -1.0]), shape=(dim,))
 
     def step(point: jax.Array, perturb_idx: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Perturb one input dimension to advance the Morris trajectory."""
         i = order[perturb_idx]
         new_point = point.at[i].add(signs[perturb_idx] * delta)
         return new_point, new_point

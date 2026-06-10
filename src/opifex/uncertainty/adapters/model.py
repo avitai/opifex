@@ -146,10 +146,12 @@ class _WrappedDeterministicModel:
     """
 
     def __init__(self, model: Callable[[jax.Array], jax.Array], capability: UQCapability) -> None:
+        """Store the deterministic model callable and its declared UQ capability."""
         self._model = model
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the model's predictive mean and variance at inputs ``x``."""
         pred = self._model(x)
         zeros = jnp.zeros_like(pred)
         return PredictiveDistribution(
@@ -170,10 +172,12 @@ class _WrappedMCDropoutModel:
     """Bookkeeping wrapper around an MC-dropout-style stochastic callable."""
 
     def __init__(self, state: MCDropoutState, capability: UQCapability) -> None:
+        """Store the MC-dropout state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array, *, rngs: nnx.Rngs) -> PredictiveDistribution:
+        """Return the MC-dropout predictive distribution by sampling dropout masks at ``x``."""
         # Caller-owned RNG: extract a single key and split into per-sample
         # keys. No hidden default — passing nothing raises TypeError at
         # the method boundary.
@@ -183,6 +187,7 @@ class _WrappedMCDropoutModel:
         sample_keys = jax.random.split(key, self._state.num_samples)
 
         def _draw(_carry: None, sample_key: jax.Array) -> tuple[None, jax.Array]:
+            """Run one stochastic forward pass with a fresh dropout mask."""
             pred = self._state.model_fn(x, rngs=nnx.Rngs(dropout=sample_key))
             return None, pred
 
@@ -210,7 +215,9 @@ class _FeatureFnProtocol(Protocol):
     those features to ``(batch, n_outputs)``.
     """
 
-    def __call__(self, x: jax.Array) -> jax.Array: ...
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Map inputs ``x`` to a feature representation."""
+        ...
 
 
 def _gaussian_linear_head_predictive(
@@ -457,10 +464,12 @@ class _WrappedBayesianLastLayerModel:
     """
 
     def __init__(self, state: BayesianLastLayerState, capability: UQCapability) -> None:
+        """Store the Bayesian-last-layer state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the model's predictive mean and variance at inputs ``x``."""
         """Return the analytic last-layer predictive distribution.
 
         For ``phi = feature_fn(x)`` (shape ``(batch, n_features)``):
@@ -563,10 +572,12 @@ class _WrappedVBLLModel:
     """
 
     def __init__(self, state: VBLLState, capability: UQCapability) -> None:
+        """Store the variational-Bayesian-last-layer state and its UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the model's predictive mean and variance at inputs ``x``."""
         """Return the analytic VBLL regression predictive distribution.
 
         For ``phi = feature_fn(x)`` (shape ``(batch, n_features)``) and the
@@ -647,10 +658,12 @@ class _WrappedDUEModel:
     """
 
     def __init__(self, state: DUEState, capability: UQCapability) -> None:
+        """Store the deterministic-uncertainty-estimation state and its UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the model's predictive mean and variance at inputs ``x``."""
         """Return the SVGP-over-features predictive, re-tagged to DUE.
 
         For ``features = feature_fn(x)`` (shape ``(batch, n_features)``):
@@ -753,10 +766,12 @@ class _WrappedSNGPModel:
     """
 
     def __init__(self, state: SNGPState, capability: UQCapability) -> None:
+        """Store the spectral-normalised-GP state and its declared UQ capability."""
         self._state = state
         self._capability = capability
 
     def predict_distribution(self, x: jax.Array) -> PredictiveDistribution:
+        """Return the model's predictive mean and variance at inputs ``x``."""
         """Return the analytic SNGP regression predictive distribution.
 
         For ``phi = feature_fn(x)`` (shape ``(batch, D)``):
@@ -830,7 +845,9 @@ class ModelUncertaintyAdapter:
 class _MCDropoutModelProtocol(Protocol):
     """Callable signature required by MCDropoutAdapter members."""
 
-    def __call__(self, x: jax.Array, *, rngs: nnx.Rngs) -> jax.Array: ...
+    def __call__(self, x: jax.Array, *, rngs: nnx.Rngs) -> jax.Array:
+        """Run a stochastic forward pass on ``x`` using the supplied RNG streams."""
+        ...
 
 
 @struct.dataclass(slots=True, kw_only=True)

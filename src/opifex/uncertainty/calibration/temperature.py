@@ -103,6 +103,7 @@ class TemperatureScaling:
         """
 
         def loss(log_temp: jax.Array) -> jax.Array:
+            """Return the temperature-scaled negative log-likelihood at ``log_temp``."""
             return nll_loss_at_temperature(logits=logits, targets=targets, log_temperature=log_temp)
 
         solver = optax.lbfgs()
