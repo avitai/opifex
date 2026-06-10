@@ -585,6 +585,34 @@ class TestMetaL2OIntegration:
             assert "meta_learning_strategy" in metrics
             assert "solve_time" in metrics
 
+    def test_gradient_based_refines_warm_start(self, l2o_engine, gb_config):
+        """``gradient_based`` must refine the warm start.
+
+        The refined solution must have an objective no worse than the warm
+        start and must expose the refinement metrics.
+        """
+        rngs = nnx.Rngs(42)
+        integration = MetaL2OIntegration(
+            l2o_engine=l2o_engine,
+            gb_config=gb_config,
+            rngs=rngs,
+        )
+
+        problem = OptimizationProblem(problem_type="quadratic", dimension=5)
+        problem_params = jnp.concatenate([(jnp.eye(5) * 1.5).flatten(), jnp.ones(5) * 0.3])
+
+        solution, metrics = integration.solve_with_meta_learning(
+            problem, problem_params, meta_learning_strategy="gradient_based"
+        )
+
+        assert metrics["meta_learning_strategy"] == "gradient_based"
+        # Refinement metrics are reported and the refined objective is not
+        # worse than the warm-start objective (gradient descent on sum(x**2)).
+        assert "base_solution_objective" in metrics
+        assert "refined_solution_objective" in metrics
+        assert metrics["refined_solution_objective"] <= metrics["base_solution_objective"] + 1e-6
+        assert jnp.isfinite(solution).all()
+
     def test_meta_l2o_strategy_selection(self, l2o_engine):
         """Test automatic meta-learning strategy selection."""
         rngs = nnx.Rngs(42)

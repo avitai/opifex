@@ -1078,9 +1078,6 @@ def _stochastic_ensemble_from_model(
     rank-deficient batch (whose ``var=0`` would produce degenerate
     acquisition scores). The noise scale is small (1e-2) so the model's
     own output dominates whenever it varies.
-
-    This replaces the previous ``jax.random.normal(self.rngs(), shape)``
-    mock predictions, which never invoked the wrapped model at all.
     """
     if num_samples <= 0:
         raise ValueError(f"num_samples must be positive; got {num_samples!r}")
@@ -1106,11 +1103,10 @@ def _stochastic_ensemble_from_model(
 class UncertaintyGuidedTrainer:
     """Uncertainty-guided adaptive training with active learning strategies.
 
-    Rewritten under Task 8.3: actually invokes ``uncertainty_quantifier``
-    on real model predictions instead of generating ``PRNGKey(42)`` mock
-    samples. The helper :func:`_stochastic_ensemble_from_model` is the
-    single point where ``model(x)`` is called per ensemble member, so the
-    duplicate-code gate is satisfied (no acquisition formulas inline).
+    Invokes ``uncertainty_quantifier`` on model predictions. The helper
+    :func:`_stochastic_ensemble_from_model` is the single point where
+    ``model(x)`` is called per ensemble member, keeping acquisition
+    formulas out of the inline path.
     """
 
     def __init__(
@@ -1125,9 +1121,8 @@ class UncertaintyGuidedTrainer:
 
         Args:
             model: Neural network model to train.
-            uncertainty_quantifier: Uncertainty quantification module —
-                typed to :class:`UncertaintyQuantifier` (Task 8.3 added
-                the type annotation that the prior H4 audit flagged).
+            uncertainty_quantifier: Uncertainty quantification module,
+                typed to :class:`UncertaintyQuantifier`.
             rngs: Caller-owned :class:`nnx.Rngs` bundle used to materialise
                 aleatoric-noise overlays for the ensemble draws.
             uncertainty_threshold: Threshold for high uncertainty detection
@@ -1192,11 +1187,9 @@ class UncertaintyGuidedTrainer:
 class MultiFidelityUncertaintyTrainer:
     """Multi-fidelity uncertainty propagation trainer.
 
-    Rewritten under Task 8.3: actually invokes both
-    ``high_fidelity_model(x)`` and ``low_fidelity_model(x)``. The
-    Kennedy-O'Hagan ``fidelity_ratio`` weighting between high/low
-    fidelity uncertainties is preserved; only the upstream
-    mock-prediction calls are replaced.
+    Invokes both ``high_fidelity_model(x)`` and ``low_fidelity_model(x)``
+    and combines their uncertainties with the Kennedy-O'Hagan
+    ``fidelity_ratio`` weighting between high- and low-fidelity outputs.
     """
 
     def __init__(
@@ -1212,8 +1205,7 @@ class MultiFidelityUncertaintyTrainer:
         Args:
             high_fidelity_model: High fidelity neural network model
             low_fidelity_model: Low fidelity neural network model
-            uncertainty_quantifier: Uncertainty quantification module
-                (typed under Task 8.3).
+            uncertainty_quantifier: Uncertainty quantification module.
             rngs: Caller-owned :class:`nnx.Rngs` bundle for the per-fidelity
                 ensemble draws.
             fidelity_ratio: Ratio of high to low fidelity data (Kennedy-O'Hagan
@@ -1253,18 +1245,16 @@ class MultiFidelityUncertaintyTrainer:
 class ActiveUncertaintyLearner:
     """Active learning with uncertainty-based sample acquisition.
 
-    Rewritten under Task 8.3 to delegate acquisition to
-    :func:`opifex.uncertainty.active.acquire`. The new
+    Acquisition is delegated to :func:`opifex.uncertainty.active.acquire`.
     :meth:`acquire_samples` accepts an explicit
     ``acquisition_fn: Callable[[jax.Array, jax.Array], jax.Array]``
     (signature ``(mean, variance) -> per-candidate scores``) in addition
-    to the legacy ``sampling_strategy`` string for backward source
-    compatibility with the registry. When ``acquisition_fn`` is provided
-    it overrides the strategy string.
+    to the ``sampling_strategy`` string registered with the active-learning
+    registry. When ``acquisition_fn`` is provided it overrides the strategy
+    string.
 
-    The duplicate-code gate forbids any acquisition formula bodies inside
-    this class: every formula evaluation goes through the active-learning
-    subsystem.
+    Acquisition formula evaluation goes through the active-learning
+    subsystem rather than being inlined in this class.
     """
 
     def __init__(

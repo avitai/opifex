@@ -452,6 +452,25 @@ class TestMultiObjectiveL2OEngine:
         assert mo_engine.scalarizer is not None
         assert mo_engine.performance_indicators is not None
 
+    def test_objective_feedback_reflects_objective_values(self):
+        """Per-objective feedback must be derived from the achieved Pareto set.
+
+        A well-minimized objective (small mean value) must yield higher
+        feedback than a poorly-minimized one (large mean value).
+        """
+        # Objective 0 well minimized (small values), objective 1 poorly (large).
+        pareto_objectives = jnp.array([[0.1, 5.0], [0.2, 6.0], [0.0, 4.0]])
+        feedback = MultiObjectiveL2OEngine._compute_objective_feedback(pareto_objectives)
+
+        assert feedback.shape == (2,)
+        # Feedback varies per objective rather than being a constant vector.
+        assert not jnp.allclose(feedback, jnp.ones(2))
+        # Well-minimized objective 0 gets higher feedback than poorly-minimized 1.
+        assert float(feedback[0]) > float(feedback[1])
+        # Matches the documented formula exactly.
+        expected = 1.0 / (1.0 + jnp.abs(jnp.mean(pareto_objectives, axis=0)))
+        assert jnp.allclose(feedback, expected)
+
     def test_solve_multi_objective_problem(self):
         """Test solving a multi-objective optimization problem."""
         mo_config = MultiObjectiveConfig(

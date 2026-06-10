@@ -121,6 +121,37 @@ class GradientBasedMetaLearningConfig:
             object.__setattr__(self, "optimizer_network_layers", [128, 64, 32])
 
 
+def refine_with_keep_best(
+    objective: Callable[[jax.Array], jax.Array],
+    warm_start: jax.Array,
+    refine_fn: Callable[[Callable[[jax.Array], jax.Array], jax.Array, int], jax.Array],
+    steps: int,
+) -> jax.Array:
+    """Refine a warm start while guaranteeing the objective never increases.
+
+    Unrolled gradient steps can overshoot a near-optimal warm start and return
+    an iterate with a larger objective. The keep-best-iterate guard (monotone
+    descent: accept the refined point only when it lowers the objective)
+    compares the objective at the warm start against the refined iterate and
+    returns whichever is lower, so refinement is never worse than its input.
+
+    Args:
+        objective: Scalar objective being minimised.
+        warm_start: Initial iterate supplied to the refinement.
+        refine_fn: Callable that maps ``(objective, warm_start, steps)`` to a
+            refined iterate.
+        steps: Number of refinement steps to unroll.
+
+    Returns:
+        The iterate with the lower objective between the warm start and the
+        refined result.
+    """
+    refined = refine_fn(objective, warm_start, steps)
+    warm_value = objective(warm_start)
+    refined_value = objective(refined)
+    return jnp.where(refined_value <= warm_value, refined, warm_start)
+
+
 class MAMLOptimizer(nnx.Module):
     """Model-Agnostic Meta-Learning (MAML) optimizer for L2O.
 
@@ -1050,10 +1081,25 @@ class MetaL2OIntegration(nnx.Module):
             metrics["meta_learning_strategy"] = "reptile"
 
         elif meta_learning_strategy == "gradient_based" and self.gb_config is not None:
-            # Use existing L2O engine with gradient-based enhancement
+            # Gradient-based enhancement: take the parametric solver's prediction
+            # as a warm start, then refine it with the meta-optimizer's
+            # gradient-based L2O steps on the engine's default quadratic objective.
+            # The refined solution has a strictly-not-worse objective than the warm
+            # start, matching the "gradient_based" label.
             base_solution = self.l2o_engine.solve_parametric_problem(problem, problem_params)
-            solution = base_solution  # Simplified for now
+
+            def _refinement_objective(x: jax.Array) -> jax.Array:
+                return jnp.sum(x**2)
+
+            solution = refine_with_keep_best(
+                _refinement_objective,
+                base_solution,
+                self.l2o_engine.solve_gradient_problem,
+                self.gb_config.gradient_unroll_steps,
+            )
             metrics["meta_learning_strategy"] = "gradient_based"
+            metrics["base_solution_objective"] = float(_refinement_objective(base_solution))
+            metrics["refined_solution_objective"] = float(_refinement_objective(solution))
 
         else:
             # Fallback to base L2O engine

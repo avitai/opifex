@@ -216,6 +216,25 @@ class TestPhysicsProfiler:
         assert isinstance(preservation, float)
         assert 0.0 <= preservation <= 1.0
 
+    def test_translation_invariance_reflects_field_structure(self, quantum_chemistry_profiler):
+        """Translation check must reflect the field's spatial structure.
+
+        A spatially-structured (non-invariant) field must yield a translation
+        error strictly below the perfect-preservation score of 1.0, while a
+        constant (translation-invariant) field must score ~1.0.
+        """
+        structured = jnp.arange(12.0).reshape(12, 1)
+        constant = jnp.ones((12, 1))
+        ops = [{"type": "translation", "vector": [3.0]}]
+
+        structured_score = quantum_chemistry_profiler._check_symmetry_preservation(structured, ops)
+        constant_score = quantum_chemistry_profiler._check_symmetry_preservation(constant, ops)
+
+        # Non-invariant field is penalized below the perfect score.
+        assert structured_score < 0.99
+        # Constant field is translation invariant.
+        assert constant_score > 0.99
+
     def test_numerical_stability_assessment(self, quantum_chemistry_profiler, sample_model_output):
         """Test numerical stability assessment."""
         stability = quantum_chemistry_profiler._assess_numerical_stability(sample_model_output)

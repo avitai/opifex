@@ -749,5 +749,58 @@ class TestIntegrationWithExistingFramework:
         assert "solution" in result
 
 
+class TestRLOptimizationStep:
+    """Tests for the RL optimization step.
+
+    The step performs an optimization step on the engine's default quadratic
+    objective ``f(x) = sum(x ** 2)`` (the same objective used by
+    ``L2OEngine.compare_all_solvers``) and reports the objective value and
+    solution measured from the resulting iterate.
+    """
+
+    def _engine(self) -> RLOptimizationEngine:
+        config = RLOptimizationConfig(max_episode_length=40)
+        return RLOptimizationEngine(config, rngs=nnx.Rngs(0))
+
+    def test_step_objective_matches_real_quadratic(self):
+        """Objective value must equal ``sum(x ** 2)`` of the returned solution."""
+        engine = self._engine()
+        engine._reset_optimization_iterate(dimension=3)
+        result = engine._execute_optimization_step(
+            OptimizationProblem(problem_type="quadratic", dimension=3, constraints=None),
+            action_type="continue_optimization",
+            params={},
+            iteration=0,
+        )
+        solution = result["solution"]
+        # The reported objective equals the quadratic evaluated at the iterate.
+        assert jnp.allclose(result["objective_value"], float(jnp.sum(solution**2)), atol=1e-5)
+
+    def test_solution_reflects_optimizer_state(self):
+        """Returned solution must reflect the optimizer iterate, not a fixed pattern."""
+        engine = self._engine()
+        engine._reset_optimization_iterate(dimension=4)
+        result = engine._execute_optimization_step(
+            OptimizationProblem(problem_type="quadratic", dimension=4, constraints=None),
+            action_type="continue_optimization",
+            params={},
+            iteration=5,
+        )
+        constant_pattern = jnp.ones(4) * (1.0 / (5 + 1))
+        assert not jnp.allclose(result["solution"], constant_pattern)
+
+    def test_real_optimization_decreases_objective(self):
+        """Running the full RL solve must reduce the quadratic objective."""
+        engine = self._engine()
+        problem = OptimizationProblem(problem_type="quadratic", dimension=3, constraints=None)
+        result = engine.solve_with_rl(problem, max_iterations=40, training=False)
+        # The default quadratic objective is minimized at x = 0 (value 0). A real
+        # gradient-based step sequence drives the objective well below the initial
+        # value of sum(ones ** 2) = 3.0.
+        assert result["objective_value"] < 1.0
+        # Solution moves toward the true minimizer (zeros).
+        assert float(jnp.linalg.norm(result["solution"])) < 1.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

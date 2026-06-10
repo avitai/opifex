@@ -149,8 +149,8 @@ class PerformanceMetrics:
 
     All fields are directly measured. GPU utilization and energy efficiency are
     intentionally omitted: measuring them requires device/power telemetry (e.g.
-    NVML) that is not a dependency of this framework, so reporting them here would
-    be a fabricated value rather than a measurement.
+    NVML) that is not a dependency of this framework, so they cannot be reported
+    here as measurements.
     """
 
     latency_ms: float

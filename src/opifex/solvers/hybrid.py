@@ -4,7 +4,10 @@ Combines classical and neural solvers for physics-informed correction
 or residual learning.
 """
 
-from typing import Literal
+from typing import Any, Literal
+
+import jax
+import jax.numpy as jnp
 
 from opifex.core.problems import Problem
 from opifex.core.solver.interface import (
@@ -13,6 +16,25 @@ from opifex.core.solver.interface import (
     SolverConfig,
     SolverState,
 )
+
+
+def relative_field_discrepancy(classical_field: jax.Array, neural_field: jax.Array) -> jax.Array:
+    """Relative L2 discrepancy between two field arrays.
+
+    Computes ``||classical - neural|| / (||classical|| + eps)``, a non-negative
+    measure of how far the neural prediction departs from the classical one on
+    a shared field. It is well defined even when the classical field is zero.
+
+    Args:
+        classical_field: Field array from the classical solver.
+        neural_field: Field array from the neural solver.
+
+    Returns:
+        Non-negative relative discrepancy as a scalar array.
+    """
+    difference_norm = jnp.linalg.norm(classical_field - neural_field)
+    reference_norm = jnp.linalg.norm(classical_field) + 1e-12
+    return difference_norm / reference_norm
 
 
 class HybridSolver:
@@ -40,6 +62,26 @@ class HybridSolver:
         self.neural = neural_solver
         self.mode = mode
 
+    @staticmethod
+    def _relative_discrepancy(classical_field: Any, neural_field: Any) -> float:
+        """Relative L2 discrepancy between a classical and neural field prediction.
+
+        Computes ``||classical - neural|| / (||classical|| + eps)``. This
+        measures how much the neural solver's prediction departs from
+        the classical one on a shared field (the magnitude of the correction the
+        hybrid adds), and is well defined even when the classical field is zero.
+
+        Args:
+            classical_field: Field array from the classical solver.
+            neural_field: Field array from the neural solver.
+
+        Returns:
+            Non-negative relative discrepancy.
+        """
+        return float(
+            relative_field_discrepancy(jnp.asarray(classical_field), jnp.asarray(neural_field))
+        )
+
     def solve(
         self,
         problem: Problem,
@@ -57,20 +99,30 @@ class HybridSolver:
         # (In a real residual scenario, we might modify the problem passed to Neural)
         sol_neural = self.neural.solve(problem, state, config)
 
-        # 3. Combine
+        # 3. Combine and measure the classical/neural discrepancy.
         combined_fields = {}
+        discrepancies: list[float] = []
         for key in sol_classical.fields:
             if key in sol_neural.fields:
                 val_c = sol_classical.fields[key]
                 val_n = sol_neural.fields[key]
 
                 combined_fields[key] = val_c + val_n
+                discrepancies.append(self._relative_discrepancy(val_c, val_n))
+
+        # ``hybrid_error`` is the mean relative L2 discrepancy between the
+        # classical and neural field predictions -- a measured quantity
+        # computed from the two solutions. It
+        # quantifies how much the two solvers disagree on the shared fields
+        # (i.e. the magnitude of the neural correction relative to the classical
+        # solution). It is ``0.0`` only when there are no shared fields.
+        hybrid_error = float(sum(discrepancies) / len(discrepancies)) if discrepancies else 0.0
 
         # Merge metrics
         metrics = {
             **{f"classical_{k}": v for k, v in sol_classical.metrics.items()},
             **{f"neural_{k}": v for k, v in sol_neural.metrics.items()},
-            "hybrid_error": 0.0,  # Placeholder
+            "hybrid_error": hybrid_error,
         }
 
         return Solution(

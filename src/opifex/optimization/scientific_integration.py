@@ -16,6 +16,30 @@ import jax.numpy as jnp
 from opifex.core.physics import ConservationLaw
 
 
+def translation_invariance_error(
+    field: jax.Array, shifts: tuple[int, ...], axes: tuple[int, ...]
+) -> jax.Array:
+    """Relative L2 discrepancy between a field and its periodic translation.
+
+    A translation-invariant field is unchanged by a periodic spatial shift, so
+    shifting it and measuring the relative L2 difference yields ~0 for a
+    constant or periodic field and a positive value for a field with spatial
+    structure.
+
+    Args:
+        field: Spatial field to test for translation invariance.
+        shifts: Integer roll amount applied along each axis in ``axes``.
+        axes: Axes along which the periodic shift is applied.
+
+    Returns:
+        Relative L2 discrepancy between the field and its shifted copy.
+    """
+    translated = jnp.roll(field, shift=shifts, axis=axes)
+    discrepancy = jnp.linalg.norm(field - translated)
+    reference = jnp.linalg.norm(field) + 1e-12
+    return discrepancy / reference
+
+
 class PhysicsDomain(Enum):
     """Scientific computing domains."""
 
@@ -344,12 +368,19 @@ class PhysicsProfiler:
                     symmetry_errors.append(symmetry_error)
 
             elif operation["type"] == "translation":
-                # Translation invariance check
-                jnp.array(operation["vector"])
-                # For translation invariance, certain properties should remain unchanged
-                # This is a simplified check
-                jnp.sum(model_output)  # Total value should be invariant
-                symmetry_errors.append(0.0)  # Placeholder for more sophisticated check
+                # Translation invariance check: a translation-invariant field is
+                # unchanged by a periodic spatial shift, so we apply the translation
+                # to the output (rolling it along its leading spatial axes by the
+                # integer components of the translation vector) and measure the
+                # relative L2 discrepancy between the field and its shifted
+                # copy. A constant / periodic field yields ~0; a field with spatial
+                # structure yields a nonzero error.
+                vector = jnp.asarray(operation["vector"])
+                shifts = tuple(round(float(component)) for component in vector)
+                axes = tuple(range(min(len(shifts), model_output.ndim)))
+                symmetry_errors.append(
+                    translation_invariance_error(model_output, shifts[: len(axes)], axes)
+                )
 
         if symmetry_errors:
             return float(1.0 - jnp.mean(jnp.array(symmetry_errors)))

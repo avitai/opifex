@@ -309,16 +309,23 @@ class ParetoFrontierOptimizer(nnx.Module):
         return jax.vmap(check_domination_for_solution)(jnp.arange(num_solutions))
 
     def _scalarize_objectives(self, objectives: jax.Array, preference: jax.Array) -> jax.Array:
-        """Convert multi-objective problem to single objective using scalarization."""
-        if self.config.scalarization_strategy == "weighted_sum":
-            return jnp.dot(preference, objectives)
+        """Convert multi-objective problem to single objective using scalarization.
+
+        The ``ParetoFrontierOptimizer`` is *preference-conditioned*: the frontier
+        network already maps each preference vector to a distinct solution, so the
+        training-loss scalarization weights the objectives by that same preference
+        (the standard Pareto-MTL / linear-scalarization training signal of Lin et
+        al., "Pareto Multi-Task Learning", NeurIPS 2019). The ``"learned"`` setting
+        therefore reuses this preference-weighted aggregation here; the *learned
+        weight network* lives in :class:`ObjectiveScalarizer` and is applied on the
+        public :meth:`solve_multi_objective` path, not in this inner training loss.
+        """
         if self.config.scalarization_strategy == "chebyshev":
             return jnp.max(preference * objectives)
         if self.config.scalarization_strategy == "achievement":
             # Achievement scalarizing function
             return jnp.max(preference * objectives) + 0.01 * jnp.sum(preference * objectives)
-        # "learned"
-        # For now, use weighted sum - in practice, this would be a learned function
+        # "weighted_sum" and "learned": preference-weighted linear scalarization.
         return jnp.dot(preference, objectives)
 
     def _compute_diversity_loss(self, solution: jax.Array, all_preferences: jax.Array) -> jax.Array:
@@ -623,6 +630,27 @@ class MultiObjectiveL2OEngine(nnx.Module):
 
         self.performance_indicators = PerformanceIndicators()
 
+    @staticmethod
+    def _compute_objective_feedback(pareto_objectives: jax.Array) -> jax.Array:
+        """Measure per-objective performance feedback from the achieved Pareto set.
+
+        For each objective, an objective that is well minimized across the
+        frontier (small mean achieved value) receives high feedback, and a poorly
+        minimized one receives low feedback, via ``1 / (1 + |mean_value|)`` which
+        is monotonically decreasing in the achieved objective magnitude and lies
+        in ``(0, 1]``. The scalarizer then boosts weights for low-feedback
+        (harder) objectives, producing a data-derived signal from the Pareto set.
+
+        Args:
+            pareto_objectives: Achieved objective values, shape
+                ``(num_solutions, num_objectives)``.
+
+        Returns:
+            Per-objective feedback of shape ``(num_objectives,)``.
+        """
+        mean_objective_values = jnp.mean(pareto_objectives, axis=0)
+        return 1.0 / (1.0 + jnp.abs(mean_objective_values))
+
     def solve_multi_objective_problem(
         self,
         objective_functions: list[Callable[[jax.Array], jax.Array]],
@@ -653,8 +681,8 @@ class MultiObjectiveL2OEngine(nnx.Module):
             objective_functions
         )
 
-        # Step 3: Learn scalarization weights
-        performance_feedback = jnp.ones(self.config.num_objectives)  # Placeholder
+        # Step 3: Learn scalarization weights from measured per-objective feedback.
+        performance_feedback = self._compute_objective_feedback(pareto_objectives)
         learned_weights = self.scalarizer.learn_scalarization_weights(
             problem_features, pareto_objectives, performance_feedback
         )

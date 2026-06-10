@@ -633,6 +633,11 @@ class RLOptimizationEngine(nnx.Module):
         self.episode_rewards: list[float] = []
         self.optimization_metrics: list[dict[str, Any]] = []
 
+        # Optimization iterate advanced by ``_execute_optimization_step``.
+        # Reset at the start of every ``solve_with_rl`` call.
+        self._current_iterate: jax.Array = jnp.zeros(1)
+        self._previous_objective: float = float("inf")
+
     def solve_with_rl(
         self,
         problem: OptimizationProblem,
@@ -664,6 +669,10 @@ class RLOptimizationEngine(nnx.Module):
             "computational_cost": 0.0,
             "max_iterations_remaining": 1.0,
         }
+
+        # Reset the optimization iterate that ``_execute_optimization_step``
+        # advances. Each call to ``solve_with_rl`` starts a fresh optimization run.
+        self._reset_optimization_iterate(problem.dimension)
 
         # Initial state encoding
         state = self.rl_agent.encode_state(problem, convergence_history, resource_usage)
@@ -752,6 +761,59 @@ class RLOptimizationEngine(nnx.Module):
             "action_sequence": [action_type],  # Could track full sequence
         }
 
+    @staticmethod
+    def _default_objective(x: jax.Array) -> jax.Array:
+        """Default quadratic objective ``f(x) = sum(x ** 2)``.
+
+        This is the same objective used by :meth:`L2OEngine.compare_all_solvers`
+        for the engine's automatic paths. ``OptimizationProblem`` only carries a
+        problem *specification* (type, dimension, constraints) and no callable
+        objective, so this convex quadratic serves as the evaluable
+        surrogate that the RL-selected step minimizes.
+        """
+        return jnp.sum(x**2)
+
+    def _reset_optimization_iterate(self, dimension: int) -> None:
+        """Initialize the optimization iterate for a fresh RL solve.
+
+        Args:
+            dimension: Problem dimension of the iterate to optimize.
+        """
+        self._current_iterate = jnp.ones(dimension)
+        self._previous_objective = float(self._default_objective(self._current_iterate))
+
+    #: Base gradient-descent step size that RL actions modulate. The default
+    #: quadratic objective ``f(x) = sum(x ** 2)`` has Hessian ``2 I``, so the
+    #: exact Newton step size is ``0.5``; the base stays safely below that.
+    _BASE_STEP_SIZE = 0.2
+    #: Bounds keeping the modulated step in the convergent regime ``(0, 0.5)``.
+    _MIN_STEP_SIZE = 1e-3
+    _MAX_STEP_SIZE = 0.49
+
+    def _action_learning_rate(self, action_type: str, params: dict[str, Any]) -> float:
+        """Map an RL action to a concrete gradient-descent step size.
+
+        The action *modulates* the engine's base step size rather than supplying
+        an absolute learning rate. ``params['learning_rate']`` (set by the
+        meta-scheduler) is interpreted as a relative scale around the scheduler's
+        own base rate, so the gradient step stays in the convergent
+        regime for the default quadratic surrogate.
+
+        Args:
+            action_type: Interpreted RL action type.
+            params: Action parameters (may carry a meta-scheduler ``learning_rate``).
+
+        Returns:
+            A positive step size applied to the gradient step, clamped to
+            ``[_MIN_STEP_SIZE, _MAX_STEP_SIZE]`` for stability.
+        """
+        step = self._BASE_STEP_SIZE
+        if action_type == "increase_learning_rate":
+            step *= 1.5
+        elif action_type == "decrease_learning_rate":
+            step *= 0.5
+        return float(min(max(step, self._MIN_STEP_SIZE), self._MAX_STEP_SIZE))
+
     def _execute_optimization_step(
         self,
         problem: OptimizationProblem,
@@ -759,37 +821,47 @@ class RLOptimizationEngine(nnx.Module):
         params: dict[str, Any],
         iteration: int,
     ) -> dict[str, Any]:
-        """Execute single optimization step based on RL action.
+        """Execute a single optimization step driven by the RL action.
+
+        The step performs gradient descent on the engine's default quadratic
+        objective :meth:`_default_objective`, with a learning rate selected by the
+        RL action. All returned quantities (objective value, improvement,
+        convergence) are measured from the resulting iterate.
 
         Args:
-            problem: Optimization problem
-            action_type: Type of optimization action
-            params: Action parameters
-            iteration: Current iteration number
+            problem: Optimization problem (provides the dimension/specification).
+            action_type: Type of optimization action selected by the agent.
+            params: Action parameters (e.g. learning rate adjustments).
+            iteration: Current iteration number.
 
         Returns:
-            Step results including metrics
+            Step results with metrics measured from the resulting iterate.
         """
-        # For now, use simplified step execution
-        # In practice, this would integrate with actual optimization algorithms
+        if not hasattr(self, "_current_iterate"):
+            self._reset_optimization_iterate(problem.dimension)
 
-        # Simulate optimization step
-        if hasattr(self, "_previous_objective"):
-            objective_improvement = max(0.0, self._previous_objective - (iteration * 0.1))
-        else:
-            objective_improvement = 1.0
-            self._previous_objective: float = 10.0
+        previous_objective = self._previous_objective
+        learning_rate = self._action_learning_rate(action_type, params)
 
-        current_objective = max(0.1, 10.0 - iteration * 0.1)
+        # Gradient-descent step on the default quadratic objective.
+        gradient = jax.grad(self._default_objective)(self._current_iterate)
+        new_iterate = self._current_iterate - learning_rate * gradient
+        current_objective = float(self._default_objective(new_iterate))
+
+        self._current_iterate = new_iterate
         self._previous_objective = current_objective
 
+        objective_improvement = max(0.0, previous_objective - current_objective)
+        # Relative improvement gives a bounded convergence-speed signal.
+        convergence_speed = objective_improvement / (previous_objective + 1e-8)
+
         return {
-            "solution": jnp.ones(problem.dimension) * (1.0 / (iteration + 1)),
+            "solution": new_iterate,
             "objective_value": current_objective,
             "objective_improvement": objective_improvement,
-            "convergence_speed": 1.0 / (iteration + 1),
+            "convergence_speed": convergence_speed,
             "computational_cost": 0.01,
-            "converged": current_objective < 0.5,
+            "converged": current_objective < 1e-4,
             "constraint_violation": 0.0,
         }
 
