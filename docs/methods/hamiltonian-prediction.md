@@ -145,6 +145,29 @@ and verifying the assembled-matrix equivariance `H(R x) = D(R) H(x) D(R)^T` with
 `wigner_d` — see
 [Equivariant DFT Hamiltonian Prediction](../examples/quantum-chemistry/hamiltonian-prediction.md).
 
+## Accelerating SCF with a predicted Fock
+
+A predicted Fock matrix close to the self-consistent one is a high-quality SCF
+initial guess: seeding the iteration with a near-converged density lets the
+Anderson/DIIS solver reach the fixed point in fewer steps than the default
+core-Hamiltonian guess. The SCF solver exposes this seam directly —
+`SCFSolver.solve(initial_density=...)` accepts a closed-shell density in the
+solver's AO basis, and `density_from_fock(fock, overlap, n_occupied)`
+reconstructs that density from a Fock matrix by solving `FC = SCe`. The converged
+result is independent of the seed; only the iteration count changes.
+
+`measure_scf_acceleration(solver, initial_density)` runs the solve from both the
+default guess and the supplied density and reports the iteration counts
+(`baseline_iterations`, `guided_iterations`, `iteration_reduction`), after
+checking both reach the same energy — a guard that a mismatched basis would trip.
+
+The guess must live in the *solver's* AO basis. The native `SCFSolver` runs LDA
+on a Cartesian def2-SVP (or STO-3G) basis, whereas the QH9 predictor emits
+spherical def2-SVP B3LYP Fock blocks, so wiring the trained predictor end-to-end
+additionally requires a spherical-def2-SVP solver path (a Cartesian↔spherical `d`
+transform); that basis bridge is tracked separately and is not assumed by the
+acceleration utilities.
+
 ## Extending
 
 - **SO(2)-frame convolution (QHNetV2).** Yu et al. 2025
