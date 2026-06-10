@@ -19,6 +19,10 @@ from opifex.deployment.core_serving import (
     ModelServer,
     ServingStatus,
 )
+from opifex.deployment.servable_registry import (
+    register_servable_model,
+    ServableModelRegistry,
+)
 
 
 __all__ = [
@@ -31,5 +35,7 @@ __all__ = [
     "ModelMetadata",
     "ModelRegistry",
     "ModelServer",
+    "ServableModelRegistry",
     "ServingStatus",
+    "register_servable_model",
 ]
