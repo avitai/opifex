@@ -121,7 +121,10 @@ class TestQuantumProblemEnergyTransforms:
             differentiable = float(
                 problem._energy_from_positions(problem.molecular_system.positions)
             )
-        assert reported == differentiable
+        # Both come from ``_energy_from_positions``; two separate evaluations of
+        # the SCF energy can reassociate float reductions by ~1 ULP, so the
+        # contract is numerical agreement, not bitwise identity.
+        assert reported == pytest.approx(differentiable, abs=1e-10)
 
     def test_energy_supports_vmap_over_geometries(self) -> None:
         """The differentiable energy maps over a batch of geometries with ``vmap``."""
