@@ -4,20 +4,24 @@ r"""Heterogeneous-batch training driver for QH9 block-form Hamiltonian predictio
 Trains a single
 :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianPredictor`
 on QH9-Stable (Yu et al. 2023, arXiv:2306.04922) using the QHNet block criterion
-(:func:`~opifex.neural.quantum.hamiltonian.block_training.qh9_block_loss`). Unlike
-the old per-composition driver (``scripts/train_qh9.py``, which compiled a fresh
-jitted step per atomic-number *signature* -- minutes of compile and no batching of
-mixed molecules), the block path concatenates many molecules of differing
-composition into one flat batch padded to a fixed ``(max_atoms, max_edges)``
-shape. That single shape compiles the train step *once*; every subsequent
-mixed-composition batch reuses the same compiled step, so the GPU is fed one
-large heterogeneous batch per step.
+(:func:`~opifex.neural.quantum.hamiltonian.block_training.per_molecule_block_loss`).
+Each molecule is read by
+:class:`~opifex.data.sources.qh9_padded_source.QH9PaddedSource` padded to a fixed
+per-molecule ``(max_atoms, max_edges)`` shape (host-side integer index prep only)
+and ``--batch-size`` molecules are stacked on a leading axis. The Fock spherical
+decode and block cut then run on device as the canonical datarax operators in
+:mod:`opifex.data.sources.qh9_fock_operators`, fused into the jitted train step
+(:func:`~opifex.neural.quantum.hamiltonian.block_training.make_fused_block_train_step`):
+the operators are vmapped over the molecule axis Batch-free, the per-molecule
+predictor is vmapped over the batch, and the loss + optimizer update share one
+forward inside a single ``nnx.jit`` graph. The fixed shape compiles once, so the
+block cut runs on device rather than as a host-side NumPy loop.
 
 Outputs (under ``--out``): a flushed ``train.log`` (mirrored to stdout) of per-step
 and per-epoch train Hamiltonian-MAE (Hartree), a per-``--val-every``-epoch
 validation Hamiltonian-MAE (Hartree), orbax checkpoints of the best-val parameters
-under ``checkpoints/``, and a ``metrics.json`` of the measured per-epoch metrics.
-No metric is fabricated -- every number is measured from a forward pass.
+under ``checkpoints/``, and a ``metrics.json`` of the per-epoch metrics (each
+number measured from a forward pass).
 
 Run ``JAX_ENABLE_X64=1`` for training (the QH9 Fock targets are float64); prefix
 with ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` to avoid grabbing all GPU memory.
@@ -30,24 +34,28 @@ import json
 import logging
 import sys
 import time
+from collections.abc import Iterator  # noqa: TC003
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, TYPE_CHECKING
+from typing import Protocol
 
 import jax
 import numpy as np
 import orbax.checkpoint as ocp
 from flax import nnx
 
-from opifex.data.sources.qh9_block_stream import (
-    create_qh9_block_stream_loader,
-    QH9BlockStreamConfig,
-    QH9BlockStreamLoaders,
+from opifex.data.sources.qh9_fock_operators import (
+    FockBlockCutConfig,
+    FockBlockCutOperator,
+    FockSphericalDecodeConfig,
+    FockSphericalDecodeOperator,
 )
-from opifex.data.sources.qh9_blocks import (
-    BlockBatchConfig,
-    create_qh9_block_loader,
-    QH9BlockLoaders,
+from opifex.data.sources.qh9_padded_source import (
+    create_qh9_padded_sources,
+    iterate_padded_batches,
+    QH9PaddedConfig,
+    QH9PaddedSource,
+    QH9PaddedSplits,
 )
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianConfig,
@@ -55,8 +63,8 @@ from opifex.neural.quantum.hamiltonian.block_predictor import (
 )
 from opifex.neural.quantum.hamiltonian.block_training import (
     BlockTrainConfig,
-    make_block_eval_step,
-    make_block_train_step,
+    make_fused_block_eval_step,
+    make_fused_block_train_step,
 )
 
 
@@ -66,16 +74,34 @@ _DEFAULT_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 _DEFAULT_OUT = Path("/mnt/ssd2/Data/qh9/runs/blocks1")
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
 class _BatchSource(Protocol):
-    """A re-iterable, sized source of padded batch dicts (eager tuple or stream)."""
+    """A re-iterable, sized source of per-molecule padded raw batch dicts."""
 
     def __iter__(self) -> Iterator[dict[str, jax.Array]]: ...
 
     def __len__(self) -> int: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _PaddedBatches:
+    """Re-iterable, sized view of fixed-size molecule batches over a source.
+
+    Wraps :func:`~opifex.data.sources.qh9_padded_source.iterate_padded_batches`
+    so each epoch re-iterates the source from the start; ``len`` is the number of
+    ``batch_size``-molecule batches (the last batch wraps to a full ``batch_size``,
+    so the masked loss ignores the wrapped molecules' padded blocks).
+    """
+
+    source: QH9PaddedSource
+    batch_size: int
+
+    def __iter__(self) -> Iterator[dict[str, jax.Array]]:
+        """Yield consecutive fixed-size batches over the source."""
+        return iterate_padded_batches(self.source, self.batch_size)
+
+    def __len__(self) -> int:
+        """Return the number of batches per epoch."""
+        return (len(self.source) + self.batch_size - 1) // self.batch_size
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +123,6 @@ class TrainArgs:
     num_interactions: int
     out: Path
     val_every: int
-    stream: bool
 
 
 def _parse_args(argv: list[str] | None) -> TrainArgs:
@@ -107,8 +132,8 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     )
     parser.add_argument("--db", type=Path, default=_DEFAULT_DB)
     parser.add_argument("--limit", type=int, default=None, help="Cap decoded molecules (None=all).")
-    parser.add_argument("--max-atoms", type=int, default=32, dest="max_atoms")
-    parser.add_argument("--max-edges", type=int, default=900, dest="max_edges")
+    parser.add_argument("--max-atoms", type=int, default=29, dest="max_atoms")
+    parser.add_argument("--max-edges", type=int, default=812, dest="max_edges")
     parser.add_argument("--batch-size", type=int, default=32, dest="batch_size")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=5e-4, dest="learning_rate")
@@ -117,12 +142,6 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     parser.add_argument("--num-interactions", type=int, default=3, dest="num_interactions")
     parser.add_argument("--out", type=Path, default=_DEFAULT_OUT)
     parser.add_argument("--val-every", type=int, default=1, dest="val_every")
-    parser.add_argument(
-        "--stream",
-        action="store_true",
-        help="Stream molecules from sqlite out-of-core (datarax StreamingSourceBase) "
-        "instead of decoding all into RAM -- required for the full 130k dataset.",
-    )
     namespace = parser.parse_args(argv)
     return TrainArgs(
         db=namespace.db,
@@ -137,7 +156,6 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
         num_interactions=namespace.num_interactions,
         out=namespace.out,
         val_every=namespace.val_every,
-        stream=namespace.stream,
     )
 
 
@@ -206,51 +224,48 @@ def _train_epoch(
     predictor: BlockHamiltonianPredictor,
     optimizer: nnx.Optimizer,
     train_step,
-    eval_step,
     *,
     epoch: int,
     log_every: int,
 ) -> _EpochResult:
-    """Run one training epoch over the padded block batches.
+    """Run one training epoch over the per-molecule padded batches.
 
-    The first step pays the one-off JIT compile; every later step of the fixed
-    padded shape reuses it. The per-batch train Hamiltonian-MAE (Hartree) is
-    measured (not the optimisation loss) so the logged metric is directly
-    comparable to QHNet's reported H-MAE.
+    The fused step decodes + cuts the Fock and runs the predictor + loss + update
+    in one ``nnx.jit`` graph and returns ``(loss, mae)`` from a single forward, so
+    there is no separate eval pass. Host syncs are deferred to the log cadence
+    (and epoch end): the per-step ``(loss, mae)`` device arrays are accumulated
+    and only converted to Python floats when logged, so the GPU is not stalled by
+    a per-step ``float()`` / ``block_until_ready``.
     """
-    losses: list[float] = []
-    maes: list[float] = []
+    losses: list[jax.Array] = []
+    maes: list[jax.Array] = []
     n_molecules = 0
     epoch_start = time.time()
     first_step_seconds = 0.0
     for index, batch in enumerate(batches):
         step_start = time.time()
-        loss = train_step(predictor, optimizer, batch)
-        mae = eval_step(predictor, batch)
-        float_loss = float(loss)
-        float_mae = float(mae)
-        jax.block_until_ready(mae)
-        step_seconds = time.time() - step_start
-        if index == 0:
-            first_step_seconds = step_seconds
-        losses.append(float_loss)
-        maes.append(float_mae)
+        loss, mae = train_step(predictor, optimizer, batch)
+        losses.append(loss)
+        maes.append(mae)
         n_real = int(np.sum(np.asarray(batch["node_pad_mask"]) > 0))
         n_molecules += _molecule_count(batch)
+        if index == 0:
+            jax.block_until_ready(mae)  # Bound the one-off compile to step 0's timing.
+            first_step_seconds = time.time() - step_start
         if index % log_every == 0:
             logger.info(
-                "epoch %d step %d/%d  train H-MAE %.6e Ha  (loss %.4e, %d atoms, %.3fs)",
+                "epoch %d step %d/%d  train H-MAE %.6e Ha  (loss %.4e, %d atoms)",
                 epoch,
                 index,
                 len(batches),
-                float_mae,
-                float_loss,
+                float(mae),
+                float(loss),
                 n_real,
-                step_seconds,
             )
     seconds = time.time() - epoch_start
+    mean_mae = float(np.mean([float(m) for m in maes])) if maes else float("nan")
     return _EpochResult(
-        train_mae=float(np.mean(maes)) if maes else float("nan"),
+        train_mae=mean_mae,
         n_molecules=n_molecules,
         n_batches=len(batches),
         seconds=seconds,
@@ -264,7 +279,7 @@ def _evaluate(
     eval_step,
 ) -> float | None:
     """Return the molecule-weighted mean validation Hamiltonian-MAE (Hartree)."""
-    if not batches:
+    if len(batches) == 0:
         return None
     total = 0.0
     count = 0
@@ -277,11 +292,8 @@ def _evaluate(
 
 
 def _molecule_count(batch: dict[str, jax.Array]) -> int:
-    """Number of real (non-padded) molecules in a padded block batch."""
-    node_batch = np.asarray(batch["node_batch"])
-    node_pad = np.asarray(batch["node_pad_mask"]) > 0
-    real_ids = node_batch[node_pad]
-    return int(real_ids.max()) + 1 if real_ids.size else 0
+    """Number of molecules in a per-molecule padded batch (the leading axis)."""
+    return int(np.asarray(batch["node_pad_mask"]).shape[0])
 
 
 # ---------------------------------------------------------------------------
@@ -304,31 +316,19 @@ def _save_checkpoint(
 # ---------------------------------------------------------------------------
 def _startup_summary(
     args: TrainArgs,
-    loaders: QH9BlockLoaders | QH9BlockStreamLoaders,
+    splits: QH9PaddedSplits,
     predictor: BlockHamiltonianPredictor,
     n_params: int,
 ) -> None:
     """Log a clear startup summary of the run."""
-    # Report batch counts (cheap for both eager and streaming); the exact
-    # molecule count is avoided for streaming so the summary never forces a full
-    # out-of-core pass over the dataset.
-    n_train_batches = len(loaders.train)
-    n_val_batches = len(loaders.val)
-    logger.info("QH9 block-form Hamiltonian training driver (heterogeneous batch)")
+    logger.info("QH9 block-form Hamiltonian training driver (per-molecule GPU operators)")
     logger.info("  database          : %s", args.db)
-    logger.info("  loader            : %s", "streaming (out-of-core)" if args.stream else "eager")
     logger.info("  limit             : %s", "all" if args.limit is None else args.limit)
+    logger.info("  train molecules   : %d", len(splits.train))
+    logger.info("  val   molecules   : %d", len(splits.val))
+    logger.info("  test  molecules   : %d", len(splits.test))
     logger.info(
-        "  train batches     : %d  (<= %d molecules, batch %d)",
-        n_train_batches,
-        n_train_batches * args.batch_size,
-        args.batch_size,
-    )
-    logger.info("  val   batches     : %d", n_val_batches)
-    logger.info(
-        "  padded shape      : %d atoms x %d edges  (per-mol %d/%d x batch %d)",
-        args.max_atoms * args.batch_size,
-        args.max_edges * args.batch_size,
+        "  per-mol shape     : %d atoms x %d edges  (batch %d molecules)",
         args.max_atoms,
         args.max_edges,
         args.batch_size,
@@ -341,8 +341,10 @@ def _startup_summary(
     logger.info("  trainable params  : %d", n_params)
     logger.info("  output dir        : %s", args.out)
     logger.info(
-        "  note: the first step pays a single JIT compile for the padded "
-        "(max_atoms, max_edges) shape; every later step (any composition) reuses it."
+        "  note: the fused step decodes + cuts the Fock and runs the predictor + "
+        "loss + update on device in one nnx.jit graph; the first step pays a "
+        "single compile for the (batch, max_atoms, max_edges) shape and every "
+        "later step reuses it."
     )
 
 
@@ -353,56 +355,50 @@ def _run(args: TrainArgs) -> dict[str, object]:
     """Execute the full training run and return the metrics record.
 
     ``--max-atoms`` / ``--max-edges`` are the *per-molecule* maxima (the largest
-    QH9 molecule has 29 atoms, hence ``29 * 28 = 812`` directed edges); the
-    collator pads the *whole batch* to the running totals, so the padded
-    concatenation is sized at ``max_atoms * batch_size`` atoms and
-    ``max_edges * batch_size`` edges -- one fixed shape that compiles once.
+    QH9 molecule has 29 atoms, hence ``29 * 28 = 812`` directed edges); each
+    molecule is padded to that fixed per-molecule shape and ``--batch-size``
+    molecules are stacked on a leading axis. The Fock spherical decode and block
+    cut run on device as datarax operators, fused into the jitted train step --
+    no host-side eager cut.
     """
-    max_atoms = args.max_atoms * args.batch_size
-    max_edges = args.max_edges * args.batch_size
-    if args.stream:
-        stream_config = QH9BlockStreamConfig(
-            max_atoms=max_atoms,
-            max_edges=max_edges,
-            batch_size=args.batch_size,
-            shuffle=True,
-        )
-        loaders = create_qh9_block_stream_loader(
-            config=stream_config, db_path=args.db, limit=args.limit
-        )
-    else:
-        config = BlockBatchConfig(
-            max_atoms=max_atoms,
-            max_edges=max_edges,
-            batch_size=args.batch_size,
-        )
-        loaders = create_qh9_block_loader(config=config, db_path=args.db, limit=args.limit)
+    config = QH9PaddedConfig(
+        max_atoms=args.max_atoms,
+        max_edges=args.max_edges,
+        shuffle=True,
+    )
+    splits = create_qh9_padded_sources(
+        config=config, db_path=args.db, limit=args.limit, rngs=nnx.Rngs(0)
+    )
 
     predictor = _build_predictor(args)
     n_params = sum(int(x.size) for x in jax.tree_util.tree_leaves(nnx.state(predictor, nnx.Param)))
-    _startup_summary(args, loaders, predictor, n_params)
+    _startup_summary(args, splits, predictor, n_params)
 
-    if not loaders.train:
+    if len(splits.train) == 0:
         logger.warning("empty training split (tiny --limit); nothing to train.")
         return {"epochs": [], "best_val_hamiltonian_mae_hartree": None}
 
-    train_config = _train_config(args, steps_per_epoch=len(loaders.train))
+    train_batches = _PaddedBatches(splits.train, args.batch_size)
+    val_batches = _PaddedBatches(splits.val, args.batch_size)
+    train_config = _train_config(args, steps_per_epoch=len(train_batches))
     optimizer = nnx.Optimizer(predictor, train_config.optimizer(), wrt=nnx.Param)
-    train_step = make_block_train_step(num_molecules=args.batch_size)
-    eval_step = make_block_eval_step(num_molecules=args.batch_size)
+
+    decode_op = FockSphericalDecodeOperator(FockSphericalDecodeConfig())
+    cut_op = FockBlockCutOperator(FockBlockCutConfig())
+    train_step = make_fused_block_train_step(decode_op, cut_op, num_molecules=args.batch_size)
+    eval_step = make_fused_block_eval_step(decode_op, cut_op)
 
     checkpoint_dir = args.out / "checkpoints"
     best_val: float | None = None
     epoch_records: list[dict[str, object]] = []
-    log_every = max(len(loaders.train) // 10, 1)
+    log_every = max(len(train_batches) // 10, 1)
 
     for epoch in range(1, args.epochs + 1):
         result = _train_epoch(
-            loaders.train,
+            train_batches,
             predictor,
             optimizer,
             train_step,
-            eval_step,
             epoch=epoch,
             log_every=log_every,
         )
@@ -430,7 +426,7 @@ def _run(args: TrainArgs) -> dict[str, object]:
         )
 
         if epoch % args.val_every == 0:
-            val_mae = _evaluate(loaders.val, predictor, eval_step)
+            val_mae = _evaluate(val_batches, predictor, eval_step)
             if val_mae is None:
                 logger.warning("epoch %d  val set is EMPTY (tiny --limit); no val MAE.", epoch)
                 record["val_hamiltonian_mae_hartree"] = None

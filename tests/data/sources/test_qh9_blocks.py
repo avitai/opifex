@@ -5,9 +5,10 @@ molecule's spherical def2-SVP Fock matrix into the fixed ``(14, 14)`` per-atom
 diagonal blocks and per-directed-edge off-diagonal blocks consumed by the
 heterogeneous-batch
 :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianPredictor`,
-then collates a heterogeneous batch into one flat padded concatenation (QHNet
-``cut_matrix`` reference ``OpenDFT/QHBench/QH9/datasets.py``; Yu et al. 2023,
-arXiv:2306.04922).
+(QHNet ``cut_matrix`` reference ``OpenDFT/QHBench/QH9/datasets.py``; Yu et al.
+2023, arXiv:2306.04922). The cut + its inverse
+:func:`~opifex.data.sources.qh9_blocks.reconstruct_fock_from_blocks` are the
+record of equivalence the device block-cut operator is checked against.
 
 These tests build a TINY SYNTHETIC sqlite fixture (NOT real QH9 data -- random
 *symmetric* Fock blobs of the correct QH9-native def2-SVP size, mirroring the
@@ -18,9 +19,8 @@ real ``(id, N, Z, pos, Ham)`` row schema, exactly as
 * the block cut round-trips to the original spherical Fock (``1e-10``) for H2O
   and a heavier molecule;
 * masks are correct (H-H ``5x5``, C-H ``14x5`` populated entries);
-* the padded-concat collate yields the right fixed shapes + pad masks and safe
-  in-range padded edges;
-* a real-data smoke (``limit 8``) yields finite blocks of the right shapes.
+* a real-data smoke (``limit 8``) yields finite blocks of the right shapes that
+  round-trip to the original Fock.
 """
 
 from __future__ import annotations
@@ -32,9 +32,6 @@ import numpy as np
 import pytest
 
 from opifex.data.sources.qh9_blocks import (
-    BlockBatchConfig,
-    collate_block_batch,
-    create_qh9_block_loader,
     cut_fock_to_blocks,
     reconstruct_fock_from_blocks,
 )
@@ -173,160 +170,20 @@ def test_off_diagonal_blocks_zero_outside_mask(synthetic_qh9_db: Path) -> None:
 
 
 # =============================================================================
-# Padded-concat collation
+# Real-data smoke
 # =============================================================================
-
-
-def test_collate_fixed_shapes_and_pad_masks(synthetic_qh9_db: Path) -> None:
-    """The collate produces fixed padded shapes with correct node/edge pad masks."""
-    examples = read_qh9_sqlite(synthetic_qh9_db)
-    config = BlockBatchConfig(max_atoms=12, max_edges=140)
-    batch = collate_block_batch(examples[:3], config)  # H2O(3), HCNO(4), H2(2)
-
-    assert batch["atomic_numbers"].shape == (12,)
-    assert batch["positions"].shape == (12, 3)
-    assert batch["edge_index"].shape == (2, 140)
-    assert batch["node_batch"].shape == (12,)
-    assert batch["edge_batch"].shape == (140,)
-    assert batch["diagonal_blocks"].shape == (12, FULL_ORBITALS, FULL_ORBITALS)
-    assert batch["diagonal_mask"].shape == (12, FULL_ORBITALS, FULL_ORBITALS)
-    assert batch["off_diagonal_blocks"].shape == (140, FULL_ORBITALS, FULL_ORBITALS)
-    assert batch["off_diagonal_mask"].shape == (140, FULL_ORBITALS, FULL_ORBITALS)
-    assert batch["node_pad_mask"].shape == (12,)
-    assert batch["edge_pad_mask"].shape == (140,)
-
-    # 3 + 4 + 2 = 9 real atoms; edges = 3*2 + 4*3 + 2*1 = 20 real edges.
-    assert int(batch["node_pad_mask"].sum()) == 9
-    assert int(batch["edge_pad_mask"].sum()) == 20
-
-
-def test_collate_node_batch_segments(synthetic_qh9_db: Path) -> None:
-    """node_batch assigns contiguous molecule ids; padding gets a sentinel id."""
-    examples = read_qh9_sqlite(synthetic_qh9_db)
-    config = BlockBatchConfig(max_atoms=12, max_edges=140)
-    batch = collate_block_batch(examples[:3], config)
-    node_batch = np.asarray(batch["node_batch"])
-    pad = np.asarray(batch["node_pad_mask"])
-    # Real atoms: molecule 0 (3 atoms), molecule 1 (4), molecule 2 (2).
-    np.testing.assert_array_equal(node_batch[:3], 0)
-    np.testing.assert_array_equal(node_batch[3:7], 1)
-    np.testing.assert_array_equal(node_batch[7:9], 2)
-    # Padded atoms are masked out.
-    assert not pad[9:].any()
-
-
-def test_collate_edge_index_offset_within_molecule(synthetic_qh9_db: Path) -> None:
-    """Real edges connect atoms of the SAME molecule, offset into the flat batch."""
-    examples = read_qh9_sqlite(synthetic_qh9_db)
-    config = BlockBatchConfig(max_atoms=12, max_edges=140)
-    batch = collate_block_batch(examples[:3], config)
-    edge_index = np.asarray(batch["edge_index"])
-    node_batch = np.asarray(batch["node_batch"])
-    edge_pad = np.asarray(batch["edge_pad_mask"])
-    real = edge_pad
-    rows = edge_index[0, real]
-    cols = edge_index[1, real]
-    np.testing.assert_array_equal(node_batch[rows], node_batch[cols])
-
-
-def test_collate_padded_edges_point_in_range(synthetic_qh9_db: Path) -> None:
-    """Padded edges point at a safe in-range padded atom (never -1 or wrapping)."""
-    examples = read_qh9_sqlite(synthetic_qh9_db)
-    config = BlockBatchConfig(max_atoms=12, max_edges=140)
-    batch = collate_block_batch(examples[:3], config)
-    edge_index = np.asarray(batch["edge_index"])
-    assert edge_index.min() >= 0
-    assert edge_index.max() < config.max_atoms
-    # Padded edge endpoints must be padded (non-real) atoms.
-    node_pad = np.asarray(batch["node_pad_mask"])
-    edge_pad = np.asarray(batch["edge_pad_mask"])
-    padded_edges = ~edge_pad
-    assert not node_pad[edge_index[0, padded_edges]].any()
-    assert not node_pad[edge_index[1, padded_edges]].any()
-
-
-def test_collate_roundtrips_each_molecule(synthetic_qh9_db: Path) -> None:
-    """Each molecule's masked blocks in the batch reconstruct its own Fock."""
-    examples = read_qh9_sqlite(synthetic_qh9_db)
-    config = BlockBatchConfig(max_atoms=12, max_edges=140)
-    batch = collate_block_batch(examples[:3], config)
-    node_batch = np.asarray(batch["node_batch"])
-    edge_batch = np.asarray(batch["edge_batch"])
-    node_pad = np.asarray(batch["node_pad_mask"])
-    edge_pad = np.asarray(batch["edge_pad_mask"])
-    edge_index = np.asarray(batch["edge_index"])
-    atoms = np.asarray(batch["atomic_numbers"])
-
-    for mol_id, example in enumerate(examples[:3]):
-        node_sel = (node_batch == mol_id) & node_pad
-        edge_sel = (edge_batch == mol_id) & edge_pad
-        node_global = np.nonzero(node_sel)[0]
-        # Remap the molecule's flat indices to local 0..n_atoms-1.
-        remap = {int(g): i for i, g in enumerate(node_global)}
-        local_edges = np.stack(
-            [
-                [remap[int(r)] for r in edge_index[0, edge_sel]],
-                [remap[int(c)] for c in edge_index[1, edge_sel]],
-            ]
-        ).astype(np.int64)
-        reconstructed = reconstruct_fock_from_blocks(
-            atoms[node_sel],
-            np.asarray(batch["diagonal_blocks"])[node_sel],
-            np.asarray(batch["diagonal_mask"])[node_sel],
-            np.asarray(batch["off_diagonal_blocks"])[edge_sel],
-            np.asarray(batch["off_diagonal_mask"])[edge_sel],
-            local_edges,
-        )
-        residual = float(np.max(np.abs(reconstructed - example.fock)))
-        # The collated batch arrays follow the active JAX precision (float32 under
-        # the suite's x64-off default), so this round-trip is float32-bounded; the
-        # exact (1e-10) cut correctness is proven on the NumPy path above.
-        assert residual < 1e-5, f"molecule {mol_id} round-trip residual {residual:.2e}"
-
-
-# =============================================================================
-# Loader factory + real-data smoke
-# =============================================================================
-
-
-def test_create_block_loader_yields_batch_dicts(synthetic_qh9_db: Path) -> None:
-    """The loader factory yields train/val/test iterables of batch dicts."""
-    config = BlockBatchConfig(max_atoms=12, max_edges=140, batch_size=2)
-    loaders = create_qh9_block_loader(db_path=synthetic_qh9_db, config=config)
-    total = 0
-    for split in (loaders.train, loaders.val, loaders.test):
-        for batch in split:
-            assert set(batch) == {
-                "atomic_numbers",
-                "positions",
-                "edge_index",
-                "node_batch",
-                "edge_batch",
-                "diagonal_blocks",
-                "diagonal_mask",
-                "off_diagonal_blocks",
-                "off_diagonal_mask",
-                "node_pad_mask",
-                "edge_pad_mask",
-            }
-            assert batch["positions"].shape == (12, 3)
-            total += int(np.asarray(batch["node_pad_mask"]).sum())
-    # All 4 molecules' atoms (3+4+2+3 = 12) appear across the splits exactly once.
-    assert total == 12
 
 
 @pytest.mark.skipif(not _REAL_DB.exists(), reason="real QH9Stable.db not present")
 def test_real_data_smoke_finite_blocks() -> None:
-    """A real-data smoke (limit 8) yields finite blocks of the right shapes."""
+    """A real-data smoke (limit 8) cuts finite blocks that round-trip to the Fock."""
     examples = read_qh9_sqlite(_REAL_DB, limit=8)
     assert len(examples) == 8
-    total_atoms = sum(ex.n_atoms for ex in examples)
-    total_edges = sum(ex.n_atoms * (ex.n_atoms - 1) for ex in examples)
-    config = BlockBatchConfig(max_atoms=total_atoms, max_edges=total_edges, batch_size=8)
     for example in examples:
         diag, diag_mask, off, off_mask, edge_index = cut_fock_to_blocks(
             example.atomic_numbers, example.fock
         )
+        assert diag.shape == (example.n_atoms, FULL_ORBITALS, FULL_ORBITALS)
         assert np.all(np.isfinite(diag))
         assert np.all(np.isfinite(off))
         reconstructed = reconstruct_fock_from_blocks(
@@ -334,7 +191,3 @@ def test_real_data_smoke_finite_blocks() -> None:
         )
         residual = float(np.max(np.abs(reconstructed - example.fock)))
         assert residual < 1e-10, f"real molecule round-trip residual {residual:.2e}"
-    batch = collate_block_batch(examples, config)
-    assert batch["diagonal_blocks"].shape == (total_atoms, FULL_ORBITALS, FULL_ORBITALS)
-    assert int(np.asarray(batch["node_pad_mask"]).sum()) == total_atoms
-    assert np.all(np.isfinite(np.asarray(batch["diagonal_blocks"])))

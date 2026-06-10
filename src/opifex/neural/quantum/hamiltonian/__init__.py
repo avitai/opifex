@@ -21,9 +21,9 @@ The public surface:
 * The orbital-layout primitives (:data:`BLOCK_IRREPS`, :data:`FULL_ORBITALS`,
   :data:`ORBITAL_MASK`, :func:`atom_orbital_counts`, :func:`block_validity_mask`)
   fixing the def2-SVP AO slots each block occupies.
-* The block training surface (:class:`BlockTrainConfig`, :func:`qh9_block_loss`,
-  :func:`make_block_train_step` / :func:`make_block_eval_step`) used by
-  ``scripts/train_qh9_blocks.py``.
+* The GPU-fused block training surface (:class:`BlockTrainConfig`,
+  :func:`per_molecule_block_loss`, :func:`make_fused_block_train_step` /
+  :func:`make_fused_block_eval_step`) used by ``scripts/train_qh9_blocks.py``.
 """
 
 from opifex.neural.quantum.hamiltonian._block_expansion import (
@@ -42,10 +42,10 @@ from opifex.neural.quantum.hamiltonian.block_predictor import (
 )
 from opifex.neural.quantum.hamiltonian.block_training import (
     BlockTrainConfig,
-    make_block_eval_step,
-    make_block_train_step,
-    masked_block_loss,
-    qh9_block_loss,
+    make_fused_block_eval_step,
+    make_fused_block_train_step,
+    per_molecule_block_loss,
+    predict_blocks_vmapped,
 )
 
 
@@ -59,8 +59,8 @@ __all__ = [
     "HamiltonianBlockExpansion",
     "atom_orbital_counts",
     "block_validity_mask",
-    "make_block_eval_step",
-    "make_block_train_step",
-    "masked_block_loss",
-    "qh9_block_loss",
+    "make_fused_block_eval_step",
+    "make_fused_block_train_step",
+    "per_molecule_block_loss",
+    "predict_blocks_vmapped",
 ]

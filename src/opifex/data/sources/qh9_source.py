@@ -51,10 +51,10 @@ Batching
 QH9 molecules are heterogeneous (``n_atoms`` 3..29; AO count varies with
 composition), so they cannot be collated into one dense tensor without padding.
 This module owns only the SQLite decode, the def2-SVP convention transform and
-the reference split; the block-form batching that consumes them lives in
-:mod:`opifex.data.sources.qh9_blocks` and
-:mod:`opifex.data.sources.qh9_block_stream` (per-atom / per-edge QHNet blocks
-collated into a single flat batch).
+the reference split; the out-of-core per-molecule padded batching that consumes
+them lives in :mod:`opifex.data.sources.qh9_padded_source` (fixed-shape padded
+elements whose Fock decode + block cut are deferred to the GPU operators in
+:mod:`opifex.data.sources.qh9_fock_operators`).
 
 No download happens at import time; the loader reads an existing
 ``QH9Stable.db`` (default ``/mnt/ssd2/Data/qh9/raw/QH9Stable.db``).
@@ -134,12 +134,18 @@ class QH9Example:
             multiplicity 1).
         fock: def2-SVP Fock matrix in opifex spherical AO ordering, shape
             ``(n_ao, n_ao)``, symmetric, Hartree.
+        native_fock: The same Fock in QH9-native AO ordering (the on-disk
+            layout, before the def2-SVP spherical reorder), shape
+            ``(n_ao, n_ao)``. Kept so the spherical decode can run downstream on
+            the GPU (:mod:`opifex.data.sources.qh9_fock_operators`) instead of
+            host-side.
         atomic_numbers: Nuclear charges, shape ``(n_atoms,)``.
     """
 
     molecule_id: int
     system: MolecularSystem
     fock: Float[NDArray[np.float64], "n_ao n_ao"]
+    native_fock: Float[NDArray[np.float64], "n_ao n_ao"]
     atomic_numbers: Int[NDArray[np.int32], " n_atoms"]
 
     @property
@@ -180,25 +186,28 @@ class QH9Data:
 # =============================================================================
 
 
-def matrix_transform_def2svp(
-    matrix: Float[NDArray[np.float64], "n_ao n_ao"],
+def def2svp_decode_indices(
     atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-) -> Float[NDArray[np.float64], "n_ao n_ao"]:
-    r"""Reorder a QH9-native Fock matrix into PySCF def2-SVP spherical ordering.
+) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
+    r"""Return the QH9-native -> spherical def2-SVP AO permutation and signs.
 
-    Faithful NumPy reimplementation of the reference
-    ``matrix_transform(matrices, atoms, convention='pyscf_def2svp')`` from
-    ``QHBench/QH9/datasets.py``: it builds the per-AO permutation (whole-shell
+    Decomposes the reference ``matrix_transform(convention='pyscf_def2svp')``
+    into its two per-AO ingredients: the permutation ``indices`` (whole-shell
     reordering composed with within-shell component reordering) and the per-AO
-    sign vector, then applies them symmetrically to both matrix axes
-    (``M' = S M[I][:, I] S^T`` with ``S = diag(signs)``).
+    sign vector ``signs``. They define the symmetric congruence
+
+    .. math::  M' = S\, M[I][:, I]\, S^\top, \qquad S = \mathrm{diag}(\text{signs}),
+
+    i.e. ``M'[i, j] = M[I[i], I[j]] * signs[i] * signs[j]``. The same arrays drive
+    both the NumPy :func:`matrix_transform_def2svp` and the device-side
+    :class:`~opifex.data.sources.qh9_fock_operators.FockSphericalDecodeOperator`,
+    so the two paths are bit-for-bit identical (DRY).
 
     Args:
-        matrix: QH9-native Fock matrix, shape ``(n_ao, n_ao)``.
         atomic_numbers: Nuclear charges of the molecule, shape ``(n_atoms,)``.
 
     Returns:
-        The Fock matrix in PySCF/opifex def2-SVP spherical AO ordering.
+        ``(indices, signs)`` each shape ``(n_ao,)`` (``int64``).
 
     Raises:
         KeyError: If an atomic number is outside the QH9 element set
@@ -221,8 +230,34 @@ def matrix_transform_def2svp(
     transform_indices = [transform_indices[idx] for idx in orbitals_order]
     transform_signs = [transform_signs[idx] for idx in orbitals_order]
     indices = np.concatenate(transform_indices).astype(np.int64)
-    signs = np.concatenate(transform_signs)
+    signs = np.concatenate(transform_signs).astype(np.int64)
+    return indices, signs
 
+
+def matrix_transform_def2svp(
+    matrix: Float[NDArray[np.float64], "n_ao n_ao"],
+    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
+) -> Float[NDArray[np.float64], "n_ao n_ao"]:
+    r"""Reorder a QH9-native Fock matrix into PySCF def2-SVP spherical ordering.
+
+    Faithful NumPy reimplementation of the reference
+    ``matrix_transform(matrices, atoms, convention='pyscf_def2svp')`` from
+    ``QHBench/QH9/datasets.py``: it applies the per-AO permutation and sign vector
+    from :func:`def2svp_decode_indices` symmetrically to both matrix axes
+    (``M' = S M[I][:, I] S^T`` with ``S = diag(signs)``).
+
+    Args:
+        matrix: QH9-native Fock matrix, shape ``(n_ao, n_ao)``.
+        atomic_numbers: Nuclear charges of the molecule, shape ``(n_atoms,)``.
+
+    Returns:
+        The Fock matrix in PySCF/opifex def2-SVP spherical AO ordering.
+
+    Raises:
+        KeyError: If an atomic number is outside the QH9 element set
+            (H, C, N, O, F).
+    """
+    indices, signs = def2svp_decode_indices(atomic_numbers)
     transformed = matrix[..., indices, :][..., :, indices]
     return transformed * signs[:, None] * signs[None, :]
 
@@ -287,6 +322,7 @@ def _decode_row(
         system=system,
         fock=fock,
         atomic_numbers=atomic_numbers,
+        native_fock=native_fock,
     )
 
 
@@ -402,6 +438,7 @@ def load_qh9_data(
 __all__ = [
     "QH9Data",
     "QH9Example",
+    "def2svp_decode_indices",
     "load_qh9_data",
     "matrix_transform_def2svp",
     "qh9_random_split",
