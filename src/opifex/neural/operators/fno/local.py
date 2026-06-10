@@ -183,7 +183,7 @@ class LocalFourierNeuralOperator(nnx.Module):
         modes: Sequence[int],
         num_layers: int = 4,
         kernel_size: int = 3,
-        use_adaptive_mixing: bool = True,
+        use_adaptive_mixing: bool = True,  # noqa: ARG002 - accepted for operator configuration parity
         use_residual_connections: bool = True,
         activation: Callable = nnx.gelu,
         *,

@@ -314,7 +314,7 @@ class MultiScalePhysics:
     def _compute_scale_loss(
         self,
         scale: str,
-        x: jax.Array,
+        x: jax.Array,  # noqa: ARG002 - conservation-term interface takes coordinates
         y_pred: jax.Array,
         y_true: jax.Array,
         base_loss_fn: Callable,
@@ -525,7 +525,11 @@ class ConstraintAggregator:
         return metrics
 
     def _compute_conservation_violation(
-        self, law: str, x: jax.Array, y_pred: jax.Array, y_true: jax.Array
+        self,
+        law: str,
+        x: jax.Array,  # noqa: ARG002 - conservation-term interface takes coordinates
+        y_pred: jax.Array,
+        y_true: jax.Array,
     ) -> jax.Array:
         """Compute violation for a specific conservation law.
 

@@ -554,7 +554,7 @@ class CachedProgressiveTester:
 class OptimizedGPUManager:
     """Complete optimized GPU manager integrating all optimization techniques."""
 
-    def __init__(self, max_memory_fraction: float = 0.75) -> None:
+    def __init__(self, max_memory_fraction: float = 0.75) -> None:  # noqa: ARG002 - accepted for configuration-API parity
         self.roofline_manager = RooflineMemoryManager()
         self.mixed_precision = MixedPrecisionOptimizer()
         self.async_manager = AsyncMemoryManager()
@@ -597,7 +597,9 @@ class OptimizedGPUManager:
         return self.mixed_precision.mixed_precision_matmul(x, y)
 
     def benchmark_with_prefetching(
-        self, operation_fn: Callable[[Array, Array], Array], test_sizes: list[int]
+        self,
+        operation_fn: Callable[[Array, Array], Array],  # noqa: ARG002 - benchmark-harness callable interface
+        test_sizes: list[int],
     ) -> dict[int, dict[str, Any]]:
         """Benchmark with asynchronous prefetching and memory pooling."""
         results = {}

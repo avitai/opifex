@@ -134,7 +134,7 @@ class GradNormBalancer(nnx.Module):
         num_losses: int,
         config: GradNormConfig | None = None,
         *,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize GradNorm balancer.
 

@@ -790,7 +790,7 @@ class RLOptimizationEngine(nnx.Module):
     _MIN_STEP_SIZE = 1e-3
     _MAX_STEP_SIZE = 0.49
 
-    def _action_learning_rate(self, action_type: str, params: dict[str, Any]) -> float:
+    def _action_learning_rate(self, action_type: str, params: dict[str, Any]) -> float:  # noqa: ARG002 - action interface receives action parameters
         """Map an RL action to a concrete gradient-descent step size.
 
         The action *modulates* the engine's base step size rather than supplying
@@ -819,7 +819,7 @@ class RLOptimizationEngine(nnx.Module):
         problem: OptimizationProblem,
         action_type: str,
         params: dict[str, Any],
-        iteration: int,
+        iteration: int,  # noqa: ARG002 - optimization-step interface receives the iteration index
     ) -> dict[str, Any]:
         """Execute a single optimization step driven by the RL action.
 

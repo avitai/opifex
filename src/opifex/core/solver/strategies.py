@@ -65,7 +65,7 @@ class AdaptiveLossBalancing(BaseCallback, nnx.Module):
                 self.weights[key].value = new_w
             # else: Unknown keys are ignored to maintain static structure for JIT
 
-    def on_batch_end(self, batch: int, state: Any, loss: Any, metrics: dict[str, Any]) -> None:
+    def on_batch_end(self, batch: int, state: Any, loss: Any, metrics: dict[str, Any]) -> None:  # noqa: ARG002 - training-callback hook interface
         """Hook to update weights after batch."""
         # Extract individual loss components from metrics if available
         relevant_losses = {k: v for k, v in metrics.items() if k.startswith("loss_")}
@@ -98,7 +98,7 @@ class CurriculumRegularization(BaseCallback):
         schedule = optax.linear_schedule(self.start_val, self.end_val, self.total_epochs)
         return float(jnp.asarray(schedule(epoch)))
 
-    def on_epoch_begin(self, epoch: int, state: Any) -> None:
+    def on_epoch_begin(self, epoch: int, state: Any) -> None:  # noqa: ARG002 - training-callback hook interface
         """Anneal the bound loss-term weight in place for the upcoming epoch."""
         self.target_weight.value = jnp.asarray(
             self.get_value(epoch), dtype=self.target_weight.value.dtype

@@ -40,7 +40,7 @@ class TrainingComponent:
         """
         # Base implementation does nothing
 
-    def step(self, model: nnx.Module, training_state: Any) -> Any | None:
+    def step(self, model: nnx.Module, training_state: Any) -> Any | None:  # noqa: ARG002 - training-component lifecycle interface
         """Execute component logic for current training step.
 
         Args:

@@ -35,7 +35,10 @@ class FlopsCounter:
         self.profile_data = {}
 
     def count_forward_flops(
-        self, model: nnx.Module, inputs: jnp.ndarray, **kwargs
+        self,
+        model: nnx.Module,
+        inputs: jnp.ndarray,
+        **kwargs,  # noqa: ARG002 - FLOP-counter interface accepts forward kwargs
     ) -> dict[str, Any]:
         """
         Count FLOPs for a forward pass.

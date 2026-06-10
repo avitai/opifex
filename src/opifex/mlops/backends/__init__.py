@@ -19,7 +19,7 @@ except ImportError:
     class _MLflowBackendUnavailable:
         """Fallback MLflow backend when MLflow is not available."""
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: ARG002 - no-op backend accepts arbitrary backend kwargs
             raise ImportError("MLflow is not installed. Install with: uv add mlflow")
 
     # Use the fallback class with the expected name

@@ -631,7 +631,7 @@ class BasicTrainer:
         """
 
         # Define loss function with modern NNX pattern for better performance
-        def _loss(model):
+        def _loss(_model):
             return self.compute_loss(x, y_true)
 
         # Apply gradient checkpointing (remat) if configured

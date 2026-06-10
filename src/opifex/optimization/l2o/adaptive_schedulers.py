@@ -86,7 +86,7 @@ class PerformanceAwareScheduler(nnx.Module):
     loss improvement patterns, convergence detection, and stagnation handling.
     """
 
-    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs) -> None:
+    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs) -> None:  # noqa: ARG002 - nnx.Module constructor receives rngs
         """Initialize performance-aware scheduler.
 
         Args:
@@ -465,7 +465,7 @@ class SchedulerIntegration(nnx.Module):
 
         return l2o_engine
 
-    def update_schedulers(self, step: int, loss: float) -> dict[str, Any]:
+    def update_schedulers(self, step: int, loss: float) -> dict[str, Any]:  # noqa: ARG002 - scheduler-update interface receives the step index
         """Update all enabled schedulers with current step and loss.
 
         Args:

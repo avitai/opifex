@@ -506,7 +506,11 @@ class CustomMetrics:
         )
 
     def record_fno_metrics(
-        self, model_id: str, modes: dict[str, int], forward_time: float, resolution: str
+        self,
+        model_id: str,
+        modes: dict[str, int],  # noqa: ARG002 - metric-record interface accepts spectral modes
+        forward_time: float,
+        resolution: str,
     ) -> None:
         """Record FNO-specific metrics."""
         if hasattr(self, "fno_forward_time") and self.fno_forward_time:

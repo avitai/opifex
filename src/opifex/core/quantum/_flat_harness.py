@@ -164,7 +164,7 @@ def _orbital_primitive_offsets(
 
 
 def _build_quartet_gather(
-    flat: FlatPrimitives,
+    flat: FlatPrimitives,  # noqa: ARG001 - gather-builder closure interface
     quartets: np.ndarray,
     members: list[np.ndarray],
 ) -> tuple[np.ndarray, np.ndarray]:

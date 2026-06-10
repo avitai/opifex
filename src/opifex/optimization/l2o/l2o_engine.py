@@ -555,7 +555,7 @@ class L2OEngine:
 
         return results
 
-    def recommend_algorithm(self, problem: OptimizationProblem, problem_params: jax.Array) -> str:
+    def recommend_algorithm(self, problem: OptimizationProblem, problem_params: jax.Array) -> str:  # noqa: ARG002 - recommendation interface receives problem parameters
         """Recommend best algorithm for given problem.
 
         Args:

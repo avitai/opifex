@@ -27,7 +27,7 @@ class ResourceOrchestrator(nnx.Module):
         optimization_objective: OptimizationObjective = (
             OptimizationObjective.BALANCE_COST_PERFORMANCE
         ),
-        learning_rate: float = 0.001,
+        learning_rate: float = 0.001,  # noqa: ARG002 - accepted for orchestrator configuration parity
         *,
         rngs: nnx.Rngs,
     ) -> None:
@@ -249,7 +249,7 @@ class ResourceOrchestrator(nnx.Module):
     def _select_optimal_pools(
         self,
         eligible_pools: list[ResourcePool],
-        allocation_scores: jnp.ndarray,
+        allocation_scores: jnp.ndarray,  # noqa: ARG002 - pool-selection interface receives allocation scores
         requirements: dict[ResourceType, int],
     ) -> dict[str, ResourcePool]:
         """Select optimal pools based on allocation scores and optimization objective.

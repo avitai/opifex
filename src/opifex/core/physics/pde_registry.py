@@ -564,7 +564,7 @@ def _navier_stokes_residual(
     model_v: Callable,
     x: Float[Array, "batch spatial_dim"],
     nu: float = 0.01,
-    rho: float = 1.0,
+    rho: float = 1.0,  # noqa: ARG001 - PDE residual signature is uniform across registry
 ) -> tuple[Float[Array, "batch"], Float[Array, "batch"], Float[Array, "batch"]]:
     """
     Compute Navier-Stokes equation residuals (2D incompressible).
@@ -1010,7 +1010,7 @@ def _amr_poisson_residual(
     x: Float[Array, "batch spatial_dim"],
     autodiff_engine: Any,
     source_term: Float[Array, "batch"] | None = None,
-    error_threshold: float = 0.1,
+    error_threshold: float = 0.1,  # noqa: ARG001 - PDE residual signature is uniform across registry
 ) -> tuple[Float[Array, "batch"], Float[Array, "batch"]]:
     """
     Compute Poisson residual with AMR error indicators.

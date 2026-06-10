@@ -27,9 +27,9 @@ class SpectralNeuralOperator(nnx.Module):
         input_dim: int,
         output_dim: int,
         hidden_dims: Sequence[int] = (128, 128, 64),
-        num_heads: int = 8,
+        num_heads: int = 8,  # noqa: ARG002 - accepted for spectral-block configuration parity
         power_iterations: int = 1,
-        use_adaptive_bounds: bool = False,
+        use_adaptive_bounds: bool = False,  # noqa: ARG002 - accepted for spectral-block configuration parity
         *,
         rngs: nnx.Rngs,
     ) -> None:

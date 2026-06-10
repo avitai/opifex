@@ -323,7 +323,7 @@ class MultiGridTuckerDecomposition(nnx.Module):
             }
         )
 
-    def _init_adaptive_rank_learning(self, rngs: nnx.Rngs) -> None:
+    def _init_adaptive_rank_learning(self, rngs: nnx.Rngs) -> None:  # noqa: ARG002 - nnx initializer receives rngs
         """Initialize adaptive rank learning components."""
         # Track rank gradients for each frequency band
         self.rank_gradients = {}

@@ -250,7 +250,7 @@ class HyperbolicManifold:
         # General case: rejection sampling
         max_attempts = 100
 
-        def attempt_sample(i, state):
+        def attempt_sample(_i, state):
             """Run one rejection-sampling attempt to draw a point inside the disk."""
             key_i, accepted, samples = state
             key_i, subkey = jax.random.split(key_i)

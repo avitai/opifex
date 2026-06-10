@@ -215,8 +215,8 @@ class MAMLOptimizer(nnx.Module):
     def meta_learn_on_task_distribution(
         self,
         task_distribution: list[tuple[OptimizationProblem, jax.Array]],
-        meta_optimizer_state: Any,
-        meta_step: int,
+        meta_optimizer_state: Any,  # noqa: ARG002 - meta-learning interface receives optimizer state and step
+        meta_step: int,  # noqa: ARG002 - meta-learning interface receives optimizer state and step
     ) -> tuple[dict[str, Any], float]:
         """Perform MAML meta-learning on a distribution of optimization tasks.
 
@@ -438,7 +438,7 @@ class ReptileOptimizer(nnx.Module):
     def meta_learn_reptile_step(
         self,
         task_distribution: list[tuple[OptimizationProblem, jax.Array]],
-        meta_step: int,
+        meta_step: int,  # noqa: ARG002 - reptile-step interface receives the meta step
     ) -> dict[str, Any]:
         """Perform one Reptile meta-learning step.
 
@@ -708,7 +708,7 @@ class GradientBasedMetaLearner(nnx.Module):
         previous_update: jax.Array,
         loss_history: jax.Array,
         problem_features: jax.Array,
-        step: int,
+        step: int,  # noqa: ARG002 - learned-update interface receives the step index
     ) -> tuple[jax.Array, dict[str, Any]]:
         """Compute parameter update using learned optimization strategy.
 

@@ -394,7 +394,7 @@ class AdvancedMetricsCollector:
 
     def collect_quantum_metrics(
         self,
-        x: Float[Array, "batch ..."],
+        x: Float[Array, "batch ..."],  # noqa: ARG002 - metric-collector interface takes inputs
         y_pred: Float[Array, "batch ..."],
         quantum_config: dict[str, Any],
     ) -> dict[str, float]:
@@ -493,7 +493,7 @@ class AdvancedMetricsCollector:
 
     def _compute_energy_conservation(
         self,
-        x: Float[Array, "batch ..."],
+        x: Float[Array, "batch ..."],  # noqa: ARG002 - conservation-metric interface takes inputs
         y_pred: Float[Array, "batch ..."],
         y_true: Float[Array, "batch ..."],
     ) -> jax.Array:
@@ -513,7 +513,7 @@ class AdvancedMetricsCollector:
 
     def _compute_momentum_conservation(
         self,
-        x: Float[Array, "batch ..."],
+        x: Float[Array, "batch ..."],  # noqa: ARG002 - conservation-metric interface takes inputs
         y_pred: Float[Array, "batch ..."],
         y_true: Float[Array, "batch ..."],
     ) -> jax.Array:
@@ -535,9 +535,9 @@ class AdvancedMetricsCollector:
 
     def _compute_particle_conservation(
         self,
-        x: Float[Array, "batch ..."],
+        x: Float[Array, "batch ..."],  # noqa: ARG002 - conservation-metric interface takes inputs
         y_pred: Float[Array, "batch ..."],
-        y_true: Float[Array, "batch ..."],
+        y_true: Float[Array, "batch ..."],  # noqa: ARG002 - conservation-metric interface takes targets
     ) -> jax.Array:
         """Compute particle number conservation violation.
 
@@ -558,9 +558,9 @@ class AdvancedMetricsCollector:
 
     def _compute_symmetry_conservation(
         self,
-        x: Float[Array, "batch ..."],
+        x: Float[Array, "batch ..."],  # noqa: ARG002 - conservation-metric interface takes inputs
         y_pred: Float[Array, "batch ..."],
-        y_true: Float[Array, "batch ..."],
+        y_true: Float[Array, "batch ..."],  # noqa: ARG002 - conservation-metric interface takes targets
     ) -> jax.Array:
         """Compute symmetry conservation violation (delegates to physics_constraints).
 

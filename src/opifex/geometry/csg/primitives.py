@@ -68,7 +68,7 @@ class Interval(Geometry):
         x = jax.random.uniform(key, (n,), minval=self.a, maxval=self.b)
         return x.reshape(n, 1)
 
-    def sample_boundary(self, n: int, key: jax.Array) -> Points1D:
+    def sample_boundary(self, n: int, key: jax.Array) -> Points1D:  # noqa: ARG002 - boundary-sampler interface receives an rng key
         """Sample points from interval boundary (endpoints).
 
         For 1D intervals, the boundary consists of just two points: {a, b}.

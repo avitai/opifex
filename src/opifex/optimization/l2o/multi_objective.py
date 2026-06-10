@@ -386,7 +386,7 @@ class ObjectiveScalarizer(nnx.Module):
     def learn_scalarization_weights(
         self,
         problem_features: jax.Array,
-        objective_values_history: jax.Array,
+        objective_values_history: jax.Array,  # noqa: ARG002 - scalarization interface receives objective history
         performance_feedback: jax.Array,
     ) -> jax.Array:
         """Learn optimal scalarization weights based on problem characteristics.
@@ -715,7 +715,7 @@ class MultiObjectiveL2OEngine(nnx.Module):
         self,
         objective_functions: list[Callable[[jax.Array], jax.Array]],
         preference_vector: jax.Array,
-        problem_features: jax.Array,
+        problem_features: jax.Array,  # noqa: ARG002 - preference-solve interface receives problem features
     ) -> tuple[jax.Array, dict[str, Any]]:
         """Solve multi-objective problem with user preference vector.
 

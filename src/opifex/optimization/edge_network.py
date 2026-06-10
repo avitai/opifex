@@ -223,7 +223,7 @@ class LatencyOptimizer(nnx.Module):
         self,
         target_latency_ms: float = 0.5,
         optimization_window_seconds: int = 60,
-        learning_rate: float = 0.001,
+        learning_rate: float = 0.001,  # noqa: ARG002 - accepted for configuration parity
         *,
         rngs: nnx.Rngs,
     ) -> None:
@@ -565,7 +565,7 @@ class RegionalFailover:
         latency_key = (original_region, failover_region)
         return self.edge_gateway.latency_matrix.get(latency_key, 0.0)
 
-    async def _execute_failover(self, from_region: EdgeRegion, to_region: EdgeRegion) -> bool:
+    async def _execute_failover(self, from_region: EdgeRegion, to_region: EdgeRegion) -> bool:  # noqa: ARG002 - failover interface receives source and target regions
         """Execute the actual failover operation."""
         # In practice, this would:
         # 1. Update load balancer configurations
@@ -663,7 +663,7 @@ class IntelligentEdgeNetwork:
     async def _simulate_edge_inference(
         self,
         region: EdgeRegion,
-        input_data: jnp.ndarray,
+        input_data: jnp.ndarray,  # noqa: ARG002 - inference-stub interface receives input data
         workload_profile: LatencyProfile,
     ) -> float:
         """Simulate inference latency for edge region."""

@@ -477,7 +477,6 @@ ignore = [
   "E741", # Ambiguous variable name (mathematical variables)
   "F722", # Forward annotation syntax error (JAX typing)
   "S101", # Use of assert (common in scientific computing)
-  "PLR0913", # Too many arguments (scientific functions)
   "PLR2004", # Magic value used in comparison (constants)
   "NPY002", # Replace legacy np.random.* random number generators
   "COM812", # Missing trailing comma (conflicts with formatter)
@@ -485,10 +484,6 @@ ignore = [
   # Mathematical variable naming exceptions for scientific computing
   "N803", # Argument names like R, T are standard in mathematics/physics
   "N806", # Variable names like Q, R, K, L are standard in mathematics
-  # Unused arguments in scientific computing (common for mathematical signatures)
-  "ARG001", # Unused function arguments (mathematical function signatures)
-  "ARG002", # Unused method arguments (mathematical method signatures)
-  "ARG005", # Unused lambda arguments (JAX functional programming)
   # Exception handling patterns acceptable in scientific computing
   "TRY003", # Long messages in exceptions (descriptive scientific errors)
   "TRY300", # Consider else block (scientific error handling patterns)
@@ -577,7 +572,10 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "F841", # Unused variables (demonstrations may not use all variables)
   "E501", # Long lines in example comments
   "BLE001", # Broad except acceptable in demonstration code
-  "C901" # Demonstration scripts may inline multi-stage walkthroughs
+  "C901", # Demonstration scripts may inline multi-stage walkthroughs
+  "ARG001", # Demonstration callbacks/closures keep interface params
+  "ARG005", # Demonstration lambdas keep interface params
+  "PLR0913" # Walkthroughs configure models/loaders with one kwarg per setting
 ]
 "scripts/*" = [
   "E501", # Line too long (development scripts can be longer)
@@ -588,7 +586,9 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "PTH110", # os.path.exists (legacy compatibility)
   "SIM102", # Nested if statements (readability in scripts)
   "T201", # Print statements (utility scripts need output)
-  "BLE001" # Broad except acceptable in utility scripts
+  "BLE001", # Broad except acceptable in utility scripts
+  "ARG001", # Utility-script callbacks/closures keep interface params
+  "PLR0913" # Utility scripts wire many CLI/config options through one function
 ]
 # Core library files with necessary user feedback
 "src/opifex/benchmarking/evaluation_engine.py" = [
@@ -597,6 +597,11 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/core/gpu_optimization.py" = [
   "T201" # Print statements for benchmark results and user feedback
 ]
+# Physics-loss and conservation interfaces carry the full residual context
+# (network, coordinates, targets, rngs) mandated by the loss-strategy protocol.
+"src/opifex/core/physics/losses.py" = [
+  "PLR0913" # Physics-loss interface carries the full residual evaluation context
+]
 # Core library files with scientific computing patterns
 "src/opifex/core/problems.py" = [
   "T201", # Print statements for debugging in development
@@ -604,22 +609,98 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "E501", # Long lines for scientific comments
   "RET504" # Scientific computing return patterns
 ]
+# Gaussian-integral primitives in the quantum MMD/RI engines: every argument is
+# a physical quantity (angular momenta, exponents, centers, charges). The
+# signatures follow the Helgaker McMurchie-Davidson recurrences verbatim.
+"src/opifex/core/quantum/_eager_reference.py" = [
+  "PLR0913" # McMurchie-Davidson primitive integrals: one arg per physical quantity
+]
+"src/opifex/core/quantum/_flat_harness.py" = [
+  "PLR0913" # Flattened primitive-integral kernel: one arg per shell quantum number
+]
+"src/opifex/core/quantum/_flat_mmd.py" = [
+  "PLR0913" # McMurchie-Davidson primitive integrals: one arg per physical quantity
+]
+"src/opifex/core/quantum/_ri.py" = [
+  "PLR0913" # Resolution-of-identity three-center primitives: one arg per physical quantity
+]
 "src/opifex/core/quantum/operators.py" = [
   "B028", # Warning stacklevel in scientific context
   "E501" # Long scientific comments
 ]
+"src/opifex/core/training/strategies/mixed_precision.py" = [
+  "PLR0913" # nnx training-strategy constructor: one kwarg per precision setting
+]
+"src/opifex/core/training/strategies/multilevel/multilevel_fno.py" = [
+  "PLR0913" # FNO-hierarchy factory mirrors the per-level operator hyperparameters
+]
+# Data-loader factories expose one keyword per loader/sampler/transform knob;
+# they are always called by keyword and never positionally.
+"src/opifex/data/loaders/factory.py" = [
+  "PLR0913" # PDE data-loader factories: one kwarg per loader/sampler/transform option
+]
+"src/opifex/data/sources/rmd17_source.py" = [
+  "PLR0913" # rMD17 loader factory: one kwarg per dataset/loader option
+]
+# Kubernetes manifest fields map one-to-one onto the rendered quota spec.
+"src/opifex/deployment/kubernetes/resource_manager.py" = [
+  "PLR0913" # ResourceQuota manifest: one kwarg per quota field
+]
+# PLR0913 (>8 args) scoping.
+#
+# Flax NNX modules and operator/wavefunction constructors are canonically
+# configured through many keyword-only hyperparameters; upstream Flax layers
+# (nnx.Linear, nnx.MultiHeadAttention) themselves take ~16. Their paired
+# ``create_*`` factories mirror the same constructor surface. Grouping these
+# into a config object would obscure, not clarify, the architecture.
+"src/opifex/neural/**/*.py" = [
+  "PLR0913" # nnx.Module constructors / operator factories: one kwarg per hyperparameter
+]
 "src/opifex/neural/bayesian/blackjax_integration.py" = [
   "T201" # Print statements for MCMC fallback warnings
+]
+"src/opifex/optimization/production.py" = [
+  "PLR0913" # nnx.Module assembling production subsystems: one kwarg per component
 ]
 # Domain exceptions intentionally named for the concept they model
 # (FunctionalNotFound, AccessDenied, ...) rather than an -Error suffix.
 "src/opifex/platform/registry/exceptions.py" = [
   "N818" # Exception names model domain conditions, not an Error suffix
 ]
+# Mathematical/algorithmic signatures where each argument is a distinct,
+# named quantity of the underlying numerical method.
+"src/opifex/uncertainty/inference_backends/_advi_algorithm.py" = [
+  "PLR0913" # ADVI ELBO step: one arg per variational-inference quantity
+]
+"src/opifex/uncertainty/inference_backends/_pathfinder_algorithm.py" = [
+  "PLR0913" # Pathfinder approximation: one arg per algorithm quantity
+]
+"src/opifex/uncertainty/markov/markov_pep.py" = [
+  "PLR0913" # Markov power-EP GP fit: one arg per state-space/likelihood quantity
+]
+"src/opifex/uncertainty/markov/markov_pep_likelihoods.py" = [
+  "PLR0913" # Markov power-EP GP fit: one arg per state-space/likelihood quantity
+]
+"src/opifex/uncertainty/monitoring/reliability_report.py" = [
+  "PLR0913" # Reliability-report assembler: one optional kwarg per UQ metric
+]
+"src/opifex/uncertainty/objectives.py" = [
+  "PLR0913" # Objective assembled from its named loss components
+]
+"src/opifex/uncertainty/sbi/_base.py" = [
+  "PLR0913" # MCMC posterior-predictive: one arg per sampler quantity
+]
+"src/opifex/uncertainty/scientific/_specialised.py" = [
+  "PLR0913" # Perturbed-step solver: one arg per perturbation quantity
+]
+"src/opifex/uncertainty/statespace/cakf.py" = [
+  "PLR0913" # Continuous-time Kalman update: one arg per state-space quantity
+]
 # Add visualization complexity ignores to existing per-file-ignores section
 "src/opifex/visualization/**/*.py" = [
   "PLR0912", # Too many branches - acceptable for comprehensive plotting
-  "PLR0915" # Too many statements - acceptable for comprehensive plotting
+  "PLR0915", # Too many statements - acceptable for comprehensive plotting
+  "PLR0913" # Plot helpers expose one keyword per styling knob (title/labels/cmap/vmin/vmax/figsize/save_path)
 ]
 # Test files with scientific computing patterns
 "tests/*" = [
@@ -628,7 +709,11 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "RUF003", # Mathematical symbols in comments
   "RET504", # Test return patterns
   "BLE001", # Broad except acceptable in test helpers and fixtures
-  "C901" # Test bodies may exercise many branches/parametrisations inline
+  "C901", # Test bodies may exercise many branches/parametrisations inline
+  "ARG001", # Mock callbacks / parametrize ids / JAX-callback fakes keep interface params
+  "ARG002", # Stub method overrides keep the interface signature they replace
+  "ARG005", # Test lambdas keep interface params (e.g. nnx callbacks, diffrax rhs)
+  "PLR0913" # Test factories/builders configure fixtures with many explicit kwargs
 ]
 "tests/conftest.py" = [
   "T201", # Print statements (test configuration logging)

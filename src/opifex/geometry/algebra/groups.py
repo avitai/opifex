@@ -293,22 +293,22 @@ class SE3Group:
 
 
 # JAX pytree registration
-def _so3_tree_flatten(group):
+def _so3_tree_flatten(_group):
     """Flatten an SO(3) group into empty pytree leaves (stateless)."""
     return (), None
 
 
-def _so3_tree_unflatten(aux_data, children):
+def _so3_tree_unflatten(_aux_data, _children):
     """Reconstruct an SO(3) group from its empty pytree representation."""
     return SO3Group()
 
 
-def _se3_tree_flatten(group):
+def _se3_tree_flatten(_group):
     """Flatten an SE(3) group into empty pytree leaves (stateless)."""
     return (), None
 
 
-def _se3_tree_unflatten(aux_data, children):
+def _se3_tree_unflatten(_aux_data, _children):
     """Reconstruct an SE(3) group from its empty pytree representation."""
     return SE3Group()
 

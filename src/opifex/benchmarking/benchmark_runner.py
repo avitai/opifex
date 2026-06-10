@@ -617,7 +617,9 @@ class BenchmarkRunner:
         return config
 
     def _validate_result(
-        self, result: BenchmarkResult, benchmark_config: BenchmarkConfig
+        self,
+        result: BenchmarkResult,
+        benchmark_config: BenchmarkConfig,  # noqa: ARG002 - uniform validation-hook signature
     ) -> ValidationReport:
         """Validate a benchmark result."""
         return self.validator.validate_against_reference(result, "synthetic_reference")
@@ -625,7 +627,7 @@ class BenchmarkRunner:
     def _validate_result_for_domain(
         self,
         result: BenchmarkResult,
-        benchmark_config: BenchmarkConfig,
+        benchmark_config: BenchmarkConfig,  # noqa: ARG002 - uniform validation-hook signature
         domain_config: DomainConfig,
     ) -> ValidationReport:
         """Validate result with domain-specific criteria."""
@@ -648,7 +650,7 @@ class BenchmarkRunner:
     def _generate_comprehensive_analysis(
         self,
         results: dict[str, dict[str, BenchmarkResult]],
-        validations: dict[str, dict[str, ValidationReport]],
+        validations: dict[str, dict[str, ValidationReport]],  # noqa: ARG002 - uniform report-section signature
     ) -> None:
         """Generate full analysis across all results."""
 
@@ -660,7 +662,7 @@ class BenchmarkRunner:
     def _generate_domain_summary(
         self,
         benchmark_results: dict[str, dict[str, BenchmarkResult]],
-        domain_config: DomainConfig,
+        domain_config: DomainConfig,  # noqa: ARG002 - uniform report-section signature
     ) -> dict[str, Any]:
         """Generate summary statistics for domain results."""
         all_results: list[BenchmarkResult] = []
@@ -717,7 +719,9 @@ mean absolute error (MAE), and relative error.
         """
 
     def _generate_abstract(
-        self, results: dict[str, dict[str, BenchmarkResult]], domain: str
+        self,
+        results: dict[str, dict[str, BenchmarkResult]],  # noqa: ARG002 - uniform report-section signature
+        domain: str,
     ) -> str:
         """Generate abstract for publication."""
         return f"""
@@ -761,7 +765,8 @@ in scientific computing
         return findings
 
     def _generate_recommendations(
-        self, results: dict[str, dict[str, BenchmarkResult]]
+        self,
+        results: dict[str, dict[str, BenchmarkResult]],  # noqa: ARG002 - uniform report-section signature
     ) -> list[str]:
         """Generate recommendations based on results."""
         return [

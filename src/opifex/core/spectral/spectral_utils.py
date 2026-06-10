@@ -69,7 +69,7 @@ def energy_spectrum(
     x: jax.Array,
     spatial_dims: int,
     dx: GridSpacing,
-    axis: Axis | None = None,
+    axis: Axis | None = None,  # noqa: ARG001 - spectral-utility API parity across signatures
 ) -> jax.Array:
     """
     Compute energy spectrum of input signal.
@@ -108,7 +108,7 @@ def spectral_energy(
     x: jax.Array,
     spatial_dims: int,
     dx: GridSpacing,
-    axis: Axis | None = None,
+    axis: Axis | None = None,  # noqa: ARG001 - spectral-utility API parity across signatures
 ) -> jax.Array:
     """
     Compute total spectral energy of input signal.
@@ -141,7 +141,7 @@ def spectral_energy(
 def wavenumber_grid(
     shape: Sequence[int],
     dx: GridSpacing,
-    axis: Axis | None = None,
+    axis: Axis | None = None,  # noqa: ARG001 - spectral-utility API parity across signatures
     magnitude: bool = False,
 ) -> list[jax.Array] | jax.Array:
     """

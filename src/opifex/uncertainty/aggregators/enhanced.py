@@ -137,7 +137,7 @@ class DistributionalAleatoricUncertainty:
 
     def compute_gaussian_uncertainty(
         self,
-        mean: Float[Array, "batch output"],
+        mean: Float[Array, "batch output"],  # noqa: ARG002 - aggregation interface receives the predictive mean
         log_std: Float[Array, "batch output"],
     ) -> Float[Array, "batch output"]:
         """Compute uncertainty from Gaussian distributional parameters.
@@ -398,7 +398,7 @@ class EnhancedUncertaintyQuantifier:
         self,
         ensemble_predictions: Float[Array, "models batch output"],
         distributional_std: Float[Array, "batch output"] | None = None,
-        inputs: Float[Array, "batch input_dim"] | None = None,
+        inputs: Float[Array, "batch input_dim"] | None = None,  # noqa: ARG002 - decomposition interface receives inputs
         dropout_predictions: Float[Array, "samples batch output"] | None = None,
     ) -> EnhancedUncertaintyComponents:
         """Enhanced uncertainty decomposition with multiple sources.

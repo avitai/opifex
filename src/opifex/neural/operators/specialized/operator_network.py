@@ -238,7 +238,7 @@ class OperatorNetwork(nnx.Module):
             rngs=rngs,
         )
 
-    def _create_latent_operator(self, config: dict[str, Any], activation, rngs: nnx.Rngs) -> Any:
+    def _create_latent_operator(self, config: dict[str, Any], activation, rngs: nnx.Rngs) -> Any:  # noqa: ARG002 - operator-builder interface receives an activation
         """Create Latent Neural Operator."""
         LatentNeuralOperator = _lazy_import_latent_neural_operator()
 

@@ -221,7 +221,7 @@ class MockMetricsImplementation:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def labels(self, **kwargs):
+    def labels(self, **kwargs):  # noqa: ARG002 - metric-stub accepts arbitrary labels
         """Set labels for metrics (mock implementation)."""
         return self
 

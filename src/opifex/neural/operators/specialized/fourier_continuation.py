@@ -274,7 +274,7 @@ class FourierContinuationExtender(nnx.Module):
         self,
         x: jnp.ndarray,
         axes: int | tuple[int, ...] | None = None,
-        deterministic: bool = True,
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jnp.ndarray:
         """Apply Fourier continuation to input.
 

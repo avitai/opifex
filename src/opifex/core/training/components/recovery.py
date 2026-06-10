@@ -35,13 +35,16 @@ class ErrorRecoveryManager(TrainingComponent):
         self.recovery_attempts = 0
         self.last_stable_state: Any = None
 
-    def setup(self, model: nnx.Module, training_state: Any) -> None:
+    def setup(self, model: nnx.Module, training_state: Any) -> None:  # noqa: ARG002 - training-component lifecycle interface
         """Setup error recovery with initial stable state."""
         self.last_stable_state = training_state
         self.recovery_attempts = 0
 
     def check_training_stability(
-        self, loss: float, grads: Any, training_state: Any
+        self,
+        loss: float,
+        grads: Any,
+        training_state: Any,  # noqa: ARG002 - stability-check interface receives training state
     ) -> tuple[bool, str | None]:
         """Check if training is stable and suggest recovery if needed.
 

@@ -339,7 +339,10 @@ class ValidationEngine:
             )
 
     async def _execute_with_timeout(
-        self, test_function: Callable, functional_data: dict[str, Any], timeout: int
+        self,
+        test_function: Callable,
+        functional_data: dict[str, Any],
+        timeout: int,  # noqa: ARG002 - timeout enforced by the asyncio wrapper, not the body
     ) -> dict[str, Any]:
         """Execute test function with timeout.
 
@@ -439,7 +442,9 @@ class ValidationEngine:
         return metrics
 
     def _generate_recommendations(
-        self, results: list[ValidationResult], functional_data: dict[str, Any]
+        self,
+        results: list[ValidationResult],
+        functional_data: dict[str, Any],  # noqa: ARG002 - recommendation interface receives functional data
     ) -> list[str]:
         """Generate improvement recommendations.
 

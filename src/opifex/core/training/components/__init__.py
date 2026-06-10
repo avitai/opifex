@@ -46,7 +46,7 @@ class CheckpointComponent(TrainingComponent):
         self.max_to_keep = self.config.get("max_to_keep", 5)
         self._checkpoints: list[dict[str, Any]] = []
 
-    def setup(self, model: nnx.Module, training_state: Any) -> None:
+    def setup(self, model: nnx.Module, training_state: Any) -> None:  # noqa: ARG002 - training-component lifecycle interface
         """Setup checkpoint directory.
 
         Args:
@@ -160,7 +160,7 @@ class MixedPrecisionComponent(TrainingComponent):
         self.dynamic_loss_scaling = self.config.get("dynamic_loss_scaling", True)
         self.precision_state = MixedPrecisionState(self.loss_scale)
 
-    def setup(self, model: nnx.Module, training_state: Any) -> None:
+    def setup(self, model: nnx.Module, training_state: Any) -> None:  # noqa: ARG002 - training-component lifecycle interface
         """Initialize precision state.
 
         Args:
@@ -278,7 +278,7 @@ class FlexibleOptimizerFactory(TrainingComponent):
         )
         self._create_optimizer = create_optimizer
 
-    def create_optimizer(self, model: nnx.Module):
+    def create_optimizer(self, model: nnx.Module):  # noqa: ARG002 - optimizer-factory interface receives model
         """Create optimizer with optional scheduling.
 
         Args:

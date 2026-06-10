@@ -81,7 +81,7 @@ def compute_empirical_ntk(
     model: nnx.Module,
     x1: Float[Array, "batch1 dim"],
     x2: Float[Array, "batch2 dim"] | None = None,
-    config: NTKConfig | None = None,
+    config: NTKConfig | None = None,  # noqa: ARG001 - empirical-NTK wrapper interface
 ) -> Float[Array, "batch1 batch2"]:
     """Compute empirical NTK matrix between input points.
 

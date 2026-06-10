@@ -71,8 +71,8 @@ __all__ = [
 
 
 def compute_residual_error(
-    model: Callable[[Float[Array, "... dim"]], Float[Array, "..."]],
-    x: Float[Array, "batch dim"],
+    model: Callable[[Float[Array, "... dim"]], Float[Array, "..."]],  # noqa: ARG001 - residual-estimator strategy interface
+    x: Float[Array, "batch dim"],  # noqa: ARG001 - residual-estimator strategy interface
     residual: Float[Array, "batch"],
 ) -> Float[Array, "batch"]:
     """Compute residual-based error estimation.

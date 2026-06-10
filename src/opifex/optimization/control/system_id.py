@@ -90,7 +90,7 @@ class SystemIdentifier(nnx.Module):
         state: jax.Array,
         input_val: jax.Array,
         *,
-        deterministic: bool = True,
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Predict next state given current state and input.
 
@@ -337,7 +337,7 @@ class OnlineSystemLearner(SystemIdentifier):
             nnx.update(self, updated_params)
 
             # Compute adaptation strength
-            def compute_norm(param, grad):
+            def compute_norm(_param, grad):
                 if grad is not None:
                     return jnp.linalg.norm(effective_lr * grad)
                 return 0.0
@@ -652,7 +652,7 @@ class SystemDynamicsModel(nnx.Module):
         state: jax.Array,
         input_val: jax.Array,
         *,
-        deterministic: bool = True,
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Compute next state given current state and input.
 

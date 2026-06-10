@@ -125,7 +125,7 @@ def _build_gated_output(
     extra_values: jax.Array,
     gate_values: jax.Array,
     num_extra: int,
-    leading_shape: tuple[int, ...],
+    leading_shape: tuple[int, ...],  # noqa: ARG001 - gated-output builder interface
     even_act: Callable[[jax.Array], jax.Array],
     odd_act: Callable[[jax.Array], jax.Array],
 ) -> tuple[Irreps, list[jax.Array | None]]:

@@ -272,7 +272,7 @@ class PhysicsProfiler:
         self,
         model_output: jnp.ndarray,
         reference_data: dict[str, Any],
-        time_series: list[jnp.ndarray] | None = None,
+        time_series: list[jnp.ndarray] | None = None,  # noqa: ARG002 - conservation-check interface receives the time series
     ) -> float:
         """Check momentum conservation over time for production profiling.
 
@@ -908,7 +908,7 @@ class ScientificComputingIntegrator:
 
     def optimize_for_scientific_accuracy(
         self,
-        model_output: jnp.ndarray,
+        model_output: jnp.ndarray,  # noqa: ARG002 - accuracy-optimization interface receives model output
         validation_results: dict[str, Any],
     ) -> dict[str, Any]:
         """Generate optimization recommendations based on scientific validation."""

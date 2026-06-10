@@ -409,7 +409,7 @@ class CanaryController:
             # Execute rollback (in practice, would revert infrastructure changes)
             await self._execute_rollback(deployment_id)
 
-    async def _execute_rollback(self, deployment_id: str) -> None:
+    async def _execute_rollback(self, deployment_id: str) -> None:  # noqa: ARG002 - rollback interface keyed by deployment id
         """Execute actual rollback operation."""
         # Simulate rollback execution
         await asyncio.sleep(0.5)
@@ -688,7 +688,9 @@ class AdaptiveDeploymentSystem:
         }
 
     async def _execute_blue_green_deployment(
-        self, deployment_id: str, config: DeploymentConfig
+        self,
+        deployment_id: str,  # noqa: ARG002 - deployment-strategy interface (id, config)
+        config: DeploymentConfig,  # noqa: ARG002 - deployment-strategy interface (id, config)
     ) -> bool:
         """Execute blue-green deployment."""
         # Simulate blue-green deployment
@@ -696,7 +698,9 @@ class AdaptiveDeploymentSystem:
         return True
 
     async def _execute_rolling_deployment(
-        self, deployment_id: str, config: DeploymentConfig
+        self,
+        deployment_id: str,  # noqa: ARG002 - deployment-strategy interface (id, config)
+        config: DeploymentConfig,  # noqa: ARG002 - deployment-strategy interface (id, config)
     ) -> bool:
         """Execute rolling deployment."""
         # Simulate rolling deployment

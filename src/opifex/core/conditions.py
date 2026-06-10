@@ -360,8 +360,8 @@ class NeumannBC(BoundaryCondition):
     def apply(
         self,
         params: jax.Array,
-        x: jax.Array | None = None,
-        t: float = 0.0,
+        x: jax.Array | None = None,  # noqa: ARG002 - boundary-condition callable interface
+        t: float = 0.0,  # noqa: ARG002 - boundary-condition callable interface
         weight: float = 1.0,
     ) -> jax.Array:
         """Apply Neumann boundary condition to parameters.
@@ -638,7 +638,7 @@ class WavefunctionBC(BoundaryCondition):
         # For vanishing conditions, no additional requirements
         return True
 
-    def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
+    def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:  # noqa: ARG002 - constant condition ignores time coordinate
         """Evaluate wavefunction boundary condition."""
         if self.condition_type == "vanishing":
             return jnp.zeros_like(x)

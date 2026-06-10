@@ -9,12 +9,16 @@ Provides Kubernetes deployment capabilities including:
 
 from opifex.deployment.kubernetes.autoscaler import AutoScaler
 from opifex.deployment.kubernetes.manifest_generator import ManifestGenerator
-from opifex.deployment.kubernetes.orchestrator import KubernetesOrchestrator
+from opifex.deployment.kubernetes.orchestrator import (
+    DeploymentManifestConfig,
+    KubernetesOrchestrator,
+)
 from opifex.deployment.kubernetes.resource_manager import ResourceManager
 
 
 __all__ = [
     "AutoScaler",
+    "DeploymentManifestConfig",
     "KubernetesOrchestrator",
     "ManifestGenerator",
     "ResourceManager",

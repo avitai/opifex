@@ -69,7 +69,9 @@ class WarmStartingStrategy:
         self._optimizer_state_memory = []
 
     def get_warm_start_params(
-        self, previous_params: jax.Array, current_problem_features: jax.Array
+        self,
+        previous_params: jax.Array,
+        current_problem_features: jax.Array,  # noqa: ARG002 - warm-start interface receives current problem features
     ) -> jax.Array:
         """Get warm-start parameters based on parameter transfer.
 

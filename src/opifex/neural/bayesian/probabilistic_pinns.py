@@ -534,7 +534,9 @@ class MultiFidelityPINN(nnx.Module):
         }
 
     def adaptive_prediction(
-        self, x: jax.Array, uncertainty_threshold: float = 0.1
+        self,
+        x: jax.Array,
+        uncertainty_threshold: float = 0.1,  # noqa: ARG002 - prediction interface accepts an uncertainty threshold
     ) -> tuple[jax.Array, jax.Array, dict[str, jax.Array]]:
         """
         Adaptive prediction with automatic fidelity selection.
@@ -1132,7 +1134,7 @@ class RobustPINNOptimizer(nnx.Module):
         num_samples: int,
         *,
         rngs: nnx.Rngs,
-        uncertainty_threshold: float = 0.1,
+        uncertainty_threshold: float = 0.1,  # noqa: ARG002 - sampling interface accepts an uncertainty threshold
     ) -> jax.Array:
         """Select candidate points by predictive uncertainty.
 

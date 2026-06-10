@@ -118,7 +118,7 @@ class PhysicsInformedOperator(nnx.Module):
         self,
         coordinates: jax.Array,
         *,
-        deterministic: bool = True,
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Compute physics-based loss components.
 

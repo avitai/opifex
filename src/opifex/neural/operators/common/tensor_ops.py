@@ -285,7 +285,9 @@ def ensure_channel_compatibility(
 
 @beartype
 def interpolate_spatial_dimensions(
-    x: Array, target_spatial_shape: Sequence[int], method: str = "linear"
+    x: Array,
+    target_spatial_shape: Sequence[int],
+    method: str = "linear",  # noqa: ARG001 - interpolation API accepts a method selector
 ) -> Array:
     """
     Interpolate tensor to match target spatial dimensions.
