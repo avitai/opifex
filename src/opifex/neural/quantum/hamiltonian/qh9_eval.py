@@ -65,7 +65,7 @@ from opifex.data.sources.qh9_source import (
     _DEF2SVP_ORBITAL_ORDER,
     _DEF2SVP_ORBITAL_SIGN,
     QH9Example,
-    read_qh9_sqlite,
+    read_qh9_test_split,
 )
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianPredictor,  # noqa: TC001
@@ -588,11 +588,12 @@ def evaluate_qh9_test_set(
 ) -> QH9TestSetMetrics:
     r"""Evaluate the QH9 benchmark metrics over the QH9-Stable test split.
 
-    Decodes QH9-Stable (reusing :func:`~opifex.data.sources.qh9_source.read_qh9_sqlite`
-    and the deterministic ``0.8/0.1/0.1`` split), optionally restores a best-val
-    orbax checkpoint into ``predictor`` (:func:`load_predictor_checkpoint`), then
-    aggregates :func:`evaluate_fock` over the test-split molecules
-    (:func:`evaluate_examples`).
+    Reads only the deterministic ``0.8/0.1/0.1`` test-split molecules
+    (:func:`~opifex.data.sources.qh9_source.read_qh9_test_split`, which computes the
+    split from the cheap id count and decodes the test subset lazily -- no full
+    130k-molecule decode), optionally restores a best-val orbax checkpoint into
+    ``predictor`` (:func:`load_predictor_checkpoint`), then aggregates
+    :func:`evaluate_fock` over the test molecules (:func:`evaluate_examples`).
 
     Args:
         predictor: The block Hamiltonian predictor, built with the config matching
@@ -609,13 +610,7 @@ def evaluate_qh9_test_set(
     if checkpoint_path is not None:
         predictor = load_predictor_checkpoint(predictor, checkpoint_path)
 
-    from opifex.data.sources.qh9_source import qh9_random_split
-
-    examples = read_qh9_sqlite(db_path)
-    _, _, test_indices = qh9_random_split(len(examples))
-    if limit is not None:
-        test_indices = test_indices[:limit]
-    test_examples = [examples[int(index)] for index in test_indices]
+    test_examples = read_qh9_test_split(db_path, limit=limit)
     logger.info("Evaluating QH9 test set over %d molecules", len(test_examples))
     return evaluate_examples(predictor, test_examples)
 

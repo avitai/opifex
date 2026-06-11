@@ -34,6 +34,7 @@ from opifex.data.sources.qh9_source import (
     matrix_transform_def2svp,
     qh9_random_split,
     read_qh9_sqlite,
+    read_qh9_test_split,
 )
 
 
@@ -241,3 +242,37 @@ def test_load_qh9_data_decodes_examples(synthetic_qh9_db: Path) -> None:
     data = load_qh9_data(synthetic_qh9_db)
     assert data.n_examples == 2
     assert tuple(int(ex.molecule_id) for ex in data.examples) == (0, 1)
+
+
+def _write_n_molecule_db(db_path: Path, n_molecules: int) -> Path:
+    """Write a synthetic QH9-Stable db with ``n_molecules`` H2O rows (ids 0..n-1)."""
+    fock = _random_symmetric(_native_ao(_H2O_ATOMS), seed=7).tobytes()
+    positions = np.zeros((3, 3), dtype=np.float64).tobytes()
+    rows = [(i, 3, _H2O_ATOMS.tobytes(), positions, fock) for i in range(n_molecules)]
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("CREATE TABLE data (id INTEGER, N INTEGER, Z BLOB, pos BLOB, Ham BLOB)")
+        connection.executemany("INSERT INTO data VALUES (?, ?, ?, ?, ?)", rows)
+        connection.commit()
+    return db_path
+
+
+def test_read_test_split_matches_eager_decode_then_split(tmp_path: Path) -> None:
+    """The lazy test-split read returns exactly the deterministic test molecules."""
+    db = _write_n_molecule_db(tmp_path / "QH9Stable.db", 10)
+    full = read_qh9_sqlite(db)
+    _, _, test_indices = qh9_random_split(len(full))
+    expected_ids = [int(full[int(i)].molecule_id) for i in test_indices]
+
+    lazy = read_qh9_test_split(db)
+    assert [int(ex.molecule_id) for ex in lazy] == expected_ids
+
+
+def test_read_test_split_respects_limit(tmp_path: Path) -> None:
+    """``limit`` caps the number of test molecules read (the first of the split)."""
+    db = _write_n_molecule_db(tmp_path / "QH9Stable.db", 10)
+    _, _, test_indices = qh9_random_split(10)
+
+    limited = read_qh9_test_split(db, limit=1)
+    assert len(limited) == 1
+    full = read_qh9_sqlite(db)
+    assert int(limited[0].molecule_id) == int(full[int(test_indices[0])].molecule_id)

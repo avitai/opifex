@@ -409,6 +409,51 @@ def qh9_random_split(
     )
 
 
+def read_qh9_test_split(
+    db_path: Path,
+    *,
+    limit: int | None = None,
+    seed: int = _SPLIT_SEED,
+) -> tuple[QH9Example, ...]:
+    """Decode only the QH9-Stable *test-split* molecules (lazy, no full decode).
+
+    Computes the deterministic ``0.8 / 0.1 / 0.1`` test split from the cheap
+    ``id``-column count (touching no Fock blob), then reads + decodes only the
+    selected test molecules by id over a read-only connection. This avoids
+    materialising all ~130k Focks (tens of GB) just to evaluate a test subset --
+    the split is still computed over the full database, so the molecules returned
+    are exactly those of the reference test split.
+
+    Args:
+        db_path: Path to ``QH9Stable.db``.
+        limit: Optional cap on the number of test molecules decoded (the first of
+            the test split); ``None`` decodes the whole test split.
+        seed: Split permutation seed (fixed at 43 in the reference).
+
+    Returns:
+        The decoded test-split examples, in test-split order.
+
+    Raises:
+        FileNotFoundError: If ``db_path`` does not exist.
+        KeyError: If a selected molecule id is missing (corrupt database).
+    """
+    if not db_path.exists():
+        raise FileNotFoundError(f"QH9-Stable database not found: {db_path}")
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+        ids = [int(row[0]) for row in connection.execute("SELECT id FROM data ORDER BY id")]
+        _, _, test_positions = qh9_random_split(len(ids), seed=seed)
+        if limit is not None:
+            test_positions = test_positions[:limit]
+        examples: list[QH9Example] = []
+        for position in test_positions:
+            molecule_id = ids[int(position)]
+            row = connection.execute("SELECT * FROM data WHERE id = ?", (molecule_id,)).fetchone()
+            if row is None:
+                raise KeyError(f"QH9-Stable molecule id {molecule_id} not found.")
+            examples.append(_decode_row(*row))
+    return tuple(examples)
+
+
 def load_qh9_data(
     db_path: Path,
     *,
@@ -443,4 +488,5 @@ __all__ = [
     "matrix_transform_def2svp",
     "qh9_random_split",
     "read_qh9_sqlite",
+    "read_qh9_test_split",
 ]
