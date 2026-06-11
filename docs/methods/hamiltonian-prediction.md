@@ -171,12 +171,19 @@ default guess and the supplied density and reports the iteration counts
 (`baseline_iterations`, `guided_iterations`, `iteration_reduction`), after
 checking both reach the same energy — a guard that a mismatched basis would trip.
 
-The guess must live in the *solver's* AO basis. The native `SCFSolver` runs LDA
-on a Cartesian def2-SVP (or STO-3G) basis, whereas the QH9 predictor emits
-spherical def2-SVP B3LYP Fock blocks, so wiring the trained predictor end-to-end
-additionally requires a spherical-def2-SVP solver path (a Cartesian↔spherical `d`
-transform); that basis bridge is tracked separately and is not assumed by the
-acceleration utilities.
+The guess must live in the *solver's* AO basis. The native `SCFSolver` runs on a
+Cartesian def2-SVP (or STO-3G) basis, whereas the QH9 predictor emits *spherical*
+def2-SVP Fock blocks. `spherical_fock_to_cartesian_density(spherical_fock,
+cartesian_overlap, angular_momenta, n_occupied)` bridges the two with the
+validated Cartesian↔spherical block transform: it solves the closed-shell density
+in the spherical basis and embeds it into the Cartesian one as `D_cart = T D_sph
+Tᵀ`. The congruence preserves the electron count `Tr(D_cart S_cart) = 2 n_occ` and
+overlap-metric idempotency `D_cart S_cart D_cart = 2 D_cart` exactly, so the
+result is a valid closed-shell SCF seed. It lives in the spherical subspace of the
+Cartesian basis (the d contaminant starts at zero and the SCF relaxes it), so it
+is an approximate guess; an exact match would need a spherical-mode SCF. A
+predictor Fock in the `pyscf_def2svp` p-order must pass through
+`to_pyscf_internal_ordering` before the bridge.
 
 ## Extending
 

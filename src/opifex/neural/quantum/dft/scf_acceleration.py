@@ -20,6 +20,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from opifex.core.quantum._spherical import apply_matrix, build_block_transform
+from opifex.neural.quantum.dft.scf import density_from_fock
+
 
 if TYPE_CHECKING:
     from jax import Array
@@ -93,7 +96,54 @@ def measure_scf_acceleration(
     )
 
 
+def spherical_fock_to_cartesian_density(
+    spherical_fock: Array,
+    cartesian_overlap: Array,
+    angular_momenta: tuple[int, ...],
+    n_occupied: int,
+) -> Array:
+    r"""Build a Cartesian SCF seed density from a spherical-basis Fock matrix.
+
+    Bridges the predictor's *spherical* def2-SVP Fock (the standard
+    ``2l+1``-per-shell basis) to an initial density in the SCF's *Cartesian*
+    basis (``(l+1)(l+2)/2`` per shell -- e.g. 6 d components, with the extra
+    contaminant). With the validated Cartesian->spherical block transform ``T``
+    (:func:`~opifex.core.quantum._spherical.build_block_transform`, columns in the
+    spherical AO order), the Cartesian overlap is mapped to spherical
+    (``S_sph = T^T S_cart T``), the closed-shell density is solved there
+    (:func:`~opifex.neural.quantum.dft.scf.density_from_fock`), and embedded back
+    as ``D_cart = T D_sph T^T``. This congruence preserves the electron count
+    ``Tr(D_cart S_cart) = 2 n_occ`` and overlap-metric idempotency
+    ``D_cart S_cart D_cart = 2 D_cart`` exactly, so ``D_cart`` is a valid
+    closed-shell seed for :meth:`SCFSolver.solve(initial_density=...)<...solve>`.
+
+    The seed lives in the spherical subspace of the Cartesian basis (the d
+    contaminant starts at zero and the SCF relaxes it), so it is an approximate
+    guess, not the exact Cartesian fixed point. ``spherical_fock`` must be in the
+    same spherical AO order as ``T``'s columns; a QH9-predictor Fock (the
+    ``pyscf_def2svp`` p-order) needs
+    :func:`~opifex.neural.quantum.hamiltonian.qh9_eval.to_pyscf_internal_ordering`
+    applied first.
+
+    Args:
+        spherical_fock: The Fock matrix in the spherical AO basis
+            ``(n_sph, n_sph)``.
+        cartesian_overlap: The SCF's Cartesian AO overlap ``(n_cart, n_cart)``.
+        angular_momenta: The angular momentum ``l`` of each shell, in AO order
+            (the SCF basis's ``shell.angular_momentum`` sequence).
+        n_occupied: Number of doubly-occupied orbitals (electrons // 2).
+
+    Returns:
+        The Cartesian closed-shell seed density ``(n_cart, n_cart)``.
+    """
+    transform = build_block_transform(angular_momenta)
+    spherical_overlap = apply_matrix(transform, cartesian_overlap)
+    spherical_density = density_from_fock(spherical_fock, spherical_overlap, n_occupied)
+    return transform @ spherical_density @ transform.T
+
+
 __all__ = [
     "SCFAccelerationResult",
     "measure_scf_acceleration",
+    "spherical_fock_to_cartesian_density",
 ]
