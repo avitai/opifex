@@ -162,3 +162,28 @@ def test_read_dynamic_decodes_rows(tmp_path: Path) -> None:
     assert first.native_fock.shape == (_native_ao(atoms), _native_ao(atoms))
     # The native Fock is symmetric (as in the real database).
     assert float(np.max(np.abs(first.native_fock - first.native_fock.T))) == 0.0
+
+
+# --- Out-of-core Dynamic padded source ----------------------------------------
+def test_dynamic_padded_sources_geometry_split(tmp_path: Path) -> None:
+    """The Dynamic factory builds rowid-keyed splits and reads a padded batch."""
+    from opifex.data.sources.qh9_padded_source import (
+        create_qh9_dynamic_padded_sources,
+        iterate_padded_batches,
+        QH9PaddedConfig,
+    )
+
+    atoms = np.array([8, 1, 1], dtype=np.int32)
+    num_mol = 2
+    specs = [(atoms, i) for i in range(num_mol * _GEO_PER_MOL)]
+    db = _write_dynamic_db(tmp_path / "QH9Dynamic_100k.db", specs)
+
+    config = QH9PaddedConfig(max_atoms=6, max_edges=30)
+    splits = create_qh9_dynamic_padded_sources(config=config, db_path=db, split="geometry")
+    assert len(splits.train) == 80 * num_mol
+    assert len(splits.val) == 10 * num_mol
+    assert len(splits.test) == 10 * num_mol
+
+    batch = next(iterate_padded_batches(splits.train, 4))
+    assert batch["native_fock"].shape[0] == 4
+    assert batch["atomic_numbers"].shape == (4, 6)

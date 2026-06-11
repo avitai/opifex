@@ -61,6 +61,7 @@ import resource
 import sqlite3
 from collections.abc import Iterator  # noqa: TC003
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import jax
@@ -73,6 +74,12 @@ from jaxtyping import Array  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
 from opifex.data.sources.qh9_blocks import _atom_ao_offsets, _complete_directed_edges
+from opifex.data.sources.qh9_dynamic import (
+    decode_qh9_dynamic_row,
+    QH9_DYNAMIC_GEOMETRIES_PER_MOL,
+    qh9_dynamic_geometry_split,
+    qh9_dynamic_mol_split,
+)
 from opifex.data.sources.qh9_source import (
     _decode_row,
     def2svp_decode_indices,
@@ -88,6 +95,30 @@ _DEFAULT_DATABASE: Path = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 
 _PADDING_ATOMIC_NUMBER: int = 0
 """Atomic number assigned to padded atoms (the embedding table's Z=0 row)."""
+
+
+class QH9Variant(StrEnum):
+    """Which QH9 database a source reads, selecting its row key and decode.
+
+    QH9-Stable rows are keyed by the unique ``id`` column; QH9-Dynamic stores
+    ~100 geometries per molecule (so ``id`` is not unique) and is keyed by the
+    implicit ``rowid``, with the geometry/mol splits indexing row positions.
+    """
+
+    STABLE = "stable"
+    DYNAMIC = "dynamic"
+
+
+# Fixed per-variant SQL (literal, never string-built from input): the key pre-pass
+# and the single-row seek over Stable's unique ``id`` or Dynamic's ``rowid``.
+_VARIANT_KEYS_QUERY: dict[QH9Variant, str] = {
+    QH9Variant.STABLE: "SELECT id FROM data ORDER BY id",
+    QH9Variant.DYNAMIC: "SELECT rowid FROM data ORDER BY rowid",
+}
+_VARIANT_ROW_QUERY: dict[QH9Variant, str] = {
+    QH9Variant.STABLE: "SELECT * FROM data WHERE id = ?",
+    QH9Variant.DYNAMIC: "SELECT * FROM data WHERE rowid = ?",
+}
 
 
 @dataclass(frozen=True)
@@ -218,55 +249,67 @@ def _stack_padded(padded: list[dict[str, NDArray]]) -> dict[str, Array]:
 # =============================================================================
 
 
-def _read_split_ids(db_path: Path, *, limit: int | None = None) -> tuple[int, ...]:
-    """Read only the ``id`` column from the QH9-Stable ``data`` table.
+def _read_split_keys(
+    db_path: Path, *, variant: QH9Variant = QH9Variant.STABLE, limit: int | None = None
+) -> tuple[int, ...]:
+    """Read only the per-row key column from a QH9 ``data`` table.
 
-    The cheap pre-pass: it touches no ``Z``/``pos``/``Ham`` blob, so the full
-    130k id list costs ~1 MB regardless of Fock size.
+    The cheap pre-pass: it touches no ``Z``/``pos``/``Ham`` blob, so the full key
+    list costs a few MB regardless of Fock size. The key is the unique ``id`` for
+    QH9-Stable and the implicit ``rowid`` for QH9-Dynamic (where ``id`` is shared
+    across a molecule's geometries).
 
     Args:
-        db_path: Path to ``QH9Stable.db``.
-        limit: Optional cap on the number of ids returned (ascending ``id``).
+        db_path: Path to the QH9 database.
+        variant: Which database layout is being read (selects the key column).
+        limit: Optional cap on the number of keys returned (ascending key).
 
     Returns:
-        The molecule ids in ascending order.
+        The row keys in ascending order.
 
     Raises:
         FileNotFoundError: If ``db_path`` does not exist.
     """
     if not db_path.exists():
-        raise FileNotFoundError(f"QH9-Stable database not found: {db_path}")
-    query = "SELECT id FROM data ORDER BY id"
+        raise FileNotFoundError(f"QH9 database not found: {db_path}")
+    query = _VARIANT_KEYS_QUERY[variant]
     if limit is not None:
         query += f" LIMIT {int(limit)}"
     with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
-        ids = [int(row[0]) for row in connection.execute(query)]
-    logger.info("QH9 padded source: read %d molecule ids from %s", len(ids), db_path)
-    return tuple(ids)
+        keys = [int(row[0]) for row in connection.execute(query)]
+    logger.info("QH9 padded source: read %d row keys from %s", len(keys), db_path)
+    return tuple(keys)
 
 
-def _read_one_example(connection: sqlite3.Connection, molecule_id: int) -> QH9Example:
-    """Lazily read + decode a single molecule by id (one indexed row).
+def _read_one_example(
+    connection: sqlite3.Connection, key: int, *, variant: QH9Variant = QH9Variant.STABLE
+) -> QH9Example:
+    """Lazily read + decode a single molecule by its row key (one indexed row).
 
-    Issues ``SELECT * FROM data WHERE id = ?`` (``id`` is the primary key, so the
-    read is index-seeked) and decodes the row with the reused
-    :func:`~opifex.data.sources.qh9_source._decode_row`, keeping exactly one
-    molecule's Fock resident.
+    Issues ``SELECT * FROM data WHERE <key_column> = ?`` (an index-seeked read on
+    the unique ``id`` for Stable or the ``rowid`` for Dynamic) and decodes the row
+    with the variant's decoder (the shared
+    :func:`~opifex.data.sources.qh9_source._decode_row` for Stable's five columns,
+    :func:`~opifex.data.sources.qh9_dynamic.decode_qh9_dynamic_row` for Dynamic's
+    eleven), keeping exactly one molecule's Fock resident.
 
     Args:
-        connection: An open read-only SQLite connection to ``QH9Stable.db``.
-        molecule_id: The ``id`` primary key of the molecule to read.
+        connection: An open read-only SQLite connection to the QH9 database.
+        key: The row key (Stable ``id`` or Dynamic ``rowid``) to read.
+        variant: Which database layout is being read (selects the decoder).
 
     Returns:
         The decoded molecule with its native + spherical Fock.
 
     Raises:
-        KeyError: If no row with ``molecule_id`` exists.
+        KeyError: If no row with ``key`` exists.
     """
-    cursor = connection.execute("SELECT * FROM data WHERE id = ?", (molecule_id,))
+    cursor = connection.execute(_VARIANT_ROW_QUERY[variant], (key,))
     row = cursor.fetchone()
     if row is None:
-        raise KeyError(f"QH9-Stable molecule id {molecule_id} not found.")
+        raise KeyError(f"QH9 {variant} row key {key} not found.")
+    if variant is QH9Variant.DYNAMIC:
+        return decode_qh9_dynamic_row(row)
     molecule_identifier, num_nodes, atoms_blob, pos_blob, ham_blob = row
     return _decode_row(molecule_identifier, num_nodes, atoms_blob, pos_blob, ham_blob)
 
@@ -303,15 +346,18 @@ class QH9PaddedSource(DataSourceModule):
         db_path: Path,
         split_ids: tuple[int, ...],
         split_name: str | None = None,
+        variant: QH9Variant = QH9Variant.STABLE,
+        dataset_name: str = "QH9Stable",
         rngs: nnx.Rngs | None = None,
         name: str | None = None,
     ) -> None:
-        """Initialise the lazy source from a split's id list (no Fock read)."""
+        """Initialise the lazy source from a split's row-key list (no Fock read)."""
         super().__init__(config, rngs=rngs, name=name or "QH9PaddedSource")
         self._db_path = nnx.static(db_path)
+        self._variant = nnx.static(variant)
         self.split_ids = nnx.static(tuple(int(i) for i in split_ids))
         self.length = nnx.static(len(self.split_ids))
-        self.dataset_name = "QH9Stable"
+        self.dataset_name = dataset_name
         self.split_name = split_name
         self.epoch = nnx.Variable(0)
         self._is_random_order = config.shuffle
@@ -349,10 +395,11 @@ class QH9PaddedSource(DataSourceModule):
         return order[positions % int(self.length)]
 
     def _read_padded(self, molecule_ids: NDArray[np.int64]) -> list[dict[str, NDArray]]:
-        """Read + pad the given molecule ids over a fresh read-only connection."""
+        """Read + pad the given row keys over a fresh read-only connection."""
+        variant = QH9Variant(self._variant)
         with sqlite3.connect(f"file:{self._db_path}?mode=ro", uri=True) as connection:
             return [
-                _pad_molecule(_read_one_example(connection, int(mid)), self.config)
+                _pad_molecule(_read_one_example(connection, int(mid), variant=variant), self.config)
                 for mid in molecule_ids
             ]
 
@@ -439,6 +486,64 @@ def _with_shuffle(config: QH9PaddedConfig, shuffle: bool) -> QH9PaddedConfig:
     )
 
 
+def _build_splits_from_indices(
+    *,
+    config: QH9PaddedConfig,
+    db_path: Path,
+    keys: NDArray[np.int64],
+    split_indices: tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.int64]],
+    variant: QH9Variant,
+    dataset_name: str,
+    rngs: nnx.Rngs | None,
+) -> QH9PaddedSplits:
+    """Build train/val/test sources from split positions into the ``keys`` array.
+
+    Shared by the Stable and Dynamic factories: each split selects its row keys
+    ``keys[indices]`` (ascending), the train split honours ``config.shuffle`` and
+    val/test stay ordered.
+
+    Args:
+        config: Padding/split configuration.
+        db_path: Path to the QH9 database the sources read.
+        keys: The ascending row keys (Stable ``id`` or Dynamic ``rowid``).
+        split_indices: ``(train, val, test)`` position arrays into ``keys``.
+        variant: Which QH9 database layout the sources read.
+        dataset_name: Display name recorded on each source.
+        rngs: Optional RNGs forwarded to each source.
+
+    Returns:
+        A :class:`QH9PaddedSplits` bundle.
+    """
+    train_idx, val_idx, test_idx = split_indices
+
+    def _source(indices: NDArray[np.int64], split_name: str, *, shuffle: bool) -> QH9PaddedSource:
+        split_keys = tuple(int(k) for k in np.sort(keys[indices]))
+        split_config = config if shuffle == config.shuffle else _with_shuffle(config, shuffle)
+        return QH9PaddedSource(
+            split_config,
+            db_path=db_path,
+            split_ids=split_keys,
+            split_name=split_name,
+            variant=variant,
+            dataset_name=dataset_name,
+            rngs=rngs,
+        )
+
+    logger.info(
+        "QH9 padded source (%s): %d train / %d val / %d test rows",
+        dataset_name,
+        len(train_idx),
+        len(val_idx),
+        len(test_idx),
+    )
+    return QH9PaddedSplits(
+        train=_source(train_idx, "train", shuffle=config.shuffle),
+        val=_source(val_idx, "val", shuffle=False),
+        test=_source(test_idx, "test", shuffle=False),
+        units={"positions": "Bohr", "fock": "Hartree"},
+    )
+
+
 def create_qh9_padded_sources(
     *,
     config: QH9PaddedConfig,
@@ -469,32 +574,72 @@ def create_qh9_padded_sources(
         FileNotFoundError: If the resolved database path does not exist.
     """
     resolved_path = db_path if db_path is not None else _DEFAULT_DATABASE
-    ids = _read_split_ids(resolved_path, limit=limit)
-    train_idx, val_idx, test_idx = qh9_random_split(len(ids), seed=config.seed)
-    id_array = np.asarray(ids, dtype=np.int64)
-
-    def _source(indices: NDArray[np.int64], split_name: str, *, shuffle: bool) -> QH9PaddedSource:
-        split_ids = tuple(int(i) for i in np.sort(id_array[indices]))
-        split_config = config if shuffle == config.shuffle else _with_shuffle(config, shuffle)
-        return QH9PaddedSource(
-            split_config,
-            db_path=resolved_path,
-            split_ids=split_ids,
-            split_name=split_name,
-            rngs=rngs,
-        )
-
-    logger.info(
-        "QH9 padded source: %d train / %d val / %d test molecules",
-        len(train_idx),
-        len(val_idx),
-        len(test_idx),
+    ids = _read_split_keys(resolved_path, variant=QH9Variant.STABLE, limit=limit)
+    return _build_splits_from_indices(
+        config=config,
+        db_path=resolved_path,
+        keys=np.asarray(ids, dtype=np.int64),
+        split_indices=qh9_random_split(len(ids), seed=config.seed),
+        variant=QH9Variant.STABLE,
+        dataset_name="QH9Stable",
+        rngs=rngs,
     )
-    return QH9PaddedSplits(
-        train=_source(train_idx, "train", shuffle=config.shuffle),
-        val=_source(val_idx, "val", shuffle=False),
-        test=_source(test_idx, "test", shuffle=False),
-        units={"positions": "Bohr", "fock": "Hartree"},
+
+
+def create_qh9_dynamic_padded_sources(
+    *,
+    config: QH9PaddedConfig,
+    db_path: Path,
+    split: str = "geometry",
+    limit: int | None = None,
+    rngs: nnx.Rngs | None = None,
+) -> QH9PaddedSplits:
+    """Create out-of-core padded train/val/test sources for QH9-Dynamic.
+
+    Reads only the ``rowid`` column of an existing ``QH9Dynamic_*.db`` and applies
+    one of the two reference ``0.8 / 0.1 / 0.1`` splits over the row positions: the
+    geometry-wise split (every molecule in all splits at disjoint timesteps) or
+    the molecule-wise split (whole molecules held out). The molecule count is the
+    number of rows divided by the 100 geometries stored per molecule; a ``limit``
+    that is not a whole number of molecules drops the trailing partial molecule.
+
+    Args:
+        config: Padding/split configuration.
+        db_path: Path to ``QH9Dynamic_300k.db`` / ``QH9Dynamic_100k.db``.
+        split: ``"geometry"`` or ``"mol"`` (the reference Dynamic splits).
+        limit: Optional cap on rows considered (ascending ``rowid``; smoke-tests).
+        rngs: Optional RNGs forwarded to each source.
+
+    Returns:
+        A :class:`QH9PaddedSplits` bundle.
+
+    Raises:
+        FileNotFoundError: If ``db_path`` does not exist.
+        ValueError: If ``split`` is not ``"geometry"`` or ``"mol"``, or the
+            database holds fewer than one full molecule.
+    """
+    rowids = _read_split_keys(db_path, variant=QH9Variant.DYNAMIC, limit=limit)
+    geometries_per_mol = QH9_DYNAMIC_GEOMETRIES_PER_MOL
+    num_molecules = len(rowids) // geometries_per_mol
+    if num_molecules < 1:
+        raise ValueError(
+            f"QH9-Dynamic database has {len(rowids)} rows, fewer than the "
+            f"{geometries_per_mol} geometries of one molecule."
+        )
+    if split == "geometry":
+        split_indices = qh9_dynamic_geometry_split(num_molecules)
+    elif split == "mol":
+        split_indices = qh9_dynamic_mol_split(num_molecules)
+    else:
+        raise ValueError(f"split must be 'geometry' or 'mol', got {split!r}.")
+    return _build_splits_from_indices(
+        config=config,
+        db_path=db_path,
+        keys=np.asarray(rowids, dtype=np.int64),
+        split_indices=split_indices,
+        variant=QH9Variant.DYNAMIC,
+        dataset_name="QH9Dynamic",
+        rngs=rngs,
     )
 
 
@@ -557,6 +702,8 @@ __all__ = [
     "QH9PaddedConfig",
     "QH9PaddedSource",
     "QH9PaddedSplits",
+    "QH9Variant",
+    "create_qh9_dynamic_padded_sources",
     "create_qh9_padded_sources",
     "iterate_padded_batches",
     "read_padded_source_rss",

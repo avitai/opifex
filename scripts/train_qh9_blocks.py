@@ -52,6 +52,7 @@ from opifex.data.sources.qh9_fock_operators import (
     FockSphericalDecodeOperator,
 )
 from opifex.data.sources.qh9_padded_source import (
+    create_qh9_dynamic_padded_sources,
     create_qh9_padded_sources,
     iterate_padded_batches,
     QH9PaddedConfig,
@@ -72,7 +73,27 @@ from opifex.neural.quantum.hamiltonian.qh9_eval import load_predictor_checkpoint
 
 logger = logging.getLogger("train_qh9_blocks")
 
-_DEFAULT_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
+_DATASET_DB = {
+    "stable": Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db"),
+    "dynamic-100k": Path("/mnt/ssd2/Data/qh9/raw/QH9Dynamic_100k.db"),
+    "dynamic-300k": Path("/mnt/ssd2/Data/qh9/raw/QH9Dynamic_300k.db"),
+}
+_DEFAULT_DB = _DATASET_DB["stable"]
+
+
+def _resolve_db_path(args: TrainArgs) -> Path:
+    """The database path: an explicit ``--db`` or the per-dataset default."""
+    return args.db if args.db is not None else _DATASET_DB[args.dataset]
+
+
+def _validate_dataset_split(dataset: str, split: str) -> None:
+    """Reject dataset/split combinations the loaders do not support."""
+    if dataset == "stable" and split != "random":
+        raise ValueError("QH9-Stable supports only --split random.")
+    if dataset.startswith("dynamic") and split not in ("geometry", "mol"):
+        raise ValueError("QH9-Dynamic supports only --split geometry or mol.")
+
+
 _DEFAULT_OUT = Path("/mnt/ssd2/Data/qh9/runs/blocks1")
 
 
@@ -113,7 +134,9 @@ class _PaddedBatches:
 class TrainArgs:
     """Parsed command-line arguments for the block training driver."""
 
-    db: Path
+    dataset: str
+    split: str
+    db: Path | None
     limit: int | None
     max_atoms: int
     max_edges: int
@@ -133,7 +156,21 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     parser = argparse.ArgumentParser(
         description="Train QH9 block-form Hamiltonian prediction (heterogeneous batch)."
     )
-    parser.add_argument("--db", type=Path, default=_DEFAULT_DB)
+    parser.add_argument(
+        "--dataset",
+        choices=("stable", "dynamic-100k", "dynamic-300k"),
+        default="stable",
+        help="QH9 dataset variant (selects the default database and split kinds).",
+    )
+    parser.add_argument(
+        "--split",
+        choices=("random", "geometry", "mol"),
+        default="random",
+        help="Split: 'random' for Stable; 'geometry'/'mol' for Dynamic.",
+    )
+    parser.add_argument(
+        "--db", type=Path, default=None, help="Database path (defaults to the dataset's)."
+    )
     parser.add_argument("--limit", type=int, default=None, help="Cap decoded molecules (None=all).")
     parser.add_argument("--max-atoms", type=int, default=29, dest="max_atoms")
     parser.add_argument("--max-edges", type=int, default=812, dest="max_edges")
@@ -155,7 +192,10 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
         ),
     )
     namespace = parser.parse_args(argv)
+    _validate_dataset_split(namespace.dataset, namespace.split)
     return TrainArgs(
+        dataset=namespace.dataset,
+        split=namespace.split,
         db=namespace.db,
         limit=namespace.limit,
         max_atoms=namespace.max_atoms,
@@ -438,7 +478,8 @@ def _startup_summary(
 ) -> None:
     """Log a clear startup summary of the run."""
     logger.info("QH9 block-form Hamiltonian training driver (per-molecule GPU operators)")
-    logger.info("  database          : %s", args.db)
+    logger.info("  dataset / split   : %s / %s", args.dataset, args.split)
+    logger.info("  database          : %s", _resolve_db_path(args))
     logger.info("  limit             : %s", "all" if args.limit is None else args.limit)
     logger.info("  train molecules   : %d", len(splits.train))
     logger.info("  val   molecules   : %d", len(splits.val))
@@ -482,9 +523,15 @@ def _run(args: TrainArgs) -> dict[str, object]:
         max_edges=args.max_edges,
         shuffle=True,
     )
-    splits = create_qh9_padded_sources(
-        config=config, db_path=args.db, limit=args.limit, rngs=nnx.Rngs(0)
-    )
+    db_path = _resolve_db_path(args)
+    if args.dataset == "stable":
+        splits = create_qh9_padded_sources(
+            config=config, db_path=db_path, limit=args.limit, rngs=nnx.Rngs(0)
+        )
+    else:
+        splits = create_qh9_dynamic_padded_sources(
+            config=config, db_path=db_path, split=args.split, limit=args.limit, rngs=nnx.Rngs(0)
+        )
 
     predictor = _build_predictor(args)
     n_params = sum(int(x.size) for x in jax.tree_util.tree_leaves(nnx.state(predictor, nnx.Param)))

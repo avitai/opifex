@@ -139,6 +139,16 @@ loss `qh9_block_loss` (with `make_block_train_step` / `make_block_eval_step`)
 compares only the valid AO slots. `scripts/train_qh9_blocks.py` wires the data
 pipeline, predictor and loss into an end-to-end training run.
 
+Both QH9 benchmarks are supported. QH9-Stable (one equilibrium geometry per
+molecule, `--dataset stable --split random`) and QH9-Dynamic (~100 molecular-
+dynamics geometries per molecule, `--dataset dynamic-300k`/`dynamic-100k`) share
+the predictor, loss and out-of-core padded source. The Dynamic loader
+(`opifex.data.sources.qh9_dynamic`) reproduces the two reference splits exactly:
+`--split geometry` (every molecule in all splits at disjoint timesteps) and
+`--split mol` (whole molecules held out — the harder generalisation test). Because
+a Dynamic molecule's geometries share a non-unique `id`, the source keys rows by
+`rowid`; the splits, decode and padding are otherwise identical to Stable.
+
 For a thin, untrained demo of the block mechanics — building the predictor,
 running a concatenated batch of two molecules, assembling a symmetric dense Fock,
 and verifying the assembled-matrix equivariance `H(R x) = D(R) H(x) D(R)^T` with
