@@ -294,6 +294,7 @@ def _train_epoch(
     and only converted to Python floats when logged, so the GPU is not stalled by
     a per-step ``float()`` / ``block_until_ready``.
     """
+    predictor.train()  # Switch to train mode (canonical NNX boundary, outside jit).
     losses: list[jax.Array] = []
     maes: list[jax.Array] = []
     n_molecules = 0
@@ -338,6 +339,7 @@ def _evaluate(
     """Return the molecule-weighted mean validation Hamiltonian-MAE (Hartree)."""
     if len(batches) == 0:
         return None
+    predictor.eval()  # Switch to eval mode (canonical NNX boundary, outside jit).
     total = 0.0
     count = 0
     for batch in batches:

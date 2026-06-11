@@ -549,6 +549,7 @@ def evaluate_examples(
     Raises:
         ValueError: If ``examples`` is empty.
     """
+    predictor.eval()  # Inference: switch to eval mode (canonical NNX boundary).
     totals = dict.fromkeys(_METRIC_KEYS, 0.0)
     count = 0
     for example in examples:
