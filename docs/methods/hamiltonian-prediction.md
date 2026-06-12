@@ -33,18 +33,32 @@ in fixed-size **blocks**, every primitive reused from the equivariant kit:
 1. **Steerable trunk.** The NequIP tensor-product message passing
    (`opifex.neural.atomistic.backbones.nequip`) produces a *full steerable*
    per-atom feature (an `IrrepsArray`, not just the scalar readout the energy head
-   uses). The trunk is shared with the
+   uses) in a uniform-multiplicity, parity-correct layout
+   `Hx0e + Hx1o + Hx2e + Hx3o + Hx4e`. The trunk is shared with the
    [Atomistic Potentials](atomistic-potentials.md) family.
-2. **Node head — diagonal blocks `H_ii`.** A shared `HamiltonianBlockExpansion`
-   turns each atom's node feature and invariant embedding into the full
-   `(14, 14)` def2-SVP on-site block (`BLOCK_IRREPS = 3x0e + 2x1e + 1x2e`), which
-   the forward symmetrizes (`D + D^T`).
-3. **Edge head — off-diagonal blocks `H_ij`.** For every directed atom pair a
-   mixed sender/receiver edge feature (a radially-modulated tensor product of the
-   sender's features with the edge spherical harmonics, combined with the
-   receiver's features) is expanded by the *same* head into the `(14, 14)`
-   off-site block.
-4. **Mask, scatter and symmetrize.** `assemble_matrix` masks each `(14, 14)`
+2. **Refinement — the Fock-block features.** A Fock block is a rank-2 tensor that
+   needs *products* of the trunk features, so after the
+   `start_refinement_layer`-th convolution each further layer feeds the
+   parity-relabelled (all-even, matching QHNet's `hidden_irrep_base`) node feature
+   into a `SelfInteractionLayer` (QHNet `SelfNetLayer` — a channel-wise *self*
+   tensor product `tp(W_l x, W_r x)` building the diagonal feature `f_ii`) and a
+   `PairInteractionLayer` (QHNet `PairNetLayer` — a channel-wise *pair* tensor
+   product `tp(x[i], x[j])` over the complete edge graph, with per-edge weights
+   modulated by the radial embedding and the endpoint inner product, building the
+   off-diagonal feature `f_ij`). The features accumulate residually across the
+   stack. Each layer first `rms_normalize`s its input (an equivariant RMSNorm —
+   division by the per-node invariant RMS) so the squaring tensor products stay
+   bounded regardless of the trunk's activation scale. These layers compose the
+   `ChannelwiseTensorProduct`, `NormGate`, `inner_product` and `rms_normalize`
+   primitives from `opifex.neural.equivariant`.
+3. **Node head — diagonal blocks `H_ii`.** A shared `HamiltonianBlockExpansion`
+   turns the bottlenecked diagonal feature `f_ii` and the atom's invariant
+   embedding into the full `(14, 14)` def2-SVP on-site block
+   (`BLOCK_IRREPS = 3x0e + 2x1e + 1x2e`), which the forward symmetrizes (`D + D^T`).
+4. **Edge head — off-diagonal blocks `H_ij`.** For every directed atom pair the
+   bottlenecked pair feature `f_ij` and the concatenated pair embedding are
+   expanded by the *same* head into the `(14, 14)` off-site block.
+5. **Mask, scatter and symmetrize.** `assemble_matrix` masks each `(14, 14)`
    block to its element's valid AO slots (`block_validity_mask` — hydrogen keeps
    `2s + 1p`, C/N/O/F all 14), scatters it to the per-atom AO offsets
    (`atom_orbital_counts`), writes off-diagonal blocks at both `(i, j)` and
@@ -85,6 +99,7 @@ The public surface lives in `opifex.neural.quantum.hamiltonian`:
 | Symbol | Role |
 |--------|------|
 | `BLOCK_IRREPS` | the 14-dim row/col representation of a Fock block (`3x0e + 2x1e + 1x2e`) |
+| `SelfInteractionLayer` / `PairInteractionLayer` | QHNet `SelfNetLayer` / `PairNetLayer`: channel-wise self / pair tensor products that build the diagonal / off-diagonal block features, accumulated residually |
 | `HamiltonianBlockExpansion` | the shared block head: last-index Clebsch-Gordan contraction of a steerable feature into a `(14, 14)` block, driven by an invariant embedding |
 | `block_validity_mask` / `atom_orbital_counts` | the per-element AO mask (hydrogen `2s + 1p`, C/N/O/F all 14) and populated-AO counts assembly uses |
 | `BlockHamiltonianPredictor` | the heterogeneous-batchable predictor: per-atom diagonal + per-edge off-diagonal blocks, with `assemble_matrix` building the symmetric dense matrix |
@@ -101,10 +116,12 @@ from opifex.neural.quantum.hamiltonian import (
 
 predictor = BlockHamiltonianPredictor(
     config=BlockHamiltonianConfig(
-        hidden_irreps="32x0e + 16x1o + 8x2e",  # must carry every degree the s/p/d blocks reach
-        sh_lmax=2,
-        num_interactions=2,
-        cutoff=20.0,                            # Bohr
+        hidden_irreps="32x0e + 32x1o + 32x2e + 32x3o + 32x4e",  # uniform mul, l up to the d-d block
+        sh_lmax=4,
+        num_interactions=5,
+        start_refinement_layer=2,   # QHNet: refine after the 2nd convolution
+        bottleneck_multiplicity=32,
+        cutoff=20.0,                # Bohr
     ),
     rngs=nnx.Rngs(0),
 )

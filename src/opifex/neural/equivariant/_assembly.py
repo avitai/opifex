@@ -47,6 +47,35 @@ def from_chunks(
     return IrrepsArray(irreps, jnp.concatenate(flat_blocks, axis=-1))
 
 
+def apply_scalar_weights(
+    features: IrrepsArray, weights: Float[Array, "... num_irreps"]
+) -> IrrepsArray:
+    r"""Scale each multiplicity of ``features`` by an invariant scalar weight.
+
+    Multiplying a steerable feature's multiplicity by a rotation-invariant scalar
+    is equivariant, so this realises the radial / scalar-gated modulation used by
+    the NequIP convolution and the equivariant Hamiltonian pair head (one weight
+    per irrep, ``weights.shape[-1] == features.irreps.num_irreps``).
+
+    Args:
+        features: The steerable feature to scale.
+        weights: Per-multiplicity scalars of width ``features.irreps.num_irreps``
+            (multiplicity-major, matching the block order), broadcasting over the
+            leading axes of ``features``.
+
+    Returns:
+        An :class:`IrrepsArray` with the same irreps as ``features``, each
+        multiplicity scaled by its weight.
+    """
+    scaled: list[Float[Array, "... mul dim_l"] | None] = []
+    cursor = 0
+    for (mul, _), chunk in zip(features.irreps.blocks, features.chunks, strict=True):
+        block_weights = weights[..., cursor : cursor + mul]
+        scaled.append(chunk * block_weights[..., None])
+        cursor += mul
+    return from_chunks(features.irreps, scaled, features.array.shape[:-1], features.array.dtype)
+
+
 def group_by_irrep(irreps: Irreps) -> dict[Irrep, list[int]]:
     """Map each distinct :class:`Irrep` to the indices of the blocks carrying it.
 

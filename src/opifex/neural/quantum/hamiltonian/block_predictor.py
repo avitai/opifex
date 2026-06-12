@@ -1,60 +1,48 @@
-r"""Heterogeneous-batchable QHNet-style block Hamiltonian predictor.
+r"""Heterogeneous-batchable QHNet block Hamiltonian predictor.
 
-This is the *segment/concatenated* core of a QHNet Fock predictor (Yu et al. 2023,
-"QHNet", arXiv:2306.04922; reference ``divelab/AIRS``
+A faithful JAX/Flax-NNX port of the QHNet Fock predictor (Yu et al. 2023, "QHNet",
+arXiv:2306.04922; reference ``divelab/AIRS``
 ``OpenDFT/QHBench/QH9/models/QHNet.py``). Given a **flat heterogeneous batch** --
 many molecules of differing composition/size concatenated into ``(A, 3)``
 positions, ``(A,)`` atomic numbers and a ``(2, E)`` *within-molecule* directed
 edge index (already offset so an edge never crosses molecules) -- it emits, for
 *every* atom, a fixed ``(14, 14)`` diagonal Fock block and, for *every* directed
-edge, a ``(14, 14)`` off-diagonal block.
-
-Because the blocks are fixed-size (the def2-SVP second-row layout
+edge, a ``(14, 14)`` off-diagonal block (the def2-SVP second-row layout
 :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS` =
-``3x0e + 2x1e + 1x2e``) and the NequIP convolution scatters messages **only over
-within-molecule edges**, one compiled forward (for a given padded ``(A, E)``)
-runs over *any* concatenation of molecules -- no per-composition assembly plan and
-no per-molecule recompile (the per-composition dense-assembly predictor it
-replaced has been removed).
+``3x0e + 2x1e + 1x2e``).
 
-Architecture (QHNet forward, ``divelab/AIRS`` ``QHNet.forward``)
----------------------------------------------------------------
+Architecture (QHNet ``QHNet.forward``)
+--------------------------------------
 1. **Embed** atomic numbers into the trunk's scalar channels and lift into the
-   steerable hidden layout (reuses :class:`~...nequip.NequIP`'s embedding pattern).
+   parity-correct steerable hidden layout ``Hx0e + Hx1o + Hx2e + Hx3o + Hx4e``.
 2. **Message passing**: ``num_interactions`` reused
    :class:`~opifex.neural.atomistic.backbones.nequip._ConvolutionLayer` layers
-   (the NequIP Clebsch-Gordan TP convolution) produce per-atom equivariant
-   features. The conv layer is segment/edge-based -- it scatters via
-   :func:`~opifex.neural.equivariant.scatter_sum` over ``geometry.receivers`` --
-   so it runs **unchanged** on the concatenated multi-molecule graph (QHNet's
+   (the NequIP Clebsch-Gordan TP convolution; segment/edge-based, hence
+   batch-transparent) produce per-atom equivariant features (QHNet's
    ``ConvNetLayer`` stack).
-3. **Bottleneck**: an :class:`~opifex.neural.equivariant.EquivariantLinear` maps
-   the per-atom features to the diagonal head's steerable feature (QHNet's
-   ``output_ii``), and a second one to the off-diagonal head's feature
-   (``output_ij``).
-4. **Diagonal head** (per atom): the shared
+3. **Refinement** (the QHNet expressivity core a NequIP trunk lacks): after the
+   ``start_refinement_layer``-th convolution, each subsequent layer feeds the
+   parity-relabelled (all-even, matching QHNet's ``hidden_irrep_base``) node
+   feature into a
+   :class:`~opifex.neural.quantum.hamiltonian._refinement.SelfInteractionLayer`
+   (QHNet ``SelfNetLayer`` -- a channel-wise *self* tensor product building the
+   diagonal feature ``fii``) and a
+   :class:`~opifex.neural.quantum.hamiltonian._refinement.PairInteractionLayer`
+   (QHNet ``PairNetLayer`` -- a channel-wise *pair* tensor product over the
+   complete edge graph building the off-diagonal feature ``fij``), accumulated
+   residually across the stack.
+4. **Bottleneck**: ``output_ii`` / ``output_ij``
+   (:class:`~opifex.neural.equivariant.EquivariantLinear`) map ``fii`` / ``fij``
+   to the even bottleneck layout ``Bx0e + ... + Bx4e``.
+5. **Block heads**: the shared
    :class:`~opifex.neural.quantum.hamiltonian._block_expansion.HamiltonianBlockExpansion`
-   over the node feature + the per-atom invariant (``0e``) embedding.
-5. **Off-diagonal head** (per directed edge): the *same* block-head module over a
-   steerable pair feature (sender feature tensored with the edge spherical
-   harmonics, radially modulated, plus a mixed receiver feature -- the NequIP edge
-   message reused) + a per-edge invariant embedding formed by concatenating the
-   sender and receiver scalar embeddings (QHNet's
-   ``node_pair_embedding = cat([node_attr[dst], node_attr[src]])``).
+   (QHNet's Wigner-3j ``Expansion``) expands the bottleneck feature + a per-sample
+   invariant embedding (the atom embedding for the diagonal head, the concatenated
+   pair embedding for the off-diagonal head) into the ``(14, 14)`` block.
 6. **Symmetrise** (QHNet ``ret_diagonal = D + D^T``): the diagonal block is made
-   symmetric; the off-diagonal block law ``ND + ND[transpose_edge].T`` is realised
-   implicitly because the directed graph contains both ``(i, j)`` and ``(j, i)``
-   and :meth:`assemble_matrix`/downstream symmetrise the assembled matrix (see the
-   *Off-diagonal symmetrisation* note below).
-
-Bounded scope (vs. the full QHNet)
-----------------------------------
-The QHNet ``SelfNetLayer`` / ``PairNetLayer`` on-site/pair *refinement* blocks are
-intentionally **not** included here: this module is the heterogeneous-batch *core*
-(embed -> conv trunk -> bottleneck -> shared block head), the part that makes
-fixed-size blocks trivially batchable. The refinement layers are an orthogonal
-expressivity upgrade (a documented follow-up), not part of the batching contract,
-and the equivariance / batch-consistency guarantees here do not depend on them.
+   symmetric; the off-diagonal block law ``H[i, j] = B_ij + B_ji^T`` is realised at
+   assembly because the directed graph carries both ``(i, j)`` and ``(j, i)`` (see
+   the *Off-diagonal symmetrisation* note below).
 
 Off-diagonal symmetrisation: QHNet symmetrises with ``ND[transpose_edge].T``,
 which requires the per-graph ``transpose_edge_index`` permutation. On a flat
@@ -87,17 +75,19 @@ from opifex.neural.equivariant import (
     BesselBasis,
     cosine_cutoff,
     EquivariantLinear,
-    FullyConnectedTensorProduct,
     Irrep,
     Irreps,
     IrrepsArray,
     spherical_harmonics,
 )
-from opifex.neural.equivariant._assembly import from_chunks
 from opifex.neural.quantum.hamiltonian._block_expansion import HamiltonianBlockExpansion
 from opifex.neural.quantum.hamiltonian._orbital_layout import (
     atom_orbital_counts,
     block_validity_mask,
+)
+from opifex.neural.quantum.hamiltonian._refinement import (
+    PairInteractionLayer,
+    SelfInteractionLayer,
 )
 
 
@@ -111,17 +101,25 @@ _MAX_ATOMIC_NUMBER = 118
 class BlockHamiltonianConfig:
     """Hyper-parameters of a :class:`BlockHamiltonianPredictor`.
 
-    Defaults sit near QHNet (hidden multiplicity ~128, ``sh_lmax`` 4, 5
-    interactions) but are reduced here so the documented defaults stay test-fast;
-    production configs should raise them toward the reference.
+    Defaults sit well below the QHNet reference (hidden multiplicity ~128, ``sh_lmax``
+    4, 5 interactions) so the documented defaults stay test-fast; production /
+    training configs should raise ``hidden_irreps`` to a uniform-multiplicity
+    ``Hx0e + Hx1o + Hx2e + Hx3o + Hx4e`` (``sh_lmax`` 4) toward the reference.
 
     Attributes:
         hidden_irreps: Steerable layout of the per-atom hidden / message-passing
-            features (QHNet's ``hidden_irrep``). Must contain a ``0e`` scalar
-            channel to read out as the invariant embedding.
+            features (QHNet's ``hidden_irrep``). Must be **uniform multiplicity**
+            across all degrees (the channel-wise refinement tensor products require
+            it) and contain a ``0e`` scalar channel.
         sh_lmax: Maximum spherical-harmonic degree of the edge embedding.
         num_interactions: Number of NequIP convolution layers (QHNet's
             ``num_gnn_layers`` ``ConvNetLayer`` stack).
+        start_refinement_layer: Convolution index after which the self / pair
+            refinement layers run (QHNet's ``start_layer``); refinement happens for
+            every layer with index strictly greater than it, so there are
+            ``num_interactions - 1 - start_refinement_layer`` refinement layers.
+        bottleneck_multiplicity: Multiplicity of the even bottleneck feeding the
+            block heads (QHNet's ``bottle_hidden_size``).
         num_radial_basis: Number of Bessel radial-basis functions.
         radial_hidden_dim: Hidden width of the radial network MLP.
         cutoff: Connection / cutoff radius ``r_c`` (Bohr). Defaults large so the
@@ -131,17 +129,21 @@ class BlockHamiltonianConfig:
         embed_dim: Width of the invariant embedding driving the block head's
             per-sample weight/bias MLP.
         block_mlp_hidden_dim: Hidden width of the block head's weight/bias MLP.
+        pair_weight_hidden_dim: Hidden width of the pair layer's per-edge weight MLPs.
     """
 
-    hidden_irreps: str = "32x0e + 16x1o + 8x2e"
-    sh_lmax: int = 2
+    hidden_irreps: str = "16x0e + 16x1o + 16x2e + 16x3o + 16x4e"
+    sh_lmax: int = 4
     num_interactions: int = 3
+    start_refinement_layer: int = 0
+    bottleneck_multiplicity: int = 16
     num_radial_basis: int = 8
     radial_hidden_dim: int = 64
     cutoff: float = 20.0
     average_num_neighbors: float = 1.0
     embed_dim: int = 64
     block_mlp_hidden_dim: int = 128
+    pair_weight_hidden_dim: int = 64
 
     def to_nequip(self) -> NequIPConfig:
         """Return the matching :class:`NequIPConfig` for the reused conv layers."""
@@ -156,26 +158,26 @@ class BlockHamiltonianConfig:
         )
 
 
-def _bottleneck_feature_irreps(hidden_irreps: Irreps, multiplicity: int) -> Irreps:
-    """Return the block-head feature layout: one ``mult x le`` block per degree.
+def _even_irreps(irreps: Irreps) -> Irreps:
+    """Return ``irreps`` with every block's parity relabelled to even.
+
+    The refinement layers and the block heads operate in QHNet's all-even
+    ``hidden_irrep_base`` space; relabelling the trunk's odd irreps (``1o``,
+    ``3o``) to even keeps the per-block dimensions and makes the head
+    SO(3)-equivariant (parity is forgotten, exactly as in the reference).
+    """
+    return Irreps(tuple((mul, Irrep(irrep.l, 1)) for mul, irrep in irreps.blocks))
+
+
+def _bottleneck_irreps(hidden_irreps: Irreps, multiplicity: int) -> Irreps:
+    """Return the even bottleneck layout: one ``multiplicity x le`` block per degree.
 
     The :class:`HamiltonianBlockExpansion` keys its expansion paths on the input
-    *degree* ``l`` only (parity is irrelevant to the rotation-only block law), so
-    the bottleneck carries every degree present in ``hidden_irreps`` once, at the
-    given multiplicity. Degrees absent from the trunk simply leave their
-    Clebsch-Gordan sub-block components at zero (still equivariant).
-
-    Args:
-        hidden_irreps: The trunk's per-atom feature layout.
-        multiplicity: Multiplicity assigned to every bottleneck degree.
-
-    Returns:
-        The bottleneck / block-head feature :class:`Irreps` (even-parity, ascending
-        degree), e.g. ``8x0e + 8x1e + 8x2e``.
+    *degree* ``l`` only, so the bottleneck carries every degree present in
+    ``hidden_irreps`` once, at ``multiplicity`` (even parity, ascending degree).
     """
     degrees = sorted({irrep.l for _, irrep in hidden_irreps.blocks})
-    blocks = tuple((multiplicity, Irrep(degree, 1)) for degree in degrees)
-    return Irreps(blocks)
+    return Irreps(tuple((multiplicity, Irrep(degree, 1)) for degree in degrees))
 
 
 class BlockHamiltonianPredictor(nnx.Module):
@@ -184,10 +186,9 @@ class BlockHamiltonianPredictor(nnx.Module):
     Consumes a flat concatenated batch (``atomic_numbers``, ``positions``,
     within-molecule ``edge_index``) and emits a fixed ``(14, 14)`` diagonal block
     per atom and ``(14, 14)`` off-diagonal block per directed edge. Reuses the
-    NequIP convolution trunk (segment-based, hence batch-transparent) and the
-    shared :class:`HamiltonianBlockExpansion` head for both the diagonal (node
-    feature + node embedding) and off-diagonal (edge feature + concatenated pair
-    embedding) blocks (reference ``divelab/AIRS``
+    NequIP convolution trunk (segment-based, hence batch-transparent), the QHNet
+    self / pair interaction refinement layers and the shared
+    :class:`HamiltonianBlockExpansion` head (reference ``divelab/AIRS``
     ``OpenDFT/QHBench/QH9/models/QHNet.py``).
 
     Args:
@@ -195,8 +196,8 @@ class BlockHamiltonianPredictor(nnx.Module):
         rngs: Random number generators (keyword-only) seeding all weights.
 
     Raises:
-        ValueError: If ``config.hidden_irreps`` carries no ``0e`` scalar channel
-            (needed for the invariant embedding driving the block head).
+        ValueError: If ``config.hidden_irreps`` carries no ``0e`` scalar channel,
+            is not uniform multiplicity, or leaves no room for a refinement layer.
     """
 
     def __init__(
@@ -205,20 +206,16 @@ class BlockHamiltonianPredictor(nnx.Module):
         config: BlockHamiltonianConfig | None = None,
         rngs: nnx.Rngs,
     ) -> None:
-        """Build the embedding, conv trunk, bottlenecks and the shared block head."""
+        """Build the embedding, conv trunk, refinement stack and block heads."""
         super().__init__()
         self.config = config if config is not None else BlockHamiltonianConfig()
         self.hidden_irreps = Irreps(self.config.hidden_irreps)
+        self._validate_config()
         self._num_scalars = sum(mul for mul, ir in self.hidden_irreps.blocks if ir.l == 0)
-        if self._num_scalars == 0:
-            raise ValueError(
-                f"hidden_irreps must contain a 0e scalar channel to read out, got "
-                f"{self.hidden_irreps!r}"
-            )
         nequip_config = self.config.to_nequip()
         self.sh_irreps = spherical_harmonics(self.config.sh_lmax, jnp.zeros((1, 3))).irreps
 
-        # --- embedding + lift into the steerable hidden layout (NequIP pattern) ---
+        # --- embedding + lift into the parity-correct steerable hidden layout ---
         self.embedding = nnx.Embed(
             num_embeddings=_MAX_ATOMIC_NUMBER + 1, features=self._num_scalars, rngs=rngs
         )
@@ -242,27 +239,30 @@ class BlockHamiltonianPredictor(nnx.Module):
             ]
         )
 
-        # --- bottleneck features for the diagonal and off-diagonal block heads ---
-        block_multiplicity = self._num_scalars
-        self._feature_irreps = _bottleneck_feature_irreps(self.hidden_irreps, block_multiplicity)
-        self.output_ii = EquivariantLinear(self.hidden_irreps, self._feature_irreps, rngs=rngs)
-        self.output_ij = EquivariantLinear(self.hidden_irreps, self._feature_irreps, rngs=rngs)
-
-        # --- off-diagonal edge feature builder (NequIP edge message, reused) ---
-        self.edge_tensor_product = FullyConnectedTensorProduct(
-            self.hidden_irreps, self.sh_irreps, self.hidden_irreps, rngs=rngs
+        # --- QHNet refinement stack (all-even base) ---
+        self._even_base = _even_irreps(self.hidden_irreps)
+        self._num_refinement = self.config.num_interactions - 1 - self.config.start_refinement_layer
+        self.self_layers = nnx.List(
+            [SelfInteractionLayer(self._even_base, rngs=rngs) for _ in range(self._num_refinement)]
         )
-        self.edge_radial = nnx.Linear(
-            self.config.num_radial_basis,
-            self.hidden_irreps.num_irreps,
-            use_bias=False,
-            rngs=rngs,
-        )
-        self.edge_receiver_mix = EquivariantLinear(
-            self.hidden_irreps, self.hidden_irreps, rngs=rngs
+        self.pair_layers = nnx.List(
+            [
+                PairInteractionLayer(
+                    self._even_base,
+                    edge_radial_dim=self.config.num_radial_basis,
+                    weight_hidden_dim=self.config.pair_weight_hidden_dim,
+                    rngs=rngs,
+                )
+                for _ in range(self._num_refinement)
+            ]
         )
 
-        # --- one shared block-expansion head: diagonal embed_dim, off-diag 2x ---
+        # --- even bottleneck + shared block-expansion heads ---
+        self._feature_irreps = _bottleneck_irreps(
+            self.hidden_irreps, self.config.bottleneck_multiplicity
+        )
+        self.output_ii = EquivariantLinear(self._even_base, self._feature_irreps, rngs=rngs)
+        self.output_ij = EquivariantLinear(self._even_base, self._feature_irreps, rngs=rngs)
         self.diagonal_head = HamiltonianBlockExpansion(
             feature_irreps=self._feature_irreps,
             embed_dim=self.config.embed_dim,
@@ -275,73 +275,82 @@ class BlockHamiltonianPredictor(nnx.Module):
             mlp_hidden_dim=self.config.block_mlp_hidden_dim,
             rngs=rngs,
         )
-        # Project the trunk scalars to the block head's embedding width.
+        # Project the (element-identity) atom embedding to the block head's width.
         self.node_embed = nnx.Linear(self._num_scalars, self.config.embed_dim, rngs=rngs)
 
-    def _trunk(
+    def _validate_config(self) -> None:
+        """Validate the hidden layout supports the refinement / head requirements."""
+        if self._num_scalars_for(self.hidden_irreps) == 0:
+            raise ValueError(
+                f"hidden_irreps must contain a 0e scalar channel to read out, got "
+                f"{self.hidden_irreps!r}"
+            )
+        multiplicities = {mul for mul, _ in self.hidden_irreps.blocks}
+        if len(multiplicities) != 1:
+            raise ValueError(
+                f"hidden_irreps must be uniform multiplicity for the channel-wise "
+                f"refinement tensor products, got {self.hidden_irreps!r}"
+            )
+        if self.config.num_interactions - 1 - self.config.start_refinement_layer < 1:
+            raise ValueError(
+                f"need at least one refinement layer: num_interactions="
+                f"{self.config.num_interactions} with start_refinement_layer="
+                f"{self.config.start_refinement_layer} leaves none"
+            )
+
+    @staticmethod
+    def _num_scalars_for(irreps: Irreps) -> int:
+        """Return the total ``l = 0`` multiplicity of ``irreps``."""
+        return sum(mul for mul, irrep in irreps.blocks if irrep.l == 0)
+
+    def _encode(
         self,
         atomic_numbers: Int[Array, " n_atoms"],
         positions: Float[Array, "n_atoms 3"],
         edge_index: Int[Array, "2 n_edges"],
-    ) -> tuple[IrrepsArray, IrrepsArray, Float[Array, "n_edges num_radial"]]:
-        """Embed + run the conv trunk; return node features and reusable edge data.
+    ) -> tuple[IrrepsArray, IrrepsArray, Float[Array, "n_atoms embed"]]:
+        """Run the trunk + refinement; return the diagonal/off-diagonal features.
 
         Returns:
-            ``(node_features, edge_sh, radial_envelope)`` where ``node_features`` is
-            the per-atom steerable feature, ``edge_sh`` the per-edge spherical
-            harmonics and ``radial_envelope`` the cutoff-enveloped radial basis.
+            ``(diagonal_feature, off_diagonal_feature, node_embedding)`` where the
+            first is per-atom ``fii`` (even bottleneck), the second per-edge ``fij``
+            (even bottleneck) and the third the per-atom invariant embedding driving
+            the block heads.
         """
         n_atoms = atomic_numbers.shape[0]
-        graph = (edge_index[0], edge_index[1])
-        geometry = edge_geometry(positions, graph)
+        senders, receivers = edge_index[0], edge_index[1]
+        geometry = edge_geometry(positions, (senders, receivers))
         lengths = geometry.lengths[:, 0]
         radial = self.radial_basis(lengths)
         envelope = (cosine_cutoff(lengths, self.config.cutoff) * geometry.mask[:, 0])[:, None]
         edge_sh = spherical_harmonics(self.sh_irreps, geometry.vectors)
-        scalar_embedding = IrrepsArray(self._embedding_irreps, self.embedding(atomic_numbers))
-        node_features = self.embedding_linear(scalar_embedding)
-        for layer in self.layers:
+        radial_envelope = radial * envelope
+
+        atom_embedding = self.embedding(atomic_numbers)
+        node_features = self.embedding_linear(IrrepsArray(self._embedding_irreps, atom_embedding))
+        diagonal_feature: IrrepsArray | None = None
+        off_diagonal_feature: IrrepsArray | None = None
+        refinement_index = 0
+        for layer_index, layer in enumerate(self.layers):
             node_features = layer(node_features, edge_sh, geometry, radial, envelope, n_atoms)
-        return node_features, edge_sh, radial * envelope
+            if layer_index > self.config.start_refinement_layer:
+                node_even = IrrepsArray(self._even_base, node_features.array)
+                diagonal_feature = self.self_layers[refinement_index](node_even, diagonal_feature)
+                off_diagonal_feature = self.pair_layers[refinement_index](
+                    node_even, senders, receivers, radial_envelope, off_diagonal_feature
+                )
+                refinement_index += 1
 
-    def _edge_feature(
-        self,
-        node_features: IrrepsArray,
-        edge_index: Int[Array, "2 n_edges"],
-        edge_sh: IrrepsArray,
-        radial_envelope: Float[Array, "n_edges num_radial"],
-    ) -> IrrepsArray:
-        """Build the steerable per-edge (pair) feature (QHNet pair message reuse).
-
-        The sender feature is tensored with the edge spherical harmonics and
-        radially modulated (the NequIP edge message), and a mixed receiver feature
-        is added (the QHNet off-diagonal edge-message construction).
-        """
-        senders, receivers = edge_index[0], edge_index[1]
-        sender_features = IrrepsArray(node_features.irreps, node_features.array[senders])
-        message = self.edge_tensor_product(sender_features, edge_sh)
-        weights = self.edge_radial(radial_envelope)
-        message = self._apply_radial_weights(message, weights)
-        receiver_features = IrrepsArray(node_features.irreps, node_features.array[receivers])
-        mixed = self.edge_receiver_mix(receiver_features)
-        return IrrepsArray(self.hidden_irreps, message.array + mixed.array)
-
-    def _apply_radial_weights(
-        self, message: IrrepsArray, weights: Float[Array, "n_edges num_irreps"]
-    ) -> IrrepsArray:
-        """Scale each output multiplicity of ``message`` by its radial weight."""
-        scaled: list[Array | None] = []
-        cursor = 0
-        for (mul, _), chunk in zip(message.irreps.blocks, message.chunks, strict=True):
-            block_weights = weights[:, cursor : cursor + mul]
-            scaled.append(chunk * block_weights[..., None])
-            cursor += mul
-        return from_chunks(message.irreps, scaled, message.array.shape[:-1], message.array.dtype)
-
-    def _node_embedding(self, node_features: IrrepsArray) -> Float[Array, "n_atoms embed"]:
-        """Project the per-atom invariant scalar channels to the head embedding."""
-        scalars = node_features.chunks[0].reshape(node_features.array.shape[0], self._num_scalars)
-        return self.node_embed(scalars)
+        node_embedding = self.node_embed(atom_embedding)
+        if diagonal_feature is None or off_diagonal_feature is None:
+            raise RuntimeError(
+                "no refinement layer ran; _validate_config should guarantee at least one"
+            )
+        return (
+            self.output_ii(diagonal_feature),
+            self.output_ij(off_diagonal_feature),
+            node_embedding,
+        )
 
     def __call__(
         self,
@@ -361,7 +370,7 @@ class BlockHamiltonianPredictor(nnx.Module):
                 :func:`~...backbones._message_passing.edge_geometry` contract).
             node_batch: Optional ``(A,)`` segment id per atom. Accepted for
                 completeness; the forward does not need it because the conv trunk
-                scatters only over the within-molecule ``edge_index``.
+                and refinement scatter only over the within-molecule ``edge_index``.
 
         Returns:
             ``{"diagonal_blocks": (A, 14, 14), "off_diagonal_blocks": (E, 14, 14)}``;
@@ -369,23 +378,21 @@ class BlockHamiltonianPredictor(nnx.Module):
             off-diagonal blocks are raw (symmetrised at assembly, see module docs).
         """
         del node_batch  # Not required: edges are within-molecule (documented).
-        node_features, edge_sh, radial_envelope = self._trunk(atomic_numbers, positions, edge_index)
-        node_embedding = self._node_embedding(node_features)
+        senders, receivers = edge_index[0], edge_index[1]
+        diagonal_feature, off_diagonal_feature, node_embedding = self._encode(
+            atomic_numbers, positions, edge_index
+        )
 
         # --- diagonal blocks (per atom) ---
-        diagonal_feature = self.output_ii(node_features)
         diagonal = self.diagonal_head(diagonal_feature, node_embedding)
         diagonal = diagonal + jnp.swapaxes(diagonal, -1, -2)
 
         # --- off-diagonal blocks (per directed edge) ---
-        edge_feature = self._edge_feature(node_features, edge_index, edge_sh, radial_envelope)
-        off_feature = self.output_ij(edge_feature)
-        senders, receivers = edge_index[0], edge_index[1]
         # QHNet pair embedding: cat([node_attr[dst], node_attr[src]]) = [receiver, sender].
         pair_embedding = jnp.concatenate(
             [node_embedding[receivers], node_embedding[senders]], axis=-1
         )
-        off_diagonal = self.off_diagonal_head(off_feature, pair_embedding)
+        off_diagonal = self.off_diagonal_head(off_diagonal_feature, pair_embedding)
 
         return {"diagonal_blocks": diagonal, "off_diagonal_blocks": off_diagonal}
 

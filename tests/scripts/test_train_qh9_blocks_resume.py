@@ -92,11 +92,13 @@ def _tiny_argv(db_path: Path, out_dir: Path, *, epochs: int, resume: bool) -> li
         "--max-edges",
         "30",
         "--hidden",
-        "8x0e + 4x1o",
+        "4x0e + 4x1o",
         "--sh-lmax",
         "1",
         "--num-interactions",
-        "1",
+        "2",
+        "--start-refinement-layer",
+        "0",
     ]
     if resume:
         argv.append("--resume")

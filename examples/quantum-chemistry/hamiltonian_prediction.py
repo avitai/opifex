@@ -142,9 +142,10 @@ OUTPUT_DIR = Path("docs/assets/examples/hamiltonian_prediction")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 CONFIG = BlockHamiltonianConfig(
-    hidden_irreps="32x0e + 16x1o + 8x2e",  # must carry every degree the s/p/d blocks reach
-    sh_lmax=2,
-    num_interactions=2,
+    hidden_irreps="32x0e + 32x1o + 32x2e + 32x3o + 32x4e",  # uniform mul, l up to the d-d block
+    sh_lmax=4,
+    num_interactions=4,
+    start_refinement_layer=1,
     num_radial_basis=8,
     cutoff=20.0,  # Bohr; large enough for a complete within-molecule graph
 )

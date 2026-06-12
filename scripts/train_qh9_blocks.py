@@ -146,6 +146,8 @@ class TrainArgs:
     hidden_irreps: str
     sh_lmax: int
     num_interactions: int
+    start_refinement_layer: int
+    bottleneck_multiplicity: int
     out: Path
     val_every: int
     resume: bool
@@ -177,9 +179,19 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     parser.add_argument("--batch-size", type=int, default=32, dest="batch_size")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=5e-4, dest="learning_rate")
-    parser.add_argument("--hidden", type=str, default="64x0e + 32x1o + 16x2e", dest="hidden_irreps")
-    parser.add_argument("--sh-lmax", type=int, default=2, dest="sh_lmax")
-    parser.add_argument("--num-interactions", type=int, default=3, dest="num_interactions")
+    parser.add_argument(
+        "--hidden",
+        type=str,
+        default="64x0e + 64x1o + 64x2e + 64x3o + 64x4e",
+        dest="hidden_irreps",
+        help="Uniform-multiplicity hidden irreps (QHNet refinement requires uniform mul).",
+    )
+    parser.add_argument("--sh-lmax", type=int, default=4, dest="sh_lmax")
+    parser.add_argument("--num-interactions", type=int, default=5, dest="num_interactions")
+    parser.add_argument(
+        "--start-refinement-layer", type=int, default=2, dest="start_refinement_layer"
+    )
+    parser.add_argument("--bottleneck-mul", type=int, default=32, dest="bottleneck_multiplicity")
     parser.add_argument("--out", type=Path, default=_DEFAULT_OUT)
     parser.add_argument("--val-every", type=int, default=1, dest="val_every")
     parser.add_argument(
@@ -206,6 +218,8 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
         hidden_irreps=namespace.hidden_irreps,
         sh_lmax=namespace.sh_lmax,
         num_interactions=namespace.num_interactions,
+        start_refinement_layer=namespace.start_refinement_layer,
+        bottleneck_multiplicity=namespace.bottleneck_multiplicity,
         out=namespace.out,
         val_every=namespace.val_every,
         resume=namespace.resume,
@@ -240,6 +254,8 @@ def _build_predictor(args: TrainArgs) -> BlockHamiltonianPredictor:
         hidden_irreps=args.hidden_irreps,
         sh_lmax=args.sh_lmax,
         num_interactions=args.num_interactions,
+        start_refinement_layer=args.start_refinement_layer,
+        bottleneck_multiplicity=args.bottleneck_multiplicity,
     )
     return BlockHamiltonianPredictor(config=config, rngs=nnx.Rngs(0))
 
@@ -497,6 +513,11 @@ def _startup_summary(
     logger.info("  learning rate     : %g (AdamW, warmup-poly, clip 5.0)", args.learning_rate)
     logger.info("  hidden irreps     : %s", args.hidden_irreps)
     logger.info("  sh_lmax / layers  : %d / %d", args.sh_lmax, args.num_interactions)
+    logger.info(
+        "  refine from / bot : %d / %d",
+        args.start_refinement_layer,
+        args.bottleneck_multiplicity,
+    )
     logger.info("  trainable params  : %d", n_params)
     logger.info("  output dir        : %s", args.out)
     logger.info(

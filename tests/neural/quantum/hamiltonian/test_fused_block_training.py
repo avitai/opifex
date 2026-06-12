@@ -83,7 +83,9 @@ def _batch_and_predictor() -> tuple[dict, BlockHamiltonianPredictor, QH9PaddedCo
     config = QH9PaddedConfig(max_atoms=6, max_edges=6 * 5)
     batch = _stack_padded([_pad_molecule(example, config) for example in examples])
     predictor = BlockHamiltonianPredictor(
-        config=BlockHamiltonianConfig(hidden_irreps="16x0e + 8x1o + 4x2e", num_interactions=2),
+        config=BlockHamiltonianConfig(
+            hidden_irreps="8x0e + 8x1o + 8x2e", sh_lmax=2, num_interactions=2
+        ),
         rngs=nnx.Rngs(0),
     )
     return batch, predictor, config, examples

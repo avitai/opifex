@@ -65,6 +65,7 @@ from jaxtyping import Array, Float  # noqa: TC002
 from opifex.core.quantum.registry import register_backbone
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
 from opifex.neural.equivariant import (
+    apply_scalar_weights,
     BesselBasis,
     cosine_cutoff,
     EquivariantLinear,
@@ -75,7 +76,6 @@ from opifex.neural.equivariant import (
     scatter_sum,
     spherical_harmonics,
 )
-from opifex.neural.equivariant._assembly import from_chunks
 
 
 if TYPE_CHECKING:
@@ -190,19 +190,6 @@ class _ConvolutionLayer(nnx.Module):
         self.self_interaction = EquivariantLinear(node_irreps, hidden_irreps, rngs=rngs)
         self.average_num_neighbors = config.average_num_neighbors
 
-    def _apply_radial_weights(
-        self, message: IrrepsArray, weights: Float[Array, "max_edges num_weights"]
-    ) -> IrrepsArray:
-        """Scale each output multiplicity of ``message`` by its radial weight."""
-        chunks = message.chunks
-        scaled: list[Array | None] = []
-        cursor = 0
-        for (mul, _), chunk in zip(message.irreps.blocks, chunks, strict=True):
-            block_weights = weights[:, cursor : cursor + mul]
-            scaled.append(chunk * block_weights[..., None])
-            cursor += mul
-        return from_chunks(message.irreps, scaled, message.array.shape[:-1], message.array.dtype)
-
     def __call__(
         self,
         node_features: IrrepsArray,
@@ -228,7 +215,7 @@ class _ConvolutionLayer(nnx.Module):
         sender_features = IrrepsArray(node_features.irreps, node_features.array[geometry.senders])
         message = self.tensor_product(sender_features, edge_sh)
         weights = self.radial_network(radial) * envelope
-        message = self._apply_radial_weights(message, weights)
+        message = apply_scalar_weights(message, weights)
         aggregated = scatter_sum(message.array, geometry.receivers, num_segments=num_atoms)
         aggregated = aggregated / jnp.sqrt(self.average_num_neighbors)
         gated = gate(IrrepsArray(self._gate_irreps, aggregated))
