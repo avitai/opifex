@@ -6,9 +6,10 @@ offer filtering, and its catalog lacks the RTX PRO 6000 server variant), so this
 launcher drives the ``vastai`` CLI directly for **deterministic** hardware: it
 picks a specific single-GPU offer, provisions it (injecting the SSH key in the
 onstart so connection works on a plain CUDA image), rsyncs the working tree and
-the QH9 database, builds the opifex environment (forcing the *bundled*
-``jax[cuda12]`` so it runs on Blackwell regardless of the image's CUDA), and
-starts the training driver in a ``tmux`` session that survives disconnects.
+the QH9 database, builds opifex's canonical isolated env with the repo's own
+``setup.sh`` (whose ``gpu`` extra ships the >=12.8 CUDA wheels Blackwell sm_120
+needs), and starts the training driver from the activated venv in a ``tmux``
+session that survives disconnects.
 
 Prerequisites:
     - ``~/.config/vastai/vast_api_key`` (the vast CLI key).
@@ -240,22 +241,26 @@ def _remote(config: LaunchConfig, host: str, port: int, script: str) -> None:
 
 
 def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
-    """Build the env (Blackwell-safe jax) and start training in tmux."""
+    """Build opifex's canonical isolated env via setup.sh and start training.
+
+    Uses the repo's own ``setup.sh --backend cuda12`` (which builds the venv with
+    the isolated CUDA toolchain -- the gpu extra's >=12.8 wheels give Blackwell
+    sm_120 codegen) and the generated ``activate.sh``, so the remote environment
+    matches a local checkout exactly rather than an ad-hoc venv.
+    """
     setup = (
         'set -e; export PATH="$HOME/.local/bin:$PATH"; '
         "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh; "
-        f"cd {_REMOTE_REPO}; uv venv --python 3.12 .venv -q; "
-        "uv sync --extra gpu --extra neural-dft; "
-        'uv pip install --python .venv/bin/python -q "jax[cuda12]==0.8.0" "jaxlib==0.8.0"; '
-        '.venv/bin/python -c "import jax; print(jax.devices())"'
+        f"cd {_REMOTE_REPO}; chmod +x setup.sh; ./setup.sh --backend cuda12 --python 3.12; "
+        'source activate.sh; python -c "import jax; print(jax.devices())"'
     )
     _remote(config, host, port, setup)
     forwarded = " ".join(shlex.quote(a) for a in config.train_args)
     train = (
         f"cd {_REMOTE_REPO} && mkdir -p {config.remote_out} && "
         f"tmux new-session -d -s train "
-        f"'JAX_ENABLE_X64=1 XLA_PYTHON_CLIENT_PREALLOCATE=false "
-        f".venv/bin/python scripts/train_qh9_blocks.py --dataset stable "
+        f"'source activate.sh && JAX_ENABLE_X64=1 XLA_PYTHON_CLIENT_PREALLOCATE=false "
+        f"python scripts/train_qh9_blocks.py --dataset stable "
         f"--db {_REMOTE_DB} --batch-size {config.batch_size} --epochs {config.epochs} "
         f"--out {config.remote_out} {forwarded} "
         f"2>&1 | tee {config.remote_out}/console.log'"
