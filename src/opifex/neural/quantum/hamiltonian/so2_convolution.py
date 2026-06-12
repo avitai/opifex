@@ -56,7 +56,7 @@ import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
-from opifex.geometry.algebra.wigner import wigner_d
+from opifex.geometry.algebra.wigner import _matrix_to_euler, _wigner_d_from_euler
 from opifex.neural.atomistic.backbones._message_passing import EdgeGeometry  # noqa: TC001
 from opifex.neural.atomistic.backbones.nequip import (
     _gate_input_irreps,
@@ -67,6 +67,8 @@ from opifex.neural.equivariant import (
     apply_scalar_weights,
     EquivariantLinear,
     gate,
+    NormGate,
+    rms_normalize,
     scatter_sum,
 )
 from opifex.neural.equivariant._assembly import from_chunks
@@ -151,26 +153,87 @@ class _PerOrderPlan:
         self.channels_per_order = tuple(len(cols) for cols in columns_pos)
 
 
-class SO2EdgeConvolution(nnx.Module):
-    r"""eSCN SO(2)-frame edge convolution (drop-in for the SO(3) edge tensor product).
+def _edge_unit_vectors(edge_vectors: Float[Array, "edges 3"]) -> Float[Array, "edges 3"]:
+    r"""Normalise edge vectors with a grad-safe fallback at zero length.
 
-    Computes an equivariant edge message from a node feature and the edge vector
-    by rotating into the edge-aligned frame, mixing per order :math:`m` with the
-    cheap :math:`SO(2)` operations of eSCN (arXiv:2302.03655) / QHNetV2
-    (arXiv:2306.04922), and rotating back. The call signature mirrors the
-    :class:`opifex.neural.equivariant.tensor_product.TensorProduct` protocol so it
-    substitutes directly for
-    :class:`~opifex.neural.equivariant.tensor_product.FullyConnectedTensorProduct`
-    as the predictor's ``edge_tensor_product``.
+    Padded / zero-length edges (sentinel direction ``+y``, the quantisation axis)
+    keep both the forward value and the backward gradient finite via the
+    double-``where`` trick -- a plain ``where`` would still propagate ``NaN`` from
+    the unselected ``edge / 0`` branch in the backward pass.
 
     Args:
-        irreps_in: Layout of the input node feature (and, by default, the output).
-        sh_lmax: Maximum spherical-harmonic degree of the edge embedding the dense
-            tensor product would have consumed; it caps the order ``m`` of the
-            :math:`SO(2)` mixing at ``min(sh_lmax, lmax(irreps))``.
-        irreps_out: Desired output layout. Defaults to ``irreps_in``. Every output
-            degree must also appear in ``irreps_in`` (the :math:`SO(2)` mixing maps
-            order to order, degree to itself).
+        edge_vectors: Per-edge displacement vectors of shape ``(edges, 3)``.
+
+    Returns:
+        Per-edge unit direction vectors of shape ``(edges, 3)``.
+    """
+    norm_sq = jnp.sum(edge_vectors**2, axis=-1, keepdims=True)
+    is_zero = norm_sq <= _DISTANCE_EPSILON
+    safe_norm_sq = jnp.where(is_zero, jnp.ones_like(norm_sq), norm_sq)
+    reference_axis = jnp.array([0.0, 1.0, 0.0], dtype=edge_vectors.dtype)
+    return jnp.where(is_zero, reference_axis, edge_vectors / jnp.sqrt(safe_norm_sq))
+
+
+def _rotate_irreps(
+    array: Float[Array, "edges dim"],
+    irreps: Irreps,
+    alpha: Float[Array, " edges"],
+    beta: Float[Array, " edges"],
+    gamma: Float[Array, " edges"],
+    dtype: jnp.dtype,
+) -> Float[Array, "edges dim"]:
+    r"""Apply the block-diagonal Wigner-D of per-edge Euler angles to a feature array.
+
+    The eSCN frame rotation is the same per edge for every degree, so the Euler
+    angles (extracted once by the caller) are shared across all blocks; each
+    block's Wigner-D is the cheap ``Z_l J_l Z_l J_l Z_l`` product
+    (:func:`opifex.geometry.algebra.wigner._wigner_d_from_euler`), with no per-edge
+    ``expm`` -- the throughput fix over the matrix-exponential path.
+
+    Args:
+        array: Flat irreps feature of shape ``(edges, irreps.dim)``.
+        irreps: Layout of ``array``.
+        alpha: Per-edge first Euler angle (rotation about ``+y``).
+        beta: Per-edge second Euler angle (rotation about ``+x``).
+        gamma: Per-edge third Euler angle (rotation about ``+y``).
+        dtype: Output dtype.
+
+    Returns:
+        The rotated feature, same shape and layout as ``array``.
+    """
+    leading = array.shape[:-1]
+    chunks: list[Float[Array, "edges channels dim_l"] | None] = []
+    start = 0
+    for mul, irrep in irreps.blocks:
+        width = mul * irrep.dim
+        block = array[..., start : start + width].reshape(*leading, mul, irrep.dim)
+        wig = jax.vmap(lambda a, b, g, degree=irrep.l: _wigner_d_from_euler(degree, a, b, g))(
+            alpha, beta, gamma
+        ).astype(dtype)
+        rotated = jnp.einsum("...ij,...uj->...ui", wig, block)
+        chunks.append(rotated)
+        start += width
+    return from_chunks(irreps, chunks, leading, dtype).array
+
+
+class SO2Linear(nnx.Module):
+    r"""Per-order :math:`SO(2)` mixing of in-frame features (eSCN, no rotation).
+
+    The order-diagonal linear map at the heart of the eSCN reduction: given
+    features already rotated into the edge frame, it mixes channels within each
+    order :math:`m` -- a real map for :math:`m = 0` and a complex map
+    :math:`W_1 + i W_2` for the :math:`(+m, -m)` pair, which is the most general
+    channel mixing that commutes with every rotation about the quantisation axis
+    (Passaro & Zitnick 2023, arXiv:2302.03655; fairchem ``SO2_m_Conv``). Both
+    :class:`SO2EdgeConvolution` (a single feature) and
+    :class:`SO2PairInteractionLayer` (a concatenated endpoint pair) sandwich this
+    map between a rotate-in and a rotate-out.
+
+    Args:
+        irreps_in: Layout of the in-frame input feature.
+        irreps_out: Desired output layout; every output degree must appear in
+            ``irreps_in`` (the mixing maps order to order, degree to itself).
+        max_order: Highest order ``m`` to mix.
         rngs: Random number generators (keyword-only); ``rngs.params()`` seeds the
             per-order mixing weights.
     """
@@ -178,31 +241,18 @@ class SO2EdgeConvolution(nnx.Module):
     def __init__(
         self,
         irreps_in: Irreps | str,
+        irreps_out: Irreps | str,
         *,
-        sh_lmax: int,
-        irreps_out: Irreps | str | None = None,
+        max_order: int,
         rngs: nnx.Rngs,
     ) -> None:
-        """Build the per-order SO(2) mixing weights and the static column plan."""
+        """Build the per-order SO(2) mixing weights and the static column plans."""
         super().__init__()
-        self.irreps_in1 = Irreps(irreps_in)
-        self.irreps_out = Irreps(irreps_out) if irreps_out is not None else self.irreps_in1
-
-        in_lmax = max((irrep.l for _, irrep in self.irreps_in1.blocks), default=0)
-        out_lmax = max((irrep.l for _, irrep in self.irreps_out.blocks), default=0)
-        self.max_order = min(sh_lmax, in_lmax, out_lmax)
-        if sh_lmax < 0:
-            raise ValueError(f"sh_lmax must be non-negative, got {sh_lmax}")
-
-        # The dense tensor product the predictor uses also names a second input
-        # (the spherical harmonics); for the SO(2) frame that input is replaced by
-        # the edge direction, so we expose ``irreps_in2`` for protocol parity.
-        from opifex.neural.equivariant import spherical_harmonics  # local: read-only sibling
-
-        self.irreps_in2 = spherical_harmonics(sh_lmax, jnp.zeros((1, 3))).irreps
-
-        self._in_plan = _PerOrderPlan(self.irreps_in1, self.max_order)
-        self._out_plan = _PerOrderPlan(self.irreps_out, self.max_order)
+        self.irreps_in = Irreps(irreps_in)
+        self.irreps_out = Irreps(irreps_out)
+        self.max_order = max_order
+        self._in_plan = _PerOrderPlan(self.irreps_in, max_order)
+        self._out_plan = _PerOrderPlan(self.irreps_out, max_order)
 
         # Per-order learnable mixings: real (m = 0) and complex (m > 0, two real
         # parts) linear maps from the input channels of order m to the output
@@ -210,7 +260,7 @@ class SO2EdgeConvolution(nnx.Module):
         key = rngs.params()
         real_weights: list[nnx.Param] = []
         complex_weights: list[nnx.Param] = []
-        for m in range(self.max_order + 1):
+        for m in range(max_order + 1):
             fan_in = max(self._in_plan.channels_per_order[m], 1)
             scale = 1.0 / (fan_in**0.5)
             shape = (self._in_plan.channels_per_order[m], self._out_plan.channels_per_order[m])
@@ -285,23 +335,64 @@ class SO2EdgeConvolution(nnx.Module):
             output = output.at[..., cols_neg].set(out_neg)
         return output
 
-    def _rotate(
-        self, array: Float[Array, "edges dim"], irreps: Irreps, rotations: Float[Array, "edges 3 3"]
-    ) -> Float[Array, "edges dim"]:
-        """Apply the block-diagonal Wigner-D of per-edge ``rotations`` to a feature array."""
-        leading = array.shape[:-1]
-        chunks: list[Float[Array, "edges channels dim_l"] | None] = []
-        start = 0
-        dtype = array.dtype
-        for mul, irrep in irreps.blocks:
-            width = mul * irrep.dim
-            block = array[..., start : start + width].reshape(*leading, mul, irrep.dim)
-            # ``wigner_d`` takes a single 3x3 rotation; vmap it over the edge axis.
-            wig = jax.vmap(lambda r, degree=irrep.l: wigner_d(degree, r))(rotations).astype(dtype)
-            rotated = jnp.einsum("...ij,...uj->...ui", wig, block)
-            chunks.append(rotated)
-            start += width
-        return from_chunks(irreps, chunks, leading, dtype).array
+    def __call__(self, array: Float[Array, "edges dim"]) -> Float[Array, "edges dim_out"]:
+        """Mix an in-frame feature array per order ``m`` into ``irreps_out``."""
+        negatives, positives = self._gather_orders(array)
+        return self._mix_orders(negatives, positives, array.dtype)
+
+
+class SO2EdgeConvolution(nnx.Module):
+    r"""eSCN SO(2)-frame edge convolution (drop-in for the SO(3) edge tensor product).
+
+    Computes an equivariant edge message from a node feature and the edge vector
+    by rotating into the edge-aligned frame, mixing per order :math:`m` with the
+    cheap :class:`SO2Linear` operation of eSCN (arXiv:2302.03655) / QHNetV2
+    (arXiv:2306.04922), and rotating back. The call signature mirrors the
+    :class:`opifex.neural.equivariant.tensor_product.TensorProduct` protocol so it
+    substitutes directly for
+    :class:`~opifex.neural.equivariant.tensor_product.FullyConnectedTensorProduct`
+    as the predictor's ``edge_tensor_product``.
+
+    Args:
+        irreps_in: Layout of the input node feature (and, by default, the output).
+        sh_lmax: Maximum spherical-harmonic degree of the edge embedding the dense
+            tensor product would have consumed; it caps the order ``m`` of the
+            :math:`SO(2)` mixing at ``min(sh_lmax, lmax(irreps))``.
+        irreps_out: Desired output layout. Defaults to ``irreps_in``. Every output
+            degree must also appear in ``irreps_in`` (the :math:`SO(2)` mixing maps
+            order to order, degree to itself).
+        rngs: Random number generators (keyword-only); ``rngs.params()`` seeds the
+            per-order mixing weights.
+    """
+
+    def __init__(
+        self,
+        irreps_in: Irreps | str,
+        *,
+        sh_lmax: int,
+        irreps_out: Irreps | str | None = None,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Build the per-order SO(2) mixing and record the static order cap."""
+        super().__init__()
+        if sh_lmax < 0:
+            raise ValueError(f"sh_lmax must be non-negative, got {sh_lmax}")
+        self.irreps_in1 = Irreps(irreps_in)
+        self.irreps_out = Irreps(irreps_out) if irreps_out is not None else self.irreps_in1
+
+        in_lmax = max((irrep.l for _, irrep in self.irreps_in1.blocks), default=0)
+        out_lmax = max((irrep.l for _, irrep in self.irreps_out.blocks), default=0)
+        self.max_order = min(sh_lmax, in_lmax, out_lmax)
+
+        # The dense tensor product the predictor uses also names a second input
+        # (the spherical harmonics); for the SO(2) frame that input is replaced by
+        # the edge direction, so we expose ``irreps_in2`` for protocol parity.
+        from opifex.neural.equivariant import spherical_harmonics  # local: read-only sibling
+
+        self.irreps_in2 = spherical_harmonics(sh_lmax, jnp.zeros((1, 3))).irreps
+        self.so2_linear = SO2Linear(
+            self.irreps_in1, self.irreps_out, max_order=self.max_order, rngs=rngs
+        )
 
     def __call__(self, x: IrrepsArray, edge_vectors: Float[Array, "edges 3"]) -> IrrepsArray:
         """Compute the eSCN SO(2)-frame edge message.
@@ -324,22 +415,18 @@ class SO2EdgeConvolution(nnx.Module):
                 f"SO2EdgeConvolution expected input irreps {self.irreps_in1!r}, got {x.irreps!r}"
             )
         dtype = x.array.dtype
-        # Double-where normalisation: sqrt never sees 0, so the gradient through
-        # padded / zero-length edges is finite (a plain ``where`` would still
-        # propagate NaN from the unselected ``edge/0`` branch in the backward pass).
-        norm_sq = jnp.sum(edge_vectors**2, axis=-1, keepdims=True)
-        is_zero = norm_sq <= _DISTANCE_EPSILON
-        safe_norm_sq = jnp.where(is_zero, jnp.ones_like(norm_sq), norm_sq)
-        reference_axis = jnp.array([0.0, 1.0, 0.0], dtype=edge_vectors.dtype)
-        unit_vectors = jnp.where(is_zero, reference_axis, edge_vectors / jnp.sqrt(safe_norm_sq))
-
+        unit_vectors = _edge_unit_vectors(edge_vectors)
         rotations = _edge_frame_rotation(unit_vectors).astype(dtype)
-        inverse_rotations = jnp.swapaxes(rotations, -1, -2)
+        alpha, beta, gamma = jax.vmap(_matrix_to_euler)(rotations)
+        inverse_alpha, inverse_beta, inverse_gamma = jax.vmap(_matrix_to_euler)(
+            jnp.swapaxes(rotations, -1, -2)
+        )
 
-        rotated_in = self._rotate(x.array, self.irreps_in1, rotations)
-        negatives, positives = self._gather_orders(rotated_in)
-        mixed = self._mix_orders(negatives, positives, dtype)
-        rotated_out = self._rotate(mixed, self.irreps_out, inverse_rotations)
+        rotated_in = _rotate_irreps(x.array, self.irreps_in1, alpha, beta, gamma, dtype)
+        mixed = self.so2_linear(rotated_in)
+        rotated_out = _rotate_irreps(
+            mixed, self.irreps_out, inverse_alpha, inverse_beta, inverse_gamma, dtype
+        )
         return IrrepsArray(self.irreps_out, rotated_out)
 
 
@@ -393,3 +480,139 @@ class SO2ConvolutionLayer(nnx.Module):
         gated = gate(IrrepsArray(self._gate_irreps, aggregated))
         self_connection = self.self_interaction(node_features)
         return IrrepsArray(self.node_irreps, gated.array + self_connection.array)
+
+
+class SO2PairInteractionLayer(nnx.Module):
+    r"""eSCN SO(2)-frame off-diagonal pair refinement (replaces the O(L^3) node(x)node CG).
+
+    QHNetV2's reduction of QHNet's ``PairNetLayer`` to SO(2) local frames (Yu et
+    al. 2025, "Efficient Prediction of SO(3)-Equivariant Hamiltonian Matrices via
+    SO(2) Local Frames", arXiv:2506.09398; reference OrbEvo
+    ``../AIRS/OpenDFT/OrbEvo/orbevo/models/orbevo/{so2_ops.py,
+    transformer_block_dm.py}``). For a directed edge ``i -> j`` the two endpoint
+    node features are rotated into the ``i -> j`` edge frame, concatenated
+    channel-wise, and coupled by an in-frame ``SO2Linear -> gate -> SO2Linear``
+    (``O(L^2)`` per edge), then rotated back to the global frame and residually
+    accumulated onto the running off-diagonal-block feature.
+
+    This replaces QHNet's dense channel-wise Clebsch-Gordan ``tp(x[src], x[dst])``
+    -- the dominant cost of the block predictor (the complete edge graph times an
+    ``O(L^3)`` product) -- with the cheap order-diagonal SO(2) operations, while
+    staying SO(3)-equivariant: the frame co-rotates with the geometry, so rotating
+    every node feature **and** the edge vectors by ``R`` rotates the per-edge
+    output by ``R``. The directed frame (``i -> j`` differs from ``j -> i``) gives
+    the genuine off-diagonal asymmetry the Fock block needs.
+
+    Args:
+        irreps: The (all-even) node / per-edge output feature layout.
+        sh_lmax: Maximum spherical-harmonic degree (caps the SO(2) order).
+        edge_radial_dim: Width of the per-edge radial embedding.
+        weight_hidden_dim: Hidden width of the per-edge radial weight MLP.
+        rngs: Random number generators (keyword-only) seeding the weights.
+
+    Raises:
+        ValueError: If ``sh_lmax`` is negative.
+    """
+
+    def __init__(
+        self,
+        irreps: Irreps | str,
+        *,
+        sh_lmax: int,
+        edge_radial_dim: int,
+        weight_hidden_dim: int = 64,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Build the concat SO(2) coupling, radial modulation and output gate."""
+        super().__init__()
+        if sh_lmax < 0:
+            raise ValueError(f"sh_lmax must be non-negative, got {sh_lmax}")
+        self.irreps = Irreps(irreps)
+        self._gate_irreps = _gate_input_irreps(self.irreps)
+        # Channel-wise concatenation of the two rotated endpoints: the in-frame
+        # message carries 2x the multiplicity of each degree (OrbEvo
+        # ``cat((x_source, x_target), dim=channel)``).
+        self._concat_irreps = Irreps(tuple((2 * mul, irrep) for mul, irrep in self.irreps.blocks))
+        lmax = max((irrep.l for _, irrep in self.irreps.blocks), default=0)
+        self.max_order = min(sh_lmax, lmax)
+        self.so2_in = SO2Linear(
+            self._concat_irreps, self._gate_irreps, max_order=self.max_order, rngs=rngs
+        )
+        self.so2_out = SO2Linear(self.irreps, self.irreps, max_order=self.max_order, rngs=rngs)
+        # Per-edge radial modulation of the in-frame message (eSCN m-share radial).
+        self.radial_hidden = nnx.Linear(edge_radial_dim, weight_hidden_dim, rngs=rngs)
+        self.radial_out = nnx.Linear(weight_hidden_dim, self._gate_irreps.num_irreps, rngs=rngs)
+        self.gate_out = NormGate(self.irreps, rngs=rngs)
+        self.linear_out = EquivariantLinear(self.irreps, self.irreps, rngs=rngs)
+
+    def _concatenate_endpoints(
+        self,
+        source: Float[Array, "edges dim"],
+        target: Float[Array, "edges dim"],
+        dtype: jnp.dtype,
+    ) -> Float[Array, "edges concat_dim"]:
+        """Concatenate two in-frame endpoint features channel-wise per degree."""
+        leading = source.shape[:-1]
+        source_chunks = IrrepsArray(self.irreps, source).chunks
+        target_chunks = IrrepsArray(self.irreps, target).chunks
+        concat_chunks: list[Float[Array, "edges channels dim_l"] | None] = [
+            jnp.concatenate([s, t], axis=-2)
+            for s, t in zip(source_chunks, target_chunks, strict=True)
+        ]
+        return from_chunks(self._concat_irreps, concat_chunks, leading, dtype).array
+
+    def __call__(
+        self,
+        node_features: IrrepsArray,
+        geometry: EdgeGeometry,
+        edge_radial: Float[Array, "max_edges num_radial_basis"],
+        accumulated: IrrepsArray | None = None,
+    ) -> IrrepsArray:
+        """Return the refined per-edge off-diagonal feature, optionally accumulated.
+
+        Args:
+            node_features: Per-atom feature ``(n_atoms, irreps.dim)``.
+            geometry: Edge geometry carrying the ``(senders, receivers)`` indices
+                and per-edge displacement ``vectors`` defining each frame.
+            edge_radial: ``(max_edges, num_radial_basis)`` per-edge radial embedding
+                (already envelope-modulated by the caller).
+            accumulated: Running off-diagonal-block feature from earlier layers
+                (added residually), or ``None`` for the first refinement layer.
+
+        Returns:
+            The refined per-edge feature ``(max_edges, irreps.dim)``.
+        """
+        # Bound the (unnormalised trunk) magnitudes before the coupling; the
+        # norm-based scaling is rotation-invariant, so equivariance is preserved.
+        node_features = rms_normalize(node_features)
+        dtype = node_features.array.dtype
+        unit_vectors = _edge_unit_vectors(geometry.vectors)
+        rotations = _edge_frame_rotation(unit_vectors).astype(dtype)
+        alpha, beta, gamma = jax.vmap(_matrix_to_euler)(rotations)
+        inverse_alpha, inverse_beta, inverse_gamma = jax.vmap(_matrix_to_euler)(
+            jnp.swapaxes(rotations, -1, -2)
+        )
+
+        # Rotate both endpoints into the i->j edge frame, then concatenate.
+        source = _rotate_irreps(
+            node_features.array[geometry.senders], self.irreps, alpha, beta, gamma, dtype
+        )
+        target = _rotate_irreps(
+            node_features.array[geometry.receivers], self.irreps, alpha, beta, gamma, dtype
+        )
+        message = self._concatenate_endpoints(source, target, dtype)
+
+        # In-frame coupling: SO2Linear -> radial modulate -> gate -> SO2Linear.
+        message = self.so2_in(message)
+        radial_weights = self.radial_out(jax.nn.silu(self.radial_hidden(edge_radial)))
+        message = apply_scalar_weights(IrrepsArray(self._gate_irreps, message), radial_weights)
+        coupled = self.so2_out(gate(message).array)
+
+        # Rotate back to the global frame, then the QHNet output gate + linear.
+        coupled = _rotate_irreps(
+            coupled, self.irreps, inverse_alpha, inverse_beta, inverse_gamma, dtype
+        )
+        refined = self.linear_out(self.gate_out(IrrepsArray(self.irreps, coupled)))
+        if accumulated is not None:
+            refined = IrrepsArray(self.irreps, refined.array + accumulated.array)
+        return refined

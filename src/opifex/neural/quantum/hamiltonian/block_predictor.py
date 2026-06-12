@@ -28,10 +28,11 @@ Architecture (QHNet ``QHNet.forward``)
    :class:`~opifex.neural.quantum.hamiltonian._refinement.SelfInteractionLayer`
    (QHNet ``SelfNetLayer`` -- a channel-wise *self* tensor product building the
    diagonal feature ``fii``) and a
-   :class:`~opifex.neural.quantum.hamiltonian._refinement.PairInteractionLayer`
-   (QHNet ``PairNetLayer`` -- a channel-wise *pair* tensor product over the
-   complete edge graph building the off-diagonal feature ``fij``), accumulated
-   residually across the stack.
+   :class:`~opifex.neural.quantum.hamiltonian.so2_convolution.SO2PairInteractionLayer`
+   (QHNetV2's SO(2)-frame reduction of QHNet's ``PairNetLayer`` -- the two
+   endpoints rotated into the edge frame, concatenated and coupled by an in-frame
+   ``O(L^2)`` SO(2) operation over the complete edge graph, building the
+   off-diagonal feature ``fij``), accumulated residually across the stack.
 4. **Bottleneck**: ``output_ii`` / ``output_ij``
    (:class:`~opifex.neural.equivariant.EquivariantLinear`) map ``fii`` / ``fij``
    to the even bottleneck layout ``Bx0e + ... + Bx4e``.
@@ -86,11 +87,11 @@ from opifex.neural.quantum.hamiltonian._orbital_layout import (
     atom_orbital_counts,
     block_validity_mask,
 )
-from opifex.neural.quantum.hamiltonian._refinement import (
-    PairInteractionLayer,
-    SelfInteractionLayer,
+from opifex.neural.quantum.hamiltonian._refinement import SelfInteractionLayer
+from opifex.neural.quantum.hamiltonian.so2_convolution import (
+    SO2ConvolutionLayer,
+    SO2PairInteractionLayer,
 )
-from opifex.neural.quantum.hamiltonian.so2_convolution import SO2ConvolutionLayer
 
 
 logger = logging.getLogger(__name__)
@@ -245,8 +246,9 @@ class BlockHamiltonianPredictor(nnx.Module):
         )
         self.pair_layers = nnx.List(
             [
-                PairInteractionLayer(
+                SO2PairInteractionLayer(
                     self._even_base,
+                    sh_lmax=self.config.sh_lmax,
                     edge_radial_dim=self.config.num_radial_basis,
                     weight_hidden_dim=self.config.pair_weight_hidden_dim,
                     rngs=rngs,
@@ -334,7 +336,7 @@ class BlockHamiltonianPredictor(nnx.Module):
                 node_even = IrrepsArray(self._even_base, node_features.array)
                 diagonal_feature = self.self_layers[refinement_index](node_even, diagonal_feature)
                 off_diagonal_feature = self.pair_layers[refinement_index](
-                    node_even, senders, receivers, radial_envelope, off_diagonal_feature
+                    node_even, geometry, radial_envelope, off_diagonal_feature
                 )
                 refinement_index += 1
 

@@ -22,8 +22,12 @@ import pytest
 from flax import nnx
 
 from opifex.geometry.algebra.wigner import wigner_d
+from opifex.neural.atomistic.backbones._message_passing import edge_geometry
 from opifex.neural.equivariant import Irreps, IrrepsArray
-from opifex.neural.quantum.hamiltonian.so2_convolution import SO2EdgeConvolution
+from opifex.neural.quantum.hamiltonian.so2_convolution import (
+    SO2EdgeConvolution,
+    SO2PairInteractionLayer,
+)
 
 
 HIDDEN_IRREPS = "4x0e + 4x1o + 2x2e"
@@ -215,3 +219,124 @@ def test_m0_axis_is_y() -> None:
     assert np.isclose(d2[2, 2], 1.0, atol=1e-6)
     off_center = np.abs(d2[2, [0, 1, 3, 4]]).max()
     assert off_center < 1e-6
+
+
+# --- SO(2)-frame off-diagonal pair refinement (replaces the O(L^3) node(x)node CG) ---
+
+PAIR_IRREPS = "4x0e + 4x1e + 2x2e"
+PAIR_RADIAL_DIM = 8
+
+
+def _pair_inputs(
+    key: jax.Array, n_atoms: int = 4
+) -> tuple[IrrepsArray, jax.Array, tuple[jax.Array, jax.Array]]:
+    """Random nodes, positions and a complete directed edge index for ``n_atoms``."""
+    feat_key, pos_key = jax.random.split(key)
+    irreps = Irreps(PAIR_IRREPS)
+    nodes = IrrepsArray(irreps, jax.random.normal(feat_key, (n_atoms, irreps.dim)))
+    positions = jax.random.normal(pos_key, (n_atoms, 3))
+    senders = [i for i in range(n_atoms) for j in range(n_atoms) if i != j]
+    receivers = [j for i in range(n_atoms) for j in range(n_atoms) if i != j]
+    return nodes, positions, (jnp.array(senders), jnp.array(receivers))
+
+
+def _make_pair() -> SO2PairInteractionLayer:
+    return SO2PairInteractionLayer(
+        PAIR_IRREPS, sh_lmax=SH_LMAX, edge_radial_dim=PAIR_RADIAL_DIM, rngs=nnx.Rngs(params=0)
+    )
+
+
+def test_pair_output_irreps_per_edge() -> None:
+    """The pair layer emits one feature of ``PAIR_IRREPS`` per directed edge."""
+    layer = _make_pair()
+    nodes, positions, edge_index = _pair_inputs(jax.random.key(1))
+    geometry = edge_geometry(positions, edge_index)
+    radial = jax.random.normal(jax.random.key(2), (edge_index[0].shape[0], PAIR_RADIAL_DIM))
+    out = layer(nodes, geometry, radial)
+    assert out.irreps == Irreps(PAIR_IRREPS)
+    assert out.array.shape == (edge_index[0].shape[0], Irreps(PAIR_IRREPS).dim)
+
+
+def test_pair_rotational_equivariance() -> None:
+    r"""Rotating nodes by ``D(R)`` and positions by ``R`` rotates the per-edge output.
+
+    The eSCN off-diagonal guarantee: the edge frame co-rotates with the geometry,
+    so ``f(D(R) x, R p) = D(R) f(x, p)``. Checked in float64 (the rotate -> mix ->
+    rotate-back chain accumulates float32 round-off).
+    """
+    with jax.enable_x64(True):
+        layer = _make_pair()
+        nodes, positions, edge_index = _pair_inputs(jax.random.key(1))
+        nodes = IrrepsArray(nodes.irreps, nodes.array.astype(jnp.float64))
+        positions = positions.astype(jnp.float64)
+        radial = jax.random.normal(
+            jax.random.key(2), (edge_index[0].shape[0], PAIR_RADIAL_DIM)
+        ).astype(jnp.float64)
+        rotation = _random_rotation(jax.random.key(3)).astype(jnp.float64)
+
+        baseline = layer(nodes, edge_geometry(positions, edge_index), radial)
+        rotated_nodes = IrrepsArray(
+            nodes.irreps, _rotate_irreps(nodes.irreps, nodes.array, rotation)
+        )
+        rotated_positions = jnp.einsum("ij,nj->ni", rotation, positions)
+        rotated_out = layer(rotated_nodes, edge_geometry(rotated_positions, edge_index), radial)
+
+        expected = _rotate_irreps(baseline.irreps, baseline.array, rotation)
+        residual = float(jnp.max(jnp.abs(rotated_out.array - expected)))
+    assert residual < 1e-5, f"pair equivariance residual {residual:.2e} exceeds 1e-5"
+
+
+def test_pair_directed_asymmetry() -> None:
+    """The ``i -> j`` and ``j -> i`` edges get different blocks (off-diagonal asymmetry)."""
+    layer = _make_pair()
+    nodes, positions, edge_index = _pair_inputs(jax.random.key(4))
+    geometry = edge_geometry(positions, edge_index)
+    # Constant radial across edges, so only the directed frame and the endpoint
+    # order distinguish ``i -> j`` from ``j -> i`` (not a per-edge radial value).
+    radial = jnp.ones((edge_index[0].shape[0], PAIR_RADIAL_DIM))
+    out = np.array(layer(nodes, geometry, radial).array)
+    senders, receivers = np.array(edge_index[0]), np.array(edge_index[1])
+    i, j = int(senders[0]), int(receivers[0])
+    reverse = int(np.where((senders == j) & (receivers == i))[0][0])
+    assert not np.allclose(out[0], out[reverse], atol=1e-4)
+
+
+def test_pair_residual_accumulation() -> None:
+    """Passing an accumulator adds it residually to the refined feature."""
+    layer = _make_pair()
+    nodes, positions, edge_index = _pair_inputs(jax.random.key(5))
+    geometry = edge_geometry(positions, edge_index)
+    radial = jax.random.normal(jax.random.key(6), (edge_index[0].shape[0], PAIR_RADIAL_DIM))
+    prior = IrrepsArray(
+        Irreps(PAIR_IRREPS),
+        jnp.ones((edge_index[0].shape[0], Irreps(PAIR_IRREPS).dim)),
+    )
+    without = layer(nodes, geometry, radial).array
+    with_accumulator = layer(nodes, geometry, radial, prior).array
+    assert jnp.allclose(with_accumulator, without + prior.array, atol=1e-5)
+
+
+def test_pair_jit_grad_vmap_smoke() -> None:
+    """The pair layer is jit/grad clean with finite gradients."""
+    layer = _make_pair()
+    nodes, positions, edge_index = _pair_inputs(jax.random.key(7))
+    geometry = edge_geometry(positions, edge_index)
+    radial = jax.random.normal(jax.random.key(8), (edge_index[0].shape[0], PAIR_RADIAL_DIM))
+    graph_def, state = nnx.split(layer)
+
+    @jax.jit
+    def run(state: nnx.State) -> jax.Array:
+        module = nnx.merge(graph_def, state)
+        return module(nodes, geometry, radial).array.sum()
+
+    gradient = jax.grad(run)(state)
+    leaves = jax.tree_util.tree_leaves(gradient)
+    assert leaves and all(jnp.all(jnp.isfinite(leaf)) for leaf in leaves)
+
+
+def test_pair_invalid_sh_lmax_raises() -> None:
+    """A negative ``sh_lmax`` fails fast."""
+    with pytest.raises(ValueError, match="sh_lmax"):
+        SO2PairInteractionLayer(
+            PAIR_IRREPS, sh_lmax=-1, edge_radial_dim=PAIR_RADIAL_DIM, rngs=nnx.Rngs(params=0)
+        )
