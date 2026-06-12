@@ -43,6 +43,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 logger = logging.getLogger("launch_vast_direct")
@@ -52,9 +53,21 @@ _REMOTE_REPO = "/root/opifex"
 _REMOTE_DB = "/root/qh9/QH9Stable.db"
 _REMOTE_OUT = "/root/results/qh9_run"
 # Synced code: source, scripts and packaging only (mirrors .skyignore intent).
+# Cache / build / data dirs are excluded so a checkout's local ``.cache`` /
+# ``.uv-cache`` (often many GB) is never uploaded -- that ballooned a sync to
+# >5 GB and stalled provisioning before this exclusion was added.
 _RSYNC_EXCLUDES = (
     ".venv",
     ".git",
+    ".cache",
+    ".uv-cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "cache",
+    "checkpoints",
+    "results",
+    "mlruns",
     "example_data",
     "examples",
     "tests",
@@ -90,6 +103,8 @@ class LaunchConfig:
     train_args: tuple[str, ...]
     fetch: Path | None
     dry_run: bool
+    ssh_timeout_minutes: float = 25.0
+    keep_on_failure: bool = False
     onstart_extra: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -177,13 +192,41 @@ def _create_instance(config: LaunchConfig, offer_id: int) -> int:
     return instance_id
 
 
-def _instance_ssh(instance_id: int) -> tuple[str, int] | None:
-    """Return ``(host, port)`` if the instance is running, else ``None``."""
+def _instance_state(instance_id: int) -> dict[str, Any]:
+    """Return the raw vast instance record (``actual_status``, ``ssh_host`` ...)."""
     raw = _vastai(["show", "instance", str(instance_id), "--raw"], capture=True)
-    info = json.loads(raw)
-    if info.get("actual_status") != "running" or not info.get("ssh_host"):
+    return json.loads(raw)
+
+
+def _instance_ssh(info: dict[str, Any]) -> tuple[str, int] | None:
+    """Return ``(host, port)`` once the instance exposes an SSH endpoint.
+
+    The endpoint is offered whenever ``ssh_host`` is populated -- which happens
+    while ``actual_status`` is still ``"loading"`` (the image is pulling but the
+    proxy sshd is already reachable). Gating on ``actual_status == "running"``
+    would skip that window entirely and is why a slow-loading image used to time
+    the launcher out; instead the caller probes SSH on every poll where a host is
+    present and only the probe decides readiness.
+    """
+    host = info.get("ssh_host")
+    port = info.get("ssh_port")
+    if not host or not port:
         return None
-    return info["ssh_host"], int(info["ssh_port"])
+    return str(host), int(port)
+
+
+def _destroy_instance(instance_id: int) -> None:
+    """Best-effort destroy so a failed provision never bills idle."""
+    try:
+        _vastai(["destroy", "instance", str(instance_id)])
+        logger.info("destroyed instance %d", instance_id)
+    except subprocess.CalledProcessError:
+        logger.exception(
+            "FAILED to auto-destroy instance %d -- it may still be billing; "
+            "run: uvx vastai destroy instance %d",
+            instance_id,
+            instance_id,
+        )
 
 
 def _ssh_base(config: LaunchConfig, host: str, port: int) -> list[str]:
@@ -202,20 +245,63 @@ def _ssh_base(config: LaunchConfig, host: str, port: int) -> list[str]:
     ]
 
 
-def _wait_for_ssh(config: LaunchConfig, instance_id: int, *, attempts: int = 40) -> tuple[str, int]:
-    """Poll until the instance accepts SSH, returning ``(host, port)``."""
-    for attempt in range(1, attempts + 1):
-        endpoint = _instance_ssh(instance_id)
+# vast ``actual_status`` values that mean the instance can never become usable;
+# seeing one aborts the wait immediately instead of burning the whole timeout.
+_TERMINAL_STATUSES = frozenset({"exited", "error", "offline"})
+
+
+def _wait_for_ssh(
+    config: LaunchConfig, instance_id: int, *, timeout_minutes: float = 25.0
+) -> tuple[str, int]:
+    """Poll until the instance accepts SSH, returning ``(host, port)``.
+
+    Robust against slow-loading images: the instance's ``actual_status`` is logged
+    every poll (so a long ``"loading"`` is visible, not silent), SSH is probed as
+    soon as an endpoint appears (even while still loading), the wait runs to a
+    wall-clock ``timeout_minutes`` rather than a fixed attempt count, and a
+    terminal status (``error`` / ``exited`` / ``offline``) aborts immediately. On
+    timeout it raises so the caller can tear the instance down -- it must never be
+    left billing in ``loading``.
+
+    Args:
+        config: The launch configuration (for the SSH probe).
+        instance_id: The vast instance id to wait on.
+        timeout_minutes: Wall-clock budget before giving up.
+
+    Returns:
+        The reachable ``(host, port)``.
+
+    Raises:
+        SystemExit: If the instance reaches a terminal status or the timeout
+            elapses without SSH becoming reachable.
+    """
+    deadline = time.monotonic() + timeout_minutes * 60.0
+    poll = 0
+    last_status = ""
+    while time.monotonic() < deadline:
+        poll += 1
+        info = _instance_state(instance_id)
+        status = str(info.get("actual_status") or "unknown")
+        if status != last_status:
+            logger.info("instance %d status: %s", instance_id, status)
+            last_status = status
+        if status in _TERMINAL_STATUSES:
+            raise SystemExit(f"instance {instance_id} reached terminal status {status!r}")
+        endpoint = _instance_ssh(info)
         if endpoint is not None:
             host, port = endpoint
             probe = [*_ssh_base(config, host, port), "-o", "BatchMode=yes", "echo ok"]
             result = subprocess.run(probe, capture_output=True, text=True, check=False)
             if result.returncode == 0:
-                logger.info("ssh ready at %s:%d (attempt %d)", host, port, attempt)
+                logger.info("ssh ready at %s:%d (status=%s, poll %d)", host, port, status, poll)
                 return host, port
-        logger.info("waiting for ssh (%d/%d)...", attempt, attempts)
+        remaining = int(deadline - time.monotonic())
+        logger.info("waiting for ssh (status=%s, ~%ds left)...", status, max(remaining, 0))
         time.sleep(20)
-    raise SystemExit(f"instance {instance_id} did not become SSH-reachable")
+    raise SystemExit(
+        f"instance {instance_id} did not become SSH-reachable within "
+        f"{timeout_minutes:.0f} min (last status: {last_status!r})"
+    )
 
 
 def _rsync(
@@ -270,18 +356,49 @@ def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
 
 
 def launch(config: LaunchConfig) -> None:
-    """Run the full provision -> sync -> setup -> train lifecycle."""
+    """Run the full provision -> sync -> setup -> train lifecycle.
+
+    Everything after the instance is created runs under a guard that destroys the
+    instance on any failure (unless ``--keep-on-failure``): a provision that
+    stalls in ``loading`` or a sync/setup error must never leave a GPU billing
+    idle. On success the instance is intentionally left running (it is doing the
+    training); the teardown command is printed.
+    """
     offer_id = _select_offer(config)
     if config.dry_run:
         logger.info("dry-run: would provision offer %d and launch; stopping.", offer_id)
         return
     instance_id = _create_instance(config, offer_id)
-    host, port = _wait_for_ssh(config, instance_id)
-    _rsync(config, host, port, f"{_REPO_ROOT}/", f"{_REMOTE_REPO}/", excludes=True)
-    if config.db is not None:
-        _remote(config, host, port, f"mkdir -p {Path(_REMOTE_DB).parent}")
-        _rsync(config, host, port, str(config.db), _REMOTE_DB, excludes=False)
-    _setup_and_launch(config, host, port)
+    try:
+        host, port = _wait_for_ssh(
+            config, instance_id, timeout_minutes=config.ssh_timeout_minutes
+        )
+        _rsync(config, host, port, f"{_REPO_ROOT}/", f"{_REMOTE_REPO}/", excludes=True)
+        if config.db is not None:
+            _remote(config, host, port, f"mkdir -p {Path(_REMOTE_DB).parent}")
+            _rsync(config, host, port, str(config.db), _REMOTE_DB, excludes=False)
+        _setup_and_launch(config, host, port)
+    except BaseException as error:
+        # Any failure -- including a stalled ``loading`` timeout or Ctrl-C -- must
+        # tear the instance down so it never bills idle. The traceback surfaces
+        # once at the top level via ``raise``, so log only a concise reason here
+        # (TRY400's ``logging.exception`` would duplicate that traceback).
+        if config.keep_on_failure:
+            logger.error(  # noqa: TRY400 - concise reason; traceback re-raised below
+                "launch failed (%s); instance %d KEPT (--keep-on-failure) and is "
+                "billing -- teardown: uvx vastai destroy instance %d",
+                error,
+                instance_id,
+                instance_id,
+            )
+        else:
+            logger.error(  # noqa: TRY400 - concise reason; traceback re-raised below
+                "launch failed (%s); destroying instance %d to stop billing",
+                error,
+                instance_id,
+            )
+            _destroy_instance(instance_id)
+        raise
     ssh_cmd = " ".join(_ssh_base(config, host, port))
     logger.info("monitor:  %s 'tail -f %s/train.log'", ssh_cmd, config.remote_out)
     logger.info("teardown: uvx vastai destroy instance %d", instance_id)
@@ -316,6 +433,18 @@ def _parse_args(argv: list[str] | None) -> LaunchConfig:
     parser.add_argument("--fetch", type=Path, default=None, help="Local dir to fetch results into.")
     parser.add_argument("--dry-run", action="store_true", help="Select an offer and stop.")
     parser.add_argument(
+        "--ssh-timeout-minutes",
+        type=float,
+        default=25.0,
+        help="Wall-clock budget to wait for the instance to become SSH-reachable.",
+    )
+    parser.add_argument(
+        "--keep-on-failure",
+        action="store_true",
+        help="Do NOT auto-destroy the instance if provisioning/setup fails (default: destroy "
+        "so a stalled instance never bills idle).",
+    )
+    parser.add_argument(
         "train_args", nargs="*", help="Args forwarded to train_qh9_blocks.py (after --)."
     )
     namespace = parser.parse_args(argv)
@@ -332,6 +461,8 @@ def _parse_args(argv: list[str] | None) -> LaunchConfig:
         train_args=tuple(namespace.train_args),
         fetch=namespace.fetch,
         dry_run=namespace.dry_run,
+        ssh_timeout_minutes=namespace.ssh_timeout_minutes,
+        keep_on_failure=namespace.keep_on_failure,
     )
 
 
