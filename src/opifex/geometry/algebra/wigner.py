@@ -279,7 +279,12 @@ def _log_coordinates_from_matrix(rotation: Float[Array, "3 3"]) -> Float[Array, 
         The ``3``-vector ``angle * axis``.
     """
     trace = rotation[0, 0] + rotation[1, 1] + rotation[2, 2]
-    angle = jnp.arccos(jnp.clip((trace - 1.0) / 2.0, -1.0, 1.0))
+    # Clip the arccos argument strictly inside (-1, 1): at +-1 (angle 0 / pi) the
+    # arccos gradient is infinite and would propagate NaN for axis-aligned
+    # rotations (e.g. an edge along the eSCN quantisation axis). The value error
+    # is O(1e-3 rad) only at the singular poles, which are measure zero.
+    cos_angle = jnp.clip((trace - 1.0) / 2.0, -1.0 + 1e-7, 1.0 - 1e-7)
+    angle = jnp.arccos(cos_angle)
     axis = jnp.stack(
         [
             rotation[2, 1] - rotation[1, 2],
@@ -287,9 +292,13 @@ def _log_coordinates_from_matrix(rotation: Float[Array, "3 3"]) -> Float[Array, 
             rotation[1, 0] - rotation[0, 1],
         ]
     )
-    norm = jnp.sqrt(jnp.sum(axis**2))
-    safe_norm = jnp.where(norm > 0.0, norm, 1.0)
-    axis = jnp.where(norm > 0.0, axis / safe_norm, jnp.array([1.0, 0.0, 0.0]))
+    # Double-where so the sqrt never sees 0 (angle -> 0 => axis -> 0): this guards
+    # the *backward* pass, which a forward-only ``where(norm > 0, ...)`` does not.
+    axis_sq = jnp.sum(axis**2)
+    is_zero = axis_sq <= 1e-12
+    axis_safe = jnp.where(is_zero, jnp.ones_like(axis_sq), axis_sq)
+    reference = jnp.array([1.0, 0.0, 0.0], dtype=rotation.dtype)
+    axis = jnp.where(is_zero, reference, axis / jnp.sqrt(axis_safe))
     return angle * axis
 
 

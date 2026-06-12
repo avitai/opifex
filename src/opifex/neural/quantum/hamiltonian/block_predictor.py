@@ -15,9 +15,10 @@ Architecture (QHNet ``QHNet.forward``)
 --------------------------------------
 1. **Embed** atomic numbers into the trunk's scalar channels and lift into the
    parity-correct steerable hidden layout ``Hx0e + Hx1o + Hx2e + Hx3o + Hx4e``.
-2. **Message passing**: ``num_interactions`` reused
-   :class:`~opifex.neural.atomistic.backbones.nequip._ConvolutionLayer` layers
-   (the NequIP Clebsch-Gordan TP convolution; segment/edge-based, hence
+2. **Message passing**: ``num_interactions``
+   :class:`~opifex.neural.quantum.hamiltonian.so2_convolution.SO2ConvolutionLayer`
+   layers (the eSCN SO(2)-frame convolution of QHNetV2, arXiv 2506.09398 -- O(L^2)
+   per edge vs the dense O(L^3) tensor product; segment/edge-based, hence
    batch-transparent) produce per-atom equivariant features (QHNet's
    ``ConvNetLayer`` stack).
 3. **Refinement** (the QHNet expressivity core a NequIP trunk lacks): after the
@@ -70,7 +71,7 @@ from flax import nnx
 from jaxtyping import Array, Float, Int  # noqa: TC002
 
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry
-from opifex.neural.atomistic.backbones.nequip import _ConvolutionLayer, NequIPConfig
+from opifex.neural.atomistic.backbones.nequip import NequIPConfig
 from opifex.neural.equivariant import (
     BesselBasis,
     cosine_cutoff,
@@ -89,6 +90,7 @@ from opifex.neural.quantum.hamiltonian._refinement import (
     PairInteractionLayer,
     SelfInteractionLayer,
 )
+from opifex.neural.quantum.hamiltonian.so2_convolution import SO2ConvolutionLayer
 
 
 logger = logging.getLogger(__name__)
@@ -228,12 +230,8 @@ class BlockHamiltonianPredictor(nnx.Module):
         # --- reused NequIP convolution trunk (segment/edge-based -> batch clean) ---
         self.layers = nnx.List(
             [
-                _ConvolutionLayer(
-                    self.hidden_irreps,
-                    self.sh_irreps,
-                    self.hidden_irreps,
-                    nequip_config,
-                    rngs=rngs,
+                SO2ConvolutionLayer(
+                    self.hidden_irreps, self.config.sh_lmax, nequip_config, rngs=rngs
                 )
                 for _ in range(self.config.num_interactions)
             ]
@@ -323,7 +321,6 @@ class BlockHamiltonianPredictor(nnx.Module):
         lengths = geometry.lengths[:, 0]
         radial = self.radial_basis(lengths)
         envelope = (cosine_cutoff(lengths, self.config.cutoff) * geometry.mask[:, 0])[:, None]
-        edge_sh = spherical_harmonics(self.sh_irreps, geometry.vectors)
         radial_envelope = radial * envelope
 
         atom_embedding = self.embedding(atomic_numbers)
@@ -332,7 +329,7 @@ class BlockHamiltonianPredictor(nnx.Module):
         off_diagonal_feature: IrrepsArray | None = None
         refinement_index = 0
         for layer_index, layer in enumerate(self.layers):
-            node_features = layer(node_features, edge_sh, geometry, radial, envelope, n_atoms)
+            node_features = layer(node_features, geometry, radial, envelope, n_atoms)
             if layer_index > self.config.start_refinement_layer:
                 node_even = IrrepsArray(self._even_base, node_features.array)
                 diagonal_feature = self.self_layers[refinement_index](node_even, diagonal_feature)

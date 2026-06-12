@@ -57,6 +57,18 @@ from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.geometry.algebra.wigner import wigner_d
+from opifex.neural.atomistic.backbones._message_passing import EdgeGeometry  # noqa: TC001
+from opifex.neural.atomistic.backbones.nequip import (
+    _gate_input_irreps,
+    _RadialNetwork,
+    NequIPConfig,
+)
+from opifex.neural.equivariant import (
+    apply_scalar_weights,
+    EquivariantLinear,
+    gate,
+    scatter_sum,
+)
 from opifex.neural.equivariant._assembly import from_chunks
 from opifex.neural.equivariant.irreps import Irreps, IrrepsArray
 
@@ -93,8 +105,12 @@ def _edge_frame_rotation(
     # right-handed orthonormal frame (det = +1), so R is a proper rotation.
     projection = jnp.sum(helper * unit_vectors, axis=-1, keepdims=True)
     e1 = helper - projection * unit_vectors
-    e1_norm = jnp.sqrt(jnp.sum(e1**2, axis=-1, keepdims=True) + _DISTANCE_EPSILON)
-    e1 = e1 / e1_norm
+    # Double-where so the sqrt never sees 0 (degenerate helper||u): both the
+    # forward value and the backward gradient stay finite (the argmin seed makes
+    # ||e1|| >= sqrt(2/3) in practice, but stay defensive for grad safety).
+    e1_sq = jnp.sum(e1**2, axis=-1, keepdims=True)
+    e1_safe = jnp.where(e1_sq > _DISTANCE_EPSILON, e1_sq, jnp.ones_like(e1_sq))
+    e1 = e1 / jnp.sqrt(e1_safe)
     e2 = jnp.cross(e1, unit_vectors)
 
     # Rows of R are (e1, u, e2) -> R u = (0, 1, 0).
@@ -308,9 +324,14 @@ class SO2EdgeConvolution(nnx.Module):
                 f"SO2EdgeConvolution expected input irreps {self.irreps_in1!r}, got {x.irreps!r}"
             )
         dtype = x.array.dtype
-        lengths = jnp.sqrt(jnp.sum(edge_vectors**2, axis=-1, keepdims=True) + _DISTANCE_EPSILON)
-        is_finite = jnp.sqrt(jnp.sum(edge_vectors**2, axis=-1, keepdims=True)) > 0.0
-        unit_vectors = jnp.where(is_finite, edge_vectors / lengths, jnp.array([0.0, 1.0, 0.0]))
+        # Double-where normalisation: sqrt never sees 0, so the gradient through
+        # padded / zero-length edges is finite (a plain ``where`` would still
+        # propagate NaN from the unselected ``edge/0`` branch in the backward pass).
+        norm_sq = jnp.sum(edge_vectors**2, axis=-1, keepdims=True)
+        is_zero = norm_sq <= _DISTANCE_EPSILON
+        safe_norm_sq = jnp.where(is_zero, jnp.ones_like(norm_sq), norm_sq)
+        reference_axis = jnp.array([0.0, 1.0, 0.0], dtype=edge_vectors.dtype)
+        unit_vectors = jnp.where(is_zero, reference_axis, edge_vectors / jnp.sqrt(safe_norm_sq))
 
         rotations = _edge_frame_rotation(unit_vectors).astype(dtype)
         inverse_rotations = jnp.swapaxes(rotations, -1, -2)
@@ -320,3 +341,55 @@ class SO2EdgeConvolution(nnx.Module):
         mixed = self._mix_orders(negatives, positives, dtype)
         rotated_out = self._rotate(mixed, self.irreps_out, inverse_rotations)
         return IrrepsArray(self.irreps_out, rotated_out)
+
+
+class SO2ConvolutionLayer(nnx.Module):
+    r"""NequIP-style message-passing layer whose edge message is the eSCN SO(2) conv.
+
+    Identical in structure to
+    :class:`~opifex.neural.atomistic.backbones.nequip._ConvolutionLayer` -- radial
+    modulation, neighbour-sum aggregation, equivariant gate and a residual
+    self-interaction -- but the ``O(L^3)`` dense ``node (x) Y(edge)`` tensor product
+    is replaced by the ``O(L^2)`` :class:`SO2EdgeConvolution` (QHNetV2, arXiv
+    2506.09398). Drop-in for the Hamiltonian predictor's convolution trunk.
+
+    Args:
+        node_irreps: Per-atom feature layout (input and output of the layer).
+        sh_lmax: Maximum spherical-harmonic degree the dense product would have used
+            (caps the SO(2) order).
+        config: The shared :class:`NequIPConfig` (radial width, neighbour norm).
+        rngs: Random number generators (keyword-only).
+    """
+
+    def __init__(
+        self, node_irreps: Irreps, sh_lmax: int, config: NequIPConfig, *, rngs: nnx.Rngs
+    ) -> None:
+        """Build the SO(2) edge convolution, radial network and self-interaction."""
+        super().__init__()
+        self.node_irreps = node_irreps
+        self._gate_irreps = _gate_input_irreps(node_irreps)
+        self.so2_conv = SO2EdgeConvolution(
+            node_irreps, sh_lmax=sh_lmax, irreps_out=self._gate_irreps, rngs=rngs
+        )
+        self.radial_network = _RadialNetwork(config, self._gate_irreps.num_irreps, rngs=rngs)
+        self.self_interaction = EquivariantLinear(node_irreps, node_irreps, rngs=rngs)
+        self.average_num_neighbors = config.average_num_neighbors
+
+    def __call__(
+        self,
+        node_features: IrrepsArray,
+        geometry: EdgeGeometry,
+        radial: Float[Array, "max_edges num_radial_basis"],
+        envelope: Float[Array, "max_edges 1"],
+        num_atoms: int,
+    ) -> IrrepsArray:
+        """Return the post-gate node features after one SO(2) convolution layer."""
+        sender_features = IrrepsArray(node_features.irreps, node_features.array[geometry.senders])
+        message = self.so2_conv(sender_features, geometry.vectors)
+        weights = self.radial_network(radial) * envelope
+        message = apply_scalar_weights(message, weights)
+        aggregated = scatter_sum(message.array, geometry.receivers, num_segments=num_atoms)
+        aggregated = aggregated / jnp.sqrt(self.average_num_neighbors)
+        gated = gate(IrrepsArray(self._gate_irreps, aggregated))
+        self_connection = self.self_interaction(node_features)
+        return IrrepsArray(self.node_irreps, gated.array + self_connection.array)
