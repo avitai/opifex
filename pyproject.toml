@@ -121,19 +121,19 @@ gpu = [
   # GPU dependencies - Complete CUDA stack installed locally in venv
   "jax[cuda12_local]==0.8.0",
   "jaxlib==0.8.0", # Core CUDA runtime and libraries
-  "nvidia-cublas-cu12>=12.6",
-  "nvidia-cuda-cupti-cu12>=12.6",
-  "nvidia-cuda-nvcc-cu12>=12.6", # CUDA compiler
-  "nvidia-cuda-nvrtc-cu12>=12.6", # CUDA runtime compiler
-  "nvidia-cuda-runtime-cu12>=12.6",
-  "nvidia-cudnn-cu12>=9.1",
+  "nvidia-cublas-cu12>=12.8",
+  "nvidia-cuda-cupti-cu12>=12.8",
+  "nvidia-cuda-nvcc-cu12>=12.8", # CUDA compiler (>=12.8 emits Blackwell sm_120 SASS; <12.8 PTX-JITs, ~1.6x slower)
+  "nvidia-cuda-nvrtc-cu12>=12.8", # CUDA runtime compiler
+  "nvidia-cuda-runtime-cu12>=12.8",
+  "nvidia-cudnn-cu12>=9.8",
   "nvidia-cufft-cu12>=11.4",
   "nvidia-curand-cu12>=10.3",
   "nvidia-cusolver-cu12>=11.7",
   "nvidia-cusparse-cu12>=12.3",
   "nvidia-nccl-cu12>=2.20", # Additional CUDA ML libraries
-  "nvidia-nvjitlink-cu12>=12.6",
-  "nvidia-nvtx-cu12>=12.6"
+  "nvidia-nvjitlink-cu12>=12.8",
+  "nvidia-nvtx-cu12>=12.8"
 ]
 metal = [
   # Metal acceleration for Apple Silicon Macs (M1/M2/M3+)

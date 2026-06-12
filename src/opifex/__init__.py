@@ -52,6 +52,8 @@ def setup_jax_optimization() -> None:
             [
                 "--xla_gpu_enable_triton_gemm=true",
                 "--xla_gpu_enable_latency_hiding_scheduler=true",
+                # Hopper/Blackwell speed-of-light latency model -> better scheduling.
+                "--xla_gpu_enable_analytical_sol_latency_estimator=true",
             ]
         )
         # Enable high precision matmul for GPU
