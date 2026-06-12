@@ -337,7 +337,10 @@ def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
     setup = (
         'set -e; export PATH="$HOME/.local/bin:$PATH"; '
         "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh; "
-        f"cd {_REMOTE_REPO}; chmod +x setup.sh; ./setup.sh --backend cuda12 --python 3.12; "
+        # ``neural-dft`` pulls in pyscf, which the QH9 training entrypoint imports
+        # transitively (qh9_eval); without it the run dies at import on a fresh box.
+        f"cd {_REMOTE_REPO}; chmod +x setup.sh; "
+        "./setup.sh --backend cuda12 --python 3.12 --extra neural-dft; "
         'source activate.sh; python -c "import jax; print(jax.devices())"'
     )
     _remote(config, host, port, setup)
@@ -370,9 +373,7 @@ def launch(config: LaunchConfig) -> None:
         return
     instance_id = _create_instance(config, offer_id)
     try:
-        host, port = _wait_for_ssh(
-            config, instance_id, timeout_minutes=config.ssh_timeout_minutes
-        )
+        host, port = _wait_for_ssh(config, instance_id, timeout_minutes=config.ssh_timeout_minutes)
         _rsync(config, host, port, f"{_REPO_ROOT}/", f"{_REMOTE_REPO}/", excludes=True)
         if config.db is not None:
             _remote(config, host, port, f"mkdir -p {Path(_REMOTE_DB).parent}")

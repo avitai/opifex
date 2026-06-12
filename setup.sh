@@ -9,6 +9,7 @@ PYTHON_VERSION=""
 RECREATE=false
 FORCE_CLEAN=false
 DRY_RUN=false
+EXTRA_EXTRAS=()
 
 usage() {
     cat <<'EOF'
@@ -20,6 +21,8 @@ Usage:
 Options:
   --backend <auto|cpu|cuda12|metal>  Choose the backend policy. Default: auto
   --python <version>                 Create the environment with a specific Python version
+  --extra <name>                     Sync an additional optional-dependency extra (repeatable);
+                                     e.g. --extra neural-dft pulls in pyscf for QH9 training
   --recreate                         Remove the existing .venv before syncing
   --force-clean                      Remove .venv, the generated .opifex.env, and repo-local test artifacts
   --dry-run                          Print the resolved backend and uv commands without changing files
@@ -81,6 +84,11 @@ while [[ $# -gt 0 ]]; do
             PYTHON_VERSION="$2"
             shift 2
             ;;
+        --extra)
+            [[ $# -ge 2 ]] || die "--extra requires a value"
+            EXTRA_EXTRAS+=("$2")
+            shift 2
+            ;;
         --recreate)
             RECREATE=true
             shift
@@ -129,6 +137,11 @@ case "$BACKEND" in
         die "resolved unsupported backend '$BACKEND'"
         ;;
 esac
+
+# Caller-requested extras (e.g. neural-dft for pyscf-backed QH9 training).
+for extra in "${EXTRA_EXTRAS[@]+"${EXTRA_EXTRAS[@]}"}"; do
+    SYNC_ARGS+=(--extra "$extra")
+done
 
 if [[ "$DRY_RUN" == true ]]; then
     echo "project root: $PROJECT_ROOT"
