@@ -97,6 +97,7 @@ class LaunchConfig:
     image: str
     ssh_key: Path
     db: Path | None
+    db_url: str | None
     remote_out: str
     batch_size: int
     epochs: int
@@ -307,11 +308,17 @@ def _wait_for_ssh(
 def _rsync(
     config: LaunchConfig, host: str, port: int, source: str, dest: str, *, excludes: bool
 ) -> None:
-    """Rsync ``source`` to ``root@host:dest`` over the instance's SSH."""
+    """Rsync ``source`` to ``root@host:dest`` over the instance's SSH.
+
+    Compression (``-z``) is always on: the upload is bound by the local upstream
+    link (the instance downlink is ~9 Gbit/s), so trading CPU for bytes-on-the-wire
+    is a net win even for the weakly-compressible (~1.18x) QH9 float DB. For the
+    one-off, much faster path that avoids re-uploading the DB at all, stage it once
+    and pass ``--db-url`` (see :func:`_download_remote_db`).
+    """
     ssh = f"ssh -i {config.ssh_key} -p {port} -o StrictHostKeyChecking=no"
-    command = ["rsync", "-a", "--info=stats1", "-e", ssh]
+    command = ["rsync", "-az", "--info=stats1", "-e", ssh]
     if excludes:
-        command[1] = "-az"
         for pattern in _RSYNC_EXCLUDES:
             command.extend(["--exclude", pattern])
     command.extend([source, f"root@{host}:{dest}"])
@@ -324,6 +331,27 @@ def _remote(config: LaunchConfig, host: str, port: int, script: str) -> None:
     command = [*_ssh_base(config, host, port), "bash -s"]
     logger.info("remote: %s", script.strip().splitlines()[0])
     subprocess.run(command, input=script, text=True, check=True)
+
+
+def _download_remote_db(config: LaunchConfig, host: str, port: int) -> None:
+    """Pull the QH9 DB onto the instance from ``config.db_url`` (the fast path).
+
+    Local upstream is the rsync bottleneck (a single TCP stream already saturates
+    it; parallel streams were measured *slower*). Downloading from a URL the
+    instance can reach uses its ~9 Gbit/s downlink instead, so a DB staged once on
+    fast-upstream storage (e.g. a datacenter box or object store) transfers in
+    seconds rather than tens of minutes. ``curl`` retries/resumes for robustness.
+    """
+    url = config.db_url
+    if url is None:
+        raise ValueError("_download_remote_db called without db_url")
+    download = (
+        f"set -e; mkdir -p {Path(_REMOTE_DB).parent}; "
+        f"curl -fSL --retry 5 --retry-delay 5 -C - -o {_REMOTE_DB} {shlex.quote(url)}; "
+        f"ls -la {_REMOTE_DB}"
+    )
+    logger.info("downloading DB on instance from %s", url)
+    _remote(config, host, port, download)
 
 
 def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
@@ -345,16 +373,37 @@ def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
     )
     _remote(config, host, port, setup)
     forwarded = " ".join(shlex.quote(a) for a in config.train_args)
-    train = (
-        f"cd {_REMOTE_REPO} && mkdir -p {config.remote_out} && "
-        f"tmux new-session -d -s train "
-        f"'source activate.sh && JAX_ENABLE_X64=1 XLA_PYTHON_CLIENT_PREALLOCATE=false "
-        f"python scripts/train_qh9_blocks.py --dataset stable "
-        f"--db {_REMOTE_DB} --batch-size {config.batch_size} --epochs {config.epochs} "
-        f"--out {config.remote_out} {forwarded} "
-        f"2>&1 | tee {config.remote_out}/console.log'"
+    # Write the training command to a script FILE and run that in tmux, rather than
+    # embedding it (with shlex-quoted args) inside a nested ``tmux '...'`` string --
+    # the nested single quotes broke the invocation, and a bare ``python`` did not
+    # resolve in the non-interactive tmux shell. The script exports the uv path,
+    # activates the env and uses ``uv run python`` (which resolves the project venv
+    # regardless of PATH), so the run starts reliably.
+    run_script = "\n".join(
+        [
+            "#!/bin/bash",
+            "set -e",
+            f"cd {_REMOTE_REPO}",
+            'export PATH="$HOME/.local/bin:$PATH"',
+            "source activate.sh",
+            "export JAX_ENABLE_X64=1 XLA_PYTHON_CLIENT_PREALLOCATE=false",
+            (
+                "exec uv run python scripts/train_qh9_blocks.py --dataset stable "
+                f"--db {_REMOTE_DB} --batch-size {config.batch_size} "
+                f"--epochs {config.epochs} --out {config.remote_out} {forwarded}"
+            ),
+        ]
     )
-    _remote(config, host, port, train)
+    write_script = (
+        f"mkdir -p {config.remote_out} && cat > {_REMOTE_REPO}/run_train.sh "
+        f"<<'OPIFEX_TRAIN_EOF'\n{run_script}\nOPIFEX_TRAIN_EOF"
+    )
+    _remote(config, host, port, write_script)
+    launch_train = (
+        f"tmux new-session -d -s train "
+        f"'bash {_REMOTE_REPO}/run_train.sh > {config.remote_out}/console.log 2>&1'"
+    )
+    _remote(config, host, port, launch_train)
     logger.info("training started in tmux session 'train' on %s:%d", host, port)
 
 
@@ -375,7 +424,11 @@ def launch(config: LaunchConfig) -> None:
     try:
         host, port = _wait_for_ssh(config, instance_id, timeout_minutes=config.ssh_timeout_minutes)
         _rsync(config, host, port, f"{_REPO_ROOT}/", f"{_REMOTE_REPO}/", excludes=True)
-        if config.db is not None:
+        # DB transfer: prefer the fast instance-side download when a URL is staged;
+        # otherwise rsync the local copy (upstream-bound -- see _download_remote_db).
+        if config.db_url is not None:
+            _download_remote_db(config, host, port)
+        elif config.db is not None:
             _remote(config, host, port, f"mkdir -p {Path(_REMOTE_DB).parent}")
             _rsync(config, host, port, str(config.db), _REMOTE_DB, excludes=False)
         _setup_and_launch(config, host, port)
@@ -428,6 +481,12 @@ def _parse_args(argv: list[str] | None) -> LaunchConfig:
     )
     parser.add_argument("--ssh-key", type=Path, required=True, help="Local private SSH key path.")
     parser.add_argument("--db", type=Path, default=None, help="Local QH9 database to rsync.")
+    parser.add_argument(
+        "--db-url",
+        default=None,
+        help="URL to download the QH9 DB onto the instance (fast: uses the instance's "
+        "~9 Gbit/s downlink instead of the upstream-bound local rsync). Overrides --db.",
+    )
     parser.add_argument("--remote-out", default=_REMOTE_OUT, help="Remote run directory.")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=30)
@@ -456,6 +515,7 @@ def _parse_args(argv: list[str] | None) -> LaunchConfig:
         image=namespace.image,
         ssh_key=namespace.ssh_key.expanduser(),
         db=namespace.db,
+        db_url=namespace.db_url,
         remote_out=namespace.remote_out,
         batch_size=namespace.batch_size,
         epochs=namespace.epochs,
