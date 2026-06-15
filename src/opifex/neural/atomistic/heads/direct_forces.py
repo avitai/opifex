@@ -49,17 +49,12 @@ building those vectors from relative geometry (edge directions), exactly as
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 VECTOR_FEATURES_KEY = "node_vectors"

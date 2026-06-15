@@ -15,11 +15,11 @@ import json
 import sys
 from typing import TYPE_CHECKING
 
+from opifex.benchmarking.benchmark_registry import BenchmarkRegistry  # noqa: TC001
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from opifex.benchmarking.benchmark_registry import BenchmarkRegistry
 
 
 def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:

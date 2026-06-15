@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
 
 from opifex.geometry.csg.operations import difference, intersection, union
 from opifex.geometry.csg.primitives import Circle, Rectangle
-
-
-if TYPE_CHECKING:
-    from opifex.geometry.csg.types import Shape2D
+from opifex.geometry.csg.types import Shape2D  # noqa: TC001
 
 
 def compute_shape_area(

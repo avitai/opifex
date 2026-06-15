@@ -8,16 +8,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field, replace
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax
 import jax.numpy as jnp
+import optax  # noqa: TC002
 from flax import nnx
-
-
-if TYPE_CHECKING:
-    import optax
-    from jaxtyping import Array, Float
+from jaxtyping import Array, Float  # noqa: TC002
 
 
 # Constants for unit conversions

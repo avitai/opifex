@@ -32,11 +32,11 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 STRAIN_ENERGY_FN_KEY = "_strain_energy_fn"

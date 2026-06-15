@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float  # noqa: TC002
 
 from opifex.geometry.base import Geometry
-from opifex.geometry.csg.types import _EnhancedShapeBase
-
-
-if TYPE_CHECKING:
-    from opifex.geometry.csg.types import Point1D, Point2D, Points1D, Points2D
+from opifex.geometry.csg.types import (
+    _EnhancedShapeBase,
+    Point1D,
+    Point2D,
+    Points1D,
+    Points2D,
+)
 
 
 class Interval(Geometry):

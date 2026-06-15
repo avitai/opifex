@@ -15,16 +15,13 @@ are :class:`opifex.uncertainty.types.PredictionInterval` value objects.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.types import PredictionInterval
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionInterval,
+)
 
 
 # ---------------------------------------------------------------------------

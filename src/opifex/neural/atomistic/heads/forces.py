@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING
 import jax
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 ENERGY_FN_KEY = "_energy_fn"

@@ -22,14 +22,13 @@ import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
+from flax.nnx import Rngs  # noqa: TC002
+
+from opifex.optimization.l2o.l2o_engine import L2OEngine  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from flax.nnx import Rngs
-
-    from opifex.optimization.l2o.l2o_engine import L2OEngine
 
 
 @dataclass(slots=True, kw_only=True)

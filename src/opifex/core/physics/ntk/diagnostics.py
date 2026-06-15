@@ -18,20 +18,16 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
+from flax import nnx  # noqa: TC002
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.core.physics.ntk.spectral_analysis import (
     compute_condition_number,
     compute_effective_rank,
 )
 from opifex.core.physics.ntk.wrapper import NTKWrapper
-
-
-if TYPE_CHECKING:
-    from flax import nnx
-    from jaxtyping import Array, Float
 
 
 def compute_mode_coefficients(

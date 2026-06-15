@@ -38,20 +38,17 @@ the :attr:`~MultiTaskEnergyHead.default_task` (the first registered task) is use
 from __future__ import annotations
 
 import logging
-from typing import Final, TYPE_CHECKING
+from typing import Final
 
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
 from opifex.neural.atomistic.heads.energy import EnergyHead
 
 # Eager (not TYPE_CHECKING): used as a runtime default-argument value below.
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 _logger = logging.getLogger(__name__)

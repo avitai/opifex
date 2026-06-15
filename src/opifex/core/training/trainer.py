@@ -36,13 +36,12 @@ from opifex.core.training.optimizers import create_optimizer, OptimizerConfig
 logger = logging.getLogger(__name__)
 
 
+from opifex.core.training.components.base import TrainingCallback  # noqa: TC001
+from opifex.core.training.config import TrainingConfig  # noqa: TC001
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from opifex.core.training.components.base import (
-        TrainingCallback,
-    )
-    from opifex.core.training.config import TrainingConfig
 
 
 class Trainer(nnx.Module):

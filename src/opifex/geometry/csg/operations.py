@@ -9,17 +9,11 @@ smooth-blended :func:`smooth_union`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float  # noqa: TC002
 
-from opifex.geometry.csg.types import _EnhancedShapeBase
-
-
-if TYPE_CHECKING:
-    from opifex.geometry.csg.types import Point2D, Points2D, Shape2D
+from opifex.geometry.csg.types import _EnhancedShapeBase, Point2D, Points2D, Shape2D
 
 
 class _SDFOperations:

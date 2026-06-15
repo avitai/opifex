@@ -24,18 +24,17 @@ scoring kernels here mirror.
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 from flax import struct
 
 from opifex.uncertainty.conformal.scores import conformal_quantile
-from opifex.uncertainty.types import PredictionSet, require_fitted_state
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionSet,
+    require_fitted_state,
+)
 
 
 _PROBABILITY_SUM_TOL: float = 1e-3

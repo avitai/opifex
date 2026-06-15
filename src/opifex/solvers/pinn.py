@@ -21,17 +21,15 @@ import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.core.physics import AutoDiffEngine
 from opifex.core.physics.losses import PhysicsLossComposer, PhysicsLossConfig
+from opifex.geometry.base import Geometry  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from jaxtyping import Array, Float
-
-    from opifex.geometry.base import Geometry
 
 
 # =============================================================================

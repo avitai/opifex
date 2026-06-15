@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable  # noqa: TC003 — kept eager for consistency
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -62,10 +62,9 @@ from opifex.uncertainty.types import PredictiveDistribution
 logger = logging.getLogger(__name__)
 
 
-if TYPE_CHECKING:
-    from jaxtyping import Array, Float
+from jaxtyping import Array, Float  # noqa: TC002
 
-    from opifex.uncertainty.aggregators.basic import UncertaintyQuantifier
+from opifex.uncertainty.aggregators.basic import UncertaintyQuantifier  # noqa: TC001
 
 
 class ModularTrainer:

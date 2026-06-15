@@ -17,17 +17,15 @@ transformations and trace cleanly under ``jax.jit``.
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 from flax import struct
 
-from opifex.uncertainty.types import PredictionInterval
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionInterval,
+)
 
 
 # ---------------------------------------------------------------------------

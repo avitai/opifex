@@ -27,14 +27,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import nnx
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.neural.pinns.dense_stack import DenseStack
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-
-    from jaxtyping import Array, Float
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

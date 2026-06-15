@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 import numpy as np
+from ase import Atoms  # noqa: TC002
 from ase.calculators.calculator import all_changes, Calculator, PropertyNotImplementedError
 from ase.stress import full_3x3_to_voigt_6_stress
 from ase.units import Bohr, Hartree
@@ -46,14 +47,11 @@ from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.neural.atomistic import AtomisticModel  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from ase import Atoms
-
-    from opifex.neural.atomistic import AtomisticModel
 
 
 logger = logging.getLogger(__name__)

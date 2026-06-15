@@ -49,6 +49,7 @@ from artifex.generative_models.core.sampling.blackjax_samplers import (
     mala_sampling,
     nuts_sampling,
 )
+from flax import nnx  # noqa: TC002
 
 from opifex.uncertainty._predictive import predictive_from_parameter_samples
 from opifex.uncertainty.inference_backends.base import (
@@ -64,8 +65,6 @@ from opifex.uncertainty.types import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from flax import nnx
 
 _SUPPORTED_METHODS: tuple[str, ...] = ("hmc", "nuts", "mala")
 _UNSUPPORTED_METHODS: tuple[str, ...] = ("sgld", "sghmc", "smc")

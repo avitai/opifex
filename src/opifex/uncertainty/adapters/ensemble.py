@@ -47,12 +47,11 @@ from flax import nnx, struct
 
 from opifex.uncertainty._predictive import ensemble_predictive
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.uncertainty.types import MetadataItems, PredictiveDistribution  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
 
 _SWAG_STREAMS = ("sample", "default")

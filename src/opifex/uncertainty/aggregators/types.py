@@ -9,12 +9,11 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
+from jaxtyping import Array, Float  # noqa: TC002
+
 
 if TYPE_CHECKING:
-    from jaxtyping import Array, Float
-
-    # Define common type variable names for array dimensions
-    batch = None  # Type variable for batch dimension
+    batch = None  # type-var placeholder for jaxtyping array dimensions
 
 
 @dataclasses.dataclass

@@ -26,6 +26,7 @@ import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.optimization.second_order.config import (
     HybridOptimizerConfig,
@@ -40,8 +41,6 @@ from opifex.optimization.second_order.hybrid_optimizer import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from jaxtyping import Array, Float
 
 
 def _parameter_loss_dtype(params) -> jnp.dtype | None:

@@ -8,14 +8,9 @@ scientific applications. Learnable graph operators live in
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
-
-
-if TYPE_CHECKING:
-    from jaxtyping import Float, Int
+from jaxtyping import Float, Int  # noqa: TC002
 
 
 class GraphTopology:

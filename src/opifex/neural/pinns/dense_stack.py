@@ -19,14 +19,13 @@ from typing import Any, TYPE_CHECKING
 
 import jax.numpy as jnp
 from flax import nnx
+from jaxtyping import Array  # noqa: TC002
 
 from opifex.neural.dtypes import as_compute_array, canonicalize_dtype
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-
-    from jaxtyping import Array
 
 
 class DenseStack(nnx.Module):

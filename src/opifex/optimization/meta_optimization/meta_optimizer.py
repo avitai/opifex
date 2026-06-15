@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
+from flax import nnx  # noqa: TC002
+
+from opifex.core.training.config import MetaOptimizerConfig  # noqa: TC001
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from flax import nnx
-
-    from opifex.core.training.config import MetaOptimizerConfig
 
 import jax
 import jax.numpy as jnp

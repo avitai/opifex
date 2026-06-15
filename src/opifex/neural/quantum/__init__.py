@@ -20,20 +20,12 @@ they are simply resolved on first access.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
+from opifex.neural.quantum.dft import Functional, SCFResult, SCFSolver, SolverMode
 from opifex.neural.quantum.neural_xc import NeuralXCFunctional
 from opifex.uncertainty.registry import UQRegistry
-
-
-if TYPE_CHECKING:
-    from opifex.neural.quantum.dft import (
-        Functional,
-        SCFResult,
-        SCFSolver,
-        SolverMode,
-    )
 
 
 # UQ capability registration — Task 7.5. Guarded against duplicate

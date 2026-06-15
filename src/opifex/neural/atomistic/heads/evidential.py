@@ -46,12 +46,11 @@ evidences :math:`\alpha_i - 1`), consistent with energy being extensive.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
 from opifex.uncertainty.evidential import (
     aleatoric_variance,
@@ -59,10 +58,6 @@ from opifex.uncertainty.evidential import (
     NIGParams,
     positive_evidential_params,
 )
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 # Output keys this head writes. Centralised so the head's ``__call__`` and

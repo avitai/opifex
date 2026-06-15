@@ -62,19 +62,19 @@ from artifex.generative_models.core.rng import extract_rng_key
 from blackjax.mcmc.hmc import (
     HMCState,  # noqa: TC002 — kept eager (pyproject dep) per opifex convention
 )
-from flax import struct
+from flax import (
+    nnx,
+    struct,
+)
 from jax.scipy.special import gammaln
 from jax.scipy.stats import norm as _norm
 
+from opifex.discovery.sindy.library import CandidateLibrary  # noqa: TC001
 from opifex.uncertainty.types import PredictionInterval
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from flax import nnx
-
-    from opifex.discovery.sindy.library import CandidateLibrary
 
 # RNG streams consulted (in order) when a caller passes ``nnx.Rngs``; mirrors
 # the platform-wide convention used by the inference backends.

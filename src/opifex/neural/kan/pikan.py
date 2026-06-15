@@ -12,16 +12,12 @@ Reference:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+import jax  # noqa: TC002
 from artifex.generative_models.core.layers.kan import (
     create_kan_layer,
 )
 from flax import nnx
-
-
-if TYPE_CHECKING:
-    import jax
 
 
 # Valid KAN types that map to Artifex registry

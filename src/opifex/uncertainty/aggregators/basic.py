@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import jax.scipy as jsp
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
 from opifex.uncertainty.aggregators.types import (
@@ -17,10 +18,7 @@ from opifex.uncertainty.aggregators.types import (
 
 
 if TYPE_CHECKING:
-    from jaxtyping import Array, Float
-
-    # Define common type variable names for array dimensions
-    batch = None  # Type variable for batch dimension
+    batch = None  # type-var placeholder for jaxtyping array dimensions
 
 
 class EpistemicUncertainty:

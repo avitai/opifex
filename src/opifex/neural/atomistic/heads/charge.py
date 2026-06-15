@@ -22,17 +22,12 @@ readout relies on.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 def conserve_total_charge(raw_charges: Array, total_charge: float | Array) -> Array:

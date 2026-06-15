@@ -56,12 +56,12 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_backbone
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
 from opifex.neural.equivariant import (
@@ -76,10 +76,6 @@ from opifex.neural.equivariant import (
     scatter_sum,
     spherical_harmonics,
 )
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 _MAX_ATOMIC_NUMBER = 118

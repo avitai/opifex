@@ -42,12 +42,11 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from jaxtyping import Array, Float  # noqa: TC002
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from jaxtyping import Array, Float
 
 
 @partial(jax.jit, static_argnums=(0,))

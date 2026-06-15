@@ -6,16 +6,13 @@ for scientific machine learning training.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax
 import jax.numpy as jnp
+from flax import nnx  # noqa: TC002
 
 from opifex.core.training.components.lifecycle import TrainingComponent
-
-
-if TYPE_CHECKING:
-    from flax import nnx
 
 
 class ErrorRecoveryManager(TrainingComponent):

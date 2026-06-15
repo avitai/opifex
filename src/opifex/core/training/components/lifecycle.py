@@ -9,11 +9,9 @@ This module exists as a separate file to avoid circular imports between
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
-
-if TYPE_CHECKING:
-    from flax import nnx
+from flax import nnx  # noqa: TC002
 
 
 class TrainingComponent:
