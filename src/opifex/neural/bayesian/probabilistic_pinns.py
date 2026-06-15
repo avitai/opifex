@@ -988,21 +988,19 @@ def create_multifidelity_pinn(
             "factory does not seed a hidden fixed-key Monte Carlo path."
         )
 
-    # Create configuration from dict if provided
+    # Create configuration from dict if provided. ``MultiFidelityConfig`` is a
+    # frozen dataclass, so overrides are applied immutably via
+    # ``dataclasses.replace`` rather than in-place ``setattr``.
     if config_dict is not None:
-        config = MultiFidelityConfig()
+        valid_fields = {f.name for f in dataclasses.fields(MultiFidelityConfig)}
+        overrides = {key: value for key, value in config_dict.items() if key in valid_fields}
 
-        # Handle nested configurations
-        if "low_fidelity" in config_dict:
-            if isinstance(config_dict["low_fidelity"], dict):
-                config.low_fidelity = FidelityConfig(**config_dict["low_fidelity"])
-            else:
-                config.low_fidelity = config_dict["low_fidelity"]
+        # Normalise a nested ``low_fidelity`` dict into a ``FidelityConfig``.
+        low_fidelity = overrides.get("low_fidelity")
+        if isinstance(low_fidelity, dict):
+            overrides["low_fidelity"] = FidelityConfig(**low_fidelity)
 
-        # Update other fields
-        for key, value in config_dict.items():
-            if hasattr(config, key) and key != "low_fidelity":
-                setattr(config, key, value)
+        config = dataclasses.replace(MultiFidelityConfig(), **overrides)
     else:
         config = MultiFidelityConfig()
 

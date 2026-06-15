@@ -7,15 +7,15 @@ Darcy flow solutions on-demand, following Grain's interface requirements.
 
 from typing import Any, SupportsIndex
 
-import grain.python as grain
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from opifex.data.sources._base import GrainPDESource
 from opifex.physics.solvers.darcy import solve_darcy_flow
 
 
-class DarcyDataSource(grain.RandomAccessDataSource):
+class DarcyDataSource(GrainPDESource):
     """
     Grain-compliant data source for Darcy flow equation.
 
@@ -60,10 +60,6 @@ class DarcyDataSource(grain.RandomAccessDataSource):
         y = jnp.linspace(0, 1, resolution)
         self.X, self.Y = jnp.meshgrid(x, y, indexing="ij")
 
-    def __len__(self) -> int:
-        """Return total number of samples."""
-        return self.n_samples
-
     def _generate_permeability_field(self, key):
         """Generate random permeability coefficient field."""
         key1, key2, key3 = jax.random.split(key, 3)
@@ -105,19 +101,7 @@ class DarcyDataSource(grain.RandomAccessDataSource):
         Raises:
             IndexError: If index is out of bounds
         """
-        if isinstance(index, slice):
-            raise TypeError("Slicing not supported, use integer index")
-
-        if not isinstance(index, int):
-            raise TypeError(f"Index must be an integer, got {type(index)}")
-
-        if index < 0 or index >= self.n_samples:
-            raise IndexError(
-                f"Index {index} out of bounds for source with {self.n_samples} samples"
-            )
-
-        # Deterministic key from index
-        key = jax.random.PRNGKey(self.seed + index)
+        index, key = self._resolve_key(index)
 
         # Generate permeability field
         permeability = self._generate_permeability_field(key)

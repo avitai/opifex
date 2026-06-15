@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 
 import jax
+import jax.flatten_util
 import jax.numpy as jnp
 from flax import nnx
 
@@ -236,7 +237,18 @@ class AmortizedVariationalFramework(nnx.Module):
 
         self.base_model = base_model
         self.config = variational_config
-        self.num_params = self._count_parameters(base_model)
+
+        # Split the base model into a static graph definition plus its
+        # ``nnx.Param`` leaves. ``ravel_pytree`` gives a flat <-> tree
+        # bijection so a sampled parameter *vector* can be injected back
+        # into a functional copy of the model via ``nnx.merge`` (the
+        # canonical NNX state pattern). The unravel closure and graphdef
+        # are static under ``jax.jit`` — only the flat vector is traced.
+        base_graphdef, base_params = nnx.split(base_model, nnx.Param)
+        flat_params, unravel_params = jax.flatten_util.ravel_pytree(base_params)
+        self._base_graphdef = base_graphdef
+        self._unravel_params = unravel_params
+        self.num_params = int(flat_params.shape[0])
 
         # Variational posterior approximation
         self.variational_posterior = MeanFieldGaussian(num_params=self.num_params, rngs=rngs)
@@ -251,19 +263,6 @@ class AmortizedVariationalFramework(nnx.Module):
 
         # Store prior config for physics constraints
         self.prior_config = prior_config
-
-    def _count_parameters(self, model: nnx.Module) -> int:
-        """Count total number of parameters in model.
-
-        Args:
-            model: The neural network model to analyze.
-
-        Returns:
-            Total number of parameters in the model.
-        """
-        params = nnx.state(model, nnx.Param)
-        param_arrays = jax.tree_util.tree_leaves(params)
-        return sum(arr.size for arr in param_arrays if arr.size > 0)
 
     def _split_posterior_params(
         self, posterior_params: Float[Array, "batch params"]
@@ -307,48 +306,20 @@ class AmortizedVariationalFramework(nnx.Module):
         posterior_params = self.amortization_network(x)
         mean_params, log_std_params = self._split_posterior_params(posterior_params)
 
-        # Enhanced approach: Use predicted parameters for true Bayesian sampling
-        try:
-            # Create temporary posterior with amortized parameters
-            temp_posterior = MeanFieldGaussian(num_params=self.num_params, rngs=rngs)
+        # Build a posterior seeded with the amortized (batch-mean)
+        # predictions, draw parameter vectors from it, and inject each
+        # draw into the base model for a true variational forward pass.
+        temp_posterior = MeanFieldGaussian(num_params=self.num_params, rngs=rngs)
+        batch_mean_params = jnp.mean(mean_params, axis=0)
+        batch_log_std_params = jnp.mean(log_std_params, axis=0)
+        temp_posterior.mean[...] = batch_mean_params
+        temp_posterior.log_std[...] = batch_log_std_params
 
-            # Update with amortized predictions (batch-wise mean)
-            batch_mean_params = jnp.mean(mean_params, axis=0)
-            batch_log_std_params = jnp.mean(log_std_params, axis=0)
+        param_samples = temp_posterior.sample(num_samples, rngs=rngs)
 
-            # Update posterior parameters
-            temp_posterior.mean[...] = batch_mean_params
-            temp_posterior.log_std[...] = batch_log_std_params
-
-            # Sample parameter vectors from updated posterior
-            param_samples = temp_posterior.sample(num_samples, rngs=rngs)
-
-            # Make predictions with each parameter sample
-            predictions = []
-            for i in range(num_samples):
-                # Use parameter injection for true Bayesian sampling
-                pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
-                predictions.append(pred)
-
-            # Compute statistics from samples
-            predictions_array = jnp.stack(predictions, axis=0)
-            mean_prediction = jnp.mean(predictions_array, axis=0)
-            uncertainty = jnp.var(predictions_array, axis=0)
-
-        except (TypeError, ValueError, AttributeError, RuntimeError):
-            # Fallback to simplified approach if parameter injection fails
-            samples = []
-            for _i in range(num_samples):
-                # Add noise to input to simulate parameter uncertainty
-                noise_scale = 0.01  # Small amount of input noise
-                noisy_x = x + noise_scale * jax.random.normal(rngs.sample(), x.shape)
-                output = self.base_model(noisy_x)  # type: ignore[misc]
-                samples.append(output)
-
-            # Convert to array and compute statistics
-            samples_array = jnp.stack(samples, axis=0)
-            mean_prediction = jnp.mean(samples_array, axis=0)
-            uncertainty = jnp.var(samples_array, axis=0)
+        predictions = jax.vmap(lambda pv: self._forward_with_params(x, pv))(param_samples)
+        mean_prediction = jnp.mean(predictions, axis=0)
+        uncertainty = jnp.var(predictions, axis=0)
 
         return mean_prediction, uncertainty
 
@@ -356,44 +327,31 @@ class AmortizedVariationalFramework(nnx.Module):
         self,
         x: Float[Array, "batch input_dim"],
         params_vector: Float[Array, ...],
-        *,
-        rngs: nnx.Rngs,
     ) -> Float[Array, "batch output_dim"]:
-        """Approximate forward pass parameterised by a candidate parameter vector.
+        """Run the base model with an injected sampled parameter vector.
 
-        This is a Monte-Carlo proxy: instead of materialising every sampled
-        ``params_vector`` into the underlying NNX module (which would require
-        an ``nnx.split`` / ``nnx.merge`` round-trip per draw), the routine
-        injects a small input perturbation whose magnitude tracks
-        ``jnp.mean(jnp.abs(params_vector)) * 1e-3``. The resulting
-        predictive ensemble is **not** equivalent to a true Bayesian
-        forward pass — it is a smoothed surrogate suitable for the
-        variance / spread diagnostics this module emits, and callers must
-        not treat the resulting distribution as a calibrated posterior
-        predictive.
-
-        Args:
-            x: Input tensor.
-            params_vector: Parameter vector whose magnitude scales the
-                input-perturbation surrogate. Pass the actual sampled
-                parameter vector you would have injected.
-            rngs: Caller-owned PRNG bundle (one ``sample()`` draw consumed).
-        """
-        surrogate_step = jnp.mean(jnp.abs(params_vector)) * 0.001
-        perturbed_x = x + surrogate_step * jax.random.normal(rngs.sample(), x.shape)
-
-        return self.base_model(perturbed_x)  # type: ignore[misc, operator]
-
-    def _inject_parameters(self, model: nnx.Module, params_vector: Float[Array, ...]) -> None:
-        """Inject parameter vector into model.
+        The flat ``params_vector`` (a single draw from the variational
+        posterior) is unravelled into the base model's ``nnx.Param`` tree
+        and merged with the static graph definition captured at
+        construction. The reconstructed functional copy is then evaluated
+        on ``x``, so the perturbation lives in the network **weights** —
+        this is the true variational forward pass, not an input-space
+        surrogate. The routine is a pure function of ``x`` and
+        ``params_vector`` and is therefore ``jit`` / ``grad`` / ``vmap``
+        compatible.
 
         Args:
-            model: Model to inject parameters into.
-            params_vector: Flattened parameter vector.
+            x: Input tensor of shape (batch_size, input_dim).
+            params_vector: Flat parameter vector of shape ``(num_params,)``
+                drawn from the variational posterior.
+
+        Returns:
+            Model output of shape (batch_size, output_dim) under the
+            injected weights.
         """
-        # TODO: Implement full parameter injection mechanism for NNX modules
-        # This requires traversing the NNX state tree and updating parameters
-        # from the flattened vector
+        params_state = self._unravel_params(params_vector)
+        model = nnx.merge(self._base_graphdef, params_state)
+        return model(x)  # type: ignore[misc, operator]
 
     def compute_elbo(
         self,
@@ -433,22 +391,16 @@ class AmortizedVariationalFramework(nnx.Module):
         # Sample from variational posterior
         param_samples = temp_posterior.sample(num_samples, rngs=rngs)
 
-        # Compute log likelihood using parameter samples
-        log_likelihood = jnp.array(0.0)
-        for i in range(num_samples):
-            try:
-                # Forward pass with sampled parameters
-                y_pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
-                # Gaussian likelihood (negative MSE)
-                sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)  # sigma^2 = 0.01
-                log_likelihood += sample_log_likelihood
-            except (TypeError, ValueError, AttributeError, RuntimeError):
-                # Fallback to base model if parameter injection fails
-                y_pred = self.base_model(x)  # type: ignore[misc]
-                sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)
-                log_likelihood += sample_log_likelihood
+        # Monte-Carlo expected log likelihood under the injected weights.
+        # Gaussian likelihood with sigma^2 = 0.01 (negative scaled MSE).
+        sigma_squared = 0.01
 
-        log_likelihood /= num_samples
+        def _sample_log_likelihood(params_vector: Float[Array, ...]) -> Float[Array, ""]:
+            y_pred = self._forward_with_params(x, params_vector)
+            return -jnp.sum((y - y_pred) ** 2) / (2.0 * sigma_squared)
+
+        per_sample_ll = jax.vmap(_sample_log_likelihood)(param_samples)
+        log_likelihood = jnp.mean(per_sample_ll)
 
         # Compute KL divergence from prior
         kl_divergence = temp_posterior.kl_divergence()
@@ -488,22 +440,10 @@ class AmortizedVariationalFramework(nnx.Module):
         temp_posterior.mean[...] = batch_mean_params
         temp_posterior.log_std[...] = batch_log_std_params
 
-        # Sample parameter vectors
+        # Sample parameter vectors and inject each into the base model.
         param_samples = temp_posterior.sample(num_samples, rngs=rngs)
 
-        # Generate predictions for each parameter sample
-        predictions = []
-        for i in range(num_samples):
-            try:
-                pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
-            except (TypeError, ValueError, AttributeError, RuntimeError):
-                # Fallback to base model with input noise
-                noise_scale = 0.01
-                noisy_x = x + noise_scale * jax.random.normal(rngs.sample(), x.shape)
-                pred = self.base_model(noisy_x)  # type: ignore[misc]
-            predictions.append(pred)
-
-        return jnp.stack(predictions, axis=0)
+        return jax.vmap(lambda pv: self._forward_with_params(x, pv))(param_samples)
 
     def __call__(
         self,

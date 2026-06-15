@@ -38,7 +38,7 @@ repos:
 
   # Workshop-inspired comprehensive Python linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+    rev: v0.15.2
     hooks:
       - id: ruff # linter with scientific computing optimizations (auto-fix)
         args: [--fix]
@@ -96,6 +96,18 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
+
+  # Import architecture contracts (import-linter) — enforce layering boundaries
+  - repo: local
+    hooks:
+      - id: lint-imports
+        name: lint-imports
+        entry: uv run lint-imports
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
   # Workshop-inspired security scanning

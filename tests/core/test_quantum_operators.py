@@ -1,9 +1,10 @@
 """Tests for quantum operators focusing on implementing NotImplementedError methods using TDD."""
 
+import jax
 import jax.numpy as jnp
 import pytest
 
-from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.core.quantum.molecular_system import create_molecular_system, MolecularSystem
 from opifex.core.quantum.operators import (
     HamiltonianOperator,
     KineticEnergyOperator,
@@ -373,3 +374,96 @@ class TestQuantumOperatorsTDD:
 
         assert jnp.isfinite(energy_fd)
         assert jnp.isfinite(energy_spectral)
+
+
+class TestHamiltonianCoulombPotentialPhysics:
+    """TDD for the ``coulomb`` potential: a real soft-Coulomb nuclear attraction.
+
+    The ``coulomb`` branch must compute the soft-Coulomb nuclear-attraction
+    potential ``V(r) = -sum_A Z_A / sqrt(|r - R_A|^2 + eps)`` derived from the
+    molecular system's nuclei (matching the formulation in
+    ``opifex.neural.quantum.neural_scf.NeuralSCFSolver._nuclear_potential``),
+    not a hardcoded grid that ignores the molecule.
+    """
+
+    @staticmethod
+    def _coulomb_potential(hamiltonian: HamiltonianOperator, wavefunction):
+        """Recover V from the diagonal potential operator: V|1> = V * 1."""
+        ones = jnp.ones_like(wavefunction)
+        return hamiltonian._apply_potential(ones)
+
+    def test_coulomb_potential_depends_on_nuclear_charges(self):
+        """Different nuclear charges must give different (and -Z scaled) potentials."""
+        wavefunction = jnp.ones(64)
+
+        hydrogen = create_molecular_system([("H", (0.0, 0.0, 0.0))])
+        lithium = create_molecular_system([("Li", (0.0, 0.0, 0.0))])
+
+        h_op = HamiltonianOperator(molecular_system=hydrogen, potential_method="coulomb")
+        li_op = HamiltonianOperator(molecular_system=lithium, potential_method="coulomb")
+
+        v_h = self._coulomb_potential(h_op, wavefunction)
+        v_li = self._coulomb_potential(li_op, wavefunction)
+
+        # Charge dependence: the hardcoded stub ignores the molecule, so these
+        # would be identical under the buggy implementation.
+        assert not jnp.allclose(v_h, v_li)
+
+        # Attractive everywhere (-Z/r sign) for a positive nuclear charge.
+        assert jnp.all(v_h < 0.0)
+        assert jnp.all(v_li < 0.0)
+
+        # -Z scaling: Li (Z=3) is three times as deep as H (Z=1) at every point.
+        assert jnp.allclose(v_li, 3.0 * v_h, rtol=1e-5)
+
+    def test_coulomb_potential_depends_on_nuclear_positions(self):
+        """Different nuclear geometries must give different potentials."""
+        wavefunction = jnp.ones(64)
+
+        at_origin = MolecularSystem(
+            atomic_numbers=jnp.array([1]),
+            positions=jnp.array([[0.0, 0.0, 0.0]]),
+        )
+        displaced = MolecularSystem(
+            atomic_numbers=jnp.array([1]),
+            positions=jnp.array([[2.0, 0.0, 0.0]]),
+        )
+
+        v_origin = self._coulomb_potential(
+            HamiltonianOperator(molecular_system=at_origin, potential_method="coulomb"),
+            wavefunction,
+        )
+        v_displaced = self._coulomb_potential(
+            HamiltonianOperator(molecular_system=displaced, potential_method="coulomb"),
+            wavefunction,
+        )
+
+        # Geometry dependence: the hardcoded stub ignores positions entirely.
+        assert not jnp.allclose(v_origin, v_displaced)
+
+    def test_coulomb_potential_deepest_at_nucleus(self):
+        """The -Z/r well must be deepest where the nucleus sits."""
+        wavefunction = jnp.ones(129)  # odd length -> exact centre sample
+        hydrogen = create_molecular_system([("H", (0.0, 0.0, 0.0))])
+
+        op = HamiltonianOperator(molecular_system=hydrogen, potential_method="coulomb")
+        v = self._coulomb_potential(op, wavefunction)
+
+        # Nucleus is at the radial origin -> deepest point at the grid centre.
+        assert int(jnp.argmin(v)) == len(v) // 2
+
+    def test_coulomb_potential_jit_compatible(self):
+        """The coulomb potential path must stay jit/grad/vmap clean."""
+        wavefunction = jnp.exp(-(jnp.linspace(-4.0, 4.0, 64) ** 2))
+        hydrogen = create_molecular_system([("H", (0.0, 0.0, 0.0))])
+        op = HamiltonianOperator(molecular_system=hydrogen, potential_method="coulomb")
+
+        jitted = jax.jit(op._apply_potential)
+        result = jitted(wavefunction)
+        assert result.shape == wavefunction.shape
+        assert jnp.all(jnp.isfinite(result))
+
+        # grad through the energy expectation value.
+        grad = jax.grad(lambda psi: jnp.real(op.compute_energy(psi)))(wavefunction)
+        assert grad.shape == wavefunction.shape
+        assert jnp.all(jnp.isfinite(grad))

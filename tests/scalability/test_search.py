@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import jax.numpy as jnp
 import pytest
 
-from opifex.scalability.search import (
+from opifex.scalability import (
     SearchEngine,
     SearchQuery,
     SearchResult,

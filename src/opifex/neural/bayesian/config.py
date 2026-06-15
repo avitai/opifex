@@ -21,7 +21,19 @@ class FidelityConfig:
     data_weight: float = 1.0
 
 
-@dataclass(slots=True, kw_only=True)
+def _default_low_fidelity() -> FidelityConfig:
+    """Build the default low-fidelity configuration."""
+    return FidelityConfig(
+        data_points=1000,
+        noise_level=0.01,
+        spatial_resolution=32,
+        temporal_resolution=50,
+        physics_weight=1.0,
+        data_weight=1.0,
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MultiFidelityConfig:
     """
     Complete configuration for multi-fidelity PINN with all required keys.
@@ -31,7 +43,7 @@ class MultiFidelityConfig:
     """
 
     # CRITICAL: Core required keys that must be present
-    low_fidelity: FidelityConfig | None = None
+    low_fidelity: FidelityConfig = field(default_factory=_default_low_fidelity)
     high_fidelity_count: int = 1
 
     # Network architecture parameters
@@ -82,19 +94,7 @@ class MultiFidelityConfig:
     )
 
     def __post_init__(self) -> None:
-        """Initialize default configurations and validate required keys."""
-        # FIXED: Ensure low_fidelity is always initialized
-        if self.low_fidelity is None:
-            self.low_fidelity = FidelityConfig(
-                data_points=1000,
-                noise_level=0.01,
-                spatial_resolution=32,
-                temporal_resolution=50,
-                physics_weight=1.0,
-                data_weight=1.0,
-            )
-
-        # Validate required attributes
+        """Validate required keys and values after construction."""
         self._validate_config()
 
     def _validate_config(self) -> None:

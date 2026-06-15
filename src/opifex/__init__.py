@@ -113,11 +113,14 @@ def setup_jax_optimization() -> None:
     logger.info("   • XLA Flags: %s", os.environ.get("XLA_FLAGS", "None"))
 
 
-# Optional auto-setup: opt-out via ``OPIFEX_AUTO_CONFIGURE=0`` to avoid
-# module-level side effects on ``import opifex`` (Rule 13: no hidden
-# side effects at import time). This guard makes tests deterministic
-# under controlled env, while preserving zero-config UX by default.
-# Callers preferring full explicit control should set the env var and
-# invoke :func:`setup_jax_optimization` themselves at process startup.
-if os.environ.get("OPIFEX_AUTO_CONFIGURE", "1") != "0":
-    setup_jax_optimization()
+# Auto-configuration is opt-in (Rule 13: no hidden side effects at import
+# time). Importing ``opifex`` mutates nothing global — no ``os.environ``,
+# no ``jax.config``, no cache directory. To enable the JAX performance
+# optimisations, call :func:`setup_jax_optimization` explicitly at process
+# startup (recommended in application entry points / notebooks):
+#
+#     import opifex
+#     opifex.setup_jax_optimization()
+#
+# The previous ``OPIFEX_AUTO_CONFIGURE`` environment toggle is removed: an
+# explicit function call is the single, discoverable configuration path.

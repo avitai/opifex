@@ -42,6 +42,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp import ExactGPState, fit_exact_gp, predict_exact_gp
 from opifex.uncertainty.registry import DefaultStrategy
@@ -189,9 +190,9 @@ def predict_nonlinear_multi_fidelity_gp(
     # Var(y) = E_q[Var(y | sample)] + Var_q(E[y | sample]).
     pooled_variance = jnp.mean(variances, axis=0) + jnp.var(means, axis=0)
     pooled_variance = jnp.clip(pooled_variance, a_min=_PSEUDO_NOISE_FLOOR)
-    return PredictiveDistribution(
-        mean=pooled_mean,
-        variance=pooled_variance,
+    return gaussian_process_predictive(
+        pooled_mean,
+        pooled_variance,
         epistemic=pooled_variance,
         total_uncertainty=pooled_variance,
         metadata=compose_method_metadata(

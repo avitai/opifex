@@ -1,8 +1,12 @@
 """PyTree registration utilities for geometric objects."""
 
+import logging
 from typing import Any
 
 import jax
+
+
+_logger = logging.getLogger(__name__)
 
 
 def _register_manifold_pytrees(RiemannianManifold) -> None:
@@ -337,19 +341,22 @@ def _register_graph_pytrees() -> None:  # noqa: PLR0915
         graph_neural_operator_tree_unflatten,
     )
 
-    # Register GraphTopology
-    def graph_topology_tree_flatten(gt: Any) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+    # Register GraphTopology.
+    # edge_features is a traced child (not static aux_data) so it survives a
+    # flatten/unflatten round-trip and stays a differentiable leaf under
+    # jit/grad/vmap.  A None edge_features remains None because JAX treats it as
+    # an empty subtree.
+    def graph_topology_tree_flatten(gt: Any) -> tuple[tuple[Any, ...], None]:
         """Flatten GraphTopology for pytree operations."""
-        children = (gt.nodes, gt.edges, gt.adjacency_matrix)
-        aux_data = (gt.edge_features,)  # edge_features can be None
-        return children, aux_data
+        children = (gt.nodes, gt.edges, gt.edge_features, gt.adjacency_matrix)
+        return children, None
 
-    def graph_topology_tree_unflatten(aux_data: tuple[Any, ...], children: tuple[Any, ...]) -> Any:
+    def graph_topology_tree_unflatten(aux_data: None, children: tuple[Any, ...]) -> Any:
         """Unflatten GraphTopology from pytree operations."""
-        (edge_features,) = aux_data
-        nodes, edges, adjacency_matrix = children
+        del aux_data
+        nodes, edges, edge_features, adjacency_matrix = children
 
-        # Create new instance without calling __init__
+        # Create new instance without calling __init__ to avoid recomputing adjacency.
         gt = GraphTopology.__new__(GraphTopology)
         gt.nodes = nodes
         gt.edges = edges
@@ -360,70 +367,6 @@ def _register_graph_pytrees() -> None:  # noqa: PLR0915
     jax.tree_util.register_pytree_node(
         GraphTopology, graph_topology_tree_flatten, graph_topology_tree_unflatten
     )
-
-
-# Utility functions for checking registration status
-def is_pytree_registered(cls: type) -> bool:
-    """Check if a class is registered as a JAX pytree.
-
-    Args:
-        cls: The class to check
-
-    Returns:
-        bool: True if the class is registered as a pytree, False otherwise
-    """
-    try:
-        # Try to create a simple instance and use JAX's tree operations
-        # This is a heuristic check - there's no direct API to check registration
-        test_obj = object.__new__(cls)
-        jax.tree_util.tree_map(lambda x: x, test_obj)
-        return True
-    except (TypeError, AttributeError, ValueError):
-        return False
-
-
-def list_registered_pytrees() -> list[str]:
-    """List all registered geometric pytrees.
-
-    Returns:
-        List of class names that are registered as pytrees
-    """
-    # Import all geometric classes
-    from opifex.geometry.algebra import SE3Group, SO3Group
-    from opifex.geometry.csg import (
-        Circle,
-        CSGDifference,
-        CSGIntersection,
-        CSGUnion,
-        MolecularGeometry,
-        PeriodicCell,
-        Polygon,
-        Rectangle,
-    )
-    from opifex.geometry.manifolds.riemannian import RiemannianManifold
-    from opifex.geometry.topology import GraphTopology
-
-    classes_to_check = [
-        RiemannianManifold,
-        Rectangle,
-        Circle,
-        Polygon,
-        CSGUnion,
-        CSGIntersection,
-        CSGDifference,
-        PeriodicCell,
-        MolecularGeometry,
-        SO3Group,
-        SE3Group,
-        GraphTopology,
-    ]
-
-    registered = []
-    for cls in classes_to_check:
-        if is_pytree_registered(cls):
-            registered.append(cls.__name__)
-
-    return registered
 
 
 # Register all pytrees when module is imported
@@ -457,11 +400,14 @@ def register_geometric_pytrees() -> None:
     # Register molecular pytrees
     _register_molecular_pytrees(MolecularGeometry)
 
-    # Register graph pytrees (if available)
-    from contextlib import suppress
-
-    with suppress(Exception):
-        _register_graph_pytrees()  # Graph neural networks are disabled if this fails
+    # Register graph pytrees.  Only a genuinely missing graph module is tolerated
+    # (graph neural networks then stay disabled); any other failure must surface.
+    try:
+        _register_graph_pytrees()
+    except ImportError:
+        _logger.warning(
+            "Graph pytree registration skipped: graph module unavailable.", exc_info=True
+        )
 
 
 # Call registration when module is imported

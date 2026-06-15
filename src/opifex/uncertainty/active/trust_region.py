@@ -33,6 +33,30 @@ import jax
 import jax.numpy as jnp
 
 
+def _clip_box_bounds(
+    center: jax.Array,
+    length: jax.Array,
+    lower: jax.Array,
+    upper: jax.Array,
+) -> tuple[jax.Array, jax.Array]:
+    """Return ``(lower, upper)`` of an axis-aligned box clipped to the search space.
+
+    The box spans ``[center - length/2, center + length/2]`` per axis, then is
+    clipped to the global ``[lower, upper]`` search-space bounds.
+
+    Args:
+        center: Box centre, shape ``(d,)``.
+        length: Box edge length (scalar).
+        lower: Global lower search-space bounds, shape ``(d,)``.
+        upper: Global upper search-space bounds, shape ``(d,)``.
+
+    Returns:
+        Tuple ``(clipped_lower, clipped_upper)``, each shape ``(d,)``.
+    """
+    half = 0.5 * length
+    return jnp.maximum(center - half, lower), jnp.minimum(center + half, upper)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TrustRegionBox:
     """Axis-aligned trust-region box clipped to the global search space.
@@ -53,10 +77,9 @@ class TrustRegionBox:
 
     def bounds(self) -> tuple[jax.Array, jax.Array]:
         """Return ``(lower, upper)`` of the trust-region box clipped to the search space."""
-        half = 0.5 * self.length
-        lower = jnp.maximum(self.center - half, self.search_space_lower)
-        upper = jnp.minimum(self.center + half, self.search_space_upper)
-        return lower, upper
+        return _clip_box_bounds(
+            self.center, self.length, self.search_space_lower, self.search_space_upper
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -90,10 +113,9 @@ class TREGOBox:
 
     def bounds(self) -> tuple[jax.Array, jax.Array]:
         """Same as :meth:`TrustRegionBox.bounds`."""
-        half = 0.5 * self.length
-        lower = jnp.maximum(self.center - half, self.search_space_lower)
-        upper = jnp.minimum(self.center + half, self.search_space_upper)
-        return lower, upper
+        return _clip_box_bounds(
+            self.center, self.length, self.search_space_lower, self.search_space_upper
+        )
 
     def register_round(self, *, was_success: bool) -> TREGOBox:
         """Functional update — increment counters and trigger length update if saturated."""
@@ -131,10 +153,9 @@ class TURBOBox:
 
     def bounds(self) -> tuple[jax.Array, jax.Array]:
         """Same as :meth:`TrustRegionBox.bounds`."""
-        half = 0.5 * self.length
-        lower = jnp.maximum(self.center - half, self.search_space_lower)
-        upper = jnp.minimum(self.center + half, self.search_space_upper)
-        return lower, upper
+        return _clip_box_bounds(
+            self.center, self.length, self.search_space_lower, self.search_space_upper
+        )
 
     def recenter(self, *, new_best: jax.Array) -> TURBOBox:
         """Return a new TuRBO box centred on ``new_best``; length unchanged."""

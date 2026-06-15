@@ -1,10 +1,3 @@
-# FILE PLACEMENT: opifex/neural/operators/specialized/mgno.py
-#
-# FIXED Multipole Graph Neural Operator Implementation
-# Fixes numerical instability and NaN output issues
-#
-# This file should REPLACE: opifex/neural/operators/specialized/mgno.py
-
 """
 Multipole Graph Neural Operator (MGNO)
 
@@ -20,15 +13,9 @@ Key Features:
 - Graph-based representation for particle systems
 """
 
-import logging
-
 import jax
 import jax.numpy as jnp
 from flax import nnx
-
-
-# Configure logging for warnings instead of print statements
-logger = logging.getLogger(__name__)
 
 
 class MultipoleExpansion(nnx.Module):
@@ -86,27 +73,23 @@ class MultipoleExpansion(nnx.Module):
         Returns:
             Multipole-transformed features (batch, num_points, channels)
         """
-        # FIXED: Input validation and clipping to prevent overflow
+        # Clip inputs to a finite dynamic range to prevent overflow in the
+        # radial power terms. (No NaN masking — invalid inputs must fail fast.)
         x = jnp.clip(x, -1e6, 1e6)
         positions = jnp.clip(positions, -1e6, 1e6)
 
-        # Check for NaN inputs and replace with zeros
-        x = jnp.where(jnp.isnan(x), 0.0, x)
-        positions = jnp.where(jnp.isnan(positions), 0.0, positions)
-
         _batch_size, _num_points, _channels = x.shape  # Marked as unused for validation
 
-        # Compute multipole moments with stability
+        # Per-order multipole moments: (batch, num_points, channels, max_order + 1).
         moments = self._compute_stable_multipole_moments(x, positions)
 
-        # Apply learned transformation with stability checks
-        transformed = jnp.einsum("...i,ijo->...o", moments, self.multipole_weights.value)
+        # Learned mixing across input channels and multipole orders.
+        # Weights are indexed (channel_in=i, channel_out=j, order=o); contract i, o
+        # to produce a per-output-channel feature of shape (batch, num_points, channels).
+        transformed = jnp.einsum("...io,ijo->...j", moments, self.multipole_weights.value)
 
-        # Apply layer normalization for stability
-        normalized = self.layer_norm(transformed)
-
-        # FIXED: Final NaN check and replacement
-        return jnp.where(jnp.isnan(normalized), x, normalized)
+        # Layer normalization for output stability.
+        return self.layer_norm(transformed)
 
     def _compute_stable_multipole_moments(self, x: jax.Array, positions: jax.Array) -> jax.Array:
         """
@@ -117,13 +100,15 @@ class MultipoleExpansion(nnx.Module):
             positions: Particle positions (batch, num_points, coord_dim)
 
         Returns:
-            Stable multipole moments (batch, num_points, channels)
+            Stable per-order multipole moments
+            (batch, num_points, channels, max_order + 1).
         """
         _batch_size, _num_points, _channels = x.shape  # Marked as unused for validation
         coord_dim = positions.shape[-1]
 
-        # Initialize moments accumulator
-        moments = jnp.zeros((_batch_size, _num_points, _channels))
+        # Collect one moment tensor per multipole order; stacked along a new
+        # trailing axis so the learned weights can mix across orders.
+        per_order_moments: list[jax.Array] = []
 
         for order in range(self.max_order + 1):
             # FIXED: Compute distances with stability measures
@@ -162,15 +147,10 @@ class MultipoleExpansion(nnx.Module):
             order_scale = jnp.clip(self.order_scales.value[order], 0.01, 1.0)
             weighted_moment = normalized_moment * order_scale / (order + 1.0)
 
-            # Accumulate moments with overflow protection
-            moments = moments + weighted_moment
+            per_order_moments.append(weighted_moment)
 
-            # FIXED: Check for NaN propagation and stop if detected
-            if jnp.any(jnp.isnan(moments)):
-                # Stop expansion if NaN detected
-                break
-
-        return moments
+        # Stack along a trailing order axis: (batch, num_points, channels, order).
+        return jnp.stack(per_order_moments, axis=-1)
 
 
 class MGNOLayer(nnx.Module):
@@ -297,45 +277,23 @@ class MGNOLayer(nnx.Module):
         # Store original input for residual connection
         x_orig = x
 
-        # FIXED: Multipole expansion with error handling
-        try:
-            multipole_features = self.multipole_expansion(x, positions)
-        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
-            # Fall back to original features if multipole expansion fails
-            multipole_features = x
-            logger.warning("Multipole expansion failed, using original features: %s", e)
+        # Multipole expansion (long-range interactions). Errors propagate — a
+        # failing sub-module must not be silently substituted for the input.
+        multipole_features = self.multipole_expansion(x, positions)
 
-        # FIXED: Local message passing with error handling
-        try:
-            local_messages = self._local_message_passing(x, positions)
-        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
-            # Fall back to zeros if local message passing fails
-            local_messages = jnp.zeros_like(x)
-            logger.warning("Local message passing failed, using zeros: %s", e)
+        # Local message passing (short-range interactions).
+        local_messages = self._local_message_passing(x, positions)
 
-        # FIXED: Update function with stability
+        # Update function combining multipole and local features.
         update_input = jnp.concatenate([multipole_features, local_messages], axis=-1)
+        updated_features = self.update_mlp(update_input)
 
-        try:
-            updated_features = self.update_mlp(update_input)
-        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
-            # Fall back to multipole features if update fails
-            updated_features = multipole_features
-            logger.warning("Update MLP failed, using multipole features: %s", e)
-
-        # Apply dropout during training
+        # Apply dropout during training.
         if training:
             updated_features = self.dropout(updated_features)
 
-        # FIXED: Residual connection with layer normalization
-        output = self.layer_norm(x_orig + updated_features)
-
-        # FIXED: Final NaN check with fallback
-        if jnp.any(jnp.isnan(output)):
-            logger.warning("NaN detected in MGNO layer output, using input")
-            return x_orig
-
-        return output
+        # Residual connection with layer normalization.
+        return self.layer_norm(x_orig + updated_features)
 
 
 class MultipoleGraphNeuralOperator(nnx.Module):
@@ -411,58 +369,27 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         Returns:
             Output features (batch, num_points, out_channels)
         """
-        # FIXED: Full input validation
-        if jnp.any(jnp.isnan(x)) or jnp.any(jnp.isnan(positions)):
-            raise ValueError("NaN detected in inputs to MGNO")
-
+        # Static shape validation (operates on ``.shape``, so it stays a Python
+        # branch that is safe under jit/vmap and does not concretise input values).
         if x.shape[0] != positions.shape[0] or x.shape[1] != positions.shape[1]:
             raise ValueError(
                 f"Batch size or number of points mismatch: x={x.shape}, positions={positions.shape}"
             )
 
-        # Input projection
+        # Input projection.
         x = self.input_proj(x)
 
-        # Apply MGNO layers with error handling
-        for i, layer in enumerate(self.mgno_layers):
-            try:
-                x_new = layer(x, positions, training=training)
+        # Apply MGNO layers. Errors propagate (fail fast) — a failing layer is
+        # never silently skipped, which would otherwise yield a wrong result.
+        for layer in self.mgno_layers:
+            x = layer(x, positions, training=training)
+            x = nnx.gelu(x)
+            if training:
+                x = self.dropout(x)
 
-                # Additional stability check
-                if jnp.any(jnp.isnan(x_new)):
-                    logger.warning("NaN detected in layer %d, using previous features", i)
-                    continue  # Skip this layer update
-
-                x = x_new
-
-                # Apply activation
-                x = nnx.gelu(x)
-
-                # Apply dropout during training
-                if training:
-                    x = self.dropout(x)
-
-            except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
-                logger.warning("Layer %d failed with error: %s", i, e)
-                # Continue with previous features
-                continue
-
-        # Output projection
-        try:
-            output = self.output_proj(x)
-        except (ValueError, TypeError, ArithmeticError, RuntimeError) as e:
-            logger.warning("Output projection failed: %s", e)
-            # Create zero output as fallback
-            _batch_size, _num_points = x.shape[:2]
-            output = jnp.zeros((_batch_size, _num_points, self.out_features))
-
-        # FIXED: Final validation and cleanup
-        if jnp.any(jnp.isnan(output)):
-            logger.warning("NaN in final output, returning zeros")
-            _batch_size, _num_points = output.shape[:2]
-            output = jnp.zeros((_batch_size, _num_points, self.out_features))
-
-        return output
+        # Output projection. On failure the error propagates rather than being
+        # masked by an all-zero prediction.
+        return self.output_proj(x)
 
 
 # Factory functions for different MGNO configurations

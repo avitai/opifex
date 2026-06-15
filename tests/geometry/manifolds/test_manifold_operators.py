@@ -55,8 +55,8 @@ class ManifoldWrapper:
         return self._manifold.christoffel_symbols(point)
 
     def parallel_transport(self, tangent, path_start, path_end):
-        # Adapt the signature to match RiemannianManifold's implementation
-        return self._manifold.parallel_transport(path_start, tangent, tangent)
+        # RiemannianManifold now follows the Manifold protocol order directly.
+        return self._manifold.parallel_transport(tangent, path_start, path_end)
 
 
 class TestManifoldNeuralOperator:

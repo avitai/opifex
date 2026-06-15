@@ -22,6 +22,7 @@ from typing import Self, TYPE_CHECKING
 
 import jax.numpy as jnp
 
+from opifex.discovery.sindy._formatting import format_sindy_equations
 from opifex.discovery.sindy.library import CandidateLibrary
 from opifex.discovery.sindy.optimizers import STLSQ
 
@@ -211,17 +212,7 @@ class WeakSINDy:
         n_targets = self.coefficients.shape[0]
         target_names = input_names or [f"x{i}" for i in range(n_targets)]
 
-        eqs = []
-        for tidx in range(n_targets):
-            terms = []
-            for lidx, name in enumerate(names):
-                coef = float(self.coefficients[tidx, lidx])
-                if abs(coef) > 1e-10:
-                    terms.append(f"{coef:.{precision}f} {name}")
-            rhs = " + ".join(terms) if terms else "0"
-            eqs.append(f"d{target_names[tidx]}/dt = {rhs}")
-
-        return eqs
+        return format_sindy_equations(self.coefficients, names, target_names, precision)
 
     def score(self, x: jnp.ndarray, x_dot: jnp.ndarray) -> float:
         """Compute R² score against true derivatives.

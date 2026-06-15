@@ -7,7 +7,7 @@ including physics-aware metrics, quantum chemistry metrics, and advanced diagnos
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TYPE_CHECKING
 
 import jax
@@ -107,6 +107,17 @@ class TrainingState:
     # Recovery and checkpointing
     checkpoint_metadata: dict[str, Any] = field(default_factory=dict)
     recovery_state: dict[str, Any] = field(default_factory=dict)
+
+    def with_updates(self, **changes: Any) -> TrainingState:
+        """Return a new state with ``changes`` applied (immutable update).
+
+        Wraps :func:`dataclasses.replace` so scalar progress fields
+        (``step``, ``epoch``, ``best_loss``, ...) can be advanced without
+        mutating the existing instance. Unchanged fields, including the
+        ``model`` and ``optimizer`` references, are shared with the
+        original. Prefer this over in-place attribute assignment.
+        """
+        return replace(self, **changes)
 
     def update_physics_metric(self, metric_name: str, value: float) -> None:
         """Update a physics-specific metric."""

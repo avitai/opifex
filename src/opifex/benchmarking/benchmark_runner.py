@@ -65,6 +65,20 @@ class PublicationReport:
     appendix_data: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BenchmarkFailure:
+    """A single (benchmark, operator) run that raised during execution.
+
+    Recording failures explicitly keeps a benchmark crash from silently
+    disappearing: the suite continues, but the error remains queryable on the
+    runner instead of being indistinguishable from an incompatible/skipped pair.
+    """
+
+    benchmark_name: str
+    operator_name: str
+    error: Exception
+
+
 class BenchmarkRunner:
     """Orchestrates complete benchmarking pipeline execution.
 
@@ -102,6 +116,10 @@ class BenchmarkRunner:
         self.validator = validator or ValidationFramework()
         self.analyzer = analyzer or AnalysisEngine()
         self.results_manager = results_manager or ResultsManager(storage_path=str(self.output_dir))
+
+        # Records (benchmark, operator) runs that raised, so suite-level failures
+        # remain inspectable rather than being silently swallowed.
+        self.failed_runs: list[BenchmarkFailure] = []
 
         # Auto-discover operators if registry is empty
         if len(self.registry.list_available_operators()) == 0:
@@ -175,8 +193,20 @@ class BenchmarkRunner:
                         validation = self._validate_result(result, benchmark_config)
                         benchmark_validations[operator_name] = validation
 
-                except Exception:
+                # One operator/benchmark crash must not abort the whole suite:
+                # operators and metrics come from third-party/registry code that can
+                # raise anything. The exception is bound, logged with its traceback,
+                # and recorded in ``failed_runs`` so real bugs stay visible to callers
+                # rather than being silently masked.
+                except Exception as error:
                     logger.exception("Benchmark %s failed for %s", benchmark_name, operator_name)
+                    self.failed_runs.append(
+                        BenchmarkFailure(
+                            benchmark_name=benchmark_name,
+                            operator_name=operator_name,
+                            error=error,
+                        )
+                    )
 
             all_results[benchmark_name] = benchmark_results
             if validate_results:
@@ -248,8 +278,20 @@ class BenchmarkRunner:
                         },
                     )
 
-                except Exception:
+                # One operator/benchmark crash must not abort the domain suite:
+                # operators and metrics come from third-party/registry code that can
+                # raise anything. The exception is bound, logged with its traceback,
+                # and recorded in ``failed_runs`` so real bugs stay visible to callers
+                # rather than being silently masked.
+                except Exception as error:
                     logger.exception("Benchmark %s failed for %s", benchmark.name, operator_name)
+                    self.failed_runs.append(
+                        BenchmarkFailure(
+                            benchmark_name=benchmark.name,
+                            operator_name=operator_name,
+                            error=error,
+                        )
+                    )
 
             # Generate comparison report for this benchmark
             if len(operator_results) >= 2:

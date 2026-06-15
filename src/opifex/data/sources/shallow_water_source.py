@@ -7,15 +7,15 @@ shallow water solutions on-demand, following Grain's interface requirements.
 
 from typing import Any, SupportsIndex
 
-import grain.python as grain
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from opifex.data.sources._base import GrainPDESource
 from opifex.physics.solvers.shallow_water import solve_shallow_water_2d
 
 
-class ShallowWaterDataSource(grain.RandomAccessDataSource):
+class ShallowWaterDataSource(GrainPDESource):
     """
     Grain-compliant data source for shallow water equations.
 
@@ -44,10 +44,6 @@ class ShallowWaterDataSource(grain.RandomAccessDataSource):
         self.time_steps = time_steps
         self.seed = seed
 
-    def __len__(self) -> int:
-        """Return total number of samples."""
-        return self.n_samples
-
     def _generate_initial_condition(self, key):
         """Generate random initial conditions for (h, u, v)."""
         x = jnp.linspace(0, 1, self.resolution)
@@ -73,19 +69,7 @@ class ShallowWaterDataSource(grain.RandomAccessDataSource):
 
     def __getitem__(self, index: SupportsIndex | slice) -> dict[str, Any]:
         """Generate sample deterministically from index."""
-        if isinstance(index, slice):
-            raise TypeError("Slicing not supported, use integer index")
-
-        if not isinstance(index, int):
-            raise TypeError(f"Index must be an integer, got {type(index)}")
-
-        if index < 0 or index >= self.n_samples:
-            raise IndexError(
-                f"Index {index} out of bounds for source with {self.n_samples} samples"
-            )
-
-        # Deterministic key from index
-        key = jax.random.PRNGKey(self.seed + index)
+        index, key = self._resolve_key(index)
 
         # Generate initial conditions
         h_init, u_init, v_init = self._generate_initial_condition(key)

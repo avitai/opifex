@@ -12,6 +12,7 @@ import pytest
 from opifex.geometry.manifolds.riemannian import (
     euclidean_metric,
     hyperbolic_metric,
+    product_metric,
     RiemannianManifold,
     spherical_metric,
 )
@@ -177,14 +178,90 @@ class TestJITCompatibility:
         """Test that parallel_transport can be JIT compiled."""
         jit_transport = jax.jit(self.manifold.parallel_transport)
 
-        # Test compilation and execution
-        result_normal = self.manifold.parallel_transport(
-            self.test_point, self.test_tangent, self.test_vector
-        )
-        result_jit = jit_transport(self.test_point, self.test_tangent, self.test_vector)
+        # Protocol order: (tangent, path_start, path_end).
+        tangent = self.test_vector
+        path_start = self.test_point
+        path_end = self.test_point2
+
+        result_normal = self.manifold.parallel_transport(tangent, path_start, path_end)
+        result_jit = jit_transport(tangent, path_start, path_end)
 
         assert jnp.allclose(result_normal, result_jit, atol=1e-5)
         assert result_jit.shape == (2,)
+
+
+class TestParallelTransportProtocol:
+    """Verify parallel_transport honours the Manifold protocol contract.
+
+    The ``Manifold`` protocol (geometry/manifolds/base.py) declares
+    ``parallel_transport(self, tangent, path_start, path_end)`` where ``tangent``
+    is the vector at ``path_start`` to be transported along the geodesic from
+    ``path_start`` to ``path_end``. ``HyperbolicManifold`` follows this contract;
+    these tests pin ``RiemannianManifold`` to the same signature/semantics so a
+    caller using the ``Manifold`` interface transports the right vector along the
+    right geodesic (Liskov substitutability).
+    """
+
+    def setup_method(self):
+        """Set up a Euclidean manifold where transport is the identity map."""
+        self.manifold = RiemannianManifold(
+            dimension=2,
+            metric_function=euclidean_metric,
+        )
+
+    def test_parallel_transport_matches_protocol_signature(self):
+        """Degenerate path (start == end) returns the tangent unchanged.
+
+        Calling through the protocol order ``(tangent, path_start, path_end)``
+        with ``path_start == path_end`` must return ``tangent`` itself: there is
+        no geodesic to transport along. The old ``(base, tangent, vector)`` order
+        misreads ``tangent`` as the base point and integrates a spurious geodesic,
+        so the result is not equal to the supplied tangent.
+        """
+        tangent = jnp.array([0.3, -0.2])
+        path_start = jnp.array([0.1, 0.2])
+        path_end = path_start
+
+        transported = self.manifold.parallel_transport(tangent, path_start, path_end)
+
+        assert transported.shape == tangent.shape
+        assert jnp.allclose(transported, tangent, atol=1e-5)
+
+    def test_parallel_transport_euclidean_is_identity(self):
+        """On a flat (Euclidean) metric, transport leaves the vector unchanged.
+
+        Christoffel symbols vanish for the Euclidean metric, so parallel transport
+        along any geodesic equals the input vector. This is a hand-computed exact
+        value and only holds when the protocol argument order is respected (the
+        first argument is the vector being transported).
+        """
+        tangent = jnp.array([0.2, 0.5])
+        path_start = jnp.array([0.1, 0.1])
+        path_end = jnp.array([0.4, -0.3])
+
+        transported = self.manifold.parallel_transport(tangent, path_start, path_end)
+
+        assert jnp.allclose(transported, tangent, atol=1e-4)
+
+    def test_parallel_transport_preserves_metric_norm(self):
+        """Transport preserves the Riemannian norm at the endpoint.
+
+        Parallel transport is an isometry: ``||transported||_g(path_end)`` equals
+        ``||tangent||_g(path_start)``. For the Euclidean metric the metric tensor
+        is constant identity, so this reduces to preserving the Euclidean norm.
+        """
+        tangent = jnp.array([0.3, 0.4])
+        path_start = jnp.array([0.0, 0.0])
+        path_end = jnp.array([0.5, 0.2])
+
+        transported = self.manifold.parallel_transport(tangent, path_start, path_end)
+
+        g_start = self.manifold.metric_tensor(path_start)
+        g_end = self.manifold.metric_tensor(path_end)
+        norm_start = jnp.sqrt(jnp.einsum("i,ij,j->", tangent, g_start, tangent))
+        norm_end = jnp.sqrt(jnp.einsum("i,ij,j->", transported, g_end, transported))
+
+        assert jnp.allclose(norm_end, norm_start, atol=1e-4)
 
 
 class TestVMAPCompatibility:
@@ -506,6 +583,58 @@ class TestPerformanceBenchmarks:
 
         assert result.shape == (batch_size, 3, 3)
         assert jnp.all(jnp.isfinite(result))
+
+
+class TestProductMetric:
+    """Test product_metric for product manifolds with arbitrary factor dims."""
+
+    def test_product_metric_handles_non_2d_factors(self):
+        """Product of a 3D and a 1D factor must slice each factor's real dim.
+
+        Builds M = E^3 x S^1(radius=2). The block-diagonal metric must be:
+        top-left 3x3 = identity (Euclidean on coords [0:3]), bottom-right 1x1
+        = radius^2 = 4 (spherical on coord [3:4]). The hardcoded "2D for now"
+        slicing fed exactly two coordinates to every factor, producing two 2x2
+        blocks from the wrong coordinate slices -- this test pins the fix.
+        """
+        radius = 2.0
+        # Each factor carries its real dimension: (metric_fn, dim).
+        metric_fn = product_metric(
+            (euclidean_metric, 3),
+            (spherical_metric(radius), 1),
+        )
+
+        # Distinct coordinate values so a wrong slice would be observable.
+        point = jnp.array([0.1, 0.2, 0.3, 0.4])
+        metric = metric_fn(point)
+
+        # Full metric is 4x4 block-diagonal: 3 (Euclidean) + 1 (spherical).
+        assert metric.shape == (4, 4)
+
+        # Euclidean factor occupies the leading 3x3 block (identity).
+        assert jnp.allclose(metric[:3, :3], jnp.eye(3))
+
+        # Spherical factor occupies the trailing 1x1 block: radius^2 = 4.
+        assert jnp.allclose(metric[3:, 3:], jnp.array([[radius**2]]))
+
+        # Off-diagonal coupling blocks must be exactly zero (block-diagonal).
+        assert jnp.allclose(metric[:3, 3:], jnp.zeros((3, 1)))
+        assert jnp.allclose(metric[3:, :3], jnp.zeros((1, 3)))
+
+    def test_product_metric_jit_compatibility(self):
+        """metric_fn from product_metric must be jit-compilable (smoke check)."""
+        metric_fn = product_metric(
+            (euclidean_metric, 3),
+            (spherical_metric(2.0), 1),
+        )
+        jit_metric = jax.jit(metric_fn)
+
+        point = jnp.array([0.1, 0.2, 0.3, 0.4])
+        result_normal = metric_fn(point)
+        result_jit = jit_metric(point)
+
+        assert jnp.allclose(result_normal, result_jit)
+        assert result_jit.shape == (4, 4)
 
 
 if __name__ == "__main__":

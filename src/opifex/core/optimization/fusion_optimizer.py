@@ -333,35 +333,10 @@ def create_fused_computation_graph(
     return jax.jit(fused_graph)
 
 
-# Utility functions for fusion analysis
-def analyze_fusion_opportunities(model: nnx.Module) -> dict:
-    """Analyze fusion opportunities in a neural operator model."""
-    _ = model  # Reserved for future implementation
-
-    # This is a simplified analysis - in practice, would need to traverse
-    # the computation graph to identify fusion opportunities
-
-    return {
-        "num_operations": 0,
-        "fusable_patterns": [],
-        "estimated_speedup": 0.0,
-        "fusion_recommendations": [],
-    }
-
-
-def apply_fusion_optimizations(model: nnx.Module) -> nnx.Module:
-    """Apply fusion optimizations to a neural operator model."""
-    # This would implement automatic fusion optimization
-    # For now, return the model unchanged
-    return model
-
-
 # Export main components
 __all__ = [
     "FusedFourierLayer",
     "FusionOptimizedOperator",
-    "analyze_fusion_opportunities",
-    "apply_fusion_optimizations",
     "create_fused_computation_graph",
     "fused_conv_activation",
     "fused_elementwise_chain",

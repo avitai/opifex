@@ -936,15 +936,22 @@ class BasicTrainer:
             self.state.model
         )
 
-        # Track physics loss components
-        self.metrics.physics_losses.append(float(loss_components["physics_loss"]))
-        self.metrics.boundary_losses.append(float(loss_components["boundary_loss"]))
+        # Track physics loss components. The fallback branch (no physics loss
+        # attached) builds a minimal ``loss_components`` dict without these
+        # keys, so only record them when a physics loss is configured and read
+        # defensively to keep the contract total across implementations.
+        if self.physics_loss is not None:
+            self.metrics.physics_losses.append(float(loss_components.get("physics_loss", 0.0)))
+            self.metrics.boundary_losses.append(float(loss_components.get("boundary_loss", 0.0)))
 
-        # Update parameters using the correct parameter format
-        params = nnx.to_tree(nnx.state(self.state.model, nnx.Param))
-        updates, opt_state = self.state.optimizer.update(grads, self.state.opt_state, params)
-        nnx.update(self.state.model, updates)
-        self.state.opt_state = opt_state
+        # Update parameters using the same NNX/optax pattern as ``training_step``:
+        # tree-flatten grads/params, apply the optax delta, then restore NNX state.
+        params = nnx.state(self.state.model, nnx.Param)
+        updates, self.state.opt_state = self.state.optimizer.update(
+            nnx.to_tree(grads), self.state.opt_state, nnx.to_tree(params)
+        )
+        updated_params = optax.apply_updates(nnx.to_tree(params), updates)
+        nnx.update(self.state.model, nnx.from_tree(updated_params))
 
         # Update step counter
         self.state.step += 1
@@ -1533,18 +1540,19 @@ def create_progress_bar_callback(
     """
     pbar = None
 
-    def progress_callback(epoch: int, metrics: dict[str, Any]) -> None:
+    def progress_callback(progress_info: dict[str, Any]) -> None:
         nonlocal pbar
 
-        train_loss = metrics.get("train_loss")
-        val_loss = metrics.get("val_loss") or metrics.get("final_val_loss")
+        epoch = progress_info.get("epoch", 0)
+        train_loss = progress_info.get("train_loss")
+        val_loss = progress_info.get("val_loss") or progress_info.get("final_val_loss")
 
         # Initialize progress bar on first call
         if pbar is None:
-            # Try to get total from metrics if not provided
+            # Try to get total from the progress info if not provided
             nonlocal total_epochs
             if total_epochs is None:
-                total_epochs = metrics.get("total_epochs")
+                total_epochs = progress_info.get("total_epochs")
 
             default_kwargs = {
                 "total": total_epochs,

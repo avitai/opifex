@@ -79,6 +79,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace.kalman import (
@@ -86,7 +87,7 @@ from opifex.uncertainty.statespace.kalman import (
     kalman_log_likelihood,
     kalman_smoother,
 )
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _QUASISEP_SHO_SOURCE_PACKAGE = "opifex.uncertainty.gp"
@@ -329,9 +330,9 @@ def predict_quasisep_sho_gp(
     test_sorted_positions = inverse_order[num_train:]
     test_means = smoothed_means[test_sorted_positions, 0]
     test_variances = smoothed_covs[test_sorted_positions, 0, 0]
-    return PredictiveDistribution(
-        mean=test_means,
-        variance=test_variances,
+    return gaussian_process_predictive(
+        test_means,
+        test_variances,
         epistemic=test_variances,
         total_uncertainty=test_variances,
         metadata=compose_method_metadata(

@@ -268,7 +268,7 @@ class AWSDeploymentManager:
                 "enable_dns_support": True,
                 "tags": {
                     "Name": f"{self.config.cluster_name}-vpc",
-                    "kubernetes.io/cluster/{self.config.cluster_name}": "shared",
+                    f"kubernetes.io/cluster/{self.config.cluster_name}": "shared",
                 },
             },
             "internet_gateway": {"tags": {"Name": f"{self.config.cluster_name}-igw"}},
@@ -278,7 +278,7 @@ class AWSDeploymentManager:
                     "availability_zone": az,
                     "tags": {
                         "Name": f"{self.config.cluster_name}-private-{i + 1}",
-                        "kubernetes.io/cluster/{self.config.cluster_name}": "owned",
+                        f"kubernetes.io/cluster/{self.config.cluster_name}": "owned",
                         "kubernetes.io/role/internal-elb": "1",
                     },
                 }
@@ -297,7 +297,7 @@ class AWSDeploymentManager:
                     "map_public_ip_on_launch": True,
                     "tags": {
                         "Name": f"{self.config.cluster_name}-public-{i + 1}",
-                        "kubernetes.io/cluster/{self.config.cluster_name}": "owned",
+                        f"kubernetes.io/cluster/{self.config.cluster_name}": "owned",
                         "kubernetes.io/role/elb": "1",
                     },
                 }
@@ -385,7 +385,7 @@ class AWSDeploymentManager:
                     "name": "opifex/database/password",
                     "description": "Database password for Opifex application",
                     "generate_secret_string": {
-                        "password_length": 32,
+                        "password_length": 32,  # nosec B105 - password-length config, not a secret
                         "exclude_characters": '"@/\\',
                     },
                 },
@@ -400,7 +400,7 @@ class AWSDeploymentManager:
                     "name": "opifex/oauth/credentials",
                     "description": "OAuth credentials for Opifex authentication",
                     "secret_string": json.dumps(
-                        {"client_id": "PLACEHOLDER", "client_secret": "PLACEHOLDER"}
+                        {"client_id": "PLACEHOLDER", "client_secret": "PLACEHOLDER"}  # nosec B105 - placeholder, not a real secret
                     ),
                 },
             ]

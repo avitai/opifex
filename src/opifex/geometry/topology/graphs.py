@@ -308,20 +308,3 @@ class GraphNeuralOperator:
 
         # Output projection
         return linear_layer(node_features, self.output_w, self.output_b)
-
-
-# JAX pytree registration for GraphTopology
-def _graph_topology_tree_flatten(graph):
-    children = (graph.nodes, graph.edges, graph.edge_features, graph.adjacency_matrix)
-    aux_data = None
-    return children, aux_data
-
-
-def _graph_topology_tree_unflatten(aux_data, children):
-    nodes, edges, edge_features, adjacency_matrix = children
-    return GraphTopology(nodes, edges, edge_features, adjacency_matrix)
-
-
-jax.tree_util.register_pytree_node(
-    GraphTopology, _graph_topology_tree_flatten, _graph_topology_tree_unflatten
-)

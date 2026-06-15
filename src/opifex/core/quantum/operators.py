@@ -90,6 +90,13 @@ class HamiltonianOperator(QuantumOperator):
     methods for quantum mechanical calculations.
     """
 
+    # Soft-Coulomb regularisation (Bohr^2) removing the 1/r singularity on the
+    # grid; matches NeuralSCFSolver._nuclear_potential in neural.quantum.neural_scf.
+    _SOFT_COULOMB_EPS: float = 1e-2
+    # Padding (Bohr) added either side of the outermost nucleus when deriving the
+    # 1D potential grid from the molecular geometry.
+    _GRID_PADDING_BOHR: float = 5.0
+
     def __init__(
         self,
         molecular_system: MolecularSystem,
@@ -199,13 +206,43 @@ class HamiltonianOperator(QuantumOperator):
             return kinetic_result
         raise NotImplementedError(f"Kinetic method {self.kinetic_method} not implemented")
 
+    def _soft_coulomb_grid(self, n_points: int) -> Array:
+        """Symmetric 1D grid spanning the molecule's nuclei.
+
+        The grid extent is derived from the nuclear geometry (rather than being
+        a hardcoded interval), so it always brackets every nucleus with a fixed
+        padding either side. Mirrors the radial projection used by
+        ``NeuralSCFSolver._atom_centres_on_grid`` in
+        ``opifex.neural.quantum.neural_scf``.
+        """
+        centres = jnp.linalg.norm(self.molecular_system.positions, axis=1)
+        half_extent = jnp.max(jnp.abs(centres)) + self._GRID_PADDING_BOHR
+        return jnp.linspace(-half_extent, half_extent, n_points)
+
+    def _soft_coulomb_potential(self, wavefunction: Array) -> Array:
+        """Soft-Coulomb nuclear-attraction potential ``V(r) = -sum_A Z_A / sqrt(|r - R_A|^2 + eps)``.
+
+        Summed over every nucleus so the potential depends on both the nuclear
+        charges and the geometry of ``self.molecular_system``. The softening term
+        removes the Coulomb singularity on the grid (standard soft-Coulomb
+        regularisation). This is the same formulation implemented by
+        ``NeuralSCFSolver._nuclear_potential`` in
+        ``opifex.neural.quantum.neural_scf`` (cf. Javadi-Abhari et al. soft-Coulomb
+        model atoms).
+        """
+        grid = self._soft_coulomb_grid(len(wavefunction))
+        centres = jnp.linalg.norm(self.molecular_system.positions, axis=1)
+        charges = self.molecular_system.atomic_numbers.astype(grid.dtype)
+        separations = grid[None, :] - centres[:, None]
+        softened = jnp.sqrt(separations**2 + self._SOFT_COULOMB_EPS)
+        return -jnp.sum(charges[:, None] / softened, axis=0)
+
     def _apply_potential(self, wavefunction: Array) -> Array:
         """Apply potential energy operator."""
         if self.potential_method == "coulomb":
-            # For hydrogen-like atoms: V = -Z/r
-            # Simplified 1D harmonic potential for testing
-            x = jnp.linspace(-5, 5, len(wavefunction))
-            potential = -1.0 / (jnp.abs(x) + 0.1)  # Avoid singularity
+            # Real soft-Coulomb nuclear attraction derived from the molecule's
+            # nuclei (charges + geometry), not a fixed test grid.
+            potential = self._soft_coulomb_potential(wavefunction)
             return potential * wavefunction
         if self.potential_method == "harmonic":
             # Harmonic oscillator potential: V = (1/2) * k * x²

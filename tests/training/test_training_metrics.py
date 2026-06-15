@@ -143,6 +143,35 @@ class TestTrainingState:
         assert state.step == 1
         assert state.epoch == 1
 
+    def test_training_state_with_updates_returns_new_instance(self):
+        """`with_updates` returns a new state via replace, leaving the original intact."""
+        model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
+        optimizer = optax.adam(1e-3)
+        params = nnx.to_tree(nnx.state(model, nnx.Param))
+        opt_state = optimizer.init(params)
+
+        state = TrainingState(
+            model=model,
+            optimizer=optimizer,
+            opt_state=opt_state,
+            step=0,
+            epoch=0,
+        )
+
+        updated = state.with_updates(step=5, epoch=2, best_loss=0.1)
+
+        # New instance carries the updates
+        assert updated.step == 5
+        assert updated.epoch == 2
+        assert updated.best_loss == 0.1
+        # Original is unchanged (immutable-update semantics)
+        assert state.step == 0
+        assert state.epoch == 0
+        assert updated is not state
+        # Shared, untouched fields are preserved by reference
+        assert updated.model is model
+        assert updated.optimizer is optimizer
+
     def test_enhanced_training_state_physics_metrics(self):
         """Test enhanced training state physics metrics tracking."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))

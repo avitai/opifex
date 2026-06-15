@@ -506,6 +506,19 @@ class TestSearchEngine:
         assert isinstance(embedding, jnp.ndarray)
         assert embedding.shape == (256,)
 
+    def test_generate_embedding_encodes_word_content(self, search_engine):
+        """Test that the embedding encodes keyword content, not whole-string hash.
+
+        Semantic search requires word-level encoding: two phrases with the same
+        keyword set (after stop-word removal, order-independent) must yield
+        identical embeddings so reordered queries score as maximally similar.
+        """
+        emb1 = search_engine._generate_embedding("neural network for physics")
+        emb2 = search_engine._generate_embedding("physics neural network")
+
+        # Same keyword set -> identical bag-of-words embedding -> cosine ~ 1.0.
+        assert search_engine._cosine_similarity(emb1, emb2) == pytest.approx(1.0, abs=1e-5)
+
     @pytest.mark.asyncio
     async def test_get_functional_embedding(self, search_engine, mock_registry):
         """Test functional embedding generation and caching."""

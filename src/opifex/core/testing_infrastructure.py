@@ -17,8 +17,8 @@ from enum import Enum
 from typing import Any
 
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Module logger only — importing must not reconfigure the host root logger
+# (Rule 13: no import-time side effects). Applications own ``basicConfig``.
 logger = logging.getLogger(__name__)
 
 

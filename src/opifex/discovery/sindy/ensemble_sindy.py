@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
+from opifex.discovery.sindy._formatting import format_sindy_equations
 from opifex.discovery.sindy.library import CandidateLibrary
 from opifex.discovery.sindy.optimizers import STLSQ
 
@@ -132,18 +133,9 @@ class EnsembleSINDy:
         n_targets = self.coef_mean.shape[0]
         target_names = input_names or [f"x{i}" for i in range(n_targets)]
 
-        eqs = []
-        for tidx in range(n_targets):
-            terms = []
-            for lidx, name in enumerate(names):
-                mean = float(self.coef_mean[tidx, lidx])
-                std = float(self.coef_std[tidx, lidx])
-                if abs(mean) > 1e-10 or std > 0.01:
-                    terms.append(f"({mean:.{precision}f}±{std:.{precision}f}) {name}")
-            rhs = " + ".join(terms) if terms else "0"
-            eqs.append(f"d{target_names[tidx]}/dt = {rhs}")
-
-        return eqs
+        return format_sindy_equations(
+            self.coef_mean, names, target_names, precision, std=self.coef_std
+        )
 
 
 __all__ = ["EnsembleSINDy"]

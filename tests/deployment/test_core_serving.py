@@ -7,42 +7,20 @@ including model loading, inference serving, and basic deployment utilities.
 
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-
-# Import type checking to avoid runtime issues
-if TYPE_CHECKING:
-    from opifex.deployment.core_serving import (
-        DeploymentConfig,
-        InferenceEngine,
-        ModelMetadata,
-        ModelRegistry,
-        ModelServer,
-        ServingStatus,
-    )
-else:
-    try:
-        from opifex.deployment.core_serving import (
-            DeploymentConfig,
-            InferenceEngine,
-            ModelMetadata,
-            ModelRegistry,
-            ModelServer,
-            ServingStatus,
-        )
-    except ImportError:
-        # Handle gracefully if components aren't implemented yet
-        DeploymentConfig = None  # type: ignore[misc,assignment]
-        InferenceEngine = None  # type: ignore[misc,assignment]
-        ModelMetadata = None  # type: ignore[misc,assignment]
-        ModelRegistry = None  # type: ignore[misc,assignment]
-        ModelServer = None  # type: ignore[misc,assignment]
-        ServingStatus = None  # type: ignore[misc,assignment]
+from opifex.deployment.core_serving import (
+    DeploymentConfig,
+    InferenceEngine,
+    ModelMetadata,
+    ModelRegistry,
+    ModelServer,
+    ServingStatus,
+)
 
 
 # Test model classes at module level for proper pickling
@@ -74,9 +52,6 @@ class TestDeploymentConfig:
 
     def test_deployment_config_initialization(self):
         """Test basic deployment configuration creation."""
-        if DeploymentConfig is None:
-            pytest.skip("DeploymentConfig not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_fno",
             model_type="neural_operator",
@@ -95,9 +70,6 @@ class TestDeploymentConfig:
 
     def test_deployment_config_validation(self):
         """Test deployment configuration validation."""
-        if DeploymentConfig is None:
-            pytest.skip("DeploymentConfig not yet implemented")
-
         # Test invalid port
         with pytest.raises(ValueError, match="Port must be between"):
             DeploymentConfig(model_name="test", model_type="neural_operator", serving_port=70000)
@@ -108,9 +80,6 @@ class TestDeploymentConfig:
 
     def test_deployment_config_jax_precision(self):
         """Test JAX precision configuration."""
-        if DeploymentConfig is None:
-            pytest.skip("DeploymentConfig not yet implemented")
-
         config = DeploymentConfig(
             model_name="test", model_type="neural_operator", precision="float64"
         )
@@ -123,9 +92,6 @@ class TestModelMetadata:
 
     def test_model_metadata_creation(self):
         """Test basic model metadata creation."""
-        if ModelMetadata is None:
-            pytest.skip("ModelMetadata not yet implemented")
-
         metadata = ModelMetadata(
             name="darcy_fno",
             version="1.0.0",
@@ -146,9 +112,6 @@ class TestModelMetadata:
 
     def test_model_metadata_serialization(self):
         """Test model metadata JSON serialization."""
-        if ModelMetadata is None:
-            pytest.skip("ModelMetadata not yet implemented")
-
         metadata = ModelMetadata(
             name="test_model",
             version="1.0.0",
@@ -173,9 +136,6 @@ class TestModelRegistry:
 
     def test_model_registry_initialization(self):
         """Test model registry initialization."""
-        if ModelRegistry is None:
-            pytest.skip("ModelRegistry not yet implemented")
-
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = ModelRegistry(storage_path=temp_dir)
             assert registry.storage_path == Path(temp_dir)
@@ -183,9 +143,6 @@ class TestModelRegistry:
 
     def test_model_registration(self):
         """Test model registration and retrieval."""
-        if ModelRegistry is None:
-            pytest.skip("ModelRegistry not yet implemented")
-
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = ModelRegistry(storage_path=temp_dir)
 
@@ -211,15 +168,73 @@ class TestModelRegistry:
             # Retrieve model
             retrieved_model, retrieved_metadata = registry.get_model(model_id)
             assert retrieved_metadata.name == "test_fno"
-            # The registry returns a MinimalModel for testing purposes
+            # The registry reconstructs the registered model (same class structure)
             assert hasattr(retrieved_model, "linear")
             assert callable(retrieved_model)
 
+    def test_get_model_roundtrips_registered_weights(self):
+        """get_model must return the SAME weights that were registered.
+
+        Regression for the serving-registry correctness hole where
+        ``get_model`` fabricated a fresh ``nnx.Rngs(0)``-initialised model
+        with RANDOM weights instead of deserialising the registered one.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry = ModelRegistry(storage_path=temp_dir)
+
+            # Build a model whose weights are clearly NOT the default init,
+            # so a random/default-init reconstruction is guaranteed to differ.
+            original = SimpleTestModel(rngs=nnx.Rngs(0))
+            shifted = jax.tree_util.tree_map(lambda leaf: leaf + 3.0, nnx.state(original))
+            nnx.update(original, shifted)
+
+            metadata = ModelMetadata(
+                name="roundtrip_fno",
+                version="1.0.0",
+                model_type="fno",
+                input_shape=(64,),
+                output_shape=(64,),
+            )
+
+            model_id = registry.register_model(original, metadata)
+            loaded, _ = registry.get_model(model_id)
+
+            probe = jnp.linspace(-1.0, 1.0, 64).reshape(1, 64)
+            expected = original(probe)
+            actual = loaded(probe)  # type: ignore[operator]  # nnx.Module is callable
+
+            assert jnp.allclose(actual, expected, atol=1e-6), (
+                "get_model returned a different model than was registered"
+            )
+
+    def test_get_model_raises_without_template_instead_of_fabricating(self):
+        """When the structural template is missing, fail honestly.
+
+        Across a fresh process the in-memory ``GraphDef`` template is gone;
+        ``get_model`` must raise ``NotImplementedError`` rather than return a
+        fabricated / random model.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry = ModelRegistry(storage_path=temp_dir)
+            model = SimpleTestModel(rngs=nnx.Rngs(0))
+            metadata = ModelMetadata(
+                name="no_template",
+                version="1.0.0",
+                model_type="fno",
+                input_shape=(64,),
+                output_shape=(64,),
+            )
+            model_id = registry.register_model(model, metadata)
+
+            # Simulate a fresh process: weights persist on disk, but the
+            # in-memory reconstruction template is unavailable.
+            registry._templates.clear()
+
+            with pytest.raises(NotImplementedError, match="model deserialization"):
+                registry.get_model(model_id)
+
     def test_model_versioning(self):
         """Test model versioning functionality."""
-        if ModelRegistry is None:
-            pytest.skip("ModelRegistry not yet implemented")
-
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = ModelRegistry(storage_path=temp_dir)
 
@@ -248,9 +263,6 @@ class TestInferenceEngine:
 
     def test_inference_engine_initialization(self):
         """Test inference engine initialization."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model",
             model_type="neural_operator",
@@ -265,9 +277,6 @@ class TestInferenceEngine:
 
     def test_model_loading(self):
         """Test model loading functionality."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model",
             model_type="neural_operator",
@@ -296,9 +305,6 @@ class TestInferenceEngine:
 
     def test_batch_inference(self):
         """Test batch inference processing."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model",
             model_type="neural_operator",
@@ -329,9 +335,6 @@ class TestInferenceEngine:
 
     def test_inference_validation(self):
         """Test input validation for inference."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model",
             model_type="neural_operator",
@@ -348,9 +351,6 @@ class TestInferenceEngine:
 
     def test_performance_monitoring(self):
         """Test inference performance monitoring."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model",
             model_type="neural_operator",
@@ -393,9 +393,6 @@ class TestModelServer:
 
     def test_model_server_initialization(self):
         """Test model server initialization."""
-        if ModelServer is None:
-            pytest.skip("ModelServer not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model", model_type="neural_operator", serving_port=8080
         )
@@ -406,9 +403,6 @@ class TestModelServer:
 
     def test_server_startup(self):
         """Test server startup process."""
-        if ModelServer is None:
-            pytest.skip("ModelServer not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model", model_type="neural_operator", serving_port=8080
         )
@@ -421,9 +415,6 @@ class TestModelServer:
 
     def test_health_check_endpoint(self):
         """Test health check endpoint."""
-        if ModelServer is None:
-            pytest.skip("ModelServer not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model", model_type="neural_operator", serving_port=8080
         )
@@ -440,9 +431,6 @@ class TestModelServer:
 
     def test_prediction_endpoint(self):
         """Test prediction endpoint functionality."""
-        if ModelServer is None:
-            pytest.skip("ModelServer not yet implemented")
-
         config = DeploymentConfig(
             model_name="test_model",
             model_type="neural_operator",
@@ -481,9 +469,6 @@ class TestServingIntegration:
 
     def test_end_to_end_serving_workflow(self):
         """Test complete model serving workflow."""
-        if None in [ModelServer, ModelRegistry, InferenceEngine, DeploymentConfig]:
-            pytest.skip("Serving components not yet implemented")
-
         with tempfile.TemporaryDirectory() as temp_dir:
             # Setup
             config = DeploymentConfig(
@@ -495,14 +480,16 @@ class TestServingIntegration:
 
             registry = ModelRegistry(storage_path=temp_dir)
 
-            # Mock model
+            # Mock model — SimpleTestModel is Linear(64, 64); metadata and
+            # serving input below match that shape so get_model can return
+            # the real reconstructed model (not a fabricated stand-in).
             mock_model = SimpleTestModel(rngs=nnx.Rngs(0))
             mock_metadata = ModelMetadata(
                 name="integration_test",
                 version="1.0.0",
                 model_type="fno",
-                input_shape=(8,),
-                output_shape=(8,),
+                input_shape=(64,),
+                output_shape=(64,),
             )
 
             # Register model
@@ -518,7 +505,7 @@ class TestServingIntegration:
             server.inference_engine = engine
 
             # Test prediction
-            input_data = {"data": [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]]}
+            input_data = {"data": [[1.0] * 64]}
             result = server.predict(input_data)
 
             assert "predictions" in result
@@ -526,9 +513,6 @@ class TestServingIntegration:
 
     def test_error_handling_integration(self):
         """Test error handling across serving components."""
-        if None in [ModelServer, InferenceEngine, DeploymentConfig]:
-            pytest.skip("Serving components not yet implemented")
-
         config = DeploymentConfig(model_name="error_test", model_type="fno", batch_size=4)
 
         # Test uninitialized server prediction
@@ -543,9 +527,6 @@ class TestJAXOptimization:
 
     def test_jax_jit_compilation(self):
         """Test JAX JIT compilation for inference."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="jit_test",
             model_type="neural_operator",
@@ -574,9 +555,6 @@ class TestJAXOptimization:
 
     def test_gpu_memory_management(self):
         """Test GPU memory management."""
-        if InferenceEngine is None:
-            pytest.skip("InferenceEngine not yet implemented")
-
         config = DeploymentConfig(
             model_name="gpu_test",
             model_type="neural_operator",

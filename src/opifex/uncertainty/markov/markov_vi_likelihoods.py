@@ -17,7 +17,10 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.adapters.base import compose_method_metadata
+from opifex.uncertainty._predictive import (
+    gaussian_process_predictive,
+    replace_predictive_metadata,
+)
 from opifex.uncertainty.gp.laplace_classification import (
     _bernoulli_log_likelihood_components,
 )
@@ -26,6 +29,7 @@ from opifex.uncertainty.gp.laplace_likelihoods import (
     _poisson_log_likelihood_components,
     _studentst_components_factory,
 )
+from opifex.uncertainty.markov._likelihood_support import latent_variance
 from opifex.uncertainty.markov.markov_laplace_likelihoods import (
     _gaussian_components_factory,
 )
@@ -34,47 +38,11 @@ from opifex.uncertainty.markov.markov_vi import (
     MarkovVIGPState,
     predict_markov_vi_gp,
 )
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import StateSpaceKernel  # noqa: TC001
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
-_MARKOV_VI_SOURCE_PACKAGE = "opifex.uncertainty.markov"
-
-
-def _replace_metadata_vi(
-    predictive: PredictiveDistribution,
-    *,
-    estimator: str,
-    likelihood: str,
-    link: str,
-) -> PredictiveDistribution:
-    """Refresh predictive metadata to advertise the VI inference path."""
-    return PredictiveDistribution(
-        mean=predictive.mean,
-        variance=predictive.variance,
-        epistemic=predictive.epistemic,
-        aleatoric=predictive.aleatoric,
-        total_uncertainty=predictive.total_uncertainty,
-        samples=predictive.samples,
-        covariance=predictive.covariance,
-        quantiles=predictive.quantiles,
-        interval=predictive.interval,
-        prediction_set=predictive.prediction_set,
-        metadata=compose_method_metadata(
-            method=DefaultStrategy.GAUSSIAN_PROCESS.value,
-            source_package=_MARKOV_VI_SOURCE_PACKAGE,
-            extra=(
-                ("estimator", estimator),
-                (
-                    "paper",
-                    "Khan & Lin 2017 / Chang+ 2020 (Conjugate-Computation VI on Markov GPs)",
-                ),
-                ("likelihood", likelihood),
-                ("link", link),
-            ),
-        ),
-    )
+_MARKOV_VI_PAPER = "Khan & Lin 2017 / Chang+ 2020 (Conjugate-Computation VI on Markov GPs)"
 
 
 # -----------------------------------------------------------------------------
@@ -106,19 +74,20 @@ def predict_bernoulli_markov_vi_gp(
 ) -> PredictiveDistribution:
     """Predict ``p(y_* = +1)`` via the MacKay probit collapse."""
     latent = predict_markov_vi_gp(state=state, times_test=times_test)
-    assert latent.variance is not None
-    kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * latent.variance / 8.0)
+    variance = latent_variance(latent)
+    kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * variance / 8.0)
     class_probability = jax.nn.sigmoid(kappa * latent.mean)
-    return _replace_metadata_vi(
-        PredictiveDistribution(
-            mean=class_probability,
-            variance=latent.variance,
-            epistemic=latent.variance,
-            total_uncertainty=latent.variance,
+    return replace_predictive_metadata(
+        gaussian_process_predictive(
+            class_probability,
+            variance,
+            epistemic=variance,
+            total_uncertainty=variance,
         ),
         estimator="bernoulli_markov_vi_gp",
         likelihood="bernoulli",
         link="logit",
+        paper=_MARKOV_VI_PAPER,
     )
 
 
@@ -151,19 +120,20 @@ def predict_poisson_markov_vi_gp(
 ) -> PredictiveDistribution:
     r"""Predict Poisson intensity ``E[λ] = exp(μ + ½ V)`` under log-normal moments."""
     latent = predict_markov_vi_gp(state=state, times_test=times_test)
-    assert latent.variance is not None
-    intensity_mean = jnp.exp(latent.mean + 0.5 * latent.variance)
-    intensity_variance = (intensity_mean**2) * jnp.expm1(latent.variance)
-    return _replace_metadata_vi(
-        PredictiveDistribution(
-            mean=intensity_mean,
-            variance=intensity_variance,
-            epistemic=latent.variance,
+    variance = latent_variance(latent)
+    intensity_mean = jnp.exp(latent.mean + 0.5 * variance)
+    intensity_variance = (intensity_mean**2) * jnp.expm1(variance)
+    return replace_predictive_metadata(
+        gaussian_process_predictive(
+            intensity_mean,
+            intensity_variance,
+            epistemic=variance,
             total_uncertainty=intensity_variance,
         ),
         estimator="poisson_markov_vi_gp",
         likelihood="poisson",
         link="exp",
+        paper=_MARKOV_VI_PAPER,
     )
 
 
@@ -203,20 +173,21 @@ def predict_studentst_markov_vi_gp(
 ) -> PredictiveDistribution:
     r"""Predict Student-t response: mean ``μ``, variance ``V + σ²ν/(ν−2)``."""
     latent = predict_markov_vi_gp(state=state, times_test=times_test)
-    assert latent.variance is not None
+    variance = latent_variance(latent)
     df_arr = jnp.asarray(df)
     scale_sq = jnp.asarray(scale) ** 2
-    response_variance = latent.variance + scale_sq * df_arr / (df_arr - 2.0)
-    return _replace_metadata_vi(
-        PredictiveDistribution(
-            mean=latent.mean,
-            variance=response_variance,
-            epistemic=latent.variance,
+    response_variance = variance + scale_sq * df_arr / (df_arr - 2.0)
+    return replace_predictive_metadata(
+        gaussian_process_predictive(
+            latent.mean,
+            response_variance,
+            epistemic=variance,
             total_uncertainty=response_variance,
         ),
         estimator="studentst_markov_vi_gp",
         likelihood="students_t",
         link="identity",
+        paper=_MARKOV_VI_PAPER,
     )
 
 
@@ -254,20 +225,21 @@ def predict_beta_markov_vi_gp(
 ) -> PredictiveDistribution:
     r"""Predict Beta response: ``E[y] = σ(κ μ)``, variance ``m̂(1-m̂)/(s+1)``."""
     latent = predict_markov_vi_gp(state=state, times_test=times_test)
-    assert latent.variance is not None
-    kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * latent.variance / 8.0)
+    variance = latent_variance(latent)
+    kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * variance / 8.0)
     response_mean = jax.nn.sigmoid(kappa * latent.mean)
     response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
-    return _replace_metadata_vi(
-        PredictiveDistribution(
-            mean=response_mean,
-            variance=response_variance,
-            epistemic=latent.variance,
+    return replace_predictive_metadata(
+        gaussian_process_predictive(
+            response_mean,
+            response_variance,
+            epistemic=variance,
             total_uncertainty=response_variance,
         ),
         estimator="beta_markov_vi_gp",
         likelihood="beta",
         link="logit",
+        paper=_MARKOV_VI_PAPER,
     )
 
 
@@ -313,18 +285,19 @@ def predict_gaussian_markov_vi_gp(
 ) -> PredictiveDistribution:
     r"""Predict ``y*``: mean ``μ``, variance ``V + σ²`` (latent + obs noise)."""
     latent = predict_markov_vi_gp(state=state, times_test=times_test)
-    assert latent.variance is not None
-    response_variance = latent.variance + noise_std**2
-    return _replace_metadata_vi(
-        PredictiveDistribution(
-            mean=latent.mean,
-            variance=response_variance,
-            epistemic=latent.variance,
+    variance = latent_variance(latent)
+    response_variance = variance + noise_std**2
+    return replace_predictive_metadata(
+        gaussian_process_predictive(
+            latent.mean,
+            response_variance,
+            epistemic=variance,
             total_uncertainty=response_variance,
         ),
         estimator="gaussian_markov_vi_gp",
         likelihood="gaussian",
         link="identity",
+        paper=_MARKOV_VI_PAPER,
     )
 
 

@@ -102,10 +102,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
 from opifex.uncertainty.registry import DefaultStrategy
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _STOCHASTIC_SVGP_SOURCE_PACKAGE = "opifex.uncertainty.gp"
@@ -372,9 +373,9 @@ def predict_stochastic_svgp(
     mean_test, var_test = _latent_marginal_moments(
         state=state, cholesky_kzz=cholesky_kzz, x_batch=x_test
     )
-    return PredictiveDistribution(
-        mean=mean_test,
-        variance=var_test,
+    return gaussian_process_predictive(
+        mean_test,
+        var_test,
         epistemic=var_test,
         total_uncertainty=var_test,
         metadata=compose_method_metadata(

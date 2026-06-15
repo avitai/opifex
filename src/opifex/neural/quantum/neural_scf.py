@@ -322,6 +322,99 @@ class NeuralSCFSolver(nnx.Module):
         converged = energy_converged and density_converged
         return converged, chemical_accuracy, convergence_prob
 
+    def _atom_centres_on_grid(self, molecular_system: MolecularSystem) -> Array:
+        """Project 3D nuclear positions onto the 1D radial SCF grid.
+
+        Each nucleus is mapped to its distance from the origin (the same radial
+        projection used to seed the density in ``NeuralDFT``), giving a scalar
+        centre on the ``[0, r_max]`` grid the Kohn-Sham matrix is built over.
+        """
+        return jnp.linalg.norm(molecular_system.positions, axis=1)
+
+    def _kinetic_operator(self, grid_spacing: float) -> Array:
+        """Finite-difference kinetic-energy operator ``-1/2 d^2/dr^2``.
+
+        Uses the symmetric three-point second-derivative stencil on the uniform
+        radial grid, i.e. the standard particle-in-a-box discretisation of the
+        Laplacian (Szabo & Ostlund, *Modern Quantum Chemistry*; the same kinetic
+        operator used by real-space DFT grids such as PySCF's).
+        """
+        main = -2.0 * jnp.ones(self.grid_size)
+        off = jnp.ones(self.grid_size - 1)
+        laplacian = jnp.diag(main) + jnp.diag(off, 1) + jnp.diag(off, -1)
+        return -0.5 * laplacian / (grid_spacing**2)
+
+    def _nuclear_potential(self, grid_points: Array, molecular_system: MolecularSystem) -> Array:
+        """Softened nuclear-attraction potential ``-sum_A Z_A / |r - R_A|``.
+
+        Summed over every nucleus, so the potential -- and hence the whole
+        Kohn-Sham matrix -- depends on both the nuclear charges and the geometry
+        of ``molecular_system``. A small softening term removes the Coulomb
+        singularity on the grid (a standard soft-Coulomb regularisation).
+        """
+        centres = self._atom_centres_on_grid(molecular_system)
+        charges = molecular_system.atomic_numbers.astype(grid_points.dtype)
+        separations = grid_points[None, :] - centres[:, None]
+        softened = jnp.sqrt(separations**2 + 1e-2)
+        return -jnp.sum(charges[:, None] / softened, axis=0)
+
+    def _kohn_sham_matrix(self, density: Array, molecular_system: MolecularSystem) -> Array:
+        """Assemble the symmetric Kohn-Sham matrix on the 1D radial grid.
+
+        Combines the finite-difference kinetic operator with diagonal
+        nuclear-attraction, Hartree and LDA exchange-correlation potentials. The
+        Hartree term is the mean-field ``rho``-dependent potential and the LDA
+        exchange uses ``V_xc = -0.984 rho^{1/3}`` (the Slater exchange constant
+        also used by ``NeuralDFT``), making the matrix self-consistent in the
+        current density as well as molecule-dependent.
+        """
+        grid_points = jnp.linspace(0.0, 10.0, self.grid_size)
+        grid_spacing = float(grid_points[1] - grid_points[0])
+
+        kinetic = self._kinetic_operator(grid_spacing)
+        nuclear = self._nuclear_potential(grid_points, molecular_system)
+        safe_density = jnp.maximum(density, self.numerical_eps)
+        hartree = 0.5 * safe_density
+        exchange_correlation = -0.984 * jnp.power(safe_density, 1.0 / 3.0)
+
+        potential = nuclear + hartree + exchange_correlation
+        hamiltonian = kinetic + jnp.diag(potential)
+        # Symmetrise to kill any floating-point asymmetry before the eigensolve.
+        return 0.5 * (hamiltonian + hamiltonian.T)
+
+    def _kohn_sham_step(
+        self, density: Array, molecular_system: MolecularSystem
+    ) -> tuple[float, Array]:
+        """Perform one Kohn-Sham SCF step for ``molecular_system``.
+
+        Builds the Kohn-Sham matrix from the current density and the molecule,
+        diagonalises it (``F C = C e`` in the orthonormal grid basis), doubly
+        occupies the lowest ``n_occupied`` orbitals for a closed shell and forms
+        the new density from those orbitals. This is the canonical Roothaan SCF
+        update (Szabo & Ostlund, Ch. 3; PySCF's ``scf.hf.kernel``) restricted to
+        the solver's 1D radial grid, mirroring ``NeuralDFT._solve_classical_scf``.
+
+        Args:
+            density: Current electron density on the grid (length ``grid_size``).
+            molecular_system: Molecule supplying nuclear charges and geometry.
+
+        Returns:
+            Tuple of (band-structure energy ``2 sum_i e_i``, new grid density).
+        """
+        n_electrons = int(molecular_system.n_electrons)
+        # Closed-shell occupation: doubly occupy the lowest orbitals, clamped to
+        # at least one so single-electron systems remain valid.
+        n_occupied = max(n_electrons // 2, 1)
+
+        hamiltonian = self._kohn_sham_matrix(density, molecular_system)
+        eigenvalues, eigenvectors = jnp.linalg.eigh(hamiltonian)
+
+        occupied_orbitals = eigenvectors[:, :n_occupied]
+        new_density = 2.0 * jnp.sum(occupied_orbitals**2, axis=1)
+        band_structure_energy = float(2.0 * jnp.sum(eigenvalues[:n_occupied]))
+
+        return band_structure_energy, new_density
+
     def solve_scf(
         self,
         molecular_system: MolecularSystem,
@@ -332,10 +425,20 @@ class NeuralSCFSolver(nnx.Module):
     ) -> SCFResult:
         """Solve SCF equations with neural acceleration and full analysis.
 
+        By default the per-iteration Kohn-Sham matrix is built from
+        ``molecular_system`` (nuclear charges and geometry) and the current
+        density, then diagonalised to produce both the band-structure energy and
+        the next-iteration density (see :meth:`_kohn_sham_step`); the result
+        therefore depends on the molecule. Supplying ``hamiltonian_fn`` overrides
+        this with a caller-provided scalar electronic-energy callable, in which
+        case a gradient-free trial density update is used instead.
+
         Args:
-            molecular_system: Molecular system to solve
-            initial_density: Initial electron density guess
-            hamiltonian_fn: Custom Hamiltonian function (optional)
+            molecular_system: Molecular system whose nuclear charges and geometry
+                define the default Kohn-Sham matrix.
+            initial_density: Initial electron density guess (length ``grid_size``)
+            hamiltonian_fn: Optional scalar electronic-energy callable that
+                replaces the default Kohn-Sham construction.
             deterministic: Whether to use deterministic computation
 
         Returns:
@@ -358,13 +461,17 @@ class NeuralSCFSolver(nnx.Module):
         convergence_probabilities = []
 
         for iteration in range(self.max_iterations):
-            # Default Hamiltonian if none provided (simple kinetic + potential)
+            # Build the Kohn-Sham matrix from the molecular system and diagonalise
+            # it unless the caller supplied a scalar-energy callable. The occupied
+            # Kohn-Sham orbitals also drive the density update below, so both the
+            # energy and the density genuinely depend on ``molecular_system``.
             if hamiltonian_fn is None:
-                # Simplified Hamiltonian for demonstration
-                # In practice, this would be a full DFT Hamiltonian
-                current_energy = float(jnp.sum(current_density**2) * 0.5)
+                current_energy, kohn_sham_density = self._kohn_sham_step(
+                    current_density, molecular_system
+                )
             else:
                 current_energy = float(hamiltonian_fn(current_density))
+                kohn_sham_density = None
 
             # Compute convergence errors
             energy_error = self._compute_energy_error(previous_energy, current_energy)
@@ -403,14 +510,20 @@ class NeuralSCFSolver(nnx.Module):
             if iteration < self.max_iterations - 1:
                 previous_density = current_density.copy()
 
-                # Enhanced density update with neural mixing
-                if iteration > 0:
-                    # Simple density update for demonstration
-                    # In practice, this would involve solving Kohn-Sham equations
+                if kohn_sham_density is not None:
+                    # Default path: mix in the density rebuilt from the occupied
+                    # Kohn-Sham orbitals (a genuine SCF update) from the first
+                    # iteration onward, exactly as a Roothaan SCF loop does.
+                    current_density = self._mix_densities(
+                        current_density, kohn_sham_density, deterministic=deterministic
+                    )
+                elif iteration > 0:
+                    # Caller-supplied scalar Hamiltonian: no orbitals are
+                    # available, so apply a gradient-free trial perturbation and
+                    # let the neural mixer damp it.
                     density_update = current_density + 0.01 * jnp.sin(
                         jnp.linspace(0, 2 * jnp.pi, self.grid_size)
                     )
-
                     current_density = self._mix_densities(
                         current_density, density_update, deterministic=deterministic
                     )

@@ -5,11 +5,71 @@ uncertainty estimates from probabilistic models, including temperature scaling
 and reliability diagram computation.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import TypeVar
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
+
+
+_Params = TypeVar("_Params")
+
+
+def _gradient_descent(
+    loss_fn: Callable[[_Params], jax.Array],
+    init_params: _Params,
+    *,
+    n_steps: int,
+    lr: float,
+    project: Callable[[_Params], _Params] | None = None,
+    update: Callable[[_Params, _Params], _Params] | None = None,
+    on_step: Callable[[_Params], None] | None = None,
+) -> _Params:
+    """Run a fixed-iteration gradient-descent loop over an arbitrary pytree.
+
+    Centralises the ``for _ in range(n_steps): g = grad(loss)(p); p = step(p, g);
+    p = project(p)`` skeleton that the temperature-scaling and Platt calibrators
+    previously re-implemented four times. The step rule, projection and a
+    per-iteration observer are injected so each call site keeps its original
+    behaviour exactly.
+
+    Args:
+        loss_fn: Scalar loss as a function of the parameter pytree. Gradients
+            are taken with :func:`jax.grad`, so ``init_params`` may be a scalar
+            array or a tuple/pytree of arrays.
+        init_params: Initial parameter pytree.
+        n_steps: Number of gradient-descent iterations (fixed, not adaptive).
+        lr: Learning rate used by the default plain-SGD update. Ignored when a
+            custom ``update`` is supplied.
+        project: Optional projection applied to the parameters after every
+            update (e.g. a positivity floor). ``None`` leaves them unconstrained.
+        update: Optional custom update mapping ``(params, grads) -> params``
+            (e.g. momentum). Defaults to plain SGD ``p - lr * g`` applied
+            leaf-wise via :func:`jax.tree.map`.
+        on_step: Optional side-effecting observer invoked with the *current*
+            parameters at the start of each iteration, before the gradient
+            step. Used to record per-step diagnostics.
+
+    Returns:
+        The parameter pytree after ``n_steps`` iterations.
+    """
+    params = init_params
+    step = (
+        update
+        if update is not None
+        else (lambda current, grads: jax.tree.map(lambda p, g: p - lr * g, current, grads))
+    )
+
+    for _ in range(n_steps):
+        if on_step is not None:
+            on_step(params)
+        grads = jax.grad(loss_fn)(params)
+        params = step(params, grads)
+        if project is not None:
+            params = project(params)
+
+    return params
 
 
 class TemperatureScaling(nnx.Module):
@@ -204,27 +264,46 @@ class TemperatureScaling(nnx.Module):
             return -jnp.mean(log_probs[jnp.arange(len(labels)), labels])
 
         # Enhanced optimization with momentum for adaptive mode
-        current_temp = self.temperature[...]
+        positivity_floor = lambda temp: jnp.maximum(temp, 0.01)  # Ensure positive
 
         if self.adaptive:
-            # Use momentum-based optimization
-            for _ in range(200):  # More iterations for better convergence
-                grad = jax.grad(calibration_loss)(current_temp)
-
-                # Update velocity with momentum
-                self.velocity[...] = self.momentum[...] * self.velocity[...] + grad
-
-                # Update temperature
-                current_temp = current_temp - self.learning_rate * self.velocity[...]
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
+            # Momentum-based optimization: 200 steps for better convergence.
+            current_temp = _gradient_descent(
+                calibration_loss,
+                self.temperature[...],
+                n_steps=200,
+                lr=self.learning_rate,
+                update=self._momentum_update,
+                project=positivity_floor,
+            )
         else:
-            # Simple gradient-based optimization
-            for _ in range(100):  # Fixed number of optimization steps
-                grad = jax.grad(calibration_loss)(current_temp)
-                current_temp = current_temp - self.learning_rate * grad
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
+            # Plain SGD: a fixed number of optimization steps.
+            current_temp = _gradient_descent(
+                calibration_loss,
+                self.temperature[...],
+                n_steps=100,
+                lr=self.learning_rate,
+                project=positivity_floor,
+            )
 
         return float(current_temp)
+
+    def _momentum_update(self, current_temp: jax.Array, grad: jax.Array) -> jax.Array:
+        """Momentum gradient step that mutates the persistent velocity state.
+
+        Reproduces the historical adaptive update exactly: the velocity is
+        advanced as ``momentum * velocity + grad`` before the temperature is
+        moved by ``-learning_rate * velocity``.
+
+        Args:
+            current_temp: Current temperature scalar.
+            grad: Loss gradient at ``current_temp``.
+
+        Returns:
+            Updated temperature scalar (before projection).
+        """
+        self.velocity[...] = self.momentum[...] * self.velocity[...] + grad
+        return current_temp - self.learning_rate * self.velocity[...]
 
     def optimize_temperature_with_physics_constraints(
         self, predictions: jax.Array, targets: jax.Array, inputs: jax.Array
@@ -259,35 +338,25 @@ class TemperatureScaling(nnx.Module):
                 constraint_penalty,
             )
 
-        # Optimize temperature
-        current_temp = self.temperature[...]
+        scalar_loss = lambda temp: physics_aware_loss(temp)[0]
+        positivity_floor = lambda temp: jnp.maximum(temp, 0.01)  # Ensure positive
 
-        if self.adaptive:
-            # Use momentum-based optimization with physics constraints
-            for _ in range(150):  # More iterations for physics-aware optimization
-                _loss_value, constraint_penalty = physics_aware_loss(current_temp)
-                grad = jax.grad(lambda t: physics_aware_loss(t)[0])(current_temp)
+        def record_penalty(temp: jax.Array) -> None:
+            """Append the current-step constraint penalty to the history."""
+            self.constraint_penalty_history.append(float(physics_aware_loss(temp)[1]))
 
-                # Store constraint penalty in history
-                self.constraint_penalty_history.append(float(constraint_penalty))
-
-                # Update velocity with momentum
-                self.velocity[...] = self.momentum[...] * self.velocity[...] + grad
-
-                # Update temperature
-                current_temp = current_temp - self.learning_rate * self.velocity[...]
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
-        else:
-            # Simple gradient-based optimization with physics constraints
-            for _ in range(100):
-                _loss_value, constraint_penalty = physics_aware_loss(current_temp)
-                grad = jax.grad(lambda t: physics_aware_loss(t)[0])(current_temp)
-
-                # Store constraint penalty in history
-                self.constraint_penalty_history.append(float(constraint_penalty))
-
-                current_temp = current_temp - self.learning_rate * grad
-                current_temp = jnp.maximum(current_temp, 0.01)  # Ensure positive
+        # Momentum-based when adaptive (150 steps), else plain SGD (100 steps).
+        update = self._momentum_update if self.adaptive else None
+        n_steps = 150 if self.adaptive else 100
+        current_temp = _gradient_descent(
+            scalar_loss,
+            self.temperature[...],
+            n_steps=n_steps,
+            lr=self.learning_rate,
+            update=update,
+            project=positivity_floor,
+            on_step=record_penalty,
+        )
 
         # Keep history bounded
         if len(self.constraint_penalty_history) > 100:
@@ -361,25 +430,25 @@ class PlattScaling(nnx.Module):
             max_iterations: Maximum number of optimization iterations
         """
 
-        def loss_fn(a_param, b_param):
-            """Binary cross-entropy loss for Platt scaling."""
+        def loss_fn(params: tuple[jax.Array, jax.Array]) -> jax.Array:
+            """Binary cross-entropy loss for Platt scaling over ``(a, b)``."""
+            a_param, b_param = params
             probs = jax.nn.sigmoid(a_param * logits + b_param)
             # Clip probabilities to avoid log(0)
             probs = jnp.clip(probs, 1e-8, 1.0 - 1e-8)
             return -jnp.mean(labels * jnp.log(probs) + (1 - labels) * jnp.log(1 - probs))
 
-        # Optimize A and B parameters
-        current_A, current_B = self.a[...], self.b[...]
-        learning_rate = 0.01
-
-        for _ in range(max_iterations):
-            grads = jax.grad(loss_fn, argnums=(0, 1))(current_A, current_B)
-            current_A -= learning_rate * grads[0]
-            current_B -= learning_rate * grads[1]
+        # Optimize the (A, B) parameter pair with plain SGD.
+        current_a, current_b = _gradient_descent(
+            loss_fn,
+            (self.a[...], self.b[...]),
+            n_steps=max_iterations,
+            lr=0.01,
+        )
 
         # Update parameters
-        self.a = nnx.Param(current_A)
-        self.b = nnx.Param(current_B)
+        self.a = nnx.Param(current_a)
+        self.b = nnx.Param(current_b)
 
 
 class IsotonicRegression(nnx.Module):
@@ -457,27 +526,56 @@ class IsotonicRegression(nnx.Module):
         self.calibration_map[...] = calibrated_values
 
     def _pool_adjacent_violators(self, y: jax.Array) -> jax.Array:
-        """Pool adjacent violators algorithm for isotonic regression.
+        """Pool adjacent violators algorithm (PAVA) for isotonic regression.
+
+        Computes the non-decreasing sequence closest to ``y`` (in the
+        equal-weight least-squares sense) by repeatedly merging adjacent
+        out-of-order blocks and replacing each block by its mean until no
+        violations remain. This is the standard pool-adjacent-violators
+        algorithm; see scikit-learn's ``sklearn.isotonic`` /
+        ``_inplace_contiguous_isotonic_regression`` and Best & Chakravarti
+        (1990), "Active set algorithms for isotonic regression".
+
+        The previous single forward pass averaged each adjacent pair at
+        most once and therefore left order violations in place (e.g.
+        ``[3, 2, 1] -> [2.5, 1.75, 1.75]``, still decreasing). Iterating to
+        convergence guarantees the output is non-decreasing.
 
         Args:
-            y: Input values to make monotonic
+            y: Input values to make monotonic.
 
         Returns:
-            Monotonic version of input values
+            Monotonic (non-decreasing) version of input values.
         """
-        # Simple implementation of PAV algorithm
-        n = len(y)
-        result = jnp.copy(y)
+        # The input is a small, eagerly-evaluated per-bin array (length
+        # ``n_bins``), so a host-side block-merge loop is appropriate and
+        # keeps the routine exact and JAX-transform-free.
+        values = [float(v) for v in y]
+        # Each block tracks (sum, weight) so its mean is sum / weight.
+        block_sums: list[float] = []
+        block_weights: list[float] = []
 
-        # Find violations and pool adjacent values
-        for i in range(n - 1):
-            if result[i] > result[i + 1]:
-                # Pool values to maintain monotonicity
-                pooled_value = (result[i] + result[i + 1]) / 2
-                result = result.at[i].set(pooled_value)
-                result = result.at[i + 1].set(pooled_value)
+        for value in values:
+            block_sums.append(value)
+            block_weights.append(1.0)
+            # Merge while the last block violates monotonicity against the
+            # block before it (mean of previous block > mean of last block).
+            while (
+                len(block_sums) > 1
+                and block_sums[-2] / block_weights[-2] > block_sums[-1] / block_weights[-1]
+            ):
+                merged_sum = block_sums.pop() + block_sums.pop()
+                merged_weight = block_weights.pop() + block_weights.pop()
+                block_sums.append(merged_sum)
+                block_weights.append(merged_weight)
 
-        return result
+        # Expand block means back to a per-element array.
+        result: list[float] = []
+        for block_sum, block_weight in zip(block_sums, block_weights, strict=True):
+            block_mean = block_sum / block_weight
+            result.extend([block_mean] * int(block_weight))
+
+        return jnp.asarray(result, dtype=y.dtype)
 
 
 class CalibrationTools(nnx.Module):
@@ -490,6 +588,9 @@ class CalibrationTools(nnx.Module):
             rngs: Random number generators
         """
         super().__init__()
+        # Retained so the Platt / isotonic helpers can instantiate the
+        # canonical calibrator modules they delegate to.
+        self.rngs = rngs
 
     def assess_calibration(
         self,
@@ -639,74 +740,46 @@ class CalibrationTools(nnx.Module):
         labels: jax.Array,
         validation_logits: jax.Array,
     ) -> tuple[float, float]:
-        """Apply Platt scaling for probability calibration.
+        """Fit Platt scaling and return its ``(slope, intercept)`` parameters.
+
+        Delegates to :class:`PlattScaling` (the single source of truth for
+        Platt calibration) so there is exactly one fitting implementation.
+        The returned ``slope`` / ``intercept`` are the fitted sigmoid
+        parameters ``a`` / ``b`` from ``P(y=1|f) = sigmoid(a * f + b)``.
 
         Args:
-            logits: Training logits for fitting scaling parameters
-            labels: Training labels
-            validation_logits: Validation logits to calibrate
+            logits: Training logits for fitting scaling parameters.
+            labels: Training labels.
+            validation_logits: Validation logits (accepted for API
+                compatibility; the fitted parameters are independent of
+                them).
 
         Returns:
-            Tuple of (slope, intercept) scaling parameters
+            Tuple of ``(slope, intercept)`` scaling parameters.
         """
-        # Simplified Platt scaling implementation
-        # In practice, would use scipy.optimize for better fitting
-
-        # Note: In full implementation, convert labels to +1/-1 for binary
-        # binary_labels = 2 * labels - 1  # Unused in simplified implementation
-
-        # Initial parameters
-        slope = jnp.array(1.0)
-        intercept = jnp.array(0.0)
-
-        # Simple gradient-based optimization
-        learning_rate = 0.01
-        for _ in range(100):
-            # Apply current scaling
-            scaled_logits = slope * logits + intercept
-            probs = jax.nn.sigmoid(scaled_logits)
-
-            # Compute gradients of cross-entropy loss
-            residuals = probs - jnp.asarray(labels > 0.5)
-
-            slope_grad = jnp.mean(residuals * logits)
-            intercept_grad = jnp.mean(residuals)
-
-            # Update parameters
-            slope -= learning_rate * slope_grad
-            intercept -= learning_rate * intercept_grad
-
-        return float(slope), float(intercept)
+        del validation_logits  # Parameters depend only on the training fit.
+        scaler = PlattScaling(rngs=self.rngs)
+        scaler.fit(logits, labels)
+        return float(scaler.a[...]), float(scaler.b[...])
 
     def isotonic_regression_calibration(
         self,
         confidences: jax.Array,
         accuracies: jax.Array,
     ) -> jax.Array:
-        """Apply isotonic regression for calibration.
+        """Fit isotonic regression and return calibrated confidences.
+
+        Delegates to :class:`IsotonicRegression` (the single source of
+        truth, which uses a convergent pool-adjacent-violators fit) so
+        there is exactly one isotonic implementation.
 
         Args:
-            confidences: Predicted confidence values
-            accuracies: Binary accuracy indicators
+            confidences: Predicted confidence values.
+            accuracies: Binary accuracy indicators.
 
         Returns:
-            Calibrated confidence values
+            Calibrated confidence values, aligned with ``confidences``.
         """
-        # Simplified isotonic regression - in practice would use sklearn
-        # Sort by confidence
-        sorted_indices = jnp.argsort(confidences)
-        sorted_confidences = confidences[sorted_indices]
-        sorted_accuracies = accuracies[sorted_indices]
-
-        # Apply smoothing to create monotonic calibration mapping
-        window_size = max(1, len(confidences) // 20)  # 5% window
-        calibrated = jnp.zeros_like(sorted_confidences)
-
-        for i in range(len(sorted_confidences)):
-            start_idx = max(0, i - window_size // 2)
-            end_idx = min(len(sorted_confidences), i + window_size // 2 + 1)
-            calibrated = calibrated.at[i].set(jnp.mean(sorted_accuracies[start_idx:end_idx]))
-
-        # Map back to original order
-        inverse_indices = jnp.argsort(sorted_indices)
-        return calibrated[inverse_indices]
+        regressor = IsotonicRegression(rngs=self.rngs)
+        regressor.fit(confidences, accuracies)
+        return regressor(confidences)

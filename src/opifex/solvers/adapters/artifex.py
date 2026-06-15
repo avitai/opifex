@@ -1,16 +1,22 @@
-"""Adapter for Artifex Generative Models to SciMLSolver interface.
+"""Adapter for Artifex Generative Models to the :class:`SciMLSolver` interface.
 
-Allows usage of Artifex Diffusion/Flow models within Opifex workflows.
+Allows usage of Avitai Artifex Diffusion/Flow models within Opifex workflows.
 
 .. warning::
     Experimental — planned for Version 5 (Foundation Models & Generative).
-    The solve() method currently returns placeholder output pending Artifex
-    DDPMModel API integration.
+    The Artifex backend exposes no stable ``DDPMModel`` with a
+    ``sample(rngs, condition, num_samples)`` interface: the only ``sample``
+    methods live on modality wrappers with an incompatible
+    ``sample(n_samples, **kwargs)`` signature, and
+    ``artifex.generative_models.models`` does not currently import. Until a
+    real delegation is wired, every entry point raises
+    :class:`NotImplementedError` (following the "not wired" convention used in
+    :mod:`opifex.platform.registry.core` and the inference-backend sampler
+    hooks) rather than returning a placeholder solution.
 """
 
 from typing import Any
 
-import jax.numpy as jnp
 from flax import nnx
 
 from opifex.core.problems import Problem
@@ -22,12 +28,16 @@ from opifex.core.solver.interface import (
 )
 
 
-class ArtifexSolverAdapter(SciMLSolver):
-    """Adapts an Artifex generative model to the SciMLSolver protocol.
+_NOT_WIRED = "artifex solver adapter not implemented"
 
-    This allows Opifex to use Artifex's high-quality generative models
-    (Diffusion, Flows) to solve inverse problems or generate field solutions based
-    on conditions.
+
+class ArtifexSolverAdapter(SciMLSolver):
+    """Adapts an Artifex generative model to the :class:`SciMLSolver` protocol.
+
+    This is intended to let Opifex use Artifex's generative models (Diffusion,
+    Flows) to generate field solutions conditioned on a :class:`Problem`. The
+    Artifex sampling API is not yet stable, so both entry points raise
+    :class:`NotImplementedError` until the backend is wired.
     """
 
     def __init__(self, artifex_model: Any) -> None:
@@ -35,7 +45,8 @@ class ArtifexSolverAdapter(SciMLSolver):
 
         Args:
             artifex_model: An instantiated Artifex generative model (nnx.Module).
-                           Must support a `sample(rngs, condition, ...)` or similar API.
+                           Must support a ``sample(rngs, condition, ...)`` or
+                           similar API once the backend is wired.
         """
         self.model = artifex_model
 
@@ -47,54 +58,26 @@ class ArtifexSolverAdapter(SciMLSolver):
     ) -> Solution:
         """Generate a solution using the Artifex model.
 
-        The 'problem' parameters/conditions are passed as context to the generator
-        model.
+        Raises:
+            NotImplementedError: The Artifex sampling backend is not yet wired
+                into this adapter; see the module docstring. Returning a dummy
+                converged :class:`Solution` would be a silent-success trap, so
+                the adapter fails fast instead.
         """
-        # 1. Extract conditions from Problem
-        # This mapping depends on how Artifex expects conditions.
-        # For a generic adapter, we assume the problem has some 'conditions'
-        # or 'parameters' that we pass to the model.
-
-        # Placeholder logic for extraction:
-        # condition = problem.parameters if hasattr(problem, 'parameters') else None
-
-        # 2. Sample from the model
-        # We need an RNG key.
-        # rngs = initial_state.rngs if initial_state else nnx.Rngs(0)
-
-        # Assumptions on Artifex API (based on generic generative model patterns):
-        # samples = self.model.sample(rngs=rngs, condition=condition, num_samples=...)
-        # Since we don't have the exact Artifex API docs in front of us, we write a
-        # generic call that would be adapted once we see Artifex's signature.
-        # For now, we assume a .sample() method.
-
-        # samples = self.model.sample(rngs, num_samples=1)
-        # Generate 1 sample by default for a Solver
-
-        # MOCKING EXECUTION for now since we don't have a live model instance
-        # in this ctx
-        # In a real run, this would be:
-        # samples = self.model.sample(rngs, condition=...)
-
-        # For the purpose of the adapter structure:
-        if hasattr(self.model, "sample"):
-            # This is the expected path
-            # samples = self.model.sample(...)
-            pass
-
-        # Return a dummy solution to satisfy protocol until integrated
-        return Solution(
-            fields={"u": jnp.zeros((1,))},
-            metrics={},
-            execution_time=0.0,
-            converged=True,
-        )
+        del problem, initial_state, config
+        raise NotImplementedError(_NOT_WIRED)
 
     def sample_batch(self, problem: Problem, num_samples: int, rngs: nnx.Rngs) -> Any:
         """Sample a batch of solutions from the underlying generative model.
 
-        Useful upstream of
+        Intended for use upstream of
         :func:`opifex.uncertainty.scientific.summarize_stacked_sample_solution`,
         which then summarises the stacked sample axis.
+
+        Raises:
+            NotImplementedError: The Artifex sampling backend is not yet wired
+                into this adapter; see the module docstring. Returning ``None``
+                would be an implicit-success trap, so the adapter fails fast.
         """
-        # Delegates to model.sample
+        del problem, num_samples, rngs
+        raise NotImplementedError(_NOT_WIRED)

@@ -16,15 +16,11 @@ MODERNIZATION APPLIED:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -58,6 +54,28 @@ class DFTResult:
     orbital_energies: jax.Array | None = None
     chemical_accuracy_achieved: bool = False
     precision_metrics: dict[str, float] | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _ClassicalSCFResult:
+    """Result of the classical (non-neural) Roothaan SCF fallback loop.
+
+    Mirrors the subset of the neural ``SCFResult`` interface consumed by
+    :meth:`NeuralDFT.compute_energy` and :meth:`NeuralDFT._assess_precision`.
+
+    Attributes:
+        converged: Whether the band-structure energy met the SCF threshold.
+        total_energy: Final band-structure energy in Hartree.
+        final_density: Converged electron density in the Kohn-Sham basis.
+        iterations: Number of SCF iterations performed.
+        convergence_history: Per-iteration band-structure energy trace.
+    """
+
+    converged: bool
+    total_energy: float
+    final_density: jax.Array
+    iterations: int
+    convergence_history: jax.Array
 
 
 class NeuralDFT(nnx.Module):
@@ -192,26 +210,26 @@ class NeuralDFT(nnx.Module):
         else:
             initial_density = self._validate_density(density, molecular_system)
 
-        # Create Hamiltonian function for SCF (returns energy scalar)
-        def hamiltonian_fn(d):
-            hamiltonian = self._compute_hamiltonian(d, molecular_system)
-            # Extract energy as trace of diagonal elements (simplified)
-            return jnp.trace(hamiltonian)
-
         # Solve SCF equations
         if self.neural_scf_solver is not None:
-            # Use neural SCF solver
+            # The neural SCF solver consumes a scalar-energy callable: it treats
+            # ``hamiltonian_fn``'s return as the electronic energy of the trial
+            # density (see ``NeuralSCFSolver.solve_scf``). The energy proxy is the
+            # trace of the Kohn-Sham matrix.
+            def hamiltonian_fn(d: jax.Array) -> jax.Array:
+                return jnp.trace(self._compute_hamiltonian(d, molecular_system))
+
             scf_result = self.neural_scf_solver.solve_scf(
                 molecular_system=molecular_system,
                 initial_density=initial_density,
                 hamiltonian_fn=hamiltonian_fn,
             )
         else:
-            # Use classical SCF solver
+            # The classical solver diagonalises the full Kohn-Sham *matrix*, so it
+            # builds it internally rather than via the scalar ``hamiltonian_fn``.
             scf_result = self._solve_classical_scf(
                 molecular_system=molecular_system,
                 initial_density=initial_density,
-                hamiltonian_fn=hamiltonian_fn,
             )
 
         # Compute energy components with precision tracking
@@ -468,28 +486,66 @@ class NeuralDFT(nnx.Module):
         self,
         molecular_system: Any,
         initial_density: jax.Array,
-        hamiltonian_fn: Callable[[jax.Array], jax.Array],
-    ) -> Any:  # Returns SCF result-like object
-        """Fallback classical SCF solver."""
-        # Simple SCF iteration
-        density = initial_density
-        convergence_history = []
+    ) -> _ClassicalSCFResult:
+        """Solve the Kohn-Sham equations with a classical Roothaan SCF loop.
+
+        This is the non-neural fallback used when ``use_neural_scf=False``. It
+        follows the canonical self-consistent-field iteration of Roothaan's
+        equations (Szabo & Ostlund, *Modern Quantum Chemistry*, Ch. 3, the
+        ``FC = SCe`` eigenproblem and the SCF procedure of Sec. 3.4.6), which is
+        also the loop structure of the restricted Kohn-Sham ``kernel`` driver in
+        PySCF (``pyscf.scf.hf.kernel`` / ``pyscf.dft.rks``):
+
+        1. Build the Kohn-Sham matrix ``F`` from the current density.
+        2. Diagonalise it: ``F C = C e`` (here in an orthonormal basis, so the
+           overlap ``S`` is the identity and a plain symmetric eigensolve
+           suffices).
+        3. Occupy the lowest ``n_occupied`` orbitals (doubly, closed shell) and
+           form the new density from the occupied orbital coefficients.
+        4. Linearly mix old and new densities to damp oscillations.
+        5. Monitor the band-structure energy ``2 sum_i e_i`` and stop once
+           successive energies differ by less than ``convergence_threshold``.
+
+        The density is carried in the Kohn-Sham *basis* representation (length
+        ``n_basis``) throughout, so the mixing in step 4 acts on commensurate
+        vectors. ``_compute_hamiltonian`` returns the symmetric ``n_basis x
+        n_basis`` Kohn-Sham matrix.
+
+        Args:
+            molecular_system: Molecular system providing electron count.
+            initial_density: Initial density guess (any length; resized to the
+                Kohn-Sham basis on entry).
+
+        Returns:
+            Classical SCF result with the converged density, band-structure
+            energy, iteration count and per-iteration energy trace.
+        """
+        n_electrons = int(molecular_system.n_electrons)
+        n_basis = min(n_electrons * 2, 50)
+        # Closed-shell occupation: doubly occupy the lowest ``n_occupied``
+        # orbitals; clamp to at least one so single-electron systems are valid.
+        n_occupied = max(n_electrons // 2, 1)
+
+        # Carry the density in the Kohn-Sham basis so mixing stays commensurate.
+        density = self._resize_density_to_basis(initial_density, n_basis)
+        convergence_history: list[float] = []
+        converged = False
+        iteration = 0
 
         for iteration in range(self.max_scf_iterations):
-            # Compute Hamiltonian
-            hamiltonian = hamiltonian_fn(density)
+            # 1. Build the Kohn-Sham matrix for the current density.
+            hamiltonian = self._compute_hamiltonian(density, molecular_system)
 
-            # Diagonalize to get new density (simplified)
-            eigenvals, eigenvecs = jnp.linalg.eigh(hamiltonian)
+            # 2. Diagonalise the symmetric Kohn-Sham matrix (orthonormal basis).
+            eigenvalues, eigenvectors = jnp.linalg.eigh(hamiltonian)
 
-            # Simple density update (occupy lowest orbitals)
-            n_occupied = molecular_system.n_electrons // 2
-            occupied_orbitals = eigenvecs[:, :n_occupied]
-            new_density = 2 * jnp.sum(occupied_orbitals**2, axis=1)
+            # 3. Occupy the lowest orbitals and build the new density.
+            occupied_orbitals = eigenvectors[:, :n_occupied]
+            new_density = 2.0 * jnp.sum(occupied_orbitals**2, axis=1)
 
-            # Check convergence
-            energy = jnp.sum(eigenvals[:n_occupied]) * 2
-            convergence_history.append(float(energy))
+            # 5. Band-structure energy trace (sum of occupied orbital energies).
+            energy = float(2.0 * jnp.sum(eigenvalues[:n_occupied]))
+            convergence_history.append(energy)
 
             if iteration > 0:
                 energy_diff = abs(convergence_history[-1] - convergence_history[-2])
@@ -497,21 +553,20 @@ class NeuralDFT(nnx.Module):
                     converged = True
                     break
 
-            # Simple mixing
+            # 4. Linear density mixing to damp SCF oscillations.
             density = 0.8 * density + 0.2 * new_density
-        else:
-            converged = False
 
-        # Create mock result object
-        class SCFResult:
-            def __init__(self) -> None:
-                self.converged = converged
-                self.total_energy = convergence_history[-1] if convergence_history else 0.0
-                self.final_density = density
-                self.iterations = iteration + 1
-                self.convergence_history = jax.Array(convergence_history)
-
-        return SCFResult()
+        total_energy = convergence_history[-1] if convergence_history else 0.0
+        # ``jax.Array`` is an abstract type, not a constructor — calling it raises
+        # ``TypeError``. ``jnp.array`` is the correct primitive to materialise the
+        # Python list of per-iteration energies into a device array.
+        return _ClassicalSCFResult(
+            converged=converged,
+            total_energy=total_energy,
+            final_density=density,
+            iterations=iteration + 1,
+            convergence_history=jnp.array(convergence_history),
+        )
 
     def _assess_precision(self, scf_result: Any, molecular_system: Any) -> dict[str, float]:
         """Assess numerical precision and accuracy of calculation."""

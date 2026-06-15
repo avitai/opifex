@@ -3,19 +3,90 @@ CheckpointManager for Opifex Training Infrastructure
 
 A focused component for managing model checkpoints during training.
 Provides save, load, and management functionality for neural operator models.
+
+Serialization is performed with safe mechanisms only: JAX/Flax NNX array
+state is persisted with Orbax (:class:`orbax.checkpoint.StandardCheckpointer`)
+and plain-Python metadata is persisted as JSON. No ``pickle`` is used, so
+loading a checkpoint can never execute arbitrary code.
 """
 
+import importlib
+import json
 import logging
-import pickle
+import shutil
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
+import jax
+import jax.numpy as jnp
+import orbax.checkpoint as ocp  # type: ignore[import-untyped]
 from flax import nnx
 
 
-# Configure logging for security warnings
 logger = logging.getLogger(__name__)
+
+# Filenames used inside each checkpoint directory.
+_STATE_DIRNAME = "state"
+_METADATA_FILENAME = "metadata.json"
+
+# Keys describing a single NNX variable leaf in the metadata schema. The
+# schema lets ``load_checkpoint`` rebuild an abstract ``nnx.State`` target
+# (a tree of ``jax.ShapeDtypeStruct``) without a live model instance, so the
+# array data can be safely restored from the Orbax store.
+_PATH_KEY = "path"
+_SHAPE_KEY = "shape"
+_DTYPE_KEY = "dtype"
+_VARIABLE_MODULE_KEY = "variable_module"
+_VARIABLE_QUALNAME_KEY = "variable_qualname"
+
+
+def _state_to_schema(state: nnx.State) -> list[dict[str, Any]]:
+    """Serialize an ``nnx.State`` structure into a JSON-friendly schema.
+
+    The schema records, per array leaf, its key path, shape, dtype, and the
+    fully-qualified Flax variable class (e.g. ``flax.nnx.Param``). This is the
+    minimum needed to reconstruct an abstract restore target.
+    """
+    schema: list[dict[str, Any]] = []
+    for path, variable in state.flat_state():
+        value = variable.value
+        variable_type = type(variable)
+        schema.append(
+            {
+                _PATH_KEY: list(path),
+                _SHAPE_KEY: list(value.shape),
+                _DTYPE_KEY: jnp.dtype(value.dtype).name,
+                _VARIABLE_MODULE_KEY: variable_type.__module__,
+                _VARIABLE_QUALNAME_KEY: variable_type.__qualname__,
+            }
+        )
+    return schema
+
+
+def _resolve_variable_type(module_name: str, qualname: str) -> type[nnx.Variable]:
+    """Resolve a Flax NNX variable class from its module and qualified name."""
+    module = importlib.import_module(module_name)
+    resolved: Any = module
+    for attribute in qualname.split("."):
+        resolved = getattr(resolved, attribute)
+    if not (isinstance(resolved, type) and issubclass(resolved, nnx.Variable)):
+        raise TypeError(f"{module_name}.{qualname} is not an nnx.Variable subclass")
+    return resolved
+
+
+def _schema_to_abstract_state(schema: list[dict[str, Any]]) -> nnx.State:
+    """Rebuild an abstract ``nnx.State`` (``ShapeDtypeStruct`` leaves) from schema."""
+    items: list[tuple[tuple[Any, ...], nnx.Variable]] = []
+    for entry in schema:
+        variable_type = _resolve_variable_type(
+            entry[_VARIABLE_MODULE_KEY], entry[_VARIABLE_QUALNAME_KEY]
+        )
+        abstract_value = jax.ShapeDtypeStruct(
+            tuple(entry[_SHAPE_KEY]), jnp.dtype(entry[_DTYPE_KEY])
+        )
+        items.append((tuple(entry[_PATH_KEY]), variable_type(abstract_value)))
+    return nnx.State.from_flat_path(items)
 
 
 class CheckpointManager:
@@ -23,7 +94,8 @@ class CheckpointManager:
     Manages model checkpoints for training workflows.
 
     Provides functionality to save, load, list, and manage model checkpoints
-    with metadata tracking and validation.
+    with metadata tracking and validation. Each checkpoint is a directory
+    containing Orbax-serialized NNX state and a JSON metadata sidecar.
     """
 
     def __init__(
@@ -61,6 +133,9 @@ class CheckpointManager:
         """
         Save a model checkpoint.
 
+        Array state is written with Orbax and metadata with JSON; no pickle
+        is involved.
+
         Args:
             model: Model to save
             step: Training step number
@@ -80,23 +155,32 @@ class CheckpointManager:
         if not isinstance(loss, int | float):
             raise TypeError("Loss must be a number")
 
-        # Create checkpoint filename with timezone-aware timestamp
+        # Create checkpoint directory with timezone-aware timestamp. The
+        # ``.pkl`` suffix is retained only as a stable checkpoint-name marker;
+        # the contents are Orbax + JSON, never a pickle stream.
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = f"checkpoint_step_{step}_{timestamp}.pkl"
         filepath = self.checkpoint_dir / filename
+        filepath.mkdir(parents=True, exist_ok=True)
 
-        # Prepare checkpoint data
-        checkpoint_data = {
-            "model_state": nnx.state(model),
+        model_state = nnx.state(model)
+
+        # Persist array state with Orbax.
+        state_dir = (filepath / _STATE_DIRNAME).resolve()
+        with ocp.StandardCheckpointer() as checkpointer:
+            checkpointer.save(state_dir, model_state)
+
+        # Persist plain-Python metadata (plus the structural schema needed to
+        # rebuild the abstract restore target) as JSON.
+        metadata_payload = {
             "step": step,
             "loss": float(loss),
             "timestamp": timestamp,
             "metadata": metadata or {},
+            "structure": _state_to_schema(model_state),
         }
-
-        # Save checkpoint (security note: pickle should only be used with trusted data)
-        with open(filepath, "wb") as f:
-            pickle.dump(checkpoint_data, f)
+        with open(filepath / _METADATA_FILENAME, "w") as metadata_file:
+            json.dump(metadata_payload, metadata_file, indent=2)
 
         # Auto cleanup if enabled
         if self.auto_cleanup:
@@ -122,13 +206,24 @@ class CheckpointManager:
         if not checkpoint_file.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-        # Security warning for pickle usage
-        logger.warning("Loading checkpoint with pickle - ensure file is from trusted source")
-
         try:
-            with open(checkpoint_path, "rb") as f:
-                return pickle.load(f)  # noqa: S301  # nosec B301
-        except (pickle.UnpicklingError, EOFError, ValueError) as e:
+            metadata_path = checkpoint_file / _METADATA_FILENAME
+            with open(metadata_path) as metadata_file:
+                metadata_payload = json.load(metadata_file)
+
+            abstract_state = _schema_to_abstract_state(metadata_payload["structure"])
+            state_dir = (checkpoint_file / _STATE_DIRNAME).resolve()
+            with ocp.StandardCheckpointer() as checkpointer:
+                model_state = checkpointer.restore(state_dir, target=abstract_state)
+
+            return {
+                "model_state": model_state,
+                "step": metadata_payload["step"],
+                "loss": metadata_payload["loss"],
+                "timestamp": metadata_payload["timestamp"],
+                "metadata": metadata_payload.get("metadata", {}),
+            }
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
             raise ValueError(f"Failed to load checkpoint: {e}") from e
 
     def restore_model(self, model: nnx.Module, checkpoint_path: str) -> nnx.Module:
@@ -236,6 +331,9 @@ class CheckpointManager:
         """
         try:
             checkpoint_file = Path(checkpoint_path)
+            if checkpoint_file.is_dir():
+                shutil.rmtree(checkpoint_file)
+                return True
             if checkpoint_file.exists():
                 checkpoint_file.unlink()
                 return True
@@ -253,12 +351,10 @@ class CheckpointManager:
         deleted_count = 0
 
         for filepath in self.checkpoint_dir.glob("checkpoint_*.pkl"):
-            try:
-                filepath.unlink()
+            if self.delete_checkpoint(str(filepath)):
                 deleted_count += 1
-            except OSError as e:
-                logger.warning("Failed to delete checkpoint %s: %s", filepath, e)
-                continue
+            else:
+                logger.warning("Failed to delete checkpoint %s", filepath)
 
         return deleted_count
 

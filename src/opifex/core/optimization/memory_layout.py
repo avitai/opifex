@@ -237,13 +237,6 @@ class OptimizedLinear(nnx.Module):
         return result[..., : self.original_out]
 
 
-def optimize_neural_operator_layout(model: nnx.Module) -> nnx.Module:
-    """Optimize memory layout for an entire neural operator model."""
-    # This would implement automatic layout optimization for the entire model
-    # For now, return the model unchanged
-    return model
-
-
 def benchmark_layout_performance(
     x: jax.Array,
     operation: Callable,
@@ -325,5 +318,4 @@ __all__ = [
     "OptimizedLinear",
     "benchmark_layout_performance",
     "create_layout_optimization_report",
-    "optimize_neural_operator_layout",
 ]

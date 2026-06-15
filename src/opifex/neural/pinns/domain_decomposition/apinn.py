@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.neural.pinns.dense_stack import DenseStack
 from opifex.neural.pinns.domain_decomposition.base import (
     DomainDecompositionPINN,
     Interface,
@@ -82,13 +83,13 @@ class GatingNetwork(nnx.Module):
         self.activation = activation
         self.num_subdomains = num_subdomains
 
-        layers = []
-        dims = [input_dim, *hidden_dims, num_subdomains]
-
-        for i in range(len(dims) - 1):
-            layers.append(nnx.Linear(dims[i], dims[i + 1], rngs=rngs))
-
-        self.layers = nnx.List(layers)
+        self.layers = DenseStack(
+            input_dim=input_dim,
+            output_dim=num_subdomains,
+            hidden_dims=hidden_dims,
+            activation=activation,
+            rngs=rngs,
+        )
 
     def __call__(
         self, x: Float[Array, "batch dim"], temperature: float = 1.0
@@ -102,15 +103,8 @@ class GatingNetwork(nnx.Module):
         Returns:
             Gating weights for each subdomain (sum to 1)
         """
-        h = x
-        for layer in list(self.layers)[:-1]:
-            h = layer(h)
-            h = self.activation(h)
-
-        # Final layer outputs logits
-        logits = list(self.layers)[-1](h)
-
-        # Temperature-scaled softmax
+        # Dense stack outputs logits; apply temperature-scaled softmax.
+        logits = self.layers(x)
         return nnx.softmax(logits / temperature, axis=-1)
 
 

@@ -315,19 +315,33 @@ class RiemannianManifold:
         return jax.vmap(self._jax_log_map_optimization)(bases, points)
 
     def parallel_transport(
-        self, base: ManifoldPoint, tangent: TangentVector, vector: TangentVector
+        self, tangent: TangentVector, path_start: ManifoldPoint, path_end: ManifoldPoint
     ) -> TangentVector:
-        """Parallel transport vector along geodesic.
+        """Parallel transport a tangent vector along a geodesic.
+
+        Follows the ``Manifold`` protocol contract
+        (``geometry/manifolds/base.py``): ``tangent`` is the vector at
+        ``path_start`` and it is transported along the geodesic running from
+        ``path_start`` to ``path_end`` while preserving parallelism with respect
+        to the Levi-Civita connection. The geodesic is identified by its initial
+        velocity ``log_map(path_start, path_end)``, so a degenerate path
+        (``path_start == path_end``) returns ``tangent`` unchanged.
 
         Args:
-            base: Base point
-            tangent: Direction of transport (tangent vector)
-            vector: Vector to transport
+            tangent: Tangent vector at ``path_start`` to transport.
+            path_start: Starting point of the transport.
+            path_end: End point of the transport.
 
         Returns:
-            Parallel transported vector
+            Parallel transported tangent vector at ``path_end``.
         """
-        return self._jax_parallel_transport(base, tangent, vector)
+        velocity = self.log_map(path_start, path_end)
+        same_point = jnp.sum((path_end - path_start) ** 2) < 1e-16
+        return jnp.where(
+            same_point,
+            tangent,
+            self._jax_parallel_transport(path_start, velocity, tangent),
+        )
 
     def _jax_parallel_transport(
         self, base: ManifoldPoint, tangent: TangentVector, vector: TangentVector
@@ -431,24 +445,37 @@ def spherical_metric(radius: float = 1.0):
     return metric_fn
 
 
-def product_metric(*metrics):
-    """Product metric for product manifolds."""
+def product_metric(
+    *factors: tuple[Callable[[ManifoldPoint], MetricTensor], int],
+):
+    """Product metric for product manifolds.
+
+    Each factor is a ``(metric_function, dimension)`` pair. The factor's
+    ``dimension`` is the number of coordinates that factor consumes, so the
+    point is split into contiguous slices of the declared sizes and each
+    sub-metric is assembled into a block-diagonal tensor. Factor dimensions
+    are explicit precisely because the metric functions infer their shape from
+    the coordinate slice they receive -- an incorrect split would otherwise
+    silently produce a wrong metric.
+
+    Args:
+        *factors: One ``(metric_function, dimension)`` pair per manifold factor.
+
+    Returns:
+        A metric function mapping a point of the summed dimension to the
+        block-diagonal product metric tensor.
+    """
 
     def metric_fn(point: ManifoldPoint) -> MetricTensor:
-        total_dim = 0
         metric_blocks = []
 
         start_idx = 0
-        for metric in metrics:
-            # Assume each metric function expects points of its own dimension
-            # This is simplified - real implementation would need dimension info
-            sub_point = point[..., start_idx : start_idx + 2]  # Assume 2D for now
-            sub_metric = metric(sub_point)
-            metric_blocks.append(sub_metric)
-            start_idx += 2
-            total_dim += 2
+        for factor_metric, factor_dim in factors:
+            sub_point = point[..., start_idx : start_idx + factor_dim]
+            metric_blocks.append(factor_metric(sub_point))
+            start_idx += factor_dim
 
-        # Block diagonal matrix
+        # Block diagonal matrix combining each factor's sub-metric.
         return jax.scipy.linalg.block_diag(*metric_blocks)
 
     return metric_fn

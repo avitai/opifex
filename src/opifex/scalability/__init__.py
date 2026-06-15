@@ -8,12 +8,12 @@ from opifex.distributed import (
     MeshRules,
     shard_batch,
 )
-from opifex.scalability.search import (
+from opifex.platform.registry.search import (
     SearchEngine,
     SearchQuery,
     SearchResult,
-    SearchType,
 )
+from opifex.platform.search_types import SearchType
 
 
 __all__ = [

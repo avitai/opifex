@@ -15,6 +15,7 @@ from typing import Self, TYPE_CHECKING
 
 import jax.numpy as jnp
 
+from opifex.discovery.sindy._formatting import format_sindy_equations
 from opifex.discovery.sindy.config import SINDyConfig
 from opifex.discovery.sindy.library import CandidateLibrary
 from opifex.discovery.sindy.optimizers import SR3, STLSQ
@@ -121,18 +122,7 @@ class SINDy:
         n_targets = self.coefficients.shape[0]
         target_names = input_names or [f"x{i}" for i in range(n_targets)]
 
-        eqs = []
-        for target_idx in range(n_targets):
-            terms = []
-            for lib_idx, name in enumerate(names):
-                coef = float(self.coefficients[target_idx, lib_idx])
-                if abs(coef) > 1e-10:
-                    terms.append(f"{coef:.{precision}f} {name}")
-
-            rhs = " + ".join(terms) if terms else "0"
-            eqs.append(f"d{target_names[target_idx]}/dt = {rhs}")
-
-        return eqs
+        return format_sindy_equations(self.coefficients, names, target_names, precision)
 
     def feature_names(self, input_names: Sequence[str] | None = None) -> list[str]:
         """Get library feature names.
