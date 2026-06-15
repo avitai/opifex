@@ -193,7 +193,7 @@ def estimate_epochs_to_convergence(
     return jnp.abs(epochs)
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class NTKTrainingDiagnostics:
     """Training diagnostics based on NTK analysis.
 
@@ -300,7 +300,7 @@ class NTKDiagnosticsCallback:
     def __init__(
         self,
         compute_frequency: int = 100,
-    ):
+    ) -> None:
         """Initialize callback.
 
         Args:

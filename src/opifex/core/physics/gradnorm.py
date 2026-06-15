@@ -135,7 +135,7 @@ class GradNormBalancer(nnx.Module):
         config: GradNormConfig | None = None,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize GradNorm balancer.
 
         Args:

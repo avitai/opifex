@@ -35,7 +35,27 @@ class TestAWSConfig:
         assert config.security_config["enable_logging"] is True
         assert len(config.security_config["log_types"]) == 5
         assert config.security_config["enable_private_access"] is True
-        assert config.security_config["enable_public_access"] is True
+        # Secure-by-default: public access disabled and no permissive CIDRs.
+        # Callers must explicitly enable public access AND supply authorized CIDRs.
+        assert config.security_config["enable_public_access"] is False
+        assert config.security_config["public_access_cidrs"] == []
+
+    def test_aws_config_security_defaults_do_not_open_to_internet(self):
+        """Default ``AWSConfig`` must not expose 0.0.0.0/0 anywhere in security/network config.
+
+        Rule 8 (Security): defaults must be safe; opt-in to dangerous behaviour.
+        """
+        import json as _json
+
+        from opifex.deployment.cloud.aws import AWSConfig
+
+        config = AWSConfig()
+        serialised = _json.dumps(
+            {"security": config.security_config, "network": config.network_config}
+        )
+        assert "0.0.0.0/0" not in serialised, (
+            "AWSConfig defaults must not include the literal 0.0.0.0/0 — security must opt-in."
+        )
 
     def test_custom_config(self):
         """Test custom AWS configuration values."""
@@ -91,7 +111,9 @@ class TestAWSDeploymentManager:
         vpc_config = config["vpc_config"]
         assert len(vpc_config["subnet_ids"]) == 6  # 3 private + 3 public
         assert vpc_config["endpoint_config_private_access"] is True
-        assert vpc_config["endpoint_config_public_access"] is True
+        # Secure-by-default: public access opt-in only (Rule 8).
+        assert vpc_config["endpoint_config_public_access"] is False
+        assert vpc_config["public_access_cidrs"] == []
 
         # Test logging configuration
         assert config["enabled_cluster_log_types"] == [
@@ -373,10 +395,11 @@ class TestAWSDeploymentManager:
         ]
         assert log_types == expected_logs
 
-        # Test private/public access
+        # Test private/public access — secure-by-default (Rule 8: opt-in only).
         vpc_config = eks_config["vpc_config"]
         assert vpc_config["endpoint_config_private_access"] is True
-        assert vpc_config["endpoint_config_public_access"] is True
+        assert vpc_config["endpoint_config_public_access"] is False
+        assert vpc_config["public_access_cidrs"] == []
 
     def test_iam_policy_security_validation(self, deployment_manager):
         """Test that IAM policies follow security best practices."""

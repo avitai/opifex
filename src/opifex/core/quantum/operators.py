@@ -28,7 +28,7 @@ class QuantumOperator(ABC):
     JAX transformations support and adjoint operations.
     """
 
-    def __init__(self, name: str = "operator"):
+    def __init__(self, name: str = "operator") -> None:
         """
         Initialize quantum operator.
 
@@ -96,7 +96,7 @@ class HamiltonianOperator(QuantumOperator):
         kinetic_method: str = "finite_difference",
         potential_method: str = "coulomb",
         name: str = "hamiltonian",
-    ):
+    ) -> None:
         """
         Initialize Hamiltonian operator.
 
@@ -224,7 +224,7 @@ class DensityMatrix:
     and validation of quantum mechanical constraints.
     """
 
-    def __init__(self, matrix: Array):
+    def __init__(self, matrix: Array) -> None:
         """
         Initialize density matrix.
 
@@ -290,7 +290,7 @@ class Observable(QuantumOperator):
         operator_func: Callable,
         name: str = "observable",
         is_hermitian: bool = True,
-    ):
+    ) -> None:
         """
         Initialize observable operator.
 
@@ -362,7 +362,7 @@ class MomentumOperator(QuantumOperator):
         order: int = 2,
         hbar: float = 1.0,
         name: str = "momentum",
-    ):
+    ) -> None:
         """
         Initialize momentum operator.
 
@@ -490,7 +490,7 @@ class MomentumOperator(QuantumOperator):
                 return jnp.real(gradient)
             return gradient
 
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError, FloatingPointError) as e:
             # If all spectral methods fail, fallback to finite difference
             import warnings
 
@@ -542,7 +542,7 @@ class KineticEnergyOperator(QuantumOperator):
         hbar: float = 1.0,
         method: str = "finite_difference",
         name: str = "kinetic_energy",
-    ):
+    ) -> None:
         """
         Initialize kinetic energy operator.
 
@@ -654,7 +654,9 @@ class PotentialEnergyOperator(QuantumOperator):
     potential functions.
     """
 
-    def __init__(self, potential_func: Callable[[Array], Array], name: str = "potential_energy"):
+    def __init__(
+        self, potential_func: Callable[[Array], Array], name: str = "potential_energy"
+    ) -> None:
         """
         Initialize potential energy operator.
 
@@ -733,7 +735,7 @@ class SparseOperator(QuantumOperator):
         values: Array,
         shape: tuple[int, int],
         name: str = "sparse_operator",
-    ):
+    ) -> None:
         """
         Initialize sparse operator.
 
@@ -802,7 +804,7 @@ class OperatorComposition(QuantumOperator):
     proper adjoint and Hermitian property handling.
     """
 
-    def __init__(self, operators: list[QuantumOperator], name: str = "composition"):
+    def __init__(self, operators: list[QuantumOperator], name: str = "composition") -> None:
         """
         Initialize operator composition.
 

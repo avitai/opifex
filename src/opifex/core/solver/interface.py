@@ -26,7 +26,7 @@ class Solution:
     stats: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SolverConfig:
     """Configuration for the solver."""
 
@@ -37,7 +37,7 @@ class SolverConfig:
     training_config: Any | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SolverState:
     """State of the solver (parameters, optimizer state, etc.)."""
 

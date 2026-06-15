@@ -40,7 +40,7 @@ HAS_PSUTIL = has_psutil
 HAS_JAX = has_jax
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LogContext:
     """Context information for structured logging."""
 
@@ -60,7 +60,7 @@ class LogContext:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LogEntry:
     """Structured log entry for scientific computing workloads."""
 
@@ -109,7 +109,7 @@ class LogEntry:
 class JsonFormatter(logging.Formatter):
     """JSON formatter for structured logging."""
 
-    def __init__(self, context: LogContext):
+    def __init__(self, context: LogContext) -> None:
         super().__init__()
         self.context = context
 
@@ -212,7 +212,7 @@ class StructuredLogger:
         level: str = "INFO",
         handlers: list[logging.Handler] | None = None,
         elk_config: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         """
         Initialize structured logger.
 
@@ -278,7 +278,7 @@ class StructuredLogger:
 
             self.info("ELK stack integration configured", operation_type="elk_setup")
 
-        except Exception as e:
+        except (OSError, ValueError, TypeError, KeyError) as e:
             self.warning(f"Failed to configure ELK stack: {e}")
             self.elk_enabled = False
 
@@ -553,8 +553,11 @@ def get_global_logger() -> StructuredLogger:
 def log_training_start(model_name: str, epoch: int, batch_size: int, **kwargs) -> None:
     """Log training start event."""
     logger = get_global_logger()
+    # The model_name / epoch / batch_size already appear as structured
+    # kwargs on the log record, so the message text is a static event label
+    # rather than an f-string (Rule 12: lazy structured logging).
     logger.info(
-        f"Starting training: {model_name}",
+        "Starting training",
         operation_type="training_start",
         model_name=model_name,
         epoch=epoch,
@@ -569,7 +572,7 @@ def log_training_step(
     """Log training step metrics."""
     logger = get_global_logger()
     logger.info(
-        f"Training step {step}",
+        "Training step",
         operation_type="training_step",
         epoch=epoch,
         step=step,
@@ -585,7 +588,7 @@ def log_inference_request(
     """Log inference request."""
     logger = get_global_logger()
     logger.info(
-        f"Inference request: {model_name}",
+        "Inference request",
         operation_type="inference_request",
         model_name=model_name,
         batch_size=batch_size,
@@ -598,7 +601,7 @@ def log_model_load(model_name: str, model_size_mb: float | None = None, **kwargs
     """Log model loading event."""
     logger = get_global_logger()
     logger.info(
-        f"Loading model: {model_name}",
+        "Loading model",
         operation_type="model_load",
         model_name=model_name,
         model_size_mb=model_size_mb,
@@ -610,8 +613,9 @@ def log_error(error: Exception, operation_type: str = "unknown", **kwargs) -> No
     """Log error with context."""
     logger = get_global_logger()
     logger.exception(
-        f"Error in {operation_type}: {error!s}",
+        "Error",
         operation_type=operation_type,
         error_type=type(error).__name__,
+        error_message=str(error),
         **kwargs,
     )

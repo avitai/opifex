@@ -24,7 +24,7 @@ class SensorOptimization(nnx.Module):
         *,
         optimization_method: str = "learnable",
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize sensor optimization.
 
         Args:

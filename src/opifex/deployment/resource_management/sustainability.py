@@ -21,7 +21,7 @@ class SustainabilityTracker:
         self,
         carbon_reduction_target_percentage: float = 30.0,
         renewable_energy_preference: bool = True,
-    ):
+    ) -> None:
         self.carbon_reduction_target_percentage = carbon_reduction_target_percentage
         self.renewable_energy_preference = renewable_energy_preference
 

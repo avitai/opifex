@@ -83,7 +83,7 @@ HARTREE_TO_EV = 27.21138602
 EV_TO_HARTREE = 1.0 / HARTREE_TO_EV
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MolecularSystem:
     """
     Standard molecular system representation for Neural DFT.
@@ -108,7 +108,7 @@ class MolecularSystem:
     cell: Array | None = None  # Shape: (3, 3) for periodic systems
     basis_set: str = "def2-tzvp"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate molecular system after initialization."""
         # Validate array shapes
         if self.positions.shape[0] != len(self.atomic_numbers):

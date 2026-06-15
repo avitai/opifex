@@ -27,7 +27,7 @@ HARTREE_TO_KCAL_MOL = 627.50960803  # Conversion factor from Hartree to kcal/mol
 class TrainingMetrics:
     """Training metrics tracking."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize metrics tracking."""
         self.train_losses: list[float] = []
         self.val_losses: list[float] = []
@@ -72,7 +72,7 @@ class TrainingMetrics:
         self.constraint_violations.append(violation)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TrainingState:
     """Enhanced training state management with full physics-aware metrics.
 
@@ -193,7 +193,7 @@ class TrainingState:
 class AdvancedMetricsCollector:
     """Advanced metrics collection for scientific computing training."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the advanced metrics collector."""
         self.training_start_time: float | None = None
         self.epoch_start_time: float | None = None

@@ -16,14 +16,14 @@ from opifex.core.training.physics_configs import (
     ElectronicStructureConfig,
     SCFConfig,
 )
+from opifex.core.training.strategies.quantum import QuantumTrainingManager
 from opifex.core.training.trainer import Trainer
-from opifex.training.quantum_training import QuantumTrainingManager
 
 
 class MockModel(nnx.Module):
     """Mock model for quantum testing."""
 
-    def __init__(self, features: int = 32, rngs: nnx.Rngs | None = None):
+    def __init__(self, features: int = 32, rngs: nnx.Rngs | None = None) -> None:
         if rngs is None:
             rngs = nnx.Rngs(0)
         self.linear1 = nnx.Linear(2, features, rngs=rngs)

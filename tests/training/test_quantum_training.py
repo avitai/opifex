@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from opifex.training.quantum_training import QuantumTrainingManager
+from opifex.core.training.strategies.quantum import QuantumTrainingManager
 
 
 class TestQuantumTrainingManager:

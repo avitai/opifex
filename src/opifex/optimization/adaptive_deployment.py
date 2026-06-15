@@ -51,7 +51,7 @@ class RollbackTrigger(Enum):
     HEALTH_CHECK_FAILURE = "health_check_failure"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DeploymentConfig:
     """Configuration for deployment strategies."""
 
@@ -68,7 +68,7 @@ class DeploymentConfig:
     feature_flag_percentage: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DeploymentMetrics:
     """Metrics collected during deployment."""
 
@@ -91,7 +91,7 @@ class DeploymentMetrics:
     physics_consistency: float = 0.0
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class DeploymentState:
     """Current state of a deployment."""
 
@@ -107,7 +107,7 @@ class DeploymentState:
     health_checks_failed: int = 0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RollbackDecision:
     """Decision result for rollback evaluation."""
 
@@ -130,7 +130,7 @@ class DeploymentAI(nnx.Module):
         decision_threshold: float = 0.7,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.input_features = input_features
         self.metric_features = metric_features
@@ -253,7 +253,7 @@ class CanaryController:
         initial_traffic_percentage: float = 5.0,
         progression_steps: list[float] | None = None,
         evaluation_period_minutes: int = 10,
-    ):
+    ) -> None:
         self.deployment_ai = deployment_ai
         self.initial_traffic_percentage = initial_traffic_percentage
         self.progression_steps = progression_steps or [5, 10, 25, 50, 75, 100]
@@ -422,7 +422,7 @@ class TrafficShaper:
         self,
         deployment_ai: DeploymentAI,
         max_traffic_change_per_minute: float = 10.0,  # Max 10% change per minute
-    ):
+    ) -> None:
         self.deployment_ai = deployment_ai
         self.max_traffic_change_per_minute = max_traffic_change_per_minute
 
@@ -503,7 +503,7 @@ class RollbackEngine:
         deployment_ai: DeploymentAI,
         rollback_threshold: float = 0.8,
         evaluation_window_minutes: int = 5,
-    ):
+    ) -> None:
         self.deployment_ai = deployment_ai
         self.rollback_threshold = rollback_threshold
         self.evaluation_window_minutes = evaluation_window_minutes
@@ -626,7 +626,7 @@ class AdaptiveDeploymentSystem:
         canary_controller: CanaryController,
         traffic_shaper: TrafficShaper,
         rollback_engine: RollbackEngine,
-    ):
+    ) -> None:
         self.deployment_ai = deployment_ai
         self.canary_controller = canary_controller
         self.traffic_shaper = traffic_shaper

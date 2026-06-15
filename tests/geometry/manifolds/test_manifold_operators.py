@@ -25,7 +25,7 @@ from opifex.geometry.manifolds.riemannian import (
 class ManifoldWrapper:
     """Wrapper to adapt RiemannianManifold to match Manifold protocol."""
 
-    def __init__(self, manifold):
+    def __init__(self, manifold) -> None:
         self._manifold = manifold
 
     def __getattr__(self, name):

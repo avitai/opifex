@@ -42,7 +42,7 @@ class FailoverStrategy(Enum):
     WEIGHTED_DISTRIBUTION = "weighted_distribution"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class EdgeNodeMetrics:
     """Performance metrics for edge nodes."""
 
@@ -61,7 +61,7 @@ class EdgeNodeMetrics:
     last_update: float = field(default_factory=time.time)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LatencyProfile:
     """Latency optimization profile for different workload types."""
 
@@ -73,7 +73,7 @@ class LatencyProfile:
     geographic_distribution: dict[EdgeRegion, float]  # Weight by region
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class CacheEntry:
     """Cache entry for edge model and result caching."""
 
@@ -89,7 +89,7 @@ class CacheEntry:
     compression_ratio: float = 1.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FailoverResult:
     """Result of failover operation."""
 
@@ -109,7 +109,7 @@ class EdgeGateway(nnx.Module):
         primary_regions: list[EdgeRegion] | None = None,
         latency_target_ms: float = 0.5,  # Sub-millisecond target
         max_failover_attempts: int = 3,
-    ):
+    ) -> None:
         super().__init__()
         self.primary_regions = primary_regions or [
             EdgeRegion.US_EAST,
@@ -226,7 +226,7 @@ class LatencyOptimizer(nnx.Module):
         learning_rate: float = 0.001,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.target_latency_ms = target_latency_ms
         self.optimization_window_seconds = optimization_window_seconds
@@ -299,7 +299,7 @@ class EdgeCache:
         max_entries: int = 10000,
         ttl_seconds: int = 3600,  # 1 hour default TTL
         compression_threshold_mb: float = 100.0,
-    ):
+    ) -> None:
         self.max_cache_size_bytes = int(max_cache_size_gb * 1024 * 1024 * 1024)
         self.max_entries = max_entries
         self.ttl_seconds = ttl_seconds
@@ -439,7 +439,7 @@ class RegionalFailover:
         failover_strategy: FailoverStrategy = FailoverStrategy.LOWEST_LATENCY,
         health_check_interval: float = 10.0,
         failover_threshold: float = 0.5,  # Health score threshold
-    ):
+    ) -> None:
         self.edge_gateway = edge_gateway
         self.failover_strategy = failover_strategy
         self.health_check_interval = health_check_interval
@@ -589,7 +589,7 @@ class IntelligentEdgeNetwork:
         edge_cache: EdgeCache,
         regional_failover: RegionalFailover,
         target_latency_ms: float = 0.5,
-    ):
+    ) -> None:
         self.edge_gateway = edge_gateway
         self.latency_optimizer = latency_optimizer
         self.edge_cache = edge_cache

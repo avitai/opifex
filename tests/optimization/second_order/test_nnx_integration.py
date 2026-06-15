@@ -28,7 +28,7 @@ def _all_leaves_finite(tree) -> bool:
 class SimpleModel(nnx.Module):
     """Simple test model for optimization."""
 
-    def __init__(self, in_features: int, out_features: int, *, rngs: nnx.Rngs):
+    def __init__(self, in_features: int, out_features: int, *, rngs: nnx.Rngs) -> None:
         self.linear = nnx.Linear(in_features, out_features, rngs=rngs)
 
     def __call__(self, x):
@@ -38,7 +38,7 @@ class SimpleModel(nnx.Module):
 class MLPModel(nnx.Module):
     """MLP for more complex optimization tests."""
 
-    def __init__(self, in_features: int, hidden: int, out_features: int, *, rngs: nnx.Rngs):
+    def __init__(self, in_features: int, hidden: int, out_features: int, *, rngs: nnx.Rngs) -> None:
         self.linear1 = nnx.Linear(in_features, hidden, rngs=rngs)
         self.linear2 = nnx.Linear(hidden, out_features, rngs=rngs)
 

@@ -195,7 +195,7 @@ class OpifexProfilingHarness:
         enable_compilation_profiling: bool = True,
         enable_roofline_analysis: bool = True,
         trace_dir: str | None = None,
-    ):
+    ) -> None:
         # Initialize event coordinator
         self.coordinator = EventCoordinator()
         if trace_dir is None:

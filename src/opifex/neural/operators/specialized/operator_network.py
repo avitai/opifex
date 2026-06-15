@@ -83,7 +83,7 @@ class OperatorNetwork(nnx.Module):
         config: dict[str, Any],
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize operator network.
 
         Args:

@@ -37,7 +37,7 @@ class OrbaxCheckpointManager:
         checkpoint_dir: str | Path,
         max_to_keep: int = 5,
         create: bool = True,
-    ):
+    ) -> None:
         """Initialize the checkpoint manager.
 
         Args:
@@ -71,7 +71,7 @@ class OrbaxCheckpointManager:
             options=self.options,
         )
 
-        logger.info(f"Initialized OrbaxCheckpointManager at {self.checkpoint_dir}")
+        logger.info("Initialized OrbaxCheckpointManager at %s", self.checkpoint_dir)
 
     def save_checkpoint(
         self,
@@ -145,7 +145,7 @@ class OrbaxCheckpointManager:
             )
             self.checkpoint_manager.save(step, args=save_args)  # type: ignore[reportCallIssue]
             self.checkpoint_manager.wait_until_finished()
-            logger.info(f"Successfully saved complete checkpoint for step {step}")
+            logger.info("Successfully saved complete checkpoint for step %s", step)
             return str(self.checkpoint_dir / str(step))
         except Exception:
             logger.exception("Error saving checkpoint")
@@ -154,19 +154,19 @@ class OrbaxCheckpointManager:
     def _restore_nnx_module(self, target_model, model_restored, step):
         if model_restored is not None:
             nnx.update(target_model, model_restored)
-            logger.info(f"Successfully restored nnx.Module state from step {step}")
+            logger.info("Successfully restored nnx.Module state from step %s", step)
         return target_model
 
     def _restore_train_state(self, target_model, model_restored, step):
         if model_restored is not None:
-            logger.info(f"Successfully restored TrainState from step {step}")
+            logger.info("Successfully restored TrainState from step %s", step)
             return model_restored
         return target_model
 
     def _restore_dict(self, target_model, model_restored, step):
         if model_restored is not None:
             target_model.update(model_restored)
-            logger.info(f"Successfully restored dict state from step {step}")
+            logger.info("Successfully restored dict state from step %s", step)
         return target_model
 
     def _get_restore_args(self, target_model):
@@ -327,10 +327,10 @@ class OrbaxCheckpointManager:
         """
         try:
             self.checkpoint_manager.delete(step)
-            logger.info(f"Successfully deleted checkpoint for step {step}")
+            logger.info("Successfully deleted checkpoint for step %s", step)
             return True
         except Exception:
-            logger.exception(f"Error deleting checkpoint for step {step}")
+            logger.exception("Error deleting checkpoint for step %s", step)
             return False
 
     def close(self) -> None:

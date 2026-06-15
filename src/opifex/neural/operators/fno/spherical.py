@@ -41,7 +41,7 @@ class SphericalHarmonicConvolution(nnx.Module):
         mmax: int | None = None,  # Maximum azimuthal order
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize spherical harmonic convolution.
 
@@ -146,7 +146,7 @@ class SphericalFourierNeuralOperator(nnx.Module):
         use_real_sht: bool = False,  # Whether to use real-valued SHT
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize Spherical FNO.
 

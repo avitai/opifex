@@ -7,6 +7,7 @@ quantum mechanical calculations. Neural DFT is integrated as a first-class
 paradigm alongside traditional PINNs and Neural Operators.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -18,6 +19,9 @@ from jax import Array
 from opifex.core.quantum import MolecularSystem
 from opifex.core.quantum.molecular_system import create_molecular_system
 from opifex.geometry.base import Geometry
+
+
+_logger = logging.getLogger(__name__)
 
 
 class Problem(Protocol):
@@ -57,7 +61,7 @@ class PDEProblem(ABC):
         initial_conditions: dict[str, Any] | list[Any] | None = None,
         parameters: dict[str, float] | None = None,
         time_dependent: bool = False,
-    ):
+    ) -> None:
         self.geometry = geometry
         self.equation = equation
         self.boundary_conditions = boundary_conditions
@@ -98,7 +102,7 @@ class ODEProblem(ABC):
         initial_conditions: dict[str, float | Array] | None = None,
         boundary_conditions: dict[str, Any] | None = None,
         parameters: dict[str, float] | None = None,
-    ):
+    ) -> None:
         self.time_span = time_span
         self.equation = equation
         self.initial_conditions = initial_conditions or {}
@@ -142,7 +146,7 @@ class OptimizationProblem(ABC):
         bounds: list[tuple[float, float]] | None = None,
         constraints: list[Callable] | None = None,
         parameters: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         self.dimension = dimension
         self.bounds = bounds
         self.constraints = constraints or []
@@ -200,7 +204,7 @@ class InverseProblem(ABC):
         forward_problem: PDEProblem | ODEProblem,
         observed_data: tuple[Array, Array],  # (coords, values)
         parameter_bounds: dict[str, tuple[float, float]] | None = None,
-    ):
+    ) -> None:
         self.forward_problem = forward_problem
         self.observed_coords, self.observed_values = observed_data
         self.parameter_bounds = parameter_bounds or {}
@@ -237,7 +241,7 @@ class DataDrivenProblem(ABC):  # noqa: B024
         train_dataset: tuple[Array, Array],  # (x_train, y_train)
         val_dataset: tuple[Array, Array] | None = None,  # (x_val, y_val)
         parameters: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         self.x_train, self.y_train = train_dataset
         self.val_dataset = val_dataset
         self.parameters = parameters or {}
@@ -271,7 +275,7 @@ class QuantumProblem(ABC):
         convergence_threshold: float = 1e-8,
         max_iterations: int = 100,
         parameters: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         self.molecular_system = molecular_system
         self.method = method
         self.convergence_threshold = convergence_threshold
@@ -338,7 +342,7 @@ class ElectronicStructureProblem(QuantumProblem):
         boundary_conditions: list[Any] | None = None,
         constraints: list[Any] | None = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(molecular_system, method="neural_dft", **kwargs)
         self.functional_type = functional_type
         self.scf_method = scf_method
@@ -420,10 +424,13 @@ class ElectronicStructureProblem(QuantumProblem):
         try:
             result = neural_dft.compute_energy(self.molecular_system, density=density)
             return float(result.total_energy)
-        except Exception as e:
-            # Fallback to simple approximation for testing
-            # This ensures tests pass while neural components are being developed
-            print(f"Neural DFT computation failed: {e}. Using simple approximation.")
+        except (RuntimeError, ValueError, AttributeError) as e:
+            # Fall back to a simple approximation when neural DFT fails for
+            # a recoverable reason. Programming errors (TypeError, etc.) are
+            # NOT caught — they must propagate (Rule 6: catch only specific
+            # exceptions). Diagnostic goes through the logger, not print
+            # (Rule 12: no print() in library code).
+            _logger.warning("Neural DFT computation failed: %s. Using simple approximation.", e)
 
             # Simple energy approximation based on atomic numbers using JAX-compatible operations
             # Use vectorized operations instead of Python loops and conditionals
@@ -479,7 +486,7 @@ class ElectronicStructureProblem(QuantumProblem):
                 # Vectorized nuclear repulsion calculation
                 nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
             else:
-                nuclear_repulsion = 0.0
+                nuclear_repulsion = jnp.asarray(0.0)
 
             # Total energy = electronic energy (negative) + nuclear repulsion (positive)
             # For single atoms, nuclear_repulsion = 0, so total should be negative

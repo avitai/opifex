@@ -328,7 +328,7 @@ def plot_flops_analysis(
         matplotlib Figure object
 
     Example:
-        >>> from opifex.training import FlopsCounter
+        >>> from opifex.core.training.monitoring.flops import FlopsCounter
         >>> counter = FlopsCounter(model)
         >>> flops = counter.count(sample_input)
         >>> fig = plot_flops_analysis(
@@ -366,13 +366,18 @@ def plot_memory_usage(
         matplotlib Figure object
 
     Example:
-        >>> # Monitor memory during training
-        >>> from opifex.training import MemoryMonitor
-        >>> monitor = MemoryMonitor()
-        >>> # ... training loop ...
+        >>> # ``MemoryMonitor`` is not implemented yet; collect the array
+        >>> # yourself (e.g. via ``psutil``) and pass it in:
+        >>> import time, psutil
+        >>> proc = psutil.Process()
+        >>> mem_history, timestamps = [], []
+        >>> for _ in range(num_steps):
+        ...     # ... training step ...
+        ...     mem_history.append(proc.memory_info().rss / 1e9)
+        ...     timestamps.append(time.time())
         >>> fig = plot_memory_usage(
-        ...     monitor.memory_history,
-        ...     timestamps=monitor.timestamps,
+        ...     jnp.asarray(mem_history),
+        ...     timestamps=jnp.asarray(timestamps),
         ...     title="Training Memory Profile"
         ... )
     """
@@ -429,7 +434,7 @@ import jax
 import jax.numpy as jnp
 from opifex.data.loaders import create_burgers_loader
 from opifex.neural.operators.fno import FourierNeuralOperator
-from opifex.training import BasicTrainer, TrainingConfig
+from opifex.training.basic_trainer import BasicTrainer, TrainingConfig
 from opifex.visualization import (
     plot_field_comparison,
     create_physics_animation,

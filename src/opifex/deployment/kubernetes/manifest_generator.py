@@ -19,7 +19,7 @@ class ManifestGenerator:
     with proper resource management and configuration.
     """
 
-    def __init__(self, namespace: str, app_name: str, image: str):
+    def __init__(self, namespace: str, app_name: str, image: str) -> None:
         """
         Initialize manifest generator.
 

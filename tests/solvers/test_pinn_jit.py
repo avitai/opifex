@@ -19,7 +19,7 @@ from opifex.solvers.pinn import PINNSolver
 class SimpleMLP(nnx.Module):
     """Simple MLP for testing."""
 
-    def __init__(self, key: jax.Array):
+    def __init__(self, key: jax.Array) -> None:
         self.dense1 = nnx.Linear(2, 32, rngs=nnx.Rngs(key))
         self.dense2 = nnx.Linear(32, 1, rngs=nnx.Rngs(key))
 

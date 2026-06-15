@@ -9,7 +9,7 @@ from typing import Protocol
 from opifex.core.solver.strategies import (
     AdaptiveLossBalancing,
     CurriculumRegularization,
-    TrainingComponent,
+    TrainingCallback,
     TrainingStrategy,
 )
 
@@ -18,10 +18,10 @@ class TestStrategyProtocols:
     """Test protocol definitions."""
 
     def test_training_component_protocol(self):
-        """Verify TrainingComponent protocol definition."""
+        """Verify TrainingCallback protocol definition."""
         # A component should be callable or have specific lifecycle methods
         # For now, we assume it needs at least an update or on_step method
-        assert issubclass(TrainingComponent, Protocol)
+        assert issubclass(TrainingCallback, Protocol)
 
     def test_training_strategy_protocol(self):
         """Verify TrainingStrategy protocol definition."""
@@ -35,7 +35,7 @@ class TestAdaptiveLossBalancing:
     def test_initialization(self):
         """Test initialization with config."""
         strategy = AdaptiveLossBalancing(loss_keys=["pde", "bc"], alpha=0.5)
-        assert isinstance(strategy, TrainingComponent)
+        assert isinstance(strategy, TrainingCallback)
         # Weights should be initialized eagerly
         assert len(strategy.weights) == 2
 
@@ -64,7 +64,7 @@ class TestCurriculumRegularization:
     def test_initialization(self):
         """Test initialization."""
         strategy = CurriculumRegularization()
-        assert isinstance(strategy, TrainingComponent)
+        assert isinstance(strategy, TrainingCallback)
         assert strategy.start_val == 0.0
 
     def test_parameter_progression(self):

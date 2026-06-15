@@ -65,6 +65,6 @@ def create_physics_animation(
 
     if save_path:
         anim.save(save_path, writer="pillow", fps=10)
-        logger.info(f"Animation saved to {save_path}")
+        logger.info("Animation saved to %s", save_path)
 
     return anim

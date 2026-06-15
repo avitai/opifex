@@ -108,7 +108,7 @@ class BenchmarkRegistry:
     - Compatibility checking between operators and benchmarks
     """
 
-    def __init__(self, config_path: str | None = None):
+    def __init__(self, config_path: str | None = None) -> None:
         """Initialize the benchmark registry.
 
         Args:

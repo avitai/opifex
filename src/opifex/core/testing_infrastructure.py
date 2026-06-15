@@ -67,7 +67,7 @@ class CompilationStrategy(Enum):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CUDAEnvironment:
     """Local CUDA environment configuration."""
 
@@ -78,14 +78,14 @@ class CUDAEnvironment:
     cuda_version: str | None = None
     environment_variables: dict[str, str] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.cuda_library_paths is None:
-            self.cuda_library_paths = []
+            object.__setattr__(self, "cuda_library_paths", [])
         if self.environment_variables is None:
-            self.environment_variables = {}
+            object.__setattr__(self, "environment_variables", {})
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TestEnvironment:
     """Test environment configuration."""
 
@@ -99,7 +99,7 @@ class TestEnvironment:
     process_isolation: bool = False
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GPUTestResult:
     """Result of GPU stability testing."""
 
@@ -109,7 +109,7 @@ class GPUTestResult:
     test_duration_ms: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CompilationResult:
     """Result of model compilation attempt."""
 
@@ -144,7 +144,7 @@ class DependencyManager:
     Provides mock implementations when dependencies are unavailable.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.dependencies: dict[str, DependencyStatus] = {}
         self.mocks: dict[str, Any] = {}
@@ -167,7 +167,7 @@ class DependencyManager:
         """Register a mock implementation for a dependency."""
         self.mocks[dependency] = mock_implementation
         self.dependencies[dependency] = DependencyStatus.MOCK
-        self.logger.debug(f"Registered mock for {dependency}")
+        self.logger.debug("Registered mock for %s", dependency)
 
     def get_implementation(self, dependency: str) -> Any:
         """Get the implementation (real or mock) for a dependency."""
@@ -218,20 +218,20 @@ def requires_dependency(dependency: str, mock_implementation: Any | None = None)
 class MockMetricsImplementation:
     """Mock implementation for Prometheus metrics when unavailable."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         pass
 
     def labels(self, **kwargs):
         """Set labels for metrics (mock implementation)."""
         return self
 
-    def set(self, value):
+    def set(self, value) -> None:
         """Set metric value (mock implementation)."""
 
-    def observe(self, value):
+    def observe(self, value) -> None:
         """Observe metric value (mock implementation)."""
 
-    def inc(self, value=1):
+    def inc(self, value=1) -> None:
         """Increment metric by value (mock implementation)."""
 
     def get_metrics_data(self) -> str:

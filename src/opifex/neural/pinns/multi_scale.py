@@ -38,7 +38,7 @@ class MultiScalePINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Multi-Scale PINN.
 
         Args:
@@ -92,7 +92,9 @@ class MultiScalePINN(nnx.Module):
 
             scale_network = nnx.Sequential(*layers)
             scale_networks_temp.append(scale_network)
-            self.scale_networks = nnx.List(scale_networks_temp)
+        # Assignment outside the per-scale loop (Rule 0: avoid rebinding
+        # the attribute every iteration).
+        self.scale_networks = nnx.List(scale_networks_temp)
 
         # Combination weights for multi-scale fusion
         self.scale_weights = nnx.Linear(
@@ -251,7 +253,7 @@ class SimplePINN(nnx.Module):
         *,
         activation: Callable[[Array], Array] = jnp.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Simple PINN.
 
         Args:

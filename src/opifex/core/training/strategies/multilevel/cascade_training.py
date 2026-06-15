@@ -20,7 +20,7 @@ from flax import nnx
 
 
 if TYPE_CHECKING:
-    from opifex.training.multilevel.multilevel_adam import MultilevelAdam
+    from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
 
 
 # Protocol for prolongate function: (coarse_model, fine_model) -> fine_model
@@ -39,7 +39,7 @@ class CascadeTrainer:
         optimizer: MultilevelAdam,
         prolongate_fn: ProlongateFn,
         state_transition_fn: StateTransitionFn | None = None,
-    ):
+    ) -> None:
         """Initialize Cascade Trainer.
 
         Args:

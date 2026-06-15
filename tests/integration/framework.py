@@ -25,7 +25,7 @@ class OpifexTestFramework:
     - Validation utilities
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.device_info = get_device_info()
         self.test_data_manager = TestDataManager()
         self.performance_monitor = PerformanceMonitor()
@@ -105,7 +105,7 @@ class OpifexTestFramework:
 class TestDataManager:
     """Manage standardized test datasets and problems."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.data_cache = {}
         self.problem_configs = self._initialize_problem_configs()
 
@@ -504,7 +504,7 @@ class TestDataManager:
 class PerformanceMonitor:
     """Monitor and validate performance characteristics."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     @property
@@ -676,7 +676,7 @@ class PerformanceMonitor:
 class IntegrationValidator:
     """Validate integration between components."""
 
-    def __init__(self, components: list[str]):
+    def __init__(self, components: list[str]) -> None:
         self.components = components
         self.validation_rules = self._load_validation_rules()
 

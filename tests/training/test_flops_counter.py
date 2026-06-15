@@ -10,8 +10,8 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.training.monitoring.flops import FlopsCounter
 from opifex.neural.operators.fno.base import FourierNeuralOperator
-from opifex.training.flops_counter import FlopsCounter
 
 
 class TestFlopsCounterInitialization:

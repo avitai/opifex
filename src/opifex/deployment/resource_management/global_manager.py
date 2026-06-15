@@ -29,7 +29,7 @@ class GlobalResourceManager:
         gpu_pool_manager: GPUPoolManager,
         cost_controller: CostController,
         sustainability_tracker: SustainabilityTracker,
-    ):
+    ) -> None:
         """Initialize GlobalResourceManager with all sub-managers.
 
         Args:

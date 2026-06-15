@@ -29,7 +29,7 @@ class GraphTopology:
         edges: Int[jax.Array, "e 2"],
         edge_features: Float[jax.Array, "e f"] | None = None,
         adjacency_matrix: Float[jax.Array, "n n"] | None = None,
-    ):
+    ) -> None:
         """Initialize graph topology.
 
         Args:
@@ -156,7 +156,7 @@ class GraphMessagePassing:
         hidden_dim: int,
         output_dim: int,
         key: jax.Array,
-    ):
+    ) -> None:
         """Initialize message passing layer.
 
         Args:
@@ -246,7 +246,7 @@ class GraphNeuralOperator:
         output_dim: int | None = None,
         num_layers: int = 3,
         key: jax.Array | None = None,
-    ):
+    ) -> None:
         """Initialize graph neural operator.
 
         Args:

@@ -18,7 +18,7 @@ except ImportError:
     HAS_REQUESTS = False  # type: ignore[misc]
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class Panel:
     """Grafana panel configuration."""
 
@@ -83,7 +83,7 @@ class Panel:
         return panel_dict
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class Dashboard:
     """Grafana dashboard configuration."""
 
@@ -139,7 +139,7 @@ class GrafanaManager:
         api_key: str | None = None,
         username: str = "admin",
         password: str = "changeme",  # nosec # noqa: S107
-    ):
+    ) -> None:
         """
         Initialize Grafana manager.
 

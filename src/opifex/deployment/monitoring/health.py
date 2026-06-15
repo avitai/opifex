@@ -53,7 +53,7 @@ class HealthStatus(Enum):
     UNKNOWN = "unknown"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class HealthCheckResult:
     """Result of a health check operation."""
 
@@ -76,7 +76,7 @@ class HealthCheckResult:
         }
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ServiceHealth:
     """Overall service health status."""
 
@@ -113,7 +113,7 @@ class HealthChecker:
         enable_model_checks: bool = True,
         enable_dependency_checks: bool = True,
         check_timeout: float = 30.0,
-    ):
+    ) -> None:
         """
         Initialize health checker.
 
@@ -139,7 +139,7 @@ class HealthChecker:
         # Initialize default health checks
         self._register_default_checks()
 
-        self.logger.info(f"Health checker initialized for service: {service_name}")
+        self.logger.info("Health checker initialized for service: %s", service_name)
 
     def _register_default_checks(self) -> None:
         """Register default health checks."""
@@ -158,7 +158,7 @@ class HealthChecker:
     ) -> None:
         """Register a custom health check function."""
         self.health_checks[name] = check_function
-        self.logger.info(f"Registered health check: {name}")
+        self.logger.info("Registered health check: %s", name)
 
     def register_dependency(self, name: str, url: str) -> None:
         """Register an external dependency for health monitoring."""
@@ -167,7 +167,7 @@ class HealthChecker:
             self.register_health_check(
                 f"dependency_{name}", lambda: self._check_dependency(name, url)
             )
-        self.logger.info(f"Registered dependency: {name} -> {url}")
+        self.logger.info("Registered dependency: %s -> %s", name, url)
 
     def register_model_endpoint(self, name: str, endpoint: str) -> None:
         """Register a model endpoint for health monitoring."""
@@ -176,7 +176,7 @@ class HealthChecker:
             self.register_health_check(
                 f"model_{name}", lambda: self._check_model_endpoint(name, endpoint)
             )
-        self.logger.info(f"Registered model endpoint: {name} -> {endpoint}")
+        self.logger.info("Registered model endpoint: %s -> %s", name, endpoint)
 
     def _check_system_resources(self) -> HealthCheckResult:
         """Check system resource availability."""
@@ -223,7 +223,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             return HealthCheckResult(
                 name="system_resources",
                 status=HealthStatus.UNHEALTHY,
@@ -280,7 +280,7 @@ class HealthChecker:
                                 else 0,
                             }
                         )
-                except Exception as e:
+                except (RuntimeError, AttributeError, OSError) as e:
                     gpu_details.append(
                         {
                             "device_id": i,
@@ -315,7 +315,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (RuntimeError, AttributeError, OSError) as e:
             return HealthCheckResult(
                 name="gpu_availability",
                 status=HealthStatus.UNHEALTHY,
@@ -345,7 +345,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (AttributeError, OSError, RuntimeError) as e:
             return HealthCheckResult(
                 name="application",
                 status=HealthStatus.UNHEALTHY,
@@ -398,7 +398,7 @@ class HealthChecker:
                 details={"url": url, "timeout_seconds": self.check_timeout},
                 duration_ms=(time.time() - start_time) * 1000,
             )
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, OSError) as e:
             return HealthCheckResult(
                 name=f"dependency_{name}",
                 status=HealthStatus.UNHEALTHY,
@@ -436,7 +436,7 @@ class HealthChecker:
                 try:
                     response_data = response.json()
                     details.update(response_data)
-                except Exception:
+                except (ValueError, TypeError):
                     pass  # Ignore JSON parsing errors
 
             else:
@@ -452,7 +452,7 @@ class HealthChecker:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, OSError) as e:
             return HealthCheckResult(
                 name=f"model_{name}",
                 status=HealthStatus.UNHEALTHY,
@@ -473,7 +473,7 @@ class HealthChecker:
         try:
             return self.health_checks[check_name]()
         except Exception as e:
-            self.logger.exception(f"Health check '{check_name}' failed")
+            self.logger.exception("Health check '%s' failed", check_name)
             return HealthCheckResult(
                 name=check_name,
                 status=HealthStatus.UNHEALTHY,
@@ -490,7 +490,7 @@ class HealthChecker:
                 result = self.run_health_check(check_name)
                 results.append(result)
             except Exception as e:
-                self.logger.exception(f"Failed to run health check '{check_name}'")
+                self.logger.exception("Failed to run health check '%s'", check_name)
                 results.append(
                     HealthCheckResult(
                         name=check_name,
@@ -513,7 +513,9 @@ class HealthChecker:
 
         total_duration = (time.time() - start_time) * 1000
         self.logger.info(
-            f"Health check completed in {total_duration:.2f}ms - Status: {overall_status.value}"
+            "Health check completed in %.2fms - Status: %s",
+            total_duration,
+            overall_status.value,
         )
 
         return ServiceHealth(
@@ -563,7 +565,7 @@ class HealthChecker:
         callback: Callable[[ServiceHealth], None] | None = None,
     ) -> None:
         """Run health checks periodically."""
-        self.logger.info(f"Starting periodic health checks every {interval_seconds} seconds")
+        self.logger.info("Starting periodic health checks every %s seconds", interval_seconds)
 
         while True:
             try:
@@ -573,8 +575,8 @@ class HealthChecker:
                     callback(service_health)
 
                 self.logger.debug(
-                    f"Periodic health check completed - "
-                    f"Status: {service_health.overall_status.value}"
+                    "Periodic health check completed - Status: %s",
+                    service_health.overall_status.value,
                 )
 
             except Exception:

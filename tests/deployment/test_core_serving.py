@@ -49,7 +49,7 @@ else:
 class SimpleTestModel(nnx.Module):
     """Simple test model that can be pickled."""
 
-    def __init__(self, rngs):
+    def __init__(self, rngs) -> None:
         self.linear = nnx.Linear(64, 64, rngs=rngs)
 
     def __call__(self, x):
@@ -59,7 +59,7 @@ class SimpleTestModel(nnx.Module):
 class MultiLayerTestModel(nnx.Module):
     """Multi-layer test model for more complex testing."""
 
-    def __init__(self, rngs):
+    def __init__(self, rngs) -> None:
         self.layer1 = nnx.Linear(32, 64, rngs=rngs)
         self.layer2 = nnx.Linear(64, 32, rngs=rngs)
 

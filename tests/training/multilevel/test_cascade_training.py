@@ -2,15 +2,15 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.training.multilevel.cascade_training import CascadeTrainer
-from opifex.training.multilevel.multilevel_adam import MultilevelAdam
+from opifex.core.training.strategies.multilevel.cascade_training import CascadeTrainer
+from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
 
 
 class DummyModel(nnx.Module):
     size: int
     param: nnx.Param[jax.Array]
 
-    def __init__(self, size: int, rngs: nnx.Rngs):
+    def __init__(self, size: int, rngs: nnx.Rngs) -> None:
         self.size = size
         self.param = nnx.Param(jax.random.uniform(rngs.params(), (size,)))
 

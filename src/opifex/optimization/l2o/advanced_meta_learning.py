@@ -27,7 +27,7 @@ from opifex.optimization.l2o.l2o_engine import L2OEngine, L2OEngineConfig
 from opifex.optimization.l2o.parametric_solver import OptimizationProblem
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class MAMLConfig:
     """Configuration for Model-Agnostic Meta-Learning (MAML) optimization.
 
@@ -45,7 +45,7 @@ class MAMLConfig:
     task_distribution_diversity: float = 0.8
     convergence_tolerance: float = 1e-6
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate MAML configuration parameters."""
         if self.inner_learning_rate <= 0:
             raise ValueError("Inner learning rate must be positive")
@@ -55,7 +55,7 @@ class MAMLConfig:
             raise ValueError("Inner steps must be positive")
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReptileConfig:
     """Configuration for Reptile meta-learning algorithm.
 
@@ -73,7 +73,7 @@ class ReptileConfig:
     gradient_clipping: float = 1.0
     convergence_patience: int = 5
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate Reptile configuration parameters."""
         valid_strategies = ["uniform", "weighted", "adaptive"]
         if self.task_sampling_strategy not in valid_strategies:
@@ -83,7 +83,7 @@ class ReptileConfig:
             )
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GradientBasedMetaLearningConfig:
     """Configuration for gradient-based meta-learning strategies.
 
@@ -100,10 +100,10 @@ class GradientBasedMetaLearningConfig:
     problem_conditioning: bool = True
     numerical_stability_epsilon: float = 1e-8
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default values and validate configuration."""
         if self.optimizer_network_layers is None:
-            self.optimizer_network_layers = [128, 64, 32]
+            object.__setattr__(self, "optimizer_network_layers", [128, 64, 32])
 
 
 class MAMLOptimizer(nnx.Module):
@@ -122,7 +122,7 @@ class MAMLOptimizer(nnx.Module):
         optimizer_output_dim: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize MAML optimizer.
 
         Args:
@@ -364,7 +364,7 @@ class ReptileOptimizer(nnx.Module):
         optimizer_output_dim: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize Reptile optimizer.
 
         Args:
@@ -584,7 +584,7 @@ class GradientBasedMetaLearner(nnx.Module):
         problem_dim: int,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize gradient-based meta-learner.
 
         Args:
@@ -841,7 +841,7 @@ class MetaL2OIntegration(nnx.Module):
         gb_config: GradientBasedMetaLearningConfig | None = None,
         *,
         rngs: Rngs,
-    ):
+    ) -> None:
         """Initialize Meta-L2O integration.
 
         Args:

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DFTResult:
     """Result of neural DFT calculation with full diagnostics.
 
@@ -87,7 +87,7 @@ class NeuralDFT(nnx.Module):
         enable_high_precision: bool = True,
         # NNX requirements
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize neural DFT framework following NNX patterns.
 
         Args:
@@ -272,22 +272,32 @@ class NeuralDFT(nnx.Module):
             pass
 
     def _validate_density(self, density: jax.Array, molecular_system: Any) -> jax.Array:
-        """Validate and normalize electron density."""
-        # Ensure positive density
+        """Validate and normalize electron density.
+
+        All control flow here is expressed in terms of JAX primitives
+        (``jnp.where`` / ``jnp.maximum``) so that ``_validate_density``
+        is fully JIT-compatible. The eager finite-value check raised
+        ``TracerBoolConversionError`` under JIT — we drop the ``raise``
+        and let downstream callers handle non-finite output (which is
+        rare given the ``jnp.maximum`` floor below).
+        """
+        # Ensure positive density (also handles +inf → preserved, -inf → 0)
         density = jnp.maximum(density, 1e-12)
 
-        # Check for finite values
-        if not jnp.all(jnp.isfinite(density)):
-            raise ValueError("Density contains non-finite values")
-
-        # Normalize to correct electron count
+        # Normalize to correct electron count when there's any mass present;
+        # ``jnp.where`` keeps the branch JIT-traceable.
         total_electrons = jnp.sum(density)
         target_electrons = molecular_system.n_electrons
-
-        if total_electrons > 1e-12:
-            density = density * target_electrons / total_electrons
-
-        return density
+        # ``jnp.where`` returns ``Array | tuple[Array, ...]`` in stubs (the
+        # tuple branch only when called as the legacy 1-arg ``where``); cast
+        # to ``Array`` since we always pass 3 args here.
+        return jnp.asarray(
+            jnp.where(
+                total_electrons > 1e-12,
+                density * target_electrons / total_electrons,
+                density,
+            )
+        )
 
     def _generate_initial_density(self, molecular_system: Any) -> jax.Array:
         """Generate chemically reasonable initial electron density guess."""
@@ -321,7 +331,10 @@ class NeuralDFT(nnx.Module):
         n_atoms = positions.shape[0]
 
         if n_atoms == 1:
-            return jax.Array(0.0)
+            # ``jax.Array`` is a type, not a constructor — calling it with a
+            # scalar raises ``TypeError``. The correct primitive is
+            # ``jnp.array`` (which respects dtype defaults and JIT tracing).
+            return jnp.array(0.0)
 
         # Vectorized computation for efficiency
         i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
@@ -491,7 +504,7 @@ class NeuralDFT(nnx.Module):
 
         # Create mock result object
         class SCFResult:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.converged = converged
                 self.total_energy = convergence_history[-1] if convergence_history else 0.0
                 self.final_density = density

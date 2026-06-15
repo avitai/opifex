@@ -196,7 +196,7 @@ def _run_benchmark(
 
     try:
         result = runner._run_single_benchmark(operator_name, benchmark_config)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- CLI top-level handler reports any benchmark failure
         print(f"Error running benchmark: {e}", file=sys.stderr)
         return 1
 

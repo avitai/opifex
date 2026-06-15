@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from opifex.optimization.l2o.parametric_solver import OptimizationProblem
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RLOptimizationConfig:
     """Configuration for reinforcement learning-based optimization.
 
@@ -68,7 +68,7 @@ class RLOptimizationConfig:
     reward_efficiency_weight: float = 0.2
     max_episode_length: int = 1000
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if self.state_dim <= 0:
             raise ValueError("state_dim must be positive")
@@ -107,7 +107,7 @@ class DQNNetwork(nnx.Module):
         hidden_dims: Sequence[int] = (256, 256, 128),
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize DQN network.
 
         Args:
@@ -162,7 +162,7 @@ class StateEncoder(nnx.Module):
         output_dim: int = 64,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize state encoder.
 
         Args:
@@ -226,7 +226,7 @@ class StateEncoder(nnx.Module):
         return self.fusion(combined)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Experience:
     """Single experience for replay buffer."""
 
@@ -243,7 +243,7 @@ class ExperienceReplayBuffer:
     Stores optimization experiences and provides efficient sampling for training.
     """
 
-    def __init__(self, capacity: int):
+    def __init__(self, capacity: int) -> None:
         """Initialize replay buffer.
 
         Args:
@@ -253,7 +253,7 @@ class ExperienceReplayBuffer:
         self.buffer: deque[Experience] = deque(maxlen=capacity)
         self.position = 0
 
-    def push(self, experience: Experience):
+    def push(self, experience: Experience) -> None:
         """Add experience to buffer.
 
         Args:
@@ -291,7 +291,7 @@ class RewardFunction:
     computational efficiency.
     """
 
-    def __init__(self, config: RLOptimizationConfig):
+    def __init__(self, config: RLOptimizationConfig) -> None:
         """Initialize reward function.
 
         Args:
@@ -348,7 +348,7 @@ class RLOptimizationAgent(nnx.Module):
         config: RLOptimizationConfig,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize RL optimization agent.
 
         Args:
@@ -384,7 +384,7 @@ class RLOptimizationAgent(nnx.Module):
         self.episode_count = 0
         self.rng_key = rngs.params()
 
-    def _update_target_network(self):
+    def _update_target_network(self) -> None:
         """Update target network with current DQN weights."""
         # Copy parameters from main DQN to target DQN using nnx.update
         main_state = nnx.state(self.dqn)
@@ -467,7 +467,7 @@ class RLOptimizationAgent(nnx.Module):
         reward: float,
         next_state: jax.Array,
         done: bool,
-    ):
+    ) -> None:
         """Store experience in replay buffer.
 
         Args:
@@ -477,7 +477,13 @@ class RLOptimizationAgent(nnx.Module):
             next_state: Next state
             done: Whether episode is complete
         """
-        experience = Experience(state, action, reward, next_state, done)
+        experience = Experience(
+            state=state,
+            action=action,
+            reward=reward,
+            next_state=next_state,
+            done=done,
+        )
         self.replay_buffer.push(experience)
 
     def train_step(self) -> dict[str, float]:
@@ -537,7 +543,7 @@ class ActionInterpreter:
     hyperparameter adjustments, and stopping criteria.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize action interpreter."""
         # Define action mappings
         self.action_mappings = {
@@ -604,7 +610,7 @@ class RLOptimizationEngine(nnx.Module):
         meta_optimizer: MetaOptimizer | None = None,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize RL optimization engine.
 
         Args:

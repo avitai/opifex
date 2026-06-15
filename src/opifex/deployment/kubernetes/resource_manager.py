@@ -16,7 +16,7 @@ class ResourceManager:
     resource quotas, and default limits for enterprise-grade deployments.
     """
 
-    def __init__(self, namespace: str):
+    def __init__(self, namespace: str) -> None:
         """
         Initialize resource manager.
 

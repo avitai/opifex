@@ -13,7 +13,7 @@ import jax.numpy as jnp
 from opifex.platform.search_types import SearchType
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SearchQuery:
     """Structured search query for neural functionals."""
 
@@ -40,7 +40,7 @@ class SearchQuery:
     search_type: SearchType = SearchType.HYBRID
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SearchResult:
     """Search result with relevance scoring."""
 
@@ -66,7 +66,7 @@ class SearchEngine:
         registry_service: Any,
         enable_semantic_search: bool = True,
         similarity_threshold: float = 0.7,
-    ):
+    ) -> None:
         """Initialize search engine.
 
         Args:
@@ -646,6 +646,6 @@ class SearchEngine:
                 query="",  # Empty query to get all
                 limit=10000,  # Large limit for development
             )
-        except Exception:
+        except (OSError, ConnectionError, TimeoutError, ValueError, AttributeError):
             # Fallback to empty list if registry is not available
             return []

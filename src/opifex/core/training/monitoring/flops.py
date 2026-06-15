@@ -22,7 +22,7 @@ class FlopsCounter:
     and complete training steps for neural operator models.
     """
 
-    def __init__(self, enable_profiling: bool = True):
+    def __init__(self, enable_profiling: bool = True) -> None:
         """
         Initialize the FLOPs counter.
 
@@ -236,7 +236,7 @@ class FlopsCounter:
             },
         }
 
-    def reset_counters(self):
+    def reset_counters(self) -> None:
         """Reset all FLOPS counters and profiling data."""
         self.total_flops = 0
         self.operation_counts = {}
@@ -256,7 +256,7 @@ class FlopsCounter:
             "enable_profiling": self.enable_profiling,
         }
 
-    def enable_profiling_mode(self, enable: bool = True):
+    def enable_profiling_mode(self, enable: bool = True) -> None:
         """
         Enable or disable FLOPS profiling.
 
@@ -299,7 +299,7 @@ class FlopsCounter:
         # Add some overhead for activation functions, etc.
         return int(base_flops * 1.2)
 
-    def _update_operation_count(self, operation: str, flops: int):
+    def _update_operation_count(self, operation: str, flops: int) -> None:
         """Update operation count tracking."""
         if operation not in self.operation_counts:
             self.operation_counts[operation] = 0

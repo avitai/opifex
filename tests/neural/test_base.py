@@ -166,9 +166,10 @@ class TestQuantumMLP:
             rngs=rngs,
         )
 
-        # Test quantum defaults
+        # Test quantum defaults — enforce_symmetry now defaults to False
+        # (the previous True default was a silent no-op; fail-fast contract).
         assert mlp.activation == "tanh"  # Quantum-optimized default
-        assert mlp.enforce_symmetry is True
+        assert mlp.enforce_symmetry is False
         assert mlp.dropout_rate == 0.0
         assert mlp.use_bias is True
         assert mlp.apply_final_dropout is False
@@ -330,31 +331,28 @@ class TestQuantumMLP:
             assert output.shape == (1, 1)
             assert jnp.isfinite(output).all()
 
-    def test_symmetry_configuration(self):
-        """Test symmetry configuration options."""
+    def test_symmetry_configuration_fails_fast_when_requested(self):
+        """``enforce_symmetry=True`` raises NotImplementedError.
+
+        The symmetry-enforcement code path is not implemented yet — the
+        previous silent pass-through was a POLA violation. Until the
+        algorithm lands, requesting enforcement must fail fast.
+        """
         rngs = nnx.Rngs(42)
-
-        # Test permutation symmetry
-        mlp_perm = QuantumMLP(
-            layer_sizes=[6, 16, 1],
-            enforce_symmetry=True,
-            symmetry_type="permutation",
-            rngs=rngs,
-        )
-
-        assert mlp_perm.enforce_symmetry is True
-        assert mlp_perm.symmetry_type == "permutation"
-
-        # Test rotation symmetry
-        mlp_rot = QuantumMLP(
-            layer_sizes=[6, 16, 1],
-            enforce_symmetry=True,
-            symmetry_type="rotation",
-            rngs=rngs,
-        )
-
-        assert mlp_rot.enforce_symmetry is True
-        assert mlp_rot.symmetry_type == "rotation"
+        with pytest.raises(NotImplementedError, match="enforce_symmetry"):
+            QuantumMLP(
+                layer_sizes=[6, 16, 1],
+                enforce_symmetry=True,
+                symmetry_type="permutation",
+                rngs=rngs,
+            )
+        with pytest.raises(NotImplementedError, match="enforce_symmetry"):
+            QuantumMLP(
+                layer_sizes=[6, 16, 1],
+                enforce_symmetry=True,
+                symmetry_type="rotation",
+                rngs=rngs,
+            )
 
     def test_initialization_validation(self):
         """Test validation logic in QuantumMLP initialization."""

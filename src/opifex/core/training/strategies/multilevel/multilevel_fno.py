@@ -94,7 +94,7 @@ class SpectralConv1d(nnx.Module):
         modes: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral convolution.
 
         Args:
@@ -172,7 +172,7 @@ class SimpleFNO(nnx.Module):
         num_layers: int = 4,
         activation: Callable[[Array], Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize simple FNO.
 
         Args:
@@ -399,7 +399,7 @@ class MultilevelFNOTrainer:
         num_layers: int = 4,
         activation: Callable[[Array], Array] = nnx.gelu,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize multilevel FNO trainer.
 
         Args:

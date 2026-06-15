@@ -143,7 +143,7 @@ class FractionalPINN(nnx.Module):
         compute_dtype: Any = jnp.float32,
         param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize fPINN.
 
         Args:

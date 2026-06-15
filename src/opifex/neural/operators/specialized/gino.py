@@ -43,7 +43,7 @@ class GeometryEncoder(nnx.Module):
         max_position: float = 10000.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize geometry encoder.
 
@@ -134,7 +134,7 @@ class GeometryAttention(nnx.Module):
         use_distance_attention: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize geometry attention with proper dimension validation.
 
@@ -288,7 +288,7 @@ class GINOBlock(nnx.Module):
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize GINO block.
 
@@ -476,7 +476,7 @@ class GeometryInformedNeuralOperator(nnx.Module):
         use_spectral_conv: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """
         Initialize GINO.
 

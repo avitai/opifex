@@ -32,7 +32,7 @@ class Framework(Enum):
     TENSORFLOW = "tensorflow"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PhysicsMetadata:
     """Physics-informed metadata for scientific computing experiments."""
 
@@ -61,7 +61,7 @@ class PhysicsMetadata:
     validation_metrics: dict[str, str] | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NeuralOperatorMetrics:
     """Metrics specific to neural operator experiments."""
 
@@ -86,7 +86,7 @@ class NeuralOperatorMetrics:
     parameter_extrapolation_error: float | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class L2OMetrics:
     """Metrics specific to learning-to-optimize experiments."""
 
@@ -114,7 +114,7 @@ class L2OMetrics:
     momentum_schedule: list[float] | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NeuralDFTMetrics:
     """Metrics specific to neural density functional theory experiments."""
 
@@ -142,7 +142,7 @@ class NeuralDFTMetrics:
     vibrational_frequency_error_cm_minus_1: float | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PINNMetrics:
     """Metrics specific to physics-informed neural network experiments."""
 
@@ -171,7 +171,7 @@ class PINNMetrics:
     causality_violation: float | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class QuantumMetrics:
     """Metrics specific to quantum computing experiments."""
 
@@ -201,7 +201,7 @@ class QuantumMetrics:
     parameter_gradient_magnitude: float | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentConfig:
     """Configuration for scientific computing experiments."""
 
@@ -239,7 +239,7 @@ class ExperimentConfig:
 class Experiment(ABC):
     """Abstract base class for scientific computing experiments."""
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig) -> None:
         self.config = config
         self.id: str | None = None
         self.start_time: datetime | None = None
@@ -310,11 +310,11 @@ class Experiment(ABC):
 class ExperimentTracker:
     """Factory for creating experiment instances with appropriate backends."""
 
-    def __init__(self, default_backend: str = "auto"):
+    def __init__(self, default_backend: str = "auto") -> None:
         self.default_backend = default_backend
         self._backend_registry: dict[str, type[Experiment]] = {}
 
-    def register_backend(self, name: str, backend_class):
+    def register_backend(self, name: str, backend_class) -> None:
         """Register a new backend implementation."""
         self._backend_registry[name] = backend_class
 

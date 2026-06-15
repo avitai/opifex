@@ -36,7 +36,7 @@ class TestType(Enum):
     DOCUMENTATION = "documentation"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ValidationRule:
     """A validation rule for neural functionals."""
 
@@ -49,7 +49,7 @@ class ValidationRule:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ValidationResult:
     """Result of a validation test."""
 
@@ -62,7 +62,7 @@ class ValidationResult:
     error_traceback: str | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FunctionalReport:
     """Complete validation report for a neural functional."""
 
@@ -89,7 +89,7 @@ class ValidationEngine:
         registry_service,
         enable_gpu_testing: bool = True,
         strict_mode: bool = False,
-    ):
+    ) -> None:
         """Initialize validation engine.
 
         Args:
@@ -326,7 +326,7 @@ class ValidationEngine:
                 execution_time=rule.timeout_seconds,
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- user-supplied test_function can raise anything
             return ValidationResult(
                 rule_name=rule.name,
                 status=ValidationStatus.FAILED,
@@ -498,7 +498,7 @@ class ValidationEngine:
             for test_input in test_inputs:
                 try:
                     _ = functional(test_input)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 -- user-supplied functional can raise anything
                     return {
                         "status": ValidationStatus.WARNING,
                         "message": f"Input validation concern: {e!s}",
@@ -511,7 +511,7 @@ class ValidationEngine:
                 "score": 1.0,
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Input validation failed: {e!s}",
@@ -558,7 +558,7 @@ class ValidationEngine:
                 },
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Output validation failed: {e!s}",
@@ -598,7 +598,7 @@ class ValidationEngine:
                 "score": 1.0,
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Determinism test failed: {e!s}",
@@ -640,7 +640,7 @@ class ValidationEngine:
                 "details": {"memory_mb": total_memory},
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Memory test failed: {e!s}",
@@ -693,7 +693,7 @@ class ValidationEngine:
                 },
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Speed test failed: {e!s}",
@@ -724,7 +724,7 @@ class ValidationEngine:
                     "details": {"jit_compatible": True},
                 }
 
-            except Exception as jit_error:
+            except Exception as jit_error:  # noqa: BLE001 -- JIT can raise jax/python errors for any user functional
                 return {
                     "status": ValidationStatus.WARNING,
                     "message": f"JIT compilation failed: {jit_error!s}",
@@ -732,7 +732,7 @@ class ValidationEngine:
                     "details": {"jit_compatible": False},
                 }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"JAX compatibility test failed: {e!s}",
@@ -776,7 +776,7 @@ class ValidationEngine:
                     "details": {"batch_compatible": True},
                 }
 
-            except Exception as batch_error:
+            except Exception as batch_error:  # noqa: BLE001 -- batched functional invocation can raise anything
                 return {
                     "status": ValidationStatus.WARNING,
                     "message": f"Batch processing not supported: {batch_error!s}",
@@ -784,7 +784,7 @@ class ValidationEngine:
                     "details": {"batch_compatible": False},
                 }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- harness wraps arbitrary user functional invocation
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Batch processing test failed: {e!s}",
@@ -838,7 +838,7 @@ class ValidationEngine:
                 },
             }
 
-        except Exception as e:
+        except (AttributeError, TypeError, KeyError) as e:
             return {
                 "status": ValidationStatus.FAILED,
                 "message": f"Documentation test failed: {e!s}",

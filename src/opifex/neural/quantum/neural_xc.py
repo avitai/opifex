@@ -27,7 +27,7 @@ class MultiHeadAttention(nnx.Module):
         dropout_rate: float = 0.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize multi-head attention with enhanced capabilities.
 
         Args:
@@ -122,7 +122,7 @@ class DensityFeatureExtractor(nnx.Module):
         use_advanced_features: bool = True,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize density feature extractor with enhanced capabilities.
 
         Args:
@@ -248,7 +248,7 @@ class NeuralXCFunctional(nnx.Module):
         dropout_rate: float = 0.0,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize neural XC functional with enhanced capabilities.
 
         Args:

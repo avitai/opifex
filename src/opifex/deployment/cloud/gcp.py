@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GCPConfig:
     """Configuration for GCP deployment."""
 
@@ -40,6 +40,11 @@ class GCPConfig:
             },
         }
     )
+
+    # VPC subnet CIDR (used as the default ingress source for opt-in
+    # firewall rules; callers wanting public ingress must supply
+    # ``security_config["public_ingress_cidrs"]`` explicitly).
+    subnet_cidr: str = "10.0.0.0/16"
 
     # Network configuration
     network_config: dict[str, Any] = field(
@@ -65,7 +70,7 @@ class GCPConfig:
 class GCPDeploymentManager:
     """Manages Opifex framework deployment on Google Cloud Platform."""
 
-    def __init__(self, config: GCPConfig):
+    def __init__(self, config: GCPConfig) -> None:
         """Initialize GCP deployment manager.
 
         Args:
@@ -182,11 +187,19 @@ class GCPDeploymentManager:
                         {"IPProtocol": "icmp"},
                     ],
                 },
+                # Secure-by-default: SSH + API ingress restricted to VPC
+                # internal CIDR. The previous default `0.0.0.0/0` opened
+                # both SSH (port 22) and API ports (80/443/8080) to the
+                # public internet — a critical misconfiguration (Rule 8).
+                # Callers who need public ingress must set
+                # ``security_config["public_ingress_cidrs"]`` explicitly.
                 {
                     "name": "opifex-allow-ssh",
                     "direction": "INGRESS",
                     "priority": 1000,
-                    "source_ranges": ["0.0.0.0/0"],
+                    "source_ranges": self.config.security_config.get(
+                        "public_ingress_cidrs", [self.config.subnet_cidr]
+                    ),
                     "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}],
                     "target_tags": ["opifex-ssh"],
                 },
@@ -194,7 +207,9 @@ class GCPDeploymentManager:
                     "name": "opifex-allow-api",
                     "direction": "INGRESS",
                     "priority": 1000,
-                    "source_ranges": ["0.0.0.0/0"],
+                    "source_ranges": self.config.security_config.get(
+                        "public_ingress_cidrs", [self.config.subnet_cidr]
+                    ),
                     "allowed": [{"IPProtocol": "tcp", "ports": ["80", "443", "8080"]}],
                     "target_tags": ["opifex-api"],
                 },

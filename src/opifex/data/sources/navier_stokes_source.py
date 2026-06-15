@@ -52,7 +52,7 @@ class NavierStokesDataSource(grain.RandomAccessDataSource):
         reynolds_range: tuple[float, float] = (100.0, 1000.0),
         time_range: tuple[float, float] = (0.0, 1.0),
         seed: int = 42,
-    ):
+    ) -> None:
         """Initialize Navier-Stokes data source."""
         if n_samples <= 0:
             raise ValueError(f"n_samples must be positive, got {n_samples}")

@@ -16,7 +16,7 @@ class SO3Group:
     Represents rotation matrices in 3D space with determinant +1.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize SO(3) group."""
         self.dimension = 3  # Manifold dimension
         self.matrix_size = 3  # 3x3 rotation matrices
@@ -186,7 +186,7 @@ class SE3Group:
     Represents rigid body transformations in 3D space.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize SE(3) group."""
         self.so3 = SO3Group()
         self.dimension = 6  # 3 for rotation + 3 for translation

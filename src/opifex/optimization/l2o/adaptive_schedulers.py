@@ -26,7 +26,7 @@ from flax.nnx import Rngs
 from opifex.optimization.l2o.l2o_engine import L2OEngine
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MetaSchedulerConfig:
     """Configuration for adaptive learning rate schedulers.
 
@@ -55,10 +55,10 @@ class MetaSchedulerConfig:
     enable_multiscale: bool = False
     enable_bayesian_optimization: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default values and validate configuration."""
         if self.multiscale_components is None:
-            self.multiscale_components = ["encoder", "solver", "decoder"]
+            object.__setattr__(self, "multiscale_components", ["encoder", "solver", "decoder"])
 
         # Validate learning rate bounds
         if self.min_learning_rate >= self.max_learning_rate:
@@ -84,7 +84,7 @@ class PerformanceAwareScheduler(nnx.Module):
     loss improvement patterns, convergence detection, and stagnation handling.
     """
 
-    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs):
+    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs) -> None:
         """Initialize performance-aware scheduler.
 
         Args:
@@ -142,7 +142,7 @@ class PerformanceAwareScheduler(nnx.Module):
         # Consider converged if variance is very small
         return float(loss_variance) < 1e-12
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset scheduler state."""
         self.current_learning_rate = self.config.base_learning_rate
         self.loss_history = []
@@ -157,7 +157,7 @@ class MultiscaleScheduler(nnx.Module):
     of the neural network, allowing fine-grained control over optimization.
     """
 
-    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs):
+    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs) -> None:
         """Initialize multiscale scheduler.
 
         Args:
@@ -223,7 +223,7 @@ class MultiscaleScheduler(nnx.Module):
             optimizers[component] = optax.adam(learning_rate=scheduler.current_learning_rate)
         return optimizers
 
-    def reset_all_components(self):
+    def reset_all_components(self) -> None:
         """Reset all component schedulers."""
         for scheduler in self.component_schedulers.values():
             scheduler.reset()
@@ -236,7 +236,7 @@ class BayesianSchedulerOptimizer(nnx.Module):
     scheduler parameters based on optimization performance feedback.
     """
 
-    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs):
+    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs) -> None:
         """Initialize Bayesian scheduler optimizer.
 
         Args:
@@ -262,7 +262,7 @@ class BayesianSchedulerOptimizer(nnx.Module):
         # Bayesian optimization-based suggestion
         return self._bayesian_parameter_suggestion()
 
-    def update_with_performance(self, parameters: dict[str, float], performance: float):
+    def update_with_performance(self, parameters: dict[str, float], performance: float) -> None:
         """Update with performance feedback for given parameters.
 
         Args:
@@ -367,7 +367,7 @@ class SchedulerIntegration(nnx.Module):
     a unified interface for integration with the existing L2O framework.
     """
 
-    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs):
+    def __init__(self, config: MetaSchedulerConfig, *, rngs: Rngs) -> None:
         """Initialize scheduler integration.
 
         Args:
@@ -496,7 +496,7 @@ class SchedulerIntegration(nnx.Module):
 
         return self.bayesian_scheduler.get_best_parameters()
 
-    def reset_all_schedulers(self):
+    def reset_all_schedulers(self) -> None:
         """Reset all scheduler states."""
         if self.performance_scheduler:
             self.performance_scheduler.reset()

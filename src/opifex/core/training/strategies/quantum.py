@@ -19,7 +19,7 @@ class QuantumTrainingManager:
     state tracking for physics-informed neural network training.
     """
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any]) -> None:
         """Initialize quantum training manager.
 
         Args:

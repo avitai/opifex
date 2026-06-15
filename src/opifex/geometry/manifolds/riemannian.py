@@ -38,7 +38,7 @@ class RiemannianManifold:
         embedding_dimension: int | None = None,
         coordinate_chart: Callable[[ManifoldPoint], ManifoldPoint] | None = None,
         inverse_chart: Callable[[ManifoldPoint], ManifoldPoint] | None = None,
-    ):
+    ) -> None:
         """Initialize Riemannian manifold.
 
         Args:

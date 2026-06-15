@@ -8,23 +8,34 @@ Selected Architecture: Hybrid Performance Platform + Intelligent Edge + Adaptive
 Optimization
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import time
+from collections.abc import Callable, Coroutine  # noqa: TC003 — used in eager type aliases
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast, Protocol
+from typing import Any, cast, Protocol, TYPE_CHECKING, TypeVar
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 from flax.nnx import Module
 
-from opifex.deployment.resource_management import GlobalResourceManager
-from opifex.optimization.adaptive_deployment import (
+
+if TYPE_CHECKING:
+    # ``GlobalResourceManager`` is the concrete deployment-side implementation,
+    # but optimization only needs the type as a stored handle. Using a
+    # ``TYPE_CHECKING``-gated alias keeps the type information for static
+    # analysers without creating a runtime ``optimization → deployment``
+    # import (Dependency Inversion / layered architecture).
+    from opifex.deployment.resource_management import GlobalResourceManager
+from opifex.optimization.adaptive_deployment import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
     AdaptiveDeploymentSystem,
 )
-from opifex.optimization.edge_network import (
+from opifex.optimization.edge_network import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
     IntelligentEdgeNetwork,
 )
 from opifex.optimization.performance_monitoring import (
@@ -82,6 +93,34 @@ def get_model_input_features(model: Module) -> int:
         raise ValueError(f"Cannot determine input features for model {type(model)}: {e}") from e
 
 
+_AwaitableT = TypeVar("_AwaitableT")
+
+
+def _run_awaitable_sync(
+    coro_factory: Callable[[], Coroutine[Any, Any, _AwaitableT]],
+) -> _AwaitableT:
+    """Execute an async coroutine from a synchronous context safely.
+
+    ``asyncio.run`` raises ``RuntimeError`` when invoked from a thread that
+    already owns an event loop, which is exactly what happens if a caller
+    invokes ``HybridPerformancePlatform.optimize_model`` from inside an
+    async pipeline. To preserve correctness under both calling contexts,
+    we bridge through a worker thread when an active loop is detected —
+    the fresh thread owns its own loop and never deadlocks.
+
+    ``coro_factory`` must be a zero-arg callable that returns a fresh
+    coroutine — coroutines are single-shot, so we need a factory so each
+    branch (or any retry) can build its own instance.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro_factory())
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(coro_factory())).result()
+
+
 class OptimizationStrategy(Enum):
     """JIT optimization strategies for different workload patterns."""
 
@@ -91,7 +130,7 @@ class OptimizationStrategy(Enum):
     BALANCED = "balanced"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class WorkloadProfile:
     """Profiling data for production workloads."""
 
@@ -104,7 +143,7 @@ class WorkloadProfile:
     model_complexity: str  # "simple", "medium", "complex"
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class PerformanceMetrics:
     """Performance metrics for optimization validation."""
 
@@ -116,7 +155,7 @@ class PerformanceMetrics:
     improvement_factor: float
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class OptimizedModel:
     """Container for optimized model with performance metadata."""
 
@@ -124,6 +163,24 @@ class OptimizedModel:
     optimization_type: OptimizationStrategy
     performance_metrics: PerformanceMetrics
     optimization_metadata: dict[str, Any]
+
+
+class _JitWrappedModel(Module):
+    """Generic JIT-compiled wrapper around an existing ``Module``.
+
+    All four optimisation strategies below (fused, memory-efficient,
+    latency-tuned, balanced) wrap their input the same way: stash the
+    original module + bind a single jit-compiled forward callable.
+    Inlining four near-identical classes was a Rule 1 (DRY) violation; we
+    keep one generic wrapper and parameterise it by the forward fn.
+    """
+
+    def __init__(self, original_model: Module, forward_fn: Callable[..., Any]) -> None:
+        self.original_model = original_model
+        self.forward_fn = forward_fn
+
+    def __call__(self, x: Any) -> Any:
+        return self.forward_fn(x)
 
 
 class AdaptiveJAXOptimizer(nnx.Module):
@@ -138,7 +195,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         performance_threshold: float = 1.1,
         memory_efficiency_target: float = 0.85,
         cache_size: int = 100,
-    ):
+    ) -> None:
         """Initialize the adaptive JAX optimizer.
 
         Args:
@@ -174,21 +231,11 @@ class AdaptiveJAXOptimizer(nnx.Module):
     def apply_aggressive_kernel_fusion(self, model: Module) -> Module:
         """Apply aggressive kernel fusion for compute-intensive workloads."""
 
-        # Create JIT-compiled version with aggressive optimization
         @jax.jit
         def fused_forward(x):
             return model(x)  # type: ignore[operator]
 
-        # Create optimized model with fused operations
-        class FusedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.fused_forward = fused_forward
-
-            def __call__(self, x):
-                return self.fused_forward(x)
-
-        return FusedModel(model)
+        return _JitWrappedModel(model, fused_forward)
 
     def apply_memory_optimization(self, model: Module) -> Module:
         """Apply memory optimization for large models."""
@@ -199,20 +246,11 @@ class AdaptiveJAXOptimizer(nnx.Module):
         def memory_efficient_forward(x):
             return model(x)  # type: ignore[operator]
 
-        class MemoryOptimizedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.memory_forward = memory_efficient_forward
-
-            def __call__(self, x):
-                return self.memory_forward(x)
-
-        return MemoryOptimizedModel(model)
+        return _JitWrappedModel(model, memory_efficient_forward)
 
     def apply_latency_optimization(self, model: Module) -> Module:
         """Apply latency optimization for real-time inference."""
 
-        # Pre-compile and optimize for minimal latency
         @jax.jit
         def fast_forward(x):
             return model(x)  # type: ignore[operator]
@@ -221,15 +259,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         dummy_input = jnp.ones((1, 64))  # Typical input shape
         _ = fast_forward(dummy_input)  # Trigger compilation
 
-        class LatencyOptimizedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.fast_forward = fast_forward
-
-            def __call__(self, x):
-                return self.fast_forward(x)
-
-        return LatencyOptimizedModel(model)
+        return _JitWrappedModel(model, fast_forward)
 
     def apply_balanced_optimization(self, model: Module) -> Module:
         """Apply balanced optimization for general workloads."""
@@ -238,15 +268,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         def balanced_forward(x):
             return model(x)  # type: ignore[operator]
 
-        class BalancedModel(Module):
-            def __init__(self, original_model):
-                self.original_model = original_model
-                self.balanced_forward = balanced_forward
-
-            def __call__(self, x):
-                return self.balanced_forward(x)
-
-        return BalancedModel(model)
+        return _JitWrappedModel(model, balanced_forward)
 
     def benchmark_model_performance(
         self, model: Module, workload: WorkloadProfile
@@ -366,7 +388,7 @@ class IntelligentGPUMemoryManager(nnx.Module):
         fragmentation_threshold: float = 0.15,
         gc_trigger_threshold: float = 0.85,
         pool_sizes: dict[str, tuple[int, int]] | None = None,
-    ):
+    ) -> None:
         """Initialize GPU memory manager.
 
         Args:
@@ -474,7 +496,7 @@ class HybridPerformancePlatform(nnx.Module):
         target_latency_ms: float = 0.5,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
 
         # Core optimization components
@@ -542,8 +564,7 @@ class HybridPerformancePlatform(nnx.Module):
 
         # Step 3: Version 7.4 - Performance monitoring setup
         with contextlib.suppress(Exception):
-            # Collect current metrics (asyncio.run handles event loop automatically)
-            asyncio.run(self.performance_monitor.collect_current_metrics())  # type: ignore[misc]
+            _run_awaitable_sync(self.performance_monitor.collect_current_metrics)
 
         # Step 4: Version 7.4 - Scientific validation
         if callable(model):
@@ -585,26 +606,28 @@ class HybridPerformancePlatform(nnx.Module):
                     }
                 )
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- scientific validators are user-supplied; continue pipeline
                 # Log scientific validation error and continue
                 optimized_model.optimization_metadata["scientific_validation_error"] = str(e)
 
         # Step 5: Version 7.4 - Predictive scaling recommendations
         try:
             if len(self.performance_monitor.metrics_history) >= 10:
-                scaling_decision = asyncio.run(self.predictive_scaler.evaluate_scaling_decision())  # type: ignore[misc]
+                scaling_decision = _run_awaitable_sync(
+                    self.predictive_scaler.evaluate_scaling_decision
+                )
                 optimized_model.optimization_metadata["scaling_recommendation"] = scaling_decision
             else:
                 # Collect some initial metrics for future scaling decisions
                 for _ in range(5):
-                    metrics = asyncio.run(self.performance_monitor.collect_current_metrics())  # type: ignore[misc]
+                    metrics = _run_awaitable_sync(self.performance_monitor.collect_current_metrics)
                     self.performance_monitor.metrics_history.append(metrics)
 
                 optimized_model.optimization_metadata["scaling_recommendation"] = {
                     "action": "monitor",
                     "reason": "Collecting baseline metrics",
                 }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- predictive scaling backends may raise arbitrary errors
             # Log predictive scaling error and continue
             optimized_model.optimization_metadata["scaling_error"] = str(e)
 

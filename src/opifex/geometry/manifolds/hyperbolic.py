@@ -30,7 +30,7 @@ class HyperbolicManifold:
     with gyrovector space operations. All operations are JAX-compatible.
     """
 
-    def __init__(self, curvature: float = -1.0, dimension: int | None = None):
+    def __init__(self, curvature: float = -1.0, dimension: int | None = None) -> None:
         """Initialize hyperbolic manifold.
 
         Args:

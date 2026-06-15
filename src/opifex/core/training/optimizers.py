@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import optax
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class OptimizerConfig:
     """Configuration for optimizer creation.
 

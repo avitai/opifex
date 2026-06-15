@@ -20,7 +20,7 @@ class IncrementalTrainer:
     Designed following test-driven development principles.
     """
 
-    def __init__(self, model: nnx.Module, rngs: nnx.Rngs):
+    def __init__(self, model: nnx.Module, rngs: nnx.Rngs) -> None:
         """Initialize incremental trainer.
 
         Args:
@@ -84,7 +84,7 @@ class IncrementalTrainer:
         total_variance = 0.0
         count = 0
 
-        def compute_variance_recursive(grad_dict):
+        def compute_variance_recursive(grad_dict) -> None:
             nonlocal total_variance, count
 
             if isinstance(grad_dict, dict):

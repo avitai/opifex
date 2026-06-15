@@ -48,7 +48,7 @@ class TuckerDecomposition(nnx.Module):
         rank: float | Sequence[int],
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
@@ -124,7 +124,7 @@ class CPDecomposition(nnx.Module):
         rank: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
@@ -172,7 +172,7 @@ class TensorTrainDecomposition(nnx.Module):
         max_rank: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
@@ -219,7 +219,7 @@ class TensorizedSpectralConvolution(nnx.Module):
         rank: float = 0.1,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -306,7 +306,7 @@ class TensorizedFourierNeuralOperator(nnx.Module):
         rank: float = 0.1,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels

@@ -16,7 +16,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MPCConfig:
     """Configuration for MPC controller."""
 
@@ -30,11 +30,15 @@ class MPCConfig:
     time_limit: float = 0.01  # Real-time constraint (10ms)
     learning_rate: float = 0.01
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.prediction_steps is None:
-            self.prediction_steps = self.horizon
+            object.__setattr__(self, "prediction_steps", self.horizon)
         if self.objective_weights is None:
-            self.objective_weights = {"state": 1.0, "control": 0.1, "terminal": 10.0}
+            object.__setattr__(
+                self,
+                "objective_weights",
+                {"state": 1.0, "control": 0.1, "terminal": 10.0},
+            )
 
 
 class MPCResult(NamedTuple):
@@ -82,7 +86,7 @@ class PredictiveModel(nnx.Module):
         conservation_laws: list[str] | None = None,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.hidden_dims = hidden_dims or [64, 32]
@@ -165,7 +169,7 @@ class ConstraintProjector(nnx.Module):
         safety_constraints: bool = False,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.state_bounds = state_bounds
@@ -187,7 +191,7 @@ class ConstraintProjector(nnx.Module):
                 nnx.Linear(16, control_dim, rngs=rngs),
             )
 
-    def add_custom_constraint(self, constraint_fn: Callable):
+    def add_custom_constraint(self, constraint_fn: Callable) -> None:
         """Add custom constraint function."""
         self.custom_constraints.append(constraint_fn)
 
@@ -235,7 +239,7 @@ class ConstraintProjector(nnx.Module):
 class ControlBarrier:
     """Control barrier function for safety."""
 
-    def __init__(self, constraint: Callable, alpha: float = 1.0):
+    def __init__(self, constraint: Callable, alpha: float = 1.0) -> None:
         self.constraint = constraint
         self.alpha = alpha
 
@@ -256,7 +260,7 @@ class RealTimeOptimizer(nnx.Module):
         learning_rate: float = 0.01,
         warm_start: bool = True,
         time_limit: float = 0.01,
-    ):
+    ) -> None:
         self.max_iterations = max_iterations
         self.tolerance = tolerance
         self.learning_rate = learning_rate
@@ -389,7 +393,7 @@ class RealTimeOptimizer(nnx.Module):
 class MPCObjective:
     """MPC objective function."""
 
-    def __init__(self, weights: dict[str, float]):
+    def __init__(self, weights: dict[str, float]) -> None:
         self.weights = weights
 
     def __call__(
@@ -413,7 +417,7 @@ class DifferentiableMPC(nnx.Module):
         config: MPCConfig,
         dynamics_model: PredictiveModel | None = None,
         constraint_projector: ConstraintProjector | None = None,
-    ):
+    ) -> None:
         self.config = config
         self.horizon = config.horizon
         self.control_dim = config.control_dim
@@ -455,7 +459,7 @@ class DifferentiableMPC(nnx.Module):
         # Custom dynamics function
         self._custom_dynamics = None
 
-    def set_dynamics(self, dynamics_fn: Callable):
+    def set_dynamics(self, dynamics_fn: Callable) -> None:
         """Set custom dynamics function."""
         self._custom_dynamics = dynamics_fn
 
@@ -588,7 +592,7 @@ class SafetyCriticalMPC(DifferentiableMPC):
         emergency_control: bool = True,
         backup_policy: bool = True,
         **kwargs,
-    ):
+    ) -> None:
         config = MPCConfig(horizon=horizon, control_dim=control_dim, state_dim=state_dim, **kwargs)
         super().__init__(config)
 
@@ -620,7 +624,7 @@ class SafetyCriticalMPC(DifferentiableMPC):
 
         return backup_policy
 
-    def add_barrier(self, barrier: ControlBarrier):
+    def add_barrier(self, barrier: ControlBarrier) -> None:
         """Add control barrier function."""
         self.control_barriers.append(barrier)
 
@@ -686,7 +690,7 @@ class RecedingHorizonController(nnx.Module):
         control_dim: int = 2,
         sampling_time: float = 0.1,
         safety_critical: bool = False,
-    ):
+    ) -> None:
         self.mpc_horizon = mpc_horizon
         self.control_horizon = control_horizon
         self.state_dim = state_dim

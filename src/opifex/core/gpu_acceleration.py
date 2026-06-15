@@ -36,7 +36,7 @@ _HW_PROBE_FAILURE = (AttributeError, KeyError, RuntimeError, TypeError)
 class RooflineMemoryManager:
     """Memory management based on roofline model for optimal hardware utilization."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.hw_specs = self._get_hardware_specs()
         self.operation_cache = {}
 
@@ -173,7 +173,7 @@ class RooflineMemoryManager:
 class MixedPrecisionOptimizer:
     """Hardware-aware mixed precision optimization for maximum performance."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.hardware_config = self._detect_hardware()
 
     def _detect_hardware(self) -> dict[str, Any]:
@@ -272,7 +272,7 @@ class MixedPrecisionOptimizer:
 class AsyncMemoryManager:
     """Asynchronous memory management with prefetching for overlapped computation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.prefetch_queue = {}
 
     def async_device_put(self, array: jax.Array, device: Any, key: str | None = None) -> jax.Array:
@@ -316,7 +316,7 @@ class AsyncMemoryManager:
 class MemoryPoolManager:
     """Memory pool management for efficient buffer reuse."""
 
-    def __init__(self, pool_size_gb: float = 4.0):
+    def __init__(self, pool_size_gb: float = 4.0) -> None:
         self.pool_size_bytes = int(pool_size_gb * 1024**3)
         self.buffer_pools = {}  # (shape, dtype) -> list of buffers
         self.allocated_bytes = 0
@@ -405,9 +405,14 @@ class MemoryPoolManager:
 class CachedProgressiveTester:
     """Progressive testing with caching and roofline analysis prescreening."""
 
-    def __init__(self, memory_manager: RooflineMemoryManager | None = None):
+    def __init__(self, memory_manager: RooflineMemoryManager | None = None) -> None:
         self.memory_manager = memory_manager or RooflineMemoryManager()
         self.hardware_signature = self._get_hardware_signature()
+        # Per-instance test-result cache. We avoided ``functools.lru_cache``
+        # on the bound method because it would pin ``self`` in the cache
+        # key forever (ruff B019), preventing garbage collection of the
+        # tester. A plain dict on the instance disappears with it.
+        self._test_op_cache: dict[tuple[str, int, str], tuple[bool, float | None, str | None]] = {}
 
     def _get_hardware_signature(self) -> str:
         """Create unique signature for current hardware configuration."""
@@ -420,12 +425,22 @@ class CachedProgressiveTester:
             )
             return "unknown_hardware"
 
-    @functools.lru_cache(maxsize=128)  # noqa: B019
     def _cached_test_operation(
         self, operation_name: str, size: int, dtype_str: str
     ) -> tuple[bool, float | None, str | None]:
-        """Cache test results to avoid repeated expensive tests."""
-        return self._actual_test_operation(operation_name, size, dtype_str)
+        """Cache test results to avoid repeated expensive tests.
+
+        Uses ``self._test_op_cache`` (initialised in ``__init__``) rather
+        than ``functools.lru_cache`` so the cache lives and dies with the
+        instance — see ruff B019 / Rule 0 for the rationale.
+        """
+        key = (operation_name, size, dtype_str)
+        cached = self._test_op_cache.get(key)
+        if cached is not None:
+            return cached
+        result = self._actual_test_operation(operation_name, size, dtype_str)
+        self._test_op_cache[key] = result
+        return result
 
     def _actual_test_operation(
         self, operation_name: str, size: int, dtype_str: str
@@ -476,7 +491,7 @@ class CachedProgressiveTester:
             avg_time = sum(times) / len(times)
             return True, avg_time, None
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- benchmarks arbitrary operation_fn from caller
             return False, None, str(e)
 
     def _test_safe_matmul(self, x: Array, y: Array) -> Array:
@@ -539,7 +554,7 @@ class CachedProgressiveTester:
 class OptimizedGPUManager:
     """Complete optimized GPU manager integrating all optimization techniques."""
 
-    def __init__(self, max_memory_fraction: float = 0.75):
+    def __init__(self, max_memory_fraction: float = 0.75) -> None:
         self.roofline_manager = RooflineMemoryManager()
         self.mixed_precision = MixedPrecisionOptimizer()
         self.async_manager = AsyncMemoryManager()
@@ -631,7 +646,7 @@ class OptimizedGPUManager:
                         ),
                     }
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- benchmark loop captures any GPU/runtime failure
                 results[size] = {
                     "success": False,
                     "execution_time": None,

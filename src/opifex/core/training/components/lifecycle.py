@@ -22,7 +22,7 @@ class TrainingComponent:
     Provides lifecycle methods (setup, step, cleanup) for component composition.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize the training component.
 
         Args:

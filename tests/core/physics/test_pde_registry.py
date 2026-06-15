@@ -266,7 +266,7 @@ class TestPoissonResidual:
 
         # Simple NNX model
         class SimplePINN(nnx.Module):
-            def __init__(self, rngs):
+            def __init__(self, rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):

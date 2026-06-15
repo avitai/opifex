@@ -193,7 +193,7 @@ class FusedFourierLayer(nnx.Module):
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize fused Fourier layer.
 
         Args:
@@ -263,7 +263,7 @@ class FusedFourierLayer(nnx.Module):
 class FusionOptimizedOperator(nnx.Module):
     """Base class for fusion-optimized neural operators."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.fusion_enabled = True
         self.target_layout = self._detect_optimal_layout()
@@ -281,7 +281,7 @@ class FusionOptimizedOperator(nnx.Module):
         # CPU may prefer NCHW for some operations
         return "NCHW"
 
-    def enable_fusion_optimization(self, enable: bool = True):
+    def enable_fusion_optimization(self, enable: bool = True) -> None:
         """Enable or disable fusion optimizations."""
         self.fusion_enabled = enable
 

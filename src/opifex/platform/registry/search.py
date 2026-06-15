@@ -15,7 +15,7 @@ import jax.numpy as jnp
 from opifex.platform.search_types import SearchType
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class SearchQuery:
     """Search query for neural functionals."""
 
@@ -33,7 +33,7 @@ class SearchQuery:
     search_type: SearchType = SearchType.HYBRID
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SearchResult:
     """Search result for a neural functional."""
 
@@ -60,7 +60,7 @@ class SearchEngine:
         registry_service,
         enable_semantic_search: bool = True,
         similarity_threshold: float = 0.7,
-    ):
+    ) -> None:
         """Initialize search engine.
 
         Args:

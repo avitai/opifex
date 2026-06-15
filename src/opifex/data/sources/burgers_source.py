@@ -49,7 +49,7 @@ class BurgersDataSource(grain.RandomAccessDataSource):
         time_range: tuple[float, float] = (0.0, 2.0),
         dimension: str = "2d",
         seed: int = 42,
-    ):
+    ) -> None:
         """Initialize Burgers data source."""
         if dimension not in ["1d", "2d"]:
             raise ValueError(f"dimension must be '1d' or '2d', got '{dimension}'")

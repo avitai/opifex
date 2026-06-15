@@ -107,7 +107,7 @@ class NNXSecondOrderOptimizer:
         self,
         model: nnx.Module,
         config: LBFGSConfig | None = None,
-    ):
+    ) -> None:
         """Initialize the optimizer.
 
         Args:
@@ -208,7 +208,7 @@ class NNXHybridOptimizer:
         self,
         model: nnx.Module,
         config: HybridOptimizerConfig | None = None,
-    ):
+    ) -> None:
         """Initialize the hybrid optimizer.
 
         Args:

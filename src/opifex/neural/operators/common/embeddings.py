@@ -43,7 +43,7 @@ class GridEmbedding2D(EmbeddingBase):
         self,
         in_channels: int,
         grid_boundaries: list[list[float]] | None = None,
-    ):
+    ) -> None:
         super().__init__()
         if grid_boundaries is None:
             grid_boundaries = [[0.0, 1.0], [0.0, 1.0]]
@@ -124,7 +124,7 @@ class GridEmbeddingND(EmbeddingBase):
         in_channels: int,
         dim: int = 2,
         grid_boundaries: list[list[float]] | None = None,
-    ):
+    ) -> None:
         super().__init__()
         if grid_boundaries is None:
             grid_boundaries = [[0.0, 1.0] for _ in range(dim)]
@@ -233,7 +233,7 @@ class SinusoidalEmbedding(EmbeddingBase):
         num_frequencies: int | None = None,
         embedding_type: str = "transformer",
         max_positions: int = 10000,
-    ):
+    ) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.num_frequencies = num_frequencies or in_channels
@@ -311,7 +311,7 @@ class FunctionEmbedding(EmbeddingBase):
     architectures, supporting various coordinate systems and transformations.
     """
 
-    def __init__(self, in_channels: int, out_channels: int):
+    def __init__(self, in_channels: int, out_channels: int) -> None:
         super().__init__()
         self.in_channels = in_channels
         self._out_channels = out_channels

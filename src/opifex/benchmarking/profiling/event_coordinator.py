@@ -51,7 +51,7 @@ class ProfilingTimeline:
         profiler_id: str,
         data: dict[str, Any] | None = None,
         duration_ms: float | None = None,
-    ):
+    ) -> None:
         """Add an event to the timeline."""
         with self._lock:
             if self._start_time is None:
@@ -127,7 +127,7 @@ class EventCoordinator:
                     self.timeline.add_event(
                         "jax_profiler_start", "coordinator", {"trace_dir": trace_dir}
                     )
-                except Exception as e:
+                except (RuntimeError, OSError) as e:
                     # JAX profiler might not be available in all environments
                     self.timeline.add_event("jax_profiler_error", "coordinator", {"error": str(e)})
 

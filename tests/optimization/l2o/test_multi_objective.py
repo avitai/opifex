@@ -731,7 +731,7 @@ class TestJITCompatibility:
         from typing import cast
 
         class MockL2OEngine:
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
             def solve(self, *args, **kwargs):

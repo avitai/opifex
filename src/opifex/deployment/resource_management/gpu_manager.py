@@ -18,7 +18,7 @@ class GPUPoolManager:
         resource_orchestrator: Any,
         memory_optimization_threshold: float = 0.85,
         pool_rebalancing_interval: int = 300,  # 5 minutes
-    ):
+    ) -> None:
         """Initialize GPU pool manager.
 
         Args:

@@ -211,7 +211,7 @@ class NTKWrapper:
         self,
         model: nnx.Module,
         config: NTKConfig | None = None,
-    ):
+    ) -> None:
         """Initialize NTK wrapper.
 
         Args:

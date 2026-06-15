@@ -30,7 +30,7 @@ class ArtifexSolverAdapter(SciMLSolver):
     on conditions.
     """
 
-    def __init__(self, artifex_model: Any):
+    def __init__(self, artifex_model: Any) -> None:
         """Initialize with an Artifex model instance.
 
         Args:

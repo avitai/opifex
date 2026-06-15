@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from opifex.distributed.config import DistributedConfig
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class QuantumTrainingConfig:
     """Configuration for quantum-aware training.
 
@@ -54,7 +54,7 @@ class QuantumTrainingConfig:
     enable_energy_conservation: bool = True
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class LossConfig:
     """Configuration for loss computation.
 
@@ -75,7 +75,7 @@ class LossConfig:
     regularization_weight: float = 0.0
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class OptimizationConfig:
     """Configuration for optimization.
 
@@ -98,7 +98,7 @@ class OptimizationConfig:
     beta2: float = 0.999  # for Adam
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class ValidationConfig:
     """Configuration for validation.
 
@@ -115,7 +115,7 @@ class ValidationConfig:
     compute_val_metrics: bool = True
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class CheckpointConfig:
     """Configuration for checkpointing.
 
@@ -132,7 +132,7 @@ class CheckpointConfig:
     save_best_only: bool = False
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class MetaOptimizerConfig:
     """Configuration for meta-optimization algorithms.
 
@@ -167,7 +167,7 @@ class MetaOptimizerConfig:
     energy_convergence_tracking: bool = False
     chemical_accuracy_target: float = 1e-3
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         valid_algorithms = ["l2o", "adaptive_lr", "warm_start"]
         if self.meta_algorithm not in valid_algorithms:
@@ -184,7 +184,7 @@ class MetaOptimizerConfig:
             )
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class TrainingConfig:
     """Main training configuration.
 
@@ -246,7 +246,7 @@ class TrainingConfig:
     # Distributed training configuration (optional)
     distributed_config: DistributedConfig | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Update sub-configs with main config values.
 
         This ensures that the main config values are synchronized to the

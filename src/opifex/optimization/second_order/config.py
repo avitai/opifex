@@ -92,7 +92,7 @@ class LBFGSConfig:
     max_iterations: int = 100
     tolerance: float = 1e-6
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if self.memory_size <= 0:
             raise ValueError("memory_size must be positive")
@@ -136,7 +136,7 @@ class GaussNewtonConfig:
     rtol: float = 1e-6
     atol: float = 1e-6
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if self.damping_increase_factor <= 1:
             raise ValueError("increase_factor must be > 1")
@@ -188,7 +188,7 @@ class HybridOptimizerConfig:
     adam_b2: float = 0.999
     lbfgs_config: LBFGSConfig = field(default_factory=LBFGSConfig)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if self.first_order_steps <= 0:
             raise ValueError("first_order_steps must be positive")

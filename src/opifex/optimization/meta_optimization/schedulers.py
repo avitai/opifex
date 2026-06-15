@@ -46,7 +46,7 @@ class AdaptiveLearningRateScheduler:
         factor: float = 0.5,
         min_lr: float = 1e-8,
         **kwargs: Any,
-    ):
+    ) -> None:
         """Initialize adaptive learning rate scheduler.
 
         Args:

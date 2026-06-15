@@ -41,7 +41,7 @@ class WarmStartingStrategy:
         adaptation_ratio: float = 0.9,
         similarity_metric: str = "cosine",
         min_similarity: float = 0.7,
-    ):
+    ) -> None:
         """Initialize warm-starting strategy.
 
         Args:

@@ -71,7 +71,7 @@ def modal_analysis(
     # Reconstruct field - use more stable approach
     try:
         reconstructed = jnp.real(jnp.fft.ifft2(filtered_fft))
-    except Exception:
+    except (ValueError, TypeError, ArithmeticError, FloatingPointError):
         # Fallback: return zero field if reconstruction fails
         reconstructed = jnp.zeros_like(field)
 

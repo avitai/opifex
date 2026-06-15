@@ -6,13 +6,13 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
-from opifex.neural.base import StandardMLP
-from opifex.training.metrics import (
+from opifex.core.training.monitoring.metrics import (
     AdvancedMetricsCollector,
     HARTREE_TO_KCAL_MOL,
     TrainingMetrics,
     TrainingState,
 )
+from opifex.neural.base import StandardMLP
 
 
 class TestTrainingMetrics:

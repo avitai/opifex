@@ -65,10 +65,10 @@ from opifex.core.gpu_acceleration import (
     RooflineMemoryManager,
     safe_matrix_multiply,
 )
-from opifex.neural.operators import FourierNeuralOperator, UFourierNeuralOperator
-from opifex.training.mixed_precision import (
+from opifex.core.training.strategies.mixed_precision import (
     align_for_tensorcore,
 )
+from opifex.neural.operators import FourierNeuralOperator, UFourierNeuralOperator
 
 
 class ComprehensiveProfilingDemo:

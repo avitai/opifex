@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.training.strategies.incremental_trainer import IncrementalTrainer
 from opifex.neural.operators.fno.base import FourierNeuralOperator
-from opifex.training.incremental_trainer import IncrementalTrainer
 
 
 class TestIncrementalTrainerInitialization:

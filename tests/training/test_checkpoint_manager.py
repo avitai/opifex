@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from flax import nnx
 
+from opifex.core.training.components.checkpoint_manager import CheckpointManager
 from opifex.neural.operators.fno.base import FourierNeuralOperator
-from opifex.training.checkpoint_manager import CheckpointManager
 
 
 class TestCheckpointManagerInitialization:

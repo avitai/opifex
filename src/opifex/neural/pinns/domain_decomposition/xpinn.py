@@ -102,7 +102,7 @@ class XPINN(DomainDecompositionPINN):
         config: XPINNConfig | None = None,
         activation: Callable[[Array], Array] = nnx.tanh,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize XPINN.
 
         Args:

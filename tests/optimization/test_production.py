@@ -37,7 +37,7 @@ def get_model_input_features(model) -> int:
 class SimpleModel(nnx.Module):
     """Simple test model for production optimization tests."""
 
-    def __init__(self, features: int = 64, *, rngs: nnx.Rngs):
+    def __init__(self, features: int = 64, *, rngs: nnx.Rngs) -> None:
         super().__init__()
         self.linear = nnx.Linear(features, features, rngs=rngs)
 

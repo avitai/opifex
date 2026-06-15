@@ -41,7 +41,7 @@ class FourierSpectralConvolution(nnx.Module):
         modes: int,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize spectral convolution layer following NNX patterns.
 
         Args:
@@ -127,7 +127,7 @@ class FourierLayer(nnx.Module):
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         spatial_dims: int = 2,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Fourier layer following NNX patterns.
 
         Args:
@@ -363,7 +363,7 @@ class FourierNeuralOperator(nnx.Module):
         domain_padding: int = 0,
         spatial_dims: int = 2,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize Fourier Neural Operator following NNX patterns.
 
         Args:

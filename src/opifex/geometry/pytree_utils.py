@@ -5,7 +5,7 @@ from typing import Any
 import jax
 
 
-def _register_manifold_pytrees(RiemannianManifold):
+def _register_manifold_pytrees(RiemannianManifold) -> None:
     """Register manifold-related pytrees."""
 
     def riemannian_tree_flatten(
@@ -44,7 +44,7 @@ def _register_manifold_pytrees(RiemannianManifold):
     )
 
 
-def _register_shape_pytrees(Rectangle, Circle, Polygon):
+def _register_shape_pytrees(Rectangle, Circle, Polygon) -> None:
     """Register basic shape pytrees."""
 
     # Register Rectangle
@@ -109,7 +109,7 @@ def _register_shape_pytrees(Rectangle, Circle, Polygon):
     jax.tree_util.register_pytree_node(Polygon, polygon_tree_flatten, polygon_tree_unflatten)
 
 
-def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference):
+def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference) -> None:
     """Register CSG operation pytrees."""
 
     # Register CSGUnion
@@ -167,7 +167,7 @@ def _register_csg_pytrees(CSGUnion, CSGIntersection, CSGDifference):
     )
 
 
-def _register_periodic_pytrees(PeriodicCell):
+def _register_periodic_pytrees(PeriodicCell) -> None:
     """Register periodic cell pytrees."""
 
     def periodic_cell_tree_flatten(
@@ -188,7 +188,7 @@ def _register_periodic_pytrees(PeriodicCell):
     )
 
 
-def _register_molecular_pytrees(MolecularGeometry):
+def _register_molecular_pytrees(MolecularGeometry) -> None:
     """Register molecular geometry pytrees."""
 
     def molecular_geometry_tree_flatten(
@@ -218,7 +218,7 @@ def _register_molecular_pytrees(MolecularGeometry):
     )
 
 
-def _register_graph_pytrees():  # noqa: PLR0915
+def _register_graph_pytrees() -> None:  # noqa: PLR0915
     """Register graph-related pytrees."""
     # Import here to avoid circular imports
     from opifex.geometry.topology.graphs import (
@@ -378,7 +378,7 @@ def is_pytree_registered(cls: type) -> bool:
         test_obj = object.__new__(cls)
         jax.tree_util.tree_map(lambda x: x, test_obj)
         return True
-    except Exception:
+    except (TypeError, AttributeError, ValueError):
         return False
 
 
@@ -427,7 +427,7 @@ def list_registered_pytrees() -> list[str]:
 
 
 # Register all pytrees when module is imported
-def register_geometric_pytrees():
+def register_geometric_pytrees() -> None:
     """Register all geometric objects as JAX pytrees."""
     # Import all geometric classes
     from opifex.geometry.csg import (

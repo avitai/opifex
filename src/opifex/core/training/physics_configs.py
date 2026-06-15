@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ConstraintConfig:
     """Configuration for physics constraint enforcement.
 
@@ -34,7 +34,7 @@ class ConstraintConfig:
     violation_monitoring: bool = False
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ConservationConfig:
     """Configuration for conservation law enforcement.
 
@@ -61,7 +61,7 @@ class ConservationConfig:
     target_particle_number: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MultiScaleConfig:
     """Configuration for multi-scale physics integration.
 
@@ -76,7 +76,7 @@ class MultiScaleConfig:
     coupling: bool = False
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class BoundaryConfig:
     """Configuration for boundary conditions.
 
@@ -89,7 +89,7 @@ class BoundaryConfig:
     enforce: bool = False
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DFTConfig:
     """Configuration for density functional theory.
 
@@ -104,7 +104,7 @@ class DFTConfig:
     exchange_correlation_weight: float = 0.3
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SCFConfig:
     """Configuration for self-consistent field calculations.
 
@@ -119,7 +119,7 @@ class SCFConfig:
     mixing_parameter: float = 0.5
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ElectronicStructureConfig:
     """Configuration for electronic structure optimization.
 
@@ -134,7 +134,7 @@ class ElectronicStructureConfig:
     temperature: float = 300.0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ChemicalAccuracyTracking:
     """Configuration for chemical accuracy tracking.
 
@@ -149,7 +149,7 @@ class ChemicalAccuracyTracking:
     history_size: int = 100
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SCFConvergenceTracking:
     """Configuration for SCF convergence tracking.
 
@@ -164,7 +164,7 @@ class SCFConvergenceTracking:
     history_size: int = 100
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ConservationViolationTracking:
     """Configuration for conservation violation tracking.
 
@@ -179,7 +179,7 @@ class ConservationViolationTracking:
     history_size: int = 100
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MetricsTrackingConfig:
     """Configuration for physics metrics tracking.
 
@@ -202,7 +202,7 @@ class MetricsTrackingConfig:
     conservation_violations: ConservationViolationTracking | None = None
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LoggingConfig:
     """Configuration for physics-specific logging.
 
@@ -221,7 +221,7 @@ class LoggingConfig:
     alert_thresholds: dict[str, float] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PerformanceConfig:
     """Configuration for performance analytics.
 

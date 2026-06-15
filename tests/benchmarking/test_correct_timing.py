@@ -18,7 +18,7 @@ class TestCorrectBenchmarkTiming:
         from opifex.core.timing import block_until_ready
 
         class ReadySpy:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.called = False
 
             def block_until_ready(self):
@@ -92,7 +92,7 @@ class TestBenchmarkPipelineCorrectness:
         from flax import nnx
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(10, 10, rngs=rngs)
 
             def __call__(self, x):

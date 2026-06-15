@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from opifex.core.training.components.base import (
-        TrainingComponent,
+        TrainingCallback,
     )
     from opifex.core.training.config import TrainingConfig
 
@@ -70,7 +70,7 @@ class Trainer(nnx.Module):
         model: nnx.Module,
         config: TrainingConfig,
         rngs: nnx.Rngs | None = None,
-    ):
+    ) -> None:
         """Initialize the trainer.
 
         Args:
@@ -130,8 +130,7 @@ class Trainer(nnx.Module):
         # Extensibility: custom losses and hooks
         self.custom_losses: dict[str, Callable] = {}
         self.hooks: dict[str, list[Callable]] = {}
-        self.hooks: dict[str, list[Callable]] = {}
-        self.components: nnx.List[TrainingComponent] = nnx.List([])
+        self.components: nnx.List[TrainingCallback] = nnx.List([])
 
         # Initialize constraint weights if configured
         self._constraint_weights = nnx.Dict()
@@ -150,7 +149,7 @@ class Trainer(nnx.Module):
                 config=config.distributed_config,
             )
 
-    def add_component(self, component: TrainingComponent) -> None:
+    def add_component(self, component: TrainingCallback) -> None:
         """Add a training component.
 
         Args:
@@ -454,8 +453,11 @@ class Trainer(nnx.Module):
                     if val_loss is not None:
                         val_info = f", Val Loss: {val_loss:.6f}"
                 logger.info(
-                    f"Epoch {epoch + 1}/{self.config.num_epochs}: "
-                    f"Train Loss: {avg_train_loss:.6f}{val_info}"
+                    "Epoch %d/%d: Train Loss: %.6f%s",
+                    epoch + 1,
+                    self.config.num_epochs,
+                    avg_train_loss,
+                    val_info,
                 )
 
             # Checkpointing
@@ -523,7 +525,7 @@ class Trainer(nnx.Module):
                 return_original_on_missing=False,
             )
             return model, metadata  # pyright: ignore[reportArgumentType]
-        except Exception:
+        except (OSError, ValueError, KeyError, FileNotFoundError):
             return None, {}
 
     def register_custom_loss(self, name: str, loss_fn: Callable) -> None:

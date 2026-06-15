@@ -15,21 +15,14 @@ Version 7.4 Production Optimization Components:
 # Core optimization components
 # Version 7.4: Performance Monitoring & Prediction
 # Version 7.4: Adaptive Deployment System
-# Version 7.4: Global Resource Management
-from opifex.deployment.resource_management import (
-    CloudProvider,
-    CostController,
-    CostOptimization,
-    GlobalResourceManager,
-    GPUPoolManager,
-    OptimizationObjective,
-    ResourceAllocation,
-    ResourceOrchestrator,
-    ResourcePool,
-    ResourceType,
-    SustainabilityMetrics,
-    SustainabilityTracker,
-)
+#
+# Note: resource_management lives in opifex.deployment because deployment
+# owns the concrete cloud/sustainability concerns. Callers that need the
+# concrete classes should import them from
+# ``opifex.deployment.resource_management`` directly — we no longer
+# re-export them here, which kept the optimization layer artificially
+# coupled to deployment-side symbols nobody was importing through this
+# facade.
 from opifex.optimization.adaptive_deployment import (
     AdaptiveDeploymentSystem,
     CanaryController,
@@ -103,13 +96,9 @@ __all__ = [
     "Anomaly",
     "AnomalySeverity",
     "CanaryController",
-    # Global resource management
-    "CloudProvider",
     # Scientific computing integration
     "ConservationCheckResult",
     "ConservationLaw",
-    "CostController",
-    "CostOptimization",
     "DeploymentAI",
     "DeploymentConfig",
     "DeploymentMetrics",
@@ -123,8 +112,6 @@ __all__ = [
     "EdgeRegion",
     "FailoverResult",
     "FailoverStrategy",
-    "GPUPoolManager",
-    "GlobalResourceManager",
     "HybridPerformancePlatform",
     "IntelligentEdgeNetwork",
     "IntelligentGPUMemoryManager",
@@ -132,7 +119,6 @@ __all__ = [
     "LatencyProfile",
     "NumericalValidationResult",
     "NumericalValidator",
-    "OptimizationObjective",
     "OptimizationStrategy",
     "OptimizedModel",
     "PerformanceMetrics",
@@ -145,18 +131,12 @@ __all__ = [
     "PredictiveScaler",
     "ProductionPerformanceMetrics",
     "RegionalFailover",
-    "ResourceAllocation",
-    "ResourceOrchestrator",
-    "ResourcePool",
-    "ResourceType",
     "RollbackDecision",
     "RollbackEngine",
     "RollbackTrigger",
     "ScientificBenchmarkResult",
     "ScientificBenchmarkValidator",
     "ScientificComputingIntegrator",
-    "SustainabilityMetrics",
-    "SustainabilityTracker",
     "TrafficShaper",
     "WorkloadProfile",
 ]

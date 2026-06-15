@@ -30,7 +30,7 @@ class TestTrainerUsesNNXOptimizer:
 
         # Create simple model
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -56,7 +56,7 @@ class TestTrainerUsesNNXOptimizer:
         from opifex.core.training.trainer import Trainer
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -98,7 +98,7 @@ class TestTrainerUsesNNXOptimizer:
         from opifex.core.training.trainer import Trainer
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -132,7 +132,7 @@ class TestNNXOptimizerPerformance:
         import optax
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(100, 100, rngs=rngs)
 
             def __call__(self, x):
@@ -184,7 +184,7 @@ class TestTrainerJITWithNNXOptimizer:
         from opifex.core.training.trainer import Trainer
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -228,7 +228,7 @@ class TestTrainerJITWithNNXOptimizer:
         from opifex.core.training.trainer import Trainer
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -270,7 +270,7 @@ class TestNNXOptimizerIntegration:
         from opifex.core.training.trainer import Trainer
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(5, 1, rngs=rngs)
 
             def __call__(self, x):
@@ -299,7 +299,7 @@ class TestNNXOptimizerIntegration:
         import optax
 
         class SimpleModel(nnx.Module):
-            def __init__(self, *, rngs: nnx.Rngs):
+            def __init__(self, *, rngs: nnx.Rngs) -> None:
                 self.dense = nnx.Linear(2, 1, rngs=rngs)
 
             def __call__(self, x):

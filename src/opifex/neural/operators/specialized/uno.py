@@ -34,7 +34,7 @@ class UNetBlock(nnx.Module):
         activation: Callable = nnx.gelu,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize U-Net block.
 
         Args:
@@ -132,7 +132,7 @@ class UNeuralOperator(nnx.Module):
         activation: Callable = nnx.gelu,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         """Initialize UNO.
 
         Args:

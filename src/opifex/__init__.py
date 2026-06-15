@@ -17,7 +17,7 @@ __author__ = "Opifex Team"
 __email__ = "team@opifex.io"
 
 
-def setup_jax_optimization():
+def setup_jax_optimization() -> None:
     """Setup JAX optimizations for improved performance.
 
     This function configures:
@@ -107,11 +107,17 @@ def setup_jax_optimization():
 
     logger = logging.getLogger(__name__)
     logger.info("🚀 Opifex JAX Optimizations Enabled:")
-    logger.info(f"   • Backend: {backend}")
-    logger.info(f"   • XLA Cache: {cache_dir}")
-    logger.info(f"   • Device count: {jax.device_count()}")
-    logger.info(f"   • XLA Flags: {os.environ.get('XLA_FLAGS', 'None')}")
+    logger.info("   • Backend: %s", backend)
+    logger.info("   • XLA Cache: %s", cache_dir)
+    logger.info("   • Device count: %s", jax.device_count())
+    logger.info("   • XLA Flags: %s", os.environ.get("XLA_FLAGS", "None"))
 
 
-# Automatically setup optimizations on import
-setup_jax_optimization()
+# Optional auto-setup: opt-out via ``OPIFEX_AUTO_CONFIGURE=0`` to avoid
+# module-level side effects on ``import opifex`` (Rule 13: no hidden
+# side effects at import time). This guard makes tests deterministic
+# under controlled env, while preserving zero-config UX by default.
+# Callers preferring full explicit control should set the env var and
+# invoke :func:`setup_jax_optimization` themselves at process startup.
+if os.environ.get("OPIFEX_AUTO_CONFIGURE", "1") != "0":
+    setup_jax_optimization()

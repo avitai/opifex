@@ -39,7 +39,7 @@ class MixedPrecisionConfig:
         max_loss_scale: float = 2**24,
         overflow_check_frequency: int = 100,
         enable_tensorcore_alignment: bool = True,
-    ):
+    ) -> None:
         """Initialize mixed precision configuration.
 
         Args:
@@ -79,7 +79,7 @@ class MixedPrecisionConfig:
 class MixedPrecisionState:
     """State for mixed precision training."""
 
-    def __init__(self, loss_scale: float, overflow_count: int = 0):
+    def __init__(self, loss_scale: float, overflow_count: int = 0) -> None:
         self.loss_scale = loss_scale
         self.overflow_count = overflow_count
         self.step_count = 0
@@ -181,7 +181,7 @@ class MixedPrecisionTrainer(BasicTrainer):
         model: nnx.Module,
         config: TrainingConfig,
         mp_config: MixedPrecisionConfig | None = None,
-    ):
+    ) -> None:
         """Initialize mixed precision trainer.
 
         Args:
@@ -204,12 +204,12 @@ class MixedPrecisionTrainer(BasicTrainer):
 
         logger = logging.getLogger(__name__)
         logger.info("🔧 Mixed Precision Training Initialized:")
-        logger.info(f"   • Compute dtype: {self.mp_config.compute_dtype}")
-        logger.info(f"   • Parameter dtype: {self.mp_config.param_dtype}")
-        logger.info(f"   • Backend: {self.mp_config.backend}")
-        logger.info(f"   • TensorCore alignment: {self.mp_config.enable_tensorcore_alignment}")
+        logger.info("   • Compute dtype: %s", self.mp_config.compute_dtype)
+        logger.info("   • Parameter dtype: %s", self.mp_config.param_dtype)
+        logger.info("   • Backend: %s", self.mp_config.backend)
+        logger.info("   • TensorCore alignment: %s", self.mp_config.enable_tensorcore_alignment)
 
-    def _convert_model_to_mixed_precision(self):
+    def _convert_model_to_mixed_precision(self) -> None:
         """Convert model parameters to mixed precision format."""
         # Keep parameters in float32 for stability
         # Computations will be done in lower precision

@@ -40,7 +40,7 @@ def simple_model():
     """Create a simple test model."""
 
     class SimpleModel(nnx.Module):
-        def __init__(self, *, rngs: nnx.Rngs):
+        def __init__(self, *, rngs: nnx.Rngs) -> None:
             self.linear = nnx.Linear(10, 5, rngs=rngs)
 
         def __call__(self, x: jax.Array) -> jax.Array:
@@ -84,24 +84,24 @@ class TestTrainingComponent:
         assert component.name == "TrainingComponent"
 
     def test_component_lifecycle_setup(self, simple_model, training_state):
-        """Test component setup lifecycle method."""
+        """Test that base setup is a no-op (does not mutate component state)."""
         component = TrainingComponent()
+        initial_config = dict(component.config)
+        initial_name = component.name
 
-        # Should not raise error
         component.setup(simple_model, training_state)
 
-        # Base implementation should do nothing
-        assert True
+        assert component.config == initial_config
+        assert component.name == initial_name
 
     def test_component_lifecycle_cleanup(self):
-        """Test component cleanup lifecycle method."""
+        """Test that base cleanup is a no-op (does not mutate component state)."""
         component = TrainingComponent()
+        initial_config = dict(component.config)
 
-        # Should not raise error
         component.cleanup()
 
-        # Base implementation should do nothing
-        assert True
+        assert component.config == initial_config
 
     def test_component_step_method(self, simple_model, training_state):
         """Test component step method."""
@@ -441,8 +441,9 @@ class TestComponentComposition:
         recovery.setup(simple_model, training_state)
         mixed_precision.setup(simple_model, training_state)
 
-        # All should complete without error
-        assert True
+        assert checkpoint.name == "CheckpointComponent"
+        assert recovery.name == "RecoveryComponent"
+        assert mixed_precision.name == "MixedPrecisionComponent"
 
     def test_components_can_be_chained(self, simple_model, training_state):
         """Test that component steps can be chained."""
@@ -473,8 +474,9 @@ class TestComponentComposition:
         for component in components:
             component.cleanup()
 
-        # Should complete without error
-        assert True
+        for component in components:
+            assert hasattr(component, "name")
+            assert hasattr(component, "config")
 
 
 # ===================================================================

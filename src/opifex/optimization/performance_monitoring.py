@@ -26,7 +26,7 @@ class AnomalySeverity(Enum):
     CRITICAL = "critical"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Anomaly:
     """Performance anomaly detection result."""
 
@@ -40,7 +40,7 @@ class Anomaly:
     recommended_action: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PerformanceMetrics:
     """Full performance metrics for monitoring."""
 
@@ -69,7 +69,7 @@ class PerformanceMetrics:
     physics_metrics: dict[str, float] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PredictionResult:
     """Result of performance prediction."""
 
@@ -103,7 +103,7 @@ class PerformancePredictor(nnx.Module):
         prediction_horizon: int = 60,  # minutes
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.prediction_horizon = prediction_horizon
 
@@ -136,7 +136,7 @@ class AIAnomalyDetector(nnx.Module):
         anomaly_threshold: float = 0.8,
         *,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
         super().__init__()
         self.anomaly_threshold = anomaly_threshold
 
@@ -174,7 +174,7 @@ class PerformanceMonitor:
         anomaly_detector: AIAnomalyDetector,
         performance_predictor: PerformancePredictor,
         collection_interval: float = 1.0,  # seconds
-    ):
+    ) -> None:
         self.anomaly_detector = anomaly_detector
         self.performance_predictor = performance_predictor
         self.collection_interval = collection_interval
@@ -209,7 +209,7 @@ class PerformanceMonitor:
 
                 await asyncio.sleep(self.collection_interval)
 
-            except Exception:
+            except Exception:  # noqa: BLE001 -- monitoring loop must survive any iteration failure
                 await asyncio.sleep(self.collection_interval)
 
     async def stop_monitoring(self) -> None:
@@ -397,7 +397,7 @@ class PredictiveScaler:
         scale_down_threshold: float = 0.8,
         min_replicas: int = 1,
         max_replicas: int = 10,
-    ):
+    ) -> None:
         self.performance_monitor = performance_monitor
         self.scale_up_threshold = scale_up_threshold
         self.scale_down_threshold = scale_down_threshold
@@ -446,7 +446,7 @@ class PredictiveScaler:
 
             return scaling_decision
 
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, KeyError, ArithmeticError) as e:
             return {
                 "action": "maintain",
                 "target_replicas": self.current_replicas,
@@ -468,5 +468,5 @@ class PredictiveScaler:
 
             return True
 
-        except Exception:
+        except (KeyError, TypeError, ValueError):
             return False

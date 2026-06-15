@@ -40,7 +40,7 @@ class DiffusionDataSource(grain.RandomAccessDataSource):
         advection_range: tuple[float, float] = (0.1, 1.0),
         dimension: str = "2d",
         seed: int = 42,
-    ):
+    ) -> None:
         """Initialize Diffusion data source."""
         if dimension not in ["1d", "2d"]:
             raise ValueError(f"dimension must be '1d' or '2d', got '{dimension}'")

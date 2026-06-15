@@ -104,36 +104,54 @@ class TestPrometheusMetrics:
             assert mock_psutil.cpu_percent.called or mock_psutil.virtual_memory.called
 
     @patch("opifex.deployment.monitoring.metrics.HAS_PROMETHEUS", True)
-    @patch("opifex.deployment.monitoring.metrics.HAS_JAX", True)
-    def test_update_gpu_metrics_with_jax(self):
-        """Test GPU metrics update when JAX is available."""
+    def test_update_gpu_metrics_with_pynvml_reports_real_memory(self):
+        """Test GPU metrics update queries pynvml for real device memory.
+
+        The mock-GPU-value path was removed (Rule 8: do not ship hardcoded
+        constants to Prometheus). When pynvml is importable, the metric
+        must reflect ``nvmlDeviceGetMemoryInfo().used`` for each device.
+        """
+        import sys
+        import types
+
+        fake_pynvml = types.ModuleType("pynvml")
+
+        class _FakeNVMLError(Exception):
+            pass
+
+        class _FakeMemInfo:
+            used = 4096
+
+        # Synthetic module attributes — pyright can't see what we're patching
+        # in, so we silence the unknown-attr warnings for this block.
+        fake_pynvml.NVMLError = _FakeNVMLError  # pyright: ignore[reportAttributeAccessIssue]
+        fake_pynvml.nvmlInit = Mock()  # pyright: ignore[reportAttributeAccessIssue]
+        fake_pynvml.nvmlShutdown = Mock()  # pyright: ignore[reportAttributeAccessIssue]
+        fake_pynvml.nvmlDeviceGetCount = Mock(return_value=2)  # pyright: ignore[reportAttributeAccessIssue]
+        fake_pynvml.nvmlDeviceGetHandleByIndex = Mock(return_value="handle")  # pyright: ignore[reportAttributeAccessIssue]
+        fake_pynvml.nvmlDeviceGetMemoryInfo = Mock(return_value=_FakeMemInfo())  # pyright: ignore[reportAttributeAccessIssue]
+
         with (
             patch("opifex.deployment.monitoring.metrics.CollectorRegistry"),
-            patch("opifex.deployment.monitoring.metrics.jax") as mock_jax,
+            patch.dict(sys.modules, {"pynvml": fake_pynvml}),
         ):
-            # Mock JAX device info
-            mock_device = Mock()
-            mock_device.id = 0
-            mock_jax.devices.return_value = [mock_device]
-            mock_jax.device_get.return_value = 0.85
-
             metrics = PrometheusMetrics()
-
-            # Simply test that the method runs without error
             metrics.update_gpu_metrics()
 
-            # Verify JAX methods were called
-            assert mock_jax.devices.called
+            assert fake_pynvml.nvmlInit.called
+            assert fake_pynvml.nvmlDeviceGetCount.called
+            assert fake_pynvml.nvmlDeviceGetMemoryInfo.call_count == 2
 
-    def test_update_gpu_metrics_without_jax(self):
-        """Test GPU metrics update when JAX is not available."""
+    def test_update_gpu_metrics_without_pynvml_silently_skips(self):
+        """When pynvml is not importable, the GPU metric path is skipped silently."""
+        import sys
+
         with (
             patch("opifex.deployment.monitoring.metrics.HAS_PROMETHEUS", True),
-            patch("opifex.deployment.monitoring.metrics.HAS_JAX", False),
+            patch.dict(sys.modules, {"pynvml": None}),
         ):
             metrics = PrometheusMetrics()
-
-            # Should not raise exception when JAX is not available
+            # Should not raise exception when pynvml is not available
             metrics.update_gpu_metrics()
 
     @patch("opifex.deployment.monitoring.metrics.HAS_PROMETHEUS", True)

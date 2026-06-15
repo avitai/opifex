@@ -46,7 +46,7 @@ class RegistryService:
         db_session: Session | AsyncSession,
         storage_path: str = "data/registry",
         max_file_size: int = 100 * 1024 * 1024,  # 100MB default
-    ):
+    ) -> None:
         """Initialize registry service.
 
         Args:
@@ -355,7 +355,7 @@ class RegistryService:
         file_path = functional_dir / f"{version_tag}.json"
 
         # Write data asynchronously
-        def write_file():
+        def write_file() -> None:
             with open(file_path, "wb") as f:
                 f.write(data)
 

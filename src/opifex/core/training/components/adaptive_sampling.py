@@ -102,7 +102,7 @@ class RADSampler:
         >>> sampled = sampler.sample(domain_points, residuals, batch_size=32, key=key)
     """
 
-    def __init__(self, config: RADConfig | None = None):
+    def __init__(self, config: RADConfig | None = None) -> None:
         """Initialize RAD sampler.
 
         Args:
@@ -202,7 +202,7 @@ class RARDRefiner:
         config: RARDConfig | None = None,
         num_new_points: int | None = None,
         noise_scale: float | None = None,
-    ):
+    ) -> None:
         """Initialize RAR-D refiner.
 
         Args:

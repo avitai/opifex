@@ -396,7 +396,7 @@ class TestOperatorComposition:
 
         # Create simple operators
         class ScaleOperator(QuantumOperator):
-            def __init__(self, scale, name="scale"):
+            def __init__(self, scale, name="scale") -> None:
                 super().__init__(name)
                 self.scale = scale
 
@@ -422,7 +422,7 @@ class TestOperatorComposition:
         """Test operator composition application."""
 
         class ScaleOperator(QuantumOperator):
-            def __init__(self, scale, name="scale"):
+            def __init__(self, scale, name="scale") -> None:
                 super().__init__(name)
                 self.scale = scale
 
@@ -452,7 +452,7 @@ class TestOperatorComposition:
         """Test operator composition adjoint."""
 
         class ScaleOperator(QuantumOperator):
-            def __init__(self, scale, name="scale"):
+            def __init__(self, scale, name="scale") -> None:
                 super().__init__(name)
                 self.scale = scale
 
@@ -480,7 +480,7 @@ class TestOperatorComposition:
         """Test operator composition Hermitian property."""
 
         class ScaleOperator(QuantumOperator):
-            def __init__(self, scale, name="scale"):
+            def __init__(self, scale, name="scale") -> None:
                 super().__init__(name)
                 self.scale = scale
 
@@ -970,7 +970,7 @@ class TestQuantumOperatorsFromProblems:
         from opifex.core.quantum.operators import OperatorComposition, QuantumOperator
 
         class ScaleOperator(QuantumOperator):
-            def __init__(self, scale, name="scale"):
+            def __init__(self, scale, name="scale") -> None:
                 super().__init__(name=name)
                 self.scale = scale
 

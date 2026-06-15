@@ -320,7 +320,7 @@ class PDEBenchEvaluationPipeline:
 
                 results.append(result)
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- user-supplied forward_fn can raise anything
                 warnings.warn(
                     f"Failed to evaluate {model_name} on {dataset_name}: {e}",
                     stacklevel=2,

@@ -49,7 +49,7 @@ def plot_flops_analysis(
     return fig
 
 
-def _plot_single_model_flops(results: dict[str, Any], axes: list[plt.Axes]):
+def _plot_single_model_flops(results: dict[str, Any], axes: list[plt.Axes]) -> None:
     """Plot FLOPS analysis for a single model."""
     # FLOPS breakdown pie chart
     ax = axes[0]
@@ -200,7 +200,7 @@ def _plot_single_model_flops(results: dict[str, Any], axes: list[plt.Axes]):
         ax.set_title("Computational Efficiency")
 
 
-def _plot_multi_model_flops(results: dict[str, Any], axes: list[plt.Axes]):
+def _plot_multi_model_flops(results: dict[str, Any], axes: list[plt.Axes]) -> None:
     """Plot FLOPS analysis for multiple models or benchmark results."""
     # Extract model names and FLOPS data
     model_names = []

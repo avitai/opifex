@@ -207,10 +207,6 @@ def test_pathfinder_sample_reproducible_under_same_key() -> None:
         maxiter=15,
         maxcor=4,
     )
-    samples_a, _ = pathfinder_sample(
-        rng_key=jax.random.PRNGKey(7), state=state, num_samples=128
-    )
-    samples_b, _ = pathfinder_sample(
-        rng_key=jax.random.PRNGKey(7), state=state, num_samples=128
-    )
+    samples_a, _ = pathfinder_sample(rng_key=jax.random.PRNGKey(7), state=state, num_samples=128)
+    samples_b, _ = pathfinder_sample(rng_key=jax.random.PRNGKey(7), state=state, num_samples=128)
     assert jnp.array_equal(samples_a, samples_b)

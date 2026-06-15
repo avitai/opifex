@@ -10,8 +10,8 @@ from opifex.core.training.components import (
     FlexibleOptimizerFactory,
     TrainingComponent,
 )
+from opifex.core.training.monitoring.metrics import TrainingState
 from opifex.neural.base import StandardMLP
-from opifex.training.metrics import TrainingState
 
 
 class TestTrainingComponent:
