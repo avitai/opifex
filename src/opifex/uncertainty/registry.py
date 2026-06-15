@@ -93,6 +93,7 @@ class DefaultStrategy(StrEnum):
     RANDOMIZED_LINALG = "randomized_linalg"
     BAYESIAN_QUADRATURE = "bayesian_quadrature"
     STATE_SPACE_FILTERING = "state_space_filtering"
+    GAUSSIAN_PROCESS = "gaussian_process"
     UNSUPPORTED = "unsupported"
 
 

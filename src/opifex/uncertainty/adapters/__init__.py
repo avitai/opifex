@@ -19,9 +19,17 @@ from opifex.uncertainty.adapters.ensemble import (
     SWAGState,
     TestTimeAugmentationAdapterSpec,
 )
+from opifex.uncertainty.adapters.gp import (
+    BayesnewtonAdapterSpec,
+    GPJaxAdapterSpec,
+    KalmanJaxAdapterSpec,
+    MarkovflowAdapterSpec,
+    TinygpAdapterSpec,
+)
 from opifex.uncertainty.adapters.model import (
     BayesianLastLayerAdapterSpec,
     LaplaceAdapterSpec,
+    LaplaceState,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
@@ -43,6 +51,7 @@ __all__ = [
     "BatchEnsembleAdapterSpec",
     "BatchEnsembleState",
     "BayesianLastLayerAdapterSpec",
+    "BayesnewtonAdapterSpec",
     "DUEAdapterSpec",
     "DeepEnsembleAdapter",
     "DeepEnsembleState",
@@ -54,9 +63,13 @@ __all__ = [
     "FNOConformalAdapterSpec",
     "FNODeepEnsembleAdapterSpec",
     "FNOMCDropoutAdapterSpec",
+    "GPJaxAdapterSpec",
+    "KalmanJaxAdapterSpec",
     "LaplaceAdapterSpec",
+    "LaplaceState",
     "MCDropoutAdapter",
     "MCDropoutState",
+    "MarkovflowAdapterSpec",
     "ModelUncertaintyAdapter",
     "ModelUncertaintyAdapterProtocol",
     "OperatorAdapterSpec",
@@ -66,5 +79,6 @@ __all__ = [
     "SnapshotEnsembleAdapterSpec",
     "SnapshotEnsembleState",
     "TestTimeAugmentationAdapterSpec",
+    "TinygpAdapterSpec",
     "VBLLAdapterSpec",
 ]
