@@ -5,6 +5,7 @@ Focuses on proper physics-aware neural operator testing without legacy compatibi
 """
 
 import jax
+import jax.numpy as jnp
 import pytest
 from flax import nnx
 
@@ -66,7 +67,9 @@ class TestMultiPhysicsDeepONet:
 
         assert len(model.physics_operators) == 3
         assert len(model.physics_constraints) == 2
-        assert hasattr(model, "system_coupling")
+        # Each physics system owns an independent trunk network.
+        trunk_ids = {id(op.trunk_net) for op in model.physics_operators}
+        assert len(trunk_ids) == 3
 
     def test_forward_pass_single_system(self, sample_data):
         """Test forward pass with single physics system."""
@@ -113,8 +116,10 @@ class TestMultiPhysicsDeepONet:
             sample_data["trunk_input"],
         )
 
-        expected_shape = sample_data["trunk_input"].shape[:-1]
-        assert output.shape == expected_shape
+        # Multi-physics single-location output carries a per-physics axis:
+        # (batch, num_physics_systems).
+        batch_size = sample_data["trunk_input"].shape[0]
+        assert output.shape == (batch_size, 2)
 
     def test_physics_attention_integration(self, sample_data):
         """Test physics-aware attention mechanism."""
@@ -204,8 +209,9 @@ class TestMultiPhysicsDeepONet:
             sample_data["trunk_input"],
         )
 
-        expected_shape = sample_data["trunk_input"].shape[:-1]
-        assert output.shape == expected_shape
+        # Three coupled physics systems -> per-physics axis of size 3.
+        batch_size = sample_data["trunk_input"].shape[0]
+        assert output.shape == (batch_size, 3)
 
     def test_physics_constraints_setting(self):
         """Test setting physics constraints."""
@@ -262,3 +268,112 @@ class TestMultiPhysicsDeepONet:
             )
 
             assert len(model.physics_operators) == 1
+
+
+class TestPerPhysicsTrunks:
+    """Tests for genuine per-physics (independent) trunk networks.
+
+    Following the IndependentStrategy of Lu et al. 2022 (CMAME 393, 114778,
+    section 3.1.6): each physics field is produced by its own branch and trunk
+    network, then the fields are stacked along a trailing physics axis.
+    """
+
+    @staticmethod
+    def _make_model(num_physics_systems: int, *, use_attention: bool = False):
+        return MultiPhysicsDeepONet(
+            branch_input_dim=16,
+            trunk_input_dim=2,
+            branch_hidden_dims=[32],
+            trunk_hidden_dims=[32],
+            latent_dim=24,
+            num_physics_systems=num_physics_systems,
+            use_attention=use_attention,
+            sensor_optimization=False,
+            rngs=nnx.Rngs(0),
+        )
+
+    def test_multi_location_output_shape_has_physics_axis(self):
+        """Multi-location output is (batch, n_points, n_physics)."""
+        model = self._make_model(3)
+        batch_size, n_points = 4, 5
+        branch = jax.random.normal(jax.random.PRNGKey(0), (batch_size, 16))
+        trunk = jax.random.normal(jax.random.PRNGKey(1), (batch_size, n_points, 2))
+
+        output = model([branch, branch, branch], trunk)
+
+        assert output.shape == (batch_size, n_points, 3)
+
+    def test_distinct_trunks_yield_distinct_physics_fields(self):
+        """Identical branch inputs must still give different physics fields.
+
+        If every field shared one trunk (the old stub), feeding identical
+        branch inputs would make all fields collapse onto each other. Distinct
+        per-physics trunks (and branches) break that degeneracy.
+        """
+        model = self._make_model(2)
+        batch_size, n_points = 3, 6
+        branch = jax.random.normal(jax.random.PRNGKey(0), (batch_size, 16))
+        trunk = jax.random.normal(jax.random.PRNGKey(1), (batch_size, n_points, 2))
+
+        output = model([branch, branch], trunk)
+
+        field_0 = output[..., 0]
+        field_1 = output[..., 1]
+        assert not jnp.allclose(field_0, field_1)
+
+    def test_per_physics_trunk_parameters_are_used(self):
+        """Each physics output depends on its own trunk's parameters.
+
+        Perturbing only physics operator 1's trunk must change field 1 while
+        leaving field 0 untouched - proving field i is wired to trunk i.
+        """
+        model = self._make_model(2)
+        batch_size, n_points = 2, 4
+        branch = jax.random.normal(jax.random.PRNGKey(0), (batch_size, 16))
+        trunk = jax.random.normal(jax.random.PRNGKey(1), (batch_size, n_points, 2))
+
+        before = model([branch, branch], trunk)
+
+        # Perturb only the second physics operator's trunk first layer.
+        kernel = model.physics_operators[1].trunk_net.layers[0].kernel
+        kernel.value = kernel.value + 1.0
+
+        after = model([branch, branch], trunk)
+
+        # Field 0 (trunk 0) is unchanged; field 1 (trunk 1) changes.
+        assert jnp.allclose(before[..., 0], after[..., 0])
+        assert not jnp.allclose(before[..., 1], after[..., 1])
+
+    def test_jit_grad_vmap_smoke(self):
+        """jit/grad/vmap must all succeed on the per-physics forward pass."""
+        model = self._make_model(2)
+        graphdef, state = nnx.split(model)
+
+        batch_size, n_points = 2, 4
+        branch = jax.random.normal(jax.random.PRNGKey(0), (batch_size, 16))
+        trunk = jax.random.normal(jax.random.PRNGKey(1), (batch_size, n_points, 2))
+
+        def forward(state, branch, trunk):
+            merged = nnx.merge(graphdef, state)
+            return merged([branch, branch], trunk)
+
+        # jit
+        jitted = jax.jit(forward)
+        out = jitted(state, branch, trunk)
+        assert out.shape == (batch_size, n_points, 2)
+
+        # grad through a scalar loss
+        def loss_fn(state):
+            return jnp.sum(forward(state, branch, trunk) ** 2)
+
+        grads = jax.grad(loss_fn)(state)
+        leaves = jax.tree_util.tree_leaves(grads)
+        assert leaves
+        assert all(jnp.all(jnp.isfinite(leaf)) for leaf in leaves)
+
+        # vmap over a leading ensemble axis of inputs
+        branch_batched = jnp.stack([branch, branch + 1.0, branch - 1.0])
+        trunk_batched = jnp.stack([trunk, trunk * 2.0, trunk * 0.5])
+        vmapped = jax.vmap(forward, in_axes=(None, 0, 0))
+        out_v = vmapped(state, branch_batched, trunk_batched)
+        assert out_v.shape == (3, batch_size, n_points, 2)

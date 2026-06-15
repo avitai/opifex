@@ -14,6 +14,7 @@ from opifex.core.physics import PhysicsInformedLoss, PhysicsLossConfig
 from opifex.neural.base import StandardMLP
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.neural.operators.physics import PhysicsInformedOperator
+from opifex.neural.operators.physics._conservation import conservation_residual_loss
 
 
 class TestPhysicsInformedOperator:
@@ -312,3 +313,80 @@ class TestPhysicsInformedOperator:
 
         assert output.shape == (batch_size, 32)
         assert jnp.isfinite(output).all()
+
+
+class TestConservationResidualLoss:
+    """Test the genuine flux-divergence conservation loss in the PINO."""
+
+    @staticmethod
+    def _grid_coordinates(batch_size: int, n_points: int) -> jax.Array:
+        """Build (batch, n_points, 2) coordinates on a uniform x-grid."""
+        x = jnp.linspace(0.0, 1.0, n_points, endpoint=False)
+        coords = jnp.stack([x, jnp.zeros_like(x)], axis=-1)  # (n_points, 2)
+        return jnp.broadcast_to(coords, (batch_size, n_points, 2))
+
+    def test_pointwise_input_returns_zero(self):
+        """Without a spatial grid axis the local residual is undefined -> 0."""
+        pino = PhysicsInformedOperator(
+            layer_sizes=[2, 32, 1],
+            physics_type="conservation",
+            rngs=nnx.Rngs(0),
+        )
+        x = jax.random.normal(jax.random.PRNGKey(0), (4, 2))
+        loss = pino.compute_physics_loss(x)
+        assert loss == 0.0
+
+    def test_divergence_free_field_gives_zero_loss(self):
+        """A constant (divergence-free) flux field gives ~0 conservation loss."""
+        pino = PhysicsInformedOperator(
+            layer_sizes=[2, 16, 3],
+            physics_type="conservation",
+            rngs=nnx.Rngs(0),
+        )
+        coords = self._grid_coordinates(batch_size=2, n_points=32)
+        spacing = pino._grid_spacing(coords)
+
+        # A constant flux field is divergence-free, so the loss must be ~0.
+        constant_flux = jnp.ones((2, 32, 3))
+        loss = conservation_residual_loss(constant_flux, spatial_axis=1, spacing=spacing)
+        assert loss < 1e-12
+
+    def test_loss_is_finite_and_nonnegative(self):
+        """The real conservation loss is finite and >= 0 on a learned field."""
+        pino = PhysicsInformedOperator(
+            layer_sizes=[2, 16, 3],
+            physics_type="conservation",
+            rngs=nnx.Rngs(0),
+        )
+        coords = self._grid_coordinates(batch_size=2, n_points=32)
+        loss = pino.compute_physics_loss(coords)
+        assert jnp.isfinite(loss)
+        assert loss >= 0.0
+        assert loss.shape == ()
+
+    def test_jit_grad_vmap(self):
+        """Conservation loss is jit/grad/vmap compatible through the model."""
+        pino = PhysicsInformedOperator(
+            layer_sizes=[2, 16, 3],
+            physics_type="conservation",
+            rngs=nnx.Rngs(0),
+        )
+        coords = self._grid_coordinates(batch_size=2, n_points=32)
+
+        @nnx.jit
+        def loss_fn(model, c):
+            return model.compute_physics_loss(c)
+
+        jitted = loss_fn(pino, coords)
+        assert jnp.isfinite(jitted)
+
+        grads = nnx.grad(loss_fn)(pino, coords)
+        grad_leaves = jax.tree_util.tree_leaves(grads)
+        assert any(jnp.linalg.norm(leaf) > 0.0 for leaf in grad_leaves)
+
+        single = self._grid_coordinates(batch_size=1, n_points=32)[0]
+        batched = jax.vmap(lambda c: pino._compute_conservation_loss(c[None]))(
+            jnp.broadcast_to(single, (3, 32, 2))
+        )
+        assert batched.shape == (3,)
+        assert jnp.all(jnp.isfinite(batched))

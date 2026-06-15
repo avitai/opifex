@@ -11,6 +11,19 @@ Key Features:
 - Gradient-based meta-learning for parameter initialization
 - Meta-L2O integration for self-improving optimization
 - Integration with existing L2O engine and MetaOptimizer framework
+
+References:
+    Andrychowicz et al., "Learning to learn by gradient descent by gradient
+    descent", NeurIPS 2016 (https://arxiv.org/abs/1606.04474). The learned
+    optimizer is meta-trained by unrolling the optimizee for ``T`` steps --
+    feeding each optimizee gradient to the learned update rule, applying it to
+    the optimizee parameters, and accumulating the optimizee loss -- then
+    backpropagating the summed optimizee loss through the whole unroll into the
+    learned-optimizer parameters.
+
+    The unroll/meta-gradient formulation follows Google's ``learned_optimization``
+    reference (``docs/notebooks/no_dependency_learned_optimizer.ipynb``,
+    ``meta_loss`` via ``jax.lax.scan`` + ``jax.value_and_grad``).
 """
 
 import time
@@ -20,6 +33,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import optax
 from flax import nnx
 from flax.nnx import Rngs
 
@@ -99,6 +113,7 @@ class GradientBasedMetaLearningConfig:
     curvature_adaptation: bool = False
     problem_conditioning: bool = True
     numerical_stability_epsilon: float = 1e-8
+    meta_loss_clip: float = 1e6
 
     def __post_init__(self) -> None:
         """Set default values and validate configuration."""
@@ -649,6 +664,13 @@ class GradientBasedMetaLearner(nnx.Module):
             jnp.zeros((config.gradient_unroll_steps, problem_dim))
         )
 
+        # Meta-optimizer for the learned-optimizer (outer) parameters. Only the
+        # trainable ``nnx.Param`` leaves are updated; the history buffer above is
+        # an ``nnx.Variable`` and is therefore excluded from meta-updates.
+        self.meta_optimizer = nnx.Optimizer(
+            self, optax.adam(config.meta_learning_rate), wrt=nnx.Param
+        )
+
     def compute_learned_update(
         self,
         gradients: jax.Array,
@@ -695,9 +717,6 @@ class GradientBasedMetaLearner(nnx.Module):
         else:
             final_update = scaled_update
 
-        # Update optimization history
-        self._update_optimization_history(final_update, step)
-
         metrics = {
             "learned_lr": learned_lr,
             "update_norm": jnp.linalg.norm(final_update),
@@ -724,23 +743,28 @@ class GradientBasedMetaLearner(nnx.Module):
             Updated meta-optimizer state and meta-loss
         """
 
-        def meta_loss_fn(network_params):
-            total_loss = 0.0
+        if not optimization_trajectories:
+            raise ValueError("At least one optimization trajectory is required for meta-training")
 
-            for trajectory in optimization_trajectories:
-                # Reconstruct optimization trajectory with learned optimizer
-                simulated_loss = self._simulate_optimization_trajectory(trajectory, network_params)
-                total_loss += simulated_loss
+        def meta_loss_fn(network_params: nnx.State) -> jax.Array:
+            # Mean optimizee loss obtained by unrolling the learned optimizer on
+            # each trajectory; differentiable w.r.t. ``network_params``.
+            per_trajectory = jnp.stack(
+                [
+                    self._simulate_optimization_trajectory(trajectory, network_params)
+                    for trajectory in optimization_trajectories
+                ]
+            )
+            return jnp.mean(per_trajectory)
 
-            return total_loss / len(optimization_trajectories)
-
-        # Compute meta-gradients for the learned optimizer
+        # Backprop the summed optimizee loss through the whole unroll into the
+        # learned-optimizer parameters (Andrychowicz et al., 2016).
         meta_loss, meta_grads = jax.value_and_grad(meta_loss_fn)(self._get_network_parameters())
 
-        # Update network parameters
+        # Apply the meta-gradients to the learned-optimizer parameters.
         self._update_network_parameters(meta_grads)
 
-        return meta_optimizer_state, meta_loss
+        return meta_optimizer_state, float(meta_loss)
 
     def _prepare_optimizer_input(
         self,
@@ -808,21 +832,120 @@ class GradientBasedMetaLearner(nnx.Module):
         buffer_idx = step % self.config.gradient_unroll_steps
         self.optimization_history[...] = self.optimization_history[...].at[buffer_idx].set(update)
 
+    def _build_quadratic_optimizee(
+        self, trajectory: dict[str, Any]
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        r"""Build a strongly convex quadratic optimizee from a trajectory.
+
+        The optimizee is :math:`f(x) = \tfrac{1}{2} x^T Q x + c^T x`. When the
+        trajectory supplies an explicit ``hessian`` / ``linear`` pair they are
+        used directly (after symmetrising ``Q``); otherwise a well-conditioned
+        default ``Q = I`` with a unit linear term is used so the meta-loss is
+        always bounded below and differentiable.
+
+        Args:
+            trajectory: Optimization-trajectory description. Recognised keys are
+                ``hessian`` (``(d, d)``), ``linear`` (``(d,)``) and
+                ``initial_params`` (``(d,)``).
+
+        Returns:
+            Tuple ``(hessian, linear, initial_params)`` describing the optimizee.
+        """
+        dimension = self.problem_dim
+
+        raw_hessian = trajectory.get("hessian")
+        if raw_hessian is not None:
+            hessian = jnp.asarray(raw_hessian)
+            hessian = 0.5 * (hessian + hessian.T)
+        else:
+            hessian = jnp.eye(dimension)
+
+        raw_linear = trajectory.get("linear")
+        linear = jnp.asarray(raw_linear) if raw_linear is not None else jnp.ones(dimension)
+
+        raw_initial = trajectory.get("initial_params")
+        initial_params = (
+            jnp.asarray(raw_initial) if raw_initial is not None else jnp.ones(dimension)
+        )
+
+        return hessian, linear, initial_params
+
     def _simulate_optimization_trajectory(
-        self, trajectory: dict[str, Any], network_params: dict[str, Any]
+        self, trajectory: dict[str, Any], network_params: nnx.State
     ) -> jax.Array:
-        """Simulate optimization trajectory for meta-training."""
-        # Simplified implementation - would use trajectory data to compute
-        # how well the learned optimizer performs compared to ground truth
-        return jnp.array(0.0)  # Placeholder
+        r"""Unroll the learned optimizer on a trajectory and return its meta-loss.
 
-    def _get_network_parameters(self) -> dict[str, Any]:
-        """Get current network parameters for meta-learning."""
-        return {}  # Placeholder - would extract actual network parameters
+        Functionally rebuilds the learned optimizer from ``network_params`` and
+        unrolls a quadratic optimizee for ``config.gradient_unroll_steps`` steps,
+        feeding each optimizee gradient to :meth:`compute_learned_update`,
+        applying the produced update and accumulating the optimizee loss. The
+        returned mean loss is differentiable w.r.t. ``network_params`` so that
+        ``jax.grad`` yields the meta-gradient (Andrychowicz et al., 2016).
 
-    def _update_network_parameters(self, meta_grads: dict[str, Any]) -> None:
-        """Update network parameters using meta-gradients."""
-        # Placeholder - would update actual network parameters
+        Args:
+            trajectory: Optimizee description (see :meth:`_build_quadratic_optimizee`).
+            network_params: Candidate learned-optimizer parameters
+                (``nnx.Param`` state) to evaluate.
+
+        Returns:
+            Scalar mean optimizee loss over the unroll, differentiable w.r.t.
+            ``network_params``.
+        """
+        graphdef, _, other_state = nnx.split(self, nnx.Param, ...)
+        learned_optimizer = nnx.merge(graphdef, network_params, other_state)
+
+        hessian, linear, params = self._build_quadratic_optimizee(trajectory)
+
+        def optimizee_loss(point: jax.Array) -> jax.Array:
+            return 0.5 * point @ (hessian @ point) + linear @ point
+
+        loss_and_grad = jax.value_and_grad(optimizee_loss)
+
+        previous_update = jnp.zeros(self.problem_dim)
+        problem_features = jnp.diag(hessian)
+        total_loss = jnp.array(0.0)
+        loss_history = jnp.zeros(0)
+
+        clip = self.config.meta_loss_clip
+        for step in range(self.config.gradient_unroll_steps):
+            loss, gradients = loss_and_grad(params)
+            # Clip per-step loss (and map NaN -> clip) so a diverging unroll
+            # cannot produce non-finite meta-gradients (learned_optimization
+            # short_segment_unroll, cell 45).
+            loss = jnp.where(jnp.isnan(loss), clip, jnp.minimum(loss, clip))
+            total_loss = total_loss + loss
+            loss_history = jnp.append(loss_history, loss)
+
+            update, _ = learned_optimizer.compute_learned_update(
+                gradients,
+                previous_update,
+                loss_history,
+                problem_features,
+                step,
+            )
+            params = params - update
+            previous_update = update
+
+        return total_loss / self.config.gradient_unroll_steps
+
+    def _get_network_parameters(self) -> nnx.State:
+        """Get the trainable learned-optimizer parameters as an ``nnx`` state.
+
+        Returns:
+            The ``nnx.Param`` leaves of the learned optimizer as an
+            :class:`flax.nnx.State` pytree suitable for ``jax.grad`` /
+            ``nnx.Optimizer.update``.
+        """
+        return nnx.state(self, nnx.Param)
+
+    def _update_network_parameters(self, meta_grads: nnx.State) -> None:
+        """Apply meta-gradients to the learned-optimizer parameters.
+
+        Args:
+            meta_grads: Meta-gradient state with the same structure as
+                :meth:`_get_network_parameters`.
+        """
+        self.meta_optimizer.update(self, meta_grads)
 
 
 class MetaL2OIntegration(nnx.Module):

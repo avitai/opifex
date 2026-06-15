@@ -11,12 +11,9 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
 
 from opifex.platform.registry.core import RegistryService
 from opifex.platform.registry.exceptions import (
@@ -26,7 +23,6 @@ from opifex.platform.registry.exceptions import (
     RegistryError,
     ValidationError,
 )
-from opifex.platform.registry.models import FunctionalMetadata
 
 
 class TestRegistryService:
@@ -626,111 +622,44 @@ class TestRegistryMetadataNonMutation:
         assert result["name"] == "Test"
 
 
-class _SqliteRegistryService(RegistryService):
-    """Registry service backed by a real synchronous SQLite session.
+class TestRegistryMetadataRoundTrip:
+    """Round-trip regression: registered metadata survives the DB round-trip.
 
-    Overrides the persistence stubs with a genuine ORM adapter (the
-    extension point documented on :class:`RegistryService`) so the
-    ``register_functional`` -> ``retrieve_functional`` round-trip exercises
-    a real database write and read for :class:`FunctionalMetadata`.
-
-    Only the ``functional_metadata`` table is materialised in SQLite; the
-    functional and version records are held in memory because
-    ``NeuralFunctional.tags`` uses a PostgreSQL ``ARRAY`` column that does
-    not compile on SQLite. This keeps the test focused on the metadata
-    column-name round-trip under test.
+    Regression for the ORM column-name bug where ``register_functional`` built
+    ``FunctionalMetadata(metadata=...)`` but the mapped column is
+    ``metadata_json`` (``metadata`` is SQLAlchemy's reserved declarative
+    attribute, so the value was silently dropped on reload). Exercised against
+    the real async SQLite backend wired into :class:`RegistryService`.
     """
 
-    def __init__(self, db_session: Session, storage_path: str) -> None:
-        super().__init__(db_session=db_session, storage_path=storage_path)
-        self._session = db_session
-        self._functionals: dict[str, Any] = {}
-        self._versions: dict[str, Any] = {}
-
-    def _save_sync(self, *objects: object) -> None:
-        for obj in objects:
-            record: Any = obj
-            if isinstance(obj, FunctionalMetadata):
-                # The PostgreSQL UUID column requires a uuid.UUID value when
-                # bound through the SQLite dialect; register_functional supplies
-                # the id as a string, so coerce it here in the adapter.
-                record.functional_id = uuid.UUID(str(record.functional_id))
-                self._session.add(obj)
-            elif hasattr(obj, "version_tag"):
-                self._versions[str(record.functional_id)] = obj
-            else:
-                self._functionals[str(record.id)] = obj
-        self._session.commit()
-        # Drop persisted instances from the identity map so subsequent reads
-        # reload the row from the database (surfacing any column mismatch).
-        self._session.expunge_all()
-
-    async def _get_functional_by_id(self, functional_id: str) -> Any:
-        return self._functionals.get(functional_id)
-
-    async def _get_functional_version(self, functional_id: str, version_tag: str | None) -> Any:
-        return self._versions.get(functional_id)
-
-    async def _get_functional_metadata(self, functional_id: str) -> Any:
-        return (
-            self._session.query(FunctionalMetadata)
-            .filter(FunctionalMetadata.functional_id == uuid.UUID(functional_id))
-            .one_or_none()
-        )
-
-
-class TestRegistryMetadataRoundTrip:
-    """Round-trip tests for functional metadata persistence."""
-
-    @pytest.fixture
-    def sqlite_session(self):
-        """In-memory SQLite session with the functional_metadata table."""
-        engine = create_engine("sqlite://")
-        FunctionalMetadata.__table__.create(engine)
-        session = sessionmaker(bind=engine)()
-        try:
-            yield session
-        finally:
-            session.close()
-            engine.dispose()
-
-    @pytest.fixture
-    def sqlite_registry(self, sqlite_session):
-        """Registry service backed by a real SQLite session."""
-        temp_dir = tempfile.mkdtemp()
-        try:
-            yield _SqliteRegistryService(db_session=sqlite_session, storage_path=temp_dir)
-        finally:
-            shutil.rmtree(temp_dir)
-
     @pytest.mark.asyncio
-    async def test_metadata_round_trips_through_database(self, sqlite_registry):
-        """Registered metadata must survive a real DB write/read round-trip.
+    async def test_metadata_round_trips_through_database(self):
+        """``retrieve_functional`` returns exactly the metadata written."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service = RegistryService(
+                storage_path=str(root / "storage"),
+                database_url=f"sqlite+aiosqlite:///{root / 'registry.db'}",
+            )
+            metadata = {
+                "name": "Round Trip Optimizer",
+                "type": "l2o",
+                "description": "Persisted metadata must survive the DB round-trip",
+                "tags": ["optimization", "regression"],
+                "domain": "fluid_dynamics",
+                "is_public": True,
+                "performance": {"accuracy": 0.95, "speed": "fast"},
+                "requirements": {"memory_gb": 2, "gpu_required": True},
+            }
+            functional = {"module_type": "RoundTripOptimizer", "weights": [1.0, 2.0]}
+            try:
+                functional_id = await service.register_functional(
+                    functional=functional, metadata=metadata, user_id="user-roundtrip"
+                )
+                retrieved = await service.retrieve_functional(functional_id)
+            finally:
+                await service.close()
 
-        Regression for the ORM column-name bug: ``register_functional`` built
-        ``FunctionalMetadata(metadata=...)`` but the mapped column is
-        ``metadata_json``. ``metadata`` is SQLAlchemy's reserved declarative
-        attribute, so the value never reached the column and was silently lost
-        on reload. ``retrieve_functional`` must return exactly what was written.
-        """
-        metadata = {
-            "name": "Round Trip Optimizer",
-            "type": "l2o",
-            "description": "Persisted metadata must survive the DB round-trip",
-            "tags": ["optimization", "regression"],
-            "domain": "fluid_dynamics",
-            "is_public": True,
-            "performance": {"accuracy": 0.95, "speed": "fast"},
-            "requirements": {"memory_gb": 2, "gpu_required": True},
-        }
-        functional = {"module_type": "RoundTripOptimizer", "weights": [1.0, 2.0]}
-
-        functional_id = await sqlite_registry.register_functional(
-            functional=functional, metadata=metadata, user_id="user-roundtrip"
-        )
-
-        retrieved = await sqlite_registry.retrieve_functional(functional_id)
-
-        expected = sqlite_registry._validate_metadata(dict(metadata))
-        assert retrieved["metadata"] == expected
-        assert retrieved["metadata"], "metadata was lost during the DB round-trip"
+            expected = service._validate_metadata(dict(metadata))
+            assert retrieved["metadata"] == expected
+            assert retrieved["metadata"], "metadata was lost during the DB round-trip"

@@ -6,8 +6,11 @@ write to this file; no intermediate ``surrogate/pce.py`` exists).
 
 Scope:
 
-* Orthogonal one-dimensional basis evaluation for Legendre (uniform
-  inputs) and probabilists' Hermite (Gaussian inputs).
+* Orthogonal one-dimensional basis evaluation for the canonical
+  Wiener-Askey families: Legendre (uniform inputs), probabilists'
+  Hermite (Gaussian inputs), generalized Laguerre (Gamma / exponential
+  inputs) and Jacobi (Beta inputs). See Xiu & Karniadakis 2002 Table 4.1
+  for the basis <-> distribution correspondence.
 * Two-dimensional tensor-product basis evaluation.
 * Mean / variance extraction from explicit PCE coefficients on an
   orthonormal basis.
@@ -28,7 +31,17 @@ Bibliography (cited in implementation docstrings):
 - Xiu, D. & Karniadakis, G. E. (2002), "The Wiener-Askey Polynomial Chaos
   for Stochastic Differential Equations", SIAM J. Sci. Comput. 24(2),
   619-644 — orthonormal basis recipe + closed-form mean / variance
-  extraction (their eq. (3.3)).
+  extraction (their eq. (3.3)) and the Askey-scheme correspondence table
+  (their Table 4.1: Legendre<->Uniform, Hermite<->Gaussian,
+  Laguerre<->Gamma, Jacobi<->Beta).
+- Golub, G. H. & Welsch, J. H. (1969), "Calculation of Gauss Quadrature
+  Rules", Math. Comp. 23(106), 221-230 — Gauss nodes / weights from the
+  symmetric tridiagonal Jacobi matrix of the three-term recurrence
+  coefficients (used here for every family, including Laguerre / Jacobi).
+- Gautschi, W. (2004), "Orthogonal Polynomials: Computation and
+  Approximation", Oxford University Press — orthonormal three-term
+  recurrence ``sqrt(b_{n+1}) p_{n+1} = (x - a_n) p_n - sqrt(b_n) p_{n-1}``
+  and the monic recurrence coefficients per weight (their Table 1.1).
 - Ghanem, R. & Spanos, P. (1991), "Stochastic Finite Elements: A Spectral
   Approach" (Dover reprint 2003) — KLE eigenvalue problem
   ``∫ C(x, y) phi(y) dy = lambda phi(x)`` discretised via the midpoint
@@ -41,8 +54,9 @@ Bibliography (cited in implementation docstrings):
   tensor products of certain classes of functions", Dokl. Akad. Nauk
   SSSR 148(5), 1042-1045 — the original sparse-grid construction.
 - Abramowitz, M. & Stegun, I. A. (1972), "Handbook of Mathematical
-  Functions", Table 22.4 (Legendre) and 22.5.18 (Hermite) — closed-form
-  polynomial values used in test cross-checks.
+  Functions", §22.7 three-term recurrences (22.7.10 Legendre, 22.7.14
+  Hermite, 22.7.12 generalized Laguerre, 22.7.1 Jacobi) and closed-form
+  polynomial values (Tables 22.4 / 22.5.18) used in test cross-checks.
 """
 
 from __future__ import annotations
@@ -61,7 +75,8 @@ from numpy.polynomial.hermite_e import hermegauss
 from opifex.uncertainty.types import metadata_to_dict, MetadataItems
 
 
-_SUPPORTED_FAMILIES = frozenset({"legendre", "hermite"})
+_SUPPORTED_FAMILIES = frozenset({"legendre", "hermite", "laguerre", "jacobi"})
+_PARAMETRIC_FAMILIES = frozenset({"laguerre", "jacobi"})
 
 
 # ---------------------------------------------------------------------------
@@ -192,18 +207,229 @@ def _hermite_basis(degree: int, x: jax.Array) -> jax.Array:
     return norm * raw
 
 
-def _scalar_basis_one(family: str, degree: int, x: jax.Array) -> jax.Array:
+# ---------------------------------------------------------------------------
+# Generalized Askey-scheme families via monic three-term recurrences
+# (Laguerre <-> Gamma, Jacobi <-> Beta). The recurrence coefficients are
+# shared between the orthonormal basis evaluation and the Golub-Welsch
+# Gauss quadrature so a single source of truth defines each family.
+# ---------------------------------------------------------------------------
+
+
+def _measure_mass(family: str) -> float:
+    """Total mass of the orthogonality measure used by ``family``.
+
+    Every family except Legendre orthonormalises against a *probability*
+    measure (mass 1). Legendre keeps its historical Lebesgue weight on
+    ``[-1, 1]`` (mass 2; orthonormalisation factor ``sqrt((2n + 1) / 2)``),
+    so its matching Gauss quadrature must integrate ``int_{-1}^{1} . dx``
+    rather than the uniform density. Centralising the mass here keeps the
+    basis (:func:`_legendre_basis`) and quadrature (:func:`gauss_quadrature`)
+    consistent for every family.
+    """
+    return 2.0 if family == "legendre" else 1.0
+
+
+def _monic_recurrence_coefficients(
+    *,
+    family: str,
+    count: int,
+    alpha: float,
+    beta: float,
+) -> tuple[jax.Array, jax.Array]:
+    r"""Monic three-term recurrence coefficients ``(a_n, b_n)`` for ``n < count``.
+
+    Every classical orthogonal family satisfies the monic recurrence
+    (Gautschi 2004 §1.3; Abramowitz & Stegun §22.7)::
+
+        pi_{n+1}(x) = (x - a_n) pi_n(x) - b_n pi_{n-1}(x),  pi_{-1} = 0, pi_0 = 1.
+
+    ``b_0`` is the total mass of the weight (:func:`_measure_mass`): 1 for
+    the probability-normalised families and 2 for Legendre (Lebesgue
+    weight on ``[-1, 1]``, matching :func:`_legendre_basis`).
+
+    The coefficients per family (probability-weighted, A&S §22.7):
+
+    * Legendre (uniform on ``[-1, 1]``): ``a_n = 0``,
+      ``b_n = n^2 / ((2n - 1)(2n + 1))``.
+    * Hermite (standard normal): ``a_n = 0``, ``b_n = n``.
+    * Generalized Laguerre (Gamma shape ``alpha + 1`` on ``[0, inf)``):
+      ``a_n = 2n + alpha + 1``, ``b_n = n (n + alpha)``.
+    * Jacobi (Beta on ``[-1, 1]``, weight ``(1 - x)^alpha (1 + x)^beta``):
+      ``a_n = (beta^2 - alpha^2) / ((2n + alpha + beta)(2n + alpha + beta + 2))``
+      (with ``a_0 = (beta - alpha) / (alpha + beta + 2)``) and
+      ``b_1 = 4 (alpha + 1)(beta + 1) / ((alpha + beta + 2)^2 (alpha + beta + 3))``,
+      ``b_n = 4 n (n + alpha)(n + beta)(n + alpha + beta) /
+      ((2n + alpha + beta)^2 (2n + alpha + beta + 1)(2n + alpha + beta - 1))``.
+
+    Args:
+        family: One of the supported Askey-scheme families.
+        count: Number of coefficient pairs ``a_0..a_{count-1}``.
+        alpha: Shape parameter (generalized Laguerre / Jacobi); ignored
+            by Legendre / Hermite.
+        beta: Second Jacobi shape parameter; ignored otherwise.
+
+    Returns:
+        Tuple ``(a, b)`` of shape ``(count,)`` arrays; ``b[0]`` is the
+        measure mass (:func:`_measure_mass`).
+
+    Raises:
+        ValueError: On an unsupported family.
+    """
+    if family not in _SUPPORTED_FAMILIES:
+        raise ValueError(
+            f"Unsupported PCE family: {family!r}. Choose from {sorted(_SUPPORTED_FAMILIES)}."
+        )
+    n = jnp.arange(count, dtype=jnp.float64)
+    if family == "legendre":
+        a = jnp.zeros_like(n)
+        b = jnp.where(n == 0, 0.0, n**2 / ((2.0 * n - 1.0) * (2.0 * n + 1.0)))
+    elif family == "hermite":
+        a = jnp.zeros_like(n)
+        b = n
+    elif family == "laguerre":
+        a = 2.0 * n + alpha + 1.0
+        b = n * (n + alpha)
+    else:  # jacobi
+        two_n_ab = 2.0 * n + alpha + beta
+        # Guard the ``n == 0`` (and ``n == 1`` for ``b``) denominators which
+        # vanish for ``alpha + beta == 0``; the guarded entries are overwritten.
+        safe_denom = jnp.where(n == 0, 1.0, two_n_ab * (two_n_ab + 2.0))
+        a_general = (beta**2 - alpha**2) / safe_denom
+        a = jnp.where(n == 0, (beta - alpha) / (alpha + beta + 2.0), a_general)
+        b_denom = jnp.where(n < 2, 1.0, two_n_ab**2 * (two_n_ab + 1.0) * (two_n_ab - 1.0))
+        b_general = 4.0 * n * (n + alpha) * (n + beta) * (n + alpha + beta) / b_denom
+        b_one = (
+            4.0 * (alpha + 1.0) * (beta + 1.0) / ((alpha + beta + 2.0) ** 2 * (alpha + beta + 3.0))
+        )
+        b = jnp.where(n == 1, b_one, b_general)
+    return a, b.at[0].set(_measure_mass(family))
+
+
+def _orthonormal_recurrence_basis(
+    *,
+    family: str,
+    degree: int,
+    x: jax.Array,
+    alpha: float,
+    beta: float,
+) -> jax.Array:
+    r"""Orthonormal polynomial of ``degree`` via the recurrence coefficients.
+
+    Converts the monic recurrence to the orthonormal one (Gautschi 2004
+    eq. (1.3.13))::
+
+        sqrt(b_{n+1}) p_{n+1}(x) = (x - a_n) p_n(x) - sqrt(b_n) p_{n-1}(x),
+
+    with ``p_0 = 1 / sqrt(b_0)`` (``b_0`` the measure mass). The loop
+    bound ``degree`` is a static Python ``int`` so the call is traceable
+    under ``jax.jit`` / ``vmap`` / ``grad``.
+    """
+    if degree < 0:
+        raise ValueError(f"degree must be >= 0; got {degree}.")
+    a, b = _monic_recurrence_coefficients(family=family, count=degree + 2, alpha=alpha, beta=beta)
+    a = a.astype(x.dtype)
+    sqrt_b = jnp.sqrt(b).astype(x.dtype)
+    p_prev = jnp.zeros_like(x)
+    p_curr = jnp.ones_like(x) / sqrt_b[0]
+    for n in range(degree):
+        p_next = ((x - a[n]) * p_curr - sqrt_b[n] * p_prev) / sqrt_b[n + 1]
+        p_prev, p_curr = p_curr, p_next
+    return p_curr
+
+
+def _golub_welsch(a: jax.Array, b: jax.Array) -> tuple[jax.Array, jax.Array]:
+    """Gauss nodes / weights from monic recurrence coefficients ``(a, b)``.
+
+    Golub-Welsch (1969): the Gauss nodes are the eigenvalues of the
+    symmetric tridiagonal Jacobi matrix with diagonal ``a`` and
+    off-diagonal ``sqrt(b[1:])``; the weights are ``b[0]`` times the
+    squared first component of each normalised eigenvector. Built with
+    ``jnp.linalg.eigh`` so the construction is JAX-native.
+
+    Args:
+        a: ``(K,)`` diagonal recurrence coefficients.
+        b: ``(K,)`` off-diagonal-squared coefficients with ``b[0]`` the
+            total mass of the measure.
+
+    Returns:
+        Tuple ``(nodes, weights)`` of shape ``(K,)`` sorted ascending.
+    """
+    off_diagonal = jnp.sqrt(b[1:])
+    jacobi_matrix = jnp.diag(a) + jnp.diag(off_diagonal, 1) + jnp.diag(off_diagonal, -1)
+    eigenvalues, eigenvectors = jnp.linalg.eigh(jacobi_matrix)
+    weights = b[0] * eigenvectors[0, :] ** 2
+    return eigenvalues, weights
+
+
+def gauss_quadrature(
+    *,
+    family: str,
+    order: int,
+    alpha: float = 0.0,
+    beta: float = 0.0,
+) -> tuple[jax.Array, jax.Array]:
+    """Gauss quadrature nodes / weights for an Askey-scheme family.
+
+    Implements the Golub-Welsch (1969) eigenvalue method on the monic
+    three-term recurrence coefficients (:func:`_monic_recurrence_coefficients`),
+    so a single recurrence definition drives both the orthonormal basis
+    and its matching quadrature. The ``order``-point rule integrates
+    polynomials of degree up to ``2 * order - 1`` exactly. Weights sum to
+    the measure mass (:func:`_measure_mass`): 1 for the probability-
+    normalised families, 2 for Legendre (Lebesgue weight on ``[-1, 1]``).
+
+    Args:
+        family: ``"legendre"`` (uniform on ``[-1, 1]``), ``"hermite"``
+            (standard normal), ``"laguerre"`` (Gamma shape ``alpha + 1``
+            on ``[0, inf)``) or ``"jacobi"`` (Beta on ``[-1, 1]`` with
+            weight ``(1 - x)^alpha (1 + x)^beta``).
+        order: Number of quadrature points (``order >= 1``).
+        alpha: Shape parameter for generalized Laguerre / Jacobi.
+        beta: Second Jacobi shape parameter.
+
+    Returns:
+        Tuple ``(nodes, weights)`` of shape ``(order,)``.
+
+    Raises:
+        ValueError: On an unsupported family or non-positive order.
+    """
+    if family not in _SUPPORTED_FAMILIES:
+        raise ValueError(
+            f"Unsupported PCE family: {family!r}. Choose from {sorted(_SUPPORTED_FAMILIES)}."
+        )
+    if order <= 0:
+        raise ValueError(f"order must be positive; got {order}.")
+    a, b = _monic_recurrence_coefficients(family=family, count=order, alpha=alpha, beta=beta)
+    return _golub_welsch(a, b)
+
+
+def _scalar_basis_one(
+    family: str,
+    degree: int,
+    x: jax.Array,
+    *,
+    alpha: float = 0.0,
+    beta: float = 0.0,
+) -> jax.Array:
     """Dispatch helper: single-degree 1-D basis evaluation.
 
     Centralises the family → basis function dispatch so callers (the
     surrogate ``evaluate`` paths and :func:`evaluate_basis`) share the
     same Python-level loop over degrees. ``degree`` MUST be a concrete
     Python ``int`` because the JAX while-loop bound is static.
+
+    Legendre / Hermite use their dedicated closed-form-normalised
+    evaluators; Laguerre / Jacobi go through the shared orthonormal
+    recurrence (parametrised by ``alpha`` / ``beta``).
     """
     if family == "legendre":
         return _legendre_basis(degree, x)
     if family == "hermite":
         return _hermite_basis(degree, x)
+    if family in _PARAMETRIC_FAMILIES:
+        return _orthonormal_recurrence_basis(
+            family=family, degree=degree, x=x, alpha=alpha, beta=beta
+        )
     raise ValueError(
         f"Unsupported PCE family: {family!r}. Choose from {sorted(_SUPPORTED_FAMILIES)}."
     )
@@ -214,15 +440,23 @@ def evaluate_basis(
     family: str,
     degrees: jax.Array,
     x: jax.Array,
+    alpha: float = 0.0,
+    beta: float = 0.0,
 ) -> jax.Array:
     """Compute the requested orthonormal basis on ``x``.
 
     Args:
-        family: ``"legendre"`` (uniform on ``[-1, 1]``) or
-            ``"hermite"`` (probabilists' Hermite for ``x ~ N(0, 1)``).
+        family: ``"legendre"`` (uniform on ``[-1, 1]``), ``"hermite"``
+            (probabilists' Hermite for ``x ~ N(0, 1)``), ``"laguerre"``
+            (generalized Laguerre for Gamma shape ``alpha + 1`` on
+            ``[0, inf)``) or ``"jacobi"`` (Beta on ``[-1, 1]`` with weight
+            ``(1 - x)^alpha (1 + x)^beta``).
         degrees: 1-D integer array of degrees ``(P,)`` to evaluate.
         x: Input array of shape ``(N, d)`` for a ``d``-dimensional
             tensor-product basis, or ``(N,)`` for the 1-D basis.
+        alpha: Shape parameter for generalized Laguerre / Jacobi;
+            ignored by Legendre / Hermite.
+        beta: Second Jacobi shape parameter; ignored otherwise.
 
     Returns:
         ``(N, P)`` array of basis values for a 1-D ``x`` and
@@ -238,7 +472,8 @@ def evaluate_basis(
     if degrees.shape[0] == 0:
         raise ValueError("degrees must contain at least one non-empty entry.")
 
-    basis_one = _legendre_basis if family == "legendre" else _hermite_basis
+    def basis_one(degree: int, values: jax.Array) -> jax.Array:
+        return _scalar_basis_one(family, degree, values, alpha=alpha, beta=beta)
 
     if x.ndim == 1:
         return jnp.stack([basis_one(int(d), x) for d in degrees], axis=1)
@@ -965,6 +1200,7 @@ __all__ = [
     "StochasticGalerkinSurrogate",
     "evaluate_basis",
     "fit_pce_coefficients",
+    "gauss_quadrature",
     "pce_mean_variance",
     "pce_summary",
     "smolyak_sparse_grid",

@@ -4,28 +4,37 @@ Provides the core functionality for storing, retrieving, and managing
 neural functionals in the Opifex community platform. Implements CRUD
 operations with metadata management and version control integration.
 
-.. warning::
-    Database persistence is not yet wired in. The private ``_save_async``,
-    ``_get_functional_by_id``, ``_search_functionals_db``, and related
-    methods raise :class:`NotImplementedError` until an ORM adapter
-    subclasses :class:`RegistryService` and overrides them. The public
-    API (``register_functional``, ``retrieve_functional``,
-    ``search_functionals``, ``delete_functional``) will surface that
-    error rather than silently returning incorrect results.
+Persistence is backed by an async SQLAlchemy engine
+(:class:`~opifex.platform.registry.database.RegistryDatabase`). The default
+backend is on-disk SQLite via ``aiosqlite``, so the registry works out of the
+box and survives process restarts; the same ORM transparently targets
+PostgreSQL (``postgresql+asyncpg``) in production. The engine/URL is
+injectable through the constructor and the engine is created lazily — no
+database connection is opened at import time.
+
+The public async API (``register_functional``, ``retrieve_functional``,
+``search_functionals``, ``delete_functional``) reads and writes the ORM
+records (:class:`~opifex.platform.registry.models.NeuralFunctional`,
+:class:`~opifex.platform.registry.models.FunctionalVersion`,
+:class:`~opifex.platform.registry.models.FunctionalMetadata`) using
+parameterized queries within ``async with`` session scopes.
 """
 
 import asyncio
 import hashlib
 import json
+import shutil
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
 from flax import nnx
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from opifex.platform.registry.database import default_sqlite_url, RegistryDatabase
 from opifex.platform.registry.exceptions import (
     AccessDenied,
     FunctionalNotFound,
@@ -50,21 +59,59 @@ class RegistryService:
 
     def __init__(
         self,
-        db_session: Session | AsyncSession,
+        db_session: Session | AsyncSession | None = None,
         storage_path: str = "data/registry",
         max_file_size: int = 100 * 1024 * 1024,  # 100MB default
+        *,
+        database_url: str | None = None,
+        database: RegistryDatabase | None = None,
     ) -> None:
         """Initialize registry service.
 
+        The persistence backend is resolved with the following precedence:
+        an explicitly injected ``database``; otherwise a
+        :class:`~opifex.platform.registry.database.RegistryDatabase` built from
+        ``database_url``; otherwise — when only a concrete ``db_session`` is
+        supplied — that legacy session-backed adapter path is used; otherwise
+        the default on-disk SQLite database under ``storage_path``.
+
         Args:
-            db_session: Database session for metadata storage
-            storage_path: File system path for functional storage
-            max_file_size: Maximum file size for neural functionals (bytes)
+            db_session: Optional pre-built SQLAlchemy session. Retained for
+                callers that drive their own session lifecycle; when omitted
+                the service owns an async engine via ``database``.
+            storage_path: File-system path for functional artifact storage
+                (and the location of the default SQLite database file).
+            max_file_size: Maximum file size for neural functionals (bytes).
+            database_url: Async SQLAlchemy URL for the persistence backend
+                (e.g. ``sqlite+aiosqlite:///…`` or ``postgresql+asyncpg://…``).
+                Ignored when ``database`` is provided.
+            database: Pre-constructed async database backend (dependency
+                injection). Takes precedence over ``database_url``.
         """
         self.db = db_session
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.max_file_size = max_file_size
+
+        # Resolve the async persistence backend. A concrete (non-async)
+        # ``db_session`` signals the legacy session-adapter path used by
+        # callers that override the persistence hooks; in that case no async
+        # backend is created. Otherwise an async ``RegistryDatabase`` is used,
+        # defaulting to on-disk SQLite under ``storage_path``.
+        self._database: RegistryDatabase | None
+        if database is not None:
+            self._database = database
+        elif database_url is not None:
+            self._database = RegistryDatabase(database_url)
+        elif db_session is None:
+            self._database = RegistryDatabase(default_sqlite_url(self.storage_path))
+        else:
+            self._database = None
+
+    async def close(self) -> None:
+        """Release the async persistence backend, if the service owns one."""
+        if self._database is not None:
+            await self._database.close()
 
     async def register_functional(
         self,
@@ -138,8 +185,10 @@ class RegistryService:
             is_latest=True,
         )
 
-        # Save to database
-        if isinstance(self.db, AsyncSession):
+        # Save to database. The async backend is used when the service owns
+        # one or a concrete async session was supplied; otherwise the legacy
+        # synchronous session-adapter hook is dispatched.
+        if self._database is not None or isinstance(self.db, AsyncSession):
             await self._save_async(db_functional, db_metadata, db_version)
         else:
             self._save_sync(db_functional, db_metadata, db_version)
@@ -420,43 +469,140 @@ class RegistryService:
         # Convert to string for comparison to avoid SQLAlchemy type issues
         return str(author_id) == str(user_id)
 
-    # Database Operation Interfaces — fail fast until a storage backend is wired in.
+    # Database Operation Interfaces — async SQLAlchemy ORM persistence.
 
-    _NOT_WIRED = (
-        "Persistent storage backend is not wired into RegistryService yet. "
-        "Provide a session-aware ORM adapter and override this method."
+    _NO_BACKEND = (
+        "RegistryService has no async persistence backend; supply a "
+        "database_url / database, or override this hook in a session adapter."
     )
 
+    def _require_database(self) -> RegistryDatabase:
+        """Return the owned async backend or fail fast if absent."""
+        if self._database is None:
+            raise RuntimeError(self._NO_BACKEND)
+        return self._database
+
     async def _save_async(self, *objects: object) -> None:
-        """Save objects to database asynchronously."""
-        raise NotImplementedError(self._NOT_WIRED)
+        """Persist ORM records within a single transactional session."""
+        database = self._require_database()
+        async with database.session() as session:
+            for obj in objects:
+                session.add(obj)
 
     def _save_sync(self, *objects: object) -> None:
-        """Save objects to database synchronously."""
-        raise NotImplementedError(self._NOT_WIRED)
+        """Persist ORM records synchronously (legacy session adapter hook).
 
-    async def _get_functional_by_id(self, functional_id: str) -> None:
-        """Get functional by ID from database."""
-        raise NotImplementedError(self._NOT_WIRED)
+        Raises:
+            TypeError: When no synchronous :class:`~sqlalchemy.orm.Session` is
+                available; the async backend path uses :meth:`_save_async`.
+        """
+        if not isinstance(self.db, Session):
+            raise TypeError(self._NO_BACKEND)
+        for obj in objects:
+            self.db.add(obj)
+        self.db.commit()
 
-    async def _get_functional_version(self, functional_id: str, version_tag: str | None) -> None:
-        """Get functional version from database."""
-        raise NotImplementedError(self._NOT_WIRED)
+    async def _get_functional_by_id(self, functional_id: str) -> NeuralFunctional | None:
+        """Load a non-deleted functional record by id, or ``None``."""
+        database = self._require_database()
+        async with database.session() as session:
+            statement = select(NeuralFunctional).where(
+                NeuralFunctional.id == uuid.UUID(functional_id),
+                NeuralFunctional.is_deleted.is_(False),
+            )
+            return (await session.execute(statement)).scalar_one_or_none()
 
-    async def _get_functional_metadata(self, functional_id: str) -> None:
-        """Get functional metadata from database."""
-        raise NotImplementedError(self._NOT_WIRED)
+    async def _get_functional_version(
+        self, functional_id: str, version_tag: str | None
+    ) -> FunctionalVersion | None:
+        """Load a specific version, or the latest when ``version_tag`` is None."""
+        database = self._require_database()
+        async with database.session() as session:
+            statement = select(FunctionalVersion).where(
+                FunctionalVersion.functional_id == uuid.UUID(functional_id)
+            )
+            if version_tag is not None:
+                statement = statement.where(FunctionalVersion.version_tag == version_tag)
+            else:
+                statement = statement.where(FunctionalVersion.is_latest.is_(True))
+            return (await session.execute(statement)).scalars().first()
+
+    async def _get_functional_metadata(self, functional_id: str) -> FunctionalMetadata | None:
+        """Load the metadata record for a functional, or ``None``."""
+        database = self._require_database()
+        async with database.session() as session:
+            statement = select(FunctionalMetadata).where(
+                FunctionalMetadata.functional_id == uuid.UUID(functional_id)
+            )
+            return (await session.execute(statement)).scalar_one_or_none()
 
     async def _search_functionals_db(
-        self, query: str, filters: dict, tags: list[str] | None, limit: int, offset: int
-    ) -> list:
-        """Search functionals in database."""
-        raise NotImplementedError(self._NOT_WIRED)
+        self,
+        query: str,
+        filters: dict[str, Any],
+        tags: list[str] | None,
+        limit: int,
+        offset: int,
+    ) -> list[NeuralFunctional]:
+        """Search functionals by text, scalar filters and tags."""
+        database = self._require_database()
+        async with database.session() as session:
+            statement = select(NeuralFunctional).where(NeuralFunctional.is_deleted.is_(False))
+            if query:
+                statement = statement.where(NeuralFunctional.name.ilike(f"%{query}%"))
+            functional_type = filters.get("functional_type")
+            if functional_type:
+                statement = statement.where(NeuralFunctional.functional_type == functional_type)
+            author_id = filters.get("author_id")
+            if author_id:
+                statement = statement.where(NeuralFunctional.author_id == author_id)
+            statement = (
+                statement.order_by(NeuralFunctional.created_at.desc()).limit(limit).offset(offset)
+            )
+            candidates = list((await session.execute(statement)).scalars().all())
+
+        if not tags:
+            return candidates
+        # Tag membership is filtered in Python so the portable ``StringArray``
+        # column (JSON-encoded on SQLite) matches identically across dialects.
+        required = set(tags)
+        return [c for c in candidates if required.issubset(set(c.tags or []))]
 
     async def _delete_version(self, functional_id: str, version_tag: str) -> None:
-        """Delete specific version from database and storage."""
-        raise NotImplementedError(self._NOT_WIRED)
+        """Delete one version row and its on-disk artifact."""
+        database = self._require_database()
+        functional_uuid = uuid.UUID(functional_id)
+        async with database.session() as session:
+            statement = sa_delete(FunctionalVersion).where(
+                FunctionalVersion.functional_id == functional_uuid,
+                FunctionalVersion.version_tag == version_tag,
+            )
+            await session.execute(statement)
+        self._remove_version_file(functional_id, version_tag)
 
     async def _delete_functional_complete(self, functional_id: str) -> None:
-        """Delete entire functional from database and storage."""
-        raise NotImplementedError(self._NOT_WIRED)
+        """Soft-delete the functional and remove all on-disk artifacts.
+
+        The row is flagged ``is_deleted`` (preserving audit/download history
+        via the soft-delete columns) while the on-disk artifacts are removed.
+        """
+        database = self._require_database()
+        functional_uuid = uuid.UUID(functional_id)
+        async with database.session() as session:
+            statement = select(NeuralFunctional).where(NeuralFunctional.id == functional_uuid)
+            functional = (await session.execute(statement)).scalar_one_or_none()
+            if functional is not None:
+                functional.is_deleted = True
+                functional.deleted_at = datetime.now(UTC)
+        self._remove_functional_dir(functional_id)
+
+    def _remove_version_file(self, functional_id: str, version_tag: str) -> None:
+        """Delete a single version artifact file if present."""
+        file_path = self.storage_path / functional_id / "versions" / f"{version_tag}.json"
+        file_path.unlink(missing_ok=True)
+
+    def _remove_functional_dir(self, functional_id: str) -> None:
+        """Recursively delete a functional's artifact directory if present."""
+        functional_dir = self.storage_path / functional_id
+        if functional_dir.exists():
+            shutil.rmtree(functional_dir)

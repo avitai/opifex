@@ -4,6 +4,7 @@ These tests define the expected behavior of MAML, Reptile, gradient-based meta-l
 and Meta-L2O integration for Version 5.1.3 implementation.
 """
 
+import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
@@ -406,6 +407,99 @@ class TestGradientBasedMetaLearner:
             gb_meta_learner.problem_dim,
         )
         assert history_shape == expected_shape
+
+    @staticmethod
+    def _quadratic_trajectory(dimension: int, seed: int) -> dict:
+        """Build a strongly convex quadratic optimizee trajectory.
+
+        The optimizee is ``0.5 x^T Q x + c^T x`` with a positive-definite ``Q``
+        so the unrolled inner loss is bounded below and differentiable.
+        """
+        key = jax.random.PRNGKey(seed)
+        a_key, c_key, x_key = jax.random.split(key, 3)
+        a_matrix = jax.random.normal(a_key, (dimension, dimension))
+        hessian = a_matrix @ a_matrix.T + dimension * jnp.eye(dimension)
+        linear = jax.random.normal(c_key, (dimension,))
+        return {
+            "hessian": hessian,
+            "linear": linear,
+            "initial_params": jax.random.normal(x_key, (dimension,)),
+        }
+
+    def test_get_network_parameters_non_empty_and_round_trips(self, gb_meta_learner):
+        """Network params are a non-empty pytree that survives an update round-trip."""
+        params = gb_meta_learner._get_network_parameters()
+        leaves = jax.tree_util.tree_leaves(params)
+        assert len(leaves) > 0
+        assert all(jnp.isfinite(leaf).all() for leaf in leaves)
+
+        # Zero meta-gradients leave the parameters numerically unchanged.
+        zero_grads = jax.tree_util.tree_map(jnp.zeros_like, params)
+        before = jax.tree_util.tree_leaves(gb_meta_learner._get_network_parameters())
+        gb_meta_learner._update_network_parameters(zero_grads)
+        after = jax.tree_util.tree_leaves(gb_meta_learner._get_network_parameters())
+        assert len(before) == len(after)
+        for prev, curr in zip(before, after, strict=True):
+            assert jnp.allclose(prev, curr, atol=1e-5)
+
+    def test_meta_training_reduces_meta_loss(self, l2o_config):
+        """Several meta-training steps lower the meta-loss on a quadratic family."""
+        # A modest learned learning-rate ceiling keeps the untrained unroll stable
+        # (analogous to the small base step in learned_optimization's LOpt).
+        config = GradientBasedMetaLearningConfig(
+            optimizer_network_layers=[64, 32],
+            gradient_unroll_steps=10,
+            learned_lr_bounds=(1e-6, 0.1),
+            meta_learning_rate=1e-3,
+        )
+        rngs = nnx.Rngs(0)
+        learner = GradientBasedMetaLearner(
+            config=config, l2o_config=l2o_config, problem_dim=4, rngs=rngs
+        )
+        trajectories = [self._quadratic_trajectory(4, seed) for seed in range(3)]
+
+        _, first_loss = learner.meta_train_on_optimization_trajectories(trajectories, None)
+        last_loss = first_loss
+        for _ in range(15):
+            _, last_loss = learner.meta_train_on_optimization_trajectories(trajectories, None)
+
+        assert jnp.isfinite(first_loss)
+        assert last_loss < first_loss
+
+    def test_simulate_trajectory_is_differentiable_and_transform_safe(self, gb_config, l2o_config):
+        """The unrolled meta-loss is finite under jit/grad/vmap."""
+        rngs = nnx.Rngs(1)
+        learner = GradientBasedMetaLearner(
+            config=gb_config, l2o_config=l2o_config, problem_dim=3, rngs=rngs
+        )
+        trajectory = self._quadratic_trajectory(3, seed=7)
+        params = learner._get_network_parameters()
+
+        loss = learner._simulate_optimization_trajectory(trajectory, params)
+        assert loss.shape == ()
+        assert jnp.isfinite(loss)
+
+        # grad w.r.t. network params is meaningful (non-zero somewhere).
+        grads = jax.grad(learner._simulate_optimization_trajectory, argnums=1)(trajectory, params)
+        grad_norm = sum(float(jnp.sum(leaf**2)) for leaf in jax.tree_util.tree_leaves(grads))
+        assert grad_norm > 0.0
+
+        # jit smoke test.
+        jit_loss = jax.jit(learner._simulate_optimization_trajectory)(trajectory, params)
+        assert jnp.allclose(jit_loss, loss)
+
+        # vmap over a batch of stacked trajectories.
+        batch = jax.tree_util.tree_map(
+            lambda *xs: jnp.stack(xs),
+            *[self._quadratic_trajectory(3, seed=s) for s in range(4)],
+        )
+
+        def loss_for(single_trajectory):
+            return learner._simulate_optimization_trajectory(single_trajectory, params)
+
+        batched = jax.vmap(loss_for)(batch)
+        assert batched.shape == (4,)
+        assert jnp.isfinite(batched).all()
 
 
 class TestMetaL2OIntegration:

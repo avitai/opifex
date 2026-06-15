@@ -35,6 +35,137 @@ from opifex.uncertainty.types import PredictiveDistribution, PredictiveMode
 
 _PINN_RNG_STREAMS = ("sample", "default")
 
+# Boundary-condition types supported by :func:`compute_boundary_residual`.
+# Dirichlet uses the field value directly; Neumann/Robin need the model's
+# normal derivative and therefore a differentiable ``model`` callable.
+_BC_TYPE_DIRICHLET = "dirichlet"
+_BC_TYPE_NEUMANN = "neumann"
+_BC_TYPE_ROBIN = "robin"
+_SUPPORTED_BC_TYPES = (_BC_TYPE_DIRICHLET, _BC_TYPE_NEUMANN, _BC_TYPE_ROBIN)
+
+
+def _resolve_bc_target(value: Any, coords: jax.Array) -> jax.Array:
+    """Resolve a boundary target ``g`` to an array broadcastable to predictions.
+
+    ``value`` may be a constant (scalar / array) or a callable ``g(x)`` that
+    maps boundary coordinates to target values (deepxde ``DirichletBC`` pattern,
+    ``../deepxde/deepxde/icbc/boundary_conditions.py``).
+    """
+    if callable(value):
+        return jnp.asarray(value(coords))
+    return jnp.asarray(value)
+
+
+def _normal_derivative(model: Callable[[jax.Array], jax.Array], coords: jax.Array) -> jax.Array:
+    """Return ``du/dn`` at ``coords`` via JVP of the model along the outward normal.
+
+    For the 1-D / axis-aligned boundaries handled here the outward normal is the
+    sum of input-coordinate partials, matching deepxde ``NeumannBC.error``
+    (``../deepxde``). Implemented with :func:`jax.jvp` so it composes with
+    ``jit``/``grad``/``vmap``.
+    """
+    ones = jnp.ones_like(coords)
+    _, directional = jax.jvp(model, (coords,), (ones,))
+    return directional
+
+
+def compute_boundary_residual(
+    x: jax.Array,
+    y_pred: jax.Array,
+    boundary: Mapping[str, Any],
+) -> jax.Array:
+    """Compute the per-point boundary-condition residual ``r_b`` for a B-PINN.
+
+    Implements the boundary-condition likelihood residual of a Bayesian
+    Physics-Informed Neural Network (Yang, Meng & Karniadakis 2021,
+    *"B-PINNs"*, J. Comput. Phys. 425:109913, arXiv:2003.06097): the residual
+    placed under a Gaussian BC likelihood alongside the PDE residual. The
+    Dirichlet/Neumann/Robin residual forms follow deepxde's ``DirichletBC`` /
+    ``NeumannBC`` / ``RobinBC`` ``error`` methods
+    (``../deepxde/deepxde/icbc/boundary_conditions.py``).
+
+    Args:
+        x: Boundary coordinates ``x_b`` at which the BC is enforced.
+        y_pred: Model prediction ``u_theta(x_b)`` at those coordinates.
+        boundary: BC specification. Recognised keys:
+
+            * ``type`` — ``"dirichlet"`` (default), ``"neumann"`` or
+              ``"robin"``.
+            * ``value`` — target ``g``; a constant or a callable ``g(x)``.
+              Robin targets are callables ``g(x, u)`` of coordinate and field.
+            * ``model`` — differentiable ``u_theta(x)`` callable; REQUIRED for
+              Neumann/Robin to form the normal derivative.
+
+    Returns:
+        The residual array (NOT yet squared / reduced) shaped like ``y_pred``.
+
+    Raises:
+        ValueError: when ``type`` is unsupported, or a Neumann/Robin BC omits
+            the ``model`` callable needed for the normal derivative.
+    """
+    bc_type = str(boundary.get("type", _BC_TYPE_DIRICHLET)).lower()
+    if bc_type not in _SUPPORTED_BC_TYPES:
+        raise ValueError(
+            f"unsupported boundary-condition type {bc_type!r}; "
+            f"supported types: {list(_SUPPORTED_BC_TYPES)!r}."
+        )
+    raw_value = boundary.get("value", 0.0)
+
+    if bc_type == _BC_TYPE_DIRICHLET:
+        target = _resolve_bc_target(raw_value, x)
+        return y_pred - target
+
+    model: Callable[[jax.Array], jax.Array] | None = boundary.get("model")
+    if model is None or not callable(model):
+        raise ValueError(
+            f"boundary-condition type {bc_type!r} requires a 'model' callable "
+            "(differentiable u_theta(x)) to evaluate the normal derivative."
+        )
+    normal_grad = _normal_derivative(model, x)
+    if bc_type == _BC_TYPE_NEUMANN:
+        target = _resolve_bc_target(raw_value, x)
+        return normal_grad - target
+    # Robin: du/dn - g(x, u); the target depends on both coordinate and field.
+    robin_target = (
+        jnp.asarray(raw_value(x, y_pred)) if callable(raw_value) else jnp.asarray(raw_value)
+    )
+    return normal_grad - robin_target
+
+
+def _boundary_loss_term(
+    interior_x: jax.Array,
+    interior_pred: jax.Array,
+    boundary: Mapping[str, Any],
+    model: Callable[[jax.Array], jax.Array],
+) -> jax.Array:
+    """Return the scalar BC MSE for one ``boundary_conditions`` mapping.
+
+    The BC is evaluated at the dedicated boundary points ``boundary_x`` when
+    supplied (the B-PINN contract — BC data live on the boundary, not the
+    interior PDE collocation points). For backward compatibility, when no
+    ``boundary_x`` is given the BC is scored on the interior batch (legacy
+    single-value-over-domain behaviour). The returned value is the RAW mean
+    squared residual — no hidden multiplier — so ``ObjectiveConfig`` weights
+    remain the single source of truth.
+    """
+    boundary_x = boundary.get("boundary_x")
+    if boundary_x is not None:
+        x_b = jnp.asarray(boundary_x)
+        y_b = model(x_b)
+    else:
+        x_b = interior_x
+        y_b = interior_pred
+    # Neumann/Robin need a differentiable model callable for the normal
+    # derivative; inject the wrapped model when the spec does not carry one.
+    spec = boundary
+    if boundary.get("model") is None and str(boundary.get("type", "")).lower() in (
+        _BC_TYPE_NEUMANN,
+        _BC_TYPE_ROBIN,
+    ):
+        spec = {**boundary, "model": model}
+    residual = compute_boundary_residual(x_b, y_b, spec)
+    return jnp.mean(residual**2)
+
 
 def _coerce_predictive_mode(mode: PredictiveMode | str) -> PredictiveMode:
     """Coerce ``mode`` to :class:`PredictiveMode`; raise ``ValueError`` on miss.
@@ -590,6 +721,62 @@ class ProbabilisticPINN(nnx.Module):
             metadata=(("method", coerced_mode.value), ("num_samples", int(num_samples))),
         )
 
+    def boundary_coverage(
+        self,
+        boundary_x: jax.Array,
+        *,
+        boundary_value: float | jax.Array | Callable[[jax.Array], jax.Array] = 0.0,
+        rngs: nnx.Rngs,
+        num_samples: int = 32,
+        credible_level: float = 0.95,
+    ) -> dict[str, jax.Array]:
+        """Check that the predictive distribution covers a Dirichlet BC value.
+
+        Calibration contract for a B-PINN (Yang/Meng/Karniadakis 2021): a
+        well-trained posterior should produce a predictive whose MEAN matches
+        the boundary value and whose credible interval COVERS it at the boundary
+        points (low predictive std + correct mean). This method draws
+        ``num_samples`` posterior predictive samples at ``boundary_x`` and
+        reports the agreement.
+
+        Args:
+            boundary_x: Boundary coordinates ``x_b`` to evaluate.
+            boundary_value: Target Dirichlet value ``g``; constant or callable.
+            rngs: Caller-owned RNG bundle for posterior sampling.
+            num_samples: Number of posterior predictive draws.
+            credible_level: Central credible level for the interval check.
+
+        Returns:
+            Mapping with ``mean_abs_error`` (mean ``|E[u] - g|`` over boundary
+            points), ``coverage`` (fraction of boundary points whose central
+            credible interval contains ``g``), and ``predictive_std`` (mean
+            predictive standard deviation at the boundary).
+        """
+        predictive = self.predict_distribution(boundary_x, rngs=rngs, num_samples=num_samples)
+        target = _resolve_bc_target(boundary_value, boundary_x)
+        target = jnp.broadcast_to(target, predictive.mean.shape)
+
+        mean_abs_error = jnp.mean(jnp.abs(predictive.mean - target))
+
+        samples = predictive.samples
+        if samples is None:
+            raise ValueError(
+                "boundary_coverage requires predictive samples; predict_distribution returned none."
+            )
+        tail = (1.0 - credible_level) / 2.0
+        lower = jnp.quantile(samples, tail, axis=0)
+        upper = jnp.quantile(samples, 1.0 - tail, axis=0)
+        covered = (target >= lower) & (target <= upper)
+        coverage = jnp.mean(covered.astype(jnp.float32))
+
+        variance = predictive.variance
+        predictive_std = jnp.mean(jnp.sqrt(variance)) if variance is not None else jnp.array(0.0)
+        return {
+            "mean_abs_error": mean_abs_error,
+            "coverage": coverage,
+            "predictive_std": predictive_std,
+        }
+
     def loss_components(
         self,
         batch: Mapping[str, Any],
@@ -622,8 +809,13 @@ class ProbabilisticPINN(nnx.Module):
             physics_residual = jnp.mean(residual**2)
         boundary = None
         if boundary_conditions is not None:
-            bc_value = boundary_conditions.get("value", 0.0)
-            boundary = jnp.mean((y_pred - bc_value) ** 2)
+            # B-PINN BC likelihood: score the residual on the dedicated
+            # boundary points (Yang/Meng/Karniadakis 2021), sampling the
+            # posterior so the BC term enters the variational objective.
+            def bc_model(coords: jax.Array) -> jax.Array:
+                return self._forward(coords, rngs=rngs, deterministic=False)
+
+            boundary = _boundary_loss_term(x, y_pred, boundary_conditions, bc_model)
         kl = self.kl_divergence()
 
         return UQLossComponents.from_components(
@@ -719,13 +911,18 @@ class ProbabilisticPINN(nnx.Module):
         residual = pde_residual_fn(x, y_pred)
         physics_loss = jnp.mean(residual**2)
 
-        # Add boundary condition loss if provided
+        # Add boundary-condition loss if provided. The BC residual follows the
+        # B-PINN / deepxde form (Dirichlet/Neumann/Robin) and is evaluated at
+        # dedicated boundary points when supplied; ``weight`` (default 1.0) is
+        # the only multiplier — no hidden scale.
         if boundary_conditions is not None:
-            # Simple boundary loss implementation
             bc_weight = boundary_conditions.get("weight", 1.0)
-            bc_value = boundary_conditions.get("value", 0.0)
-            bc_loss = jnp.mean((y_pred - bc_value) ** 2) * bc_weight * 0.1
-            physics_loss = physics_loss + bc_loss
+
+            def bc_model(coords: jax.Array) -> jax.Array:
+                return self(coords, deterministic=True)
+
+            bc_loss = _boundary_loss_term(x, y_pred, boundary_conditions, bc_model)
+            physics_loss = physics_loss + bc_weight * bc_loss
 
         return physics_loss
 
@@ -905,27 +1102,29 @@ class RobustPINNOptimizer(nnx.Module):
         y_pred: jax.Array,
         boundary_conditions: dict[str, Any],
     ) -> jax.Array:
-        """
-        Compute boundary condition loss.
+        """Compute the raw boundary-condition MSE for the wrapped model.
+
+        Delegates to :func:`compute_boundary_residual` so Dirichlet, Neumann
+        and Robin BCs share one reference-cited implementation (B-PINN /
+        deepxde). The BC is evaluated at the dedicated ``boundary_x`` points
+        when supplied; otherwise on the interior batch (legacy behaviour). The
+        returned MSE carries NO hidden multiplier — the ``boundary_weight`` of
+        :class:`ObjectiveConfig` is the single scaling source.
 
         Args:
-            x: Input coordinates
-            y_pred: Model predictions
-            boundary_conditions: Boundary condition specification
+            x: Interior collocation coordinates (fallback boundary points).
+            y_pred: Posterior-mean prediction at ``x``.
+            boundary_conditions: BC specification (see
+                :func:`compute_boundary_residual`).
 
         Returns:
-            Boundary loss scalar
+            Scalar boundary-condition mean squared residual.
         """
-        bc_type = boundary_conditions.get("type", "dirichlet")
 
-        if bc_type == "dirichlet":
-            # Simple Dirichlet BC: assume boundary points have y=0
-            bc_value = boundary_conditions.get("value", 0.0)
-            # For simplicity, apply to all points (in practice would filter boundary)
-            return jnp.mean((y_pred - bc_value) ** 2) * 0.1
+        def bc_model(coords: jax.Array) -> jax.Array:
+            return _extract_prediction_array(self.model(coords, deterministic=True))
 
-        # For other BC types, return zero for now
-        return jnp.array(0.0)
+        return _boundary_loss_term(x, y_pred, boundary_conditions, bc_model)
 
     def uncertainty_guided_sampling(
         self,

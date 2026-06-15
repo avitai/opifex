@@ -19,19 +19,31 @@ Key Features:
 - Adaptive geometric sampling
 """
 
+import math
 from collections.abc import Callable, Sequence
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.neural.operators.common.embeddings import SinusoidalEmbedding
+
 
 class GeometryEncoder(nnx.Module):
-    """
-    Encoder for geometric coordinates with positional encoding.
+    """Encoder mapping point coordinates to geometry embeddings.
 
-    Transforms coordinate information into rich geometric embeddings
-    suitable for neural operator processing.
+    Coordinates are first lifted into a sinusoidal positional embedding and
+    then passed through an MLP to produce per-point geometry features. This is
+    the geometry-embedding component of the Geometry-Informed Neural Operator.
+
+    References
+    ----------
+    Li, Z. et al. (2023). "Geometry-Informed Neural Operator for Large-Scale
+    3D PDEs." NeurIPS 2023, arXiv:2309.00583. The transformer-style sinusoidal
+    coordinate embedding mirrors the input/output GNO positional embedding in
+    ``neuraloperator/neuralop/layers/gno_block.py`` (``self.pos_embedding``,
+    L154-L160 / L239-L241) built from
+    ``neuralop/layers/embeddings.py::SinusoidalEmbedding``.
     """
 
     def __init__(
@@ -40,34 +52,50 @@ class GeometryEncoder(nnx.Module):
         hidden_dim: int,
         output_dim: int,
         use_positional_encoding: bool = True,
+        num_frequencies: int = 8,
         max_position: float = 10000.0,
+        embedding_type: str = "transformer",
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """
-        Initialize geometry encoder.
+        """Initialize the geometry encoder.
 
         Args:
-            coord_dim: Dimension of input coordinates
-            hidden_dim: Hidden layer dimension
-            output_dim: Output embedding dimension
-            use_positional_encoding: Whether to use sinusoidal positional encoding
-            max_position: Maximum position for encoding
-            rngs: Random number generator state
+            coord_dim: Dimension of input coordinates.
+            hidden_dim: Hidden layer dimension of the encoding MLP.
+            output_dim: Output geometry-embedding dimension.
+            use_positional_encoding: Whether to lift coordinates with a
+                sinusoidal positional embedding before the MLP.
+            num_frequencies: Number of sinusoidal frequencies per coordinate.
+            max_position: ``max_positions`` for transformer-style embedding.
+            embedding_type: Sinusoidal embedding style, ``"transformer"`` or
+                ``"nerf"``.
+            rngs: Random number generator state.
         """
         self.coord_dim = coord_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.use_positional_encoding = use_positional_encoding
+        self.num_frequencies = num_frequencies
         self.max_position = max_position
 
-        # Calculate encoded dimension
-        encoding_dim = 20 if use_positional_encoding else 0
-        input_dim = coord_dim + encoding_dim
+        if use_positional_encoding:
+            self.positional_embedding: SinusoidalEmbedding | None = SinusoidalEmbedding(
+                in_channels=coord_dim,
+                num_frequencies=num_frequencies,
+                embedding_type=embedding_type,
+                max_positions=int(max_position),
+            )
+            # The original coordinates are concatenated with their embedding so
+            # the encoder retains absolute position alongside spectral features.
+            self.embedded_coord_dim = coord_dim + self.positional_embedding.out_channels
+        else:
+            self.positional_embedding = None
+            self.embedded_coord_dim = coord_dim
 
         # Encoder network
         self.encoder = nnx.Sequential(
-            nnx.Linear(input_dim, hidden_dim, rngs=rngs),
+            nnx.Linear(self.embedded_coord_dim, hidden_dim, rngs=rngs),
             nnx.gelu,
             nnx.Linear(hidden_dim, hidden_dim, rngs=rngs),
             nnx.gelu,
@@ -75,46 +103,31 @@ class GeometryEncoder(nnx.Module):
         )
 
     def _positional_encoding(self, coords: jax.Array) -> jax.Array:
-        """
-        Apply sinusoidal positional encoding to coordinates.
+        """Lift coordinates into a sinusoidal positional embedding.
 
         Args:
-            coords: Coordinate tensor (..., coord_dim)
+            coords: Coordinate tensor of shape ``(batch, n_points, coord_dim)``.
 
         Returns:
-            Encoded coordinates (..., coord_dim + encoding_dim)
+            Coordinates concatenated with their sinusoidal embedding, of shape
+            ``(batch, n_points, embedded_coord_dim)``.
         """
-        if not self.use_positional_encoding:
+        if self.positional_embedding is None:
             return coords
 
-        # Create frequency scales for encoding
-        scales = jnp.logspace(0, jnp.log10(self.max_position), 10)
-
-        # Apply sinusoidal encoding to each coordinate dimension
-        encoded = []
-        for i in range(self.coord_dim):
-            coord_i = coords[..., i : i + 1]  # Keep dimension
-            for scale in scales:
-                encoded.append(jnp.sin(scale * coord_i))
-                encoded.append(jnp.cos(scale * coord_i))
-
-        # Concatenate original coordinates with encodings
-        return jnp.concatenate([coords, *encoded], axis=-1)
+        embedded = self.positional_embedding(coords)
+        return jnp.concatenate([coords, embedded], axis=-1)
 
     def __call__(self, coords: jax.Array) -> jax.Array:
-        """
-        Encode coordinate information.
+        """Encode coordinates into geometry embeddings.
 
         Args:
-            coords: Coordinate tensor (..., coord_dim)
+            coords: Coordinate tensor of shape ``(batch, n_points, coord_dim)``.
 
         Returns:
-            Geometry embeddings (..., output_dim)
+            Geometry embeddings of shape ``(batch, n_points, output_dim)``.
         """
-        # Apply positional encoding
         coords_encoded = self._positional_encoding(coords)
-
-        # Encode geometry
         return self.encoder(coords_encoded)
 
 
@@ -378,16 +391,20 @@ class GINOBlock(nnx.Module):
         # Apply inverse FFT
         return jnp.fft.irfftn(out_ft_slice, s=x.shape[-2:], axes=(-2, -1))
 
-    def __call__(self, x: jax.Array, coords: jax.Array) -> jax.Array:
-        """
-        Forward pass with proper dimension handling.
+    def __call__(
+        self, x: jax.Array, coords: jax.Array, geometry_embeddings: jax.Array
+    ) -> jax.Array:
+        """Apply spectral convolution and geometry-aware attention.
 
         Args:
-            x: Input tensor (batch, ..., channels)
-            coords: Coordinate tensor (batch, num_points, coord_dim)
+            x: Input tensor of shape ``(batch, ..., channels)``.
+            coords: Coordinate tensor of shape ``(batch, num_points, coord_dim)``.
+            geometry_embeddings: Computed geometry embeddings of shape
+                ``(batch, num_points, geometry_dim)``, produced by the model's
+                shared geometry encoder from ``coords``.
 
         Returns:
-            Output tensor (batch, ..., out_channels)
+            Output tensor of shape ``(batch, ..., out_channels)``.
         """
         # Store original shape for reconstruction
         original_shape = x.shape
@@ -409,22 +426,13 @@ class GINOBlock(nnx.Module):
         if self.use_geometry_attention:
             # Reshape for attention: flatten spatial dimensions
             spatial_dims = original_shape[1:-1]
-            num_points = int(jnp.prod(jnp.array(spatial_dims)))
+            num_points = math.prod(spatial_dims)
 
             # Reshape to (batch, num_points, channels)
             x_flat = x_activated.reshape(batch_size, num_points, self.out_channels)
 
-            # Ensure coords match the flattened spatial points
-            if coords.shape[1] != num_points:
-                # Generate default coordinate grid if needed
-                coords = self._generate_coordinate_grid(spatial_dims, batch_size)
-
-            # Dummy geometry embeddings (in practice, these would be computed)
-            geometry_embeddings = jnp.zeros(
-                (batch_size, num_points, self.geometry_dim), dtype=x_flat.dtype
-            )
-
-            # Apply geometry attention
+            # Apply geometry attention using the computed geometry embeddings
+            # (Li et al. 2023, arXiv:2309.00583).
             x_attended = self.geometry_attention(x_flat, geometry_embeddings, coords)
 
             # Reshape back to original spatial dimensions
@@ -434,24 +442,6 @@ class GINOBlock(nnx.Module):
 
         # Layer normalization
         return self.norm(x_output)
-
-    def _generate_coordinate_grid(
-        self, spatial_dims: tuple[int, ...], batch_size: int
-    ) -> jax.Array:
-        """Generate coordinate grid for spatial dimensions."""
-        if len(spatial_dims) == 2:
-            h, w = spatial_dims
-            y_coords = jnp.linspace(-1, 1, h)
-            x_coords = jnp.linspace(-1, 1, w)
-            yy, xx = jnp.meshgrid(y_coords, x_coords, indexing="ij")
-            coords = jnp.stack([yy.flatten(), xx.flatten()], axis=-1)
-            return jnp.tile(coords[None, :, :], (batch_size, 1, 1))
-
-        # For other dimensions, generate simple linear coordinates
-        total_points = int(jnp.prod(jnp.array(spatial_dims)))
-        coords = jnp.linspace(-1, 1, total_points).reshape(-1, 1)
-        coords = jnp.tile(coords, (1, self.coord_dim))
-        return jnp.tile(coords[None, :, :], (batch_size, 1, 1))
 
 
 class GeometryInformedNeuralOperator(nnx.Module):
@@ -503,12 +493,13 @@ class GeometryInformedNeuralOperator(nnx.Module):
         # Input projection
         self.input_proj = nnx.Linear(in_channels, hidden_channels, rngs=rngs)
 
-        # Geometry encoder
+        # Shared geometry encoder: lifts coordinates into sinusoidal features
+        # and encodes them into geometry embeddings consumed by every block.
         self.geometry_encoder = GeometryEncoder(
             coord_dim=coord_dim,
             hidden_dim=64,
             output_dim=geometry_dim,
-            use_positional_encoding=False,  # Disable for dimensional compatibility
+            use_positional_encoding=True,
             rngs=rngs,
         )
 
@@ -553,15 +544,16 @@ class GeometryInformedNeuralOperator(nnx.Module):
             spatial_dims = x.shape[1:-1]
             coords = self._generate_default_coords(spatial_dims, batch_size)
 
-        # Encode geometry (currently not used but may be needed for future enhancements)
-        _ = self.geometry_encoder(coords)
+        # Compute geometry embeddings from coordinates once and share them
+        # across all blocks (Li et al. 2023, arXiv:2309.00583).
+        geometry_embeddings = self.geometry_encoder(coords)
 
         # Input projection
         x = self.input_proj(x)
 
         # Apply GINO blocks
         for block in self.gino_blocks:
-            x = block(x, coords)
+            x = block(x, coords, geometry_embeddings)
 
         # Output projection
         return self.output_proj(x)
@@ -577,7 +569,7 @@ class GeometryInformedNeuralOperator(nnx.Module):
             return jnp.tile(coords[None, :, :], (batch_size, 1, 1))
 
         # For other dimensions
-        total_points = int(jnp.prod(jnp.array(spatial_dims)))
+        total_points = math.prod(spatial_dims)
         coords = jnp.linspace(-1, 1, total_points).reshape(-1, 1)
         coords = jnp.tile(coords, (1, self.coord_dim))
         return jnp.tile(coords[None, :, :], (batch_size, 1, 1))

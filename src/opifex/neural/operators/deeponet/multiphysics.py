@@ -3,6 +3,34 @@
 This module provides the MultiPhysicsDeepONet class, which extends the basic
 DeepONet architecture with physics-aware attention, multi-physics coupling,
 and sensor optimization for improved operator learning in complex systems.
+
+Multi-output formulation
+-------------------------
+Each physics field is produced by its own *independent* branch and trunk
+network, following the multi-output DeepONet "independent" strategy:
+
+    field_i(u)(y) = <branch_i(u), trunk_i(y)>
+
+The branch network ``branch_i`` encodes the input function ``u`` for physics
+``i``; the trunk network ``trunk_i`` encodes the query coordinates ``y`` for
+physics ``i``; their inner product over the latent dimension gives the value of
+physics field ``i`` at ``y``. Fields are then stacked along a trailing physics
+axis to give an output of shape ``(batch, n_points, num_physics_systems)``.
+
+This mirrors ``IndependentStrategy`` in DeepXDE
+(``deepxde/nn/deeponet_strategy.py``).
+
+References
+----------
+- L. Lu, P. Jin, G. Pang, Z. Zhang, G. E. Karniadakis. "Learning nonlinear
+  operators via DeepONet based on the universal approximation theorem of
+  operators." Nature Machine Intelligence, 3, 218-229, 2021.
+- L. Lu, X. Meng, S. Cai, Z. Mao, S. Goswami, Z. Zhang, G. E. Karniadakis.
+  "A comprehensive and fair comparison of two neural operators (with practical
+  extensions) based on FAIR data." Computer Methods in Applied Mechanics and
+  Engineering, 393, 114778, 2022 (section 3.1.6, multi-output strategies).
+- DeepXDE reference implementation: ``deepxde/nn/deeponet_strategy.py``
+  (``IndependentStrategy``).
 """
 
 from collections.abc import Callable
@@ -91,7 +119,6 @@ class MultiPhysicsDeepONet(nnx.Module):
         self._initialize_sensor_optimization(
             sensor_optimization, num_sensors, trunk_input_dim, rngs
         )
-        self._initialize_system_coupling(num_physics_systems, latent_dim, rngs)
 
     def _configure_sensors(
         self, sensor_optimization: bool, num_sensors: int | None, branch_input_dim: int
@@ -186,17 +213,6 @@ class MultiPhysicsDeepONet(nnx.Module):
                 rngs=rngs,
             )
 
-    def _initialize_system_coupling(
-        self, num_physics_systems: int, latent_dim: int, rngs: nnx.Rngs
-    ) -> None:
-        """Initialize system coupling weights for multi-physics interaction."""
-        if num_physics_systems > 1:
-            self.system_coupling = nnx.Linear(
-                in_features=latent_dim * num_physics_systems,
-                out_features=latent_dim,
-                rngs=rngs,
-            )
-
     def _prepare_branch_inputs(self, branch_inputs: jax.Array | list[jax.Array]) -> list[jax.Array]:
         """Prepare branch inputs for multiple physics systems."""
         if isinstance(branch_inputs, jax.Array):
@@ -275,42 +291,62 @@ class MultiPhysicsDeepONet(nnx.Module):
         # Stack encodings: [batch, num_systems, latent_dim]
         return jnp.stack(encodings, axis=1)
 
-    def _encode_trunk_inputs(self, trunk_input: jax.Array) -> jax.Array:
-        """Encode trunk inputs using physics-specific operators."""
-        # Handle trunk input shape: expected (batch, trunk_dim) or
-        # (batch, num_locations, trunk_dim)
-        if len(trunk_input.shape) == 2:
+    def _normalize_trunk_input(self, trunk_input: jax.Array) -> tuple[jax.Array, int, int]:
+        """Reshape and validate trunk input to ``(batch, num_locations, trunk_dim)``.
+
+        Args:
+            trunk_input: Query coordinates of shape ``(batch, trunk_dim)`` or
+                ``(batch, num_locations, trunk_dim)``.
+
+        Returns:
+            Tuple of the 3D trunk input, the batch size and the number of
+            locations.
+        """
+        if trunk_input.ndim == 2:
             # Single location per batch: (batch, trunk_dim)
             batch_size, trunk_dim = trunk_input.shape
             num_locations = 1
             trunk_input = trunk_input.reshape(batch_size, num_locations, trunk_dim)
-        elif len(trunk_input.shape) == 3:
+        elif trunk_input.ndim == 3:
             # Multiple locations per batch: (batch, num_locations, trunk_dim)
-            batch_size, num_locations, trunk_dim = trunk_input.shape
+            batch_size, num_locations, _ = trunk_input.shape
         else:
             raise ValueError(
-                f"Expected trunk_input to have 2 or 3 dimensions, got {len(trunk_input.shape)}"
+                f"Expected trunk_input to have 2 or 3 dimensions, got {trunk_input.ndim}"
             )
 
-        # Flatten for processing: [batch * num_locations, trunk_dim]
-        trunk_input_flat = trunk_input.reshape(batch_size * num_locations, trunk_dim)
-
-        # For now, use the first physics operator's trunk network
-        # (assumption: shared trunk network across physics systems)
-        # TODO: Consider physics-specific trunk networks in future
         expected_dim = self.physics_operators[0].trunk_net.layers[0].in_features
-
-        if trunk_input_flat.shape[-1] != expected_dim:
+        if trunk_input.shape[-1] != expected_dim:
             raise ValueError(
-                f"Trunk input dimension {trunk_input_flat.shape[-1]} "
+                f"Trunk input dimension {trunk_input.shape[-1]} "
                 f"does not match expected dimension {expected_dim}"
             )
+        return trunk_input, batch_size, num_locations
 
-        # Encode using trunk network
-        trunk_encoding_flat = self.physics_operators[0].trunk_net(trunk_input_flat)
+    def _encode_all_trunks(self, trunk_input: jax.Array) -> jax.Array:
+        """Encode query coordinates with a separate trunk per physics field.
 
-        # Reshape back: [batch, num_locations, latent_dim]
-        return trunk_encoding_flat.reshape(batch_size, num_locations, self.latent_dim)
+        Each physics operator owns an independent trunk network. This evaluates
+        every trunk at the query coordinates, following the independent
+        multi-output DeepONet strategy (Lu et al. 2022, section 3.1.6).
+
+        Args:
+            trunk_input: Query coordinates of shape ``(batch, trunk_dim)`` or
+                ``(batch, num_locations, trunk_dim)``.
+
+        Returns:
+            Per-physics trunk encodings of shape
+            ``(batch, num_locations, num_physics_systems, latent_dim)``.
+        """
+        trunk_input, batch_size, num_locations = self._normalize_trunk_input(trunk_input)
+        trunk_input_flat = trunk_input.reshape(batch_size * num_locations, -1)
+
+        encodings = [
+            operator.trunk_net(trunk_input_flat).reshape(batch_size, num_locations, self.latent_dim)
+            for operator in self.physics_operators
+        ]
+        # Stack along a physics axis: (batch, num_locations, num_physics, latent_dim).
+        return jnp.stack(encodings, axis=2)
 
     def _apply_physics_attention(
         self,
@@ -357,11 +393,17 @@ class MultiPhysicsDeepONet(nnx.Module):
             training: Whether in training mode
 
         Returns:
-            Function values at query locations [batch] or [batch, num_locations]
+            Per-physics function values at the query locations. The trailing
+            physics axis is dropped for a single physics system, and the
+            location axis is dropped for single-location trunk inputs. Concretely:
+
+            - multi-location, multi-physics: ``(batch, num_locations, num_physics)``
+            - single-location, multi-physics: ``(batch, num_physics)``
+            - multi-location, single-physics: ``(batch, num_locations)``
+            - single-location, single-physics: ``(batch,)``
         """
         # Determine if trunk input has single or multiple locations
-        original_trunk_shape = trunk_input.shape
-        single_location = len(original_trunk_shape) == 2
+        single_location = trunk_input.ndim == 2
 
         # Prepare branch inputs for multiple systems
         branch_input_list = self._prepare_branch_inputs(branch_inputs)
@@ -370,39 +412,25 @@ class MultiPhysicsDeepONet(nnx.Module):
         if spatial_coords is not None:
             branch_input_list = self._apply_sensor_optimization(branch_input_list, spatial_coords)
 
-        # Encode branch inputs
+        # Encode branch inputs: (batch, num_physics, latent_dim)
         branch_encoding = self._encode_branch_inputs(branch_input_list)
 
-        # Apply physics-aware attention
+        # Apply physics-aware attention (cross-physics coupling)
         branch_encoding = self._apply_physics_attention(branch_encoding, physics_info, training)
 
-        # Encode trunk inputs
-        trunk_encoding = self._encode_trunk_inputs(trunk_input)
+        # Encode trunk inputs with per-physics trunks:
+        # (batch, num_locations, num_physics, latent_dim)
+        trunk_encoding = self._encode_all_trunks(trunk_input)
 
-        # Combine multi-physics outputs
+        # Per-physics inner product over the latent dimension:
+        # branch (b, p, l) . trunk (b, n, p, l) -> (b, n, p)
+        output = jnp.einsum("bpl,bnpl->bnp", branch_encoding, trunk_encoding)
+
+        # Collapse singleton axes to keep the simplest natural shape.
         if self.num_physics_systems == 1:
-            # Single system: direct inner product
-            branch_vec = branch_encoding.squeeze(1)  # [batch, latent_dim]
-            output = jnp.einsum("bl,bnl->bn", branch_vec, trunk_encoding)
-        else:
-            # Multiple systems: combine using coupling weights
-            # branch_encoding: [batch, num_systems, latent_dim]
-            # trunk_encoding: [batch, num_locations, latent_dim]
-
-            # Flatten systems dimension for coupling
-            batch_size = branch_encoding.shape[0]
-            branch_flat = branch_encoding.reshape(
-                batch_size, self.num_physics_systems * self.latent_dim
-            )
-            coupled_branch = self.system_coupling(branch_flat)  # [batch, latent_dim]
-
-            # Inner product with coupled representation
-            output = jnp.einsum("bl,bnl->bn", coupled_branch, trunk_encoding)
-
-        # Return appropriate shape based on input
+            output = output.squeeze(-1)
         if single_location:
-            # Squeeze out the location dimension for single location inputs
-            return output.squeeze(-1)
+            output = output.squeeze(1)
         return output
 
     def get_sensor_positions(self) -> jax.Array | None:

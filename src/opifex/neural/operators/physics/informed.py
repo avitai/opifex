@@ -20,6 +20,7 @@ from flax import nnx
 
 # Import neural network components
 from opifex.neural.base import StandardMLP
+from opifex.neural.operators.physics._conservation import conservation_residual_loss
 
 
 class PhysicsInformedOperator(nnx.Module):
@@ -174,13 +175,55 @@ class PhysicsInformedOperator(nnx.Module):
         return jnp.array(0.0)
 
     def _compute_conservation_loss(self, coordinates: jax.Array) -> jax.Array:
-        """Compute conservation law violation loss."""
-        # Placeholder: conservation of mass/energy
-        solution = self.__call__(coordinates, deterministic=True)
+        """Compute the local conservation-law residual loss.
 
-        # Example: mass conservation (sum of solution should be conserved)
-        mass_violation = jnp.std(jnp.sum(solution, axis=-1))
-        return mass_violation**2
+        Enforces the continuity / mass conservation law in flux form
+        ``∇·F = 0`` (Landau & Lifshitz, *Fluid Mechanics*, §1), treating the
+        predicted output channels as components of the conserved flux ``F`` and
+        the ``n_points`` axis as the spatial grid. The loss penalises the
+        squared discrete divergence ``mean((∇·F)²)`` computed with second-order
+        central finite differences, matching ``neuraloperator``'s
+        ``FiniteDiff.divergence`` reference.
+
+        A divergence-free (constant) flux yields ~0 loss; a flux with non-zero
+        divergence yields the corresponding positive value.
+
+        The divergence requires a resolved spatial grid. For point-wise inputs
+        of shape ``(batch, input_dim)`` there is no neighbour to difference
+        against, so the local conservation residual is not well-defined and a
+        zero loss is returned honestly rather than substituting a proxy.
+
+        Args:
+            coordinates: Space-time coordinates, ``(batch, n_points, input_dim)``
+                for the resolved-grid case.
+
+        Returns:
+            Scalar mean-squared conservation residual.
+        """
+        if coordinates.ndim < 3:
+            # No spatial grid axis: local divergence is undefined here.
+            return jnp.array(0.0)
+
+        # solution shape: (batch, n_points, n_channels); channels are the flux
+        # components and axis 1 indexes the spatial grid.
+        solution = self.__call__(coordinates, deterministic=True)
+        spacing = self._grid_spacing(coordinates)
+        return conservation_residual_loss(solution, spatial_axis=1, spacing=spacing)
+
+    @staticmethod
+    def _grid_spacing(coordinates: jax.Array) -> jax.Array:
+        """Estimate uniform grid spacing from the first spatial coordinate.
+
+        Args:
+            coordinates: Coordinates of shape ``(batch, n_points, input_dim)``.
+
+        Returns:
+            Positive scalar grid spacing ``Δx`` along the points axis.
+        """
+        first_axis = coordinates[..., 0]
+        diffs = jnp.diff(first_axis, axis=-1)
+        spacing = jnp.mean(jnp.abs(diffs))
+        return jnp.where(spacing > 0.0, spacing, 1.0)
 
     def _compute_symmetry_loss(self, coordinates: jax.Array) -> jax.Array:
         """Compute symmetry constraint violation loss."""

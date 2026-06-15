@@ -36,6 +36,24 @@ from opifex.optimization.meta_optimization import (
 )
 
 
+def _match_dimension(solution: jax.Array, dimension: int) -> jax.Array:
+    """Truncate or zero-pad a solution vector to the requested dimension.
+
+    Args:
+        solution: Decision vector produced by a solver.
+        dimension: Target problem dimension.
+
+    Returns:
+        A vector of length ``dimension`` (truncated or right-padded with zeros).
+    """
+    if solution.shape[0] == dimension:
+        return solution
+    if solution.shape[0] > dimension:
+        return solution[:dimension]
+    padding = jnp.zeros(dimension - solution.shape[0])
+    return jnp.concatenate([solution, padding])
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class L2OEngineConfig:
     """Configuration for the L2O engine integration.
@@ -374,15 +392,7 @@ class L2OEngine:
             raise ValueError("Parametric solver not initialized")
 
         solution, _ = self.parametric_solver.solve_optimization_problem(problem, problem_params)
-        # Ensure solution matches problem dimension
-        if solution.shape[0] != problem.dimension:
-            # Truncate or pad to match problem dimension
-            if solution.shape[0] > problem.dimension:
-                solution = solution[: problem.dimension]
-            else:
-                padding = jnp.zeros(problem.dimension - solution.shape[0])
-                solution = jnp.concatenate([solution, padding])
-        return solution
+        return _match_dimension(solution, problem.dimension)
 
     def solve_gradient_problem(
         self,
@@ -478,49 +488,70 @@ class L2OEngine:
             problem_params: Problem parameters
 
         Returns:
-            Comparison results for each solver
+            Comparison results for each solver. Every entry reports only measured
+            quantities: ``solution`` (the produced decision vector), ``time``
+            (wall-clock seconds), and ``objective_value`` (the default quadratic
+            objective ``sum(x**2)`` evaluated on that solution). Learned solvers
+            additionally report ``speedup`` = ``traditional_time / solver_time``,
+            measured against the traditional baseline that is run in this call.
+            No accuracy is reported because ``OptimizationProblem`` carries no
+            ground-truth optimum to compare against.
         """
-        results = {}
+
+        def _default_objective(x: jax.Array) -> jax.Array:
+            """Default quadratic objective used by the engine's automatic paths."""
+            return jnp.sum(x**2)
+
+        results: dict[str, dict[str, Any]] = {}
+
+        # Traditional baseline: run the real fallback solver and time it. This is
+        # the reference against which learned-solver speedups are computed, so it
+        # is measured first.
+        baseline_start = time.time()
+        if self.parametric_solver is not None:
+            traditional_solution = self.parametric_solver.parametric_solver._traditional_fallback(
+                problem_params.reshape(1, -1)
+            )[0]
+        else:
+            traditional_solution = self.solve_gradient_problem(
+                _default_objective, jnp.zeros(problem.dimension), steps=10
+            )
+        traditional_solution = _match_dimension(traditional_solution, problem.dimension)
+        traditional_time = max(time.time() - baseline_start, 1e-9)
+
+        results["traditional_baseline"] = {
+            "solution": traditional_solution,
+            "time": traditional_time,
+            "objective_value": float(_default_objective(traditional_solution)),
+        }
 
         # Parametric solver
         if self.parametric_solver is not None:
             start_time = time.time()
             solution = self.solve_parametric_problem(problem, problem_params)
-            parametric_time = time.time() - start_time
+            parametric_time = max(time.time() - start_time, 1e-9)
 
             results["parametric_solver"] = {
                 "solution": solution,
                 "time": parametric_time,
-                "accuracy": 0.95,  # Simplified metric
-                "speedup": 150.0,  # Assumed speedup
+                "objective_value": float(_default_objective(solution)),
+                "speedup": traditional_time / parametric_time,
             }
 
         # Gradient-based L2O
         if self.gradient_l2o is not None:
             start_time = time.time()
-
-            def loss_fn(x):
-                return jnp.sum(x**2)
-
-            solution = self.solve_gradient_problem(loss_fn, jnp.zeros(problem.dimension), steps=10)
-            gradient_time = time.time() - start_time
+            solution = self.solve_gradient_problem(
+                _default_objective, jnp.zeros(problem.dimension), steps=10
+            )
+            gradient_time = max(time.time() - start_time, 1e-9)
 
             results["gradient_l2o"] = {
                 "solution": solution,
                 "time": gradient_time,
-                "accuracy": 0.90,  # Simplified metric
-                "speedup": 5.0,  # Typical gradient L2O speedup
+                "objective_value": float(_default_objective(solution)),
+                "speedup": traditional_time / gradient_time,
             }
-
-        # Traditional baseline (simulated)
-        traditional_time = 0.1  # Assumed traditional solver time
-        traditional_solution = jnp.zeros(problem.dimension)  # Simplified
-
-        results["traditional_baseline"] = {
-            "solution": traditional_solution,
-            "time": traditional_time,
-            "accuracy": 1.0,  # Reference accuracy
-        }
 
         return results
 

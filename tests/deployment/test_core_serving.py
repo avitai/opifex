@@ -5,6 +5,7 @@ Tests the foundational components for serving Opifex models in production,
 including model loading, inference serving, and basic deployment utilities.
 """
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -207,30 +208,101 @@ class TestModelRegistry:
                 "get_model returned a different model than was registered"
             )
 
-    def test_get_model_raises_without_template_instead_of_fabricating(self):
-        """When the structural template is missing, fail honestly.
+    def test_get_model_reconstructs_cross_process(self):
+        """A fresh registry reconstructs a model purely from disk (F23).
 
-        Across a fresh process the in-memory ``GraphDef`` template is gone;
-        ``get_model`` must raise ``NotImplementedError`` rather than return a
-        fabricated / random model.
+        Cross-process reconstruction persists the module's fully-qualified
+        ``module:class`` and abstract-init kwargs alongside the Orbax weight
+        state. A registry whose in-memory templates are cleared (simulating a
+        separate process) must rebuild the module and restore weights so the
+        reconstructed model reproduces the registered one exactly.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry = ModelRegistry(storage_path=temp_dir)
+
+            original = SimpleTestModel(rngs=nnx.Rngs(0))
+            shifted = jax.tree_util.tree_map(lambda leaf: leaf + 5.0, nnx.state(original))
+            nnx.update(original, shifted)
+
+            metadata = ModelMetadata(
+                name="cross_process",
+                version="1.0.0",
+                model_type="fno",
+                input_shape=(64,),
+                output_shape=(64,),
+            )
+            model_id = registry.register_model(original, metadata)
+
+            # Simulate a fresh process: the in-memory templates are gone, so
+            # reconstruction must come entirely from the persisted artifacts.
+            registry._templates.clear()
+
+            loaded, _ = registry.get_model(model_id)
+            probe = jnp.linspace(-1.0, 1.0, 64).reshape(1, 64)
+            assert jnp.allclose(
+                loaded(probe),  # type: ignore[operator]
+                original(probe),
+                atol=1e-6,
+            ), "cross-process reconstruction did not reproduce the registered model"
+
+    def test_get_model_reconstructs_from_brand_new_registry(self):
+        """A brand-new ModelRegistry instance reconstructs a saved model.
+
+        The strongest cross-process check: a second ``ModelRegistry`` object
+        is constructed against the same storage directory (no shared
+        in-memory state) and must rebuild the registered model losslessly.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            writer = ModelRegistry(storage_path=temp_dir)
+            original = MultiLayerTestModel(rngs=nnx.Rngs(0))
+            shifted = jax.tree_util.tree_map(lambda leaf: leaf - 2.0, nnx.state(original))
+            nnx.update(original, shifted)
+            metadata = ModelMetadata(
+                name="fresh_registry",
+                version="1.0.0",
+                model_type="fno",
+                input_shape=(32,),
+                output_shape=(32,),
+            )
+            model_id = writer.register_model(original, metadata)
+
+            reader = ModelRegistry(storage_path=temp_dir)
+            loaded, _ = reader.get_model(model_id)
+
+            probe = jnp.linspace(-1.0, 1.0, 32).reshape(1, 32)
+            assert jnp.allclose(
+                loaded(probe),  # type: ignore[operator]
+                original(probe),
+                atol=1e-6,
+            )
+
+    def test_get_model_fails_fast_on_unresolvable_class(self):
+        """Reconstruction fails honestly when the class cannot be resolved.
+
+        If the persisted ``module:class`` reference cannot be imported (e.g.
+        the class was removed/renamed), ``get_model`` must raise a clear
+        error rather than fabricate a model.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = ModelRegistry(storage_path=temp_dir)
             model = SimpleTestModel(rngs=nnx.Rngs(0))
             metadata = ModelMetadata(
-                name="no_template",
+                name="bad_class",
                 version="1.0.0",
                 model_type="fno",
                 input_shape=(64,),
                 output_shape=(64,),
             )
             model_id = registry.register_model(model, metadata)
-
-            # Simulate a fresh process: weights persist on disk, but the
-            # in-memory reconstruction template is unavailable.
             registry._templates.clear()
 
-            with pytest.raises(NotImplementedError, match="model deserialization"):
+            # Corrupt the persisted class reference on disk.
+            info_path = Path(temp_dir) / model_id / "model_info.json"
+            info = json.loads(info_path.read_text())
+            info["model_qualname"] = "opifex.nonexistent.module:GhostModel"
+            info_path.write_text(json.dumps(info))
+
+            with pytest.raises((ImportError, AttributeError, ValueError)):
                 registry.get_model(model_id)
 
     def test_model_versioning(self):

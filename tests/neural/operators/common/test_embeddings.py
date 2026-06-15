@@ -299,6 +299,81 @@ class TestGridEmbeddingND:
         assert jnp.allclose(output_regular, output_jit, rtol=1e-6)
 
 
+class TestGridEmbeddingNDCoordinates:
+    """Per-axis coordinate correctness for the N-D grid embedding (1D/2D/3D).
+
+    Verifies the reference neuralop convention: appended channel ``k`` is the
+    normalized coordinate that varies along spatial axis ``k`` (``indexing="ij"``),
+    spanning the per-axis configured boundaries from corner to corner.
+    """
+
+    def test_1d_coordinate_spans_axis(self):
+        """1D adds one channel that ramps across the single spatial axis."""
+        embedding = GridEmbeddingND(in_channels=1, dim=1, grid_boundaries=[[2.0, 5.0]])
+        x = jnp.zeros((1, 4, 1))
+        coords = embedding(x)[0, :, 1]
+        assert jnp.allclose(coords, jnp.linspace(2.0, 5.0, 4))
+
+    def test_2d_each_channel_varies_along_its_axis(self):
+        """Channel -2 varies along axis 0; channel -1 varies along axis 1."""
+        embedding = GridEmbeddingND(in_channels=1, dim=2, grid_boundaries=[[0.0, 1.0], [0.0, 3.0]])
+        x = jnp.zeros((1, 3, 5, 1))
+        out = embedding(x)[0]
+        # Axis-0 channel: constant along axis 1, ramps along axis 0.
+        assert jnp.allclose(out[:, 0, 1], jnp.linspace(0.0, 1.0, 3))
+        assert jnp.ptp(out[0, :, 1]) == 0.0
+        # Axis-1 channel: constant along axis 0, ramps along axis 1.
+        assert jnp.allclose(out[0, :, 2], jnp.linspace(0.0, 3.0, 5))
+        assert jnp.ptp(out[:, 0, 2]) == 0.0
+
+    def test_3d_corner_values_span_boundaries(self):
+        """3D input gains 3 channels whose corners equal the boundary extremes."""
+        boundaries = [[-2.0, 2.0], [-1.0, 3.0], [0.0, 1.0]]
+        embedding = GridEmbeddingND(in_channels=2, dim=3, grid_boundaries=boundaries)
+        x = jnp.zeros((1, 4, 6, 8, 2))
+        out = embedding(x)[0]
+        assert out.shape == (4, 6, 8, 5)
+        # Lower corner -> per-axis minima; upper corner -> per-axis maxima.
+        lower = out[0, 0, 0, 2:]
+        upper = out[-1, -1, -1, 2:]
+        assert jnp.allclose(lower, jnp.array([-2.0, -1.0, 0.0]))
+        assert jnp.allclose(upper, jnp.array([2.0, 3.0, 1.0]))
+
+    def test_2d_specialization_matches_nd(self):
+        """GridEmbedding2D must produce the same coordinates as the N-D version."""
+        boundaries = [[-1.0, 1.0], [0.0, 2.0]]
+        x = jax.random.normal(jax.random.PRNGKey(7), (2, 3, 5, 1))
+        out_2d = GridEmbedding2D(in_channels=1, grid_boundaries=boundaries)(x)
+        out_nd = GridEmbeddingND(in_channels=1, dim=2, grid_boundaries=boundaries)(x)
+        assert jnp.allclose(out_2d, out_nd)
+
+    def test_grad_flows_through_nd(self):
+        """Gradients reach the data channels of the N-D embedding."""
+        embedding = GridEmbeddingND(in_channels=1, dim=3)
+        x = jax.random.normal(jax.random.PRNGKey(1), (1, 3, 3, 3, 1))
+
+        def loss_fn(inputs: jax.Array) -> jax.Array:
+            return jnp.mean(embedding(inputs)[..., :1] ** 2)
+
+        grads = jax.grad(loss_fn)(x)
+        assert grads.shape == x.shape
+        assert jnp.all(jnp.isfinite(grads))
+        assert jnp.linalg.norm(grads) > 1e-6
+
+    def test_vmap_over_batch_nd(self):
+        """vmap over the batch axis matches the natively batched call (3D)."""
+        embedding = GridEmbeddingND(in_channels=1, dim=3)
+        x = jax.random.normal(jax.random.PRNGKey(2), (4, 3, 3, 3, 1))
+
+        def single(sample: jax.Array) -> jax.Array:
+            return embedding(sample[None])[0]
+
+        out_vmap = jax.vmap(single)(x)
+        out_batched = embedding(x)
+        assert out_vmap.shape == out_batched.shape
+        assert jnp.allclose(out_vmap, out_batched)
+
+
 class TestSinusoidalEmbedding:
     """Full tests for SinusoidalEmbedding layer."""
 

@@ -19,11 +19,13 @@ References:
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import nnx
 
 from opifex.neural.pinns.dense_stack import DenseStack
@@ -321,119 +323,140 @@ class DomainDecompositionPINN(nnx.Module):
         return total_residual / len(self.interfaces)
 
 
-def uniform_partition(  # noqa: PLR0912
+def _cell_id(cell: tuple[int, ...], num_partitions: tuple[int, ...]) -> int:
+    """Map a per-axis cell index to a flat row-major (C-order) subdomain id.
+
+    The ordering matches ``itertools.product`` and the legacy 2D convention
+    ``id = i * ny + j``, generalised to N dimensions via row-major raveling.
+
+    Args:
+        cell: Per-axis cell indices, length ``dim``
+        num_partitions: Number of partitions in each dimension
+
+    Returns:
+        Flat subdomain identifier
+    """
+    return int(np.ravel_multi_index(cell, num_partitions))
+
+
+def _face_sample_points(
+    cell: tuple[int, ...],
+    axis: int,
+    partition_bounds: list[Array],
+    interface_points: int,
+) -> Array:
+    """Sample points on the shared face between a cell and its ``axis`` neighbour.
+
+    The face is fixed at the upper edge of ``cell`` along ``axis`` and spans the
+    extent of the cell in every other dimension. ``interface_points`` points are
+    laid out along each of the (dim-1) transverse axes via a tensor-product
+    meshgrid, generalising the 1D/2D face sampling to N-D. A 2D face therefore
+    keeps the legacy ``interface_points`` total, while a 3D face yields an
+    ``interface_points x interface_points`` grid. For a 1D face (a single point,
+    no transverse axes) the point is tiled to preserve the documented shape.
+
+    Args:
+        cell: Per-axis cell indices of the lower-side subdomain
+        axis: Axis normal to the shared face
+        partition_bounds: Per-axis partition edge arrays
+        interface_points: Number of sample points along each transverse axis
+
+    Returns:
+        Sample coordinates, shape ``(num_points, dim)``
+    """
+    dim = len(cell)
+    face_value = partition_bounds[axis][cell[axis] + 1]
+    has_transverse_axis = dim > 1
+
+    axis_grids: list[Array] = []
+    for d in range(dim):
+        if d == axis:
+            axis_grids.append(jnp.array([face_value]))
+        else:
+            lo = partition_bounds[d][cell[d]]
+            hi = partition_bounds[d][cell[d] + 1]
+            axis_grids.append(jnp.linspace(lo, hi, interface_points))
+
+    mesh = jnp.meshgrid(*axis_grids, indexing="ij")
+    points = jnp.stack([component.ravel() for component in mesh], axis=-1)
+
+    # A 1D face is a single point; tile it to honour the documented point count.
+    if not has_transverse_axis:
+        points = jnp.tile(points, (interface_points, 1))
+    return points
+
+
+def uniform_partition(
     bounds: Float[Array, "dim 2"],
     num_partitions: tuple[int, ...],
     interface_points: int = 10,
 ) -> tuple[list[Subdomain], list[Interface]]:
-    """Create uniform partition of a rectangular domain.
+    """Create a uniform N-D partition of a rectangular (hyperrectangular) domain.
+
+    The domain is tiled into a tensor-product grid of axis-aligned subdomains,
+    one per grid cell, with subdomain ids enumerated in row-major (C) order.
+    Internal faces between axis-adjacent cells become :class:`Interface`
+    objects with an axis-aligned unit normal and a grid of sample points on the
+    shared face. The construction is dimension-agnostic and works for 1D, 2D,
+    3D and higher (no per-dimension special-casing).
+
+    Reference:
+        Moseley, Markham, Nissen-Meyer (2023), "Finite Basis Physics-Informed
+        Neural Networks", arXiv:2107.07871. The FBPINN subdomain tiling is a
+        tensor product across dimensions; see ``RectangularDecompositionND`` in
+        the reference implementation (https://github.com/benmoseley/FBPINNs),
+        which lays out subdomains via ``np.meshgrid(*subdomain_xs)``.
 
     Args:
-        bounds: Domain bounds, shape (dim, 2) with [min, max] for each dimension
-        num_partitions: Number of partitions in each dimension
-        interface_points: Number of sample points per interface
+        bounds: Domain bounds, shape ``(dim, 2)`` with ``[min, max]`` per axis
+        num_partitions: Number of partitions in each dimension (length ``dim``)
+        interface_points: Target number of sample points per interface face
 
     Returns:
-        Tuple of (subdomains, interfaces)
+        Tuple of ``(subdomains, interfaces)``
     """
     dim = bounds.shape[0]
     if len(num_partitions) != dim:
         msg = f"num_partitions length {len(num_partitions)} must match bounds dim {dim}"
         raise ValueError(msg)
 
-    # Compute partition boundaries in each dimension
-    partition_bounds = []
-    for d in range(dim):
-        edges = jnp.linspace(bounds[d, 0], bounds[d, 1], num_partitions[d] + 1)
-        partition_bounds.append(edges)
+    # Per-axis partition edges: num_partitions[d] cells -> num_partitions[d]+1 edges.
+    partition_bounds = [
+        jnp.linspace(bounds[d, 0], bounds[d, 1], num_partitions[d] + 1) for d in range(dim)
+    ]
 
-    # Create subdomains
-    subdomains = []
-    subdomain_id = 0
+    # Tensor-product subdomain grid, enumerated row-major to match _cell_id.
+    cell_ranges = [range(n) for n in num_partitions]
+    subdomains = [
+        Subdomain(
+            id=_cell_id(cell, num_partitions),
+            bounds=jnp.array(
+                [
+                    [partition_bounds[d][cell[d]], partition_bounds[d][cell[d] + 1]]
+                    for d in range(dim)
+                ]
+            ),
+        )
+        for cell in itertools.product(*cell_ranges)
+    ]
 
-    if dim == 1:
-        for i in range(num_partitions[0]):
-            lo, hi = partition_bounds[0][i], partition_bounds[0][i + 1]
-            sub_bounds = jnp.array([[lo, hi]])
-            subdomains.append(Subdomain(id=subdomain_id, bounds=sub_bounds))
-            subdomain_id += 1
-    elif dim == 2:
-        for i in range(num_partitions[0]):
-            for j in range(num_partitions[1]):
-                sub_bounds = jnp.array(
-                    [
-                        [partition_bounds[0][i], partition_bounds[0][i + 1]],
-                        [partition_bounds[1][j], partition_bounds[1][j + 1]],
-                    ]
-                )
-                subdomains.append(Subdomain(id=subdomain_id, bounds=sub_bounds))
-                subdomain_id += 1
-    else:
-        raise NotImplementedError("Only 1D and 2D partitioning implemented")
-
-    # Create interfaces
-    interfaces = []
-
-    if dim == 1:
-        for i in range(num_partitions[0] - 1):
-            interface_x = partition_bounds[0][i + 1]
-            points = jnp.array([[interface_x]] * interface_points)
+    # Internal faces: for each axis, connect cells adjacent along that axis.
+    interfaces: list[Interface] = []
+    for axis in range(dim):
+        for cell in itertools.product(*cell_ranges):
+            if cell[axis] + 1 >= num_partitions[axis]:
+                continue  # no neighbour on the far side along this axis
+            neighbour = (*cell[:axis], cell[axis] + 1, *cell[axis + 1 :])
+            normal = jnp.zeros(dim).at[axis].set(1.0)
             interfaces.append(
                 Interface(
-                    subdomain_ids=(i, i + 1),
-                    points=points,
-                    normal=jnp.array([1.0]),
+                    subdomain_ids=(
+                        _cell_id(cell, num_partitions),
+                        _cell_id(neighbour, num_partitions),
+                    ),
+                    points=_face_sample_points(cell, axis, partition_bounds, interface_points),
+                    normal=normal,
                 )
             )
-    elif dim == 2:
-        # Vertical interfaces (x-direction)
-        for i in range(num_partitions[0] - 1):
-            for j in range(num_partitions[1]):
-                interface_x = partition_bounds[0][i + 1]
-                y_min = partition_bounds[1][j]
-                y_max = partition_bounds[1][j + 1]
-
-                points = jnp.column_stack(
-                    [
-                        jnp.full(interface_points, interface_x),
-                        jnp.linspace(y_min, y_max, interface_points),
-                    ]
-                )
-
-                left_id = i * num_partitions[1] + j
-                right_id = (i + 1) * num_partitions[1] + j
-
-                interfaces.append(
-                    Interface(
-                        subdomain_ids=(left_id, right_id),
-                        points=points,
-                        normal=jnp.array([1.0, 0.0]),
-                    )
-                )
-
-        # Horizontal interfaces (y-direction)
-        for i in range(num_partitions[0]):
-            for j in range(num_partitions[1] - 1):
-                interface_y = partition_bounds[1][j + 1]
-                x_min = partition_bounds[0][i]
-                x_max = partition_bounds[0][i + 1]
-
-                points = jnp.column_stack(
-                    [
-                        jnp.linspace(x_min, x_max, interface_points),
-                        jnp.full(interface_points, interface_y),
-                    ]
-                )
-
-                bottom_id = i * num_partitions[1] + j
-                top_id = i * num_partitions[1] + (j + 1)
-
-                interfaces.append(
-                    Interface(
-                        subdomain_ids=(bottom_id, top_id),
-                        points=points,
-                        normal=jnp.array([0.0, 1.0]),
-                    )
-                )
 
     return subdomains, interfaces

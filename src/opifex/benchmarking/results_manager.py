@@ -432,10 +432,76 @@ def _generate_scaling_plots(
     plots_path: Path,
     output_format: str,
 ) -> list[Path]:
-    """Generate scaling behavior plots."""
-    # Placeholder for future implementation
-    _ = results, plots_path, output_format
-    return []
+    """Generate scaling behaviour plots (metric vs. problem size).
+
+    Renders, per model, execution time and MSE against the problem size taken
+    from ``result.metadata["problem_size"]`` (the same convention used by
+    :meth:`AnalysisEngine.analyze_scaling_behavior`). Results without a
+    ``problem_size`` are ignored; a model needs at least two distinct sizes to
+    be plotted.
+
+    Args:
+        results: Benchmark results to plot.
+        plots_path: Directory in which to write the figure.
+        output_format: Image format (e.g. ``"png"``).
+
+    Returns:
+        Paths to the generated figure files (empty if no scaling data exists).
+    """
+    try:
+        import matplotlib as mpl
+
+        mpl.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        logger.warning("matplotlib unavailable; skipping scaling plots")
+        return []
+
+    by_model: dict[str, list[tuple[int, float, float]]] = {}
+    for result in results:
+        size = result.metadata.get("problem_size")
+        if size is None:
+            continue
+        exec_time = result.metadata.get("execution_time", 0.0)
+        mse_metric = result.metrics.get("mse")
+        mse_value = mse_metric.value if mse_metric is not None else float("nan")
+        by_model.setdefault(result.name, []).append((int(size), exec_time, mse_value))
+
+    plottable = {name: rows for name, rows in by_model.items() if len({r[0] for r in rows}) >= 2}
+    if not plottable:
+        return []
+
+    fig, (ax_time, ax_mse) = plt.subplots(1, 2, figsize=(14, 6))
+    fig.suptitle("Scaling Behaviour", fontsize=16)
+
+    for name, rows in plottable.items():
+        rows.sort(key=lambda row: row[0])
+        sizes = [row[0] for row in rows]
+        times = [row[1] for row in rows]
+        mses = [row[2] for row in rows]
+        ax_time.plot(sizes, times, marker="o", label=name)
+        ax_mse.plot(sizes, mses, marker="o", label=name)
+
+    ax_time.set_title("Execution Time vs Problem Size")
+    ax_time.set_xlabel("Problem size")
+    ax_time.set_ylabel("Time (s)")
+    ax_time.set_xscale("log")
+    ax_time.set_yscale("log")
+    ax_time.legend()
+
+    ax_mse.set_title("MSE vs Problem Size")
+    ax_mse.set_xlabel("Problem size")
+    ax_mse.set_ylabel("MSE")
+    ax_mse.set_xscale("log")
+    ax_mse.set_yscale("log")
+    ax_mse.legend()
+
+    plt.tight_layout()
+    plot_file = plots_path / f"scaling.{output_format}"
+    plt.savefig(plot_file, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    return [plot_file]
 
 
 def _generate_convergence_plots(
@@ -443,10 +509,55 @@ def _generate_convergence_plots(
     plots_path: Path,
     output_format: str,
 ) -> list[Path]:
-    """Generate convergence analysis plots."""
-    # Placeholder for future implementation
-    _ = results, plots_path, output_format
-    return []
+    """Generate convergence plots (training loss vs. epoch).
+
+    Renders the per-epoch loss curve for every model that records a
+    ``loss_history`` (a sequence of per-epoch loss values) in its metadata.
+    Results without a loss history are ignored.
+
+    Args:
+        results: Benchmark results to plot.
+        plots_path: Directory in which to write the figure.
+        output_format: Image format (e.g. ``"png"``).
+
+    Returns:
+        Paths to the generated figure files (empty if no loss histories exist).
+    """
+    try:
+        import matplotlib as mpl
+
+        mpl.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        logger.warning("matplotlib unavailable; skipping convergence plots")
+        return []
+
+    curves = [
+        (result.name, [float(v) for v in result.metadata["loss_history"]])
+        for result in results
+        if result.metadata.get("loss_history")
+    ]
+    if not curves:
+        return []
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.suptitle("Training Convergence", fontsize=16)
+
+    for name, history in curves:
+        ax.plot(range(1, len(history) + 1), history, marker=".", label=name)
+
+    ax.set_title("Loss vs Epoch")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.set_yscale("log")
+    ax.legend()
+
+    plt.tight_layout()
+    plot_file = plots_path / f"convergence.{output_format}"
+    plt.savefig(plot_file, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    return [plot_file]
 
 
 # ---------------------------------------------------------------------------

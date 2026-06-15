@@ -10,8 +10,6 @@ The platform module offers:
 - **Model Search**: Semantic search over registered models
 - **Version Control**: Track model evolution and lineage
 - **Validation**: Ensure model compatibility and correctness
-- **Collaboration** *(planned)*: Team collaboration features
-- **Dashboard** *(planned)*: Analytics and monitoring
 
 ## Registry Core
 

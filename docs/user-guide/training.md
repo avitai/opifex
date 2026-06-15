@@ -617,82 +617,45 @@ visualizer = TrainingVisualizer(update_frequency=5)
 
 ### Robust Checkpointing System
 
+Checkpointing is handled by the unified, Orbax-backed
+`OrbaxCheckpointStore`. It is the single source of truth for persisting and
+restoring NNX model state: array weights are written with Orbax and
+plain-Python metadata with JSON, so loading a checkpoint never executes
+arbitrary code. Checkpoints are addressed by integer `step`, and old
+checkpoints are pruned automatically according to `max_to_keep`.
+
 ```python
-import orbax.checkpoint as ocp
-from pathlib import Path
-import time
+from flax import nnx
 
-class AdvancedCheckpointManager:
-    """Advanced checkpointing with metadata and recovery."""
+from opifex.core.training.components.checkpoint_store import OrbaxCheckpointStore
 
-    def __init__(self, checkpoint_dir, max_to_keep=5):
-        self.checkpoint_dir = Path(checkpoint_dir)
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self.max_to_keep = max_to_keep
+# The store is a context manager; it releases Orbax resources on exit.
+with OrbaxCheckpointStore("./checkpoints/advanced_training", max_to_keep=10) as store:
+    # Save model state plus rich metadata at a given step.
+    store.save(
+        model,
+        step=epoch,
+        loss=train_loss,
+        physics_metadata={"energy_conservation": 1e-6},
+        additional_metadata={"experiment_id": "exp_001"},
+    )
 
-        # Initialize Orbax checkpoint manager
-        self.manager = ocp.CheckpointManager(
-            self.checkpoint_dir,
-            max_to_keep=max_to_keep,
-            item_names=("model_state", "optimizer_state", "metadata")
-        )
+    # Restore into a live model instance (arrays are merged in place).
+    restored_model, metadata = store.restore(model, step=epoch)
 
-    def save_checkpoint(self, epoch, model_state, optimizer_state,
-                       training_metrics, physics_metrics=None):
-        """Save full checkpoint with metadata."""
-
-        # Prepare metadata
-        metadata = {
-            "epoch": epoch,
-            "training_metrics": training_metrics,
-            "physics_metrics": physics_metrics or {},
-            "timestamp": time.time(),
-            "model_info": {
-                "architecture": type(model_state).__name__,
-                "parameter_count": sum(
-                    p.size for p in jax.tree_leaves(model_state) if hasattr(p, 'size')
-                )
-            }
-        }
-
-        # Save checkpoint
-        checkpoint_data = {
-            "model_state": model_state,
-            "optimizer_state": optimizer_state,
-            "metadata": metadata
-        }
-
-        self.manager.save(epoch, checkpoint_data)
-
-        print(f"Checkpoint saved at epoch {epoch}")
-
-    def load_checkpoint(self, epoch=None):
-        """Load checkpoint with automatic recovery."""
-        try:
-            if epoch is None:
-                # Load latest checkpoint
-                latest_step = self.manager.latest_step()
-                if latest_step is None:
-                    return None
-                epoch = latest_step
-
-            checkpoint_data = self.manager.restore(epoch)
-
-            print(f"Checkpoint loaded from epoch {epoch}")
-            return checkpoint_data
-
-        except Exception as e:
-            print(f"Failed to load checkpoint: {e}")
-            return None
-
-# Use advanced checkpointing
-checkpoint_manager = AdvancedCheckpointManager(
-    checkpoint_dir="./checkpoints/advanced_training",
-    max_to_keep=10
-)
-
-print("Full training infrastructure guide completed")
+    # Inspect the saved checkpoints.
+    steps = store.list_steps()           # e.g. [10, 20, 30]
+    latest = store.latest_step()         # most recent step
+    best = store.best_step(metric="loss")  # lowest-loss checkpoint
 ```
+
+The unified `Trainer` wires this store automatically whenever
+`checkpoint_config.checkpoint_dir` is set, exposing `Trainer.save_checkpoint`
+and `Trainer.load_checkpoint` as thin wrappers over the store.
+
+`OrbaxCheckpointStore` also supports Flax `TrainState` payloads via
+`create_train_state`, `save_train_state`, and `restore_train_state` for
+workflows that need to persist optimizer state alongside model parameters.
 
 This thorough training guide provides the complete infrastructure for advanced scientific machine learning training. The modular, component-based architecture enables researchers to build sophisticated training workflows while maintaining the flexibility needed for modern scientific applications.
 

@@ -55,7 +55,6 @@ _DEFERRED_ADAPTER_SPECS: tuple[type, ...] = (
     ProbnumAdapterSpec,
     ProbfindiffAdapterSpec,
     DiffeqzooAdapterSpec,
-    PerturbedStepSolverSpec,
 )
 
 
@@ -81,6 +80,9 @@ _CONCRETIZED_ALGORITHM_SPECS: tuple[type, ...] = (
     ManifoldUpdateSpec,
     DenseOutputSamplingSpec,
     DynamicMVDiffusionSpec,
+    # F19: PerturbedStepSolver wrap() returns the Conrad+ 2017 perturbed-step
+    # ensemble ODE solver (a JAX-native algorithmic primitive).
+    PerturbedStepSolverSpec,
 )
 
 
