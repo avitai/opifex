@@ -24,6 +24,8 @@ from flax.nnx import Rngs
 
 # Import L2O engine for integration
 from opifex.optimization.l2o.l2o_engine import L2OEngine
+from opifex.uncertainty.active.acquisition import expected_improvement
+from opifex.uncertainty.types import PredictiveDistribution
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -308,15 +310,27 @@ class BayesianSchedulerOptimizer(nnx.Module):
         }
 
     def _bayesian_parameter_suggestion(self) -> dict[str, float]:
-        """Generate parameter suggestion using Bayesian optimization."""
-        # Simplified Bayesian optimization using acquisition function
-        best_acquisition = -float("inf")
-        best_params = None
+        """Generate parameter suggestion using a real EI acquisition.
 
-        # Try multiple candidates and pick best acquisition value
-        key = self.rngs.params()
+        Delegates the scoring step to
+        :func:`opifex.uncertainty.active.acquisition.expected_improvement`
+        applied to a 1-D Gaussian posterior built from
+        ``performance_history``: ``mean = candidate_distance_weighted
+        average of historical performances``, ``variance = empirical
+        variance + exploration jitter``. EI is selected over UCB / PI
+        because the scheduler's objective is to *improve* over the
+        best-so-far performance, which is exactly EI's contract.
+
+        Mirrors trieste's ``ask_tell_optimization`` pattern: at each
+        round, sample a pool of candidates uniformly from the parameter
+        bounds, score them with a published acquisition kernel, and
+        return the argmax candidate.
+        """
+        best_acquisition = -float("inf")
+        best_params: dict[str, float] | None = None
+
+        # Pool of candidate parameter configurations.
         for _ in range(10):
-            key, _ = jax.random.split(key)
             candidate_params = self._random_parameter_suggestion()
             acquisition_value = self._compute_acquisition_function(candidate_params)
 
@@ -327,37 +341,54 @@ class BayesianSchedulerOptimizer(nnx.Module):
         return best_params if best_params is not None else self._random_parameter_suggestion()
 
     def _compute_acquisition_function(self, parameters: dict[str, float]) -> float:
-        """Compute acquisition function for given parameters.
+        """Score a candidate via :func:`expected_improvement`.
 
-        Args:
-            parameters: Parameters to evaluate
+        The history-based posterior used by the EI kernel is constructed
+        as follows:
 
-        Returns:
-            Acquisition function value
+        * ``mean`` — the distance-weighted average of past performances.
+          Far-from-history candidates inherit the unconditional mean.
+        * ``variance`` — the empirical performance variance plus an
+          exploration jitter that grows with the minimum distance to
+          recorded points. This forces variance to be strictly positive
+          even when only one history entry exists.
+        * ``best_value`` — the minimum recorded performance (minimisation
+          convention; EI returns positive scores for candidates expected
+          to beat the incumbent).
+
+        The acquisition score is the raw EI value clipped to ``[0, inf)``.
         """
-        # Simplified Expected Improvement acquisition function
         if not self.performance_history:
             return 1.0
 
-        # Compute distance to existing parameter points
+        history_params = self.parameter_history
+        history_perf = jnp.asarray(self.performance_history)
+
         distances = []
-        for hist_params in self.parameter_history:
-            distance = sum(
+        for hist_params in history_params:
+            d = sum(
                 (parameters[key] - hist_params[key]) ** 2
                 for key in parameters
                 if key in hist_params
             )
-            distances.append(distance)
+            distances.append(d)
+        distances_arr = jnp.asarray(distances)
+        min_distance = float(jnp.min(distances_arr)) if distances else 1.0
 
-        # Encourage exploration of distant points
-        min_distance = min(distances) if distances else 1.0
-        exploration_bonus = jnp.sqrt(min_distance)
+        # Distance-weighted mean (Shepard interpolation, p=2). Falls back
+        # to the unweighted mean as min_distance -> 0.
+        weights = 1.0 / (distances_arr + 1e-6)
+        weights = weights / jnp.sum(weights)
+        mean_estimate = jnp.sum(weights * history_perf)
+        var_estimate = jnp.var(history_perf) + 0.1 + jnp.sqrt(min_distance)
 
-        # Encourage exploitation of good regions
-        best_performance = min(self.performance_history)
-        exploitation_bonus = max(0, best_performance - 0.5)
-
-        return float(exploration_bonus + exploitation_bonus)
+        predictive = PredictiveDistribution(
+            mean=mean_estimate[None],
+            variance=var_estimate[None],
+        )
+        best_value = float(jnp.min(history_perf))
+        ei = expected_improvement(predictive, best_value=best_value)
+        return float(jnp.maximum(ei[0], 0.0))
 
 
 class SchedulerIntegration(nnx.Module):

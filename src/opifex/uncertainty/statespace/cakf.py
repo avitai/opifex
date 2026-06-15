@@ -18,7 +18,12 @@ Canonical reference (line-by-line port):
 References
 ----------
 * Pförtner, Wenger, Cockayne, Hennig 2024 — *Computation-Aware Kalman
-  Filtering and Smoothing*, arXiv:2405.08971.
+  Filtering and Smoothing*, arXiv:2405.08971 (PRIMARY — the CAKF /
+  CAKS algorithm vendored here).
+* Wenger, Pleiss, Pförtner, Hennig, Cunningham 2023 — *Posterior and
+  Computational Uncertainty in Gaussian Processes*, arXiv:2306.07879
+  (computation-aware GP / CAGP precursor that the Kalman variant of
+  Pförtner+ 2024 builds on).
 """
 
 from __future__ import annotations

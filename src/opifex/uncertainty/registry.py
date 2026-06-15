@@ -199,6 +199,28 @@ class UQCapability:
         """Return an all-flags-false baseline declaration for deterministic models."""
         return cls(default_strategy=DefaultStrategy.DETERMINISTIC)
 
+    def with_adapter(self, strategy: str) -> UQCapability:
+        """Return a copy with the ``supports_<strategy>`` flag flipped on.
+
+        Builder used by per-operator capability declarations (Task 7.1)
+        to compose adapter strategies (``"ensemble"`` / ``"conformal"`` /
+        ``"calibration"``) onto a ``deterministic_baseline()`` without
+        ad-hoc field mutation.
+
+        Args:
+            strategy: Short adapter name. Currently supported values:
+                ``"ensemble"``, ``"conformal"``, ``"calibration"``.
+
+        Raises:
+            ValueError: On an unrecognised strategy name.
+        """
+        valid_strategies = {"ensemble", "conformal", "calibration"}
+        if strategy not in valid_strategies:
+            raise ValueError(
+                f"Unknown adapter strategy {strategy!r}. Choose from {sorted(valid_strategies)}."
+            )
+        return dataclasses.replace(self, **{f"supports_{strategy}": True})  # type: ignore[arg-type]
+
 
 class UQRegistry(SingletonRegistry["UQCapability"]):
     """Singleton registry mapping capability-name → :class:`UQCapability`.

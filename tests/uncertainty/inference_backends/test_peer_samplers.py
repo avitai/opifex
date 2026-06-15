@@ -40,7 +40,7 @@ _PEER_BACKENDS: tuple[type, ...] = (
 )
 
 
-_DEFERRED_PEER_BACKENDS: tuple[type, ...] = (ADVIBackend,)
+_DEFERRED_PEER_BACKENDS: tuple[type, ...] = ()
 
 
 _CONCRETIZED_PEER_BACKENDS: tuple[type, ...] = (
@@ -48,6 +48,8 @@ _CONCRETIZED_PEER_BACKENDS: tuple[type, ...] = (
     SVGDBackend,
     # Task 6.3.9b: Pathfinder algorithm wired through `fit`.
     PathfinderBackend,
+    # Task 6.3.9c: ADVI (mean-field) algorithm wired through `fit`.
+    ADVIBackend,
 )
 
 
@@ -180,6 +182,42 @@ def test_advi_backend_advertises_meanfield_or_fullrank_choice() -> None:
     backend = ADVIBackend()
     assert "advi" in backend.method_names
     assert "mean-field" in backend.notes.lower() or "meanfield" in backend.notes.lower()
+
+
+def test_advi_backend_fit_returns_meanfield_samples_concentrating_around_target_mean() -> None:
+    """``ADVIBackend.fit`` runs ELBO optimisation and returns concentrated draws.
+
+    On a standard-normal target the mean-field Gaussian should converge to
+    zero mean and unit scale, so the samples concentrate near zero.
+    """
+    from opifex.uncertainty.inference_backends.base import BackendResult
+
+    backend = ADVIBackend(
+        init_state=jnp.array([1.0, -1.0]),
+        num_samples=512,
+        num_iterations=400,
+        num_mc_samples=8,
+        learning_rate=0.05,
+    )
+
+    def target_log_prob(x: jax.Array) -> jax.Array:
+        return -0.5 * jnp.sum(x**2)
+
+    result = backend.fit(target_log_prob=target_log_prob, rngs=nnx.Rngs(sampler=11))
+    assert isinstance(result, BackendResult)
+    samples = result.sampler_state
+    assert samples.shape == (512, 2)
+    empirical_mean = jnp.mean(samples, axis=0)
+    assert jnp.allclose(empirical_mean, jnp.zeros(2), atol=0.3)
+
+
+def test_advi_backend_predict_distribution_remains_deferred() -> None:
+    """ADVI's prediction hooks need a model-aware adapter."""
+    backend = ADVIBackend()
+    with pytest.raises(NotImplementedError, match="predict_distribution"):
+        backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
+    with pytest.raises(NotImplementedError, match="posterior_predictive"):
+        backend.posterior_predictive(nnx.Rngs(sampler=0), jnp.zeros(1))
 
 
 def test_blackjax_no_longer_lists_advi_and_pathfinder_as_unsupported() -> None:

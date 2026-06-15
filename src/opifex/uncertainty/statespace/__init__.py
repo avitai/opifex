@@ -20,6 +20,8 @@ References
 
 from __future__ import annotations
 
+from opifex.uncertainty.registry import UQRegistry
+from opifex.uncertainty.statespace._uq_capabilities import STATESPACE_CAPABILITIES
 from opifex.uncertainty.statespace.cakf import (
     cakf_predict,
     cakf_update,
@@ -54,7 +56,16 @@ from opifex.uncertainty.statespace.sqrt_kalman import (
 )
 
 
+# UQ capability registration — Task 7.2. Singleton :class:`UQRegistry`
+# guarded against duplicate registration on repeat imports (Rule 13).
+_uq_registry: UQRegistry = UQRegistry()
+for _name, _capability in STATESPACE_CAPABILITIES.items():
+    if _name not in _uq_registry:
+        _uq_registry.register(_name, _capability)
+
+
 __all__ = [
+    "STATESPACE_CAPABILITIES",
     "LowRankDowndatedMatrix",
     "StateSpaceKernel",
     "cakf_predict",

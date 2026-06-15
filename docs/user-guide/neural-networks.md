@@ -364,9 +364,13 @@ bnn = UncertaintyQuantifier(
     confidence_level=0.95,
 )
 
-# Prediction with uncertainty
+# Prediction with uncertainty — canonical surface returns a typed
+# ``PredictiveDistribution`` with ``mean`` and ``std`` attributes that
+# round-trip through ``jax.tree``.
 x_test = jax.random.normal(jax.random.PRNGKey(10), (100, 2))
-mean, std = bnn.predict_with_uncertainty(x_test, n_samples=100)
+distribution = bnn.predict_distribution(x_test, rngs=rngs, num_samples=100)
+mean = distribution.mean
+std = distribution.std
 
 print(f"Bayesian prediction: mean shape {mean.shape}, std shape {std.shape}")
 print(f"Average uncertainty: {jnp.mean(std):.4f}")

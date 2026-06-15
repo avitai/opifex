@@ -15,6 +15,7 @@ Key Features:
 - Integration with traditional solvers via Optimistix
 """
 
+from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES
 from opifex.optimization.l2o.adaptive_schedulers import (
     BayesianSchedulerOptimizer,
     create_l2o_engine_with_adaptive_schedulers,
@@ -62,9 +63,19 @@ from opifex.optimization.l2o.rl_optimization import (
     RLOptimizationEngine,
     StateEncoder,
 )
+from opifex.uncertainty.registry import UQRegistry
+
+
+# UQ capability registration — Task 7.5. Guarded against duplicate
+# registration on repeat imports (Rule 13).
+_uq_registry: UQRegistry = UQRegistry()
+for _name, _capability in L2O_CAPABILITIES.items():
+    if _name not in _uq_registry:
+        _uq_registry.register(_name, _capability)
 
 
 __all__ = [
+    "L2O_CAPABILITIES",
     "ActionInterpreter",
     "BayesianSchedulerOptimizer",
     "ConstraintHandler",

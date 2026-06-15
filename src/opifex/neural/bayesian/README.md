@@ -1,270 +1,235 @@
-# Opifex Bayesian Neural Networks: Advanced Uncertainty Quantification
+# Opifex Bayesian Neural Networks
 
-This module provides advanced Bayesian machine learning capabilities for scientific computing, featuring robust uncertainty quantification, physics-informed Bayesian networks, and modern calibration tools. All implementations use JAX/FLAX NNX with BlackJAX integration for robust probabilistic inference.
+This module hosts the Bayesian model surface of Opifex: variational training
+helpers, calibration tooling, and amortised posterior frameworks. Probabilistic
+PINNs and the trainable Bayesian dense / spectral-convolution layers live in
+`opifex.uncertainty` so that operator and PINN code share a single
+implementation. Everything below is currently exported and exercised by the
+test suite.
 
-## ✅ **COMPLETED IMPLEMENTATIONS**
+## Module map
 
-**Status**: ✅ **FULLY IMPLEMENTED AND TESTED**
-**Implementation**: 7 core modules with 3,945 total lines of production code
-**Testing**: ✅ **Contributing to 1061 total tests (99.6% pass rate)**
-**Features**: Complete probabilistic framework with enterprise-grade uncertainty quantification
+| Module | Public symbols |
+|--------|----------------|
+| `variational_framework` | `AmortizedVariationalFramework`, `VariationalConfig`, `PriorConfig`, `MeanFieldGaussian`, `UncertaintyEncoder` |
+| `calibration_tools` | `CalibrationTools`, `PlattScaling`, `IsotonicRegression`, `TemperatureScaling` |
+| `probabilistic_pinns` | `ProbabilisticPINN`, `MultiFidelityPINN`, `RobustPINNOptimizer`, factory helpers |
 
-### **📊 Module Overview**
+Trainable Bayesian layers (`BayesianLinear`, `BayesianSpectralConvolution`)
+are re-exported from `opifex.uncertainty` and consumed directly by the PINN
+and neural-operator code paths. Aggregators (`UncertaintyQuantifier`,
+`EnhancedUncertaintyQuantifier`, `MultiSourceUncertaintyAggregator`) live in
+`opifex.uncertainty.aggregators`. Physics-informed prior modules
+(`PhysicsInformedPriors`, `ConservationLawPriors`, `DomainSpecificPriors`,
+`HierarchicalBayesianFramework`, `PhysicsAwareUncertaintyPropagation`) live
+in `opifex.uncertainty.priors_physics`. MCMC sampling is delivered by
+`opifex.uncertainty.inference_backends.BlackJAXBackend`, a thin adapter over
+sibling Artifex's HMC / NUTS / MALA wrappers.
 
-| Module | Description |
-|--------|-------------|
-| `probabilistic_pinns.py` | Physics-informed Bayesian networks |
-| `calibration_tools.py` | Calibration helpers (Platt, isotonic, temperature) |
-| `variational_framework.py` | Variational inference methods |
-
-Aggregators (`UncertaintyQuantifier`, `EnhancedUncertaintyQuantifier`,
-`MultiSourceUncertaintyAggregator`, etc.) live in
-`opifex.uncertainty.aggregators`. Physics-prior modules
-(`PhysicsInformedPriors`, `ConservationLawPriors`,
-`DomainSpecificPriors`, `HierarchicalBayesianFramework`,
-`PhysicsAwareUncertaintyPropagation`) live in
-`opifex.uncertainty.priors_physics`.
-
-MCMC sampling lives in `opifex.uncertainty.inference_backends.blackjax:BlackJAXBackend` (thin adapter over Artifex's HMC / NUTS / MALA wrappers).
-
-## 🚀 **Core Features**
-
-### 1. Uncertainty Quantification
-
-Full uncertainty assessment with multiple uncertainty sources and propagation strategies.
+## Bayesian dense layers
 
 ```python
 import jax
 import jax.numpy as jnp
-from opifex.uncertainty.aggregators import EnhancedUncertaintyQuantifier
+import flax.nnx as nnx
+from opifex.uncertainty.layers.bayesian import BayesianLinear
 
-quantifier = EnhancedUncertaintyQuantifier(
-    ensemble_size=10,
-    distributional_output=True,
-    multi_source_aggregation=True,
-)
+rngs = nnx.Rngs(0)
+layer = BayesianLinear(in_features=8, out_features=16, prior_std=1.0, rngs=rngs)
 
-ensemble_predictions = jax.random.normal(jax.random.key(0), (10, 100, 1))
-result = quantifier.enhanced_decompose_uncertainty(
-    ensemble_predictions=ensemble_predictions,
-)
+x = jax.random.normal(jax.random.PRNGKey(1), (4, 8))
 
-print(f"Ensemble epistemic shape: {result.epistemic_ensemble.shape}")
-print(f"Total uncertainty mean: {result.total_uncertainty.mean():.4f}")
+# Posterior sample (uses the caller-owned RNG bundle).
+sample_rngs = nnx.Rngs(posterior=2)
+y_sampled = layer(x, deterministic=False, rngs=sample_rngs)
+
+# Posterior mean (no sampling).
+y_mean = layer(x, deterministic=True)
+
+# Closed-form diagonal-Gaussian KL between posterior and prior.
+kl = layer.kl_divergence()
 ```
 
-**Features**:
+`BayesianSpectralConvolution` follows the same call convention and powers the
+trainable Bayesian path in `opifex.neural.operators` (FNO and operator
+layers).
 
-- **Multi-source uncertainty**: Epistemic + aleatoric decomposition
-- **Ensemble methods**: Deep-ensemble disagreement quantification
-- **Distributional uncertainty**: Gaussian / Laplace / mixture distributions
+## Variational training surface
 
-### 2. Physics-Informed Bayesian Networks
-
-Bayesian neural networks with physics constraints and conservation law enforcement.
+`opifex.neural.bayesian.probabilistic_pinns.ProbabilisticPINN` implements the
+`VariationalModule` protocol from `opifex.uncertainty.protocols`. The
+canonical training-time entry points are `loss_components` and
+`negative_elbo` (both return a `UQLossComponents` driven by an
+`ObjectiveConfig`), and the canonical inference-time entry point is
+`predict_distribution` (returns a `PredictiveDistribution`).
 
 ```python
-from opifex.neural.bayesian import ProbabilisticPINN
+import jax.numpy as jnp
+import flax.nnx as nnx
+from opifex.neural.bayesian.probabilistic_pinns import ProbabilisticPINN
+from opifex.uncertainty.objectives import ObjectiveConfig
 
-# Create physics-informed Bayesian network
+rngs = nnx.Rngs(0)
 pinn = ProbabilisticPINN(
-    layers=[64, 64, 64, 1],
-    physics_constraints=['energy_conservation', 'mass_conservation'],
-    prior_type='physics_informed',
-    likelihood_type='heteroscedastic',
-    rngs=nnx.Rngs(key)
+    input_dim=2,
+    output_dim=1,
+    hidden_dims=(32, 32),
+    use_bayesian=True,
+    rngs=rngs,
 )
 
-# Define PDE residual function
-def pde_residual(x, u, params):
-    """Heat equation: ∂u/∂t - α∇²u = 0"""
-    u_t = jax.grad(lambda t: pinn(jnp.array([t, x[1]]), params))(x[0])
-    u_xx = jax.grad(jax.grad(lambda x_: pinn(jnp.array([x[0], x_]), params)))(x[1])
-    return u_t - 0.1 * u_xx  # α = 0.1
+objective = ObjectiveConfig(
+    kl_weight=1e-3,
+    dataset_size=512,
+    physics_weight=1.0,
+    data_weight=1.0,
+    boundary_weight=1.0,
+    initial_condition_weight=0.0,
+    regularization_weight=0.0,
+    calibration_weight=0.0,
+    conformal_weight=0.0,
+    pac_bayes_weight=0.0,
+)
 
-# Train with physics constraints and uncertainty
-training_data = {
-    'x_boundary': boundary_points,
-    'u_boundary': boundary_values,
-    'x_physics': physics_points,
-    'pde_residual': pde_residual
+batch = {
+    "x": jnp.zeros((16, 2)),
+    "y": jnp.zeros((16, 1)),
 }
 
-trained_pinn = pinn.train(training_data, num_epochs=1000)
+components = pinn.loss_components(batch, rngs=nnx.Rngs(elbo=1), objective=objective)
+elbo_components = pinn.negative_elbo(batch, rngs=nnx.Rngs(elbo=2), objective=objective)
+predictive = pinn.predict_distribution(batch["x"], rngs=nnx.Rngs(predict=3))
 ```
 
-**Features**:
+`UQLossComponents` exposes per-term breakdowns (`data`, `physics_residual`,
+`boundary`, `regularization`, `kl`, `negative_elbo`, ...) so trainers can log
+diagnostics without recomputing weighted sums.
 
-- **Physics-aware priors**: Conservation law constraints in prior distributions
-- **Heteroscedastic uncertainty**: Input-dependent noise modeling
-- **Constraint enforcement**: Hard and soft physics constraint integration
-- **Bayesian optimization**: Hyperparameter optimization with uncertainty
+## Amortised variational framework
 
-### 3. Enhanced Calibration Framework
-
-Physics-aware calibration with constraint preservation and domain-specific adjustments.
+`AmortizedVariationalFramework` wraps any Flax NNX module and adds a
+mean-field Gaussian posterior plus an input-conditioned uncertainty encoder.
 
 ```python
-from opifex.neural.bayesian import PhysicsAwareCalibration
-
-# Initialize calibration system
-calibrator = PhysicsAwareCalibration(
-    calibration_method='temperature_scaling',
-    physics_constraints=['energy_conservation', 'positivity'],
-    constraint_enforcement='soft',
-    domain='quantum_chemistry'
+import flax.nnx as nnx
+from opifex.neural.base import StandardMLP
+from opifex.neural.bayesian import (
+    AmortizedVariationalFramework,
+    VariationalConfig,
+    PriorConfig,
+    MeanFieldGaussian,
+    UncertaintyEncoder,
 )
 
-# Calibrate model predictions
-predictions = model(x_test)
-uncertainties = uncertainty_model(x_test)
+rngs = nnx.Rngs(0)
 
-calibrated_predictions, calibrated_uncertainties = calibrator.calibrate(
-    predictions=predictions,
-    uncertainties=uncertainties,
-    true_values=y_test,
-    physics_context={'energy_range': [0.0, 10.0], 'particle_count': 100}
+base_model = StandardMLP(
+    layer_sizes=[10, 64, 64, 1],
+    activation="gelu",
+    rngs=rngs,
 )
 
-# Evaluate calibration quality
-calibration_metrics = calibrator.evaluate_calibration(
-    calibrated_predictions,
-    calibrated_uncertainties,
-    y_test
+framework = AmortizedVariationalFramework(
+    base_model=base_model,
+    prior_config=PriorConfig(prior_scale=1.0),
+    variational_config=VariationalConfig(
+        input_dim=10,
+        hidden_dims=(64, 32),
+        num_samples=10,
+        kl_weight=1.0,
+    ),
+    rngs=rngs,
 )
-
-print(f"Expected Calibration Error: {calibration_metrics['ece']:.4f}")
-print(f"Reliability Score: {calibration_metrics['reliability']:.4f}")
 ```
 
-**Features**:
+`MeanFieldGaussian` and `UncertaintyEncoder` are also re-exported for use as
+standalone NNX modules when the orchestration wrapper is not needed.
 
-- **Physics-aware temperature scaling**: Constraint-preserving calibration
-- **Domain-specific priors**: Quantum chemistry, fluid dynamics, materials science
-- **Coverage probability assessment**: Reliability evaluation metrics
-- **Constraint enforcement**: Energy conservation, mass conservation, positivity
-
-### 4. BlackJAX Integration
-
-Professional MCMC sampling with advanced diagnostics and convergence monitoring.
+## Calibration tools
 
 ```python
-from opifex.neural.bayesian import BlackJAXSampler
-
-# Initialize MCMC sampler
-sampler = BlackJAXSampler(
-    algorithm='nuts',  # or 'hmc', 'mala', 'rwm'
-    num_warmup=1000,
-    num_samples=5000,
-    diagnostics=['r_hat', 'ess', 'mcse'],
-    adaptation_strategy='dual_averaging'
+import flax.nnx as nnx
+from opifex.neural.bayesian import (
+    CalibrationTools,
+    PlattScaling,
+    IsotonicRegression,
 )
+from opifex.uncertainty.calibration import TemperatureScaling
+from opifex.uncertainty.conformal import SplitConformalRegressor
 
-# Define log probability function
-def log_prob_fn(params, data):
-    """Log probability for Bayesian neural network."""
-    predictions = model.apply(params, data['x'])
-    log_likelihood = jnp.sum(jax.scipy.stats.norm.logpdf(
-        data['y'], predictions, data['noise_std']
-    ))
-    log_prior = jnp.sum(jax.scipy.stats.norm.logpdf(
-        jax.tree_util.tree_flatten(params)[0], 0.0, 1.0
-    ))
-    return log_likelihood + log_prior
+rngs = nnx.Rngs(0)
 
-# Run MCMC sampling
-samples, diagnostics = sampler.sample(
-    log_prob_fn=log_prob_fn,
-    initial_params=initial_params,
-    data={'x': x_train, 'y': y_train, 'noise_std': 0.1}
-)
+# Trainable per-domain calibration helpers (NNX modules).
+calibration = CalibrationTools(rngs=rngs)
+platt = PlattScaling(rngs=rngs)
+isotonic = IsotonicRegression(n_bins=100, rngs=rngs)
 
-print(f"Samples shape: {samples.shape}")
-print(f"R-hat convergence: {diagnostics['r_hat']:.4f}")
-print(f"Effective sample size: {diagnostics['ess']:.0f}")
+# Caller-driven value-object calibrators from the platform layer.
+temperature = TemperatureScaling()
+# state = temperature.fit(logits=val_logits, targets=val_labels)
+# probs = temperature.with_state(state).predict(test_logits)
+
+conformal = SplitConformalRegressor(alpha=0.1)
+# state = conformal.fit(predictions=val_preds, targets=val_targets)
+# interval = conformal.with_state(state).predict(predictions=test_preds)
 ```
 
-## 🧪 **Advanced Applications**
+The CalibraX-backed `TemperatureScaling` / `SplitConformalRegressor` objects
+are pure value objects: their `fit` returns a state and `with_state(state)`
+returns a fresh callable. The neural NNX wrappers (`CalibrationTools`,
+`PlattScaling`, `IsotonicRegression`) maintain learnable parameters so they
+can be composed into a Flax model graph.
 
-### Hierarchical Bayesian Modeling
-
-Multi-level uncertainty modeling with adaptive propagation:
+## MCMC via the BlackJAX backend
 
 ```python
-from opifex.uncertainty.priors_physics import HierarchicalBayesianFramework
+import jax.numpy as jnp
+import flax.nnx as nnx
+from opifex.uncertainty import BlackJAXBackend
 
-# Create hierarchical model
-hierarchical_model = HierarchicalBayesianFramework(
-    levels=['global', 'local', 'observation'],
-    uncertainty_propagation='constraint_preserving',
-    adaptation_strategy='performance_based'
+def log_density(theta):
+    return -0.5 * jnp.sum(theta * theta)
+
+backend = BlackJAXBackend(
+    target_log_prob=log_density,
+    init_state=jnp.zeros(10),
+    n_samples=1000,
+    n_burnin=1000,
+    method="nuts",
+    step_size=1e-3,
 )
 
-# Multi-level prediction with uncertainty
-global_predictions, level_uncertainties = hierarchical_model.predict_hierarchical(
-    x_test, return_level_uncertainties=True
-)
+result = backend.fit(log_density, rngs=nnx.Rngs(sample=0))
+samples = result.sampler_state
+
+predictive = backend.predict_distribution(jnp.zeros((4, 10)), rngs=nnx.Rngs(predict=1))
 ```
 
-### Physics-Aware Uncertainty Propagation
+The backend conforms to `InferenceBackendProtocol`. Sampler families that
+are not yet wrapped (SGLD, SGHMC, SMC) raise `UnsupportedBackendError` from
+`opifex.uncertainty.inference_backends`. Mean-field VI, SVGD, and Pathfinder
+are available as separate backends (`ADVIBackend`, `SVGDBackend`,
+`PathfinderBackend`) and are routed through the same protocol.
 
-Constraint-preserving uncertainty propagation for scientific computing:
+## Practical guidance
 
-```python
-from opifex.neural.bayesian import PhysicsUncertaintyPropagation
+- Always pass an explicit `nnx.Rngs` to Bayesian layers and modules; the
+  module never owns its own seed.
+- Prefer `loss_components` / `negative_elbo` over assembling
+  `data_loss + kl_weight * kl_divergence()` by hand. The objective config
+  centralises the weights and the loss container records the breakdown.
+- Use `predict_distribution` (returns a `PredictiveDistribution`) for any
+  inference-time uncertainty surface; downstream calibrators and conformal
+  wrappers expect that container.
+- Check calibration on a held-out set with metrics from
+  `opifex.uncertainty.calibration` (`expected_calibration_error`,
+  `regression_calibration_error`, `picp`, `mpiw`, ...) before reporting
+  predictive intervals.
 
-# Initialize physics-aware propagation
-propagator = PhysicsUncertaintyPropagation(
-    conservation_laws=['energy', 'momentum', 'mass'],
-    constraint_tolerance=1e-6,
-    propagation_method='monte_carlo'
-)
+## Related modules
 
-# Propagate uncertainty through physics constraints
-propagated_uncertainty = propagator.propagate(
-    input_distribution=input_dist,
-    physics_model=physics_model,
-    constraints=conservation_constraints
-)
-```
-
-## 📋 **Best Practices**
-
-### Uncertainty Assessment
-
-1. **Multi-source consideration**: Always account for epistemic, aleatoric, and model uncertainty
-2. **Physics constraints**: Incorporate domain knowledge through physics-informed priors
-3. **Calibration validation**: Regularly assess and improve uncertainty calibration
-4. **Computational efficiency**: Use ensemble methods for epistemic uncertainty when feasible
-
-### Model Selection
-
-1. **Prior specification**: Choose physics-informed priors for scientific applications
-2. **Likelihood modeling**: Use heteroscedastic models for input-dependent noise
-3. **Constraint enforcement**: Implement soft constraints for differentiable training
-4. **Diagnostic monitoring**: Track MCMC convergence and effective sample sizes
-
-## 🔧 **Integration with Opifex Framework**
-
-The Bayesian module integrates seamlessly with other Opifex components:
-
-- **Neural Operators**: Uncertainty quantification for operator learning
-- **Physics-Informed Networks**: Bayesian PINNs with physics constraints
-- **Quantum Chemistry**: Neural DFT with uncertainty-aware functionals
-- **Training Infrastructure**: Bayesian optimization and meta-learning
-
-## 📊 **Performance & Scalability**
-
-- **JAX native**: Full JIT compilation and GPU acceleration
-- **Memory efficient**: Optimized for large-scale scientific computing
-- **Parallel sampling**: Multi-chain MCMC with convergence diagnostics
-- **Production ready**: Enterprise-grade uncertainty quantification
-
-For detailed implementation examples, see the main [Opifex documentation](../../README.md) and individual module docstrings.
-
-## 🔗 **Related Modules**
-
-- **[Neural Operators](../operators/README.md)**: Operator learning with uncertainty
-- **[Quantum Networks](../quantum/README.md)**: Neural DFT with Bayesian functionals
-- **[Training Infrastructure](../../training/README.md)**: Bayesian optimization
-- **[Core Framework](../../core/README.md)**: Mathematical foundations
+- [Neural operators](../operators/README.md) — operator learning with
+  uncertainty surfaces.
+- [Quantum neural networks](../quantum/README.md) — neural DFT components.
+- [Core framework](../../core/README.md) — physics losses and shared
+  mathematical primitives.
