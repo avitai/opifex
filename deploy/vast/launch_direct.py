@@ -4,11 +4,9 @@
 SkyPilot's vast integration is unreliable here (its ``vastai-sdk`` 1.0+ breaks
 offer filtering, and its catalog lacks the RTX PRO 6000 server variant), so this
 launcher drives the ``vastai`` CLI directly for **deterministic** hardware: it
-picks a specific single-GPU offer, provisions it with vast-native ``--ssh`` (no
-custom onstart -- a custom onstart suppresses vast's ``running`` status; see
-``memory-bank/known-issues/vast-actual-status-stuck-loading.md``), installs the
-pipeline packages over SSH, rsyncs the working tree and the QH9 database, then
-builds opifex's canonical isolated env with the repo's own
+picks a specific single-GPU offer, provisions it (injecting the SSH key in the
+onstart so connection works on a plain CUDA image), rsyncs the working tree and
+the QH9 database, builds opifex's canonical isolated env with the repo's own
 ``setup.sh`` (whose ``gpu`` extra ships the >=12.8 CUDA wheels Blackwell sm_120
 needs), and starts the training driver from the activated venv in a ``tmux``
 session that survives disconnects.
@@ -43,7 +41,7 @@ import shlex
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +105,7 @@ class LaunchConfig:
     dry_run: bool
     ssh_timeout_minutes: float = 25.0
     keep_on_failure: bool = False
+    onstart_extra: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _vastai(args: list[str], *, capture: bool = False) -> str:
@@ -141,30 +140,27 @@ def _select_offer(config: LaunchConfig) -> int:
     return int(offer["id"])
 
 
-# Packages the training pipeline needs on the instance (rsync for the working-tree
-# and DB sync, tmux for the detached run, git/curl for setup). On a plain CUDA image
-# these are installed over SSH *after* provisioning -- deliberately NOT via a custom
-# ``--onstart-cmd``: overriding the onstart suppresses vast's ``loading -> running``
-# status transition (confirmed by experiment -- native ``--ssh`` reaches ``running``
-# in ~80s, while a custom onstart leaves ``actual_status`` stuck at ``loading``
-# indefinitely even though the box is fully usable). See
-# ``memory-bank/known-issues/vast-actual-status-stuck-loading.md``.
-_REMOTE_DEPS_INSTALL = (
-    "export DEBIAN_FRONTEND=noninteractive; "
-    "apt-get update && apt-get install -y rsync git curl tmux ca-certificates"
-)
+def _onstart_script(config: LaunchConfig) -> str:
+    """Build the onstart that installs sshd and injects the SSH public key.
+
+    A plain CUDA image has no sshd and (because a custom onstart overrides vast's
+    default key injection) no authorized key, so both are set up explicitly here.
+    """
+    public_key = config.ssh_key.with_suffix(".pub").read_text().strip()
+    lines = [
+        "export DEBIAN_FRONTEND=noninteractive",
+        "apt-get update && apt-get install -y openssh-server git rsync curl tmux ca-certificates",
+        "mkdir -p /run/sshd /root/.ssh",
+        f"echo {shlex.quote(public_key)} >> /root/.ssh/authorized_keys",
+        "chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys",
+        "(service ssh start || /usr/sbin/sshd)",
+        *config.onstart_extra,
+    ]
+    return "; ".join(lines)
 
 
 def _create_instance(config: LaunchConfig, offer_id: int) -> int:
-    """Register the SSH key and create the instance with vast-native SSH.
-
-    Uses vast's built-in ``--ssh`` provisioning (which installs sshd and injects the
-    account-registered key) rather than a custom ``--onstart-cmd``. The custom
-    onstart used previously suppressed vast's ``running`` status transition (the box
-    stayed ``loading`` forever); native provisioning keeps ``actual_status`` truthful.
-    Pipeline packages (rsync/tmux/...) are instead installed over SSH post-boot via
-    :data:`_REMOTE_DEPS_INSTALL`.
-    """
+    """Register the SSH key, create the instance and return its id."""
     public_key = config.ssh_key.with_suffix(".pub").read_text().strip()
     # Registering an already-present key is a harmless no-op error; ignore it.
     try:
@@ -181,8 +177,11 @@ def _create_instance(config: LaunchConfig, offer_id: int) -> int:
             "--disk",
             str(config.disk),
             "--ssh",
+            "--direct",
             "--label",
             "opifex-train",
+            "--onstart-cmd",
+            _onstart_script(config),
             "--raw",
         ],
         capture=True,
@@ -375,9 +374,6 @@ def launch(config: LaunchConfig) -> None:
     instance_id = _create_instance(config, offer_id)
     try:
         host, port = _wait_for_ssh(config, instance_id, timeout_minutes=config.ssh_timeout_minutes)
-        # Install the pipeline packages the (custom-onstart-free) image lacks before
-        # the rsync step needs them on the instance.
-        _remote(config, host, port, _REMOTE_DEPS_INSTALL)
         _rsync(config, host, port, f"{_REPO_ROOT}/", f"{_REMOTE_REPO}/", excludes=True)
         if config.db is not None:
             _remote(config, host, port, f"mkdir -p {Path(_REMOTE_DB).parent}")
