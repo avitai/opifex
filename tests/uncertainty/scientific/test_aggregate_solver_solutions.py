@@ -131,9 +131,7 @@ def test_aggregate_omits_quantiles_block_when_none_requested() -> None:
 
 def test_aggregate_metadata_carries_ensemble_size_and_extra_entries() -> None:
     solutions = [_make_solution(v) for v in (1.0, 2.0, 3.0)]
-    out = aggregate_solver_solutions(
-        solutions, metadata=(("method", "deep_ensemble"),)
-    )
+    out = aggregate_solver_solutions(solutions, metadata=(("method", "deep_ensemble"),))
     metadata = dict(out.auxiliary_data["uq"]["metadata"])
     assert metadata["uncertainty_sources"] == ("ensemble",)
     assert metadata["ensemble_size"] == 3
@@ -237,9 +235,7 @@ def test_summarize_stacked_rejects_out_of_range_quantile() -> None:
     from opifex.uncertainty.scientific.solutions import summarize_stacked_sample_solution
 
     with pytest.raises(ValueError, match="quantile"):
-        summarize_stacked_sample_solution(
-            _make_stacked_solution([1.0, 2.0]), quantiles=(2.0,)
-        )
+        summarize_stacked_sample_solution(_make_stacked_solution([1.0, 2.0]), quantiles=(2.0,))
 
 
 def test_summarize_stacked_rejects_mismatched_sample_lengths() -> None:

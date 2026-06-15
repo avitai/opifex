@@ -116,7 +116,12 @@ def test_compute_ess_is_grad_compatible() -> None:
 
 
 def test_blackjax_backend_spec_advertises_supported_and_unsupported_samplers() -> None:
-    """``BLACKJAX_BACKEND_SPEC`` advertises the full sampler family list."""
+    """``BLACKJAX_BACKEND_SPEC`` advertises the BlackJAX-owned sampler family list.
+
+    ``advi`` and ``pathfinder`` have been moved to dedicated peer
+    backends (:class:`ADVIBackend`, :class:`PathfinderBackend`) and
+    are no longer the BlackJAX backend's responsibility.
+    """
     from opifex.uncertainty.inference_backends.base import InferenceBackendSpec
     from opifex.uncertainty.inference_backends.blackjax import BLACKJAX_BACKEND_SPEC
 
@@ -125,14 +130,18 @@ def test_blackjax_backend_spec_advertises_supported_and_unsupported_samplers() -
     # Implemented (delegated to Artifex).
     for impl in ("hmc", "nuts", "mala"):
         assert impl in BLACKJAX_BACKEND_SPEC.sampler_names
-    # Audit-mandated unsupported families show up too, marked with the
-    # ``unsupported:`` prefix so the router can surface them with an
+    # BlackJAX-owned unsupported families remain in the spec marked with
+    # the ``unsupported:`` prefix so the router can surface them with an
     # actionable error.
-    for unsupported in ("sgld", "sghmc", "smc", "advi", "pathfinder"):
+    for unsupported in ("sgld", "sghmc", "smc"):
         assert (
             unsupported in BLACKJAX_BACKEND_SPEC.sampler_names
             or f"unsupported:{unsupported}" in BLACKJAX_BACKEND_SPEC.sampler_names
         )
+    # ADVI and Pathfinder are now owned by peer backends, not BlackJAX.
+    for migrated in ("advi", "pathfinder"):
+        assert migrated not in BLACKJAX_BACKEND_SPEC.sampler_names
+        assert f"unsupported:{migrated}" not in BLACKJAX_BACKEND_SPEC.sampler_names
 
 
 def test_blackjax_backend_delegates_to_artifex_nuts_sampling(

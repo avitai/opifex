@@ -27,7 +27,9 @@ from flax import nnx, struct
 
 from opifex.uncertainty.adapters._specs import _DeferredAdapterSpec
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.curvature import DiagonalLaplacePosterior
+from opifex.uncertainty.curvature import (
+    DiagonalLaplacePosterior,  # noqa: TC001 — kept eager for consistency
+)
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
@@ -133,7 +135,7 @@ class _WrappedLaplaceModel:
         )
         mean = self._state.posterior.mean
         standard_deviation = 1.0 / jnp.sqrt(self._state.posterior.precision_diagonal)
-        noise = jax.random.normal(key, (self._state.num_samples,) + mean.shape)
+        noise = jax.random.normal(key, (self._state.num_samples, *mean.shape))
         parameter_samples = mean + noise * standard_deviation
 
         def _predict(parameters: jax.Array) -> jax.Array:
