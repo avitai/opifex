@@ -64,7 +64,7 @@ Opifex supports a wide range of scientific applications:
 - **Heat Transfer**: Diffusion, advection-diffusion
 - **Structural Mechanics**: Elasticity, Euler beam problems
 - **Wave Propagation**: Wave equation, Helmholtz equation
-- **Quantum Chemistry**: DFT, electronic structure via NeuralDFT
+- **Quantum Chemistry**: Kohn-Sham DFT and electronic structure via the differentiable `SCFSolver` (`opifex.neural.quantum.dft`)
 - **Materials Science**: Allen-Cahn, diffusion-reaction systems
 
 ## Neural Operators

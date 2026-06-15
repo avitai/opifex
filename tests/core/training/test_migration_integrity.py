@@ -38,14 +38,12 @@ def test_strategies_migration():
         from opifex.core.training.strategies import (
             incremental_trainer,
             mixed_precision,
-            quantum,
         )
     except ImportError:
         pytest.fail("Failed to import strategies from core")
 
     assert hasattr(mixed_precision, "MixedPrecisionTrainer")
     assert hasattr(incremental_trainer, "IncrementalTrainer")
-    assert hasattr(quantum, "QuantumTrainingManager")
 
 
 def test_legacy_shims_are_gone():

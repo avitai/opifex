@@ -602,10 +602,6 @@ order-by-type = false
 "src/opifex/neural/bayesian/blackjax_integration.py" = [
   "T201" # Print statements for MCMC fallback warnings
 ]
-"src/opifex/neural/quantum/neural_dft.py" = [
-  "E501", # Long scientific comments
-  "RET504" # Scientific computing return patterns
-]
 # Domain exceptions intentionally named for the concept they model
 # (FunctionalNotFound, AccessDenied, ...) rather than an -Error suffix.
 "src/opifex/platform/registry/exceptions.py" = [

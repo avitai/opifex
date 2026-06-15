@@ -295,14 +295,12 @@ xc_potential = model.compute_functional_derivative(
 )
 ```
 
-**Using with Neural DFT:**
+**Driving the Kohn-Sham SCF with the learned functional:**
 
 ```python
-from opifex.neural.quantum import NeuralDFT
+from opifex.neural.quantum.dft import SCFSolver
 
-# The neural DFT framework uses NeuralXCFunctional internally
-neural_dft = NeuralDFT(
-    xc_functional_type="neural",  # Uses NeuralXCFunctional
-    rngs=rngs,
-)
+# Pass the trained NeuralXCFunctional to the real RKS SCF solver.
+solver = SCFSolver(system, neural_functional=model)
+energy = solver.energy()  # converged Kohn-Sham total energy (Hartree)
 ```

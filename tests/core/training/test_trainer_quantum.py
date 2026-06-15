@@ -16,7 +16,6 @@ from opifex.core.training.physics_configs import (
     ElectronicStructureConfig,
     SCFConfig,
 )
-from opifex.core.training.strategies.quantum import QuantumTrainingManager
 from opifex.core.training.trainer import Trainer
 
 
@@ -53,24 +52,6 @@ def sample_data():
 
 class TestQuantumCapabilities:
     """Test quantum training capabilities."""
-
-    def test_quantum_manager_scf_convergence(self):
-        """Test SCF convergence monitoring using QuantumTrainingManager."""
-        # Use QuantumTrainingManager directly with dict config
-        config = {
-            "quantum_training": True,
-            "max_scf_iterations": 100,
-            "scf_tolerance": 1e-6,
-        }
-        manager = QuantumTrainingManager(config)
-
-        positions = jax.random.normal(jax.random.PRNGKey(0), (5, 3, 3))
-        converged, iterations = manager.monitor_scf_convergence(positions)
-
-        assert isinstance(converged, bool)
-        assert isinstance(iterations, int)
-        assert iterations >= 0
-        assert iterations <= 100
 
     def test_scf_config_composition(self, mock_model, sample_data):
         """Test SCF configuration composition with trainer."""
@@ -109,22 +90,6 @@ class TestQuantumCapabilities:
         assert trainer.config.dft_config == dft_config
         assert trainer.config.dft_config is not None
         assert trainer.config.dft_config.functional == "pbe"
-
-    def test_scf_convergence_with_different_tolerances(self):
-        """Test SCF convergence with varying tolerance settings."""
-        # Strict tolerance
-        config_strict = {
-            "quantum_training": True,
-            "max_scf_iterations": 100,
-            "scf_tolerance": 1e-8,
-        }
-        manager_strict = QuantumTrainingManager(config_strict)
-
-        positions = jax.random.normal(jax.random.PRNGKey(42), (3, 3, 3))
-        converged, iterations = manager_strict.monitor_scf_convergence(positions)
-
-        assert isinstance(converged, bool)
-        assert iterations >= 0
 
     def test_electronic_structure_config(self, mock_model):
         """Test electronic structure configuration."""
@@ -167,27 +132,6 @@ class TestQuantumCapabilities:
 
 class TestQuantumTrainingEnhancements:
     """Test quantum training enhancements for real SCF and DFT integration."""
-
-    def test_real_scf_convergence(self):
-        """Test actual self-consistent field integration."""
-        config = {
-            "quantum_training": True,
-            "scf_tolerance": 1e-6,
-            "max_scf_iterations": 50,
-            "scf_mixing_parameter": 0.5,
-        }
-        manager = QuantumTrainingManager(config)
-
-        # Test SCF convergence with realistic positions
-        positions = jnp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])  # Simple molecule
-
-        converged, iterations = manager.monitor_scf_convergence(positions)
-
-        # Verify SCF convergence monitoring
-        assert isinstance(converged, bool)
-        assert isinstance(iterations, int)
-        assert iterations > 0
-        assert iterations <= 50
 
     def test_dft_integration(self, mock_model, sample_data):
         """Test density functional theory training capabilities."""
@@ -234,30 +178,6 @@ class TestQuantumTrainingEnhancements:
         assert isinstance(loss, jax.Array)
         assert loss > 0
 
-    def test_dft_functional_configuration(self):
-        """Test DFT functional configuration options."""
-        # Test PBE functional
-        config_pbe = {"quantum_training": True, "dft_functional": "pbe"}
-        manager_pbe = QuantumTrainingManager(config_pbe)
-        assert manager_pbe.dft_functional == "pbe"
-
-        # Test B3LYP functional
-        config_b3lyp = {"quantum_training": True, "dft_functional": "b3lyp"}
-        manager_b3lyp = QuantumTrainingManager(config_b3lyp)
-        assert manager_b3lyp.dft_functional == "b3lyp"
-
-    def test_scf_mixing_parameter(self):
-        """Test SCF mixing parameter configuration."""
-        config = {
-            "quantum_training": True,
-            "scf_mixing_parameter": 0.7,
-            "max_scf_iterations": 20,
-        }
-        manager = QuantumTrainingManager(config)
-
-        assert manager.scf_mixing_parameter == 0.7
-        assert manager.max_scf_iterations == 20
-
 
 class TestAdvancedQuantumTraining:
     """Test advanced quantum training workflows."""
@@ -299,18 +219,6 @@ class TestAdvancedQuantumTraining:
         loss, metrics = trainer.training_step(x[:10], y[:10])
         assert jnp.isfinite(loss)
         assert isinstance(metrics, dict)
-
-    def test_quantum_manager_dft_energy(self):
-        """Test DFT energy computation via QuantumTrainingManager."""
-        config = {"quantum_training": True, "dft_functional": "pbe"}
-        manager = QuantumTrainingManager(config)
-
-        # Test DFT energy computation
-        y_pred = jnp.array([[1.0], [2.0], [3.0]])
-        dft_energy = manager.compute_dft_energy(y_pred)
-
-        assert isinstance(dft_energy, jax.Array)
-        assert dft_energy > 0
 
     def test_quantum_ml_workflow(self, mock_model, sample_data):
         """Test quantum machine learning workflow with specialized components."""

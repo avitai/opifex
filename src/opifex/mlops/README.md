@@ -114,13 +114,20 @@ l2o_metrics = L2OMetrics(
     generalization_error=0.05
 )
 
-# Neural DFT experiment tracking
+# Kohn-Sham DFT experiment tracking (errors against a reference, e.g. PySCF)
 neural_dft_metrics = NeuralDFTMetrics(
-    functional_type="DM21",
-    chemical_accuracy=0.8,  # kcal/mol
-    scf_convergence=1e-6,
-    total_energy=-76.4,
-    homo_lumo_gap=0.5
+    total_energy_error_hartree=1e-4,
+    forces_error_ev_per_angstrom=0.02,
+    density_mse=1e-5,
+    exchange_correlation_error=1e-4,
+    atomization_energy_error_kcal_per_mol=0.8,
+    bond_length_error_angstrom=0.005,
+    particle_number_conservation=1e-8,
+    density_positivity_violation=0.0,
+    symmetry_preservation=1e-8,
+    scf_iterations=12,
+    scf_convergence_time=0.5,
+    density_optimization_time=0.3,
 )
 ```
 

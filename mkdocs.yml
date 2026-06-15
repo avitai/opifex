@@ -86,6 +86,8 @@ nav:
       - Domain Decomposition PINNs: methods/domain-decomposition-pinns.md
       - NTK Analysis: methods/ntk-analysis.md
       - Neural Density Functional Theory: methods/neural-dft.md
+      - Variational Monte Carlo: methods/variational-monte-carlo.md
+      - Hamiltonian Prediction: methods/hamiltonian-prediction.md
       - Probabilistic Numerics: methods/probabilistic.md
       - Learn-to-Optimize: methods/l2o.md
       - Second-Order Optimization: methods/second-order-optimization.md
@@ -141,8 +143,9 @@ nav:
           - Curvature — Laplace classifier: examples/uncertainty/curvature-laplace.md
           - Probabilistic numerics — Fenrir vs DALTON: examples/uncertainty/probnum-fenrir-dalton.md
       - Quantum Chemistry:
-          - Neural DFT (H2 Molecule): examples/quantum-chemistry/neural-dft.md
           - Neural XC Functional: examples/quantum-chemistry/neural-xc-functional.md
+          - Variational Monte Carlo (Atoms & H2): examples/quantum-chemistry/vmc-atoms.md
+          - Equivariant Hamiltonian Prediction: examples/quantum-chemistry/hamiltonian-prediction.md
       - Atomistic Potentials:
           - NequIP on rMD17 (Aspirin): examples/atomistic/nequip-md17.md
       - Optimization & Meta-Learning:

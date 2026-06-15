@@ -210,35 +210,27 @@ for step in range(optimization_steps):
         print(f"Efficiency score: {metrics['efficiency_score']}")
 ```
 
-### Quantum-Aware Optimization
+### Electronic-structure problems
+
+The electronic-structure problem is backed by the real Kohn-Sham DFT solver
+(`opifex.neural.quantum.dft.SCFSolver`); its energy and analytic forces are the
+converged Kohn-Sham quantities and are `jit` / `grad` / `vmap` compatible, so
+they slot into geometry-optimisation and meta-optimisation loops.
 
 ```python
-from opifex.optimization.meta_optimization import MetaOptimizer, MetaOptimizerConfig
+import jax
+
 from opifex.core import create_neural_dft_problem
+from opifex.core.quantum.molecular_system import create_molecular_system
 
-# Create quantum mechanical problem
-molecular_system = create_molecular_system([
-    ("H", (0.0, 0.0, 0.0)),
-    ("H", (0.74, 0.0, 0.0))
-])
-neural_dft_problem = create_neural_dft_problem(molecular_system)
+with jax.enable_x64(True):
+    molecular_system = create_molecular_system(
+        [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
+    )
+    problem = create_neural_dft_problem(molecular_system)  # functional_type -> LDA/PBE
 
-# Configure quantum-aware meta-optimizer
-config = MetaOptimizerConfig(
-    quantum_aware=True,
-    scf_acceleration=True,
-    energy_convergence_threshold=1e-6,
-    max_scf_iterations=100
-)
-
-meta_optimizer = MetaOptimizer(config=config, rngs=nnx.Rngs(42))
-
-# Optimize quantum problem
-quantum_params = meta_optimizer.optimize_quantum(
-    problem=neural_dft_problem,
-    initial_params=initial_density_matrix,
-    target_accuracy=1e-3  # Chemical accuracy
-)
+    energy = problem.compute_energy()   # converged Kohn-Sham energy (Hartree)
+    forces = problem.compute_forces()   # analytic -dE/dR
 ```
 
 ### Meta-Optimization for Multiple Problems
@@ -353,10 +345,10 @@ The L2O system uses neural networks to learn optimization algorithms:
 
 Specialized optimization for quantum mechanical problems:
 
-- **SCF Acceleration**: Self-consistent field convergence acceleration
 - **Energy Optimization**: Specialized algorithms for energy minimization
 - **Quantum Constraints**: Built-in handling of quantum mechanical constraints
-- **Chemical Accuracy**: Optimization targeting <1 kcal/mol energy accuracy
+- **Real Kohn-Sham DFT**: Differentiable energy and analytic forces from
+  `opifex.neural.quantum.dft.SCFSolver`
 
 ## Integration with Other Packages
 

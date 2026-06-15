@@ -381,9 +381,8 @@ class TestHamiltonianCoulombPotentialPhysics:
 
     The ``coulomb`` branch must compute the soft-Coulomb nuclear-attraction
     potential ``V(r) = -sum_A Z_A / sqrt(|r - R_A|^2 + eps)`` derived from the
-    molecular system's nuclei (matching the formulation in
-    ``opifex.neural.quantum.neural_scf.NeuralSCFSolver._nuclear_potential``),
-    not a hardcoded grid that ignores the molecule.
+    molecular system's nuclei (the standard soft-Coulomb model-atom
+    formulation), not a hardcoded grid that ignores the molecule.
     """
 
     @staticmethod

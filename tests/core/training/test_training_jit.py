@@ -153,18 +153,6 @@ class TestTrainerJITCompilation:
         assert isinstance(loss2, jax.Array)
 
 
-class TestQuantumTrainingJIT:
-    """Test quantum training code uses JIT compilation."""
-
-    def test_quantum_training_step_jit_compiled(self):
-        """Test quantum training utilities use JIT compilation.
-
-        Quantum training with SCF iterations is compute-intensive.
-        JIT compilation is critical for performance.
-        """
-        # Will be implemented after checking quantum_training.py
-
-
 # ==============================================================================
 # Integration Tests - Verify Complete Training Pipeline Uses JIT
 # ==============================================================================

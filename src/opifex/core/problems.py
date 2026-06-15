@@ -3,13 +3,15 @@ Unified Problem Definition Framework for Opifex
 
 This module provides a unified interface for defining all types of scientific
 machine learning problems, including PDEs, ODEs, optimization problems, and
-quantum mechanical calculations. Neural DFT is integrated as a first-class
-paradigm alongside traditional PINNs and Neural Operators.
+quantum mechanical calculations. The electronic-structure problem is backed by
+the real Kohn-Sham DFT solver (:mod:`opifex.neural.quantum.dft`) alongside
+traditional PINNs and Neural Operators.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any, Protocol, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -18,6 +20,16 @@ from jax import Array
 from opifex.core.quantum import MolecularSystem
 from opifex.core.quantum.molecular_system import create_molecular_system
 from opifex.geometry.base import Geometry
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    # ``Functional`` / ``SCFSolver`` are imported lazily at runtime inside the
+    # methods below to break the ``core`` <-> ``neural.quantum.dft`` import cycle
+    # (both reach back into ``core.quantum``); the type-checking import keeps the
+    # annotations honest.
+    from opifex.neural.quantum.dft import Functional, SCFSolver
 
 
 class Problem(Protocol):
@@ -388,8 +400,41 @@ class ElectronicStructureProblem(QuantumProblem):
 
         return not (self.grid_level < 1 or self.grid_level > 5)
 
+    @property
+    def scf_solver(self) -> SCFSolver:
+        """The restricted Kohn-Sham SCF solver backing this problem.
+
+        Built lazily (and cached) from the problem's :class:`MolecularSystem`
+        and the requested functional, then reused for the energy and the
+        analytic forces so both come from one self-consistent solve.
+        """
+        from opifex.neural.quantum.dft import SCFSolver
+
+        solver = getattr(self, "_scf_solver", None)
+        if solver is None:
+            solver = SCFSolver(self.molecular_system, functional=self._scf_functional)
+            self._scf_solver = solver
+        return solver
+
+    @property
+    def _scf_functional(self) -> Functional:
+        """Map ``functional_type`` onto a concrete real DFT functional.
+
+        The PBE GGA backs the ``pbe_*`` request strings; every other request
+        falls back to the LDA (Slater + VWN5) functional. The learned-XC path
+        (:class:`~opifex.neural.quantum.neural_xc.NeuralXCFunctional`) is not
+        auto-selected here -- it is wired through
+        :class:`~opifex.neural.quantum.dft.SCFSolver` directly with a trained
+        module.
+        """
+        from opifex.neural.quantum.dft import Functional
+
+        if self.functional_type.startswith("pbe"):
+            return Functional.PBE
+        return Functional.LDA
+
     def compute_energy(self, density: Array | None = None) -> float | Array:
-        """Compute the total electronic energy of the system.
+        """Compute the converged Kohn-Sham total energy of the system.
 
         Delegates to :meth:`_energy_from_positions` -- the same differentiable
         routine that :meth:`compute_forces` differentiates -- so the energy and
@@ -400,11 +445,12 @@ class ElectronicStructureProblem(QuantumProblem):
         raises a ``TypeError`` subclass, which selects the array branch).
 
         Args:
-            density: Optional electronic density (unused by the analytic energy
-                surrogate; accepted for interface parity with the SCF backends).
+            density: Ignored. The restricted Kohn-Sham SCF solves for the
+                self-consistent density itself; the argument is retained only
+                for interface parity with :class:`QuantumProblem`.
 
         Returns:
-            Total electronic energy in Hartree.
+            Total Kohn-Sham energy in Hartree.
         """
         energy = self._energy_from_positions(self.molecular_system.positions, density)
         try:
@@ -414,92 +460,41 @@ class ElectronicStructureProblem(QuantumProblem):
             return energy
 
     def _energy_from_positions(self, positions: Array, density: Array | None = None) -> Array:
-        """
-        Pure function to compute energy from positions without object creation.
+        """Converged Kohn-Sham total energy as a function of nuclear positions.
 
-        This is designed to be JAX-compatible and avoid object creation inside
-        JAX transformations like jax.grad.
+        A pure, differentiable function of ``positions``: the integrals, grid
+        and exchange-correlation matrix are rebuilt at ``positions`` and the
+        self-consistent density is found as an implicit fixed point, so the
+        result is ``jit`` / ``grad`` / ``vmap`` compatible and the forces in
+        :meth:`compute_forces` are the exact analytic gradient
+        (:class:`~opifex.neural.quantum.dft.SCFSolver`).
 
         Args:
-            positions: Nuclear positions
-            density: Electronic density
+            positions: Nuclear positions in Bohr [Shape: (n_atoms, 3)].
+            density: Ignored (the SCF solves for the density); see
+                :meth:`compute_energy`.
 
         Returns:
-            Total energy as JAX array
+            The scalar converged total energy (Hartree).
         """
-        # Use the optimized nuclear repulsion calculation from compute_energy
-        atomic_numbers = self.molecular_system.atomic_numbers
-        n_atoms = positions.shape[0]
-
-        # Vectorized nuclear repulsion calculation using JAX - fully JAX compatible
-        # Create pairwise distance matrix using JAX vectorized operations
-        def compute_pairwise_distances(pos1, pos2):
-            # Add small epsilon to avoid division by zero in gradients
-            diff = pos1 - pos2
-            return jnp.sqrt(jnp.sum(diff**2) + 1e-12)
-
-        # Vectorize over all pairs using vmap
-        distances = jax.vmap(jax.vmap(compute_pairwise_distances, (None, 0)), (0, None))(
-            positions, positions
-        )
-
-        # Create upper triangular mask to avoid double counting
-        i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
-
-        # Extract upper triangular distances and atomic numbers
-        # For single atoms, these will be empty arrays and the sum will be 0
-        pair_distances = distances[i_indices, j_indices]
-        atomic_i = atomic_numbers[i_indices]
-        atomic_j = atomic_numbers[j_indices]
-
-        # Vectorized nuclear repulsion calculation
-        # For single atoms, this sum will be 0 (empty array sum)
-        nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
-
-        # Electronic energy approximation using the same logic as compute_energy
-        # Use vectorized operations instead of Python loops and conditionals
-        hydrogen_energy = -0.5  # Hydrogen ground state ~ -0.5 Hartree
-        carbon_energy = -37.8
-        oxygen_energy = -75.0
-
-        # Use jnp.where for conditional logic that works with JIT
-        energies = jnp.where(
-            atomic_numbers == 1,
-            hydrogen_energy,
-            jnp.where(
-                atomic_numbers == 6,
-                carbon_energy,
-                jnp.where(
-                    atomic_numbers == 8,
-                    oxygen_energy,
-                    -atomic_numbers * 1.0,  # Rough approximation for other elements
-                ),
-            ),
-        )
-
-        electronic_energy = jnp.sum(energies)
-
-        # Total energy
-        total_energy = electronic_energy + nuclear_repulsion
-
-        return total_energy
+        del density  # The SCF solves for the self-consistent density.
+        return self.scf_solver.energy_from_positions(positions)
 
     def compute_forces(self, density: Array | None = None) -> Array:
-        """
-        Compute forces on nuclei using JAX automatic differentiation.
+        r"""Analytic nuclear forces :math:`F = -\partial E/\partial R`.
+
+        The exact implicit-differentiation forces of the converged Kohn-Sham
+        energy (:meth:`~opifex.neural.quantum.dft.SCFSolver.compute_forces`).
 
         Args:
-            density: Electronic density
+            density: Ignored (the SCF solves for the density); see
+                :meth:`compute_energy`.
 
         Returns:
-            Forces on nuclei in Hartree/Bohr
+            Forces on nuclei in Hartree/Bohr [Shape: (n_atoms, 3)].
         """
-        # Use JAX automatic differentiation on the pure energy function
-        # This avoids object creation inside the gradient computation
-        grad_fn = jax.grad(self._energy_from_positions, argnums=0)
-        forces = -grad_fn(self.molecular_system.positions, density)
-
-        return forces
+        del density  # The SCF solves for the self-consistent density.
+        return self.scf_solver.compute_forces(self.molecular_system.positions)
 
     def setup_neural_functional(self) -> dict[str, Any]:
         """Setup neural exchange-correlation functional."""
@@ -585,7 +580,14 @@ def create_data_driven_problem(train_dataset: tuple[Array, Array], **kwargs) -> 
 def create_neural_dft_problem(
     molecular_system: MolecularSystem, functional_type: str = "neural_xc", **kwargs
 ) -> ElectronicStructureProblem:
-    """Create a Neural DFT problem instance."""
+    """Create an electronic-structure (Kohn-Sham DFT) problem instance.
+
+    The returned :class:`ElectronicStructureProblem` computes its energy and
+    analytic forces through the real restricted Kohn-Sham SCF solver
+    (:class:`~opifex.neural.quantum.dft.SCFSolver`); ``functional_type``
+    selects the exchange-correlation functional (``pbe_*`` requests use the PBE
+    GGA, all others use the LDA).
+    """
     return ElectronicStructureProblem(
         molecular_system=molecular_system, functional_type=functional_type, **kwargs
     )

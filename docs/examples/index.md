@@ -142,11 +142,10 @@ Neural approaches to density functional theory.
 
 | Example | Method | Description |
 |---------|--------|-------------|
-| [Neural DFT](quantum-chemistry/neural-dft.md) | Neural SCF Solver | H2 molecule ground state |
 | [Neural XC Functional](quantum-chemistry/neural-xc-functional.md) | Learned Exchange-Correlation | Training on LDA reference |
 
 ```bash
-python examples/quantum-chemistry/neural_dft.py
+python examples/quantum-chemistry/neural_xc_functional.py
 ```
 
 ---

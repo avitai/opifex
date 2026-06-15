@@ -92,8 +92,6 @@ _TASK_7_5_DISCOVERY_NAMES: frozenset[str] = frozenset(
 
 _TASK_7_5_QUANTUM_NAMES: frozenset[str] = frozenset(
     {
-        "quantum:NeuralDFT",
-        "quantum:NeuralSCFSolver",
         "quantum:NeuralXCFunctional",
     }
 )

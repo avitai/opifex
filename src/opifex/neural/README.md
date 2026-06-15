@@ -1143,21 +1143,25 @@ result = quantifier.enhanced_decompose_uncertainty(
 - **`bayesian_pinn.py`**: Bayesian PINNs with uncertainty quantification
 - **`adaptive_pinn.py`**: Adaptive training and loss weighting
 
-## Neural Density Functional Theory (Neural DFT) ✅ **FOUNDATION READY**
+## Differentiable Kohn-Sham DFT ✅ **IMPLEMENTED**
 
-### Core Neural DFT Components 📋 **PLANNED FOR FUTURE SPRINTS**
+The `quantum/` subpackage provides a native-JAX molecular Kohn-Sham DFT solver
+and a trainable neural exchange-correlation functional (see
+[`quantum/README.md`](quantum/README.md)).
 
-- **`neural_dft.py`**: Main Neural DFT implementation with chemical accuracy
-- **`neural_xc.py`**: Neural exchange-correlation functionals (DM21-style)
-- **`scf_acceleration.py`**: ML-accelerated self-consistent field methods
-- **`molecular_systems.py`**: 3D molecular geometry and periodic boundary conditions
+### Core components
 
-### Advanced Neural DFT Methods 📋 **PLANNED**
+- **`quantum/dft/`**: Restricted Kohn-Sham SCF (`SCFSolver`) on the
+  McMurchie-Davidson Gaussian-integral backend, with LDA / PBE functionals,
+  DIIS and direct-minimisation modes, and implicit-diff analytic forces.
+- **`quantum/neural_xc.py`**: Constrained, attention-based neural
+  exchange-correlation functional (`NeuralXCFunctional`) wired into the SCF
+  with exact `dE/dtheta` for end-to-end learned-XC training.
 
-- **`hybrid_dft.py`**: Hybrid classical-neural DFT approaches
-- **`multifidelity_dft.py`**: Multi-fidelity quantum mechanical models
-- **`physics_constraints.py`**: Quantum mechanical constraints and conservation laws
-- **`chemical_accuracy.py`**: <1 kcal/mol energy accuracy validation
+### Planned extensions 📋 **PLANNED**
+
+- **`hybrid_dft.py`**: Hybrid classical-neural exchange-correlation.
+- **`multifidelity_dft.py`**: Multi-fidelity quantum mechanical models.
 
 ## Implementation Status
 

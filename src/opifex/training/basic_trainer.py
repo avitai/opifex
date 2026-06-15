@@ -42,7 +42,6 @@ from opifex.core.training.config import (
 )
 from opifex.core.training.monitoring.metrics import (
     AdvancedMetricsCollector,
-    HARTREE_TO_KCAL_MOL,
     TrainingMetrics,
     TrainingState,
 )
@@ -50,7 +49,6 @@ from opifex.core.training.monitoring.metrics import (
 # Import from core modules
 from opifex.core.training.optimizers import create_optimizer, OptimizerConfig
 from opifex.core.training.utils_legacy import (
-    safe_compute_energy,
     safe_model_call,
 )
 from opifex.uncertainty.active.acquisition import (
@@ -764,7 +762,6 @@ class BasicTrainer:
         val_data: tuple[Float[Array, "n_val ..."], Float[Array, "n_val ..."]] | None = None,
         boundary_data: tuple[Float[Array, "n_boundary ..."], Float[Array, "n_boundary ..."]]
         | None = None,
-        use_quantum_training: bool = False,
     ) -> tuple[nnx.Module, TrainingMetrics]:
         """Main training loop.
 
@@ -772,7 +769,6 @@ class BasicTrainer:
             train_data: Training data (x, y)
             val_data: Validation data (x, y), optional
             boundary_data: Boundary data (x, y), optional for physics-informed training
-            use_quantum_training: Whether to use quantum-specific training
 
         Returns:
             Tuple of (trained_model, training_metrics)
@@ -788,9 +784,7 @@ class BasicTrainer:
             self.state.epoch = epoch
 
             # Training step
-            if use_quantum_training and hasattr(self, "compute_quantum_loss"):
-                loss_value = self._quantum_training_step(x_train, y_train)
-            elif self.physics_loss is not None and boundary_data is not None:
+            if self.physics_loss is not None and boundary_data is not None:
                 # Physics-informed training step
                 loss_value = self._physics_informed_training_step(x_train, y_train, boundary_data)
             else:
@@ -808,10 +802,6 @@ class BasicTrainer:
                 val_loss = self.validation_step(x_val, y_val)
                 val_loss_value = float(val_loss)
                 self.metrics.update_val_loss(val_loss_value)
-
-                # Quantum-specific validation
-                if use_quantum_training and self.config.quantum_config:
-                    self._validate_quantum_constraints(x_val, y_val)
 
             # Progress callback
             if self.config.progress_callback is not None:
@@ -892,35 +882,6 @@ class BasicTrainer:
 
         return summary
 
-    def _quantum_training_step(
-        self,
-        positions: Float[Array, "batch n_atoms 3"],
-        energies_true: Float[Array, "batch 1"],
-    ) -> Float[Array, ""]:
-        """Quantum-specific training step."""
-
-        def loss_fn(model):
-            return self.compute_quantum_loss(positions, energies_true)
-
-        # Compute gradients
-        loss_value, grads = nnx.value_and_grad(loss_fn)(self.state.model)
-
-        # Update parameters using the correct parameter format
-        params = nnx.to_tree(nnx.state(self.state.model, nnx.Param))
-        updates, opt_state = self.state.optimizer.update(grads, self.state.opt_state, params)
-        nnx.update(self.state.model, updates)
-        self.state.opt_state = opt_state
-
-        # Update step counter
-        self.state.step += 1
-
-        # Monitor SCF convergence if quantum MLP
-        if hasattr(self.state.model, "compute_energy"):
-            converged, iterations = self.monitor_scf_convergence(positions)
-            self.metrics.update_scf_convergence(converged, iterations)
-
-        return loss_value
-
     def _physics_informed_training_step(
         self,
         x_train: Float[Array, "batch ..."],
@@ -981,93 +942,6 @@ class BasicTrainer:
         self.state.step += 1
 
         return loss_value
-
-    def _validate_quantum_constraints(
-        self,
-        positions: Float[Array, "batch n_atoms 3"],
-        energies_true: Float[Array, "batch 1"],
-    ) -> None:
-        """Validate quantum-specific constraints."""
-        # Compute chemical accuracy
-        energies_pred = safe_compute_energy(self.state.model, positions, deterministic=True)
-        accuracy = self.compute_chemical_accuracy(energies_pred, energies_true)
-        self.metrics.update_chemical_accuracy(float(accuracy))
-
-        # Compute constraint violations
-        constraint_violations = {
-            "energy_conservation": jnp.abs(energies_pred - energies_true),
-        }
-        total_violation = self.compute_constraint_violations(constraint_violations)
-        self.metrics.update_constraint_violation(float(total_violation))
-
-    def monitor_scf_convergence(
-        self,
-        positions: Float[Array, "batch n_atoms 3"],
-    ) -> tuple[bool, int]:
-        """Monitor SCF convergence for quantum systems.
-
-        Args:
-            positions: Molecular positions
-
-        Returns:
-            (converged, iterations)
-        """
-        if not self.config.quantum_config:
-            return True, 1
-
-        max_iter = self.config.quantum_config.scf_max_iterations
-        tolerance = self.config.quantum_config.scf_tolerance
-
-        # Simplified SCF monitoring - in practice this would be more complex
-        energy_prev = safe_compute_energy(self.state.model, positions, deterministic=True)
-
-        for iteration in range(1, max_iter + 1):
-            # In real implementation, this would involve SCF iterations
-            energy_current = safe_compute_energy(self.state.model, positions, deterministic=True)
-
-            # Check convergence
-            energy_diff = jnp.mean(jnp.abs(energy_current - energy_prev))
-            if energy_diff < tolerance:
-                return True, iteration
-
-            energy_prev = energy_current
-
-        return False, max_iter
-
-    def compute_chemical_accuracy(
-        self,
-        predicted: Float[Array, "batch 1"],
-        reference: Float[Array, "batch 1"],
-    ) -> Float[Array, ""]:
-        """Compute chemical accuracy in kcal/mol.
-
-        Args:
-            predicted: Predicted energies (Hartree)
-            reference: Reference energies (Hartree)
-
-        Returns:
-            Mean absolute error in kcal/mol
-        """
-        # Convert from Hartree to kcal/mol
-        error_hartree = jnp.mean(jnp.abs(predicted - reference))
-        return error_hartree * HARTREE_TO_KCAL_MOL
-
-    def compute_constraint_violations(
-        self,
-        violations: dict[str, Float[Array, ...]],
-    ) -> Float[Array, ""]:
-        """Compute total constraint violations.
-
-        Args:
-            violations: Dictionary of constraint violations
-
-        Returns:
-            Total violation measure
-        """
-        total_violation = 0.0
-        for _name, violation in violations.items():
-            total_violation += float(jnp.mean(jnp.abs(violation)))
-        return jnp.asarray(total_violation)
 
     def _save_checkpoint(self, epoch: int) -> None:
         """Save training checkpoint.

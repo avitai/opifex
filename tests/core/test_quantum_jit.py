@@ -7,6 +7,7 @@ and related quantum mechanical calculations.
 
 import jax
 import jax.numpy as jnp
+import pytest
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.operators import (
@@ -612,8 +613,16 @@ class TestJITCompatibility:
         assert jnp.allclose(grad, 2.0 * x)
         assert jnp.allclose(hessian, 2.0 * jnp.eye(3))
 
-    def test_batch_energy_computation_jit(self):
-        """Test batch energy computation with JIT and vmap."""
+    @pytest.mark.slow
+    def test_batch_energy_computation_vmap(self):
+        """Batch Kohn-Sham energies over H2 geometries via ``vmap``.
+
+        The real SCF builds its AO basis / integrals eagerly (static structural
+        metadata), so the energy is a pure differentiable function of the nuclear
+        positions only -- ``vmap`` over a batch of geometries is the supported
+        batched path. STO-3G covers only H/C/N/O, and the closed-shell RKS solver
+        requires an even electron count, so a batch of H2 bond lengths is used.
+        """
         import jax
 
         from opifex.core.problems import (
@@ -621,33 +630,21 @@ class TestJITCompatibility:
             create_neural_dft_problem,
         )
 
-        # Create multiple molecular systems
-        systems = [
-            create_molecular_system([("H", (0.0, 0.0, 0.0))]),
-            create_molecular_system([("He", (0.0, 0.0, 0.0))]),
-            create_molecular_system([("Li", (0.0, 0.0, 0.0))]),
-        ]
-
-        problems = [
-            create_neural_dft_problem(
-                molecular_system=system,
-                functional_type="neural_xc",
-                scf_method="neural_scf",
-                grid_level=1,
+        with jax.enable_x64(True):
+            problem = create_neural_dft_problem(
+                molecular_system=create_molecular_system(
+                    [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
+                )
             )
-            for system in systems
-        ]
+            base = problem.scf_solver  # build the basis/grid eagerly before tracing
+            assert base is not None
+            origin = problem.molecular_system.positions
+            batch = origin[None, :, :] + jnp.linspace(-0.05, 0.05, 3)[:, None, None]
+            energies = jax.vmap(problem._energy_from_positions)(batch)
 
-        # JIT compile batch energy computation
-        @jax.jit
-        def compute_batch_energies():
-            # Use vmap to compute energies for all systems
-            return jnp.array([problem.compute_energy() for problem in problems])
-
-        energies = compute_batch_energies()
-        assert energies.shape == (3,)
-        assert jnp.all(jnp.isfinite(energies))
-        assert jnp.all(energies < 0.0)  # All should be negative (bound states)
+            assert energies.shape == (3,)
+            assert jnp.all(jnp.isfinite(energies))
+            assert jnp.all(energies < 0.0)  # All should be negative (bound states)
 
     def test_molecular_system_distance_matrix_jit(self):
         """Test JIT compilation of molecular system distance calculations."""
@@ -729,8 +726,16 @@ class TestJITCompatibility:
         expected = jnp.array([0.5, -1.0])
         assert jnp.allclose(rhs, expected)
 
-    def test_end_to_end_quantum_jit_workflow(self):
-        """Test end-to-end quantum calculation workflow with JIT."""
+    @pytest.mark.slow
+    def test_end_to_end_quantum_workflow(self):
+        """End-to-end Kohn-Sham energy + analytic forces on H2.
+
+        Drives the real restricted Kohn-Sham SCF through the
+        :class:`ElectronicStructureProblem` API: the converged energy and the
+        implicit-differentiation forces. The SCF builds its integrals eagerly
+        (so jit wraps the differentiable energy of the nuclear positions, not
+        the basis construction), and the closed-shell STO-3G H2 is used.
+        """
         import jax
 
         from opifex.core.problems import (
@@ -738,33 +743,19 @@ class TestJITCompatibility:
             create_neural_dft_problem,
         )
 
-        # Create benzene molecule for complex test
-        benzene = create_molecular_system(
-            [
-                ("C", (1.40, 0.00, 0.00)),
-                ("C", (0.70, 1.21, 0.00)),
-                ("C", (-0.70, 1.21, 0.00)),
-                ("C", (-1.40, 0.00, 0.00)),
-                ("C", (-0.70, -1.21, 0.00)),
-                ("C", (0.70, -1.21, 0.00)),
-            ]
-        )
-
-        problem = create_neural_dft_problem(
-            molecular_system=benzene,
-            functional_type="neural_xc",
-            scf_method="neural_scf",
-            grid_level=1,
-        )
-
-        # JIT compile complete workflow including force computation
-        @jax.jit
-        def quantum_workflow():
-            energy = problem.compute_energy()
+        with jax.enable_x64(True):
+            problem = create_neural_dft_problem(
+                molecular_system=create_molecular_system(
+                    [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
+                )
+            )
+            _ = problem.scf_solver  # build the basis/grid eagerly before tracing
+            positions = problem.molecular_system.positions
+            energy = jax.jit(problem._energy_from_positions)(positions)
             forces = problem.compute_forces()
-            return energy, jnp.linalg.norm(forces)
+            force_norm = jnp.linalg.norm(forces)
 
-        energy, force_norm = quantum_workflow()
-        assert jnp.isfinite(energy)
-        assert jnp.isfinite(force_norm)
-        assert energy < 0.0  # Should be negative for bound state
+            assert bool(jnp.isfinite(energy))
+            assert bool(jnp.isfinite(force_norm))
+            assert float(energy) < 0.0  # Should be negative for bound state
+            assert forces.shape == positions.shape

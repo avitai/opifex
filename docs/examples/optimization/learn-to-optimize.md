@@ -297,7 +297,7 @@ of similar problems, the amortized cost per problem decreases significantly.
 ### Related Examples
 
 - [Meta-Optimization](./meta-optimization.md) - MAML/Reptile for PDE solver adaptation
-- [Neural DFT](../quantum-chemistry/neural-dft.md) - Neural methods for quantum chemistry
+- [Neural XC Functional](../quantum-chemistry/neural-xc-functional.md) - Learned exchange-correlation for Kohn-Sham DFT
 - [PINN Training](../pinns/poisson.md) - Physics-informed neural networks
 
 ### API Reference

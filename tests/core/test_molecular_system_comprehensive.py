@@ -4,6 +4,7 @@ This test suite focuses on improving coverage for the MolecularSystem class
 and related utilities to reach the Version 2 target of 75% coverage.
 """
 
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -840,71 +841,37 @@ class TestElectronicStructureProblem:
         )
         assert not problem.validate()
 
-    def test_neural_dft_energy_and_forces_computation(self):
-        """Test actual energy and force computation with Neural DFT."""
+    @pytest.mark.slow
+    def test_real_dft_energy_and_forces_h2(self):
+        """Real Kohn-Sham energy and analytic forces for H2.
+
+        The :class:`ElectronicStructureProblem` runs the real restricted
+        Kohn-Sham SCF (LDA/STO-3G); H2 is the closed-shell system the integral
+        backend supports. The LDA/STO-3G total energy is about -1.12 Hartree
+        (validated against PySCF in the dedicated DFT suite), and the analytic
+        forces satisfy momentum conservation (sum to zero).
+        """
         from opifex.core.problems import create_neural_dft_problem
 
-        # Create a simple hydrogen atom for testing
-        hydrogen = create_molecular_system([("H", (0.0, 0.0, 0.0))])
+        with jax.enable_x64(True):
+            problem = create_neural_dft_problem(
+                molecular_system=create_molecular_system(
+                    [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
+                )
+            )
+            energy = problem.compute_energy()
+            forces = problem.compute_forces()
 
-        problem = create_neural_dft_problem(
-            molecular_system=hydrogen,
-            functional_type="neural_xc",
-            scf_method="neural_scf",
-            grid_level=2,  # Small grid for testing
-        )
+            assert isinstance(energy, float | jnp.floating)
+            assert jnp.isfinite(energy)
+            assert energy < 0.0  # bound state
+            assert -1.5 < energy < -0.5  # H2 LDA/STO-3G ball-park
 
-        # Test energy computation
-        energy = problem.compute_energy()
-        assert isinstance(energy, float | jnp.floating)
-        assert jnp.isfinite(energy)
-        # Energy should be negative for bound states
-        assert energy < 0.0
-        # Should be reasonable for hydrogen atom (around -0.5 Hartree)
-        assert energy > -2.0  # Upper bound
-        assert energy < 0.0  # Lower bound
-
-        # Test force computation
-        forces = problem.compute_forces()
-        assert forces.shape == (1, 3)  # One atom, 3D forces
-        assert jnp.all(jnp.isfinite(forces))
-        # Forces on single atom should be approximately zero due to symmetry
-        assert jnp.allclose(forces, 0.0, atol=1e-3)
-
-    def test_neural_dft_water_energy_and_forces(self):
-        """Test energy and force computation for water molecule."""
-        from opifex.core.problems import create_neural_dft_problem
-
-        water = create_molecular_system(
-            [
-                ("O", (0.0, 0.0, 0.0)),
-                ("H", (0.76, 0.59, 0.0)),
-                ("H", (-0.76, 0.59, 0.0)),
-            ]
-        )
-
-        problem = create_neural_dft_problem(
-            molecular_system=water,
-            functional_type="neural_xc",
-            scf_method="neural_scf",
-            grid_level=2,
-        )
-
-        # Test energy computation
-        energy = problem.compute_energy()
-        assert isinstance(energy, float | jnp.floating)
-        assert jnp.isfinite(energy)
-        # Water energy should be much lower than hydrogen
-        assert energy < -50.0  # Reasonable range for water
-        assert energy > -150.0  # Updated range to accommodate computed values
-
-        # Test force computation
-        forces = problem.compute_forces()
-        assert forces.shape == (3, 3)  # Three atoms, 3D forces
-        assert jnp.all(jnp.isfinite(forces))
-        # Sum of forces should be approximately zero (momentum conservation)
-        total_force = jnp.sum(forces, axis=0)
-        assert jnp.allclose(total_force, 0.0, atol=1e-3)
+            assert forces.shape == (2, 3)  # two atoms, 3D forces
+            assert jnp.all(jnp.isfinite(forces))
+            # Sum of forces is zero (momentum conservation / Newton's third law).
+            total_force = jnp.sum(forces, axis=0)
+            assert jnp.allclose(total_force, 0.0, atol=1e-6)
 
 
 class TestConvenienceFunctions:
@@ -1105,70 +1072,6 @@ class TestProblemsEnhancement:
         assert scf_setup["acceleration"] == "neural"
         assert scf_setup["mixing_parameter"] == 0.7
 
-    def test_electronic_structure_problem_energy_computation_fallback(self):
-        """Test energy computation fallback for electronic structure problems."""
-        from opifex.core.problems import ElectronicStructureProblem
-
-        # Test with hydrogen atom
-        hydrogen_system = MolecularSystem(
-            positions=jnp.array([[0.0, 0.0, 0.0]]),
-            atomic_numbers=jnp.array([1]),
-            charge=0,
-            multiplicity=2,
-        )
-
-        problem = ElectronicStructureProblem(
-            molecular_system=hydrogen_system,
-            functional_type="neural_xc",
-            scf_method="neural_scf",
-            grid_level=1,
-        )
-
-        # This should fall back to simple approximation
-        energy = problem.compute_energy()
-        assert energy < 0.0  # Should be negative (bound state)
-
-        # Test with carbon atom
-        carbon_system = MolecularSystem(
-            positions=jnp.array([[0.0, 0.0, 0.0]]),
-            atomic_numbers=jnp.array([6]),
-            charge=0,
-            multiplicity=3,
-        )
-
-        problem = ElectronicStructureProblem(
-            molecular_system=carbon_system,
-            functional_type="neural_xc",
-            scf_method="neural_scf",
-            grid_level=1,
-        )
-
-        energy = problem.compute_energy()
-        assert energy < 0.0  # Should be negative (bound state)
-
-    def test_electronic_structure_problem_forces_computation(self):
-        """Test forces computation for electronic structure problems."""
-        from opifex.core.problems import ElectronicStructureProblem
-
-        water_system = MolecularSystem(
-            positions=jnp.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [0.0, 1.5, 0.0]]),
-            atomic_numbers=jnp.array([8, 1, 1]),
-            charge=0,
-            multiplicity=1,
-        )
-
-        problem = ElectronicStructureProblem(
-            molecular_system=water_system,
-            functional_type="neural_xc",
-            scf_method="neural_scf",
-            grid_level=1,
-        )
-
-        # Test forces computation
-        forces = problem.compute_forces()
-        assert forces.shape == (3, 3)  # 3 atoms, 3 coordinates each
-        assert isinstance(forces, jnp.ndarray)
-
     def test_electronic_structure_problem_different_functionals(self):
         """Test electronic structure problem with different functional types."""
         from opifex.core.problems import ElectronicStructureProblem
@@ -1255,10 +1158,6 @@ class TestProblemsEnhancement:
 
         # Should NOT validate because it has 0 electrons
         assert not problem.validate()
-
-        # But should still be able to compute energy (will use fallback)
-        energy = problem.compute_energy()
-        assert isinstance(energy, float | jnp.ndarray)
 
         # Test domain information
         domain = problem.get_domain()
