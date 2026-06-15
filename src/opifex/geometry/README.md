@@ -412,215 +412,34 @@ print("Equivariance tests:")
 test_equivariance(sphere_operator, sphere, sphere_data[:5])  # Test on smaller batch
 ```
 
-### 6. Graph Neural Networks and Topology
+### 6. Graph topology and graph neural networks
+
+`opifex.geometry.topology.GraphTopology` is the lightweight graph container — nodes,
+edges, and the derived adjacency / degree / Laplacian operators:
 
 ```python
-from opifex.geometry.topology.base import Graph
-from opifex.geometry.topology.graphs import message_passing, graph_convolution
+import jax.numpy as jnp
+from opifex.geometry.topology import GraphTopology
 
-# Create a molecular graph (water molecule)
-# Nodes represent atoms, edges represent bonds
-atom_features = jnp.array([
-    [8.0, 6.0],  # Oxygen: atomic number, valence electrons
-    [1.0, 1.0],  # Hydrogen 1
-    [1.0, 1.0]   # Hydrogen 2
-])
+# A molecular graph (water): nodes are atoms, edges are bonds
+nodes = jnp.array([[8.0, 6.0], [1.0, 1.0], [1.0, 1.0]])  # per-atom features
+edges = jnp.array([[0, 1], [0, 2]])                       # O-H1, O-H2
+graph = GraphTopology(nodes=nodes, edges=edges)
 
-# Edges: (O-H1), (O-H2)
-edges = jnp.array([[0, 1], [0, 2]])
-edge_features = jnp.array([
-    [1.0, 0.96],  # Bond order 1.5 (aromatic), bond length (Å)
-    [1.0, 0.96]
-])
-
-molecular_graph = Graph(
-    nodes=atom_features,
-    edges=edges,
-    edge_attributes=edge_features
-)
-
-print(f"Molecular graph:")
-print(f"  Nodes: {molecular_graph.n_nodes}")
-print(f"  Edges: {molecular_graph.n_edges}")
-print(f"  Node features shape: {molecular_graph.nodes.shape}")
-print(f"  Edge features shape: {molecular_graph.edge_attributes.shape}")
-
-# Adjacency matrix and graph properties
-adj_matrix = molecular_graph.adjacency_matrix()
-degree_matrix = molecular_graph.degree_matrix()
-laplacian = molecular_graph.laplacian_matrix()
-
-print(f"Adjacency matrix:\n{adj_matrix}")
-print(f"Degree matrix:\n{degree_matrix}")
-print(f"Laplacian matrix:\n{laplacian}")
-
-# Message passing operations
-messages = message_passing(
-    graph=molecular_graph,
-    node_features=atom_features,
-    edge_features=edge_features,
-    message_function=lambda src, edge, dst: src + edge[:2] + dst,  # Simple aggregation
-    aggregation='mean'
-)
-
-print(f"Messages shape: {messages.shape}")
-print(f"Messages:\n{messages}")
-
-# Graph convolution
-conv_output = graph_convolution(
-    graph=molecular_graph,
-    node_features=atom_features,
-    edge_features=edge_features,
-    hidden_dim=16,
-    activation=jnp.tanh
-)
-
-print(f"Graph convolution output shape: {conv_output.shape}")
-
-# Multi-layer graph neural network
-class MolecularGNN(nnx.Module):
-    """Simple GNN for molecular property prediction"""
-
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, rngs):
-        super().__init__()
-        self.num_layers = num_layers
-        self.hidden_dim = hidden_dim
-
-        # Node embedding layers
-        self.node_embeddings = []
-        layer_dims = [input_dim] + [hidden_dim] * num_layers + [output_dim]
-
-        for i in range(num_layers + 1):
-            layer = nnx.Linear(
-                in_features=layer_dims[i],
-                out_features=layer_dims[i + 1],
-                rngs=rngs
-            )
-            self.node_embeddings.append(layer)
-
-        # Graph pooling for molecular-level prediction
-        self.global_pool = nnx.Linear(
-            in_features=output_dim,
-            out_features=1,  # Molecular property (e.g., energy)
-            rngs=rngs
-        )
-
-    def __call__(self, graph, node_features, edge_features):
-        """Forward pass through GNN"""
-        h = node_features
-
-        # Graph convolution layers
-        for i, layer in enumerate(self.node_embeddings):
-            h = layer(h)
-            if i < len(self.node_embeddings) - 1:
-                h = nnx.tanh(h)
-
-                # Apply graph convolution (simplified)
-                h = graph_convolution(
-                    graph=graph,
-                    node_features=h,
-                    edge_features=edge_features,
-                    hidden_dim=self.hidden_dim,
-                    activation=nnx.tanh
-                )
-
-        # Global pooling for molecular property
-        molecular_representation = jnp.mean(h, axis=0)  # Simple mean pooling
-        molecular_property = self.global_pool(molecular_representation)
-
-        return molecular_property, h
-
-# Create and test molecular GNN
-molecular_gnn = MolecularGNN(
-    input_dim=2,
-    hidden_dim=32,
-    output_dim=16,
-    num_layers=3,
-    rngs=rngs
-)
-
-molecular_property, node_embeddings = molecular_gnn(
-    molecular_graph,
-    atom_features,
-    edge_features
-)
-
-print(f"Predicted molecular property: {molecular_property[0]:.6f}")
-print(f"Node embeddings shape: {node_embeddings.shape}")
-
-# Create a larger graph for more complex testing
-def create_benzene_graph():
-    """Create a benzene molecule graph"""
-    # 6 carbon atoms in a ring
-    benzene_atoms = jnp.array([
-        [6.0, 4.0],  # Carbon atoms with 4 valence electrons
-        [6.0, 4.0],
-        [6.0, 4.0],
-        [6.0, 4.0],
-        [6.0, 4.0],
-        [6.0, 4.0]
-    ])
-
-    # Ring structure: each carbon connected to adjacent carbons
-    benzene_edges = jnp.array([
-        [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]  # Ring
-    ])
-
-    # Alternating single/double bonds
-    benzene_edge_features = jnp.array([
-        [1.5, 1.4],  # Bond order 1.5 (aromatic), bond length
-        [1.5, 1.4],
-        [1.5, 1.4],
-        [1.5, 1.4],
-        [1.5, 1.4],
-        [1.5, 1.4]
-    ])
-
-    return Graph(
-        nodes=benzene_atoms,
-        edges=benzene_edges,
-        edge_attributes=benzene_edge_features
-    )
-
-benzene_graph = create_benzene_graph()
-benzene_property, benzene_embeddings = molecular_gnn(
-    benzene_graph,
-    benzene_graph.nodes,
-    benzene_graph.edge_attributes
-)
-
-print(f"Benzene molecular property: {benzene_property[0]:.6f}")
-print(f"Benzene has {benzene_graph.n_nodes} atoms and {benzene_graph.n_edges} bonds")
-
-# Graph invariants and symmetry
-def compute_graph_invariants(graph):
-    """Compute graph invariants for molecular characterization"""
-    # Spectral invariants
-    laplacian = graph.laplacian_matrix()
-    eigenvals = jnp.linalg.eigvals(laplacian)
-    eigenvals = jnp.sort(eigenvals.real)  # Take real part and sort
-
-    # Topological invariants
-    clustering_coeff = graph.clustering_coefficient()
-
-    return {
-        'laplacian_spectrum': eigenvals,
-        'clustering_coefficient': clustering_coeff,
-        'number_of_nodes': graph.n_nodes,
-        'number_of_edges': graph.n_edges
-    }
-
-water_invariants = compute_graph_invariants(molecular_graph)
-benzene_invariants = compute_graph_invariants(benzene_graph)
-
-print(f"Water graph invariants:")
-print(f"  Laplacian spectrum: {water_invariants['laplacian_spectrum']}")
-print(f"  Clustering coefficient: {water_invariants['clustering_coefficient']:.4f}")
-
-print(f"Benzene graph invariants:")
-print(f"  Laplacian spectrum: {benzene_invariants['laplacian_spectrum']}")
-print(f"  Clustering coefficient: {benzene_invariants['clustering_coefficient']:.4f}")
+print(graph.num_nodes, graph.num_edges)        # 3 2
+adjacency = graph.adjacency_matrix             # (3, 3)
+degree = graph.degree_matrix()                 # (3, 3)
+laplacian = graph.laplacian_matrix(normalized=True)
 ```
+
+For *learning* on graphs, use the dedicated neural subsystems:
+
+- **Molecular / atomistic property prediction** (energy, forces, stress from atomic
+  positions): `opifex.neural.atomistic` — E(3)-equivariant message-passing potentials
+  (SchNet, PaiNN, NequIP) assembled as an `AtomisticModel` with energy / forces /
+  stress heads.
+- **Graph / mesh operators** (e.g. learned PDE operators on irregular meshes):
+  `opifex.neural.operators.graph` (`GraphNeuralOperator`, `MeshGraphNet`).
 
 ### 7. Advanced Geometric Learning Applications
 

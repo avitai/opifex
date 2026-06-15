@@ -552,204 +552,50 @@ print(f"  y-velocity: {multi_pred[0, 2]:.4f}")
 print(f"  Pressure: {multi_pred[0, 3]:.4f}")
 ```
 
-### 4. Quantum-Aware Training
+### 4. Atomistic / molecular potentials
+
+For molecules and materials, train a machine-learning interatomic potential from
+`opifex.neural.atomistic`. A backbone (SchNet, PaiNN, or NequIP) is assembled into an
+`AtomisticModel` with energy / forces / stress heads; forces are the conservative
+gradient `-dE/dx` and rotate/translate/permute consistently with the inputs.
 
 ```python
-from opifex.neural.base import QuantumMLP
-from opifex.core.quantum.molecular_system import create_molecular_system
+import jax.numpy as jnp
+import flax.nnx as nnx
 
-# Create H2 molecular system
-h2_positions = jnp.array([
-    [0.0, 0.0, 0.0],    # H atom 1
-    [1.4, 0.0, 0.0]     # H atom 2 (1.4 bohr apart)
-])
+from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.core.quantum.protocols import RadiusNeighborList
+from opifex.neural.atomistic import AtomisticModel
+from opifex.neural.atomistic.backbones import NequIP, NequIPConfig
+from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 
-h2_system = create_molecular_system(
-    atomic_symbols=["H", "H"],
-    positions=h2_positions,
-    charge=0,
-    spin=0
+rngs = nnx.Rngs(0)
+backbone = NequIP(
+    config=NequIPConfig(
+        hidden_irreps="32x0e + 8x1o",
+        sh_lmax=2,
+        num_interactions=2,
+        num_radial_basis=8,
+        cutoff=5.0,
+    ),
+    rngs=rngs,
+)
+model = AtomisticModel(
+    backbone=backbone,
+    heads={"energy": EnergyHead(feature_dim=32, rngs=rngs), "forces": ForcesHead()},
+    neighbor_list=RadiusNeighborList(cutoff=5.0),
+    max_edges=64,
 )
 
-# Quantum-aware neural network
-quantum_model = QuantumMLP(
-    layer_sizes=[6, 128, 128, 64, 1],  # 2 atoms × 3 coords = 6 inputs
-    n_atoms=2,
-    activation="swish",
-    enforce_symmetry=True,  # Molecular symmetry
-    precision="float64",    # High precision for quantum chemistry
-    rngs=rngs
+water = MolecularSystem(
+    atomic_numbers=jnp.array([8, 1, 1]),
+    positions=jnp.array([[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [-0.24, 0.93, 0.0]]),
 )
-
-# Quantum Hamiltonian residual
-def electronic_hamiltonian_residual(model_fn, positions):
-    """Electronic Hamiltonian eigenvalue equation: Ĥψ = Eψ"""
-    def energy_fn(pos):
-        pos_flat = pos.flatten().reshape(1, -1)
-        return model_fn(pos_flat)[0, 0]
-
-    # Kinetic energy (simplified)
-    kinetic = 0.0
-    for i in range(2):  # 2 atoms
-        for j in range(3):  # x, y, z components
-            idx = i * 3 + j
-            def energy_component(pos):
-                return energy_fn(pos)
-
-            # Second derivative for kinetic energy
-            second_deriv = jax.grad(jax.grad(energy_component, argnums=idx), argnums=idx)(positions)
-            kinetic -= 0.5 * second_deriv  # -½∇²
-
-    # Potential energy (simplified Coulomb interactions)
-    r12 = jnp.linalg.norm(positions[0] - positions[1])
-    potential = 1.0 / (r12 + 1e-8)  # Nuclear-nuclear repulsion
-
-    total_energy = kinetic + potential
-    return total_energy
-
-# Quantum physics loss configuration
-quantum_config = PhysicsLossConfig(
-    pde_weight=1.0,
-    quantum_constraints=True,
-    conservation_weights={
-        "particle_number": 2.0,
-        "energy": 1.0,
-        "symmetry": 1.0
-    },
-    adaptive_weighting=True,
-    weight_schedule="exponential"
-)
-
-quantum_physics_loss = PhysicsInformedLoss(
-    config=quantum_config,
-    equation_type="schrodinger",
-    domain_type="molecular"
-)
-
-# Quantum training function
-def train_quantum_model(model, num_epochs=6000):
-    """Train quantum model with molecular constraints"""
-    optimizer = nnx.Optimizer(model, optax.adam(1e-4))  # Lower learning rate
-
-    def train_step(epoch):
-        # Generate random molecular configurations
-        n_configs = 1000
-        noise_scale = 0.05  # Small perturbations
-
-        configs = []
-        for _ in range(n_configs):
-            key_config = jax.random.split(key)[0]
-            noise = jax.random.normal(key_config, h2_system.positions.shape) * noise_scale
-            config = h2_system.positions + noise
-            configs.append(config)
-
-        configs = jnp.array(configs)
-
-        def loss_fn(model):
-            # Energy predictions using Hamiltonian
-            energies = jax.vmap(
-                lambda pos: electronic_hamiltonian_residual(model, pos)
-            )(configs)
-
-            # Quantum constraints
-            # 1. Energy variance (smooth energy surface)
-            energy_variance = jnp.var(energies)
-
-            # 2. Symmetry constraint (H2 has inversion symmetry)
-            inverted_configs = -configs  # Invert coordinates
-            inverted_energies = jax.vmap(
-                lambda pos: electronic_hamiltonian_residual(model, pos + h2_system.positions)
-            )(inverted_configs - h2_system.positions)
-
-            symmetry_loss = jnp.mean((energies - inverted_energies)**2)
-
-            # 3. Wavefunction normalization (simplified)
-            wavefunction_norms = jnp.abs(energies)  # Simplified normalization constraint
-            normalization_loss = jnp.mean((wavefunction_norms - 1.0)**2)
-
-            # Quantum physics loss
-            total_loss, loss_components = quantum_physics_loss.compute_loss(
-                predictions=energies.reshape(-1, 1),
-                targets=jnp.zeros((n_configs, 1)),
-                inputs=configs.reshape(n_configs, -1),
-                epoch=epoch,
-                quantum_constraints={
-                    'symmetry': symmetry_loss,
-                    'normalization': normalization_loss,
-                    'variance': energy_variance
-                }
-            )
-
-            # Add quantum-specific terms
-            total_loss += 0.1 * energy_variance + 1.0 * symmetry_loss + 0.5 * normalization_loss
-
-            loss_components.update({
-                'energy_variance': energy_variance,
-                'symmetry_loss': symmetry_loss,
-                'normalization_loss': normalization_loss
-            })
-
-            return total_loss, loss_components
-
-        (loss, metrics), grads = nnx.value_and_grad(loss_fn, has_aux=True)(model)
-        optimizer.update(grads)
-
-        return loss, metrics
-
-    print("Training quantum molecular model...")
-    for epoch in range(num_epochs):
-        loss, metrics = train_step(epoch)
-
-        if epoch % 600 == 0:
-            print(f"Epoch {epoch}:")
-            print(f"  Total Loss: {loss:.8f}")
-            for key, value in metrics.items():
-                print(f"  {key.title()}: {value:.8f}")
-
-    return model
-
-# Train quantum model
-trained_quantum_model = train_quantum_model(quantum_model)
-print("✅ Quantum training complete!")
-
-# Calculate molecular properties
-equilibrium_energy = electronic_hamiltonian_residual(
-    trained_quantum_model,
-    h2_system.positions
-)
-print(f"H2 equilibrium energy: {equilibrium_energy:.6f} Ha")
-
-# Calculate forces using automatic differentiation
-def energy_fn(positions):
-    return electronic_hamiltonian_residual(trained_quantum_model, positions)
-
-forces = -jax.grad(energy_fn)(h2_system.positions)
-print(f"Forces on H atoms (Ha/bohr):")
-for i, force in enumerate(forces):
-    print(f"  H{i+1}: [{force[0]:.6f}, {force[1]:.6f}, {force[2]:.6f}]")
-
-# Bond length optimization
-def optimize_bond_length():
-    """Find optimal H2 bond length"""
-    bond_lengths = jnp.linspace(0.5, 3.0, 50)
-    energies = []
-
-    for r in bond_lengths:
-        test_positions = jnp.array([[0.0, 0.0, 0.0], [r, 0.0, 0.0]])
-        energy = electronic_hamiltonian_residual(trained_quantum_model, test_positions)
-        energies.append(energy)
-
-    energies = jnp.array(energies)
-    min_idx = jnp.argmin(energies)
-    optimal_bond_length = bond_lengths[min_idx]
-
-    print(f"Optimal H2 bond length: {optimal_bond_length:.3f} bohr")
-    print(f"Minimum energy: {energies[min_idx]:.6f} Ha")
-
-    return optimal_bond_length, energies[min_idx]
-
-optimal_r, min_energy = optimize_bond_length()
+prediction = model(water)  # {"energy": (), "forces": (3, 3)}
 ```
+
+Train with the standard `Trainer` against reference energies and forces. See the
+[Atomistic Potentials guide](../../../docs/methods/atomistic-potentials.md).
 
 ### 5. Advanced Training with Custom Schedulers and Callbacks
 
@@ -1100,61 +946,10 @@ physics_loss = PhysicsInformedLoss(
 )
 ```
 
-### Quantum-Aware Training
-
-```python
-from opifex.training import BasicTrainer
-from opifex.neural import QuantumMLP
-import flax.nnx as nnx
-
-# Create quantum-aware model
-quantum_model = QuantumMLP(
-    features=[128, 128, 1],
-    n_atoms=3,
-    symmetry_type="permutation",
-    rngs=nnx.Rngs(42)
-)
-
-# Set up quantum training
-trainer = Trainer(model=model, config=config)
-
-# Train with quantum-specific workflows
-trained_model, metrics = trainer.train(
-    train_data=(x_train, y_train),
-    use_quantum_training=True
-)
-```
-
-## Quality Assurance
-
-### Recent QA Resolution (June 16, 2025)
-
-**All Critical Issues Resolved** ✅:
-
-1. **Physics Loss Broadcasting Fix** 🔴 **CRITICAL**
-   - Fixed tensor shape broadcasting in Schrödinger residual computation
-   - All physics-informed loss tests (4/4) now passing
-
-2. **Test Interface Alignment** 🟡 **HIGH**
-   - Complete PINN training workflow integration
-   - All physics-informed training integration tests passing (2/2)
-
-3. **Code Quality Compliance** 🟡 **HIGH**
-   - 17/17 pre-commit hooks passing (all listed checks passing)
-   - 0 type errors, 0 warnings (Perfect static analysis)
-
-### Testing Coverage
-
-- ✅ **BasicTrainer Integration Tests**: 2/2 passing
-- ✅ **Physics Loss Tests**: 4/4 passing
-- ✅ **Training Workflow Tests**: all critical tests passing
-- ✅ **Type Safety Tests**: Perfect pyright compliance
-- ✅ **Integration Tests**: Complete PINN workflow operational
-
 ## Integration with Other Packages
 
 - **[Core Package](../core/README.md)**: Seamless integration with Problem definitions and boundary conditions
-- **[Neural Package](../neural/README.md)**: Full compatibility with StandardMLP and QuantumMLP
+- **[Neural Package](../neural/README.md)**: StandardMLP plus the `neural.atomistic` interatomic-potential models (SchNet / PaiNN / NequIP)
 - **[Optimization Package](../optimization/README.md)**: Integration with meta-optimization algorithms
 - **[Geometry Package](../geometry/README.md)**: Support for complex geometries and boundary conditions
 

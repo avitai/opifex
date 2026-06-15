@@ -17,17 +17,50 @@ from opifex.core.quantum.operators import (
     QuantumOperator,
     SparseOperator,
 )
+from opifex.core.quantum.protocols import (
+    AtomisticModel,
+    Backbone,
+    NeighborList,
+    PropertyHead,
+    RadiusNeighborList,
+    Space,
+)
+from opifex.core.quantum.registry import (
+    AtomisticModelRegistry,
+    BackboneRegistry,
+    PropertyHeadRegistry,
+    register_atomistic_model,
+    register_backbone,
+    register_property_head,
+)
+from opifex.core.quantum.space import free, FreeSpace, periodic, PeriodicSpace
 
 
 __all__ = [
+    "AtomisticModel",
+    "AtomisticModelRegistry",
+    "Backbone",
+    "BackboneRegistry",
     "DensityMatrix",
+    "FreeSpace",
     "HamiltonianOperator",
     "KineticEnergyOperator",
     "MolecularSystem",
     "MomentumOperator",
+    "NeighborList",
     "Observable",
     "OperatorComposition",
+    "PeriodicSpace",
     "PotentialEnergyOperator",
+    "PropertyHead",
+    "PropertyHeadRegistry",
     "QuantumOperator",
+    "RadiusNeighborList",
+    "Space",
     "SparseOperator",
+    "free",
+    "periodic",
+    "register_atomistic_model",
+    "register_backbone",
+    "register_property_head",
 ]

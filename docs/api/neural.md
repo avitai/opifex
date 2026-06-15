@@ -11,12 +11,39 @@ The `opifex.neural` package provides the building blocks for scientific machine 
         show_root_heading: true
         show_source: true
 
-### Quantum MLP {: #quantum-networks }
+## Atomistic Models {: #atomistic-models }
 
-::: opifex.neural.base.QuantumMLP
+Machine-learning interatomic potentials live in `opifex.neural.atomistic`. They
+follow a **backbone → typed property heads** assembly: a backbone produces
+per-atom embeddings and named heads read them out into energy, forces and stress.
+See the [Atomistic Potentials guide](../methods/atomistic-potentials.md) for the
+design, the three backbones (SchNet, PaiNN, NequIP) and a registry-driven build.
+
+::: opifex.neural.atomistic.base.AtomisticModel
     options:
         show_root_heading: true
-        show_source: true
+        show_source: false
+
+::: opifex.neural.atomistic.backbones
+    options:
+        show_root_heading: true
+        show_source: false
+        members:
+            - SchNet
+            - SchNetConfig
+            - PaiNN
+            - PaiNNConfig
+            - NequIP
+            - NequIPConfig
+
+::: opifex.neural.atomistic.heads
+    options:
+        show_root_heading: true
+        show_source: false
+        members:
+            - EnergyHead
+            - ForcesHead
+            - StressHead
 
 ## Neural Quantum {: #opifex.neural.quantum }
 

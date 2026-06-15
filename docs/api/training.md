@@ -458,14 +458,14 @@ trained_model, history = trainer.train(
 
 ```python
 from opifex.neural.base import StandardMLP
-from opifex.neural.quantum import QuantumMLP
 
 # Standard networks
 standard_model = StandardMLP([3, 64, 64, 1], activation="swish", rngs=rngs)
-
-# Quantum networks
-quantum_model = QuantumMLP(features=[128, 128, 1], n_atoms=3, rngs=rngs)
 ```
+
+For molecular and materials property prediction (energies, forces, stress), build
+a machine-learning interatomic potential from `opifex.neural.atomistic` instead;
+see the [Atomistic Potentials guide](../methods/atomistic-potentials.md).
 
 ### With Optimization
 

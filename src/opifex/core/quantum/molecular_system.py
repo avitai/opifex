@@ -98,7 +98,11 @@ class MolecularSystem:
         positions: Atomic positions in Bohr (atomic units) [Shape: (N_atoms, 3)]
         charge: Total molecular charge (default: 0)
         multiplicity: Spin multiplicity (2S + 1) (default: 1)
-        cell: Periodic cell vectors in Bohr [Shape: (3, 3)] (default: None)
+        cell: Periodic cell vectors in Bohr [Shape: (3, 3)] (default: None).
+            Rows are the lattice vectors (ASE / MACE convention).
+        pbc: Per-axis periodicity flags ``(x, y, z)`` (default: None, treated as
+            non-periodic). Independent of ``cell`` so a cell may be supplied for
+            geometry without enabling periodicity.
         basis_set: Basis set specification (default: "def2-tzvp")
     """
 
@@ -107,6 +111,7 @@ class MolecularSystem:
     charge: int = 0
     multiplicity: int = 1
     cell: Array | None = None  # Shape: (3, 3) for periodic systems
+    pbc: tuple[bool, bool, bool] | None = None  # Per-axis periodicity flags
     basis_set: str = "def2-tzvp"
 
     def __post_init__(self) -> None:
@@ -141,10 +146,20 @@ class MolecularSystem:
         if self.cell is not None:
             if self.cell.shape != (3, 3):
                 raise ValueError("Periodic cell must be 3x3 matrix")
-            # Convert determinant to Python scalar for validation
-            det_value = float(jnp.linalg.det(self.cell))
-            if det_value <= 0:
-                raise ValueError("Periodic cell must have positive determinant")
+            # Convert determinant to a Python scalar for validation. Under a JAX
+            # transform (e.g. ``jax.grad`` for strain-displacement stress) the
+            # cell is a tracer and cannot be made concrete; skip the check then,
+            # exactly as the atomic-number validation above does.
+            try:
+                det_value = float(jnp.linalg.det(self.cell))
+            except (
+                jax.errors.TracerArrayConversionError,
+                jax.errors.ConcretizationTypeError,
+            ):
+                pass
+            else:
+                if det_value <= 0:
+                    raise ValueError("Periodic cell must have positive determinant")
 
     @property
     def n_atoms(self) -> int:
@@ -260,6 +275,7 @@ class MolecularSystem:
             charge=self.charge,
             multiplicity=self.multiplicity,
             cell=self.cell,
+            pbc=self.pbc,
             basis_set=self.basis_set,
         )
 

@@ -4,7 +4,7 @@ This module provides full geometric tools including:
 - Lie groups and algebraic structures
 - Differentiable manifolds
 - Topological spaces and complexes
-- Graph neural networks
+- Graph topology structures
 - Constructive solid geometry (CSG)
 """
 
@@ -40,8 +40,6 @@ from opifex.geometry.manifolds import Manifold, SphericalManifold, TangentSpace
 
 # Import topology structures
 from opifex.geometry.topology import (
-    GraphMessagePassing,
-    GraphNeuralOperator,
     GraphTopology,
     SimplicialComplex,
     TopologicalSpace,
@@ -53,8 +51,6 @@ __all__ = [
     "CSGIntersection",
     "CSGUnion",
     "Circle",
-    "GraphMessagePassing",
-    "GraphNeuralOperator",
     "GraphTopology",
     "Interval",
     "Manifold",
