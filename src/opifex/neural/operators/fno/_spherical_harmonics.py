@@ -139,10 +139,15 @@ class SphericalHarmonicBasis:
     nlon: int
     lmax: int
     mmax: int
-    # Forward weights P_l^m(cos theta_j) * w_j, shape (mmax, lmax, nlat).
-    _forward_weights: Float[Array, "mmax lmax nlat"]
+    # Forward weights P_l^m(cos theta_j) * w_j, shape (mmax, lmax, nlat). Stored as
+    # a concrete NumPy constant (not a jax.Array): the basis is cached across calls
+    # (_get_spherical_basis), so a jax.Array built here would -- on first use inside
+    # a jit trace -- be a trace-scoped constant that then leaks into every later
+    # trace (UnexpectedTracerError). NumPy data is trace-agnostic and is rematerialised
+    # as a fresh per-trace constant by forward()/inverse().
+    _forward_weights: Float[np.ndarray, "mmax lmax nlat"]
     # Inverse Legendre table P_l^m(cos theta_j), shape (mmax, lmax, nlat).
-    _legendre: Float[Array, "mmax lmax nlat"]
+    _legendre: Float[np.ndarray, "mmax lmax nlat"]
 
     def __init__(
         self,
@@ -178,10 +183,10 @@ class SphericalHarmonicBasis:
         object.__setattr__(self, "nlon", nlon)
         object.__setattr__(self, "lmax", resolved_lmax)
         object.__setattr__(self, "mmax", resolved_mmax)
-        object.__setattr__(
-            self, "_forward_weights", jnp.asarray(forward_weights, dtype=jnp.float32)
-        )
-        object.__setattr__(self, "_legendre", jnp.asarray(legendre, dtype=jnp.float32))
+        # Keep the precomputed tables as concrete NumPy constants (not jax.Array):
+        # the cached basis must stay trace-agnostic (see the field comments).
+        object.__setattr__(self, "_forward_weights", np.asarray(forward_weights, dtype=np.float32))
+        object.__setattr__(self, "_legendre", np.asarray(legendre, dtype=np.float32))
 
     def forward(
         self, field: Float[Array, "*batch nlat nlon"]

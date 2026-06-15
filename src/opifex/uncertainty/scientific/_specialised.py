@@ -342,6 +342,16 @@ def perturbed_step_solve(
     deterministic_step = _DETERMINISTIC_STEPS[method]
     solver_order = _SOLVER_ORDERS[method]
     initial_state = jnp.asarray(initial_state)
+    # Canonicalise a floating state to a dtype JAX can actually materialise under
+    # the ambient x64 setting. A float64 state reaching the solver while x64 is
+    # disabled (e.g. an array created under a ``with jax.enable_x64(True)`` block
+    # elsewhere) is preserved as float64 by ``jnp.asarray`` and would enter the
+    # scan carry as float64, yet ``step_size`` and the step arithmetic silently
+    # downcast to float32 -- breaking ``jax.lax.scan``'s "carry in == carry out"
+    # dtype contract. Casting to the realisable default float (float64 iff x64 is
+    # enabled, else float32) keeps the carry type-stable regardless of config.
+    if jnp.issubdtype(initial_state.dtype, jnp.floating):
+        initial_state = initial_state.astype(jnp.zeros(()).dtype)
     state_dtype = initial_state.dtype
     start_time = jnp.asarray(t0, dtype=state_dtype)
     step_size = jnp.asarray((t1 - t0) / num_steps, dtype=state_dtype)
