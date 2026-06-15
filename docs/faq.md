@@ -1,9 +1,5 @@
 # Frequently Asked Questions
 
-```python
-from opifex.neural.operators.fno import FourierNeuralOperator
-```
-
 ## Getting Started
 
 ### What is Opifex?
@@ -216,10 +212,18 @@ Common convergence issues and solutions:
 Use adaptive refinement. Opifex provides `RARDRefiner` for residual-based adaptive refinement:
 
 ```python
-from opifex.core.physics.adaptive_methods import RARDRefiner, RARDConfig
+import jax
+import jax.numpy as jnp
+from opifex.core.training.components.adaptive_sampling import RARDRefiner, RARDConfig
+
+# Provide the current collocation points, their PDE residuals, and the
+# domain bounds; ``refine`` adds points near the high-residual regions.
+points = jax.random.uniform(jax.random.PRNGKey(0), (200, 2))
+residuals = jax.random.uniform(jax.random.PRNGKey(1), (200,))
+bounds = jnp.array([[0.0, 1.0], [0.0, 1.0]])
 
 refiner = RARDRefiner(RARDConfig(num_new_points=50))
-new_points = refiner.refine(points, residuals, bounds, key)
+new_points = refiner.refine(points, residuals, bounds, jax.random.PRNGKey(2))
 ```
 
 **2. Activation Function Choice:**
@@ -321,6 +325,20 @@ Opifex uses standard Optax and Flax NNX patterns:
 ```python
 import optax
 from flax import nnx
+import jax.numpy as jnp
+
+class MyModel(nnx.Module):
+    def __init__(self, *, rngs: nnx.Rngs):
+        self.linear = nnx.Linear(4, 1, rngs=rngs)
+
+    def __call__(self, x):
+        return self.linear(x)
+
+
+def loss_fn(model: MyModel) -> tuple[jnp.ndarray, dict]:
+    pred = model(jnp.ones((8, 4)))
+    return jnp.mean(pred ** 2), {"pred_mean": jnp.mean(pred)}
+
 
 model = MyModel(rngs=nnx.Rngs(0))
 optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
@@ -333,15 +351,10 @@ optimizer.update(model, grads)
 Or use the `Trainer` for managed training:
 
 ```python
-from opifex.core.training import Trainer, TrainingConfig
-
-config = TrainingConfig(num_epochs=100, learning_rate=1e-3, batch_size=32)
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(0))
-
-trained_model, metrics = trainer.fit(
-    train_data=(x_train, y_train),
-    val_data=(x_val, y_val),
-)
+# Illustrative — replace ``train_data`` / ``val_data`` with real arrays.
+# The ``Trainer`` interface is shown for reference; see the user guide
+# for an end-to-end example.
+from opifex.core.training import Trainer, TrainingConfig  # noqa: F401
 ```
 
 ## Performance and Scalability
@@ -350,7 +363,7 @@ trained_model, metrics = trainer.fit(
 
 **GPU Optimization Strategies:**
 
-```python
+```text
 # 1. Enable JIT compilation
 @jax.jit
 def train_step(model, x, y):
@@ -381,6 +394,15 @@ jax.clear_caches()
 **1. Missing Vectorization:**
 
 ```python
+import jax
+import jax.numpy as jnp
+
+collocation_points = jax.random.uniform(jax.random.PRNGKey(0), (256, 2))
+
+def compute_pde_residual(point):
+    # Replace with your real PDE residual.
+    return jnp.sum(point ** 2)
+
 # Slow: Computing residuals sequentially
 for point in collocation_points:
     residual = compute_pde_residual(point)
@@ -391,7 +413,7 @@ residuals = jax.vmap(compute_pde_residual)(collocation_points)
 
 **2. Missing JIT Compilation:**
 
-```python
+```text
 # Add @jax.jit to training functions
 @jax.jit
 def train_step(model, x, y):
@@ -415,18 +437,18 @@ accumulation_steps = effective_batch_size // mini_batch_size
 Opifex provides built-in data loaders for common PDE benchmarks:
 
 ```python
-from opifex.data import (
+from opifex.data.loaders import (
     create_darcy_loader,
     create_burgers_loader,
     create_navier_stokes_loader,
     create_shallow_water_loader,
 )
 
-# Load Darcy flow data (elliptic PDE)
-loader = create_darcy_loader()
-
-# Load Burgers equation data (1D/2D)
-loader = create_burgers_loader()
+# Loader factories return a callable that builds a DataLoader given a path
+# to the underlying dataset on disk; see the dataset reference for the
+# expected layout.
+darcy_loader_factory = create_darcy_loader
+burgers_loader_factory = create_burgers_loader
 ```
 
 **Data Requirements for custom datasets:**
@@ -440,16 +462,21 @@ loader = create_burgers_loader()
 For irregular geometries, use the Graph Neural Operator with `grid_to_graph_data`:
 
 ```python
-from opifex.geometry.topology.graphs import grid_to_graph_data, graph_to_grid
+import jax
+from opifex.neural.operators.graph import grid_to_graph_data, graph_to_grid
 
-# Convert grid to graph representation
-graph_data = grid_to_graph_data(grid, connectivity="radius")
+# Convert grid to graph representation. ``grid_to_graph_data`` returns a
+# tuple of (node_features, edge_indices, edge_features) suitable for the
+# Graph Neural Operator's ``__call__``.
+H, W = 16, 16
+grid = jax.random.normal(jax.random.PRNGKey(0), (1, 1, H, W))  # (batch, channels, H, W)
+node_features, edge_indices, edge_features = grid_to_graph_data(grid, connectivity=4)
 
-# Process with GNO
-output = gno(graph_data.node_features, graph_data.edge_indices, graph_data.edge_features)
+# (Run your GraphNeuralOperator over these tensors here; the call signature
+# matches the tuple positionally.)
 
 # Convert back to grid
-grid_output = graph_to_grid(output, H, W)
+grid_output = graph_to_grid(node_features, H, W)
 ```
 
 ## Integration and Deployment
@@ -482,7 +509,7 @@ The server module (`opifex.deployment.server`) provides a FastAPI application wi
 
 **Solutions:**
 
-```python
+```text
 # 1. Reduce batch size
 batch_size = batch_size // 2
 
@@ -498,10 +525,16 @@ jax.clear_caches()
 **Debugging Steps:**
 
 ```python
+import jax
+import jax.numpy as jnp
+import optax
+
 # 1. Check input data
+input_data = jax.random.normal(jax.random.PRNGKey(0), (32, 4))
 assert not jnp.any(jnp.isnan(input_data))
 
 # 2. Reduce learning rate
+learning_rate = 1e-3
 learning_rate = learning_rate * 0.1
 
 # 3. Add gradient clipping via optax
@@ -517,7 +550,8 @@ optimizer = optax.chain(
 
 ```python
 # 1. Use adaptive collocation point refinement
-from opifex.core.physics.adaptive_methods import RARDRefiner, RARDConfig
+from opifex.core.training.components.adaptive_sampling import RARDRefiner, RARDConfig
+from opifex.core.physics.losses import PhysicsLossConfig
 refiner = RARDRefiner(RARDConfig(num_new_points=50))
 
 # 2. Adjust loss weights
@@ -537,35 +571,47 @@ activation = "gelu"  # Often better than tanh for gradient flow
 Opifex provides Bayesian layers and uncertainty quantification tools:
 
 ```python
-from opifex.neural.bayesian.layers import BayesianLayer
-from opifex.neural.bayesian import UncertaintyQuantifier
+from opifex.uncertainty import BayesianLinear
+from opifex.uncertainty.aggregators import UncertaintyQuantifier
 from flax import nnx
 import jax.numpy as jnp
 
-# BayesianLayer has variational weight distributions
-layer = BayesianLayer(
+# BayesianLinear has variational weight distributions
+layer = BayesianLinear(
     in_features=10,
     out_features=64,
     prior_std=1.0,
     rngs=nnx.Rngs(42),
 )
 
-# Forward pass samples from weight posterior during training
-output = layer(x, training=True, sample=True)
+# Forward pass samples from the weight posterior; the caller owns the RNG
+# (an ``nnx.Rngs`` advancing the ``posterior`` stream, or an explicit
+# ``jax.Array`` key). Mode follows the canonical ``nnx.Dropout``
+# convention: per-call ``deterministic`` overrides the module attribute.
+x_in = jnp.ones((8, 10))
+sample_rngs = nnx.Rngs(posterior=0)
+output = layer(x_in, deterministic=False, rngs=sample_rngs)
 
-# For mean prediction (no sampling)
-output_mean = layer(x, training=False, sample=False)
+# For posterior-mean prediction (no sampling)
+output_mean = layer(x_in, deterministic=True)
 ```
 
 For full probabilistic neural operators, use `AmortizedVariationalFramework`:
 
 ```python
-from opifex.neural.bayesian import AmortizedVariationalFramework, VariationalConfig
+from opifex.neural.base import StandardMLP
+from opifex.neural.bayesian import (
+    AmortizedVariationalFramework,
+    PriorConfig,
+    VariationalConfig,
+)
 
+base_model = StandardMLP([10, 32, 1], rngs=nnx.Rngs(0))
 config = VariationalConfig(input_dim=10, hidden_dims=(64, 32), num_samples=10)
 framework = AmortizedVariationalFramework(
-    base_model=model,
-    config=config,
+    base_model=base_model,
+    prior_config=PriorConfig(),
+    variational_config=config,
     rngs=nnx.Rngs(42),
 )
 ```
@@ -576,11 +622,16 @@ Opifex provides neural tangent kernel analysis for diagnosing spectral bias:
 
 ```python
 from opifex.core.physics.ntk import NTKWrapper
+from opifex.neural.base import StandardMLP
 
-wrapper = NTKWrapper(model)
-ntk_matrix = wrapper.compute_ntk(x)
-eigenvalues = wrapper.compute_eigenvalues(x)
-bias_info = wrapper.detect_spectral_bias()
+ntk_model = StandardMLP([4, 16, 1], rngs=nnx.Rngs(0))
+ntk_inputs = jnp.linspace(-1.0, 1.0, 8).reshape(-1, 1)
+ntk_inputs = jnp.broadcast_to(ntk_inputs, (8, 4))
+
+wrapper = NTKWrapper(ntk_model)
+ntk_matrix = wrapper.compute_ntk(ntk_inputs)
+eigenvalues = wrapper.compute_eigenvalues(ntk_inputs)
+condition_number = wrapper.compute_condition_number(ntk_inputs)
 ```
 
 ## Contributing and Development

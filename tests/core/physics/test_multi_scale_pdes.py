@@ -57,7 +57,7 @@ def constant_function():
 
 
 @pytest.fixture
-def test_points_2d():
+def points_2d():
     """2D test points."""
     return jnp.array([[0.5, 0.5], [1.0, 1.0], [0.0, 0.0]])
 
@@ -76,7 +76,7 @@ class TestHomogenizationPDE:
         pde_fn = PDEResidualRegistry.get("homogenization")
         assert callable(pde_fn)
 
-    def test_homogenization_homogeneous_coefficient(self, simple_quadratic, test_points_2d):
+    def test_homogenization_homogeneous_coefficient(self, simple_quadratic, points_2d):
         """Test homogenization with constant coefficient (reduces to Poisson).
 
         For u = x² + y², ∇²u = 4
@@ -89,19 +89,19 @@ class TestHomogenizationPDE:
         def coeff(x):
             return jnp.ones(x.shape[0])
 
-        source = jnp.full(test_points_2d.shape[0], -4.0)
+        source = jnp.full(points_2d.shape[0], -4.0)
         residual = pde_fn(
             simple_quadratic,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
             coefficient_fn=coeff,
             source_term=source,
         )
 
-        assert residual.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
         assert jnp.allclose(residual, 0.0, atol=1e-5)
 
-    def test_homogenization_periodic_coefficient(self, simple_quadratic, test_points_2d):
+    def test_homogenization_periodic_coefficient(self, simple_quadratic, points_2d):
         """Test homogenization with periodic coefficient.
 
         Coefficient: a_ε(x) = 1 + 0.5*cos(2πx)
@@ -115,15 +115,15 @@ class TestHomogenizationPDE:
 
         residual = pde_fn(
             simple_quadratic,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
             coefficient_fn=coeff,
         )
 
-        assert residual.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(residual))
 
-    def test_homogenization_discontinuous_coefficient(self, linear_function, test_points_2d):
+    def test_homogenization_discontinuous_coefficient(self, linear_function, points_2d):
         """Test homogenization with discontinuous coefficient (material interface).
 
         Coefficient: a_ε(x) = 1 if x < 0.5 else 2
@@ -137,32 +137,32 @@ class TestHomogenizationPDE:
 
         residual = pde_fn(
             linear_function,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
             coefficient_fn=coeff,
         )
 
-        assert residual.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(residual))
 
-    def test_homogenization_default_parameters(self, simple_quadratic, test_points_2d):
+    def test_homogenization_default_parameters(self, simple_quadratic, points_2d):
         """Test homogenization with default parameters (coefficient=1, source=0)."""
         pde_fn = PDEResidualRegistry.get("homogenization")
 
         residual = pde_fn(
             simple_quadratic,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
         # Should equal negative Laplacian
-        laplacian = AutoDiffEngine.compute_laplacian(simple_quadratic, test_points_2d)
+        laplacian = AutoDiffEngine.compute_laplacian(simple_quadratic, points_2d)
         expected = -laplacian
 
-        assert residual.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
         assert jnp.allclose(residual, expected, atol=1e-5)
 
-    def test_homogenization_jit_compatibility(self, simple_quadratic, test_points_2d):
+    def test_homogenization_jit_compatibility(self, simple_quadratic, points_2d):
         """Test that homogenization PDE is JIT-compatible."""
         pde_fn = PDEResidualRegistry.get("homogenization")
 
@@ -170,8 +170,8 @@ class TestHomogenizationPDE:
         def compute_residual(x):
             return pde_fn(simple_quadratic, x, AutoDiffEngine)
 
-        residual = compute_residual(test_points_2d)
-        assert residual.shape == (test_points_2d.shape[0],)
+        residual = compute_residual(points_2d)
+        assert residual.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(residual))
 
 
@@ -189,7 +189,7 @@ class TestTwoScalePDE:
         pde_fn = PDEResidualRegistry.get("two_scale")
         assert callable(pde_fn)
 
-    def test_two_scale_decoupled_scales(self, test_points_2d):
+    def test_two_scale_decoupled_scales(self, points_2d):
         """Test two-scale PDE with decoupled scales (ε=0).
 
         With ε=0, only macroscale operator L₀ should be active.
@@ -206,17 +206,17 @@ class TestTwoScalePDE:
         macro_res, micro_res = pde_fn(
             u_macro,
             u_micro,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
             epsilon=0.0,
         )
 
-        assert macro_res.shape == (test_points_2d.shape[0],)
-        assert micro_res.shape == (test_points_2d.shape[0],)
+        assert macro_res.shape == (points_2d.shape[0],)
+        assert micro_res.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(macro_res))
         assert jnp.all(jnp.isfinite(micro_res))
 
-    def test_two_scale_weak_coupling(self, test_points_2d):
+    def test_two_scale_weak_coupling(self, points_2d):
         """Test two-scale PDE with weak coupling (small ε)."""
         pde_fn = PDEResidualRegistry.get("two_scale")
 
@@ -230,15 +230,15 @@ class TestTwoScalePDE:
         macro_res, micro_res = pde_fn(
             u_macro,
             u_micro,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
             epsilon=0.01,
         )
 
-        assert macro_res.shape == (test_points_2d.shape[0],)
-        assert micro_res.shape == (test_points_2d.shape[0],)
+        assert macro_res.shape == (points_2d.shape[0],)
+        assert micro_res.shape == (points_2d.shape[0],)
 
-    def test_two_scale_scale_separation(self, test_points_2d):
+    def test_two_scale_scale_separation(self, points_2d):
         """Test that microscale varies faster than macroscale."""
         pde_fn = PDEResidualRegistry.get("two_scale")
 
@@ -250,14 +250,14 @@ class TestTwoScalePDE:
         def u_micro(x):
             return jnp.sin(20 * jnp.pi * jnp.sum(x, axis=-1))
 
-        macro_res_small, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=0.01)
+        macro_res_small, _ = pde_fn(u_macro, u_micro, points_2d, AutoDiffEngine, epsilon=0.01)
 
-        macro_res_large, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=0.1)
+        macro_res_large, _ = pde_fn(u_macro, u_micro, points_2d, AutoDiffEngine, epsilon=0.1)
 
         # Residuals should differ based on scale parameter
         assert not jnp.allclose(macro_res_small, macro_res_large, atol=1e-10)
 
-    def test_two_scale_return_tuple(self, test_points_2d):
+    def test_two_scale_return_tuple(self, points_2d):
         """Test that two-scale PDE returns tuple of (macro, micro) residuals."""
         pde_fn = PDEResidualRegistry.get("two_scale")
 
@@ -270,17 +270,17 @@ class TestTwoScalePDE:
         result = pde_fn(
             u_macro,
             u_micro,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
         assert isinstance(result, tuple)
         assert len(result) == 2
         macro_res, micro_res = result
-        assert macro_res.shape == (test_points_2d.shape[0],)
-        assert micro_res.shape == (test_points_2d.shape[0],)
+        assert macro_res.shape == (points_2d.shape[0],)
+        assert micro_res.shape == (points_2d.shape[0],)
 
-    def test_two_scale_jit_compatibility(self, test_points_2d):
+    def test_two_scale_jit_compatibility(self, points_2d):
         """Test that two-scale PDE is JIT-compatible."""
         pde_fn = PDEResidualRegistry.get("two_scale")
 
@@ -294,7 +294,7 @@ class TestTwoScalePDE:
         def compute_residuals(x):
             return pde_fn(u_macro, u_micro, x, AutoDiffEngine)
 
-        macro_res, micro_res = compute_residuals(test_points_2d)
+        macro_res, micro_res = compute_residuals(points_2d)
         assert jnp.all(jnp.isfinite(macro_res))
         assert jnp.all(jnp.isfinite(micro_res))
 
@@ -313,23 +313,23 @@ class TestAMRPoissonPDE:
         pde_fn = PDEResidualRegistry.get("amr_poisson")
         assert callable(pde_fn)
 
-    def test_amr_poisson_smooth_solution(self, simple_quadratic, test_points_2d):
+    def test_amr_poisson_smooth_solution(self, simple_quadratic, points_2d):
         """Test AMR Poisson with smooth solution (uniform error).
 
         For smooth u = x² + y², error indicator should be relatively uniform.
         """
         pde_fn = PDEResidualRegistry.get("amr_poisson")
 
-        source = jnp.full(test_points_2d.shape[0], 4.0)
+        source = jnp.full(points_2d.shape[0], 4.0)
         residual, error_indicator = pde_fn(
             simple_quadratic,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
             source_term=source,
         )
 
-        assert residual.shape == (test_points_2d.shape[0],)
-        assert error_indicator.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
+        assert error_indicator.shape == (points_2d.shape[0],)
 
         # Residual should be ~0 for correct source term
         assert jnp.allclose(residual, 0.0, atol=1e-5)
@@ -337,7 +337,7 @@ class TestAMRPoissonPDE:
         # Error indicator should be non-negative
         assert jnp.all(error_indicator >= 0.0)
 
-    def test_amr_poisson_singular_solution(self, test_points_2d):
+    def test_amr_poisson_singular_solution(self, points_2d):
         """Test AMR Poisson with singular solution (high error at singularity).
 
         Function with singularity: u(x) = 1/||x||
@@ -351,7 +351,7 @@ class TestAMRPoissonPDE:
 
         _, error_indicator = pde_fn(
             singular_u,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
@@ -359,7 +359,7 @@ class TestAMRPoissonPDE:
         origin_idx = 2  # [0.0, 0.0] is at index 2
         assert error_indicator[origin_idx] > error_indicator[1]  # Higher than [1, 1]
 
-    def test_amr_poisson_error_indicator_computation(self, simple_quadratic, test_points_2d):
+    def test_amr_poisson_error_indicator_computation(self, simple_quadratic, points_2d):
         """Test that error indicator is computed correctly.
 
         Error indicator = ||∇u|| + ||H||_F
@@ -369,38 +369,38 @@ class TestAMRPoissonPDE:
 
         _, error_indicator = pde_fn(
             simple_quadratic,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
         # Manually compute expected error indicator
-        grad = AutoDiffEngine.compute_gradient(simple_quadratic, test_points_2d)
+        grad = AutoDiffEngine.compute_gradient(simple_quadratic, points_2d)
         grad_norm = jnp.linalg.norm(grad, axis=-1)
 
-        hess = AutoDiffEngine.compute_hessian(simple_quadratic, test_points_2d)
+        hess = AutoDiffEngine.compute_hessian(simple_quadratic, points_2d)
         hess_norm = jnp.linalg.norm(hess.reshape(hess.shape[0], -1), axis=-1)
 
         expected_indicator = grad_norm + hess_norm
 
         assert jnp.allclose(error_indicator, expected_indicator, atol=1e-5)
 
-    def test_amr_poisson_return_tuple(self, simple_quadratic, test_points_2d):
+    def test_amr_poisson_return_tuple(self, simple_quadratic, points_2d):
         """Test that AMR Poisson returns tuple of (residual, error_indicator)."""
         pde_fn = PDEResidualRegistry.get("amr_poisson")
 
         result = pde_fn(
             simple_quadratic,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
         assert isinstance(result, tuple)
         assert len(result) == 2
         residual, error_indicator = result
-        assert residual.shape == (test_points_2d.shape[0],)
-        assert error_indicator.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
+        assert error_indicator.shape == (points_2d.shape[0],)
 
-    def test_amr_poisson_jit_compatibility(self, simple_quadratic, test_points_2d):
+    def test_amr_poisson_jit_compatibility(self, simple_quadratic, points_2d):
         """Test that AMR Poisson is JIT-compatible."""
         pde_fn = PDEResidualRegistry.get("amr_poisson")
 
@@ -408,7 +408,7 @@ class TestAMRPoissonPDE:
         def compute_with_indicator(x):
             return pde_fn(simple_quadratic, x, AutoDiffEngine)
 
-        residual, error_indicator = compute_with_indicator(test_points_2d)
+        residual, error_indicator = compute_with_indicator(points_2d)
         assert jnp.all(jnp.isfinite(residual))
         assert jnp.all(jnp.isfinite(error_indicator))
 
@@ -421,7 +421,7 @@ class TestAMRPoissonPDE:
 class TestMultiScaleIntegration:
     """Integration tests for multi-scale PDE workflows."""
 
-    def test_homogenization_workflow(self, test_points_2d):
+    def test_homogenization_workflow(self, points_2d):
         """End-to-end test of homogenization workflow.
 
         1. Define problem with periodic microstructure
@@ -438,13 +438,13 @@ class TestMultiScaleIntegration:
             return 1.0 + 0.5 * jnp.cos(4 * jnp.pi * x[:, 0])
 
         # Compute
-        residual = pde_fn(u, test_points_2d, AutoDiffEngine, coefficient_fn=periodic_coeff)
+        residual = pde_fn(u, points_2d, AutoDiffEngine, coefficient_fn=periodic_coeff)
 
         # Verify
-        assert residual.shape == (test_points_2d.shape[0],)
+        assert residual.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(residual))
 
-    def test_two_scale_coupling_verification(self, test_points_2d):
+    def test_two_scale_coupling_verification(self, points_2d):
         """Verify coupling between macro and micro scales."""
         pde_fn = PDEResidualRegistry.get("two_scale")
 
@@ -458,14 +458,14 @@ class TestMultiScaleIntegration:
         eps_small = 0.01
         eps_large = 0.1
 
-        macro_small, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=eps_small)
+        macro_small, _ = pde_fn(u_macro, u_micro, points_2d, AutoDiffEngine, epsilon=eps_small)
 
-        macro_large, _ = pde_fn(u_macro, u_micro, test_points_2d, AutoDiffEngine, epsilon=eps_large)
+        macro_large, _ = pde_fn(u_macro, u_micro, points_2d, AutoDiffEngine, epsilon=eps_large)
 
         # Verify coupling effect
         assert not jnp.allclose(macro_small, macro_large)
 
-    def test_amr_refinement_cycle(self, test_points_2d):
+    def test_amr_refinement_cycle(self, points_2d):
         """Test complete AMR cycle: compute → identify → refine."""
         pde_fn = PDEResidualRegistry.get("amr_poisson")
 
@@ -474,7 +474,7 @@ class TestMultiScaleIntegration:
             return jnp.exp(-jnp.sum(x**2, axis=-1))
 
         # Compute residual and error
-        _, error_indicator = pde_fn(u, test_points_2d, AutoDiffEngine)
+        _, error_indicator = pde_fn(u, points_2d, AutoDiffEngine)
 
         # Identify refinement zones (top 50%)
         threshold = jnp.percentile(error_indicator, 50)
@@ -493,7 +493,7 @@ class TestMultiScaleIntegration:
 class TestMultiScalePerformance:
     """Performance tests for multi-scale PDEs."""
 
-    def test_jit_compilation_all_pdes(self, test_points_2d):
+    def test_jit_compilation_all_pdes(self, points_2d):
         """Test JIT compilation for all 3 multi-scale PDEs."""
 
         # Homogenization
@@ -506,7 +506,7 @@ class TestMultiScalePerformance:
 
             return hom_fn(u, x, AutoDiffEngine)
 
-        res_hom = jit_hom(test_points_2d)
+        res_hom = jit_hom(points_2d)
         assert jnp.all(jnp.isfinite(res_hom))
 
         # Two-scale
@@ -522,7 +522,7 @@ class TestMultiScalePerformance:
 
             return ts_fn(u_macro, u_micro, x, AutoDiffEngine)
 
-        macro_res, micro_res = jit_ts(test_points_2d)
+        macro_res, micro_res = jit_ts(points_2d)
         assert jnp.all(jnp.isfinite(macro_res))
         assert jnp.all(jnp.isfinite(micro_res))
 
@@ -536,7 +536,7 @@ class TestMultiScalePerformance:
 
             return amr_fn(u, x, AutoDiffEngine)
 
-        residual, error = jit_amr(test_points_2d)
+        residual, error = jit_amr(points_2d)
         assert jnp.all(jnp.isfinite(residual))
         assert jnp.all(jnp.isfinite(error))
 

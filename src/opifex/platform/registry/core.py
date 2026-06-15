@@ -5,12 +5,13 @@ neural functionals in the Opifex community platform. Implements CRUD
 operations with metadata management and version control integration.
 
 .. warning::
-    Database persistence is not yet implemented. The private ``_save_async``,
-    ``_get_functional_by_id``, ``_search_functionals_db``, and related methods
-    are TODO stubs that return None/empty collections. The public API
-    (``register_functional``, ``retrieve_functional``, ``search_functionals``,
-    ``delete_functional``) will cascade to these stubs and return incorrect
-    results until a storage backend is integrated.
+    Database persistence is not yet wired in. The private ``_save_async``,
+    ``_get_functional_by_id``, ``_search_functionals_db``, and related
+    methods raise :class:`NotImplementedError` until an ORM adapter
+    subclasses :class:`RegistryService` and overrides them. The public
+    API (``register_functional``, ``retrieve_functional``,
+    ``search_functionals``, ``delete_functional``) will surface that
+    error rather than silently returning incorrect results.
 """
 
 import asyncio
@@ -407,42 +408,43 @@ class RegistryService:
         # Convert to string for comparison to avoid SQLAlchemy type issues
         return str(author_id) == str(user_id)
 
-    # Database Operation Interfaces (to be implemented with specific ORM)
+    # Database Operation Interfaces — fail fast until a storage backend is wired in.
 
-    async def _save_async(self, *objects):
+    _NOT_WIRED = (
+        "Persistent storage backend is not wired into RegistryService yet. "
+        "Provide a session-aware ORM adapter and override this method."
+    )
+
+    async def _save_async(self, *objects: object) -> None:
         """Save objects to database asynchronously."""
-        # TODO: Implement with actual async database operations
+        raise NotImplementedError(self._NOT_WIRED)
 
-    def _save_sync(self, *objects):
+    def _save_sync(self, *objects: object) -> None:
         """Save objects to database synchronously."""
-        # TODO: Implement with actual database operations
+        raise NotImplementedError(self._NOT_WIRED)
 
-    async def _get_functional_by_id(self, functional_id: str):
+    async def _get_functional_by_id(self, functional_id: str) -> None:
         """Get functional by ID from database."""
-        # TODO: Implement database query
-        return
+        raise NotImplementedError(self._NOT_WIRED)
 
-    async def _get_functional_version(self, functional_id: str, version_tag: str | None):
+    async def _get_functional_version(self, functional_id: str, version_tag: str | None) -> None:
         """Get functional version from database."""
-        # TODO: Implement database query
-        return
+        raise NotImplementedError(self._NOT_WIRED)
 
-    async def _get_functional_metadata(self, functional_id: str):
+    async def _get_functional_metadata(self, functional_id: str) -> None:
         """Get functional metadata from database."""
-        # TODO: Implement database query
-        return
+        raise NotImplementedError(self._NOT_WIRED)
 
     async def _search_functionals_db(
         self, query: str, filters: dict, tags: list[str] | None, limit: int, offset: int
-    ):
+    ) -> list:
         """Search functionals in database."""
-        # TODO: Implement database search
-        return []
+        raise NotImplementedError(self._NOT_WIRED)
 
-    async def _delete_version(self, functional_id: str, version_tag: str):
+    async def _delete_version(self, functional_id: str, version_tag: str) -> None:
         """Delete specific version from database and storage."""
-        # TODO: Implement version deletion
+        raise NotImplementedError(self._NOT_WIRED)
 
-    async def _delete_functional_complete(self, functional_id: str):
+    async def _delete_functional_complete(self, functional_id: str) -> None:
         """Delete entire functional from database and storage."""
-        # TODO: Implement complete deletion
+        raise NotImplementedError(self._NOT_WIRED)

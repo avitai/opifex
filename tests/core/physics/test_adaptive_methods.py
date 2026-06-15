@@ -38,7 +38,7 @@ from opifex.core.physics.autodiff_engine import AutoDiffEngine
 
 
 @pytest.fixture
-def test_points_2d():
+def points_2d():
     """2D test points."""
     return jnp.array([[0.5, 0.5], [1.0, 1.0], [0.0, 0.0], [0.25, 0.75]])
 
@@ -102,41 +102,41 @@ def periodic_function():
 class TestResidualError:
     """Test suite for residual-based error estimation."""
 
-    def test_zero_residual_zero_error(self, quadratic_function, test_points_2d):
+    def test_zero_residual_zero_error(self, quadratic_function, points_2d):
         """Test that zero residual gives zero error.
 
         For a perfect solution, residual = 0 → error = 0.
         """
-        zero_residual = jnp.zeros(test_points_2d.shape[0])
+        zero_residual = jnp.zeros(points_2d.shape[0])
 
         error = compute_residual_error(
             quadratic_function,
-            test_points_2d,
+            points_2d,
             zero_residual,
         )
 
-        assert error.shape == (test_points_2d.shape[0],)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.allclose(error, 0.0, atol=1e-10)
 
-    def test_large_residual_large_error(self, quadratic_function, test_points_2d):
+    def test_large_residual_large_error(self, quadratic_function, points_2d):
         """Test that large residual gives large error.
 
         Error should scale with residual magnitude.
         """
-        large_residual = jnp.full(test_points_2d.shape[0], 100.0)
+        large_residual = jnp.full(points_2d.shape[0], 100.0)
 
         error = compute_residual_error(
             quadratic_function,
-            test_points_2d,
+            points_2d,
             large_residual,
         )
 
-        assert error.shape == (test_points_2d.shape[0],)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.all(error > 0.0)
         # Error should be proportional to residual
         assert jnp.allclose(error, jnp.abs(large_residual), atol=1e-5)
 
-    def test_residual_error_scaling(self, quadratic_function, test_points_2d):
+    def test_residual_error_scaling(self, quadratic_function, points_2d):
         """Test scaling properties of residual error.
 
         Doubling residual should double error.
@@ -146,13 +146,13 @@ class TestResidualError:
 
         error_1x = compute_residual_error(
             quadratic_function,
-            test_points_2d,
+            points_2d,
             residual_1x,
         )
 
         error_2x = compute_residual_error(
             quadratic_function,
-            test_points_2d,
+            points_2d,
             residual_2x,
         )
 
@@ -167,45 +167,45 @@ class TestResidualError:
 class TestGradientError:
     """Test suite for gradient-based error estimation."""
 
-    def test_constant_function_zero_gradient(self, constant_function, test_points_2d):
+    def test_constant_function_zero_gradient(self, constant_function, points_2d):
         """Test that constant function has zero gradient error.
 
         For u = const, ∇u = 0 → gradient error = 0.
         """
         error = compute_gradient_error(
             constant_function,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
-        assert error.shape == (test_points_2d.shape[0],)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.allclose(error, 0.0, atol=1e-5)
 
-    def test_linear_function_constant_gradient(self, linear_function, test_points_2d):
+    def test_linear_function_constant_gradient(self, linear_function, points_2d):
         """Test that linear function has constant gradient error.
 
         For u = 2x + 3y, ∇u = [2, 3] → ||∇u|| = √13 everywhere.
         """
         error = compute_gradient_error(
             linear_function,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
         expected_norm = jnp.sqrt(2.0**2 + 3.0**2)  # √13 ≈ 3.606
 
-        assert error.shape == (test_points_2d.shape[0],)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.allclose(error, expected_norm, atol=1e-5)
 
-    def test_gradient_error_jit_compatible(self, quadratic_function, test_points_2d):
+    def test_gradient_error_jit_compatible(self, quadratic_function, points_2d):
         """Test that gradient error computation is JIT-compatible."""
 
         @jax.jit
         def compute_error(x):
             return compute_gradient_error(quadratic_function, x, AutoDiffEngine)
 
-        error = compute_error(test_points_2d)
-        assert error.shape == (test_points_2d.shape[0],)
+        error = compute_error(points_2d)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(error))
 
 
@@ -217,7 +217,7 @@ class TestGradientError:
 class TestHessianError:
     """Test suite for curvature-based error estimation."""
 
-    def test_quadratic_function_constant_hessian(self, quadratic_function, test_points_2d):
+    def test_quadratic_function_constant_hessian(self, quadratic_function, points_2d):
         """Test that quadratic function has constant Hessian.
 
         For u = x² + y², H = [[2, 0], [0, 2]] everywhere.
@@ -225,28 +225,28 @@ class TestHessianError:
         """
         error = compute_hessian_error(
             quadratic_function,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
         # Frobenius norm of [[2, 0], [0, 2]] is sqrt(2^2 + 2^2) = sqrt(8)
         expected_norm = jnp.sqrt(8.0)
 
-        assert error.shape == (test_points_2d.shape[0],)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.allclose(error, expected_norm, atol=1e-4)
 
-    def test_hessian_error_varying_curvature(self, exponential_function, test_points_2d):
+    def test_hessian_error_varying_curvature(self, exponential_function, points_2d):
         """Test Hessian error for function with varying curvature.
 
         Exponential function has higher curvature near origin.
         """
         error = compute_hessian_error(
             exponential_function,
-            test_points_2d,
+            points_2d,
             AutoDiffEngine,
         )
 
-        assert error.shape == (test_points_2d.shape[0],)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.all(error >= 0.0)
 
         # Error should be highest near origin [0, 0]
@@ -254,15 +254,15 @@ class TestHessianError:
         far_idx = 1  # [1, 1] is far from origin
         assert error[origin_idx] > error[far_idx]
 
-    def test_hessian_error_jit_compatible(self, quadratic_function, test_points_2d):
+    def test_hessian_error_jit_compatible(self, quadratic_function, points_2d):
         """Test that Hessian error computation is JIT-compatible."""
 
         @jax.jit
         def compute_error(x):
             return compute_hessian_error(quadratic_function, x, AutoDiffEngine)
 
-        error = compute_error(test_points_2d)
-        assert error.shape == (test_points_2d.shape[0],)
+        error = compute_error(points_2d)
+        assert error.shape == (points_2d.shape[0],)
         assert jnp.all(jnp.isfinite(error))
 
 

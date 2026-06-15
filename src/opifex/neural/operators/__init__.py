@@ -149,6 +149,20 @@ from opifex.neural.operators.specialized.uqno import (
 # Specialized existing operators
 from opifex.neural.operators.specialized.wavelet import WaveletNeuralOperator
 
+# Operator-family UQ adapter spec re-exports (Task 3.7). Specs declare
+# adapter-mediated UQ capabilities (conformal / ensemble / dropout) without
+# claiming native Bayesian support; consumed by registry / docs / future
+# concrete wrappers.
+from opifex.uncertainty.adapters.operators import (
+    DeepONetConformalAdapterSpec,
+    DeepONetDeepEnsembleAdapterSpec,
+    DeepONetMCDropoutAdapterSpec,
+    FNOConformalAdapterSpec,
+    FNODeepEnsembleAdapterSpec,
+    FNOMCDropoutAdapterSpec,
+    OperatorAdapterSpec,
+)
+
 
 # =============================================================================
 # OPERATOR REGISTRY AND FACTORY FUNCTIONS
@@ -413,6 +427,13 @@ __all__ = [
     "BayesianSpectralConvolution",
     # DeepONet variants
     "DeepONet",
+    # Operator UQ adapter specs (Task 3.7)
+    "DeepONetConformalAdapterSpec",
+    "DeepONetDeepEnsembleAdapterSpec",
+    "DeepONetMCDropoutAdapterSpec",
+    "FNOConformalAdapterSpec",
+    "FNODeepEnsembleAdapterSpec",
+    "FNOMCDropoutAdapterSpec",
     "FactorizedFourierLayer",
     # Core FNO variants
     "FourierEnhancedDeepONet",
@@ -433,6 +454,7 @@ __all__ = [
     "MultiScaleFourierNeuralOperator",
     "MultipoleExpansion",
     "MultipoleGraphNeuralOperator",
+    "OperatorAdapterSpec",
     "OperatorNetwork",
     "PhysicsAwareAttention",
     "PhysicsCrossAttention",

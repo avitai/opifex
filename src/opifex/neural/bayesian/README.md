@@ -11,52 +11,53 @@ This module provides advanced Bayesian machine learning capabilities for scienti
 
 ### **📊 Module Overview**
 
-| Module | Lines | Description | Status |
-|--------|-------|-------------|--------|
-| `uncertainty_quantification.py` | 1,102 | Advanced UQ with multi-source uncertainty | ✅ Complete |
-| `probabilistic_pinns.py` | 1,123 | Physics-informed Bayesian networks | ✅ Complete |
-| `physics_informed_priors.py` | 1,052 | Physics-aware prior distributions | ✅ Complete |
-| `calibration_tools.py` | 810 | Enhanced calibration framework | ✅ Complete |
-| `variational_framework.py` | 519 | Variational inference methods | ✅ Complete |
-| `blackjax_integration.py` | 399 | MCMC sampling integration | ✅ Complete |
+| Module | Description |
+|--------|-------------|
+| `probabilistic_pinns.py` | Physics-informed Bayesian networks |
+| `calibration_tools.py` | Calibration helpers (Platt, isotonic, temperature) |
+| `variational_framework.py` | Variational inference methods |
+
+Aggregators (`UncertaintyQuantifier`, `EnhancedUncertaintyQuantifier`,
+`MultiSourceUncertaintyAggregator`, etc.) live in
+`opifex.uncertainty.aggregators`. Physics-prior modules
+(`PhysicsInformedPriors`, `ConservationLawPriors`,
+`DomainSpecificPriors`, `HierarchicalBayesianFramework`,
+`PhysicsAwareUncertaintyPropagation`) live in
+`opifex.uncertainty.priors_physics`.
+
+MCMC sampling lives in `opifex.uncertainty.inference_backends.blackjax:BlackJAXBackend` (thin adapter over Artifex's HMC / NUTS / MALA wrappers).
 
 ## 🚀 **Core Features**
 
-### 1. Advanced Uncertainty Quantification
+### 1. Uncertainty Quantification
 
 Full uncertainty assessment with multiple uncertainty sources and propagation strategies.
 
 ```python
 import jax
 import jax.numpy as jnp
-from flax import nnx
-from opifex.neural.bayesian import AdvancedUncertaintyQuantification
+from opifex.uncertainty.aggregators import EnhancedUncertaintyQuantifier
 
-# Initialize uncertainty quantification system
-key = jax.random.PRNGKey(42)
-uq_system = AdvancedUncertaintyQuantification(
-    model_dim=64,
+quantifier = EnhancedUncertaintyQuantifier(
     ensemble_size=10,
-    uncertainty_sources=['epistemic', 'aleatoric', 'model'],
-    aggregation_strategy='adaptive_weighted',
-    rngs=nnx.Rngs(key)
+    distributional_output=True,
+    multi_source_aggregation=True,
 )
 
-# Generate predictions with uncertainty
-x_test = jax.random.normal(key, (100, 10))
-predictions, uncertainties = uq_system.predict_with_uncertainty(x_test)
+ensemble_predictions = jax.random.normal(jax.random.key(0), (10, 100, 1))
+result = quantifier.enhanced_decompose_uncertainty(
+    ensemble_predictions=ensemble_predictions,
+)
 
-print(f"Predictions shape: {predictions.shape}")
-print(f"Uncertainty breakdown: {uncertainties.keys()}")
-print(f"Total uncertainty: {uncertainties['total'].mean():.4f}")
+print(f"Ensemble epistemic shape: {result.epistemic_ensemble.shape}")
+print(f"Total uncertainty mean: {result.total_uncertainty.mean():.4f}")
 ```
 
 **Features**:
 
-- **Multi-source uncertainty**: Epistemic, aleatoric, and model uncertainty
-- **Adaptive weighting**: Performance-based uncertainty aggregation
-- **Ensemble methods**: Deep ensemble disagreement quantification
-- **Distributional uncertainty**: Support for Gaussian, Laplace, and mixture distributions
+- **Multi-source uncertainty**: Epistemic + aleatoric decomposition
+- **Ensemble methods**: Deep-ensemble disagreement quantification
+- **Distributional uncertainty**: Gaussian / Laplace / mixture distributions
 
 ### 2. Physics-Informed Bayesian Networks
 
@@ -190,7 +191,7 @@ print(f"Effective sample size: {diagnostics['ess']:.0f}")
 Multi-level uncertainty modeling with adaptive propagation:
 
 ```python
-from opifex.neural.bayesian import HierarchicalBayesianFramework
+from opifex.uncertainty.priors_physics import HierarchicalBayesianFramework
 
 # Create hierarchical model
 hierarchical_model = HierarchicalBayesianFramework(

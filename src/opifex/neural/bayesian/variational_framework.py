@@ -327,7 +327,7 @@ class AmortizedVariationalFramework(nnx.Module):
             predictions = []
             for i in range(num_samples):
                 # Use parameter injection for true Bayesian sampling
-                pred = self._forward_with_params(x, param_samples[i])
+                pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
                 predictions.append(pred)
 
             # Compute statistics from samples
@@ -353,24 +353,34 @@ class AmortizedVariationalFramework(nnx.Module):
         return mean_prediction, uncertainty
 
     def _forward_with_params(
-        self, x: Float[Array, "batch input_dim"], params_vector: Float[Array, ...]
+        self,
+        x: Float[Array, "batch input_dim"],
+        params_vector: Float[Array, ...],
+        *,
+        rngs: nnx.Rngs,
     ) -> Float[Array, "batch output_dim"]:
-        """Forward pass with specific parameter vector.
+        """Approximate forward pass parameterised by a candidate parameter vector.
+
+        This is a Monte-Carlo proxy: instead of materialising every sampled
+        ``params_vector`` into the underlying NNX module (which would require
+        an ``nnx.split`` / ``nnx.merge`` round-trip per draw), the routine
+        injects a small input perturbation whose magnitude tracks
+        ``jnp.mean(jnp.abs(params_vector)) * 1e-3``. The resulting
+        predictive ensemble is **not** equivalent to a true Bayesian
+        forward pass — it is a smoothed surrogate suitable for the
+        variance / spread diagnostics this module emits, and callers must
+        not treat the resulting distribution as a calibrated posterior
+        predictive.
 
         Args:
             x: Input tensor.
-            params_vector: Parameter vector to inject into model.
-
-        Returns:
-            Model predictions with specified parameters.
+            params_vector: Parameter vector whose magnitude scales the
+                input-perturbation surrogate. Pass the actual sampled
+                parameter vector you would have injected.
+            rngs: Caller-owned PRNG bundle (one ``sample()`` draw consumed).
         """
-        # TODO: Implement true Bayesian forward pass by injecting sampled parameters
-        # Currently using input perturbation as a simplified approximation due to
-        # complexity of NNX state management
-
-        # Add small perturbation based on parameter vector to simulate parameter changes
-        perturbation_scale = jnp.mean(jnp.abs(params_vector)) * 0.001
-        perturbed_x = x + perturbation_scale * jax.random.normal(jax.random.PRNGKey(0), x.shape)
+        surrogate_step = jnp.mean(jnp.abs(params_vector)) * 0.001
+        perturbed_x = x + surrogate_step * jax.random.normal(rngs.sample(), x.shape)
 
         return self.base_model(perturbed_x)  # type: ignore[misc, operator]
 
@@ -428,7 +438,7 @@ class AmortizedVariationalFramework(nnx.Module):
         for i in range(num_samples):
             try:
                 # Forward pass with sampled parameters
-                y_pred = self._forward_with_params(x, param_samples[i])
+                y_pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
                 # Gaussian likelihood (negative MSE)
                 sample_log_likelihood = -jnp.sum((y - y_pred) ** 2) / (2.0 * 0.01)  # sigma^2 = 0.01
                 log_likelihood += sample_log_likelihood
@@ -485,7 +495,7 @@ class AmortizedVariationalFramework(nnx.Module):
         predictions = []
         for i in range(num_samples):
             try:
-                pred = self._forward_with_params(x, param_samples[i])
+                pred = self._forward_with_params(x, param_samples[i], rngs=rngs)
             except Exception:
                 # Fallback to base model with input noise
                 noise_scale = 0.01
@@ -499,17 +509,19 @@ class AmortizedVariationalFramework(nnx.Module):
         self,
         x: Float[Array, "batch input_dim"],
         num_samples: int = 10,
+        *,
+        rngs: nnx.Rngs,
     ) -> tuple[Float[Array, "batch output_dim"], Float[Array, "batch output_dim"]]:
         """Forward pass with uncertainty quantification.
 
         Args:
             x: Input tensor of shape (batch_size, input_dim).
             num_samples: Number of Monte Carlo samples for uncertainty estimation.
+            rngs: Caller-owned ``nnx.Rngs`` bundle driving the Monte Carlo
+                draws — required, no hidden fixed-seed fallback.
 
         Returns:
             Tuple of (mean_prediction, uncertainty) both of shape
                 (batch_size, output_dim).
         """
-        # Use the uncertainty prediction method
-        rngs = nnx.Rngs(0)  # Default RNG for now
         return self.predict_with_uncertainty(x, num_samples, rngs=rngs)

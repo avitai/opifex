@@ -30,8 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python
 
-# Install uv — single-layer binary copy from official OCI image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv — pinned for reproducible builds. Update intentionally.
+COPY --from=ghcr.io/astral-sh/uv:0.11.15 /uv /usr/local/bin/uv
 
 WORKDIR /app
 

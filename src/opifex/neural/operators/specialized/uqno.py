@@ -1,720 +1,428 @@
-# FILE PLACEMENT: opifex/neural/operators/specialized/uqno.py
-#
-# FIXED Uncertainty Quantification Neural Operator Implementation
-# Fixes shape mismatches in spectral convolutions and skip connections
-#
-# This file should REPLACE: opifex/neural/operators/specialized/uqno.py
+"""JAX-native port of the conformal Uncertainty Quantification Neural Operator (UQNO).
 
+Mirrors the three-stage conformal pipeline from Ma, Pitt,
+Azizzadenesheli, Anandkumar (TMLR 2024 —
+`arXiv:2402.01960 <https://arxiv.org/abs/2402.01960>`_). The canonical
+PyTorch reference lives at
+``../neuraloperator/neuralop/models/uqno.py`` +
+``../neuraloperator/scripts/train_uqno_darcy.py``; the numerical core
+(``PointwiseQuantileLoss``, ``get_coeff_quantile_idx``, the scaling-factor
+derivation) is cross-checked test-by-test against that reference.
+
+**Differences from the canonical PyTorch implementation:**
+
+* The canonical ``UQNO.__init__(base_model, residual_model=None)``
+  defaults the residual to ``deepcopy(base_model)``. Here both
+  operators are required keyword-only (``base=``, ``residual=``) so
+  the call site is explicit about which model is which.
+* The canonical performs calibration externally in the training
+  script; this port packages :meth:`calibrate` on the class for
+  ergonomics, returning a typed :class:`UQNOConformalCalibrator`.
+* :meth:`predict_with_bands` returns a typed
+  :class:`PredictiveDistribution` with a populated
+  :class:`PredictionInterval`; the canonical returns untyped tensors.
+* JAX/NNX semantics: ``jax.lax.stop_gradient`` replaces
+  ``torch.no_grad()`` + ``model.eval()`` for the base operator inside
+  the residual-stage forward pass.
+
+**Algorithmic core mirrored faithfully:**
+
+1. **Base solution operator** ``G_hat(a, x)`` — a standard deterministic
+   :class:`opifex.neural.operators.fno.base.FourierNeuralOperator`
+   (wrapped here as :class:`UQNOBaseSolutionOperator` for tagging).
+2. **Residual operator** ``E(a, x)`` — a separately-trained
+   :class:`FourierNeuralOperator` (wrapped as
+   :class:`UQNOResidualOperator`) producing per-grid-point quantile
+   widths via the canonical pointwise pinball loss
+   :class:`opifex.uncertainty.losses.PointwiseQuantileLoss`.
+3. **Scalar conformal calibration** — on a held-out calibration set,
+   :meth:`UncertaintyQuantificationNeuralOperator.calibrate` derives a
+   single ``uncertainty_scaling_factor`` from per-grid ratios
+   ``|y - G_hat(x)| / E(x)`` via :func:`get_coeff_quantile_idx`. The
+   fitted factor lives in a :class:`UQNOConformalCalibrator` (a
+   ``flax.struct``-decorated pytree).
+
+At test time,
+:meth:`UncertaintyQuantificationNeuralOperator.predict_with_bands`
+returns a :class:`PredictiveDistribution` whose
+:attr:`PredictiveDistribution.interval` is populated with
+``G_hat(x) ± E(x) * scaling_factor``; ``epistemic`` and ``samples``
+stay ``None`` (conformal is a distribution-free calibration of the
+deterministic predictor, not a Bayesian posterior).
+
+Canonical reference (cross-checked numerically in
+``tests/neural/operators/specialized/test_uqno.py``):
+``../neuraloperator/neuralop/models/uqno.py``;
+``../neuraloperator/scripts/train_uqno_darcy.py`` for the calibration
+recipe.
 """
-Uncertainty Quantification Neural Operator (UQNO)
 
-Advanced neural operator with built-in uncertainty quantification for
-safety-critical applications. Provides both epistemic and aleatoric
-uncertainty estimates using Bayesian neural networks and ensemble methods.
+from __future__ import annotations
 
-Key Features:
-- Bayesian spectral convolutions with weight uncertainty
-- Epistemic uncertainty through weight distributions
-- Aleatoric uncertainty through learned noise parameters
-- Monte Carlo sampling for uncertainty propagation
-- Safety-critical application support
-"""
-
-import logging
-from collections.abc import Sequence
+import math
+from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-from flax import nnx
+from flax import nnx, struct
+
+from opifex.uncertainty.layers.bayesian import (
+    BayesianLinear,
+    BayesianSpectralConvolution,
+)
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionInterval,
+    PredictiveDistribution,
+)
 
 
-# Set up logger for this module
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from opifex.neural.operators.fno.base import FourierNeuralOperator
 
 
-class BayesianLinear(nnx.Module):
-    """
-    Bayesian linear layer with weight uncertainty.
-
-    Implements variational Bayesian linear layer where weights are
-    distributions rather than point estimates.
-    """
-
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        prior_std: float = 1.0,
-        *,
-        rngs: nnx.Rngs,
-    ):
-        """
-        Initialize Bayesian linear layer.
-
-        Args:
-            in_features: Number of input features
-            out_features: Number of output features
-            prior_std: Standard deviation of weight prior
-            rngs: Random number generator state
-        """
-        self.in_features = in_features
-        self.out_features = out_features
-        self.prior_std = prior_std
-        # Store rngs for dynamic sampling during forward pass
-        self.rngs = rngs
-
-        # Weight mean parameters  handling
-        self.weight_mean = nnx.Param(
-            nnx.initializers.normal(stddev=0.1)(rngs.params(), (out_features, in_features))
-        )
-        self.weight_logvar = nnx.Param(
-            nnx.initializers.constant(-3.0)(rngs.params(), (out_features, in_features))
-        )
-
-        # Bias parameters  handling
-        self.bias_mean = nnx.Param(jnp.zeros((out_features,)))
-        self.bias_logvar = nnx.Param(
-            nnx.initializers.constant(-3.0)(rngs.params(), (out_features,))
-        )
-
-        # Counter for generating unique keys (stored as Param for JIT compatibility)
-        self._sample_counter = nnx.Variable(jnp.array(0, dtype=jnp.int32))
-
-    def __call__(self, x: jax.Array, training: bool = True, sample: bool = True) -> jax.Array:
-        """
-        Forward pass with Bayesian sampling.
-
-        Args:
-            x: Input tensor
-            training: Whether in training mode
-            sample: Whether to sample weights
-
-        Returns:
-            Output tensor with uncertainty
-        """
-
-        if training and sample:
-            # Sample weights from posterior using dynamic key
-            weight_std = jnp.exp(0.5 * self.weight_logvar.value)
-            bias_std = jnp.exp(0.5 * self.bias_logvar.value)
-
-            # Use counter-based key generation for truly random samples
-            counter = self._sample_counter.value
-            self._sample_counter.value = counter + 1
-
-            key = jax.random.PRNGKey(counter)
-            key_w, key_b = jax.random.split(key)
-
-            eps_w = jax.random.normal(key_w, self.weight_mean.value.shape)
-            eps_b = jax.random.normal(key_b, self.bias_mean.value.shape)
-
-            weight = self.weight_mean.value + weight_std * eps_w
-            bias = self.bias_mean.value + bias_std * eps_b
-        else:
-            # Use mean values
-            weight = self.weight_mean.value
-            bias = self.bias_mean.value
-
-        return x @ weight.T + bias
-
-    def kl_divergence(self) -> jax.Array:
-        """
-        Compute KL divergence between posterior and prior.
-
-        Returns:
-            KL divergence scalar
-        """
-        # KL divergence for Gaussian distributions
-        weight_var = jnp.exp(self.weight_logvar.value)
-        bias_var = jnp.exp(self.bias_logvar.value)
-
-        weight_kl = 0.5 * jnp.sum(
-            (self.weight_mean.value**2 + weight_var) / (self.prior_std**2)
-            - 1
-            - self.weight_logvar.value
-            + 2 * jnp.log(self.prior_std)
-        )
-
-        bias_kl = 0.5 * jnp.sum(
-            (self.bias_mean.value**2 + bias_var) / (self.prior_std**2)
-            - 1
-            - self.bias_logvar.value
-            + 2 * jnp.log(self.prior_std)
-        )
-
-        return weight_kl + bias_kl
+# ---------------------------------------------------------------------------
+# Tagged wrappers around the deterministic FNO base + residual
+# ---------------------------------------------------------------------------
 
 
-class BayesianSpectralConvolution(nnx.Module):
-    """
-    Bayesian spectral convolution with proper shape handling.
+class UQNOBaseSolutionOperator(nnx.Module):
+    """Thin wrapper tagging an FNO as the UQNO's base solution operator.
 
-    Implements spectral convolution in Fourier domain with Bayesian weights
-    for uncertainty quantification.
+    Trained with a standard regression objective (MSE / H1) against
+    ``y_true``. The orchestrator routes its forward through
+    ``jax.lax.stop_gradient`` inside
+    :meth:`UncertaintyQuantificationNeuralOperator.__call__` so the
+    residual-stage gradients never reach this operator's parameters.
     """
 
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        modes: Sequence[int],
-        prior_std: float = 1.0,
-        *,
-        rngs: nnx.Rngs,
-    ):
-        """
-        Initialize Bayesian spectral convolution.
+    def __init__(self, fno: FourierNeuralOperator) -> None:
+        self.fno = fno
 
-        Args:
-            in_channels: Number of input channels
-            out_channels: Number of output channels
-            modes: Fourier modes for each spatial dimension
-            prior_std: Standard deviation of weight prior
-            rngs: Random number generator state
-        """
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.modes = modes
-        self.prior_std = prior_std
-
-        # Calculate weight dimensions - shape for einsum "bc...ij,oc...ij->bo...ij"
-        # FIXED: Proper weight shape for 2D spectral convolution
-        if len(modes) == 1:
-            weight_shape: tuple[int, ...] = (out_channels, in_channels, modes[0])
-        elif len(modes) == 2:
-            weight_shape = (out_channels, in_channels, modes[0], modes[1] // 2 + 1)
-        else:
-            raise ValueError(f"Unsupported number of modes: {len(modes)}")
-
-        # Weight mean parameters  handling
-        self.weight_mean = nnx.Param(
-            nnx.initializers.normal(stddev=0.1)(rngs.params(), weight_shape)
-        )
-        self.weight_logvar = nnx.Param(nnx.initializers.constant(-3.0)(rngs.params(), weight_shape))
-
-        # Separate imaginary parts for complex weights  handling
-        self.weight_imag_mean = nnx.Param(
-            nnx.initializers.normal(stddev=0.1)(rngs.params(), weight_shape)
-        )
-        self.weight_imag_logvar = nnx.Param(
-            nnx.initializers.constant(-3.0)(rngs.params(), weight_shape)
-        )
-
-        # Store rngs for dynamic sampling
-        self.rngs = rngs
-        # Counter for generating unique keys (stored as Variable for JIT compatibility)
-        self._sample_counter = nnx.Variable(jnp.array(0, dtype=jnp.int32))
-
-    def _sample_weights(self, training: bool, sample: bool) -> tuple[jax.Array, jax.Array]:
-        """Sample or use mean weights for spectral convolution."""
-        if training and sample:
-            real_std = jnp.exp(0.5 * self.weight_logvar.value)
-            imag_std = jnp.exp(0.5 * self.weight_imag_logvar.value)
-
-            # Use counter-based key generation for truly random samples
-            counter = self._sample_counter.value
-            self._sample_counter.value = counter + 1
-
-            key = jax.random.PRNGKey(counter + 1000)  # Offset to avoid overlap
-            key_real, key_imag = jax.random.split(key)
-
-            eps_real = jax.random.normal(key_real, self.weight_mean.value.shape)
-            eps_imag = jax.random.normal(key_imag, self.weight_imag_mean.value.shape)
-
-            weight_real = self.weight_mean.value + real_std * eps_real
-            weight_imag = self.weight_imag_mean.value + imag_std * eps_imag
-            weights = weight_real + 1j * weight_imag
-
-            # Compute aleatoric uncertainty for this sample
-            aleatoric_var = real_std**2 + imag_std**2
-            aleatoric_uncertainty = jnp.sqrt(jnp.mean(aleatoric_var))
-        else:
-            weights = self.weight_mean.value + 1j * self.weight_imag_mean.value
-            aleatoric_uncertainty = jnp.zeros(())
-
-        return weights, aleatoric_uncertainty
-
-    def _perform_spectral_convolution(
-        self, x: jax.Array, weights: jax.Array, batch_size: int, height: int, width: int
-    ) -> jax.Array:
-        """
-        Perform spectral convolution with FFT operations.
-
-        Args:
-            x: Input tensor in spatial domain
-            weights: Complex weights for spectral convolution
-            batch_size: Batch size
-            height: Spatial height dimension
-            width: Spatial width dimension
-
-        Returns:
-            Output tensor after spectral convolution
-        """
-        # Forward FFT to frequency domain
-        x_ft = jnp.fft.rfftn(x, axes=(-2, -1))
-
-        # Crop to specified modes based on dimensionality
-        if len(self.modes) == 2:
-            modes_h, modes_w = self.modes[0], self.modes[1]
-            x_ft_cropped = x_ft[:, :, :modes_h, : modes_w // 2 + 1]
-        else:
-            modes_h = self.modes[0]
-            x_ft_cropped = x_ft[:, :, :modes_h]
-
-        # Spectral convolution via einsum
-        out_ft = jnp.einsum("bc...ij,oc...ij->bo...ij", x_ft_cropped, weights)
-
-        # Pad and inverse FFT back to spatial domain
-        if len(self.modes) == 2:
-            # 2D case: pad and use irfftn
-            out_ft_padded = jnp.zeros((batch_size, self.out_channels, height, width // 2 + 1))
-            out_ft_padded = out_ft_padded.at[:, :, :modes_h, : modes_w // 2 + 1].set(out_ft)
-            return jnp.fft.irfftn(out_ft_padded, s=(height, width), axes=(-2, -1))
-        # 1D case: pad and use irfft
-        out_ft_padded = jnp.zeros((batch_size, self.out_channels, height))
-        out_ft_padded = out_ft_padded.at[:, :, :modes_h].set(out_ft)
-        return jnp.fft.irfft(out_ft_padded, n=width, axis=-1)
-
-    def __call__(
-        self, x: jax.Array, training: bool = True, sample: bool = True
-    ) -> tuple[jax.Array, jax.Array]:
-        """
-        Apply Bayesian spectral convolution with proper shape handling.
-
-        Args:
-            x: Input tensor (batch, in_channels, height, width)
-            training: Whether in training mode
-            sample: Whether to sample weights
-
-        Returns:
-            Tuple of (output_mean, aleatoric_uncertainty)
-        """
-        batch_size, in_channels, height, width = x.shape
-
-        # Validate input channels
-        if in_channels != self.in_channels:
-            raise ValueError(f"Expected {self.in_channels} input channels, got {in_channels}")
-
-        # Sample weights and get aleatoric uncertainty
-        weights, aleatoric_uncertainty = self._sample_weights(training, sample)
-
-        # Perform spectral convolution
-        output_mean = self._perform_spectral_convolution(x, weights, batch_size, height, width)
-        output_mean = jnp.real(output_mean)
-
-        # Ensure aleatoric uncertainty has correct shape  handling
-        aleatoric_uncertainty = jnp.broadcast_to(aleatoric_uncertainty, output_mean.shape)
-
-        return output_mean, aleatoric_uncertainty
-
-    def kl_divergence(self) -> jax.Array:
-        """Compute KL divergence for weight distributions."""
-        # KL for real part
-        real_var = jnp.exp(self.weight_logvar.value)
-        kl_real = 0.5 * jnp.sum(
-            (self.weight_mean.value**2 + real_var) / (self.prior_std**2)
-            - 1
-            - self.weight_logvar.value
-            + 2 * jnp.log(self.prior_std)
-        )
-
-        # KL for imaginary part
-        imag_var = jnp.exp(self.weight_imag_logvar.value)
-        kl_imag = 0.5 * jnp.sum(
-            (self.weight_imag_mean.value**2 + imag_var) / (self.prior_std**2)
-            - 1
-            - self.weight_imag_logvar.value
-            + 2 * jnp.log(self.prior_std)
-        )
-
-        return kl_real + kl_imag
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Apply the base solution operator to ``x``."""
+        return self.fno(x)
 
 
-class UQNOLayer(nnx.Module):
-    """
-    UQNO layer with proper shape handling for skip connections.
+class UQNOResidualOperator(nnx.Module):
+    """Thin wrapper tagging an FNO as the UQNO's residual quantile operator.
 
-    Combines Bayesian spectral convolution with local operations
-    and proper channel dimension handling.
+    Trained with :class:`opifex.uncertainty.losses.PointwiseQuantileLoss`
+    against the residuals of the (frozen) base operator. Conventionally
+    the raw output is passed through ``softplus`` / ``jnp.abs`` so
+    quantile widths are non-negative; the orchestrator's
+    :meth:`UncertaintyQuantificationNeuralOperator.predict_residual`
+    helper applies ``jnp.abs`` as a safe default.
     """
 
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        modes: Sequence[int],
-        use_skip_connection: bool = True,
-        *,
-        rngs: nnx.Rngs,
-    ):
-        """
-        Initialize UQNO layer.
+    def __init__(self, fno: FourierNeuralOperator) -> None:
+        self.fno = fno
 
-        Args:
-            in_channels: Number of input channels
-            out_channels: Number of output channels
-            modes: Fourier modes for spectral convolution
-            use_skip_connection: Whether to use skip connections
-            rngs: Random number generator state
-        """
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.use_skip_connection = use_skip_connection
-        # Bayesian spectral convolution
-        self.spectral_conv = BayesianSpectralConvolution(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            modes=modes,
-            rngs=rngs,
-        )
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Apply the residual quantile operator to ``x``."""
+        return self.fno(x)
 
-        # Local convolution for comparison
-        self.local_conv = nnx.Conv(
-            in_features=in_channels,
-            out_features=out_channels,
-            kernel_size=(1, 1),
-            padding="SAME",
-            rngs=rngs,
-        )
 
-        # FIXED: Channel projection for skip connection if needed
-        if use_skip_connection and in_channels != out_channels:
-            self.channel_proj = nnx.Conv(
-                in_features=in_channels,
-                out_features=out_channels,
-                kernel_size=(1, 1),
-                padding="SAME",
-                rngs=rngs,
-            )
-        else:
-            self.channel_proj = None  # type: ignore[assignment]
+# ---------------------------------------------------------------------------
+# Fitted conformal calibrator (flax.struct pytree)
+# ---------------------------------------------------------------------------
 
-    def __call__(self, x: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:
-        """
-        Forward pass with proper shape handling.
 
-        Args:
-            x: Input tensor (batch, in_channels, height, width)
-            training: Whether in training mode
+@struct.dataclass(slots=True, kw_only=True)
+class UQNOConformalCalibrator:
+    """Fitted scalar conformal scaling factor + the alpha/delta used to derive it.
 
-        Returns:
-            Tuple of (output, aleatoric_uncertainty)
-        """
+    The scaling factor is a scalar :class:`jax.Array`; the integer
+    ``alpha`` / ``delta`` configuration is stored as
+    ``struct.field(pytree_node=False)`` so it travels as static
+    aux_data and never enters jit traces as a leaf.
+    """
 
-        # Apply spectral convolution
-        x_spec, aleatoric_std = self.spectral_conv(x, training=training)
+    scaling_factor: jax.Array
+    alpha: float = struct.field(pytree_node=False)
+    delta: float = struct.field(pytree_node=False)
+    domain_idx: int = struct.field(pytree_node=False)
+    function_idx: int = struct.field(pytree_node=False)
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
 
-        # Convert to channels-last for Conv
-        x_channels_last = x.transpose(0, 2, 3, 1)
-        conv_out = self.local_conv(x_channels_last)
-        # Convert back to channels-first
-        x_local = conv_out.transpose(0, 3, 1, 2)
+    def validate(self) -> None:
+        """Public validation hook; not called from ``__post_init__``."""
+        if not 0.0 < float(self.alpha) < 1.0:
+            raise ValueError(f"alpha must lie in (0, 1); got {self.alpha!r}.")
+        if not 0.0 < float(self.delta) < 1.0:
+            raise ValueError(f"delta must lie in (0, 1); got {self.delta!r}.")
 
-        # Handle skip connection with proper channel matching
-        if self.use_skip_connection:
-            if self.channel_proj is not None:
-                x_channels_last = x.transpose(0, 2, 3, 1)
-                proj_out = self.channel_proj(x_channels_last)
-                x_skip = proj_out.transpose(0, 3, 1, 2)
-            else:
-                x_skip = x
-        else:
-            x_skip = jnp.zeros_like(x_spec)
 
-        # FIXED: Combine all paths
-        output = x_spec + x_local + x_skip
+# ---------------------------------------------------------------------------
+# Conformal-index helper
+# ---------------------------------------------------------------------------
 
-        return nnx.gelu(output), aleatoric_std
 
-    def kl_divergence(self) -> jax.Array:
-        """Get KL divergence from spectral convolution."""
-        return self.spectral_conv.kl_divergence()
+def get_coeff_quantile_idx(
+    *, alpha: float, delta: float, n_samples: int, n_gridpts: int
+) -> tuple[int, int]:
+    """Domain + function quantile indices for UQNO conformal calibration.
+
+    Direct JAX-free Python port of the canonical
+    ``get_coeff_quantile_idx`` in
+    ``../neuraloperator/scripts/train_uqno_darcy.py``. Returns the
+    ``(domain_idx, function_idx)`` pair: take the ``domain_idx``-th
+    largest pointwise ratio per function, then the ``function_idx``-th
+    largest of those per-function values across the calibration set.
+
+    Args:
+        alpha: Desired pointwise miscoverage rate in ``(0, 1)``.
+        delta: Desired function-level miscoverage rate in ``(0, 1)``.
+        n_samples: Number of calibration samples.
+        n_gridpts: Number of grid points per sample.
+    """
+    if not 0.0 < float(alpha) < 1.0:
+        raise ValueError(f"alpha must lie in (0, 1); got {alpha!r}.")
+    if not 0.0 < float(delta) < 1.0:
+        raise ValueError(f"delta must lie in (0, 1); got {delta!r}.")
+    if n_samples <= 0:
+        raise ValueError(f"n_samples must be positive; got {n_samples!r}.")
+    if n_gridpts <= 0:
+        raise ValueError(f"n_gridpts must be positive; got {n_gridpts!r}.")
+
+    lb = math.sqrt(-math.log(delta) / (2.0 * n_gridpts))
+    t = (alpha - lb) / 3.0 + lb
+    percentile = alpha - t
+    domain_idx = math.ceil(percentile * n_gridpts)
+    function_percentile = (
+        math.ceil((n_samples + 1) * (delta - math.exp(-2.0 * n_gridpts * t * t))) / n_samples
+    )
+    function_idx = math.ceil(function_percentile * n_samples)
+    return domain_idx, function_idx
+
+
+# ---------------------------------------------------------------------------
+# UQNO orchestrator
+# ---------------------------------------------------------------------------
 
 
 class UncertaintyQuantificationNeuralOperator(nnx.Module):
-    """
-    Complete Uncertainty Quantification Neural Operator.
+    """Three-stage conformal UQNO orchestrator.
 
-    Neural operator with built-in uncertainty quantification for
-    safety-critical applications and robust predictions.
+    Holds a base solution operator, a residual quantile operator, and
+    an optional fitted :class:`UQNOConformalCalibrator`. Use:
+
+    1. Train ``self.base`` to convergence on the regression task with
+       any standard FNO training loop.
+    2. Train ``self.residual`` against
+       :class:`opifex.uncertainty.losses.PointwiseQuantileLoss` on
+       ``base(x) - y_true`` residuals (gradients through
+       :meth:`__call__` are stopped at the base via
+       ``jax.lax.stop_gradient`` so residual-stage updates do not
+       contaminate the base).
+    3. Call :meth:`calibrate` on a held-out calibration set to obtain
+       a :class:`UQNOConformalCalibrator`; attach it via
+       :meth:`with_calibrator`.
+    4. Call :meth:`predict_with_bands` at test time.
+
+    The class never claims native Bayesian or distributional support;
+    the matching capability declaration is
+    :class:`opifex.uncertainty.adapters.operators.FNOConformalAdapterSpec`.
     """
+
+    calibrator: nnx.Data[UQNOConformalCalibrator | None]
 
     def __init__(
         self,
-        in_channels: int,
-        out_channels: int,
-        hidden_channels: int = 64,
-        modes: Sequence[int] = (16, 16),
-        num_layers: int = 4,
-        use_epistemic: bool = True,
-        use_aleatoric: bool = True,
-        ensemble_size: int = 10,
         *,
-        rngs: nnx.Rngs,
-    ):
+        base: UQNOBaseSolutionOperator,
+        residual: UQNOResidualOperator,
+        calibrator: UQNOConformalCalibrator | None = None,
+    ) -> None:
+        self.base = base
+        self.residual = residual
+        self.calibrator = calibrator
+
+    # ------------------------------------------------------------------
+    # Forward + per-stage helpers
+    # ------------------------------------------------------------------
+
+    def __call__(self, x: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return ``(solution, quantile_width)`` for ``x``.
+
+        Gradients through the base are stopped via
+        ``jax.lax.stop_gradient`` — residual-stage training that calls
+        this method only updates the residual operator and the
+        calibrator.
         """
-        Initialize UQNO with uncertainty quantification.
+        solution = jax.lax.stop_gradient(self.base(x))
+        quantile = jnp.abs(self.residual(x))
+        return solution, quantile
+
+    def predict_base(self, x: jax.Array) -> jax.Array:
+        """Apply the base solution operator only."""
+        return self.base(x)
+
+    def predict_residual(self, x: jax.Array) -> jax.Array:
+        """Apply the residual quantile operator (non-negative)."""
+        return jnp.abs(self.residual(x))
+
+    # ------------------------------------------------------------------
+    # Calibration
+    # ------------------------------------------------------------------
+
+    def calibrate(
+        self,
+        x_calib: jax.Array,
+        y_calib: jax.Array,
+        *,
+        alpha: float,
+        delta: float,
+        eps: float = 1e-12,
+    ) -> UQNOConformalCalibrator:
+        """Derive a scalar uncertainty scaling factor on a calibration set.
+
+        Mirrors ``../neuraloperator/scripts/train_uqno_darcy.py``: for
+        every calibration sample, compute per-grid ratios
+        ``|y - base(x)| / (residual(x) + eps)``; take the
+        ``domain_idx``-th largest ratio per function (per-batch);
+        then the ``function_idx``-th largest of those across the
+        batch is the scalar scaling factor.
 
         Args:
-            in_channels: Number of input channels
-            out_channels: Number of output channels
-            hidden_channels: Hidden layer width
-            modes: Fourier modes for spectral convolution
-            num_layers: Number of UQNO layers
-            use_epistemic: Whether to use epistemic uncertainty
-            use_aleatoric: Whether to use aleatoric uncertainty
-            ensemble_size: Size for Monte Carlo sampling
-            rngs: Random number generator state
+            x_calib: Calibration inputs, shape ``(n_samples, ...)``.
+            y_calib: Calibration targets, same shape as the base
+                model output.
+            alpha: Target pointwise miscoverage in ``(0, 1)``.
+            delta: Target function-level miscoverage in ``(0, 1)``.
+            eps: Floor added to ``residual(x)`` before division to
+                avoid divide-by-zero on near-zero predicted widths.
         """
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.hidden_channels = hidden_channels
-        self.num_layers = num_layers
-        self.use_epistemic = use_epistemic
-        self.use_aleatoric = use_aleatoric
-        self.ensemble_size = ensemble_size
-        self.rngs = rngs  # Store rngs for later use
-        # Input lifting
-        self.lifting = BayesianLinear(in_channels, hidden_channels, rngs=rngs)
+        base_pred = self.predict_base(x_calib)
+        residual_pred = self.predict_residual(x_calib) + eps
+        ratios = jnp.abs(y_calib - base_pred) / residual_pred  # (n_samples, ...)
+        n_samples = int(ratios.shape[0])
+        n_gridpts = int(jnp.prod(jnp.array(ratios.shape[1:])))
+        flat = ratios.reshape(n_samples, n_gridpts)
 
-        # UQNO layers
-        uqno_layers_temp = []
-        for _ in range(num_layers):
-            layer_in_channels = hidden_channels
-            layer_out_channels = hidden_channels
+        domain_idx, function_idx = get_coeff_quantile_idx(
+            alpha=alpha, delta=delta, n_samples=n_samples, n_gridpts=n_gridpts
+        )
+        # Per-sample: the (domain_idx)-th largest pointwise ratio.
+        domain_k = min(max(domain_idx + 1, 1), n_gridpts)
+        per_sample_topk = jnp.sort(flat, axis=1)[:, -domain_k:]
+        per_sample_value = per_sample_topk[:, 0]  # smallest of top-k == k-th largest
 
-            layer = UQNOLayer(
-                in_channels=layer_in_channels,
-                out_channels=layer_out_channels,
-                modes=modes,
-                rngs=rngs,
+        # Across samples: the (function_idx)-th largest of those.
+        function_k = min(max(function_idx + 1, 1), n_samples)
+        across_topk = jnp.sort(per_sample_value)[-function_k:]
+        scaling_factor = jnp.abs(across_topk[0])
+
+        return UQNOConformalCalibrator(
+            scaling_factor=scaling_factor,
+            alpha=float(alpha),
+            delta=float(delta),
+            domain_idx=int(domain_idx),
+            function_idx=int(function_idx),
+            metadata=(
+                ("source", "uqno_conformal_calibration"),
+                ("n_samples", n_samples),
+                ("n_gridpts", n_gridpts),
+            ),
+        )
+
+    def with_calibrator(
+        self, calibrator: UQNOConformalCalibrator
+    ) -> UncertaintyQuantificationNeuralOperator:
+        """Attach ``calibrator`` to this operator and return ``self``.
+
+        NNX modules support in-place mutation; ``with_*`` is the
+        fluent-attach name (matches the canonical neuraloperator
+        ``uqno_data_proc.set_scale_factor`` pattern in spirit).
+        """
+        self.calibrator = calibrator
+        return self
+
+    # ------------------------------------------------------------------
+    # Test-time prediction with calibrated bands
+    # ------------------------------------------------------------------
+
+    def predict_with_bands(self, x: jax.Array) -> PredictiveDistribution:
+        """Return ``PredictiveDistribution`` with bands ``base ± E * scaling_factor``.
+
+        Requires a fitted :class:`UQNOConformalCalibrator` (attach via
+        :meth:`with_calibrator` or by passing ``calibrator=`` at
+        construction). The metadata records
+        ``("method", "conformal"), ("alpha", alpha), ("delta", delta)``;
+        ``epistemic`` and ``samples`` stay ``None`` (conformal is not
+        Bayesian).
+        """
+        if self.calibrator is None:
+            raise RuntimeError(
+                "UQNO predict_with_bands requires a fitted calibrator. "
+                "Call .calibrate(x_calib, y_calib, alpha=..., delta=...) "
+                "and attach via .with_calibrator(...)."
             )
-            uqno_layers_temp.append(layer)
-            self.uqno_layers = nnx.List(uqno_layers_temp)
-
-        # Output projection
-        self.projection = BayesianLinear(hidden_channels, out_channels, rngs=rngs)
-
-        # Epistemic uncertainty head (if enabled)
-        if use_epistemic:
-            # The epistemic head will be initialized during the first forward pass
-            # when we know the actual input dimensions
-            self.epistemic_head = nnx.List([])
-
-    def _compute_epistemic_uncertainty(
-        self, x: jax.Array, mean_pred: jax.Array, training: bool
-    ) -> jax.Array:
-        """Compute epistemic uncertainty if enabled."""
-        if self.use_epistemic and training:
-            # Initialize epistemic head if not already done
-            # We use pixel-wise application for resolution independence
-            if len(self.epistemic_head) == 0:
-                self.epistemic_head.append(
-                    BayesianLinear(
-                        x.shape[-1],  # hidden_channels
-                        self.out_channels,
-                        rngs=self.rngs,
-                    )
-                )
-
-            epistemic_logvar = self.epistemic_head[0](
-                x, training=training
-            )  # (batch, height, width, out_channels)
-            return jnp.exp(0.5 * epistemic_logvar)
-        return jnp.zeros_like(mean_pred)
-
-    def _compute_aleatoric_uncertainty(
-        self, aleatoric_stds: list[jax.Array], mean_pred: jax.Array
-    ) -> jax.Array:
-        """Compute and project aleatoric uncertainty."""
-        if not (self.use_aleatoric and aleatoric_stds):
-            return jnp.zeros_like(mean_pred)
-
-        # Combine uncertainties from all layers (still in channels-first format)
-        combined_aleatoric_channels_first = jnp.sqrt(
-            jnp.sum(
-                jnp.stack([std**2 for std in aleatoric_stds], axis=0),
-                axis=0,
-            )
-        )  # Shape: (batch, hidden_channels, height, width)
-
-        # Convert to channels-last for projection
-        combined_aleatoric_for_projection = combined_aleatoric_channels_first.transpose(0, 2, 3, 1)
-        # Shape: (batch, height, width, hidden_channels)
-
-        # Project to output dimension using a linear transformation
-        # Note: For uncertainty, we use a simplified projection
-        # (mean of uncertainty across channels)
-        if self.hidden_channels != self.out_channels:
-            # Average across hidden channels to get output channels
-            combined_aleatoric = jnp.mean(
-                combined_aleatoric_for_projection.reshape(
-                    (
-                        *combined_aleatoric_for_projection.shape[:-1],
-                        self.out_channels,
-                        self.hidden_channels // self.out_channels,
-                    )
-                ),
-                axis=-1,
-            )
-        else:
-            combined_aleatoric = combined_aleatoric_for_projection
-
-        return combined_aleatoric
-
-    def __call__(self, x: jax.Array, training: bool = True) -> dict[str, jax.Array]:
-        """
-        Forward pass with uncertainty quantification.
-
-        Args:
-            x: Input tensor (batch, height, width, in_channels)
-            training: Whether in training mode
-
-        Returns:
-            Dictionary with mean prediction and uncertainties
-        """
-        if x.ndim != 4:
-            raise ValueError(f"Expected 4D input tensor, got {x.ndim}D")
-
-        _batch_size, _height, _width, _in_channels = x.shape
-
-        # Lifting with shape handling
-        x = self.lifting(x, training=training)  # (batch, height, width, hidden_channels)
-
-        # Convert to channels-first for convolution layers
-        x = x.transpose(0, 3, 1, 2)  # (batch, hidden_channels, height, width)
-
-        # Collect aleatoric uncertainties
-        aleatoric_stds = []
-
-        # Apply UQNO layers
-        for layer in self.uqno_layers:
-            x, aleatoric_std = layer(x, training=training)
-            aleatoric_stds.append(aleatoric_std)
-
-        # Convert back to channels-last for linear layers
-        x = x.transpose(0, 2, 3, 1)  # (batch, height, width, hidden_channels)
-
-        # Output projection
-        mean_pred = self.projection(x, training=training)
-
-        # Compute uncertainties
-        epistemic_std = self._compute_epistemic_uncertainty(x, mean_pred, training)
-        combined_aleatoric = self._compute_aleatoric_uncertainty(aleatoric_stds, mean_pred)
-
-        # Total uncertainty
-        total_uncertainty = jnp.sqrt(epistemic_std**2 + combined_aleatoric**2)
-
-        return {
-            "mean": mean_pred,
-            "epistemic_uncertainty": epistemic_std,
-            "aleatoric_uncertainty": combined_aleatoric,
-            "total_uncertainty": total_uncertainty,
-        }
-
-    def predict_with_uncertainty(
-        self, x: jax.Array, num_samples: int = 10, key: jax.Array | None = None
-    ) -> dict[str, jax.Array]:
-        """
-        Predict with Monte Carlo uncertainty estimation.
-
-        Args:
-            x: Input tensor
-            num_samples: Number of Monte Carlo samples
-            key: Random key for sampling
-
-        Returns:
-            Dictionary with prediction statistics
-        """
-        # Ensure key is not None
-        sampling_key: jax.Array = key if key is not None else jax.random.PRNGKey(0)
-
-        predictions = []
-        aleatoric_uncertainties = []
-
-        for _ in range(num_samples):
-            sampling_key, _subkey = jax.random.split(sampling_key)
-            pred = self(x, training=True)
-            predictions.append(pred["mean"])
-            aleatoric_uncertainties.append(pred["aleatoric_uncertainty"])
-
-        # Compute statistics across samples
-        means = jnp.stack(predictions)
-        aleatoric_stack = jnp.stack(aleatoric_uncertainties)
-
-        prediction_mean = jnp.mean(means, axis=0)
-        epistemic_uncertainty = jnp.std(means, axis=0)
-        aleatoric_uncertainty = jnp.mean(aleatoric_stack, axis=0)
-
-        total_uncertainty = jnp.sqrt(epistemic_uncertainty**2 + aleatoric_uncertainty**2)
-
-        return {
-            "mean": prediction_mean,
-            "epistemic_uncertainty": epistemic_uncertainty,
-            "aleatoric_uncertainty": aleatoric_uncertainty,
-            "total_uncertainty": total_uncertainty,
-        }
-
-    def kl_divergence(self) -> jax.Array:
-        """Compute total KL divergence for all Bayesian layers."""
-        kl_div = self.lifting.kl_divergence() + self.projection.kl_divergence()
-
-        for layer in self.uqno_layers:
-            kl_div += layer.kl_divergence()
-
-        if self.use_epistemic and len(self.epistemic_head) > 0:
-            kl_div += self.epistemic_head[0].kl_divergence()
-
-        return kl_div
+        solution = self.predict_base(x)
+        widths = self.predict_residual(x) * self.calibrator.scaling_factor
+        # ``scaling_factor`` is a traced jax.Array under jit and cannot be
+        # cast to float here — keep it on the calibrator object; the static
+        # alpha/delta are sufficient identifiers for the band semantics.
+        interval = PredictionInterval(
+            lower=solution - widths,
+            upper=solution + widths,
+            coverage=1.0 - self.calibrator.alpha,
+            method="conformal",
+            metadata=(
+                ("alpha", self.calibrator.alpha),
+                ("delta", self.calibrator.delta),
+            ),
+        )
+        return PredictiveDistribution(
+            mean=solution,
+            interval=interval,
+            metadata=(
+                ("method", "conformal"),
+                ("alpha", self.calibrator.alpha),
+                ("delta", self.calibrator.delta),
+                ("source", "uqno"),
+            ),
+        )
 
 
-# Factory functions for different UQNO configurations
-def create_safety_critical_uqno(
-    in_channels: int, out_channels: int, *, rngs: nnx.Rngs
-) -> UncertaintyQuantificationNeuralOperator:
-    """Create UQNO for safety-critical applications."""
-    return UncertaintyQuantificationNeuralOperator(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        hidden_channels=128,
-        modes=(32, 32),
-        num_layers=6,
-        use_epistemic=True,
-        use_aleatoric=True,
-        ensemble_size=20,
-        rngs=rngs,
-    )
+# ---------------------------------------------------------------------------
+# Backwards-incompatibility shims (Task 3.8 rewrite removed these)
+# ---------------------------------------------------------------------------
 
 
-def create_robust_design_uqno(
-    in_channels: int, out_channels: int, *, rngs: nnx.Rngs
-) -> UncertaintyQuantificationNeuralOperator:
-    """Create UQNO for robust engineering design."""
-    return UncertaintyQuantificationNeuralOperator(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        hidden_channels=96,
-        modes=(24, 24),
-        num_layers=5,
-        use_epistemic=True,
-        use_aleatoric=True,
-        ensemble_size=15,
-        rngs=rngs,
-    )
+def _legacy_factory_unavailable(name: str) -> Any:
+    """Return a callable that raises a clear "removed" message."""
+
+    def _factory(*_args: Any, **_kwargs: Any) -> Any:
+        raise NotImplementedError(
+            f"{name!r} was removed by the conformal-UQNO rewrite. Compose "
+            f"the new orchestrator manually: "
+            f"UncertaintyQuantificationNeuralOperator("
+            f"base=UQNOBaseSolutionOperator(...), "
+            f"residual=UQNOResidualOperator(...)). See "
+            f"examples/uncertainty/uqno_darcy.py for the full training + "
+            f"calibration recipe."
+        )
+
+    return _factory
 
 
-def create_bayesian_inverse_uqno(
-    in_channels: int, out_channels: int, *, rngs: nnx.Rngs
-) -> UncertaintyQuantificationNeuralOperator:
-    """Create UQNO for Bayesian inverse problems."""
-    return UncertaintyQuantificationNeuralOperator(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        hidden_channels=64,
-        modes=(16, 16),
-        num_layers=4,
-        use_epistemic=True,
-        use_aleatoric=False,  # Focus on epistemic uncertainty
-        ensemble_size=25,
-        rngs=rngs,
-    )
+create_safety_critical_uqno = _legacy_factory_unavailable("create_safety_critical_uqno")
+create_robust_design_uqno = _legacy_factory_unavailable("create_robust_design_uqno")
+create_bayesian_inverse_uqno = _legacy_factory_unavailable("create_bayesian_inverse_uqno")
+UQNOLayer = _legacy_factory_unavailable("UQNOLayer")
+
+
+__all__ = [
+    "BayesianLinear",
+    "BayesianSpectralConvolution",
+    "UQNOBaseSolutionOperator",
+    "UQNOConformalCalibrator",
+    "UQNOLayer",
+    "UQNOResidualOperator",
+    "UncertaintyQuantificationNeuralOperator",
+    "create_bayesian_inverse_uqno",
+    "create_robust_design_uqno",
+    "create_safety_critical_uqno",
+    "get_coeff_quantile_idx",
+]

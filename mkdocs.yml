@@ -177,11 +177,10 @@ nav:
       - Deployment: api/deployment.md
       - Benchmarking: api/benchmarking.md
       - Bayesian: api/bayesian.md
+      - Uncertainty: api/uncertainty.md
       - Scalability: api/scalability.md
-      - Education: api/education.md
       - Discovery: api/discovery.md
       - Fields: api/fields.md
-      - Utilities: api/utils.md
   - Development:
       - Contributing: development/contributing.md
       - Breaking Changes: development/breaking-changes.md
@@ -189,7 +188,7 @@ nav:
       - GPU Development: development/gpu-development.md
       - Architecture: development/architecture.md
       - Code Quality: development/code-quality.md
-      - Example Documentation Design: development/example_documentation_design.md
+      - Example Documentation Design: development/example-documentation-design.md
   - Deployment:
       - Local Development: deployment/local-development.md
       - AWS Deployment: deployment/aws-deployment.md

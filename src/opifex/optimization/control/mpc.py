@@ -334,7 +334,7 @@ class RealTimeOptimizer(nnx.Module):
         Use optimize() for JIT-compatible optimization without time limits.
         """
 
-        start_time = time.time()
+        start_time = time.monotonic()
 
         # Use warm start if available
         if self.warm_start and warm_start_solution is not None:
@@ -354,7 +354,7 @@ class RealTimeOptimizer(nnx.Module):
 
         for iteration in range(self.max_iterations):
             # Check time limit
-            if time.time() - start_time > self.time_limit:
+            if time.monotonic() - start_time > self.time_limit:
                 return OptimizationResult(
                     solution=x,
                     converged=False,
@@ -490,7 +490,7 @@ class DifferentiableMPC(nnx.Module):
         self, current_state: jnp.ndarray, reference_trajectory: jnp.ndarray
     ) -> MPCResult:
         """Compute optimal control action."""
-        start_time = time.time()
+        start_time = time.monotonic()
 
         # Initialize control sequence
         initial_controls = jnp.zeros((self.horizon, self.control_dim))
@@ -536,7 +536,7 @@ class DifferentiableMPC(nnx.Module):
         # Return only the first control action (receding horizon)
         control_action = optimal_controls[0]
 
-        computation_time = time.time() - start_time
+        computation_time = time.monotonic() - start_time
 
         return MPCResult(
             control_action=control_action,

@@ -4,6 +4,16 @@ This module provides utilities for detecting and managing JAX devices
 in a consistent way across the Opifex framework.
 """
 
+import logging
+
+
+_logger = logging.getLogger(__name__)
+
+# JAX raises these when devices / backends are missing or the runtime
+# is not initialized. They are the only failure modes we accept as
+# legitimate "JAX is unusable here" signals; everything else propagates.
+_JAX_UNAVAILABLE = (ImportError, RuntimeError, AttributeError)
+
 
 def get_device_info() -> dict[str, str | bool | int | list[str]]:
     """Get full information about available JAX devices.
@@ -34,8 +44,8 @@ def get_device_info() -> dict[str, str | bool | int | list[str]]:
             "gpu_available": backend == "gpu",
             "cpu_available": True,  # CPU is always available as fallback
         }
-    except Exception:
-        # Fallback configuration if JAX is not available or fails
+    except _JAX_UNAVAILABLE as exc:
+        _logger.warning("JAX device probe failed (%s); reporting CPU-only fallback.", exc)
         return {
             "available_devices": ["cpu:0"],
             "default_backend": "cpu",
@@ -59,7 +69,8 @@ def get_platform() -> str:
         import jax
 
         return jax.default_backend()
-    except Exception:
+    except _JAX_UNAVAILABLE as exc:
+        _logger.warning("JAX backend probe failed (%s); defaulting to 'cpu'.", exc)
         return "cpu"
 
 
@@ -93,6 +104,5 @@ def configure_jax_precision(enable_x64: bool = True) -> None:
         import jax
 
         jax.config.update("jax_enable_x64", enable_x64)
-    except Exception:
-        # Silently fail if JAX is not available
-        pass
+    except _JAX_UNAVAILABLE as exc:
+        _logger.warning("JAX precision configuration failed (%s); leaving default precision.", exc)

@@ -230,7 +230,7 @@ class ValidationEngine:
         Returns:
             Complete validation report
         """
-        start_time = time.time()
+        start_time = time.monotonic()
 
         # Load functional
         functional_data = await self.registry.retrieve_functional(functional_id, version)
@@ -273,7 +273,7 @@ class ValidationEngine:
         # Generate recommendations
         recommendations = self._generate_recommendations(test_results, functional_data)
 
-        execution_time = time.time() - start_time
+        execution_time = time.monotonic() - start_time
 
         return FunctionalReport(
             functional_id=functional_id,
@@ -298,7 +298,7 @@ class ValidationEngine:
         Returns:
             Validation result
         """
-        start_time = time.time()
+        start_time = time.monotonic()
 
         try:
             # Execute test function with timeout handling
@@ -306,7 +306,7 @@ class ValidationEngine:
                 rule.test_function, functional_data, rule.timeout_seconds
             )
 
-            execution_time = time.time() - start_time
+            execution_time = time.monotonic() - start_time
 
             return ValidationResult(
                 rule_name=rule.name,
@@ -333,7 +333,7 @@ class ValidationEngine:
                 score=0.0,
                 message=f"Test failed: {e!s}",
                 error_traceback=traceback.format_exc(),
-                execution_time=time.time() - start_time,
+                execution_time=time.monotonic() - start_time,
             )
 
     async def _execute_with_timeout(
@@ -666,9 +666,9 @@ class ValidationEngine:
             # Timed runs
             times = []
             for _ in range(5):
-                start_time = time.time()
+                start_time = time.monotonic()
                 _ = functional(test_input)
-                execution_time = time.time() - start_time
+                execution_time = time.monotonic() - start_time
                 times.append(execution_time)
 
             avg_time = sum(times) / len(times)

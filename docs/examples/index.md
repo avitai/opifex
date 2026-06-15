@@ -254,4 +254,4 @@ python examples/benchmarking/operator_benchmark.py
 - [Neural Operators Guide](../methods/neural-operators.md) -- Theory and architecture details
 - [PINNs Guide](../methods/pinns.md) -- Physics-informed methods
 - [Training Guide](../user-guide/training.md) -- `Trainer` API reference
-- [Example Documentation Design](../development/example_documentation_design.md) -- Contributing guidelines
+- [Example Documentation Design](../development/example-documentation-design.md) -- Contributing guidelines

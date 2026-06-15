@@ -306,6 +306,67 @@ trainer.set_physics_loss(physics_loss)
 - Quantum mechanical constraints
 - Boundary condition enforcement
 
+## Uncertainty-Aware Trainers
+
+Three trainer surfaces in `opifex.training.basic_trainer` extend
+`BasicTrainer` with uncertainty-driven behaviours; each is independent and
+opt-in.
+
+### `UncertaintyGuidedTrainer`
+
+Adaptive sampling driven by the model's epistemic uncertainty:
+candidate points with the highest predictive variance get re-weighted
+into the next training batch. Plugs into any
+`UncertaintyAwareModule.predict_distribution(...)` surface.
+
+```python
+from opifex.training import UncertaintyGuidedTrainer
+
+trainer = UncertaintyGuidedTrainer(
+    model=bayesian_model,
+    optimizer=optax.adam(1e-3),
+    uncertainty_threshold=0.1,
+)
+state = trainer.train(dataset, num_epochs=100)
+```
+
+### `MultiFidelityUncertaintyTrainer`
+
+Multi-fidelity training that interleaves a low-fidelity solver and a
+high-fidelity solver while tracking per-fidelity uncertainty. Routes
+expensive high-fidelity calls only when the low-fidelity uncertainty
+exceeds a configurable threshold.
+
+```python
+from opifex.training import MultiFidelityUncertaintyTrainer
+
+trainer = MultiFidelityUncertaintyTrainer(
+    low_fidelity_model=fast_model,
+    high_fidelity_model=accurate_model,
+    optimizer=optax.adam(1e-3),
+)
+```
+
+### `ActiveUncertaintyLearner`
+
+Active-learning loop that queries the most informative samples from a
+candidate pool using the same epistemic-uncertainty proxy. Designed for
+small-data regimes where labelling is expensive.
+
+```python
+from opifex.training import ActiveUncertaintyLearner
+
+learner = ActiveUncertaintyLearner(
+    model=bayesian_model,
+    optimizer=optax.adam(1e-3),
+    acquisition_size=32,
+)
+```
+
+All three trainers consume the canonical `PredictiveDistribution`
+contract from `opifex.uncertainty.types` so they slot in alongside the
+calibration and conformal post-processing pipelines.
+
 ## Usage Examples
 
 ### Basic Training Workflow

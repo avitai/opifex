@@ -170,7 +170,7 @@ tfno = create_operator(
 uqno = create_operator(
     "UQNO",
     in_channels=2, out_channels=1, hidden_channels=32,
-    modes=(8, 8), use_aleatoric=True, rngs=rngs,
+    modes=(8, 8), rngs=rngs,
 )
 ```
 
@@ -338,22 +338,40 @@ separates epistemic uncertainty (model knowledge gaps) from aleatoric
 uncertainty (inherent data noise).
 
 ```python
-# Create UQNO with aleatoric uncertainty
-uqno = UncertaintyQuantificationNeuralOperator(
+# UQNO is the canonical conformal three-stage operator:
+#   1. base FNO trained with MSE,
+#   2. residual FNO trained with PointwiseQuantileLoss,
+#   3. scalar conformal calibration on a held-out set.
+from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.neural.operators.specialized.uqno import (
+    UncertaintyQuantificationNeuralOperator,
+    UQNOBaseSolutionOperator,
+    UQNOResidualOperator,
+)
+
+base_fno = FourierNeuralOperator(
     in_channels=2, out_channels=1, hidden_channels=64,
-    modes=(16, 16), num_layers=4, use_aleatoric=True, rngs=rngs,
+    modes=16, num_layers=4, rngs=nnx.Rngs(0),
+)
+residual_fno = FourierNeuralOperator(
+    in_channels=2, out_channels=1, hidden_channels=64,
+    modes=16, num_layers=4, rngs=nnx.Rngs(1),
+)
+uqno = UncertaintyQuantificationNeuralOperator(
+    base=UQNOBaseSolutionOperator(base_fno),
+    residual=UQNOResidualOperator(residual_fno),
 )
 
-# Get uncertainty predictions with 50 Monte Carlo samples
-x = jax.random.normal(rng_key, (2, 32, 32, 2))
-uncertainty_results = uqno.predict_with_uncertainty(
-    x, num_samples=50, key=rng_key
-)
+# After training base + residual, calibrate on a held-out set:
+calibrator = uqno.calibrate(x_calib, y_calib, alpha=0.1, delta=0.1)
+uqno = uqno.with_calibrator(calibrator)
 
-mean_pred = uncertainty_results["mean"]
-epistemic_std = uncertainty_results["epistemic_uncertainty"]
-total_std = uncertainty_results["total_uncertainty"]
-aleatoric_std = uncertainty_results["aleatoric_uncertainty"]
+# At test time, predict_with_bands returns a PredictiveDistribution with
+# a populated PredictionInterval (lower, upper).
+x = jax.random.normal(jax.random.PRNGKey(0), (2, 2, 32, 32))  # channels-first
+dist = uqno.predict_with_bands(x)
+mean_pred = dist.mean
+band_width = dist.interval.upper - dist.interval.lower
 ```
 
 **Terminal Output:**
@@ -637,13 +655,20 @@ tfno = TensorizedFourierNeuralOperator(
 )
 ```
 
-### UQNO uncertainty is all zeros
+### UQNO bands collapse to (near-)zero
 
-**Symptom**: `epistemic_uncertainty` returns all zeros from `predict_with_uncertainty()`.
+**Symptom**: ``predict_with_bands(...)`` produces interval widths
+near zero, or the empirical coverage on the test set is far below
+``1 - alpha``.
 
-**Cause**: Before training, all Bayesian weight samples produce identical outputs because the model has not learned to use the stochastic components. This is expected behavior.
+**Cause**: Either the residual operator has not concentrated on the
+true residual distribution yet, or the calibration set is too small
+for the chosen ``(alpha, delta)``.
 
-**Solution**: Train the UQNO on data first using `Trainer.fit()`. After training, the epistemic uncertainty will reflect genuine model uncertainty about predictions in regions with sparse training data.
+**Solution**: Train the residual operator longer with
+``PointwiseQuantileLoss`` against ``base(x) - y_true``; supply a
+larger held-out calibration set to ``uqno.calibrate(...)``. The
+canonical Li-style setup uses ~500 calibration samples.
 
 ### MGNO force conservation error is large
 

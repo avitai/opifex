@@ -91,5 +91,10 @@ class ArtifexSolverAdapter(SciMLSolver):
         )
 
     def sample_batch(self, problem: Problem, num_samples: int, rngs: nnx.Rngs) -> Any:
-        """Helper to sample a batch, useful for GenerativeWrapper."""
+        """Sample a batch of solutions from the underlying generative model.
+
+        Useful upstream of
+        :func:`opifex.uncertainty.scientific.summarize_stacked_sample_solution`,
+        which then summarises the stacked sample axis.
+        """
         # Delegates to model.sample

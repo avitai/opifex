@@ -41,10 +41,10 @@ Probabilistic numerics distinguishes between:
 
 ### 1. Bayesian Neural Network Layers
 
-Opifex provides `BayesianLayer` -- a variational Bayesian layer with learnable weight distributions for epistemic uncertainty estimation:
+Opifex provides `BayesianLinear` -- a variational diagonal-Gaussian dense layer with learnable weight distributions for epistemic uncertainty estimation:
 
 ```python
-from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.uncertainty import BayesianLinear
 import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
@@ -52,22 +52,30 @@ import jax.numpy as jnp
 rngs = nnx.Rngs(42)
 
 # Create a Bayesian linear layer
-layer = BayesianLayer(
+layer = BayesianLinear(
     in_features=10,
     out_features=64,
     prior_std=1.0,
     rngs=rngs,
 )
 
-# Forward pass with weight sampling (training mode)
+# Forward pass with weight sampling. Caller owns the RNG — pass an
+# ``nnx.Rngs`` (which advances its ``posterior`` stream across calls)
+# or an explicit ``jax.Array`` key. Mode follows the canonical
+# ``nnx.Dropout`` convention: per-call ``deterministic`` overrides the
+# module's ``self.deterministic`` attribute set by the NNX inference
+# toggle.
 x = jax.random.normal(jax.random.PRNGKey(0), (32, 10))
-output_sampled = layer(x, training=True, sample=True)
+sample_rngs = nnx.Rngs(posterior=0)
+output_sampled = layer(x, deterministic=False, rngs=sample_rngs)
 
-# Forward pass with mean weights (inference mode)
-output_mean = layer(x, training=False, sample=False)
+# Forward pass at the posterior mean (no sampling).
+output_mean = layer(x, deterministic=True)
 ```
 
-Each `BayesianLayer` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick during training.
+Each `BayesianLinear` maintains variational parameters (`weight_mean`, `weight_logvar`, `bias_mean`, `bias_logvar`) and samples weights via the reparameterization trick when non-deterministic. `BayesianLinear.kl_divergence()` returns the closed-form diagonal Gaussian KL between the posterior and the prior, summed across weight and bias parameters.
+
+For modules built on top of these layers (`ProbabilisticPINN`, `UncertaintyQuantificationNeuralOperator`, etc.) the shared platform exposes built-in objectives — `model.loss_components(batch, *, rngs, objective)` and `model.negative_elbo(batch, *, rngs, objective)` both return a `UQLossComponents` (data, physics_residual, boundary, regularization, kl) computed from an `ObjectiveConfig`. Prefer these over assembling `data_loss + kl_weight * kl_divergence()` by hand.
 
 ### 2. Amortized Variational Framework
 
@@ -102,60 +110,76 @@ config = VariationalConfig(
 
 framework = AmortizedVariationalFramework(
     base_model=base_model,
-    config=config,
+    prior_config=PriorConfig(),
+    variational_config=config,
     rngs=rngs,
 )
 ```
 
 The framework includes a `MeanFieldGaussian` posterior and an `UncertaintyEncoder` that maps inputs to uncertainty estimates.
 
-### 3. BlackJAX MCMC Integration
+### 3. BlackJAX MCMC Backend
 
-For full Bayesian posterior sampling, Opifex integrates with BlackJAX:
+For full Bayesian posterior sampling, Opifex provides the `BlackJAXBackend`
+inference backend, which delegates to the BlackJAX HMC / NUTS / MALA
+samplers:
 
 ```python
-from opifex.neural.bayesian import BlackJAXIntegration
-from opifex.neural.base import StandardMLP
+import jax.numpy as jnp
 import flax.nnx as nnx
+from opifex.uncertainty import BlackJAXBackend
 
-rngs = nnx.Rngs(42)
+def log_density(theta):
+    # Replace with the model + likelihood log-density of interest.
+    return -0.5 * jnp.sum(theta * theta)
 
-base_model = StandardMLP(
-    layer_sizes=[10, 32, 32, 1],
-    activation="gelu",
-    rngs=rngs,
-)
+rngs = nnx.Rngs(sample=42)
 
-# Create MCMC sampler (NUTS, HMC, or MALA)
-mcmc = BlackJAXIntegration(
-    base_model=base_model,
-    sampler_type="nuts",       # "nuts", "hmc", or "mala"
-    num_warmup=1000,
-    num_samples=1000,
+backend = BlackJAXBackend(
+    target_log_prob=log_density,
+    init_state=jnp.zeros(10),
+    n_samples=1000,
+    n_burnin=1000,
+    method="nuts",       # "nuts", "hmc", or "mala"
     step_size=1e-3,
-    rngs=rngs,
 )
+
+result = backend.fit(log_density, rngs=rngs)
+samples = result.sampler_state   # shape (n_samples, ...)
+
+# Convert posterior samples into a PredictiveDistribution for downstream use.
+predictive = backend.predict_distribution(jnp.zeros((4, 10)), rngs=rngs)
 ```
 
-This provides NUTS, HMC, and MALA samplers for posterior inference over neural network parameters, enabling rigorous uncertainty quantification without variational approximations.
+The backend conforms to `InferenceBackendProtocol`. Unsupported sampler
+families (SGLD, SGHMC, SMC, ADVI, Pathfinder) raise `UnsupportedBackendError`
+until the upstream BlackJAX adapter grows a wrapper for them.
 
 ### 4. Uncertainty Quantification Utilities
 
-The `opifex.neural.bayesian.uncertainty_quantification` module provides tools for decomposing and analyzing uncertainty:
+The `opifex.uncertainty.aggregators` module provides tools for decomposing and analyzing uncertainty:
 
 ```python
-from opifex.neural.bayesian import (
+from opifex.uncertainty.aggregators import (
     UncertaintyQuantifier,
     EpistemicUncertainty,
     AleatoricUncertainty,
     UncertaintyComponents,
     CalibrationMetrics,
 )
+from opifex.uncertainty import BayesianLinear
+from flax import nnx
+import jax
 import jax.numpy as jnp
 
-# Given Monte Carlo samples from a Bayesian model
+# Build a small Bayesian model and gather Monte Carlo samples.
+rngs = nnx.Rngs(42)
+model = BayesianLinear(in_features=4, out_features=1, rngs=rngs)
+x = jax.random.normal(jax.random.PRNGKey(0), (8, 4))
+
 # predictions shape: (num_samples, batch_size, output_dim)
-predictions = jnp.stack([model(x) for _ in range(100)])
+sample_rngs = nnx.Rngs(posterior=0)
+predictions = jnp.stack([model(x, rngs=sample_rngs) for _ in range(100)])
 
 # Compute epistemic uncertainty (model uncertainty)
 epistemic_var = EpistemicUncertainty.compute_variance(predictions)
@@ -173,8 +197,10 @@ print(f"Prediction: {mean_prediction[0]} +/- {total_std[0]}")
 The `PhysicsInformedPriors` class enforces conservation laws and boundary conditions through learnable constraint weights:
 
 ```python
-from opifex.neural.bayesian import PhysicsInformedPriors
+from opifex.uncertainty.priors_physics import PhysicsInformedPriors
 import flax.nnx as nnx
+import jax
+import jax.numpy as jnp
 
 priors = PhysicsInformedPriors(
     conservation_laws=["energy", "momentum"],
@@ -184,6 +210,7 @@ priors = PhysicsInformedPriors(
 )
 
 # Apply physics constraints to sampled parameters
+unconstrained_params = jax.random.normal(jax.random.PRNGKey(0), (16,))
 constrained_params = priors.apply_constraints(unconstrained_params)
 ```
 
@@ -201,20 +228,22 @@ Opifex provides calibration methods to ensure uncertainty estimates are well-cal
 ```python
 from opifex.neural.bayesian import (
     CalibrationTools,
-    TemperatureScaling,
     PlattScaling,
     IsotonicRegression,
-    ConformalPrediction,
 )
+from opifex.uncertainty.calibration import TemperatureScaling
+from opifex.uncertainty.conformal import SplitConformalRegressor
 
-# Temperature scaling for calibration
+# Temperature scaling for classifier calibration (pure value object).
 calibrator = TemperatureScaling()
+# Caller-driven fit/predict cycle:
+#   state = calibrator.fit(logits=val_logits, targets=val_labels)
+#   probs = calibrator.with_state(state).predict(test_logits)
 
-# Conformal prediction for distribution-free coverage guarantees
-from opifex.neural.bayesian import ConformalPredictor, ConformalConfig
-
-config = ConformalConfig()
-conformal = ConformalPredictor(config=config)
+# Split-conformal regressor for distribution-free coverage guarantees.
+regressor = SplitConformalRegressor(alpha=0.1)
+# state = regressor.fit(predictions=val_preds, targets=val_targets)
+# interval = regressor.with_state(state).predict(predictions=test_preds)
 ```
 
 ### 7. Planned Components
@@ -234,7 +263,7 @@ Combine physical laws with probabilistic modeling using `PhysicsInformedLoss` an
 
 ```python
 from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
-from opifex.neural.bayesian.layers import BayesianLayer
+from opifex.uncertainty import BayesianLinear
 from opifex.neural.base import StandardMLP
 import flax.nnx as nnx
 import jax.numpy as jnp
@@ -244,14 +273,15 @@ rngs = nnx.Rngs(42)
 # Create a model with Bayesian layers for uncertainty
 class BayesianPINN(nnx.Module):
     def __init__(self, *, rngs):
-        self.layer1 = BayesianLayer(2, 64, rngs=rngs)
-        self.layer2 = BayesianLayer(64, 64, rngs=rngs)
-        self.layer3 = BayesianLayer(64, 1, rngs=rngs)
+        self.rngs = rngs
+        self.layer1 = BayesianLinear(2, 64, rngs=rngs)
+        self.layer2 = BayesianLinear(64, 64, rngs=rngs)
+        self.layer3 = BayesianLinear(64, 1, rngs=rngs)
 
     def __call__(self, x):
-        h = nnx.tanh(self.layer1(x))
-        h = nnx.tanh(self.layer2(h))
-        return self.layer3(h)
+        h = nnx.tanh(self.layer1(x, rngs=self.rngs))
+        h = nnx.tanh(self.layer2(h, rngs=self.rngs))
+        return self.layer3(h, rngs=self.rngs)
 
 model = BayesianPINN(rngs=rngs)
 
@@ -275,7 +305,11 @@ For uncertainty-aware neural operators, wrap an FNO with the `AmortizedVariation
 
 ```python
 from opifex.neural.operators.fno import FourierNeuralOperator
-from opifex.neural.bayesian import AmortizedVariationalFramework, VariationalConfig
+from opifex.neural.bayesian import (
+    AmortizedVariationalFramework,
+    PriorConfig,
+    VariationalConfig,
+)
 import flax.nnx as nnx
 
 rngs = nnx.Rngs(42)
@@ -300,7 +334,8 @@ config = VariationalConfig(
 
 prob_fno = AmortizedVariationalFramework(
     base_model=fno,
-    config=config,
+    prior_config=PriorConfig(),
+    variational_config=config,
     rngs=rngs,
 )
 ```
@@ -314,13 +349,13 @@ prob_fno = AmortizedVariationalFramework(
 model_selection_criteria = {
     "uncertainty_type": {
         "aleatoric_only": "Use heteroscedastic regression",
-        "epistemic_only": "Use AmortizedVariationalFramework or BlackJAXIntegration",
-        "both": "Use BayesianLayer-based models or deep ensembles",
+        "epistemic_only": "Use AmortizedVariationalFramework or BlackJAXBackend",
+        "both": "Use BayesianLinear-based models or deep ensembles",
     },
     "computational_budget": {
         "low": "Use single model with TemperatureScaling calibration",
         "medium": "Use AmortizedVariationalFramework with num_samples=10",
-        "high": "Use BlackJAXIntegration with NUTS sampling",
+        "high": "Use BlackJAXBackend with NUTS sampling",
     },
     "data_size": {
         "small": "Use PhysicsInformedPriors with strong constraints",
@@ -336,7 +371,7 @@ After training a probabilistic model, always check calibration:
 
 1. Compute predictions with uncertainty on a held-out set
 2. Use `CalibrationMetrics` to assess expected calibration error
-3. Apply `TemperatureScaling` or `ConformalPredictor` to improve calibration
+3. Apply `TemperatureScaling` or `SplitConformalRegressor` to improve calibration
 4. Verify coverage of confidence intervals matches nominal level
 
 ## Future Directions

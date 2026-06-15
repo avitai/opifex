@@ -276,7 +276,7 @@ print(f"Molecular energy: {energy}")
 Uncertainty quantification in scientific computations:
 
 ```python
-from opifex.neural.bayesian.uncertainty_quantification import UncertaintyQuantifier
+from opifex.uncertainty.aggregators import UncertaintyQuantifier
 
 # Uncertainty quantification interface
 uq = UncertaintyQuantifier(

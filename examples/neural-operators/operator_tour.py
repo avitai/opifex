@@ -145,7 +145,6 @@ class NeuralOperatorDemo:
             out_channels=1,
             hidden_channels=32,
             modes=(8, 8),
-            use_aleatoric=True,
             rngs=self.rngs,
         )
         print(f"  UQNO created: {type(uqno).__name__}")
@@ -381,57 +380,63 @@ class NeuralOperatorDemo:
         print("Generating uncertain data...")
         x = jax.random.normal(self.rng_key, (2, 32, 32, 2))  # (batch, height, width, channels)
 
-        # Create UQNO
-        uqno = UncertaintyQuantificationNeuralOperator(
-            in_channels=2,
-            out_channels=1,
-            hidden_channels=64,
-            modes=(16, 16),
-            num_layers=4,
-            use_aleatoric=True,
-            rngs=self.rngs,
+        # Compose the conformal UQNO (base FNO + residual FNO).
+        from opifex.neural.operators.fno.base import FourierNeuralOperator
+        from opifex.neural.operators.specialized.uqno import (
+            UQNOBaseSolutionOperator,
+            UQNOResidualOperator,
         )
 
-        print("UQNO created with Bayesian inference")
+        def _make_fno(seed: int) -> FourierNeuralOperator:
+            return FourierNeuralOperator(
+                in_channels=2,
+                out_channels=1,
+                hidden_channels=64,
+                modes=16,
+                num_layers=4,
+                rngs=nnx.Rngs(seed),
+            )
 
-        # Get uncertainty predictions
-        print("Computing uncertainty estimates...")
+        # The tour does not train; it just demonstrates the wiring + the
+        # post-calibration predict_with_bands surface on a synthetic input.
+        uqno = UncertaintyQuantificationNeuralOperator(
+            base=UQNOBaseSolutionOperator(_make_fno(0)),
+            residual=UQNOResidualOperator(_make_fno(1)),
+        )
+
+        print("UQNO created (conformal three-stage operator)")
+
+        print("Computing calibration + bands on synthetic data...")
+        # Switch input to channels-first layout that the opifex FNO expects.
+        x_nchw = jnp.transpose(x, (0, 3, 1, 2))
         start_time = time.time()
-        uncertainty_results = uqno.predict_with_uncertainty(x, num_samples=50, key=self.rng_key)
+        # Tiny synthetic calibration set: y = base(x) + small noise.
+        y_synth = uqno.predict_base(x_nchw) + 0.05 * jax.random.normal(
+            self.rng_key, (x_nchw.shape[0], 1, *x_nchw.shape[2:])
+        )
+        uqno = uqno.with_calibrator(uqno.calibrate(x_nchw, y_synth, alpha=0.1, delta=0.1))
+        dist = uqno.predict_with_bands(x_nchw)
         uncertainty_time = time.time() - start_time
 
-        # Analyze uncertainty
-        mean_pred = uncertainty_results["mean"]
-        epistemic_std = uncertainty_results["epistemic_uncertainty"]
-        total_std = uncertainty_results["total_uncertainty"]
+        mean_pred = dist.mean
+        # predict_with_bands always populates an interval once a calibrator
+        # is attached; fall back defensively if upstream contract changes.
+        if dist.interval is None:
+            raise RuntimeError("predict_with_bands returned no interval.")
+        band_width = dist.interval.upper - dist.interval.lower
 
-        print("Uncertainty prediction complete")
+        print("Conformal prediction complete")
         print(f"Time: {uncertainty_time * 1000:.2f}ms")
         print(f"Mean prediction: {mean_pred.shape}")
         print(
-            f"Epistemic uncertainty: {jnp.mean(epistemic_std):.4f} +/- {jnp.std(epistemic_std):.4f}"
+            f"Band width: mean={float(jnp.mean(band_width)):.4f}, "
+            f"std={float(jnp.std(band_width)):.4f}"
         )
-        print(f"Total uncertainty: {jnp.mean(total_std):.4f} +/- {jnp.std(total_std):.4f}")
-
-        # Check uncertainty decomposition
-        aleatoric_std = uncertainty_results["aleatoric_uncertainty"]
-
-        # Compute uncertainty ratios for analysis
-        epistemic_ratio = jnp.mean(epistemic_std) / jnp.mean(total_std)
-        aleatoric_ratio = jnp.mean(aleatoric_std) / jnp.mean(total_std)
-
-        print(f"Epistemic uncertainty ratio: {epistemic_ratio:.3f}")
-        print(f"Aleatoric uncertainty ratio: {aleatoric_ratio:.3f}")
 
         self.results["uncertainty_demo"] = {
             "input_shape": x.shape,
-            "num_samples": 50,
             "uncertainty_time_ms": uncertainty_time * 1000,
-            "mean_epistemic_std": float(jnp.mean(epistemic_std)),
-            "mean_aleatoric_std": float(jnp.mean(aleatoric_std)),
-            "mean_total_std": float(jnp.mean(total_std)),
-            "epistemic_ratio": float(epistemic_ratio),
-            "aleatoric_ratio": float(aleatoric_ratio),
+            "mean_band_width": float(jnp.mean(band_width)),
         }
 
     def demo_geometry_aware_gino(self):
@@ -877,8 +882,18 @@ def main():
     import json
     from pathlib import Path
 
-    # Create output directory if it doesn't exist
-    output_dir = Path("docs/assets/examples/operator_tour")
+    # Create output directory if it doesn't exist. Anchor to the repo root
+    # by walking up cwd to find pyproject.toml, so the path is stable
+    # regardless of execution context (script, nbconvert, Jupyter kernel —
+    # the last of which does not define ``__file__``).
+    def _find_repo_root() -> Path:
+        here = Path.cwd().resolve()
+        for ancestor in (here, *here.parents):
+            if (ancestor / "pyproject.toml").exists():
+                return ancestor
+        return here
+
+    output_dir = _find_repo_root() / "docs" / "assets" / "examples" / "operator_tour"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define output file path

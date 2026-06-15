@@ -6,26 +6,28 @@ from flax import nnx
 
 from opifex.neural.base import StandardMLP
 from opifex.neural.bayesian import (
-    AleatoricUncertainty,
     AmortizedVariationalFramework,
-    BlackJAXIntegration,
     CalibrationTools,
-    ConformalPrediction,
-    ConservationLawPriors,
-    DomainSpecificPriors,
-    EpistemicUncertainty,
-    HierarchicalBayesianFramework,
     IsotonicRegression,
     MeanFieldGaussian,
-    PhysicsAwareUncertaintyPropagation,
-    PhysicsInformedPriors,
     PlattScaling,
     PriorConfig,
     TemperatureScaling,
-    UncertaintyComponents,
     UncertaintyEncoder,
-    UncertaintyQuantifier,
     VariationalConfig,
+)
+from opifex.uncertainty.aggregators import (
+    AleatoricUncertainty,
+    EpistemicUncertainty,
+    UncertaintyComponents,
+    UncertaintyQuantifier,
+)
+from opifex.uncertainty.priors_physics import (
+    ConservationLawPriors,
+    DomainSpecificPriors,
+    HierarchicalBayesianFramework,
+    PhysicsAwareUncertaintyPropagation,
+    PhysicsInformedPriors,
 )
 
 
@@ -280,7 +282,7 @@ class TestAmortizedVariationalFramework:
 
         # Test forward pass
         x = jnp.ones((batch_size, 2))
-        mean_output, uncertainty_output = framework(x)
+        mean_output, uncertainty_output = framework(x, rngs=nnx.Rngs(123))
 
         assert mean_output.shape == (batch_size, 1)
         assert uncertainty_output.shape == (batch_size, 1)
@@ -343,7 +345,7 @@ class TestBayesianIntegration:
         assert jnp.isfinite(elbo)
 
         # Test deterministic prediction
-        mean_pred, uncertainty_pred = framework(x)
+        mean_pred, uncertainty_pred = framework(x, rngs=nnx.Rngs(123))
         assert mean_pred.shape == (batch_size, 1)
         assert uncertainty_pred.shape == (batch_size, 1)
 
@@ -377,7 +379,7 @@ class TestBayesianIntegration:
 
             # Test forward pass
             x = jnp.ones((batch_size, input_dim))
-            mean_output, uncertainty_output = framework(x)
+            mean_output, uncertainty_output = framework(x, rngs=nnx.Rngs(123))
 
             assert mean_output.shape == (batch_size, 1)
             assert uncertainty_output.shape == (batch_size, 1)
@@ -473,7 +475,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_epistemic_uncertainty_initialization(self):
         """Test initialization of ensemble-based epistemic uncertainty estimator."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -485,7 +487,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_epistemic_uncertainty_add_model(self):
         """Test adding models to ensemble uncertainty estimator."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -503,7 +505,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_prediction_aggregation(self):
         """Test ensemble prediction aggregation methods."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -527,7 +529,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_ensemble_uncertainty_computation(self):
         """Test ensemble-based uncertainty computation."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnsembleEpistemicUncertainty,
         )
 
@@ -550,7 +552,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_distributional_aleatoric_uncertainty(self):
         """Test distributional modeling of aleatoric uncertainty."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             DistributionalAleatoricUncertainty,
         )
 
@@ -562,7 +564,7 @@ class TestAdvancedUncertaintyDecomposition:
         mean = jax.random.normal(jax.random.PRNGKey(42), (batch_size, output_dim))
         log_std = jax.random.normal(jax.random.PRNGKey(43), (batch_size, output_dim))
 
-        samples = estimator.sample_gaussian(mean, log_std, num_samples=100)
+        samples = estimator.sample_gaussian(mean, log_std, num_samples=100, rngs=nnx.Rngs(0))
         assert samples.shape == (100, batch_size, output_dim)
 
         uncertainty = estimator.compute_gaussian_uncertainty(mean, log_std)
@@ -571,7 +573,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_distributional_mixture_uncertainty(self):
         """Test mixture-based distributional uncertainty."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             DistributionalAleatoricUncertainty,
         )
 
@@ -594,7 +596,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_multi_source_uncertainty_aggregation(self):
         """Test multi-source uncertainty aggregation."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             MultiSourceUncertaintyAggregator,
         )
 
@@ -637,7 +639,7 @@ class TestAdvancedUncertaintyDecomposition:
 
     def test_enhanced_uncertainty_decomposition_integration(self):
         """Test integration of advanced uncertainty decomposition methods."""
-        from opifex.neural.bayesian.uncertainty_quantification import (
+        from opifex.uncertainty.aggregators import (
             EnhancedUncertaintyQuantifier,
         )
 
@@ -704,107 +706,6 @@ class TestBayesianDataStructures:
         input_var = jnp.ones((4, 2)) * 0.2
         hetero_uncertainty = AleatoricUncertainty.heteroscedastic_uncertainty(input_var)
         assert jnp.array_equal(hetero_uncertainty, input_var)
-
-
-class TestBlackJAXIntegration:
-    """Test BlackJAX MCMC sampling integration."""
-
-    def test_initialization(self):
-        """Test BlackJAX integration initialization."""
-        rngs = nnx.Rngs(42)
-
-        # Create base model for MCMC sampling
-        base_model = StandardMLP([4, 8, 1], rngs=rngs)
-
-        # Create BlackJAX integration
-        blackjax_sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="nuts",
-            num_warmup=100,
-            num_samples=500,
-            rngs=rngs,
-        )
-
-        assert blackjax_sampler.base_model is base_model
-        assert blackjax_sampler.sampler_type == "nuts"
-        assert blackjax_sampler.num_warmup == 100
-        assert blackjax_sampler.num_samples == 500
-
-    def test_mcmc_sampling(self):
-        """Test MCMC posterior sampling with BlackJAX."""
-        rngs = nnx.Rngs(42)
-
-        # Create simple model
-        base_model = StandardMLP([2, 4, 1], rngs=rngs)
-
-        # Create synthetic data with 2 features to match model input dimension
-        x1 = jnp.linspace(-1, 1, 20)
-        x2 = jnp.linspace(0.5, 1.5, 20)
-        x_data = jnp.column_stack([x1, x2])  # Shape: (20, 2)
-        y_data = (x1**2 + x2).reshape(-1, 1) + 0.1 * jax.random.normal(rngs.sample(), (20, 1))
-
-        # Create BlackJAX sampler
-        sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="nuts",
-            num_warmup=50,
-            num_samples=100,
-            rngs=rngs,
-        )
-
-        # Sample posterior
-        samples = sampler.sample_posterior(x_data, y_data)
-
-        assert samples.shape[0] == 100  # num_samples
-        assert samples.shape[1] > 0  # parameter dimension
-        assert jnp.all(jnp.isfinite(samples))
-
-    def test_posterior_predictive(self):
-        """Test posterior predictive sampling."""
-        rngs = nnx.Rngs(42)
-
-        # Create model and data
-        base_model = StandardMLP([1, 4, 1], rngs=rngs)
-        x_test = jnp.linspace(-1, 1, 10).reshape(-1, 1)
-
-        # Create sampler
-        sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="hmc",
-            num_warmup=20,
-            num_samples=50,
-            rngs=rngs,
-        )
-
-        # Generate synthetic posterior samples
-        num_params = sampler._count_parameters(base_model)
-        posterior_samples = jax.random.normal(rngs.sample(), (50, num_params))
-
-        # Posterior predictive sampling
-        predictions = sampler.posterior_predictive(x_test, posterior_samples)
-
-        assert predictions.shape == (50, 10, 1)  # (num_samples, num_test, output_dim)
-        assert jnp.all(jnp.isfinite(predictions))
-
-    def test_multiple_samplers(self):
-        """Test different MCMC sampler types."""
-        rngs = nnx.Rngs(42)
-        base_model = StandardMLP([2, 1], rngs=rngs)
-
-        # Test different sampler types
-        sampler_types = ["nuts", "hmc", "mala"]
-
-        for sampler_type in sampler_types:
-            sampler = BlackJAXIntegration(
-                base_model=base_model,
-                sampler_type=sampler_type,
-                num_warmup=10,
-                num_samples=20,
-                rngs=rngs,
-            )
-
-            assert sampler.sampler_type == sampler_type
-            # Test that sampler can be initialized without errors
 
 
 class TestCalibrationTools:
@@ -1381,27 +1282,6 @@ class TestPhysicsAwareUncertaintyPropagation:
 class TestProbabilisticIntegration:
     """Test integration between probabilistic components."""
 
-    def test_blackjax_calibration_integration(self):
-        """Test integration between BlackJAX sampling and calibration tools."""
-        rngs = nnx.Rngs(42)
-
-        # Create model and sampler
-        base_model = StandardMLP([2, 4, 1], rngs=rngs)
-        sampler = BlackJAXIntegration(
-            base_model=base_model,
-            sampler_type="nuts",
-            num_warmup=20,
-            num_samples=50,
-            rngs=rngs,
-        )
-
-        # Create calibration tools
-        calibrator = CalibrationTools(rngs=rngs)
-
-        # This tests that the components can work together
-        assert sampler is not None
-        assert calibrator is not None
-
     def test_physics_prior_variational_integration(self):
         """Test integration between physics priors and variational framework."""
         rngs = nnx.Rngs(42)
@@ -1466,7 +1346,7 @@ class TestProbabilisticIntegration:
         )
 
         # Test that all components can work together
-        predictions, uncertainties = framework(x_data[:5], num_samples=10)
+        predictions, uncertainties = framework(x_data[:5], num_samples=10, rngs=nnx.Rngs(123))
 
         assert predictions.shape == (5, 1)
         assert uncertainties.shape == (5, 1)
@@ -1605,80 +1485,32 @@ class TestEnhancedCalibrationMethods:
         assert jnp.all(calibrated_confidences <= 1.0)
         assert jnp.all(jnp.isfinite(calibrated_confidences))
 
-    def test_conformal_prediction_initialization(self):
-        """Test ConformalPrediction initialization."""
+    def test_conformal_prediction_via_shared_subsystem(self):
+        """ConformalPrediction was migrated; ``SplitConformalRegressor`` is canonical."""
+        from opifex.uncertainty.conformal import SplitConformalRegressor
+
         rngs = nnx.Rngs(42)
-
-        conformal_predictor = ConformalPrediction(alpha=0.05, rngs=rngs)
-
-        assert conformal_predictor.alpha == 0.05
-        assert hasattr(conformal_predictor, "quantile")
-
-    def test_conformal_prediction_intervals(self):
-        """Test conformal prediction interval computation."""
-        rngs = nnx.Rngs(42)
-
-        conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-
-        # Create calibration data
-        num_cal_samples = 100
-        cal_predictions = jax.random.normal(rngs.sample(), (num_cal_samples,))
-        cal_true_values = cal_predictions + 0.5 * jax.random.normal(
-            rngs.sample(), (num_cal_samples,)
-        )
-
-        # Calibrate conformal predictor
-        conformal_predictor.calibrate(cal_predictions, cal_true_values)
-
-        # Create test predictions
-        num_test_samples = 50
-        test_predictions = jax.random.normal(rngs.sample(), (num_test_samples,))
-
-        # Compute prediction intervals
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
-
-        assert lower_bounds.shape == test_predictions.shape
-        assert upper_bounds.shape == test_predictions.shape
-        assert jnp.all(lower_bounds <= upper_bounds)
-        assert jnp.all(jnp.isfinite(lower_bounds))
-        assert jnp.all(jnp.isfinite(upper_bounds))
-
-    def test_conformal_prediction_coverage(self):
-        """Test conformal prediction coverage computation."""
-        rngs = nnx.Rngs(42)
-
-        conformal_predictor = ConformalPrediction(alpha=0.1, rngs=rngs)
-
-        # Create synthetic test data
         num_samples = 100
         predictions = jax.random.normal(rngs.sample(), (num_samples,))
         true_values = predictions + 0.3 * jax.random.normal(rngs.sample(), (num_samples,))
 
-        # Calibrate with part of the data
-        conformal_predictor.calibrate(predictions[:50], true_values[:50])
-
-        # Test coverage on remaining data
-        test_predictions = predictions[50:]
-        test_true_values = true_values[50:]
-
-        lower_bounds, upper_bounds = conformal_predictor.predict_intervals(test_predictions)
-        coverage = conformal_predictor.compute_coverage(
-            lower_bounds, upper_bounds, test_true_values
-        )
-
-        assert isinstance(coverage, int | float)
+        cp = SplitConformalRegressor(alpha=0.1)
+        state = cp.fit(predictions=predictions[:50], targets=true_values[:50])
+        interval = cp.with_state(state).predict(predictions=predictions[50:])
+        covered = (true_values[50:] >= interval.lower) & (true_values[50:] <= interval.upper)
+        coverage = float(jnp.mean(covered.astype(jnp.float32)))
         assert 0.0 <= coverage <= 1.0
-        # With alpha=0.1, we expect coverage to be around 0.9
-        assert coverage > 0.5  # Reasonable lower bound for this test
+        assert coverage > 0.5
 
     def test_enhanced_calibration_integration(self):
         """Test integration between enhanced calibration methods."""
+        from opifex.uncertainty.conformal import SplitConformalRegressor
+
         rngs = nnx.Rngs(42)
 
-        # Create all enhanced calibration methods
         platt_scaler = PlattScaling(rngs=rngs)
         isotonic_regressor = IsotonicRegression(rngs=rngs)
-        conformal_predictor = ConformalPrediction(rngs=rngs)
+        conformal_regressor = SplitConformalRegressor(alpha=0.1)
 
         # Create synthetic data
         num_samples = 150
@@ -1686,23 +1518,21 @@ class TestEnhancedCalibrationMethods:
         labels = logits > 0  # Remove explicit dtype casting
         predictions = jax.nn.sigmoid(logits)
 
-        # Test that all methods can work with the same data
         platt_scaler.fit(logits[:100], labels[:100])
         isotonic_regressor.fit(predictions[:100], labels[:100])
-        conformal_predictor.calibrate(predictions[:100], labels[:100])
+        state = conformal_regressor.fit(
+            predictions=predictions[:100], targets=labels[:100].astype(jnp.float32)
+        )
+        interval = conformal_regressor.with_state(state).predict(predictions=predictions[100:])
 
-        # Apply all calibration methods
         platt_calibrated = platt_scaler(logits[100:])
         isotonic_calibrated = isotonic_regressor(predictions[100:])
-        conformal_lower, conformal_upper = conformal_predictor.predict_intervals(predictions[100:])
 
-        # All methods should produce valid outputs
         assert jnp.all(jnp.isfinite(platt_calibrated))
         assert jnp.all(jnp.isfinite(isotonic_calibrated))
-        assert jnp.all(jnp.isfinite(conformal_lower))
-        assert jnp.all(jnp.isfinite(conformal_upper))
+        assert jnp.all(jnp.isfinite(interval.lower))
+        assert jnp.all(jnp.isfinite(interval.upper))
 
-        # Outputs should be in valid ranges
         assert jnp.all((platt_calibrated >= 0.0) & (platt_calibrated <= 1.0))
         assert jnp.all((isotonic_calibrated >= 0.0) & (isotonic_calibrated <= 1.0))
-        assert jnp.all(conformal_lower <= conformal_upper)
+        assert jnp.all(interval.lower <= interval.upper)

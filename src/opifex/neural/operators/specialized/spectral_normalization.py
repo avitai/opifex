@@ -96,8 +96,9 @@ class PowerIteration(nnx.Module):
             try:
                 self.u[...] = u
                 self.v[...] = v
-            except Exception:
-                # Skip updates if inside JAX transformation
+            except (TypeError, jax.errors.TracerArrayConversionError):
+                # In-place state mutation is invalid inside jit/grad traces;
+                # callers update outside the transform when this is hit.
                 pass
 
         # Compute spectral norm: sigma = u^T W v

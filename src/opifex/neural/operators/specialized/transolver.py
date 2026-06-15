@@ -235,7 +235,7 @@ class PhysicsAttention(nnx.Module):
         )
 
         # Temperature-scaled soft assignment: (B, H, N, D) → (B, H, N, G)
-        temp = jnp.clip(self.temperature.value.astype(self.compute_dtype), 0.1, 5.0)
+        temp = jnp.clip(self.temperature[...].astype(self.compute_dtype), 0.1, 5.0)
         slice_weights = jax.nn.softmax(self.in_project_slice(x_mid) / temp, axis=-1)
 
         # Aggregate into slice tokens: (B, H, G, D) via weighted average

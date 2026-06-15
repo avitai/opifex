@@ -81,11 +81,19 @@ from opifex.neural.operators.fno.ufno import (
     UFNOEncoderBlock,
     UFourierNeuralOperator,
 )
+from opifex.uncertainty.adapters.operators import (
+    FNOConformalAdapterSpec,
+    FNODeepEnsembleAdapterSpec,
+    FNOMCDropoutAdapterSpec,
+)
 
 
 __all__ = [
     "AmortizedFourierNeuralOperator",
     "AmortizedSpectralConvolution",
+    "FNOConformalAdapterSpec",
+    "FNODeepEnsembleAdapterSpec",
+    "FNOMCDropoutAdapterSpec",
     "FactorizedFourierLayer",
     "FourierLayer",
     "FourierNeuralOperator",

@@ -227,7 +227,7 @@ opifex-verify-examples = "scripts.verify_opifex_examples:main"
 # Bandit security configuration
 [tool.bandit]
 # Exclude assert warnings in test files and scripts while maintaining security for production
-exclude_dirs = ["tests", "scripts", "memory-bank", "documents", "custom_modes", ".cursor"]
+exclude_dirs = ["tests", "scripts", "memory-bank", "documents", "custom_modes", ".cursor", "example_data"]
 skips = [
   "B404",
   "B603",
@@ -244,9 +244,9 @@ skips = ["*/tests/*", "tests/*", "*/scripts/*", "scripts/*"]
 
 [tool.coverage.run]
 branch = true
-omit = ["*/tests/*", "*/conftest.py", "*/__pycache__/*", "*/scripts/*", "*/examples/*"]
+omit = ["*/tests/*", "*/conftest.py", "*/__pycache__/*", "*/scripts/*", "*/examples/*", "*/example_data/*"]
 parallel = true
-source = ["src"]
+source = ["src/opifex"]
 
 [tool.hatch]
 
@@ -284,7 +284,7 @@ add-ignore = [
 ]
 convention = "google"
 # Match only relevant directories, exclude test and utility directories
-match-dir = "(?!tests|memory-bank|documents|custom_modes|.cursor).*"
+match-dir = "(?!tests|memory-bank|documents|custom_modes|.cursor|example_data).*"
 
 [tool.pyright]
 exclude = [
@@ -300,6 +300,7 @@ exclude = [
   "custom_modes",
   ".cursor",
   "examples", # Exclude example files from strict type checking
+  "example_data", # Protected data directory
   "src/opifex/training/orbax_checkpoint_manager.py", # Exclude due to Orbax type stub issues
   "src/opifex/training/trainers/physics_informed_trainer.py", # Exclude due to return type issues
   "tests/training/test_orbax_checkpoint_manager.py" # Exclude due to unused variable warnings
@@ -361,7 +362,7 @@ addopts = [
   "--cov=src/opifex",
   "--cov-report=html",
   "--cov-report=term-missing",
-  "--cov-fail-under=50",
+  "--cov-fail-under=80",
   "--timeout=300",
   "--json-report",
   "--json-report-file=temp/test-results.json",
@@ -440,7 +441,8 @@ exclude = [
   "memory-bank",
   "documents",
   "custom_modes",
-  ".cursor"
+  ".cursor",
+  "example_data"
 ]
 # Additional type checking rules
 extend-select = ["UP"] # Enforce modern Python syntax

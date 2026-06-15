@@ -1029,84 +1029,35 @@ print("\nTraining completed!")
 **Testing**: ✅ **58/58 Bayesian tests passing (all listed checks passing)**
 **Coverage**: 47% test coverage on uncertainty quantification with full validation
 
-#### ✅ **Advanced Uncertainty Quantification Classes**
+#### Uncertainty Quantification Classes
 
-**New Advanced Classes Implemented**:
+Canonical entry points (see ``opifex.uncertainty.aggregators``):
 
-- ✅ **AdvancedUncertaintyAggregator**: Multi-source uncertainty aggregation with adaptive weighting
-- ✅ **AdvancedEpistemicUncertainty**: Enhanced ensemble disagreement and predictive diversity methods
-- ✅ **AdvancedAleatoricUncertainty**: Distributional uncertainty for multiple distribution types
-
-**Core Capabilities**:
-
-- ✅ **Weighted Uncertainty Aggregation**: Multiple aggregation methods (weighted_variance, weighted_mean, max_weighted, robust_weighted)
-- ✅ **Adaptive Weighting Strategies**: Reliability-based, inverse-variance, entropy-based, and uniform weighting
-- ✅ **Uncertainty Quality Assessment**: Coverage probability, interval width, calibration error, and confidence metrics
-- ✅ **Enhanced Ensemble Methods**: Variance, standard deviation, range, and IQR-based disagreement measures
-- ✅ **Predictive Diversity**: Pairwise distance and cosine diversity metrics for epistemic uncertainty
-- ✅ **Multi-Distribution Support**: Gaussian, Laplace, and mixture distribution uncertainty quantification
-
-#### Usage Examples
+- ``UncertaintyQuantifier`` — primary façade for epistemic/aleatoric
+  decomposition + calibration.
+- ``EnhancedUncertaintyQuantifier`` — multi-source variant that wires
+  ``EnsembleEpistemicUncertainty`` + ``DistributionalAleatoricUncertainty``
+  + ``MultiSourceUncertaintyAggregator`` into a single
+  ``enhanced_decompose_uncertainty`` call returning an
+  ``EnhancedUncertaintyComponents`` value object.
+- ``MultiSourceUncertaintyAggregator`` — pure aggregation kernel for
+  combining heterogeneous uncertainty sources.
 
 ```python
-from opifex.neural.bayesian import (
-    AdvancedUncertaintyAggregator,
-    AdvancedEpistemicUncertainty,
-    AdvancedAleatoricUncertainty,
-    EnhancedUncertaintyQuantifier
+from opifex.uncertainty.aggregators import (
+    EnhancedUncertaintyQuantifier,
+    MultiSourceUncertaintyAggregator,
 )
 
-# Advanced epistemic uncertainty analysis
-epistemic_analyzer = AdvancedEpistemicUncertainty()
-
-# Compute ensemble disagreement
-ensemble_predictions = jax.random.normal(key, (5, 100, 1))
-variance_uncertainty = epistemic_analyzer.compute_ensemble_disagreement(
-    ensemble_predictions, aggregation_method="variance"
+quantifier = EnhancedUncertaintyQuantifier(
+    ensemble_size=5,
+    distributional_output=True,
+    multi_source_aggregation=True,
 )
-
-# Compute predictive diversity
-diversity = epistemic_analyzer.compute_predictive_diversity(
-    ensemble_predictions, diversity_metric="pairwise_distance"
+result = quantifier.enhanced_decompose_uncertainty(
+    ensemble_predictions=ensemble_predictions,
+    distributional_std=aleatoric_std,
 )
-
-# Advanced aleatoric uncertainty
-aleatoric_analyzer = AdvancedAleatoricUncertainty()
-
-# Gaussian distributional uncertainty
-gaussian_params = {"log_std": jax.random.normal(key, (100, 1)) * 0.1}
-gaussian_uncertainty = aleatoric_analyzer.distributional_uncertainty(
-    gaussian_params, distribution_type="gaussian"
-)
-
-# Multi-source uncertainty aggregation
-aggregator = AdvancedUncertaintyAggregator()
-uncertainty_sources = [variance_uncertainty, gaussian_uncertainty]
-
-# Weighted aggregation
-aggregated_uncertainty = aggregator.weighted_uncertainty_aggregation(
-    uncertainty_sources, aggregation_method="weighted_variance"
-)
-
-# Adaptive weighting
-reliability_scores = [jnp.ones((100,)) * 0.9, jnp.ones((100,)) * 0.7]
-adaptive_weights = aggregator.adaptive_weighting(
-    uncertainty_sources,
-    reliability_scores=reliability_scores,
-    adaptation_method="reliability_based"
-)
-
-# Uncertainty quality assessment
-predictions = jnp.mean(ensemble_predictions, axis=0)
-true_values = predictions + jax.random.normal(key, predictions.shape) * 0.1
-
-quality_metrics = aggregator.uncertainty_quality_assessment(
-    predictions=predictions,
-    uncertainties=aggregated_uncertainty,
-    true_values=true_values
-)
-
-print("Quality Metrics:", quality_metrics)
 ```
 
 #### ✅ **Enhanced Integration**

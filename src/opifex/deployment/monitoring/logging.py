@@ -126,8 +126,10 @@ class JsonFormatter(logging.Formatter):
                 process = psutil.Process()
                 memory_usage_mb = process.memory_info().rss / 1024 / 1024
                 cpu_percent = process.cpu_percent()
-            except Exception:
-                pass
+            except (psutil.Error, OSError) as exc:  # type: ignore[union-attr]
+                logging.getLogger(__name__).debug(
+                    "psutil sampling failed (%s); leaving process metrics unset.", exc
+                )
 
         if HAS_JAX and jax is not None:
             try:
@@ -143,8 +145,10 @@ class JsonFormatter(logging.Formatter):
                         / 1024
                         / 1024
                     )
-            except Exception:
-                pass
+            except (RuntimeError, AttributeError) as exc:
+                logging.getLogger(__name__).debug(
+                    "JAX GPU memory probe failed (%s); leaving gpu_memory_mb unset.", exc
+                )
 
         # Extract scientific computing metadata
         operation_type = getattr(record, "operation_type", None)

@@ -294,18 +294,18 @@ neural_dft.set_xc_operator(density_operator)
 Uncertainty quantification for quantum calculations:
 
 ```python
-from opifex.neural.bayesian import AdvancedUncertaintyQuantification
+from opifex.uncertainty.aggregators import EnhancedUncertaintyQuantifier
 
-# Add uncertainty to neural functionals
-uq_neural_xc = AdvancedUncertaintyQuantification(
-    base_model=neural_xc,
-    uncertainty_sources=['epistemic', 'aleatoric'],
-    rngs=rngs
+quantifier = EnhancedUncertaintyQuantifier(
+    ensemble_size=5,
+    distributional_output=True,
+    multi_source_aggregation=True,
 )
 
-# Predictions with uncertainty bounds
-energy_prediction, energy_uncertainty = uq_neural_xc.predict_with_uncertainty(
-    molecular_system
+# Decompose epistemic vs. aleatoric uncertainty for the neural XC output.
+result = quantifier.enhanced_decompose_uncertainty(
+    ensemble_predictions=neural_xc_ensemble_outputs,
+    distributional_std=neural_xc_aleatoric_std,
 )
 ```
 
