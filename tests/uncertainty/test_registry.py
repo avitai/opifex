@@ -103,6 +103,16 @@ def test_default_strategy_string_values_are_snake_case() -> None:
     assert DefaultStrategy.LIKELIHOOD_FREE_SBI == "likelihood_free_sbi"
 
 
+def test_default_strategy_includes_probabilistic_numerics_foundation_members() -> None:
+    """Probabilistic-numerics foundation adds three strategy members.
+
+    Cite: ``memory-bank/implementation-plans/uncertainty-quantification-platform-2026-05-15/06-phase-solvers-probnum-classical-uq.md``.
+    """
+    assert DefaultStrategy.RANDOMIZED_LINALG == "randomized_linalg"
+    assert DefaultStrategy.BAYESIAN_QUADRATURE == "bayesian_quadrature"
+    assert DefaultStrategy.STATE_SPACE_FILTERING == "state_space_filtering"
+
+
 def test_deterministic_baseline_has_all_support_flags_false() -> None:
     cap = UQCapability.deterministic_baseline()
     for field in dataclasses.fields(UQCapability):

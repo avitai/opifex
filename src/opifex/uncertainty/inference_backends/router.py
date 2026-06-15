@@ -23,7 +23,10 @@ from opifex.uncertainty.inference_backends.blackjax import BLACKJAX_BACKEND_SPEC
 from opifex.uncertainty.inference_backends.optional import (
     ARTIFEX_FLOW_SPECS,
     DISTRIBUTION_SPECS,
+    OPTIONAL_FILTER_SPECS,
     OPTIONAL_FLOW_SPECS,
+    OPTIONAL_LINALG_SPECS,
+    OPTIONAL_QUADRATURE_SPECS,
     OPTIONAL_SAMPLER_SPECS,
     OptionalBackendSpec,
 )
@@ -60,6 +63,9 @@ class BackendRouter:
             "flow": ARTIFEX_FLOW_SPECS + OPTIONAL_FLOW_SPECS,
             "sampler": (_BLACKJAX_AS_OPTIONAL_SPEC, *OPTIONAL_SAMPLER_SPECS),
             "distribution": DISTRIBUTION_SPECS,
+            "linalg": OPTIONAL_LINALG_SPECS,
+            "quadrature": OPTIONAL_QUADRATURE_SPECS,
+            "filter": OPTIONAL_FILTER_SPECS,
         }
 
     def available(self, family: str) -> tuple[OptionalBackendSpec, ...]:

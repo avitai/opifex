@@ -287,10 +287,31 @@ DISTRIBUTION_SPECS: tuple[OptionalBackendSpec, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Probabilistic-numerics foundation families.
+#
+# These tuples start empty; concrete backend specs are appended as the
+# corresponding subpackages ship. The router consults them via
+# ``BackendRouter.available("linalg" | "quadrature" | "filter")``.
+# ---------------------------------------------------------------------------
+
+OPTIONAL_LINALG_SPECS: tuple[OptionalBackendSpec, ...] = ()
+"""Matrix-free linalg backends (matfree, traceax, cola)."""
+
+OPTIONAL_QUADRATURE_SPECS: tuple[OptionalBackendSpec, ...] = ()
+"""Bayesian-quadrature backends (emukit)."""
+
+OPTIONAL_FILTER_SPECS: tuple[OptionalBackendSpec, ...] = ()
+"""State-space filter backends (bayesnewton, kalman-jax, markovflow)."""
+
+
 __all__ = [
     "ARTIFEX_FLOW_SPECS",
     "DISTRIBUTION_SPECS",
+    "OPTIONAL_FILTER_SPECS",
     "OPTIONAL_FLOW_SPECS",
+    "OPTIONAL_LINALG_SPECS",
+    "OPTIONAL_QUADRATURE_SPECS",
     "OPTIONAL_SAMPLER_SPECS",
     "OptionalBackendSpec",
 ]

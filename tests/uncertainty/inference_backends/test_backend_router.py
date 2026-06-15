@@ -14,7 +14,10 @@ import pytest
 from opifex.uncertainty.inference_backends.optional import (
     ARTIFEX_FLOW_SPECS,
     DISTRIBUTION_SPECS,
+    OPTIONAL_FILTER_SPECS,
     OPTIONAL_FLOW_SPECS,
+    OPTIONAL_LINALG_SPECS,
+    OPTIONAL_QUADRATURE_SPECS,
 )
 from opifex.uncertainty.inference_backends.router import BackendRouter
 
@@ -99,3 +102,21 @@ def test_router_includes_sampler_spec_for_optional_sampler_families() -> None:
     sampler_names = {spec.name for spec in router.available("sampler")}
     for expected in ("TFP-substrate", "Bayeux", "NumPyro", "sbiax", "flowMC"):
         assert expected in sampler_names
+
+
+def test_router_available_linalg_returns_optional_linalg_specs() -> None:
+    """Phase 6 Task 6.3 expansion adds the ``linalg`` family to the router."""
+    router = BackendRouter()
+    assert router.available("linalg") == OPTIONAL_LINALG_SPECS
+
+
+def test_router_available_quadrature_returns_optional_quadrature_specs() -> None:
+    """Phase 6 Task 6.3 expansion adds the ``quadrature`` family to the router."""
+    router = BackendRouter()
+    assert router.available("quadrature") == OPTIONAL_QUADRATURE_SPECS
+
+
+def test_router_available_filter_returns_optional_filter_specs() -> None:
+    """Phase 6 Task 6.3 expansion adds the ``filter`` family to the router."""
+    router = BackendRouter()
+    assert router.available("filter") == OPTIONAL_FILTER_SPECS
