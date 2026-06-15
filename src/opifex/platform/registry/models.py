@@ -55,7 +55,7 @@ class GUID(TypeDecorator[uuid.UUID]):
             return dialect.type_descriptor(PG_UUID(as_uuid=True))
         return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value: object, dialect: Dialect) -> str | None:
+    def process_bind_param(self, value: object, dialect: Dialect) -> str | None:  # noqa: ARG002 - SQLAlchemy TypeDecorator interface receives the dialect
         """Coerce a Python value to its canonical string representation.
 
         Both the native PostgreSQL ``UUID`` and the portable ``CHAR(36)``
@@ -66,7 +66,7 @@ class GUID(TypeDecorator[uuid.UUID]):
         coerced = value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
         return str(coerced)
 
-    def process_result_value(self, value: object, dialect: Dialect) -> uuid.UUID | None:
+    def process_result_value(self, value: object, dialect: Dialect) -> uuid.UUID | None:  # noqa: ARG002 - SQLAlchemy TypeDecorator interface receives the dialect
         """Coerce a stored value back to :class:`uuid.UUID`."""
         if value is None:
             return None

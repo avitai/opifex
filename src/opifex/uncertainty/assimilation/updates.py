@@ -141,6 +141,7 @@ def sequential_update(
         carry: AssimilationState,
         inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
     ) -> tuple[AssimilationState, AssimilationState]:
+        """Run one sequential assimilation step, updating the state with new data."""
         transition, process_noise, obs, obs_matrix, obs_cov = inputs
         predicted = predict(carry, transition=transition, process_noise=process_noise)
         updated = update(

@@ -96,6 +96,7 @@ def sobol_indices(
     selectors = jnp.eye(dim, dtype=a.dtype)  # (d, d)
 
     def _eval_swapped(selector: jax.Array) -> jax.Array:
+        """Evaluate the model on the pick-freeze matrix for one swapped dimension."""
         ab = a * (1.0 - selector) + b * selector
         return model(ab)
 

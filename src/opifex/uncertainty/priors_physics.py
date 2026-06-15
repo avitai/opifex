@@ -28,7 +28,7 @@ class PhysicsInformedPriors(nnx.Module):
         constraint_weights: jax.Array | None = None,
         penalty_weight: float = 1.0,
         *,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize physics-informed priors.
 
@@ -228,7 +228,7 @@ class ConservationLawPriors(nnx.Module):
         prior_strength: float = 1.0,
         adaptive_weighting: bool = True,
         *,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize conservation law priors for uncertainty estimation.
 
@@ -823,7 +823,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
         uncertainty_inflation: float = 1.1,
         correlation_aware: bool = True,
         *,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize physics-aware uncertainty propagation.
 
@@ -940,7 +940,7 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
 
     def compute_physics_informed_confidence(
         self,
-        predictions: jax.Array,
+        predictions: jax.Array,  # noqa: ARG002 - confidence interface receives predictions
         uncertainties: jax.Array,
         physics_state: jax.Array,
     ) -> jax.Array:

@@ -94,6 +94,7 @@ def interpolate_smoothed_state(
     bucket_indices = jnp.searchsorted(times_train, times_test, side="right") - 1
 
     def predict_one(test_time: jax.Array, bucket_index: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the predictive mean and variance at one test time via SDE interpolation."""
         is_before_first = bucket_index < 0
         clipped_index = jnp.maximum(bucket_index, 0)
         anchor_mean = jnp.where(

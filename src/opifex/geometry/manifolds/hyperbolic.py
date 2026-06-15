@@ -250,7 +250,8 @@ class HyperbolicManifold:
         # General case: rejection sampling
         max_attempts = 100
 
-        def attempt_sample(i, state):
+        def attempt_sample(_i, state):
+            """Run one rejection-sampling attempt to draw a point inside the disk."""
             key_i, accepted, samples = state
             key_i, subkey = jax.random.split(key_i)
 
@@ -402,12 +403,14 @@ class HyperbolicManifold:
 
 # JAX pytree registration
 def _hyperbolic_manifold_tree_flatten(manifold):
+    """Flatten a hyperbolic manifold into its curvature leaf and dimension aux data."""
     children = (manifold.curvature,)
     aux_data = (manifold._dimension,)
     return children, aux_data
 
 
 def _hyperbolic_manifold_tree_unflatten(aux_data, children):
+    """Reconstruct a hyperbolic manifold from its curvature leaf and dimension aux data."""
     (curvature,) = children
     (dimension,) = aux_data
     return HyperbolicManifold(curvature=curvature, dimension=dimension)

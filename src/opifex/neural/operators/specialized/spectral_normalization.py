@@ -38,7 +38,7 @@ class PowerIteration(nnx.Module):
         num_iterations: int = 1,
         eps: float = 1e-12,
         *,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize power iteration algorithm.
 

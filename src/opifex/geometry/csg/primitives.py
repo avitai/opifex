@@ -68,7 +68,7 @@ class Interval(Geometry):
         x = jax.random.uniform(key, (n,), minval=self.a, maxval=self.b)
         return x.reshape(n, 1)
 
-    def sample_boundary(self, n: int, key: jax.Array) -> Points1D:
+    def sample_boundary(self, n: int, key: jax.Array) -> Points1D:  # noqa: ARG002 - boundary-sampler interface receives an rng key
         """Sample points from interval boundary (endpoints).
 
         For 1D intervals, the boundary consists of just two points: {a, b}.
@@ -153,6 +153,7 @@ class Rectangle(_EnhancedShapeBase):
         eps = 1e-8
 
         def smooth_abs(x):
+            """Return a differentiable approximation of the absolute value."""
             return jnp.sqrt(x * x + eps * eps) - eps
 
         # Distance to each edge using smooth operations
@@ -161,6 +162,7 @@ class Rectangle(_EnhancedShapeBase):
 
         # Smooth maximum using logsumexp for better numerical stability
         def smooth_max(a, b, k=10.0):
+            """Return a differentiable log-sum-exp approximation of ``max(a, b)``."""
             return jnp.logaddexp(k * a, k * b) / k
 
         # Combine distances for SDF using smooth operations
@@ -379,6 +381,7 @@ class Polygon(_EnhancedShapeBase):
 
         # Find minimum distance to all edges
         def distance_to_edge(i):
+            """Return the distance from the query point to polygon edge ``i``."""
             v1 = self.vertices[i]
             v2 = self.vertices[(i + 1) % self.n_vertices]
 
@@ -443,6 +446,7 @@ class Polygon(_EnhancedShapeBase):
         # Note: For complex polygons, ear clipping triangulation is better
         # but more complex
         def rejection_sample(current_key, num_needed):
+            """Draw interior samples by rejection sampling within the bounding box."""
             # Generate proposals
             key1, key2 = jax.random.split(current_key)
             proposals_x = jax.random.uniform(
@@ -477,6 +481,7 @@ class Polygon(_EnhancedShapeBase):
 
         # Find closest edge
         def distance_to_edge(i):
+            """Return the distance from the query point to polygon edge ``i``."""
             v1 = self.vertices[i]
             v2 = self.vertices[(i + 1) % self.n_vertices]
 

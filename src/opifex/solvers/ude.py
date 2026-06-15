@@ -61,7 +61,7 @@ class NeuralODE(nnx.Module):
         state_dim: int,
         *,
         config: UDEConfig | None = None,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize NeuralODE.
 
@@ -76,7 +76,7 @@ class NeuralODE(nnx.Module):
         self.state_dim = state_dim
         self.config = config or UDEConfig()
 
-    def vector_field(self, t: float, y: Array, args) -> Array:
+    def vector_field(self, t: float, y: Array, args) -> Array:  # noqa: ARG002 - diffrax vector-field interface (t, y, args)
         """Evaluate dy/dt = net(y).
 
         Args:
@@ -147,7 +147,7 @@ class UDESolver(nnx.Module):
         state_dim: int,
         *,
         config: UDEConfig | None = None,
-        rngs: nnx.Rngs,
+        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
         """Initialize UDE Solver.
 
@@ -166,7 +166,7 @@ class UDESolver(nnx.Module):
         self.state_dim = state_dim
         self.config = config or UDEConfig()
 
-    def vector_field(self, t: float, y: Array, args) -> Array:
+    def vector_field(self, t: float, y: Array, args) -> Array:  # noqa: ARG002 - diffrax vector-field interface (t, y, args)
         """Evaluate du/dt = known(t, y) + neural(y).
 
         Args:

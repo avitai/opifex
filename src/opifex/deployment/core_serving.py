@@ -7,7 +7,7 @@ and model registry. Follows JAX/Flax NNX best practices for scientific computing
 workloads.
 """
 
-import importlib
+import hashlib
 import json
 import logging
 import time
@@ -20,8 +20,10 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-import orbax.checkpoint as ocp  # type: ignore[import-untyped]
 from flax import nnx
+
+from opifex.core.training.components.checkpoint_store import OrbaxCheckpointStore
+from opifex.deployment.servable_registry import ServableModelRegistry
 
 
 # Configure logging
@@ -110,37 +112,82 @@ class _ModelTemplate:
 
     Pairs the module structure (``graphdef``) with an abstract, shape/dtype
     copy of its weight state (``abstract_state``). The latter is the restore
-    target handed to Orbax; merging the restored state with ``graphdef``
-    yields the original concrete module.
+    target handed to the checkpoint store; merging the restored state with
+    ``graphdef`` yields the original concrete module.
     """
 
     graphdef: nnx.GraphDef[nnx.Module]
     abstract_state: nnx.State
 
 
+def _structure_hash(abstract_state: nnx.State) -> str:
+    """Hash the shape/dtype/tree structure of an abstract weight state.
+
+    The digest is taken over a canonical description of the state pytree —
+    the ordered leaf paths plus each leaf's shape and dtype, and the tree
+    structure itself. It captures *structure* (what an Orbax restore target
+    must look like) without depending on weight values, so it detects drift
+    between the structure a recipe was registered with and the structure a
+    freshly-rebuilt module produces.
+
+    Args:
+        abstract_state: Shape/dtype-only state, e.g. from
+            :func:`flax.nnx.eval_shape` + :func:`flax.nnx.split`.
+
+    Returns:
+        A hex SHA-256 digest of the structure description.
+    """
+    leaves_with_paths, treedef = jax.tree_util.tree_flatten_with_path(abstract_state)
+    description = {
+        "treedef": str(treedef),
+        "leaves": [
+            {
+                "path": jax.tree_util.keystr(path),
+                "shape": list(leaf.shape),
+                "dtype": str(leaf.dtype),
+            }
+            for path, leaf in leaves_with_paths
+        ],
+    }
+    canonical = json.dumps(description, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class ModelRegistry:
     """Registry for managing model versions and metadata.
 
-    Model weights are serialized to disk via Orbax (the registry persists
-    ``nnx.state(model)``). Reconstruction is **cross-process**: alongside the
-    weight state the registry persists the module's fully-qualified
-    ``module:class`` reference plus the keyword arguments needed to build an
-    *abstract* (shape/dtype-only) copy of the module. On
-    :meth:`get_model` the class is imported, an abstract module is built via
-    :func:`flax.nnx.eval_shape`, and the persisted weights are restored into
-    it — so a model registered by one process is reproduced exactly by any
-    other process pointed at the same storage directory.
+    Reconstruction is **cross-process**. Each registration persists three
+    artifacts beside one another:
 
-    An in-memory ``GraphDef`` template is also retained per ``model_id`` as a
+    * an Orbax weight checkpoint (via :class:`OrbaxCheckpointStore`) holding
+      ``nnx.state(model)``;
+    * a reconstruction *recipe* (``model_info.json``) naming the class in the
+      :class:`ServableModelRegistry` plus the keyword arguments needed to
+      rebuild an *abstract* (shape/dtype-only) copy of the module;
+    * a *structure version hash* derived from that abstract module's
+      shape/dtype/tree structure, used to detect drift.
+
+    On :meth:`get_model` a fresh process resolves the class through the
+    registry, rebuilds the abstract module via :func:`flax.nnx.eval_shape` to
+    recover an identical ``GraphDef`` and restore target, asserts the persisted
+    structure hash still matches (failing fast on drift), restores the weights,
+    and merges them back into the structure. A model registered by one process
+    is therefore reproduced exactly by any other process pointed at the same
+    storage directory.
+
+    An in-memory ``GraphDef`` template is also cached per ``model_id`` as a
     fast path within the registering process; it is never required for
-    correctness. The on-disk ``module:class`` reference is the cross-process
-    contract. When the class cannot be imported (e.g. it was removed or
-    renamed) reconstruction fails fast with an import error rather than
-    fabricating a model.
+    correctness. The on-disk recipe is the cross-process contract.
     """
 
-    #: Sub-directory (under each model's directory) holding the Orbax state.
+    #: Sub-directory (under each model's directory) holding the weight checkpoint.
     _STATE_DIRNAME = "state"
+
+    #: Step key under which a model's single weight checkpoint is stored.
+    _CHECKPOINT_STEP = 0
+
+    #: Recipe schema version, persisted so future readers can detect drift.
+    _RECIPE_VERSION = "1.0"
 
     def __init__(self, storage_path: str | Path) -> None:
         """Initialize model registry.
@@ -155,11 +202,9 @@ class ModelRegistry:
         self.metadata_file = self.storage_path / "registry.json"
         self._models = self._load_registry()
 
-        # In-memory reconstruction templates keyed by model_id: the module
-        # structure (``nnx.GraphDef``) and an abstract (shape/dtype) copy of
-        # the weight state used as the Orbax restore target. Held in memory
-        # because an arbitrary module's GraphDef captures local initializer
-        # closures and is not disk-serializable.
+        # In-memory reconstruction templates keyed by model_id (fast path
+        # within the registering process). Never required for correctness:
+        # cross-process loads rebuild the template from the on-disk recipe.
         self._templates: dict[str, _ModelTemplate] = {}
 
     def _load_registry(self) -> dict[str, Any]:
@@ -174,6 +219,27 @@ class ModelRegistry:
         with open(self.metadata_file, "w") as f:
             json.dump(self._models, f, indent=2)
 
+    @staticmethod
+    def _registered_name_for(model: nnx.Module) -> str:
+        """Return the :class:`ServableModelRegistry` name of ``model``'s class.
+
+        Raises:
+            KeyError: If ``type(model)`` was never registered via
+                ``@register_servable_model``; the message lists the available
+                names so registration can be added before re-registering.
+        """
+        registry = ServableModelRegistry()
+        model_class = type(model)
+        for name in registry.list_names():
+            if registry.get(name) is model_class:
+                return name
+        available = sorted(registry.list_names())
+        raise KeyError(
+            f"{model_class.__qualname__} is not registered for serving. Decorate it "
+            f"with @register_servable_model(<name>) before registering. Available: "
+            f"{available!r}."
+        )
+
     def register_model(
         self,
         model: nnx.Module,
@@ -183,7 +249,9 @@ class ModelRegistry:
         """Register a model with metadata.
 
         Args:
-            model: The model to register.
+            model: The model to register. Its class must be registered for
+                serving via ``@register_servable_model`` so a fresh process can
+                resolve it by name.
             metadata: Model metadata.
             init_kwargs: Keyword arguments (excluding ``rngs``) needed to
                 build an abstract copy of ``type(model)`` for cross-process
@@ -194,37 +262,44 @@ class ModelRegistry:
 
         Returns:
             model_id: Unique identifier for the registered model.
+
+        Raises:
+            KeyError: If the model's class is not registered for serving.
         """
         model_id = str(uuid.uuid4())
         reconstruction_kwargs = dict(init_kwargs) if init_kwargs else {}
+        registered_name = self._registered_name_for(model)
 
         # Create model directory
         model_dir = self.storage_path / model_id
         model_dir.mkdir(exist_ok=True)
 
-        # Serialize the real model: split into structure (graphdef) + weights
-        # (state). The weights are persisted to disk via Orbax; the structural
-        # template is held in memory because it is not generically
-        # disk-serializable (NNX captures local initializer closures).
+        # Split into structure (graphdef) + weights (state). The weights are
+        # persisted via the shared checkpoint store; the structural template is
+        # cached in memory as a same-process fast path (rebuilt from the recipe
+        # cross-process).
         graphdef, state = nnx.split(model)
         abstract_state = jax.tree_util.tree_map(
             lambda leaf: jax.ShapeDtypeStruct(leaf.shape, leaf.dtype), state
         )
         self._templates[model_id] = _ModelTemplate(graphdef=graphdef, abstract_state=abstract_state)
-        state_dir = (model_dir / self._STATE_DIRNAME).resolve()
-        with ocp.StandardCheckpointer() as checkpointer:
-            checkpointer.save(state_dir, state)
+        structure_hash = _structure_hash(abstract_state)
 
-        # Persist the cross-process reconstruction contract: the
-        # fully-qualified ``module:class`` reference plus the abstract-init
-        # kwargs. Any process can import the class, rebuild an abstract module
-        # via ``nnx.eval_shape``, and restore the persisted weights into it.
+        state_dir = (model_dir / self._STATE_DIRNAME).resolve()
+        with OrbaxCheckpointStore(state_dir) as store:
+            store.save(model, step=self._CHECKPOINT_STEP, loss=0.0)
+
+        # Persist the cross-process reconstruction recipe: the registry name of
+        # the class, the abstract-init kwargs, and the structure version hash.
+        # Any process resolves the class through the registry, rebuilds the
+        # abstract module, verifies the hash, then restores the weights into it.
         model_info_path = model_dir / "model_info.json"
         model_class_info = {
-            "model_qualname": f"{model.__class__.__module__}:{model.__class__.__qualname__}",
+            "recipe_version": self._RECIPE_VERSION,
+            "registered_name": registered_name,
             "model_class_name": model.__class__.__name__,
-            "model_module": model.__class__.__module__,
             "init_kwargs": reconstruction_kwargs,
+            "structure_hash": structure_hash,
             "model_id": model_id,
             "state_path": str(state_dir),
             "input_shape": metadata.input_shape,
@@ -271,56 +346,32 @@ class ModelRegistry:
 
         return model_id
 
-    @staticmethod
-    def _resolve_model_class(qualname: str) -> type[nnx.Module]:
-        """Import and return the ``nnx.Module`` subclass named by ``qualname``.
-
-        Args:
-            qualname: A ``module:Class`` reference (dotted attribute access is
-                supported after the colon, e.g. ``pkg.mod:Outer.Inner``).
-
-        Returns:
-            The resolved class object.
-
-        Raises:
-            ValueError: If ``qualname`` is malformed.
-            ImportError: If the module cannot be imported.
-            AttributeError: If the class is absent from the module.
-            TypeError: If the resolved object is not an ``nnx.Module`` subclass.
-        """
-        if ":" not in qualname:
-            raise ValueError(f"Malformed model qualname {qualname!r}; expected 'module:Class'")
-        module_name, _, attr_path = qualname.partition(":")
-        module = importlib.import_module(module_name)
-        obj: Any = module
-        for part in attr_path.split("."):
-            obj = getattr(obj, part)
-        if not (isinstance(obj, type) and issubclass(obj, nnx.Module)):
-            raise TypeError(f"Resolved object {qualname!r} is not an nnx.Module subclass")
-        return obj
-
     def _build_abstract_template(self, model_info: dict[str, Any]) -> _ModelTemplate:
-        """Reconstruct an abstract structural template from persisted info.
+        """Reconstruct an abstract structural template from a persisted recipe.
 
-        The module's class is imported from the persisted ``module:class``
-        reference and an abstract (shape/dtype-only) instance is built via
-        :func:`flax.nnx.eval_shape`, using the persisted ``init_kwargs`` and a
-        fresh ``nnx.Rngs``. No weights are materialized — the result is the
-        Orbax restore target.
+        The module's class is resolved through :class:`ServableModelRegistry`
+        by its registered name and an abstract (shape/dtype-only) instance is
+        built via :func:`flax.nnx.eval_shape`, using the persisted
+        ``init_kwargs`` and a fresh ``nnx.Rngs``. The recovered structure hash
+        is checked against the one persisted at registration so structural
+        drift is caught before any weights are restored. No weights are
+        materialized — the result is the checkpoint restore target.
 
         Raises:
-            ImportError, AttributeError, ValueError, TypeError: If the class
-                cannot be resolved or instantiated abstractly. Reconstruction
-                fails fast rather than fabricating a model.
+            KeyError: If the registered class name is unknown (e.g. the module
+                defining it has not been imported).
+            ValueError: If the persisted structure hash does not match the
+                rebuilt structure (config/version drift).
+            TypeError: If the recipe references a non-``nnx.Module`` class.
         """
         model_path = Path(model_info["model_path"])
         info_path = model_path / "model_info.json"
         with open(info_path) as f:
-            class_info = json.load(f)
+            recipe = json.load(f)
 
-        qualname = class_info["model_qualname"]
-        init_kwargs = class_info.get("init_kwargs", {})
-        model_class = self._resolve_model_class(qualname)
+        registered_name = recipe["registered_name"]
+        init_kwargs = recipe.get("init_kwargs", {})
+        model_class = ServableModelRegistry().require(registered_name)
 
         # ``model_class`` is resolved dynamically; NNX modules conventionally
         # accept an ``rngs`` keyword for parameter initialization (supplied here
@@ -330,19 +381,31 @@ class ModelRegistry:
 
         abstract_model = nnx.eval_shape(_build_abstract)
         graphdef, abstract_state = nnx.split(abstract_model)
+
+        expected_hash = recipe.get("structure_hash")
+        actual_hash = _structure_hash(abstract_state)
+        if expected_hash != actual_hash:
+            raise ValueError(
+                f"Structure drift for model {recipe.get('model_id')!r}: the recipe was "
+                f"registered with structure hash {expected_hash!r} but rebuilding "
+                f"{registered_name!r} with init_kwargs {init_kwargs!r} produced "
+                f"{actual_hash!r}. The model class or its config changed since "
+                "registration; re-register the model or correct the recipe."
+            )
         return _ModelTemplate(graphdef=graphdef, abstract_state=abstract_state)
 
     def get_model(self, model_id: str) -> tuple[nnx.Module, ModelMetadata]:
         """Retrieve the registered model and its metadata by ID.
 
-        The model's weights are restored from the Orbax state persisted at
-        registration and merged into a structural template. The template is
-        taken from the in-memory cache when available (fast path within the
-        registering process); otherwise it is rebuilt cross-process by
-        importing the persisted ``module:class`` reference and constructing an
-        abstract module via :func:`flax.nnx.eval_shape`. The returned module
-        reproduces the registered model exactly — calling it on the same input
-        yields the same outputs.
+        The model's weights are restored from the persisted checkpoint and
+        merged into a structural template. The template is taken from the
+        in-memory cache when available (fast path within the registering
+        process); otherwise it is rebuilt cross-process from the persisted
+        recipe — resolving the class through :class:`ServableModelRegistry`,
+        constructing an abstract module via :func:`flax.nnx.eval_shape`, and
+        verifying the persisted structure hash. The returned module reproduces
+        the registered model exactly — calling it on the same input yields the
+        same outputs.
 
         Args:
             model_id: Model identifier.
@@ -352,11 +415,11 @@ class ModelRegistry:
             reconstructed :class:`flax.nnx.Module`.
 
         Raises:
-            ValueError: If ``model_id`` is not registered or its persisted
-                class reference is malformed.
-            ImportError: If the persisted module cannot be imported.
-            AttributeError: If the persisted class is absent from its module.
-            TypeError: If the persisted reference is not an ``nnx.Module``.
+            ValueError: If ``model_id`` is not registered, or if the persisted
+                structure hash does not match the rebuilt structure.
+            KeyError: If the persisted class name is not registered for serving.
+            TypeError: If the recipe references a non-``nnx.Module`` class.
+            RuntimeError: If the weight checkpoint is missing or unreadable.
         """
         if model_id not in self._models["models"]:
             raise ValueError(f"Model ID {model_id} not found")
@@ -370,20 +433,26 @@ class ModelRegistry:
         metadata = ModelMetadata.from_dict(metadata_dict)
 
         # Prefer the in-memory template (fast path); otherwise reconstruct the
-        # abstract structure cross-process from the persisted class reference.
+        # abstract structure cross-process from the persisted recipe.
         template = self._templates.get(model_id)
         if template is None:
             template = self._build_abstract_template(model_info)
 
-        # Restore the persisted weights into the abstract state template,
-        # then merge with the graphdef to obtain the concrete registered model.
-        with ocp.StandardCheckpointer() as checkpointer:
-            restored_state = checkpointer.restore(
-                Path(model_info["state_path"]), target=template.abstract_state
+        # Restore the persisted weights into the abstract structure via the
+        # shared checkpoint store, then merge with the graphdef to obtain the
+        # concrete registered model.
+        abstract_model = nnx.merge(template.graphdef, template.abstract_state)
+        with OrbaxCheckpointStore(Path(model_info["state_path"]), create=False) as store:
+            restored, _ = store.restore(abstract_model, step=self._CHECKPOINT_STEP)
+        if not isinstance(restored, nnx.Module):
+            # A non-module result signals a missing/unreadable checkpoint (a
+            # runtime/IO state), not a caller type error, so RuntimeError is
+            # the correct semantic despite the isinstance guard.
+            raise RuntimeError(  # noqa: TRY004
+                f"Weight checkpoint for model {model_id!r} could not be restored; "
+                "the checkpoint is missing or unreadable."
             )
-        model = nnx.merge(template.graphdef, restored_state)
-
-        return model, metadata
+        return restored, metadata
 
     def list_models(self) -> list[dict[str, Any]]:
         """List all registered models.

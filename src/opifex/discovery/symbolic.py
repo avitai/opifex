@@ -24,11 +24,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+pysr: Any  # ``Any`` so the import and the absent-dependency fallback unify.
 try:
-    import pysr  # type: ignore[import-untyped]
+    import pysr  # type: ignore[no-redef]
 
     _PYSR_AVAILABLE = True
 except ImportError:
+    pysr = None
     _PYSR_AVAILABLE = False  # pyright: ignore[reportConstantRedefinition]
 
 

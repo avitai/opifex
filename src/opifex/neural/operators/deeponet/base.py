@@ -351,6 +351,8 @@ class MultiFidelityDeepONet(nnx.Module):
             # Apply fusion network
             fusion_result = self.fusion_net(flat_outputs, deterministic=deterministic)
             fused_output = fusion_result.reshape(original_shape)
+        else:  # pragma: no cover - fusion_strategy validated in __init__
+            raise AssertionError(f"unreachable: fusion_strategy={self.fusion_strategy!r}")
 
         return fused_output
 

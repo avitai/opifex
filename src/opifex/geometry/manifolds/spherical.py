@@ -182,7 +182,7 @@ class SphericalManifold:
         """Sample n points from the interior of the geometry (the sphere itself)."""
         return self.random_point(key, shape=(n,))
 
-    def sample_boundary(self, n: int, key: jax.Array) -> ManifoldPoint:
+    def sample_boundary(self, n: int, key: jax.Array) -> ManifoldPoint:  # noqa: ARG002 - boundary-sampler interface (closed manifold has no boundary)
         """Sample n points from the boundary. Sphere has no boundary."""
         # Return empty array with correct shape (0, embedding_dimension)
         # We ignore n because there are no points to sample
@@ -197,12 +197,14 @@ class SphericalManifold:
 
 # JAX pytree registration
 def _spherical_manifold_tree_flatten(manifold):
+    """Flatten a spherical manifold into its radius leaf and dimension aux data."""
     children = (manifold.radius,)
     aux_data = (manifold._dimension,)
     return children, aux_data
 
 
 def _spherical_manifold_tree_unflatten(aux_data, children):
+    """Reconstruct a spherical manifold from its radius leaf and dimension aux data."""
     (radius,) = children
     (dimension,) = aux_data
     return SphericalManifold(radius=radius, dimension=dimension)

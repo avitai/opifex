@@ -22,11 +22,14 @@ from opifex.deployment.core_serving import (
     ModelServer,
     ServingStatus,
 )
+from opifex.deployment.servable_registry import register_servable_model
 
 
-# Test model classes at module level for proper pickling
+# Test model classes registered for serving so the registry can resolve them
+# by name during cross-process reconstruction.
+@register_servable_model("serving_simple_test_model")
 class SimpleTestModel(nnx.Module):
-    """Simple test model that can be pickled."""
+    """Single-layer servable test model."""
 
     def __init__(self, rngs) -> None:
         self.linear = nnx.Linear(64, 64, rngs=rngs)
@@ -35,8 +38,9 @@ class SimpleTestModel(nnx.Module):
         return self.linear(x)
 
 
+@register_servable_model("serving_multilayer_test_model")
 class MultiLayerTestModel(nnx.Module):
-    """Multi-layer test model for more complex testing."""
+    """Multi-layer servable test model for more complex testing."""
 
     def __init__(self, rngs) -> None:
         self.layer1 = nnx.Linear(32, 64, rngs=rngs)
@@ -174,12 +178,7 @@ class TestModelRegistry:
             assert callable(retrieved_model)
 
     def test_get_model_roundtrips_registered_weights(self):
-        """get_model must return the SAME weights that were registered.
-
-        Regression for the serving-registry correctness hole where
-        ``get_model`` fabricated a fresh ``nnx.Rngs(0)``-initialised model
-        with RANDOM weights instead of deserialising the registered one.
-        """
+        """get_model returns the same weights that were registered."""
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = ModelRegistry(storage_path=temp_dir)
 
@@ -209,12 +208,12 @@ class TestModelRegistry:
             )
 
     def test_get_model_reconstructs_cross_process(self):
-        """A fresh registry reconstructs a model purely from disk (F23).
+        """A fresh registry reconstructs a model purely from disk.
 
-        Cross-process reconstruction persists the module's fully-qualified
-        ``module:class`` and abstract-init kwargs alongside the Orbax weight
-        state. A registry whose in-memory templates are cleared (simulating a
-        separate process) must rebuild the module and restore weights so the
+        Cross-process reconstruction persists the module's registered class
+        name and abstract-init kwargs alongside the weight checkpoint. A
+        registry whose in-memory templates are cleared (simulating a separate
+        process) must rebuild the module and restore weights so the
         reconstructed model reproduces the registered one exactly.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -277,11 +276,11 @@ class TestModelRegistry:
             )
 
     def test_get_model_fails_fast_on_unresolvable_class(self):
-        """Reconstruction fails honestly when the class cannot be resolved.
+        """Reconstruction fails fast when the class name cannot be resolved.
 
-        If the persisted ``module:class`` reference cannot be imported (e.g.
-        the class was removed/renamed), ``get_model`` must raise a clear
-        error rather than fabricate a model.
+        If the persisted ``registered_name`` is unknown (e.g. the class was
+        removed/renamed, or its module was never imported), ``get_model`` must
+        raise a clear error rather than return a mismatched model.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             registry = ModelRegistry(storage_path=temp_dir)
@@ -299,10 +298,10 @@ class TestModelRegistry:
             # Corrupt the persisted class reference on disk.
             info_path = Path(temp_dir) / model_id / "model_info.json"
             info = json.loads(info_path.read_text())
-            info["model_qualname"] = "opifex.nonexistent.module:GhostModel"
+            info["registered_name"] = "no_such_registered_model"
             info_path.write_text(json.dumps(info))
 
-            with pytest.raises((ImportError, AttributeError, ValueError)):
+            with pytest.raises(KeyError):
                 registry.get_model(model_id)
 
     def test_model_versioning(self):
@@ -552,9 +551,9 @@ class TestServingIntegration:
 
             registry = ModelRegistry(storage_path=temp_dir)
 
-            # Mock model — SimpleTestModel is Linear(64, 64); metadata and
-            # serving input below match that shape so get_model can return
-            # the real reconstructed model (not a fabricated stand-in).
+            # SimpleTestModel is Linear(64, 64); metadata and serving input
+            # below match that shape so get_model returns the reconstructed
+            # model.
             mock_model = SimpleTestModel(rngs=nnx.Rngs(0))
             mock_metadata = ModelMetadata(
                 name="integration_test",

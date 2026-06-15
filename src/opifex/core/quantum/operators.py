@@ -118,7 +118,7 @@ class HamiltonianOperator(QuantumOperator):
         self.kinetic_method = kinetic_method
         self.potential_method = potential_method
 
-    def __call__(self, state: Array, *args, **kwargs) -> Array:
+    def __call__(self, state: Array, *args, **kwargs) -> Array:  # noqa: ARG002 - operator __call__ accepts variadic transform args
         """
         Apply Hamiltonian to wavefunction: H|ψ⟩ = (T + V)|ψ⟩.
 
@@ -785,7 +785,7 @@ class SparseOperator(QuantumOperator):
         self.nnz = len(values)
         self.density = self.nnz / (shape[0] * shape[1])
 
-    def __call__(self, state: Array, *args, **kwargs) -> Array:
+    def __call__(self, state: Array, *args, **kwargs) -> Array:  # noqa: ARG002 - operator __call__ accepts variadic transform args
         """
         Apply sparse operator to vector.
 

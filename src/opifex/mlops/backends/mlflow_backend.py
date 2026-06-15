@@ -359,7 +359,7 @@ class MLflowBackend(Experiment):
 
             return {"artifact_path": model_name}
 
-    async def _infer_model_signature(self, model: Any) -> None:
+    async def _infer_model_signature(self, model: Any) -> None:  # noqa: ARG002 - signature-inference interface receives the model
         """Infer MLflow model signature from model."""
         # This would need implementation based on model inspection
         # For now, return None to allow model logging without signature

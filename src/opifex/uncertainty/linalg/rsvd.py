@@ -45,7 +45,7 @@ def randomized_svd(
     *,
     matvec: Callable[[jax.Array], jax.Array],
     matvec_transpose: Callable[[jax.Array], jax.Array],
-    dim_rows: int,
+    dim_rows: int,  # noqa: ARG001 - randomized-SVD API parity (row dimension inferred from operator)
     dim_cols: int,
     rank: int,
     oversampling: int,

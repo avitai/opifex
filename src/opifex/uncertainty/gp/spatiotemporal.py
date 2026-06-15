@@ -147,6 +147,7 @@ def _state_space_temporal_gram(times: jax.Array, temporal_kernel: StateSpaceKern
     lags = jnp.abs(flat_times[:, None] - flat_times[None, :])
 
     def covariance_at_lag(lag: jax.Array) -> jax.Array:
+        """Return the stationary temporal covariance at a given time lag."""
         transition = temporal_kernel.state_transition(lag)
         return (measurement @ stationary_cov @ transition.T @ measurement.T)[0, 0]
 
@@ -215,6 +216,7 @@ def _build_kronecker_state_space(
     identity_space = jnp.eye(num_space, dtype=spatial_gram.dtype)
 
     def per_step(delta: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the temporal transition and process-noise blocks for one time step."""
         transition_time = temporal_kernel.state_transition(delta)
         _, process_noise_time = discretize_lti_sde(
             drift_matrix=temporal_kernel.feedback,
@@ -352,6 +354,7 @@ def predict_spatiotemporal_vgp(
     measurement = state.measurement
 
     def project(mean: jax.Array, cov: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Project a state-space posterior onto the observed-field mean and variance."""
         field_mean = measurement @ mean
         field_cov = measurement @ cov @ measurement.T
         return field_mean, jnp.diag(field_cov)

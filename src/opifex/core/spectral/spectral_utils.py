@@ -69,7 +69,7 @@ def energy_spectrum(
     x: jax.Array,
     spatial_dims: int,
     dx: GridSpacing,
-    axis: Axis | None = None,
+    axis: Axis | None = None,  # noqa: ARG001 - spectral-utility API parity across signatures
 ) -> jax.Array:
     """
     Compute energy spectrum of input signal.
@@ -108,7 +108,7 @@ def spectral_energy(
     x: jax.Array,
     spatial_dims: int,
     dx: GridSpacing,
-    axis: Axis | None = None,
+    axis: Axis | None = None,  # noqa: ARG001 - spectral-utility API parity across signatures
 ) -> jax.Array:
     """
     Compute total spectral energy of input signal.
@@ -141,7 +141,7 @@ def spectral_energy(
 def wavenumber_grid(
     shape: Sequence[int],
     dx: GridSpacing,
-    axis: Axis | None = None,
+    axis: Axis | None = None,  # noqa: ARG001 - spectral-utility API parity across signatures
     magnitude: bool = False,
 ) -> list[jax.Array] | jax.Array:
     """
@@ -190,5 +190,7 @@ def wavenumber_grid(
     elif spatial_dims == 3:
         k0, k1, k2 = jnp.meshgrid(k_arrays[0], k_arrays[1], k_arrays[2], indexing="ij")
         k_mag = jnp.sqrt(k0**2 + k1**2 + k2**2)
+    else:  # pragma: no cover - guarded by the 1 <= spatial_dims <= 3 check above
+        raise AssertionError(f"unreachable: spatial_dims={spatial_dims} not in {{1, 2, 3}}")
 
     return k_mag

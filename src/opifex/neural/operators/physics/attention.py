@@ -353,8 +353,8 @@ class PhysicsCrossAttention(nnx.Module):
     def _apply_cross_system_coupling_multi(
         self,
         system_outputs: jax.Array,
-        physics_info: jax.Array | None,
-        training: bool,
+        physics_info: jax.Array | None,  # noqa: ARG002 - coupling interface receives physics metadata
+        training: bool,  # noqa: ARG002 - nnx forward interface carries a training flag
     ) -> jax.Array:
         """Apply cross-system coupling while maintaining multi-system output structure.
 

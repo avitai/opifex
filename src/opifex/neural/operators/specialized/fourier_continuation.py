@@ -274,7 +274,7 @@ class FourierContinuationExtender(nnx.Module):
         self,
         x: jnp.ndarray,
         axes: int | tuple[int, ...] | None = None,
-        deterministic: bool = True,
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jnp.ndarray:
         """Apply Fourier continuation to input.
 
@@ -472,13 +472,15 @@ class FourierBoundaryHandler(nnx.Module):
             target_shape = extended_results[0].shape
 
             # Verify all results have the same shape, pad if necessary
-            for i in range(len(extended_results)):
-                if extended_results[i].shape != target_shape:
+            for current_method, result in zip(
+                self.continuation_methods, extended_results, strict=True
+            ):
+                if result.shape != target_shape:
                     # This should not happen if our extension methods are correct
                     # But add safety check
                     raise ValueError(
-                        f"Extension method {method} returned shape "
-                        f"{extended_results[i].shape}, expected {target_shape}"
+                        f"Extension method {current_method} returned shape "
+                        f"{result.shape}, expected {target_shape}"
                     )
 
         # Combine results using learned weights

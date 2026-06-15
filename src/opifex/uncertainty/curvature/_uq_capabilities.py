@@ -38,9 +38,29 @@ _LUNO_CAPABILITY = UQCapability(
 )
 
 
+_KFAC_CAPABILITY = UQCapability(
+    native_jax_kernel=True,
+    default_strategy=DefaultStrategy.LAPLACE,
+    source_package="opifex.uncertainty.curvature",
+    notes=(
+        "Kronecker-factored approximate curvature (KFAC) Laplace posterior "
+        "(Martens & Grosse 2015, arXiv:1503.05671; Ritter, Botev & Barber "
+        "2018, ICLR). Each layer's GGN/Fisher block is factored as A ⊗ G "
+        "with A = E[a a^T] (input-activation covariance) and G = "
+        "E[J_s^T H_y J_s] (pre-activation GGN factor), assembled into a "
+        "damped block-diagonal-of-Kronecker posterior precision over the "
+        "structured operators of CoLA (Potapczynski et al. 2023, "
+        "arXiv:2309.03060). Factors are computed natively via jax.vjp "
+        "through a tapped forward; pure JAX kernel; passes jit / grad / "
+        "vmap smokes."
+    ),
+)
+
+
 CURVATURE_CAPABILITIES: dict[str, UQCapability] = {
     "subpackage:curvature": _CURVATURE_CAPABILITY,
     "estimator:linearized_neural_operator_posterior": _LUNO_CAPABILITY,
+    "estimator:kfac_laplace_posterior": _KFAC_CAPABILITY,
 }
 
 

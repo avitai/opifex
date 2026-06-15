@@ -84,6 +84,7 @@ def _gumbel_fit_and_sample(
     levels = jnp.linspace(y_low, y_high, 200)
 
     def cdf_at(level: jax.Array) -> jax.Array:
+        """Return the probability that every grid maximum lies at or below ``level``."""
         normalised = (level - grid_means) / jnp.maximum(grid_stds, _PSEUDO_NOISE_FLOOR)
         # Probability that ALL grid maxima are <= level.
         return jnp.prod(jax.scipy.stats.norm.cdf(normalised))
@@ -203,6 +204,7 @@ def mumbo_acquisition(
         candidate_level: jax.Array,
         target_std: jax.Array,
     ) -> jax.Array:
+        """Compute the information-gain acquisition for one (input, fidelity) candidate."""
         candidate_augmented = jnp.concatenate(
             [candidate_x, candidate_level.reshape(1).astype(candidate_x.dtype)]
         ).reshape(1, -1)
@@ -256,6 +258,7 @@ def mumbo_acquisition(
         gammas = (gumbel_samples - candidate_mean) / candidate_std
 
         def per_gumbel_entropy(gamma: jax.Array) -> jax.Array:
+            """Return the extended-skew-Gaussian entropy for one Gumbel sample."""
             return _esg_entropy(
                 correlation=correlation,
                 gamma=gamma,
@@ -269,6 +272,7 @@ def mumbo_acquisition(
     candidate_indices = jnp.arange(num_candidates)
 
     def scan_step(_: jax.Array, idx: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Evaluate the acquisition for the candidate at index ``idx``."""
         score = per_candidate_acquisition(
             x_candidates[idx],
             candidate_levels[idx],

@@ -130,6 +130,7 @@ def generate_meanfield_logdensity(mu: Any, rho: Any) -> Callable[[Any], jax.Arra
     sigma = jax.tree.map(jnp.exp, rho)
 
     def meanfield_logdensity(position: Any) -> jax.Array:
+        """Return the mean-field Gaussian log-density of ``position``."""
         logq_pytree = jax.tree.map(jsp.stats.norm.logpdf, position, mu, sigma)
         logq = jax.tree.map(jnp.sum, logq_pytree)
         return jax.tree.reduce(jnp.add, logq)
@@ -157,6 +158,7 @@ def _elbo_step(
         )
 
     def objective_fn(params: tuple[Any, Any]) -> jax.Array:
+        """Return the negative ELBO estimated by Monte Carlo for the given variational params."""
         z = sample_fn(rng_key, params, num_samples)
         logq_params = jax.lax.stop_gradient(params) if stl_estimator else params
         logq = jax.vmap(logq_fn(logq_params))(z)
@@ -184,9 +186,11 @@ def step(
     parameters = (state.mu, state.rho)
 
     def sample_fn(key: jax.Array, params: tuple[Any, Any], n: int) -> Any:
+        """Draw ``n`` samples from the mean-field variational distribution."""
         return _sample(key, params[0], params[1], n)
 
     def logq_fn(params: tuple[Any, Any]) -> Callable[[Any], jax.Array]:
+        """Return the variational log-density function for the given parameters."""
         return generate_meanfield_logdensity(params[0], params[1])
 
     new_parameters, new_opt_state, elbo = _elbo_step(
@@ -237,6 +241,7 @@ def approximate(
     initial_state = init(initial_position, optimizer)
 
     def scan_step(state: MFVIState, key: jax.Array) -> tuple[MFVIState, jax.Array]:
+        """Run one ADVI optimisation step, emitting the ELBO for the iteration."""
         new_state, info = step(
             key,
             state,

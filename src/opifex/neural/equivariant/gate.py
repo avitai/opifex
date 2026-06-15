@@ -22,8 +22,10 @@ from collections.abc import Callable  # noqa: TC003
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.neural.equivariant._assembly import from_chunks
+from opifex.neural.equivariant._invariants import norm
 from opifex.neural.equivariant.irreps import Irrep, Irreps, IrrepsArray
 
 
@@ -125,7 +127,7 @@ def _build_gated_output(
     extra_values: jax.Array,
     gate_values: jax.Array,
     num_extra: int,
-    leading_shape: tuple[int, ...],
+    leading_shape: tuple[int, ...],  # noqa: ARG001 - gated-output builder interface
     even_act: Callable[[jax.Array], jax.Array],
     odd_act: Callable[[jax.Array], jax.Array],
 ) -> tuple[Irreps, list[jax.Array | None]]:
@@ -206,3 +208,102 @@ class Gate(nnx.Module):
         if x.irreps != self.irreps_in:
             raise ValueError(f"Gate expected input irreps {self.irreps_in!r}, got {x.irreps!r}")
         return gate(x, even_act=self._even_act, odd_act=self._odd_act, gate_act=self._gate_act)
+
+
+class NormGate(nnx.Module):
+    r"""Norm-gated equivariant nonlinearity (QHNet ``NormGate``).
+
+    Unlike :func:`gate` -- which consumes the *rightmost* scalars as dedicated
+    gates -- this gate drives **every** multiplicity from a learnable MLP of the
+    input scalars concatenated with the per-irrep **norms** of the non-scalar
+    channels (the gating signal is therefore rotation-invariant). The MLP output
+    replaces the scalar channels and scales each non-scalar multiplicity, so the
+    output layout equals the input layout. This is the nonlinearity used
+    throughout QHNet's self / pair interaction layers
+    (``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py`` ``NormGate``).
+
+    Scaling an equivariant feature by an invariant gate is equivariant, so the
+    module is rotation-equivariant; reusing :func:`opifex.neural.equivariant.norm`
+    gives a NaN-safe gradient at zero vectors.
+    """
+
+    def __init__(self, irreps: Irreps | str, *, rngs: nnx.Rngs) -> None:
+        """Build the gate MLP for a fixed input layout.
+
+        Args:
+            irreps: Expected input layout (validated on call). Must carry at least
+                one ``l = 0`` scalar channel to drive the gates.
+            rngs: Random number generators (keyword-only) seeding the MLP.
+
+        Raises:
+            ValueError: If ``irreps`` has no scalar channel.
+        """
+        super().__init__()
+        self.irreps = Irreps(irreps)
+        self._num_scalars = sum(mul for mul, irrep in self.irreps.blocks if irrep.l == 0)
+        self._num_vectors = sum(mul for mul, irrep in self.irreps.blocks if irrep.l > 0)
+        if self._num_scalars == 0:
+            raise ValueError(
+                f"NormGate needs at least one scalar channel to gate, got {self.irreps!r}"
+            )
+        width = self._num_scalars + self._num_vectors
+        self.hidden = nnx.Linear(width, width, rngs=rngs)
+        self.readout = nnx.Linear(width, width, rngs=rngs)
+
+    def _gate_signal(self, x: IrrepsArray) -> tuple[Float[Array, "... width"], list[Array]]:
+        """Return the MLP gate vector and the per-block scalar input chunks."""
+        leading = x.array.shape[:-1]
+        scalar_chunks = [
+            chunk.reshape(*leading, mul)
+            for (mul, irrep), chunk in zip(self.irreps.blocks, x.chunks, strict=True)
+            if irrep.l == 0
+        ]
+        scalars = jnp.concatenate(scalar_chunks, axis=-1)
+        if self._num_vectors > 0:
+            vector_blocks = tuple((mul, irrep) for mul, irrep in self.irreps.blocks if irrep.l > 0)
+            vector_flat = jnp.concatenate(
+                [
+                    chunk.reshape(*leading, mul * irrep.dim)
+                    for (mul, irrep), chunk in zip(self.irreps.blocks, x.chunks, strict=True)
+                    if irrep.l > 0
+                ],
+                axis=-1,
+            )
+            vector_norms = norm(IrrepsArray(Irreps(vector_blocks), vector_flat)).array
+            signal = jnp.concatenate([scalars, vector_norms], axis=-1)
+        else:
+            signal = scalars
+        gates = self.readout(jax.nn.silu(self.hidden(signal)))
+        return gates, scalar_chunks
+
+    def __call__(self, x: IrrepsArray) -> IrrepsArray:
+        """Apply the norm gate.
+
+        Args:
+            x: Input feature with ``x.irreps == self.irreps``.
+
+        Returns:
+            The gated :class:`IrrepsArray` with the same layout as ``x``.
+
+        Raises:
+            ValueError: If ``x.irreps`` does not match the configured layout.
+        """
+        if x.irreps != self.irreps:
+            raise ValueError(f"NormGate expected input irreps {self.irreps!r}, got {x.irreps!r}")
+        leading = x.array.shape[:-1]
+        gates, _ = self._gate_signal(x)
+        scalar_gates = gates[..., : self._num_scalars]
+        vector_gates = gates[..., self._num_scalars :]
+        out_chunks: list[Array | None] = []
+        scalar_cursor = 0
+        vector_cursor = 0
+        for (mul, irrep), chunk in zip(self.irreps.blocks, x.chunks, strict=True):
+            if irrep.l == 0:
+                block = scalar_gates[..., scalar_cursor : scalar_cursor + mul]
+                out_chunks.append(block.reshape(*leading, mul, 1))
+                scalar_cursor += mul
+            else:
+                block_gates = vector_gates[..., vector_cursor : vector_cursor + mul]
+                out_chunks.append(chunk * block_gates[..., None])
+                vector_cursor += mul
+        return from_chunks(self.irreps, out_chunks, leading, x.array.dtype)

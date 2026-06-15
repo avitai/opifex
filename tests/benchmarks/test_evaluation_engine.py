@@ -553,18 +553,47 @@ class TestPDEBenchIntegration:
         assert isinstance(loader.supported_datasets, list)
         assert len(loader.supported_datasets) > 0
 
+    def test_pdebench_load_dataset_fails_fast_without_real_data(self, tmp_path) -> None:
+        """Default load must fail fast when no dataset file is present."""
+        import pytest
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        loader = PDEBenchLoader(data_root=str(tmp_path / "empty_pdebench"))
+        with pytest.raises(FileNotFoundError, match="allow_synthetic"):
+            loader.load_dataset(dataset_name="advection", subset_size=4, resolution="low")
+
+    def test_pdebench_synthetic_warns_and_flags(self, tmp_path) -> None:
+        """Opt-in synthetic data must warn loudly and flag metadata."""
+        import pytest
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        loader = PDEBenchLoader(data_root=str(tmp_path / "empty_pdebench"))
+        with pytest.warns(UserWarning, match="SYNTHETIC"):
+            dataset = loader.load_dataset(
+                dataset_name="advection",
+                subset_size=4,
+                resolution="low",
+                allow_synthetic=True,
+            )
+        assert dataset["metadata"]["is_synthetic"] is True
+        assert dataset["metadata"]["data_source"] == "synthetic"
+
     def test_pdebench_advection_dataset_loading(self) -> None:
         """Test loading PDEBench Advection dataset."""
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         loader = PDEBenchLoader()
 
-        # Test loading synthetic advection data
+        # Synthetic data must be opted into explicitly (no real PDEBench files present).
         dataset = loader.load_dataset(
             dataset_name="advection",
             subset_size=10,  # Small subset for testing
             resolution="low",
+            allow_synthetic=True,
         )
+        assert dataset["metadata"]["is_synthetic"] is True
 
         assert "input_data" in dataset
         assert "target_data" in dataset
@@ -577,7 +606,9 @@ class TestPDEBenchIntegration:
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         loader = PDEBenchLoader()
-        dataset = loader.load_dataset(dataset_name="burgers", subset_size=5, resolution="low")
+        dataset = loader.load_dataset(
+            dataset_name="burgers", subset_size=5, resolution="low", allow_synthetic=True
+        )
 
         assert "input_data" in dataset
         assert "target_data" in dataset
@@ -589,7 +620,9 @@ class TestPDEBenchIntegration:
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         loader = PDEBenchLoader()
-        dataset = loader.load_dataset(dataset_name="darcy_flow", subset_size=5, resolution="low")
+        dataset = loader.load_dataset(
+            dataset_name="darcy_flow", subset_size=5, resolution="low", allow_synthetic=True
+        )
 
         assert "input_data" in dataset
         assert "target_data" in dataset
@@ -605,7 +638,7 @@ class TestPDEBenchIntegration:
         baseline_repo = BaselineRepository()
 
         # Load a small dataset
-        loader.load_dataset("advection", subset_size=3, resolution="low")
+        loader.load_dataset("advection", subset_size=3, resolution="low", allow_synthetic=True)
 
         # Get baseline performance metrics
         baseline_metrics = baseline_repo.get_baseline_metrics(
@@ -623,7 +656,7 @@ class TestPDEBenchIntegration:
         )
         from opifex.neural.operators.foundations import FourierNeuralOperator
 
-        pipeline = PDEBenchEvaluationPipeline()
+        pipeline = PDEBenchEvaluationPipeline(allow_synthetic=True)
 
         # Create a simple FNO model for testing
         rngs = nnx.Rngs(42)

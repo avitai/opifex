@@ -8,15 +8,23 @@ Full test suite for Version 2 TensorLy integration including:
 - JAX-TensorLy interoperability
 """
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
 
 
-# Import the module we're testing
+# Import the module we're testing. The names are declared ``Any`` so the imports and
+# the absent-dependency fallbacks unify to bound names; ``_module_available`` gates use.
+benchmark_tensorly_integration: Any
+MemoryOptimalContractions: Any
+TensorLyEnhancedDecomposition: Any
+TensorLyTuckerInitializer: Any
+_tensorly_flag: bool
 try:
-    from opifex.neural.operators.fno.tensorly_integration import (
+    from opifex.neural.operators.fno.tensorly_integration import (  # type: ignore[no-redef]
         benchmark_tensorly_integration,
         MemoryOptimalContractions,
         TENSORLY_AVAILABLE,
@@ -25,11 +33,16 @@ try:
     )
 
     _module_available = True
+    _tensorly_flag = TENSORLY_AVAILABLE
 except ImportError:
+    benchmark_tensorly_integration = None
+    MemoryOptimalContractions = None
+    TensorLyEnhancedDecomposition = None
+    TensorLyTuckerInitializer = None
+    TENSORLY_AVAILABLE = False  # pyright: ignore[reportConstantRedefinition]
     _module_available = False
-    _tensorly_available = False
-else:
-    _tensorly_available = TENSORLY_AVAILABLE
+    _tensorly_flag = False
+_tensorly_available = _tensorly_flag
 
 
 @pytest.mark.skipif(not _module_available, reason="TensorLy integration module not available")
@@ -266,6 +279,11 @@ class TestBenchmarkingUtilities:
         except Exception as e:
             # Skip this test if benchmarking fails
             pytest.skip(f"Benchmarking failed: {e}")
+
+    def test_benchmark_rejects_nonpositive_num_trials(self):
+        """num_trials < 1 must fail fast before the timing loop runs."""
+        with pytest.raises(ValueError, match="num_trials must be >= 1"):
+            benchmark_tensorly_integration(num_trials=0)
 
     def test_performance_comparison(self):
         """Test performance comparison between methods."""

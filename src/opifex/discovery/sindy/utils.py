@@ -11,7 +11,7 @@ import jax.numpy as jnp
 def finite_difference(
     x: jnp.ndarray,
     dt: float | jnp.ndarray,
-    order: int = 2,
+    order: int = 2,  # noqa: ARG001 - finite-difference API parity across orders
 ) -> jnp.ndarray:
     """Compute time derivatives via centered finite differences.
 

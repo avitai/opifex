@@ -251,5 +251,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             output = self.output_proj(combined.reshape(batch_size, height * width, channels))
             output = output.reshape(batch_size, height, width, self.out_channels)
             output = output.transpose(0, 3, 1, 2)
+        else:
+            raise ValueError(f"Unsupported input shape: {x.shape}; expected 3D or 4D")
 
         return output

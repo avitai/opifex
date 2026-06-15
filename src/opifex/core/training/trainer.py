@@ -618,7 +618,11 @@ class Trainer(nnx.Module):
                 hook_fn(self, *args, **kwargs)
 
     def _compute_scale_specific_loss(
-        self, x: jax.Array, y_pred: jax.Array, y_true: jax.Array, scale: str
+        self,
+        x: jax.Array,  # noqa: ARG002 - scale-loss interface takes inputs
+        y_pred: jax.Array,
+        y_true: jax.Array,
+        scale: str,
     ) -> jax.Array:
         """Compute loss for a specific physics scale.
 
@@ -644,7 +648,11 @@ class Trainer(nnx.Module):
         return jnp.mean((y_pred - y_true) ** 2)
 
     def _compute_constraint_specific_loss(
-        self, x: jax.Array, y_pred: jax.Array, y_true: jax.Array, constraint: str
+        self,
+        x: jax.Array,  # noqa: ARG002 - constraint-loss interface takes inputs
+        y_pred: jax.Array,
+        y_true: jax.Array,
+        constraint: str,
     ) -> jax.Array:
         """Compute loss for a specific physics constraint.
 

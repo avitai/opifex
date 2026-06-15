@@ -5,6 +5,18 @@ This module provides fundamental quantum mechanical data structures and
 utilities for Neural DFT and other quantum machine learning applications.
 """
 
+from opifex.core.quantum._ri import (
+    AuxiliaryBasis,
+    fitted_eri,
+    three_center_eri,
+    two_center_metric,
+)
+from opifex.core.quantum._spherical import (
+    apply_left,
+    apply_matrix,
+    build_block_transform,
+    cart_to_spherical_matrix,
+)
 from opifex.core.quantum.backend import JaxGaussianBackend, QCBackend
 from opifex.core.quantum.basis import AtomicOrbitalBasis, GaussianShell
 from opifex.core.quantum.molecular_system import MolecularSystem
@@ -42,6 +54,7 @@ __all__ = [
     "AtomicOrbitalBasis",
     "AtomisticModel",
     "AtomisticModelRegistry",
+    "AuxiliaryBasis",
     "Backbone",
     "BackboneRegistry",
     "DensityMatrix",
@@ -64,9 +77,16 @@ __all__ = [
     "RadiusNeighborList",
     "Space",
     "SparseOperator",
+    "apply_left",
+    "apply_matrix",
+    "build_block_transform",
+    "cart_to_spherical_matrix",
+    "fitted_eri",
     "free",
     "periodic",
     "register_atomistic_model",
     "register_backbone",
     "register_property_head",
+    "three_center_eri",
+    "two_center_metric",
 ]

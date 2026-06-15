@@ -171,6 +171,7 @@ def cakf_update(
     def body(
         carry: tuple[jax.Array, jax.Array], iteration_index: jax.Array
     ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
+        """Perform one compute-aware update iteration along a new search direction."""
         action, gram_factor = carry
         residual = observation - observation_matrix @ mean - s_apply(action)
         if precomputed_directions is None:

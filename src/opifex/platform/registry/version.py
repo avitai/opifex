@@ -374,7 +374,7 @@ class VersionManager:
         functional_id: str,
         source_branch: str,
         target_branch: str,
-        author_id: str,
+        author_id: str,  # noqa: ARG002 - versioning interface records the author id
         strategy: MergeStrategy = MergeStrategy.MERGE_COMMIT,
         message: str = "",
     ) -> bool:
@@ -500,7 +500,7 @@ class VersionManager:
 
         return diff
 
-    async def _ensure_branch(self, functional_id: str, branch: str, author_id: str) -> None:
+    async def _ensure_branch(self, functional_id: str, branch: str, author_id: str) -> None:  # noqa: ARG002 - versioning interface records the author id
         """Ensure branch exists and switch to it."""
         if not self.enable_git:
             return
@@ -534,7 +534,11 @@ class VersionManager:
             )
 
     async def _commit_changes(
-        self, functional_id: str, version_tag: str, message: str, author_id: str
+        self,
+        functional_id: str,
+        version_tag: str,
+        message: str,
+        author_id: str,  # noqa: ARG002 - versioning interface records the author id
     ) -> str:
         """Commit changes to Git and return commit hash."""
         functional_dir = self.storage_root / functional_id

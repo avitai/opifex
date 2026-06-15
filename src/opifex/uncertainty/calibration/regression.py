@@ -95,6 +95,7 @@ def regression_calibration_error(
     flat_cdf = cdf_values.reshape(-1)
 
     def empirical_at_level(level: jax.Array) -> jax.Array:
+        """Return the empirical coverage fraction at one nominal quantile level."""
         return jnp.mean((flat_cdf <= level).astype(jnp.float32))
 
     empirical = jax.vmap(empirical_at_level)(quantile_levels)

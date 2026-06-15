@@ -458,7 +458,7 @@ class IsotonicRegression(nnx.Module):
     from confidence scores to calibrated probabilities.
     """
 
-    def __init__(self, n_bins: int = 100, *, rngs: nnx.Rngs) -> None:
+    def __init__(self, n_bins: int = 100, *, rngs: nnx.Rngs) -> None:  # noqa: ARG002 - nnx.Module constructor receives rngs
         """Initialize isotonic regression.
 
         Args:

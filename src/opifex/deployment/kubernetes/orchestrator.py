@@ -5,6 +5,7 @@ This module provides a full orchestrator that combines all Kubernetes
 components for complete deployment management.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,42 @@ import yaml
 from opifex.deployment.kubernetes.autoscaler import AutoScaler
 from opifex.deployment.kubernetes.manifest_generator import ManifestGenerator
 from opifex.deployment.kubernetes.resource_manager import ResourceManager
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DeploymentManifestConfig:
+    """Configuration for a complete Kubernetes manifest suite.
+
+    Groups the deployment, autoscaling, and ingress knobs consumed by
+    :meth:`KubernetesOrchestrator.generate_complete_deployment`.
+
+    Attributes:
+        replicas: Number of deployment replicas.
+        cpu_request: CPU resource request per pod.
+        memory_request: Memory resource request per pod.
+        cpu_limit: CPU resource limit per pod (defaults applied downstream).
+        memory_limit: Memory resource limit per pod (defaults applied downstream).
+        enable_autoscaling: Whether to emit a HorizontalPodAutoscaler.
+        min_replicas: Minimum replicas for autoscaling.
+        max_replicas: Maximum replicas for autoscaling.
+        target_cpu_utilization: Target CPU utilization percentage for the HPA.
+        enable_resource_management: Whether to emit namespace, quota, and limits.
+        enable_ingress: Whether to emit an Ingress manifest.
+        ingress_host: Ingress hostname (defaults to ``<app_name>.example.com``).
+    """
+
+    replicas: int = 3
+    cpu_request: str = "200m"
+    memory_request: str = "512Mi"
+    cpu_limit: str | None = None
+    memory_limit: str | None = None
+    enable_autoscaling: bool = False
+    min_replicas: int = 2
+    max_replicas: int = 10
+    target_cpu_utilization: int = 70
+    enable_resource_management: bool = False
+    enable_ingress: bool = True
+    ingress_host: str | None = None
 
 
 class KubernetesOrchestrator:
@@ -59,49 +96,28 @@ class KubernetesOrchestrator:
     def generate_complete_deployment(
         self,
         output_dir: Path,
-        replicas: int = 3,
-        cpu_request: str = "200m",
-        memory_request: str = "512Mi",
-        cpu_limit: str | None = None,
-        memory_limit: str | None = None,
-        enable_autoscaling: bool = False,
-        min_replicas: int = 2,
-        max_replicas: int = 10,
-        target_cpu_utilization: int = 70,
-        enable_resource_management: bool = False,
-        enable_ingress: bool = True,
-        ingress_host: str | None = None,
-        **kwargs,
+        config: DeploymentManifestConfig | None = None,
     ) -> dict[str, Path]:
         """
         Generate complete deployment manifest suite.
 
         Args:
             output_dir: Directory to write manifest files
-            replicas: Number of deployment replicas
-            cpu_request: CPU resource request
-            memory_request: Memory resource request
-            cpu_limit: CPU resource limit
-            memory_limit: Memory resource limit
-            enable_autoscaling: Whether to enable HPA
-            min_replicas: Minimum replicas for autoscaling
-            max_replicas: Maximum replicas for autoscaling
-            target_cpu_utilization: Target CPU utilization for HPA
-            enable_resource_management: Whether to create resource quotas
-            enable_ingress: Whether to create ingress
-            ingress_host: Ingress hostname
-            **kwargs: Additional parameters
+            config: Manifest-suite configuration (replicas, resources,
+                autoscaling, ingress). Defaults to ``DeploymentManifestConfig()``.
 
         Returns:
             Dict mapping manifest names to file paths
         """
+        if config is None:
+            config = DeploymentManifestConfig()
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         manifest_files = {}
 
         # 1. Resource Management (namespace, quota, limits)
-        if enable_resource_management:
+        if config.enable_resource_management:
             # Namespace
             namespace_manifest = self.resource_manager.generate_namespace(
                 labels={"app": self.app_name, "env": "production"}
@@ -135,11 +151,11 @@ class KubernetesOrchestrator:
 
         # 2. Core Deployment
         deployment_manifest = self.manifest_generator.generate_deployment(
-            replicas=replicas,
-            cpu_request=cpu_request,
-            memory_request=memory_request,
-            cpu_limit=cpu_limit or "500m",
-            memory_limit=memory_limit or "1Gi",
+            replicas=config.replicas,
+            cpu_request=config.cpu_request,
+            memory_request=config.memory_request,
+            cpu_limit=config.cpu_limit or "500m",
+            memory_limit=config.memory_limit or "1Gi",
             port=self.container_port,
         )
         deployment_file = output_dir / "deployment.yaml"
@@ -153,20 +169,20 @@ class KubernetesOrchestrator:
         manifest_files["service"] = service_file
 
         # 4. Ingress
-        if enable_ingress:
+        if config.enable_ingress:
             ingress_manifest = self.manifest_generator.generate_ingress(
-                host=ingress_host or f"{self.app_name}.example.com"
+                host=config.ingress_host or f"{self.app_name}.example.com"
             )
             ingress_file = output_dir / "ingress.yaml"
             self._write_manifest(ingress_file, ingress_manifest)
             manifest_files["ingress"] = ingress_file
 
         # 5. Auto-scaling
-        if enable_autoscaling:
+        if config.enable_autoscaling:
             hpa_manifest = self.autoscaler.generate_hpa(
-                min_replicas=min_replicas,
-                max_replicas=max_replicas,
-                cpu_target_percentage=target_cpu_utilization,
+                min_replicas=config.min_replicas,
+                max_replicas=config.max_replicas,
+                cpu_target_percentage=config.target_cpu_utilization,
             )
             hpa_file = output_dir / "hpa.yaml"
             self._write_manifest(hpa_file, hpa_manifest)

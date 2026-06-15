@@ -118,6 +118,7 @@ def manifold_update(
     def step(
         carry: tuple[jax.Array, jax.Array], _: None
     ) -> tuple[tuple[jax.Array, jax.Array], None]:
+        """Run one iterated-EKF iteration of the manifold-constraint update."""
         current_mean, _current_cov = carry
         observation_value = observation_matrix @ current_mean
         residual = residual_fn(observation_value)
@@ -351,9 +352,12 @@ def perturbed_step_solve(
     )
 
     def single_trajectory(member_key: jax.Array) -> jax.Array:
+        """Integrate one perturbed-step solver trajectory for an ensemble member."""
+
         def step(
             carry: tuple[jax.Array, jax.Array], step_index: jax.Array
         ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
+            """Advance the trajectory by one perturbed solver step."""
             time, state = carry
             propagated = deterministic_step(vector_field, time, state, step_size)
             step_key = jax.random.fold_in(member_key, step_index)

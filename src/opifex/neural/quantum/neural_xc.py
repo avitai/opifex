@@ -188,7 +188,11 @@ class DensityFeatureExtractor(nnx.Module):
         self.density_cutoff = nnx.Param(jnp.array(1e-10))
 
     def __call__(
-        self, density: jax.Array, gradients: jax.Array, *, deterministic: bool = False
+        self,
+        density: jax.Array,
+        gradients: jax.Array,
+        *,
+        deterministic: bool = False,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Extract physics-informed features from density and gradients.
 

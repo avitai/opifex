@@ -66,12 +66,14 @@ class DiffusionDataSource(GrainPDESource):
         ic_type = jax.random.randint(key1, (), 0, 3)
 
         def gaussian():
+            """Return a 2D Gaussian blob with random centre and width."""
             cx = 0.3 + 0.4 * jax.random.uniform(key2)
             cy = 0.3 + 0.4 * jax.random.uniform(key3)
             width = 0.05 + 0.1 * jax.random.uniform(key2)
             return jnp.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * width**2))
 
         def square():
+            """Return a 2D square indicator patch with random centre and size."""
             cx = 0.3 + 0.4 * jax.random.uniform(key2)
             cy = 0.3 + 0.4 * jax.random.uniform(key3)
             size = 0.1 + 0.2 * jax.random.uniform(key2)
@@ -82,6 +84,7 @@ class DiffusionDataSource(GrainPDESource):
             )
 
         def wave():
+            """Return a 2D sinusoidal field with random frequencies."""
             fx = 2 + 4 * jax.random.uniform(key2)
             fy = 2 + 4 * jax.random.uniform(key3)
             return jnp.sin(fx * jnp.pi * X) * jnp.sin(fy * jnp.pi * Y)

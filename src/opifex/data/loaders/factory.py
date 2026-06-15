@@ -5,8 +5,6 @@ This module provides factory functions to create configured Grain DataLoaders
 with appropriate data sources, samplers, and transformations.
 """
 
-from typing import Any
-
 import grain.python as grain  # type: ignore  # noqa: PGH003
 
 from opifex.data.sources.burgers_source import BurgersDataSource
@@ -39,7 +37,6 @@ def create_burgers_loader(
     enable_augmentation: bool = False,
     augmentation_noise_level: float = 0.01,
     num_epochs: int = 1,
-    **kwargs: Any,
 ) -> grain.DataLoader:
     """
     Create Grain DataLoader for Burgers equation dataset.
@@ -68,7 +65,6 @@ def create_burgers_loader(
         enable_augmentation: Add noise augmentation
         augmentation_noise_level: Noise level for augmentation
         num_epochs: Number of epochs to iterate (default: 1)
-        **kwargs: Additional arguments (reserved for future use)
 
     Returns:
         grain.DataLoader: Configured data loader ready for iteration
@@ -144,7 +140,6 @@ def create_darcy_loader(
     worker_count: int = 0,
     enable_normalization: bool = True,
     num_epochs: int = 1,
-    **kwargs: Any,
 ) -> grain.DataLoader:
     """Create Grain DataLoader for Darcy flow dataset.
 
@@ -191,7 +186,6 @@ def create_diffusion_loader(
     seed: int = 42,
     worker_count: int = 0,
     num_epochs: int = 1,
-    **kwargs: Any,
 ) -> grain.DataLoader:
     """Create Grain DataLoader for diffusion-advection dataset."""
     data_source = DiffusionDataSource(
@@ -228,7 +222,6 @@ def create_shallow_water_loader(
     seed: int = 42,
     worker_count: int = 0,
     num_epochs: int = 1,
-    **kwargs: Any,
 ) -> grain.DataLoader:
     """Create Grain DataLoader for shallow water equations dataset."""
     data_source = ShallowWaterDataSource(
@@ -270,7 +263,6 @@ def create_navier_stokes_loader(
     normalization_mean: float = 0.0,
     normalization_std: float = 1.0,
     num_epochs: int = 1,
-    **kwargs: Any,
 ) -> grain.DataLoader:
     """
     Create Grain DataLoader for 2D Navier-Stokes equations dataset.
@@ -296,7 +288,6 @@ def create_navier_stokes_loader(
         normalization_mean: Mean for normalization
         normalization_std: Std for normalization
         num_epochs: Number of epochs to iterate (default: 1)
-        **kwargs: Additional arguments (reserved for future use)
 
     Returns:
         grain.DataLoader: Configured data loader ready for iteration

@@ -139,9 +139,21 @@ class PDEBenchLoader:
         split: str = "test",
         normalize: bool = True,
         format_for_model: str = "auto",
+        *,
+        allow_synthetic: bool = False,
     ) -> dict[str, Any]:
         """
         Load and preprocess a PDEBench dataset.
+
+        PDEBench datasets ship as multi-gigabyte HDF5 files that must be
+        downloaded separately (see the PDEBench data-download tooling). If the
+        corresponding HDF5 file
+        is not present under ``data_root`` it raises :class:`FileNotFoundError`
+        unless ``allow_synthetic=True`` is passed explicitly. When synthetic data
+        is requested it is generated from the dataset's spatial/channel
+        characteristics, a :class:`UserWarning` is emitted, and the returned
+        metadata is flagged with ``data_source="synthetic"`` and
+        ``is_synthetic=True`` so callers can detect it.
 
         Args:
             dataset_name: Name of the dataset to load
@@ -150,18 +162,45 @@ class PDEBenchLoader:
             split: Dataset split ("train", "val", "test")
             normalize: Whether to normalize the data
             format_for_model: Target model format ("fno", "deeponet", "auto")
+            allow_synthetic: Opt in to clearly-flagged synthetic data when no real
+                PDEBench HDF5 file is available. Defaults to ``False`` (fail fast).
 
         Returns:
             Dictionary containing:
                 - input_data: Input arrays
                 - target_data: Target arrays
-                - metadata: Dataset metadata
+                - metadata: Dataset metadata (including ``data_source`` and
+                  ``is_synthetic``)
+
+        Raises:
+            ValueError: If ``dataset_name`` is not supported.
+            FileNotFoundError: If no real PDEBench HDF5 file is found for the
+                dataset and ``allow_synthetic`` is ``False``.
         """
         if dataset_name not in self.supported_datasets:
             raise ValueError(f"Unsupported dataset: {dataset_name}")
 
-        # For now, generate synthetic data matching PDEBench characteristics
-        # In a real implementation, this would load actual PDEBench files
+        real_data_path = self._real_data_path(dataset_name)
+        if real_data_path is None:
+            if not allow_synthetic:
+                raise FileNotFoundError(
+                    f"No real PDEBench HDF5 file found for dataset {dataset_name!r} under "
+                    f"{self.data_root}. Download the PDEBench data files first, or pass "
+                    "allow_synthetic=True to generate clearly-flagged synthetic data "
+                    "(metadata['is_synthetic'] == True) for testing only."
+                )
+            warnings.warn(
+                f"Returning SYNTHETIC data for PDEBench dataset {dataset_name!r}: no real "
+                f"HDF5 file was found under {self.data_root}. This data does NOT reflect the "
+                "true PDE solution and must not be used for reported benchmark numbers. "
+                "Metadata is flagged with is_synthetic=True.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        # Generate synthetic data matching PDEBench dataset characteristics. Real
+        # HDF5 loading is gated above (fail-fast); reaching here means the caller
+        # explicitly opted into synthetic data.
         dataset_config = self._dataset_configs[dataset_name]
 
         # Generate synthetic data based on dataset characteristics
@@ -212,6 +251,7 @@ class PDEBenchLoader:
             "format": format_for_model,
             "spatial_shape": spatial_shape,
             "data_source": "synthetic",  # Mark as synthetic for testing
+            "is_synthetic": True,  # Detectable flag so callers never mistake it for real data
         }
 
         return {
@@ -219,6 +259,27 @@ class PDEBenchLoader:
             "target_data": target_data,
             "metadata": metadata,
         }
+
+    def _real_data_path(self, dataset_name: str) -> Path | None:
+        """Locate a real PDEBench HDF5 file for ``dataset_name`` under ``data_root``.
+
+        PDEBench ships datasets as HDF5 files. This searches ``data_root`` for a
+        matching ``.h5``/``.hdf5`` file. Returns ``None`` when no file exists,
+        which the caller turns into a fail-fast error.
+
+        Args:
+            dataset_name: Name of the dataset to locate.
+
+        Returns:
+            Path to the real HDF5 file, or ``None`` if not present.
+        """
+        if not self.data_root.exists():
+            return None
+        for extension in ("*.h5", "*.hdf5"):
+            matches = sorted(self.data_root.glob(f"{dataset_name}*{extension[1:]}"))
+            if matches:
+                return matches[0]
+        return None
 
     def _normalize_data(self, data: Array) -> Array:
         """Normalize data to zero mean and unit variance."""
@@ -251,14 +312,19 @@ class PDEBenchEvaluationPipeline:
     dataset loading, model evaluation, and result analysis.
     """
 
-    def __init__(self, output_dir: str | None = None) -> None:
+    def __init__(self, output_dir: str | None = None, *, allow_synthetic: bool = False) -> None:
         """
         Initialize evaluation pipeline.
 
         Args:
             output_dir: Directory for saving evaluation results
+            allow_synthetic: Propagated to :meth:`PDEBenchLoader.load_dataset`.
+                When ``True`` the pipeline may run on clearly-flagged synthetic
+                data (with a loud warning) if real PDEBench files are absent.
+                Defaults to ``False`` (fail fast on missing real data).
         """
         self.loader = PDEBenchLoader()
+        self.allow_synthetic = allow_synthetic
         self.evaluator = BenchmarkEvaluator(
             output_dir=output_dir or "./pdebench_results", save_detailed_results=True
         )
@@ -296,6 +362,7 @@ class PDEBenchEvaluationPipeline:
                     subset_size=subset_size,
                     resolution=resolution,
                     format_for_model="auto",  # Auto-detect based on model
+                    allow_synthetic=self.allow_synthetic,
                 )
 
                 # Determine forward function based on data format

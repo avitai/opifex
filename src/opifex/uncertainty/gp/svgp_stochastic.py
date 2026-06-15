@@ -486,6 +486,7 @@ def natural_gradient_step(
     initial_s_w = state.whitened_root_cov @ state.whitened_root_cov.T
 
     def elbo_in_mu_and_s(mu_w_arg: jax.Array, s_w_arg: jax.Array) -> jax.Array:
+        """Return the ELBO as a function of the whitened variational mean and covariance."""
         l_w_arg = jnp.linalg.cholesky(s_w_arg + jitter_identity)
         wrapped_state = StochasticSVGPState(
             x_inducing=state.x_inducing,

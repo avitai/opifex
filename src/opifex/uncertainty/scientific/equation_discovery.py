@@ -201,6 +201,7 @@ class BayesianSINDy:
         slab_b = self.slab_nu / 2.0 * self.slab_s**2
 
         def log_density(params: dict[str, jax.Array]) -> jax.Array:
+            """Return the unnormalised log-posterior over horseshoe-regularised SINDy terms."""
             # Constrain the positive parameters; the log transform's Jacobian
             # contributes ``log theta`` per parameter (d exp(u)/du = exp(u)).
             tau = jnp.exp(params["log_tau"])
@@ -360,6 +361,7 @@ class BayesianSINDy:
         )
 
     def _require_posterior(self) -> PosteriorOverTerms:
+        """Return the fitted posterior, raising if ``fit`` has not been called."""
         if self._posterior is None:
             raise RuntimeError("BayesianSINDy.fit must be called before posterior summaries.")
         return self._posterior
@@ -386,6 +388,7 @@ def _nuts_inference_loop(
 
     @jax.jit
     def one_step(state: HMCState, key: jax.Array) -> tuple[HMCState, HMCState]:
+        """Advance the NUTS sampler by one step, returning the new and recorded states."""
         # blackjax nuts step returns the generic ``State`` base; at runtime it is the
         # ``HMCState`` that NUTS shares with HMC (see docstring above).
         state, _info = kernel(key, state)  # pyright: ignore[reportAssignmentType]

@@ -84,7 +84,7 @@ class UNetBlock(nnx.Module):
                 rngs=rngs,
             )
 
-    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:  # noqa: ARG002 - nnx forward interface carries a deterministic flag
         """Apply U-Net block.
 
         Args:

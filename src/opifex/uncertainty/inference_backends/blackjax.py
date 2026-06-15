@@ -164,6 +164,7 @@ class BlackJAXBackend:
         log_prob_fn: Callable[[jax.Array], jax.Array],
         key: jax.Array,
     ) -> jax.Array:
+        """Run the configured BlackJAX sampler and return the posterior draws."""
         if self.method == "nuts":
             return nuts_sampling(
                 log_prob_fn,

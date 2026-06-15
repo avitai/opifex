@@ -60,7 +60,7 @@ class Shape2D(Geometry, Protocol):
 class _EnhancedShapeBase:  # pyright: ignore[reportUnusedClass]
     """Base class providing enhanced functionality to all shapes."""
 
-    def distance(self, point: Point2D) -> Float[jax.Array, ""]:
+    def distance(self, point: Point2D) -> Float[jax.Array, ""]:  # noqa: ARG002 - signed-distance interface takes a query point
         """Compute signed distance to shape boundary (enhanced feature)."""
         # Default implementation - subclasses should override for efficiency
         # This is used internally for robust CSG operations

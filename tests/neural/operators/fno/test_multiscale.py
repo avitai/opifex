@@ -6,6 +6,7 @@ and gradient checkpointing.
 
 import jax
 import jax.numpy as jnp
+import pytest
 from flax import nnx
 
 from opifex.neural.operators.fno.base import FourierNeuralOperator
@@ -90,6 +91,24 @@ class TestMultiScaleFourierNeuralOperator:
         expected_shape = (batch_size, out_channels, grid_size, grid_size)
         assert output.shape == expected_shape
         assert jnp.all(jnp.isfinite(output))
+
+    def test_multi_scale_fno_rejects_unsupported_input_rank(self):
+        """A non-3D/4D input must fail fast rather than return an unbound output."""
+        operator = MultiScaleFourierNeuralOperator(
+            in_channels=1,
+            out_channels=1,
+            hidden_channels=16,
+            modes_per_scale=[8, 4],
+            num_layers_per_scale=[1, 1],
+            spatial_dims=1,
+            use_cross_scale_attention=False,
+            rngs=nnx.Rngs(0),
+        )
+
+        # 5D input (batch, channels, d, h, w) is unsupported.
+        x = jnp.ones((2, 1, 8, 8, 8))
+        with pytest.raises(ValueError, match="Unsupported input shape"):
+            operator(x)
 
     def test_multi_scale_fno_gradient_checkpointing(self):
         """Test Multi-Scale FNO with gradient checkpointing and GPU/CPU compatibility."""

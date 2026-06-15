@@ -76,16 +76,19 @@ class BurgersDataSource(GrainPDESource):
             ic_type = jax.random.randint(key1, (), 0, 3)
 
             def gaussian():
+                """Return a 1D Gaussian bump with random centre and width."""
                 center = jax.random.uniform(key2, (), minval=-0.5, maxval=0.5)
                 width = jax.random.uniform(key3, (), minval=0.1, maxval=0.3)
                 return jnp.exp(-((x - center) ** 2) / width**2)
 
             def sine():
+                """Return a 1D sine wave with random frequency and phase."""
                 freq = jax.random.uniform(key2, (), minval=1.0, maxval=3.0)
                 phase = jax.random.uniform(key3, (), minval=0.0, maxval=2 * jnp.pi)
                 return jnp.sin(freq * jnp.pi * x + phase)
 
             def step():
+                """Return a 1D smoothed step (tanh) with random location and width."""
                 center = jax.random.uniform(key2, (), minval=-0.3, maxval=0.3)
                 width = jax.random.uniform(key3, (), minval=0.05, maxval=0.15)
                 return jnp.tanh((x - center) / width)
@@ -100,15 +103,18 @@ class BurgersDataSource(GrainPDESource):
         ic_type = jax.random.randint(key1, (), 0, 3)
 
         def gaussian():
+            """Return a 2D Gaussian bump with random centre and width."""
             cx = jax.random.uniform(key2, (), minval=-0.5, maxval=0.5)
             cy = jax.random.uniform(key3, (), minval=-0.5, maxval=0.5)
             width = jax.random.uniform(key4, (), minval=0.2, maxval=0.4)
             return jnp.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / width**2)
 
         def vortex():
+            """Return a 2D vortex-like field localised near the origin."""
             return jnp.sin(jnp.pi * X) * jnp.sin(jnp.pi * Y) * jnp.exp(-(X**2 + Y**2))
 
         def wave():
+            """Return a 2D travelling wave with random frequencies and phase."""
             fx = jax.random.uniform(key2, (), minval=1.0, maxval=2.0)
             fy = jax.random.uniform(key3, (), minval=1.0, maxval=2.0)
             phase = jax.random.uniform(key4, (), minval=0.0, maxval=2 * jnp.pi)

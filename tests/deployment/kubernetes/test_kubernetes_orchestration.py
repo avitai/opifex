@@ -12,7 +12,10 @@ import yaml
 
 from opifex.deployment.kubernetes.autoscaler import AutoScaler
 from opifex.deployment.kubernetes.manifest_generator import ManifestGenerator
-from opifex.deployment.kubernetes.orchestrator import KubernetesOrchestrator
+from opifex.deployment.kubernetes.orchestrator import (
+    DeploymentManifestConfig,
+    KubernetesOrchestrator,
+)
 from opifex.deployment.kubernetes.resource_manager import ResourceManager
 
 
@@ -267,13 +270,15 @@ class TestKubernetesIntegration:
             # Generate complete manifest suite
             orchestrator.generate_complete_deployment(
                 output_dir=output_dir,
-                replicas=3,
-                cpu_request="200m",
-                memory_request="512Mi",
-                enable_autoscaling=True,
-                min_replicas=2,
-                max_replicas=10,
-                enable_resource_management=True,
+                config=DeploymentManifestConfig(
+                    replicas=3,
+                    cpu_request="200m",
+                    memory_request="512Mi",
+                    enable_autoscaling=True,
+                    min_replicas=2,
+                    max_replicas=10,
+                    enable_resource_management=True,
+                ),
             )
 
             # Verify all manifest files exist

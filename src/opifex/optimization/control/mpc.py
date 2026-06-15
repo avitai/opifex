@@ -123,14 +123,14 @@ class PredictiveModel(nnx.Module):
 
         return physics_loss
 
-    def _energy_conservation_loss(self, state_prev, state_next, control):
+    def _energy_conservation_loss(self, state_prev, state_next, control):  # noqa: ARG002 - conservation-loss interface receives the control input
         """Energy conservation constraint."""
         # Simple kinetic energy conservation (example)
         energy_prev = 0.5 * jnp.sum(state_prev[:2] ** 2)  # First 2 states as velocities
         energy_next = 0.5 * jnp.sum(state_next[:2] ** 2)
         return (energy_next - energy_prev) ** 2
 
-    def _momentum_conservation_loss(self, state_prev, state_next, control):
+    def _momentum_conservation_loss(self, state_prev, state_next, control):  # noqa: ARG002 - conservation-loss interface receives the control input
         """Momentum conservation constraint."""
         # Simple momentum conservation (example)
         momentum_prev = jnp.sum(state_prev[:2])
@@ -243,7 +243,7 @@ class ControlBarrier:
         self.constraint = constraint
         self.alpha = alpha
 
-    def is_safe_control(self, state: jnp.ndarray, control: jnp.ndarray) -> bool:
+    def is_safe_control(self, state: jnp.ndarray, control: jnp.ndarray) -> bool:  # noqa: ARG002 - safety predicate interface receives the control input
         """Check if control is safe given current state."""
         # Simple barrier function check
         barrier_value = self.constraint(state)
@@ -296,6 +296,7 @@ class RealTimeOptimizer(nnx.Module):
         # Pre-compute gradient function
         grad_fn = jax.grad(objective)
 
+        constraint_grad_fn = None
         if constraints is not None:
             constraint_grad_fn = jax.grad(lambda x: jnp.sum(constraints(x) ** 2))
 
@@ -305,7 +306,7 @@ class RealTimeOptimizer(nnx.Module):
             grad = grad_fn(x)
 
             # Apply constraints if any
-            if constraints is not None:
+            if constraint_grad_fn is not None:
                 constraint_grad = constraint_grad_fn(x)
                 grad = grad + 0.1 * constraint_grad
 
@@ -353,6 +354,7 @@ class RealTimeOptimizer(nnx.Module):
         # Pre-compute gradient function
         grad_fn = jax.grad(objective)
 
+        constraint_grad_fn = None
         if constraints is not None:
             constraint_grad_fn = jax.grad(lambda x: jnp.sum(constraints(x) ** 2))
 
@@ -370,7 +372,7 @@ class RealTimeOptimizer(nnx.Module):
             grad = grad_fn(x)
 
             # Apply constraints if any
-            if constraints is not None:
+            if constraint_grad_fn is not None:
                 constraint_grad = constraint_grad_fn(x)
                 grad = grad + 0.1 * constraint_grad
 

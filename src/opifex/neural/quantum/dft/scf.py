@@ -74,6 +74,7 @@ from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.neural.quantum.dft._energy import (
     _density_from_fock as _density_from_fock_impl,
     _Integrals,
+    _symmetric_orthogonaliser,
     assemble_integrals,
     build_fock,
     converged_density_direct,
@@ -304,15 +305,23 @@ class SCFSolver:
         energy, gradient = jax.value_and_grad(self.energy_from_positions)(where)
         return energy, -gradient
 
-    def solve(self) -> SCFResult:
+    def solve(self, *, initial_density: Array | None = None) -> SCFResult:
         """Run the forward SCF (DIIS or direct minimisation) to convergence.
+
+        Args:
+            initial_density: Optional closed-shell density to seed the
+                Anderson/DIIS iteration. A high-quality guess (e.g. reconstructed
+                from a neural-network predicted Fock via :func:`density_from_fock`)
+                reaches the fixed point in fewer iterations; the converged result
+                is unchanged. Ignored by the direct-minimisation mode, which is
+                seeded internally.
 
         Returns:
             The :class:`SCFResult` with the converged total energy and orbitals.
         """
         if self._mode is SolverMode.DIRECT:
             return self._solve_direct()
-        return self._solve_self_consistent()
+        return self._solve_self_consistent(initial_density=initial_density)
 
     def _solve_direct(self) -> SCFResult:
         """Direct-minimisation forward solve (SCF-free path)."""
@@ -340,7 +349,7 @@ class SCFSolver:
             converged=True,
         )
 
-    def _solve_self_consistent(self) -> SCFResult:
+    def _solve_self_consistent(self, *, initial_density: Array | None = None) -> SCFResult:
         """Anderson-accelerated self-consistent forward solve.
 
         Drives the Kohn-Sham density to the fixed point with the same
@@ -357,6 +366,7 @@ class SCFSolver:
             tolerance=self._convergence_tolerance,
             max_steps=self._max_iterations,
             neural_spec=self._neural_spec,
+            initial_density=initial_density,
         )
         fock, _, _ = build_fock(solution.value, integrals, self._functional, self._neural_spec)
         density, coefficients, orbital_energies = _density_from_fock_impl(
@@ -373,9 +383,33 @@ class SCFSolver:
         )
 
 
+def density_from_fock(fock: Array, overlap: Array, n_occupied: int) -> Array:
+    """Closed-shell density from a Fock matrix by solving ``FC = SCe``.
+
+    Reconstructs an initial-guess density from a Fock matrix (such as one
+    predicted by a neural Hamiltonian model) in the same AO basis as ``overlap``:
+    it Lowdin-orthogonalises with ``S^{-1/2}``, diagonalises the orthonormal Fock,
+    back-transforms the lowest ``n_occupied`` orbitals and forms
+    ``D = 2 C_occ C_occ^T``. Pair the result with
+    :meth:`SCFSolver.solve(initial_density=...)<SCFSolver.solve>` to seed the SCF.
+
+    Args:
+        fock: The Fock matrix ``(n_ao, n_ao)``.
+        overlap: The AO overlap matrix ``S`` ``(n_ao, n_ao)`` in the same basis.
+        n_occupied: Number of doubly-occupied orbitals (electrons // 2).
+
+    Returns:
+        The closed-shell density matrix ``(n_ao, n_ao)``.
+    """
+    orthogonaliser = _symmetric_orthogonaliser(overlap)
+    density, _, _ = _density_from_fock_impl(fock, orthogonaliser, n_occupied)
+    return density
+
+
 __all__ = [
     "Functional",
     "SCFResult",
     "SCFSolver",
     "SolverMode",
+    "density_from_fock",
 ]

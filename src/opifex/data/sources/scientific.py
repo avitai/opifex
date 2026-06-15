@@ -402,7 +402,7 @@ class PDEBenchSource(DataSourceModule):
 
         return batch
 
-    def reset(self, seed: int | None = None) -> None:
+    def reset(self, seed: int | None = None) -> None:  # noqa: ARG002 - reset interface accepts an optional seed
         """Reset iteration to the beginning.
 
         Args:
@@ -608,6 +608,6 @@ class VTKMeshSource(DataSourceModule):
             raise IndexError(f"Index {index} out of range [0, {n})")
         return self.meshes[index]
 
-    def reset(self, seed: int | None = None) -> None:
+    def reset(self, seed: int | None = None) -> None:  # noqa: ARG002 - reset interface accepts an optional seed
         """Reset iteration state."""
         self._position.value = 0

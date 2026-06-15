@@ -101,6 +101,7 @@ def frank_wolfe_bq(
         carry: tuple[jax.Array, jax.Array],
         iteration: jax.Array,
     ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
+        """Perform one Frank-Wolfe iteration, selecting and reweighting a candidate point."""
         weights, _last_index = carry
         gradient = kernel_mean_at_candidates - candidate_self_kernel @ weights
         new_index = jnp.argmax(gradient)

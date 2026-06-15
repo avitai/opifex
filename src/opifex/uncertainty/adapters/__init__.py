@@ -20,6 +20,7 @@ from opifex.uncertainty.adapters.ensemble import (
     TestTimeAugmentationAdapter,
     TestTimeAugmentationState,
 )
+from opifex.uncertainty.adapters.evidential import EvidentialAdapter
 from opifex.uncertainty.adapters.gp import (
     BayesnewtonAdapterSpec,
     GPJaxAdapterSpec,
@@ -76,6 +77,7 @@ __all__ = [
     "DeepONetMCDropoutAdapterSpec",
     "DistributionAdapterProtocol",
     "DistributionAdapterSpec",
+    "EvidentialAdapter",
     "FNOConformalAdapterSpec",
     "FNODeepEnsembleAdapterSpec",
     "FNOMCDropoutAdapterSpec",

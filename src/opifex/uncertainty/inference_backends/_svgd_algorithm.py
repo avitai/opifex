@@ -70,6 +70,7 @@ def median_heuristic_bandwidth(particles: jax.Array) -> jax.Array:
     """
 
     def _pairwise_distance(left: jax.Array, right: jax.Array) -> jax.Array:
+        """Return the Euclidean distance between two particles."""
         return jnp.linalg.norm(left - right)
 
     pairwise = jax.vmap(jax.vmap(_pairwise_distance, (None, 0)), (0, None))(particles, particles)
@@ -93,6 +94,7 @@ def _phi_star(
     grad_log_prob_fn = jax.grad(target_log_prob_fn)
 
     def summand(left_particle: jax.Array, right_particle: jax.Array) -> jax.Array:
+        """Return one particle's kernel-weighted-gradient plus repulsion contribution."""
         gradient = grad_log_prob_fn(left_particle)
         kernel_value, grad_kernel = jax.value_and_grad(rbf_kernel, argnums=0)(
             left_particle, right_particle, length_scale
@@ -100,6 +102,7 @@ def _phi_star(
         return -(kernel_value * gradient) - grad_kernel
 
     def phi_star_at(right_particle: jax.Array) -> jax.Array:
+        """Return the optimal Stein update direction averaged over all particles."""
         return jax.vmap(lambda left: summand(left, right_particle))(particles).mean(axis=0)
 
     return jax.vmap(phi_star_at)(particles)
@@ -143,6 +146,7 @@ def svgd_fit(
     def step(
         carry: tuple[jax.Array, optax.OptState], _: None
     ) -> tuple[tuple[jax.Array, optax.OptState], None]:
+        """Advance the particle ensemble by one SVGD update step."""
         particles, opt_state = carry
         bandwidth = (
             median_heuristic_bandwidth(particles)

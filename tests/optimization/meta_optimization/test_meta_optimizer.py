@@ -134,3 +134,34 @@ class TestBaseOptimizer:
         params = jnp.ones(2)
         state = opt.init_optimizer_state(params)
         assert state is not None
+
+
+class TestQuantumStepScfAcceleration:
+    """Tests that scf_acceleration reflects whether the quantum branch ran."""
+
+    def test_scf_acceleration_reflects_quantum_branch(self):
+        """``scf_acceleration`` must equal whether the quantum L2O branch ran.
+
+        It reflects ``l2o_engine is not None and l2o_engine.quantum_aware``.
+        """
+        config = MetaOptimizerConfig(
+            meta_algorithm="l2o",
+            base_optimizer="adam",
+            meta_learning_rate=1e-3,
+            quantum_aware=True,
+            performance_tracking=False,
+        )
+        opt = MetaOptimizer(config, rngs=nnx.Rngs(0))
+
+        def energy_fn(x):
+            return jnp.sum(x**2)
+
+        coeffs = jnp.ones(3)
+        state = opt.init_optimizer_state(coeffs)
+        scf_context = {"iteration": 2, "energy_history": jnp.array([1.0, 0.5])}
+
+        _, _, info = opt.quantum_step(energy_fn, coeffs, state, scf_context, step=0)
+
+        expected = bool(opt.l2o_engine is not None and opt.l2o_engine.quantum_aware)
+        assert info["scf_acceleration"] == expected
+        assert info["scf_acceleration"] is True  # quantum_aware=True -> branch ran

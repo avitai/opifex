@@ -81,7 +81,7 @@ def _finite_difference_second_derivative(wavefunction: Array, dx: float) -> Arra
     )
 
 
-def quantum_fft_gradient(wavefunction: Array, dx: float, hbar: float = 1.0) -> Array:
+def quantum_fft_gradient(wavefunction: Array, dx: float, hbar: float = 1.0) -> Array:  # noqa: ARG001 - spectral-derivative API accepts a Planck constant
     """
     Compute gradient using spectral (FFT) method for quantum wavefunctions.
 
@@ -128,7 +128,7 @@ def quantum_fft_gradient(wavefunction: Array, dx: float, hbar: float = 1.0) -> A
     return gradient
 
 
-def quantum_fft_second_derivative(wavefunction: Array, dx: float, hbar: float = 1.0) -> Array:
+def quantum_fft_second_derivative(wavefunction: Array, dx: float, hbar: float = 1.0) -> Array:  # noqa: ARG001 - spectral-derivative API accepts a Planck constant
     """
     Compute second derivative using spectral (FFT) method for quantum wavefunctions.
 

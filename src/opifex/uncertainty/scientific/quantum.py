@@ -64,6 +64,7 @@ class EnergyUncertainty:
     """
 
     def __init__(self, *, method: str, units: str = "hartree") -> None:
+        """Configure the electronic-structure method and reporting energy units."""
         if not method:
             raise ValueError("method must be a non-empty string.")
         if units not in {"hartree", "kcal_per_mol", "ev"}:
@@ -105,6 +106,7 @@ class DensityUncertainty:
     """
 
     def __init__(self, *, grid_axes: tuple[str, ...]) -> None:
+        """Configure the named spatial-grid axes of the electron-density field."""
         if len(grid_axes) == 0:
             raise ValueError("grid_axes must contain at least one axis name.")
         self.grid_axes = grid_axes
@@ -143,6 +145,7 @@ class ExchangeCorrelationUncertainty:
     """
 
     def __init__(self, *, functional_family: str) -> None:
+        """Configure the exchange-correlation functional family under study."""
         if not functional_family:
             raise ValueError("functional_family must be a non-empty string.")
         self.functional_family = functional_family
@@ -181,6 +184,7 @@ class ChemicalAccuracyCoverage:
     """
 
     def __init__(self, *, tolerance_hartree: float) -> None:
+        """Configure the energy tolerance (in Hartree) defining chemical accuracy."""
         if tolerance_hartree <= 0.0:
             raise ValueError(f"tolerance_hartree must be > 0; got {tolerance_hartree}.")
         self.tolerance_hartree = tolerance_hartree

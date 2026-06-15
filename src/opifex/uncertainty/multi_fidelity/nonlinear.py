@@ -176,6 +176,7 @@ def predict_nonlinear_multi_fidelity_gp(
     sample_keys = jax.random.split(rng_key, num_samples)
 
     def per_sample_prediction(key: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Predict the target-level GP for one Monte Carlo draw of the lower fidelity."""
         noise = jax.random.normal(key, previous_mean.shape)
         previous_sample = previous_mean + previous_std * noise
         augmented_x = jnp.concatenate([x_test, previous_sample.reshape(-1, 1)], axis=1)

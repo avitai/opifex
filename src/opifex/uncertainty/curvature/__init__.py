@@ -24,6 +24,12 @@ from opifex.uncertainty.curvature._uq_capabilities import CURVATURE_CAPABILITIES
 from opifex.uncertainty.curvature.fisher import empirical_fisher_diagonal
 from opifex.uncertainty.curvature.ggn import ggn_vector_product
 from opifex.uncertainty.curvature.hessian import hessian_vector_product
+from opifex.uncertainty.curvature.kfac import (
+    kfac_factors,
+    kfac_laplace_posterior,
+    KroneckerLaplacePosterior,
+    TappedModel,
+)
 from opifex.uncertainty.curvature.laplace import (
     diagonal_laplace_posterior,
     DiagonalLaplacePosterior,
@@ -31,6 +37,14 @@ from opifex.uncertainty.curvature.laplace import (
     LaplaceState,
 )
 from opifex.uncertainty.curvature.luno import linearized_neural_operator_posterior
+from opifex.uncertainty.curvature.structured import (
+    BlockDiagonal,
+    DiagonalOperator,
+    IdentityOperator,
+    KroneckerProduct,
+    LowRankUpdate,
+    StructuredOperator,
+)
 from opifex.uncertainty.registry import UQRegistry
 
 
@@ -44,12 +58,22 @@ for _name, _capability in CURVATURE_CAPABILITIES.items():
 
 __all__ = [
     "CURVATURE_CAPABILITIES",
+    "BlockDiagonal",
     "DiagonalLaplacePosterior",
+    "DiagonalOperator",
+    "IdentityOperator",
+    "KroneckerLaplacePosterior",
+    "KroneckerProduct",
     "LaplaceAdapterSpec",
     "LaplaceState",
+    "LowRankUpdate",
+    "StructuredOperator",
+    "TappedModel",
     "diagonal_laplace_posterior",
     "empirical_fisher_diagonal",
     "ggn_vector_product",
     "hessian_vector_product",
+    "kfac_factors",
+    "kfac_laplace_posterior",
     "linearized_neural_operator_posterior",
 ]

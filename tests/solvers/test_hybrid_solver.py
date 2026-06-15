@@ -8,6 +8,7 @@ Goal: Verify HybridSolver(neural_solver, classical_solver) orchestrates them cor
 """
 
 import jax.numpy as jnp
+import pytest
 
 from opifex.core.problems import create_ode_problem
 from opifex.core.solver.interface import Solution
@@ -65,3 +66,45 @@ def test_hybrid_solver_mix():
     # Expect u = 0.5 (classical) + 0.2 (neural) = 0.7
     assert jnp.allclose(solution.fields["u"], 0.7)
     assert solution.metrics["hybrid_error"] is not None  # Check metrics combined
+
+
+def test_hybrid_error_is_measured_discrepancy():
+    """hybrid_error must equal the classical/neural relative L2 discrepancy.
+
+    Classical u = 0.5, neural u = 0.2 (constant fields), so the relative L2
+    discrepancy is ||0.5 - 0.2|| / ||0.5|| = 0.3 / 0.5 = 0.6.
+    """
+    solver = HybridSolver(
+        classical_solver=MockClassicalSolver(),
+        neural_solver=MockNeuralSolver(),
+        mode="additive",
+    )
+    problem = create_ode_problem((0.0, 1.0), lambda t, y: -y, initial_conditions={"y": 1.0})
+
+    solution = solver.solve(problem)
+
+    assert solution.metrics["hybrid_error"] == pytest.approx(0.6, abs=1e-5)
+
+
+def test_hybrid_error_zero_when_solvers_agree():
+    """hybrid_error is ~0 only when the two solvers agree."""
+
+    class AgreeingNeural:
+        def solve(self, problem, initial_state=None, config=None):
+            return Solution(
+                fields={"u": jnp.ones((10, 1)) * 0.5},  # Same as classical
+                metrics={"loss": 0.0},
+                execution_time=0.1,
+                converged=True,
+            )
+
+    solver = HybridSolver(
+        classical_solver=MockClassicalSolver(),
+        neural_solver=AgreeingNeural(),
+        mode="additive",
+    )
+    problem = create_ode_problem((0.0, 1.0), lambda t, y: -y, initial_conditions={"y": 1.0})
+
+    solution = solver.solve(problem)
+
+    assert solution.metrics["hybrid_error"] == pytest.approx(0.0, abs=1e-6)

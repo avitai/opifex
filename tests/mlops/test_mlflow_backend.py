@@ -1,15 +1,20 @@
 """Tests for MLflow backend experiment tracking."""
 
+from typing import Any
+
 import pytest
 
 from opifex.mlops.experiment import ExperimentConfig, Framework, PhysicsDomain
 
 
+# ``Any`` so the import and the absent-dependency fallback unify to a bound name.
+MLflowBackend: Any
 try:
-    from opifex.mlops.backends.mlflow_backend import MLflowBackend
+    from opifex.mlops.backends.mlflow_backend import MLflowBackend  # type: ignore[no-redef]
 
     _MLFLOW_AVAILABLE = True
 except ImportError:
+    MLflowBackend = None
     _MLFLOW_AVAILABLE = False  # pyright: ignore[reportConstantRedefinition]
 
 

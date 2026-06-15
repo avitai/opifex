@@ -185,7 +185,7 @@ def _register_status_routes(app: FastAPI, app_state: AppState) -> None:
         return _metrics_payload(app_state)
 
     @app.exception_handler(Exception)
-    async def global_exception_handler(request, exc):  # pyright: ignore[reportUnusedFunction]
+    async def global_exception_handler(_request, exc):  # pyright: ignore[reportUnusedFunction]
         """Global exception handler."""
         logger.exception("Unhandled exception: %s", exc)
         return JSONResponse(
@@ -285,7 +285,7 @@ def create_app() -> FastAPI:
     return app
 
 
-def signal_handler(signum, frame) -> None:
+def signal_handler(signum, _frame) -> None:
     """Handle shutdown signals."""
     logger.info("Received signal %s, shutting down...", signum)
     sys.exit(0)

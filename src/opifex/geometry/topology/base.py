@@ -205,7 +205,7 @@ def _topology_tree_flatten(topo):
     return (topo,), None
 
 
-def _topology_tree_unflatten(aux_data, children):
+def _topology_tree_unflatten(_aux_data, children):
     """Unflatten topology from JAX transforms."""
     return children[0]
 

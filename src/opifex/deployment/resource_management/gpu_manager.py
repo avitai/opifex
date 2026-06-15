@@ -343,7 +343,10 @@ class GPUPoolManager:
         return optimization_result
 
     def _find_better_pool_for_model(
-        self, model_hash: str, memory_gb: float, current_pool_id: str
+        self,
+        model_hash: str,  # noqa: ARG002 - pool-selection interface keyed by model hash
+        memory_gb: float,
+        current_pool_id: str,
     ) -> dict[str, Any] | None:
         """Find a better pool for model relocation.
 

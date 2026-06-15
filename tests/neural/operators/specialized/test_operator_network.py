@@ -438,6 +438,8 @@ class TestOperatorNetwork:
                     "trunk_hidden_dims": [16, 8],
                     "latent_dim": 8,
                 }
+            else:  # pragma: no cover - operator_types is a fixed literal list
+                raise AssertionError(f"unhandled operator type: {op_type}")
 
             # Should be able to create these basic operators
             operator_net = OperatorNetwork(

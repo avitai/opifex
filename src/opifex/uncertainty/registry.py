@@ -255,6 +255,7 @@ def register_uq_capability(name: str, capability: UQCapability) -> Callable[[_C]
     """
 
     def decorator(cls: _C) -> _C:
+        """Register the decorated class's capability and return it unchanged."""
         registry = UQRegistry()
         registry.register(name, capability)
         return cls

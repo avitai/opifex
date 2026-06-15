@@ -148,7 +148,7 @@ class PhysicsLossComposer:
         self,
         predictions: jax.Array,
         targets: jax.Array,
-        inputs: jax.Array,
+        inputs: jax.Array,  # noqa: ARG002 - residual interface takes network inputs
     ) -> dict[str, jax.Array]:
         """Compute basic residuals for loss composition.
 
@@ -353,7 +353,9 @@ class ConservationLawEnforcer:
         return handler()
 
     def _compute_mass_conservation(
-        self, velocity_field: jax.Array, coordinates: jax.Array | None
+        self,
+        velocity_field: jax.Array,
+        coordinates: jax.Array | None,  # noqa: ARG002 - conservation-term interface takes coordinates
     ) -> jax.Array:
         """Compute mass conservation residual (continuity equation).
 
@@ -373,7 +375,7 @@ class ConservationLawEnforcer:
     def _compute_momentum_conservation(
         self,
         state: jax.Array | tuple[jax.Array, ...],
-        coordinates: jax.Array | None,
+        coordinates: jax.Array | None,  # noqa: ARG002 - conservation-term interface takes coordinates
     ) -> jax.Array:
         """Compute momentum conservation residual.
 
@@ -396,7 +398,7 @@ class ConservationLawEnforcer:
     def _compute_energy_conservation(
         self,
         state: jax.Array | tuple[jax.Array, ...],
-        coordinates: jax.Array | None,
+        coordinates: jax.Array | None,  # noqa: ARG002 - conservation-term interface takes coordinates
     ) -> jax.Array:
         """Compute energy conservation residual.
 
@@ -614,7 +616,7 @@ class PhysicsInformedLoss:
         density_matrix: jax.Array | None = None,
         n_electrons: int | None = None,
         epoch: int = 0,
-        rngs: Any = None,  # Add RNG support for modern NNX patterns
+        rngs: Any = None,  # noqa: ARG002 - loss-evaluation interface receives rngs (nnx pattern)
         **kwargs,
     ) -> tuple[jax.Array, dict[str, jax.Array]]:
         """Compute complete physics-informed loss.
@@ -661,7 +663,7 @@ class PhysicsInformedLoss:
         model: Callable[[jax.Array], jax.Array] | None,
         boundary_predictions: jax.Array | None,
         boundary_targets: jax.Array | None,
-        boundary_inputs: jax.Array | None,
+        boundary_inputs: jax.Array | None,  # noqa: ARG002 - loss-evaluation interface receives boundary inputs
         density_matrix: jax.Array | None,
         n_electrons: int | None,
         epoch: int,

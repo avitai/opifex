@@ -267,6 +267,7 @@ def _gaussian_components_factory(*, noise_std: float):
     def _components(
         f: jax.Array, y: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Return the Gaussian log-likelihood, gradient, and Fisher curvature terms."""
         # log N(y_i; f_i, σ²) = -½ log(2π σ²) - (y - f)² / (2 σ²)
         log_lik = jnp.sum(-0.5 * jnp.log(2.0 * jnp.pi * noise_var) - 0.5 * (y - f) ** 2 / noise_var)
         grad = (y - f) / noise_var

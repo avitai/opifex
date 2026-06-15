@@ -16,7 +16,7 @@ import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NoReturn
 
 
 # Optional Prometheus imports with graceful fallback
@@ -506,7 +506,11 @@ class CustomMetrics:
         )
 
     def record_fno_metrics(
-        self, model_id: str, modes: dict[str, int], forward_time: float, resolution: str
+        self,
+        model_id: str,
+        modes: dict[str, int],  # noqa: ARG002 - metric-record interface accepts spectral modes
+        forward_time: float,
+        resolution: str,
     ) -> None:
         """Record FNO-specific metrics."""
         if hasattr(self, "fno_forward_time") and self.fno_forward_time:
@@ -555,6 +559,6 @@ class CustomMetrics:
             ).set(efficiency)
 
 
-def _raise_unsupported_metric_error(metric_type: str) -> None:
+def _raise_unsupported_metric_error(metric_type: str) -> NoReturn:
     """Helper function to raise unsupported metric type error."""
     raise ValueError(f"Unsupported metric type: {metric_type}")

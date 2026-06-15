@@ -196,7 +196,7 @@ class FermiNet(nnx.Module):
     def _orbital_matrices(
         self,
         h_to_orbitals: Float[Array, "nelectron orbital_in"],
-        ae: Float[Array, "nelectron natom ndim"],
+        ae: Float[Array, "nelectron natom ndim"],  # noqa: ARG002 - orbital builder interface receives atom-electron displacements
         r_ae: Float[Array, "nelectron natom 1"],
     ) -> list[Array]:
         """Project features to per-determinant orbital matrices with envelopes.

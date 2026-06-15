@@ -298,7 +298,9 @@ class MetaOptimizer:
         # Standard optimization step
         new_coeffs, new_opt_state, meta_info = self.step(energy_fn, orbital_coeffs, opt_state, step)
 
-        # Quantum-specific adaptations
+        # Quantum-specific adaptations. ``scf_acceleration`` reflects whether the
+        # quantum-aware L2O acceleration branch actually executed.
+        scf_acceleration_applied = self.l2o_engine is not None and self.l2o_engine.quantum_aware
         if self.l2o_engine is not None and self.l2o_engine.quantum_aware:
             # Use quantum-aware L2O adaptations
             scf_history = scf_context.get("energy_history", jnp.array([]))
@@ -312,7 +314,7 @@ class MetaOptimizer:
         quantum_info.update(
             {
                 "scf_iteration": scf_context.get("iteration", 0),
-                "scf_acceleration": True,  # Placeholder
+                "scf_acceleration": scf_acceleration_applied,
                 "energy_prediction": float(energy_fn(new_coeffs)),
             }
         )

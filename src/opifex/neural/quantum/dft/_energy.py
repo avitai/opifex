@@ -365,6 +365,7 @@ def scf_fixed_point(
     tolerance: float,
     max_steps: int,
     neural_spec: NeuralXCSpec | None = None,
+    initial_density: Array | None = None,
 ) -> optx.Solution:
     """Solve the Kohn-Sham density fixed point with Anderson acceleration.
 
@@ -376,10 +377,31 @@ def scf_fixed_point(
     (``.result``). The differentiated function is the bare Roothaan step, so the
     default :class:`~optimistix.ImplicitAdjoint` yields the exact
     implicit-function-theorem gradient regardless of the forward iteration path.
+
+    Args:
+        integrals: The molecular integrals (overlap, core Hamiltonian, ERI, XC
+            grid) the Fock build and orthogonalisation are computed from.
+        functional: The exchange-correlation functional driving the Fock build.
+        n_occupied: Number of doubly-occupied orbitals (electrons // 2).
+        tolerance: Relative and absolute residual tolerance for convergence.
+        max_steps: Maximum number of Anderson fixed-point iterations.
+        neural_spec: Optional learned-XC specification for the ``NEURAL`` path.
+        initial_density: Optional closed-shell density to seed the iteration. A
+            high-quality guess (e.g. one reconstructed from a predicted Fock)
+            reaches the fixed point in fewer steps. Defaults to the
+            core-Hamiltonian density. The converged result is independent of the
+            seed; only the iteration count changes.
+
+    Returns:
+        The optimistix fixed-point solution (``.value`` density, ``.stats``
+        iteration count, ``.result`` convergence status).
     """
-    initial = _density_from_fock(integrals.core_hamiltonian, integrals.orthogonaliser, n_occupied)[
-        0
-    ]
+    if initial_density is None:
+        initial = _density_from_fock(
+            integrals.core_hamiltonian, integrals.orthogonaliser, n_occupied
+        )[0]
+    else:
+        initial = initial_density
     solver = AndersonAcceleration(rtol=tolerance, atol=tolerance)
 
     def step(density: Array, _: None) -> Array:

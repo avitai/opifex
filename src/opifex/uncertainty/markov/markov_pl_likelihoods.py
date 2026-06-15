@@ -152,6 +152,7 @@ def _gaussian_conditional_moments_factory(*, noise_std: float):
     noise_var = noise_std * noise_std
 
     def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the Gaussian conditional mean and variance for latent ``f``."""
         return f, jnp.full_like(f, noise_var)
 
     return _moments
@@ -219,6 +220,7 @@ def _studentst_conditional_moments_factory(*, df: float, scale: float):
     response_variance = scale_sq * df_arr / (df_arr - 2.0)
 
     def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the Student-t conditional mean and variance for latent ``f``."""
         return f, jnp.full_like(f, response_variance)
 
     return _moments
@@ -287,6 +289,7 @@ def _beta_conditional_moments_factory(*, scale: float):
     scale_arr = jnp.asarray(scale)
 
     def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the Beta conditional mean and variance via the logit link."""
         mean = jax.nn.sigmoid(f)
         variance = mean * (1.0 - mean) / (scale_arr + 1.0)
         return mean, variance

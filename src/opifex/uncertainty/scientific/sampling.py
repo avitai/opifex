@@ -43,6 +43,7 @@ _HALTON_PRIMES: tuple[int, ...] = (
 
 
 def _validate_bounds(lower: jax.Array, upper: jax.Array, num_samples: int) -> int:
+    """Validate matching bounds shapes and a positive count; return the dimension."""
     if lower.shape != upper.shape:
         raise ValueError(f"lower and upper must share shape; got {lower.shape} vs {upper.shape}.")
     if num_samples <= 0:
@@ -120,6 +121,7 @@ def _halton_van_der_corput(index: jax.Array, base: int) -> jax.Array:
     max_digits = jnp.asarray(max_digits, dtype=jnp.int32) + 1
 
     def body(carry: tuple[jax.Array, jax.Array, jax.Array], _: jax.Array):
+        """Accumulate one radical-inverse digit of the van der Corput sequence."""
         idx, value, denom = carry
         digit = idx % base
         value = value + digit / denom

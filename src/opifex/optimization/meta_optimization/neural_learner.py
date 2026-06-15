@@ -132,7 +132,7 @@ class LearnToOptimize(nnx.Module):
         self,
         gradient: jax.Array,
         previous_updates: jax.Array,
-        loss_history: jax.Array | None = None,
+        loss_history: jax.Array | None = None,  # noqa: ARG002 - meta-input interface receives loss history
     ) -> jax.Array:
         """Prepare input features for meta-network."""
         # Normalize gradient

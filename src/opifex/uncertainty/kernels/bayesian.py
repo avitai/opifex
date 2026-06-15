@@ -19,6 +19,7 @@ from artifex.generative_models.core.losses.divergence import (
 
 
 def _is_standard_normal_prior(prior_mean: float, prior_std: float) -> bool:
+    """Return whether the prior is the standard normal ``N(0, 1)``."""
     return prior_mean == 0.0 and prior_std == 1.0
 
 

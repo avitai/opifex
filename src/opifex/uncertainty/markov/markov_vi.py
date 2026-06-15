@@ -117,6 +117,7 @@ def _expected_components(
     def _per_sample(
         f_q: jax.Array,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Return the log-likelihood, gradient, and curvature for one posterior sample."""
         log_lik_total, grad, w_diag, _sqrt_w = log_likelihood_components_fn(f_q, observations)
         return log_lik_total, grad, w_diag
 
@@ -164,6 +165,7 @@ def fit_markov_vi_gp(
         carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
         _: jax.Array,
     ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], None]:
+        """Run one conjugate-computation VI update of the natural parameters."""
         latent_mean, latent_variance, _state_means, _state_covs = carry
         _, expected_grad, expected_w = _expected_components(
             log_likelihood_components_fn=log_likelihood_components_fn,

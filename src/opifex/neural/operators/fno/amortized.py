@@ -162,7 +162,7 @@ class AmortizedSpectralConvolution(nnx.Module):
         perm = [self.n_dim, self.n_dim + 1, *range(self.n_dim)]
         return jnp.transpose(spatial_kernel, perm)
 
-    def __call__(self, x_ft: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:
+    def __call__(self, x_ft: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:  # noqa: ARG002 - nnx forward interface carries a training flag
         """Forward pass through amortized spectral convolution."""
         # Extract spatial dimensions from input
         input_modes = x_ft.shape[2:]  # Skip batch and channel dimensions

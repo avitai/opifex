@@ -121,18 +121,21 @@ class MultipoleExpansion(nnx.Module):
             radial_normalized = radial_raw / (1.0 + radial_raw)  # Bounds between 0 and 1
             radial = jnp.tanh(radial_normalized)  # Further stabilization
 
-            # FIXED: Angular component (stable spherical harmonics approximation)
-            if coord_dim >= 2:
-                # Use stable arctangent computation
+            # FIXED: Angular component (stable spherical harmonics approximation).
+            # Check 3D before 2D: ``coord_dim >= 2`` also matches 3D, so the more
+            # specific branch must come first or it is unreachable.
+            if coord_dim >= 3:
+                # Azimuthal angle plus polar angle for 3D
                 theta = jnp.arctan2(positions[..., 1], positions[..., 0] + self.epsilon)
-                angular = jnp.cos(order * theta)
-            elif coord_dim >= 3:
-                # Include polar angle for 3D
                 phi = jnp.arctan2(
                     jnp.sqrt(positions[..., 0] ** 2 + positions[..., 1] ** 2),
                     positions[..., 2] + self.epsilon,
                 )
                 angular = jnp.cos(order * theta) * jnp.sin(order * phi)
+            elif coord_dim >= 2:
+                # Use stable arctangent computation
+                theta = jnp.arctan2(positions[..., 1], positions[..., 0] + self.epsilon)
+                angular = jnp.cos(order * theta)
             else:
                 angular = jnp.ones_like(radial[..., 0])
 

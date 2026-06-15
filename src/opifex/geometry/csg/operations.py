@@ -62,6 +62,7 @@ class CSGUnion(_EnhancedShapeBase):
     """Union of two shapes (A ∪ B) with enhanced algorithms."""
 
     def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
+        """Store the two operand shapes of the CSG operation."""
         self.shape_a = shape_a
         self.shape_b = shape_b
 
@@ -93,6 +94,7 @@ class CSGUnion(_EnhancedShapeBase):
 
         # Filter points near the true boundary
         def is_boundary_point(point):
+            """Return whether a sampled point lies on the union boundary."""
             dist_a = self.shape_a.distance(point)
             dist_b = self.shape_b.distance(point)
             union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
@@ -126,6 +128,7 @@ class CSGUnion(_EnhancedShapeBase):
         """Compute normal (enhanced approach)."""
 
         def union_distance(p):
+            """Return the signed distance to the union (minimum of the operands)."""
             dist_a = self.shape_a.distance(p)
             dist_b = self.shape_b.distance(p)
             return _SDFOperations.union_sdf(dist_a, dist_b)
@@ -141,6 +144,7 @@ class CSGIntersection(_EnhancedShapeBase):
     """Intersection of two shapes (A ∩ B) with enhanced algorithms."""
 
     def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
+        """Store the two operand shapes of the CSG operation."""
         self.shape_a = shape_a
         self.shape_b = shape_b
 
@@ -169,6 +173,7 @@ class CSGIntersection(_EnhancedShapeBase):
         points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
 
         def is_intersection_boundary(point):
+            """Return whether a sampled point lies on the intersection boundary."""
             dist_a = self.shape_a.distance(point)
             dist_b = self.shape_b.distance(point)
             intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
@@ -206,6 +211,7 @@ class CSGIntersection(_EnhancedShapeBase):
         """Compute normal (enhanced approach)."""
 
         def intersection_distance(p):
+            """Return the signed distance to the intersection (maximum of the operands)."""
             dist_a = self.shape_a.distance(p)
             dist_b = self.shape_b.distance(p)
             return _SDFOperations.intersection_sdf(dist_a, dist_b)
@@ -221,6 +227,7 @@ class CSGDifference(_EnhancedShapeBase):
     """Difference of two shapes (A - B) with enhanced algorithms."""
 
     def __init__(self, shape_a: Shape2D, shape_b: Shape2D) -> None:
+        """Store the two operand shapes of the CSG operation."""
         self.shape_a = shape_a
         self.shape_b = shape_b
 
@@ -280,6 +287,7 @@ class CSGDifference(_EnhancedShapeBase):
         """Compute normal from shape A."""
 
         def difference_distance(p):
+            """Return the signed distance to the difference of the two operands."""
             dist_a = self.shape_a.distance(p)
             dist_b = self.shape_b.distance(p)
             return _SDFOperations.difference_sdf(dist_a, dist_b)
@@ -324,15 +332,20 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
     """Create smooth union with controllable blending (enhanced feature)."""
 
     class SmoothCSGUnion(_EnhancedShapeBase):
+        """Union of two shapes with a smooth-minimum blend at the seam."""
+
         def __init__(self, shape_a, shape_b, smoothness) -> None:
+            """Store the two operand shapes and the blend smoothness."""
             self.shape_a = shape_a
             self.shape_b = shape_b
             self.smoothness = smoothness
 
         def contains(self, point: Point2D) -> bool:
+            """Return whether ``point`` lies inside the smooth union."""
             return bool(self.distance(point) <= 0)
 
         def distance(self, point: Point2D) -> Float[jax.Array, ""]:
+            """Return the smooth-minimum signed distance to the union at ``point``."""
             dist_a = self.shape_a.distance(point)
             dist_b = self.shape_b.distance(point)
             # Smooth minimum operation
@@ -340,6 +353,7 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
             return jnp.minimum(dist_a, dist_b) - h * h * self.smoothness * 0.25
 
         def sample_boundary(self, n_points: int, key: jax.Array) -> Points2D:
+            """Sample boundary points by combining draws from both operand shapes."""
             # Use combined sampling from both shapes
             key1, key2 = jax.random.split(key)
             points_a = self.shape_a.sample_boundary(n_points // 2, key1)
@@ -347,6 +361,7 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
             return jnp.concatenate([points_a, points_b], axis=0)
 
         def compute_normal(self, point: Point2D) -> Point2D:
+            """Return the unit outward normal as the normalised distance gradient at ``point``."""
             gradient_fn = jax.grad(self.distance)
             normal = gradient_fn(point)
             norm = jnp.linalg.norm(normal)

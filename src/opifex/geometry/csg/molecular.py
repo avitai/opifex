@@ -239,6 +239,7 @@ class PeriodicCell:
 
         # Compute distances for all valid pairs using vmap
         def compute_pair_distance(i, j):
+            """Return the periodic distance between atoms ``i`` and ``j``."""
             return self.periodic_distance(positions[i], positions[j])
 
         distances = jax.vmap(compute_pair_distance)(valid_i, valid_j)

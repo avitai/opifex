@@ -57,7 +57,7 @@ def lsmr(
     matvec: Callable[[jax.Array], jax.Array],
     matvec_transpose: Callable[[jax.Array], jax.Array],
     rhs: jax.Array,
-    dim_cols: int,
+    dim_cols: int,  # noqa: ARG001 - LSMR API parity (column dimension inferred from operator)
     num_matvecs: int,
     damping: float = 0.0,
 ) -> jax.Array:

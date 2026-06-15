@@ -97,6 +97,7 @@ class GraphTopology:
 
         # Use JAX-compatible conditional
         def compute_normalized_laplacian():
+            """Return the symmetric normalised Laplacian ``I - D^{-1/2} A D^{-1/2}``."""
             # Compute D^(-1/2)
             degrees = jnp.diag(D)
             D_inv_sqrt = jnp.diag(jnp.where(degrees > 0, 1.0 / jnp.sqrt(degrees), 0.0))

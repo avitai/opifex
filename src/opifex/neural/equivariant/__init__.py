@@ -6,7 +6,16 @@ shared across opifex's quantum-SciML families (interatomic potentials,
 equivariant Hamiltonian prediction).
 """
 
-from opifex.neural.equivariant.gate import Gate, gate
+from opifex.neural.equivariant._assembly import apply_scalar_weights
+from opifex.neural.equivariant._invariants import inner_product, norm, rms_normalize
+from opifex.neural.equivariant.cartesian import (
+    CARTESIAN_IRREPS,
+    CartesianLinear,
+    CartesianTensor,
+    from_irreps_array,
+    to_irreps_array,
+)
+from opifex.neural.equivariant.gate import Gate, gate, NormGate
 from opifex.neural.equivariant.graph import (
     radius_graph,
     scatter_max,
@@ -23,13 +32,18 @@ from opifex.neural.equivariant.radial import (
 )
 from opifex.neural.equivariant.spherical_harmonics import spherical_harmonics
 from opifex.neural.equivariant.tensor_product import (
+    ChannelwiseTensorProduct,
     FullyConnectedTensorProduct,
     TensorProduct,
 )
 
 
 __all__ = [
+    "CARTESIAN_IRREPS",
     "BesselBasis",
+    "CartesianLinear",
+    "CartesianTensor",
+    "ChannelwiseTensorProduct",
     "EquivariantLinear",
     "FullyConnectedTensorProduct",
     "Gate",
@@ -37,13 +51,20 @@ __all__ = [
     "Irrep",
     "Irreps",
     "IrrepsArray",
+    "NormGate",
     "TensorProduct",
+    "apply_scalar_weights",
     "cosine_cutoff",
+    "from_irreps_array",
     "gate",
+    "inner_product",
+    "norm",
     "polynomial_cutoff",
     "radius_graph",
+    "rms_normalize",
     "scatter_max",
     "scatter_mean",
     "scatter_sum",
     "spherical_harmonics",
+    "to_irreps_array",
 ]

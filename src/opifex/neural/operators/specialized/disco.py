@@ -127,8 +127,8 @@ class DiscreteContinuousConv2d(nnx.Module):
     def __call__(
         self,
         x: jnp.ndarray,
-        spatial_coords: jnp.ndarray | None = None,
-        deterministic: bool = True,
+        spatial_coords: jnp.ndarray | None = None,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
     ) -> jnp.ndarray:
         """Apply DISCO convolution to input.
 
@@ -238,8 +238,8 @@ class DiscreteContinuousConvTranspose2d(DiscreteContinuousConv2d):
     def __call__(
         self,
         x: jnp.ndarray,
-        spatial_coords: jnp.ndarray | None = None,
-        deterministic: bool = True,
+        spatial_coords: jnp.ndarray | None = None,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
+        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
     ) -> jnp.ndarray:
         """Apply DISCO transpose convolution to input.
 
@@ -361,7 +361,7 @@ def create_disco_decoder(
     kernel_size: int = 3,
     activation: Callable = nnx.gelu,
     final_activation: Callable | None = None,
-    use_equidistant: bool = True,
+    use_equidistant: bool = True,  # noqa: ARG001 - decoder-factory interface accepts a grid selector
     *,
     rngs: nnx.Rngs,
 ) -> nnx.Sequential:
