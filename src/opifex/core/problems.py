@@ -7,7 +7,6 @@ quantum mechanical calculations. Neural DFT is integrated as a first-class
 paradigm alongside traditional PINNs and Neural Operators.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -19,9 +18,6 @@ from jax import Array
 from opifex.core.quantum import MolecularSystem
 from opifex.core.quantum.molecular_system import create_molecular_system
 from opifex.geometry.base import Geometry
-
-
-_logger = logging.getLogger(__name__)
 
 
 class Problem(Protocol):
@@ -393,126 +389,29 @@ class ElectronicStructureProblem(QuantumProblem):
         return not (self.grid_level < 1 or self.grid_level > 5)
 
     def compute_energy(self, density: Array | None = None) -> float | Array:
-        """
-        Compute total electronic energy using Neural DFT.
+        """Compute the total electronic energy of the system.
+
+        Delegates to :meth:`_energy_from_positions` -- the same differentiable
+        routine that :meth:`compute_forces` differentiates -- so the energy and
+        the forces are mutually consistent (``F = -dE/dR``) and the public
+        quantum API is ``jit`` / ``grad`` / ``vmap`` compatible. A concrete
+        Python ``float`` is returned in eager execution; under JAX transforms
+        the traced array is returned instead (calling ``float()`` on a tracer
+        raises a ``TypeError`` subclass, which selects the array branch).
 
         Args:
-            density: Electronic density (if available from previous SCF iteration)
+            density: Optional electronic density (unused by the analytic energy
+                surrogate; accepted for interface parity with the SCF backends).
 
         Returns:
-            Total electronic energy in Hartree (float or Array for AD compatibility)
+            Total electronic energy in Hartree.
         """
-        # Import here to avoid circular imports
-        from flax import nnx
-
-        from opifex.neural.quantum.neural_dft import NeuralDFT
-
-        # Create random number generator for neural components
-        rngs = nnx.Rngs(42)  # Fixed seed for reproducibility in tests
-
-        # Initialize Neural DFT calculator
-        neural_dft = NeuralDFT(
-            grid_size=50 * self.grid_level,  # Scale grid with level
-            convergence_threshold=self.convergence_threshold,
-            max_scf_iterations=min(self.max_iterations, 10),  # Limit for efficiency
-            xc_functional_type=self.functional_type,
-            mixing_strategy="neural" if self.scf_method == "neural_scf" else "linear",
-            rngs=rngs,
-        )
-
-        # Compute energy using Neural DFT
+        energy = self._energy_from_positions(self.molecular_system.positions, density)
         try:
-            result = neural_dft.compute_energy(self.molecular_system, density=density)
-            return float(result.total_energy)
-        except (RuntimeError, ValueError, AttributeError) as e:
-            # Fall back to a simple approximation when neural DFT fails for
-            # a recoverable reason. Programming errors (TypeError, etc.) are
-            # NOT caught — they must propagate (Rule 6: catch only specific
-            # exceptions). Diagnostic goes through the logger, not print
-            # (Rule 12: no print() in library code).
-            _logger.warning("Neural DFT computation failed: %s. Using simple approximation.", e)
-
-            # Simple energy approximation based on atomic numbers using JAX-compatible operations
-            # Use vectorized operations instead of Python loops and conditionals
-            atomic_numbers = self.molecular_system.atomic_numbers
-
-            # Define energy lookup using JAX-compatible operations
-            # Approximate atomic energies (in Hartree) - these are negative for bound electrons
-            hydrogen_energy = -0.5  # Hydrogen ground state ~ -0.5 Hartree
-            carbon_energy = -37.8
-            oxygen_energy = -75.0
-
-            # Use jnp.where for conditional logic that works with JIT
-            energies = jnp.where(
-                atomic_numbers == 1,
-                hydrogen_energy,
-                jnp.where(
-                    atomic_numbers == 6,
-                    carbon_energy,
-                    jnp.where(
-                        atomic_numbers == 8,
-                        oxygen_energy,
-                        -atomic_numbers * 1.0,  # Rough approximation for other elements
-                    ),
-                ),
-            )
-
-            total_energy = jnp.sum(energies)
-
-            # Add nuclear repulsion (simplified) - this is always positive
-            positions = self.molecular_system.positions
-            n_atoms = positions.shape[0]
-
-            # Vectorized nuclear repulsion calculation using JAX
-            if n_atoms > 1:
-                # Create pairwise distance matrix using JAX vectorized operations
-                # Use jax.vmap for efficient pairwise distance computation
-                def compute_pairwise_distances(pos1, pos2):
-                    return jnp.linalg.norm(pos1 - pos2)
-
-                # Vectorize over all pairs using vmap
-                distances = jax.vmap(jax.vmap(compute_pairwise_distances, (None, 0)), (0, None))(
-                    positions, positions
-                )
-
-                # Create upper triangular mask to avoid double counting
-                i_indices, j_indices = jnp.triu_indices(n_atoms, k=1)
-
-                # Extract upper triangular distances and atomic numbers
-                pair_distances = distances[i_indices, j_indices]
-                atomic_i = self.molecular_system.atomic_numbers[i_indices]
-                atomic_j = self.molecular_system.atomic_numbers[j_indices]
-
-                # Vectorized nuclear repulsion calculation
-                nuclear_repulsion = jnp.sum(atomic_i * atomic_j / jnp.maximum(pair_distances, 0.1))
-            else:
-                nuclear_repulsion = jnp.asarray(0.0)
-
-            # Total energy = electronic energy (negative) + nuclear repulsion (positive)
-            # For single atoms, nuclear_repulsion = 0, so total should be negative
-            # For molecules, nuclear repulsion partially cancels electronic attraction
-            total_result = total_energy + nuclear_repulsion
-
-            # Ensure single atoms have negative total energy (bound state requirement)
-            if n_atoms == 1:
-                # For isolated atoms, ensure negative energy
-                total_result = jnp.minimum(total_result, -0.1)  # At least -0.1 Hartree
-                # Additional safeguard to ensure negative energy for hydrogen using JAX-compatible logic
-                # Use jnp.where instead of if statement for JIT compatibility
-                is_hydrogen = self.molecular_system.atomic_numbers[0] == 1
-                total_result = jnp.where(
-                    is_hydrogen,
-                    jnp.minimum(total_result, -0.4),  # Closer to physical -0.5 Hartree for H
-                    total_result,
-                )
-
-            # Only convert to float if not in AD context
-            # In JAX AD context, float() raises TypeError on traced arrays
-            try:
-                return float(total_result)
-            except (TypeError, ValueError):
-                # Return JAX array as-is for automatic differentiation
-                return total_result
+            return float(energy)
+        except (TypeError, ValueError):
+            # Under jit/grad/vmap ``energy`` is a tracer; return it for AD.
+            return energy
 
     def _energy_from_positions(self, positions: Array, density: Array | None = None) -> Array:
         """

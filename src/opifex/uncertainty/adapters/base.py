@@ -60,7 +60,7 @@ class ModelUncertaintyAdapterProtocol(Protocol):
 
     Concrete implementations cover ``ModelUncertaintyAdapter``,
     ``DeepEnsembleAdapter``, ``MCDropoutAdapter``,
-    ``BayesianLastLayerAdapterSpec``, ``LaplaceAdapterSpec``, etc.
+    ``BayesianLastLayerAdapter``, ``LaplaceAdapterSpec``, etc.
     """
 
     def wrap(self, model: Any, capability: UQCapability) -> Any:

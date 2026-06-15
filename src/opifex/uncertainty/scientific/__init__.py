@@ -20,6 +20,10 @@ from opifex.uncertainty.scientific.domain_metrics import (
     UNSUPPORTED_LIKELIHOOD_FREE,
     UNSUPPORTED_PAC_BAYES,
 )
+from opifex.uncertainty.scientific.equation_discovery import (
+    BayesianSINDy,
+    PosteriorOverTerms,
+)
 from opifex.uncertainty.scientific.fields import (
     conservation_law_residual_summary,
     FieldMetadata,
@@ -71,6 +75,13 @@ from opifex.uncertainty.scientific.probabilistic_numerics import (
     StrategySpec,
     TornadoxAdapterSpec,
 )
+from opifex.uncertainty.scientific.quantum import (
+    CHEMICAL_ACCURACY_HARTREE,
+    ChemicalAccuracyCoverage,
+    DensityUncertainty,
+    EnergyUncertainty,
+    ExchangeCorrelationUncertainty,
+)
 from opifex.uncertainty.scientific.solutions import (
     aggregate_solver_solutions,
     SolutionDistribution,
@@ -98,21 +109,27 @@ for _name, _capability in SCIENTIFIC_FIELD_CAPABILITIES.items():
 
 
 __all__ = [
+    "CHEMICAL_ACCURACY_HARTREE",
     "SCIENTIFIC_FIELD_CAPABILITIES",
     "UNSUPPORTED_ACTIVE_LEARNING",
     "UNSUPPORTED_LIKELIHOOD_FREE",
     "UNSUPPORTED_PAC_BAYES",
+    "BayesianSINDy",
     "CalibrationSpec",
+    "ChemicalAccuracyCoverage",
     "CorrectionSpec",
     "CubatureRuleSpec",
     "DaltonAdapterSpec",
     "DataUpdateCallbackSpec",
     "DenseOutputSamplingSpec",
+    "DensityUncertainty",
     "DiagonalEK1Spec",
     "DiffeqzooAdapterSpec",
     "DiffusionSpec",
     "DomainMetricSummary",
     "DynamicMVDiffusionSpec",
+    "EnergyUncertainty",
+    "ExchangeCorrelationUncertainty",
     "ExpEKSpec",
     "FenrirAdapterSpec",
     "FieldMetadata",
@@ -128,6 +145,7 @@ __all__ = [
     "PerturbedStepSolverSpec",
     "PolynomialChaosBasis",
     "PolynomialChaosConfig",
+    "PosteriorOverTerms",
     "ProbdiffeqAdapterSpec",
     "ProbfindiffAdapterSpec",
     "ProbnumAdapterSpec",

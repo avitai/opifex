@@ -139,8 +139,9 @@ _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.BAYESIAN_LAST_LAYER,
     source_package="opifex",
     notes=(
-        "BayesianLastLayerAdapterSpec — Bayesian-only final layer "
-        "(BayesianLinear) over a deterministic backbone."
+        "BayesianLastLayerAdapter — Bayesian-only final layer over a "
+        "frozen backbone; analytic GLM / neural-linear predictive "
+        "(Ober & Rasmussen 2019; Snoek et al. 2015)."
     ),
 )
 
@@ -152,9 +153,13 @@ _SNGP_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.SNGP,
     source_package="opifex",
     notes=(
-        "SNGPAdapterSpec — Spectral-Normalized Neural Gaussian Process "
-        "last layer (Liu et al. NeurIPS 2020) for distance-aware "
-        "uncertainty and OOD detection."
+        "SNGPAdapter — Spectral-Normalized Neural Gaussian Process last "
+        "layer (Liu et al. NeurIPS 2020) for distance-aware uncertainty "
+        "and OOD detection. Wraps a fitted fixed-RFF feature map + "
+        "last-layer weights + Laplace precision matrix (built via "
+        "fit_sngp_precision, a faithful edward2 port); the regression "
+        "predictive reuses the shared Gaussian-linear-head assembly with "
+        "epistemic variance from the edward2 chol-solve diagonal."
     ),
 )
 
@@ -165,9 +170,11 @@ _VBLL_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.VBLL,
     source_package="opifex",
     notes=(
-        "VBLLAdapterSpec — Variational Bayesian Last Layer (Harrison "
-        "et al. NeurIPS 2023). Probabilistic last layer with a "
-        "variational objective."
+        "VBLLAdapter — Variational Bayesian Last Layer (Harrison, Willes "
+        "& Snoek 2024, arXiv:2404.11599). Closed-form regression "
+        "predictive over a frozen backbone with a Gaussian variational "
+        "posterior q(W) = N(mean, L Lᵀ); epistemic via the Cholesky "
+        "L-form sum((phi @ L)**2). Regression only."
     ),
 )
 
@@ -198,7 +205,7 @@ _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.SNAPSHOT_ENSEMBLE,
     source_package="opifex",
     notes=(
-        "SnapshotEnsembleAdapterSpec — Huang et al. ICLR 2017. Cyclic "
+        "SnapshotEnsembleAdapter — Huang et al. ICLR 2017. Cyclic "
         "LR schedule produces M snapshots from one training run."
     ),
 )
@@ -211,7 +218,7 @@ _SWAG_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.SWAG,
     source_package="opifex",
     notes=(
-        "SWAGAdapterSpec — Maddox et al. NeurIPS 2019. Stochastic "
+        "SWAGAdapter — Maddox et al. NeurIPS 2019. Stochastic "
         "Weight Averaging Gaussian posterior over weights."
     ),
 )
@@ -224,7 +231,7 @@ _BATCH_ENSEMBLE_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.BATCH_ENSEMBLE,
     source_package="opifex",
     notes=(
-        "BatchEnsembleAdapterSpec — Wen et al. ICLR 2020. Rank-1 "
+        "BatchEnsembleAdapter — Wen et al. ICLR 2020. Rank-1 "
         "ensemble perturbations shared across a single base network."
     ),
 )
@@ -237,22 +244,26 @@ _DUE_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.DUE,
     source_package="opifex",
     notes=(
-        "DUEAdapterSpec — Deterministic Uncertainty Estimation (van "
-        "Amersfoort et al. ICML 2021). Deep kernel + spectral "
-        "normalization for distance-aware uncertainty."
+        "DUEAdapter — Deterministic Uncertainty Estimation (van "
+        "Amersfoort et al. ICML 2021). Wraps a fitted spectral-normalized "
+        "deep-kernel feature extractor + inducing-point SVGP; reuses "
+        "opifex.uncertainty.gp.predict_svgp for the single-forward-pass "
+        "distance-aware predictive."
     ),
 )
 
 
 _TTA_ADAPTER_CAPABILITY = UQCapability(
+    supports_ensemble=True,
     supports_calibration=True,
     native_nnx_module=True,
     default_strategy=DefaultStrategy.TEST_TIME_AUGMENTATION,
     source_package="opifex",
     notes=(
-        "TestTimeAugmentationAdapterSpec — Wang et al. Neurocomputing "
-        "2019. Average predictions across input augmentations at "
-        "evaluation time."
+        "TestTimeAugmentationAdapter — Wang et al. Neurocomputing 2019. "
+        "Forward a deterministic model over a fixed tuple of deterministic "
+        "input augmentations and aggregate the predictive mean/variance "
+        "across the augmentation axis (an ensemble over augmentations)."
     ),
 )
 
@@ -367,16 +378,16 @@ ADAPTER_CAPABILITIES: dict[str, UQCapability] = {
     # Phase 4 model-uncertainty adapter specs.
     "adapter:LaplaceAdapterSpec": _LAPLACE_ADAPTER_CAPABILITY,
     "adapter:MCDropoutAdapter": _MC_DROPOUT_ADAPTER_CAPABILITY,
-    "adapter:BayesianLastLayerAdapterSpec": _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY,
-    "adapter:SNGPAdapterSpec": _SNGP_ADAPTER_CAPABILITY,
-    "adapter:VBLLAdapterSpec": _VBLL_ADAPTER_CAPABILITY,
+    "adapter:BayesianLastLayerAdapter": _BAYESIAN_LAST_LAYER_ADAPTER_CAPABILITY,
+    "adapter:SNGPAdapter": _SNGP_ADAPTER_CAPABILITY,
+    "adapter:VBLLAdapter": _VBLL_ADAPTER_CAPABILITY,
     # Phase 4 ensemble adapter specs.
     "adapter:DeepEnsembleAdapter": _DEEP_ENSEMBLE_ADAPTER_CAPABILITY,
-    "adapter:SnapshotEnsembleAdapterSpec": _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY,
-    "adapter:SWAGAdapterSpec": _SWAG_ADAPTER_CAPABILITY,
-    "adapter:BatchEnsembleAdapterSpec": _BATCH_ENSEMBLE_ADAPTER_CAPABILITY,
-    "adapter:DUEAdapterSpec": _DUE_ADAPTER_CAPABILITY,
-    "adapter:TestTimeAugmentationAdapterSpec": _TTA_ADAPTER_CAPABILITY,
+    "adapter:SnapshotEnsembleAdapter": _SNAPSHOT_ENSEMBLE_ADAPTER_CAPABILITY,
+    "adapter:SWAGAdapter": _SWAG_ADAPTER_CAPABILITY,
+    "adapter:BatchEnsembleAdapter": _BATCH_ENSEMBLE_ADAPTER_CAPABILITY,
+    "adapter:DUEAdapter": _DUE_ADAPTER_CAPABILITY,
+    "adapter:TestTimeAugmentationAdapter": _TTA_ADAPTER_CAPABILITY,
     # Phase 4 calibration / conformal concrete calibrators.
     "calibration:TemperatureScaling": _TEMPERATURE_SCALING_CAPABILITY,
     "conformal:SplitConformalRegressor": _SPLIT_CONFORMAL_REGRESSOR_CAPABILITY,

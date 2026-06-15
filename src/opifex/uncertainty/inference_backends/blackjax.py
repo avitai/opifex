@@ -50,13 +50,16 @@ from artifex.generative_models.core.sampling.blackjax_samplers import (
     nuts_sampling,
 )
 
+from opifex.uncertainty._predictive import predictive_from_parameter_samples
 from opifex.uncertainty.inference_backends.base import (
     BackendDiagnostics,
     BackendResult,
     InferenceBackendSpec,
     UnsupportedBackendError,
 )
-from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.types import (
+    PredictiveDistribution,  # noqa: TC001 — kept eager per opifex convention
+)
 
 
 if TYPE_CHECKING:
@@ -193,18 +196,27 @@ class BlackJAXBackend:
         # passes the gate but lacks a dispatch entry.
         raise UnsupportedBackendError("blackjax", reason=f"No dispatch for method {self.method!r}.")
 
-    def predict_distribution(self, x: jax.Array, *, rngs: nnx.Rngs) -> PredictiveDistribution:
-        """Posterior mean prediction at the input shape, with sample variance."""
+    def predict_distribution(
+        self,
+        x: jax.Array,
+        *,
+        rngs: nnx.Rngs,
+        predict_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
+    ) -> PredictiveDistribution:
+        """Posterior predictive at ``x`` from re-fitted posterior samples.
+
+        Routes the posterior draws through the shared
+        :func:`opifex.uncertainty._predictive.predictive_from_parameter_samples`
+        adapter (Rule 1 — DRY): model-aware when ``predict_fn`` is supplied,
+        otherwise the lightweight parameter-moment broadcast to ``x.shape``
+        (the case where the target log-density does not depend on a separate
+        predictive model).
+        """
         result = self.fit(self.target_log_prob, rngs=rngs)
-        samples = result.sampler_state
-        mean = jnp.broadcast_to(jnp.mean(samples, axis=0), x.shape)
-        variance = jnp.broadcast_to(jnp.var(samples, axis=0), x.shape)
-        return PredictiveDistribution(
-            mean=mean,
-            variance=variance,
-            samples=jnp.broadcast_to(samples[:, None, :], (samples.shape[0], *x.shape))
-            if x.shape and samples.ndim == 2
-            else samples,
+        return predictive_from_parameter_samples(
+            result.sampler_state,
+            x,
+            predict_fn=predict_fn,
             metadata=(
                 ("method", self.method),
                 ("backend", "blackjax"),
@@ -213,19 +225,24 @@ class BlackJAXBackend:
             ),
         )
 
-    def posterior_predictive(self, rngs: nnx.Rngs, x: jax.Array) -> PredictiveDistribution:
+    def posterior_predictive(
+        self,
+        rngs: nnx.Rngs,
+        x: jax.Array,
+        predict_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
+    ) -> PredictiveDistribution:
         """Posterior predictive samples evaluated at ``x``.
 
-        For the lightweight case where the target log-density does not
-        depend on a separate predictive model, the posterior predictive is
-        the same shape contract as :meth:`predict_distribution` with a
-        ``posterior_predictive`` method tag.
+        Re-fits and routes through the shared adapter with a
+        ``posterior_predictive`` method tag. For the lightweight case where the
+        target log-density does not depend on a separate predictive model, this
+        is the same shape contract as :meth:`predict_distribution`.
         """
-        out = self.predict_distribution(x, rngs=rngs)
-        return PredictiveDistribution(
-            mean=out.mean,
-            variance=out.variance,
-            samples=out.samples,
+        result = self.fit(self.target_log_prob, rngs=rngs)
+        return predictive_from_parameter_samples(
+            result.sampler_state,
+            x,
+            predict_fn=predict_fn,
             metadata=(
                 ("method", "posterior_predictive"),
                 ("backend", "blackjax"),

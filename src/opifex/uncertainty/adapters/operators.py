@@ -7,13 +7,35 @@ axis metadata (spatial / spectral), and the supported metric set
 (L2 / H1 / spatial-coverage / spectral-coverage) — without claiming
 native Bayesian support.
 
-UQNO's native conformal path is handled separately via
-:class:`opifex.neural.operators.specialized.uqno.UncertaintyQuantificationNeuralOperator`.
-The adapter specs in this module cover the *deterministic-FNO* and
-*deterministic-DeepONet* families when bolted to one of the
-strategy-specific adapters (conformal calibrator, deep ensemble,
-MC-dropout) from :mod:`opifex.uncertainty.adapters.model` and
-:mod:`opifex.uncertainty.adapters.ensemble`.
+``wrap()`` delegates by strategy to the existing concrete adapters and
+enriches the resulting :class:`PredictiveDistribution.metadata` with the
+operator's function-space provenance (family, spatial / spectral axes,
+supported metrics) so downstream consumers can identify the output
+topology:
+
+* **ENSEMBLE** — the ``model`` argument is the tuple of operator ensemble
+  members; the spec packages it as a
+  :class:`~opifex.uncertainty.adapters.ensemble.DeepEnsembleState` and
+  delegates to
+  :class:`~opifex.uncertainty.adapters.ensemble.DeepEnsembleAdapter`.
+* **MC_DROPOUT** — the ``model`` argument is an
+  :class:`~opifex.uncertainty.adapters.model.MCDropoutState`; the spec
+  delegates to
+  :class:`~opifex.uncertainty.adapters.model.MCDropoutAdapter` and
+  preserves the caller-owned ``rngs`` at predict-time.
+* **CONFORMAL** — conformal UQ for operators does **not** fit the
+  ``wrap(model, capability) -> predict_distribution`` adapter contract:
+  the conformal calibrators consume a held-out calibration set
+  (``predictions`` / ``targets``) at fit time and emit a
+  :class:`~opifex.uncertainty.types.PredictionInterval` (a scalar
+  threshold), not a per-input predictive distribution. ``wrap()``
+  therefore raises an actionable :class:`NotImplementedError` redirecting
+  callers to the dedicated conformal surfaces —
+  :class:`~opifex.uncertainty.conformal.fields.FieldSplitConformalRegressor`
+  for a deterministic FNO / DeepONet field output, or
+  :class:`opifex.neural.operators.specialized.uqno.UncertaintyQuantificationNeuralOperator`
+  for the native UQNO conformal operator. This is an honest, documented
+  boundary, not a generic stub.
 
 Each spec is:
 
@@ -22,12 +44,8 @@ Each spec is:
 * hashable (used as a static argument in jit boundaries);
 * honest — ``recommended_capability()`` returns a
   :class:`UQCapability` with ``native_bayesian=False`` and the
-  matching strategy + capability flag;
-* actionable — ``wrap()`` raises :class:`NotImplementedError` naming
-  the operator family + missing strategy backend until a concrete
-  adapter implementation lands (the spec carries the metadata; the
-  fitted wrapper will reuse :class:`DeepEnsembleAdapter` /
-  :class:`MCDropoutAdapter` from the sibling modules).
+  matching strategy + capability flag; ``wrap()`` rejects any capability
+  that falsely claims ``native_bayesian=True``.
 """
 
 from __future__ import annotations
@@ -35,7 +53,13 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from opifex.uncertainty.adapters.ensemble import DeepEnsembleAdapter, DeepEnsembleState
+from opifex.uncertainty.adapters.model import MCDropoutAdapter
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.uncertainty.types import (  # noqa: TC001 — eager per convention
+    MetadataItems,
+    PredictiveDistribution,
+)
 
 
 _FNO_SPATIAL_AXES = (1, 2)
@@ -55,6 +79,56 @@ _OPERATOR_REQUIRED_CAPABILITIES: tuple[str, ...] = (
     "native_nnx_module",
     "supports_function_space",
 )
+
+
+def _enrich_with_function_space_metadata(
+    distribution: PredictiveDistribution, function_space_metadata: MetadataItems
+) -> PredictiveDistribution:
+    """Return ``distribution`` with operator function-space provenance appended.
+
+    The concrete adapter (deep-ensemble / MC-dropout) owns the ``method`` /
+    ``source_package`` provenance plus the mean / epistemic arrays; this
+    helper leaves all of those untouched and only appends the operator
+    function-space keys that are not already present (idempotent on repeat
+    application). Single source of truth for the metadata enrichment shared
+    by every operator strategy wrapper (Rule 1: DRY).
+    """
+    existing = distribution.metadata
+    existing_keys = {key for key, _ in existing}
+    appended = tuple(
+        (key, value) for key, value in function_space_metadata if key not in existing_keys
+    )
+    if not appended:
+        return distribution
+    return dataclasses.replace(distribution, metadata=existing + appended)
+
+
+class _OperatorFunctionSpaceWrapper:
+    """Delegate ``predict_distribution`` and append function-space provenance.
+
+    Wraps the object returned by a concrete adapter
+    (:class:`DeepEnsembleAdapter` / :class:`MCDropoutAdapter`). The mean and
+    epistemic / total-uncertainty terms come from the concrete adapter
+    unchanged; only :attr:`PredictiveDistribution.metadata` is enriched with
+    the operator family / spatial-axis / spectral-axis / supported-metric
+    provenance. ``predict_distribution`` forwards every positional and
+    keyword argument (so caller-owned ``rngs`` for the MC-dropout path is
+    preserved) and is transform-safe — :func:`dataclasses.replace` over a
+    ``flax.struct`` pytree composes with ``jit`` / ``grad`` / ``vmap``.
+    """
+
+    def __init__(
+        self, *, wrapped: Any, function_space_metadata: MetadataItems
+    ) -> None:
+        self._wrapped = wrapped
+        self._function_space_metadata = function_space_metadata
+
+    def predict_distribution(self, *args: Any, **kwargs: Any) -> PredictiveDistribution:
+        """Forward to the delegate and append function-space provenance metadata."""
+        distribution = self._wrapped.predict_distribution(*args, **kwargs)
+        return _enrich_with_function_space_metadata(
+            distribution, self._function_space_metadata
+        )
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -131,13 +205,42 @@ class OperatorAdapterSpec:
         }
         return UQCapability(**kwargs)
 
+    def function_space_metadata(self) -> MetadataItems:
+        """Return the operator function-space provenance as metadata pairs.
+
+        Records ``operator_family``, ``spatial_axes``, the supported metric
+        tuple, and — for spectral operators only — ``spectral_axes``. This
+        provenance is merged into every wrapped predictive distribution so
+        downstream consumers can identify the output topology (and which
+        function-space metrics are admissible) without re-deriving it from
+        the spec.
+        """
+        items: list[tuple[str, Any]] = [
+            ("operator_family", self.operator_family),
+            ("spatial_axes", self.spatial_axes),
+            ("supported_metrics", self.supported_metrics),
+        ]
+        if self.spectral_axes is not None:
+            items.append(("spectral_axes", self.spectral_axes))
+        return tuple(items)
+
     # ------------------------------------------------------------------
-    # Adapter-wiring boundary (unsupported until a concrete adapter lands)
+    # Adapter-wiring boundary — delegate by strategy
     # ------------------------------------------------------------------
 
     def wrap(self, model: Any, capability: UQCapability) -> Any:
-        """Raise an actionable error naming the missing operator-adapter wiring."""
-        del model
+        """Wire the spec to its concrete adapter, dispatching on ``default_strategy``.
+
+        ENSEMBLE packages ``model`` (the operator-member tuple) as a
+        :class:`DeepEnsembleState` and delegates to
+        :class:`DeepEnsembleAdapter`; MC_DROPOUT delegates an
+        :class:`MCDropoutState` to :class:`MCDropoutAdapter`. The wrapped
+        object's ``predict_distribution`` output is enriched with this
+        spec's :meth:`function_space_metadata`. CONFORMAL raises an
+        actionable redirect to the dedicated conformal calibrators (the
+        conformal contract takes calibration data, not a model). A
+        capability falsely claiming ``native_bayesian=True`` is rejected.
+        """
         if capability.native_bayesian:
             raise ValueError(
                 f"{type(self).__name__} declines capabilities with "
@@ -146,13 +249,35 @@ class OperatorAdapterSpec:
                 f"use the UQNO conformal path or wrap a real "
                 f"BayesianFNO / BayesianDeepONet implementation directly."
             )
-        raise NotImplementedError(
-            f"Operator-adapter wiring for family={self.operator_family!r} + "
-            f"strategy={self.default_strategy.value!r} is not yet implemented. "
-            f"Required capabilities: {self.required_capabilities!r}; supported "
-            f"metrics: {self.supported_metrics!r}. The spec carries the metadata "
-            f"a future adapter (DeepEnsembleAdapter / MCDropoutAdapter / a "
-            f"conformal calibrator) will consume."
+        if self.default_strategy is DefaultStrategy.ENSEMBLE:
+            state = DeepEnsembleState(members=model)
+            wrapped = DeepEnsembleAdapter().wrap(state, capability)
+            return _OperatorFunctionSpaceWrapper(
+                wrapped=wrapped, function_space_metadata=self.function_space_metadata()
+            )
+        if self.default_strategy is DefaultStrategy.MC_DROPOUT:
+            wrapped = MCDropoutAdapter().wrap(model, capability)
+            return _OperatorFunctionSpaceWrapper(
+                wrapped=wrapped, function_space_metadata=self.function_space_metadata()
+            )
+        if self.default_strategy is DefaultStrategy.CONFORMAL:
+            raise NotImplementedError(
+                f"Conformal UQ for the {self.operator_family!r} operator family "
+                f"(strategy={self.default_strategy.value!r}) is not exposed through "
+                f"the wrap(model, capability) adapter contract: conformal "
+                f"calibration consumes a held-out calibration set "
+                f"(predictions/targets) and yields a PredictionInterval, not a "
+                f"per-input predictive distribution. Use "
+                f"opifex.uncertainty.conformal.fields.FieldSplitConformalRegressor "
+                f"to conformalize a deterministic {self.operator_family!r} field "
+                f"output (supported metrics: {self.supported_metrics!r}), or "
+                f"opifex.neural.operators.specialized.uqno."
+                f"UncertaintyQuantificationNeuralOperator for the native UQNO "
+                f"conformal operator."
+            )
+        raise ValueError(
+            f"{type(self).__name__} has unrecognised default_strategy="
+            f"{self.default_strategy!r}; expected CONFORMAL / ENSEMBLE / MC_DROPOUT."
         )
 
 

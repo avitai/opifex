@@ -7,12 +7,13 @@ member/sample count, source-package, and assumption metadata. Stochastic
 adapters MUST require caller-owned ``rngs`` at the method boundary — no
 hidden dropout/ensemble seed.
 
-Spec dataclasses for deferred backends (``BayesianLastLayerAdapterSpec``,
-``SNGPAdapterSpec``, ``VBLLAdapterSpec``, ``SnapshotEnsembleAdapterSpec``,
-``SWAGAdapterSpec``, ``BatchEnsembleAdapterSpec``, ``DUEAdapterSpec``,
-``TestTimeAugmentationAdapterSpec``) declare capability + source-package
-metadata and raise an actionable ``NotImplementedError`` with backend
-guidance until real implementations are wired.
+The Snapshot-ensemble,
+SWAG, and BatchEnsemble adapters are concrete — their behaviour is covered in
+``test_ensemble_adapters.py``; the test-time-augmentation adapter is
+concrete and covered in ``test_tta_adapter.py``; the VBLL adapter is
+concrete and covered in ``test_vbll_adapter.py``; the DUE adapter is concrete
+and covered in ``test_due_adapter.py``; the SNGP adapter is concrete and
+covered in ``test_sngp_adapter.py``.
 
 ``LaplaceAdapterSpec`` is concrete and produces a Monte-Carlo predictive
 distribution by sampling parameters from a diagonal Laplace posterior
@@ -27,31 +28,21 @@ running statistics through transforms (pattern (B) per
 
 from __future__ import annotations
 
-from typing import Any
-
 import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
 
 from opifex.uncertainty.adapters import (
-    BatchEnsembleAdapterSpec,
     BatchEnsembleState,
-    BayesianLastLayerAdapterSpec,
     DeepEnsembleAdapter,
     DeepEnsembleState,
-    DUEAdapterSpec,
     MCDropoutAdapter,
     MCDropoutState,
     ModelUncertaintyAdapter,
     ModelUncertaintyAdapterProtocol,
-    SnapshotEnsembleAdapterSpec,
     SnapshotEnsembleState,
-    SNGPAdapterSpec,
-    SWAGAdapterSpec,
     SWAGState,
-    TestTimeAugmentationAdapterSpec,
-    VBLLAdapterSpec,
 )
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import PredictiveDistribution
@@ -191,52 +182,6 @@ def test_mc_dropout_adapter_requires_caller_owned_rngs() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Adapter specs for deferred backends — unsupported-backend errors
-# ---------------------------------------------------------------------------
-
-
-_DEFERRED_SPECS: tuple[tuple[type, DefaultStrategy], ...] = (
-    (BayesianLastLayerAdapterSpec, DefaultStrategy.BAYESIAN_LAST_LAYER),
-    (SNGPAdapterSpec, DefaultStrategy.SNGP),
-    (VBLLAdapterSpec, DefaultStrategy.VBLL),
-    (SnapshotEnsembleAdapterSpec, DefaultStrategy.SNAPSHOT_ENSEMBLE),
-    (SWAGAdapterSpec, DefaultStrategy.SWAG),
-    (BatchEnsembleAdapterSpec, DefaultStrategy.BATCH_ENSEMBLE),
-    (DUEAdapterSpec, DefaultStrategy.DUE),
-    (TestTimeAugmentationAdapterSpec, DefaultStrategy.TEST_TIME_AUGMENTATION),
-)
-
-
-@pytest.mark.parametrize(("spec_cls", "expected_strategy"), _DEFERRED_SPECS)
-def test_deferred_adapter_specs_are_frozen_dataclasses_with_capability_metadata(
-    spec_cls: type, expected_strategy: DefaultStrategy
-) -> None:
-    """Deferred specs are pattern-(A) frozen dataclasses with capability metadata."""
-    import dataclasses as dc
-
-    assert dc.is_dataclass(spec_cls)
-    spec: Any = spec_cls()
-    assert spec.default_strategy is expected_strategy
-    assert isinstance(spec.source_package, str)
-    assert isinstance(spec.required_capabilities, tuple)
-    assert all(isinstance(tag, str) for tag in spec.required_capabilities)
-    # frozen — assigning to a field should fail
-    with pytest.raises(dc.FrozenInstanceError):
-        spec.source_package = "tampered"  # type: ignore[misc]
-
-
-@pytest.mark.parametrize(("spec_cls", "_strategy"), _DEFERRED_SPECS)
-def test_deferred_adapter_spec_wrap_raises_actionable_error(
-    spec_cls: type, _strategy: DefaultStrategy
-) -> None:
-    """`wrap` on a deferred spec raises a clear unsupported-backend error."""
-    spec: Any = spec_cls()
-    capability = UQCapability(default_strategy=spec.default_strategy)
-    with pytest.raises(NotImplementedError, match=spec.default_strategy.value):
-        spec.wrap(model=_deterministic_model, capability=capability)
-
-
-# ---------------------------------------------------------------------------
 # Fitted-state containers — pattern (B): flax.struct.dataclass
 # ---------------------------------------------------------------------------
 
@@ -275,6 +220,7 @@ def _minimal_state_kwargs(state_cls: type) -> dict[str, object]:
             "first_moment": jnp.zeros(4),
             "second_moment": jnp.zeros(4),
             "deviation_matrix": jnp.zeros((4, 2)),
+            "forward_fn": lambda flat_params, x: x @ flat_params.reshape(-1, 1),
         }
     if state_cls is BatchEnsembleState:
         return {
@@ -392,6 +338,7 @@ def test_swag_state_round_trips_through_tree_util() -> None:
         first_moment=first_moment,
         second_moment=second_moment,
         deviation_matrix=deviation_matrix,
+        forward_fn=lambda flat_params, x: x @ flat_params.reshape(-1, 1),
         metadata=(("source", "opifex"),),
     )
     doubled = jax.tree_util.tree_map(lambda leaf: leaf * 2.0, state)

@@ -31,24 +31,22 @@ from opifex.uncertainty.inference_backends import (
     PathfinderBackend,
     SVGDBackend,
 )
+from opifex.uncertainty.types import PredictiveDistribution
+
+
+def _unit_gaussian_log_prob(theta: jax.Array) -> jax.Array:
+    """Standard-normal log density over the parameter vector ``theta``."""
+    return -0.5 * jnp.sum(theta**2)
+
+
+def _linear_predict(params: jax.Array, x: jax.Array) -> jax.Array:
+    """Known linear forward model ``x @ params`` mapping params → predictions."""
+    return x @ params
 
 
 _PEER_BACKENDS: tuple[type, ...] = (
     PathfinderBackend,
     SVGDBackend,
-    ADVIBackend,
-)
-
-
-_DEFERRED_PEER_BACKENDS: tuple[type, ...] = ()
-
-
-_CONCRETIZED_PEER_BACKENDS: tuple[type, ...] = (
-    # Task 6.3.9a: SVGD algorithm wired through `fit`.
-    SVGDBackend,
-    # Task 6.3.9b: Pathfinder algorithm wired through `fit`.
-    PathfinderBackend,
-    # Task 6.3.9c: ADVI (mean-field) algorithm wired through `fit`.
     ADVIBackend,
 )
 
@@ -74,21 +72,6 @@ def test_peer_backend_implements_inference_protocol(backend_cls: type) -> None:
     """Each peer backend conforms to ``InferenceBackendProtocol`` structurally."""
     backend = backend_cls()
     assert isinstance(backend, InferenceBackendProtocol)
-
-
-@pytest.mark.parametrize("backend_cls", _DEFERRED_PEER_BACKENDS)
-def test_deferred_peer_backend_fit_raises_until_algorithm_lands(backend_cls: type) -> None:
-    """Deferred peer backends still raise ``NotImplementedError`` from ``fit``.
-
-    Pathfinder + ADVI ports land in follow-up slices.
-    """
-    backend = backend_cls()
-
-    def target_log_prob(_: jax.Array) -> jax.Array:
-        return jnp.zeros(())
-
-    with pytest.raises(NotImplementedError, match=backend.name):
-        backend.fit(target_log_prob=target_log_prob, rngs=nnx.Rngs(sampler=0))
 
 
 def test_svgd_backend_fit_returns_particle_cloud_concentrating_around_target_mean() -> None:
@@ -118,12 +101,12 @@ def test_svgd_backend_fit_returns_particle_cloud_concentrating_around_target_mea
     assert jnp.allclose(empirical_mean, jnp.zeros(2), atol=0.5)
 
 
-def test_svgd_backend_predict_distribution_remains_deferred() -> None:
-    """Until a model-aware adapter exists, prediction hooks still raise."""
+def test_svgd_backend_predict_distribution_raises_without_stored_target() -> None:
+    """A backend built without a stored ``target_log_prob`` cannot re-fit."""
     backend = SVGDBackend()
-    with pytest.raises(NotImplementedError, match="predict_distribution"):
+    with pytest.raises(ValueError, match="target_log_prob"):
         backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
-    with pytest.raises(NotImplementedError, match="posterior_predictive"):
+    with pytest.raises(ValueError, match="target_log_prob"):
         backend.posterior_predictive(nnx.Rngs(sampler=0), jnp.zeros(1))
 
 
@@ -154,13 +137,37 @@ def test_pathfinder_backend_fit_returns_samples_concentrating_around_target_mode
     assert jnp.allclose(empirical_mean, jnp.zeros(2), atol=0.2)
 
 
-def test_pathfinder_backend_predict_distribution_remains_deferred() -> None:
-    """Pathfinder's prediction hooks need a model-aware adapter."""
+def test_pathfinder_backend_predict_distribution_raises_without_stored_target() -> None:
+    """Pathfinder's prediction hooks need a stored ``target_log_prob`` to re-fit."""
     backend = PathfinderBackend()
-    with pytest.raises(NotImplementedError, match="predict_distribution"):
+    with pytest.raises(ValueError, match="target_log_prob"):
         backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
-    with pytest.raises(NotImplementedError, match="posterior_predictive"):
+    with pytest.raises(ValueError, match="target_log_prob"):
         backend.posterior_predictive(nnx.Rngs(sampler=0), jnp.zeros(1))
+
+
+def test_pathfinder_backend_predict_distribution_model_aware_and_lightweight() -> None:
+    """A stored-target Pathfinder backend yields real + lightweight predictives."""
+    d = 2
+    backend = PathfinderBackend(
+        init_state=jnp.zeros(d),
+        target_log_prob=_unit_gaussian_log_prob,
+        num_samples=128,
+        num_elbo_samples=32,
+    )
+    x = jnp.array([[1.0, 2.0], [3.0, -1.0], [0.5, 0.5]])
+
+    model_aware = backend.predict_distribution(
+        x, rngs=nnx.Rngs(sampler=3), predict_fn=_linear_predict
+    )
+    assert isinstance(model_aware, PredictiveDistribution)
+    assert model_aware.mean.shape == (3,)
+    assert model_aware.samples is not None
+    assert model_aware.samples.shape == (128, 3)
+
+    lightweight = backend.predict_distribution(x, rngs=nnx.Rngs(sampler=3))
+    assert isinstance(lightweight, PredictiveDistribution)
+    assert lightweight.mean.shape == x.shape
 
 
 def test_pathfinder_backend_advertises_quasi_newton_family() -> None:
@@ -211,13 +218,77 @@ def test_advi_backend_fit_returns_meanfield_samples_concentrating_around_target_
     assert jnp.allclose(empirical_mean, jnp.zeros(2), atol=0.3)
 
 
-def test_advi_backend_predict_distribution_remains_deferred() -> None:
-    """ADVI's prediction hooks need a model-aware adapter."""
+def test_advi_backend_predict_distribution_raises_without_stored_target() -> None:
+    """ADVI's prediction hooks need a stored ``target_log_prob`` to re-fit."""
     backend = ADVIBackend()
-    with pytest.raises(NotImplementedError, match="predict_distribution"):
+    with pytest.raises(ValueError, match="target_log_prob"):
         backend.predict_distribution(jnp.zeros(1), rngs=nnx.Rngs(sampler=0))
-    with pytest.raises(NotImplementedError, match="posterior_predictive"):
+    with pytest.raises(ValueError, match="target_log_prob"):
         backend.posterior_predictive(nnx.Rngs(sampler=0), jnp.zeros(1))
+
+
+def test_advi_backend_predict_distribution_model_aware_depends_on_model() -> None:
+    """ADVI model-aware predictive marginalises the forward model over draws.
+
+    The previously-raising hook now returns a real
+    :class:`PredictiveDistribution` whose moments depend on the supplied
+    ``predict_fn`` (distinct from the lightweight parameter-moment form).
+    """
+    d = 2
+    backend = ADVIBackend(
+        init_state=jnp.zeros(d),
+        target_log_prob=_unit_gaussian_log_prob,
+        num_samples=256,
+        num_iterations=200,
+        num_mc_samples=8,
+        learning_rate=0.05,
+    )
+    x = jnp.array([[1.0, 2.0], [3.0, -1.0], [0.5, 0.5]])
+
+    model_aware = backend.predict_distribution(
+        x, rngs=nnx.Rngs(sampler=5), predict_fn=_linear_predict
+    )
+    assert isinstance(model_aware, PredictiveDistribution)
+    assert model_aware.mean.shape == (3,)
+    assert model_aware.samples is not None
+    assert model_aware.samples.shape == (256, 3)
+    # The model-aware predictive's per-output mean reflects ``x @ E[params]``,
+    # not the raw parameter moments — it genuinely depends on the model.
+    assert model_aware.mean.shape != x.shape
+
+
+def test_advi_backend_predict_distribution_lightweight_form() -> None:
+    """Without ``predict_fn`` the ADVI predictive falls back to parameter moments."""
+    d = 3
+    backend = ADVIBackend(
+        init_state=jnp.zeros(d),
+        target_log_prob=_unit_gaussian_log_prob,
+        num_samples=256,
+        num_iterations=200,
+    )
+    x = jnp.zeros((4, d))
+
+    lightweight = backend.predict_distribution(x, rngs=nnx.Rngs(sampler=5))
+    assert isinstance(lightweight, PredictiveDistribution)
+    assert lightweight.mean.shape == x.shape
+    assert lightweight.variance is not None
+    assert lightweight.variance.shape == x.shape
+
+
+def test_advi_backend_posterior_predictive_returns_predictive_distribution() -> None:
+    """The ADVI ``posterior_predictive`` hook now returns a predictive too."""
+    d = 2
+    backend = ADVIBackend(
+        init_state=jnp.zeros(d),
+        target_log_prob=_unit_gaussian_log_prob,
+        num_samples=128,
+        num_iterations=150,
+    )
+    x = jnp.array([[1.0, 2.0], [0.5, 0.5]])
+    out = backend.posterior_predictive(nnx.Rngs(sampler=9), x, predict_fn=_linear_predict)
+    assert isinstance(out, PredictiveDistribution)
+    assert out.mean.shape == (2,)
+    assert dict(out.metadata).get("method") == "posterior_predictive"
 
 
 def test_blackjax_no_longer_lists_advi_and_pathfinder_as_unsupported() -> None:
