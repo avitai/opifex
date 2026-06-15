@@ -49,7 +49,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -57,9 +56,7 @@ import numpy as np
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 
 
 logger = logging.getLogger(__name__)

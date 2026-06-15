@@ -59,7 +59,6 @@ from __future__ import annotations
 
 import itertools
 import logging
-from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import numpy as np
@@ -67,12 +66,9 @@ from flax import nnx
 from jax.scipy.special import erfc
 from jaxtyping import Array, Complex, Float  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
 from opifex.neural.atomistic.heads.charge import conserve_total_charge
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 logger = logging.getLogger(__name__)

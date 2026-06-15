@@ -1,0 +1,64 @@
+# SkyPilot task: train the QH9 block-form Hamiltonian predictor on a rented
+# vast.ai GPU. Modelled on datarax's benchmarks/sky/gpu-benchmark.yaml -- SkyPilot
+# provisions the instance, rsyncs the working tree (respecting .skyignore) and the
+# QH9 database, installs the opifex GPU environment, and runs the existing
+# scripts/train_qh9_blocks.py driver. Override any QH9_* env at launch, e.g.
+#   sky launch -c opifex-qh9 deploy/vast/qh9_train.sky.yaml --env QH9_BATCH=24
+# The deploy/vast/launch.py wrapper sets these and fetches the run directory back.
+
+name: opifex-qh9-train
+
+workdir: .
+
+resources:
+  accelerators: H100:1
+  disk_size: 256
+  cloud: vast
+
+file_mounts:
+  # The 29 GB QH9-Stable database, rsynced before the run (see launch.py --db).
+  /root/qh9/QH9Stable.db: /mnt/ssd2/Data/qh9/raw/QH9Stable.db
+
+envs:
+  # QH9 Fock targets are float64; the trainer requires x64.
+  JAX_ENABLE_X64: "1"
+  XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+  XLA_PYTHON_CLIENT_MEM_FRACTION: "0.92"
+  # Reference QHNet scale (uniform multiplicity, l up to the d-d block).
+  QH9_HIDDEN: "128x0e + 128x1o + 128x2e + 128x3o + 128x4e"
+  QH9_SH_LMAX: "4"
+  QH9_LAYERS: "5"
+  QH9_START_REFINE: "2"
+  QH9_BOTTLENECK: "32"
+  QH9_BATCH: "16"
+  QH9_EPOCHS: "30"
+  QH9_LR: "5e-4"
+  QH9_OUT: "/root/results/qh9_mul128"
+
+setup: |
+  set -euo pipefail
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  export PATH="$HOME/.local/bin:$PATH"
+  cd ~/sky_workdir
+  uv venv --python 3.12 .venv
+  uv sync --extra gpu --extra neural-dft
+
+run: |
+  set -euo pipefail
+  export PATH="$HOME/.local/bin:$PATH"
+  cd ~/sky_workdir
+  .venv/bin/python -c "import jax; print('JAX', jax.__version__, 'devices:', jax.devices())"
+  .venv/bin/python scripts/train_qh9_blocks.py \
+    --dataset stable \
+    --db /root/qh9/QH9Stable.db \
+    --hidden "$QH9_HIDDEN" \
+    --sh-lmax "$QH9_SH_LMAX" \
+    --num-interactions "$QH9_LAYERS" \
+    --start-refinement-layer "$QH9_START_REFINE" \
+    --bottleneck-mul "$QH9_BOTTLENECK" \
+    --batch-size "$QH9_BATCH" \
+    --epochs "$QH9_EPOCHS" \
+    --lr "$QH9_LR" \
+    --out "$QH9_OUT"

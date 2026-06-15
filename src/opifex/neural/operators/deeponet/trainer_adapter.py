@@ -6,13 +6,10 @@ expects models with a single input. This adapter bridges the gap.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
+import jax  # noqa: TC002
 from flax import nnx
-
-
-if TYPE_CHECKING:
-    import jax
 
 
 class DeepONetTrainerAdapter(nnx.Module):

@@ -17,17 +17,16 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable, TYPE_CHECKING
 
+import jax  # noqa: TC002
+from flax import nnx  # noqa: TC002
+
 from opifex.uncertainty._predictive import predictive_from_parameter_samples
+from opifex.uncertainty.inference_backends.base import BackendResult  # noqa: TC001
+from opifex.uncertainty.types import MetadataItems, PredictiveDistribution  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import jax
-    from flax import nnx
-
-    from opifex.uncertainty.inference_backends.base import BackendResult
-    from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
 
 @runtime_checkable

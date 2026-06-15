@@ -22,12 +22,11 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from jaxtyping import Array, Float, PyTree  # noqa: TC002
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from jaxtyping import Array, Float, PyTree
 
 
 @dataclass(frozen=True)

@@ -17,15 +17,13 @@ Local protocols justified.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
+from typing import Any, Protocol, runtime_checkable
 
+import jax  # noqa: TC002
+from flax import nnx  # noqa: TC002
 
-if TYPE_CHECKING:
-    import jax
-    from flax import nnx
-
-    from opifex.uncertainty.objectives import ObjectiveConfig, UQLossComponents
-    from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.objectives import ObjectiveConfig, UQLossComponents  # noqa: TC001
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
 
 
 @runtime_checkable

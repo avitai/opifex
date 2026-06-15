@@ -18,16 +18,14 @@ that basis bridge is tracked separately and is not assumed here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+
+from jax import Array  # noqa: TC002
 
 from opifex.core.quantum._spherical import apply_matrix, build_block_transform
-from opifex.neural.quantum.dft.scf import density_from_fock
-
-
-if TYPE_CHECKING:
-    from jax import Array
-
-    from opifex.neural.quantum.dft.scf import SCFSolver
+from opifex.neural.quantum.dft.scf import (
+    density_from_fock,
+    SCFSolver,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

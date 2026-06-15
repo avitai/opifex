@@ -17,14 +17,11 @@ adapter only marshals a :class:`NIGParams` through it and tags provenance.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from opifex.uncertainty.evidential import nig_to_predictive_distribution
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.evidential import NIGParams
-    from opifex.uncertainty.types import PredictiveDistribution
+from opifex.uncertainty.evidential import (
+    nig_to_predictive_distribution,
+    NIGParams,
+)
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
 
 
 class EvidentialAdapter:

@@ -40,6 +40,8 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float  # noqa: TC002
 
+from opifex.geometry.algebra._wigner_j import WIGNER_J
+
 
 def _su2_clebsch_gordan_coefficient(
     j1: float, m1: float, j2: float, m2: float, j3: float, m3: float
@@ -279,7 +281,12 @@ def _log_coordinates_from_matrix(rotation: Float[Array, "3 3"]) -> Float[Array, 
         The ``3``-vector ``angle * axis``.
     """
     trace = rotation[0, 0] + rotation[1, 1] + rotation[2, 2]
-    angle = jnp.arccos(jnp.clip((trace - 1.0) / 2.0, -1.0, 1.0))
+    # Clip the arccos argument strictly inside (-1, 1): at +-1 (angle 0 / pi) the
+    # arccos gradient is infinite and would propagate NaN for axis-aligned
+    # rotations (e.g. an edge along the eSCN quantisation axis). The value error
+    # is O(1e-3 rad) only at the singular poles, which are measure zero.
+    cos_angle = jnp.clip((trace - 1.0) / 2.0, -1.0 + 1e-7, 1.0 - 1e-7)
+    angle = jnp.arccos(cos_angle)
     axis = jnp.stack(
         [
             rotation[2, 1] - rotation[1, 2],
@@ -287,9 +294,13 @@ def _log_coordinates_from_matrix(rotation: Float[Array, "3 3"]) -> Float[Array, 
             rotation[1, 0] - rotation[0, 1],
         ]
     )
-    norm = jnp.sqrt(jnp.sum(axis**2))
-    safe_norm = jnp.where(norm > 0.0, norm, 1.0)
-    axis = jnp.where(norm > 0.0, axis / safe_norm, jnp.array([1.0, 0.0, 0.0]))
+    # Double-where so the sqrt never sees 0 (angle -> 0 => axis -> 0): this guards
+    # the *backward* pass, which a forward-only ``where(norm > 0, ...)`` does not.
+    axis_sq = jnp.sum(axis**2)
+    is_zero = axis_sq <= 1e-12
+    axis_safe = jnp.where(is_zero, jnp.ones_like(axis_sq), axis_sq)
+    reference = jnp.array([1.0, 0.0, 0.0], dtype=rotation.dtype)
+    axis = jnp.where(is_zero, reference, axis / jnp.sqrt(axis_safe))
     return angle * axis
 
 
@@ -322,3 +333,191 @@ def wigner_d(degree: int, rotation: Float[Array, "3 3"]) -> Float[Array, "d d"]:
     log_coordinates = _log_coordinates_from_matrix(rotation)
     algebra_element = jnp.einsum("a,aij->ij", log_coordinates, generators)
     return jax.scipy.linalg.expm(algebra_element)
+
+
+_POLE_EPSILON = 1e-12
+"""Guard for the ``beta = 0 / pi`` pole where the ``(alpha, gamma)`` split degenerates."""
+
+
+@jax.custom_jvp
+def _safe_arccos(value: Float[Array, ""]) -> Float[Array, ""]:
+    """``arccos`` with an exact forward value and a finite gradient at ``+-1``.
+
+    The forward pass is the plain ``arccos`` (so ``beta = 0`` is recovered exactly
+    on the quantisation pole, unlike a clipped argument); only the derivative
+    ``-1 / sqrt(1 - x^2)`` is evaluated at a clamped argument so it stays finite at
+    ``x = +-1``. This is fairchem's ``Safeacos``
+    (``../fairchem/src/fairchem/core/models/uma/common/rotation.py``).
+    """
+    return jnp.arccos(value)
+
+
+@_safe_arccos.defjvp
+def _safe_arccos_jvp(  # pyright: ignore[reportUnusedFunction]  # registered as the JVP rule
+    primals: tuple[Float[Array, ""]], tangents: tuple[Float[Array, ""]]
+) -> tuple[Float[Array, ""], Float[Array, ""]]:
+    """JVP for :func:`_safe_arccos`: exact value, derivative at a clamped argument."""
+    (value,) = primals
+    (tangent,) = tangents
+    clamped = jnp.clip(value, -1.0 + 1e-7, 1.0 - 1e-7)
+    derivative = -1.0 / jnp.sqrt(1.0 - clamped * clamped)
+    return jnp.arccos(value), derivative * tangent
+
+
+def _y_rotation(degree: int, angle: Float[Array, ""]) -> Float[Array, "d d"]:
+    r"""Real Wigner-D of a rotation about ``+y`` -- the banded ``Z_l`` matrix.
+
+    In opifex's real-spherical-harmonic basis (shared with
+    :func:`spherical_harmonics`) a rotation about the ``+y`` quantisation axis acts
+    on each order ``m`` as a 2D rotation by ``m * angle``, giving the sparse
+    structure ``cos(m theta)`` on the diagonal and ``sin(m theta)`` on the
+    anti-diagonal (e3nn 0.4.0 ``o3/_wigner.py::_z_rot_mat``;
+    ``../fairchem/src/fairchem/core/models/uma/common/rotation.py``). It equals
+    :func:`wigner_d` of the corresponding ``3x3`` ``y``-rotation matrix exactly.
+
+    Args:
+        degree: The representation degree ``l`` (non-negative integer).
+        angle: The rotation angle about ``+y`` (a scalar array).
+
+    Returns:
+        Real array of shape ``(2l+1, 2l+1)``.
+    """
+    dim = 2 * degree + 1
+    indices = jnp.arange(dim)
+    reversed_indices = indices[::-1]
+    frequencies = jnp.arange(degree, -degree - 1, -1.0, dtype=angle.dtype)
+    matrix = jnp.zeros((dim, dim), dtype=angle.dtype)
+    matrix = matrix.at[indices, reversed_indices].set(jnp.sin(frequencies * angle))
+    return matrix.at[indices, indices].set(jnp.cos(frequencies * angle))
+
+
+def _matrix_to_euler(
+    rotation: Float[Array, "3 3"],
+) -> tuple[Float[Array, ""], Float[Array, ""], Float[Array, ""]]:
+    r"""Grad-safe ZYZ-about-``y`` Euler angles of a rotation matrix.
+
+    Returns ``(alpha, beta, gamma)`` with
+    ``R = matrix_y(alpha) @ matrix_x(beta) @ matrix_y(gamma)``, the e3nn
+    convention (``../e3nn-jax/e3nn_jax/_src/rotation.py::matrix_to_angles`` /
+    ``xyz_to_angles``). ``beta = arccos(R[:, 1]_y)`` and ``alpha = atan2(x, z)``
+    of the rotated ``+y`` axis; ``gamma`` is recovered from the residual rotation.
+
+    The ``arccos`` argument is clipped strictly inside ``(-1, 1)`` and the two
+    ``atan2`` calls use double-``where`` guards so both the forward value and the
+    backward gradient stay finite at the ``beta = 0 / pi`` pole (an edge along the
+    quantisation axis), mirroring fairchem's ``Safeacos`` / ``Safeatan2`` and the
+    guard in :func:`_log_coordinates_from_matrix`.
+
+    Args:
+        rotation: A ``3x3`` rotation matrix.
+
+    Returns:
+        The Euler angles ``(alpha, beta, gamma)`` as scalar arrays.
+    """
+    axis = rotation @ jnp.array([0.0, 1.0, 0.0], dtype=rotation.dtype)
+    x, y, z = axis[0], axis[1], axis[2]
+    beta = _safe_arccos(y)
+    # At the pole (x = z = 0) atan2 is ill-defined and its gradient blows up; pin
+    # alpha = 0 there (gamma then absorbs the residual y-rotation, which is exact
+    # because J @ Z_l(0) @ J = I) and feed atan2 a safe (0, 1) so grad is finite.
+    on_pole = (x * x + z * z) <= _POLE_EPSILON
+    safe_x = jnp.where(on_pole, 0.0, x)
+    safe_z = jnp.where(on_pole, 1.0, z)
+    alpha = jnp.arctan2(safe_x, safe_z)
+
+    # Residual rotation R' = matrix_y(alpha)^T matrix_x(beta)^T R = matrix_y(gamma).
+    residual = _matrix_x(beta).T @ _matrix_y(alpha).T @ rotation
+    r02, r00 = residual[0, 2], residual[0, 0]
+    on_gamma_pole = (r02 * r02 + r00 * r00) <= _POLE_EPSILON
+    safe_r02 = jnp.where(on_gamma_pole, 0.0, r02)
+    safe_r00 = jnp.where(on_gamma_pole, 1.0, r00)
+    gamma = jnp.arctan2(safe_r02, safe_r00)
+    return alpha, beta, gamma
+
+
+def _matrix_y(angle: Float[Array, ""]) -> Float[Array, "3 3"]:
+    """Return the ``3x3`` rotation matrix about the ``+y`` axis."""
+    c, s = jnp.cos(angle), jnp.sin(angle)
+    zero, one = jnp.zeros_like(angle), jnp.ones_like(angle)
+    return jnp.stack(
+        [
+            jnp.stack([c, zero, s]),
+            jnp.stack([zero, one, zero]),
+            jnp.stack([-s, zero, c]),
+        ]
+    )
+
+
+def _matrix_x(angle: Float[Array, ""]) -> Float[Array, "3 3"]:
+    """Return the ``3x3`` rotation matrix about the ``+x`` axis."""
+    c, s = jnp.cos(angle), jnp.sin(angle)
+    zero, one = jnp.zeros_like(angle), jnp.ones_like(angle)
+    return jnp.stack(
+        [
+            jnp.stack([one, zero, zero]),
+            jnp.stack([zero, c, -s]),
+            jnp.stack([zero, s, c]),
+        ]
+    )
+
+
+def _wigner_d_from_euler(
+    degree: int,
+    alpha: Float[Array, ""],
+    beta: Float[Array, ""],
+    gamma: Float[Array, ""],
+) -> Float[Array, "d d"]:
+    r"""Assemble the real Wigner-D from Euler angles via the constant ``J_l``.
+
+    ``D^l = Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` (e3nn 0.4.0
+    ``o3/_wigner.py``; fairchem ``wigner_D``). For degrees beyond the ported
+    ``J_l`` table the result falls back to the exponential path via
+    :func:`wigner_d` of the reconstructed rotation matrix.
+
+    Args:
+        degree: The representation degree ``l`` (non-negative integer).
+        alpha: First Euler angle (rotation about ``+y``).
+        beta: Second Euler angle (rotation about ``+x``).
+        gamma: Third Euler angle (rotation about ``+y``).
+
+    Returns:
+        Real array of shape ``(2l+1, 2l+1)``.
+    """
+    if degree >= len(WIGNER_J):
+        rotation = _matrix_y(alpha) @ _matrix_x(beta) @ _matrix_y(gamma)
+        return wigner_d(degree, rotation)
+    matrix_j = jnp.asarray(WIGNER_J[degree], dtype=alpha.dtype)
+    z_alpha = _y_rotation(degree, alpha)
+    z_beta = _y_rotation(degree, beta)
+    z_gamma = _y_rotation(degree, gamma)
+    return z_alpha @ matrix_j @ z_beta @ matrix_j @ z_gamma
+
+
+def wigner_d_fast(degree: int, rotation: Float[Array, "3 3"]) -> Float[Array, "d d"]:
+    r"""Real Wigner-D ``D^l(R)`` via the fast Euler-angle / ``J_l`` factorisation.
+
+    Numerically identical to :func:`wigner_d` (the trusted matrix-exponential
+    reference) but replaces the per-call ``jax.scipy.linalg.expm`` with the cheap
+    ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product (e3nn 0.4.0
+    ``o3/_wigner.py``; fairchem ``wigner_D``; QHNetV2 eSCN, arXiv:2506.09398).
+    This is the rotation primitive of the SO(2)-frame edge convolution; the
+    parity with :func:`wigner_d` is asserted in
+    ``tests/geometry/algebra/test_wigner.py``.
+
+    Fully ``jit``/``grad``/``vmap`` compatible, including at the ``beta = 0``
+    quantisation pole (an edge on the ``+y`` axis), via the guards in
+    :func:`_matrix_to_euler`.
+
+    Args:
+        degree: The representation degree ``l`` (non-negative integer).
+        rotation: A ``3x3`` rotation matrix.
+
+    Returns:
+        Real ``jax`` array of shape ``(2l+1, 2l+1)``.
+    """
+    if degree < 0:
+        raise ValueError(f"Degree must be non-negative, got {degree}")
+    if degree == 0:
+        return jnp.ones((1, 1), dtype=rotation.dtype)
+    alpha, beta, gamma = _matrix_to_euler(rotation)
+    return _wigner_d_from_euler(degree, alpha, beta, gamma)

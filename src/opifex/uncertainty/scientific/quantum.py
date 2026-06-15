@@ -30,16 +30,11 @@ Rev. Mod. Phys. 71, 1267 (1999)). In atomic units 1 kcal/mol equals
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import jax
+import jax.numpy as jnp
 
 from opifex.uncertainty._predictive import ensemble_predictive
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
-
-
-if TYPE_CHECKING:
-    import jax
-
-import jax.numpy as jnp
 
 
 # Chemical accuracy: 1 kcal/mol expressed in Hartree (atomic units).

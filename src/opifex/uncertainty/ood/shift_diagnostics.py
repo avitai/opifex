@@ -8,16 +8,11 @@ overclaim distribution-free coverage when shift is detected.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 from flax import struct
 
 from opifex.uncertainty.conformal.exchangeability import ks_two_sample_pvalue
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import MetadataItems  # noqa: TC001
 
 
 @struct.dataclass(slots=True, kw_only=True)

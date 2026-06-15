@@ -7,15 +7,11 @@ by delegating to ``calibrax.validation.check_accuracy()``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
+from calibrax.core.result import BenchmarkResult  # noqa: TC002
 from calibrax.validation.accuracy import AccuracyResult, check_accuracy
 
 from opifex.benchmarking._shared import CHEMICAL_ACCURACY_THRESHOLDS
-
-
-if TYPE_CHECKING:
-    from calibrax.core.result import BenchmarkResult
 
 
 # Default chemical accuracy thresholds per domain

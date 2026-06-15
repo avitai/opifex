@@ -42,10 +42,13 @@ in fixed-size **blocks**, every primitive reused from the equivariant kit:
    parity-relabelled (all-even, matching QHNet's `hidden_irrep_base`) node feature
    into a `SelfInteractionLayer` (QHNet `SelfNetLayer` — a channel-wise *self*
    tensor product `tp(W_l x, W_r x)` building the diagonal feature `f_ii`) and a
-   `PairInteractionLayer` (QHNet `PairNetLayer` — a channel-wise *pair* tensor
-   product `tp(x[i], x[j])` over the complete edge graph, with per-edge weights
-   modulated by the radial embedding and the endpoint inner product, building the
-   off-diagonal feature `f_ij`). The features accumulate residually across the
+   `SO2PairInteractionLayer` (QHNetV2's SO(2)-frame reduction of QHNet's
+   `PairNetLayer` — the two endpoints `x[i]`, `x[j]` are rotated into the `i → j`
+   edge frame, concatenated and coupled by an in-frame `O(L²)` SO(2) operation over
+   the complete edge graph, with per-edge weights modulated by the radial
+   embedding, building the off-diagonal feature `f_ij`; this replaces the dense
+   `O(L³)` Clebsch-Gordan pair product — the dominant cost — and is faster and more
+   accurate, arXiv:2506.09398). The features accumulate residually across the
    stack. Each layer first `rms_normalize`s its input (an equivariant RMSNorm —
    division by the per-node invariant RMS) so the squaring tensor products stay
    bounded regardless of the trunk's activation scale. These layers compose the
@@ -99,7 +102,7 @@ The public surface lives in `opifex.neural.quantum.hamiltonian`:
 | Symbol | Role |
 |--------|------|
 | `BLOCK_IRREPS` | the 14-dim row/col representation of a Fock block (`3x0e + 2x1e + 1x2e`) |
-| `SelfInteractionLayer` / `PairInteractionLayer` | QHNet `SelfNetLayer` / `PairNetLayer`: channel-wise self / pair tensor products that build the diagonal / off-diagonal block features, accumulated residually |
+| `SelfInteractionLayer` / `SO2PairInteractionLayer` | QHNet `SelfNetLayer` (channel-wise self tensor product → diagonal feature) and QHNetV2's SO(2)-frame `PairNetLayer` (in-frame `O(L²)` endpoint coupling → off-diagonal feature, replacing the dense `O(L³)` CG product), accumulated residually |
 | `HamiltonianBlockExpansion` | the shared block head: last-index Clebsch-Gordan contraction of a steerable feature into a `(14, 14)` block, driven by an invariant embedding |
 | `block_validity_mask` / `atom_orbital_counts` | the per-element AO mask (hydrogen `2s + 1p`, C/N/O/F all 14) and populated-AO counts assembly uses |
 | `BlockHamiltonianPredictor` | the heterogeneous-batchable predictor: per-atom diagonal + per-edge off-diagonal blocks, with `assemble_matrix` building the symmetric dense matrix |

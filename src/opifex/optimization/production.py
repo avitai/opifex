@@ -17,21 +17,14 @@ from collections.abc import Callable, Coroutine  # noqa: TC003 — used in eager
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast, Protocol, TYPE_CHECKING, TypeVar
+from typing import Any, cast, Protocol, TypeVar
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 from flax.nnx import Module
 
-
-if TYPE_CHECKING:
-    # ``GlobalResourceManager`` is the concrete deployment-side implementation,
-    # but optimization only needs the type as a stored handle. Using a
-    # ``TYPE_CHECKING``-gated alias keeps the type information for static
-    # analysers without creating a runtime ``optimization → deployment``
-    # import (Dependency Inversion / layered architecture).
-    from opifex.deployment.resource_management import GlobalResourceManager
+from opifex.deployment.resource_management import GlobalResourceManager  # noqa: TC001
 from opifex.optimization.adaptive_deployment import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
     AdaptiveDeploymentSystem,
 )

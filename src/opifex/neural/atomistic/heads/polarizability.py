@@ -44,17 +44,13 @@ identity (a pure :math:`l = 0` polarizability).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 logger = logging.getLogger(__name__)

@@ -6,20 +6,11 @@ for scientific machine learning applications.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
+from jaxtyping import Float  # noqa: TC002
 
-
-if TYPE_CHECKING:
-    from jaxtyping import Float
-
-    from opifex.geometry.manifolds.base import (
-        ManifoldPoint,
-        MetricTensor,
-        TangentVector,
-    )
+from opifex.geometry.manifolds.base import ManifoldPoint, MetricTensor, TangentVector  # noqa: TC001
 
 
 class SphericalManifold:

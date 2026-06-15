@@ -25,14 +25,12 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
 from flax import struct
 
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import MetadataItems  # noqa: TC001
 
 
 @struct.dataclass(slots=True, kw_only=True)

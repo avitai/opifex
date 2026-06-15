@@ -20,14 +20,10 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-
-
-if TYPE_CHECKING:
-    from jaxtyping import Array, Float, PRNGKeyArray
+from jaxtyping import Array, Float, PRNGKeyArray  # noqa: TC002
 
 
 @dataclass(frozen=True)

@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp  # noqa: TC002
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    import jax.numpy as jnp
 
 _COEFFICIENT_EPS: float = 1e-10
 _ENSEMBLE_STD_EPS: float = 0.01

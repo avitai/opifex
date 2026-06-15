@@ -7,16 +7,11 @@ by both the basic ``UncertaintyQuantifier`` and ``CalibrationAssessment``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.uncertainty.aggregators.types import CalibrationMetrics
-
-
-if TYPE_CHECKING:
-    from jaxtyping import Array, Float
 
 
 def _bin_calibration_stats(

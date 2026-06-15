@@ -37,11 +37,11 @@ def _get_distrax():  # type: ignore[return]
 
 from typing import TYPE_CHECKING
 
+from jaxtyping import Array, Float  # noqa: TC002
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from jaxtyping import Array, Float
 
 
 @dataclasses.dataclass

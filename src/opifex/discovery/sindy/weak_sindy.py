@@ -23,14 +23,13 @@ from typing import Self, TYPE_CHECKING
 import jax.numpy as jnp
 
 from opifex.discovery.sindy._formatting import format_sindy_equations
+from opifex.discovery.sindy.config import WeakSINDyConfig  # noqa: TC001
 from opifex.discovery.sindy.library import CandidateLibrary
 from opifex.discovery.sindy.optimizers import STLSQ
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from opifex.discovery.sindy.config import WeakSINDyConfig
 
 
 def _bump_function(s: jnp.ndarray, order: int = 4) -> jnp.ndarray:

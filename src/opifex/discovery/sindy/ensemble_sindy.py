@@ -17,14 +17,13 @@ import jax
 import jax.numpy as jnp
 
 from opifex.discovery.sindy._formatting import format_sindy_equations
+from opifex.discovery.sindy.config import EnsembleSINDyConfig  # noqa: TC001
 from opifex.discovery.sindy.library import CandidateLibrary
 from opifex.discovery.sindy.optimizers import STLSQ
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from opifex.discovery.sindy.config import EnsembleSINDyConfig
 
 
 class EnsembleSINDy:

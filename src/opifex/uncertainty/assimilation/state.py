@@ -17,13 +17,10 @@ Per GUIDE_ALIGNMENT §5a pattern (B): ``flax.struct.dataclass`` with
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
+import jax  # noqa: TC002
 from flax import struct
-
-
-if TYPE_CHECKING:
-    import jax
 
 
 _REQUIRED_METADATA_KEYS = (

@@ -586,7 +586,7 @@ def _run(args: TrainArgs) -> dict[str, object]:
     eval_step = make_fused_block_eval_step(decode_op, cut_op)
 
     epoch_records: list[dict[str, object]] = list(prior_records)
-    log_every = max(len(train_batches) // 10, 1)
+    log_every = min(max(len(train_batches) // 10, 1), 50)
 
     for epoch in range(start_epoch, args.epochs + 1):
         result = _train_epoch(

@@ -19,16 +19,12 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
+from flax import nnx  # noqa: TC002
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.core.physics.ntk.wrapper import NTKWrapper
-
-
-if TYPE_CHECKING:
-    from flax import nnx
-    from jaxtyping import Array, Float
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

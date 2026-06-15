@@ -7,13 +7,10 @@ manifolds in scientific machine learning applications.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Protocol, runtime_checkable, TYPE_CHECKING, TypeAlias
+from typing import Protocol, runtime_checkable, TypeAlias
 
 import jax
-
-
-if TYPE_CHECKING:
-    from jaxtyping import Float
+from jaxtyping import Float  # noqa: TC002
 
 
 # Type aliases for geometric objects

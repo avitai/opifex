@@ -7,14 +7,12 @@ JAX device meshes for distributed PDE training.
 from __future__ import annotations
 
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-
-if TYPE_CHECKING:
-    from opifex.distributed.config import DistributedConfig
+from opifex.distributed.config import DistributedConfig  # noqa: TC001
 
 
 logger = logging.getLogger(__name__)

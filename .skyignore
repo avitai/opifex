@@ -1,0 +1,32 @@
+# SkyPilot code-sync filter for cloud training: keep only what `uv sync` and the
+# training drivers need (src/, scripts/, deploy/, pyproject.toml, uv.lock,
+# README). Everything below is excluded so a launch transfers ~src+scripts, not
+# the 9 GB example_data/ or the tests/docs/site artifacts.
+.venv/
+.git/
+.github/
+example_data/
+examples/
+examples_output/
+benchmark_results/
+tests/
+docs/
+documents/
+site/
+htmlcov/
+memory-bank/
+internal_docs/
+plans/
+notes/
+temp/
+wandb/
+dist/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.db
+*.h5
+*.hdf5
+*.zip
+*.ipynb

@@ -21,13 +21,12 @@ import optax
 from flax import nnx
 
 from opifex.optimization.l2o.adaptive_schedulers import MetaSchedulerConfig
+from opifex.optimization.l2o.parametric_solver import OptimizationProblem  # noqa: TC001
 from opifex.optimization.meta_optimization import MetaOptimizer, MetaOptimizerConfig
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from opifex.optimization.l2o.parametric_solver import OptimizationProblem
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

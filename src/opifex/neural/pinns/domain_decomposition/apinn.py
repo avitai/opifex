@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 from flax import nnx
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.neural.pinns.dense_stack import DenseStack
 from opifex.neural.pinns.domain_decomposition.base import (
@@ -30,8 +31,6 @@ from opifex.neural.pinns.domain_decomposition.base import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-
-    from jaxtyping import Array, Float
 
 
 @dataclass(frozen=True)

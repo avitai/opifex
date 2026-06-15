@@ -14,23 +14,21 @@ the tests defined in test_config.py.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
-
-if TYPE_CHECKING:
-    from opifex.core.training.physics_configs import (
-        BoundaryConfig,
-        ConservationConfig,
-        ConstraintConfig,
-        DFTConfig,
-        ElectronicStructureConfig,
-        LoggingConfig,
-        MetricsTrackingConfig,
-        MultiScaleConfig,
-        PerformanceConfig,
-        SCFConfig,
-    )
-    from opifex.distributed.config import DistributedConfig
+from opifex.core.training.physics_configs import (  # noqa: TC001
+    BoundaryConfig,
+    ConservationConfig,
+    ConstraintConfig,
+    DFTConfig,
+    ElectronicStructureConfig,
+    LoggingConfig,
+    MetricsTrackingConfig,
+    MultiScaleConfig,
+    PerformanceConfig,
+    SCFConfig,
+)
+from opifex.distributed.config import DistributedConfig  # noqa: TC001
 
 
 @dataclass(slots=True, kw_only=True)

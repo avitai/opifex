@@ -21,7 +21,6 @@ metrics, plotting) operate on a single typed surface.
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -32,11 +31,11 @@ from opifex.uncertainty.conformal.scores import (
     conformal_quantile,
     cqr_score,
 )
-from opifex.uncertainty.types import PredictionInterval, require_fitted_state
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionInterval,
+    require_fitted_state,
+)
 
 
 # ---------------------------------------------------------------------------

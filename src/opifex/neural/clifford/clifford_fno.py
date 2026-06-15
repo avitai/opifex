@@ -12,8 +12,8 @@ Reference:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+import jax  # noqa: TC002
 from artifex.generative_models.core.layers.clifford import (
     CliffordConv2d,
     CliffordConv3d,
@@ -21,10 +21,6 @@ from artifex.generative_models.core.layers.clifford import (
     CliffordSpectralConv3d,
 )
 from flax import nnx
-
-
-if TYPE_CHECKING:
-    import jax
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

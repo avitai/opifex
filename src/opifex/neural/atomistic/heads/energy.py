@@ -19,19 +19,15 @@ differentiate.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+
 # Eager (not TYPE_CHECKING): the ``nnx.Data[AtomicScaleShift | None]`` class
 # annotation below is resolved by Flax NNX at runtime, so the name must exist.
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift  # noqa: TC001
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 class EnergyHead(nnx.Module):

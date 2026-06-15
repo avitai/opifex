@@ -24,16 +24,18 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
+from opifex.uncertainty.conformal.exchangeability import ExchangeabilityReport  # noqa: TC001
 from opifex.uncertainty.conformal.scores import conformal_quantile
 from opifex.uncertainty.scientific.fields import FieldMetadata
-from opifex.uncertainty.types import PredictionInterval, require_fitted_state
+from opifex.uncertainty.types import (
+    MetadataItems,
+    PredictionInterval,
+    require_fitted_state,
+)
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from opifex.uncertainty.conformal.exchangeability import ExchangeabilityReport
-    from opifex.uncertainty.types import MetadataItems
 
 
 FieldNorm = Literal["L2", "Linf", "H1"]

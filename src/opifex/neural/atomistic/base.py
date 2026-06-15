@@ -31,19 +31,15 @@ from __future__ import annotations
 
 from collections.abc import Callable  # noqa: TC003
 from dataclasses import replace
-from typing import TYPE_CHECKING
 
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+from opifex.core.quantum.protocols import Backbone, NeighborList, PropertyHead  # noqa: TC001
 from opifex.neural.atomistic.heads.energy import EnergyHead
 from opifex.neural.atomistic.heads.forces import ENERGY_FN_KEY
 from opifex.neural.atomistic.heads.stress import STRAIN_ENERGY_FN_KEY
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
-    from opifex.core.quantum.protocols import Backbone, NeighborList, PropertyHead
 
 
 _ENERGY_HEAD_NAME = "energy"

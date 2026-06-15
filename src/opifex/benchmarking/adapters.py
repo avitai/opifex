@@ -6,8 +6,6 @@ with calibrax's Run-based analysis and storage APIs.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from calibrax.core.models import (
     MetricDef,
     MetricDirection,
@@ -15,10 +13,7 @@ from calibrax.core.models import (
     Point,
     Run,
 )
-
-
-if TYPE_CHECKING:
-    from calibrax.core.result import BenchmarkResult
+from calibrax.core.result import BenchmarkResult  # noqa: TC002
 
 
 def results_to_run(

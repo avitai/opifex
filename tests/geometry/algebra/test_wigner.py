@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 from opifex.geometry.algebra import SO3Group
-from opifex.geometry.algebra.wigner import clebsch_gordan, wigner_d
+from opifex.geometry.algebra.wigner import clebsch_gordan, wigner_d, wigner_d_fast
 
 
 _RNG = SO3Group()
@@ -133,3 +133,69 @@ class TestWignerD:
         # An orthogonal matrix has unit-norm columns.
         column_norms = np.linalg.norm(matrix, axis=0)
         assert np.allclose(column_norms, 1.0, atol=1e-4)
+
+
+class TestWignerDFast:
+    """The fast Euler-angle / ``J_l`` path must equal the trusted ``expm`` path.
+
+    :func:`wigner_d` (matrix exponential of the so(3) generators) is the
+    ground-truth reference; :func:`wigner_d_fast` replaces the per-call ``expm``
+    with the cheap ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product
+    (e3nn 0.4.0 / QHNetV2 eSCN). The two must agree to machine precision in the
+    same real basis (the load-bearing parity check), and the fast path must stay
+    jit/grad/vmap clean, including at the ``beta = 0`` quantisation pole.
+    """
+
+    @pytest.mark.parametrize("degree", [0, 1, 2, 3, 4, 5])
+    def test_parity_with_expm_path(self, degree: int) -> None:
+        """``wigner_d_fast`` reproduces ``wigner_d`` for random rotations."""
+        with jax.enable_x64(True):
+            for seed in (0, 1, 2, 3, 4):
+                rotation = _random_rotation(seed).astype(jnp.float64)
+                reference = wigner_d(degree, rotation)
+                fast = wigner_d_fast(degree, rotation)
+                assert fast.shape == (2 * degree + 1, 2 * degree + 1)
+                assert jnp.allclose(fast, reference, atol=1e-9), (
+                    f"l={degree} seed={seed} max|fast-expm|={jnp.abs(fast - reference).max():.2e}"
+                )
+
+    def test_parity_high_degree_falls_back(self) -> None:
+        """Degrees beyond the ``J_l`` table still equal the ``expm`` reference."""
+        with jax.enable_x64(True):
+            rotation = _random_rotation(7).astype(jnp.float64)
+            assert jnp.allclose(wigner_d_fast(12, rotation), wigner_d(12, rotation), atol=1e-9)
+
+    def test_axis_aligned_rotation_is_finite_and_correct(self) -> None:
+        """At the ``+y`` quantisation pole (beta = 0) the fast path stays exact."""
+        with jax.enable_x64(True):
+            identity = jnp.eye(3)
+            assert jnp.allclose(wigner_d_fast(3, identity), jnp.eye(7), atol=1e-9)
+            # A pure rotation about +y keeps the edge on the pole (beta = 0).
+            angle = 0.6
+            about_y = jnp.array(
+                [
+                    [jnp.cos(angle), 0.0, jnp.sin(angle)],
+                    [0.0, 1.0, 0.0],
+                    [-jnp.sin(angle), 0.0, jnp.cos(angle)],
+                ]
+            )
+            assert jnp.allclose(wigner_d_fast(3, about_y), wigner_d(3, about_y), atol=1e-9)
+
+    def test_grad_finite_at_pole(self) -> None:
+        """Gradients are finite even when the rotation sits on the beta = 0 pole."""
+
+        def loss(r: jax.Array) -> jax.Array:
+            return jnp.sum(wigner_d_fast(2, r) ** 2)
+
+        for rotation in (jnp.eye(3), _random_rotation(5)):
+            gradient = jax.grad(loss)(rotation)
+            assert gradient.shape == (3, 3)
+            assert jnp.all(jnp.isfinite(gradient))
+
+    def test_jit_and_vmap(self) -> None:
+        """The fast path compiles and vectorises over a batch of rotations."""
+        rotations = jnp.stack([_random_rotation(s) for s in (10, 11, 12)])
+        batched = jax.jit(jax.vmap(lambda r: wigner_d_fast(3, r)))(rotations)
+        assert batched.shape == (3, 7, 7)
+        for index in range(3):
+            assert jnp.allclose(batched[index], wigner_d(3, rotations[index]), atol=1e-4)

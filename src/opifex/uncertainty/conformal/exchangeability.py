@@ -20,15 +20,11 @@ with ``λ = (sqrt(n_eff) + 0.12 + 0.11 / sqrt(n_eff)) * D`` and
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
 from flax import struct
 
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import MetadataItems  # noqa: TC001
 
 
 @struct.dataclass(slots=True, kw_only=True)

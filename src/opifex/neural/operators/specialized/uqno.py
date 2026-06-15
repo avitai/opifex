@@ -60,12 +60,13 @@ recipe.
 from __future__ import annotations
 
 import math
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 from flax import nnx, struct
 
+from opifex.neural.operators.fno.base import FourierNeuralOperator  # noqa: TC001
 from opifex.uncertainty.layers.bayesian import (
     BayesianLinear,
     BayesianSpectralConvolution,
@@ -75,10 +76,6 @@ from opifex.uncertainty.types import (
     PredictionInterval,
     PredictiveDistribution,
 )
-
-
-if TYPE_CHECKING:
-    from opifex.neural.operators.fno.base import FourierNeuralOperator
 
 
 # ---------------------------------------------------------------------------

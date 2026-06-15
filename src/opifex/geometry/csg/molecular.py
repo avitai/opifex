@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax
 import jax.numpy as jnp
 
 from opifex.geometry.csg.operations import difference
 from opifex.geometry.csg.primitives import Circle
-
-
-if TYPE_CHECKING:
-    from opifex.geometry.csg.types import Point3D, Points3D, Shape2D
+from opifex.geometry.csg.types import Point3D, Points3D, Shape2D  # noqa: TC001
 
 
 # 3D Molecular Geometry Support (preserving exact API)

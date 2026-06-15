@@ -7,16 +7,14 @@ from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+from flax import nnx  # noqa: TC002
+from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.uncertainty.aggregators.types import EnhancedUncertaintyComponents
 
 
 if TYPE_CHECKING:
-    from flax import nnx
-    from jaxtyping import Array, Float
-
-    # Define common type variable names for array dimensions
-    batch = None  # Type variable for batch dimension
+    batch = None  # type-var placeholder for jaxtyping array dimensions
 
 
 class EnsembleEpistemicUncertainty:

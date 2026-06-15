@@ -13,14 +13,12 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import jax.numpy as jnp
 from flax import nnx
 
-
-if TYPE_CHECKING:
-    from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
+from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam  # noqa: TC001
 
 
 # Protocol for prolongate function: (coarse_model, fine_model) -> fine_model

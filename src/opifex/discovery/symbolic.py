@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
-
-if TYPE_CHECKING:
-    import jax
 
 logger = logging.getLogger(__name__)
 

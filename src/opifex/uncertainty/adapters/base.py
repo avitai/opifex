@@ -14,12 +14,10 @@ Two protocols and one capability-spec container:
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
+from typing import Any, Protocol, runtime_checkable
 
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.registry import UQCapability
-    from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
+from opifex.uncertainty.registry import UQCapability  # noqa: TC001
+from opifex.uncertainty.types import MetadataItems, PredictiveDistribution  # noqa: TC001
 
 
 def compose_method_metadata(

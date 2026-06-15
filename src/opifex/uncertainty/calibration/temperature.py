@@ -19,18 +19,16 @@ aux_data.
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import optax
 from flax import struct
 
-from opifex.uncertainty.types import require_fitted_state
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.types import MetadataItems
+from opifex.uncertainty.types import (
+    MetadataItems,
+    require_fitted_state,
+)
 
 
 _MAX_LBFGS_STEPS: int = 64

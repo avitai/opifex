@@ -32,11 +32,11 @@ import jax.numpy as jnp
 from calibrax.statistics.analyzer import StatisticalAnalyzer
 from flax import struct
 
+from opifex.uncertainty.types import MetadataItems  # noqa: TC001
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from opifex.uncertainty.types import MetadataItems
 
 
 # ---------------------------------------------------------------------------

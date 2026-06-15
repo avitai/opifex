@@ -26,18 +26,13 @@ input). The construction here matches PaiNN's default ``dipole_moment`` head.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 
+from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
 from opifex.neural.atomistic.heads.charge import conserve_total_charge
-
-
-if TYPE_CHECKING:
-    from opifex.core.quantum.molecular_system import MolecularSystem
 
 
 @register_property_head("dipole")

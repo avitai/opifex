@@ -20,12 +20,11 @@ from datarax.distributed import (
     spmd_train_step,
 )
 from flax import nnx
+from jax.sharding import Mesh  # noqa: TC002
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from jax.sharding import Mesh
 
 
 logger = logging.getLogger(__name__)

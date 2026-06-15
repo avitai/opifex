@@ -22,15 +22,14 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
 
+import jax  # noqa: TC002
 from flax import nnx, struct
+
+from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import jax
-
-    from opifex.uncertainty.types import PredictiveDistribution
 
 
 class UnsupportedBackendError(Exception):

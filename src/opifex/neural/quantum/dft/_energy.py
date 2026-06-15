@@ -35,7 +35,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import optimistix as optx
@@ -53,10 +52,7 @@ from opifex.neural.quantum.dft.xc import (
     pbe_energy_density,
     pbe_exchange_correlation_potential,
 )
-
-
-if TYPE_CHECKING:
-    from opifex.neural.quantum.neural_xc import NeuralXCFunctional
+from opifex.neural.quantum.neural_xc import NeuralXCFunctional  # noqa: TC001
 
 
 class Functional(StrEnum):

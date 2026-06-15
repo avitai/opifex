@@ -47,6 +47,7 @@ from opifex.core.solver.interface import Solution
 from opifex.uncertainty.types import (
     _VARIANCE_ATOL,
     _VARIANCE_RTOL,
+    MetadataItems,
     PredictionInterval,
     PredictionSet,
     PredictiveDistribution,
@@ -55,8 +56,6 @@ from opifex.uncertainty.types import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from opifex.uncertainty.types import MetadataItems
 
 
 # The six canonical uncertainty-source labels a SolutionDistribution may

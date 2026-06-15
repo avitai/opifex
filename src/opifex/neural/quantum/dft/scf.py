@@ -62,7 +62,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 import jax
 from flax import nnx  # noqa: TC002
@@ -89,10 +88,7 @@ from opifex.neural.quantum.dft.grid import (
     build_molecular_grid_traceable,
     MolecularGridTemplate,
 )
-
-
-if TYPE_CHECKING:
-    from opifex.neural.quantum.neural_xc import NeuralXCFunctional
+from opifex.neural.quantum.neural_xc import NeuralXCFunctional  # noqa: TC001
 
 
 class SolverMode(StrEnum):

@@ -18,16 +18,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import jax  # noqa: TC002
+import jax.numpy as jnp  # noqa: TC002
+
+from opifex.discovery.sindy.config import SINDyConfig  # noqa: TC001
 from opifex.discovery.sindy.sindy import SINDy
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import jax
-    import jax.numpy as jnp
-
-    from opifex.discovery.sindy.config import SINDyConfig
 
 
 def distill_ude_residual(
