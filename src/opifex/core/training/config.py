@@ -59,7 +59,7 @@ class LossConfig:
     """Configuration for loss computation.
 
     Attributes:
-        loss_type: Type of loss function ('mse', 'mae', 'quantum_energy')
+        loss_type: Type of loss function ('mse', 'mae', 'relative_l2', 'quantum_energy')
         physics_weight: Weight for physics loss component
         boundary_weight: Weight for boundary loss component
         quantum_constraint_weight: Weight for quantum constraints
@@ -67,7 +67,7 @@ class LossConfig:
         regularization_weight: Weight for regularization term
     """
 
-    loss_type: str = "mse"  # 'mse', 'mae', 'quantum_energy'
+    loss_type: str = "mse"  # 'mse', 'mae', 'relative_l2', 'quantum_energy'
     physics_weight: float = 1.0
     boundary_weight: float = 1.0
     quantum_constraint_weight: float = 1.0
@@ -87,6 +87,12 @@ class OptimizationConfig:
         eps: Epsilon for numerical stability (for Adam)
         beta1: Beta1 for Adam optimizer
         beta2: Beta2 for Adam optimizer
+        schedule_type: Optional learning-rate schedule
+            ('exponential_decay', 'cosine_decay', 'warmup_cosine', ...)
+        decay_steps: Steps over which the schedule decays (cosine/linear)
+        transition_steps: Steps between exponential-decay applications
+        decay_rate: Multiplicative decay factor for exponential decay
+        alpha: Final-to-initial learning-rate ratio for cosine decay
     """
 
     optimizer: str = "adam"  # 'adam', 'sgd', 'rmsprop', 'adamw'
@@ -96,6 +102,11 @@ class OptimizationConfig:
     eps: float = 1e-8  # for Adam
     beta1: float = 0.9  # for Adam
     beta2: float = 0.999  # for Adam
+    schedule_type: str | None = None  # learning-rate schedule (see optimizers.py)
+    decay_steps: int | None = None
+    transition_steps: int | None = None
+    decay_rate: float = 0.96
+    alpha: float = 0.1
 
 
 @dataclass(slots=True, kw_only=True)

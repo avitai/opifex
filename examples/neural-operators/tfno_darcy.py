@@ -1,35 +1,47 @@
+# ---
+# jupyter:
+#   jupytext:
+#     formats: py:percent,ipynb
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+# ---
+
 # %% [markdown]
 # # TFNO on Darcy Flow
 #
 # | Property      | Value                                    |
 # |---------------|------------------------------------------|
 # | Level         | Intermediate                             |
-# | Runtime       | ~3 min (CPU), ~30s (GPU)                 |
-# | Memory        | ~1 GB                                    |
+# | Runtime       | ~5 min (CPU), ~1 min (GPU)               |
+# | Memory        | ~2 GB                                    |
 # | Prerequisites | JAX, Flax NNX, Neural Operators basics   |
 #
 # ## Overview
 #
 # Train a Tensorized Fourier Neural Operator (TFNO) on the Darcy flow problem.
-# TFNO extends the FNO architecture with complex-valued spectral convolution
-# weights that operate directly on Fourier coefficients.
+# A TFNO is an ordinary FNO whose spectral-convolution weights are stored as a
+# low-rank **tensor factorization** (CP / Tucker / Tensor-Train). At low rank this
+# uses a small fraction of the dense weight's parameters while retaining accuracy.
 #
 # This example demonstrates:
 #
-# - **Complex spectral weights** for enhanced frequency-domain learning
-# - **create_tucker_fno()** factory for simplified model creation
-# - **Mode truncation** for efficient spectral convolutions
-# - **Comparison** with standard FNO architecture
+# - **`create_tucker_fno()`** factory for a Tucker-factorized FNO
+# - **Genuine low-rank compression** of the spectral weights (parameter count
+#   ``<<`` the dense FNO) measured with `get_compression_stats()`
+# - **Grid positional embedding** + **relative-L2 loss**, the standard recipe for
+#   operator learning on boundary-value problems
+# - **Comparison** with the dense FNO parameter count
 #
-# Equivalent to `neuraloperator` Tucker FNO examples,
-# reimplemented using Opifex APIs.
+# Equivalent to `neuraloperator` Tucker FNO examples, reimplemented with Opifex.
 #
 # ## Learning Goals
 #
-# 1. Use `create_tucker_fno()` factory for parameter-efficient FNO
-# 2. Understand Tucker decomposition compression in spectral layers
-# 3. Compare TFNO vs FNO parameter counts and accuracy tradeoffs
-# 4. Analyze compression statistics per layer
+# 1. Use `create_tucker_fno()` for a parameter-efficient FNO
+# 2. Understand Tucker compression of spectral weights
+# 3. Train with the relative-L2 loss and Gaussian input/output normalization
+# 4. Compare TFNO vs dense FNO parameter counts and read the accuracy
 
 # %% [markdown]
 # ## Imports and Setup
@@ -53,6 +65,7 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 
 from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.neural.operators.fno.tensorized import create_tucker_fno
@@ -67,20 +80,22 @@ print(f"JAX devices: {jax.devices()}")
 # %% [markdown]
 # ## Configuration
 #
-# The rank parameter controls compression: rank=0.1 means ~10% of parameters
-# compared to equivalent non-factorized weight tensors.
+# The rank parameter controls compression: `rank=0.5` keeps each Tucker mode at
+# half its dense size, giving a large parameter reduction while preserving the
+# accuracy needed to resolve the Darcy solution.
 
 # %%
 RESOLUTION = 64
-N_TRAIN = 200
-N_TEST = 50
-BATCH_SIZE = 16
-NUM_EPOCHS = 15
+N_TRAIN = 1024
+N_TEST = 256
+BATCH_SIZE = 32
+NUM_EPOCHS = 100
 LEARNING_RATE = 1e-3
-MODES = (12, 12)
+MODES = (16, 16)
 HIDDEN_WIDTH = 32
 NUM_LAYERS = 4
-RANK = 0.1  # Tucker compression ratio (10% of full parameters)
+RANK = 0.5  # Tucker compression ratio (50% of each mode dimension)
+PERMEABILITY_VALUES = (3.0, 12.0)  # binary high-contrast benchmark (Li et al. 2020)
 SEED = 42
 
 OUTPUT_DIR = Path("docs/assets/examples/tfno_darcy")
@@ -90,12 +105,14 @@ print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
 print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
 print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
 print(f"FNO config: modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS}")
-print(f"Tucker rank: {RANK} (target ~{int(RANK * 100)}% compression)")
+print(f"Tucker rank: {RANK}")
 
 # %% [markdown]
 # ## Data Loading
 #
-# Use the standard Darcy flow loader - data format is identical for FNO and TFNO.
+# The Darcy loader generates a binary high-contrast permeability field
+# `a(x) ∈ {3, 12}` (the standard benchmark) and the exact pressure solution of
+# `-∇·(a∇u) = 1` with zero Dirichlet boundary conditions.
 
 # %%
 print()
@@ -104,6 +121,8 @@ train_loader = create_darcy_loader(
     n_samples=N_TRAIN,
     batch_size=BATCH_SIZE,
     resolution=RESOLUTION,
+    field_type="binary",  # high-contrast benchmark (a in {3, 12})
+    viscosity_range=PERMEABILITY_VALUES,
     shuffle=True,
     seed=SEED,
     worker_count=0,
@@ -113,6 +132,8 @@ test_loader = create_darcy_loader(
     n_samples=N_TEST,
     batch_size=BATCH_SIZE,
     resolution=RESOLUTION,
+    field_type="binary",
+    viscosity_range=PERMEABILITY_VALUES,
     shuffle=False,
     seed=SEED + 1000,
     worker_count=0,
@@ -135,7 +156,7 @@ for batch in test_loader:
 X_test = np.concatenate(X_test_list, axis=0)
 Y_test = np.concatenate(Y_test_list, axis=0)
 
-# Add channel dimension for TFNO (expects batch, channels, H, W)
+# Add channel dimension (batch, channels, H, W)
 X_train = X_train[:, np.newaxis, :, :]
 Y_train = Y_train[:, np.newaxis, :, :]
 X_test = X_test[:, np.newaxis, :, :]
@@ -145,9 +166,28 @@ print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
 print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
 
 # %% [markdown]
+# ## Normalization
+#
+# FNOs train best on standardized fields. We fit Gaussian statistics on the
+# training set, normalize all splits, and un-normalize predictions before
+# computing physical-space errors.
+
+# %%
+x_mean, x_std = X_train.mean(), X_train.std()
+y_mean, y_std = Y_train.mean(), Y_train.std()
+
+X_train_n = (X_train - x_mean) / x_std
+Y_train_n = (Y_train - y_mean) / y_std
+X_test_n = (X_test - x_mean) / x_std
+
+print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+# %% [markdown]
 # ## Model Creation and Comparison
 #
-# Create both TFNO and standard FNO to compare parameter counts.
+# Create both the Tucker-factorized TFNO and an equivalent dense FNO to compare
+# parameter counts.
 
 # %%
 print()
@@ -162,44 +202,45 @@ tfno_model = create_tucker_fno(
     rngs=nnx.Rngs(SEED),
 )
 
-# Count TFNO parameters
 tfno_params = nnx.state(tfno_model, nnx.Param)
 tfno_param_count = sum(x.size for x in jax.tree_util.tree_leaves(tfno_params))
 
-# Create equivalent standard FNO for comparison
-print("Creating standard FNO for comparison...")
+# Equivalent dense FNO for comparison
+print("Creating dense FNO for comparison...")
 fno_model = FourierNeuralOperator(
     in_channels=1,
     out_channels=1,
     hidden_channels=HIDDEN_WIDTH,
-    modes=max(MODES),  # FNO takes single mode value
+    modes=max(MODES),
     num_layers=NUM_LAYERS,
+    positional_embedding=True,
     rngs=nnx.Rngs(SEED + 1),
 )
 
 fno_params = nnx.state(fno_model, nnx.Param)
 fno_param_count = sum(x.size for x in jax.tree_util.tree_leaves(fno_params))
 
+stats = tfno_model.get_compression_stats()
+
 print()
 print("Model: Tucker-Factorized FNO (TFNO)")
 print(f"  Modes: {MODES}, Hidden width: {HIDDEN_WIDTH}, Layers: {NUM_LAYERS}")
 print(f"  Tucker rank: {RANK}")
 print(f"  TFNO parameters: {tfno_param_count:,}")
-print(f"  Standard FNO parameters: {fno_param_count:,}")
+print(f"  Dense FNO parameters: {fno_param_count:,}")
 print(f"  Parameter reduction: {(1 - tfno_param_count / fno_param_count) * 100:.1f}%")
-
-# Get compression stats from first layer
-layer_stats = tfno_model.tfno_layers[0].get_compression_stats()
 print()
-print("Per-layer compression stats:")
-print(f"  Factorized params: {layer_stats['factorized_parameters']:,}")
-print(f"  Dense equivalent:  {layer_stats['equivalent_dense_parameters']:,}")
-print(f"  Compression ratio: {layer_stats['compression_ratio']:.3f}")
+print("Spectral-weight compression (all factorized layers):")
+print(f"  Factorized params: {int(stats['factorized_parameters']):,}")
+print(f"  Dense equivalent:  {int(stats['equivalent_dense_parameters']):,}")
+print(f"  Compression ratio: {stats['compression_ratio']:.4f}")
 
 # %% [markdown]
 # ## Training with Opifex Trainer
 #
-# TFNO uses the same `Trainer.fit()` interface as standard FNO.
+# TFNO uses the same `Trainer.fit()` interface as a dense FNO. We train with the
+# relative-L2 loss (`loss_type="relative_l2"`), the standard operator-learning
+# objective.
 
 # %%
 print()
@@ -209,6 +250,7 @@ config = TrainingConfig(
     learning_rate=LEARNING_RATE,
     batch_size=BATCH_SIZE,
     verbose=True,
+    loss_config=LossConfig(loss_type="relative_l2"),
 )
 
 trainer = Trainer(
@@ -217,14 +259,14 @@ trainer = Trainer(
     rngs=nnx.Rngs(SEED),
 )
 
-print(f"Optimizer: Adam (lr={LEARNING_RATE})")
+print(f"Optimizer: Adam (lr={LEARNING_RATE}), loss: relative L2")
 print()
 print("Starting training...")
 start_time = time.time()
 
 trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train), jnp.array(Y_train)),
-    val_data=(jnp.array(X_test), jnp.array(Y_test)),
+    train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
+    val_data=(jnp.array(X_test_n), jnp.array((Y_test - y_mean) / y_std)),
 )
 
 training_time = time.time() - start_time
@@ -234,16 +276,26 @@ print(f"Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
 
 # %% [markdown]
 # ## Evaluation
+#
+# Predictions are un-normalized back to physical pressure before measuring the
+# relative L2 error.
 
 # %%
 print()
 print("Running evaluation...")
-X_test_jnp = jnp.array(X_test)
+X_test_jnp = jnp.array(X_test_n)
 Y_test_jnp = jnp.array(Y_test)
 
-predictions = trained_model(X_test_jnp)
 
-# Overall metrics
+def predict_in_batches(model, inputs, batch_size=128):
+    """Run the model over the test set in batches to bound memory use."""
+    outputs = [model(inputs[i : i + batch_size]) for i in range(0, inputs.shape[0], batch_size)]
+    return jnp.concatenate(outputs, axis=0)
+
+
+predictions = predict_in_batches(trained_model, X_test_jnp) * y_std + y_mean
+
+# Overall metrics on physical fields
 test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 
 pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
@@ -251,7 +303,7 @@ Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
 per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)
 mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 
-print(f"Test MSE:         {test_mse:.6f}")
+print(f"Test MSE:         {test_mse:.6e}")
 print(f"Test Relative L2: {mean_rel_l2:.6f}")
 print(f"Min Relative L2:  {float(jnp.min(per_sample_rel_l2)):.6f}")
 print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
@@ -307,7 +359,7 @@ axes[0].set_title("Error Distribution")
 axes[0].grid(True, alpha=0.3)
 
 # Parameter comparison
-models = ["Standard\nFNO", "Tucker\nTFNO"]
+models = ["Dense\nFNO", "Tucker\nTFNO"]
 params = [fno_param_count, tfno_param_count]
 colors = ["coral", "steelblue"]
 bars = axes[1].bar(models, params, color=colors, edgecolor="black", alpha=0.7)
@@ -339,16 +391,15 @@ print(f"Analysis saved to {OUTPUT_DIR / 'analysis.png'}")
 # %% [markdown]
 # ## Results Summary
 #
-# TFNO achieves similar accuracy to FNO with significantly fewer parameters.
-# The Tucker decomposition compresses spectral convolution weights while
-# preserving the essential frequency components.
+# The TFNO reaches a low relative L2 error on Darcy flow while using a small
+# fraction of the dense FNO's spectral parameters — the Tucker factorization
+# compresses the spectral weights without sacrificing accuracy.
 #
 # ## Next Steps
 #
-# - Try different rank values (0.05, 0.2) to explore accuracy-compression tradeoffs
+# - Try different rank values (0.25, 0.75) to explore the accuracy-compression tradeoff
 # - Compare with CP (`create_cp_fno()`) and Tensor Train (`create_tt_fno()`) factorizations
-# - Apply TFNO to larger problems where memory savings are more significant
-# - Experiment with progressive rank training (start low, increase during training)
+# - Apply TFNO to larger problems where the memory savings are most significant
 #
 # ### Related Examples
 #
@@ -360,7 +411,7 @@ print(f"Analysis saved to {OUTPUT_DIR / 'analysis.png'}")
 print()
 print("=" * 70)
 print(f"TFNO Darcy example completed in {training_time:.1f}s")
-print(f"Test MSE: {test_mse:.6f}, Relative L2: {mean_rel_l2:.6f}")
-print(f"Parameters: TFNO={tfno_param_count:,} vs FNO={fno_param_count:,}")
+print(f"Test MSE: {test_mse:.6e}, Relative L2: {mean_rel_l2:.6f}")
+print(f"Parameters: TFNO={tfno_param_count:,} vs dense FNO={fno_param_count:,}")
 print(f"Results saved to: {OUTPUT_DIR}")
 print("=" * 70)

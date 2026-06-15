@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -19,6 +19,14 @@
 # Darcy flow problem. GNO uses message passing neural networks to learn
 # operators on irregular domains, making it suitable for problems with
 # complex geometries or unstructured meshes.
+#
+# Unlike spectral operators (FNO, UNO), GNO samples local neighborhoods and is
+# genuinely harder to train on a regular Darcy grid. We therefore follow the
+# standard operator-learning recipe that makes it converge: ~1000 training
+# samples, **Gaussian normalization** of the input/output fields, the
+# scale-invariant **relative-L2 loss**, and mini-batched optimization. The raw
+# Darcy pressure is tiny (~0.05 scale), so without normalization the loss
+# gradients are negligible and the model never learns.
 
 # %%
 from pathlib import Path
@@ -49,13 +57,15 @@ print(f"JAX devices: {jax.devices()}")
 
 # Problem configuration
 RESOLUTION = 16  # Smaller resolution for GNO (graph scales quadratically)
-N_TRAIN = 200
-N_TEST = 50
-BATCH_SIZE = 16
-EPOCHS = 30
+N_TRAIN = 1000
+N_TEST = 100
+BATCH_SIZE = 32
+EPOCHS = 150
+LEARNING_RATE = 1e-3
+SEED = 42
 
 # Model configuration
-HIDDEN_DIM = 32
+HIDDEN_DIM = 64
 NUM_LAYERS = 4
 CONNECTIVITY = 8  # 8-neighbor connectivity includes diagonals
 
@@ -68,7 +78,8 @@ print(f"Graph connectivity: {CONNECTIVITY}-neighbor")
 # %% [markdown]
 # ## Data Loading
 #
-# Generate Darcy flow data and convert to graph representation.
+# Generate Darcy flow data. We collect *all* samples from the loader (not just
+# the first batch) so the model sees the full training set.
 
 # %%
 print()
@@ -79,7 +90,7 @@ train_loader = create_darcy_loader(
     batch_size=BATCH_SIZE,
     resolution=RESOLUTION,
     shuffle=True,
-    seed=42,
+    seed=SEED,
     worker_count=0,
 )
 
@@ -88,44 +99,77 @@ test_loader = create_darcy_loader(
     batch_size=N_TEST,
     resolution=RESOLUTION,
     shuffle=False,
-    seed=123,
+    seed=SEED + 1000,
     worker_count=0,
 )
 
-# Get data as arrays
-train_batch = next(iter(train_loader))
-X_train = jnp.array(train_batch["input"])
-Y_train = jnp.array(train_batch["output"])
 
-test_batch = next(iter(test_loader))
-X_test = jnp.array(test_batch["input"])
-Y_test = jnp.array(test_batch["output"])
+def collect_split(loader: object) -> tuple[np.ndarray, np.ndarray]:
+    """Concatenate every batch from a Grain loader into input/output arrays."""
+    inputs, outputs = [], []
+    for batch in loader:  # type: ignore[attr-defined]
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+
+X_train_np, Y_train_np = collect_split(train_loader)
+X_test_np, Y_test_np = collect_split(test_loader)
 
 # Ensure channel dimension exists (NCHW format)
-if X_train.ndim == 3:
-    X_train = X_train[:, None, :, :]  # Add channel dimension
-    Y_train = Y_train[:, None, :, :]
-    X_test = X_test[:, None, :, :]
-    Y_test = Y_test[:, None, :, :]
+if X_train_np.ndim == 3:
+    X_train_np = X_train_np[:, None, :, :]  # Add channel dimension
+    Y_train_np = Y_train_np[:, None, :, :]
+    X_test_np = X_test_np[:, None, :, :]
+    Y_test_np = Y_test_np[:, None, :, :]
 
-print(f"Grid data: X={X_train.shape}, Y={Y_train.shape}")
+print(f"Grid data: X={X_train_np.shape}, Y={Y_train_np.shape}")
+
+# %% [markdown]
+# ## Normalization
+#
+# Neural operators train best on standardized fields. The raw Darcy pressure
+# has a tiny magnitude (~0.05), so we fit Gaussian statistics on the **training**
+# split, normalize all splits, and un-normalize predictions before computing the
+# physical-space relative-L2 error.
+
+# %%
+x_mean = float(X_train_np.mean())
+x_std = float(X_train_np.std())
+y_mean = float(Y_train_np.mean())
+y_std = float(Y_train_np.std())
+
+X_train_n = (X_train_np - x_mean) / x_std
+Y_train_n = (Y_train_np - y_mean) / y_std
+X_test_n = (X_test_np - x_mean) / x_std
+
+print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+# Keep the physical-scale targets for evaluation/visualization.
+X_test = jnp.array(X_test_np)
+Y_test = jnp.array(Y_test_np)
 
 # %% [markdown]
 # ## Graph Conversion
 #
-# Convert 2D grid data to graph representation for GNO.
+# Convert the (normalized) 2D grids to graph representation for GNO. Each node
+# carries the normalized field value plus its `(x, y)` position; edges connect
+# neighboring grid points with relative-position features.
 
 # %%
 print()
 print("Converting grids to graphs...")
 
-# Convert to graph format
-train_nodes, train_edges, train_edge_feats = grid_to_graph_data(X_train, connectivity=CONNECTIVITY)
-test_nodes, test_edges, test_edge_feats = grid_to_graph_data(X_test, connectivity=CONNECTIVITY)
+train_nodes, train_edges, train_edge_feats = grid_to_graph_data(
+    jnp.array(X_train_n), connectivity=CONNECTIVITY
+)
+test_nodes, test_edges, test_edge_feats = grid_to_graph_data(
+    jnp.array(X_test_n), connectivity=CONNECTIVITY
+)
 
-# Also convert target outputs
-train_targets, _, _ = grid_to_graph_data(Y_train, connectivity=CONNECTIVITY)
-test_targets, _, _ = grid_to_graph_data(Y_test, connectivity=CONNECTIVITY)
+# Convert normalized targets to node format (value channel is what we predict).
+train_targets, _, _ = grid_to_graph_data(jnp.array(Y_train_n), connectivity=CONNECTIVITY)
 
 print(f"Node features shape: {train_nodes.shape}")
 print(f"Edge indices shape:  {train_edges.shape}")
@@ -147,7 +191,7 @@ gno = GraphNeuralOperator(
     hidden_dim=HIDDEN_DIM,
     num_layers=NUM_LAYERS,
     edge_dim=train_edge_feats.shape[-1],
-    rngs=nnx.Rngs(42),
+    rngs=nnx.Rngs(SEED),
 )
 
 # Count parameters
@@ -157,84 +201,212 @@ print(f"GNO parameters: {gno_params:,}")
 # %% [markdown]
 # ## Training
 #
-# Train the GNO with Adam optimizer using MSE loss on node features.
+# Train the GNO with the Adam optimizer using the **relative-L2 loss** on the
+# node value channel. Relative L2 is the standard operator-learning objective:
+# it normalizes each sample by its own field magnitude, so the tiny Darcy
+# pressure scale no longer starves the gradients. We mini-batch over the full
+# training set every epoch.
 
 
 # %%
-def train_model(model, train_data, epochs, lr=1e-3, model_name="GNO"):
-    """Train a model with MSE loss."""
-    nodes, edges, edge_feats, targets = train_data
-    opt = nnx.Optimizer(model, optax.adam(lr), wrt=nnx.Param)
+def relative_l2_loss(pred_values: jax.Array, target_values: jax.Array) -> jax.Array:
+    """Mean per-sample relative-L2 error ``||pred - y|| / ||y||``.
+
+    Args:
+        pred_values: Predicted node values [batch, num_nodes].
+        target_values: Target node values [batch, num_nodes].
+
+    Returns:
+        Scalar mean relative-L2 loss.
+    """
+    diff = jnp.linalg.norm(pred_values - target_values, axis=1)
+    denom = jnp.linalg.norm(target_values, axis=1) + 1e-8
+    return jnp.mean(diff / denom)
+
+
+def train_model(
+    model: GraphNeuralOperator,
+    nodes: jax.Array,
+    edges: jax.Array,
+    edge_feats: jax.Array,
+    targets: jax.Array,
+    *,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+    model_name: str = "GNO",
+) -> list[float]:
+    """Train a GNO with mini-batched relative-L2 loss on the value channel.
+
+    Args:
+        model: The GraphNeuralOperator to train (updated in place).
+        nodes: Node features [n_samples, num_nodes, node_dim].
+        edges: Edge indices [n_samples, num_edges, 2].
+        edge_feats: Edge features [n_samples, num_edges, edge_dim].
+        targets: Target node features [n_samples, num_nodes, node_dim].
+        epochs: Number of training epochs.
+        batch_size: Mini-batch size.
+        learning_rate: Adam learning rate.
+        seed: Seed for the shuffling RNG.
+        model_name: Label used in progress logging.
+
+    Returns:
+        Per-epoch mean training loss.
+    """
+    opt = nnx.Optimizer(model, optax.adam(learning_rate), wrt=nnx.Param)
 
     @nnx.jit
-    def train_step(model, opt, nodes, edges, edge_feats, targets):
-        def loss_fn(model):
+    def train_step(
+        model: GraphNeuralOperator,
+        opt: nnx.Optimizer,
+        nodes: jax.Array,
+        edges: jax.Array,
+        edge_feats: jax.Array,
+        targets: jax.Array,
+    ) -> jax.Array:
+        def loss_fn(model: GraphNeuralOperator) -> jax.Array:
             pred = model(nodes, edges, edge_feats)
-            # Only compare value channel (first column), not position encoding
-            return jnp.mean((pred[:, :, 0] - targets[:, :, 0]) ** 2)
+            # Compare the value channel only (column 0), not the position encoding.
+            return relative_l2_loss(pred[:, :, 0], targets[:, :, 0])
 
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         opt.update(model, grads)
         return loss
 
     print(f"Training {model_name}...")
-    losses = []
+    n_samples = nodes.shape[0]
+    rng = np.random.default_rng(seed)
+    losses: list[float] = []
 
     for epoch in range(epochs):
-        loss = train_step(model, opt, nodes, edges, edge_feats, targets)
-        losses.append(float(loss))
+        perm = rng.permutation(n_samples)
+        epoch_losses: list[float] = []
+        for start in range(0, n_samples, batch_size):
+            idx = perm[start : start + batch_size]
+            loss = train_step(
+                model,
+                opt,
+                nodes[idx],
+                edges[idx],
+                edge_feats[idx],
+                targets[idx],
+            )
+            epoch_losses.append(float(loss))
 
-        if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"  Epoch {epoch + 1:3d}/{epochs}: loss={loss:.6f}")
+        mean_loss = float(np.mean(epoch_losses))
+        losses.append(mean_loss)
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            print(f"  Epoch {epoch + 1:3d}/{epochs}: loss={mean_loss:.6f}")
 
     return losses
 
 
 # %%
 print()
-train_data = (train_nodes, train_edges, train_edge_feats, train_targets)
-gno_losses = train_model(gno, train_data, EPOCHS, model_name="GNO")
+gno_losses = train_model(
+    gno,
+    train_nodes,
+    train_edges,
+    train_edge_feats,
+    train_targets,
+    epochs=EPOCHS,
+    batch_size=BATCH_SIZE,
+    learning_rate=LEARNING_RATE,
+    seed=SEED,
+    model_name="GNO",
+)
 print(f"Final GNO loss: {gno_losses[-1]:.6e}")
 
 # %% [markdown]
 # ## Evaluation
 #
-# Evaluate GNO on test data.
+# Run the GNO over the test set in batches, un-normalize the predicted value
+# channel back to physical pressure, and report the relative-L2 error against
+# the (physical-scale) ground truth.
 
 
 # %%
-def evaluate_model(model, test_data, model_name="GNO"):
-    """Evaluate model on test data."""
-    nodes, edges, edge_feats, targets = test_data
+def predict_value_grid(
+    model: GraphNeuralOperator,
+    nodes: jax.Array,
+    edges: jax.Array,
+    edge_feats: jax.Array,
+    *,
+    height: int,
+    width: int,
+    batch_size: int = 128,
+) -> jax.Array:
+    """Predict node values in batches and reshape them back to a grid.
 
-    predictions = model(nodes, edges, edge_feats)
+    Args:
+        model: Trained GraphNeuralOperator.
+        nodes: Node features [n_samples, num_nodes, node_dim].
+        edges: Edge indices [n_samples, num_edges, 2].
+        edge_feats: Edge features [n_samples, num_edges, edge_dim].
+        height: Output grid height.
+        width: Output grid width.
+        batch_size: Forward-pass batch size to bound memory.
 
-    # MSE on value channel only
-    pred_values = predictions[:, :, 0]
-    target_values = targets[:, :, 0]
+    Returns:
+        Predicted (normalized) value grid [n_samples, 1, height, width].
+    """
+    grids = []
+    for start in range(0, nodes.shape[0], batch_size):
+        stop = start + batch_size
+        pred = model(nodes[start:stop], edges[start:stop], edge_feats[start:stop])
+        grids.append(graph_to_grid(pred, height=height, width=width, channels=1))
+    return jnp.concatenate(grids, axis=0)
 
-    mse = float(jnp.mean((pred_values - target_values) ** 2))
 
-    # Relative L2 error per sample
-    rel_l2_per_sample = jnp.sqrt(
-        jnp.sum((pred_values - target_values) ** 2, axis=1) / jnp.sum(target_values**2, axis=1)
+def evaluate_model(
+    pred_grid_physical: jax.Array,
+    target_grid_physical: jax.Array,
+    model_name: str = "GNO",
+) -> tuple[float, float, float, float]:
+    """Report MSE and relative-L2 statistics on physical-scale grids.
+
+    Args:
+        pred_grid_physical: Un-normalized predictions [n_samples, 1, H, W].
+        target_grid_physical: Ground-truth pressure [n_samples, 1, H, W].
+        model_name: Label used in logging.
+
+    Returns:
+        Tuple of (mse, rel_l2_mean, rel_l2_min, rel_l2_max).
+    """
+    mse = float(jnp.mean((pred_grid_physical - target_grid_physical) ** 2))
+
+    pred_flat = pred_grid_physical.reshape(pred_grid_physical.shape[0], -1)
+    target_flat = target_grid_physical.reshape(target_grid_physical.shape[0], -1)
+    rel_l2_per_sample = jnp.linalg.norm(pred_flat - target_flat, axis=1) / (
+        jnp.linalg.norm(target_flat, axis=1) + 1e-8
     )
     rel_l2_mean = float(jnp.mean(rel_l2_per_sample))
     rel_l2_min = float(jnp.min(rel_l2_per_sample))
     rel_l2_max = float(jnp.max(rel_l2_per_sample))
 
     print(f"{model_name} Results:")
-    print(f"  Test MSE:         {mse:.6f}")
+    print(f"  Test MSE:         {mse:.6e}")
     print(f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})")
 
-    return predictions, mse, rel_l2_mean
+    return mse, rel_l2_mean, rel_l2_min, rel_l2_max
 
 
 # %%
 print()
 print("Running evaluation...")
-test_data = (test_nodes, test_edges, test_edge_feats, test_targets)
-gno_pred, gno_mse, gno_rel_l2 = evaluate_model(gno, test_data, "GNO")
+pred_grid_n = predict_value_grid(
+    gno,
+    test_nodes,
+    test_edges,
+    test_edge_feats,
+    height=RESOLUTION,
+    width=RESOLUTION,
+)
+# Un-normalize predictions back to physical pressure before scoring.
+pred_grid = pred_grid_n * y_std + y_mean
+
+gno_mse, gno_rel_l2, gno_rel_l2_min, gno_rel_l2_max = evaluate_model(pred_grid, Y_test, "GNO")
 
 # %% [markdown]
 # ## Visualization
@@ -245,9 +417,6 @@ gno_pred, gno_mse, gno_rel_l2 = evaluate_model(gno, test_data, "GNO")
 # Create output directory
 output_dir = Path("docs/assets/examples/gno_darcy")
 output_dir.mkdir(parents=True, exist_ok=True)
-
-# Convert predictions back to grid format for visualization
-pred_grid = graph_to_grid(gno_pred, height=RESOLUTION, width=RESOLUTION, channels=1)
 
 # Plot predictions for a sample
 mpl.use("Agg")
@@ -290,7 +459,7 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 # Loss curve
 axes[0].semilogy(gno_losses, linewidth=2)
 axes[0].set_xlabel("Epoch")
-axes[0].set_ylabel("MSE Loss")
+axes[0].set_ylabel("Relative L2 Loss")
 axes[0].set_title("GNO Training Loss")
 axes[0].grid(True, alpha=0.3)
 
@@ -337,7 +506,7 @@ print("GNO Darcy Flow example completed")
 print("=" * 70)
 print()
 print("Results Summary:")
-print(f"  GNO:        MSE={gno_mse:.6f}, Rel L2={gno_rel_l2:.4f}, Params={gno_params:,}")
+print(f"  GNO:        MSE={gno_mse:.6e}, Rel L2={gno_rel_l2:.4f}, Params={gno_params:,}")
 print()
 print(f"Results saved to: {output_dir}")
 print("=" * 70)

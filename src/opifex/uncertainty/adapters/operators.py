@@ -117,18 +117,14 @@ class _OperatorFunctionSpaceWrapper:
     ``flax.struct`` pytree composes with ``jit`` / ``grad`` / ``vmap``.
     """
 
-    def __init__(
-        self, *, wrapped: Any, function_space_metadata: MetadataItems
-    ) -> None:
+    def __init__(self, *, wrapped: Any, function_space_metadata: MetadataItems) -> None:
         self._wrapped = wrapped
         self._function_space_metadata = function_space_metadata
 
     def predict_distribution(self, *args: Any, **kwargs: Any) -> PredictiveDistribution:
         """Forward to the delegate and append function-space provenance metadata."""
         distribution = self._wrapped.predict_distribution(*args, **kwargs)
-        return _enrich_with_function_space_metadata(
-            distribution, self._function_space_metadata
-        )
+        return _enrich_with_function_space_metadata(distribution, self._function_space_metadata)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)

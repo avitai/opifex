@@ -138,6 +138,7 @@ def create_darcy_loader(
     batch_size: int = 32,
     resolution: int = 85,
     viscosity_range: tuple[float, float] = (0.5, 2.0),
+    field_type: str = "smooth",
     shuffle: bool = True,
     seed: int = 42,
     worker_count: int = 0,
@@ -145,11 +146,17 @@ def create_darcy_loader(
     num_epochs: int = 1,
     **kwargs: Any,
 ) -> grain.DataLoader:
-    """Create Grain DataLoader for Darcy flow dataset."""
+    """Create Grain DataLoader for Darcy flow dataset.
+
+    ``field_type='binary'`` selects the high-contrast thresholded-GRF benchmark
+    (with ``viscosity_range`` as the two permeability values); ``'smooth'`` (the
+    default) keeps the smooth log-Fourier coefficient field.
+    """
     data_source = DarcyDataSource(
         n_samples=n_samples,
         resolution=resolution,
         viscosity_range=viscosity_range,
+        field_type=field_type,
         seed=seed,
     )
 

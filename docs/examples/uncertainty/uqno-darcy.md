@@ -18,7 +18,7 @@ Anandkumar (TMLR 2024,
 
 1. **Base solution operator** — a standard deterministic
    ``FourierNeuralOperator`` trained on `(input, target)` pairs with
-   MSE loss.
+   the relative-L2 loss (the canonical operator-learning objective).
 2. **Residual quantile operator** — a *separate* FNO trained against
    ``opifex.uncertainty.losses.PointwiseQuantileLoss`` on the
    residuals of the (frozen) base.
@@ -27,6 +27,14 @@ Anandkumar (TMLR 2024,
    ``uncertainty_scaling_factor`` via the canonical
    ``get_coeff_quantile_idx`` formula. Test-time bands are
    ``base(x) ± residual(x) * scaling_factor``.
+
+To reach both **good accuracy** and **meaningful calibrated
+uncertainty**, the example uses the proven operator-learning recipe:
+Gaussian input/output normalization (fit on the base-train split), the
+relative-L2 loss for the base, grid positional embedding, and ~1000
+base training samples. The predicted mean is un-normalized back to
+physical pressure (and band widths scaled by ``y_std``) before the
+relative-L2 error and conformal coverage are reported.
 
 Conformal prediction is **distribution-free**: the bands cover the
 true target on at least ``1 - alpha`` fraction of points (per the
@@ -76,7 +84,7 @@ wrapper around a pair of deterministic FNOs:
 
 | Stage | Object | Loss | Output |
 |-------|--------|------|--------|
-| 1 | `base: UQNOBaseSolutionOperator(FNO)` | MSE on `(x, y)` | $\hat{u}(x)$ |
+| 1 | `base: UQNOBaseSolutionOperator(FNO)` | relative-L2 on `(x, y)` | $\hat{u}(x)$ |
 | 2 | `residual: UQNOResidualOperator(FNO)` | `PointwiseQuantileLoss(alpha)` on `base(x) - y_true` | width$E(x)$ |
 | 3 | `UQNOConformalCalibrator` | scalar factor from held-out ratios | `scaling_factor` |
 
@@ -110,19 +118,31 @@ base_fno = FourierNeuralOperator(
     hidden_channels=32,
     modes=12,
     num_layers=4,
+    positional_embedding=True,  # append normalized grid-coordinate channels
     rngs=nnx.Rngs(42),
 )
 base_opt = nnx.Optimizer(base_fno, optax.adam(1e-3), wrt=nnx.Param)
 
 
+def relative_l2(pred, target, eps=1e-8):
+    diff = (pred - target).reshape(pred.shape[0], -1)
+    ref = target.reshape(target.shape[0], -1)
+    return jnp.mean(jnp.linalg.norm(diff, axis=1) / (jnp.linalg.norm(ref, axis=1) + eps))
+
+
 @nnx.jit
 def base_train_step(model, opt, x, y):
     def loss_fn(m):
-        return jnp.mean((m(x) - y) ** 2)
+        return relative_l2(m(x), y)  # standard operator-learning objective
     loss, grads = nnx.value_and_grad(loss_fn)(model)
     opt.update(model, grads)
     return loss
 ```
+
+The base and residual operators train on **Gaussian-normalized** inputs
+and targets (statistics fit on the base-train split); the predicted
+mean is un-normalized — and the band half-widths are scaled by
+``y_std`` — before any physical-space metric is computed.
 
 ### Step 2: Train the Residual Quantile Operator
 
@@ -131,7 +151,8 @@ from opifex.uncertainty.losses import PointwiseQuantileLoss
 
 residual_fno = FourierNeuralOperator(
     in_channels=1, out_channels=1,
-    hidden_channels=32, modes=12, num_layers=4, rngs=nnx.Rngs(43),
+    hidden_channels=32, modes=12, num_layers=4,
+    positional_embedding=True, rngs=nnx.Rngs(43),
 )
 residual_opt = nnx.Optimizer(residual_fno, optax.adam(1e-3), wrt=nnx.Param)
 quantile_loss = PointwiseQuantileLoss(alpha=0.1, reduction="mean")
@@ -162,16 +183,23 @@ uqno = UncertaintyQuantificationNeuralOperator(
     residual=UQNOResidualOperator(residual_fno),
 )
 
-# Calibrate on a held-out set.
-calibrator = uqno.calibrate(x_calib, y_calib, alpha=0.1, delta=0.1)
+# Calibrate on a held-out set (normalized space).
+calibrator = uqno.calibrate(x_calib_n, y_calib_n, alpha=0.1, delta=0.1)
 uqno = uqno.with_calibrator(calibrator)
 print(f"scaling factor: {float(calibrator.scaling_factor):.6f}")
 
-# Predict with bands.
-dist = uqno.predict_with_bands(x_test)
-lower, upper = dist.interval.lower, dist.interval.upper
-mean_prediction = dist.mean
+# Predict with bands, then un-normalize the mean and scale widths by y_std.
+dist = uqno.predict_with_bands(x_test_n)
+mean_prediction = dist.mean * y_std + y_mean
+half_width = (dist.interval.upper - dist.interval.lower) * 0.5 * y_std
+lower, upper = mean_prediction - half_width, mean_prediction + half_width
+
+# Predictive-mean accuracy in physical units.
+diff = (mean_prediction - y_test).reshape(y_test.shape[0], -1)
+ref = y_test.reshape(y_test.shape[0], -1)
+rel_l2 = float(jnp.mean(jnp.linalg.norm(diff, axis=1) / jnp.linalg.norm(ref, axis=1)))
 coverage = float(jnp.mean((y_test >= lower) & (y_test <= upper)))
+print(f"predictive-mean rel-L2: {rel_l2:.6f}")
 print(f"empirical coverage: {coverage:.3f} (target 1-alpha = {1-0.1:.2f})")
 ```
 
@@ -183,20 +211,39 @@ print(f"empirical coverage: {coverage:.3f} (target 1-alpha = {1-0.1:.2f})")
 
 ## Results Summary
 
-| Metric                    | Description                                |
-|---------------------------|--------------------------------------------|
-| `calibrator.scaling_factor` | Scalar conformal scaling factor          |
-| `calibrator.domain_idx`     | Per-function quantile index              |
-| `calibrator.function_idx`   | Across-functions quantile index          |
-| Empirical pointwise coverage on test set | Should land near $1 - \alpha$ |
-| Mean band width             | Per-pixel width of the calibrated interval |
+Representative run at resolution 64 (1000 / 500 / 500 / 100 samples for
+base / residual / calibration / test; 120 base + 80 residual epochs;
+~50 s total on a single GPU). Each FNO has **2,368,001** parameters
+(base + residual = 4,736,002).
 
-The empirical coverage on the held-out test set should land near the
-target $1 - \alpha$; the exact target depends jointly on $\alpha$ and
-$\delta$ via the canonical ``get_coeff_quantile_idx`` rule. For
-showcase-quality numbers, scale up the per-stage training samples and
-epoch counts; canonical Li-style Darcy uses ~1000 / ~500 / ~500 samples
-across the three stages and ~300 epochs per training phase.
+| Metric                                | Value                         |
+|---------------------------------------|-------------------------------|
+| Predictive-mean test rel-L2 (mean)    | **0.0039**                    |
+| Predictive-mean test rel-L2 (min/max) | 0.0025 / 0.0174               |
+| `calibrator.scaling_factor`           | 2.82                          |
+| `calibrator.domain_idx`               | 228                           |
+| `calibrator.function_idx`             | 51                            |
+| Empirical pointwise coverage (test)   | 0.979 (target $1-\alpha=0.9$) |
+| Mean band width (physical units)      | 0.0018                        |
+| Predicted std positive everywhere     | yes                           |
+| `\|error\|` vs predicted-std correlation | 0.42                       |
+| Mean `\|error\|` (high vs low uncertainty)| 2.6e-4 vs 1.6e-4           |
+
+The predictive mean reaches **~0.4 % relative-L2** error in physical
+units — the base prediction is visually indistinguishable from the
+smooth ground-truth pressure field. The empirical coverage lands
+**above** the nominal $1 - \alpha = 0.9$: the conformal
+``get_coeff_quantile_idx`` rule with $\delta = 0.1$ targets a
+*function-level* guarantee that is intentionally conservative
+pointwise, so coverage near 0.98 is expected, not a bug. The predicted
+uncertainty is positive everywhere and correlates positively with the
+absolute error (corr ≈ 0.42); the mean error is larger in the
+high-uncertainty half of the grid than in the low-uncertainty half,
+the qualitative signature of a sensible uncertainty surface.
+
+For tighter (less conservative) pointwise coverage, raise $\delta$
+toward $\alpha$; for higher accuracy, scale up the per-stage epoch
+counts or the hidden channels / Fourier modes.
 
 ## Next Steps
 
@@ -208,8 +255,9 @@ across the three stages and ~300 epochs per training phase.
    wraps any deterministic operator that satisfies the
    :class:`opifex.uncertainty.adapters.operators.FNOConformalAdapterSpec`
    capability.
-3. **Scale to canonical setup**: 1000 train / 500 residual / 500
-   calibration samples; 300 epochs per stage.
+3. **Trade coverage for tightness**: raise $\delta$ toward $\alpha$
+   to pull the conservative pointwise coverage down toward the nominal
+   $1 - \alpha$, or scale up epochs / hidden channels for accuracy.
 
 ### Related Examples
 

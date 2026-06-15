@@ -19,6 +19,10 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.neural.operators.fno._decompositions import make_decomposition
+from opifex.neural.operators.fno._factorized import factorized_spectral_conv
+from opifex.neural.operators.fno._positional import append_grid_coordinates
+
 
 class FourierSpectralConvolution(nnx.Module):
     """Spectral convolution layer for Fourier Neural Operators.
@@ -126,6 +130,8 @@ class FourierLayer(nnx.Module):
         *,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         spatial_dims: int = 2,
+        factorization: str | None = None,
+        factorization_rank: float | None = None,
         rngs: nnx.Rngs,
     ) -> None:
         """Initialize Fourier layer following NNX patterns.
@@ -137,6 +143,10 @@ class FourierLayer(nnx.Module):
             activation: Activation function
             spatial_dims: Number of spatial dimensions (1, 2, or 3). Controls which
                 spectral weights are allocated — avoids dead parameters.
+            factorization: Optional low-rank factorization of the spectral weight
+                ('tucker', 'cp', or 'tt'); ``None`` uses a dense weight.
+            factorization_rank: Compression ratio for the factorization (per-mode
+                Tucker ratio, or ratio of ``min(shape)`` for CP/TT); defaults to 0.5.
             rngs: Random number generators (keyword-only)
         """
         super().__init__()
@@ -145,13 +155,21 @@ class FourierLayer(nnx.Module):
         self.modes = modes
         self.activation = activation
         self.spatial_dims = spatial_dims
+        self.factorization = factorization
 
         # Spectral weights — only allocate for the target dimensionality.
         # Stored as separate real/imaginary Params to avoid JAX complex gradient
         # convention issue (optax issue #196) — see FourierSpectralConvolution docstring.
         scale = 1.0 / (in_channels * out_channels)
 
-        if spatial_dims == 1:
+        if factorization is not None:
+            # Low-rank factorized spectral weight (CP / Tucker / TT).
+            tensor_shape = (out_channels, in_channels, *((modes,) * spatial_dims))
+            rank = factorization_rank if factorization_rank is not None else 0.5
+            self.decomposition = make_decomposition(
+                factorization, tensor_shape, float(rank), rngs=rngs
+            )
+        elif spatial_dims == 1:
             self.spectral_conv = FourierSpectralConvolution(
                 in_channels=in_channels,
                 out_channels=out_channels,
@@ -206,6 +224,10 @@ class FourierLayer(nnx.Module):
         Dispatches based on ``self.spatial_dims`` set at init time, which
         determines which spectral weights were allocated.
         """
+        if self.factorization is not None:
+            return factorized_spectral_conv(
+                self.decomposition, x, (self.modes,) * self.spatial_dims
+            )
         if self.spatial_dims == 1:
             return self._spectral_1d(x)
         if self.spatial_dims == 2:
@@ -339,6 +361,28 @@ class FourierLayer(nnx.Module):
         # JAX X64 handles precision naturally
         return jnp.transpose(result_transposed, inv_perm)
 
+    def get_compression_stats(self) -> dict[str, float]:
+        """Report factorized-vs-dense parameter compression for this layer.
+
+        Returns:
+            Mapping with the factorized parameter count, the equivalent dense
+            spectral-weight count, their ratio, and the fractional reduction.
+
+        Raises:
+            ValueError: If the layer uses dense (non-factorized) spectral weights.
+        """
+        if self.factorization is None:
+            raise ValueError("get_compression_stats is only defined for factorized layers")
+        factorized = self.decomposition.parameter_count()
+        dense = self.in_channels * self.out_channels * (self.modes**self.spatial_dims)
+        ratio = factorized / dense if dense > 0 else 0.0
+        return {
+            "factorized_parameters": float(factorized),
+            "equivalent_dense_parameters": float(dense),
+            "compression_ratio": float(ratio),
+            "parameter_reduction": float(1.0 - ratio),
+        }
+
 
 class FourierNeuralOperator(nnx.Module):
     """Fourier Neural Operator for learning solution operators of PDEs.
@@ -358,7 +402,8 @@ class FourierNeuralOperator(nnx.Module):
         *,
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         factorization_type: str | None = None,
-        factorization_rank: int | None = None,
+        factorization_rank: float | None = None,
+        positional_embedding: bool = False,
         use_mixed_precision: bool = False,
         domain_padding: int = 0,
         spatial_dims: int = 2,
@@ -373,8 +418,11 @@ class FourierNeuralOperator(nnx.Module):
             modes: Number of Fourier modes
             num_layers: Number of Fourier layers
             activation: Activation function
-            factorization_type: Optional tensor factorization ('tucker', 'cp')
+            factorization_type: Optional tensor factorization ('tucker', 'cp', 'tt')
             factorization_rank: Rank for tensor factorization
+            positional_embedding: If True, append normalised grid-coordinate
+                channels to the input before lifting (needed for boundary-value
+                problems such as Darcy flow).
             use_mixed_precision: Whether to use mixed precision
             domain_padding: Pixels to pad spatial dims (reduces Gibbs phenomenon
                 for non-periodic problems). Set to 2 for Darcy flow.
@@ -393,10 +441,13 @@ class FourierNeuralOperator(nnx.Module):
         self.use_mixed_precision = use_mixed_precision
         self.domain_padding = domain_padding
         self.spatial_dims = spatial_dims
+        self.positional_embedding = positional_embedding
 
-        # Input projection (lifting): in_channels -> hidden_channels
+        # Input projection (lifting). With positional embedding the lifted input
+        # also carries one normalised coordinate channel per spatial axis.
+        lifting_in_channels = in_channels + (spatial_dims if positional_embedding else 0)
         self.input_projection = nnx.Linear(
-            in_features=in_channels,
+            in_features=lifting_in_channels,
             out_features=hidden_channels,
             rngs=rngs,
         )
@@ -438,33 +489,15 @@ class FourierNeuralOperator(nnx.Module):
         spatial_dims: int,
         rngs: nnx.Rngs,
     ) -> Any:
-        """Create a Fourier layer with optional factorization."""
-        # Try to use factorized layer if available and requested
-        if self.factorization_type is not None:
-            try:
-                from opifex.neural.operators.fno.factorized import (
-                    FactorizedFourierLayer,
-                )
-
-                return FactorizedFourierLayer(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    modes=modes,
-                    factorization_type=self.factorization_type,
-                    factorization_rank=self.factorization_rank or modes // 2,
-                    activation=activation,
-                    rngs=rngs,
-                )
-            except ImportError:
-                # Fall back to regular Fourier layer if factorized not available
-                pass
-
+        """Create a Fourier layer, dense or low-rank factorized (CP / Tucker / TT)."""
         return FourierLayer(
             in_channels=in_channels,
             out_channels=out_channels,
             modes=modes,
             activation=activation,
             spatial_dims=spatial_dims,
+            factorization=self.factorization_type,
+            factorization_rank=self.factorization_rank,
             rngs=rngs,
         )
 
@@ -480,6 +513,11 @@ class FourierNeuralOperator(nnx.Module):
         Returns:
             Output tensor (batch, out_channels, *spatial_dims)
         """
+        # Positional embedding: append normalised grid-coordinate channels so the
+        # translation-equivariant operator can resolve boundary-dependent solutions.
+        if self.positional_embedding:
+            x = append_grid_coordinates(x)
+
         # Input projection (lifting)
         x = self._apply_pointwise_linear(x, self.input_projection)
 
@@ -520,6 +558,29 @@ class FourierNeuralOperator(nnx.Module):
 
         # Move channels back to second dimension
         return jnp.moveaxis(out_permuted, -1, 1)  # (batch, out_channels, *spatial_dims)
+
+    def get_compression_stats(self) -> dict[str, float]:
+        """Aggregate factorized-vs-dense spectral compression across all layers.
+
+        Returns:
+            Mapping with summed factorized and equivalent-dense spectral parameter
+            counts, their ratio, and the fractional reduction.
+
+        Raises:
+            ValueError: If the operator uses dense (non-factorized) spectral weights.
+        """
+        if self.factorization_type is None:
+            raise ValueError("get_compression_stats is only defined for factorized operators")
+        per_layer = [layer.get_compression_stats() for layer in self.fourier_layers]
+        factorized = sum(stats["factorized_parameters"] for stats in per_layer)
+        dense = sum(stats["equivalent_dense_parameters"] for stats in per_layer)
+        ratio = factorized / dense if dense > 0 else 0.0
+        return {
+            "factorized_parameters": float(factorized),
+            "equivalent_dense_parameters": float(dense),
+            "compression_ratio": float(ratio),
+            "parameter_reduction": float(1.0 - ratio),
+        }
 
     def count_parameters(self) -> int:
         """Count total number of trainable parameters in the model."""

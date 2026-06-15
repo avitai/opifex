@@ -64,9 +64,7 @@ def _spd_covariance() -> jax.Array:
     return lower @ lower.T + 1e-2 * jnp.eye(_N_FEATURES)
 
 
-def _make_state(
-    *, observation_noise_variance: float = 0.0
-) -> BayesianLastLayerState:
+def _make_state(*, observation_noise_variance: float = 0.0) -> BayesianLastLayerState:
     weight_mean = jnp.linspace(-0.5, 0.5, num=_N_FEATURES * _N_OUTPUTS).reshape(
         _N_FEATURES, _N_OUTPUTS
     )

@@ -15,41 +15,44 @@
 | Property      | Value                                    |
 |---------------|------------------------------------------|
 | Level         | Intermediate                             |
-| Runtime       | ~5 min (GPU) / ~20 min (CPU)             |
+| Runtime       | ~2 min (GPU) / ~10 min (CPU)             |
 | Memory        | ~2 GB                                    |
-| Prerequisites | JAX, Flax NNX, Variational Inference     |
+| Prerequisites | JAX, Flax NNX, Deep Ensembles            |
 
 ## Overview
 
-Wrap a Fourier Neural Operator (FNO) with the
-:class:`opifex.neural.bayesian.AmortizedVariationalFramework` to get
-input-dependent uncertainty estimates around a deterministic FNO
-backbone. The base FNO is trained with MSE loss; the variational
-framework supplies the uncertainty quantification head used at
-inference.
+Quantify predictive uncertainty for the Darcy permeability-to-pressure
+operator with a **heteroscedastic deep ensemble** of Fourier Neural
+Operators. Each member is a
+:class:`opifex.neural.operators.fno.probabilistic.ProbabilisticFourierNeuralOperator`
+— an FNO backbone with twin pointwise heads that emit a per-location
+``mean`` and ``log-variance``. Training each member by the
+heteroscedastic-Gaussian negative log-likelihood gives the *aleatoric*
+axis (input-dependent noise), and the disagreement *across* members gives
+the *epistemic* axis (model uncertainty). Their sum is the total
+predictive variance, the standard deep-ensemble decomposition.
+
+This is the canonical scalable Bayesian-predictive recipe and it follows
+the same accuracy template as the deterministic operator examples — grid
+positional embedding, Gaussian input/output normalization, and enough
+epochs for the spectral weights to converge — so the predictive *mean*
+stays accurate while the predictive *spread* stays meaningful.
 
 **Key Concepts:**
-- **Variational Posterior**: Approximates the true posterior over weights
-- **Amortization Network**: Predicts posterior parameters from input
-- **Monte Carlo Prediction**: Sample-based uncertainty estimation
-
-**Note on the shared UQ surface.** Modules that ship a built-in ELBO —
-``ProbabilisticPINN`` and ``UncertaintyQuantificationNeuralOperator``
-under the migrated platform — expose ``loss_components`` and
-``negative_elbo`` returning a shared
-:class:`opifex.uncertainty.objectives.UQLossComponents`. Code targeting
-the shared surface should call those methods directly rather than
-assembling ``data_loss + kl_weight * kl`` by hand. This example pre-dates
-the shared surface and demonstrates the amortized-variational pattern;
-``AmortizedVariationalFramework.compute_elbo`` is the framework-internal
-analogue.
+- **Deep Ensemble**: Independently-trained members; their spread is the
+  epistemic (model) uncertainty (Lakshminarayanan et al. 2017).
+- **Heteroscedastic Head**: Each member predicts a per-location variance,
+  the aleatoric (data) uncertainty (Kendall & Gal 2017).
+- **Variance Calibration**: A single scale fit on a held-out split
+  aligns the predictive std with the observed error spread so the
+  ~90% interval covers ~90% of the test residuals.
 
 ## Learning Goals
 
-1. Wrap an FNO with `AmortizedVariationalFramework`
-2. Configure variational inference with `VariationalConfig`
-3. Train the base FNO with MSE loss for stable convergence
-4. Compute and visualize predictive uncertainty via the framework
+1. Build a heteroscedastic FNO with `ProbabilisticFourierNeuralOperator`
+2. Train an ensemble with the heteroscedastic-Gaussian NLL loss
+3. Decompose predictive variance into aleatoric + epistemic parts
+4. Calibrate and visualize the predictive uncertainty
 """
 
 # %% [markdown]
@@ -73,12 +76,12 @@ import optax
 from flax import nnx
 
 from opifex.data.loaders import create_darcy_loader
-from opifex.neural.bayesian import (
-    AmortizedVariationalFramework,
-    PriorConfig,
-    VariationalConfig,
+from opifex.neural.operators.fno._positional import append_grid_coordinates
+from opifex.neural.operators.fno.probabilistic import (
+    probabilistic_fno_negative_log_likelihood,
+    ProbabilisticFourierNeuralOperator,
 )
-from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.uncertainty._predictive import ensemble_predictive
 
 
 print("=" * 70)
@@ -90,29 +93,39 @@ print(f"JAX devices: {jax.devices()}")
 # %% [markdown]
 """
 ## Configuration
+
+We follow the standard operator-learning recipe — ~1000 training samples,
+Gaussian normalization, and enough epochs for the spectral weights to
+converge — and add a held-out calibration split plus a small ensemble of
+heteroscedastic members for the uncertainty estimate.
 """
 
 # %%
 # Data configuration
 RESOLUTION = 64
-N_TRAIN = 150
-N_TEST = 30
-BATCH_SIZE = 8
+N_TRAIN = 1000
+N_TEST = 100
+N_CALIBRATION = 100
+BATCH_SIZE = 32
+EVAL_CHUNK = 64  # Forward-pass chunk size to bound evaluation memory
 
 # FNO model configuration
 MODES = 12
 HIDDEN_WIDTH = 32
 NUM_LAYERS = 4
 
-# Variational configuration
-NUM_SAMPLES = 5  # MC samples for prediction
-KL_WEIGHT = 1e-4  # Weight for KL divergence
+# Ensemble / uncertainty configuration
+NUM_MEMBERS = 4  # Independently-trained ensemble members
+TARGET_COVERAGE = 0.9  # Calibrate the 1.64-sigma interval to this coverage
 
 # Training configuration
-NUM_EPOCHS = 20
+NUM_EPOCHS = 80
 LEARNING_RATE = 1e-3
 
 SEED = 42
+
+# Standard-normal quantile for the target coverage (0.9 -> 1.6449).
+COVERAGE_Z = float(jax.scipy.stats.norm.ppf(0.5 + TARGET_COVERAGE / 2.0))
 
 
 def _find_repo_root() -> Path:
@@ -131,265 +144,338 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 print()
 print("Configuration:")
 print(f"  Resolution: {RESOLUTION}x{RESOLUTION}")
-print(f"  Training samples: {N_TRAIN}, Test samples: {N_TEST}")
+print(f"  Train / calibration / test samples: {N_TRAIN} / {N_CALIBRATION} / {N_TEST}")
 print(f"  FNO: modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS}")
-print(f"  Variational: MC samples={NUM_SAMPLES}, KL weight={KL_WEIGHT}")
+print(
+    f"  Ensemble: members={NUM_MEMBERS}, target coverage={TARGET_COVERAGE:.0%} (z={COVERAGE_Z:.3f})"
+)
 print(f"  Training: epochs={NUM_EPOCHS}, lr={LEARNING_RATE}")
 
 # %% [markdown]
 """
 ## Load Darcy Flow Data
+
+`create_darcy_loader` generates the smooth Darcy permeability-to-pressure
+dataset. We collect three disjoint splits: train (fits the models),
+calibration (fits the variance scale), and test (reports the metrics).
 """
 
 # %%
 print()
 print("Loading Darcy flow data...")
 
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-    enable_normalization=True,
-    num_epochs=NUM_EPOCHS,
-)
 
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=N_TEST,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1,
-    worker_count=0,
-    enable_normalization=True,
-    num_epochs=1,
-)
+def _collect_split(n_samples: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """Materialize one Darcy split as channels-first ``(batch, 1, H, W)`` arrays."""
+    loader = create_darcy_loader(
+        n_samples=n_samples,
+        batch_size=n_samples,
+        resolution=RESOLUTION,
+        shuffle=False,
+        seed=seed,
+        worker_count=0,
+        num_epochs=1,
+    )
+    batch = next(iter(loader))
+    inputs = np.asarray(batch["input"])[:, np.newaxis, :, :]
+    outputs = np.asarray(batch["output"])[:, np.newaxis, :, :]
+    return inputs, outputs
 
-# Get test batch
-test_batch = next(iter(test_loader))
-test_inputs = jnp.array(test_batch["input"])
-test_targets = jnp.array(test_batch["output"])
 
-# FNO expects channels-first format: (batch, C, H, W)
-if test_inputs.ndim == 3:
-    test_inputs = test_inputs[:, jnp.newaxis, :, :]
-    test_targets = test_targets[:, jnp.newaxis, :, :]
+x_train, y_train = _collect_split(N_TRAIN, SEED)
+x_calibration, y_calibration = _collect_split(N_CALIBRATION, SEED + 1000)
+x_test, y_test = _collect_split(N_TEST, SEED + 2000)
 
-print(f"  Test input shape: {test_inputs.shape}")
-print(f"  Test target shape: {test_targets.shape}")
+print(f"  Train input shape: {x_train.shape}")
+print(f"  Test input shape:  {x_test.shape}")
 
 # %% [markdown]
 """
-## Create Base FNO Model
+## Normalization
 
-First, create a standard FNO that will be wrapped with variational inference.
+Neural operators train best on standardized fields. We fit Gaussian
+statistics on the **training** set, normalize every split with them, and
+un-normalize the predictive mean (and rescale the predictive std by
+``y_std``) before computing physical-space errors.
+"""
+
+# %%
+x_mean, x_std = float(x_train.mean()), float(x_train.std())
+y_mean, y_std = float(y_train.mean()), float(y_train.std())
+
+x_train_n = jnp.asarray((x_train - x_mean) / x_std)
+y_train_n = jnp.asarray((y_train - y_mean) / y_std)
+x_calibration_n = jnp.asarray((x_calibration - x_mean) / x_std)
+x_test_n = jnp.asarray((x_test - x_mean) / x_std)
+
+y_calibration_phys = jnp.asarray(y_calibration)
+y_test_phys = jnp.asarray(y_test)
+
+print(f"  Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+print(f"  Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+# %% [markdown]
+"""
+## Build the Heteroscedastic Ensemble
+
+Each member is a `ProbabilisticFourierNeuralOperator`: an FNO backbone
+plus a ``mean`` head and a ``log-variance`` head. The backbone is
+translation-equivariant, so we prepend normalized grid-coordinate
+channels to the input (the standard positional embedding for
+boundary-value problems) — that is why each member is built with
+``in_channels = 1 + 2``.
 """
 
 # %%
 print()
-print("Creating base FNO model...")
+print("Creating heteroscedastic FNO ensemble...")
 
-# Channels-first format: (batch, C, H, W)
-in_channels = test_inputs.shape[1]
-out_channels = test_targets.shape[1]
+GRID_CHANNELS = 2  # append_grid_coordinates adds one channel per spatial axis
+in_channels = x_train.shape[1] + GRID_CHANNELS
+out_channels = y_train.shape[1]
 
-# Create base FNO
-base_fno = FourierNeuralOperator(
-    in_channels=in_channels,
-    out_channels=out_channels,
-    hidden_channels=HIDDEN_WIDTH,
-    num_layers=NUM_LAYERS,
-    modes=MODES,
-    rngs=nnx.Rngs(SEED),
-)
 
-# Test forward pass
-test_out = base_fno(test_inputs[:1])
-print(f"  Base FNO output shape: {test_out.shape}")
+def _make_member(seed: int) -> ProbabilisticFourierNeuralOperator:
+    """Construct one ensemble member with its own initialization seed."""
+    return ProbabilisticFourierNeuralOperator(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        hidden_channels=HIDDEN_WIDTH,
+        modes=MODES,
+        num_layers=NUM_LAYERS,
+        rngs=nnx.Rngs(seed),
+    )
 
-base_params = sum(p.size for p in jax.tree.leaves(nnx.state(base_fno, nnx.Param)))
-print(f"  Base FNO parameters: {base_params:,}")
 
-# %% [markdown]
-"""
-## Wrap with Variational Framework
-
-The AmortizedVariationalFramework wraps the base FNO with:
-- A variational posterior over model parameters
-- An amortization network that predicts posterior parameters from inputs
-- ELBO computation for variational training
-"""
-
-# %%
-print()
-print("Creating Bayesian FNO with variational framework...")
-
-# Flatten input dimension for amortization network
-input_dim = RESOLUTION * RESOLUTION * in_channels
-
-prior_config = PriorConfig(
-    prior_scale=1.0,
-)
-
-variational_config = VariationalConfig(
-    input_dim=input_dim,
-    hidden_dims=(64, 32),
-    num_samples=NUM_SAMPLES,
-    kl_weight=KL_WEIGHT,
-)
-
-bayesian_fno = AmortizedVariationalFramework(
-    base_model=base_fno,
-    prior_config=prior_config,
-    variational_config=variational_config,
-    rngs=nnx.Rngs(SEED + 1),
-)
-
-total_params = sum(p.size for p in jax.tree.leaves(nnx.state(bayesian_fno, nnx.Param)))
-print(f"  Total parameters (FNO + amortization): {total_params:,}")
-print(f"  Amortization network added: {total_params - base_params:,} params")
+_probe = _make_member(SEED)
+member_params = sum(p.size for p in jax.tree.leaves(nnx.state(_probe, nnx.Param)))
+print(f"  Member: ProbabilisticFNO (modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS})")
+print(f"  Input channels: {x_train.shape[1]} (+ {GRID_CHANNELS} grid = {in_channels})")
+print(f"  Parameters per member: {member_params:,}")
+print(f"  Ensemble parameters:   {member_params * NUM_MEMBERS:,}")
 
 # %% [markdown]
 """
 ## Training Loop
 
-Train the base FNO with standard MSE loss. The variational framework
-sits on top of the trained backbone and supplies the input-dependent
-posterior used for uncertainty at inference time.
+Every member is trained independently by the heteroscedastic-Gaussian
+negative log-likelihood
 
-``AmortizedVariationalFramework.compute_elbo`` is the framework-internal
-ELBO entry point — it flattens the input through an amortization MLP, so
-its current implementation is suited to flat-input bases rather than the
-spatial ``(batch, C, H, W)`` shape this FNO consumes. Bayesian models
-designed against the shared platform surface (``ProbabilisticPINN`` and
-friends) replace this MSE step with
-``model.negative_elbo(batch, rngs=..., objective=ObjectiveConfig(...))``,
-which returns a ``UQLossComponents`` without any manual KL/data
-assembly.
+```
+- log N(y; mu(x), sigma^2(x))
+```
+
+(Kendall & Gal 2017, §3.1). The likelihood jointly fits the mean and the
+per-location variance, so a single loss drives both accuracy and the
+aleatoric uncertainty. Independent seeds and shuffles give the ensemble
+its epistemic spread (Lakshminarayanan et al. 2017).
 """
 
 # %%
 print()
-print("Training Bayesian FNO...")
-
-
-def preprocess_batch(x, y):
-    """Ensure correct shape: (batch, C, H, W) for FNO."""
-    if x.ndim == 3:
-        x = x[:, jnp.newaxis, :, :]
-        y = y[:, jnp.newaxis, :, :]
-    return x, y
-
-
-opt = nnx.Optimizer(base_fno, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+print("Training ensemble members...")
 
 
 @nnx.jit
-def train_step(model, opt, x, y):
-    """Train the base FNO with MSE loss."""
+def _train_step(
+    member: ProbabilisticFourierNeuralOperator,
+    optimizer: nnx.Optimizer,
+    x: jax.Array,
+    y: jax.Array,
+) -> jax.Array:
+    """One NLL gradient step on a grid-augmented batch."""
 
-    def loss_fn(m):
-        pred = m(x)
-        return jnp.mean((pred - y) ** 2)
+    def loss_fn(model: ProbabilisticFourierNeuralOperator) -> jax.Array:
+        return probabilistic_fno_negative_log_likelihood(model, append_grid_coordinates(x), y)
 
-    loss, grads = nnx.value_and_grad(loss_fn)(model)
-    opt.update(model, grads)
+    loss, grads = nnx.value_and_grad(loss_fn)(member)
+    optimizer.update(member, grads)
     return loss
 
 
+def _train_member(seed: int) -> tuple[ProbabilisticFourierNeuralOperator, list[float]]:
+    """Train one member and return it alongside its per-epoch NLL history."""
+    member = _make_member(seed)
+    optimizer = nnx.Optimizer(member, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    key = jax.random.key(seed)
+    history: list[float] = []
+    num_samples = x_train_n.shape[0]
+    for _epoch in range(NUM_EPOCHS):
+        key, shuffle_key = jax.random.split(key)
+        permutation = jax.random.permutation(shuffle_key, num_samples)
+        epoch_losses = []
+        for start in range(0, num_samples, BATCH_SIZE):
+            indices = permutation[start : start + BATCH_SIZE]
+            loss = _train_step(member, optimizer, x_train_n[indices], y_train_n[indices])
+            epoch_losses.append(float(loss))
+        history.append(float(np.mean(epoch_losses)))
+    return member, history
+
+
 start_time = time.time()
-train_losses = []
-epoch_count = 0
-batches_per_epoch = N_TRAIN // BATCH_SIZE
-
-for batch_count, batch in enumerate(train_loader, start=1):
-    # Get and preprocess batch data
-    x = jnp.array(batch["input"])
-    y = jnp.array(batch["output"])
-    x, y = preprocess_batch(x, y)
-
-    loss = train_step(base_fno, opt, x, y)
-    train_losses.append(float(loss))
-
-    if batch_count % batches_per_epoch == 0:
-        epoch_count += 1
-        avg_loss = np.mean(train_losses[-batches_per_epoch:])
-        if epoch_count % 5 == 0 or epoch_count == 1:
-            print(f"  Epoch {epoch_count:3d}/{NUM_EPOCHS}: loss = {avg_loss:.6f}")
+members: list[ProbabilisticFourierNeuralOperator] = []
+loss_histories: list[list[float]] = []
+for member_index in range(NUM_MEMBERS):
+    trained_member, member_history = _train_member(SEED + member_index)
+    members.append(trained_member)
+    loss_histories.append(member_history)
+    print(
+        f"  Member {member_index + 1}/{NUM_MEMBERS}: "
+        f"NLL {member_history[0]:+.4f} -> {member_history[-1]:+.4f}"
+    )
 
 train_time = time.time() - start_time
 print(f"Training time: {train_time:.1f}s")
-print(f"Final loss: {train_losses[-1]:.6f}")
 
 # %% [markdown]
 """
-## Uncertainty Estimation
+## Predictive Distribution
 
-Use the amortization network to estimate prediction uncertainty by
-sampling from the predictive distribution.
+For a batch we collect each member's ``(mean, variance)`` in physical
+units. The ensemble predictive mean is the average of the member means;
+the predictive variance decomposes as
+
+```
+total = aleatoric + epistemic
+      = mean_m[sigma_m^2(x)] + var_m[mu_m(x)]
+```
+
+so the std is ``sqrt(total)``. Members are evaluated in chunks to bound
+memory at this resolution.
 """
 
 # %%
 print()
-print("Estimating uncertainty...")
+print("Computing predictive distribution...")
 
-# Get point predictions from base FNO
-predictions = base_fno(test_inputs)
 
-# Estimate uncertainty using variational framework
-# Flatten input for amortization network
-flat_inputs = test_inputs.reshape(test_inputs.shape[0], -1)
+def _member_moments(
+    member: ProbabilisticFourierNeuralOperator, x_normalized: jax.Array
+) -> tuple[jax.Array, jax.Array]:
+    """Return one member's physical-unit ``(mean, variance)`` for a batch."""
+    mean_n, log_variance_n = member(append_grid_coordinates(x_normalized))
+    mean_phys = mean_n * y_std + y_mean
+    variance_phys = jnp.exp(log_variance_n) * (y_std**2)
+    return mean_phys, variance_phys
 
-# Estimate uncertainty via input perturbation (simplified approach)
-print("  Using perturbation-based uncertainty estimation...")
-preds_list = []
-for i in range(NUM_SAMPLES):
-    # Add small noise to simulate input uncertainty
-    noisy_input = test_inputs + 0.01 * jax.random.normal(
-        jax.random.PRNGKey(SEED + i), test_inputs.shape
+
+def _predict(x_normalized: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    """Chunked ensemble prediction.
+
+    Returns:
+        Tuple ``(mean, std, aleatoric_std, epistemic_std)`` in physical
+        units, each of shape ``(batch, C, H, W)``.
+    """
+    member_means_chunks: list[jax.Array] = []
+    aleatoric_chunks: list[jax.Array] = []
+    for start in range(0, x_normalized.shape[0], EVAL_CHUNK):
+        x_chunk = x_normalized[start : start + EVAL_CHUNK]
+        means_and_variances = [_member_moments(member, x_chunk) for member in members]
+        member_means = jnp.stack([mean for mean, _ in means_and_variances], axis=0)
+        member_variances = jnp.stack([variance for _, variance in means_and_variances], axis=0)
+        member_means_chunks.append(member_means)
+        aleatoric_chunks.append(jnp.mean(member_variances, axis=0))
+
+    member_means_all = jnp.concatenate(member_means_chunks, axis=1)
+    aleatoric_variance = jnp.concatenate(aleatoric_chunks, axis=0)
+
+    predictive = ensemble_predictive(member_means_all, method="heteroscedastic_deep_ensemble")
+    epistemic_variance = predictive.variance
+    total_variance = aleatoric_variance + epistemic_variance
+    return (
+        predictive.mean,
+        jnp.sqrt(total_variance + 1e-12),
+        jnp.sqrt(aleatoric_variance + 1e-12),
+        jnp.sqrt(epistemic_variance + 1e-12),
     )
-    preds_list.append(base_fno(noisy_input))
-preds_stacked = jnp.stack(preds_list)
-uncertainty = jnp.std(preds_stacked, axis=0)
 
-# Compute error metrics
-mse = jnp.mean((predictions - test_targets) ** 2)
-l2_error = jnp.sqrt(jnp.sum((predictions - test_targets) ** 2)) / jnp.sqrt(jnp.sum(test_targets**2))
+
+# %% [markdown]
+"""
+## Variance Calibration
+
+A raw deep ensemble is typically over-confident. We fit a single positive
+scale on the calibration split so that the ``COVERAGE_Z * scale * std``
+interval covers ``TARGET_COVERAGE`` of the calibration residuals, then
+apply it unchanged at test time.
+"""
+
+# %%
+print()
+print("Calibrating predictive uncertainty...")
+
+calibration_mean, calibration_std, _, _ = _predict(x_calibration_n)
+calibration_error = jnp.abs(calibration_mean - y_calibration_phys)
+calibration_ratio = (calibration_error / calibration_std).flatten()
+std_scale = float(jnp.quantile(calibration_ratio, TARGET_COVERAGE) / COVERAGE_Z)
+
+print(f"  Calibration std scale: {std_scale:.4f}")
+
+# %% [markdown]
+"""
+## Evaluation
+
+The predictive mean is scored by the per-sample relative L2 error in
+physical units; the calibrated std drives the coverage and
+error-uncertainty diagnostics.
+"""
+
+# %%
+print()
+print("Evaluating on test set...")
+
+test_mean, test_std_raw, test_aleatoric_std, test_epistemic_std = _predict(x_test_n)
+test_std = test_std_raw * std_scale
+test_error = jnp.abs(test_mean - y_test_phys)
+
+# Predictive-mean relative L2 (physical units), per sample.
+flat_diff = (test_mean - y_test_phys).reshape(test_mean.shape[0], -1)
+flat_target = y_test_phys.reshape(y_test_phys.shape[0], -1)
+per_sample_rel_l2 = jnp.linalg.norm(flat_diff, axis=1) / jnp.linalg.norm(flat_target, axis=1)
+mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
+test_mse = float(jnp.mean((test_mean - y_test_phys) ** 2))
 
 print()
 print("Results:")
-print(f"  Relative L2 Error: {float(l2_error):.4f}")
-print(f"  MSE:               {float(mse):.6f}")
-print(f"  Mean Uncertainty:  {float(jnp.mean(uncertainty)):.6f}")
+print(f"  Predictive-mean Relative L2: {mean_rel_l2:.6f}")
+print(
+    f"  Min / Max Relative L2:       {float(jnp.min(per_sample_rel_l2)):.6f}"
+    f" / {float(jnp.max(per_sample_rel_l2)):.6f}"
+)
+print(f"  Test MSE:                    {test_mse:.6e}")
+print(f"  Mean predictive std:         {float(jnp.mean(test_std)):.6e}")
+print(f"  Mean aleatoric std:          {float(jnp.mean(test_aleatoric_std)):.6e}")
+print(f"  Mean epistemic std:          {float(jnp.mean(test_epistemic_std)):.6e}")
 
 # %% [markdown]
 """
 ## Calibration Analysis
+
+We check (1) that the predictive interval covers about the target
+fraction of residuals, and (2) that the uncertainty is *larger where the
+error is larger*, both per pixel and per sample.
 """
 
 # %%
 print()
 print("Uncertainty calibration analysis...")
 
-# Compute per-sample errors (shape: batch, C, H, W)
-errors = jnp.abs(predictions - test_targets)
-mean_error_per_sample = jnp.mean(errors, axis=(1, 2, 3))  # Average over C, H, W
-mean_uncertainty_per_sample = jnp.mean(uncertainty, axis=(1, 2, 3))
+coverage_target = float(jnp.mean(test_error <= COVERAGE_Z * test_std))
+coverage_1sigma = float(jnp.mean(test_error <= test_std))
+coverage_2sigma = float(jnp.mean(test_error <= 2.0 * test_std))
 
-# Correlation between error and uncertainty
-correlation = jnp.corrcoef(mean_error_per_sample.flatten(), mean_uncertainty_per_sample.flatten())[
-    0, 1
-]
-print(f"  Error-Uncertainty Correlation: {float(correlation):.4f}")
+mean_error_per_sample = jnp.mean(test_error, axis=(1, 2, 3))
+mean_std_per_sample = jnp.mean(test_std, axis=(1, 2, 3))
+per_sample_correlation = float(jnp.corrcoef(mean_error_per_sample, mean_std_per_sample)[0, 1])
+per_pixel_correlation = float(jnp.corrcoef(test_error.flatten(), test_std.flatten())[0, 1])
 
-# Coverage
-coverage_1sigma = jnp.mean(errors <= uncertainty)
-coverage_2sigma = jnp.mean(errors <= 2 * uncertainty)
-
-print(f"  1-sigma coverage: {float(coverage_1sigma) * 100:.1f}%")
-print(f"  2-sigma coverage: {float(coverage_2sigma) * 100:.1f}%")
+print(
+    f"  Coverage @ {COVERAGE_Z:.2f}-sigma: {coverage_target * 100:.1f}% (target {TARGET_COVERAGE:.0%})"
+)
+print(f"  1-sigma coverage:           {coverage_1sigma * 100:.1f}%")
+print(f"  2-sigma coverage:           {coverage_2sigma * 100:.1f}%")
+print(f"  Error-uncertainty corr (per-sample): {per_sample_correlation:.4f}")
+print(f"  Error-uncertainty corr (per-pixel):  {per_pixel_correlation:.4f}")
 
 # %% [markdown]
 """
@@ -400,35 +486,35 @@ print(f"  2-sigma coverage: {float(coverage_2sigma) * 100:.1f}%")
 print()
 print("Creating visualizations...")
 
-sample_idx = 0
+sample_idx = int(jnp.argmax(per_sample_rel_l2))  # Show the hardest test sample
 
 fig, axes = plt.subplots(2, 3, figsize=(14, 8))
 
-# Row 1: Input, Target, Prediction (channels-first: index with [:, 0, :, :])
+# Row 1: Input, Target, Prediction (channels-first: index with [:, 0, :, :]).
 ax = axes[0, 0]
-im = ax.imshow(test_inputs[sample_idx, 0, :, :], cmap="viridis")
+im = ax.imshow(np.asarray(x_test[sample_idx, 0, :, :]), cmap="viridis")
 ax.set_title("Input (Permeability)")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[0, 1]
-im = ax.imshow(test_targets[sample_idx, 0, :, :], cmap="RdBu_r")
+im = ax.imshow(np.asarray(y_test_phys[sample_idx, 0, :, :]), cmap="RdBu_r")
 ax.set_title("Target (Pressure)")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[0, 2]
-im = ax.imshow(predictions[sample_idx, 0, :, :], cmap="RdBu_r")
-ax.set_title("Prediction")
+im = ax.imshow(np.asarray(test_mean[sample_idx, 0, :, :]), cmap="RdBu_r")
+ax.set_title("Predictive Mean")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
-# Row 2: Error, Uncertainty, Calibration
+# Row 2: Error, Uncertainty, Calibration scatter.
 ax = axes[1, 0]
-error_map = jnp.abs(predictions[sample_idx, 0, :, :] - test_targets[sample_idx, 0, :, :])
+error_map = np.asarray(test_error[sample_idx, 0, :, :])
 im = ax.imshow(error_map, cmap="hot")
 ax.set_title("Absolute Error")
 ax.set_xlabel("x")
@@ -436,27 +522,26 @@ ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
 ax = axes[1, 1]
-im = ax.imshow(uncertainty[sample_idx, 0, :, :], cmap="Oranges")
-ax.set_title("Uncertainty")
+im = ax.imshow(np.asarray(test_std[sample_idx, 0, :, :]), cmap="Oranges")
+ax.set_title("Predictive Std (calibrated)")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 plt.colorbar(im, ax=ax, fraction=0.046)
 
-# Calibration scatter plot
 ax = axes[1, 2]
 ax.scatter(
-    mean_uncertainty_per_sample,
-    mean_error_per_sample,
+    np.asarray(mean_std_per_sample),
+    np.asarray(mean_error_per_sample),
     alpha=0.7,
     c="steelblue",
     edgecolors="white",
     linewidths=0.5,
 )
 max_val = max(ax.get_xlim()[1], ax.get_ylim()[1])
-ax.plot([0, max_val], [0, max_val], "r--", label="Perfect calibration")
-ax.set_xlabel("Predicted Uncertainty")
-ax.set_ylabel("Actual Error")
-ax.set_title(f"Calibration (r={float(correlation):.2f})")
+ax.plot([0, max_val], [0, max_val], "r--", label="Error = std")
+ax.set_xlabel("Mean predictive std")
+ax.set_ylabel("Mean absolute error")
+ax.set_title(f"Calibration (r={per_sample_correlation:.2f})")
 ax.legend()
 
 plt.suptitle("Bayesian FNO on Darcy Flow", fontsize=14, y=1.02)
@@ -474,26 +559,30 @@ print(f"  Saved: {OUTPUT_DIR / 'solution.png'}")
 # %%
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-# Training loss
+# Per-member NLL curves.
 ax = axes[0]
-ax.semilogy(train_losses)
-ax.set_xlabel("Batch")
-ax.set_ylabel("Loss (MSE)")
-ax.set_title("Training Loss")
+for member_index, member_history in enumerate(loss_histories):
+    ax.plot(member_history, label=f"Member {member_index + 1}", alpha=0.8)
+ax.set_xlabel("Epoch")
+ax.set_ylabel("Negative log-likelihood")
+ax.set_title("Per-Member Training NLL")
+ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
-# Error vs uncertainty
+# Aleatoric vs epistemic std (mean per sample).
 ax = axes[1]
+aleatoric_per_sample = jnp.mean(test_aleatoric_std, axis=(1, 2, 3))
+epistemic_per_sample = jnp.mean(test_epistemic_std, axis=(1, 2, 3))
 ax.scatter(
-    mean_uncertainty_per_sample,
-    mean_error_per_sample,
+    np.asarray(aleatoric_per_sample),
+    np.asarray(epistemic_per_sample),
     alpha=0.7,
-    c=np.arange(len(mean_error_per_sample)),
+    c=np.asarray(mean_error_per_sample),
     cmap="viridis",
 )
-ax.set_xlabel("Mean Uncertainty")
-ax.set_ylabel("Mean Error")
-ax.set_title("Per-Sample Error vs Uncertainty")
+ax.set_xlabel("Mean aleatoric std")
+ax.set_ylabel("Mean epistemic std")
+ax.set_title("Uncertainty Decomposition (color = error)")
 ax.grid(True, alpha=0.3)
 
 plt.suptitle("Bayesian FNO Training Analysis", fontsize=14, y=1.02)
@@ -507,22 +596,21 @@ print(f"  Saved: {OUTPUT_DIR / 'analysis.png'}")
 """
 ## Summary
 
-| Metric                    | Value         |
-|---------------------------|---------------|
-| Relative L2 Error         | ~0.10-0.20    |
-| MSE                       | ~0.001-0.01   |
-| Mean Uncertainty          | ~0.001-0.01   |
-| Error-Uncertainty Corr    | varies        |
-| Training Time             | ~5 min        |
+| Metric                            | Value         |
+|-----------------------------------|---------------|
+| Predictive-mean Relative L2       | ~0.005        |
+| Coverage @ 1.64-sigma             | ~90%          |
+| Error-uncertainty corr (sample)   | ~0.6-0.7      |
+| Parameters per member             | ~1.3 M        |
+| Training time                     | ~1-2 min (GPU)|
 
 **Key Observations:**
-- The base FNO provides good predictions
-- Uncertainty here is estimated via input perturbation through the
-  variational framework — a simplified path that exercises the
-  framework end-to-end without requiring optional dependencies
-- For Bayesian models that ship the shared platform surface
-  (``ProbabilisticPINN``, ``UncertaintyQuantificationNeuralOperator``),
-  call ``model.negative_elbo(...)`` directly; for the
-  ``AmortizedVariationalFramework`` itself, the analogous entry point
-  is ``compute_elbo``
+- The heteroscedastic deep ensemble keeps the operator-learning accuracy
+  of a deterministic FNO (predictive-mean rel-L2 well under 0.08).
+- The predictive variance is a genuine aleatoric + epistemic
+  decomposition, calibrated to the target coverage on a held-out split.
+- Uncertainty is larger where error is larger, both per pixel and per
+  sample, so the predictive std is an actionable risk signal.
+- Members are independent, so the ensemble trains and evaluates in
+  parallel and scales to large FNO backbones.
 """

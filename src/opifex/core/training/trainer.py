@@ -93,6 +93,11 @@ class Trainer(nnx.Module):
             eps=opt_cfg.eps,
             weight_decay=opt_cfg.weight_decay,
             momentum=opt_cfg.momentum,
+            schedule_type=opt_cfg.schedule_type,
+            decay_steps=opt_cfg.decay_steps,
+            transition_steps=opt_cfg.transition_steps,
+            decay_rate=opt_cfg.decay_rate,
+            alpha=opt_cfg.alpha,
         )
 
         # Create Optax transformation
@@ -157,6 +162,37 @@ class Trainer(nnx.Module):
         """
         self.components.append(component)
 
+    def _compute_data_loss(self, y_pred: jax.Array, y: jax.Array) -> jax.Array:
+        """Compute the data-fit loss selected by ``loss_config.loss_type``.
+
+        Supports ``mse`` (default), ``mae`` and ``relative_l2``. The relative L2
+        loss — the standard operator-learning objective — averages the per-sample
+        ratio ``||y_pred - y||_2 / ||y||_2`` and is scale-invariant across samples,
+        which is important when the target field magnitude varies.
+
+        Args:
+            y_pred: Model prediction.
+            y: Target.
+
+        Returns:
+            Scalar data loss.
+
+        Raises:
+            ValueError: If ``loss_type`` is not a recognised data loss.
+        """
+        loss_type = self.config.loss_config.loss_type
+        if loss_type == "mse":
+            return jnp.mean((y_pred - y) ** 2)
+        if loss_type == "mae":
+            return jnp.mean(jnp.abs(y_pred - y))
+        if loss_type == "relative_l2":
+            diff = (y_pred - y).reshape(y_pred.shape[0], -1)
+            target = y.reshape(y.shape[0], -1)
+            numerator = jnp.linalg.norm(diff, axis=1)
+            denominator = jnp.linalg.norm(target, axis=1) + 1e-8
+            return jnp.mean(numerator / denominator)
+        raise ValueError(f"Unsupported data loss_type: {loss_type!r}")
+
     def training_step(  # noqa: PLR0915
         self,
         x: jax.Array,
@@ -196,8 +232,8 @@ class Trainer(nnx.Module):
             else:
                 y_pred = model(x)
 
-            # Base data loss
-            data_loss = jnp.mean((y_pred - y) ** 2)
+            # Base data loss (selected by loss_config.loss_type)
+            data_loss = self._compute_data_loss(y_pred, y)
 
             total_loss = data_loss
             loss_components = {"data_loss": data_loss}

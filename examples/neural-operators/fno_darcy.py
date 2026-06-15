@@ -6,6 +6,16 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#   language_info:
+#     codemirror_mode:
+#       name: ipython
+#       version: 3
+#     file_extension: .py
+#     mimetype: text/x-python
+#     name: python
+#     nbconvert_exporter: python
+#     pygments_lexer: ipython3
+#     version: 3.12.6
 # ---
 
 # %% [markdown]
@@ -15,30 +25,39 @@
 | Property      | Value                                    |
 |---------------|------------------------------------------|
 | Level         | Intermediate                             |
-| Runtime       | ~5 min (CPU/GPU)                         |
+| Runtime       | ~3 min (CPU) / ~1 min (GPU)              |
 | Memory        | ~2 GB                                    |
 | Prerequisites | JAX, Flax NNX, Neural Operators basics   |
 
 ## Overview
 
-Train a Fourier Neural Operator (FNO) on the Darcy flow equation, a 2D
-elliptic PDE that maps a permeability coefficient field to the pressure
-solution. This example demonstrates:
+Train a Fourier Neural Operator (FNO) on the Darcy flow equation, a 2D elliptic
+PDE that maps a permeability coefficient field to the pressure solution. This is
+the standard-FNO showcase on Opifex's own Darcy data: it uses
+`create_darcy_loader` (smooth Darcy, solved with the accurate direct solver) and
+reaches a low relative L2 error with the standard operator-learning recipe.
+
+This example demonstrates:
 
 - **GridEmbedding2D** for spatial positional encoding
 - **FourierNeuralOperator** for spectral operator learning
-- **Grain DataLoader** for efficient streaming data
+- **Gaussian normalization** of inputs and outputs (fit on train, un-normalized
+  predictions for physical-space error)
+- **relative-L2 loss** via `LossConfig`, the standard operator-learning objective
+- **AdamW + exponential LR decay + weight decay** to converge without overfitting
 - **Trainer.fit()** for end-to-end training with validation
 
-Equivalent to `neuraloperator/examples/models/plot_FNO_darcy.py`,
-reimplemented using Opifex APIs.
+It is the FNO counterpart to [UNO on Darcy Flow](uno-darcy.md) and
+[Your First Neural Operator](../getting-started/first-neural-operator.md), which
+use the same synthetic Darcy data and recipe.
 
 ## Learning Goals
 
 1. Compose `GridEmbedding2D` with `FourierNeuralOperator`
-2. Load Darcy flow data with `create_darcy_loader` (Grain-based)
-3. Train with Opifex's `Trainer.fit()` API
-4. Evaluate with L2 relative error and full visualization
+2. Load Darcy flow data with `create_darcy_loader`
+3. Apply Gaussian normalization and the relative-L2 loss
+4. Use AdamW + an exponential learning-rate schedule + weight decay
+5. Evaluate with L2 relative error and full visualization
 """
 
 # %% [markdown]
@@ -56,11 +75,17 @@ warnings.filterwarnings("ignore")
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from flax import nnx
 
+
+mpl.use("Agg")
+import matplotlib.pyplot as plt
+
 from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig, OptimizationConfig
+from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 
@@ -74,20 +99,34 @@ print(f"JAX devices: {jax.devices()}")
 # %% [markdown]
 """
 ## Configuration
+
+We follow the standard operator-learning recipe: ~1000 training samples,
+Gaussian normalization, the relative-L2 loss, and `AdamW` with weight decay plus
+an exponential learning-rate decay over enough epochs for the spectral weights to
+converge. The FNO also uses `domain_padding`, which pads the spatial dimensions
+before the spectral layers to reduce the Gibbs phenomenon on this non-periodic
+boundary-value problem.
 """
 
 # %%
-# Match NeuralOperator's plot_FNO_darcy.py config exactly
-RESOLUTION = 16  # Same as neuraloperator small Darcy
+RESOLUTION = 32  # synthetic Darcy resolution (differentiates from getting-started 32x32 super-res)
 N_TRAIN = 1000
 N_TEST = 100
-BATCH_SIZE = 64
-NUM_EPOCHS = 15
-LEARNING_RATE = 1e-2  # AdamW lr from neuraloperator
-MODES = 8  # n_modes=(8,8) from neuraloperator
-HIDDEN_WIDTH = 24  # hidden_channels=24 from neuraloperator
+BATCH_SIZE = 32
+NUM_EPOCHS = 200
+LEARNING_RATE = 5e-3  # AdamW initial LR
+WEIGHT_DECAY = 1e-4  # regularization to combat overfitting
+MODES = 12  # retained Fourier modes per axis
+HIDDEN_WIDTH = 32
 NUM_LAYERS = 4
+DOMAIN_PADDING = 8  # pad spatial dims to soften the Gibbs phenomenon (non-periodic)
 SEED = 42
+
+# Exponential LR schedule: halve the rate every 60 epochs.
+STEPS_PER_EPOCH = N_TRAIN // BATCH_SIZE
+LR_DECAY_EPOCHS = 60
+LR_TRANSITION_STEPS = LR_DECAY_EPOCHS * STEPS_PER_EPOCH
+LR_DECAY_RATE = 0.5
 
 OUTPUT_DIR = Path("docs/assets/examples/fno_darcy")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -96,66 +135,99 @@ print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
 print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
 print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
 print(f"FNO config: modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS}")
+print(f"Optimizer: AdamW (lr={LEARNING_RATE}, weight_decay={WEIGHT_DECAY})")
+print(f"LR schedule: exponential, x{LR_DECAY_RATE} every {LR_DECAY_EPOCHS} epochs")
 
 # %% [markdown]
 """
-## Data Loading
+## Data Loading with Grain
 
-We use the same Darcy flow dataset as NeuralOperator's `plot_FNO_darcy.py`
-(Zenodo record 12784353, 16x16 resolution, 1000 train / 100 test).
-This ensures a fair head-to-head comparison on identical data.
+Opifex provides `create_darcy_loader`, which generates Darcy flow equation data
+(permeability-to-pressure mapping) with the accurate direct solver and wraps it
+in a Google Grain DataLoader for efficient streaming and batching.
 """
 
 # %%
 print()
-data_dir = Path("example_data/darcy_neuralop")
-if not (data_dir / "darcy_train_16.npz").exists():
-    print("Downloading NeuralOperator Darcy data from Zenodo...")
-    data_dir.mkdir(parents=True, exist_ok=True)
-    from neuralop.data.datasets import load_darcy_flow_small
+print("Loading Darcy flow data via Grain...")
+train_loader = create_darcy_loader(
+    n_samples=N_TRAIN,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    shuffle=True,
+    seed=SEED,
+    worker_count=0,
+    enable_normalization=False,
+)
 
-    _tl, _testl, _dp = load_darcy_flow_small(
-        n_train=1000,
-        batch_size=64,
-        n_tests=[100, 50],
-        test_resolutions=[16, 32],
-        test_batch_sizes=[32, 32],
-    )
-    _Xs, _Ys = [], []
-    for _b in _tl:
-        _b = _dp.preprocess(_b, batched=True)
-        _Xs.append(_b["x"].numpy())
-        _Ys.append(_b["y"].numpy())
-    np.savez(data_dir / "darcy_train_16.npz", x=np.concatenate(_Xs), y=np.concatenate(_Ys))
-    for _res in [16, 32]:
-        _Xs, _Ys = [], []
-        for _b in _testl[_res]:
-            _b = _dp.preprocess(_b, batched=True)
-            _Xs.append(_b["x"].numpy())
-            _Ys.append(_b["y"].numpy())
-        np.savez(data_dir / f"darcy_test_{_res}.npz", x=np.concatenate(_Xs), y=np.concatenate(_Ys))
-    print("Data downloaded and converted to numpy.")
-else:
-    print("Loading cached NeuralOperator Darcy data...")
+test_loader = create_darcy_loader(
+    n_samples=N_TEST,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    shuffle=False,
+    seed=SEED + 1000,
+    worker_count=0,
+    enable_normalization=False,
+)
 
-train_data = np.load(data_dir / "darcy_train_16.npz")
-test_data = np.load(data_dir / "darcy_test_16.npz")
+# Collect data from loaders into arrays for Trainer.fit().
+X_train_list, Y_train_list = [], []
+for batch in train_loader:
+    X_train_list.append(batch["input"])
+    Y_train_list.append(batch["output"])
 
-X_train = train_data["x"][:N_TRAIN]
-Y_train = train_data["y"][:N_TRAIN]
-X_test = test_data["x"][:N_TEST]
-Y_test = test_data["y"][:N_TEST]
+X_train = np.concatenate(X_train_list, axis=0)
+Y_train = np.concatenate(Y_train_list, axis=0)
+
+X_test_list, Y_test_list = [], []
+for batch in test_loader:
+    X_test_list.append(batch["input"])
+    Y_test_list.append(batch["output"])
+
+X_test = np.concatenate(X_test_list, axis=0)
+Y_test = np.concatenate(Y_test_list, axis=0)
+
+# FNO expects channels-first: (batch, channels, H, W).
+if X_train.ndim == 3:
+    X_train = X_train[:, np.newaxis, :, :]
+    Y_train = Y_train[:, np.newaxis, :, :]
+if X_test.ndim == 3:
+    X_test = X_test[:, np.newaxis, :, :]
+    Y_test = Y_test[:, np.newaxis, :, :]
 
 print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
 print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
 
 # %% [markdown]
 """
+## Normalization
+
+Neural operators train best on standardized fields. We fit Gaussian statistics on
+the training set, normalize all splits, and un-normalize predictions before
+computing the physical-space relative L2 error.
+"""
+
+# %%
+x_mean, x_std = X_train.mean(), X_train.std()
+y_mean, y_std = Y_train.mean(), Y_train.std()
+
+X_train_n = (X_train - x_mean) / x_std
+Y_train_n = (Y_train - y_mean) / y_std
+X_test_n = (X_test - x_mean) / x_std
+Y_test_n = (Y_test - y_mean) / y_std
+
+print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+# %% [markdown]
+"""
 ## Model Creation
 
 We compose `GridEmbedding2D` with `FourierNeuralOperator` to inject spatial
-coordinates as additional input channels. This positional encoding helps the
-FNO learn spatially varying operators.
+coordinates as additional input channels. This positional encoding helps the FNO
+learn spatially varying operators on this boundary-value problem. The FNO also
+uses `domain_padding`, padding the spatial dimensions before the spectral layers
+to reduce the Gibbs phenomenon for the non-periodic Darcy problem.
 """
 
 
@@ -171,8 +243,23 @@ class FNOWithEmbedding(nnx.Module):
         hidden_channels: int,
         num_layers: int,
         grid_boundaries: list[list[float]],
+        *,
+        domain_padding: int,
         rngs: nnx.Rngs,
-    ):
+    ) -> None:
+        """Build the grid embedding and the underlying FNO.
+
+        Args:
+            in_channels: Number of physical input channels (before the grid).
+            out_channels: Number of output channels.
+            modes: Number of Fourier modes per spatial dimension.
+            hidden_channels: Number of FNO hidden channels.
+            num_layers: Number of spectral layers.
+            grid_boundaries: Per-axis ``[min, max]`` grid extents.
+            domain_padding: Pixels padded on each spatial axis to reduce the
+                Gibbs phenomenon for the non-periodic Darcy problem.
+            rngs: Random number generators.
+        """
         super().__init__()
         self.grid_embedding = GridEmbedding2D(
             in_channels=in_channels,
@@ -184,11 +271,19 @@ class FNOWithEmbedding(nnx.Module):
             hidden_channels=hidden_channels,
             modes=modes,
             num_layers=num_layers,
+            domain_padding=domain_padding,
             rngs=rngs,
         )
 
     def __call__(self, x: jax.Array) -> jax.Array:
-        """Forward pass: grid embedding -> FNO."""
+        """Forward pass: grid embedding -> FNO.
+
+        Args:
+            x: Input of shape ``(batch, channels, H, W)``.
+
+        Returns:
+            Output of shape ``(batch, out_channels, H, W)``.
+        """
         # (batch, channels, H, W) -> (batch, H, W, channels) for embedding
         x_hwc = jnp.moveaxis(x, 1, -1)
         x_embedded = self.grid_embedding(x_hwc)
@@ -206,6 +301,7 @@ model = FNOWithEmbedding(
     hidden_channels=HIDDEN_WIDTH,
     num_layers=NUM_LAYERS,
     grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
+    domain_padding=DOMAIN_PADDING,
     rngs=nnx.Rngs(SEED),
 )
 
@@ -220,8 +316,11 @@ print(f"  Total parameters: {param_count:,}")
 """
 ## Training with Opifex Trainer
 
-The `Trainer.fit()` method handles the full training loop with JIT compilation,
-batching, validation, and progress logging.
+We train with `AdamW`, weight decay, and an exponential learning-rate schedule
+that halves the rate every 60 epochs. The data loss is the **relative-L2 loss**
+(`loss_type="relative_l2"`), the standard operator-learning objective.
+`Trainer.fit()` handles batched training with JIT compilation, validation, and
+progress logging.
 """
 
 # %%
@@ -229,9 +328,18 @@ print()
 print("Setting up Trainer...")
 config = TrainingConfig(
     num_epochs=NUM_EPOCHS,
-    learning_rate=LEARNING_RATE,
     batch_size=BATCH_SIZE,
+    validation_frequency=20,
     verbose=True,
+    loss_config=LossConfig(loss_type="relative_l2"),
+    optimization_config=OptimizationConfig(
+        optimizer="adamw",
+        learning_rate=LEARNING_RATE,
+        weight_decay=WEIGHT_DECAY,
+        schedule_type="exponential",
+        transition_steps=LR_TRANSITION_STEPS,
+        decay_rate=LR_DECAY_RATE,
+    ),
 )
 
 trainer = Trainer(
@@ -240,14 +348,15 @@ trainer = Trainer(
     rngs=nnx.Rngs(SEED),
 )
 
-print(f"Optimizer: Adam (lr={LEARNING_RATE})")
+print(f"Optimizer: AdamW (lr={LEARNING_RATE}, weight_decay={WEIGHT_DECAY})")
+print("Loss: relative L2 (the standard operator-learning objective)")
 print()
 print("Starting training...")
 start_time = time.time()
 
 trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train), jnp.array(Y_train)),
-    val_data=(jnp.array(X_test), jnp.array(Y_test)),
+    train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
+    val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),
 )
 
 training_time = time.time() - start_time
@@ -259,18 +368,44 @@ print(f"Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
 """
 ## Evaluation
 
-Evaluate the trained FNO on the test set with detailed per-sample metrics.
+Predictions are un-normalized back to physical pressure before measuring the
+relative L2 error. We run the test and training sets through the model in batches
+(to bound memory) and compare the two to confirm the model is not overfitting.
 """
 
+
 # %%
+def predict_in_batches(
+    forward: nnx.Module,
+    inputs: jax.Array,
+    batch_size: int = 128,
+) -> jax.Array:
+    """Run the model over the inputs in batches to bound memory use.
+
+    Args:
+        forward: The trained model.
+        inputs: Inputs of shape ``(N, channels, H, W)``.
+        batch_size: Number of samples per forward pass.
+
+    Returns:
+        Concatenated predictions of shape ``(N, out_channels, H, W)``.
+    """
+    outputs = [forward(inputs[i : i + batch_size]) for i in range(0, inputs.shape[0], batch_size)]
+    return jnp.concatenate(outputs, axis=0)
+
+
 print()
 print("Running evaluation...")
-X_test_jnp = jnp.array(X_test)
+X_test_jnp = jnp.array(X_test_n)
 Y_test_jnp = jnp.array(Y_test)
+X_train_jnp = jnp.array(X_train_n)
+Y_train_jnp = jnp.array(Y_train)
 
-predictions = trained_model(X_test_jnp)
+# Un-normalize predictions back to physical pressure units.
+predictions = predict_in_batches(trained_model, X_test_jnp) * y_std + y_mean
+train_predictions = predict_in_batches(trained_model, X_train_jnp) * y_std + y_mean
 
-# Overall metrics
+# Overall metrics (in physical units).
 test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 
 pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
@@ -278,8 +413,16 @@ Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
 per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)
 mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 
-print(f"Test MSE:         {test_mse:.6f}")
-print(f"Test Relative L2: {mean_rel_l2:.6f}")
+train_diff = (train_predictions - Y_train_jnp).reshape(train_predictions.shape[0], -1)
+Y_train_flat = Y_train_jnp.reshape(Y_train_jnp.shape[0], -1)
+train_rel_l2 = float(
+    jnp.mean(jnp.linalg.norm(train_diff, axis=1) / jnp.linalg.norm(Y_train_flat, axis=1))
+)
+
+print(f"Train Relative L2: {train_rel_l2:.6f}")
+print(f"Test  Relative L2: {mean_rel_l2:.6f}")
+print(f"Overfitting gap (test - train): {mean_rel_l2 - train_rel_l2:+.6f}")
+print(f"Test MSE:         {test_mse:.6e}")
 print(f"Min Relative L2:  {float(jnp.min(per_sample_rel_l2)):.6f}")
 print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
 
@@ -362,17 +505,19 @@ print(f"Error analysis saved to {OUTPUT_DIR / 'error_analysis.png'}")
 ## Results Summary
 
 After running this example you should observe:
-- Decreasing training and validation loss over epochs
-- Reasonable L2 relative error on the Darcy flow test set
+- A decreasing relative-L2 training loss with the exponential learning-rate decay
+- A low relative L2 error on the Darcy flow test set, with a small
+  train-vs-test gap (the relative-L2 loss + weight decay + LR schedule prevent
+  overfitting)
 - Visualizations showing input permeability, ground truth pressure,
   FNO predictions, and pointwise error maps
 
 ## Next Steps
 
-- Increase resolution and training epochs for better accuracy
+- Increase resolution and training epochs for even better accuracy
 - Experiment with different numbers of Fourier modes and layers
+- Compare the relative-L2 objective against an H1 (Sobolev) gradient-aware loss
 - Try the UNO architecture for multi-scale Darcy flow problems
-- Add physics-informed loss terms for conservation constraints
 - Explore `TensorizedFourierNeuralOperator` for parameter-efficient training
 """
 
@@ -380,6 +525,6 @@ After running this example you should observe:
 print()
 print("=" * 70)
 print(f"FNO Darcy Flow example completed in {training_time:.1f}s")
-print(f"Test MSE: {test_mse:.6f}, Relative L2: {mean_rel_l2:.6f}")
+print(f"Test MSE: {test_mse:.6e}, Relative L2: {mean_rel_l2:.6f}")
 print(f"Results saved to: {OUTPUT_DIR}")
 print("=" * 70)

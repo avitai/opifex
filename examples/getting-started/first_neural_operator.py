@@ -6,6 +6,16 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#   language_info:
+#     codemirror_mode:
+#       name: ipython
+#       version: 3
+#     file_extension: .py
+#     mimetype: text/x-python
+#     name: python
+#     nbconvert_exporter: python
+#     pygments_lexer: ipython3
+#     version: 3.12.6
 # ---
 
 # %% [markdown]
@@ -30,11 +40,12 @@ Once trained at 32x32 resolution, it can make predictions at 64x64 WITHOUT retra
 **This is THE key differentiator of neural operators vs standard neural networks.**
 
 We'll achieve:
-- ~15-20% relative L2 error at training resolution (32x32)
+- ~2% relative L2 error at training resolution (32x32)
+- ~6% relative L2 error zero-shot at 64x64 (on different samples)
 - The model learns to map permeability to pressure solutions
 
-**Note**: State-of-the-art results (~2% error) require H1 loss and LR scheduling.
-This example focuses on demonstrating the Opifex APIs with minimal configuration.
+**Note**: This example reaches single-digit error with a compact configuration
+using the relative-L2 objective and Gaussian normalization.
 
 This example uses Opifex APIs:
 - `create_darcy_loader` for data generation

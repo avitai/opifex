@@ -308,7 +308,9 @@ def test_mc_dropout_operator_wrap_requires_rngs_at_predict_time() -> None:
     capability = spec.recommended_capability()
 
     def stochastic_operator(x: jax.Array, *, rngs: nnx.Rngs) -> jax.Array:
-        return jnp.sum(x, axis=-1, keepdims=True) + jax.random.normal(rngs.dropout(), (x.shape[0], 1))
+        return jnp.sum(x, axis=-1, keepdims=True) + jax.random.normal(
+            rngs.dropout(), (x.shape[0], 1)
+        )
 
     state = MCDropoutState(model_fn=stochastic_operator, num_samples=4)
     wrapped = spec.wrap(model=state, capability=capability)

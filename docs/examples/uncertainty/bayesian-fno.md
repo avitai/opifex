@@ -3,45 +3,53 @@
 | Metadata          | Value                              |
 |-------------------|------------------------------------|
 | **Level**         | Intermediate                       |
-| **Runtime**       | ~5 min (GPU) / ~20 min (CPU)       |
-| **Prerequisites** | JAX, Flax NNX, Variational Inference |
+| **Runtime**       | ~2 min (GPU) / ~10 min (CPU)       |
+| **Prerequisites** | JAX, Flax NNX, Deep Ensembles      |
 | **Format**        | Python + Jupyter                   |
 | **Memory**        | ~2 GB RAM                          |
 
 ## Overview
 
-This example demonstrates wrapping a standard Fourier Neural Operator (FNO) with
-the Amortized Variational Framework to enable uncertainty quantification. This
-approach adds Bayesian capabilities to any existing neural operator.
+This example quantifies predictive uncertainty for the Darcy
+permeability-to-pressure operator with a **heteroscedastic deep ensemble**
+of Fourier Neural Operators. Each member is a
+`ProbabilisticFourierNeuralOperator` — an FNO backbone with twin pointwise
+heads that emit a per-location `mean` and `log-variance`. Training each
+member by the heteroscedastic-Gaussian negative log-likelihood gives the
+*aleatoric* axis (input-dependent noise); the disagreement *across*
+members gives the *epistemic* axis (model uncertainty). Their sum is the
+total predictive variance.
 
 **Key Concepts:**
 
-- **Base Model**: Standard FNO for Darcy flow prediction
-- **Variational Wrapper**: `AmortizedVariationalFramework` adds uncertainty
-- **Amortization Network**: Predicts posterior parameters from input
-- **Monte Carlo**: Sample-based uncertainty estimation
+- **Deep Ensemble**: Independently-trained members; their spread is the
+  epistemic (model) uncertainty (Lakshminarayanan et al. 2017).
+- **Heteroscedastic Head**: Each member predicts a per-location variance,
+  the aleatoric (data) uncertainty (Kendall & Gal 2017).
+- **Variance Calibration**: A single positive scale, fit on a held-out
+  split, aligns the predictive std with the observed error spread.
 
 ## What You'll Learn
 
-1. **Create** a base FNO model using `FourierNeuralOperator`
-2. **Wrap** with `AmortizedVariationalFramework` for uncertainty
-3. **Configure** variational inference with `VariationalConfig`
-4. **Estimate** predictive uncertainty via perturbation sampling
+1. **Build** a heteroscedastic FNO with `ProbabilisticFourierNeuralOperator`
+2. **Train** an ensemble with the heteroscedastic-Gaussian NLL loss
+3. **Decompose** predictive variance into aleatoric + epistemic parts
+4. **Calibrate** and visualize the predictive uncertainty
 
 ## Coming from Standard FNO?
 
 | Standard FNO                       | Bayesian FNO (This Example)                 |
 |------------------------------------|---------------------------------------------|
-| Point predictions                  | Predictions + uncertainty                   |
-| `model(x)` returns `y`             | Returns mean and variance                   |
-| MSE loss                           | MSE loss on base FNO + amortized variational head |
-| No uncertainty                     | Epistemic + aleatoric decomposition         |
+| Point predictions                  | Predictive mean + calibrated std            |
+| `model(x)` returns `y`             | Member returns `(mean, log_variance)`       |
+| Relative-L2 loss                   | Heteroscedastic-Gaussian NLL                |
+| No uncertainty                     | Aleatoric + epistemic decomposition         |
 
 **Key differences:**
 
-1. **Wrapper pattern**: Base FNO wrapped with variational framework
-2. **Amortization**: Additional network predicts posterior parameters
-3. **Overhead**: ~70x more parameters for amortization network
+1. **Ensemble**: Several independently-seeded members vote on the answer.
+2. **Variance head**: Each member learns an input-dependent noise level.
+3. **Calibration**: One held-out scale aligns the interval with coverage.
 
 ## Files
 
@@ -64,37 +72,46 @@ jupyter lab examples/uncertainty/bayesian_fno.ipynb
 
 ## Core Concepts
 
-### Amortized Variational Inference
+### Heteroscedastic Deep Ensemble
 
-Traditional variational inference optimizes posterior parameters per-datapoint.
-Amortized inference uses a neural network to predict posterior parameters
-directly from input, enabling faster inference at test time.
+Each member predicts a per-location Gaussian `N(mu(x), sigma^2(x))`. The
+ensemble decomposes the total predictive variance as
 
 ```
-Input x → Amortization Network → (μ, σ) → Sample weights → Prediction
+total = aleatoric + epistemic
+      = mean_m[sigma_m^2(x)] + var_m[mu_m(x)]
 ```
 
-### Variational Framework Components
+where `m` indexes ensemble members. The aleatoric term captures
+input-dependent noise; the epistemic term captures member disagreement.
+
+### Components
 
 | Component | Role |
 |-----------|------|
-| `MeanFieldGaussian` | Variational posterior over weights |
-| `UncertaintyEncoder` | Amortization network |
-| `AmortizedVariationalFramework` | Combines base model with VI |
+| `ProbabilisticFourierNeuralOperator` | FNO backbone + mean / log-variance heads |
+| `probabilistic_fno_negative_log_likelihood` | Heteroscedastic-Gaussian training loss |
+| `append_grid_coordinates` | Positional embedding (boundary-value problems) |
+| `ensemble_predictive` | Aggregates member means into the epistemic spread |
 
 ## Implementation
 
-### Step 1: Create Base FNO
+### Step 1: Build a Heteroscedastic Member
+
+The backbone is translation-equivariant, so grid-coordinate channels are
+prepended to the input — each member is built with `in_channels = 1 + 2`.
 
 ```python
-from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.neural.operators.fno.probabilistic import (
+    ProbabilisticFourierNeuralOperator,
+)
 
-base_fno = FourierNeuralOperator(
-    in_channels=1,
+member = ProbabilisticFourierNeuralOperator(
+    in_channels=3,  # 1 permeability + 2 grid coordinates
     out_channels=1,
     hidden_channels=32,
-    num_layers=4,
     modes=12,
+    num_layers=4,
     rngs=nnx.Rngs(42),
 )
 ```
@@ -102,88 +119,82 @@ base_fno = FourierNeuralOperator(
 **Terminal Output:**
 
 ```text
-Creating base FNO model...
-  Base FNO output shape: (1, 1, 64, 64)
-  Base FNO parameters: 53,473
+Creating heteroscedastic FNO ensemble...
+  Member: ProbabilisticFNO (modes=12, width=32, layers=4)
+  Input channels: 1 (+ 2 grid = 3)
+  Parameters per member: 2,372,066
+  Ensemble parameters:   9,488,264
 ```
 
-### Step 2: Wrap with Variational Framework
+### Step 2: Train the Ensemble
+
+Every member is trained independently with the heteroscedastic-Gaussian
+NLL on grid-augmented, Gaussian-normalized inputs.
 
 ```python
-from opifex.neural.bayesian import (
-    AmortizedVariationalFramework,
-    PriorConfig,
-    VariationalConfig,
+from opifex.neural.operators.fno._positional import append_grid_coordinates
+from opifex.neural.operators.fno.probabilistic import (
+    probabilistic_fno_negative_log_likelihood,
 )
 
-prior_config = PriorConfig(prior_scale=1.0)
 
-variational_config = VariationalConfig(
-    input_dim=64 * 64 * 1,  # Flattened input
-    hidden_dims=(64, 32),
-    num_samples=5,
-    kl_weight=1e-4,
-)
+@nnx.jit
+def train_step(member, optimizer, x, y):
+    def loss_fn(model):
+        return probabilistic_fno_negative_log_likelihood(
+            model, append_grid_coordinates(x), y
+        )
 
-bayesian_fno = AmortizedVariationalFramework(
-    base_model=base_fno,
-    prior_config=prior_config,
-    variational_config=variational_config,
-    rngs=nnx.Rngs(43),
-)
+    loss, grads = nnx.value_and_grad(loss_fn)(member)
+    optimizer.update(member, grads)
+    return loss
 ```
 
 **Terminal Output:**
 
 ```text
-Creating Bayesian FNO with variational framework...
-  Total parameters (FNO + amortization): 3,953,925
-  Amortization network added: 3,900,452 params
+Training ensemble members...
+  Member 1/4: NLL +0.6485 -> -2.6133
+  Member 2/4: NLL +0.6307 -> -1.8761
+  Member 3/4: NLL +0.4165 -> -1.9256
+  Member 4/4: NLL +0.4596 -> -2.9653
+Training time: 60.9s
 ```
 
-### Step 3: Training
+### Step 3: Predict and Calibrate
 
-The base FNO is trained with standard MSE loss:
+The predictive mean and aleatoric + epistemic variance are assembled in
+physical units, then a single scale is fit on a held-out calibration
+split so the `1.64-sigma` interval covers ~90% of the residuals.
 
 **Terminal Output:**
 
 ```text
-Training Bayesian FNO...
-  Epoch   1/20: loss = 0.006995
-  Epoch   5/20: loss = 0.000382
-  Epoch  10/20: loss = 0.001228
-  Epoch  15/20: loss = 0.000237
-  Epoch  20/20: loss = 0.000273
-Training time: 36.6s
-Final loss: 0.000200
-```
+Calibrating predictive uncertainty...
+  Calibration std scale: 0.1747
 
-### Step 4: Uncertainty Estimation
+Evaluating on test set...
 
-```python
-# Perturbation-based uncertainty estimation
-preds_list = []
-for i in range(NUM_SAMPLES):
-    noisy_input = test_inputs + 0.01 * jax.random.normal(
-        jax.random.PRNGKey(SEED + i), test_inputs.shape
-    )
-    preds_list.append(base_fno(noisy_input))
-
-uncertainty = jnp.std(jnp.stack(preds_list), axis=0)
-```
-
-**Terminal Output:**
-
-```text
 Results:
-  Relative L2 Error: 5.9885
-  MSE:               0.000265
-  Mean Uncertainty:  0.000897
+  Predictive-mean Relative L2: 0.004603
+  Min / Max Relative L2:       0.002121 / 0.008210
+  Test MSE:                    1.004284e-07
+  Mean predictive std:         3.129095e-04
+  Mean aleatoric std:          1.749189e-03
+  Mean epistemic std:          3.466309e-04
+```
 
+### Step 4: Calibration Analysis
+
+**Terminal Output:**
+
+```text
 Uncertainty calibration analysis...
-  Error-Uncertainty Correlation: 0.6306
-  1-sigma coverage: 5.9%
-  2-sigma coverage: 11.4%
+  Coverage @ 1.64-sigma: 89.2% (target 90%)
+  1-sigma coverage:           68.3%
+  2-sigma coverage:           94.5%
+  Error-uncertainty corr (per-sample): 0.4206
+  Error-uncertainty corr (per-pixel):  0.1276
 ```
 
 ## Visualization
@@ -194,31 +205,33 @@ Uncertainty calibration analysis...
 
 ## Results Summary
 
-| Metric                    | Value         |
-|---------------------------|---------------|
-| Relative L2 Error         | ~6.0          |
-| MSE                       | 0.000265      |
-| Mean Uncertainty          | 0.000897      |
-| Error-Uncertainty Corr    | 0.63          |
-| Training Time             | ~37s          |
-| Base FNO Parameters       | 53,473        |
-| Total Parameters          | 3,953,925     |
+| Metric                              | Value         |
+|-------------------------------------|---------------|
+| Predictive-mean Relative L2         | 0.004603      |
+| Min / Max Relative L2               | 0.002121 / 0.008210 |
+| Coverage @ 1.64-sigma               | 89.2%         |
+| 2-sigma coverage                    | 94.5%         |
+| Error-uncertainty corr (per-sample) | 0.4206        |
+| Error-uncertainty corr (per-pixel)  | 0.1276        |
+| Parameters per member               | 2,372,066     |
+| Ensemble parameters                 | 9,488,264     |
+| Training time                       | ~61s          |
+
+The predictive mean visually matches the smooth ground-truth pressure
+field, and the calibrated predictive std is larger where the absolute
+error is larger — an actionable, well-calibrated risk signal.
 
 ## Next Steps
 
 ### Experiments to Try
 
-1. **Full ELBO training via the framework**: Call
-   `AmortizedVariationalFramework.compute_elbo` directly in the training
-   loop (no `distrax` dependency required for the inner computation).
-2. **Shared platform-surface alternative**: For new Bayesian models
-   (`ProbabilisticPINN`, `UncertaintyQuantificationNeuralOperator`),
-   call `model.negative_elbo(batch, rngs=..., objective=...)` directly
-   — returns a `UQLossComponents` from the shared
-   `opifex.uncertainty.objectives` surface.
-3. **Tune amortization**: Adjust `hidden_dims` in `VariationalConfig`
-4. **More MC samples**: Increase `num_samples` for better uncertainty estimates
-5. **Different base models**: Try TFNO, UNO, or SFNO as base
+1. **More members**: Increase `NUM_MEMBERS` for a smoother epistemic
+   estimate (diminishing returns past ~5 on this smooth dataset).
+2. **Higher capacity**: Raise `MODES` / `HIDDEN_WIDTH` for sharper means.
+3. **Target coverage**: Change `TARGET_COVERAGE` to calibrate a different
+   predictive interval (e.g. `0.95`).
+4. **Different backbones**: Swap the member backbone for TFNO or UNO and
+   keep the same heteroscedastic-ensemble wrapper.
 
 ### Related Examples
 
@@ -230,28 +243,24 @@ Uncertainty calibration analysis...
 
 ### API Reference
 
-- `AmortizedVariationalFramework`: Wraps base model with VI
-- `VariationalConfig`: Configuration for variational inference
-- `PriorConfig`: Configuration for physics-informed priors
-- `MeanFieldGaussian`: Mean-field Gaussian posterior
-- `UncertaintyEncoder`: Amortization network
+- `ProbabilisticFourierNeuralOperator`: FNO with mean + log-variance heads
+- `probabilistic_fno_negative_log_likelihood`: Heteroscedastic-Gaussian NLL
+- `append_grid_coordinates`: Grid positional embedding
+- `ensemble_predictive`: Member-aggregation predictive constructor
 
 ### Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Memory issues | Reduce amortization `hidden_dims` |
-| Poor calibration | Use more MC samples, tune perturbation scale |
-| High parameter count | Use smaller amortization network |
+| Over-confident intervals | The held-out variance scale corrects this; widen the calibration split if it is noisy |
+| Out-of-memory on evaluation | Lower `EVAL_CHUNK` |
+| Weak per-sample correlation | Train members longer or reduce per-member capacity for more diversity |
 
 ### Notes
 
-This example uses MSE training on the base FNO + a perturbation-based
-inference pass through the variational framework — a simplified path
-that exercises the wrapper end-to-end without optional dependencies.
-``AmortizedVariationalFramework.compute_elbo`` is the framework-internal
-ELBO if you want to plug it into the training loop directly. For models
-that ship the shared platform surface (``ProbabilisticPINN``,
-``UncertaintyQuantificationNeuralOperator``), call
-``model.negative_elbo(batch, rngs=..., objective=ObjectiveConfig(...))``
-instead — no manual KL/data assembly required.
+This example uses a heteroscedastic deep ensemble: each member is a
+`ProbabilisticFourierNeuralOperator` trained by the heteroscedastic-Gaussian
+NLL, and the predictive variance is the standard aleatoric + epistemic
+decomposition, calibrated to the target coverage on a held-out split. This
+is the canonical scalable Bayesian-predictive recipe and it preserves the
+operator-learning accuracy of a deterministic FNO.

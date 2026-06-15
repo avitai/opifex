@@ -266,7 +266,9 @@ class BayesianSINDy:
 
         warmup = blackjax.window_adaptation(blackjax.nuts, log_density)
         (initial_state, tuned_parameters), _ = warmup.run(
-            warmup_key, init_position, num_steps=self.num_warmup
+            warmup_key,
+            init_position,
+            num_steps=self.num_warmup,  # pyright: ignore[reportCallIssue]  # blackjax AdaptationAlgorithm.run is generically typed
         )
 
         states = _nuts_inference_loop(
@@ -384,7 +386,9 @@ def _nuts_inference_loop(
 
     @jax.jit
     def one_step(state: HMCState, key: jax.Array) -> tuple[HMCState, HMCState]:
-        state, _info = kernel(key, state)
+        # blackjax nuts step returns the generic ``State`` base; at runtime it is the
+        # ``HMCState`` that NUTS shares with HMC (see docstring above).
+        state, _info = kernel(key, state)  # pyright: ignore[reportAssignmentType]
         return state, state
 
     keys = jax.random.split(rng_key, num_samples)

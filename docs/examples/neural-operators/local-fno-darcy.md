@@ -3,10 +3,10 @@
 | Metadata          | Value                           |
 |-------------------|---------------------------------|
 | **Level**         | Intermediate                    |
-| **Runtime**       | ~3 min (CPU) / ~30s (GPU)       |
+| **Runtime**       | ~5 min (CPU) / ~1 min (GPU)     |
 | **Prerequisites** | JAX, Flax NNX, FNO basics       |
 | **Format**        | Python + Jupyter                |
-| **Memory**        | ~1 GB RAM                       |
+| **Memory**        | ~2 GB RAM                       |
 
 ## Overview
 
@@ -19,12 +19,17 @@ flow direction) and local features (e.g., boundary layers, sharp gradients). Loc
 addresses this by processing inputs through both spectral (global) and convolutional
 (local) branches, then combining the results.
 
+This example uses the standard operator-learning recipe — grid positional embedding,
+Gaussian input/output normalization, and the relative-L2 loss — to reach a low relative
+L2 error (~1%) on Darcy flow, and compares LocalFNO against a standard FNO baseline.
+
 ## What You'll Learn
 
 1. **Understand** LocalFNO architecture: spectral + local convolution branches
-2. **Create** a `LocalFourierNeuralOperator` with configurable kernel size
-3. **Compare** LocalFNO vs standard FNO on the same problem
-4. **Analyze** the trade-off between accuracy and parameter count
+2. **Apply** the operator-learning recipe: grid embedding, normalization, relative-L2 loss
+3. **Create** a `LocalFourierNeuralOperator` with configurable kernel size
+4. **Compare** LocalFNO vs standard FNO on the same problem
+5. **Analyze** the trade-off between accuracy and parameter count
 
 ## Coming from NeuralOperator (PyTorch)?
 
@@ -129,11 +134,15 @@ Where `α` is the `mixing_weight` parameter (default 0.5).
 
 ```python
 import jax
+import jax.numpy as jnp
 from flax import nnx
 
+from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
-from opifex.neural.operators.fno.local import LocalFourierNeuralOperator
+from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.neural.operators.fno.local import LocalFourierNeuralOperator
 ```
 
 **Terminal Output:**
@@ -145,111 +154,144 @@ Opifex Example: Local FNO on Darcy Flow
 JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
 Resolution: 32x32
-Training samples: 200, Test samples: 50
-Batch size: 16, Epochs: 20
+Training samples: 1000, Test samples: 100
+Batch size: 32, Epochs: 120
 FNO config: modes=(12, 12), width=32, layers=4
 Local kernel size: 3
 ```
 
-### Step 2: Data Loading
+### Step 2: Data Loading and Normalization
+
+We collect ~1000 training samples and fit Gaussian statistics on the training set,
+then normalize all splits. Predictions are un-normalized before computing the
+physical-space relative-L2 error.
 
 ```python
 train_loader = create_darcy_loader(
-    n_samples=200,
-    batch_size=16,
+    n_samples=1000,
+    batch_size=32,
     resolution=32,
     shuffle=True,
     seed=42,
 )
+
+x_mean, x_std = X_train.mean(), X_train.std()
+y_mean, y_std = Y_train.mean(), Y_train.std()
+X_train_n = (X_train - x_mean) / x_std
+Y_train_n = (Y_train - y_mean) / y_std
 ```
 
 **Terminal Output:**
 
 ```text
 Generating Darcy flow data...
-Training data: X=(16, 1, 32, 32), Y=(16, 1, 32, 32)
-Test data:     X=(50, 1, 32, 32), Y=(50, 1, 32, 32)
+Training data: X=(992, 1, 32, 32), Y=(992, 1, 32, 32)
+Test data:     X=(96, 1, 32, 32), Y=(96, 1, 32, 32)
+Input mean/std:  0.6274 / 0.2146
+Output mean/std: 0.054309 / 0.038000
 ```
 
 ### Step 3: Model Creation
 
+LocalFNO operates on channels-first tensors and does not append grid coordinates
+internally, so we wrap it with `GridEmbedding2D`. The embedding appends normalized
+`(x, y)` coordinate channels — the standard positional encoding that lets spectral
+operators resolve the Dirichlet boundary of the Darcy problem.
+
 ```python
-local_fno = LocalFourierNeuralOperator(
-    in_channels=1,
-    out_channels=1,
-    hidden_channels=32,
-    modes=(12, 12),
-    num_layers=4,
-    kernel_size=3,
-    use_residual_connections=True,
-    rngs=nnx.Rngs(42),
+class LocalFNOWithGrid(nnx.Module):
+    def __init__(self, in_channels, out_channels, hidden_channels,
+                 modes, num_layers, kernel_size, *, rngs):
+        super().__init__()
+        self.grid_embedding = GridEmbedding2D(
+            in_channels=in_channels,
+            grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
+        )
+        self.local_fno = LocalFourierNeuralOperator(
+            in_channels=self.grid_embedding.out_channels,
+            out_channels=out_channels,
+            hidden_channels=hidden_channels,
+            modes=modes,
+            num_layers=num_layers,
+            kernel_size=kernel_size,
+            use_residual_connections=True,
+            rngs=rngs,
+        )
+
+    def __call__(self, x):
+        x_hwc = jnp.moveaxis(x, 1, -1)
+        x_embedded = self.grid_embedding(x_hwc)
+        x_chw = jnp.moveaxis(x_embedded, -1, 1)
+        result = self.local_fno(x_chw)
+        return result[0] if isinstance(result, tuple) else result
+```
+
+**Terminal Output:**
+
+```text
+Creating LocalFNO model with grid embedding...
+LocalFNO parameters: 365,099
+
+Creating standard FNO for comparison...
+Standard FNO parameters: 2,368,001
+LocalFNO overhead: -84.6%
+```
+
+### Step 4: Training
+
+We train both operators with Opifex's `Trainer` and the relative-L2 loss — the
+standard operator-learning objective — over 120 epochs.
+
+```python
+config = TrainingConfig(
+    num_epochs=120,
+    learning_rate=1e-3,
+    batch_size=32,
+    validation_frequency=10,
+    verbose=True,
+    loss_config=LossConfig(loss_type="relative_l2"),
+)
+trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(42))
+trained_model, metrics = trainer.fit(
+    train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
+    val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),
 )
 ```
 
 **Terminal Output:**
 
 ```text
-Creating LocalFNO model...
-LocalFNO parameters: 365,035
+Training LocalFNO (Adam lr=0.001, relative-L2 loss)...
+LocalFNO training completed in 20.8s
+  Final train loss: 0.02236589488963927
+  Final val loss:   0.0011326733510941267
 
-Creating standard FNO for comparison...
-Standard FNO parameters: 53,473
-LocalFNO overhead: 582.7%
-```
-
-### Step 4: Training
-
-```python
-opt = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
-
-@nnx.jit
-def train_step(model, opt, x, y):
-    def loss_fn(model):
-        y_pred = model(x)
-        return jnp.mean((y_pred - y) ** 2)
-
-    loss, grads = nnx.value_and_grad(loss_fn)(model)
-    opt.update(model, grads)
-    return loss
-```
-
-**Terminal Output:**
-
-```text
-Training LocalFNO...
-  Epoch   1/20: loss=0.518433
-  Epoch   5/20: loss=0.021340
-  Epoch  10/20: loss=0.005847
-  Epoch  15/20: loss=0.008613
-  Epoch  20/20: loss=0.001378
-Final LocalFNO loss: 1.377639e-03
-
-Training Standard FNO...
-  Epoch   1/20: loss=0.045024
-  Epoch   5/20: loss=0.013370
-  Epoch  10/20: loss=0.000658
-  Epoch  15/20: loss=0.002363
-  Epoch  20/20: loss=0.000476
-Final FNO loss: 4.763597e-04
+Training Standard FNO (Adam lr=0.001, relative-L2 loss)...
+Standard FNO training completed in 12.5s
+  Final train loss: 0.008356716228468765
+  Final val loss:   0.00019725736638065428
 ```
 
 ### Step 5: Evaluation
+
+Predictions are un-normalized back to physical pressure before measuring the
+relative L2 error, and the test set is run through each model in batches.
 
 **Terminal Output:**
 
 ```text
 Running evaluation...
 LocalFNO Results:
-  Test MSE:         0.000669
-  Relative L2:      2.710133 (min=2.208369, max=4.282701)
+  Test MSE:         6.723121e-07
+  Relative L2:      0.012391 (min=0.008915, max=0.027407)
 
 Standard FNO Results:
-  Test MSE:         0.000765
-  Relative L2:      2.816077 (min=1.666520, max=4.716997)
+  Test MSE:         3.598657e-07
+  Relative L2:      0.008856 (min=0.005160, max=0.020793)
 
 Comparison:
-  MSE improvement (LocalFNO vs FNO): +12.5%
-  Rel L2 improvement: +3.8%
+  MSE improvement (LocalFNO vs FNO): -86.8%
+  Rel L2 improvement: -39.9%
 ```
 
 ### Visualization
@@ -264,12 +306,17 @@ Comparison:
 
 ## Results Summary
 
-| Metric              | LocalFNO  | Standard FNO |
-|---------------------|-----------|--------------|
-| Test MSE            | 0.000669  | 0.000765     |
-| Relative L2 Error   | 2.71      | 2.82         |
-| Parameters          | 365,035   | 53,473       |
-| MSE Improvement     | +12.5%    | (baseline)   |
+| Metric              | LocalFNO    | Standard FNO |
+|---------------------|-------------|--------------|
+| Test MSE            | 6.72e-07    | 3.60e-07     |
+| Relative L2 Error   | 0.0124      | 0.0089       |
+| Parameters          | 365,099     | 2,368,001    |
+
+Both operators reach ~1% relative L2 on the corrected Darcy data. The standard FNO
+is slightly more accurate here, while LocalFNO reaches comparable accuracy with
+roughly 6x fewer parameters thanks to its local convolution branch. On smooth
+solutions like Darcy flow the spectral branch dominates; LocalFNO's local branch
+pays off most on problems with sharp gradients or boundary layers.
 
 ## Next Steps
 
@@ -297,40 +344,37 @@ Comparison:
 
 ## Troubleshooting
 
-### LocalFNO uses more memory than expected
+### Relative L2 error is high (> 0.5)
 
-**Symptom**: `RESOURCE_EXHAUSTED` error or high memory usage.
+**Symptom**: Relative L2 stays near 0.5-0.7 even after training.
 
-**Cause**: LocalFNO has ~7x more parameters than standard FNO due to local convolution layers.
+**Cause**: Missing the operator-learning recipe — no grid positional embedding, no
+input/output normalization, or the MSE loss instead of relative-L2.
 
-**Solution**: Reduce hidden channels or use smaller kernel size:
+**Solution**: Apply the full recipe used in this example: wrap the model in
+`GridEmbedding2D`, fit Gaussian statistics on the training set and normalize all
+splits, use `LossConfig(loss_type="relative_l2")`, and train with ~1000 samples for
+enough epochs. Remember to un-normalize predictions before measuring the physical
+relative-L2 error.
 
-```python
-model = LocalFourierNeuralOperator(
-    hidden_channels=16,  # Reduce from 32
-    kernel_size=3,       # Keep small
-    ...
-)
-```
+### Training is slower than standard FNO per epoch
 
-### Training is slower than standard FNO
+**Symptom**: Each LocalFNO epoch takes longer than the standard FNO.
 
-**Symptom**: Each epoch takes significantly longer.
+**Cause**: The extra local convolution branch adds computation per layer.
 
-**Cause**: Additional local convolution operations add computational overhead.
+**Solution**: LocalFNO is designed for problems where local features matter. For
+smooth problems like Darcy flow, a standard FNO is competitive. For multi-scale
+problems with sharp gradients, LocalFNO's accuracy-per-parameter advantage justifies
+the extra cost.
 
-**Solution**: LocalFNO is designed for problems where local features matter. For smooth
-problems, use standard FNO. For multi-scale problems, the accuracy improvement may
-justify the extra cost.
+### Out-of-memory during evaluation
 
-### Relative L2 error is high
+**Symptom**: `RESOURCE_EXHAUSTED` error when running the full test set at once.
 
-**Symptom**: Relative L2 > 1.0 despite low MSE.
-
-**Cause**: The target field has small absolute values, making relative error high.
-
-**Solution**: This is expected for some problems. Focus on MSE or increase training data:
+**Solution**: Run the forward pass in batches (this example uses a batch size of 128):
 
 ```python
-train_loader = create_darcy_loader(n_samples=500, ...)  # More data
+outputs = [model(inputs[i : i + 128]) for i in range(0, inputs.shape[0], 128)]
+predictions = jnp.concatenate(outputs, axis=0) * y_std + y_mean
 ```

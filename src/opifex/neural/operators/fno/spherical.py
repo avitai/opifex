@@ -1,21 +1,18 @@
-# FILE PLACEMENT: opifex/neural/operators/fno/spherical.py
-#
-# Spherical Fourier Neural Operator (SFNO) Implementation
-# For data defined on spherical domains (climate, planetary science)
-#
-# This file should be placed at: opifex/neural/operators/fno/spherical.py
-# After placement, update opifex/neural/operators/fno/__init__.py to include:
-# from .spherical import SphericalFourierNeuralOperator, SphericalHarmonicConvolution
-
-"""
-Spherical Fourier Neural Operator (SFNO) implementation.
+"""Spherical Fourier Neural Operator (SFNO) implementation.
 
 This module provides FNO variants for data naturally defined on spherical
 domains using spherical harmonic decompositions. Ideal for global climate
 modeling, atmospheric science, and planetary-scale phenomena.
+
+The spectral transform is a genuine orthonormalized real spherical harmonic
+transform (SHT) -- a faithful JAX port of NVIDIA ``torch-harmonics`` provided by
+:mod:`opifex.neural.operators.fno._spherical_harmonics` -- replacing the earlier
+2D-FFT approximation. The spectral-conv weight multiply mirrors the SFNO spherical
+convolution of Bonev et al. 2023 (arXiv:2306.03838) and ``neuralop`` ``SphericalConv``.
 """
 
 from collections.abc import Callable, Sequence
+from functools import cache
 
 import jax
 import jax.numpy as jnp
@@ -23,13 +20,40 @@ from beartype import beartype
 from flax import nnx
 from jaxtyping import Array
 
+from opifex.neural.operators.fno._spherical_harmonics import SphericalHarmonicBasis
+
+
+@cache
+def _get_spherical_basis(
+    nlat: int, nlon: int, lmax: int, mmax: int, grid: str
+) -> SphericalHarmonicBasis:
+    """Return a cached real SHT basis for a fixed grid and truncation.
+
+    The basis holds only static (closed-over) JAX-array constants, so caching it
+    by concrete grid/truncation keeps the forward/inverse transforms ``jit`` /
+    ``grad`` / ``vmap`` compatible while avoiding repeated Legendre precompute.
+
+    Args:
+        nlat: Number of latitude grid points.
+        nlon: Number of longitude grid points.
+        lmax: Maximum spherical harmonic degree ``+ 1`` (non-inclusive).
+        mmax: Maximum azimuthal order ``+ 1`` (non-inclusive).
+        grid: Latitude quadrature grid identifier.
+
+    Returns:
+        Cached :class:`SphericalHarmonicBasis` for the requested configuration.
+    """
+    return SphericalHarmonicBasis(nlat=nlat, nlon=nlon, lmax=lmax, mmax=mmax, grid=grid)
+
 
 class SphericalHarmonicConvolution(nnx.Module):
-    """
-    Spherical harmonic convolution for spherical domains.
+    """Spherical harmonic convolution for spherical domains.
 
-    Operates in spherical harmonic space analogous to how standard FNO
-    operates in Fourier space, but adapted for spherical geometry.
+    Operates in spherical harmonic space analogous to how standard FNO operates
+    in Fourier space, but adapted for spherical geometry. The coefficient layout
+    is ``(batch, channels, lmax, mmax)`` with non-negative orders ``m`` only,
+    matching the real SHT of ``torch-harmonics`` / ``neuralop`` ``SphericalConv``.
+    A learnable complex weight contracts the channel axis per spherical mode.
     """
 
     @beartype
@@ -37,20 +61,19 @@ class SphericalHarmonicConvolution(nnx.Module):
         self,
         in_channels: int,
         out_channels: int,
-        lmax: int,  # Maximum spherical harmonic degree
-        mmax: int | None = None,  # Maximum azimuthal order
+        lmax: int,  # Maximum spherical harmonic degree (non-inclusive)
+        mmax: int | None = None,  # Maximum azimuthal order (non-inclusive)
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """
-        Initialize spherical harmonic convolution.
+        """Initialize spherical harmonic convolution.
 
         Args:
-            in_channels: Number of input channels
-            out_channels: Number of output channels
-            lmax: Maximum spherical harmonic degree (controls resolution)
-            mmax: Maximum azimuthal order (if None, uses lmax)
-            rngs: Random number generator state
+            in_channels: Number of input channels.
+            out_channels: Number of output channels.
+            lmax: Maximum spherical harmonic degree (controls resolution).
+            mmax: Maximum azimuthal order (if ``None``, uses ``lmax``).
+            rngs: Random number generator state.
         """
         super().__init__()
         self.in_channels = in_channels
@@ -58,10 +81,9 @@ class SphericalHarmonicConvolution(nnx.Module):
         self.lmax = lmax
         self.mmax = mmax if mmax is not None else lmax
 
-        # Spherical harmonic weights
-        # Shape: (in_channels, out_channels, lmax+1, 2*mmax+1)
-        # The last dimension covers m from -mmax to +mmax
-        weight_shape = (in_channels, out_channels, lmax + 1, 2 * self.mmax + 1)
+        # Spherical harmonic weights in the real-SHT (l, m) layout.
+        # Shape: (in_channels, out_channels, lmax, mmax) with m >= 0.
+        weight_shape = (in_channels, out_channels, lmax, self.mmax)
         scale = (2 / (in_channels + out_channels)) ** 0.5
 
         # Store real/imaginary parts separately to avoid JAX complex gradient
@@ -69,56 +91,28 @@ class SphericalHarmonicConvolution(nnx.Module):
         self.weight_real = nnx.Param(jax.random.normal(rngs.params(), weight_shape) * scale)
         self.weight_imag = nnx.Param(jax.random.normal(rngs.params(), weight_shape) * scale)
 
-    def _extract_spherical_modes(self, x_sht: Array) -> Array:
-        """Extract relevant spherical harmonic modes."""
-        # x_sht shape: (batch, channels, lmax_input+1, 2*mmax_input+1)
-        # Extract up to our lmax and mmax
-
-        l_end = min(self.lmax + 1, x_sht.shape[2])
-        m_start = max(0, x_sht.shape[3] // 2 - self.mmax)
-        m_end = min(x_sht.shape[3], x_sht.shape[3] // 2 + self.mmax + 1)
-
-        return x_sht[:, :, :l_end, m_start:m_end]
-
     def __call__(self, x_sht: Array) -> Array:
-        """
-        Apply spherical harmonic convolution.
+        """Apply spherical harmonic convolution.
 
         Args:
-            x_sht: Spherical harmonic coefficients (batch, channels, l_modes, m_modes)
+            x_sht: Spherical harmonic coefficients ``(batch, channels, lmax, mmax)``.
 
         Returns:
-            Transformed coefficients (batch, out_channels, l_modes, m_modes)
+            Transformed coefficients ``(batch, out_channels, lmax, mmax)``.
         """
-        # Extract spherical harmonic modes up to configured limits
-        x_modes = self._extract_spherical_modes(x_sht)
+        # Truncate the coefficients to the configured (lmax, mmax) band.
+        l_end = min(self.lmax, x_sht.shape[-2])
+        m_end = min(self.mmax, x_sht.shape[-1])
+        x_modes = x_sht[:, :, :l_end, :m_end]
 
-        # Get weight dimensions and adjust if necessary
-        # Construct complex weight from real/imaginary parts
-        weight = self.weight_real[...] + 1j * self.weight_imag[...]
+        # Construct the complex weight from real/imaginary parts and align to the
+        # truncated band (mirrors neuralop SphericalConv weight slicing).
+        weight_real = self.weight_real[:, :, :l_end, :m_end]
+        weight_imag = self.weight_imag[:, :, :l_end, :m_end]
+        weight = weight_real + 1j * weight_imag
 
-        # Ensure weight modes match input modes
-        input_l, input_m = x_modes.shape[-2:]
-        weight_l, weight_m = weight.shape[-2:]
-
-        # Handle mode dimension mismatches
-        if weight_l > input_l:
-            weight = weight[:, :, :input_l, :]
-        elif weight_l < input_l:
-            # Pad with zeros
-            pad_l = input_l - weight_l
-            weight = jnp.pad(weight, ((0, 0), (0, 0), (0, pad_l), (0, 0)))
-
-        if weight_m > input_m:
-            weight = weight[:, :, :, :input_m]
-        elif weight_m < input_m:
-            # Pad with zeros
-            pad_m = input_m - weight_m
-            weight = jnp.pad(weight, ((0, 0), (0, 0), (0, 0), (0, pad_m)))
-
-        # Spherical harmonic multiplication (analogous to spectral convolution)
-        # Use standardized einsum pattern for channel contraction
-        return jnp.einsum("bi...,ij...->bj...", x_modes, weight)
+        # Per-mode channel contraction (analogous to the FNO spectral convolution).
+        return jnp.einsum("bilm,iolm->bolm", x_modes, weight)
 
 
 class SphericalFourierNeuralOperator(nnx.Module):
@@ -143,30 +137,30 @@ class SphericalFourierNeuralOperator(nnx.Module):
         mmax: int | None = None,
         num_layers: int = 4,
         activation: Callable = nnx.gelu,
-        use_real_sht: bool = False,  # Whether to use real-valued SHT
+        grid: str = "legendre-gauss",  # Latitude quadrature grid for the SHT
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """
-        Initialize Spherical FNO.
+        """Initialize Spherical FNO.
 
         Args:
-            in_channels: Number of input channels
-            out_channels: Number of output channels
-            hidden_channels: Hidden layer width
-            lmax: Maximum spherical harmonic degree
-            mmax: Maximum azimuthal order (if None, uses lmax)
-            num_layers: Number of SFNO layers
-            activation: Activation function
-            use_real_sht: Whether to use real spherical harmonics
-            rngs: Random number generator state
+            in_channels: Number of input channels.
+            out_channels: Number of output channels.
+            hidden_channels: Hidden layer width.
+            lmax: Maximum spherical harmonic degree (controls spectral resolution).
+            mmax: Maximum azimuthal order (if ``None``, uses ``lmax``).
+            num_layers: Number of SFNO layers.
+            activation: Activation function.
+            grid: Latitude quadrature grid for the real SHT
+                (``"legendre-gauss"``).
+            rngs: Random number generator state.
         """
         super().__init__()
         self.lmax = lmax
         self.mmax = mmax if mmax is not None else lmax
         self.num_layers = num_layers
         self.activation = activation
-        self.use_real_sht = use_real_sht
+        self.grid = grid
 
         # Lifting layer
         self.lifting = nnx.Linear(in_channels, hidden_channels, rngs=rngs)
@@ -183,85 +177,71 @@ class SphericalFourierNeuralOperator(nnx.Module):
         # Projection layer
         self.projection = nnx.Linear(hidden_channels, out_channels, rngs=rngs)
 
-    def _spherical_harmonic_transform(self, x: Array) -> Array:
-        """
-        Compute spherical harmonic transform.
-
-        This is a simplified implementation using 2D FFT as approximation.
-        In a full implementation, this would use proper spherical harmonic
-        transforms with associated Legendre polynomials.
+    def _basis_for(self, nlat: int, nlon: int) -> SphericalHarmonicBasis:
+        """Return the cached real SHT basis for the given spatial grid.
 
         Args:
-            x: Input on sphere (batch, channels, nlat, nlon)
+            nlat: Number of latitude grid points.
+            nlon: Number of longitude grid points.
 
         Returns:
-            SHT coefficients (batch, channels, lmax+1, 2*mmax+1)
+            The :class:`SphericalHarmonicBasis` for ``(nlat, nlon)`` truncated to
+            this operator's ``(lmax, mmax)``.
         """
-        if self.use_real_sht:
-            # For real spherical harmonics (simplified)
-            return jnp.fft.fft2(x, axes=(-2, -1))
-        # Complex spherical harmonics (simplified with 2D FFT)
-        # In practice, would use scipy.special.sph_harm or similar
-        x_fft = jnp.fft.fft2(x, axes=(-2, -1))
+        return _get_spherical_basis(nlat, nlon, self.lmax, self.mmax, self.grid)
 
-        # Extract relevant modes up to lmax, mmax
+    def _spherical_harmonic_transform(self, x: Array) -> Array:
+        """Compute the forward real spherical harmonic transform.
+
+        Uses the orthonormalized real SHT (forward/analysis) ported from
+        ``torch-harmonics`` rather than a 2D-FFT approximation: a real FFT over
+        longitude followed by a Gauss-Legendre latitude quadrature against the
+        associated Legendre polynomials.
+
+        Args:
+            x: Input on sphere ``(batch, channels, nlat, nlon)``.
+
+        Returns:
+            Complex SHT coefficients ``(batch, channels, lmax, mmax)``.
+        """
         nlat, nlon = x.shape[-2:]
-        l_modes = min(self.lmax + 1, nlat)
-        _ = min(2 * self.mmax + 1, nlon)  # m_modes not used in current implementation
-
-        # Center the modes around DC component
-        m_start = nlon // 2 - self.mmax
-        m_end = nlon // 2 + self.mmax + 1
-
-        if m_start >= 0 and m_end <= nlon:
-            x_modes = x_fft[:, :, :l_modes, m_start:m_end]
-        else:
-            # Handle wrapping for negative frequencies
-            x_modes = jnp.concatenate(
-                [x_fft[:, :, :l_modes, m_start:], x_fft[:, :, :l_modes, :m_end]],
-                axis=-1,
-            )
-
-        return x_modes
+        return self._basis_for(nlat, nlon).forward(x)
 
     def _inverse_spherical_harmonic_transform(
         self, x_sht: Array, target_shape: Sequence[int]
     ) -> Array:
-        """
-        Compute inverse spherical harmonic transform.
+        """Compute the inverse real spherical harmonic transform (synthesis).
 
         Args:
-            x_sht: SHT coefficients
-            target_shape: Target spatial shape (nlat, nlon)
+            x_sht: SHT coefficients ``(batch, channels, lmax, mmax)``.
+            target_shape: Target spatial shape ``(nlat, nlon)``.
 
         Returns:
-            Spatial field on sphere
+            Real spatial field on sphere ``(batch, channels, nlat, nlon)``.
         """
-        if self.use_real_sht:
-            # Real ISHT (simplified)
-            return jnp.fft.ifft2(x_sht, s=target_shape, axes=(-2, -1)).real
-        # Complex ISHT (simplified with 2D IFFT)
         nlat, nlon = target_shape
+        return self._basis_for(nlat, nlon).inverse(x_sht)
 
-        # Pad to full frequency grid
-        full_spectrum = jnp.zeros((*x_sht.shape[:-2], nlat, nlon), dtype=x_sht.dtype)
+    @staticmethod
+    def _embed_coefficients(coeffs: Array, full_shape: Sequence[int]) -> Array:
+        """Zero-pad convolved coefficients back to the full SHT grid.
 
-        # Place modes in correct positions
-        l_modes = x_sht.shape[-2]
-        m_modes = x_sht.shape[-1]
-        m_center = nlon // 2
-        m_start = m_center - m_modes // 2
-        m_end = m_start + m_modes
+        The spherical convolution may act on a truncated ``(l, m)`` band; the
+        inverse transform requires coefficients on the basis's full grid, so the
+        convolved band is re-embedded with zero padding for the dropped modes.
 
-        if m_start >= 0 and m_end <= nlon:
-            full_spectrum = full_spectrum.at[:, :, :l_modes, m_start:m_end].set(x_sht)
-        else:
-            # Handle negative frequency wrapping
-            split_point = nlon - m_start
-            full_spectrum = full_spectrum.at[:, :, :l_modes, m_start:].set(x_sht[..., :split_point])
-            full_spectrum = full_spectrum.at[:, :, :l_modes, :m_end].set(x_sht[..., split_point:])
+        Args:
+            coeffs: Convolved coefficients ``(batch, channels, l_band, m_band)``.
+            full_shape: Target coefficient shape from the forward transform.
 
-        return jnp.fft.ifft2(full_spectrum, axes=(-2, -1)).real
+        Returns:
+            Coefficients zero-padded to ``full_shape``.
+        """
+        pad_l = full_shape[-2] - coeffs.shape[-2]
+        pad_m = full_shape[-1] - coeffs.shape[-1]
+        if pad_l == 0 and pad_m == 0:
+            return coeffs
+        return jnp.pad(coeffs, ((0, 0), (0, 0), (0, pad_l), (0, pad_m)))
 
     def __call__(self, x: Array) -> Array:
         """
@@ -287,13 +267,17 @@ class SphericalFourierNeuralOperator(nnx.Module):
             conv = getattr(self, f"conv_{i}")
             skip = getattr(self, f"skip_{i}")
 
-            # Spherical harmonic transform
+            # Spherical harmonic transform (forward / analysis)
             x_sht = self._spherical_harmonic_transform(x)
 
-            # Spherical convolution
+            # Spherical convolution in (l, m) coefficient space
             x_conv = conv(x_sht)
 
-            # Inverse spherical harmonic transform
+            # Re-embed the (possibly truncated) convolved band into the full SHT
+            # coefficient grid before synthesis.
+            x_conv = self._embed_coefficients(x_conv, x_sht.shape)
+
+            # Inverse spherical harmonic transform (synthesis)
             x_conv = self._inverse_spherical_harmonic_transform(x_conv, spatial_shape)
 
             # Skip connection and activation - FIXED: Handle channel dimensions properly
@@ -324,28 +308,24 @@ class SphericalFourierNeuralOperator(nnx.Module):
         return self._spherical_harmonic_transform(x)
 
     def compute_power_spectrum(self, x: Array) -> Array:
-        """
-        Compute spherical harmonic power spectrum.
+        """Compute the spherical harmonic power spectrum per degree ``l``.
+
+        The real SHT stores only non-negative orders ``m``; the negative orders of
+        a real field are their conjugates, so the angular power at degree ``l`` is
+        ``|c_l^0|^2 + 2 * sum_{m>0} |c_l^m|^2``.
 
         Args:
-            x: Input tensor on sphere
+            x: Input tensor on sphere ``(batch, channels, nlat, nlon)``.
 
         Returns:
-            Power spectrum as function of spherical harmonic degree l
+            Power spectrum ``(batch, channels, lmax)`` as a function of degree.
         """
         x_sht = self.get_spherical_modes(x)
+        squared = jnp.abs(x_sht) ** 2  # (batch, channels, lmax, mmax)
 
-        # Compute power for each degree l
-        power_spectrum = []
-        for l in range(self.lmax + 1):
-            if l < x_sht.shape[-2]:
-                # Sum over all m modes for this l
-                l_power = jnp.sum(jnp.abs(x_sht[:, :, l, :]) ** 2, axis=-1)
-                power_spectrum.append(l_power)
-            else:
-                power_spectrum.append(jnp.zeros_like(x_sht[:, :, 0, 0]))
-
-        return jnp.stack(power_spectrum, axis=-1)
+        # Double the m > 0 contributions to account for the folded negative orders.
+        order_weights = jnp.full((squared.shape[-1],), 2.0).at[0].set(1.0)
+        return jnp.sum(squared * order_weights, axis=-1)
 
 
 # Utility functions for climate/atmospheric applications
@@ -399,7 +379,6 @@ def create_ocean_sfno(
         lmax=lmax,
         mmax=lmax,
         num_layers=6,
-        use_real_sht=True,  # Ocean data often real-valued
         **kwargs,
     )
 

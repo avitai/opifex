@@ -9,7 +9,10 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.neural.operators.fno.spherical import SphericalFourierNeuralOperator
+from opifex.neural.operators.fno.spherical import (
+    SphericalFourierNeuralOperator,
+    SphericalHarmonicConvolution,
+)
 
 
 class TestSphericalFourierNeuralOperator:
@@ -228,3 +231,47 @@ class TestSphericalFourierNeuralOperator:
         output_vmap = vmapped_forward(x_batched)
         expected_shape = (3, 2, 1, 16, 32)
         assert output_vmap.shape == expected_shape
+
+    def test_sfno_uses_real_sht_round_trip(self, rngs, rng_key):
+        """The SFNO spectral transform must be a genuine real SHT (round-trip).
+
+        Forward-then-inverse SHT of a band-limited spherical field on the layer's
+        grid must reconstruct the field, replacing the old 2D-FFT approximation.
+        """
+        sfno = SphericalFourierNeuralOperator(
+            in_channels=1,
+            out_channels=1,
+            hidden_channels=8,
+            lmax=8,
+            num_layers=1,
+            rngs=rngs,
+        )
+
+        import numpy as np
+        from scipy.special import roots_legendre
+
+        nlat, nlon = 16, 32
+        # Sample on the basis' own Gauss-Legendre latitudes so the latitude
+        # quadrature is exact; otherwise the SHT cannot be a clean round-trip.
+        cost, _ = roots_legendre(nlat)
+        lats = jnp.asarray(np.flip(np.arccos(cost)))
+        lons = jnp.linspace(0.0, 2.0 * jnp.pi, nlon, endpoint=False)
+        theta, phi = jnp.meshgrid(lats, lons, indexing="ij")
+        # Smooth, band-limited field (degree-1 harmonics) within the SHT band.
+        field = (jnp.cos(theta) + jnp.sin(theta) * jnp.cos(phi))[None, None, :, :]
+
+        coeffs = sfno._spherical_harmonic_transform(field)
+        reconstructed = sfno._inverse_spherical_harmonic_transform(coeffs, (nlat, nlon))
+
+        max_abs_error = float(jnp.max(jnp.abs(reconstructed - field)))
+        assert max_abs_error < 1e-3, f"SHT round-trip error too large: {max_abs_error}"
+
+    def test_spherical_harmonic_convolution_coefficient_shape(self, rngs, rng_key):
+        """SphericalHarmonicConvolution maps SHT coefficients to ``(l, m)`` layout."""
+        lmax = 6
+        conv = SphericalHarmonicConvolution(in_channels=2, out_channels=3, lmax=lmax, rngs=rngs)
+        mmax = conv.mmax
+        coeffs = jax.random.normal(rng_key, (1, 2, lmax, mmax)) + 0.0j
+        out = conv(coeffs)
+        assert out.shape == (1, 3, lmax, mmax)
+        assert jnp.all(jnp.isfinite(jnp.abs(out)))

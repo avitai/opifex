@@ -27,7 +27,12 @@ class DarcyDataSource(GrainPDESource):
     Args:
         n_samples: Total number of samples in the dataset
         resolution: Spatial resolution for discretization
-        viscosity_range: Tuple of (min_viscosity, max_viscosity)
+        viscosity_range: ``(low, high)`` permeability bounds. For
+            ``field_type='smooth'`` the coefficient is scaled into this range; for
+            ``field_type='binary'`` these are the two discrete values.
+        field_type: ``'smooth'`` (default) for a smooth log-Fourier coefficient
+            field, or ``'binary'`` for the high-contrast thresholded-GRF benchmark
+            (Li et al. 2020) used by operator-learning showcases.
         seed: Random seed for deterministic generation
 
     Example:
@@ -41,6 +46,7 @@ class DarcyDataSource(GrainPDESource):
         n_samples: int = 1000,
         resolution: int = 85,
         viscosity_range: tuple[float, float] = (0.5, 2.0),
+        field_type: str = "smooth",
         seed: int = 42,
     ) -> None:
         """Initialize Darcy data source."""
@@ -50,9 +56,13 @@ class DarcyDataSource(GrainPDESource):
         if resolution <= 0:
             raise ValueError(f"resolution must be positive, got {resolution}")
 
+        if field_type not in ("smooth", "binary"):
+            raise ValueError(f"field_type must be 'smooth' or 'binary', got {field_type!r}")
+
         self.n_samples = n_samples
         self.resolution = resolution
         self.viscosity_range = viscosity_range
+        self.field_type = field_type
         self.seed = seed
 
         # Store grid for solver
@@ -60,8 +70,26 @@ class DarcyDataSource(GrainPDESource):
         y = jnp.linspace(0, 1, resolution)
         self.X, self.Y = jnp.meshgrid(x, y, indexing="ij")
 
+        # Isotropic GRF power-spectrum filter for the binary benchmark field
+        # (covariance ~ (-Δ + τ²I)^{-1}); DC zeroed so the threshold splits ~50/50.
+        freqs = jnp.fft.fftfreq(resolution) * resolution
+        kx, ky = jnp.meshgrid(freqs, freqs, indexing="ij")
+        self._grf_filter = ((kx**2 + ky**2 + 9.0) ** (-1.0)).at[0, 0].set(0.0)
+
     def _generate_permeability_field(self, key):
-        """Generate random permeability coefficient field."""
+        """Generate a permeability coefficient field.
+
+        ``field_type='binary'`` thresholds a Gaussian random field into the two
+        ``viscosity_range`` values (the Li et al. 2020 high-contrast benchmark);
+        ``field_type='smooth'`` builds a smooth log-Fourier field scaled into the
+        ``viscosity_range``.
+        """
+        if self.field_type == "binary":
+            white = jax.random.normal(key, (self.resolution, self.resolution))
+            field = jnp.fft.ifft2(jnp.fft.fft2(white) * self._grf_filter).real
+            low, high = self.viscosity_range
+            return jnp.where(field >= 0.0, high, low)
+
         key1, key2, key3 = jax.random.split(key, 3)
 
         # Random Fourier features for smooth coefficient field

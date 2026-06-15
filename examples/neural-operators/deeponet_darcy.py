@@ -31,6 +31,10 @@ which operates on grids, DeepONet uses a branch-trunk architecture:
 
 This makes DeepONet resolution-independent -- once trained, it can be queried
 at arbitrary spatial locations.
+
+This example uses the standard operator-learning recipe -- ~1000 training
+samples, Gaussian input/output normalization, and the relative-L2 objective --
+to reach a low relative L2 error on Darcy flow.
 """
 
 # %%
@@ -54,20 +58,21 @@ print(f"JAX devices: {jax.devices()}")
 # %%
 # Data configuration
 RESOLUTION = 32
-N_TRAIN = 200
-N_TEST = 50
+N_TRAIN = 1000
+N_TEST = 100
 N_SENSORS = RESOLUTION * RESOLUTION  # Flatten grid as sensor values
 LOCATION_DIM = 2  # (x, y) coordinates
 
 # Model configuration
-LATENT_DIM = 64
-BRANCH_HIDDEN = [256, 128]
-TRUNK_HIDDEN = [128, 128]
+LATENT_DIM = 128
+BRANCH_HIDDEN = [256, 256]
+TRUNK_HIDDEN = [128, 128, 128]
 
 # Training configuration
-BATCH_SIZE = 16
-NUM_EPOCHS = 30
+BATCH_SIZE = 32
+NUM_EPOCHS = 300
 LEARNING_RATE = 1e-3
+EVAL_BATCH_SIZE = 128  # Batch the test forward pass to bound memory use
 SEED = 42
 
 ASSETS_DIR = Path("docs/assets/examples/deeponet_darcy")
@@ -137,6 +142,26 @@ print(f"Target:       {Y_train_flat.shape}")
 
 # %% [markdown]
 """
+## Normalization
+
+Neural operators train best on standardized fields. We fit Gaussian statistics
+on the training split, normalize the branch input and the target, and
+un-normalize predictions back to physical pressure before measuring errors.
+"""
+
+# %%
+x_mean, x_std = X_train_branch.mean(), X_train_branch.std()
+y_mean, y_std = Y_train_flat.mean(), Y_train_flat.std()
+
+X_train_branch_n = (X_train_branch - x_mean) / x_std
+X_test_branch_n = (X_test_branch - x_mean) / x_std
+Y_train_flat_n = (Y_train_flat - y_mean) / y_std
+
+print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+# %% [markdown]
+"""
 ## Create DeepONet Model
 
 The branch and trunk networks are MLPs with matching output dimensions.
@@ -168,41 +193,104 @@ print(f"Total parameters: {n_params:,}")
 ## Training Loop
 
 DeepONet has a different input structure (branch + trunk) than grid-based
-operators, so we use a custom training loop with optax directly.
+operators, so we use a custom training loop with optax directly. We optimize
+the **relative-L2 loss** -- the standard operator-learning objective -- on the
+normalized fields, matching the recipe used by the grid-based examples.
 """
 
 # %%
-opt = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-print(f"Optimizer: Adam (lr={LEARNING_RATE})")
+import time
+
+
+# Adam with a short warmup then cosine decay. The warmup helps the branch/trunk
+# escape the early plateau, and the decay refines the solution late in training.
+steps_per_epoch = N_TRAIN // BATCH_SIZE
+total_steps = NUM_EPOCHS * steps_per_epoch
+lr_schedule = optax.warmup_cosine_decay_schedule(
+    init_value=LEARNING_RATE / 10,
+    peak_value=LEARNING_RATE,
+    warmup_steps=10 * steps_per_epoch,
+    decay_steps=total_steps,
+    end_value=LEARNING_RATE / 50,
+)
+opt = nnx.Optimizer(model, optax.adam(lr_schedule), wrt=nnx.Param)
+print(f"Optimizer: Adam + warmup-cosine (peak lr={LEARNING_RATE}), loss: relative L2")
 
 # Convert trunk to JAX array (shared across all samples)
 trunk_jax = jnp.array(trunk_coords)
 
-# Convert data to JAX arrays
-X_train_jax = jnp.array(X_train_branch)
-Y_train_jax = jnp.array(Y_train_flat)
+# Convert normalized training data to JAX arrays
+X_train_jax = jnp.array(X_train_branch_n)
+Y_train_jax = jnp.array(Y_train_flat_n)
+
+# Normalized branch inputs and physical-space targets for validation
+X_test_jax = jnp.array(X_test_branch_n)
+Y_test_jax = jnp.array(Y_test_flat)
+
+
+def relative_l2_loss(y_pred: jax.Array, y_target: jax.Array) -> jax.Array:
+    """Mean per-sample relative L2 error ``||y_pred - y||_2 / ||y||_2``.
+
+    Mirrors the operator-learning objective used by ``Trainer`` so DeepONet's
+    custom loop optimizes the same scale-invariant criterion.
+
+    Args:
+        y_pred: Model prediction of shape (batch, n_locations).
+        y_target: Target of shape (batch, n_locations).
+
+    Returns:
+        Scalar mean relative L2 loss.
+    """
+    numerator = jnp.linalg.norm(y_pred - y_target, axis=-1)
+    denominator = jnp.linalg.norm(y_target, axis=-1) + 1e-8
+    return jnp.mean(numerator / denominator)
 
 
 @nnx.jit
-def train_step(model, opt, x_branch, y_target):
-    """Single training step for DeepONet."""
+def train_step(
+    model: DeepONet,
+    opt: nnx.Optimizer,
+    x_branch: jax.Array,
+    y_target: jax.Array,
+) -> jax.Array:
+    """Single relative-L2 training step for DeepONet."""
 
-    def loss_fn(model):
+    def loss_fn(model: DeepONet) -> jax.Array:
         # Expand trunk for batch: (n_locations, 2) -> (batch, n_locations, 2)
         batch_size = x_branch.shape[0]
         trunk_batch = jnp.broadcast_to(trunk_jax[None], (batch_size, *trunk_jax.shape))
         y_pred = model(x_branch, trunk_batch)  # (batch, n_locations)
-        return jnp.mean((y_pred - y_target) ** 2)
+        return relative_l2_loss(y_pred, y_target)
 
     loss, grads = nnx.value_and_grad(loss_fn)(model)
     opt.update(model, grads)
     return loss
 
 
+def predict_in_batches(
+    model: DeepONet,
+    x_branch: jax.Array,
+    batch_size: int = EVAL_BATCH_SIZE,
+) -> jax.Array:
+    """Run DeepONet over the branch inputs in batches to bound memory use.
+
+    Args:
+        model: Trained DeepONet.
+        x_branch: Normalized branch inputs of shape (n_samples, n_sensors).
+        batch_size: Maximum number of samples per forward pass.
+
+    Returns:
+        Predictions of shape (n_samples, n_locations) in normalized space.
+    """
+    outputs = []
+    for i in range(0, x_branch.shape[0], batch_size):
+        x_chunk = x_branch[i : i + batch_size]
+        trunk_chunk = jnp.broadcast_to(trunk_jax[None], (x_chunk.shape[0], *trunk_jax.shape))
+        outputs.append(model(x_chunk, trunk_chunk))
+    return jnp.concatenate(outputs, axis=0)
+
+
 print(f"\nStarting training ({NUM_EPOCHS} epochs)...")
-import time
-
-
 t0 = time.time()
 
 key = jax.random.PRNGKey(SEED)
@@ -225,26 +313,24 @@ for epoch in range(NUM_EPOCHS):
         loss = train_step(model, opt, X_shuffled[start:end], Y_shuffled[start:end])
         epoch_losses.append(float(loss))
 
-    train_loss = np.mean(epoch_losses)
+    train_loss = float(np.mean(epoch_losses))
     train_losses.append(train_loss)
 
-    # Validation loss on test set
-    X_test_jax = jnp.array(X_test_branch)
-    Y_test_jax = jnp.array(Y_test_flat)
-    trunk_test = jnp.broadcast_to(trunk_jax[None], (X_test_jax.shape[0], *trunk_jax.shape))
-    test_pred = model(X_test_jax, trunk_test)
-    val_loss = float(jnp.mean((test_pred - Y_test_jax) ** 2))
+    # Validation relative-L2 on the physical-space test set
+    val_pred = predict_in_batches(model, X_test_jax) * y_std + y_mean
+    val_loss = float(relative_l2_loss(val_pred, Y_test_jax))
     val_losses.append(val_loss)
 
-    if (epoch + 1) % 10 == 0 or epoch == 0:
+    if (epoch + 1) % 20 == 0 or epoch == 0:
         print(
-            f"  Epoch {epoch + 1:3d}/{NUM_EPOCHS}: train_loss={train_loss:.6f}, val_loss={val_loss:.6f}"
+            f"  Epoch {epoch + 1:3d}/{NUM_EPOCHS}: "
+            f"train_rel_l2={train_loss:.6f}, val_rel_l2={val_loss:.6f}"
         )
 
 elapsed = time.time() - t0
 print(f"\nTraining completed in {elapsed:.1f}s")
-print(f"Final train loss: {train_losses[-1]:.6e}")
-print(f"Final val loss:   {val_losses[-1]:.6e}")
+print(f"Final train rel-L2: {train_losses[-1]:.6e}")
+print(f"Final val rel-L2:   {val_losses[-1]:.6e}")
 
 # %% [markdown]
 """
@@ -252,11 +338,8 @@ print(f"Final val loss:   {val_losses[-1]:.6e}")
 """
 
 # %%
-# Full test evaluation
-X_test_jax = jnp.array(X_test_branch)
-Y_test_jax = jnp.array(Y_test_flat)
-trunk_test = jnp.broadcast_to(trunk_jax[None], (X_test_jax.shape[0], *trunk_jax.shape))
-predictions = model(X_test_jax, trunk_test)
+# Full test evaluation -- predict in batches and un-normalize to physical space
+predictions = predict_in_batches(model, X_test_jax) * y_std + y_mean
 
 test_mse = float(jnp.mean((predictions - Y_test_jax) ** 2))
 
@@ -266,7 +349,7 @@ per_sample_norm = jnp.sqrt(jnp.sum(Y_test_jax**2, axis=-1))
 relative_l2 = per_sample_l2 / (per_sample_norm + 1e-8)
 mean_rel_l2 = float(jnp.mean(relative_l2))
 
-print(f"\nTest MSE:         {test_mse:.6f}")
+print(f"\nTest MSE:         {test_mse:.6e}")
 print(f"Test Relative L2: {mean_rel_l2:.6f}")
 print(f"Min Relative L2:  {float(jnp.min(relative_l2)):.6f}")
 print(f"Max Relative L2:  {float(jnp.max(relative_l2)):.6f}")
@@ -337,10 +420,10 @@ axes[0].axvline(mean_rel_l2, color="red", linestyle="--", label=f"Mean: {mean_re
 axes[0].legend()
 
 # Training and validation loss curves
-axes[1].semilogy(range(1, NUM_EPOCHS + 1), train_losses, label="Train Loss", color="steelblue")
-axes[1].semilogy(range(1, NUM_EPOCHS + 1), val_losses, label="Val Loss", color="coral")
+axes[1].semilogy(range(1, NUM_EPOCHS + 1), train_losses, label="Train rel-L2", color="steelblue")
+axes[1].semilogy(range(1, NUM_EPOCHS + 1), val_losses, label="Val rel-L2", color="coral")
 axes[1].set_xlabel("Epoch")
-axes[1].set_ylabel("MSE Loss")
+axes[1].set_ylabel("Relative L2 Loss")
 axes[1].set_title("Training Progress")
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
