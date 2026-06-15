@@ -180,7 +180,7 @@ The serving infrastructure lives in `src/opifex/deployment/core_serving.py`:
 - **`ModelServer`** -- programmatic server wrapper around `InferenceEngine`
 - **`ModelMetadata`** -- dataclass for model metadata (name, version, shapes, accuracy metrics)
 
-Source: [`src/opifex/deployment/core_serving.py`](../../src/opifex/deployment/core_serving.py)
+Source: [`src/opifex/deployment/core_serving.py`](https://github.com/avitai/opifex/blob/main/src/opifex/deployment/core_serving.py)
 
 ### Health Monitoring
 
@@ -192,7 +192,7 @@ The `HealthChecker` class (`src/opifex/deployment/monitoring/health.py`) provide
 - Custom health check registration
 - Periodic async health check loops
 
-Source: [`src/opifex/deployment/monitoring/health.py`](../../src/opifex/deployment/monitoring/health.py)
+Source: [`src/opifex/deployment/monitoring/health.py`](https://github.com/avitai/opifex/blob/main/src/opifex/deployment/monitoring/health.py)
 
 ## Development Workflow
 

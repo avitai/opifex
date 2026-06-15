@@ -5,6 +5,7 @@ proper input shapes, types, and parameters are provided to spectral functions.
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -77,6 +78,26 @@ def validate_spatial_dims(spatial_dims: int) -> None:
         raise ValueError(f"spatial_dims must be 1, 2, or 3, got {spatial_dims}")
 
 
+def _validate_fft_spatial_compatibility(
+    target_spatial: Sequence[int], fft_spatial: Sequence[int], spatial_dims: int
+) -> None:
+    """Check rfft spatial-dimension compatibility (last dim is the half-spectrum)."""
+    if spatial_dims >= 1:
+        expected_last_dim = target_spatial[-1] // 2 + 1
+        if fft_spatial[-1] != expected_last_dim:
+            raise ValueError(
+                f"FFT last spatial dimension {fft_spatial[-1]} incompatible "
+                f"with target size {target_spatial[-1]} (expected {expected_last_dim})"
+            )
+    if spatial_dims > 1:
+        for i in range(spatial_dims - 1):
+            if fft_spatial[i] != target_spatial[i]:
+                raise ValueError(
+                    f"FFT spatial dimension {i} has size {fft_spatial[i]}, "
+                    f"but target requires {target_spatial[i]}"
+                )
+
+
 def validate_fft_shape(
     x_ft: jax.Array,
     target_shape: Sequence[int],
@@ -119,32 +140,53 @@ def validate_fft_shape(
         if not isinstance(size, int) or size <= 0:
             raise ValueError(f"Target shape element {i} must be a positive integer, got {size}")
 
-    # Check FFT dimension compatibility
+    # Check FFT dimension compatibility (last spatial dim is the rfft half-spectrum)
     target_spatial = target_shape[-spatial_dims:]
     fft_spatial = x_ft.shape[-spatial_dims:]
-
-    # For real FFT, last dimension is compressed
-    if spatial_dims >= 1:
-        expected_last_dim = target_spatial[-1] // 2 + 1
-        if fft_spatial[-1] != expected_last_dim:
-            raise ValueError(
-                f"FFT last spatial dimension {fft_spatial[-1]} incompatible "
-                f"with target size {target_spatial[-1]} (expected {expected_last_dim})"
-            )
-
-    # Check non-last spatial dimensions
-    if spatial_dims > 1:
-        for i in range(spatial_dims - 1):
-            fft_dim = fft_spatial[i]
-            target_dim = target_spatial[i]
-            if fft_dim != target_dim:
-                raise ValueError(
-                    f"FFT spatial dimension {i} has size {fft_dim}, "
-                    f"but target requires {target_dim}"
-                )
+    _validate_fft_spatial_compatibility(target_spatial, fft_spatial, spatial_dims)
 
 
-def validate_grid_spacing(  # noqa: PLR0912
+def _grid_spacing_from_scalar(dx: float, spatial_dims: int) -> list[float]:
+    """Normalize a scalar grid spacing to one positive value per dimension."""
+    if dx <= 0:
+        raise ValueError(f"Grid spacing must be positive, got {dx}")
+    return [float(dx)] * spatial_dims
+
+
+def _grid_spacing_from_array(dx: jax.Array, spatial_dims: int) -> list[float]:
+    """Normalize a JAX-array grid spacing (rank-0 scalar or per-dimension)."""
+    if dx.ndim == 0:
+        dx_val = float(dx)
+        if dx_val <= 0:
+            raise ValueError(f"Grid spacing must be positive, got {dx_val}")
+        return [dx_val] * spatial_dims
+    dx_list = [float(dx[i]) for i in range(dx.shape[0])]
+    if len(dx_list) != spatial_dims:
+        raise ValueError(
+            f"Grid spacing length {len(dx_list)} doesn't match spatial_dims {spatial_dims}"
+        )
+    for i, dx_i in enumerate(dx_list):
+        if dx_i <= 0:
+            raise ValueError(f"Grid spacing element {i} must be positive, got {dx_i}")
+    return dx_list
+
+
+def _grid_spacing_from_sequence(dx: Sequence[Any], spatial_dims: int) -> list[float]:
+    """Normalize a list/tuple grid spacing, validating each element."""
+    dx_list = list(dx)
+    if len(dx_list) != spatial_dims:
+        raise ValueError(
+            f"Grid spacing length {len(dx_list)} doesn't match spatial_dims {spatial_dims}"
+        )
+    for i, dx_i in enumerate(dx_list):
+        if not isinstance(dx_i, int | float | jax.Array):
+            raise TypeError(f"dx element {i} must be numeric, got {type(dx_i)}")
+        if dx_i <= 0:
+            raise ValueError(f"dx element {i} must be positive, got {dx_i}")
+    return [float(dx_i) for dx_i in dx_list]
+
+
+def validate_grid_spacing(
     dx: GridSpacing,
     spatial_dims: int,
 ) -> list[float]:
@@ -164,49 +206,13 @@ def validate_grid_spacing(  # noqa: PLR0912
     """
     validate_spatial_dims(spatial_dims)
 
-    # Handle scalar dx
     if isinstance(dx, int | float):
-        if dx <= 0:
-            raise ValueError(f"Grid spacing must be positive, got {dx}")
-        return [float(dx)] * spatial_dims
-
-    # Handle JAX array dx
+        return _grid_spacing_from_scalar(dx, spatial_dims)
     if isinstance(dx, jax.Array):
-        if dx.ndim == 0:  # Scalar JAX array
-            dx_val = float(dx)
-            if dx_val <= 0:
-                raise ValueError(f"Grid spacing must be positive, got {dx_val}")
-            return [dx_val] * spatial_dims
-        # Multi-dimensional JAX array - treat as sequence
-        dx_list = [float(dx[i]) for i in range(dx.shape[0])]
-        if len(dx_list) != spatial_dims:
-            raise ValueError(
-                f"Grid spacing length {len(dx_list)} doesn't match spatial_dims {spatial_dims}"
-            )
-        for i, dx_i in enumerate(dx_list):
-            if dx_i <= 0:
-                raise ValueError(f"Grid spacing element {i} must be positive, got {dx_i}")
-        return dx_list
-
-    # Handle sequence dx
+        return _grid_spacing_from_array(dx, spatial_dims)
     if not isinstance(dx, list | tuple):
         raise TypeError(f"dx must be a scalar or sequence, got {type(dx)}")
-
-    dx_list = list(dx)
-
-    if len(dx_list) != spatial_dims:
-        raise ValueError(
-            f"Grid spacing length {len(dx_list)} doesn't match spatial_dims {spatial_dims}"
-        )
-
-    # Validate each element
-    for i, dx_i in enumerate(dx_list):
-        if not isinstance(dx_i, int | float | jax.Array):
-            raise TypeError(f"dx element {i} must be numeric, got {type(dx_i)}")
-        if dx_i <= 0:
-            raise ValueError(f"dx element {i} must be positive, got {dx_i}")
-
-    return [float(dx_i) for dx_i in dx_list]
+    return _grid_spacing_from_sequence(dx, spatial_dims)
 
 
 def validate_axis_parameter(

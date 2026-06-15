@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import jax.numpy as jnp
+import optax
 from flax import nnx
 
 from opifex.core.training.components.base import BaseCallback, TrainingCallback
@@ -74,24 +75,31 @@ class AdaptiveLossBalancing(BaseCallback, nnx.Module):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CurriculumRegularization(BaseCallback):
-    """Curriculum Regularization Strategy.
+    """Curriculum-weighting callback for a bound loss-term weight.
 
-    Increases or decreases a regularization parameter (e.g., complexity penalty)
-    over the course of training.
+    Deterministically anneals a loss-term weight along a linear schedule over
+    training epochs (curriculum weighting; Krishnapriyan et al. 2021,
+    "Characterizing possible failure modes in physics-informed neural
+    networks"). ``target_weight`` is the ``nnx.Variable`` the trainer's
+    ``loss_fn`` reads (for example an entry of ``Trainer._constraint_weights``);
+    :meth:`on_epoch_begin` updates its ``.value`` in place between jitted steps,
+    and the next ``nnx.jit`` train step observes the new value without
+    recompilation (reference semantics preserve the shared Variable). The
+    schedule delegates to :func:`optax.linear_schedule`.
     """
 
+    target_weight: nnx.Variable
     start_val: float = 0.0
     end_val: float = 1.0
     total_epochs: int = 100
 
     def get_value(self, epoch: int) -> float:
-        """Get the regularization value for the current epoch (linear schedule)."""
-        progress = min(max(epoch / self.total_epochs, 0.0), 1.0)
-        return self.start_val + (self.end_val - self.start_val) * progress
+        """Return the scheduled weight for ``epoch`` (linear, clamped at the ends)."""
+        schedule = optax.linear_schedule(self.start_val, self.end_val, self.total_epochs)
+        return float(jnp.asarray(schedule(epoch)))
 
     def on_epoch_begin(self, epoch: int, state: Any) -> None:
-        """Update the regularization parameter in the training state."""
-        val = self.get_value(epoch)
-        # In a real implementation, we would update state.params or state.config
-        # print(f"Epoch {epoch}: Updating reg param to {val}")
-        _ = val  # Silence unused variable warning
+        """Anneal the bound loss-term weight in place for the upcoming epoch."""
+        self.target_weight.value = jnp.asarray(
+            self.get_value(epoch), dtype=self.target_weight.value.dtype
+        )

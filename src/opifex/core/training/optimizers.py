@@ -136,119 +136,115 @@ def create_rmsprop(
     return optax.rmsprop(learning_rate=learning_rate, decay=decay, eps=eps)
 
 
-def create_schedule(  # noqa: PLR0912
-    schedule_type: str,
-    init_value: float = 1e-3,
-    decay_steps: int | None = None,
-    alpha: float = 0.1,
-    transition_steps: int | None = None,
-    decay_rate: float = 0.96,
-    end_value: float | None = None,
-    boundaries_and_values: tuple[list[int], list[float]] | None = None,
-    peak_value: float | None = None,
-    warmup_steps: int | None = None,
-) -> optax.Schedule:
-    """Create learning rate schedule.
+def _constant_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Constant learning-rate schedule."""
+    return optax.constant_schedule(config.learning_rate)
+
+
+def _cosine_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Cosine-decay schedule (``decay_steps`` defaults to 1000)."""
+    decay_steps = config.decay_steps if config.decay_steps is not None else 1000
+    return optax.cosine_decay_schedule(
+        init_value=config.learning_rate, decay_steps=decay_steps, alpha=config.alpha
+    )
+
+
+def _exponential_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Exponential-decay schedule (``transition_steps`` defaults to 1000)."""
+    transition_steps = config.transition_steps if config.transition_steps is not None else 1000
+    return optax.exponential_decay(
+        init_value=config.learning_rate,
+        transition_steps=transition_steps,
+        decay_rate=config.decay_rate,
+    )
+
+
+def _linear_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Linear schedule to ``end_value`` (defaults to 10% of the initial value)."""
+    transition_steps = config.transition_steps if config.transition_steps is not None else 1000
+    end_value = config.end_value if config.end_value is not None else config.learning_rate * 0.1
+    return optax.linear_schedule(
+        init_value=config.learning_rate,
+        end_value=end_value,
+        transition_steps=transition_steps,
+    )
+
+
+def _step_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Piecewise-constant (step) schedule with a default decaying staircase."""
+    if config.boundaries_and_values is None:
+        boundaries, values = (
+            [100, 200],
+            [config.learning_rate, config.learning_rate * 0.1, config.learning_rate * 0.01],
+        )
+    else:
+        boundaries, values = config.boundaries_and_values
+    scales = (
+        {
+            boundary: values[i + 1] / values[i]
+            for i, boundary in enumerate(boundaries)
+            if i + 1 < len(values)
+        }
+        if len(values) > 1
+        else {}
+    )
+    return optax.piecewise_constant_schedule(
+        init_value=values[0] if values else config.learning_rate,
+        boundaries_and_scales=scales,
+    )
+
+
+def _warmup_cosine_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Linear warmup followed by cosine decay."""
+    return optax.warmup_cosine_decay_schedule(
+        init_value=config.learning_rate,
+        peak_value=config.peak_value if config.peak_value is not None else config.learning_rate,
+        warmup_steps=config.warmup_steps if config.warmup_steps is not None else 100,
+        decay_steps=config.decay_steps if config.decay_steps is not None else 1000,
+    )
+
+
+def _as_float32_schedule(schedule: optax.Schedule) -> optax.Schedule:
+    """Wrap a schedule so it returns float32 (stable optax updates under x64)."""
+
+    def wrapped_schedule(count):
+        return jnp.asarray(schedule(count), dtype=jnp.float32)
+
+    return wrapped_schedule
+
+
+_SCHEDULE_BUILDERS = {
+    "constant": _constant_schedule,
+    "cosine": _cosine_schedule,
+    "exponential": _exponential_schedule,
+    "linear": _linear_schedule,
+    "step": _step_schedule,
+    "warmup_cosine": _warmup_cosine_schedule,
+}
+
+
+def create_schedule(config: OptimizerConfig) -> optax.Schedule:
+    """Create a learning-rate schedule from an optimizer configuration.
+
+    The schedule kind and its parameters are read from ``config`` (see
+    :class:`OptimizerConfig`); ``config.learning_rate`` is the schedule's
+    initial value. The output is cast to float32 for stable optax updates
+    under x64.
 
     Args:
-        schedule_type: Type of schedule ("constant", "cosine", "exponential",
-            "linear", "step", "warmup_cosine")
-        init_value: Initial learning rate value
-        decay_steps: Number of steps for decay (cosine)
-        alpha: Minimum learning rate multiplier (cosine)
-        transition_steps: Steps between rate changes (exponential, linear)
-        decay_rate: Decay rate (exponential)
-        end_value: Final learning rate value (linear)
-        boundaries_and_values: (boundaries, values) for step schedule
-        peak_value: Peak learning rate after warmup
-        warmup_steps: Number of warmup steps
+        config: Optimizer configuration carrying ``schedule_type`` and the
+            associated schedule parameters.
 
     Returns:
-        Learning rate schedule function
+        A float32 ``optax.Schedule``.
 
     Raises:
-        ValueError: If schedule_type is unknown
+        ValueError: If ``config.schedule_type`` is unknown.
     """
-
-    def as_float32_schedule(schedule: optax.Schedule) -> optax.Schedule:
-        def wrapped_schedule(count):
-            return jnp.asarray(schedule(count), dtype=jnp.float32)
-
-        return wrapped_schedule
-
-    if schedule_type == "constant":
-        return as_float32_schedule(optax.constant_schedule(init_value))
-
-    if schedule_type == "cosine":
-        if decay_steps is None:
-            decay_steps = 1000
-        return as_float32_schedule(
-            optax.cosine_decay_schedule(init_value=init_value, decay_steps=decay_steps, alpha=alpha)
-        )
-
-    if schedule_type == "exponential":
-        if transition_steps is None:
-            transition_steps = 1000
-        return as_float32_schedule(
-            optax.exponential_decay(
-                init_value=init_value,
-                transition_steps=transition_steps,
-                decay_rate=decay_rate,
-            )
-        )
-
-    if schedule_type == "linear":
-        if transition_steps is None:
-            transition_steps = 1000
-        if end_value is None:
-            end_value = init_value * 0.1
-        return as_float32_schedule(
-            optax.linear_schedule(
-                init_value=init_value,
-                end_value=end_value,
-                transition_steps=transition_steps,
-            )
-        )
-
-    if schedule_type == "step":
-        if boundaries_and_values is None:
-            # Default step schedule
-            boundaries_and_values = (
-                [100, 200],
-                [init_value, init_value * 0.1, init_value * 0.01],
-            )
-        boundaries, values = boundaries_and_values
-        return as_float32_schedule(
-            optax.piecewise_constant_schedule(
-                init_value=values[0] if values else init_value,
-                boundaries_and_scales={
-                    b: values[i + 1] / values[i]
-                    for i, b in enumerate(boundaries)
-                    if i + 1 < len(values)
-                }
-                if len(values) > 1
-                else {},
-            )
-        )
-
-    if schedule_type == "warmup_cosine":
-        if warmup_steps is None:
-            warmup_steps = 100
-        if peak_value is None:
-            peak_value = init_value
-        if decay_steps is None:
-            decay_steps = 1000
-
-        return as_float32_schedule(
-            optax.warmup_cosine_decay_schedule(
-                init_value=init_value,
-                peak_value=peak_value,
-                warmup_steps=warmup_steps,
-                decay_steps=decay_steps,
-            )
-        )
-
-    raise ValueError(f"Unknown schedule type: {schedule_type}")
+    builder = _SCHEDULE_BUILDERS.get(config.schedule_type or "")
+    if builder is None:
+        raise ValueError(f"Unknown schedule type: {config.schedule_type}")
+    return _as_float32_schedule(builder(config))
 
 
 def with_gradient_clipping(
@@ -360,18 +356,7 @@ def create_optimizer(config: OptimizerConfig) -> optax.GradientTransformation:
 
     # Add schedule (if specified)
     if config.schedule_type is not None:
-        schedule = create_schedule(
-            schedule_type=config.schedule_type,
-            init_value=config.learning_rate,
-            decay_steps=config.decay_steps,
-            alpha=config.alpha,
-            transition_steps=config.transition_steps,
-            decay_rate=config.decay_rate,
-            end_value=config.end_value,
-            boundaries_and_values=config.boundaries_and_values,
-            peak_value=config.peak_value,
-            warmup_steps=config.warmup_steps,
-        )
+        schedule = create_schedule(config)
         transformations.append(optax.scale_by_schedule(schedule))
 
     # Add base optimizer

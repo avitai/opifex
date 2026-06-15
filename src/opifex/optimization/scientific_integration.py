@@ -752,6 +752,49 @@ class ScientificBenchmarkValidator:
         return results
 
 
+def _append_physics_recommendations(recommendations: dict[str, Any], physics: Any) -> None:
+    """Append physics-metric-driven accuracy recommendations."""
+    if physics.numerical_stability < 0.9:
+        recommendations["recommendations"].append("Improve numerical stability")
+        recommendations["priority_actions"].append("stabilize_numerics")
+    if physics.energy_conservation_error > 1e-6:
+        recommendations["recommendations"].append("Improve energy conservation")
+        recommendations["priority_actions"].append("enforce_energy_conservation")
+    if physics.symmetry_preservation < 0.95:
+        recommendations["recommendations"].append("Enhance symmetry preservation")
+        recommendations["priority_actions"].append("enforce_symmetries")
+
+
+def _append_numerical_recommendations(recommendations: dict[str, Any], numerical: Any) -> None:
+    """Append numerical-validation-driven accuracy recommendations."""
+    if not numerical.is_valid:
+        recommendations["recommendations"].extend(numerical.recommendations)
+        recommendations["priority_actions"].append("fix_numerical_issues")
+    if numerical.condition_number > 1e6:
+        recommendations["recommendations"].append("Address matrix conditioning")
+        recommendations["priority_actions"].append("improve_conditioning")
+
+
+def _append_conservation_recommendations(recommendations: dict[str, Any], checks: Any) -> None:
+    """Append conservation-law-driven accuracy recommendations."""
+    for conservation in checks:
+        if not conservation.is_conserved:
+            recommendations["recommendations"].append(f"Fix {conservation.law.value} conservation")
+            recommendations["priority_actions"].append(
+                f"enforce_{conservation.law.value}_conservation"
+            )
+
+
+def _append_benchmark_recommendations(recommendations: dict[str, Any], benchmarks: Any) -> None:
+    """Append benchmark-accuracy-driven recommendations."""
+    failed_benchmarks = [br for br in benchmarks if not br.meets_accuracy_threshold]
+    if failed_benchmarks:
+        recommendations["recommendations"].append(
+            f"Improve accuracy for {len(failed_benchmarks)} benchmarks"
+        )
+        recommendations["priority_actions"].append("improve_benchmark_accuracy")
+
+
 class ScientificComputingIntegrator:
     """Main integrator for scientific computing optimization."""
 
@@ -839,62 +882,25 @@ class ScientificComputingIntegrator:
     ) -> dict[str, Any]:
         """Generate optimization recommendations based on scientific validation."""
 
-        recommendations = {
+        recommendations: dict[str, Any] = {
             "optimization_type": "scientific_accuracy",
             "recommendations": [],
             "priority_actions": [],
         }
 
-        # Check physics metrics
         if "physics_metrics" in validation_results:
-            physics = validation_results["physics_metrics"]
-
-            if physics.numerical_stability < 0.9:
-                recommendations["recommendations"].append("Improve numerical stability")
-                recommendations["priority_actions"].append("stabilize_numerics")
-
-            if physics.energy_conservation_error > 1e-6:
-                recommendations["recommendations"].append("Improve energy conservation")
-                recommendations["priority_actions"].append("enforce_energy_conservation")
-
-            if physics.symmetry_preservation < 0.95:
-                recommendations["recommendations"].append("Enhance symmetry preservation")
-                recommendations["priority_actions"].append("enforce_symmetries")
-
-        # Check numerical validation
+            _append_physics_recommendations(recommendations, validation_results["physics_metrics"])
         if "numerical_validation" in validation_results:
-            numerical = validation_results["numerical_validation"]
-
-            if not numerical.is_valid:
-                recommendations["recommendations"].extend(numerical.recommendations)
-                recommendations["priority_actions"].append("fix_numerical_issues")
-
-            if numerical.condition_number > 1e6:
-                recommendations["recommendations"].append("Address matrix conditioning")
-                recommendations["priority_actions"].append("improve_conditioning")
-
-        # Check conservation laws
+            _append_numerical_recommendations(
+                recommendations, validation_results["numerical_validation"]
+            )
         if "conservation_checks" in validation_results:
-            for conservation in validation_results["conservation_checks"]:
-                if not conservation.is_conserved:
-                    recommendations["recommendations"].append(
-                        f"Fix {conservation.law.value} conservation"
-                    )
-                    recommendations["priority_actions"].append(
-                        f"enforce_{conservation.law.value}_conservation"
-                    )
-
-        # Check benchmarks
+            _append_conservation_recommendations(
+                recommendations, validation_results["conservation_checks"]
+            )
         if "benchmark_validation" in validation_results:
-            failed_benchmarks = [
-                br
-                for br in validation_results["benchmark_validation"]
-                if not br.meets_accuracy_threshold
-            ]
-            if failed_benchmarks:
-                recommendations["recommendations"].append(
-                    f"Improve accuracy for {len(failed_benchmarks)} benchmarks"
-                )
-                recommendations["priority_actions"].append("improve_benchmark_accuracy")
+            _append_benchmark_recommendations(
+                recommendations, validation_results["benchmark_validation"]
+            )
 
         return recommendations

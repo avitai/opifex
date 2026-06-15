@@ -307,6 +307,166 @@ def _plot_multi_model_flops(results: dict[str, Any], axes: list[plt.Axes]) -> No
             ax.set_title("FLOPS Scaling")
 
 
+def _plot_memory_breakdown(ax: Any, memory_results: dict[str, Any]) -> None:
+    """Plot the memory-breakdown pie chart (or a no-data placeholder)."""
+    if "efficiency_analysis" not in memory_results:
+        return
+    breakdown = memory_results["efficiency_analysis"].get("memory_breakdown", {})
+    if not breakdown:
+        ax.text(
+            0.5,
+            0.5,
+            "No memory breakdown available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return
+    colors = ["lightblue", "lightcoral", "lightgreen"]
+    labels = []
+    sizes = []
+    for key, value in breakdown.items():
+        if value > 0:
+            labels.append(key.replace("_mb", "").replace("_", " ").title())
+            sizes.append(value)
+    if sizes:
+        ax.pie(sizes, labels=labels, colors=colors[: len(sizes)], autopct="%1.1f%%", startangle=90)
+        ax.set_title("Memory Breakdown")
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No memory data available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+
+
+def _plot_memory_timeline(ax: Any, memory_results: dict[str, Any]) -> None:
+    """Plot the memory-usage timeline (or a no-data placeholder)."""
+    if "profiling_timeline" not in memory_results:
+        return
+    timeline_data = memory_results["profiling_timeline"].get("timeline", [])
+    if not (timeline_data and len(timeline_data) > 1):
+        ax.text(
+            0.5,
+            0.5,
+            "No timeline data available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_title("Memory Timeline")
+        return
+    times = [point[0] for point in timeline_data]
+    memories = [point[1] for point in timeline_data]
+    ax.plot(times, memories, "b-", linewidth=2, marker="o", markersize=6)
+    ax.set_xlabel("Checkpoint")
+    ax.set_ylabel("Memory Usage (MB)")
+    ax.set_title("Memory Timeline")
+    ax.grid(True, alpha=0.3)
+    for point in timeline_data:
+        if len(point) > 2:  # Has label
+            ax.annotate(
+                point[2],
+                (point[0], point[1]),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+            )
+
+
+def _plot_memory_efficiency(ax: Any, memory_results: dict[str, Any]) -> None:
+    """Plot the total-memory efficiency bar with threshold lines."""
+    if "efficiency_analysis" not in memory_results:
+        return
+    eff = memory_results["efficiency_analysis"]
+    category = eff.get("efficiency_category", "unknown")
+    total_memory = eff.get("total_memory_mb", 0)
+    colors = {
+        "very_efficient": "green",
+        "efficient": "lightgreen",
+        "moderate": "orange",
+        "memory_intensive": "red",
+        "unknown": "gray",
+    }
+    ax.bar(["Total Memory"], [total_memory], color=colors.get(category, "gray"))
+    ax.set_ylabel("Memory (MB)")
+    ax.set_title(f"Memory Efficiency: {category.replace('_', ' ').title()}")
+    ax.text(
+        0, total_memory + total_memory * 0.01, f"{total_memory:.2f} MB", ha="center", va="bottom"
+    )
+    ax.axhline(y=100, color="green", linestyle="--", alpha=0.5, label="Very Efficient (<100MB)")
+    ax.axhline(y=500, color="orange", linestyle="--", alpha=0.5, label="Moderate (<500MB)")
+    ax.axhline(y=1000, color="red", linestyle="--", alpha=0.5, label="Intensive (<1GB)")
+    ax.legend(fontsize=8)
+
+
+def _categorize_suggestion(suggestion: str) -> str:
+    """Map an optimization suggestion string to its display category."""
+    text = suggestion.lower()
+    if "memory" in text or "batch" in text:
+        return "Memory Reduction"
+    if "jax" in text or "jit" in text:
+        return "JAX Optimization"
+    if "model" in text or "parameter" in text:
+        return "Model Optimization"
+    return "Data Pipeline"
+
+
+def _plot_optimization_suggestions(ax: Any, memory_results: dict[str, Any]) -> None:
+    """Plot optimization suggestions grouped by category (or a placeholder)."""
+    if "optimization_suggestions" not in memory_results:
+        return
+    suggestions = memory_results["optimization_suggestions"]
+    if not suggestions:
+        ax.text(
+            0.5,
+            0.5,
+            "No optimization suggestions available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return
+    categories = {
+        "Memory Reduction": 0,
+        "JAX Optimization": 0,
+        "Model Optimization": 0,
+        "Data Pipeline": 0,
+    }
+    for suggestion in suggestions:
+        categories[_categorize_suggestion(suggestion)] += 1
+    categories = {key: value for key, value in categories.items() if value > 0}
+    if not categories:
+        ax.text(
+            0.5,
+            0.5,
+            "No optimization suggestions",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return
+    bars = ax.bar(
+        categories.keys(),
+        categories.values(),
+        color=["lightblue", "lightcoral", "lightgreen", "orange"],
+    )
+    ax.set_ylabel("Number of Suggestions")
+    ax.set_title("Optimization Suggestions by Category")
+    ax.tick_params(axis="x", rotation=45)
+    for bar, count in zip(bars, categories.values(), strict=False):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            bar.get_height() + 0.01,
+            str(count),
+            ha="center",
+            va="bottom",
+        )
+
+
 def plot_memory_usage(
     memory_results: dict[str, Any],
     title: str = "Memory Usage Analysis",
@@ -328,196 +488,10 @@ def plot_memory_usage(
     fig, axes = plt.subplots(2, 2, figsize=figsize)
     axes = axes.flatten()
 
-    # Memory breakdown pie chart
-    ax = axes[0]
-    if "efficiency_analysis" in memory_results:
-        eff = memory_results["efficiency_analysis"]
-        breakdown = eff.get("memory_breakdown", {})
-
-        if breakdown:
-            labels = []
-            sizes = []
-            colors = ["lightblue", "lightcoral", "lightgreen"]
-
-            for _i, (key, value) in enumerate(breakdown.items()):
-                if value > 0:
-                    labels.append(key.replace("_mb", "").replace("_", " ").title())
-                    sizes.append(value)
-
-            if sizes:
-                ax.pie(
-                    sizes,
-                    labels=labels,
-                    colors=colors[: len(sizes)],
-                    autopct="%1.1f%%",
-                    startangle=90,
-                )
-                ax.set_title("Memory Breakdown")
-            else:
-                ax.text(
-                    0.5,
-                    0.5,
-                    "No memory data available",
-                    ha="center",
-                    va="center",
-                    transform=ax.transAxes,
-                )
-        else:
-            ax.text(
-                0.5,
-                0.5,
-                "No memory breakdown available",
-                ha="center",
-                va="center",
-                transform=ax.transAxes,
-            )
-
-    # Memory timeline (if available)
-    ax = axes[1]
-    if "profiling_timeline" in memory_results:
-        timeline = memory_results["profiling_timeline"]
-        timeline_data = timeline.get("timeline", [])
-
-        if timeline_data and len(timeline_data) > 1:
-            times = [point[0] for point in timeline_data]
-            memories = [point[1] for point in timeline_data]
-
-            ax.plot(times, memories, "b-", linewidth=2, marker="o", markersize=6)
-            ax.set_xlabel("Checkpoint")
-            ax.set_ylabel("Memory Usage (MB)")
-            ax.set_title("Memory Timeline")
-            ax.grid(True, alpha=0.3)
-
-            # Add labels for checkpoints with labels
-            for point in timeline_data:
-                if len(point) > 2:  # Has label
-                    ax.annotate(
-                        point[2],
-                        (point[0], point[1]),
-                        textcoords="offset points",
-                        xytext=(0, 10),
-                        ha="center",
-                    )
-        else:
-            ax.text(
-                0.5,
-                0.5,
-                "No timeline data available",
-                ha="center",
-                va="center",
-                transform=ax.transAxes,
-            )
-            ax.set_title("Memory Timeline")
-
-    # Memory efficiency category
-    ax = axes[2]
-    if "efficiency_analysis" in memory_results:
-        eff = memory_results["efficiency_analysis"]
-        category = eff.get("efficiency_category", "unknown")
-        total_memory = eff.get("total_memory_mb", 0)
-
-        # Color code efficiency
-        colors = {
-            "very_efficient": "green",
-            "efficient": "lightgreen",
-            "moderate": "orange",
-            "memory_intensive": "red",
-            "unknown": "gray",
-        }
-
-        color = colors.get(category, "gray")
-
-        # Simple bar showing total memory with color coding
-        bar = ax.bar(["Total Memory"], [total_memory], color=color)
-        ax.set_ylabel("Memory (MB)")
-        ax.set_title(f"Memory Efficiency: {category.replace('_', ' ').title()}")
-
-        # Add value label
-        ax.text(
-            0,
-            total_memory + total_memory * 0.01,
-            f"{total_memory:.2f} MB",
-            ha="center",
-            va="bottom",
-        )
-
-        # Add efficiency thresholds as horizontal lines
-        ax.axhline(
-            y=100,
-            color="green",
-            linestyle="--",
-            alpha=0.5,
-            label="Very Efficient (<100MB)",
-        )
-        ax.axhline(y=500, color="orange", linestyle="--", alpha=0.5, label="Moderate (<500MB)")
-        ax.axhline(y=1000, color="red", linestyle="--", alpha=0.5, label="Intensive (<1GB)")
-        ax.legend(fontsize=8)
-
-    # Optimization suggestions
-    ax = axes[3]
-    if "optimization_suggestions" in memory_results:
-        suggestions = memory_results["optimization_suggestions"]
-
-        if suggestions:
-            # Count suggestions by category
-            categories = {
-                "Memory Reduction": 0,
-                "JAX Optimization": 0,
-                "Model Optimization": 0,
-                "Data Pipeline": 0,
-            }
-
-            for suggestion in suggestions:
-                if "memory" in suggestion.lower() or "batch" in suggestion.lower():
-                    categories["Memory Reduction"] += 1
-                elif "jax" in suggestion.lower() or "jit" in suggestion.lower():
-                    categories["JAX Optimization"] += 1
-                elif "model" in suggestion.lower() or "parameter" in suggestion.lower():
-                    categories["Model Optimization"] += 1
-                else:
-                    categories["Data Pipeline"] += 1
-
-            # Filter out zero categories
-            categories = {k: v for k, v in categories.items() if v > 0}
-
-            if categories:
-                bars = ax.bar(
-                    categories.keys(),
-                    categories.values(),
-                    color=["lightblue", "lightcoral", "lightgreen", "orange"],
-                )
-                ax.set_ylabel("Number of Suggestions")
-                ax.set_title("Optimization Suggestions by Category")
-                ax.tick_params(axis="x", rotation=45)
-
-                # Add value labels
-                for bar, count in zip(bars, categories.values(), strict=False):
-                    height = bar.get_height()
-                    ax.text(
-                        bar.get_x() + bar.get_width() / 2.0,
-                        height + 0.01,
-                        str(count),
-                        ha="center",
-                        va="bottom",
-                    )
-            else:
-                ax.text(
-                    0.5,
-                    0.5,
-                    "No optimization suggestions",
-                    ha="center",
-                    va="center",
-                    transform=ax.transAxes,
-                )
-        else:
-            ax.text(
-                0.5,
-                0.5,
-                "No optimization suggestions available",
-                ha="center",
-                va="center",
-                transform=ax.transAxes,
-            )
+    _plot_memory_breakdown(axes[0], memory_results)
+    _plot_memory_timeline(axes[1], memory_results)
+    _plot_memory_efficiency(axes[2], memory_results)
+    _plot_optimization_suggestions(axes[3], memory_results)
 
     fig.suptitle(title, fontsize=16)
     plt.tight_layout()
@@ -526,6 +500,84 @@ def plot_memory_usage(
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
 
     return fig
+
+
+def _extract_complexity_data(
+    complexity_results: dict[str, Any],
+) -> tuple[list[str], list[Any], list[Any], list[Any]]:
+    """Extract per-model parameter/memory/operation counts, skipping metadata keys."""
+    model_names: list[str] = []
+    total_params: list[Any] = []
+    memory_usage: list[Any] = []
+    total_ops: list[Any] = []
+    for name, data in complexity_results.items():
+        if name.startswith("_"):  # Skip comparison metadata
+            continue
+        if isinstance(data, dict) and "parameters" in data:
+            model_names.append(name)
+            total_params.append(data["parameters"]["total_parameters"])
+            if "memory" in data and "total_estimated_mb" in data["memory"]:
+                memory_usage.append(data["memory"]["total_estimated_mb"])
+            else:
+                memory_usage.append(0)
+            if "computational" in data:
+                total_ops.append(data["computational"]["total_estimated_operations"])
+            else:
+                total_ops.append(0)
+    return model_names, total_params, memory_usage, total_ops
+
+
+def _plot_relative_efficiency(ax: Any, complexity_results: dict[str, Any]) -> None:
+    """Plot relative parameter-efficiency ratios when comparison data is available."""
+    comparison = complexity_results.get("_comparison", {})
+    if "parameter_efficiency" in comparison:
+        ratios = comparison["parameter_efficiency"]
+        ax.bar(list(ratios.keys()), list(ratios.values()), color="orange")
+        ax.set_ylabel("Parameter Efficiency Ratio")
+        ax.set_title("Relative Parameter Efficiency")
+        ax.tick_params(axis="x", rotation=45)
+        ax.axhline(y=1, color="red", linestyle="--", alpha=0.7, label="Baseline")
+        ax.legend()
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No efficiency comparison available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_title("Relative Efficiency")
+
+
+def _plot_model_type_distribution(ax: Any, complexity_results: dict[str, Any]) -> None:
+    """Plot the distribution of model types as a pie chart when available."""
+    model_types = [
+        data["model_type"]
+        for name, data in complexity_results.items()
+        if not name.startswith("_") and isinstance(data, dict) and "model_type" in data
+    ]
+    if model_types:
+        type_counts: dict[str, int] = {}
+        for model_type in model_types:
+            type_counts[model_type] = type_counts.get(model_type, 0) + 1
+        ax.pie(
+            type_counts.values(),
+            labels=type_counts.keys(),
+            autopct="%1.1f%%",
+            startangle=90,
+        )
+        ax.set_title("Model Type Distribution")
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No model type data available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_title("Model Type Distribution")
 
 
 def plot_model_complexity_comparison(
@@ -549,28 +601,9 @@ def plot_model_complexity_comparison(
     fig, axes = plt.subplots(2, 3, figsize=figsize)
     axes = axes.flatten()
 
-    # Extract model data
-    model_names = []
-    total_params = []
-    memory_usage = []
-    total_ops = []
-
-    for name, data in complexity_results.items():
-        if name.startswith("_"):  # Skip comparison metadata
-            continue
-        if isinstance(data, dict) and "parameters" in data:
-            model_names.append(name)
-            total_params.append(data["parameters"]["total_parameters"])
-
-            if "memory" in data and "total_estimated_mb" in data["memory"]:
-                memory_usage.append(data["memory"]["total_estimated_mb"])
-            else:
-                memory_usage.append(0)
-
-            if "computational" in data:
-                total_ops.append(data["computational"]["total_estimated_operations"])
-            else:
-                total_ops.append(0)
+    model_names, total_params, memory_usage, total_ops = _extract_complexity_data(
+        complexity_results
+    )
 
     if not model_names:
         for ax in axes:
@@ -625,61 +658,10 @@ def plot_model_complexity_comparison(
         )
 
     # Relative efficiency (if comparison data available)
-    ax = axes[4]
-    if (
-        "_comparison" in complexity_results
-        and "parameter_efficiency" in complexity_results["_comparison"]
-    ):
-        ratios = complexity_results["_comparison"]["parameter_efficiency"]
-        names = list(ratios.keys())
-        ratio_values = list(ratios.values())
-
-        ax.bar(names, ratio_values, color="orange")
-        ax.set_ylabel("Parameter Efficiency Ratio")
-        ax.set_title("Relative Parameter Efficiency")
-        ax.tick_params(axis="x", rotation=45)
-        ax.axhline(y=1, color="red", linestyle="--", alpha=0.7, label="Baseline")
-        ax.legend()
-    else:
-        ax.text(
-            0.5,
-            0.5,
-            "No efficiency comparison available",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-        )
-        ax.set_title("Relative Efficiency")
+    _plot_relative_efficiency(axes[4], complexity_results)
 
     # Model type distribution (if available)
-    ax = axes[5]
-    model_types = []
-    for name, data in complexity_results.items():
-        if not name.startswith("_") and isinstance(data, dict) and "model_type" in data:
-            model_types.append(data["model_type"])
-
-    if model_types:
-        type_counts = {}
-        for model_type in model_types:
-            type_counts[model_type] = type_counts.get(model_type, 0) + 1
-
-        ax.pie(
-            type_counts.values(),
-            labels=type_counts.keys(),
-            autopct="%1.1f%%",
-            startangle=90,
-        )
-        ax.set_title("Model Type Distribution")
-    else:
-        ax.text(
-            0.5,
-            0.5,
-            "No model type data available",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-        )
-        ax.set_title("Model Type Distribution")
+    _plot_model_type_distribution(axes[5], complexity_results)
 
     fig.suptitle(title, fontsize=16)
     plt.tight_layout()

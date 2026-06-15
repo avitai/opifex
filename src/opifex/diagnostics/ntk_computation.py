@@ -81,7 +81,6 @@ def compute_gradient_jacobian(model: nnx.Module, x: jax.Array) -> jax.Array:
         # we treat the row index as "sample index".
         # If output > 1, effectively we have batch*output samples.
 
-        # leaf_shape = leaf.shape
         # Flatten batch and output dims together for the "sample" dimension
         # But wait, NTK usually compares x_i and x_j.
         # For multi-output, we get a kernel K_{ij} which is a matrix.

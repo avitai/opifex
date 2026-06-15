@@ -144,10 +144,10 @@ uv run pytest -vv --json-report --json-report-file=temp/test-results.json --json
 
 ```bash
 # Serve documentation locally
-uv run mkdocs serve
+uv run --extra docs mkdocs serve
 
 # Build documentation
-uv run mkdocs build
+uv run --extra docs mkdocs build
 ```
 
 ## Troubleshooting

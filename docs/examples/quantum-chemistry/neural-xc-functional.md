@@ -264,7 +264,7 @@ Physics Constraint Verification:
 
 | Example                                      | Level        | What You'll Learn               |
 |----------------------------------------------|--------------|--------------------------------|
-| [Neural DFT](neural-dft.md)                  | Advanced     | Full DFT energy calculation     |
+| [Neural DFT](../../methods/neural-dft.md)    | Advanced     | Full DFT energy calculation     |
 | [FNO on Darcy](../neural-operators/fno-darcy.md) | Beginner | Data-driven operator learning  |
 
 ### API Reference

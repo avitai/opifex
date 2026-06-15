@@ -499,22 +499,8 @@ class TensorShapeValidator:
                     f"{expected_dims} dimensions. Full equation: {equation}"
                 )
 
-        # Collect dimension sizes for consistency checking.
-        dim_sizes: dict[str, int] = {}
-        for shape, input_spec in zip(operand_shapes, input_specs, strict=False):
-            spec = input_spec.strip()
-            for dim_idx, dim_label in enumerate(spec):
-                size = shape[dim_idx]
-                if dim_label in dim_sizes:
-                    if dim_sizes[dim_label] != size:
-                        _raise_einsum_dimension_error(
-                            f"Dimension '{dim_label}' has inconsistent "
-                            f"sizes: {dim_sizes[dim_label]} vs {size}. "
-                            f"Equation: {equation}, Operand shapes: "
-                            f"{operand_shapes}"
-                        )
-                else:
-                    dim_sizes[dim_label] = size
+        # Validate that every shared index resolves to a single consistent size.
+        _check_einsum_dimension_consistency(operand_shapes, input_specs, equation)
 
     @staticmethod
     def validate_attention_dims(query: Array, key: Array, value: Array) -> None:
@@ -892,6 +878,25 @@ def pad_spectral_1d(
         return out_ft
     padded = jnp.zeros((batch_size, out_channels, target_freq_size), dtype=out_ft.dtype)
     return padded.at[:, :, : out_ft.shape[-1]].set(out_ft)
+
+
+def _check_einsum_dimension_consistency(
+    operand_shapes: list[tuple[int, ...]], input_specs: list[str], equation: str
+) -> None:
+    """Ensure every shared einsum index resolves to a single consistent size."""
+    dim_sizes: dict[str, int] = {}
+    for shape, input_spec in zip(operand_shapes, input_specs, strict=False):
+        spec = input_spec.strip()
+        for dim_idx, dim_label in enumerate(spec):
+            size = shape[dim_idx]
+            if dim_label in dim_sizes and dim_sizes[dim_label] != size:
+                _raise_einsum_dimension_error(
+                    f"Dimension '{dim_label}' has inconsistent "
+                    f"sizes: {dim_sizes[dim_label]} vs {size}. "
+                    f"Equation: {equation}, Operand shapes: "
+                    f"{operand_shapes}"
+                )
+            dim_sizes.setdefault(dim_label, size)
 
 
 def _raise_einsum_dimension_error(message: str) -> None:

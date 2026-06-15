@@ -84,6 +84,61 @@ def _register_lifecycle(app: FastAPI, app_state: AppState) -> None:
         logger.info("Shutting down Opifex Model Serving API")
 
 
+def _health_status(app_state: AppState) -> dict[str, Any]:
+    """Build the ``/health`` payload, raising 503 if the service is unhealthy."""
+    try:
+        uptime = 0.0  # Calculate actual uptime in production
+        return {
+            "status": "healthy",
+            "service": "opifex-model-serving",
+            "version": "1.0.0",
+            "uptime_seconds": uptime,
+            "components": {
+                "inference_engine": app_state.inference_engine is not None,
+                "model_registry": app_state.model_registry is not None,
+                "model_loaded": (
+                    app_state.inference_engine is not None
+                    and app_state.inference_engine.is_initialized
+                ),
+            },
+        }
+    except Exception as e:
+        logger.exception("Health check failed")
+        raise HTTPException(status_code=503, detail="Service unhealthy") from e
+
+
+def _list_models_payload(app_state: AppState) -> dict[str, Any] | None:
+    """Build the ``/models`` payload, raising on registry errors."""
+    try:
+        registry = app_state.model_registry
+        if registry is None:
+            _raise_service_unavailable("Model registry not available")
+            return None  # never reached; helps the type checker
+        models = registry.list_models()
+        return {"models": models}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to list models")
+        raise HTTPException(status_code=500, detail="Failed to list models") from e
+
+
+def _metrics_payload(app_state: AppState) -> dict[str, Any] | None:
+    """Build the ``/metrics`` payload, raising on inference-engine errors."""
+    try:
+        engine = app_state.inference_engine
+        if engine is None:
+            _raise_service_unavailable("Inference engine not available")
+            return None  # never reached; helps the type checker
+        metrics = engine.get_performance_metrics()
+        return {"metrics": metrics}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get metrics")
+        raise HTTPException(status_code=500, detail="Failed to get metrics") from e
+
+
 def _register_status_routes(app: FastAPI, app_state: AppState) -> None:
     """Register status/info routes (health, root, models, metrics, errors)."""
 
@@ -94,26 +149,7 @@ def _register_status_routes(app: FastAPI, app_state: AppState) -> None:
         Returns:
             Health status information
         """
-        try:
-            uptime = 0.0  # Calculate actual uptime in production
-
-            return {
-                "status": "healthy",
-                "service": "opifex-model-serving",
-                "version": "1.0.0",
-                "uptime_seconds": uptime,
-                "components": {
-                    "inference_engine": app_state.inference_engine is not None,
-                    "model_registry": app_state.model_registry is not None,
-                    "model_loaded": (
-                        app_state.inference_engine is not None
-                        and app_state.inference_engine.is_initialized
-                    ),
-                },
-            }
-        except Exception as e:
-            logger.exception("Health check failed")
-            raise HTTPException(status_code=503, detail="Service unhealthy") from e
+        return _health_status(app_state)
 
     @app.get("/")
     async def root():  # pyright: ignore[reportUnusedFunction]
@@ -137,19 +173,7 @@ def _register_status_routes(app: FastAPI, app_state: AppState) -> None:
         Returns:
             List of available models
         """
-        try:
-            registry = app_state.model_registry
-            if registry is None:
-                _raise_service_unavailable("Model registry not available")
-                return None  # This will never execute but helps type checker
-
-            models = registry.list_models()
-            return {"models": models}
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception("Failed to list models")
-            raise HTTPException(status_code=500, detail="Failed to list models") from e
+        return _list_models_payload(app_state)
 
     @app.get("/metrics")
     async def get_metrics():  # pyright: ignore[reportUnusedFunction]
@@ -158,19 +182,7 @@ def _register_status_routes(app: FastAPI, app_state: AppState) -> None:
         Returns:
             Performance metrics
         """
-        try:
-            engine = app_state.inference_engine
-            if engine is None:
-                _raise_service_unavailable("Inference engine not available")
-                return None  # This will never execute but helps type checker
-
-            metrics = engine.get_performance_metrics()
-            return {"metrics": metrics}
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception("Failed to get metrics")
-            raise HTTPException(status_code=500, detail="Failed to get metrics") from e
+        return _metrics_payload(app_state)
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):  # pyright: ignore[reportUnusedFunction]

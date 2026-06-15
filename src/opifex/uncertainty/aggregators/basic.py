@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
+import jax.scipy as jsp
 
 from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
 from opifex.uncertainty.aggregators.types import (
@@ -259,17 +260,12 @@ class UncertaintyQuantifier:
         if confidence_level is None:
             confidence_level = self.confidence_level
 
-        # Use JAX-compatible approach instead of scipy
-        # alpha = 1.0 - confidence_level  # Computed but not used in simplified impl
-        # Approximate z-score for common confidence levels
-        if confidence_level >= 0.99:
-            z_score = 2.576  # 99%
-        elif confidence_level >= 0.95:
-            z_score = 1.96  # 95%
-        elif confidence_level >= 0.90:
-            z_score = 1.645  # 90%
-        else:
-            z_score = 1.0  # Fallback
+        # Exact two-sided Gaussian quantile (inverse normal CDF). jax.scipy's
+        # ``norm.ppf`` is JIT- and grad-compatible, so this stays traceable for
+        # any confidence level (matches the in-repo convention in
+        # uncertainty/reliability/failure_probability.py).
+        alpha = 1.0 - confidence_level
+        z_score = jsp.stats.norm.ppf(1.0 - alpha / 2.0)
 
         std_dev = jnp.sqrt(total_variance)
         margin = z_score * std_dev

@@ -11,6 +11,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from opifex.platform.registry.core import RegistryService
+
 
 class VersionStatus(Enum):
     """Status of a version."""
@@ -86,7 +88,7 @@ class VersionManager:
     def __init__(
         self,
         storage_root: Path,
-        registry_service,
+        registry_service: RegistryService,
         enable_git: bool = True,
     ) -> None:
         """Initialize version manager.

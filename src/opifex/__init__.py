@@ -17,6 +17,15 @@ __author__ = "Opifex Team"
 __email__ = "team@opifex.io"
 
 
+def _append_xla_flags(flags: list[str]) -> None:
+    """Append XLA flags to the ``XLA_FLAGS`` env var, skipping ones already set."""
+    existing_flags = os.environ.get("XLA_FLAGS", "")
+    for flag in flags:
+        if flag not in existing_flags:
+            existing_flags += f" {flag}"
+    os.environ["XLA_FLAGS"] = existing_flags.strip()
+
+
 def setup_jax_optimization() -> None:
     """Setup JAX optimizations for improved performance.
 
@@ -39,64 +48,38 @@ def setup_jax_optimization() -> None:
 
     if backend == "gpu":
         # GPU-specific optimizations for TensorCore utilization
-        gpu_flags = [
-            "--xla_gpu_enable_triton_gemm=true",
-            "--xla_gpu_enable_latency_hiding_scheduler=true",
-        ]
-
-        existing_flags = os.environ.get("XLA_FLAGS", "")
-        for flag in gpu_flags:
-            if flag not in existing_flags:
-                existing_flags += f" {flag}"
-
-        os.environ["XLA_FLAGS"] = existing_flags.strip()
-
+        _append_xla_flags(
+            [
+                "--xla_gpu_enable_triton_gemm=true",
+                "--xla_gpu_enable_latency_hiding_scheduler=true",
+            ]
+        )
         # Enable high precision matmul for GPU
         jax.config.update("jax_default_matmul_precision", "high")
 
     elif backend == "tpu":
         # TPU-specific optimizations
-        tpu_flags = [
-            "--xla_tpu_enable_async_collective_fusion=true",
-            "--xla_tpu_enable_async_collective_fusion_fuse_all_gather=true",
-        ]
-
-        existing_flags = os.environ.get("XLA_FLAGS", "")
-        for flag in tpu_flags:
-            if flag not in existing_flags:
-                existing_flags += f" {flag}"
-
-        os.environ["XLA_FLAGS"] = existing_flags.strip()
-
+        _append_xla_flags(
+            [
+                "--xla_tpu_enable_async_collective_fusion=true",
+                "--xla_tpu_enable_async_collective_fusion_fuse_all_gather=true",
+            ]
+        )
         # TPU uses default precision
         jax.config.update("jax_default_matmul_precision", "default")
 
     else:
         # CPU optimizations
-        cpu_flags = [
-            "--xla_cpu_enable_fast_math=true",
-            "--xla_cpu_fast_math_honor_infs=true",
-            "--xla_cpu_fast_math_honor_nans=true",
-        ]
-
-        existing_flags = os.environ.get("XLA_FLAGS", "")
-        for flag in cpu_flags:
-            if flag not in existing_flags:
-                existing_flags += f" {flag}"
-
-        os.environ["XLA_FLAGS"] = existing_flags.strip()
+        _append_xla_flags(
+            [
+                "--xla_cpu_enable_fast_math=true",
+                "--xla_cpu_fast_math_honor_infs=true",
+                "--xla_cpu_fast_math_honor_nans=true",
+            ]
+        )
 
     # General performance optimizations
-    general_flags = [
-        "--xla_force_host_platform_device_count=1",
-    ]
-
-    existing_flags = os.environ.get("XLA_FLAGS", "")
-    for flag in general_flags:
-        if flag not in existing_flags:
-            existing_flags += f" {flag}"
-
-    os.environ["XLA_FLAGS"] = existing_flags.strip()
+    _append_xla_flags(["--xla_force_host_platform_device_count=1"])
 
     # Memory management
     jax.config.update("jax_enable_x64", False)  # Use 32-bit by default for performance

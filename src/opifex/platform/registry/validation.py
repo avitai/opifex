@@ -14,6 +14,8 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
+from opifex.platform.registry.core import RegistryService
+
 
 class ValidationStatus(Enum):
     """Status of validation process."""
@@ -86,7 +88,7 @@ class ValidationEngine:
 
     def __init__(
         self,
-        registry_service,
+        registry_service: RegistryService,
         enable_gpu_testing: bool = True,
         strict_mode: bool = False,
     ) -> None:

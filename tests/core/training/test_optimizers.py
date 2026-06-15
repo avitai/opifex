@@ -123,7 +123,7 @@ class TestScheduleCreation:
 
     def test_create_constant_schedule(self):
         """Test constant learning rate schedule."""
-        schedule = create_schedule(schedule_type="constant", init_value=0.001)
+        schedule = create_schedule(OptimizerConfig(schedule_type="constant", learning_rate=0.001))
 
         assert callable(schedule)
         assert schedule(0) == 0.001
@@ -133,7 +133,7 @@ class TestScheduleCreation:
     def test_create_cosine_schedule(self):
         """Test cosine decay schedule."""
         schedule = create_schedule(
-            schedule_type="cosine", init_value=0.01, decay_steps=1000, alpha=0.1
+            OptimizerConfig(schedule_type="cosine", learning_rate=0.01, decay_steps=1000, alpha=0.1)
         )
 
         assert callable(schedule)
@@ -145,10 +145,12 @@ class TestScheduleCreation:
     def test_create_exponential_schedule(self):
         """Test exponential decay schedule."""
         schedule = create_schedule(
-            schedule_type="exponential",
-            init_value=0.1,
-            transition_steps=100,
-            decay_rate=0.96,
+            OptimizerConfig(
+                schedule_type="exponential",
+                learning_rate=0.1,
+                transition_steps=100,
+                decay_rate=0.96,
+            )
         )
 
         assert callable(schedule)
@@ -160,10 +162,12 @@ class TestScheduleCreation:
     def test_create_linear_schedule(self):
         """Test linear decay schedule."""
         schedule = create_schedule(
-            schedule_type="linear",
-            init_value=0.01,
-            end_value=0.001,
-            transition_steps=1000,
+            OptimizerConfig(
+                schedule_type="linear",
+                learning_rate=0.01,
+                end_value=0.001,
+                transition_steps=1000,
+            )
         )
 
         assert callable(schedule)
@@ -176,10 +180,12 @@ class TestScheduleCreation:
         """Default schedules should be stable when global x64 is enabled."""
         with jax.enable_x64(True):
             schedule = create_schedule(
-                schedule_type="linear",
-                init_value=0.01,
-                end_value=0.001,
-                transition_steps=1000,
+                OptimizerConfig(
+                    schedule_type="linear",
+                    learning_rate=0.01,
+                    end_value=0.001,
+                    transition_steps=1000,
+                )
             )
 
             first_value = jnp.asarray(schedule(0))
@@ -192,7 +198,9 @@ class TestScheduleCreation:
         boundaries = [100, 200, 300]
         values = [0.1, 0.01, 0.001, 0.0001]
 
-        schedule = create_schedule(schedule_type="step", boundaries_and_values=(boundaries, values))
+        schedule = create_schedule(
+            OptimizerConfig(schedule_type="step", boundaries_and_values=(boundaries, values))
+        )
 
         assert callable(schedule)
         assert schedule(0) == pytest.approx(0.1)
@@ -205,11 +213,13 @@ class TestScheduleCreation:
     def test_create_warmup_cosine_schedule(self):
         """Test warmup with cosine decay schedule."""
         schedule = create_schedule(
-            schedule_type="warmup_cosine",
-            init_value=0.0,
-            peak_value=0.01,
-            warmup_steps=100,
-            decay_steps=1000,
+            OptimizerConfig(
+                schedule_type="warmup_cosine",
+                learning_rate=0.0,
+                peak_value=0.01,
+                warmup_steps=100,
+                decay_steps=1000,
+            )
         )
 
         assert callable(schedule)
@@ -222,7 +232,7 @@ class TestScheduleCreation:
     def test_invalid_schedule_type_raises_error(self):
         """Test that invalid schedule type raises ValueError."""
         with pytest.raises(ValueError, match="Unknown schedule type"):
-            create_schedule(schedule_type="invalid_schedule")
+            create_schedule(OptimizerConfig(schedule_type="invalid_schedule"))
 
 
 class TestGradientClipping:
@@ -572,7 +582,9 @@ class TestEdgeCases:
         boundaries = []
         values = [0.1]
 
-        schedule = create_schedule(schedule_type="step", boundaries_and_values=(boundaries, values))
+        schedule = create_schedule(
+            OptimizerConfig(schedule_type="step", boundaries_and_values=(boundaries, values))
+        )
 
         assert callable(schedule)
         assert schedule(0) == 0.1

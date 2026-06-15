@@ -10,6 +10,34 @@ import jax
 import jax.numpy as jnp
 
 
+def _validate_shallow_water_inputs(
+    h_initial: jax.Array,
+    u_initial: jax.Array,
+    v_initial: jax.Array,
+    g: float,
+    dt: float,
+    n_steps: int,
+    grid_spacing: float,
+) -> None:
+    """Validate field shapes and positive scalar parameters (trace-time static checks)."""
+    if not (isinstance(h_initial, jax.Array) and h_initial.ndim == 2):
+        raise ValueError("h_initial must be a 2D array")
+    if not (isinstance(u_initial, jax.Array) and u_initial.ndim == 2):
+        raise ValueError("u_initial must be a 2D array")
+    if not (isinstance(v_initial, jax.Array) and v_initial.ndim == 2):
+        raise ValueError("v_initial must be a 2D array")
+    if not (h_initial.shape == u_initial.shape == v_initial.shape):
+        raise ValueError("All input fields must have the same shape")
+    if not (isinstance(g, int | float) and g > 0):
+        raise ValueError("g must be a positive number")
+    if not (isinstance(dt, int | float) and dt > 0):
+        raise ValueError("dt must be a positive number")
+    if not (isinstance(n_steps, int) and n_steps > 0):
+        raise ValueError("n_steps must be a positive integer")
+    if not (isinstance(grid_spacing, int | float) and grid_spacing > 0):
+        raise ValueError("grid_spacing must be a positive number")
+
+
 @partial(jax.jit, static_argnums=(3, 4, 5, 6))
 def solve_shallow_water_2d(
     h_initial: jax.Array,
@@ -37,23 +65,7 @@ def solve_shallow_water_2d(
     Returns:
         Tuple of (height, u_velocity, v_velocity) at final time
     """
-    # Input validation
-    if not (isinstance(h_initial, jax.Array) and h_initial.ndim == 2):
-        raise ValueError("h_initial must be a 2D array")
-    if not (isinstance(u_initial, jax.Array) and u_initial.ndim == 2):
-        raise ValueError("u_initial must be a 2D array")
-    if not (isinstance(v_initial, jax.Array) and v_initial.ndim == 2):
-        raise ValueError("v_initial must be a 2D array")
-    if not (h_initial.shape == u_initial.shape == v_initial.shape):
-        raise ValueError("All input fields must have the same shape")
-    if not (isinstance(g, int | float) and g > 0):
-        raise ValueError("g must be a positive number")
-    if not (isinstance(dt, int | float) and dt > 0):
-        raise ValueError("dt must be a positive number")
-    if not (isinstance(n_steps, int) and n_steps > 0):
-        raise ValueError("n_steps must be a positive integer")
-    if not (isinstance(grid_spacing, int | float) and grid_spacing > 0):
-        raise ValueError("grid_spacing must be a positive number")
+    _validate_shallow_water_inputs(h_initial, u_initial, v_initial, g, dt, n_steps, grid_spacing)
 
     dx = dy = grid_spacing
 

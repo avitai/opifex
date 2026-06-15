@@ -166,47 +166,9 @@ class BenchmarkRunner:
             logger.info("Running benchmark: %s", benchmark_name)
             benchmark_config = self.registry.get_benchmark_config(benchmark_name)
 
-            benchmark_results = {}
-            benchmark_validations = {}
-
-            for operator_name in operators:
-                # Check compatibility
-                compatible_ops = self.registry.list_compatible_operators(benchmark_name)
-                if operator_name not in compatible_ops:
-                    logger.debug(
-                        "Skipping %s (not compatible with %s)", operator_name, benchmark_name
-                    )
-                    continue
-
-                logger.info("Testing %s...", operator_name)
-
-                try:
-                    # Run benchmark
-                    result = self._run_single_benchmark(operator_name, benchmark_config)
-                    benchmark_results[operator_name] = result
-
-                    # Save result
-                    self.results_manager.save_benchmark_results(result)
-
-                    # Validation
-                    if validate_results:
-                        validation = self._validate_result(result, benchmark_config)
-                        benchmark_validations[operator_name] = validation
-
-                # One operator/benchmark crash must not abort the whole suite:
-                # operators and metrics come from third-party/registry code that can
-                # raise anything. The exception is bound, logged with its traceback,
-                # and recorded in ``failed_runs`` so real bugs stay visible to callers
-                # rather than being silently masked.
-                except Exception as error:
-                    logger.exception("Benchmark %s failed for %s", benchmark_name, operator_name)
-                    self.failed_runs.append(
-                        BenchmarkFailure(
-                            benchmark_name=benchmark_name,
-                            operator_name=operator_name,
-                            error=error,
-                        )
-                    )
+            benchmark_results, benchmark_validations = self._run_benchmark_operators(
+                benchmark_name, benchmark_config, operators, validate_results
+            )
 
             all_results[benchmark_name] = benchmark_results
             if validate_results:
@@ -217,6 +179,49 @@ class BenchmarkRunner:
             self._generate_comprehensive_analysis(all_results, validation_reports)
 
         return all_results
+
+    def _run_benchmark_operators(
+        self,
+        benchmark_name: str,
+        benchmark_config: Any,
+        operators: list[str],
+        validate_results: bool,
+    ) -> tuple[dict[str, BenchmarkResult], dict[str, Any]]:
+        """Run every compatible operator against one benchmark, recording failures.
+
+        A single operator/benchmark crash must not abort the whole suite: operators
+        and metrics come from third-party/registry code that can raise anything, so
+        the exception is bound, logged with its traceback, and recorded in
+        ``failed_runs`` so real bugs stay visible to callers rather than being
+        silently masked.
+        """
+        benchmark_results: dict[str, BenchmarkResult] = {}
+        benchmark_validations: dict[str, Any] = {}
+        compatible_ops = self.registry.list_compatible_operators(benchmark_name)
+        for operator_name in operators:
+            if operator_name not in compatible_ops:
+                logger.debug("Skipping %s (not compatible with %s)", operator_name, benchmark_name)
+                continue
+
+            logger.info("Testing %s...", operator_name)
+            try:
+                result = self._run_single_benchmark(operator_name, benchmark_config)
+                benchmark_results[operator_name] = result
+                self.results_manager.save_benchmark_results(result)
+                if validate_results:
+                    benchmark_validations[operator_name] = self._validate_result(
+                        result, benchmark_config
+                    )
+            except Exception as error:
+                logger.exception("Benchmark %s failed for %s", benchmark_name, operator_name)
+                self.failed_runs.append(
+                    BenchmarkFailure(
+                        benchmark_name=benchmark_name,
+                        operator_name=operator_name,
+                        error=error,
+                    )
+                )
+        return benchmark_results, benchmark_validations
 
     def execute_domain_specific_suite(self, domain: str) -> DomainResults:
         """Execute benchmark suite for a specific scientific domain.

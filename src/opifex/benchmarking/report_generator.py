@@ -16,6 +16,113 @@ from calibrax.statistics import paired_significance_test
 from opifex.benchmarking._shared import ACCURACY_METRIC_KEYS
 
 
+def _performance_label(mse: float) -> str:
+    """Map an MSE value to a qualitative performance label."""
+    if mse < 0.01:
+        return "Excellent"
+    if mse < 0.1:
+        return "Good"
+    if mse < 1.0:
+        return "Fair"
+    return "Needs Improvement"
+
+
+def _correlation_finding(r2_score: float) -> str | None:
+    """Notable finding for an R-squared correlation value, if any."""
+    if r2_score > 0.95:
+        return "Excellent correlation with ground truth"
+    if r2_score < 0.5:
+        return "Low correlation with ground truth - model may need improvement"
+    return None
+
+
+def _timing_finding(evaluation_time: float) -> str | None:
+    """Notable finding for an evaluation-time value, if any."""
+    if evaluation_time < 1.0:
+        return "Very fast inference time"
+    if evaluation_time > 10.0:
+        return "Slow inference time - consider optimization"
+    return None
+
+
+def _mse_recommendation(mse: float) -> str | None:
+    """Accuracy recommendation driven by the MSE value."""
+    if mse > 1.0:
+        return "Consider increasing model complexity or training time to improve accuracy"
+    if mse < 0.001:
+        return "Excellent accuracy achieved - model is ready for production use"
+    return None
+
+
+def _timing_recommendation(evaluation_time: float) -> str | None:
+    """Efficiency recommendation driven by the evaluation time."""
+    if evaluation_time > 5.0:
+        return "Consider model optimization techniques to reduce inference time"
+    return None
+
+
+def _uncertainty_recommendation(epistemic: float) -> str | None:
+    """Recommendation driven by epistemic uncertainty."""
+    if epistemic > 0.5:
+        return "High epistemic uncertainty - consider ensemble methods or more training data"
+    return None
+
+
+def _r2_recommendation(r2_score: float) -> str | None:
+    """Recommendation driven by the R-squared score."""
+    if r2_score < 0.7:
+        return "Low R-squared score suggests potential data quality issues or model underfitting"
+    return None
+
+
+_RECOMMENDATION_RULES = (
+    ("mse", _mse_recommendation),
+    ("evaluation_time", _timing_recommendation),
+    ("epistemic_uncertainty", _uncertainty_recommendation),
+    ("r2_score", _r2_recommendation),
+)
+
+
+def _format_metadata_section(metadata: dict[str, Any]) -> list[str]:
+    """Render the METADATA section lines for the text report."""
+    lines = ["METADATA", "-" * 30, f"Generated: {metadata.get('generated_at', 'Unknown')}"]
+    if "dataset" in metadata:
+        dataset = metadata["dataset"]
+        lines.append(
+            f"Dataset: {dataset.get('name', 'Unknown')} ({dataset.get('type', 'Unknown')})"
+        )
+    if "model" in metadata:
+        model = metadata["model"]
+        lines.append(f"Model: {model.get('name', 'Unknown')} ({model.get('type', 'Unknown')})")
+    lines.append("")
+    return lines
+
+
+def _format_summary_section(summary: dict[str, Any]) -> list[str]:
+    """Render the EVALUATION SUMMARY section lines for the text report."""
+    lines = [
+        "EVALUATION SUMMARY",
+        "-" * 30,
+        f"Overall Performance: {summary.get('overall_performance', 'Unknown')}",
+    ]
+    if "key_metrics" in summary:
+        lines.append("\nKey Metrics:")
+        lines.extend(f"  {metric}: {value}" for metric, value in summary["key_metrics"].items())
+    if summary.get("notable_findings"):
+        lines.append("\nNotable Findings:")
+        lines.extend(f"  • {finding}" for finding in summary["notable_findings"])
+    lines.append("")
+    return lines
+
+
+def _format_recommendations_section(recommendations: list[str]) -> list[str]:
+    """Render the RECOMMENDATIONS section lines for the text report."""
+    lines = ["RECOMMENDATIONS", "-" * 30]
+    lines.extend(f"{index}. {rec}" for index, rec in enumerate(recommendations, 1))
+    lines.append("")
+    return lines
+
+
 class PDEBenchReportGenerator:
     """Generator for full PDEBench evaluation reports.
 
@@ -104,16 +211,7 @@ class PDEBenchReportGenerator:
         if "mse" in results:
             mse_value = float(results["mse"])
             summary["key_metrics"]["mse"] = mse_value
-
-            # Determine performance level
-            if mse_value < 0.01:
-                summary["overall_performance"] = "Excellent"
-            elif mse_value < 0.1:
-                summary["overall_performance"] = "Good"
-            elif mse_value < 1.0:
-                summary["overall_performance"] = "Fair"
-            else:
-                summary["overall_performance"] = "Needs Improvement"
+            summary["overall_performance"] = _performance_label(mse_value)
 
         if "mae" in results:
             summary["key_metrics"]["mae"] = float(results["mae"])
@@ -121,23 +219,17 @@ class PDEBenchReportGenerator:
         if "r2_score" in results:
             r2_value = float(results["r2_score"])
             summary["key_metrics"]["r2_score"] = r2_value
-
-            if r2_value > 0.95:
-                summary["notable_findings"].append("Excellent correlation with ground truth")
-            elif r2_value < 0.5:
-                summary["notable_findings"].append(
-                    "Low correlation with ground truth - model may need improvement"
-                )
+            finding = _correlation_finding(r2_value)
+            if finding is not None:
+                summary["notable_findings"].append(finding)
 
         # Add computational efficiency notes
         if "evaluation_time" in results:
             eval_time = float(results["evaluation_time"])
             summary["key_metrics"]["evaluation_time_seconds"] = eval_time
-
-            if eval_time < 1.0:
-                summary["notable_findings"].append("Very fast inference time")
-            elif eval_time > 10.0:
-                summary["notable_findings"].append("Slow inference time - consider optimization")
+            finding = _timing_finding(eval_time)
+            if finding is not None:
+                summary["notable_findings"].append(finding)
 
         return summary
 
@@ -286,42 +378,11 @@ class PDEBenchReportGenerator:
     def _generate_recommendations(self, results: dict[str, Any]) -> list[str]:
         """Generate actionable recommendations based on results."""
         recommendations = []
-
-        # Performance-based recommendations
-        if "mse" in results:
-            mse_value = float(results["mse"])
-            if mse_value > 1.0:
-                recommendations.append(
-                    "Consider increasing model complexity or training time to improve accuracy"
-                )
-            elif mse_value < 0.001:
-                recommendations.append(
-                    "Excellent accuracy achieved - model is ready for production use"
-                )
-
-        # Efficiency recommendations
-        if "evaluation_time" in results:
-            eval_time = float(results["evaluation_time"])
-            if eval_time > 5.0:
-                recommendations.append(
-                    "Consider model optimization techniques to reduce inference time"
-                )
-
-        # Uncertainty recommendations
-        if "epistemic_uncertainty" in results:
-            epistemic = float(results["epistemic_uncertainty"])
-            if epistemic > 0.5:
-                recommendations.append(
-                    "High epistemic uncertainty - consider ensemble methods or more training data"
-                )
-
-        # Data quality recommendations
-        if "r2_score" in results:
-            r2 = float(results["r2_score"])
-            if r2 < 0.7:
-                recommendations.append(
-                    "Low R² score suggests potential data quality issues or model underfitting"
-                )
+        for key, rule in _RECOMMENDATION_RULES:
+            if key in results:
+                recommendation = rule(float(results[key]))
+                if recommendation is not None:
+                    recommendations.append(recommendation)
 
         if not recommendations:
             recommendations.append(
@@ -332,57 +393,16 @@ class PDEBenchReportGenerator:
 
     def format_report_as_text(self, report: dict[str, Any]) -> str:
         """Format report as human-readable text."""
-        lines = []
-        lines.append("=" * 60)
-        lines.append("PDEBench Evaluation Report")
-        lines.append("=" * 60)
-        lines.append("")
+        lines = ["=" * 60, "PDEBench Evaluation Report", "=" * 60, ""]
 
-        # Metadata
         if "metadata" in report:
-            lines.append("METADATA")
-            lines.append("-" * 30)
-            metadata = report["metadata"]
-            lines.append(f"Generated: {metadata.get('generated_at', 'Unknown')}")
+            lines.extend(_format_metadata_section(report["metadata"]))
 
-            if "dataset" in metadata:
-                dataset = metadata["dataset"]
-                lines.append(
-                    f"Dataset: {dataset.get('name', 'Unknown')} ({dataset.get('type', 'Unknown')})"
-                )
-
-            if "model" in metadata:
-                model = metadata["model"]
-                lines.append(
-                    f"Model: {model.get('name', 'Unknown')} ({model.get('type', 'Unknown')})"
-                )
-            lines.append("")
-
-        # Summary
         if "evaluation_summary" in report:
-            lines.append("EVALUATION SUMMARY")
-            lines.append("-" * 30)
-            summary = report["evaluation_summary"]
-            lines.append(f"Overall Performance: {summary.get('overall_performance', 'Unknown')}")
+            lines.extend(_format_summary_section(report["evaluation_summary"]))
 
-            if "key_metrics" in summary:
-                lines.append("\nKey Metrics:")
-                for metric, value in summary["key_metrics"].items():
-                    lines.append(f"  {metric}: {value}")
-
-            if summary.get("notable_findings"):
-                lines.append("\nNotable Findings:")
-                for finding in summary["notable_findings"]:
-                    lines.append(f"  • {finding}")
-            lines.append("")
-
-        # Recommendations
         if "recommendations" in report:
-            lines.append("RECOMMENDATIONS")
-            lines.append("-" * 30)
-            for i, rec in enumerate(report["recommendations"], 1):
-                lines.append(f"{i}. {rec}")
-            lines.append("")
+            lines.extend(_format_recommendations_section(report["recommendations"]))
 
         lines.append("=" * 60)
         return "\n".join(lines)
