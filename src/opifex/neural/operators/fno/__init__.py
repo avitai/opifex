@@ -33,6 +33,12 @@ from opifex.neural.operators.fno.base import (
     FourierNeuralOperator,
     FourierSpectralConvolution,
 )
+
+# NEW: Bayesian / CAKF spectral conv (Phase 10 Task 10.4)
+from opifex.neural.operators.fno.bayesian import (
+    BayesianSpectralConvolution,
+    ComputationAwareSpectralConvolution,
+)
 from opifex.neural.operators.fno.factorized import FactorizedFourierLayer
 
 # NEW: Local FNO with global + local operations
@@ -46,6 +52,12 @@ from opifex.neural.operators.fno.local import (
 
 # Existing variants
 from opifex.neural.operators.fno.multiscale import MultiScaleFourierNeuralOperator
+
+# NEW: Probabilistic FNO with heteroscedastic-Gaussian heads
+from opifex.neural.operators.fno.probabilistic import (
+    probabilistic_fno_negative_log_likelihood,
+    ProbabilisticFourierNeuralOperator,
+)
 
 # Spectral neural operators with normalization
 from opifex.neural.operators.fno.spectral import (
@@ -91,6 +103,8 @@ from opifex.uncertainty.adapters.operators import (
 __all__ = [
     "AmortizedFourierNeuralOperator",
     "AmortizedSpectralConvolution",
+    "BayesianSpectralConvolution",
+    "ComputationAwareSpectralConvolution",
     "FNOConformalAdapterSpec",
     "FNODeepEnsembleAdapterSpec",
     "FNOMCDropoutAdapterSpec",
@@ -102,6 +116,7 @@ __all__ = [
     "LocalFourierLayer",
     "LocalFourierNeuralOperator",
     "MultiScaleFourierNeuralOperator",
+    "ProbabilisticFourierNeuralOperator",
     "SpectralNeuralOperator",
     "SphericalFourierNeuralOperator",
     "SphericalHarmonicConvolution",
@@ -127,4 +142,5 @@ __all__ = [
     "create_wave_amfno",
     "create_wave_local_fno",
     "create_weather_sfno",
+    "probabilistic_fno_negative_log_likelihood",
 ]

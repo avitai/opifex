@@ -41,11 +41,6 @@ from opifex.uncertainty.types import PredictiveDistribution
 # ---------------------------------------------------------------------------
 
 
-def _gaussian_entropy(variance: jax.Array) -> jax.Array:
-    """Differential entropy of a Gaussian with variance ``sigma**2``."""
-    return 0.5 * jnp.log(2.0 * jnp.pi * jnp.e * variance)
-
-
 def _two_member_predictive(
     *,
     member_means: tuple[float, float],
@@ -236,6 +231,7 @@ class TestAcquireDispatcher:
         assert isinstance(result, AcquiredBatch)
         assert result.indices.shape == (2,)
         # UCB picks the highest mean + beta*std combination.
+        assert pd.variance is not None
         manual = pd.mean + 2.0 * jnp.sqrt(pd.variance)
         top_two = jnp.argsort(manual)[-2:]
         assert {int(i) for i in result.indices} == {int(i) for i in top_two}

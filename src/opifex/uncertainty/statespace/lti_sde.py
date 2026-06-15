@@ -78,3 +78,46 @@ def discretize_lti_sde(
     cross_block = exponential[:state_dim, state_dim:]
     process_noise = cross_block @ transition.T
     return transition, process_noise
+
+
+def state_transition_matrix(
+    *,
+    drift_matrix: jax.Array,
+    dispersion_matrix: jax.Array,
+    dt: jax.Array,
+    diffusion: jax.Array | None = None,
+) -> jax.Array:
+    r"""Return only ``A = exp(F dt)`` from the LTI-SDE discretisation.
+
+    Thin convenience wrapper around :func:`discretize_lti_sde` for the
+    common case where only the transition matrix is needed (e.g.
+    independent discretisation of a kernel's continuous-time SDE).
+    """
+    transition, _ = discretize_lti_sde(
+        drift_matrix=drift_matrix,
+        dispersion_matrix=dispersion_matrix,
+        dt=dt,
+        diffusion=diffusion,
+    )
+    return transition
+
+
+def process_noise_covariance(
+    *,
+    drift_matrix: jax.Array,
+    dispersion_matrix: jax.Array,
+    dt: jax.Array,
+    diffusion: jax.Array | None = None,
+) -> jax.Array:
+    r"""Return only ``Q`` (Van Loan process-noise) from the LTI-SDE discretisation.
+
+    Thin convenience wrapper around :func:`discretize_lti_sde` for the
+    common case where only the process-noise covariance is needed.
+    """
+    _, process_noise = discretize_lti_sde(
+        drift_matrix=drift_matrix,
+        dispersion_matrix=dispersion_matrix,
+        dt=dt,
+        diffusion=diffusion,
+    )
+    return process_noise

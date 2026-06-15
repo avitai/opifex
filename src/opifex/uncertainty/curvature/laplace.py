@@ -40,10 +40,10 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 from dataclasses import dataclass
 from typing import Protocol
 
-import jax  # noqa: TC002 — kept eager for consistency with the rest of opifex.uncertainty
+import jax
 import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
-from flax import nnx, struct  # noqa: TC002 — kept eager for consistency
+from flax import nnx, struct
 
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.curvature.fisher import empirical_fisher_diagonal

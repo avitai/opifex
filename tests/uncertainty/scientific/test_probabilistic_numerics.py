@@ -15,7 +15,6 @@ import pytest
 
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.scientific import (
-    ApplyDiffusionSpec,
     CalibrationSpec,
     CorrectionSpec,
     CubatureRuleSpec,
@@ -23,6 +22,7 @@ from opifex.uncertainty.scientific import (
     DenseOutputSamplingSpec,
     DiffeqzooAdapterSpec,
     DiffusionSpec,
+    DynamicMVDiffusionSpec,
     FenrirAdapterSpec,
     InitSchemeSpec,
     IOUPPriorSpec,
@@ -80,7 +80,7 @@ _CONCRETIZED_ALGORITHM_SPECS: tuple[type, ...] = (
     # wrap() returns a JAX-native algorithmic primitive.
     ManifoldUpdateSpec,
     DenseOutputSamplingSpec,
-    ApplyDiffusionSpec,
+    DynamicMVDiffusionSpec,
 )
 
 

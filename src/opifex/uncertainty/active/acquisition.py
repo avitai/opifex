@@ -406,3 +406,93 @@ def acquire(
         strategy=strategy.value,
         metadata=metadata,
     )
+
+
+# -----------------------------------------------------------------------------
+# Information-theoretic acquisitions (MES / GIBBON / IVR) — Slice 23
+# -----------------------------------------------------------------------------
+
+
+def min_value_entropy_search(
+    *,
+    means: jax.Array,
+    variances: jax.Array,
+    sampled_min_values: jax.Array,
+) -> jax.Array:
+    r"""Min-Value Entropy Search (Wang+ 2017; trieste ``function/entropy.py:50``).
+
+    Approximates the per-candidate information gain about the global
+    minimum using Monte-Carlo samples of the minimum value:
+
+    .. math::
+
+        \alpha_{\text{MES}}(x)
+            \approx \frac{1}{S}\,\sum_{s=1}^{S}
+                \frac{\phi(\gamma_s) \, \gamma_s}{2\,\Phi(\gamma_s)}
+                - \log \Phi(\gamma_s),
+
+    with ``γ_s = (y*_s − μ(x)) / σ(x)``. The score is a Monte-Carlo
+    estimate of information gain about the minimum value and is
+    non-negative in expectation.
+
+    Args:
+        means: ``(N,)`` posterior means.
+        variances: ``(N,)`` posterior variances.
+        sampled_min_values: ``(S,)`` Monte-Carlo samples of the
+            global minimum value.
+
+    Returns:
+        ``(N,)`` per-candidate MES scores.
+    """
+    stds = jnp.sqrt(jnp.maximum(variances, _VARIANCE_FLOOR))
+    gamma = (sampled_min_values[None, :] - means[:, None]) / stds[:, None]
+    log_cdf = jnorm.logcdf(gamma)
+    pdf = jnorm.pdf(gamma)
+    cdf = jnorm.cdf(gamma)
+    contribution = (pdf * gamma) / (2.0 * jnp.maximum(cdf, _LOG_FLOOR)) - log_cdf
+    return jnp.mean(contribution, axis=-1)
+
+
+def gibbon(
+    *,
+    means: jax.Array,
+    variances: jax.Array,
+    sampled_min_values: jax.Array,
+) -> jax.Array:
+    r"""GIBBON acquisition (Moss+ 2021; trieste ``function/entropy.py:236``).
+
+    At batch size 1, GIBBON reduces exactly to MES (Moss+ 2021 §3),
+    so this single-point form delegates to
+    :func:`min_value_entropy_search`. The batch extension belongs in
+    :mod:`opifex.uncertainty.active.batch_active`.
+    """
+    return min_value_entropy_search(
+        means=means, variances=variances, sampled_min_values=sampled_min_values
+    )
+
+
+def integrated_variance_reduction_score(
+    *,
+    candidate_variances: jax.Array,
+    cross_variances: jax.Array,
+) -> jax.Array:
+    r"""Integrated variance reduction (trieste ``function/active_learning.py:250``).
+
+    Ranks candidates by how much they reduce the posterior variance
+    when conditioned on. For each candidate ``i`` with posterior
+    variance ``v_i`` and per-target cross-variance ``c_{i, t}``, the
+    reduction at target ``t`` is ``c_{i, t}² / v_i``; the IVR score
+    sums over the target set.
+
+    Args:
+        candidate_variances: ``(N,)`` posterior variance at each
+            candidate.
+        cross_variances: ``(N, T)`` cross-covariance between
+            candidates and target points.
+
+    Returns:
+        ``(N,)`` integrated variance-reduction score, non-negative.
+    """
+    safe_var = jnp.maximum(candidate_variances, _VARIANCE_FLOOR)
+    contributions = (cross_variances**2) / safe_var[:, None]
+    return jnp.sum(contributions, axis=-1)

@@ -338,3 +338,128 @@ def q_expected_hypervolume_improvement(
     new_volumes = jax.vmap(_hv_with_candidates)(samples)  # (S,)
     improvement = jnp.maximum(new_volumes - baseline, 0.0)
     return jnp.mean(improvement)
+
+
+# -----------------------------------------------------------------------------
+# qHSRI / Fantasizer / LocalPenalization — Slice 23 (audit finding #4b)
+# -----------------------------------------------------------------------------
+
+
+def batch_hypervolume_sharpe_ratio_indicator(
+    *,
+    means: jax.Array,
+    stds: jax.Array,
+    batch_size: int,
+    reference_point: jax.Array,
+) -> jax.Array:
+    r"""Batch Hypervolume Sharpe-Ratio Indicator (qHSRI; Binois+ 2020).
+
+    Ranks candidates by their Sharpe-ratio-style score in multi-
+    objective space — per-candidate "return" is the dominated
+    hypervolume of its mean vector over the reference point, and the
+    "risk" is the geometric mean of its standard deviations. The top
+    ``batch_size`` candidates by Sharpe ratio form the batch.
+
+    Args:
+        means: ``(N, M)`` posterior means over ``M`` objectives.
+        stds: ``(N, M)`` posterior standard deviations.
+        batch_size: Number of candidates to select.
+        reference_point: ``(M,)`` reference point in objective space.
+
+    Returns:
+        ``(batch_size,)`` selected candidate indices (descending Sharpe).
+    """
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive; got {batch_size!r}.")
+    hypervolume_contribution = jnp.prod(jnp.maximum(means - reference_point[None, :], 0.0), axis=-1)
+    risk = jnp.exp(jnp.mean(jnp.log(jnp.maximum(stds, 1e-12)), axis=-1))
+    sharpe = hypervolume_contribution / jnp.maximum(risk, 1e-12)
+    return jnp.argsort(sharpe)[-batch_size:][::-1]
+
+
+def fantasizer(
+    *,
+    initial_scores: jax.Array,
+    batch_size: int,
+    key: jax.Array,
+) -> jax.Array:
+    r"""Sequential greedy batch via fantasised observations (Snoek+ 2012).
+
+    The full fantasised-posterior update requires the GP model itself;
+    this opifex port implements the simplified greedy variant used by
+    trieste's ``Fantasizer``: pick the top-``batch_size`` initial
+    scores while iteratively dampening previously-picked candidates
+    via setting their score to ``-inf``. A tiny ``key``-derived
+    random tiebreak breaks ties deterministically.
+
+    Args:
+        initial_scores: ``(N,)`` per-candidate score.
+        batch_size: Number of candidates to select.
+        key: PRNG key for the deterministic tiebreak.
+
+    Returns:
+        ``(batch_size,)`` distinct selected indices.
+    """
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive; got {batch_size!r}.")
+    if batch_size > initial_scores.shape[0]:
+        raise ValueError(
+            f"batch_size ({batch_size}) cannot exceed candidate count ({initial_scores.shape[0]})."
+        )
+    tiebreak_noise = 1e-6 * jax.random.uniform(key, initial_scores.shape)
+    scores = initial_scores + tiebreak_noise
+
+    def step(carry: jax.Array, _: jax.Array) -> tuple[jax.Array, jax.Array]:
+        idx = jnp.argmax(carry)
+        new_carry = carry.at[idx].set(-jnp.inf)
+        return new_carry, idx
+
+    _, picked = jax.lax.scan(step, scores, jnp.arange(batch_size))
+    return picked
+
+
+def local_penalization(
+    *,
+    candidates: jax.Array,
+    pending_points: jax.Array,
+    base_scores: jax.Array,
+    lipschitz_constant: float,
+    max_value: float,
+) -> jax.Array:
+    r"""Gonzalez+ 2016 local-penalisation batch acquisition.
+
+    Multiplies each candidate score by a soft-thresholding factor for
+    every pending point. The factor at candidate ``x_i`` for pending
+    point ``p_j`` is
+
+    .. math::
+
+        \pi(x_i, p_j) = \tfrac{1}{2}\,
+            \mathrm{erfc}\!\left(
+                -\frac{L\,\lVert x_i - p_j\rVert - M}{\sqrt{2}}
+            \right),
+
+    with the simplification that the pending-point posterior std and
+    function value are absorbed into the global ``max_value`` ``M``
+    estimate (the default trieste configuration). The factor is in
+    ``(0, 1)`` and approaches ``1`` far from pending points.
+
+    Args:
+        candidates: ``(N, d)`` candidate inputs.
+        pending_points: ``(M, d)`` pending-worker inputs.
+        base_scores: ``(N,)`` base acquisition scores.
+        lipschitz_constant: ``L`` — estimated Lipschitz constant of
+            the objective.
+        max_value: ``M`` — estimated global maximum of the objective.
+
+    Returns:
+        ``(N,)`` penalised scores.
+    """
+    from jax.scipy.special import erfc
+
+    diff = candidates[:, None, :] - pending_points[None, :, :]
+    distances = jnp.linalg.norm(diff, axis=-1)
+    arg = -(lipschitz_constant * distances - max_value) / jnp.sqrt(2.0)
+    factors = 0.5 * erfc(arg)
+    penalty = jnp.prod(factors, axis=1)
+    return base_scores * penalty

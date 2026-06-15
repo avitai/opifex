@@ -23,8 +23,24 @@ _CURVATURE_CAPABILITY = UQCapability(
 )
 
 
+_LUNO_CAPABILITY = UQCapability(
+    native_jax_kernel=True,
+    default_strategy=DefaultStrategy.LAPLACE,
+    source_package="opifex.uncertainty.curvature",
+    notes=(
+        "Linearised neural-operator predictive posterior (Magnani et al. "
+        "2024, arXiv:2406.04317). Given a diagonal Laplace posterior at "
+        "the MAP point, the network is locally linearised and treated "
+        "as a function-valued Gaussian process; the marginal predictive "
+        "variance is ``diag(J Σ J^T)`` computed via ``jax.jacrev``. "
+        "Pure JAX kernel; passes jit / vmap smokes."
+    ),
+)
+
+
 CURVATURE_CAPABILITIES: dict[str, UQCapability] = {
     "subpackage:curvature": _CURVATURE_CAPABILITY,
+    "estimator:linearized_neural_operator_posterior": _LUNO_CAPABILITY,
 }
 
 
