@@ -525,15 +525,18 @@ class BenchmarkRunner:
                 f"Unknown loader_type '{loader_type}'. Available: {list(loader_registry.keys())}"
             )
 
-        # DRY: Factory function for creating loaders
         batch_size = benchmark_config.computational_requirements.get("batch_size", 32)
         resolution = benchmark_config.input_shape[0]
 
-        # Create train and test loaders
-        train_loader = loader_fn(n_samples=1000, batch_size=batch_size, resolution=resolution)
-        test_loader = loader_fn(n_samples=100, batch_size=batch_size, resolution=resolution)
-
-        return train_loader, test_loader
+        # One generation, split into ~1000 train / ~100 test datarax pipelines.
+        n_samples = 1100
+        loaders = loader_fn(
+            n_samples=n_samples,
+            batch_size=batch_size,
+            resolution=resolution,
+            val_fraction=100 / n_samples,
+        )
+        return loaders.train, loaders.val
 
     def _get_operator_config(
         self,

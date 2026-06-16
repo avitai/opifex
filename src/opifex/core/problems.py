@@ -20,11 +20,15 @@ from jax import Array
 from opifex.core.quantum import MolecularSystem
 from opifex.core.quantum.molecular_system import create_molecular_system
 from opifex.geometry.base import Geometry
-from opifex.neural.quantum.dft import Functional, SCFSolver  # noqa: TC001
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    # Imported lazily here to avoid a circular import: opifex.neural.quantum.dft
+    # imports scf_acceleration, which transitively imports opifex.core. These names
+    # are used only in annotations; runtime uses do a local import inside methods.
+    from opifex.neural.quantum.dft import Functional, SCFSolver
 
 
 class Problem(Protocol):

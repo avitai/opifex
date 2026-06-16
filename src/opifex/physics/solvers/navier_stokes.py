@@ -75,7 +75,7 @@ def _advection_term(f: jax.Array, u: jax.Array, v: jax.Array, dx: float) -> jax.
 def solve_navier_stokes_2d(
     u0: jax.Array,
     v0: jax.Array,
-    nu: float,
+    nu: float | jax.Array,
     time_range: tuple[float, float] = (0.0, 1.0),
     time_steps: int = 5,
     resolution: int = 64,
@@ -127,26 +127,35 @@ def solve_navier_stokes_2d(
 
         return u_new, v_new
 
-    # Time stepping with sub-stepping for stability
-    u, v = u0, v0
-    u_trajectory = [u]
-    v_trajectory = [v]
+    # Adaptive sub-stepping between save times via lax.while_loop + lax.scan so
+    # the solver is jit/vmap-compatible (the previous float()-in-while version
+    # forced a host<->device sync every sub-step and could not be jit-compiled).
+    def integrate_interval(
+        state: tuple[jax.Array, jax.Array], bounds: jax.Array
+    ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
+        t_target = bounds[1]
 
-    for i in range(time_steps):
-        t_current = float(save_times[i])
-        t_target = float(save_times[i + 1])
-        t = t_current
+        def not_done(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
+            return carry[2] < t_target - 1e-12
 
-        while t < t_target - 1e-12:
-            dt_sub = compute_cfl_dt(u, v)
-            dt_sub = jnp.minimum(dt_sub, t_target - t)
-            u, v = step_forward(u, v, float(dt_sub))
-            t += float(dt_sub)
+        def sub_step(
+            carry: tuple[jax.Array, jax.Array, jax.Array],
+        ) -> tuple[jax.Array, jax.Array, jax.Array]:
+            u_cur, v_cur, t = carry
+            dt_sub = jnp.minimum(compute_cfl_dt(u_cur, v_cur), t_target - t)
+            u_next, v_next = step_forward(u_cur, v_cur, dt_sub)
+            return u_next, v_next, t + dt_sub
 
-        u_trajectory.append(u)
-        v_trajectory.append(v)
+        u_final, v_final, _ = jax.lax.while_loop(
+            not_done, sub_step, (state[0], state[1], bounds[0])
+        )
+        return (u_final, v_final), (u_final, v_final)
 
-    return jnp.stack(u_trajectory), jnp.stack(v_trajectory)
+    interval_bounds = jnp.stack([save_times[:-1], save_times[1:]], axis=1)
+    _, (u_saved, v_saved) = jax.lax.scan(integrate_interval, (u0, v0), interval_bounds)
+    u_trajectory = jnp.concatenate([u0[None], u_saved], axis=0)
+    v_trajectory = jnp.concatenate([v0[None], v_saved], axis=0)
+    return u_trajectory, v_trajectory
 
 
 def create_taylor_green_vortex(

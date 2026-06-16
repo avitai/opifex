@@ -24,6 +24,7 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.core.metrics import relative_l2_error
 from opifex.core.training.components.checkpoint_store import (
     OrbaxCheckpointStore,
 )
@@ -185,11 +186,7 @@ class Trainer(nnx.Module):
         if loss_type == "mae":
             return jnp.mean(jnp.abs(y_pred - y))
         if loss_type == "relative_l2":
-            diff = (y_pred - y).reshape(y_pred.shape[0], -1)
-            target = y.reshape(y.shape[0], -1)
-            numerator = jnp.linalg.norm(diff, axis=1)
-            denominator = jnp.linalg.norm(target, axis=1) + 1e-8
-            return jnp.mean(numerator / denominator)
+            return relative_l2_error(y_pred, y)
         raise ValueError(f"Unsupported data loss_type: {loss_type!r}")
 
     def training_step(

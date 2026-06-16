@@ -9,11 +9,30 @@ import pytest
 
 from opifex.physics.solvers.burgers import (
     Burgers2DSolver,
-    solve_burgers_1d,
     solve_burgers_2d,
 )
 from opifex.physics.solvers.diffusion_advection import solve_diffusion_advection_2d
 from opifex.physics.solvers.shallow_water import solve_shallow_water_2d
+
+
+class TestBurgersSolverTransforms:
+    """The PDE solvers must be jit/vmap-compatible (opifex is JAX-native).
+
+    These would have caught the ``float()``-in-``while``-loop defect that made
+    ``solve_burgers_2d`` un-jittable and forced slow per-sample data generation
+    (vmapped on-device generation is ~10^5x faster). The 1D Burgers operator data
+    is now produced by the pseudo-spectral solver
+    (:mod:`opifex.physics.spectral.steppers`), tested under ``tests/physics/spectral``.
+    """
+
+    def test_solve_2d_is_jit_and_vmap_compatible(self) -> None:
+        """solve_burgers_2d is also jit/vmap-compatible."""
+        ics = jax.random.normal(jax.random.PRNGKey(1), (4, 16, 16))
+        viscs = jnp.full((4,), 0.1)
+        batched = jax.jit(jax.vmap(lambda u, v: solve_burgers_2d(u, v, (0.0, 1.0), 3, 16)))
+        out = batched(ics, viscs)
+        assert out.shape == (4, 4, 16, 16)
+        assert jnp.all(jnp.isfinite(out))
 
 
 class TestBurgers2DSolver:
@@ -255,80 +274,6 @@ class TestBurgers2DSolver:
 
         with pytest.raises(ValueError, match="dt_max must be a positive number"):
             Burgers2DSolver(dt_max=-0.001)
-
-
-class TestSolveBurgers1d:
-    """Test suite for the standalone solve_burgers_1d function."""
-
-    def test_output_shape(self):
-        """Output shape should be (time_steps+1, resolution)."""
-        resolution = 32
-        time_steps = 5
-        ic = jnp.sin(jnp.pi * jnp.linspace(-1, 1, resolution))
-        result = solve_burgers_1d(ic, viscosity=0.1, time_steps=time_steps, resolution=resolution)
-        assert result.shape == (time_steps + 1, resolution)
-
-    def test_initial_condition_preserved(self):
-        """First time step should match the initial condition."""
-        resolution = 32
-        ic = jnp.sin(jnp.pi * jnp.linspace(-1, 1, resolution))
-        result = solve_burgers_1d(ic, viscosity=0.1, time_steps=3, resolution=resolution)
-        assert jnp.allclose(result[0], ic, atol=1e-6)
-
-    def test_numerical_stability_low_viscosity(self):
-        """Solution must stay bounded for low viscosity over long time."""
-        resolution = 64
-        x = jnp.linspace(-1, 1, resolution)
-        ic = jnp.sin(jnp.pi * x)
-        result = solve_burgers_1d(
-            ic,
-            viscosity=0.01,
-            time_range=(0.0, 1.0),
-            time_steps=5,
-            resolution=resolution,
-        )
-        # All values must be finite and bounded
-        assert jnp.all(jnp.isfinite(result))
-        assert float(jnp.max(jnp.abs(result))) < 10.0
-
-    def test_numerical_stability_shock_initial_condition(self):
-        """Solution must stay bounded for step-function (shock) initial conditions."""
-        resolution = 64
-        x = jnp.linspace(-1, 1, resolution)
-        ic = jnp.tanh(x / 0.1)  # Sharp step function
-        result = solve_burgers_1d(
-            ic,
-            viscosity=0.01,
-            time_range=(0.0, 1.0),
-            time_steps=5,
-            resolution=resolution,
-        )
-        assert jnp.all(jnp.isfinite(result))
-        assert float(jnp.max(jnp.abs(result))) < 10.0
-
-    def test_diffusion_smooths_solution(self):
-        """High viscosity should smooth the solution over time."""
-        resolution = 64
-        x = jnp.linspace(-1, 1, resolution)
-        ic = jnp.sin(3 * jnp.pi * x)
-        result = solve_burgers_1d(
-            ic,
-            viscosity=0.5,
-            time_range=(0.0, 1.0),
-            time_steps=5,
-            resolution=resolution,
-        )
-        # Standard deviation should decrease over time (diffusion smooths)
-        stds = [float(jnp.std(result[t])) for t in range(result.shape[0])]
-        assert stds[-1] < stds[0]
-
-    def test_deterministic(self):
-        """Same inputs should produce same outputs."""
-        resolution = 32
-        ic = jnp.sin(jnp.pi * jnp.linspace(-1, 1, resolution))
-        r1 = solve_burgers_1d(ic, viscosity=0.1, time_steps=3, resolution=resolution)
-        r2 = solve_burgers_1d(ic, viscosity=0.1, time_steps=3, resolution=resolution)
-        assert jnp.allclose(r1, r2, atol=1e-10)
 
 
 class TestSolveBurgers2d:

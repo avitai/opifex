@@ -60,24 +60,24 @@ class TestDataLoaderIntegration:
     """Tests for data loader integration with benchmarks."""
 
     def test_darcy_loader_integration(self):
-        """Benchmarks use actual Opifex data loaders."""
+        """Benchmarks use actual Opifex datarax loaders."""
         from opifex.data.loaders import create_darcy_loader
 
-        loader = create_darcy_loader(n_samples=10, batch_size=2, resolution=32)
+        loaders = create_darcy_loader(n_samples=10, batch_size=2, resolution=32)
 
-        batch = next(iter(loader))
+        batch = next(iter(loaders.train))
         assert "input" in batch
         assert "output" in batch
-        # Darcy loader returns (batch, H, W) format (no channel dim)
-        assert batch["input"].ndim == 3
+        # Darcy loader returns channels-first (batch, C, H, W) format.
+        assert batch["input"].shape == (2, 1, 32, 32)
 
     def test_burgers_loader_integration(self):
         """Burgers loader works with benchmarks."""
         from opifex.data.loaders import create_burgers_loader
 
-        loader = create_burgers_loader(n_samples=10, batch_size=2, resolution=32, dimension="2d")
+        loaders = create_burgers_loader(n_samples=10, batch_size=2, resolution=32)
 
-        batch = next(iter(loader))
+        batch = next(iter(loaders.train))
         assert "input" in batch
         assert "output" in batch
 
@@ -220,9 +220,10 @@ class TestTrainingLoop:
         config = ExecutionConfig(n_epochs=2, batch_size=4, learning_rate=1e-3)
         executor = OperatorExecutor(config)
 
-        # Use actual data loaders
-        train_loader = create_darcy_loader(n_samples=8, batch_size=4, resolution=16)
-        test_loader = create_darcy_loader(n_samples=4, batch_size=4, resolution=16)
+        # Use actual datarax loaders (one generation split into train/val).
+        loaders = create_darcy_loader(
+            n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3
+        )
 
         # Execute benchmark
         result = executor.execute_training_benchmark(
@@ -235,8 +236,8 @@ class TestTrainingLoop:
                 "rank": 0.1,
                 "num_layers": 2,
             },
-            train_loader=train_loader,
-            test_loader=test_loader,
+            train_loader=loaders.train,
+            test_loader=loaders.val,
             benchmark_name="test_darcy",
         )
 

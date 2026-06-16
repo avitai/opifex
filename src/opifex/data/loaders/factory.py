@@ -1,341 +1,195 @@
+"""datarax-backed loader factories for opifex's synthetic PDE datasets.
+
+Each ``create_*_loader`` generates a dataset eagerly via jit+vmap
+(:mod:`opifex.data.sources.pde_generation`) and serves it through datarax
+``MemorySource`` + ``Pipeline``, returning a :class:`PDELoaders` (train + val)
+— the same datarax pattern as :func:`opifex.data.sources.rmd17_source.create_rmd17_loader`.
+The dataset contract is uniform: each batch is ``{"input": (b, C_in, *spatial),
+"output": (b, C_out, *spatial)}`` (channels-first), the operator being
+conditioning -> final-time solution.
 """
-Grain DataLoader factory functions for Opifex PDEs.
 
-This module provides factory functions to create configured Grain DataLoaders
-with appropriate data sources, samplers, and transformations.
-"""
+from __future__ import annotations
 
-import grain.python as grain  # type: ignore  # noqa: PGH003
+from dataclasses import dataclass
 
-from opifex.data.sources.burgers_source import BurgersDataSource
-from opifex.data.sources.darcy_source import DarcyDataSource
-from opifex.data.sources.diffusion_source import DiffusionDataSource
-from opifex.data.sources.navier_stokes_source import NavierStokesDataSource
-from opifex.data.sources.shallow_water_source import ShallowWaterDataSource
-from opifex.data.transforms.pde_transforms import (
-    AddNoiseAugmentation,
-    NormalizeTransform,
-    SpectralTransform,
+import numpy as np  # noqa: TC002  # pyproject dep — keep eager (see CLAUDE.md)
+from datarax.pipeline import Pipeline
+from datarax.sources import MemorySource, MemorySourceConfig
+from flax import nnx
+
+from opifex.data.sources.pde_generation import (
+    generate_burgers,
+    generate_darcy,
+    generate_diffusion,
+    generate_navier_stokes,
+    generate_shallow_water,
 )
 
 
+@dataclass(frozen=True)
+class PDELoaders:
+    """datarax train/val pipelines plus metadata for a synthetic PDE dataset.
+
+    Attributes:
+        train: datarax ``Pipeline`` over the training split (shuffled).
+        val: datarax ``Pipeline`` over the validation split (sequential).
+        n_train: Number of training samples.
+        n_val: Number of validation samples.
+        resolution: Spatial resolution of the fields.
+    """
+
+    train: Pipeline
+    val: Pipeline
+    n_train: int
+    n_val: int
+    resolution: int
+
+
+def _build_pipeline(
+    data: dict[str, np.ndarray], *, batch_size: int, shuffle: bool, seed: int
+) -> Pipeline:
+    """Wrap a split's ``{"input", "output"}`` arrays in a datarax source + pipeline."""
+    source = MemorySource(
+        MemorySourceConfig(shuffle=shuffle),
+        data=data,
+        rngs=nnx.Rngs(shuffle=seed),
+    )
+    return Pipeline(source=source, stages=[], batch_size=batch_size, rngs=nnx.Rngs(seed))
+
+
+def _make_loaders(
+    data: dict[str, np.ndarray],
+    *,
+    batch_size: int,
+    val_fraction: float,
+    seed: int,
+    resolution: int,
+) -> PDELoaders:
+    """Split a generated dataset into train/val datarax pipelines."""
+    n_samples = data["input"].shape[0]
+    n_val = max(1, round(n_samples * val_fraction))
+    n_train = n_samples - n_val
+    train = {key: value[:n_train] for key, value in data.items()}
+    val = {key: value[n_train:] for key, value in data.items()}
+    return PDELoaders(
+        train=_build_pipeline(train, batch_size=batch_size, shuffle=True, seed=seed),
+        val=_build_pipeline(val, batch_size=batch_size, shuffle=False, seed=seed + 1),
+        n_train=n_train,
+        n_val=n_val,
+        resolution=resolution,
+    )
+
+
 def create_burgers_loader(
+    *,
     n_samples: int = 1000,
+    resolution: int = 128,
     batch_size: int = 32,
-    resolution: int = 64,
-    time_steps: int = 5,
-    viscosity_range: tuple[float, float] = (0.01, 0.1),
-    time_range: tuple[float, float] = (0.0, 2.0),
-    dimension: str = "2d",
-    shuffle: bool = True,
+    viscosity_range: tuple[float, float] = (0.1, 0.1),
+    time_final: float = 1.0,
+    val_fraction: float = 0.2,
     seed: int = 42,
-    worker_count: int = 4,
-    enable_normalization: bool = True,
-    normalization_mean: float = 0.0,
-    normalization_std: float = 1.0,
-    enable_spectral: bool = False,
-    enable_augmentation: bool = False,
-    augmentation_noise_level: float = 0.01,
-    num_epochs: int = 1,
-) -> grain.DataLoader:
-    """
-    Create Grain DataLoader for Burgers equation dataset.
-
-    This factory creates a complete data loading pipeline with:
-    1. BurgersDataSource - on-demand PDE solution generation
-    2. IndexSampler - efficient shuffling and sharding
-    3. Optional transforms - normalization, spectral features, augmentation
-    4. Batching - efficient batch creation
-
-    Args:
-        n_samples: Total number of samples in dataset
-        batch_size: Batch size for training
-        resolution: Spatial resolution for discretization
-        time_steps: Number of time steps in solution
-        viscosity_range: Tuple of (min_viscosity, max_viscosity)
-        time_range: Tuple of (start_time, end_time)
-        dimension: Either "1d" or "2d"
-        shuffle: Whether to shuffle data
-        seed: Random seed for reproducibility
-        worker_count: Number of parallel worker processes
-        enable_normalization: Apply z-score normalization
-        normalization_mean: Mean for normalization
-        normalization_std: Std for normalization
-        enable_spectral: Add FFT features
-        enable_augmentation: Add noise augmentation
-        augmentation_noise_level: Noise level for augmentation
-        num_epochs: Number of epochs to iterate (default: 1)
-
-    Returns:
-        grain.DataLoader: Configured data loader ready for iteration
-
-    Example:
-        >>> loader = create_burgers_loader(
-        ...     n_samples=10000,
-        ...     batch_size=32,
-        ...     shuffle=True,
-        ...     worker_count=4,
-        ... )
-        >>> for batch in loader:
-        ...     x_batch = batch["input"]
-        ...     y_batch = batch["output"]
-        ...     # Train model
-    """
-    # 1. Data source - generates PDE solutions on-demand
-    data_source = BurgersDataSource(
+) -> PDELoaders:
+    """Create train/val datarax pipelines for the 1D Burgers operator-learning task."""
+    data = generate_burgers(
         n_samples=n_samples,
         resolution=resolution,
-        time_steps=time_steps,
         viscosity_range=viscosity_range,
-        time_range=time_range,
-        dimension=dimension,
+        time_final=time_final,
         seed=seed,
     )
-
-    # 2. Sampler - handles shuffling and multi-process sharding
-    sampler = grain.IndexSampler(
-        num_records=len(data_source),
-        shuffle=shuffle,
-        seed=seed,
-        num_epochs=num_epochs,
-        shard_options=grain.ShardByJaxProcess(drop_remainder=True),
-    )
-
-    # 3. Operations pipeline - transforms and batching
-    operations = []
-
-    # Optional: Add noise augmentation (before normalization)
-    if enable_augmentation:
-        operations.append(AddNoiseAugmentation(noise_level=augmentation_noise_level))
-
-    # Optional: Normalize data
-    if enable_normalization:
-        operations.append(NormalizeTransform(mean=normalization_mean, std=normalization_std))
-
-    # Optional: Add spectral features
-    if enable_spectral:
-        operations.append(SpectralTransform())
-
-    # Always add batching as the last operation
-    operations.append(grain.Batch(batch_size=batch_size, drop_remainder=True))
-
-    # 4. Create DataLoader
-    return grain.DataLoader(
-        data_source=data_source,
-        sampler=sampler,
-        operations=operations,
-        worker_count=worker_count,
-        worker_buffer_size=20,  # Pre-fetch buffer size
+    return _make_loaders(
+        data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
     )
 
 
 def create_darcy_loader(
+    *,
     n_samples: int = 1000,
+    resolution: int = 64,
     batch_size: int = 32,
-    resolution: int = 85,
-    viscosity_range: tuple[float, float] = (0.5, 2.0),
+    coeff_range: tuple[float, float] = (0.1, 1.0),
     field_type: str = "smooth",
-    shuffle: bool = True,
+    val_fraction: float = 0.2,
     seed: int = 42,
-    worker_count: int = 0,
-    enable_normalization: bool = True,
-    num_epochs: int = 1,
-) -> grain.DataLoader:
-    """Create Grain DataLoader for Darcy flow dataset.
-
-    ``field_type='binary'`` selects the high-contrast thresholded-GRF benchmark
-    (with ``viscosity_range`` as the two permeability values); ``'smooth'`` (the
-    default) keeps the smooth log-Fourier coefficient field.
-    """
-    data_source = DarcyDataSource(
+) -> PDELoaders:
+    """Create train/val datarax pipelines for the 2D Darcy-flow operator-learning task."""
+    data = generate_darcy(
         n_samples=n_samples,
         resolution=resolution,
-        viscosity_range=viscosity_range,
+        coeff_range=coeff_range,
         field_type=field_type,
         seed=seed,
     )
-
-    sampler = grain.IndexSampler(
-        num_records=len(data_source),
-        shuffle=shuffle,
-        seed=seed,
-        num_epochs=num_epochs,
-        shard_options=grain.ShardByJaxProcess(drop_remainder=True),
-    )
-
-    operations = []
-    if enable_normalization:
-        operations.append(NormalizeTransform(mean=0.0, std=1.0))
-    operations.append(grain.Batch(batch_size=batch_size, drop_remainder=True))
-
-    return grain.DataLoader(
-        data_source=data_source,
-        sampler=sampler,
-        operations=operations,
-        worker_count=worker_count,
-        worker_buffer_size=20,
+    return _make_loaders(
+        data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
     )
 
 
 def create_diffusion_loader(
+    *,
     n_samples: int = 1000,
-    batch_size: int = 32,
     resolution: int = 64,
-    time_steps: int = 5,
-    shuffle: bool = True,
+    batch_size: int = 32,
+    diffusion_range: tuple[float, float] = (0.01, 0.1),
+    advection_range: tuple[float, float] = (-1.0, 1.0),
+    val_fraction: float = 0.2,
     seed: int = 42,
-    worker_count: int = 0,
-    num_epochs: int = 1,
-) -> grain.DataLoader:
-    """Create Grain DataLoader for diffusion-advection dataset."""
-    data_source = DiffusionDataSource(
+) -> PDELoaders:
+    """Create train/val datarax pipelines for the 2D diffusion-advection task."""
+    data = generate_diffusion(
         n_samples=n_samples,
         resolution=resolution,
-        time_steps=time_steps,
+        diffusion_range=diffusion_range,
+        advection_range=advection_range,
         seed=seed,
     )
-
-    sampler = grain.IndexSampler(
-        num_records=len(data_source),
-        shuffle=shuffle,
-        seed=seed,
-        num_epochs=num_epochs,
-        shard_options=grain.ShardByJaxProcess(drop_remainder=True),
-    )
-
-    operations = [grain.Batch(batch_size=batch_size, drop_remainder=True)]
-
-    return grain.DataLoader(
-        data_source=data_source,
-        sampler=sampler,
-        operations=operations,
-        worker_count=worker_count,
-        worker_buffer_size=20,
-    )
-
-
-def create_shallow_water_loader(
-    n_samples: int = 1000,
-    batch_size: int = 32,
-    resolution: int = 64,
-    shuffle: bool = True,
-    seed: int = 42,
-    worker_count: int = 0,
-    num_epochs: int = 1,
-) -> grain.DataLoader:
-    """Create Grain DataLoader for shallow water equations dataset."""
-    data_source = ShallowWaterDataSource(
-        n_samples=n_samples,
-        resolution=resolution,
-        seed=seed,
-    )
-
-    sampler = grain.IndexSampler(
-        num_records=len(data_source),
-        shuffle=shuffle,
-        seed=seed,
-        num_epochs=num_epochs,
-        shard_options=grain.ShardByJaxProcess(drop_remainder=True),
-    )
-
-    operations = [grain.Batch(batch_size=batch_size, drop_remainder=True)]
-
-    return grain.DataLoader(
-        data_source=data_source,
-        sampler=sampler,
-        operations=operations,
-        worker_count=worker_count,
-        worker_buffer_size=20,
+    return _make_loaders(
+        data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
     )
 
 
 def create_navier_stokes_loader(
+    *,
     n_samples: int = 1000,
-    batch_size: int = 32,
     resolution: int = 64,
-    time_steps: int = 5,
-    reynolds_range: tuple[float, float] = (100.0, 1000.0),
+    batch_size: int = 32,
+    viscosity_range: tuple[float, float] = (0.001, 0.01),
     time_range: tuple[float, float] = (0.0, 1.0),
-    shuffle: bool = True,
+    val_fraction: float = 0.2,
     seed: int = 42,
-    worker_count: int = 0,
-    enable_normalization: bool = False,
-    normalization_mean: float = 0.0,
-    normalization_std: float = 1.0,
-    num_epochs: int = 1,
-) -> grain.DataLoader:
-    """
-    Create Grain DataLoader for 2D Navier-Stokes equations dataset.
-
-    This factory creates a complete data loading pipeline for incompressible
-    2D Navier-Stokes solutions with:
-    1. NavierStokesDataSource - on-demand NS solution generation
-    2. IndexSampler - efficient shuffling and sharding
-    3. Optional transforms - normalization
-    4. Batching - efficient batch creation
-
-    Args:
-        n_samples: Total number of samples in dataset
-        batch_size: Batch size for training
-        resolution: Spatial resolution for discretization
-        time_steps: Number of time steps in solution trajectory
-        reynolds_range: Tuple of (min_reynolds, max_reynolds)
-        time_range: Tuple of (start_time, end_time)
-        shuffle: Whether to shuffle data
-        seed: Random seed for reproducibility
-        worker_count: Number of parallel worker processes
-        enable_normalization: Apply z-score normalization
-        normalization_mean: Mean for normalization
-        normalization_std: Std for normalization
-        num_epochs: Number of epochs to iterate (default: 1)
-
-    Returns:
-        grain.DataLoader: Configured data loader ready for iteration
-
-    Example:
-        >>> loader = create_navier_stokes_loader(
-        ...     n_samples=1000,
-        ...     batch_size=16,
-        ...     resolution=64,
-        ...     reynolds_range=(100, 500),
-        ...     seed=42,
-        ... )
-        >>> for batch in loader:
-        ...     input_vel = batch["input"]   # (batch, 2, res, res)
-        ...     output_vel = batch["output"] # (batch, time_steps, 2, res, res)
-    """
-    data_source = NavierStokesDataSource(
+) -> PDELoaders:
+    """Create train/val datarax pipelines for the 2D Navier-Stokes task."""
+    data = generate_navier_stokes(
         n_samples=n_samples,
         resolution=resolution,
-        time_steps=time_steps,
-        reynolds_range=reynolds_range,
+        viscosity_range=viscosity_range,
         time_range=time_range,
         seed=seed,
     )
-
-    sampler = grain.IndexSampler(
-        num_records=len(data_source),
-        shuffle=shuffle,
-        seed=seed,
-        num_epochs=num_epochs,
-        shard_options=grain.ShardByJaxProcess(drop_remainder=True),
+    return _make_loaders(
+        data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
     )
 
-    operations = []
-    if enable_normalization:
-        operations.append(NormalizeTransform(mean=normalization_mean, std=normalization_std))
-    operations.append(grain.Batch(batch_size=batch_size, drop_remainder=True))
 
-    return grain.DataLoader(
-        data_source=data_source,
-        sampler=sampler,
-        operations=operations,
-        worker_count=worker_count,
-        worker_buffer_size=20,
+def create_shallow_water_loader(
+    *,
+    n_samples: int = 1000,
+    resolution: int = 64,
+    batch_size: int = 32,
+    val_fraction: float = 0.2,
+    seed: int = 42,
+) -> PDELoaders:
+    """Create train/val datarax pipelines for the 2D shallow-water task."""
+    data = generate_shallow_water(n_samples=n_samples, resolution=resolution, seed=seed)
+    return _make_loaders(
+        data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
     )
 
 
 __all__ = [
+    "PDELoaders",
     "create_burgers_loader",
     "create_darcy_loader",
     "create_diffusion_loader",

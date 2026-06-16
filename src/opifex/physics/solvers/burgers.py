@@ -13,77 +13,9 @@ import jax
 import jax.numpy as jnp
 
 
-def solve_burgers_1d(
-    initial_condition: jax.Array,
-    viscosity: float,
-    time_range: tuple[float, float] = (0.0, 2.0),
-    time_steps: int = 5,
-    resolution: int = 64,
-) -> jax.Array:
-    """
-    Solve 1D Burgers equation using finite difference scheme.
-
-    Uses forward Euler with upwind advection and central diffusion,
-    with CFL-adaptive sub-stepping for numerical stability.
-
-    Args:
-        initial_condition: Initial condition u(x, 0)
-        viscosity: Viscosity parameter
-        time_range: (start_time, end_time)
-        time_steps: Number of time steps to save
-        resolution: Grid resolution
-
-    Returns:
-        Solution trajectory (time_steps+1, resolution) including initial condition
-    """
-    dx = 2.0 / (resolution - 1)
-    save_times = jnp.linspace(time_range[0], time_range[1], time_steps + 1)
-
-    def step_forward(u, dt_sub):
-        """Single sub-step using finite difference."""
-        # Periodic boundary conditions
-        u_padded = jnp.concatenate([u[-1:], u, u[:1]])
-
-        # Central difference for second derivative
-        u_xx = (u_padded[2:] - 2 * u_padded[1:-1] + u_padded[:-2]) / dx**2
-
-        # Upwind scheme for convection term
-        u_left = jnp.concatenate([u[-1:], u[:-1]])
-        u_right = jnp.concatenate([u[1:], u[:1]])
-
-        u_x = jnp.where(u >= 0, (u - u_left) / dx, (u_right - u) / dx)
-
-        # Update using forward Euler
-        return u - dt_sub * u * u_x + dt_sub * viscosity * u_xx
-
-    def compute_stable_dt(u):
-        """Compute CFL-stable time step."""
-        max_u = jnp.max(jnp.abs(u)) + 1e-8
-        dt_advection = 0.4 * dx / max_u
-        dt_diffusion = 0.4 * dx**2 / (viscosity + 1e-8)
-        return jnp.minimum(dt_advection, dt_diffusion)
-
-    # Time stepping with sub-stepping for stability
-    u = initial_condition
-    trajectory = [u]
-
-    for i in range(time_steps):
-        t_current = float(save_times[i])
-        t_target = float(save_times[i + 1])
-        t = t_current
-        while t < t_target - 1e-12:
-            dt_sub = compute_stable_dt(u)
-            dt_sub = jnp.minimum(dt_sub, t_target - t)
-            u = step_forward(u, dt_sub)
-            t += float(dt_sub)
-        trajectory.append(u)
-
-    return jnp.stack(trajectory)
-
-
 def solve_burgers_2d(
     initial_condition: jax.Array,
-    viscosity: float,
+    viscosity: float | jax.Array,
     time_range: tuple[float, float] = (0.0, 2.0),
     time_steps: int = 5,
     resolution: int = 64,
@@ -139,22 +71,30 @@ def solve_burgers_2d(
         dt_diffusion = 0.25 * dx**2 / (viscosity + 1e-8)
         return jnp.minimum(dt_advection, dt_diffusion)
 
-    # Time stepping with sub-stepping for stability
-    u = initial_condition
-    trajectory = [u]
+    # Adaptive sub-stepping between save times, expressed with lax.while_loop +
+    # lax.scan so the solver is jit/vmap-compatible. The previous version called
+    # float(dt_sub)/float(save_times[i]) inside a Python while loop, which forces
+    # a host<->device sync every sub-step and cannot be jit-compiled (breaking
+    # vmapped on-device data generation).
+    def integrate_interval(u: jax.Array, bounds: jax.Array) -> tuple[jax.Array, jax.Array]:
+        t_target = bounds[1]
 
-    for i in range(time_steps):
-        t_current = float(save_times[i])
-        t_target = float(save_times[i + 1])
-        t = t_current
-        while t < t_target - 1e-12:
-            dt_sub = compute_stable_dt(u)
-            dt_sub = jnp.minimum(dt_sub, t_target - t)
-            u = step_forward(u, dt_sub)
-            t += float(dt_sub)
-        trajectory.append(u)
+        def not_done(state: tuple[jax.Array, jax.Array]) -> jax.Array:
+            return state[1] < t_target - 1e-12
 
-    return jnp.stack(trajectory)
+        def sub_step(
+            state: tuple[jax.Array, jax.Array],
+        ) -> tuple[jax.Array, jax.Array]:
+            u_cur, t = state
+            dt_sub = jnp.minimum(compute_stable_dt(u_cur), t_target - t)
+            return step_forward(u_cur, dt_sub), t + dt_sub
+
+        u_next, _ = jax.lax.while_loop(not_done, sub_step, (u, bounds[0]))
+        return u_next, u_next
+
+    interval_bounds = jnp.stack([save_times[:-1], save_times[1:]], axis=1)
+    _, saved = jax.lax.scan(integrate_interval, initial_condition, interval_bounds)
+    return jnp.concatenate([initial_condition[None], saved], axis=0)
 
 
 class Burgers2DSolver:
@@ -347,4 +287,4 @@ class Burgers2DSolver:
         return u, v
 
 
-__all__ = ["Burgers2DSolver", "solve_burgers_1d", "solve_burgers_2d"]
+__all__ = ["Burgers2DSolver", "solve_burgers_2d"]

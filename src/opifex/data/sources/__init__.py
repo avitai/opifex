@@ -1,14 +1,18 @@
-"""
-Grain data sources for Opifex PDEs.
+"""Data sources for Opifex.
 
-This module provides Grain-compliant data sources for various PDE problems,
-plus scientific data sources extending datarax's DataSourceModule.
+Synthetic PDE datasets are generated eagerly via jit+vmap
+(:mod:`opifex.data.sources.pde_generation`) and served through datarax
+pipelines by :mod:`opifex.data.loaders`. Atomistic/quantum and file-backed
+sources (rMD17, QH9, PDEBench, VTK) extend datarax's ``DataSourceModule``.
 """
 
-from opifex.data.sources.burgers_source import BurgersDataSource
-from opifex.data.sources.darcy_source import DarcyDataSource
-from opifex.data.sources.diffusion_source import DiffusionDataSource
-from opifex.data.sources.navier_stokes_source import NavierStokesDataSource
+from opifex.data.sources.pde_generation import (
+    generate_burgers,
+    generate_darcy,
+    generate_diffusion,
+    generate_navier_stokes,
+    generate_shallow_water,
+)
 from opifex.data.sources.qh9_blocks import (
     cut_fock_to_blocks,
     reconstruct_fock_from_blocks,
@@ -42,14 +46,9 @@ from opifex.data.sources.scientific import (
     VTKMeshConfig,
     VTKMeshSource,
 )
-from opifex.data.sources.shallow_water_source import ShallowWaterDataSource
 
 
 __all__ = [
-    "BurgersDataSource",
-    "DarcyDataSource",
-    "DiffusionDataSource",
-    "NavierStokesDataSource",
     "PDEBenchConfig",
     "PDEBenchSource",
     "QH9Data",
@@ -60,13 +59,17 @@ __all__ = [
     "RMD17Config",
     "RMD17Data",
     "RMD17Loaders",
-    "ShallowWaterDataSource",
     "VTKMeshConfig",
     "VTKMeshSource",
     "create_qh9_padded_sources",
     "create_rmd17_loader",
     "cut_fock_to_blocks",
     "download_rmd17_molecule",
+    "generate_burgers",
+    "generate_darcy",
+    "generate_diffusion",
+    "generate_navier_stokes",
+    "generate_shallow_water",
     "iterate_padded_batches",
     "load_qh9_data",
     "matrix_transform_def2svp",

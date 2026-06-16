@@ -52,6 +52,7 @@ schedule + global-norm clip) wrapping the single predictor.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable  # noqa: TC003
 from dataclasses import dataclass
 from typing import Literal
 
@@ -305,7 +306,7 @@ def make_fused_block_train_step(
     *,
     num_molecules: int,
     swap_edges: bool = True,
-):
+) -> Callable[..., tuple[Float[Array, ""], Float[Array, ""]]]:
     """Build the fused decode + cut + predict + loss + update train step.
 
     The returned ``nnx.jit`` closure runs, inside one compiled graph over a
@@ -373,7 +374,7 @@ def make_fused_block_eval_step(
     cut_op: OperatorModule,
     *,
     swap_edges: bool = True,
-):
+) -> Callable[..., Float[Array, ""]]:
     """Build a fused decode + cut + predict Hamiltonian-MAE eval step.
 
     The evaluation analogue of :func:`make_fused_block_train_step`: it reuses the

@@ -7,7 +7,48 @@ The 2D incompressible Navier-Stokes equations:
     ∇·u = 0 (incompressibility)
 """
 
+import jax
 import jax.numpy as jnp
+
+
+class TestNavierStokesTransforms:
+    """The solver must be jit/vmap-compatible (opifex is JAX-native).
+
+    Would have caught the ``float()``-in-``while`` defect that made the
+    Navier-Stokes solver un-jittable and forced slow per-sample data generation.
+    """
+
+    def test_solve_is_jit_compatible(self) -> None:
+        """solve_navier_stokes_2d traces under jit and preserves the IC."""
+        from opifex.physics.solvers.navier_stokes import (
+            create_taylor_green_vortex,
+            solve_navier_stokes_2d,
+        )
+
+        u0, v0 = create_taylor_green_vortex(16)
+        u_traj, v_traj = jax.jit(
+            lambda a, b: solve_navier_stokes_2d(a, b, 0.05, (0.0, 0.5), 3, 16)
+        )(u0, v0)
+        assert u_traj.shape == (4, 16, 16)
+        assert jnp.allclose(u_traj[0], u0) and jnp.allclose(v_traj[0], v0)
+        assert jnp.all(jnp.isfinite(u_traj)) and jnp.all(jnp.isfinite(v_traj))
+
+    def test_solve_is_vmap_compatible(self) -> None:
+        """The solver vmaps over a batch of initial fields and viscosities."""
+        from opifex.physics.solvers.navier_stokes import (
+            create_taylor_green_vortex,
+            solve_navier_stokes_2d,
+        )
+
+        u0, v0 = create_taylor_green_vortex(16)
+        us, vs = jnp.stack([u0, u0]), jnp.stack([v0, v0])
+        nus = jnp.array([0.05, 0.1])
+        batched = jax.jit(
+            jax.vmap(lambda a, b, n: solve_navier_stokes_2d(a, b, n, (0.0, 0.5), 3, 16))
+        )
+        u_traj, v_traj = batched(us, vs, nus)
+        assert u_traj.shape == (2, 4, 16, 16) and v_traj.shape == (2, 4, 16, 16)
+        assert jnp.all(jnp.isfinite(u_traj)) and jnp.all(jnp.isfinite(v_traj))
 
 
 class TestNavierStokesSolver:
