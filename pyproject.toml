@@ -196,6 +196,9 @@ scientific-data = [
 test = [
   "beartype>=0.14.1",
   "coverage>=7.9.2",
+  # Reference pseudo-spectral PDE solvers, used to cross-check
+  # opifex.physics.spectral against an independent implementation.
+  "exponax>=0.2.0",
   "pytest>=8.4.1",
   "pytest-asyncio>=1.0.0",
   "pytest-benchmark>=5.1.0",
@@ -573,6 +576,7 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "E501", # Long lines in example comments
   "BLE001", # Broad except acceptable in demonstration code
   "C901", # Demonstration scripts may inline multi-stage walkthroughs
+  "PLR0915", # main() inlines a full example walkthrough (load, train, eval, plot)
   "ARG001", # Demonstration callbacks/closures keep interface params
   "ARG005", # Demonstration lambdas keep interface params
   "PLR0913" # Walkthroughs configure models/loaders with one kwarg per setting

@@ -1716,6 +1716,22 @@ wheels = [
 ]
 
 [[package]]
+name = "exponax"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "equinox" },
+    { name = "jax" },
+    { name = "jaxtyping" },
+    { name = "matplotlib" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/90/695f379846a7bfd8e2fa0f837761c19c42c1982e64ab6f7023bd372d4b96/exponax-0.2.0.tar.gz", hash = "sha256:4d4d88cd0313def80040a370b67299851edab2411890c01305c6eb167a5b93f1", size = 137873, upload-time = "2026-02-20T10:06:45.15Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/fc/0588f4a5f340d011f46e5ac907f6141af557ef6d57e49b3237b2024fd6f4/exponax-0.2.0-py3-none-any.whl", hash = "sha256:7e013aecd3f6af641a509a8a72b8b0f18067c6ca24194146ed52b370a026be34", size = 159217, upload-time = "2026-02-20T10:06:43.603Z" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.133.0"
 source = { registry = "https://pypi.org/simple" }
@@ -5083,6 +5099,7 @@ all = [
     { name = "beartype" },
     { name = "build" },
     { name = "coverage" },
+    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "griffe" },
@@ -5147,6 +5164,7 @@ all-cpu = [
     { name = "beartype" },
     { name = "build" },
     { name = "coverage" },
+    { name = "exponax" },
     { name = "griffe" },
     { name = "hippogriffe" },
     { name = "import-linter" },
@@ -5187,6 +5205,7 @@ all-macos = [
     { name = "beartype" },
     { name = "build" },
     { name = "coverage" },
+    { name = "exponax" },
     { name = "griffe" },
     { name = "hippogriffe" },
     { name = "import-linter" },
@@ -5414,6 +5433,7 @@ scientific-data = [
 test = [
     { name = "beartype" },
     { name = "coverage" },
+    { name = "exponax" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-benchmark" },
@@ -5444,6 +5464,7 @@ requires-dist = [
     { name = "datarax", specifier = ">=0.1.3" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", specifier = ">=0.1.0,<0.2.0" },
+    { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
     { name = "fastapi", marker = "extra == 'platform'", specifier = ">=0.115.13" },
     { name = "flax", specifier = ">=0.12.0" },
     { name = "grain", marker = "extra == 'scientific-data'", specifier = ">=0.2.3" },
