@@ -36,14 +36,14 @@ This example demonstrates:
 - **GridEmbedding2D** positional encoding fed as extra input channels
 - **Gaussian normalization** of inputs and outputs
 - **relative-L2 loss** via `LossConfig`, the standard operator-learning objective
-- **Grain DataLoader** for efficient streaming data
+- **datarax DataLoader** for efficient streaming data
 - **Trainer.fit()** for end-to-end training with validation
 - **Zero-shot super-resolution** inference at higher resolutions
 
 ## Learning Goals
 
 1. Create a UNO with `create_uno` factory
-2. Load Darcy flow data with `create_darcy_loader` (Grain-based)
+2. Load Darcy flow data with `create_darcy_loader` (datarax-based)
 3. Apply grid embedding, normalization, and the relative-L2 loss
 4. Train with Opifex's `Trainer.fit()` API
 5. Evaluate predictions and demonstrate zero-shot super-resolution
@@ -72,18 +72,14 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
+from opifex.core.evaluation import predict_in_batches
+from opifex.core.metrics import per_sample_relative_l2
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.specialized import create_uno
 
-
-print("=" * 70)
-print("Opifex Example: UNO on Darcy Flow")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
 
 # %% [markdown]
 """
@@ -94,83 +90,14 @@ Gaussian normalization, the relative-L2 loss, and enough epochs for the
 spectral weights to converge.
 """
 
-# %%
-RESOLUTION = 32
-N_TRAIN = 1000
-N_TEST = 100
-BATCH_SIZE = 32
-NUM_EPOCHS = 120
-LEARNING_RATE = 1e-3
-HIDDEN_CHANNELS = 32
-MODES = 12
-N_LAYERS = 3
-SEED = 42
-
-OUTPUT_DIR = Path("docs/assets/examples/uno_darcy")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
-print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
-print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
-print(f"UNO config: hidden={HIDDEN_CHANNELS}, modes={MODES}, layers={N_LAYERS}")
-
 # %% [markdown]
 """
-## Data Loading with Grain
+## Data Loading with datarax
 
 Opifex provides `create_darcy_loader` which generates Darcy flow equation data
-(permeability-to-pressure mapping) and wraps it in a Google Grain DataLoader
+(permeability-to-pressure mapping) and wraps it in a datarax DataLoader
 for efficient streaming and batching.
 """
-
-# %%
-print()
-print("Loading Darcy flow data via Grain...")
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-)
-
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
-
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
-
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
-
-X_test_list, Y_test_list = [], []
-for batch in test_loader:
-    X_test_list.append(batch["input"])
-    Y_test_list.append(batch["output"])
-
-X_test = np.concatenate(X_test_list, axis=0)
-Y_test = np.concatenate(Y_test_list, axis=0)
-
-# UNO expects channels-last: (batch, height, width, channels)
-if X_train.ndim == 3:
-    X_train = X_train[..., np.newaxis]
-    Y_train = Y_train[..., np.newaxis]
-if X_test.ndim == 3:
-    X_test = X_test[..., np.newaxis]
-    Y_test = Y_test[..., np.newaxis]
-
-print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
-print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
 
 # %% [markdown]
 """
@@ -180,18 +107,6 @@ Neural operators train best on standardized fields. We fit Gaussian statistics
 on the training set, normalize all splits, and un-normalize predictions before
 computing physical-space errors.
 """
-
-# %%
-x_mean, x_std = X_train.mean(), X_train.std()
-y_mean, y_std = Y_train.mean(), Y_train.std()
-
-X_train_n = (X_train - x_mean) / x_std
-Y_train_n = (Y_train - y_mean) / y_std
-X_test_n = (X_test - x_mean) / x_std
-Y_test_n = (Y_test - y_mean) / y_std
-
-print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
-print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
 
 # %% [markdown]
 """
@@ -257,27 +172,6 @@ class UNOWithGrid(nnx.Module):
         return self.uno(x_embedded, deterministic=deterministic)
 
 
-print()
-print("Creating UNO model with grid embedding...")
-in_channels = X_train.shape[-1]
-out_channels = Y_train.shape[-1]
-
-model = UNOWithGrid(
-    input_channels=in_channels,
-    output_channels=out_channels,
-    hidden_channels=HIDDEN_CHANNELS,
-    modes=MODES,
-    n_layers=N_LAYERS,
-    rngs=nnx.Rngs(SEED),
-)
-
-params = nnx.state(model, nnx.Param)
-param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
-print(f"Model: UNO + GridEmbedding2D (hidden={HIDDEN_CHANNELS}, modes={MODES}, layers={N_LAYERS})")
-print(f"Input channels: {in_channels} (+ 2 grid coords = {in_channels + 2} after embedding)")
-print(f"Output channels: {out_channels}")
-print(f"Total parameters: {param_count:,}")
-
 # %% [markdown]
 """
 ## Training with Opifex Trainer
@@ -286,39 +180,6 @@ We use Opifex's `Trainer` with the relative-L2 loss (`loss_type="relative_l2"`),
 the standard operator-learning objective. The `Trainer.fit()` method handles
 batched training with JIT compilation, validation, and progress logging.
 """
-
-# %%
-print()
-print("Setting up Trainer...")
-config = TrainingConfig(
-    num_epochs=NUM_EPOCHS,
-    learning_rate=LEARNING_RATE,
-    batch_size=BATCH_SIZE,
-    validation_frequency=5,
-    verbose=True,
-    loss_config=LossConfig(loss_type="relative_l2"),
-)
-
-trainer = Trainer(
-    model=model,
-    config=config,
-    rngs=nnx.Rngs(SEED),
-)
-
-print(f"Optimizer: Adam (lr={LEARNING_RATE}), loss: relative L2")
-print()
-print("Starting training...")
-start_time = time.time()
-
-trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
-    val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),
-)
-
-training_time = time.time() - start_time
-print(f"Training completed in {training_time:.1f}s")
-print(f"Final train loss: {metrics.get('final_train_loss', 'N/A')}")
-print(f"Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
 
 # %% [markdown]
 """
@@ -329,152 +190,270 @@ relative L2 error. The test set is run through the model in batches to bound
 memory use at higher resolutions.
 """
 
-# %%
-print()
-print("Evaluating on test set...")
-X_test_jnp = jnp.array(X_test_n)
-Y_test_jnp = jnp.array(Y_test)
-
-
-def predict_in_batches(
-    forward: nnx.Module,
-    inputs: jax.Array,
-    batch_size: int = 128,
-) -> jax.Array:
-    """Run the model over the inputs in batches to bound memory use."""
-    outputs = [
-        forward(inputs[i : i + batch_size], deterministic=True)
-        for i in range(0, inputs.shape[0], batch_size)
-    ]
-    return jnp.concatenate(outputs, axis=0)
-
-
-predictions = predict_in_batches(trained_model, X_test_jnp) * y_std + y_mean
-
-test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
-
-# Relative L2 error per sample
-pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
-Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)
-mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
-
-print(f"Test MSE:         {test_mse:.6e}")
-print(f"Test Relative L2: {mean_rel_l2:.6f}")
-print(f"Min Relative L2:  {float(jnp.min(per_sample_rel_l2)):.6f}")
-print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
 
 # %% [markdown]
 """
-## Zero-Shot Super-Resolution
+## Run the example
 
-UNO can generalize to different resolutions without retraining. Here we test
-inference at 2x the training resolution. The input is normalized with the
-training statistics and the prediction is un-normalized for comparison.
+All run logic — configuration, data loading, normalization, model creation,
+training, evaluation, zero-shot super-resolution, and visualization — lives in
+`main()`. It returns a small dict of finite scalar metrics and saves the
+prediction/super-resolution plots to `docs/assets/examples/uno_darcy/`.
 """
+
 
 # %%
-print()
-target_resolution = RESOLUTION * 2
-print(f"Testing zero-shot super-resolution: {RESOLUTION} -> {target_resolution}")
+def main() -> dict[str, float | int]:
+    """Train a UNO on Darcy flow and report relative-L2 error metrics.
 
-# Take one test sample and upsample the (normalized) input
-x_sample = X_test_jnp[0:1]
-x_high_res = jax.image.resize(
-    x_sample,
-    (1, target_resolution, target_resolution, in_channels),
-    method="bilinear",
-)
+    Returns:
+        Finite scalar metrics: parameter count, final train loss, test MSE,
+        mean test relative L2 error, and the zero-shot super-resolution error.
+    """
+    # --- Configuration ---
+    resolution = 32
+    n_train = 1000
+    n_test = 100
+    batch_size = 32
+    num_epochs = 120
+    learning_rate = 1e-3
+    hidden_channels = 32
+    modes = 12
+    n_layers = 3
+    seed = 42
 
-# Predict at high resolution, then un-normalize
-y_pred_high = trained_model(x_high_res, deterministic=True) * y_std + y_mean
+    output_dir = Path("docs/assets/examples/uno_darcy")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-# Upsample ground truth for comparison
-y_true_high = jax.image.resize(
-    Y_test_jnp[0:1],
-    (1, target_resolution, target_resolution, out_channels),
-    method="bilinear",
-)
+    print("=" * 70)
+    print("Opifex Example: UNO on Darcy Flow")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Resolution: {resolution}x{resolution}")
+    print(f"Training samples: {n_train}, Test samples: {n_test}")
+    print(f"Batch size: {batch_size}, Epochs: {num_epochs}")
+    print(f"UNO config: hidden={hidden_channels}, modes={modes}, layers={n_layers}")
 
-sr_error = float(
-    jnp.sqrt(jnp.sum((y_pred_high - y_true_high) ** 2)) / jnp.sqrt(jnp.sum(y_true_high**2))
-)
-print(f"Super-resolution L2 error: {sr_error:.6f}")
+    # --- Data loading via datarax ---
+    print()
+    print("Loading Darcy flow data via datarax...")
+    n_samples = n_train + n_test
+    loaders = create_darcy_loader(
+        n_samples=n_samples,
+        batch_size=batch_size,
+        resolution=resolution,
+        val_fraction=n_test / n_samples,
+        seed=seed,
+    )
 
-# %% [markdown]
-"""
-## Visualization
+    # datarax yields channels-first {"input": (b, 1, H, W), "output": (b, 1, H, W)};
+    # UNO (and its grid embedding, eval, and visualization) work channels-last, so
+    # we move the channel axis to the end once here, at the data boundary.
+    def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+        inputs, outputs = [], []
+        for batch in pipeline:
+            inputs.append(np.moveaxis(np.asarray(batch["input"]), 1, -1))
+            outputs.append(np.moveaxis(np.asarray(batch["output"]), 1, -1))
+        return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
-Plot the input field, ground truth, UNO prediction, and absolute error
-for selected test samples, plus the super-resolution result.
-"""
+    x_train, y_train = _collect(loaders.train)
+    x_test, y_test = _collect(loaders.val)
 
-# %%
-print()
-print("Generating visualizations...")
+    print(f"Training data: X={x_train.shape}, Y={y_train.shape}")
+    print(f"Test data:     X={x_test.shape}, Y={y_test.shape}")
 
-# --- Sample predictions ---
-n_vis = 3
-indices = np.linspace(0, len(X_test) - 1, n_vis, dtype=int)
+    # --- Normalization (fit on train, applied to all splits) ---
+    x_mean, x_std = x_train.mean(), x_train.std()
+    y_mean, y_std = y_train.mean(), y_train.std()
 
-fig, axes = plt.subplots(n_vis, 4, figsize=(16, 4 * n_vis))
-fig.suptitle("UNO Darcy Flow Predictions (Opifex)", fontsize=14, fontweight="bold")
+    x_train_n = (x_train - x_mean) / x_std
+    y_train_n = (y_train - y_mean) / y_std
+    x_test_n = (x_test - x_mean) / x_std
 
-for row, idx in enumerate(indices):
-    x_field = X_test[idx, :, :, 0]
-    y_true = Y_test[idx, :, :, 0]
-    y_pred = np.array(predictions[idx, :, :, 0])
-    error = np.abs(y_pred - y_true)
+    print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+    print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
 
-    im0 = axes[row, 0].imshow(x_field, cmap="viridis")
-    axes[row, 0].set_title(f"Input {row + 1}: Permeability")
-    axes[row, 0].axis("off")
-    plt.colorbar(im0, ax=axes[row, 0], shrink=0.8)
+    # --- Model creation ---
+    print()
+    print("Creating UNO model with grid embedding...")
+    in_channels = x_train.shape[-1]
+    out_channels = y_train.shape[-1]
 
-    im1 = axes[row, 1].imshow(y_true, cmap="RdBu_r")
-    axes[row, 1].set_title(f"Ground Truth {row + 1}")
-    axes[row, 1].axis("off")
-    plt.colorbar(im1, ax=axes[row, 1], shrink=0.8)
+    model = UNOWithGrid(
+        input_channels=in_channels,
+        output_channels=out_channels,
+        hidden_channels=hidden_channels,
+        modes=modes,
+        n_layers=n_layers,
+        rngs=nnx.Rngs(seed),
+    )
 
-    im2 = axes[row, 2].imshow(y_pred, cmap="RdBu_r")
-    axes[row, 2].set_title(f"UNO Prediction {row + 1}")
-    axes[row, 2].axis("off")
-    plt.colorbar(im2, ax=axes[row, 2], shrink=0.8)
+    params = nnx.state(model, nnx.Param)
+    param_count = int(sum(x.size for x in jax.tree_util.tree_leaves(params)))
+    print(f"Model: UNO + GridEmbedding2D (hidden={hidden_channels}, modes={modes}, layers={n_layers})")
+    print(f"Input channels: {in_channels} (+ 2 grid coords = {in_channels + 2} after embedding)")
+    print(f"Output channels: {out_channels}")
+    print(f"Total parameters: {param_count:,}")
 
-    im3 = axes[row, 3].imshow(error, cmap="Reds")
-    axes[row, 3].set_title(f"Absolute Error {row + 1}")
-    axes[row, 3].axis("off")
-    plt.colorbar(im3, ax=axes[row, 3], shrink=0.8)
+    # --- Training ---
+    print()
+    print("Setting up Trainer...")
+    config = TrainingConfig(
+        num_epochs=num_epochs,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        validation_frequency=5,
+        verbose=True,
+        loss_config=LossConfig(loss_type="relative_l2"),
+    )
+    trainer = Trainer(
+        model=model,
+        config=config,
+        rngs=nnx.Rngs(seed),
+    )
 
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "uno_predictions.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Predictions saved to {OUTPUT_DIR / 'uno_predictions.png'}")
+    print(f"Optimizer: Adam (lr={learning_rate}), loss: relative L2")
+    print()
+    print("Starting training...")
+    start_time = time.time()
 
-# --- Super-resolution visualization ---
-fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-fig.suptitle(
-    f"UNO Zero-Shot Super-Resolution ({RESOLUTION} -> {target_resolution})",
-    fontsize=14,
-    fontweight="bold",
-)
+    trained_model, metrics = trainer.fit(
+        train_data=(jnp.array(x_train_n), jnp.array(y_train_n)),
+        val_data=(jnp.array(x_test_n), jnp.array((y_test - y_mean) / y_std)),
+    )
 
-im0 = axes[0].imshow(np.array(x_high_res[0, :, :, 0]), cmap="viridis", aspect="equal")
-axes[0].set_title("Input (High Res)")
-plt.colorbar(im0, ax=axes[0], shrink=0.8)
+    training_time = time.time() - start_time
+    final_train_loss = float(metrics["final_train_loss"])
+    final_val_loss = float(metrics["final_val_loss"])
+    print(f"Training completed in {training_time:.1f}s")
+    print(f"Final train loss: {final_train_loss}")
+    print(f"Final val loss:   {final_val_loss}")
 
-im1 = axes[1].imshow(np.array(y_pred_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
-axes[1].set_title("UNO Prediction")
-plt.colorbar(im1, ax=axes[1], shrink=0.8)
+    # --- Evaluation (un-normalized to physical pressure units) ---
+    print()
+    print("Evaluating on test set...")
+    x_test_jnp = jnp.array(x_test_n)
+    y_test_jnp = jnp.array(y_test)
 
-im2 = axes[2].imshow(np.array(y_true_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
-axes[2].set_title("Ground Truth (Upsampled)")
-plt.colorbar(im2, ax=axes[2], shrink=0.8)
+    predictions = (
+        predict_in_batches(lambda b: trained_model(b, deterministic=True), x_test_jnp) * y_std
+        + y_mean
+    )
 
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "uno_superresolution.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Super-resolution saved to {OUTPUT_DIR / 'uno_superresolution.png'}")
+    test_mse = float(jnp.mean((predictions - y_test_jnp) ** 2))
+
+    per_sample_rel_l2 = per_sample_relative_l2(predictions, y_test_jnp)
+    mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
+
+    print(f"Test MSE:         {test_mse:.6e}")
+    print(f"Test Relative L2: {mean_rel_l2:.6f}")
+    print(f"Min Relative L2:  {float(jnp.min(per_sample_rel_l2)):.6f}")
+    print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
+
+    # --- Zero-shot super-resolution ---
+    print()
+    target_resolution = resolution * 2
+    print(f"Testing zero-shot super-resolution: {resolution} -> {target_resolution}")
+
+    x_sample = x_test_jnp[0:1]
+    x_high_res = jax.image.resize(
+        x_sample,
+        (1, target_resolution, target_resolution, in_channels),
+        method="bilinear",
+    )
+    y_pred_high = trained_model(x_high_res, deterministic=True) * y_std + y_mean
+    y_true_high = jax.image.resize(
+        y_test_jnp[0:1],
+        (1, target_resolution, target_resolution, out_channels),
+        method="bilinear",
+    )
+    sr_error = float(
+        jnp.sqrt(jnp.sum((y_pred_high - y_true_high) ** 2)) / jnp.sqrt(jnp.sum(y_true_high**2))
+    )
+    print(f"Super-resolution L2 error: {sr_error:.6f}")
+
+    # --- Visualization: sample predictions ---
+    print()
+    print("Generating visualizations...")
+    n_vis = 3
+    indices = np.linspace(0, len(x_test) - 1, n_vis, dtype=int)
+
+    fig, axes = plt.subplots(n_vis, 4, figsize=(16, 4 * n_vis))
+    fig.suptitle("UNO Darcy Flow Predictions (Opifex)", fontsize=14, fontweight="bold")
+
+    for row, idx in enumerate(indices):
+        x_field = x_test[idx, :, :, 0]
+        y_true = y_test[idx, :, :, 0]
+        y_pred = np.array(predictions[idx, :, :, 0])
+        error = np.abs(y_pred - y_true)
+
+        im0 = axes[row, 0].imshow(x_field, cmap="viridis")
+        axes[row, 0].set_title(f"Input {row + 1}: Permeability")
+        axes[row, 0].axis("off")
+        plt.colorbar(im0, ax=axes[row, 0], shrink=0.8)
+
+        im1 = axes[row, 1].imshow(y_true, cmap="RdBu_r")
+        axes[row, 1].set_title(f"Ground Truth {row + 1}")
+        axes[row, 1].axis("off")
+        plt.colorbar(im1, ax=axes[row, 1], shrink=0.8)
+
+        im2 = axes[row, 2].imshow(y_pred, cmap="RdBu_r")
+        axes[row, 2].set_title(f"UNO Prediction {row + 1}")
+        axes[row, 2].axis("off")
+        plt.colorbar(im2, ax=axes[row, 2], shrink=0.8)
+
+        im3 = axes[row, 3].imshow(error, cmap="Reds")
+        axes[row, 3].set_title(f"Absolute Error {row + 1}")
+        axes[row, 3].axis("off")
+        plt.colorbar(im3, ax=axes[row, 3], shrink=0.8)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / "uno_predictions.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Predictions saved to {output_dir / 'uno_predictions.png'}")
+
+    # --- Visualization: super-resolution ---
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+    fig.suptitle(
+        f"UNO Zero-Shot Super-Resolution ({resolution} -> {target_resolution})",
+        fontsize=14,
+        fontweight="bold",
+    )
+
+    im0 = axes[0].imshow(np.array(x_high_res[0, :, :, 0]), cmap="viridis", aspect="equal")
+    axes[0].set_title("Input (High Res)")
+    plt.colorbar(im0, ax=axes[0], shrink=0.8)
+
+    im1 = axes[1].imshow(np.array(y_pred_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
+    axes[1].set_title("UNO Prediction")
+    plt.colorbar(im1, ax=axes[1], shrink=0.8)
+
+    im2 = axes[2].imshow(np.array(y_true_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
+    axes[2].set_title("Ground Truth (Upsampled)")
+    plt.colorbar(im2, ax=axes[2], shrink=0.8)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / "uno_superresolution.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Super-resolution saved to {output_dir / 'uno_superresolution.png'}")
+
+    print()
+    print("=" * 70)
+    print(f"UNO Darcy Flow example completed in {training_time:.1f}s")
+    print(f"Test MSE: {test_mse:.6e}, Relative L2: {mean_rel_l2:.6f}")
+    print(f"Results saved to: {output_dir}")
+    print("=" * 70)
+
+    return {
+        "param_count": param_count,
+        "final_loss": final_train_loss,
+        "final_val_loss": final_val_loss,
+        "test_mse": test_mse,
+        "l2_relative_error": mean_rel_l2,
+        "superresolution_l2_error": sr_error,
+    }
+
 
 # %% [markdown]
 """
@@ -495,9 +474,7 @@ After running this example you should observe:
 """
 
 # %%
-print()
-print("=" * 70)
-print(f"UNO Darcy Flow example completed in {training_time:.1f}s")
-print(f"Test MSE: {test_mse:.6e}, Relative L2: {mean_rel_l2:.6f}")
-print(f"Results saved to: {OUTPUT_DIR}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

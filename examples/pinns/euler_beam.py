@@ -33,12 +33,7 @@ from flax import nnx
 
 
 # %%
-# Configuration
-print("=" * 70)
-print("Opifex Example: Euler-Bernoulli Beam PINN")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
+mpl.use("Agg")
 
 # Problem configuration
 # EI * d^4w/dx^4 = q, we set EI=1, q=-1 for simplicity
@@ -57,14 +52,6 @@ HIDDEN_DIMS = [20, 20, 20]
 # Training configuration
 EPOCHS = 15000
 LEARNING_RATE = 1e-3
-
-print()
-print("Euler-Bernoulli beam: EI * d^4w/dx^4 = q")
-print(f"  Load: q = {Q}")
-print(f"Domain: x in [{X_MIN}, {X_MAX}]")
-print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} boundary")
-print(f"Network: [1] + {HIDDEN_DIMS} + [1]")
-print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
 # %% [markdown]
 # ## Problem Definition
@@ -107,16 +94,6 @@ def exact_third_derivative(x):
     return -x + 1
 
 
-print()
-print("Cantilever beam (fixed at x=0, free at x=1):")
-print("  w(0) = 0      (deflection)")
-print("  w'(0) = 0     (slope)")
-print("  w''(1) = 0    (moment)")
-print("  w'''(1) = 0   (shear)")
-print(f"  q = {Q}       (uniform load)")
-print("  Solution: w = -x^4/24 + x^3/6 - x^2/4")
-
-
 # %% [markdown]
 # ## PINN Architecture
 
@@ -146,36 +123,6 @@ class EulerBeamPINN(nnx.Module):
             h = jnp.tanh(layer(h))
         return self.layers[-1](h)
 
-
-# %%
-print()
-print("Creating PINN model...")
-
-pinn = EulerBeamPINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
-
-n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
-print(f"PINN parameters: {n_params:,}")
-
-# %% [markdown]
-# ## Collocation Points
-
-# %%
-print()
-print("Generating collocation points...")
-
-key = jax.random.PRNGKey(42)
-
-# Domain interior points
-x_domain = jax.random.uniform(key, (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
-x_domain = x_domain.reshape(-1, 1)
-
-# Boundary points
-x_left = jnp.zeros((N_BOUNDARY // 2, 1))  # x = 0
-x_right = jnp.ones((N_BOUNDARY // 2, 1))  # x = 1
-
-print(f"Domain points: {x_domain.shape}")
-print(f"Left BC points: {x_left.shape}")
-print(f"Right BC points: {x_right.shape}")
 
 # %% [markdown]
 # ## Physics-Informed Loss
@@ -264,13 +211,8 @@ def total_loss(pinn, x_dom, x_left, x_right, lambda_bc=100.0):
 # %% [markdown]
 # ## Training
 
+
 # %%
-print()
-print("Training PINN...")
-
-opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-
-
 @nnx.jit
 def train_step(pinn, opt, x_dom, x_left, x_right):
     """Perform one training step."""
@@ -283,176 +225,193 @@ def train_step(pinn, opt, x_dom, x_left, x_right):
     return loss
 
 
-losses = []
-for epoch in range(EPOCHS):
-    loss = train_step(pinn, opt, x_domain, x_left, x_right)
-    losses.append(float(loss))
-
-    if (epoch + 1) % 3000 == 0 or epoch == 0:
-        print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
-
-print(f"Final loss: {losses[-1]:.6e}")
-
 # %% [markdown]
-# ## Evaluation
+# ## Run the example
+#
+# Builds collocation points, trains the beam PINN, evaluates against the exact
+# solution and boundary conditions, and saves the visualizations.
+
 
 # %%
-print()
-print("Evaluating PINN...")
+def main() -> dict[str, float | int]:
+    """Train an Euler-Bernoulli beam PINN, evaluate against the exact solution, and plot."""
+    print("=" * 70)
+    print("Opifex Example: Euler-Bernoulli Beam PINN")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print("Euler-Bernoulli beam: EI * d^4w/dx^4 = q")
+    print(f"  Load: q = {Q}")
+    print(f"Domain: x in [{X_MIN}, {X_MAX}]")
+    print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} boundary")
+    print(f"Network: [1] + {HIDDEN_DIMS} + [1]")
+    print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
-# Create evaluation grid
-nx = 200
-x_eval = jnp.linspace(X_MIN, X_MAX, nx).reshape(-1, 1)
+    pinn = EulerBeamPINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
+    n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
+    print(f"PINN parameters: {n_params:,}")
 
-# PINN prediction
-w_pred = pinn(x_eval).squeeze()
+    key = jax.random.PRNGKey(42)
+    x_domain = jax.random.uniform(key, (N_DOMAIN,), minval=X_MIN, maxval=X_MAX).reshape(-1, 1)
+    x_left = jnp.zeros((N_BOUNDARY // 2, 1))  # x = 0
+    x_right = jnp.ones((N_BOUNDARY // 2, 1))  # x = 1
+    print(f"Domain points: {x_domain.shape}")
+    print(f"Left BC points: {x_left.shape}")
+    print(f"Right BC points: {x_right.shape}")
 
-# Exact solution
-w_exact = exact_solution(x_eval.squeeze())
+    print("Training PINN...")
+    opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    losses = []
+    for epoch in range(EPOCHS):
+        loss = train_step(pinn, opt, x_domain, x_left, x_right)
+        losses.append(float(loss))
+        if (epoch + 1) % 3000 == 0 or epoch == 0:
+            print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
+    final_loss = losses[-1]
+    print(f"Final loss: {final_loss:.6e}")
 
-# Errors
-error = jnp.abs(w_pred - w_exact)
-l2_error = float(jnp.sqrt(jnp.sum((w_pred - w_exact) ** 2) / jnp.sum(w_exact**2 + 1e-10)))
-max_error = float(jnp.max(error))
-mean_error = float(jnp.mean(error))
+    print("Evaluating PINN...")
+    nx = 200
+    x_eval = jnp.linspace(X_MIN, X_MAX, nx).reshape(-1, 1)
 
-# BC errors
-w_0, w_x_0, _, _, _ = compute_derivatives(pinn, jnp.array([[0.0]]))
-_, _, w_xx_1, w_xxx_1, _ = compute_derivatives(pinn, jnp.array([[1.0]]))
+    w_pred = pinn(x_eval).squeeze()
+    w_exact = exact_solution(x_eval.squeeze())
 
-print(f"Relative L2 error:   {l2_error:.6e}")
-print(f"Maximum point error: {max_error:.6e}")
-print(f"Mean point error:    {mean_error:.6e}")
-print()
-print("Boundary condition errors:")
-print(f"  w(0) = {float(w_0[0]):.6e} (should be 0)")
-print(f"  w'(0) = {float(w_x_0[0]):.6e} (should be 0)")
-print(f"  w''(1) = {float(w_xx_1[0]):.6e} (should be 0)")
-print(f"  w'''(1) = {float(w_xxx_1[0]):.6e} (should be 0)")
+    error = jnp.abs(w_pred - w_exact)
+    l2_error = float(jnp.sqrt(jnp.sum((w_pred - w_exact) ** 2) / jnp.sum(w_exact**2 + 1e-10)))
+    max_error = float(jnp.max(error))
+    mean_error = float(jnp.mean(error))
 
-# %% [markdown]
-# ## Visualization
+    w_0, w_x_0, _, _, _ = compute_derivatives(pinn, jnp.array([[0.0]]))
+    _, _, w_xx_1, w_xxx_1, _ = compute_derivatives(pinn, jnp.array([[1.0]]))
+
+    print(f"Relative L2 error:   {l2_error:.6e}")
+    print(f"Maximum point error: {max_error:.6e}")
+    print(f"Mean point error:    {mean_error:.6e}")
+    print("Boundary condition errors:")
+    print(f"  w(0) = {float(w_0[0]):.6e} (should be 0)")
+    print(f"  w'(0) = {float(w_x_0[0]):.6e} (should be 0)")
+    print(f"  w''(1) = {float(w_xx_1[0]):.6e} (should be 0)")
+    print(f"  w'''(1) = {float(w_xxx_1[0]):.6e} (should be 0)")
+
+    output_dir = Path("docs/assets/examples/euler_beam_pinn")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    axes[0].plot(np.array(x_eval), np.array(w_pred), "b-", label="PINN", linewidth=2)
+    axes[0].plot(np.array(x_eval), np.array(w_exact), "r--", label="Exact", linewidth=2, alpha=0.7)
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("w(x)")
+    axes[0].set_title("Beam Deflection")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    axes[0].invert_yaxis()  # Deflection is typically shown downward
+
+    axes[1].plot(np.array(x_eval), np.array(error), "g-", linewidth=2)
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("|Error|")
+    axes[1].set_title(f"Point-wise Error (L2={l2_error:.2e})")
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].semilogy(losses, linewidth=1)
+    axes[2].set_xlabel("Epoch")
+    axes[2].set_ylabel("Loss")
+    axes[2].set_title("Training Loss")
+    axes[2].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Solution saved to {output_dir / 'solution.png'}")
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    _, w_x_all, w_xx_all, w_xxx_all, w_xxxx_all = compute_derivatives(pinn, x_eval)
+    w_x_exact = exact_derivative(x_eval.squeeze())
+    w_xx_exact = exact_second_derivative(x_eval.squeeze())
+    w_xxx_exact = exact_third_derivative(x_eval.squeeze())
+    w_xxxx_exact = jnp.full_like(x_eval.squeeze(), -1.0)  # w'''' = q = -1
+
+    axes[0, 0].plot(np.array(x_eval), np.array(w_x_all), "b-", label="PINN", linewidth=2)
+    axes[0, 0].plot(
+        np.array(x_eval), np.array(w_x_exact), "r--", label="Exact", linewidth=2, alpha=0.7
+    )
+    axes[0, 0].set_xlabel("x")
+    axes[0, 0].set_ylabel("w'(x)")
+    axes[0, 0].set_title("Slope")
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+
+    axes[0, 1].plot(np.array(x_eval), np.array(w_xx_all), "b-", label="PINN", linewidth=2)
+    axes[0, 1].plot(
+        np.array(x_eval), np.array(w_xx_exact), "r--", label="Exact", linewidth=2, alpha=0.7
+    )
+    axes[0, 1].set_xlabel("x")
+    axes[0, 1].set_ylabel("w''(x)")
+    axes[0, 1].set_title("Curvature (Moment)")
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+
+    axes[1, 0].plot(np.array(x_eval), np.array(w_xxx_all), "b-", label="PINN", linewidth=2)
+    axes[1, 0].plot(
+        np.array(x_eval),
+        np.array(w_xxx_exact),
+        "r--",
+        label="Exact",
+        linewidth=2,
+        alpha=0.7,
+    )
+    axes[1, 0].set_xlabel("x")
+    axes[1, 0].set_ylabel("w'''(x)")
+    axes[1, 0].set_title("Shear")
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+
+    axes[1, 1].plot(np.array(x_eval), np.array(w_xxxx_all), "b-", label="PINN", linewidth=2)
+    axes[1, 1].plot(
+        np.array(x_eval),
+        np.array(w_xxxx_exact),
+        "r--",
+        label="Exact (q=-1)",
+        linewidth=2,
+        alpha=0.7,
+    )
+    axes[1, 1].set_xlabel("x")
+    axes[1, 1].set_ylabel("w''''(x)")
+    axes[1, 1].set_title("Load (4th derivative)")
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Analysis saved to {output_dir / 'analysis.png'}")
+
+    print("=" * 70)
+    print("Euler-Bernoulli Beam PINN example completed")
+    print(f"  Final loss:          {final_loss:.6e}")
+    print(f"  Relative L2 error:   {l2_error:.6e}")
+    print(f"  Maximum error:       {max_error:.6e}")
+    print(f"  BC w(0):             {float(w_0[0]):.6e}")
+    print(f"  BC w'(0):            {float(w_x_0[0]):.6e}")
+    print(f"  BC w''(1):           {float(w_xx_1[0]):.6e}")
+    print(f"  BC w'''(1):          {float(w_xxx_1[0]):.6e}")
+    print(f"  Parameters:          {n_params:,}")
+    print(f"Results saved to: {output_dir}")
+    print("=" * 70)
+
+    return {
+        "final_loss": final_loss,
+        "l2_relative_error": l2_error,
+        "max_error": max_error,
+        "mean_error": mean_error,
+        "bc_error": float(
+            (abs(float(w_0[0])) + abs(float(w_x_0[0])) + abs(float(w_xx_1[0])) + abs(float(w_xxx_1[0])))
+            / 4
+        ),
+        "param_count": int(n_params),
+    }
+
 
 # %%
-output_dir = Path("docs/assets/examples/euler_beam_pinn")
-output_dir.mkdir(parents=True, exist_ok=True)
-
-mpl.use("Agg")
-
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-
-# Deflection
-axes[0].plot(np.array(x_eval), np.array(w_pred), "b-", label="PINN", linewidth=2)
-axes[0].plot(np.array(x_eval), np.array(w_exact), "r--", label="Exact", linewidth=2, alpha=0.7)
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("w(x)")
-axes[0].set_title("Beam Deflection")
-axes[0].legend()
-axes[0].grid(True, alpha=0.3)
-axes[0].invert_yaxis()  # Deflection is typically shown downward
-
-# Error
-axes[1].plot(np.array(x_eval), np.array(error), "g-", linewidth=2)
-axes[1].set_xlabel("x")
-axes[1].set_ylabel("|Error|")
-axes[1].set_title(f"Point-wise Error (L2={l2_error:.2e})")
-axes[1].grid(True, alpha=0.3)
-
-# Training loss
-axes[2].semilogy(losses, linewidth=1)
-axes[2].set_xlabel("Epoch")
-axes[2].set_ylabel("Loss")
-axes[2].set_title("Training Loss")
-axes[2].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
-plt.close()
-print()
-print(f"Solution saved to {output_dir / 'solution.png'}")
-
-# %%
-# Derivatives comparison
-fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-
-# Compute PINN derivatives
-w_all, w_x_all, w_xx_all, w_xxx_all, w_xxxx_all = compute_derivatives(pinn, x_eval)
-
-# Exact derivatives
-w_x_exact = exact_derivative(x_eval.squeeze())
-w_xx_exact = exact_second_derivative(x_eval.squeeze())
-w_xxx_exact = exact_third_derivative(x_eval.squeeze())
-w_xxxx_exact = jnp.full_like(x_eval.squeeze(), -1.0)  # w'''' = q = -1
-
-# Plot
-axes[0, 0].plot(np.array(x_eval), np.array(w_x_all), "b-", label="PINN", linewidth=2)
-axes[0, 0].plot(np.array(x_eval), np.array(w_x_exact), "r--", label="Exact", linewidth=2, alpha=0.7)
-axes[0, 0].set_xlabel("x")
-axes[0, 0].set_ylabel("w'(x)")
-axes[0, 0].set_title("Slope")
-axes[0, 0].legend()
-axes[0, 0].grid(True, alpha=0.3)
-
-axes[0, 1].plot(np.array(x_eval), np.array(w_xx_all), "b-", label="PINN", linewidth=2)
-axes[0, 1].plot(
-    np.array(x_eval), np.array(w_xx_exact), "r--", label="Exact", linewidth=2, alpha=0.7
-)
-axes[0, 1].set_xlabel("x")
-axes[0, 1].set_ylabel("w''(x)")
-axes[0, 1].set_title("Curvature (Moment)")
-axes[0, 1].legend()
-axes[0, 1].grid(True, alpha=0.3)
-
-axes[1, 0].plot(np.array(x_eval), np.array(w_xxx_all), "b-", label="PINN", linewidth=2)
-axes[1, 0].plot(
-    np.array(x_eval),
-    np.array(w_xxx_exact),
-    "r--",
-    label="Exact",
-    linewidth=2,
-    alpha=0.7,
-)
-axes[1, 0].set_xlabel("x")
-axes[1, 0].set_ylabel("w'''(x)")
-axes[1, 0].set_title("Shear")
-axes[1, 0].legend()
-axes[1, 0].grid(True, alpha=0.3)
-
-axes[1, 1].plot(np.array(x_eval), np.array(w_xxxx_all), "b-", label="PINN", linewidth=2)
-axes[1, 1].plot(
-    np.array(x_eval),
-    np.array(w_xxxx_exact),
-    "r--",
-    label="Exact (q=-1)",
-    linewidth=2,
-    alpha=0.7,
-)
-axes[1, 1].set_xlabel("x")
-axes[1, 1].set_ylabel("w''''(x)")
-axes[1, 1].set_title("Load (4th derivative)")
-axes[1, 1].legend()
-axes[1, 1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Analysis saved to {output_dir / 'analysis.png'}")
-
-# %%
-print()
-print("=" * 70)
-print("Euler-Bernoulli Beam PINN example completed")
-print("=" * 70)
-print()
-print("Results Summary:")
-print(f"  Final loss:          {losses[-1]:.6e}")
-print(f"  Relative L2 error:   {l2_error:.6e}")
-print(f"  Maximum error:       {max_error:.6e}")
-print(f"  BC w(0):             {float(w_0[0]):.6e}")
-print(f"  BC w'(0):            {float(w_x_0[0]):.6e}")
-print(f"  BC w''(1):           {float(w_xx_1[0]):.6e}")
-print(f"  BC w'''(1):          {float(w_xxx_1[0]):.6e}")
-print(f"  Parameters:          {n_params:,}")
-print()
-print(f"Results saved to: {output_dir}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

@@ -118,13 +118,6 @@ from opifex.neural.quantum.vmc import (
 )
 
 
-print("=" * 70)
-print("Opifex Example: Variational Monte Carlo (H, He, H2)")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-print(f"x64 enabled: {jax.config.read('jax_enable_x64')}")
-
 # %% [markdown]
 """
 ## Configuration
@@ -224,12 +217,8 @@ SYSTEMS = (
 )
 
 OUTPUT_DIR = Path("docs/assets/examples/vmc_atoms")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print(f"Systems: {', '.join(s.name for s in SYSTEMS)}")
-print(f"Ansatz: FermiNet, hidden_one={HIDDEN_ONE}, hidden_two={HIDDEN_TWO}, dets={DETERMINANTS}")
-print(f"Sampler: harmonic-mean Metropolis, {SAMPLER_STEPS} sweeps/step, step_size={STEP_SIZE} bohr")
-print(f"Optimizer: {OPTIMIZER.upper()} natural gradient, {BATCH_SIZE} walkers")
+CHEMICAL_ACCURACY_MHA = 1.594  # 1 kcal/mol in milli-Hartree
 
 # %% [markdown]
 """
@@ -295,141 +284,139 @@ result for the table and the convergence plot.
 """
 
 # %%
-print()
-print("Starting VMC optimisation (jit compiles on the first step of each system)...")
-results: dict[str, VMCResult] = {}
-run_times: dict[str, float] = {}
-for system in SYSTEMS:
-    driver = build_driver(system)
-    start_time = time.time()
-    result = driver.run(jax.random.PRNGKey(system.seed))
-    elapsed = time.time() - start_time
-    results[system.name] = result
-    run_times[system.name] = elapsed
-    error_mha = (float(result.energy) - system.exact_energy) * 1000.0
+def main() -> dict[str, float | int]:
+    """Optimise all systems, render diagnostics, and return per-system energy errors."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("=" * 70)
+    print("Opifex Example: Variational Monte Carlo (H, He, H2)")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"x64 enabled: {jax.config.read('jax_enable_x64')}")
+    print(f"Systems: {', '.join(s.name for s in SYSTEMS)}")
+    print(f"Ansatz: FermiNet, hidden_one={HIDDEN_ONE}, hidden_two={HIDDEN_TWO}, dets={DETERMINANTS}")
     print(
-        f"{system.name:>3s} | {system.iterations:4d} iters | "
-        f"E = {float(result.energy):+.5f} +/- {float(result.energy_error):.5f} Ha | "
-        f"exact {system.exact_energy:+.4f} | err {error_mha:+6.2f} mHa | "
-        f"t {elapsed:4.0f}s"
+        f"Sampler: harmonic-mean Metropolis, {SAMPLER_STEPS} sweeps/step, "
+        f"step_size={STEP_SIZE} bohr"
     )
-total_time = sum(run_times.values())
-print(f"All systems optimised in {total_time:.0f}s")
+    print(f"Optimizer: {OPTIMIZER.upper()} natural gradient, {BATCH_SIZE} walkers")
 
-# %% [markdown]
-"""
-## Results
+    print()
+    print("Starting VMC optimisation (jit compiles on the first step of each system)...")
+    results: dict[str, VMCResult] = {}
+    run_times: dict[str, float] = {}
+    for system in SYSTEMS:
+        driver = build_driver(system)
+        start_time = time.time()
+        result = driver.run(jax.random.PRNGKey(system.seed))
+        elapsed = time.time() - start_time
+        results[system.name] = result
+        run_times[system.name] = elapsed
+        error_mha = (float(result.energy) - system.exact_energy) * 1000.0
+        print(
+            f"{system.name:>3s} | {system.iterations:4d} iters | "
+            f"E = {float(result.energy):+.5f} +/- {float(result.energy_error):.5f} Ha | "
+            f"exact {system.exact_energy:+.4f} | err {error_mha:+6.2f} mHa | "
+            f"t {elapsed:4.0f}s"
+        )
+    total_time = sum(run_times.values())
+    print(f"All systems optimised in {total_time:.0f}s")
 
-The recovered energy of each system against its exact reference, with the Monte
-Carlo standard error and the absolute error in milli-Hartree. **Chemical
-accuracy** is the conventional 1 kcal/mol ~ 1.594 mHa threshold; the variational
-principle guarantees every recovered energy is an upper bound on the exact value,
-so the errors are essentially all positive (above the true ground state) up to
-Monte Carlo noise.
-"""
-
-# %%
-CHEMICAL_ACCURACY_MHA = 1.594  # 1 kcal/mol in milli-Hartree
-print("=" * 70)
-print("VMC ground-state energies vs exact references")
-print("=" * 70)
-header = (
-    f"{'System':>6s} | {'E_VMC (Ha)':>20s} | {'Exact (Ha)':>11s} | {'Error':>10s} | {'Status':>8s}"
-)
-print(header)
-print("-" * len(header))
-for system in SYSTEMS:
-    result = results[system.name]
-    energy = float(result.energy)
-    stderr = float(result.energy_error)
-    error_mha = (energy - system.exact_energy) * 1000.0
-    within = abs(error_mha) < CHEMICAL_ACCURACY_MHA
-    status = "chem-acc" if within else "outside"
-    print(
-        f"{system.name:>6s} | {energy:+.5f} +/- {stderr:.5f} | "
-        f"{system.exact_energy:+11.4f} | {error_mha:+7.2f} mHa | {status:>8s}"
+    # Results table: recovered energy vs exact reference.
+    print("=" * 70)
+    print("VMC ground-state energies vs exact references")
+    print("=" * 70)
+    header = (
+        f"{'System':>6s} | {'E_VMC (Ha)':>20s} | {'Exact (Ha)':>11s} | "
+        f"{'Error':>10s} | {'Status':>8s}"
     )
-print("-" * len(header))
-print(f"Chemical accuracy threshold: |error| < {CHEMICAL_ACCURACY_MHA} mHa (1 kcal/mol)")
-print()
-print("References: H -0.5 (exact), He -2.9037 (Pekeris 1958), H2@R=1.4bohr -1.1745")
-print("(exact Born-Oppenheimer). These are recoveries of known physics, not a")
-print("benchmark: the variational principle bounds every energy from above, so")
-print("recovering them to <1 mHa demonstrates the ansatz + sampler + optimiser are")
-print("correct and accurate -- the same stack scales unchanged to larger molecules.")
+    print(header)
+    print("-" * len(header))
+    energy_errors_mha: dict[str, float] = {}
+    for system in SYSTEMS:
+        result = results[system.name]
+        energy = float(result.energy)
+        stderr = float(result.energy_error)
+        error_mha = (energy - system.exact_energy) * 1000.0
+        energy_errors_mha[system.name] = error_mha
+        within = abs(error_mha) < CHEMICAL_ACCURACY_MHA
+        status = "chem-acc" if within else "outside"
+        print(
+            f"{system.name:>6s} | {energy:+.5f} +/- {stderr:.5f} | "
+            f"{system.exact_energy:+11.4f} | {error_mha:+7.2f} mHa | {status:>8s}"
+        )
+    print("-" * len(header))
+    print(f"Chemical accuracy threshold: |error| < {CHEMICAL_ACCURACY_MHA} mHa (1 kcal/mol)")
+    print()
+    print("References: H -0.5 (exact), He -2.9037 (Pekeris 1958), H2@R=1.4bohr -1.1745")
+    print("(exact Born-Oppenheimer). These are recoveries of known physics, not a")
+    print("benchmark: the variational principle bounds every energy from above, so")
+    print("recovering them to <1 mHa demonstrates the ansatz + sampler + optimiser are")
+    print("correct and accurate -- the same stack scales unchanged to larger molecules.")
 
-# %% [markdown]
-"""
-## Visualization
+    # Visualization.
+    colors = {"H": "#1f77b4", "He": "#d62728", "H2": "#2ca02c"}
 
-Two diagnostics. First, the **energy-convergence curves**: the per-iteration mean
-local energy of each system on a symmetric-log axis of the error above the exact
-reference, with the chemical-accuracy band shaded. Second, the **sampled walker
-density** for the hydrogen atom: the radial distribution of the converged walkers
-against the exact hydrogen `1s` ground-state density `4 r^2 |psi_1s|^2` with
-`psi_1s = exp(-r) / sqrt(pi)`, a direct check that the Metropolis sampler is
-drawing from the correct Born density.
-"""
-
-# %%
-colors = {"H": "#1f77b4", "He": "#d62728", "H2": "#2ca02c"}
-
-# Energy-convergence curves: error above exact (Ha) per iteration, symmetric-log.
-fig, ax = plt.subplots(figsize=(9, 5.5))
-for system in SYSTEMS:
-    history = np.asarray(results[system.name].energy_history)
-    error = history - system.exact_energy
-    ax.plot(
-        np.arange(1, history.shape[0] + 1),
-        error,
-        color=colors[system.name],
-        lw=1.4,
-        label=f"{system.name} (final {error[-1] * 1000:+.2f} mHa)",
+    # Energy-convergence curves: error above exact (Ha) per iteration, symmetric-log.
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    for system in SYSTEMS:
+        history = np.asarray(results[system.name].energy_history)
+        error = history - system.exact_energy
+        ax.plot(
+            np.arange(1, history.shape[0] + 1),
+            error,
+            color=colors[system.name],
+            lw=1.4,
+            label=f"{system.name} (final {error[-1] * 1000:+.2f} mHa)",
+        )
+    ax.axhspan(
+        -CHEMICAL_ACCURACY_MHA / 1000.0,
+        CHEMICAL_ACCURACY_MHA / 1000.0,
+        color="#7f7f7f",
+        alpha=0.15,
+        label="chemical accuracy (+/-1 kcal/mol)",
     )
-ax.axhspan(
-    -CHEMICAL_ACCURACY_MHA / 1000.0,
-    CHEMICAL_ACCURACY_MHA / 1000.0,
-    color="#7f7f7f",
-    alpha=0.15,
-    label="chemical accuracy (+/-1 kcal/mol)",
-)
-ax.axhline(0.0, color="#7f7f7f", ls="--", lw=1)
-ax.set_yscale("symlog", linthresh=1e-3)
-ax.set_xlabel("VMC iteration")
-ax.set_ylabel("Energy error above exact (Ha)")
-ax.set_title("VMC energy convergence (H, He, H2)")
-ax.legend(loc="upper right", fontsize=9)
-ax.grid(True, which="both", alpha=0.3)
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "energy_convergence.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
+    ax.axhline(0.0, color="#7f7f7f", ls="--", lw=1)
+    ax.set_yscale("symlog", linthresh=1e-3)
+    ax.set_xlabel("VMC iteration")
+    ax.set_ylabel("Energy error above exact (Ha)")
+    ax.set_title("VMC energy convergence (H, He, H2)")
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(True, which="both", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "energy_convergence.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
-# Hydrogen walker density vs the exact 1s radial distribution 4 r^2 |psi_1s|^2.
-h_walkers = np.asarray(results["H"].walkers)  # (batch, 1, 3)
-radii = np.linalg.norm(h_walkers[:, 0, :], axis=-1)
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(
-    radii,
-    bins=60,
-    density=True,
-    color=colors["H"],
-    alpha=0.55,
-    label="sampled walkers |psi|^2",
-)
-r_grid = np.linspace(0.0, radii.max(), 400)
-exact_radial = 4.0 * r_grid**2 * (np.exp(-r_grid) ** 2 / np.pi) * np.pi  # 4 r^2 |psi_1s|^2
-ax.plot(r_grid, exact_radial, color="#000000", lw=2, label="exact 1s: $4 r^2 |\\psi_{1s}|^2$")
-ax.set_xlabel("Electron-nucleus distance r (bohr)")
-ax.set_ylabel("Radial probability density")
-ax.set_title("Hydrogen atom: VMC walker density vs exact 1s")
-ax.legend(loc="upper right")
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "hydrogen_density.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
+    # Hydrogen walker density vs the exact 1s radial distribution 4 r^2 |psi_1s|^2.
+    h_walkers = np.asarray(results["H"].walkers)  # (batch, 1, 3)
+    radii = np.linalg.norm(h_walkers[:, 0, :], axis=-1)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.hist(
+        radii,
+        bins=60,
+        density=True,
+        color=colors["H"],
+        alpha=0.55,
+        label="sampled walkers |psi|^2",
+    )
+    r_grid = np.linspace(0.0, radii.max(), 400)
+    exact_radial = 4.0 * r_grid**2 * (np.exp(-r_grid) ** 2 / np.pi) * np.pi  # 4 r^2 |psi_1s|^2
+    ax.plot(r_grid, exact_radial, color="#000000", lw=2, label="exact 1s: $4 r^2 |\\psi_{1s}|^2$")
+    ax.set_xlabel("Electron-nucleus distance r (bohr)")
+    ax.set_ylabel("Radial probability density")
+    ax.set_title("Hydrogen atom: VMC walker density vs exact 1s")
+    ax.legend(loc="upper right")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "hydrogen_density.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
-print(f"Saved plots to {OUTPUT_DIR}/")
-print("  energy_convergence.png, hydrogen_density.png")
+    print(f"Saved plots to {OUTPUT_DIR}/")
+    print("  energy_convergence.png, hydrogen_density.png")
+
+    return {f"{name}_energy_error_mha": error for name, error in energy_errors_mha.items()}
+
 
 # %% [markdown]
 """
@@ -451,3 +438,9 @@ See [Variational Monte Carlo](../../methods/variational-monte-carlo.md) for the
 backbone -> local-energy -> optimiser design and how to swap in a PsiFormer
 attention backbone or a MALA sampler.
 """
+
+# %%
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

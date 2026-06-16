@@ -32,15 +32,10 @@ import numpy as np
 import optax
 from flax import nnx
 
+mpl.use("Agg")
+
 
 # %%
-# Configuration - matching DeepXDE setup
-print("=" * 70)
-print("Opifex Example: Wave Equation PINN")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # Problem configuration (from DeepXDE)
 C = 1.0  # Wave speed (simplified from DeepXDE's C=10 for easier training)
 
@@ -59,12 +54,6 @@ HIDDEN_DIMS = [50, 50, 50]
 # Training configuration
 EPOCHS = 15000
 LEARNING_RATE = 1e-3
-
-print(f"Wave speed: c = {C}")
-print(f"Domain: x in [{X_MIN}, {X_MAX}], t in [{T_MIN}, {T_MAX}]")
-print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} boundary, {N_INITIAL} initial")
-print(f"Network: [2] + {HIDDEN_DIMS} + [1]")
-print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
 # %% [markdown]
 # ## Problem Definition
@@ -98,13 +87,6 @@ def initial_velocity(x):
     """Initial velocity: u_t(x, 0) = 0."""
     return jnp.zeros_like(x)
 
-
-print()
-print("Wave equation: u_tt = c^2 * u_xx")
-print("Initial condition: u(x, 0) = sin(pi*x)")
-print("Initial velocity: u_t(x, 0) = 0")
-print("Boundary conditions: u(0, t) = u(1, t) = 0")
-print("Analytical solution: u(x, t) = sin(pi*x) * cos(c*pi*t)")
 
 # %% [markdown]
 # ## PINN Architecture
@@ -151,48 +133,8 @@ class WavePINN(nnx.Module):
         return self.layers[-1](h)
 
 
-# %%
-print()
-print("Creating PINN model...")
-
-pinn = WavePINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
-
-# Count parameters
-n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
-print(f"PINN parameters: {n_params:,}")
-
 # %% [markdown]
 # ## Collocation Points
-
-# %%
-print()
-print("Generating collocation points...")
-
-key = jax.random.PRNGKey(42)
-keys = jax.random.split(key, 6)
-
-# Domain interior points
-x_domain = jax.random.uniform(keys[0], (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
-t_domain = jax.random.uniform(keys[1], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)
-xt_domain = jnp.column_stack([x_domain, t_domain])
-
-# Boundary points (x = 0 and x = 1)
-t_left = jax.random.uniform(keys[2], (N_BOUNDARY // 2,), minval=T_MIN, maxval=T_MAX)
-xt_left = jnp.column_stack([jnp.zeros(N_BOUNDARY // 2), t_left])
-
-t_right = jax.random.uniform(keys[3], (N_BOUNDARY // 2,), minval=T_MIN, maxval=T_MAX)
-xt_right = jnp.column_stack([jnp.ones(N_BOUNDARY // 2), t_right])
-
-xt_boundary = jnp.concatenate([xt_left, xt_right], axis=0)
-
-# Initial condition points (t = 0)
-x_initial = jax.random.uniform(keys[4], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
-xt_initial = jnp.column_stack([x_initial, jnp.zeros(N_INITIAL)])
-u_initial = initial_condition(x_initial)
-
-print(f"Domain points:   {xt_domain.shape}")
-print(f"Boundary points: {xt_boundary.shape}")
-print(f"Initial points:  {xt_initial.shape}")
 
 # %% [markdown]
 # ## Physics-Informed Loss
@@ -282,13 +224,8 @@ def total_loss(pinn, xt_dom, xt_bc, xt_ic, u_ic, lambda_bc=10.0, lambda_ic=10.0)
 # %% [markdown]
 # ## Training
 
+
 # %%
-print()
-print("Training PINN...")
-
-opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-
-
 @nnx.jit
 def train_step(pinn, opt, xt_dom, xt_bc, xt_ic, u_ic):
     """Single training step."""
@@ -301,179 +238,207 @@ def train_step(pinn, opt, xt_dom, xt_bc, xt_ic, u_ic):
     return loss
 
 
-losses = []
-for epoch in range(EPOCHS):
-    loss = train_step(pinn, opt, xt_domain, xt_boundary, xt_initial, u_initial)
-    losses.append(float(loss))
-
-    if (epoch + 1) % 3000 == 0 or epoch == 0:
-        print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
-
-print(f"Final loss: {losses[-1]:.6e}")
-
 # %% [markdown]
-# ## Evaluation
+# ## Run the example
+#
+# Builds collocation points, trains the PINN, evaluates against the exact
+# standing-wave solution, and saves the visualizations.
+
 
 # %%
-print()
-print("Evaluating PINN...")
+def main() -> dict[str, float | int]:
+    """Train a wave PINN, evaluate against the exact solution, and plot."""
+    print("=" * 70)
+    print("Opifex Example: Wave Equation PINN")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Wave speed: c = {C}")
+    print(f"Domain: x in [{X_MIN}, {X_MAX}], t in [{T_MIN}, {T_MAX}]")
+    print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} boundary, {N_INITIAL} initial")
+    print(f"Network: [2] + {HIDDEN_DIMS} + [1]")
+    print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
+    print("Wave equation: u_tt = c^2 * u_xx")
+    print("Initial condition: u(x, 0) = sin(pi*x)")
+    print("Initial velocity: u_t(x, 0) = 0")
+    print("Boundary conditions: u(0, t) = u(1, t) = 0")
+    print("Analytical solution: u(x, t) = sin(pi*x) * cos(c*pi*t)")
 
-# Create evaluation grid
-nx, nt = 100, 100
-x_eval = jnp.linspace(X_MIN, X_MAX, nx)
-t_eval = jnp.linspace(T_MIN, T_MAX, nt)
-xx, tt = jnp.meshgrid(x_eval, t_eval)
-xt_eval = jnp.column_stack([xx.ravel(), tt.ravel()])
+    pinn = WavePINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
+    n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
+    print(f"PINN parameters: {n_params:,}")
 
-# PINN prediction
-u_pred = pinn(xt_eval).squeeze()
-u_pred_grid = u_pred.reshape(nt, nx)
+    key = jax.random.PRNGKey(42)
+    keys = jax.random.split(key, 6)
 
-# Exact solution
-u_exact_grid = exact_solution(xx, tt)
+    x_domain = jax.random.uniform(keys[0], (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
+    t_domain = jax.random.uniform(keys[1], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)
+    xt_domain = jnp.column_stack([x_domain, t_domain])
 
-# Compute errors
-error = jnp.abs(u_pred_grid - u_exact_grid)
-l2_error = float(jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2)))
-max_error = float(jnp.max(error))
-mean_error = float(jnp.mean(error))
+    t_left = jax.random.uniform(keys[2], (N_BOUNDARY // 2,), minval=T_MIN, maxval=T_MAX)
+    xt_left = jnp.column_stack([jnp.zeros(N_BOUNDARY // 2), t_left])
+    t_right = jax.random.uniform(keys[3], (N_BOUNDARY // 2,), minval=T_MIN, maxval=T_MAX)
+    xt_right = jnp.column_stack([jnp.ones(N_BOUNDARY // 2), t_right])
+    xt_boundary = jnp.concatenate([xt_left, xt_right], axis=0)
 
-# Mean PDE residual
-residual = compute_pde_residual(pinn, xt_eval)
-mean_residual = float(jnp.mean(jnp.abs(residual)))
+    x_initial = jax.random.uniform(keys[4], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
+    xt_initial = jnp.column_stack([x_initial, jnp.zeros(N_INITIAL)])
+    u_initial = initial_condition(x_initial)
+    print(f"Domain points:   {xt_domain.shape}")
+    print(f"Boundary points: {xt_boundary.shape}")
+    print(f"Initial points:  {xt_initial.shape}")
 
-print(f"Relative L2 error:   {l2_error:.6e}")
-print(f"Maximum point error: {max_error:.6e}")
-print(f"Mean point error:    {mean_error:.6e}")
-print(f"Mean PDE residual:   {mean_residual:.6e}")
+    print("Training PINN...")
+    opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    losses = []
+    for epoch in range(EPOCHS):
+        loss = train_step(pinn, opt, xt_domain, xt_boundary, xt_initial, u_initial)
+        losses.append(float(loss))
+        if (epoch + 1) % 3000 == 0 or epoch == 0:
+            print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
+    final_loss = losses[-1]
+    print(f"Final loss: {final_loss:.6e}")
 
-# %% [markdown]
-# ## Visualization
+    print("Evaluating PINN...")
+    nx, nt = 100, 100
+    x_eval = jnp.linspace(X_MIN, X_MAX, nx)
+    t_eval = jnp.linspace(T_MIN, T_MAX, nt)
+    xx, tt = jnp.meshgrid(x_eval, t_eval)
+    xt_eval = jnp.column_stack([xx.ravel(), tt.ravel()])
 
-# %%
-# Create output directory
-output_dir = Path("docs/assets/examples/wave_pinn")
-output_dir.mkdir(parents=True, exist_ok=True)
+    u_pred = pinn(xt_eval).squeeze()
+    u_pred_grid = u_pred.reshape(nt, nx)
+    u_exact_grid = exact_solution(xx, tt)
 
-mpl.use("Agg")
-
-# Plot solution evolution
-fig, axes = plt.subplots(1, 4, figsize=(18, 4))
-
-# PINN solution heatmap
-im0 = axes[0].imshow(
-    np.array(u_pred_grid),
-    extent=[X_MIN, X_MAX, T_MIN, T_MAX],
-    origin="lower",
-    aspect="auto",
-    cmap="RdBu_r",
-    vmin=-1,
-    vmax=1,
-)
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("t")
-axes[0].set_title("PINN Solution u(x, t)")
-plt.colorbar(im0, ax=axes[0])
-
-# Exact solution
-im1 = axes[1].imshow(
-    np.array(u_exact_grid),
-    extent=[X_MIN, X_MAX, T_MIN, T_MAX],
-    origin="lower",
-    aspect="auto",
-    cmap="RdBu_r",
-    vmin=-1,
-    vmax=1,
-)
-axes[1].set_xlabel("x")
-axes[1].set_ylabel("t")
-axes[1].set_title("Exact Solution")
-plt.colorbar(im1, ax=axes[1])
-
-# Error
-im2 = axes[2].imshow(
-    np.array(error),
-    extent=[X_MIN, X_MAX, T_MIN, T_MAX],
-    origin="lower",
-    aspect="auto",
-    cmap="hot",
-)
-axes[2].set_xlabel("x")
-axes[2].set_ylabel("t")
-axes[2].set_title(f"Error (max={max_error:.2e})")
-plt.colorbar(im2, ax=axes[2])
-
-# Training loss
-axes[3].semilogy(losses, linewidth=1)
-axes[3].set_xlabel("Epoch")
-axes[3].set_ylabel("Loss")
-axes[3].set_title("Training Loss")
-axes[3].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
-plt.close()
-print()
-print(f"Solution saved to {output_dir / 'solution.png'}")
-
-# %%
-# Time snapshots
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-# Snapshots at different times
-t_indices = [0, nt // 4, nt // 2, 3 * nt // 4]
-colors = ["b", "g", "r", "m"]
-for t_idx, color in zip(t_indices, colors, strict=True):
-    t_val = float(t_eval[t_idx])
-    axes[0].plot(
-        np.array(x_eval),
-        np.array(u_pred_grid[t_idx, :]),
-        f"{color}-",
-        label=f"PINN t={t_val:.2f}",
-        linewidth=2,
+    error = jnp.abs(u_pred_grid - u_exact_grid)
+    l2_error = float(
+        jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2))
     )
-    axes[0].plot(
-        np.array(x_eval),
-        np.array(u_exact_grid[t_idx, :]),
-        f"{color}--",
-        label=f"Exact t={t_val:.2f}",
-        linewidth=1,
-        alpha=0.7,
+    max_error = float(jnp.max(error))
+    mean_error = float(jnp.mean(error))
+
+    residual = compute_pde_residual(pinn, xt_eval)
+    mean_residual = float(jnp.mean(jnp.abs(residual)))
+    print(f"Relative L2 error:   {l2_error:.6e}")
+    print(f"Maximum point error: {max_error:.6e}")
+    print(f"Mean point error:    {mean_error:.6e}")
+    print(f"Mean PDE residual:   {mean_residual:.6e}")
+
+    output_dir = Path("docs/assets/examples/wave_pinn")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    im0 = axes[0].imshow(
+        np.array(u_pred_grid),
+        extent=[X_MIN, X_MAX, T_MIN, T_MAX],
+        origin="lower",
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-1,
+        vmax=1,
     )
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("u(x, t)")
-axes[0].set_title("Solution at Different Times")
-axes[0].legend(fontsize=8, ncol=2)
-axes[0].grid(True, alpha=0.3)
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("t")
+    axes[0].set_title("PINN Solution u(x, t)")
+    plt.colorbar(im0, ax=axes[0])
 
-# Initial condition comparison
-axes[1].plot(np.array(x_eval), np.array(u_pred_grid[0, :]), "b-", label="PINN", linewidth=2)
-axes[1].plot(np.array(x_eval), np.array(u_exact_grid[0, :]), "r--", label="Exact", linewidth=2)
-axes[1].set_xlabel("x")
-axes[1].set_ylabel("u(x, 0)")
-axes[1].set_title("Initial Condition")
-axes[1].legend()
-axes[1].grid(True, alpha=0.3)
+    im1 = axes[1].imshow(
+        np.array(u_exact_grid),
+        extent=[X_MIN, X_MAX, T_MIN, T_MAX],
+        origin="lower",
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-1,
+        vmax=1,
+    )
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("t")
+    axes[1].set_title("Exact Solution")
+    plt.colorbar(im1, ax=axes[1])
 
-plt.tight_layout()
-plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Analysis saved to {output_dir / 'analysis.png'}")
+    im2 = axes[2].imshow(
+        np.array(error),
+        extent=[X_MIN, X_MAX, T_MIN, T_MAX],
+        origin="lower",
+        aspect="auto",
+        cmap="hot",
+    )
+    axes[2].set_xlabel("x")
+    axes[2].set_ylabel("t")
+    axes[2].set_title(f"Error (max={max_error:.2e})")
+    plt.colorbar(im2, ax=axes[2])
+
+    axes[3].semilogy(losses, linewidth=1)
+    axes[3].set_xlabel("Epoch")
+    axes[3].set_ylabel("Loss")
+    axes[3].set_title("Training Loss")
+    axes[3].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Solution saved to {output_dir / 'solution.png'}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    t_indices = [0, nt // 4, nt // 2, 3 * nt // 4]
+    colors = ["b", "g", "r", "m"]
+    for t_idx, color in zip(t_indices, colors, strict=True):
+        t_val = float(t_eval[t_idx])
+        axes[0].plot(
+            np.array(x_eval),
+            np.array(u_pred_grid[t_idx, :]),
+            f"{color}-",
+            label=f"PINN t={t_val:.2f}",
+            linewidth=2,
+        )
+        axes[0].plot(
+            np.array(x_eval),
+            np.array(u_exact_grid[t_idx, :]),
+            f"{color}--",
+            label=f"Exact t={t_val:.2f}",
+            linewidth=1,
+            alpha=0.7,
+        )
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("u(x, t)")
+    axes[0].set_title("Solution at Different Times")
+    axes[0].legend(fontsize=8, ncol=2)
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(np.array(x_eval), np.array(u_pred_grid[0, :]), "b-", label="PINN", linewidth=2)
+    axes[1].plot(np.array(x_eval), np.array(u_exact_grid[0, :]), "r--", label="Exact", linewidth=2)
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("u(x, 0)")
+    axes[1].set_title("Initial Condition")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Analysis saved to {output_dir / 'analysis.png'}")
+
+    print("=" * 70)
+    print("Wave Equation PINN example completed")
+    print(f"  Final loss:          {final_loss:.6e}")
+    print(f"  Relative L2 error:   {l2_error:.6e}")
+    print(f"  Maximum error:       {max_error:.6e}")
+    print(f"  Mean error:          {mean_error:.6e}")
+    print(f"  Mean PDE residual:   {mean_residual:.6e}")
+    print(f"  Parameters:          {n_params:,}")
+    print(f"Results saved to: {output_dir}")
+    print("=" * 70)
+
+    return {
+        "final_loss": final_loss,
+        "l2_relative_error": l2_error,
+        "max_error": max_error,
+        "mean_error": mean_error,
+        "mean_pde_residual": mean_residual,
+        "param_count": int(n_params),
+    }
+
 
 # %%
-# Summary
-print()
-print("=" * 70)
-print("Wave Equation PINN example completed")
-print("=" * 70)
-print()
-print("Results Summary:")
-print(f"  Final loss:          {losses[-1]:.6e}")
-print(f"  Relative L2 error:   {l2_error:.6e}")
-print(f"  Maximum error:       {max_error:.6e}")
-print(f"  Mean error:          {mean_error:.6e}")
-print(f"  Mean PDE residual:   {mean_residual:.6e}")
-print(f"  Parameters:          {n_params:,}")
-print()
-print(f"Results saved to: {output_dir}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

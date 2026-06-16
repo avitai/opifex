@@ -1,7 +1,8 @@
-#!/usr/bin/env python
-r"""Jupytext Conversion & Synchronization Utility
+#!/usr/bin/env python3
+# ruff: noqa: T201
+r"""Jupytext Conversion & Synchronization Utility.
 
-A full tool for converting and synchronizing between Python scripts (.py)
+A complete tool for converting and synchronizing between Python scripts (.py)
 and Jupyter notebooks (.ipynb) using Jupytext's py:percent format.
 
 Features:
@@ -13,21 +14,22 @@ Features:
 
 Usage:
     # Convert single file
-    python scripts/jupytext_converter.py py-to-nb examples/path/to/example.py
-    python scripts/jupytext_converter.py nb-to-py examples/path/to/example.ipynb
+    uv run python scripts/jupytext_converter.py py-to-nb examples/path/to/example.py
+    uv run python scripts/jupytext_converter.py nb-to-py examples/path/to/example.ipynb
 
     # Sync existing pair (bidirectional)
-    python scripts/jupytext_converter.py sync examples/path/to/example.py
+    uv run python scripts/jupytext_converter.py sync examples/path/to/example.py
 
     # Batch convert directory
-    python scripts/jupytext_converter.py batch-py-to-nb examples/generative_models/
-    python scripts/jupytext_converter.py batch-nb-to-py examples/generative_models/
+    uv run python scripts/jupytext_converter.py batch-py-to-nb examples/generative_models/
+    uv run python scripts/jupytext_converter.py batch-nb-to-py examples/generative_models/
 
     # Validate synchronization
-    python scripts/jupytext_converter.py validate examples/
+    uv run python scripts/jupytext_converter.py validate examples/
 
 Requirements:
-    - jupytext: Install with `uv add jupytext` or `pip install jupytext`
+    - jupytext: Install with `uv add jupytext` if it is not already present in
+      the active environment
 
 Author: Artifex Team
 Last Updated: 2025-10-16
@@ -65,6 +67,7 @@ IMPORTANT - Known Jupytext Limitations:
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -82,12 +85,12 @@ def validate_python_for_jupytext(py_file: Path) -> tuple[bool, list[str]]:
         py_file: Path to Python file to validate
 
     Returns:
-        tuple of (is_valid: bool, issues: list[str])
+        Tuple of (is_valid: bool, issues: List[str])
     """
     issues = []
 
     try:
-        with open(py_file, encoding="utf-8") as f:
+        with open(py_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         # Pattern 1: print() with "\n" or other escape sequences in string concatenation
@@ -113,8 +116,8 @@ def validate_python_for_jupytext(py_file: Path) -> tuple[bool, list[str]]:
 
         return len(issues) == 0, issues
 
-    except Exception as e:
-        issues.append(f"Error reading file: {e}")
+    except OSError as error:
+        issues.append(f"Error reading file: {error}")
         return False, issues
 
 
@@ -126,7 +129,7 @@ def run_jupytext_command(args: list[str], verbose: bool = False) -> tuple[bool, 
         verbose: If True, print command output
 
     Returns:
-        tuple of (success: bool, output: str)
+        Tuple of (success: bool, output: str)
     """
     cmd = ["jupytext", *args]
 
@@ -146,8 +149,8 @@ def run_jupytext_command(args: list[str], verbose: bool = False) -> tuple[bool, 
     except subprocess.TimeoutExpired:
         print(f"❌ Command timed out: {' '.join(cmd)}", file=sys.stderr)
         return False, ""
-    except Exception as e:
-        print(f"❌ Error running jupytext: {e}", file=sys.stderr)
+    except OSError as error:
+        print(f"❌ Error running jupytext: {error}", file=sys.stderr)
         return False, ""
 
 
@@ -207,10 +210,8 @@ def convert_py_to_nb(py_file: Path, verbose: bool = False) -> bool:
 
     if success:
         # Post-process to remove cell IDs for deterministic output
-        import json
-
         try:
-            with open(nb_file) as f:
+            with open(nb_file, "r") as f:
                 notebook = json.load(f)
 
             # Remove cell IDs
@@ -218,18 +219,18 @@ def convert_py_to_nb(py_file: Path, verbose: bool = False) -> bool:
                 cell.pop("id", None)
 
             # Write back
-            with open(nb_file) as f:
+            with open(nb_file, "w") as f:
                 json.dump(notebook, f, indent=1, ensure_ascii=False)
                 f.write("\n")  # Add trailing newline
 
             print(f"✅ Created {nb_file}")
             return True
-        except Exception as e:
-            print(f"⚠️  Created {nb_file} but failed to strip cell IDs: {e}")
+        except (json.JSONDecodeError, OSError) as error:
+            print(f"⚠️  Created {nb_file} but failed to strip cell IDs: {error}")
             return True  # Still consider it success
-
-    print(f"❌ Failed to convert {py_file}")
-    return False
+    else:
+        print(f"❌ Failed to convert {py_file}")
+        return False
 
 
 def convert_nb_to_py(nb_file: Path, verbose: bool = False) -> bool:
@@ -263,9 +264,9 @@ def convert_nb_to_py(nb_file: Path, verbose: bool = False) -> bool:
     if success:
         print(f"✅ Created {py_file}")
         return True
-
-    print(f"❌ Failed to convert {nb_file}")
-    return False
+    else:
+        print(f"❌ Failed to convert {nb_file}")
+        return False
 
 
 def sync_pair(file_path: Path, verbose: bool = False) -> bool:
@@ -314,9 +315,9 @@ def sync_pair(file_path: Path, verbose: bool = False) -> bool:
     if success:
         print("✅ Synchronized pair")
         return True
-
-    print("❌ Failed to sync pair")
-    return False
+    else:
+        print("❌ Failed to sync pair")
+        return False
 
 
 def batch_convert_directory(
@@ -330,7 +331,7 @@ def batch_convert_directory(
         verbose: If True, show detailed output
 
     Returns:
-        tuple of (success_count, fail_count)
+        Tuple of (success_count, fail_count)
     """
     if not directory.exists():
         print(f"❌ Directory not found: {directory}")
@@ -386,7 +387,7 @@ def validate_sync(directory: Path, verbose: bool = False) -> tuple[int, int, int
         verbose: If True, show detailed output
 
     Returns:
-        tuple of (synced_count, out_of_sync_count, missing_pair_count)
+        Tuple of (synced_count, out_of_sync_count, missing_pair_count)
     """
     if not directory.exists():
         print(f"❌ Directory not found: {directory}")
@@ -414,9 +415,7 @@ def validate_sync(directory: Path, verbose: bool = False) -> tuple[int, int, int
         # Check if files have jupytext pairing metadata
         # Check the notebook file since that's where --set-formats adds metadata
         try:
-            import json
-
-            with open(nb_file) as f:
+            with open(nb_file, "r") as f:
                 notebook = json.load(f)
 
             # Check if notebook has jupytext metadata with formats
@@ -443,14 +442,14 @@ def validate_sync(directory: Path, verbose: bool = False) -> tuple[int, int, int
                 else:
                     print(f"❌ Out of sync: {py_file}")
                     out_of_sync_count += 1
-        except Exception as e:
-            print(f"❌ Error checking {py_file}: {e}")
+        except (json.JSONDecodeError, OSError) as error:
+            print(f"❌ Error checking {py_file}: {error}")
             out_of_sync_count += 1
 
     return synced_count, out_of_sync_count, missing_pair_count
 
 
-def main():  # noqa: PLR0915
+def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Jupytext Conversion & Synchronization Utility",
@@ -498,7 +497,7 @@ def main():  # noqa: PLR0915
 
     if not args.command:
         parser.print_help()
-        sys.exit(1)
+        return 1
 
     print("=" * 80)
     print(f"Jupytext Converter: {args.command}")
@@ -508,31 +507,31 @@ def main():  # noqa: PLR0915
     # Execute command
     if args.command == "py-to-nb":
         success = convert_py_to_nb(args.file, args.verbose)
-        sys.exit(0 if success else 1)
+        return 0 if success else 1
 
-    elif args.command == "nb-to-py":
+    if args.command == "nb-to-py":
         success = convert_nb_to_py(args.file, args.verbose)
-        sys.exit(0 if success else 1)
+        return 0 if success else 1
 
-    elif args.command == "sync":
+    if args.command == "sync":
         success = sync_pair(args.file, args.verbose)
-        sys.exit(0 if success else 1)
+        return 0 if success else 1
 
-    elif args.command == "batch-py-to-nb":
+    if args.command == "batch-py-to-nb":
         success_count, fail_count = batch_convert_directory(args.directory, ".py", args.verbose)
         print("=" * 80)
         print(f"✅ Succeeded: {success_count}")
         print(f"❌ Failed: {fail_count}")
-        sys.exit(0 if fail_count == 0 else 1)
+        return 0 if fail_count == 0 else 1
 
-    elif args.command == "batch-nb-to-py":
+    if args.command == "batch-nb-to-py":
         success_count, fail_count = batch_convert_directory(args.directory, ".ipynb", args.verbose)
         print("=" * 80)
         print(f"✅ Succeeded: {success_count}")
         print(f"❌ Failed: {fail_count}")
-        sys.exit(0 if fail_count == 0 else 1)
+        return 0 if fail_count == 0 else 1
 
-    elif args.command == "validate":
+    if args.command == "validate":
         synced, out_of_sync, missing = validate_sync(args.directory, args.verbose)
         print()
         print("=" * 80)
@@ -541,8 +540,10 @@ def main():  # noqa: PLR0915
         print(f"✅ Synced: {synced}")
         print(f"❌ Out of sync: {out_of_sync}")
         print(f"⚠️  Missing pairs: {missing}")
-        sys.exit(0 if (out_of_sync == 0 and missing == 0) else 1)
+        return 0 if (out_of_sync == 0 and missing == 0) else 1
+
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

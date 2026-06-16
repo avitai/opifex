@@ -56,11 +56,6 @@ SCRATCH_STEPS = 1000  # Steps for training from scratch baseline
 OUTPUT_DIR = "docs/assets/examples/meta_optimization"
 
 # %%
-print("=" * 70)
-print("Opifex Example: Meta-Optimization (MAML/Reptile) for PINNs")
-print("=" * 70)
-
-# %%
 import time
 from pathlib import Path
 
@@ -71,10 +66,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
-
-
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
 
 # %% [markdown]
 r"""
@@ -117,14 +108,6 @@ def count_params(model):
     """Count number of trainable parameters."""
     return sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param)))
 
-
-# %%
-print()
-print("Creating PINN architecture...")
-test_pinn = BurgersPINN(hidden_dim=32, rngs=nnx.Rngs(0))
-n_params = count_params(test_pinn)
-print("  Architecture: [2] -> [32] -> [32] -> [1]")
-print(f"  Parameters: {n_params:,}")
 
 # %% [markdown]
 """
@@ -212,15 +195,6 @@ def pinn_loss(pinn, xt_domain, xt_initial, u_initial, xt_boundary, nu):
     return loss_pde + loss_ic + loss_bc
 
 
-# %%
-print()
-print("Generating collocation points...")
-key = jax.random.PRNGKey(SEED)
-xt_domain, xt_initial, u_initial, xt_boundary = generate_collocation_points(key)
-print(f"  Domain points: {xt_domain.shape}")
-print(f"  Initial points: {xt_initial.shape}")
-print(f"  Boundary points: {xt_boundary.shape}")
-
 # %% [markdown]
 """
 ## Step 3: Define Task Distribution
@@ -229,21 +203,6 @@ Our task distribution consists of Burgers equations with different viscosity val
 Higher viscosity = more diffusion (smoother solutions).
 Lower viscosity = less diffusion (sharper gradients/shocks).
 """
-
-# %%
-print()
-print("Creating viscosity distribution...")
-
-# Generate training and test viscosities
-key, subkey = jax.random.split(key)
-all_viscosities = jnp.linspace(NU_MIN, NU_MAX, NUM_TRAIN_VISCOSITIES + NUM_TEST_VISCOSITIES)
-train_viscosities = all_viscosities[::2][:NUM_TRAIN_VISCOSITIES]  # Every other for training
-test_viscosities = all_viscosities[1::2][:NUM_TEST_VISCOSITIES]  # Alternating for test
-
-print(
-    f"  Training viscosities ({len(train_viscosities)}): {[f'{v:.4f}' for v in train_viscosities]}"
-)
-print(f"  Test viscosities ({len(test_viscosities)}):     {[f'{v:.4f}' for v in test_viscosities]}")
 
 # %% [markdown]
 """
@@ -369,40 +328,6 @@ def maml_meta_step(
     return new_meta_params, total_meta_loss / len(viscosities)
 
 
-# %%
-print()
-print("Meta-training with MAML...")
-print("-" * 50)
-
-# Initialize meta-parameters
-key, subkey = jax.random.split(key)
-maml_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
-maml_meta_params = get_pinn_params(maml_pinn)
-
-maml_losses = []
-start_time = time.time()
-
-for meta_step in range(META_STEPS):
-    maml_meta_params, meta_loss = maml_meta_step(
-        maml_pinn,
-        maml_meta_params,
-        train_viscosities,
-        xt_domain,
-        xt_initial,
-        u_initial,
-        xt_boundary,
-        INNER_LR,
-        INNER_STEPS,
-        META_LR,
-    )
-    maml_losses.append(float(meta_loss))
-
-    if (meta_step + 1) % 20 == 0:
-        print(f"  Step {meta_step + 1:3d}/{META_STEPS}: meta-loss = {meta_loss:.6f}")
-
-maml_time = time.time() - start_time
-print(f"  MAML training time: {maml_time:.2f}s")
-
 # %% [markdown]
 """
 ## Step 5: Implement Reptile for PINNs
@@ -504,40 +429,6 @@ def reptile_meta_step(
     return new_meta_params, total_loss / len(viscosities)
 
 
-# %%
-print()
-print("Meta-training with Reptile...")
-print("-" * 50)
-
-# Initialize meta-parameters
-key, subkey = jax.random.split(key)
-reptile_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
-reptile_meta_params = get_pinn_params(reptile_pinn)
-
-reptile_losses = []
-start_time = time.time()
-
-for meta_step in range(META_STEPS):
-    reptile_meta_params, meta_loss = reptile_meta_step(
-        reptile_pinn,
-        reptile_meta_params,
-        train_viscosities,
-        xt_domain,
-        xt_initial,
-        u_initial,
-        xt_boundary,
-        INNER_LR,
-        INNER_STEPS * 2,
-        META_LR,  # More inner steps for Reptile
-    )
-    reptile_losses.append(float(meta_loss))
-
-    if (meta_step + 1) % 20 == 0:
-        print(f"  Step {meta_step + 1:3d}/{META_STEPS}: meta-loss = {meta_loss:.6f}")
-
-reptile_time = time.time() - start_time
-print(f"  Reptile training time: {reptile_time:.2f}s")
-
 # %% [markdown]
 """
 ## Step 6: Evaluate Few-Shot Adaptation
@@ -582,331 +473,442 @@ def evaluate_on_grid(pinn, nu, nx=50, nt=20):
 
 
 # %%
-print()
-print("Evaluating few-shot adaptation on held-out viscosities...")
-print("-" * 50)
+def main() -> dict[str, float | int]:
+    """Run the full MAML/Reptile meta-optimization pipeline and return scalar metrics."""
+    print("=" * 70)
+    print("Opifex Example: Meta-Optimization (MAML/Reptile) for PINNs")
+    print("=" * 70)
 
-results = {
-    "maml": {"final_loss": [], "residual": [], "time": []},
-    "reptile": {"final_loss": [], "residual": [], "time": []},
-    "scratch_short": {"final_loss": [], "residual": [], "time": []},
-    "scratch_long": {"final_loss": [], "residual": [], "time": []},
-}
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
 
-for nu in test_viscosities:
-    print(f"  Testing viscosity nu = {nu:.4f}...")
+    # Step 1: probe architecture
+    print()
+    print("Creating PINN architecture...")
+    test_pinn = BurgersPINN(hidden_dim=32, rngs=nnx.Rngs(0))
+    n_params = count_params(test_pinn)
+    print("  Architecture: [2] -> [32] -> [32] -> [1]")
+    print(f"  Parameters: {n_params:,}")
 
-    # MAML adaptation (100 steps)
+    # Step 2: collocation points
+    print()
+    print("Generating collocation points...")
+    key = jax.random.PRNGKey(SEED)
+    xt_domain, xt_initial, u_initial, xt_boundary = generate_collocation_points(key)
+    print(f"  Domain points: {xt_domain.shape}")
+    print(f"  Initial points: {xt_initial.shape}")
+    print(f"  Boundary points: {xt_boundary.shape}")
+
+    # Step 3: viscosity distribution
+    print()
+    print("Creating viscosity distribution...")
     key, subkey = jax.random.split(key)
-    eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
-    start = time.time()
-    maml_final_loss, _ = train_pinn(
-        eval_pinn,
-        maml_meta_params,
-        nu,
-        xt_domain,
-        xt_initial,
-        u_initial,
-        xt_boundary,
-        INNER_LR,
-        ADAPT_STEPS,
+    all_viscosities = jnp.linspace(NU_MIN, NU_MAX, NUM_TRAIN_VISCOSITIES + NUM_TEST_VISCOSITIES)
+    train_viscosities = all_viscosities[::2][:NUM_TRAIN_VISCOSITIES]  # Every other for training
+    test_viscosities = all_viscosities[1::2][:NUM_TEST_VISCOSITIES]  # Alternating for test
+    print(
+        f"  Training viscosities ({len(train_viscosities)}): "
+        f"{[f'{v:.4f}' for v in train_viscosities]}"
     )
-    maml_time_adapt = time.time() - start
-    maml_residual = evaluate_on_grid(eval_pinn, nu)
-    results["maml"]["final_loss"].append(maml_final_loss)
-    results["maml"]["residual"].append(maml_residual)
-    results["maml"]["time"].append(maml_time_adapt)
+    print(
+        f"  Test viscosities ({len(test_viscosities)}):     "
+        f"{[f'{v:.4f}' for v in test_viscosities]}"
+    )
 
-    # Reptile adaptation (100 steps)
+    # Step 4: MAML meta-training
+    print()
+    print("Meta-training with MAML...")
+    print("-" * 50)
     key, subkey = jax.random.split(key)
-    eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
-    start = time.time()
-    reptile_final_loss, _ = train_pinn(
-        eval_pinn,
-        reptile_meta_params,
-        nu,
-        xt_domain,
-        xt_initial,
-        u_initial,
-        xt_boundary,
-        INNER_LR,
-        ADAPT_STEPS,
-    )
-    reptile_time_adapt = time.time() - start
-    reptile_residual = evaluate_on_grid(eval_pinn, nu)
-    results["reptile"]["final_loss"].append(reptile_final_loss)
-    results["reptile"]["residual"].append(reptile_residual)
-    results["reptile"]["time"].append(reptile_time_adapt)
+    maml_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
+    maml_meta_params = get_pinn_params(maml_pinn)
 
-    # Random init - same budget (100 steps)
+    maml_losses = []
+    start_time = time.time()
+    for meta_step in range(META_STEPS):
+        maml_meta_params, meta_loss = maml_meta_step(
+            maml_pinn,
+            maml_meta_params,
+            train_viscosities,
+            xt_domain,
+            xt_initial,
+            u_initial,
+            xt_boundary,
+            INNER_LR,
+            INNER_STEPS,
+            META_LR,
+        )
+        maml_losses.append(float(meta_loss))
+        if (meta_step + 1) % 20 == 0:
+            print(f"  Step {meta_step + 1:3d}/{META_STEPS}: meta-loss = {meta_loss:.6f}")
+    maml_time = time.time() - start_time
+    print(f"  MAML training time: {maml_time:.2f}s")
+
+    # Step 5: Reptile meta-training
+    print()
+    print("Meta-training with Reptile...")
+    print("-" * 50)
     key, subkey = jax.random.split(key)
-    eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
-    random_init_params = get_pinn_params(eval_pinn)
-    start = time.time()
-    scratch_short_loss, _ = train_pinn(
-        eval_pinn,
-        random_init_params,
-        nu,
-        xt_domain,
-        xt_initial,
-        u_initial,
-        xt_boundary,
-        INNER_LR,
-        ADAPT_STEPS,
+    reptile_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
+    reptile_meta_params = get_pinn_params(reptile_pinn)
+
+    reptile_losses = []
+    start_time = time.time()
+    for meta_step in range(META_STEPS):
+        reptile_meta_params, meta_loss = reptile_meta_step(
+            reptile_pinn,
+            reptile_meta_params,
+            train_viscosities,
+            xt_domain,
+            xt_initial,
+            u_initial,
+            xt_boundary,
+            INNER_LR,
+            INNER_STEPS * 2,
+            META_LR,  # More inner steps for Reptile
+        )
+        reptile_losses.append(float(meta_loss))
+        if (meta_step + 1) % 20 == 0:
+            print(f"  Step {meta_step + 1:3d}/{META_STEPS}: meta-loss = {meta_loss:.6f}")
+    reptile_time = time.time() - start_time
+    print(f"  Reptile training time: {reptile_time:.2f}s")
+
+    # Step 6: few-shot evaluation
+    print()
+    print("Evaluating few-shot adaptation on held-out viscosities...")
+    print("-" * 50)
+
+    results = {
+        "maml": {"final_loss": [], "residual": [], "time": []},
+        "reptile": {"final_loss": [], "residual": [], "time": []},
+        "scratch_short": {"final_loss": [], "residual": [], "time": []},
+        "scratch_long": {"final_loss": [], "residual": [], "time": []},
+    }
+
+    for nu in test_viscosities:
+        print(f"  Testing viscosity nu = {nu:.4f}...")
+
+        # MAML adaptation (100 steps)
+        key, subkey = jax.random.split(key)
+        eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
+        start = time.time()
+        maml_final_loss, _ = train_pinn(
+            eval_pinn,
+            maml_meta_params,
+            nu,
+            xt_domain,
+            xt_initial,
+            u_initial,
+            xt_boundary,
+            INNER_LR,
+            ADAPT_STEPS,
+        )
+        maml_time_adapt = time.time() - start
+        maml_residual = evaluate_on_grid(eval_pinn, nu)
+        results["maml"]["final_loss"].append(maml_final_loss)
+        results["maml"]["residual"].append(maml_residual)
+        results["maml"]["time"].append(maml_time_adapt)
+
+        # Reptile adaptation (100 steps)
+        key, subkey = jax.random.split(key)
+        eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
+        start = time.time()
+        reptile_final_loss, _ = train_pinn(
+            eval_pinn,
+            reptile_meta_params,
+            nu,
+            xt_domain,
+            xt_initial,
+            u_initial,
+            xt_boundary,
+            INNER_LR,
+            ADAPT_STEPS,
+        )
+        reptile_time_adapt = time.time() - start
+        reptile_residual = evaluate_on_grid(eval_pinn, nu)
+        results["reptile"]["final_loss"].append(reptile_final_loss)
+        results["reptile"]["residual"].append(reptile_residual)
+        results["reptile"]["time"].append(reptile_time_adapt)
+
+        # Random init - same budget (100 steps)
+        key, subkey = jax.random.split(key)
+        eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
+        random_init_params = get_pinn_params(eval_pinn)
+        start = time.time()
+        scratch_short_loss, _ = train_pinn(
+            eval_pinn,
+            random_init_params,
+            nu,
+            xt_domain,
+            xt_initial,
+            u_initial,
+            xt_boundary,
+            INNER_LR,
+            ADAPT_STEPS,
+        )
+        scratch_short_time = time.time() - start
+        scratch_short_residual = evaluate_on_grid(eval_pinn, nu)
+        results["scratch_short"]["final_loss"].append(scratch_short_loss)
+        results["scratch_short"]["residual"].append(scratch_short_residual)
+        results["scratch_short"]["time"].append(scratch_short_time)
+
+        # Random init - 10x budget (1000 steps)
+        key, subkey = jax.random.split(key)
+        eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
+        random_init_params = get_pinn_params(eval_pinn)
+        start = time.time()
+        scratch_long_loss, _ = train_pinn(
+            eval_pinn,
+            random_init_params,
+            nu,
+            xt_domain,
+            xt_initial,
+            u_initial,
+            xt_boundary,
+            INNER_LR,
+            SCRATCH_STEPS,
+        )
+        scratch_long_time = time.time() - start
+        scratch_long_residual = evaluate_on_grid(eval_pinn, nu)
+        results["scratch_long"]["final_loss"].append(scratch_long_loss)
+        results["scratch_long"]["residual"].append(scratch_long_residual)
+        results["scratch_long"]["time"].append(scratch_long_time)
+
+    # Summary statistics
+    print()
+    print("=" * 70)
+    print("RESULTS SUMMARY")
+    print("=" * 70)
+
+    maml_mean_loss = np.mean(results["maml"]["final_loss"])
+    maml_mean_residual = np.mean(results["maml"]["residual"])
+    reptile_mean_loss = np.mean(results["reptile"]["final_loss"])
+    reptile_mean_residual = np.mean(results["reptile"]["residual"])
+    scratch_short_mean_loss = np.mean(results["scratch_short"]["final_loss"])
+    scratch_short_mean_residual = np.mean(results["scratch_short"]["residual"])
+    scratch_long_mean_loss = np.mean(results["scratch_long"]["final_loss"])
+    scratch_long_mean_residual = np.mean(results["scratch_long"]["residual"])
+
+    print()
+    print("Few-Shot Adaptation Results (lower is better):")
+    print("-" * 50)
+    print(f"{'Method':<25} {'Steps':<8} {'Loss':<12} {'PDE Residual':<12}")
+    print("-" * 50)
+    print(
+        f"{'MAML + adapt':<25} {ADAPT_STEPS:<8} "
+        f"{maml_mean_loss:<12.6f} {maml_mean_residual:<12.6f}"
     )
-    scratch_short_time = time.time() - start
-    scratch_short_residual = evaluate_on_grid(eval_pinn, nu)
-    results["scratch_short"]["final_loss"].append(scratch_short_loss)
-    results["scratch_short"]["residual"].append(scratch_short_residual)
-    results["scratch_short"]["time"].append(scratch_short_time)
-
-    # Random init - 10x budget (1000 steps)
-    key, subkey = jax.random.split(key)
-    eval_pinn = create_fresh_pinn(nnx.Rngs(int(subkey[0])))
-    random_init_params = get_pinn_params(eval_pinn)
-    start = time.time()
-    scratch_long_loss, _ = train_pinn(
-        eval_pinn,
-        random_init_params,
-        nu,
-        xt_domain,
-        xt_initial,
-        u_initial,
-        xt_boundary,
-        INNER_LR,
-        SCRATCH_STEPS,
+    print(
+        f"{'Reptile + adapt':<25} {ADAPT_STEPS:<8} "
+        f"{reptile_mean_loss:<12.6f} {reptile_mean_residual:<12.6f}"
     )
-    scratch_long_time = time.time() - start
-    scratch_long_residual = evaluate_on_grid(eval_pinn, nu)
-    results["scratch_long"]["final_loss"].append(scratch_long_loss)
-    results["scratch_long"]["residual"].append(scratch_long_residual)
-    results["scratch_long"]["time"].append(scratch_long_time)
-
-# %%
-# Compute summary statistics
-print()
-print("=" * 70)
-print("RESULTS SUMMARY")
-print("=" * 70)
-
-maml_mean_loss = np.mean(results["maml"]["final_loss"])
-maml_mean_residual = np.mean(results["maml"]["residual"])
-reptile_mean_loss = np.mean(results["reptile"]["final_loss"])
-reptile_mean_residual = np.mean(results["reptile"]["residual"])
-scratch_short_mean_loss = np.mean(results["scratch_short"]["final_loss"])
-scratch_short_mean_residual = np.mean(results["scratch_short"]["residual"])
-scratch_long_mean_loss = np.mean(results["scratch_long"]["final_loss"])
-scratch_long_mean_residual = np.mean(results["scratch_long"]["residual"])
-
-print()
-print("Few-Shot Adaptation Results (lower is better):")
-print("-" * 50)
-print(f"{'Method':<25} {'Steps':<8} {'Loss':<12} {'PDE Residual':<12}")
-print("-" * 50)
-print(f"{'MAML + adapt':<25} {ADAPT_STEPS:<8} {maml_mean_loss:<12.6f} {maml_mean_residual:<12.6f}")
-print(
-    f"{'Reptile + adapt':<25} {ADAPT_STEPS:<8} {reptile_mean_loss:<12.6f} {reptile_mean_residual:<12.6f}"
-)
-print(
-    f"{'Random init (same)':<25} {ADAPT_STEPS:<8} {scratch_short_mean_loss:<12.6f} {scratch_short_mean_residual:<12.6f}"
-)
-print(
-    f"{'Random init (10x steps)':<25} {SCRATCH_STEPS:<8} {scratch_long_mean_loss:<12.6f} {scratch_long_mean_residual:<12.6f}"
-)
-
-# Calculate improvement
-loss_improvement_maml = (scratch_short_mean_loss - maml_mean_loss) / scratch_short_mean_loss * 100
-loss_improvement_reptile = (
-    (scratch_short_mean_loss - reptile_mean_loss) / scratch_short_mean_loss * 100
-)
-residual_improvement_maml = (
-    (scratch_short_mean_residual - maml_mean_residual) / scratch_short_mean_residual * 100
-)
-residual_improvement_reptile = (
-    (scratch_short_mean_residual - reptile_mean_residual) / scratch_short_mean_residual * 100
-)
-
-print()
-print("Improvement over Random Init (same step budget):")
-print("-" * 50)
-print(
-    f"  MAML:    {loss_improvement_maml:.1f}% lower loss, {residual_improvement_maml:.1f}% lower residual"
-)
-print(
-    f"  Reptile: {loss_improvement_reptile:.1f}% lower loss, {residual_improvement_reptile:.1f}% lower residual"
-)
-
-# Efficiency comparison: meta-learning achieves similar to 10x training
-efficiency_maml = scratch_long_mean_residual / maml_mean_residual if maml_mean_residual > 0 else 0
-efficiency_reptile = (
-    scratch_long_mean_residual / reptile_mean_residual if reptile_mean_residual > 0 else 0
-)
-
-print()
-print("Efficiency Comparison:")
-print("-" * 50)
-print(f"  MAML ({ADAPT_STEPS} steps) achieves similar residual as scratch ({SCRATCH_STEPS} steps)")
-print(f"  Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps needed")
-print("=" * 70)
-
-# %% [markdown]
-"""
-## Step 7: Visualization
-"""
-
-# %%
-print()
-print("Generating visualizations...")
-
-Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
-mpl.use("Agg")
-
-# %%
-# Figure 1: Meta-training curves
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-ax1 = axes[0]
-ax1.semilogy(maml_losses, label="MAML", color="blue", linewidth=2)
-ax1.semilogy(reptile_losses, label="Reptile", color="orange", linewidth=2)
-ax1.set_xlabel("Meta-step", fontsize=12)
-ax1.set_ylabel("Meta-loss (log scale)", fontsize=12)
-ax1.set_title("Meta-Training Convergence", fontsize=14)
-ax1.legend()
-ax1.grid(True, alpha=0.3)
-
-ax2 = axes[1]
-methods = [
-    "MAML\n(100 steps)",
-    "Reptile\n(100 steps)",
-    "Random\n(100 steps)",
-    "Random\n(1000 steps)",
-]
-mean_residuals = [
-    maml_mean_residual,
-    reptile_mean_residual,
-    scratch_short_mean_residual,
-    scratch_long_mean_residual,
-]
-colors = ["blue", "orange", "gray", "darkgray"]
-
-bars = ax2.bar(methods, mean_residuals, color=colors, edgecolor="black", linewidth=1.5)
-ax2.set_ylabel("Mean PDE Residual", fontsize=12)
-ax2.set_title("Few-Shot Adaptation: PDE Residual", fontsize=14)
-ax2.grid(True, alpha=0.3, axis="y")
-
-# Add value labels on bars
-for bar, val in zip(bars, mean_residuals, strict=False):
-    ax2.text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height() + 0.01 * max(mean_residuals),
-        f"{val:.4f}",
-        ha="center",
-        va="bottom",
-        fontsize=10,
+    print(
+        f"{'Random init (same)':<25} {ADAPT_STEPS:<8} "
+        f"{scratch_short_mean_loss:<12.6f} {scratch_short_mean_residual:<12.6f}"
+    )
+    print(
+        f"{'Random init (10x steps)':<25} {SCRATCH_STEPS:<8} "
+        f"{scratch_long_mean_loss:<12.6f} {scratch_long_mean_residual:<12.6f}"
     )
 
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/meta_training.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"  Saved: {OUTPUT_DIR}/meta_training.png")
+    # Improvement over random init (same step budget)
+    loss_improvement_maml = (
+        (scratch_short_mean_loss - maml_mean_loss) / scratch_short_mean_loss * 100
+    )
+    loss_improvement_reptile = (
+        (scratch_short_mean_loss - reptile_mean_loss) / scratch_short_mean_loss * 100
+    )
+    residual_improvement_maml = (
+        (scratch_short_mean_residual - maml_mean_residual) / scratch_short_mean_residual * 100
+    )
+    residual_improvement_reptile = (
+        (scratch_short_mean_residual - reptile_mean_residual) / scratch_short_mean_residual * 100
+    )
+
+    print()
+    print("Improvement over Random Init (same step budget):")
+    print("-" * 50)
+    print(
+        f"  MAML:    {loss_improvement_maml:.1f}% lower loss, "
+        f"{residual_improvement_maml:.1f}% lower residual"
+    )
+    print(
+        f"  Reptile: {loss_improvement_reptile:.1f}% lower loss, "
+        f"{residual_improvement_reptile:.1f}% lower residual"
+    )
+
+    print()
+    print("Efficiency Comparison:")
+    print("-" * 50)
+    print(
+        f"  MAML ({ADAPT_STEPS} steps) achieves similar residual "
+        f"as scratch ({SCRATCH_STEPS} steps)"
+    )
+    print(f"  Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps needed")
+    print("=" * 70)
+
+    # Step 7: visualization
+    print()
+    print("Generating visualizations...")
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    mpl.use("Agg")
+
+    # Figure 1: Meta-training curves
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
+    ax1.semilogy(maml_losses, label="MAML", color="blue", linewidth=2)
+    ax1.semilogy(reptile_losses, label="Reptile", color="orange", linewidth=2)
+    ax1.set_xlabel("Meta-step", fontsize=12)
+    ax1.set_ylabel("Meta-loss (log scale)", fontsize=12)
+    ax1.set_title("Meta-Training Convergence", fontsize=14)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = axes[1]
+    methods = [
+        "MAML\n(100 steps)",
+        "Reptile\n(100 steps)",
+        "Random\n(100 steps)",
+        "Random\n(1000 steps)",
+    ]
+    mean_residuals = [
+        maml_mean_residual,
+        reptile_mean_residual,
+        scratch_short_mean_residual,
+        scratch_long_mean_residual,
+    ]
+    colors = ["blue", "orange", "gray", "darkgray"]
+
+    bars = ax2.bar(methods, mean_residuals, color=colors, edgecolor="black", linewidth=1.5)
+    ax2.set_ylabel("Mean PDE Residual", fontsize=12)
+    ax2.set_title("Few-Shot Adaptation: PDE Residual", fontsize=14)
+    ax2.grid(True, alpha=0.3, axis="y")
+
+    for bar, val in zip(bars, mean_residuals, strict=False):
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01 * max(mean_residuals),
+            f"{val:.4f}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/meta_training.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: {OUTPUT_DIR}/meta_training.png")
+
+    # Figure 2: Per-viscosity breakdown
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
+    x_pos = np.arange(len(test_viscosities))
+    width = 0.2
+
+    ax1.bar(
+        x_pos - 1.5 * width,
+        results["maml"]["final_loss"],
+        width,
+        label="MAML",
+        color="blue",
+    )
+    ax1.bar(
+        x_pos - 0.5 * width,
+        results["reptile"]["final_loss"],
+        width,
+        label="Reptile",
+        color="orange",
+    )
+    ax1.bar(
+        x_pos + 0.5 * width,
+        results["scratch_short"]["final_loss"],
+        width,
+        label="Random (100)",
+        color="gray",
+    )
+    ax1.bar(
+        x_pos + 1.5 * width,
+        results["scratch_long"]["final_loss"],
+        width,
+        label="Random (1000)",
+        color="darkgray",
+    )
+
+    ax1.set_xlabel("Test Viscosity", fontsize=12)
+    ax1.set_ylabel("Final Loss", fontsize=12)
+    ax1.set_title("Loss by Viscosity", fontsize=14)
+    ax1.set_xticks(x_pos)
+    ax1.set_xticklabels([f"{nu:.4f}" for nu in test_viscosities])
+    ax1.legend(fontsize=9)
+    ax1.grid(True, alpha=0.3, axis="y")
+
+    ax2 = axes[1]
+    ax2.bar(x_pos - 1.5 * width, results["maml"]["residual"], width, label="MAML", color="blue")
+    ax2.bar(
+        x_pos - 0.5 * width,
+        results["reptile"]["residual"],
+        width,
+        label="Reptile",
+        color="orange",
+    )
+    ax2.bar(
+        x_pos + 0.5 * width,
+        results["scratch_short"]["residual"],
+        width,
+        label="Random (100)",
+        color="gray",
+    )
+    ax2.bar(
+        x_pos + 1.5 * width,
+        results["scratch_long"]["residual"],
+        width,
+        label="Random (1000)",
+        color="darkgray",
+    )
+
+    ax2.set_xlabel("Test Viscosity", fontsize=12)
+    ax2.set_ylabel("PDE Residual", fontsize=12)
+    ax2.set_title("PDE Residual by Viscosity", fontsize=14)
+    ax2.set_xticks(x_pos)
+    ax2.set_xticklabels([f"{nu:.4f}" for nu in test_viscosities])
+    ax2.legend(fontsize=9)
+    ax2.grid(True, alpha=0.3, axis="y")
+
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/error_distribution.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: {OUTPUT_DIR}/error_distribution.png")
+
+    print()
+    print("=" * 70)
+    print("Meta-optimization example completed successfully!")
+    print("=" * 70)
+    print()
+    print("Key Takeaways:")
+    print("  1. Meta-learning finds initializations that generalize across viscosity values")
+    print("  2. MAML/Reptile + 100 steps achieves quality comparable to random + 1000 steps")
+    print(
+        f"  3. Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps for "
+        "same quality"
+    )
+    print("  4. Both MAML and Reptile work well; Reptile is simpler and often faster")
+    print()
+    print(f"Results saved to: {OUTPUT_DIR}")
+    print("=" * 70)
+
+    return {
+        "maml_mean_residual": float(maml_mean_residual),
+        "reptile_mean_residual": float(reptile_mean_residual),
+        "scratch_short_mean_residual": float(scratch_short_mean_residual),
+        "scratch_long_mean_residual": float(scratch_long_mean_residual),
+        "num_test_viscosities": int(len(test_viscosities)),
+    }
+
 
 # %%
-# Figure 2: Per-viscosity breakdown
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-# Loss comparison
-ax1 = axes[0]
-x_pos = np.arange(len(test_viscosities))
-width = 0.2
-
-ax1.bar(
-    x_pos - 1.5 * width,
-    results["maml"]["final_loss"],
-    width,
-    label="MAML",
-    color="blue",
-)
-ax1.bar(
-    x_pos - 0.5 * width,
-    results["reptile"]["final_loss"],
-    width,
-    label="Reptile",
-    color="orange",
-)
-ax1.bar(
-    x_pos + 0.5 * width,
-    results["scratch_short"]["final_loss"],
-    width,
-    label="Random (100)",
-    color="gray",
-)
-ax1.bar(
-    x_pos + 1.5 * width,
-    results["scratch_long"]["final_loss"],
-    width,
-    label="Random (1000)",
-    color="darkgray",
-)
-
-ax1.set_xlabel("Test Viscosity", fontsize=12)
-ax1.set_ylabel("Final Loss", fontsize=12)
-ax1.set_title("Loss by Viscosity", fontsize=14)
-ax1.set_xticks(x_pos)
-ax1.set_xticklabels([f"{nu:.4f}" for nu in test_viscosities])
-ax1.legend(fontsize=9)
-ax1.grid(True, alpha=0.3, axis="y")
-
-# Residual comparison
-ax2 = axes[1]
-ax2.bar(x_pos - 1.5 * width, results["maml"]["residual"], width, label="MAML", color="blue")
-ax2.bar(
-    x_pos - 0.5 * width,
-    results["reptile"]["residual"],
-    width,
-    label="Reptile",
-    color="orange",
-)
-ax2.bar(
-    x_pos + 0.5 * width,
-    results["scratch_short"]["residual"],
-    width,
-    label="Random (100)",
-    color="gray",
-)
-ax2.bar(
-    x_pos + 1.5 * width,
-    results["scratch_long"]["residual"],
-    width,
-    label="Random (1000)",
-    color="darkgray",
-)
-
-ax2.set_xlabel("Test Viscosity", fontsize=12)
-ax2.set_ylabel("PDE Residual", fontsize=12)
-ax2.set_title("PDE Residual by Viscosity", fontsize=14)
-ax2.set_xticks(x_pos)
-ax2.set_xticklabels([f"{nu:.4f}" for nu in test_viscosities])
-ax2.legend(fontsize=9)
-ax2.grid(True, alpha=0.3, axis="y")
-
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/error_distribution.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"  Saved: {OUTPUT_DIR}/error_distribution.png")
-
-# %%
-print()
-print("=" * 70)
-print("Meta-optimization example completed successfully!")
-print("=" * 70)
-print()
-print("Key Takeaways:")
-print("  1. Meta-learning finds initializations that generalize across viscosity values")
-print("  2. MAML/Reptile + 100 steps achieves quality comparable to random + 1000 steps")
-print(
-    f"  3. Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps for same quality"
-)
-print("  4. Both MAML and Reptile work well; Reptile is simpler and often faster")
-print()
-print(f"Results saved to: {OUTPUT_DIR}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

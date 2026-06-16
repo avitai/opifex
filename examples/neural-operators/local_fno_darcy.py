@@ -67,6 +67,8 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
+from opifex.core.evaluation import predict_in_batches
+from opifex.core.metrics import per_sample_relative_l2
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
@@ -74,12 +76,6 @@ from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.neural.operators.fno.local import LocalFourierNeuralOperator
 
-
-print("=" * 70)
-print("Opifex Example: Local FNO on Darcy Flow")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
 
 # %% [markdown]
 """
@@ -106,97 +102,11 @@ NUM_LAYERS = 4
 KERNEL_SIZE = 3
 
 OUTPUT_DIR = Path("docs/assets/examples/local_fno_darcy")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
-print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
-print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
-print(f"FNO config: modes={MODES}, width={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
-print(f"Local kernel size: {KERNEL_SIZE}")
 
 # %% [markdown]
 """
-## Data Loading
-
-Generate Darcy flow data: permeability fields (input) mapped to pressure
-solutions (output). Opifex's `create_darcy_loader` wraps a spectral solver in a
-Google Grain DataLoader for efficient streaming and batching.
-"""
-
-# %%
-print()
-print("Generating Darcy flow data...")
-
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-)
-
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
-
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
-
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
-
-X_test_list, Y_test_list = [], []
-for batch in test_loader:
-    X_test_list.append(batch["input"])
-    Y_test_list.append(batch["output"])
-
-X_test = np.concatenate(X_test_list, axis=0)
-Y_test = np.concatenate(Y_test_list, axis=0)
-
-# LocalFNO expects channels-first: (batch, channels, height, width)
-if X_train.ndim == 3:
-    X_train = X_train[:, np.newaxis, :, :]
-    Y_train = Y_train[:, np.newaxis, :, :]
-if X_test.ndim == 3:
-    X_test = X_test[:, np.newaxis, :, :]
-    Y_test = Y_test[:, np.newaxis, :, :]
-
-print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
-print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
-
-# %% [markdown]
-"""
-## Normalization
-
-Neural operators train best on standardized fields. We fit Gaussian statistics
-on the training set, normalize all splits, and un-normalize predictions before
-computing physical-space errors.
-"""
-
-# %%
-x_mean, x_std = X_train.mean(), X_train.std()
-y_mean, y_std = Y_train.mean(), Y_train.std()
-
-X_train_n = (X_train - x_mean) / x_std
-Y_train_n = (Y_train - y_mean) / y_std
-X_test_n = (X_test - x_mean) / x_std
-Y_test_n = (Y_test - y_mean) / y_std
-
-print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
-print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
-
-# %% [markdown]
-"""
-## Model Creation
+## Model Definitions
 
 LocalFNO operates on channels-first tensors and does not append grid
 coordinates internally, so we wrap it with `GridEmbedding2D`. The embedding
@@ -326,263 +236,277 @@ def count_params(model: nnx.Module) -> int:
     return sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param)))
 
 
-print()
-print("Creating LocalFNO model with grid embedding...")
-local_fno = LocalFNOWithGrid(
-    in_channels=1,
-    out_channels=1,
-    hidden_channels=HIDDEN_CHANNELS,
-    modes=MODES,
-    num_layers=NUM_LAYERS,
-    kernel_size=KERNEL_SIZE,
-    rngs=nnx.Rngs(SEED),
-)
-local_fno_params = count_params(local_fno)
-print(f"LocalFNO parameters: {local_fno_params:,}")
-
-print()
-print("Creating standard FNO for comparison...")
-standard_fno = FNOWithGrid(
-    in_channels=1,
-    out_channels=1,
-    hidden_channels=HIDDEN_CHANNELS,
-    modes=MODES[0],
-    num_layers=NUM_LAYERS,
-    rngs=nnx.Rngs(SEED),
-)
-fno_params = count_params(standard_fno)
-print(f"Standard FNO parameters: {fno_params:,}")
-print(f"LocalFNO overhead: {(local_fno_params / fno_params - 1) * 100:.1f}%")
-
 # %% [markdown]
 """
-## Training with Opifex Trainer
+## Run the Example
 
-We train both models with the relative-L2 loss (`loss_type="relative_l2"`), the
-standard operator-learning objective. The `Trainer.fit()` method handles batched
-training with JIT compilation, validation, and progress logging.
+`main()` loads and normalizes the Darcy data, trains both LocalFNO and a
+standard FNO with the relative-L2 loss, evaluates and compares them, saves the
+figures, and returns a small dict of finite metrics.
 """
 
 
 # %%
-def train_operator(model: nnx.Module, model_name: str) -> tuple[nnx.Module, list[float]]:
-    """Train an operator on the normalized Darcy data with the relative-L2 loss.
+def main() -> dict[str, float | int]:
+    """Train and compare LocalFNO vs a standard FNO on the Darcy flow problem."""
+    print("=" * 70)
+    print("Opifex Example: Local FNO on Darcy Flow")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
+    print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
+    print(f"FNO config: modes={MODES}, width={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
+    print(f"Local kernel size: {KERNEL_SIZE}")
 
-    Args:
-        model: The NNX operator to train.
-        model_name: Human-readable name used in log messages.
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    Returns:
-        Tuple of (trained model, per-epoch training-loss history).
-    """
-    loss_history: list[float] = []
-
-    def record_loss(_epoch: int, logs: dict) -> None:
-        loss_history.append(float(logs["train_loss"]))
-
-    config = TrainingConfig(
-        num_epochs=NUM_EPOCHS,
-        learning_rate=LEARNING_RATE,
+    # --- Data loading via datarax ---
+    print()
+    print("Generating Darcy flow data and serving via datarax...")
+    n_samples = N_TRAIN + N_TEST
+    loaders = create_darcy_loader(
+        n_samples=n_samples,
         batch_size=BATCH_SIZE,
-        validation_frequency=10,
-        verbose=True,
-        loss_config=LossConfig(loss_type="relative_l2"),
-        progress_callback=record_loss,
-    )
-    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
-
-    print(f"Training {model_name} (Adam lr={LEARNING_RATE}, relative-L2 loss)...")
-    start = time.time()
-    trained_model, metrics = trainer.fit(
-        train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
-        val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),
-    )
-    elapsed = time.time() - start
-    print(f"{model_name} training completed in {elapsed:.1f}s")
-    print(f"  Final train loss: {metrics.get('final_train_loss', 'N/A')}")
-    print(f"  Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
-    return trained_model, loss_history
-
-
-# %%
-print()
-local_fno, local_history = train_operator(local_fno, "LocalFNO")
-
-print()
-standard_fno, fno_history = train_operator(standard_fno, "Standard FNO")
-
-# %% [markdown]
-"""
-## Evaluation
-
-Predictions are un-normalized back to physical pressure before measuring the
-relative L2 error. The test set is run through each model in batches to bound
-memory use.
-"""
-
-# %%
-X_test_jnp = jnp.array(X_test_n)
-Y_test_jnp = jnp.array(Y_test)
-
-
-def predict_in_batches(
-    model: nnx.Module,
-    inputs: jax.Array,
-    batch_size: int = 128,
-) -> jax.Array:
-    """Run the model over the inputs in batches to bound memory use.
-
-    Args:
-        model: The trained operator.
-        inputs: Normalized inputs of shape (batch, channels, height, width).
-        batch_size: Forward-pass batch size.
-
-    Returns:
-        Un-normalized predictions of shape (batch, channels, height, width).
-    """
-    outputs = [model(inputs[i : i + batch_size]) for i in range(0, inputs.shape[0], batch_size)]
-    return jnp.concatenate(outputs, axis=0) * y_std + y_mean
-
-
-def evaluate_model(model: nnx.Module, model_name: str) -> tuple[jax.Array, float, float]:
-    """Evaluate an operator on the physical-space test set.
-
-    Args:
-        model: The trained operator.
-        model_name: Human-readable name used in log messages.
-
-    Returns:
-        Tuple of (predictions, test MSE, mean relative-L2 error).
-    """
-    predictions = predict_in_batches(model, X_test_jnp)
-    mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
-
-    pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
-    y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-    per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(y_flat, axis=1)
-    rel_l2_mean = float(jnp.mean(per_sample_rel_l2))
-    rel_l2_min = float(jnp.min(per_sample_rel_l2))
-    rel_l2_max = float(jnp.max(per_sample_rel_l2))
-
-    print(f"{model_name} Results:")
-    print(f"  Test MSE:         {mse:.6e}")
-    print(f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})")
-    return predictions, mse, rel_l2_mean
-
-
-# %%
-print()
-print("Running evaluation...")
-local_pred, local_mse, local_rel_l2 = evaluate_model(local_fno, "LocalFNO")
-print()
-fno_pred, fno_mse, fno_rel_l2 = evaluate_model(standard_fno, "Standard FNO")
-
-# Compare
-print()
-print("Comparison:")
-mse_improvement = (fno_mse - local_mse) / fno_mse * 100
-rel_l2_improvement = (fno_rel_l2 - local_rel_l2) / fno_rel_l2 * 100
-print(f"  MSE improvement (LocalFNO vs FNO): {mse_improvement:+.1f}%")
-print(f"  Rel L2 improvement: {rel_l2_improvement:+.1f}%")
-
-# %% [markdown]
-"""
-## Visualization
-
-Compare LocalFNO and standard FNO predictions against the ground truth, with
-absolute-error maps for one representative test sample.
-"""
-
-# %%
-print()
-print("Generating visualizations...")
-
-fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-
-sample_idx = 0
-input_field = np.array(X_test[sample_idx, 0])
-ground_truth = np.array(Y_test[sample_idx, 0])
-
-# Row 1: LocalFNO
-axes[0, 0].imshow(input_field, cmap="viridis")
-axes[0, 0].set_title("Input (Permeability)")
-axes[0, 0].set_ylabel("LocalFNO", fontsize=12)
-axes[0, 0].axis("off")
-
-axes[0, 1].imshow(ground_truth, cmap="RdBu_r")
-axes[0, 1].set_title("Ground Truth")
-axes[0, 1].axis("off")
-
-axes[0, 2].imshow(np.array(local_pred[sample_idx, 0]), cmap="RdBu_r")
-axes[0, 2].set_title("LocalFNO Prediction")
-axes[0, 2].axis("off")
-
-local_error = np.abs(np.array(local_pred[sample_idx, 0]) - ground_truth)
-im1 = axes[0, 3].imshow(local_error, cmap="hot")
-axes[0, 3].set_title(f"LocalFNO Error (max={local_error.max():.4f})")
-axes[0, 3].axis("off")
-plt.colorbar(im1, ax=axes[0, 3], fraction=0.046)
-
-# Row 2: Standard FNO
-axes[1, 0].imshow(input_field, cmap="viridis")
-axes[1, 0].set_title("Input (Permeability)")
-axes[1, 0].set_ylabel("Standard FNO", fontsize=12)
-axes[1, 0].axis("off")
-
-axes[1, 1].imshow(ground_truth, cmap="RdBu_r")
-axes[1, 1].set_title("Ground Truth")
-axes[1, 1].axis("off")
-
-axes[1, 2].imshow(np.array(fno_pred[sample_idx, 0]), cmap="RdBu_r")
-axes[1, 2].set_title("Standard FNO Prediction")
-axes[1, 2].axis("off")
-
-fno_error = np.abs(np.array(fno_pred[sample_idx, 0]) - ground_truth)
-im2 = axes[1, 3].imshow(fno_error, cmap="hot")
-axes[1, 3].set_title(f"FNO Error (max={fno_error.max():.4f})")
-axes[1, 3].axis("off")
-plt.colorbar(im2, ax=axes[1, 3], fraction=0.046)
-
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "predictions.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Predictions saved to {OUTPUT_DIR / 'predictions.png'}")
-
-# %%
-# Training comparison and test-error analysis
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-# Loss histories (relative-L2 train loss per epoch)
-if local_history:
-    axes[0].semilogy(local_history, label="LocalFNO", linewidth=2)
-if fno_history:
-    axes[0].semilogy(fno_history, label="Standard FNO", linewidth=2, linestyle="--")
-axes[0].set_xlabel("Epoch")
-axes[0].set_ylabel("Relative-L2 Loss")
-axes[0].set_title("Training Loss Comparison")
-axes[0].legend()
-axes[0].grid(True, alpha=0.3)
-
-# Test relative-L2 error comparison
-models = ["LocalFNO", "Standard FNO"]
-rel_l2_values = [local_rel_l2, fno_rel_l2]
-colors = ["steelblue", "coral"]
-bars = axes[1].bar(models, rel_l2_values, color=colors)
-axes[1].set_ylabel("Test Relative L2")
-axes[1].set_title("Test Error Comparison")
-for bar, value in zip(bars, rel_l2_values, strict=True):
-    axes[1].text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height(),
-        f"{value:.4f}",
-        ha="center",
-        va="bottom",
+        resolution=RESOLUTION,
+        val_fraction=N_TEST / n_samples,
+        seed=SEED,
     )
 
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "comparison.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Comparison saved to {OUTPUT_DIR / 'comparison.png'}")
+    # Collect the datarax pipelines into arrays. Batches are channels-first
+    # {"input": (b, 1, H, W), "output": (b, 1, H, W)} for Darcy.
+    def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+        inputs, outputs = [], []
+        for batch in pipeline:
+            inputs.append(np.asarray(batch["input"]))
+            outputs.append(np.asarray(batch["output"]))
+        return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+    X_train, Y_train = _collect(loaders.train)
+    X_test, Y_test = _collect(loaders.val)
+
+    print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
+    print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
+
+    # --- Normalization ---
+    x_mean, x_std = X_train.mean(), X_train.std()
+    y_mean, y_std = Y_train.mean(), Y_train.std()
+
+    X_train_n = (X_train - x_mean) / x_std
+    Y_train_n = (Y_train - y_mean) / y_std
+    X_test_n = (X_test - x_mean) / x_std
+    Y_test_n = (Y_test - y_mean) / y_std
+
+    print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+    print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+    # --- Model creation ---
+    print()
+    print("Creating LocalFNO model with grid embedding...")
+    local_fno = LocalFNOWithGrid(
+        in_channels=1,
+        out_channels=1,
+        hidden_channels=HIDDEN_CHANNELS,
+        modes=MODES,
+        num_layers=NUM_LAYERS,
+        kernel_size=KERNEL_SIZE,
+        rngs=nnx.Rngs(SEED),
+    )
+    local_fno_params = count_params(local_fno)
+    print(f"LocalFNO parameters: {local_fno_params:,}")
+
+    print()
+    print("Creating standard FNO for comparison...")
+    standard_fno = FNOWithGrid(
+        in_channels=1,
+        out_channels=1,
+        hidden_channels=HIDDEN_CHANNELS,
+        modes=MODES[0],
+        num_layers=NUM_LAYERS,
+        rngs=nnx.Rngs(SEED),
+    )
+    fno_params = count_params(standard_fno)
+    print(f"Standard FNO parameters: {fno_params:,}")
+    print(f"LocalFNO overhead: {(local_fno_params / fno_params - 1) * 100:.1f}%")
+
+    # --- Training ---
+    def train_operator(model: nnx.Module, model_name: str) -> tuple[nnx.Module, list[float]]:
+        """Train an operator on the normalized Darcy data with the relative-L2 loss.
+
+        Args:
+            model: The NNX operator to train.
+            model_name: Human-readable name used in log messages.
+
+        Returns:
+            Tuple of (trained model, per-epoch training-loss history).
+        """
+        loss_history: list[float] = []
+
+        def record_loss(_epoch: int, logs: dict) -> None:
+            loss_history.append(float(logs["train_loss"]))
+
+        config = TrainingConfig(
+            num_epochs=NUM_EPOCHS,
+            learning_rate=LEARNING_RATE,
+            batch_size=BATCH_SIZE,
+            validation_frequency=10,
+            verbose=True,
+            loss_config=LossConfig(loss_type="relative_l2"),
+            progress_callback=record_loss,
+        )
+        trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+
+        print(f"Training {model_name} (Adam lr={LEARNING_RATE}, relative-L2 loss)...")
+        start = time.time()
+        trained_model, metrics = trainer.fit(
+            train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
+            val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),
+        )
+        elapsed = time.time() - start
+        print(f"{model_name} training completed in {elapsed:.1f}s")
+        print(f"  Final train loss: {metrics.get('final_train_loss', 'N/A')}")
+        print(f"  Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
+        return trained_model, loss_history
+
+    print()
+    local_fno, local_history = train_operator(local_fno, "LocalFNO")
+    print()
+    standard_fno, fno_history = train_operator(standard_fno, "Standard FNO")
+
+    # --- Evaluation ---
+    X_test_jnp = jnp.array(X_test_n)
+    Y_test_jnp = jnp.array(Y_test)
+
+    def evaluate_model(model: nnx.Module, model_name: str) -> tuple[jax.Array, float, float]:
+        """Evaluate an operator on the physical-space test set."""
+        predictions = predict_in_batches(model, X_test_jnp) * y_std + y_mean
+        mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
+
+        per_sample_rel_l2 = per_sample_relative_l2(predictions, Y_test_jnp)
+        rel_l2_mean = float(jnp.mean(per_sample_rel_l2))
+        rel_l2_min = float(jnp.min(per_sample_rel_l2))
+        rel_l2_max = float(jnp.max(per_sample_rel_l2))
+
+        print(f"{model_name} Results:")
+        print(f"  Test MSE:         {mse:.6e}")
+        print(f"  Relative L2:      {rel_l2_mean:.6f} (min={rel_l2_min:.6f}, max={rel_l2_max:.6f})")
+        return predictions, mse, rel_l2_mean
+
+    print()
+    print("Running evaluation...")
+    local_pred, local_mse, local_rel_l2 = evaluate_model(local_fno, "LocalFNO")
+    print()
+    fno_pred, fno_mse, fno_rel_l2 = evaluate_model(standard_fno, "Standard FNO")
+
+    print()
+    print("Comparison:")
+    mse_improvement = (fno_mse - local_mse) / fno_mse * 100
+    rel_l2_improvement = (fno_rel_l2 - local_rel_l2) / fno_rel_l2 * 100
+    print(f"  MSE improvement (LocalFNO vs FNO): {mse_improvement:+.1f}%")
+    print(f"  Rel L2 improvement: {rel_l2_improvement:+.1f}%")
+
+    # --- Visualization: predictions ---
+    print()
+    print("Generating visualizations...")
+    _fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+
+    sample_idx = 0
+    input_field = np.array(X_test[sample_idx, 0])
+    ground_truth = np.array(Y_test[sample_idx, 0])
+
+    # Row 1: LocalFNO
+    axes[0, 0].imshow(input_field, cmap="viridis")
+    axes[0, 0].set_title("Input (Permeability)")
+    axes[0, 0].set_ylabel("LocalFNO", fontsize=12)
+    axes[0, 0].axis("off")
+    axes[0, 1].imshow(ground_truth, cmap="RdBu_r")
+    axes[0, 1].set_title("Ground Truth")
+    axes[0, 1].axis("off")
+    axes[0, 2].imshow(np.array(local_pred[sample_idx, 0]), cmap="RdBu_r")
+    axes[0, 2].set_title("LocalFNO Prediction")
+    axes[0, 2].axis("off")
+    local_error = np.abs(np.array(local_pred[sample_idx, 0]) - ground_truth)
+    im1 = axes[0, 3].imshow(local_error, cmap="hot")
+    axes[0, 3].set_title(f"LocalFNO Error (max={local_error.max():.4f})")
+    axes[0, 3].axis("off")
+    plt.colorbar(im1, ax=axes[0, 3], fraction=0.046)
+
+    # Row 2: Standard FNO
+    axes[1, 0].imshow(input_field, cmap="viridis")
+    axes[1, 0].set_title("Input (Permeability)")
+    axes[1, 0].set_ylabel("Standard FNO", fontsize=12)
+    axes[1, 0].axis("off")
+    axes[1, 1].imshow(ground_truth, cmap="RdBu_r")
+    axes[1, 1].set_title("Ground Truth")
+    axes[1, 1].axis("off")
+    axes[1, 2].imshow(np.array(fno_pred[sample_idx, 0]), cmap="RdBu_r")
+    axes[1, 2].set_title("Standard FNO Prediction")
+    axes[1, 2].axis("off")
+    fno_error = np.abs(np.array(fno_pred[sample_idx, 0]) - ground_truth)
+    im2 = axes[1, 3].imshow(fno_error, cmap="hot")
+    axes[1, 3].set_title(f"FNO Error (max={fno_error.max():.4f})")
+    axes[1, 3].axis("off")
+    plt.colorbar(im2, ax=axes[1, 3], fraction=0.046)
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "predictions.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Predictions saved to {OUTPUT_DIR / 'predictions.png'}")
+
+    # --- Visualization: training comparison ---
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    if local_history:
+        axes[0].semilogy(local_history, label="LocalFNO", linewidth=2)
+    if fno_history:
+        axes[0].semilogy(fno_history, label="Standard FNO", linewidth=2, linestyle="--")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("Relative-L2 Loss")
+    axes[0].set_title("Training Loss Comparison")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    models = ["LocalFNO", "Standard FNO"]
+    rel_l2_values = [local_rel_l2, fno_rel_l2]
+    colors = ["steelblue", "coral"]
+    bars = axes[1].bar(models, rel_l2_values, color=colors)
+    axes[1].set_ylabel("Test Relative L2")
+    axes[1].set_title("Test Error Comparison")
+    for bar, value in zip(bars, rel_l2_values, strict=True):
+        axes[1].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.4f}",
+            ha="center",
+            va="bottom",
+        )
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "comparison.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Comparison saved to {OUTPUT_DIR / 'comparison.png'}")
+
+    print()
+    print("=" * 70)
+    print("Local FNO Darcy Flow example completed")
+    print("=" * 70)
+    print("Results Summary:")
+    print(
+        f"  LocalFNO:     MSE={local_mse:.6e}, Rel L2={local_rel_l2:.4f}, Params={local_fno_params:,}"
+    )
+    print(f"  Standard FNO: MSE={fno_mse:.6e}, Rel L2={fno_rel_l2:.4f}, Params={fno_params:,}")
+    print(f"  Improvement:  MSE {mse_improvement:+.1f}%, Rel L2 {rel_l2_improvement:+.1f}%")
+    print(f"Results saved to: {OUTPUT_DIR}")
+    print("=" * 70)
+
+    return {
+        "local_fno_mse": local_mse,
+        "local_fno_rel_l2": local_rel_l2,
+        "standard_fno_mse": fno_mse,
+        "standard_fno_rel_l2": fno_rel_l2,
+        "local_fno_parameters": int(local_fno_params),
+        "standard_fno_parameters": int(fno_params),
+    }
+
 
 # %% [markdown]
 """
@@ -596,17 +520,7 @@ After running this example you should observe:
 """
 
 # %%
-print()
-print("=" * 70)
-print("Local FNO Darcy Flow example completed")
-print("=" * 70)
-print()
-print("Results Summary:")
-print(
-    f"  LocalFNO:     MSE={local_mse:.6e}, Rel L2={local_rel_l2:.4f}, Params={local_fno_params:,}"
-)
-print(f"  Standard FNO: MSE={fno_mse:.6e}, Rel L2={fno_rel_l2:.4f}, Params={fno_params:,}")
-print(f"  Improvement:  MSE {mse_improvement:+.1f}%, Rel L2 {rel_l2_improvement:+.1f}%")
-print()
-print(f"Results saved to: {OUTPUT_DIR}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

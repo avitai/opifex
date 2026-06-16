@@ -46,7 +46,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Opifex Framework imports
-from opifex.data.sources import DarcyDataSource
+from opifex.data.sources import generate_darcy
 
 
 # %% [markdown]
@@ -191,19 +191,15 @@ def analyze_darcy_spectral_properties(
     for resolution in resolutions:
         print(f"\nAnalyzing spectral properties at {resolution}x{resolution}")
 
-        # Create data source (Grain-based)
-        data_source = DarcyDataSource(
-            n_samples=min(n_samples, 100),
-            resolution=resolution,
-            viscosity_range=viscosity_range,
-            seed=int(key[0]),
-        )
-
-        # Generate data
+        # Generate data with the vmapped datarax generator. Fields are
+        # channels-first ``(N, 1, H, W)``; drop the channel axis for the 2D
+        # spectral analysis below.
         start_time = time.time()
-        samples = [data_source[i] for i in range(len(data_source))]
-        train_inputs = jnp.stack([s["input"] for s in samples])
-        train_outputs = jnp.stack([s["output"] for s in samples])
+        data = generate_darcy(
+            n_samples=min(n_samples, 100), resolution=resolution, seed=int(key[0])
+        )
+        train_inputs = jnp.asarray(data["input"][:, 0])
+        train_outputs = jnp.asarray(data["output"][:, 0])
         generation_time = time.time() - start_time
 
         print(f"  Generation time: {generation_time:.3f}s")

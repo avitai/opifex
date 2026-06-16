@@ -387,26 +387,23 @@ class NeuralOperatorComparativeStudy:
         Returns:
             Tuple ``(x, y)`` in channels-first ``(N, 1, H, W)`` layout.
         """
-        loader = create_darcy_loader(
+        loaders = create_darcy_loader(
             n_samples=n_samples,
             batch_size=self.batch_size,
             resolution=resolution,
-            shuffle=False,
             seed=seed,
-            worker_count=0,
-            enable_normalization=False,
         )
+        # Drain both train/val pipelines for one contiguous block; batches are
+        # already channels-first ``(N, 1, H, W)``.
         inputs: list[np.ndarray] = []
         outputs: list[np.ndarray] = []
-        for batch in loader:
-            inputs.append(batch["input"])
-            outputs.append(batch["output"])
+        for pipeline in (loaders.train, loaders.val):
+            for batch in pipeline:
+                inputs.append(np.asarray(batch["input"]))
+                outputs.append(np.asarray(batch["output"]))
 
-        x = np.concatenate(inputs, axis=0)
-        y = np.concatenate(outputs, axis=0)
-        if x.ndim == 3:
-            x = x[:, np.newaxis, :, :]
-            y = y[:, np.newaxis, :, :]
+        x = np.concatenate(inputs, axis=0)[:n_samples]
+        y = np.concatenate(outputs, axis=0)[:n_samples]
         return x, y
 
     def generate_test_datasets(self, resolution: int) -> dict[str, dict[str, jnp.ndarray]]:
@@ -1008,17 +1005,30 @@ on Darcy flow, so the accuracy column is meaningful for comparison.
 """
 
 # %%
-study = NeuralOperatorComparativeStudy(
-    resolution_sizes=[32, 64],
-    n_train=1000,
-    n_test=100,
-    num_epochs=100,
-    batch_size=32,
-    learning_rate=1e-3,
-    hidden_channels=32,
-    seed=42,
-)
-study.run_complete_study()
+def main() -> dict[str, float | int]:
+    """Run the comparative study and return a finite summary of the results."""
+    study = NeuralOperatorComparativeStudy(
+        resolution_sizes=[32, 64],
+        n_train=1000,
+        n_test=100,
+        num_epochs=100,
+        batch_size=32,
+        learning_rate=1e-3,
+        hidden_channels=32,
+        seed=42,
+    )
+    study.run_complete_study()
+
+    successful = [r for r in study.all_results if "relative_l2" in r.metrics]
+    best_relative_l2 = (
+        min(r.metrics["relative_l2"].value for r in successful) if successful else 0.0
+    )
+    return {
+        "total_runs": len(study.all_results),
+        "successful_runs": len(successful),
+        "best_relative_l2": float(best_relative_l2),
+    }
+
 
 # %% [markdown]
 """
@@ -1029,3 +1039,9 @@ study.run_complete_study()
 - Compare against neuraloperator (PyTorch) and DeepXDE baselines
 - See individual model examples (`fno_darcy.py`, `uno_darcy.py`) for details
 """
+
+# %%
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

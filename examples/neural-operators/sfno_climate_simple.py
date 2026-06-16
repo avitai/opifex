@@ -25,12 +25,12 @@ spherical harmonic transforms, making it well-suited for global climate and weat
 prediction tasks.
 
 We use Opifex's `create_climate_sfno` factory to build the model, the
-`create_shallow_water_loader` for streaming data via Google Grain, and the
+`create_shallow_water_loader` for streaming data via datarax, and the
 `Trainer` with `TrainingConfig` for the training loop.
 
 ## Learning Goals
 1. Create an SFNO with `create_climate_sfno` factory
-2. Load climate data with `create_shallow_water_loader` (Grain-based)
+2. Load climate data with `create_shallow_water_loader` (datarax-based)
 3. Train with Opifex's `Trainer.fit()` API
 4. Evaluate and visualize climate predictions on a spherical domain
 """
@@ -41,6 +41,7 @@ We use Opifex's `create_climate_sfno` factory to build the model, the
 """
 
 # %%
+import math
 import time
 import warnings
 from pathlib import Path
@@ -60,12 +61,6 @@ from opifex.data.loaders import create_shallow_water_loader
 from opifex.neural.operators.fno.spherical import create_climate_sfno
 
 
-print("=" * 70)
-print("Opifex Example: Simple Spherical FNO for Climate Modeling")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # %% [markdown]
 """
 ## Configuration
@@ -84,213 +79,188 @@ LEARNING_RATE = 1e-3
 SEED = 42
 
 OUTPUT_DIR = Path("docs/assets/examples/sfno_climate_simple")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
-print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
-print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
-print(f"Output directory: {OUTPUT_DIR}")
 
 # %% [markdown]
 """
-## Data Loading with Grain
+## Run the example
 
-Opifex provides `create_shallow_water_loader` which generates synthetic
-shallow water equation data and wraps it in a Google Grain DataLoader
-for efficient streaming and batching.
+All runtime logic — data loading via datarax, model creation, training with the
+Opifex `Trainer`, evaluation, and visualization — lives in `main()`. Nothing
+heavy runs at import time, so the module can be imported cheaply (e.g. by the
+example smoke tests).
 """
+
 
 # %%
-print()
-print("Loading shallow water equation data via Grain...")
-train_loader = create_shallow_water_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-)
+def main() -> dict[str, float | int]:
+    """Train a climate SFNO, evaluate it, save plots, and return scalar metrics."""
+    print("=" * 70)
+    print("Opifex Example: Simple Spherical FNO for Climate Modeling")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
 
-test_loader = create_shallow_water_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
+    print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
+    print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
+    print(f"Output directory: {OUTPUT_DIR}")
 
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
+    # --- Data loading with datarax ---
+    print()
+    print("Loading shallow water equation data via datarax...")
+    n_samples = N_TRAIN + N_TEST
+    loaders = create_shallow_water_loader(
+        n_samples=n_samples,
+        batch_size=BATCH_SIZE,
+        resolution=RESOLUTION,
+        val_fraction=N_TEST / n_samples,
+        seed=SEED,
+    )
 
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
+    def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+        # Batches are channels-first dicts: input/output each (batch, 3, H, W).
+        inputs, outputs = [], []
+        for batch in pipeline:
+            inputs.append(np.asarray(batch["input"]))
+            outputs.append(np.asarray(batch["output"]))
+        return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
-X_test_list, Y_test_list = [], []
-for batch in test_loader:
-    X_test_list.append(batch["input"])
-    Y_test_list.append(batch["output"])
+    x_train, y_train = _collect(loaders.train)
+    x_test, y_test = _collect(loaders.val)
 
-X_test = np.concatenate(X_test_list, axis=0)
-Y_test = np.concatenate(Y_test_list, axis=0)
+    print(f"Training data: X={x_train.shape}, Y={y_train.shape}")
+    print(f"Test data:     X={x_test.shape}, Y={y_test.shape}")
 
-# Ensure 4D tensors: (batch, channels, height, width)
-if X_train.ndim == 3:
-    X_train = X_train[:, None, :, :]
-    Y_train = Y_train[:, None, :, :]
-if X_test.ndim == 3:
-    X_test = X_test[:, None, :, :]
-    Y_test = Y_test[:, None, :, :]
+    # --- Model creation ---
+    print()
+    print("Creating Spherical FNO model...")
+    in_channels = x_train.shape[1]
+    out_channels = y_train.shape[1]
 
-print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
-print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
+    model = create_climate_sfno(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        lmax=8,
+        rngs=nnx.Rngs(SEED),
+    )
 
-# %% [markdown]
-"""
-## Model Creation
+    print("Model: Spherical FNO (lmax=8)")
+    print(f"Input channels: {in_channels}, Output channels: {out_channels}")
 
-The `create_climate_sfno` factory creates a Spherical FNO pre-configured for
-climate modeling. It sets up spherical harmonic convolution layers with the
-specified maximum degree `lmax`.
-"""
+    # --- Training with Opifex Trainer ---
+    print()
+    print("Setting up Trainer...")
+    config = TrainingConfig(
+        num_epochs=NUM_EPOCHS,
+        learning_rate=LEARNING_RATE,
+        batch_size=BATCH_SIZE,
+        verbose=True,
+    )
 
-# %%
-print()
-print("Creating Spherical FNO model...")
-in_channels = X_train.shape[1]
-out_channels = Y_train.shape[1]
+    trainer = Trainer(
+        model=model,
+        config=config,
+        rngs=nnx.Rngs(SEED),
+    )
 
-model = create_climate_sfno(
-    in_channels=in_channels,
-    out_channels=out_channels,
-    lmax=8,
-    rngs=nnx.Rngs(SEED),
-)
+    print(f"Optimizer: Adam (lr={LEARNING_RATE})")
+    print()
+    print("Starting training...")
+    start_time = time.time()
 
-print("Model: Spherical FNO (lmax=8)")
-print(f"Input channels: {in_channels}, Output channels: {out_channels}")
+    trained_model, metrics = trainer.fit(
+        train_data=(jnp.array(x_train), jnp.array(y_train)),
+        val_data=(jnp.array(x_test), jnp.array(y_test)),
+    )
 
-# %% [markdown]
-"""
-## Training with Opifex Trainer
+    training_time = time.time() - start_time
+    print(f"Training completed in {training_time:.1f}s")
+    print(f"Final train loss: {metrics.get('final_train_loss', 'N/A')}")
+    print(f"Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
 
-Instead of writing a manual training loop, we use Opifex's `Trainer` with
-`TrainingConfig`. The `Trainer.fit()` method handles:
-- Batched training with JIT compilation
-- Validation at configurable intervals
-- Progress logging
-- Checkpointing (optional)
-"""
+    # --- Evaluation ---
+    print()
+    print("Evaluating on test set...")
+    x_test_jnp = jnp.array(x_test)
+    y_test_jnp = jnp.array(y_test)
 
-# %%
-print()
-print("Setting up Trainer...")
-config = TrainingConfig(
-    num_epochs=NUM_EPOCHS,
-    learning_rate=LEARNING_RATE,
-    batch_size=BATCH_SIZE,
-    verbose=True,
-)
+    predictions = trained_model(x_test_jnp)
 
-trainer = Trainer(
-    model=model,
-    config=config,
-    rngs=nnx.Rngs(SEED),
-)
+    test_mse = float(jnp.mean((predictions - y_test_jnp) ** 2))
 
-print(f"Optimizer: Adam (lr={LEARNING_RATE})")
-print()
-print("Starting training...")
-start_time = time.time()
+    # Relative L2 error per sample
+    pred_diff = (predictions - y_test_jnp).reshape(predictions.shape[0], -1)
+    y_flat = y_test_jnp.reshape(y_test_jnp.shape[0], -1)
+    rel_l2 = float(
+        jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(y_flat, axis=1))
+    )
 
-trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train), jnp.array(Y_train)),
-    val_data=(jnp.array(X_test), jnp.array(Y_test)),
-)
+    print(f"Test MSE:         {test_mse:.6f}")
+    print(f"Test Relative L2: {rel_l2:.6f}")
 
-training_time = time.time() - start_time
-print(f"Training completed in {training_time:.1f}s")
-print(f"Final train loss: {metrics.get('final_train_loss', 'N/A')}")
-print(f"Final val loss:   {metrics.get('final_val_loss', 'N/A')}")
+    # --- Visualization ---
+    print()
+    print("Generating visualization...")
 
-# %% [markdown]
-"""
-## Evaluation
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    fig.suptitle("Spherical FNO Climate Prediction (Opifex)", fontsize=14, fontweight="bold")
 
-Evaluate the trained model on the test set by computing MSE and relative L2 error.
-"""
+    sample_idx = 0
 
-# %%
-print()
-print("Evaluating on test set...")
-X_test_jnp = jnp.array(X_test)
-Y_test_jnp = jnp.array(Y_test)
+    # Input
+    im0 = axes[0].imshow(x_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
+    axes[0].set_title("Input")
+    axes[0].set_xlabel("Longitude")
+    axes[0].set_ylabel("Latitude")
+    plt.colorbar(im0, ax=axes[0], shrink=0.8)
 
-predictions = trained_model(X_test_jnp)
+    # Ground truth
+    im1 = axes[1].imshow(y_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
+    axes[1].set_title("Ground Truth")
+    axes[1].set_xlabel("Longitude")
+    plt.colorbar(im1, ax=axes[1], shrink=0.8)
 
-test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
+    # Prediction
+    pred_np = np.array(predictions[sample_idx, 0])
+    im2 = axes[2].imshow(pred_np, cmap="RdBu_r", aspect="equal")
+    axes[2].set_title("SFNO Prediction")
+    axes[2].set_xlabel("Longitude")
+    plt.colorbar(im2, ax=axes[2], shrink=0.8)
 
-# Relative L2 error per sample
-pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
-Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-rel_l2 = float(jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)))
+    # Error
+    error = np.abs(pred_np - y_test[sample_idx, 0])
+    im3 = axes[3].imshow(error, cmap="plasma", aspect="equal")
+    axes[3].set_title("Absolute Error")
+    axes[3].set_xlabel("Longitude")
+    plt.colorbar(im3, ax=axes[3], shrink=0.8)
 
-print(f"Test MSE:         {test_mse:.6f}")
-print(f"Test Relative L2: {rel_l2:.6f}")
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "sfno_results.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
-# %% [markdown]
-"""
-## Visualization
+    print(f"Visualization saved to {OUTPUT_DIR / 'sfno_results.png'}")
 
-Plot the input field, ground truth, SFNO prediction, and absolute error
-for a sample from the test set.
-"""
+    print()
+    print("=" * 70)
+    print(f"Spherical FNO Climate example completed in {training_time:.1f}s")
+    print(f"Results saved to: {OUTPUT_DIR}")
+    print("=" * 70)
 
-# %%
-print()
-print("Generating visualization...")
+    # --- Metrics dict (finite scalars only) ---
+    param_count = sum(int(p.size) for p in jax.tree.leaves(nnx.state(trained_model, nnx.Param)))
+    summary: dict[str, float | int] = {
+        "test_mse": test_mse,
+        "l2_relative_error": rel_l2,
+        "param_count": param_count,
+    }
 
-fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-fig.suptitle("Spherical FNO Climate Prediction (Opifex)", fontsize=14, fontweight="bold")
+    final_train_loss = metrics.get("final_train_loss", "N/A")
+    if isinstance(final_train_loss, (int, float)) and math.isfinite(final_train_loss):
+        summary["final_train_loss"] = float(final_train_loss)
 
-sample_idx = 0
+    return summary
 
-# Input
-im0 = axes[0].imshow(X_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
-axes[0].set_title("Input")
-axes[0].set_xlabel("Longitude")
-axes[0].set_ylabel("Latitude")
-plt.colorbar(im0, ax=axes[0], shrink=0.8)
-
-# Ground truth
-im1 = axes[1].imshow(Y_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
-axes[1].set_title("Ground Truth")
-axes[1].set_xlabel("Longitude")
-plt.colorbar(im1, ax=axes[1], shrink=0.8)
-
-# Prediction
-pred_np = np.array(predictions[sample_idx, 0])
-im2 = axes[2].imshow(pred_np, cmap="RdBu_r", aspect="equal")
-axes[2].set_title("SFNO Prediction")
-axes[2].set_xlabel("Longitude")
-plt.colorbar(im2, ax=axes[2], shrink=0.8)
-
-# Error
-error = np.abs(pred_np - Y_test[sample_idx, 0])
-im3 = axes[3].imshow(error, cmap="plasma", aspect="equal")
-axes[3].set_title("Absolute Error")
-axes[3].set_xlabel("Longitude")
-plt.colorbar(im3, ax=axes[3], shrink=0.8)
-
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "sfno_results.png", dpi=150, bbox_inches="tight")
-plt.close()
-
-print(f"Visualization saved to {OUTPUT_DIR / 'sfno_results.png'}")
 
 # %% [markdown]
 """
@@ -309,8 +279,7 @@ After running this example you should observe:
 """
 
 # %%
-print()
-print("=" * 70)
-print(f"Spherical FNO Climate example completed in {training_time:.1f}s")
-print(f"Results saved to: {OUTPUT_DIR}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

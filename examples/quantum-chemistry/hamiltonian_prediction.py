@@ -112,13 +112,6 @@ from opifex.neural.quantum.hamiltonian import (
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_default_matmul_precision", "high")
 
-print("=" * 70)
-print("Opifex Example: Equivariant DFT Hamiltonian Prediction (QHNet block form)")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-print(f"Block irreps: {BLOCK_IRREPS}  (per-atom / per-edge block size {FULL_ORBITALS})")
-
 # %% [markdown]
 """
 ## Configuration
@@ -139,7 +132,6 @@ here: the equivariance is structural and holds for *any* weights.
 # %%
 SEED = 0
 OUTPUT_DIR = Path("docs/assets/examples/hamiltonian_prediction")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 CONFIG = BlockHamiltonianConfig(
     hidden_irreps="32x0e + 32x1o + 32x2e + 32x3o + 32x4e",  # uniform mul, l up to the d-d block
@@ -163,14 +155,6 @@ METHANE_POSITIONS = jnp.array(
         [-1.19, 1.19, -1.19],
     ]
 )
-
-predictor = BlockHamiltonianPredictor(config=CONFIG, rngs=nnx.Rngs(SEED))
-num_params = sum(
-    int(np.prod(leaf.shape)) for leaf in jax.tree_util.tree_leaves(nnx.state(predictor, nnx.Param))
-)
-print(f"Predictor: irreps={CONFIG.hidden_irreps}, layers={CONFIG.num_interactions}")
-print(f"Trainable parameters: {num_params}")
-
 
 # %% [markdown]
 """
@@ -224,25 +208,6 @@ def single_batch(
     return atomic_numbers, positions, edge_index, node_batch
 
 
-n_water = int(WATER_ATOMIC_NUMBERS.shape[0])
-n_methane = int(METHANE_ATOMIC_NUMBERS.shape[0])
-
-batch_atomic_numbers = jnp.concatenate([WATER_ATOMIC_NUMBERS, METHANE_ATOMIC_NUMBERS])
-batch_positions = jnp.concatenate([WATER_POSITIONS, METHANE_POSITIONS])
-water_senders, water_receivers = complete_edges(0, n_water)
-methane_senders, methane_receivers = complete_edges(n_water, n_methane)
-batch_edge_index = jnp.asarray(
-    [water_senders + methane_senders, water_receivers + methane_receivers], dtype=jnp.int32
-)
-batch_node_batch = jnp.concatenate(
-    [jnp.zeros((n_water,), jnp.int32), jnp.full((n_methane,), 1, jnp.int32)]
-)
-
-print()
-print(f"Flat batch: {n_water + n_methane} atoms, {batch_edge_index.shape[1]} directed edges")
-print(f"  water   (O,H,H)      atoms 0..{n_water - 1}")
-print(f"  methane (C,H,H,H,H)  atoms {n_water}..{n_water + n_methane - 1}")
-
 # %% [markdown]
 """
 ## Running the Predictor
@@ -267,19 +232,6 @@ def predict_blocks(
     return module(atomic_numbers, positions, edge_index, node_batch)
 
 
-batch_out = predict_blocks(
-    predictor, batch_atomic_numbers, batch_positions, batch_edge_index, batch_node_batch
-)
-diagonal_blocks = batch_out["diagonal_blocks"]
-off_diagonal_blocks = batch_out["off_diagonal_blocks"]
-
-print(f"diagonal_blocks:     {diagonal_blocks.shape}  (one (14,14) block per atom)")
-print(f"off_diagonal_blocks: {off_diagonal_blocks.shape}  (one (14,14) block per edge)")
-
-# The diagonal blocks are symmetric (the forward applies the QHNet D + D^T).
-diag_symmetry = float(jnp.max(jnp.abs(diagonal_blocks - jnp.swapaxes(diagonal_blocks, -1, -2))))
-print(f"max diagonal-block asymmetry: {diag_symmetry:.2e}")
-
 # %% [markdown]
 """
 ## Heterogeneous-Batch Consistency
@@ -289,30 +241,7 @@ are run alone — proof that concatenating heterogeneous molecules does not leak
 information across molecule boundaries. The first `n_water` diagonal blocks must
 equal water's, the rest methane's; the off-diagonal blocks split at the edge
 boundary.
-"""
 
-# %%
-water_out = predict_blocks(predictor, *single_batch(WATER_ATOMIC_NUMBERS, WATER_POSITIONS))
-methane_out = predict_blocks(predictor, *single_batch(METHANE_ATOMIC_NUMBERS, METHANE_POSITIONS))
-
-n_water_edges = n_water * (n_water - 1)
-diag_water_match = float(jnp.max(jnp.abs(diagonal_blocks[:n_water] - water_out["diagonal_blocks"])))
-diag_methane_match = float(
-    jnp.max(jnp.abs(diagonal_blocks[n_water:] - methane_out["diagonal_blocks"]))
-)
-off_water_match = float(
-    jnp.max(jnp.abs(off_diagonal_blocks[:n_water_edges] - water_out["off_diagonal_blocks"]))
-)
-off_methane_match = float(
-    jnp.max(jnp.abs(off_diagonal_blocks[n_water_edges:] - methane_out["off_diagonal_blocks"]))
-)
-
-print("Flat-batch blocks vs per-molecule blocks (max abs difference):")
-print(f"  water   diagonal: {diag_water_match:.2e}   off-diagonal: {off_water_match:.2e}")
-print(f"  methane diagonal: {diag_methane_match:.2e}   off-diagonal: {off_methane_match:.2e}")
-
-# %% [markdown]
-"""
 ## Assembling the Dense Fock Matrix
 
 `assemble_matrix` masks each `(14, 14)` block to its element's valid AO slots
@@ -321,20 +250,6 @@ print(f"  methane diagonal: {diag_methane_match:.2e}   off-diagonal: {off_methan
 and finally symmetrises `H = H~ + H~^T`. For water (`O` 14 + `H` 5 + `H` 5) the
 result is a symmetric `(24, 24)` matrix.
 """
-
-# %%
-water_z, water_pos, water_edges, _ = single_batch(WATER_ATOMIC_NUMBERS, WATER_POSITIONS)
-water_matrix = predictor.assemble_matrix(
-    water_out["diagonal_blocks"], water_out["off_diagonal_blocks"], water_z, water_edges
-)
-expected_ao = int(jnp.sum(atom_orbital_counts(WATER_ATOMIC_NUMBERS)))
-matrix_symmetry = float(jnp.max(jnp.abs(water_matrix - water_matrix.T)))
-
-print(
-    f"Assembled water Fock: shape {tuple(water_matrix.shape)} "
-    f"(expected ({expected_ao}, {expected_ao}): O 14 + H 5 + H 5)"
-)
-print(f"max |H - H^T|: {matrix_symmetry:.2e}")
 
 # %% [markdown]
 """
@@ -386,61 +301,166 @@ def random_rotation(seed: int) -> jax.Array:
     return orthogonal * jnp.sign(jnp.linalg.det(orthogonal))
 
 
-print()
-print("Assembled-matrix equivariance H(R x) = D(R) H(x) D(R)^T under random rotations:")
-equivariance_errors: list[float] = []
-for seed in range(5):
-    rotation = random_rotation(seed)
-    rotated_out = predict_blocks(
-        predictor, water_z, water_pos @ rotation.T, water_edges, jnp.zeros((n_water,), jnp.int32)
-    )
-    rotated_matrix = predictor.assemble_matrix(
-        rotated_out["diagonal_blocks"], rotated_out["off_diagonal_blocks"], water_z, water_edges
-    )
-    wigner = assembled_ao_wigner(WATER_ATOMIC_NUMBERS, rotation)
-    expected = wigner @ water_matrix @ wigner.T
-    error = float(jnp.max(jnp.abs(rotated_matrix - expected)))
-    equivariance_errors.append(error)
-    print(f"  rotation {seed}: max |H(Rx) - D H D^T| = {error:.3e}")
-
-max_equivariance_error = max(equivariance_errors)
-print(f"Worst-case equivariance error: {max_equivariance_error:.3e}")
-
 # %% [markdown]
 """
-## Visualization
-
-Two diagnostics: the assembled water Fock heatmap (its symmetric structure and
-the masked H-block sparsity), and the per-rotation equivariance error.
+## Run the example
 """
 
+
 # %%
-matrix_np = np.asarray(water_matrix)
-vmax = float(np.abs(matrix_np).max())
-fig, ax = plt.subplots(figsize=(6.4, 5.4))
-image = ax.imshow(matrix_np, cmap="RdBu_r", vmin=-vmax, vmax=vmax)
-ax.set_title("Assembled water Fock H (untrained, symmetric)")
-ax.set_xlabel("AO index")
-ax.set_ylabel("AO index")
-fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "fock_heatmap.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
+def main() -> dict[str, float | int]:
+    """Build the predictor, run the batched forward, and verify block equivariance."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.bar(range(len(equivariance_errors)), equivariance_errors, color="#2ca02c")
-ax.set_yscale("log")
-ax.set_xlabel("Random rotation")
-ax.set_ylabel("max |H(Rx) - D(R) H(x) D(R)^T|")
-ax.set_title("Assembled-matrix SE(3) equivariance error")
-ax.grid(True, which="both", axis="y", alpha=0.3)
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "equivariance_error.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
+    print("=" * 70)
+    print("Opifex Example: Equivariant DFT Hamiltonian Prediction (QHNet block form)")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Block irreps: {BLOCK_IRREPS}  (per-atom / per-edge block size {FULL_ORBITALS})")
 
-print()
-print(f"Saved plots to {OUTPUT_DIR}/")
-print("  fock_heatmap.png, equivariance_error.png")
+    predictor = BlockHamiltonianPredictor(config=CONFIG, rngs=nnx.Rngs(SEED))
+    num_params = sum(
+        int(np.prod(leaf.shape))
+        for leaf in jax.tree_util.tree_leaves(nnx.state(predictor, nnx.Param))
+    )
+    print(f"Predictor: irreps={CONFIG.hidden_irreps}, layers={CONFIG.num_interactions}")
+    print(f"Trainable parameters: {num_params}")
+
+    # Build the flat concatenated batch (water + methane).
+    n_water = int(WATER_ATOMIC_NUMBERS.shape[0])
+    n_methane = int(METHANE_ATOMIC_NUMBERS.shape[0])
+
+    batch_atomic_numbers = jnp.concatenate([WATER_ATOMIC_NUMBERS, METHANE_ATOMIC_NUMBERS])
+    batch_positions = jnp.concatenate([WATER_POSITIONS, METHANE_POSITIONS])
+    water_senders, water_receivers = complete_edges(0, n_water)
+    methane_senders, methane_receivers = complete_edges(n_water, n_methane)
+    batch_edge_index = jnp.asarray(
+        [water_senders + methane_senders, water_receivers + methane_receivers], dtype=jnp.int32
+    )
+    batch_node_batch = jnp.concatenate(
+        [jnp.zeros((n_water,), jnp.int32), jnp.full((n_methane,), 1, jnp.int32)]
+    )
+
+    print()
+    print(f"Flat batch: {n_water + n_methane} atoms, {batch_edge_index.shape[1]} directed edges")
+    print(f"  water   (O,H,H)      atoms 0..{n_water - 1}")
+    print(f"  methane (C,H,H,H,H)  atoms {n_water}..{n_water + n_methane - 1}")
+
+    # Run the predictor over the concatenated batch.
+    batch_out = predict_blocks(
+        predictor, batch_atomic_numbers, batch_positions, batch_edge_index, batch_node_batch
+    )
+    diagonal_blocks = batch_out["diagonal_blocks"]
+    off_diagonal_blocks = batch_out["off_diagonal_blocks"]
+
+    print(f"diagonal_blocks:     {diagonal_blocks.shape}  (one (14,14) block per atom)")
+    print(f"off_diagonal_blocks: {off_diagonal_blocks.shape}  (one (14,14) block per edge)")
+
+    # The diagonal blocks are symmetric (the forward applies the QHNet D + D^T).
+    diag_symmetry = float(
+        jnp.max(jnp.abs(diagonal_blocks - jnp.swapaxes(diagonal_blocks, -1, -2)))
+    )
+    print(f"max diagonal-block asymmetry: {diag_symmetry:.2e}")
+
+    # Heterogeneous-batch consistency: flat-batch blocks vs per-molecule blocks.
+    water_out = predict_blocks(predictor, *single_batch(WATER_ATOMIC_NUMBERS, WATER_POSITIONS))
+    methane_out = predict_blocks(
+        predictor, *single_batch(METHANE_ATOMIC_NUMBERS, METHANE_POSITIONS)
+    )
+
+    n_water_edges = n_water * (n_water - 1)
+    diag_water_match = float(
+        jnp.max(jnp.abs(diagonal_blocks[:n_water] - water_out["diagonal_blocks"]))
+    )
+    diag_methane_match = float(
+        jnp.max(jnp.abs(diagonal_blocks[n_water:] - methane_out["diagonal_blocks"]))
+    )
+    off_water_match = float(
+        jnp.max(jnp.abs(off_diagonal_blocks[:n_water_edges] - water_out["off_diagonal_blocks"]))
+    )
+    off_methane_match = float(
+        jnp.max(jnp.abs(off_diagonal_blocks[n_water_edges:] - methane_out["off_diagonal_blocks"]))
+    )
+
+    print("Flat-batch blocks vs per-molecule blocks (max abs difference):")
+    print(f"  water   diagonal: {diag_water_match:.2e}   off-diagonal: {off_water_match:.2e}")
+    print(f"  methane diagonal: {diag_methane_match:.2e}   off-diagonal: {off_methane_match:.2e}")
+
+    # Assemble the dense Fock matrix for water.
+    water_z, water_pos, water_edges, _ = single_batch(WATER_ATOMIC_NUMBERS, WATER_POSITIONS)
+    water_matrix = predictor.assemble_matrix(
+        water_out["diagonal_blocks"], water_out["off_diagonal_blocks"], water_z, water_edges
+    )
+    expected_ao = int(jnp.sum(atom_orbital_counts(WATER_ATOMIC_NUMBERS)))
+    matrix_symmetry = float(jnp.max(jnp.abs(water_matrix - water_matrix.T)))
+
+    print(
+        f"Assembled water Fock: shape {tuple(water_matrix.shape)} "
+        f"(expected ({expected_ao}, {expected_ao}): O 14 + H 5 + H 5)"
+    )
+    print(f"max |H - H^T|: {matrix_symmetry:.2e}")
+
+    # Equivariance check under random rotations.
+    print()
+    print("Assembled-matrix equivariance H(R x) = D(R) H(x) D(R)^T under random rotations:")
+    equivariance_errors: list[float] = []
+    for seed in range(5):
+        rotation = random_rotation(seed)
+        rotated_out = predict_blocks(
+            predictor,
+            water_z,
+            water_pos @ rotation.T,
+            water_edges,
+            jnp.zeros((n_water,), jnp.int32),
+        )
+        rotated_matrix = predictor.assemble_matrix(
+            rotated_out["diagonal_blocks"], rotated_out["off_diagonal_blocks"], water_z, water_edges
+        )
+        wigner = assembled_ao_wigner(WATER_ATOMIC_NUMBERS, rotation)
+        expected = wigner @ water_matrix @ wigner.T
+        error = float(jnp.max(jnp.abs(rotated_matrix - expected)))
+        equivariance_errors.append(error)
+        print(f"  rotation {seed}: max |H(Rx) - D H D^T| = {error:.3e}")
+
+    max_equivariance_error = max(equivariance_errors)
+    print(f"Worst-case equivariance error: {max_equivariance_error:.3e}")
+
+    # Visualization.
+    matrix_np = np.asarray(water_matrix)
+    vmax = float(np.abs(matrix_np).max())
+    fig, ax = plt.subplots(figsize=(6.4, 5.4))
+    image = ax.imshow(matrix_np, cmap="RdBu_r", vmin=-vmax, vmax=vmax)
+    ax.set_title("Assembled water Fock H (untrained, symmetric)")
+    ax.set_xlabel("AO index")
+    ax.set_ylabel("AO index")
+    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "fock_heatmap.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(range(len(equivariance_errors)), equivariance_errors, color="#2ca02c")
+    ax.set_yscale("log")
+    ax.set_xlabel("Random rotation")
+    ax.set_ylabel("max |H(Rx) - D(R) H(x) D(R)^T|")
+    ax.set_title("Assembled-matrix SE(3) equivariance error")
+    ax.grid(True, which="both", axis="y", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "equivariance_error.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    print()
+    print(f"Saved plots to {OUTPUT_DIR}/")
+    print("  fock_heatmap.png, equivariance_error.png")
+
+    return {
+        "equivariance_error": max_equivariance_error,
+        "diagonal_block_asymmetry": diag_symmetry,
+        "matrix_symmetry": matrix_symmetry,
+        "num_params": num_params,
+    }
+
 
 # %% [markdown]
 """
@@ -468,3 +488,9 @@ QH9-Stable through the block-form data pipeline
 the QH9 benchmark are documented in
 [Hamiltonian Prediction](../../methods/hamiltonian-prediction.md).
 """
+
+# %%
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

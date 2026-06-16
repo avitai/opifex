@@ -106,12 +106,6 @@ from opifex.neural.atomistic.backbones import NequIP, NequIPConfig
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 
 
-print("=" * 70)
-print("Opifex Example: NequIP on rMD17 (Aspirin)")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # %% [markdown]
 """
 ## Configuration
@@ -196,20 +190,6 @@ EMA_DECAY = 0.99
 KCAL_PER_MOL_IN_MEV_F = float(KCAL_PER_MOL_IN_MEV)
 
 OUTPUT_DIR = Path("docs/assets/examples/nequip_rmd17")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-print(f"Molecule: {MOLECULE}")
-print(f"Train/val configurations: {N_TRAIN}/{N_VAL}, batch size {BATCH_SIZE}")
-print(f"Epochs: {NUM_EPOCHS} ({WARMUP_EPOCHS} warm-up + {MAIN_EPOCHS} main)")
-print(f"NequIP: irreps={HIDDEN_IRREPS}, layers={NUM_INTERACTIONS}, cutoff={CUTOFF} A")
-print(
-    f"Loss weights: energy={ENERGY_WEIGHT}, "
-    f"force={FORCE_WEIGHT_WARMUP} (warm-up) -> {FORCE_WEIGHT_MAIN} (main)"
-)
-print(
-    f"Optimizer: AdamW (lr={LEARNING_RATE}, wd={WEIGHT_DECAY}, deep cosine decay, clip={GRADIENT_CLIP})"
-)
-print(f"EMA of weights for evaluation: decay={EMA_DECAY}")
 
 # %% [markdown]
 """
@@ -226,45 +206,6 @@ jitted training step consumes -- no per-configuration `MolecularSystem`
 round-trip is needed.
 """
 
-# %%
-print()
-print("Loading rMD17 aspirin (downloads + caches on first run)...")
-loaders = create_rmd17_loader(
-    molecule=MOLECULE,
-    n_train=N_TRAIN,
-    n_val=N_VAL,
-    batch_size=BATCH_SIZE,
-    seed=SEED,
-)
-atomic_numbers = jnp.asarray(loaders.atomic_numbers)
-n_atoms = int(atomic_numbers.shape[0])
-max_edges = n_atoms * n_atoms  # static upper bound on the radius-graph edges
-
-
-def collect_batches(pipeline: object) -> list[AtomisticBatch]:
-    """Materialize one pass of a datarax pipeline into atomistic batches."""
-    batches: list[AtomisticBatch] = []
-    for record in pipeline:  # type: ignore[attr-defined]
-        batches.append(
-            AtomisticBatch.from_arrays(
-                jnp.asarray(record["positions"]),
-                atomic_numbers,
-                jnp.asarray(record["energy"]),
-                jnp.asarray(record["forces"]),
-            )
-        )
-    return batches
-
-
-train_batches = collect_batches(loaders.train)
-val_batches = collect_batches(loaders.val)
-formula = MolecularSystem(
-    atomic_numbers=atomic_numbers, positions=jnp.zeros((n_atoms, 3))
-).molecular_formula
-print(f"Atoms: {n_atoms} ({formula})")
-print(f"Train batches: {len(train_batches)}, val batches: {len(val_batches)}")
-print(f"Energy unit: {loaders.units['energy']}, force unit: {loaders.units['forces']}")
-
 # %% [markdown]
 """
 ## Energy Normalization
@@ -276,17 +217,7 @@ conditioned. `fit_atomic_scale_shift` fits the MACE/NequIP affine readout
 mean per-atom energy and `scale` is the spread of the residual (interaction)
 energy. Passed into the `EnergyHead`, it leaves the network learning only the
 small interaction energy.
-"""
 
-# %%
-train_energies = jnp.concatenate([batch.energies for batch in train_batches])
-atom_counts = jnp.full(train_energies.shape, float(n_atoms))
-scale_shift = fit_atomic_scale_shift(train_energies, atom_counts)
-print(f"Per-atom shift: {float(scale_shift.shift):.3f} kcal/mol")
-print(f"Residual energy scale: {float(scale_shift.scale):.3f} kcal/mol")
-
-# %% [markdown]
-"""
 ## Model Assembly
 
 An `AtomisticModel` composes three swappable pieces: the `NequIP` backbone (per-
@@ -295,35 +226,6 @@ with the fitted scale-shift) and a `ForcesHead` (forces as `-grad(energy)`), wir
 together by a `RadiusNeighborList` edge builder. The `EnergyHead`'s `feature_dim`
 equals the number of `0e` scalar channels in the hidden irreps (here 64).
 """
-
-# %%
-rngs = nnx.Rngs(SEED)
-backbone = NequIP(
-    config=NequIPConfig(
-        hidden_irreps=HIDDEN_IRREPS,
-        sh_lmax=SH_LMAX,
-        num_interactions=NUM_INTERACTIONS,
-        num_radial_basis=NUM_RADIAL_BASIS,
-        radial_hidden_dim=RADIAL_HIDDEN_DIM,
-        cutoff=CUTOFF,
-        average_num_neighbors=AVERAGE_NUM_NEIGHBORS,
-    ),
-    rngs=rngs,
-)
-num_scalar_features = 64  # the 0e multiplicity of HIDDEN_IRREPS
-model = AtomisticModel(
-    backbone=backbone,
-    heads={
-        "energy": EnergyHead(feature_dim=num_scalar_features, scale_shift=scale_shift, rngs=rngs),
-        "forces": ForcesHead(),
-    },
-    neighbor_list=RadiusNeighborList(cutoff=CUTOFF),
-    max_edges=max_edges,
-)
-num_params = sum(
-    int(np.prod(leaf.shape)) for leaf in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param))
-)
-print(f"Trainable parameters: {num_params}")
 
 # %% [markdown]
 """
@@ -353,242 +255,330 @@ afterwards, so the training trajectory itself is untouched.
 """
 
 # %%
-steps_per_epoch = len(train_batches)
-optimizer = nnx.Optimizer(
-    model,
-    create_optimizer(
-        OptimizerConfig(
-            optimizer_type="adamw",
-            learning_rate=LEARNING_RATE,
-            weight_decay=WEIGHT_DECAY,
-            schedule_type="cosine",
-            decay_steps=NUM_EPOCHS * steps_per_epoch,
-            alpha=LR_ALPHA,
-            gradient_clip=GRADIENT_CLIP,
-            clip_type="by_global_norm",
-        )
-    ),
-    wrt=nnx.Param,
-)
-# Two scan-fused epoch functions: one per phase weight. Both share the model and
-# optimizer (so the single cosine schedule advances continuously across the phase
-# boundary) and both thread the EMA state through the scan carry. Each call runs a
-# whole epoch as one jitted `lax.scan`; switching phases recompiles once.
-warmup_epoch = make_scanned_epoch(
-    model,
-    optimizer,
-    energy_weight=ENERGY_WEIGHT,
-    force_weight=FORCE_WEIGHT_WARMUP,
-    ema_decay=EMA_DECAY,
-)
-main_epoch = make_scanned_epoch(
-    model,
-    optimizer,
-    energy_weight=ENERGY_WEIGHT,
-    force_weight=FORCE_WEIGHT_MAIN,
-    ema_decay=EMA_DECAY,
-)
-# Stack the epoch's per-step batches once into a single pytree with a leading
-# `num_steps` axis -- the input `make_scanned_epoch` scans over.
-stacked_train = AtomisticBatch.stack(train_batches)
-# EMA of the weights (NequIP/MACE eval convention): seeded from the initial model
-# params and threaded through the scan carry, blended inside the scan body.
-ema_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
+def main() -> dict[str, float | int]:
+    """Load rMD17 aspirin, train the two-phase NequIP potential, and report MLIP error."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    print("=" * 70)
+    print("Opifex Example: NequIP on rMD17 (Aspirin)")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Molecule: {MOLECULE}")
+    print(f"Train/val configurations: {N_TRAIN}/{N_VAL}, batch size {BATCH_SIZE}")
+    print(f"Epochs: {NUM_EPOCHS} ({WARMUP_EPOCHS} warm-up + {MAIN_EPOCHS} main)")
+    print(f"NequIP: irreps={HIDDEN_IRREPS}, layers={NUM_INTERACTIONS}, cutoff={CUTOFF} A")
+    print(
+        f"Loss weights: energy={ENERGY_WEIGHT}, "
+        f"force={FORCE_WEIGHT_WARMUP} (warm-up) -> {FORCE_WEIGHT_MAIN} (main)"
+    )
+    print(
+        f"Optimizer: AdamW (lr={LEARNING_RATE}, wd={WEIGHT_DECAY}, "
+        f"deep cosine decay, clip={GRADIENT_CLIP})"
+    )
+    print(f"EMA of weights for evaluation: decay={EMA_DECAY}")
 
-@nnx.jit
-def predict_batch(model: AtomisticModel, positions: jax.Array) -> tuple[jax.Array, jax.Array]:
-    """Vectorized jitted energy+forces prediction over a stacked batch."""
+    # Data loading.
+    print()
+    print("Loading rMD17 aspirin (downloads + caches on first run)...")
+    loaders = create_rmd17_loader(
+        molecule=MOLECULE,
+        n_train=N_TRAIN,
+        n_val=N_VAL,
+        batch_size=BATCH_SIZE,
+        seed=SEED,
+    )
+    atomic_numbers = jnp.asarray(loaders.atomic_numbers)
+    n_atoms = int(atomic_numbers.shape[0])
+    max_edges = n_atoms * n_atoms  # static upper bound on the radius-graph edges
 
-    def single(pos: jax.Array) -> tuple[jax.Array, jax.Array]:
-        system = MolecularSystem(atomic_numbers=atomic_numbers, positions=pos)
-        outputs = model(system)
-        return outputs["energy"], outputs["forces"]
+    def collect_batches(pipeline: object) -> list[AtomisticBatch]:
+        """Materialize one pass of a datarax pipeline into atomistic batches."""
+        batches: list[AtomisticBatch] = []
+        for record in pipeline:  # type: ignore[attr-defined]
+            batches.append(
+                AtomisticBatch.from_arrays(
+                    jnp.asarray(record["positions"]),
+                    atomic_numbers,
+                    jnp.asarray(record["energy"]),
+                    jnp.asarray(record["forces"]),
+                )
+            )
+        return batches
 
-    return jax.vmap(single)(positions)
+    train_batches = collect_batches(loaders.train)
+    val_batches = collect_batches(loaders.val)
+    formula = MolecularSystem(
+        atomic_numbers=atomic_numbers, positions=jnp.zeros((n_atoms, 3))
+    ).molecular_formula
+    print(f"Atoms: {n_atoms} ({formula})")
+    print(f"Train batches: {len(train_batches)}, val batches: {len(val_batches)}")
+    print(f"Energy unit: {loaders.units['energy']}, force unit: {loaders.units['forces']}")
 
+    # Energy normalization.
+    train_energies = jnp.concatenate([batch.energies for batch in train_batches])
+    atom_counts = jnp.full(train_energies.shape, float(n_atoms))
+    scale_shift = fit_atomic_scale_shift(train_energies, atom_counts)
+    print(f"Per-atom shift: {float(scale_shift.shift):.3f} kcal/mol")
+    print(f"Residual energy scale: {float(scale_shift.scale):.3f} kcal/mol")
 
-def evaluate(model: AtomisticModel) -> dict[str, float]:
-    """Validation energy/force MAE and RMSE in meV and meV/A."""
-    pred_e, pred_f, true_e, true_f = [], [], [], []
+    # Model assembly.
+    rngs = nnx.Rngs(SEED)
+    backbone = NequIP(
+        config=NequIPConfig(
+            hidden_irreps=HIDDEN_IRREPS,
+            sh_lmax=SH_LMAX,
+            num_interactions=NUM_INTERACTIONS,
+            num_radial_basis=NUM_RADIAL_BASIS,
+            radial_hidden_dim=RADIAL_HIDDEN_DIM,
+            cutoff=CUTOFF,
+            average_num_neighbors=AVERAGE_NUM_NEIGHBORS,
+        ),
+        rngs=rngs,
+    )
+    num_scalar_features = 64  # the 0e multiplicity of HIDDEN_IRREPS
+    model = AtomisticModel(
+        backbone=backbone,
+        heads={
+            "energy": EnergyHead(
+                feature_dim=num_scalar_features, scale_shift=scale_shift, rngs=rngs
+            ),
+            "forces": ForcesHead(),
+        },
+        neighbor_list=RadiusNeighborList(cutoff=CUTOFF),
+        max_edges=max_edges,
+    )
+    num_params = sum(
+        int(np.prod(leaf.shape)) for leaf in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param))
+    )
+    print(f"Trainable parameters: {num_params}")
+
+    @nnx.jit
+    def predict_batch(
+        model: AtomisticModel, positions: jax.Array
+    ) -> tuple[jax.Array, jax.Array]:
+        """Vectorized jitted energy+forces prediction over a stacked batch."""
+
+        def single(pos: jax.Array) -> tuple[jax.Array, jax.Array]:
+            system = MolecularSystem(atomic_numbers=atomic_numbers, positions=pos)
+            outputs = model(system)
+            return outputs["energy"], outputs["forces"]
+
+        return jax.vmap(single)(positions)
+
+    def evaluate(model: AtomisticModel) -> dict[str, float]:
+        """Validation energy/force MAE and RMSE in meV and meV/A."""
+        pred_e, pred_f, true_e, true_f = [], [], [], []
+        for batch in val_batches:
+            energies, forces = predict_batch(model, batch.positions)
+            pred_e.append(energies)
+            pred_f.append(forces)
+            true_e.append(batch.energies)
+            true_f.append(batch.forces)
+        pred_e = jnp.concatenate(pred_e)
+        true_e = jnp.concatenate(true_e)
+        pred_f = jnp.concatenate(pred_f).reshape(-1)
+        true_f = jnp.concatenate(true_f).reshape(-1)
+        unit = KCAL_PER_MOL_IN_MEV_F
+        return {
+            "energy_mae": float(mae(pred_e, true_e)) * unit,
+            "energy_rmse": float(rmse(pred_e, true_e)) * unit,
+            "force_mae": float(mae(pred_f, true_f)) * unit,
+            "force_rmse": float(rmse(pred_f, true_f)) * unit,
+        }
+
+    def evaluate_ema(model: AtomisticModel, ema_state: nnx.State) -> dict[str, float]:
+        """Evaluate against the EMA (smoothed) weights, then restore the live weights.
+
+        Loads the EMA shadow into the model for the duration of the validation pass and
+        restores the live (last-step) parameters afterwards, so the training trajectory
+        is untouched -- the NequIP/MACE `ema.average_parameters()` convention, here for
+        the raw EMA carry threaded through the scan.
+        """
+        live_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
+        nnx.update(model, ema_state)
+        try:
+            return evaluate(model)
+        finally:
+            nnx.update(model, live_state)
+
+    # Training.
+    steps_per_epoch = len(train_batches)
+    optimizer = nnx.Optimizer(
+        model,
+        create_optimizer(
+            OptimizerConfig(
+                optimizer_type="adamw",
+                learning_rate=LEARNING_RATE,
+                weight_decay=WEIGHT_DECAY,
+                schedule_type="cosine",
+                decay_steps=NUM_EPOCHS * steps_per_epoch,
+                alpha=LR_ALPHA,
+                gradient_clip=GRADIENT_CLIP,
+                clip_type="by_global_norm",
+            )
+        ),
+        wrt=nnx.Param,
+    )
+    # Two scan-fused epoch functions: one per phase weight. Both share the model and
+    # optimizer (so the single cosine schedule advances continuously across the phase
+    # boundary) and both thread the EMA state through the scan carry. Each call runs a
+    # whole epoch as one jitted `lax.scan`; switching phases recompiles once.
+    warmup_epoch = make_scanned_epoch(
+        model,
+        optimizer,
+        energy_weight=ENERGY_WEIGHT,
+        force_weight=FORCE_WEIGHT_WARMUP,
+        ema_decay=EMA_DECAY,
+    )
+    main_epoch = make_scanned_epoch(
+        model,
+        optimizer,
+        energy_weight=ENERGY_WEIGHT,
+        force_weight=FORCE_WEIGHT_MAIN,
+        ema_decay=EMA_DECAY,
+    )
+    # Stack the epoch's per-step batches once into a single pytree with a leading
+    # `num_steps` axis -- the input `make_scanned_epoch` scans over.
+    stacked_train = AtomisticBatch.stack(train_batches)
+    # EMA of the weights (NequIP/MACE eval convention): seeded from the initial model
+    # params and threaded through the scan carry, blended inside the scan body.
+    ema_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
+
+    print()
+    print("Starting training...")
+    print(
+        f"Phase 1 (energy warm-up): epochs 1-{WARMUP_EPOCHS}, force_weight={FORCE_WEIGHT_WARMUP}"
+    )
+    print(f"Phase 2 (main): epochs {WARMUP_EPOCHS + 1}-{NUM_EPOCHS}, force_weight={FORCE_WEIGHT_MAIN}")
+    start_time = time.time()
+    loss_history: list[float] = []
+    for epoch in range(NUM_EPOCHS):
+        # Phase 1 (energy warm-up) converges the absolute energy offset, then phase 2
+        # refines the forces. Both scanned epochs share the model + optimizer, so the
+        # cosine schedule advances continuously across the boundary; switching the
+        # phase function recompiles once. Each call runs the whole epoch as one jitted
+        # `lax.scan`, threading the EMA shadow through the scan carry, and returns the
+        # updated EMA state and the per-step losses (synced to host once per epoch).
+        scanned_epoch = warmup_epoch if epoch < WARMUP_EPOCHS else main_epoch
+        ema_state, losses = scanned_epoch(model, optimizer, stacked_train, ema_state)
+        loss_history.append(float(jnp.sum(losses)) / len(train_batches))
+        if epoch == 0 or (epoch + 1) % 25 == 0:
+            metrics = evaluate_ema(model, ema_state)  # progress on the smoothed weights
+            phase = "warm-up" if epoch < WARMUP_EPOCHS else "main    "
+            print(
+                f"Epoch {epoch + 1:3d}/{NUM_EPOCHS} [{phase}] | loss {loss_history[-1]:10.3f} | "
+                f"E-MAE {metrics['energy_mae']:6.1f} meV | "
+                f"F-MAE {metrics['force_mae']:6.1f} meV/A | "
+                f"t {time.time() - start_time:5.0f}s"
+            )
+    training_time = time.time() - start_time
+    print(f"Training complete in {training_time:.0f}s")
+
+    # Load the EMA (smoothed) weights into the model so the final metrics and parity
+    # plots below are all reported against the averaged weights -- the NequIP/MACE
+    # evaluation convention. The raw last-step weights are discarded.
+    nnx.update(model, ema_state)
+    print(f"Loaded EMA weights (decay={EMA_DECAY}) for evaluation.")
+
+    # Evaluation.
+    final_metrics = evaluate(model)
+    print("=" * 70)
+    print("Validation metrics (aspirin, rMD17 test split)")
+    print("=" * 70)
+    print(f"Energy MAE:  {final_metrics['energy_mae']:7.2f} meV")
+    print(f"Energy RMSE: {final_metrics['energy_rmse']:7.2f} meV")
+    print(f"Force  MAE:  {final_metrics['force_mae']:7.2f} meV/A")
+    print(f"Force  RMSE: {final_metrics['force_rmse']:7.2f} meV/A")
+    print()
+    print("Published rMD17 aspirin @1000 configs (950 train / 50 val; Batzner et al. 2022,")
+    print("Nat. Commun.; tabulated in Batatia et al. 2022, MACE, NeurIPS, Table 1 --")
+    print("the canonical rMD17 @1000 benchmark):")
+    print("  NequIP: Energy MAE ~ 2.3 meV,  Force MAE ~ 8.0 meV/A")
+    print("  MACE:   Energy MAE ~ 2.2 meV,  Force MAE ~ 6.6 meV/A")
+    energy_factor = final_metrics["energy_mae"] / 2.3
+    force_factor = final_metrics["force_mae"] / 8.0
+    print(f"This run's energy MAE is ~{energy_factor:.0f}x and force MAE ~{force_factor:.1f}x the")
+    print("published NequIP accuracy -- the two-phase loss converges the absolute energy")
+    print("offset (now comparable to the forces) while the forces stay accurate. This")
+    print("two-body (correlation=1) model approaches, but does not match, the published")
+    print("NequIP/MACE numbers from larger, higher-body-order models trained longer.")
+
+    # Visualization: gather predictions over the validation split for the parity plots.
+    val_pred_e, val_pred_f, val_true_e, val_true_f = [], [], [], []
     for batch in val_batches:
         energies, forces = predict_batch(model, batch.positions)
-        pred_e.append(energies)
-        pred_f.append(forces)
-        true_e.append(batch.energies)
-        true_f.append(batch.forces)
-    pred_e = jnp.concatenate(pred_e)
-    true_e = jnp.concatenate(true_e)
-    pred_f = jnp.concatenate(pred_f).reshape(-1)
-    true_f = jnp.concatenate(true_f).reshape(-1)
-    unit = KCAL_PER_MOL_IN_MEV_F
+        val_pred_e.append(np.asarray(energies))
+        val_pred_f.append(np.asarray(forces).reshape(-1))
+        val_true_e.append(np.asarray(batch.energies))
+        val_true_f.append(np.asarray(batch.forces).reshape(-1))
+    val_pred_e = np.concatenate(val_pred_e)
+    val_true_e = np.concatenate(val_true_e)
+    val_pred_f = np.concatenate(val_pred_f)
+    val_true_f = np.concatenate(val_true_f)
+
+    # Energy + force parity.
+    fig, axes = plt.subplots(1, 2, figsize=(13, 6))
+
+    e_ref = val_true_e - val_true_e.mean()
+    e_pred = val_pred_e - val_true_e.mean()
+    e_lo, e_hi = float(min(e_ref.min(), e_pred.min())), float(max(e_ref.max(), e_pred.max()))
+    axes[0].scatter(e_ref, e_pred, s=8, alpha=0.4, color="#1f77b4")
+    axes[0].plot([e_lo, e_hi], [e_lo, e_hi], "k--", lw=1)
+    axes[0].set_xlabel("Reference energy - mean (kcal/mol)")
+    axes[0].set_ylabel("Predicted energy - mean (kcal/mol)")
+    axes[0].set_title(f"Energy parity (MAE {final_metrics['energy_mae']:.1f} meV)")
+    axes[0].set_aspect("equal", adjustable="box")
+
+    f_lo, f_hi = (
+        float(min(val_true_f.min(), val_pred_f.min())),
+        float(max(val_true_f.max(), val_pred_f.max())),
+    )
+    axes[1].scatter(val_true_f, val_pred_f, s=2, alpha=0.2, color="#d62728")
+    axes[1].plot([f_lo, f_hi], [f_lo, f_hi], "k--", lw=1)
+    axes[1].set_xlabel("Reference force component (kcal/mol/A)")
+    axes[1].set_ylabel("Predicted force component (kcal/mol/A)")
+    axes[1].set_title(f"Force parity (MAE {final_metrics['force_mae']:.1f} meV/A)")
+    axes[1].set_aspect("equal", adjustable="box")
+
+    fig.suptitle("NequIP on rMD17 aspirin: validation parity", fontsize=13)
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "parity.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # Training-loss curve. The weighted loss has a discontinuity at the phase boundary
+    # (the force weight jumps), so annotate it rather than reading it as a regression.
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(range(1, NUM_EPOCHS + 1), loss_history, color="#2ca02c")
+    ax.axvline(WARMUP_EPOCHS, color="#7f7f7f", ls="--", lw=1)
+    ax.text(
+        WARMUP_EPOCHS,
+        ax.get_ylim()[1],
+        f" warm-up -> main\n (force weight {FORCE_WEIGHT_WARMUP:.0f} -> {FORCE_WEIGHT_MAIN:.0f})",
+        color="#7f7f7f",
+        va="top",
+        fontsize=9,
+    )
+    ax.set_yscale("log")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Weighted energy+forces loss")
+    ax.set_title("NequIP training loss (aspirin, two-phase)")
+    ax.grid(True, which="both", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "loss_curve.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"Saved plots to {OUTPUT_DIR}/")
+    print("  parity.png, loss_curve.png")
+
     return {
-        "energy_mae": float(mae(pred_e, true_e)) * unit,
-        "energy_rmse": float(rmse(pred_e, true_e)) * unit,
-        "force_mae": float(mae(pred_f, true_f)) * unit,
-        "force_rmse": float(rmse(pred_f, true_f)) * unit,
+        "energy_mae_meV": final_metrics["energy_mae"],
+        "energy_rmse_meV": final_metrics["energy_rmse"],
+        "force_mae_meV_per_ang": final_metrics["force_mae"],
+        "force_rmse_meV_per_ang": final_metrics["force_rmse"],
+        "num_params": num_params,
     }
 
-
-def evaluate_ema(model: AtomisticModel, ema_state: nnx.State) -> dict[str, float]:
-    """Evaluate against the EMA (smoothed) weights, then restore the live weights.
-
-    Loads the EMA shadow into the model for the duration of the validation pass and
-    restores the live (last-step) parameters afterwards, so the training trajectory
-    is untouched -- the NequIP/MACE `ema.average_parameters()` convention, here for
-    the raw EMA carry threaded through the scan.
-    """
-    live_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
-    nnx.update(model, ema_state)
-    try:
-        return evaluate(model)
-    finally:
-        nnx.update(model, live_state)
-
-
-print()
-print("Starting training...")
-print(f"Phase 1 (energy warm-up): epochs 1-{WARMUP_EPOCHS}, force_weight={FORCE_WEIGHT_WARMUP}")
-print(f"Phase 2 (main): epochs {WARMUP_EPOCHS + 1}-{NUM_EPOCHS}, force_weight={FORCE_WEIGHT_MAIN}")
-start_time = time.time()
-loss_history: list[float] = []
-for epoch in range(NUM_EPOCHS):
-    # Phase 1 (energy warm-up) converges the absolute energy offset, then phase 2
-    # refines the forces. Both scanned epochs share the model + optimizer, so the
-    # cosine schedule advances continuously across the boundary; switching the
-    # phase function recompiles once. Each call runs the whole epoch as one jitted
-    # `lax.scan`, threading the EMA shadow through the scan carry, and returns the
-    # updated EMA state and the per-step losses (synced to host once per epoch).
-    scanned_epoch = warmup_epoch if epoch < WARMUP_EPOCHS else main_epoch
-    ema_state, losses = scanned_epoch(model, optimizer, stacked_train, ema_state)
-    loss_history.append(float(jnp.sum(losses)) / len(train_batches))
-    if epoch == 0 or (epoch + 1) % 25 == 0:
-        metrics = evaluate_ema(model, ema_state)  # progress on the smoothed weights
-        phase = "warm-up" if epoch < WARMUP_EPOCHS else "main    "
-        print(
-            f"Epoch {epoch + 1:3d}/{NUM_EPOCHS} [{phase}] | loss {loss_history[-1]:10.3f} | "
-            f"E-MAE {metrics['energy_mae']:6.1f} meV | "
-            f"F-MAE {metrics['force_mae']:6.1f} meV/A | "
-            f"t {time.time() - start_time:5.0f}s"
-        )
-training_time = time.time() - start_time
-print(f"Training complete in {training_time:.0f}s")
-
-# Load the EMA (smoothed) weights into the model so the final metrics and parity
-# plots below are all reported against the averaged weights -- the NequIP/MACE
-# evaluation convention. The raw last-step weights are discarded.
-nnx.update(model, ema_state)
-print(f"Loaded EMA weights (decay={EMA_DECAY}) for evaluation.")
-
-# %% [markdown]
-"""
-## Evaluation
-
-Final validation error on the 1000-configuration aspirin test split, in the
-standard MLIP units (meV for energy, meV/A for force components). The model now
-holds the **EMA (smoothed) weights** (NequIP/MACE evaluation convention), so all
-metrics and parity plots below reflect the averaged -- not last-step -- weights.
-"""
-
-# %%
-final_metrics = evaluate(model)
-print("=" * 70)
-print("Validation metrics (aspirin, rMD17 test split)")
-print("=" * 70)
-print(f"Energy MAE:  {final_metrics['energy_mae']:7.2f} meV")
-print(f"Energy RMSE: {final_metrics['energy_rmse']:7.2f} meV")
-print(f"Force  MAE:  {final_metrics['force_mae']:7.2f} meV/A")
-print(f"Force  RMSE: {final_metrics['force_rmse']:7.2f} meV/A")
-print()
-print("Published rMD17 aspirin @1000 configs (950 train / 50 val; Batzner et al. 2022,")
-print("Nat. Commun.; tabulated in Batatia et al. 2022, MACE, NeurIPS, Table 1 --")
-print("the canonical rMD17 @1000 benchmark):")
-print("  NequIP: Energy MAE ~ 2.3 meV,  Force MAE ~ 8.0 meV/A")
-print("  MACE:   Energy MAE ~ 2.2 meV,  Force MAE ~ 6.6 meV/A")
-energy_factor = final_metrics["energy_mae"] / 2.3
-force_factor = final_metrics["force_mae"] / 8.0
-print(f"This run's energy MAE is ~{energy_factor:.0f}x and force MAE ~{force_factor:.1f}x the")
-print("published NequIP accuracy -- the two-phase loss converges the absolute energy")
-print("offset (now comparable to the forces) while the forces stay accurate. This")
-print("two-body (correlation=1) model approaches, but does not match, the published")
-print("NequIP/MACE numbers from larger, higher-body-order models trained longer.")
-
-# %% [markdown]
-"""
-## Visualization
-
-Three diagnostics: an energy parity plot (predicted vs reference total energy,
-mean-centred so the residual interaction energy is visible), a force-component
-parity plot (every Cartesian force component), and the training-loss curve.
-"""
-
-# %%
-# Gather predictions over the validation split for the parity plots.
-val_pred_e, val_pred_f, val_true_e, val_true_f = [], [], [], []
-for batch in val_batches:
-    energies, forces = predict_batch(model, batch.positions)
-    val_pred_e.append(np.asarray(energies))
-    val_pred_f.append(np.asarray(forces).reshape(-1))
-    val_true_e.append(np.asarray(batch.energies))
-    val_true_f.append(np.asarray(batch.forces).reshape(-1))
-val_pred_e = np.concatenate(val_pred_e)
-val_true_e = np.concatenate(val_true_e)
-val_pred_f = np.concatenate(val_pred_f)
-val_true_f = np.concatenate(val_true_f)
-
-# Energy + force parity.
-fig, axes = plt.subplots(1, 2, figsize=(13, 6))
-
-e_ref = val_true_e - val_true_e.mean()
-e_pred = val_pred_e - val_true_e.mean()
-e_lo, e_hi = float(min(e_ref.min(), e_pred.min())), float(max(e_ref.max(), e_pred.max()))
-axes[0].scatter(e_ref, e_pred, s=8, alpha=0.4, color="#1f77b4")
-axes[0].plot([e_lo, e_hi], [e_lo, e_hi], "k--", lw=1)
-axes[0].set_xlabel("Reference energy - mean (kcal/mol)")
-axes[0].set_ylabel("Predicted energy - mean (kcal/mol)")
-axes[0].set_title(f"Energy parity (MAE {final_metrics['energy_mae']:.1f} meV)")
-axes[0].set_aspect("equal", adjustable="box")
-
-f_lo, f_hi = (
-    float(min(val_true_f.min(), val_pred_f.min())),
-    float(max(val_true_f.max(), val_pred_f.max())),
-)
-axes[1].scatter(val_true_f, val_pred_f, s=2, alpha=0.2, color="#d62728")
-axes[1].plot([f_lo, f_hi], [f_lo, f_hi], "k--", lw=1)
-axes[1].set_xlabel("Reference force component (kcal/mol/A)")
-axes[1].set_ylabel("Predicted force component (kcal/mol/A)")
-axes[1].set_title(f"Force parity (MAE {final_metrics['force_mae']:.1f} meV/A)")
-axes[1].set_aspect("equal", adjustable="box")
-
-fig.suptitle("NequIP on rMD17 aspirin: validation parity", fontsize=13)
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "parity.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
-
-# Training-loss curve. The weighted loss has a discontinuity at the phase boundary
-# (the force weight jumps), so annotate it rather than reading it as a regression.
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.plot(range(1, NUM_EPOCHS + 1), loss_history, color="#2ca02c")
-ax.axvline(WARMUP_EPOCHS, color="#7f7f7f", ls="--", lw=1)
-ax.text(
-    WARMUP_EPOCHS,
-    ax.get_ylim()[1],
-    f" warm-up -> main\n (force weight {FORCE_WEIGHT_WARMUP:.0f} -> {FORCE_WEIGHT_MAIN:.0f})",
-    color="#7f7f7f",
-    va="top",
-    fontsize=9,
-)
-ax.set_yscale("log")
-ax.set_xlabel("Epoch")
-ax.set_ylabel("Weighted energy+forces loss")
-ax.set_title("NequIP training loss (aspirin, two-phase)")
-ax.grid(True, which="both", alpha=0.3)
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "loss_curve.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
-
-print(f"Saved plots to {OUTPUT_DIR}/")
-print("  parity.png, loss_curve.png")
 
 # %% [markdown]
 """
@@ -610,3 +600,9 @@ substantially longer. Closing the remaining gap needs `l_max = 3`, wider feature
 and the MACE-style higher-body-order contraction; see
 [Atomistic Potentials](../../methods/atomistic-potentials.md) for the design.
 """
+
+# %%
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

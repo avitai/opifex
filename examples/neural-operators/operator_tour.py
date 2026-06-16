@@ -95,12 +95,6 @@ from opifex.neural.operators.fno._positional import append_grid_coordinates
 from opifex.neural.operators.fno.tensorized import create_cp_fno, create_tucker_fno
 
 
-print("=" * 70)
-print("Opifex Example: Neural Operator Comparison Tour on Darcy Flow")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # %% [markdown]
 """
 ## Configuration
@@ -128,122 +122,7 @@ PERMEABILITY_VALUES = (3.0, 12.0)  # binary high-contrast benchmark (Li et al. 2
 SEED = 42
 
 OUTPUT_DIR = Path("docs/assets/examples/operator_tour")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
-print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
-print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
-print(f"Shared FNO config: modes={MODES}, width={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
-
-# %% [markdown]
-"""
-## Operator Discovery
-
-Before training, the factory system lists every available operator by category
-and recommends one per application domain. This is the recommended way to pick an
-architecture for a new problem.
-"""
-
-# %%
-print()
-print("=" * 70)
-print("OPERATOR DISCOVERY")
-print("=" * 70)
-
-print()
-print("Available operators by category:")
-for category, operators in list_operators().items():
-    print(f"  {category}: {', '.join(operators)}")
-
-print()
-print("Recommendations by application:")
-applications = [
-    "turbulent_flow",
-    "global_climate",
-    "molecular_dynamics",
-    "cad_geometry",
-    "safety_critical",
-    "parameter_efficient",
-]
-for app in applications:
-    rec = recommend_operator(app)
-    print(f"  {app:20s}: {rec['primary']} - {rec['reason']}")
-
-# %% [markdown]
-"""
-## Data Loading
-
-The Darcy loader generates a binary high-contrast permeability field
-``a(x) ∈ {3, 12}`` (the standard benchmark) and the exact pressure solution of
-``-∇·(a∇u) = 1`` with zero Dirichlet boundary conditions. The fixed Darcy solver
-makes these labels physically accurate, so a well-trained operator can reach a
-low relative-L2 error.
-"""
-
-# %%
-print()
-print("Generating Darcy flow data...")
-
-
-def _collect(loader: Any) -> tuple[np.ndarray, np.ndarray]:
-    """Drain a Grain loader into channels-first ``(N, 1, H, W)`` arrays."""
-    inputs, outputs = [], []
-    for batch in loader:
-        inputs.append(batch["input"])
-        outputs.append(batch["output"])
-    x = np.concatenate(inputs, axis=0)[:, np.newaxis, :, :]
-    y = np.concatenate(outputs, axis=0)[:, np.newaxis, :, :]
-    return x, y
-
-
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    field_type="binary",
-    viscosity_range=PERMEABILITY_VALUES,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-)
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    field_type="binary",
-    viscosity_range=PERMEABILITY_VALUES,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
-
-X_train, Y_train = _collect(train_loader)
-X_test, Y_test = _collect(test_loader)
-
-print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
-print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
-
-# %% [markdown]
-"""
-## Normalization
-
-Neural operators train best on standardized fields. We fit Gaussian statistics on
-the training set, normalize all splits, and un-normalize predictions before
-computing physical-space errors.
-"""
-
-# %%
-x_mean, x_std = X_train.mean(), X_train.std()
-y_mean, y_std = Y_train.mean(), Y_train.std()
-
-X_train_n = jnp.array((X_train - x_mean) / x_std)
-Y_train_n = jnp.array((Y_train - y_mean) / y_std)
-X_test_n = jnp.array((X_test - x_mean) / x_std)
-Y_test_n = jnp.array((Y_test - y_mean) / y_std)
-Y_test_jnp = jnp.array(Y_test)
-
-print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
-print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
 
 # %% [markdown]
 """
@@ -353,29 +232,7 @@ def count_parameters(model: nnx.Module) -> int:
     return int(sum(x.size for x in jax.tree_util.tree_leaves(params)))
 
 
-operators = build_operators()
-
-print()
-print("Comparison operators (parameter counts):")
-for name, op in operators.items():
-    print(f"  {name:14s}: {count_parameters(op):,} params")
-
-# %% [markdown]
-"""
-## Training Each Operator
-
-We reuse the *same* `Trainer` configuration for every operator: Adam at
-``1e-3``, the relative-L2 loss (`loss_type="relative_l2"`), and an identical
-epoch budget. Only the architecture changes between runs.
-"""
-
-
-# %%
-def predict_in_batches(
-    model: nnx.Module,
-    inputs: jax.Array,
-    batch_size: int = 128,
-) -> jax.Array:
+def predict_in_batches(model: nnx.Module, inputs: jax.Array, batch_size: int = 128) -> jax.Array:
     """Run a model over the inputs in batches to bound memory use."""
     outputs = [model(inputs[i : i + batch_size]) for i in range(0, inputs.shape[0], batch_size)]
     return jnp.concatenate(outputs, axis=0)
@@ -388,236 +245,307 @@ def relative_l2(predictions: jax.Array, targets: jax.Array) -> jax.Array:
     return jnp.linalg.norm(diff, axis=1) / jnp.linalg.norm(target_flat, axis=1)
 
 
-def train_and_evaluate(name: str, model: nnx.Module) -> dict[str, Any]:
-    """Train one operator with the shared recipe and evaluate on the test set.
+def collect_darcy_split(pipeline: Any) -> tuple[np.ndarray, np.ndarray]:
+    """Drain a datarax pipeline into channels-first ``(N, 1, H, W)`` arrays."""
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
-    Args:
-        name: Display name of the operator (for logging).
-        model: An initialized, channels-first neural operator.
 
-    Returns:
-        A result dict with parameter count, training time, final losses,
-        per-sample errors, mean relative-L2, MSE, and the test predictions.
-    """
+# %% [markdown]
+"""
+## Run the Example
+
+`main()` runs operator discovery, loads and normalizes the Darcy data, trains
+each of the five operators with the shared recipe, evaluates against a mean-
+predictor floor, saves the figures, and returns a small dict of finite metrics
+(best operator's error and parameter count, plus the operator count).
+"""
+
+
+# %%
+def main() -> dict[str, float | int]:
+    """Tour and compare the Fourier-family neural operators on Darcy flow."""
+    print("=" * 70)
+    print("Opifex Example: Neural Operator Comparison Tour on Darcy Flow")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
+    print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
+    print(f"Shared FNO config: modes={MODES}, width={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # --- Operator discovery ---
     print()
-    print("-" * 70)
-    print(f"Training {name} ({count_parameters(model):,} params)...")
-    config = TrainingConfig(
-        num_epochs=NUM_EPOCHS,
-        learning_rate=LEARNING_RATE,
+    print("=" * 70)
+    print("OPERATOR DISCOVERY")
+    print("=" * 70)
+    print("Available operators by category:")
+    for category, operators_in_cat in list_operators().items():
+        print(f"  {category}: {', '.join(operators_in_cat)}")
+
+    print()
+    print("Recommendations by application:")
+    applications = [
+        "turbulent_flow",
+        "global_climate",
+        "molecular_dynamics",
+        "cad_geometry",
+        "safety_critical",
+        "parameter_efficient",
+    ]
+    for app in applications:
+        rec = recommend_operator(app)
+        print(f"  {app:20s}: {rec['primary']} - {rec['reason']}")
+
+    # --- Data loading ---
+    print()
+    print("Generating Darcy flow data...")
+    n_samples = N_TRAIN + N_TEST
+    loaders = create_darcy_loader(
+        n_samples=n_samples,
         batch_size=BATCH_SIZE,
-        validation_frequency=10,
-        verbose=False,
-        loss_config=LossConfig(loss_type="relative_l2"),
+        resolution=RESOLUTION,
+        field_type="binary",
+        coeff_range=PERMEABILITY_VALUES,
+        val_fraction=N_TEST / n_samples,
+        seed=SEED,
     )
-    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
 
-    start = time.time()
-    trained_model, metrics = trainer.fit(
-        train_data=(X_train_n, Y_train_n),
-        val_data=(X_test_n, Y_test_n),
+    X_train, Y_train = collect_darcy_split(loaders.train)
+    X_test, Y_test = collect_darcy_split(loaders.val)
+    print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
+    print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
+
+    # --- Normalization ---
+    x_mean, x_std = X_train.mean(), X_train.std()
+    y_mean, y_std = Y_train.mean(), Y_train.std()
+
+    X_train_n = jnp.array((X_train - x_mean) / x_std)
+    Y_train_n = jnp.array((Y_train - y_mean) / y_std)
+    X_test_n = jnp.array((X_test - x_mean) / x_std)
+    Y_test_n = jnp.array((Y_test - y_mean) / y_std)
+    Y_test_jnp = jnp.array(Y_test)
+
+    print(f"Input mean/std:  {x_mean:.4f} / {x_std:.4f}")
+    print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
+
+    # --- Build the comparison set ---
+    operators = build_operators()
+    print()
+    print("Comparison operators (parameter counts):")
+    for name, op in operators.items():
+        print(f"  {name:14s}: {count_parameters(op):,} params")
+
+    # --- Train and evaluate each operator ---
+    def train_and_evaluate(name: str, model: nnx.Module) -> dict[str, Any]:
+        """Train one operator with the shared recipe and evaluate on the test set."""
+        print()
+        print("-" * 70)
+        print(f"Training {name} ({count_parameters(model):,} params)...")
+        config = TrainingConfig(
+            num_epochs=NUM_EPOCHS,
+            learning_rate=LEARNING_RATE,
+            batch_size=BATCH_SIZE,
+            validation_frequency=10,
+            verbose=False,
+            loss_config=LossConfig(loss_type="relative_l2"),
+        )
+        trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+
+        start = time.time()
+        trained_model, metrics = trainer.fit(
+            train_data=(X_train_n, Y_train_n),
+            val_data=(X_test_n, Y_test_n),
+        )
+        train_time = time.time() - start
+
+        predictions = predict_in_batches(trained_model, X_test_n) * y_std + y_mean
+        per_sample = relative_l2(predictions, Y_test_jnp)
+        mean_rel_l2 = float(jnp.mean(per_sample))
+        mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
+
+        print(
+            f"  {name}: rel-L2={mean_rel_l2:.4f}, MSE={mse:.3e}, "
+            f"time={train_time:.1f}s, "
+            f"final val loss={metrics.get('final_val_loss', float('nan')):.4f}"
+        )
+        return {
+            "params": count_parameters(trained_model),
+            "train_time_s": train_time,
+            "final_train_loss": float(metrics.get("final_train_loss", float("nan"))),
+            "final_val_loss": float(metrics.get("final_val_loss", float("nan"))),
+            "per_sample_rel_l2": np.array(per_sample),
+            "mean_rel_l2": mean_rel_l2,
+            "mse": mse,
+            "predictions": np.array(predictions),
+        }
+
+    print()
+    print("=" * 70)
+    print("TRAINING COMPARISON")
+    print("=" * 70)
+
+    results: dict[str, dict[str, Any]] = {}
+    for name, op in operators.items():
+        results[name] = train_and_evaluate(name, op)
+
+    # --- Baseline: mean predictor ---
+    mean_field = jnp.full_like(Y_test_jnp, float(Y_train.mean()))
+    mean_baseline_rel_l2 = float(jnp.mean(relative_l2(mean_field, Y_test_jnp)))
+    print()
+    print(f"Mean-predictor relative-L2: {mean_baseline_rel_l2:.4f}")
+    print("Every trained operator must beat this floor to be useful.")
+
+    # --- Comparison summary ---
+    print()
+    print("=" * 70)
+    print("COMPARISON SUMMARY (sorted by relative-L2)")
+    print("=" * 70)
+    baseline_params = results["Dense FNO"]["params"]
+
+    print()
+    header = (
+        f"{'Operator':14s} {'Rel-L2':>9s} {'MSE':>11s} "
+        f"{'Params':>11s} {'vs FNO':>8s} {'Time(s)':>9s}"
     )
-    train_time = time.time() - start
+    print(header)
+    print("-" * len(header))
+    for name, res in sorted(results.items(), key=lambda kv: kv[1]["mean_rel_l2"]):
+        ratio = baseline_params / res["params"] if res["params"] > 0 else 0.0
+        print(
+            f"{name:14s} {res['mean_rel_l2']:9.4f} {res['mse']:11.3e} "
+            f"{res['params']:11,d} {ratio:7.2f}x {res['train_time_s']:9.1f}"
+        )
+    print(f"{'Mean predictor':14s} {mean_baseline_rel_l2:9.4f}")
 
-    predictions = predict_in_batches(trained_model, X_test_n) * y_std + y_mean
-    per_sample = relative_l2(predictions, Y_test_jnp)
-    mean_rel_l2 = float(jnp.mean(per_sample))
-    mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
+    best_name = min(results, key=lambda k: results[k]["mean_rel_l2"])
+    print()
+    print(f"Best accuracy: {best_name} (rel-L2={results[best_name]['mean_rel_l2']:.4f})")
 
-    print(
-        f"  {name}: rel-L2={mean_rel_l2:.4f}, MSE={mse:.3e}, "
-        f"time={train_time:.1f}s, "
-        f"final val loss={metrics.get('final_val_loss', float('nan')):.4f}"
+    # --- Visualization: best-operator predictions ---
+    print()
+    print("Generating visualizations...")
+    best_preds = results[best_name]["predictions"]
+    n_vis = 3
+    indices = np.linspace(0, len(X_test) - 1, n_vis, dtype=int)
+
+    fig, axes = plt.subplots(n_vis, 4, figsize=(16, 4 * n_vis))
+    fig.suptitle(
+        f"Best Operator ({best_name}) -- Darcy Flow Predictions",
+        fontsize=14,
+        fontweight="bold",
     )
+    for row, idx in enumerate(indices):
+        x_field = X_test[idx, 0]
+        y_true = Y_test[idx, 0]
+        y_pred = best_preds[idx, 0]
+        error = np.abs(y_pred - y_true)
+
+        im0 = axes[row, 0].imshow(x_field, cmap="viridis")
+        axes[row, 0].set_title(f"Input {row + 1}: Permeability")
+        axes[row, 0].axis("off")
+        plt.colorbar(im0, ax=axes[row, 0], shrink=0.8)
+
+        im1 = axes[row, 1].imshow(y_true, cmap="RdBu_r")
+        axes[row, 1].set_title(f"Ground Truth {row + 1}")
+        axes[row, 1].axis("off")
+        plt.colorbar(im1, ax=axes[row, 1], shrink=0.8)
+
+        im2 = axes[row, 2].imshow(y_pred, cmap="RdBu_r")
+        axes[row, 2].set_title(f"{best_name} Prediction {row + 1}")
+        axes[row, 2].axis("off")
+        plt.colorbar(im2, ax=axes[row, 2], shrink=0.8)
+
+        im3 = axes[row, 3].imshow(error, cmap="Reds")
+        axes[row, 3].set_title(f"Absolute Error {row + 1}")
+        axes[row, 3].axis("off")
+        plt.colorbar(im3, ax=axes[row, 3], shrink=0.8)
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "predictions.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Predictions saved to {OUTPUT_DIR / 'predictions.png'}")
+
+    # --- Visualization: accuracy, parameters, cost ---
+    names = list(results.keys())
+    rel_l2_values = [results[n]["mean_rel_l2"] for n in names]
+    param_values = [results[n]["params"] for n in names]
+    time_values = [results[n]["train_time_s"] for n in names]
+    colors = ["steelblue", "coral", "mediumseagreen", "goldenrod", "mediumpurple"]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle("Neural Operator Comparison on Darcy Flow", fontsize=14, fontweight="bold")
+
+    bars0 = axes[0].bar(names, rel_l2_values, color=colors, edgecolor="black", alpha=0.8)
+    axes[0].axhline(mean_baseline_rel_l2, color="red", linestyle="--", label="Mean predictor")
+    axes[0].set_ylabel("Test Relative L2 (lower is better)")
+    axes[0].set_title("Accuracy")
+    axes[0].legend()
+    axes[0].tick_params(axis="x", rotation=30)
+    for bar, value in zip(bars0, rel_l2_values, strict=True):
+        axes[0].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    bars1 = axes[1].bar(names, param_values, color=colors, edgecolor="black", alpha=0.8)
+    axes[1].set_ylabel("Parameters")
+    axes[1].set_title("Model Size")
+    axes[1].tick_params(axis="x", rotation=30)
+    for bar, value in zip(bars1, param_values, strict=True):
+        axes[1].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value / 1e3:.0f}k",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    bars2 = axes[2].bar(names, time_values, color=colors, edgecolor="black", alpha=0.8)
+    axes[2].set_ylabel("Training Time (s)")
+    axes[2].set_title("Training Cost")
+    axes[2].tick_params(axis="x", rotation=30)
+    for bar, value in zip(bars2, time_values, strict=True):
+        axes[2].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.0f}s",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "analysis.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Analysis saved to {OUTPUT_DIR / 'analysis.png'}")
+
+    print()
+    print("=" * 70)
+    print("Operator comparison tour complete")
+    print(f"Best operator: {best_name} (rel-L2={results[best_name]['mean_rel_l2']:.4f})")
+    print(f"Results saved to: {OUTPUT_DIR}")
+    print("=" * 70)
+
+    best = results[best_name]
     return {
-        "params": count_parameters(trained_model),
-        "train_time_s": train_time,
-        "final_train_loss": float(metrics.get("final_train_loss", float("nan"))),
-        "final_val_loss": float(metrics.get("final_val_loss", float("nan"))),
-        "per_sample_rel_l2": np.array(per_sample),
-        "mean_rel_l2": mean_rel_l2,
-        "mse": mse,
-        "predictions": np.array(predictions),
+        "num_operators": len(results),
+        "best_rel_l2": best["mean_rel_l2"],
+        "best_mse": best["mse"],
+        "best_parameters": int(best["params"]),
+        "mean_baseline_rel_l2": mean_baseline_rel_l2,
     }
 
-
-print()
-print("=" * 70)
-print("TRAINING COMPARISON")
-print("=" * 70)
-
-results: dict[str, dict[str, Any]] = {}
-for name, op in operators.items():
-    results[name] = train_and_evaluate(name, op)
-
-# %% [markdown]
-"""
-## Baseline: Mean Predictor
-
-A fair comparison needs a floor. The mean predictor always outputs the training
-mean pressure -- any operator worth using must beat it.
-"""
-
-# %%
-mean_field = jnp.full_like(Y_test_jnp, float(Y_train.mean()))
-mean_baseline_rel_l2 = float(jnp.mean(relative_l2(mean_field, Y_test_jnp)))
-print()
-print(f"Mean-predictor relative-L2: {mean_baseline_rel_l2:.4f}")
-print("Every trained operator must beat this floor to be useful.")
-
-# %% [markdown]
-"""
-## Comparison Summary
-
-The table below ranks the operators by accuracy. The Tensorized FNOs trade a
-small amount of accuracy for a large parameter reduction relative to the dense
-FNO -- the parameter-efficiency story that motivates them.
-"""
-
-# %%
-print()
-print("=" * 70)
-print("COMPARISON SUMMARY (sorted by relative-L2)")
-print("=" * 70)
-baseline_params = results["Dense FNO"]["params"]
-
-print()
-header = (
-    f"{'Operator':14s} {'Rel-L2':>9s} {'MSE':>11s} {'Params':>11s} {'vs FNO':>8s} {'Time(s)':>9s}"
-)
-print(header)
-print("-" * len(header))
-for name, res in sorted(results.items(), key=lambda kv: kv[1]["mean_rel_l2"]):
-    ratio = baseline_params / res["params"] if res["params"] > 0 else 0.0
-    print(
-        f"{name:14s} {res['mean_rel_l2']:9.4f} {res['mse']:11.3e} "
-        f"{res['params']:11,d} {ratio:7.2f}x {res['train_time_s']:9.1f}"
-    )
-print(f"{'Mean predictor':14s} {mean_baseline_rel_l2:9.4f}")
-
-best_name = min(results, key=lambda k: results[k]["mean_rel_l2"])
-print()
-print(f"Best accuracy: {best_name} (rel-L2={results[best_name]['mean_rel_l2']:.4f})")
-
-# %% [markdown]
-"""
-## Visualization: Predictions
-
-For the most accurate operator, we plot the input permeability, the ground-truth
-pressure, the prediction, and the absolute error for a few test samples.
-"""
-
-# %%
-print()
-print("Generating visualizations...")
-
-best_preds = results[best_name]["predictions"]
-n_vis = 3
-indices = np.linspace(0, len(X_test) - 1, n_vis, dtype=int)
-
-fig, axes = plt.subplots(n_vis, 4, figsize=(16, 4 * n_vis))
-fig.suptitle(
-    f"Best Operator ({best_name}) -- Darcy Flow Predictions",
-    fontsize=14,
-    fontweight="bold",
-)
-for row, idx in enumerate(indices):
-    x_field = X_test[idx, 0]
-    y_true = Y_test[idx, 0]
-    y_pred = best_preds[idx, 0]
-    error = np.abs(y_pred - y_true)
-
-    im0 = axes[row, 0].imshow(x_field, cmap="viridis")
-    axes[row, 0].set_title(f"Input {row + 1}: Permeability")
-    axes[row, 0].axis("off")
-    plt.colorbar(im0, ax=axes[row, 0], shrink=0.8)
-
-    im1 = axes[row, 1].imshow(y_true, cmap="RdBu_r")
-    axes[row, 1].set_title(f"Ground Truth {row + 1}")
-    axes[row, 1].axis("off")
-    plt.colorbar(im1, ax=axes[row, 1], shrink=0.8)
-
-    im2 = axes[row, 2].imshow(y_pred, cmap="RdBu_r")
-    axes[row, 2].set_title(f"{best_name} Prediction {row + 1}")
-    axes[row, 2].axis("off")
-    plt.colorbar(im2, ax=axes[row, 2], shrink=0.8)
-
-    im3 = axes[row, 3].imshow(error, cmap="Reds")
-    axes[row, 3].set_title(f"Absolute Error {row + 1}")
-    axes[row, 3].axis("off")
-    plt.colorbar(im3, ax=axes[row, 3], shrink=0.8)
-
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "predictions.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Predictions saved to {OUTPUT_DIR / 'predictions.png'}")
-
-# %% [markdown]
-"""
-## Visualization: Accuracy, Parameters, and Cost
-
-Three bar charts summarise the comparison: test accuracy (lower is better),
-parameter count (lower is more efficient), and training time.
-"""
-
-# %%
-names = list(results.keys())
-rel_l2_values = [results[n]["mean_rel_l2"] for n in names]
-param_values = [results[n]["params"] for n in names]
-time_values = [results[n]["train_time_s"] for n in names]
-colors = ["steelblue", "coral", "mediumseagreen", "goldenrod", "mediumpurple"]
-
-fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-fig.suptitle("Neural Operator Comparison on Darcy Flow", fontsize=14, fontweight="bold")
-
-bars0 = axes[0].bar(names, rel_l2_values, color=colors, edgecolor="black", alpha=0.8)
-axes[0].axhline(mean_baseline_rel_l2, color="red", linestyle="--", label="Mean predictor")
-axes[0].set_ylabel("Test Relative L2 (lower is better)")
-axes[0].set_title("Accuracy")
-axes[0].legend()
-axes[0].tick_params(axis="x", rotation=30)
-for bar, value in zip(bars0, rel_l2_values, strict=True):
-    axes[0].text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height(),
-        f"{value:.3f}",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-    )
-
-bars1 = axes[1].bar(names, param_values, color=colors, edgecolor="black", alpha=0.8)
-axes[1].set_ylabel("Parameters")
-axes[1].set_title("Model Size")
-axes[1].tick_params(axis="x", rotation=30)
-for bar, value in zip(bars1, param_values, strict=True):
-    axes[1].text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height(),
-        f"{value / 1e3:.0f}k",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-    )
-
-bars2 = axes[2].bar(names, time_values, color=colors, edgecolor="black", alpha=0.8)
-axes[2].set_ylabel("Training Time (s)")
-axes[2].set_title("Training Cost")
-axes[2].tick_params(axis="x", rotation=30)
-for bar, value in zip(bars2, time_values, strict=True):
-    axes[2].text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height(),
-        f"{value:.0f}s",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-    )
-
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "analysis.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Analysis saved to {OUTPUT_DIR / 'analysis.png'}")
 
 # %% [markdown]
 """
@@ -647,9 +575,7 @@ After running this tour you will have:
 """
 
 # %%
-print()
-print("=" * 70)
-print("Operator comparison tour complete")
-print(f"Best operator: {best_name} (rel-L2={results[best_name]['mean_rel_l2']:.4f})")
-print(f"Results saved to: {OUTPUT_DIR}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

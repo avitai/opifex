@@ -8,7 +8,8 @@
 #       format_version: '1.3'
 # ---
 
-#!/usr/bin/env python3
+# %%
+# !/usr/bin/env python3
 
 # %% [markdown]
 """
@@ -30,7 +31,7 @@ resolution scaling, and data quality metrics.
 
 ## Learning Goals
 
-1. **Generate** Darcy flow datasets with `DarcyDataSource` at multiple resolutions
+1. **Generate** Darcy flow datasets with `generate_darcy` at multiple resolutions
 2. **Analyze** field statistics (mean, std, dynamic range) for permeability and pressure
 3. **Compute** spatial gradient correlations between input and output fields
 4. **Evaluate** resolution scaling performance (samples/second, time scaling)
@@ -39,6 +40,7 @@ resolution scaling, and data quality metrics.
 # %%
 import argparse
 import time
+from pathlib import Path
 from typing import Any
 
 import jax
@@ -47,7 +49,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Opifex Framework imports
-from opifex.data.sources import DarcyDataSource
+from opifex.data.sources import generate_darcy
 
 
 # %% [markdown]
@@ -247,17 +249,14 @@ def analyze_darcy_flow_dataset(
         print()
         print(f"Analyzing resolution: {resolution}x{resolution}")
 
-        # Create data source (Grain-based)
-        data_source = DarcyDataSource(
-            resolution=resolution,
-            n_samples=n_samples,
-            viscosity_range=viscosity_range,
-            seed=42,
-        )
-
-        # Generate samples and measure timing
+        # Generate the dataset with the vmapped datarax generator and measure
+        # timing. Fields are channels-first ``(1, H, W)``.
         start_time = time.time()
-        samples = [data_source[i] for i in range(n_samples)]
+        data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=42)
+        samples = [
+            {"input": data["input"][i], "output": data["output"][i]}
+            for i in range(n_samples)
+        ]
         generation_time = time.time() - start_time
 
         # Analyze samples
@@ -485,7 +484,10 @@ def main():
     # Create visualizations
     preprocessing_results = {}  # Placeholder for future preprocessing analysis
 
-    save_path = f"{args.output_dir}/darcy_analysis" if args.save_plots else None
+    save_path = None
+    if args.save_plots:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        save_path = f"{args.output_dir}/darcy_analysis"
     create_visualization(results, preprocessing_results, save_path)
 
     # Print summary

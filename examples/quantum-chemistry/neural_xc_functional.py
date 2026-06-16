@@ -49,11 +49,6 @@ GRID_POINTS = 32  # Points per density sample
 OUTPUT_DIR = "docs/assets/examples/neural_xc_functional"
 
 # %%
-print("=" * 70)
-print("Opifex Example: Training Neural XC Functional")
-print("=" * 70)
-
-# %%
 import time
 from pathlib import Path
 
@@ -63,9 +58,6 @@ import matplotlib.pyplot as plt
 import optax
 from flax import nnx
 
-
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
 
 # %%
 from opifex.neural.quantum import NeuralXCFunctional
@@ -86,11 +78,6 @@ where $C_x \\approx 0.738$ for exchange.
 """
 
 # %%
-print()
-print("Generating training data...")
-print("-" * 50)
-
-
 def generate_density_sample(key: jax.Array, grid_points: int) -> jax.Array:
     """Generate a physically reasonable electron density sample.
 
@@ -151,40 +138,6 @@ def compute_lda_xc_energy(density: jax.Array) -> jax.Array:
     return exchange + correlation
 
 
-# Generate training data
-print(f"  Training samples: {NUM_TRAIN_SAMPLES}")
-print(f"  Test samples: {NUM_TEST_SAMPLES}")
-print(f"  Grid points per sample: {GRID_POINTS}")
-
-key = jax.random.PRNGKey(SEED)
-
-# Generate training densities
-train_keys = jax.random.split(key, NUM_TRAIN_SAMPLES + 1)
-key = train_keys[0]
-train_densities = jnp.stack([generate_density_sample(k, GRID_POINTS) for k in train_keys[1:]])
-
-# Generate test densities
-test_keys = jax.random.split(key, NUM_TEST_SAMPLES + 1)
-key = test_keys[0]
-test_densities = jnp.stack([generate_density_sample(k, GRID_POINTS) for k in test_keys[1:]])
-
-# Compute gradients
-train_gradients = jnp.stack([compute_density_gradients(d) for d in train_densities])
-test_gradients = jnp.stack([compute_density_gradients(d) for d in test_densities])
-
-# Compute reference LDA XC energies
-train_xc_ref = jnp.stack([compute_lda_xc_energy(d) for d in train_densities])
-test_xc_ref = jnp.stack([compute_lda_xc_energy(d) for d in test_densities])
-
-print()
-print(f"  Train densities shape: {train_densities.shape}")
-print(f"  Train gradients shape: {train_gradients.shape}")
-print(f"  Train XC reference shape: {train_xc_ref.shape}")
-print()
-print(f"  Test densities shape: {test_densities.shape}")
-print(f"  Test gradients shape: {test_gradients.shape}")
-print(f"  Test XC reference shape: {test_xc_ref.shape}")
-
 # %% [markdown]
 """
 ## Step 2: Create Neural XC Functional
@@ -193,76 +146,28 @@ The Neural XC Functional uses:
 1. **Density Feature Extractor**: Extracts physics-informed features
 2. **Attention Mechanism**: Captures non-local correlations
 3. **Physics Constraints**: Ensures negative XC energy and proper scaling
-"""
 
-# %%
-print()
-print("Creating Neural XC Functional...")
-print("-" * 50)
-
-rngs = nnx.Rngs(SEED)
-
-model = NeuralXCFunctional(
-    hidden_sizes=HIDDEN_SIZES,
-    activation=nnx.gelu,
-    use_attention=USE_ATTENTION,
-    num_attention_heads=NUM_ATTENTION_HEADS,
-    use_advanced_features=USE_ADVANCED_FEATURES,
-    dropout_rate=DROPOUT_RATE,
-    rngs=rngs,
-)
-
-# Count parameters
-param_count = sum(p.size for p in jax.tree_util.tree_leaves(nnx.state(model)))
-print(f"  Hidden sizes: {HIDDEN_SIZES}")
-print(f"  Use attention: {USE_ATTENTION}")
-print(f"  Attention heads: {NUM_ATTENTION_HEADS}")
-print(f"  Use advanced features: {USE_ADVANCED_FEATURES}")
-print(f"  Total parameters: {param_count:,}")
-
-# Test forward pass
-test_output = model(train_densities[:1], train_gradients[:1], deterministic=True)
-print(f"  Test output shape: {test_output.shape}")
-
-# %% [markdown]
-"""
 ## Step 3: Define Loss Function and Training Loop
 
 We train the neural XC functional to minimize the mean squared error
 between predicted and reference LDA XC energies.
 """
 
+
 # %%
-print()
-print("Setting up training...")
-print("-" * 50)
-
-
 def loss_fn(model, densities, gradients, targets):
     """Mean squared error loss for XC energy prediction."""
     predictions = model(densities, gradients, deterministic=True)
     return jnp.mean((predictions - targets) ** 2)
 
 
-# Create optimizer
-optimizer = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-
-print("  Optimizer: Adam")
-print(f"  Learning rate: {LEARNING_RATE}")
-print(f"  Batch size: {BATCH_SIZE}")
-print(f"  Number of epochs: {NUM_EPOCHS}")
-
 # %% [markdown]
 """
 ## Step 4: Train the Model
 """
 
+
 # %%
-print()
-print("Training Neural XC Functional...")
-print("-" * 50)
-
-
 @nnx.jit
 def train_step(model, optimizer, densities, gradients, targets):
     """Perform a single training step."""
@@ -271,281 +176,351 @@ def train_step(model, optimizer, densities, gradients, targets):
     return loss
 
 
-# Training loop
-train_losses = []
-test_losses = []
-n_batches = NUM_TRAIN_SAMPLES // BATCH_SIZE
-
-start_time = time.time()
-
-for epoch in range(NUM_EPOCHS):
-    epoch_losses = []
-
-    # Shuffle training data
-    key, shuffle_key = jax.random.split(key)
-    perm = jax.random.permutation(shuffle_key, NUM_TRAIN_SAMPLES)
-    shuffled_densities = train_densities[perm]
-    shuffled_gradients = train_gradients[perm]
-    shuffled_targets = train_xc_ref[perm]
-
-    # Mini-batch training
-    for batch_idx in range(n_batches):
-        start_idx = batch_idx * BATCH_SIZE
-        end_idx = start_idx + BATCH_SIZE
-
-        batch_densities = shuffled_densities[start_idx:end_idx]
-        batch_gradients = shuffled_gradients[start_idx:end_idx]
-        batch_targets = shuffled_targets[start_idx:end_idx]
-
-        loss = train_step(model, optimizer, batch_densities, batch_gradients, batch_targets)
-        epoch_losses.append(float(loss))
-
-    # Record epoch loss
-    epoch_loss = jnp.mean(jnp.array(epoch_losses))
-    train_losses.append(float(epoch_loss))
-
-    # Compute test loss
-    test_loss = float(loss_fn(model, test_densities, test_gradients, test_xc_ref))
-    test_losses.append(test_loss)
-
-    # Log progress
-    if (epoch + 1) % 10 == 0 or epoch == 0:
-        print(
-            f"  Epoch {epoch + 1:3d}/{NUM_EPOCHS}: "
-            f"train_loss = {epoch_loss:.6f}, test_loss = {test_loss:.6f}"
-        )
-
-training_time = time.time() - start_time
-
-print()
-print("Training complete!")
-print(f"  Training time: {training_time:.1f}s")
-print(f"  Final train loss: {train_losses[-1]:.6f}")
-print(f"  Final test loss: {test_losses[-1]:.6f}")
-
 # %% [markdown]
 """
-## Step 5: Evaluate Model Performance
+## Run the example
+
+Steps 5-7 (evaluate, visualize, assess chemical accuracy) and the results summary
+follow the training loop inside ``main()``.
 """
 
-# %%
-print()
-print("Evaluating model performance...")
-print("-" * 50)
-
-# Get predictions on test set
-test_predictions = model(test_densities, test_gradients, deterministic=True)
-
-# Compute metrics
-mse = float(jnp.mean((test_predictions - test_xc_ref) ** 2))
-mae = float(jnp.mean(jnp.abs(test_predictions - test_xc_ref)))
-r2 = float(
-    1
-    - jnp.sum((test_xc_ref - test_predictions) ** 2)
-    / jnp.sum((test_xc_ref - jnp.mean(test_xc_ref)) ** 2)
-)
-
-# Per-sample correlation
-correlations = []
-for i in range(NUM_TEST_SAMPLES):
-    corr = jnp.corrcoef(test_predictions[i], test_xc_ref[i])[0, 1]
-    if jnp.isfinite(corr):
-        correlations.append(float(corr))
-
-mean_correlation = jnp.mean(jnp.array(correlations)) if correlations else 0.0
-
-print(f"  Mean Squared Error (MSE): {mse:.6e}")
-print(f"  Mean Absolute Error (MAE): {mae:.6e}")
-print(f"  R-squared (R2): {r2:.4f}")
-print(f"  Mean Correlation: {mean_correlation:.4f}")
-
-# Check physics constraints
-print()
-print("Physics Constraint Verification:")
-all_negative = float(jnp.mean(test_predictions < 0))
-print(f"  XC energy negative: {all_negative * 100:.1f}% of predictions")
-
-# %% [markdown]
-"""
-## Step 6: Visualization
-"""
 
 # %%
-print()
-print("Generating visualizations...")
+def main() -> dict[str, float | int]:
+    """Generate data, train the neural XC functional, and return the headline metrics."""
+    print("=" * 70)
+    print("Opifex Example: Training Neural XC Functional")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
 
-Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    # Generate training data.
+    print()
+    print("Generating training data...")
+    print("-" * 50)
+    print(f"  Training samples: {NUM_TRAIN_SAMPLES}")
+    print(f"  Test samples: {NUM_TEST_SAMPLES}")
+    print(f"  Grid points per sample: {GRID_POINTS}")
 
-# %%
-# Figure 1: Training curves
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    key = jax.random.PRNGKey(SEED)
 
-# Left: Training curves
-ax1 = axes[0]
-epochs = jnp.arange(1, NUM_EPOCHS + 1)
-ax1.semilogy(epochs, train_losses, "b-", linewidth=2, label="Train Loss")
-ax1.semilogy(epochs, test_losses, "r--", linewidth=2, label="Test Loss")
-ax1.set_xlabel("Epoch", fontsize=12)
-ax1.set_ylabel("MSE Loss", fontsize=12)
-ax1.set_title("Training Progress", fontsize=14)
-ax1.legend()
-ax1.grid(True, alpha=0.3)
+    train_keys = jax.random.split(key, NUM_TRAIN_SAMPLES + 1)
+    key = train_keys[0]
+    train_densities = jnp.stack(
+        [generate_density_sample(k, GRID_POINTS) for k in train_keys[1:]]
+    )
 
-# Right: Prediction vs Reference scatter
-ax2 = axes[1]
-ax2.scatter(
-    test_xc_ref.flatten(),
-    test_predictions.flatten(),
-    alpha=0.3,
-    s=5,
-    c="blue",
-)
-# Perfect prediction line
-min_val = min(test_xc_ref.min(), test_predictions.min())
-max_val = max(test_xc_ref.max(), test_predictions.max())
-ax2.plot([min_val, max_val], [min_val, max_val], "r--", linewidth=2, label="Perfect")
-ax2.set_xlabel("Reference XC Energy (LDA)", fontsize=12)
-ax2.set_ylabel("Predicted XC Energy", fontsize=12)
-ax2.set_title(f"Prediction vs Reference (R2 = {r2:.3f})", fontsize=14)
-ax2.legend()
-ax2.grid(True, alpha=0.3)
+    test_keys = jax.random.split(key, NUM_TEST_SAMPLES + 1)
+    key = test_keys[0]
+    test_densities = jnp.stack([generate_density_sample(k, GRID_POINTS) for k in test_keys[1:]])
 
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/training_curves.png", dpi=150, bbox_inches="tight")
-plt.show()
-print(f"  Saved: {OUTPUT_DIR}/training_curves.png")
+    train_gradients = jnp.stack([compute_density_gradients(d) for d in train_densities])
+    test_gradients = jnp.stack([compute_density_gradients(d) for d in test_densities])
 
-# %%
-# Figure 2: Sample predictions
-fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    train_xc_ref = jnp.stack([compute_lda_xc_energy(d) for d in train_densities])
+    test_xc_ref = jnp.stack([compute_lda_xc_energy(d) for d in test_densities])
 
-# Select 6 test samples
-sample_indices = [0, 10, 20, 30, 40, 50]
+    print()
+    print(f"  Train densities shape: {train_densities.shape}")
+    print(f"  Train gradients shape: {train_gradients.shape}")
+    print(f"  Train XC reference shape: {train_xc_ref.shape}")
+    print()
+    print(f"  Test densities shape: {test_densities.shape}")
+    print(f"  Test gradients shape: {test_gradients.shape}")
+    print(f"  Test XC reference shape: {test_xc_ref.shape}")
 
-for idx, ax in zip(sample_indices, axes.flatten(), strict=False):
-    x = jnp.arange(GRID_POINTS)
+    # Create the model.
+    print()
+    print("Creating Neural XC Functional...")
+    print("-" * 50)
 
-    # Plot density (scaled for visibility)
-    density_scaled = test_densities[idx] / test_densities[idx].max() * 0.5
-    ax.fill_between(x, 0, density_scaled, alpha=0.3, color="gray", label="Density")
+    rngs = nnx.Rngs(SEED)
+    model = NeuralXCFunctional(
+        hidden_sizes=HIDDEN_SIZES,
+        activation=nnx.gelu,
+        use_attention=USE_ATTENTION,
+        num_attention_heads=NUM_ATTENTION_HEADS,
+        use_advanced_features=USE_ADVANCED_FEATURES,
+        dropout_rate=DROPOUT_RATE,
+        rngs=rngs,
+    )
 
-    # Plot XC energies
-    ax.plot(x, test_xc_ref[idx], "b-", linewidth=2, label="Reference (LDA)")
-    ax.plot(x, test_predictions[idx], "r--", linewidth=2, label="Predicted")
+    param_count = sum(p.size for p in jax.tree_util.tree_leaves(nnx.state(model)))
+    print(f"  Hidden sizes: {HIDDEN_SIZES}")
+    print(f"  Use attention: {USE_ATTENTION}")
+    print(f"  Attention heads: {NUM_ATTENTION_HEADS}")
+    print(f"  Use advanced features: {USE_ADVANCED_FEATURES}")
+    print(f"  Total parameters: {param_count:,}")
 
-    # Compute sample correlation
-    sample_corr = float(jnp.corrcoef(test_predictions[idx], test_xc_ref[idx])[0, 1])
+    test_output = model(train_densities[:1], train_gradients[:1], deterministic=True)
+    print(f"  Test output shape: {test_output.shape}")
 
-    ax.set_xlabel("Grid Point", fontsize=10)
-    ax.set_ylabel("XC Energy", fontsize=10)
-    ax.set_title(f"Sample {idx} (corr = {sample_corr:.3f})", fontsize=12)
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
+    # Set up training.
+    print()
+    print("Setting up training...")
+    print("-" * 50)
+    optimizer = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    print("  Optimizer: Adam")
+    print(f"  Learning rate: {LEARNING_RATE}")
+    print(f"  Batch size: {BATCH_SIZE}")
+    print(f"  Number of epochs: {NUM_EPOCHS}")
 
-plt.suptitle("Sample XC Energy Predictions", fontsize=14, y=1.02)
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/sample_predictions.png", dpi=150, bbox_inches="tight")
-plt.show()
-print(f"  Saved: {OUTPUT_DIR}/sample_predictions.png")
+    # Training loop.
+    print()
+    print("Training Neural XC Functional...")
+    print("-" * 50)
+    train_losses = []
+    test_losses = []
+    n_batches = NUM_TRAIN_SAMPLES // BATCH_SIZE
 
-# %%
-# Figure 3: Error analysis
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    start_time = time.time()
 
-# Left: Error distribution
-ax1 = axes[0]
-errors = (test_predictions - test_xc_ref).flatten()
-ax1.hist(errors, bins=50, density=True, alpha=0.7, color="blue", edgecolor="black")
-ax1.axvline(0, color="r", linestyle="--", linewidth=2)
-ax1.axvline(
-    jnp.mean(errors),
-    color="g",
-    linestyle="-",
-    linewidth=2,
-    label=f"Mean: {jnp.mean(errors):.4f}",
-)
-ax1.set_xlabel("Prediction Error", fontsize=12)
-ax1.set_ylabel("Density", fontsize=12)
-ax1.set_title("Error Distribution", fontsize=14)
-ax1.legend()
-ax1.grid(True, alpha=0.3)
+    for epoch in range(NUM_EPOCHS):
+        epoch_losses = []
 
-# Right: Error vs density magnitude
-ax2 = axes[1]
-density_mag = jnp.abs(test_densities).flatten()
-errors_flat = jnp.abs(errors)
-ax2.scatter(density_mag, errors_flat, alpha=0.2, s=3, c="blue")
-ax2.set_xlabel("Density Magnitude", fontsize=12)
-ax2.set_ylabel("Absolute Error", fontsize=12)
-ax2.set_title("Error vs Density", fontsize=14)
-ax2.grid(True, alpha=0.3)
+        # Shuffle training data
+        key, shuffle_key = jax.random.split(key)
+        perm = jax.random.permutation(shuffle_key, NUM_TRAIN_SAMPLES)
+        shuffled_densities = train_densities[perm]
+        shuffled_gradients = train_gradients[perm]
+        shuffled_targets = train_xc_ref[perm]
 
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/error_analysis.png", dpi=150, bbox_inches="tight")
-plt.show()
-print(f"  Saved: {OUTPUT_DIR}/error_analysis.png")
+        # Mini-batch training
+        for batch_idx in range(n_batches):
+            start_idx = batch_idx * BATCH_SIZE
+            end_idx = start_idx + BATCH_SIZE
 
-# %% [markdown]
-"""
-## Step 7: Assess Chemical Accuracy
-"""
+            batch_densities = shuffled_densities[start_idx:end_idx]
+            batch_gradients = shuffled_gradients[start_idx:end_idx]
+            batch_targets = shuffled_targets[start_idx:end_idx]
 
-# %%
-print()
-print("Chemical Accuracy Assessment:")
-print("-" * 50)
+            loss = train_step(model, optimizer, batch_densities, batch_gradients, batch_targets)
+            epoch_losses.append(float(loss))
 
-# Use built-in assessment method
-accuracy_metrics = model.assess_chemical_accuracy(
-    test_densities[:10],
-    test_gradients[:10],
-    reference_energy=test_xc_ref[:10],
-    deterministic=True,
-)
+        # Record epoch loss
+        epoch_loss = jnp.mean(jnp.array(epoch_losses))
+        train_losses.append(float(epoch_loss))
 
-for key, value in accuracy_metrics.items():
-    if isinstance(value, float):
-        if abs(value) < 1e-3 or abs(value) > 1e3:
-            print(f"  {key}: {value:.6e}")
+        # Compute test loss
+        test_loss = float(loss_fn(model, test_densities, test_gradients, test_xc_ref))
+        test_losses.append(test_loss)
+
+        # Log progress
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            print(
+                f"  Epoch {epoch + 1:3d}/{NUM_EPOCHS}: "
+                f"train_loss = {epoch_loss:.6f}, test_loss = {test_loss:.6f}"
+            )
+
+    training_time = time.time() - start_time
+
+    print()
+    print("Training complete!")
+    print(f"  Training time: {training_time:.1f}s")
+    print(f"  Final train loss: {train_losses[-1]:.6f}")
+    print(f"  Final test loss: {test_losses[-1]:.6f}")
+
+    # Step 5: Evaluate model performance.
+    print()
+    print("Evaluating model performance...")
+    print("-" * 50)
+
+    test_predictions = model(test_densities, test_gradients, deterministic=True)
+
+    mse = float(jnp.mean((test_predictions - test_xc_ref) ** 2))
+    mae = float(jnp.mean(jnp.abs(test_predictions - test_xc_ref)))
+    r2 = float(
+        1
+        - jnp.sum((test_xc_ref - test_predictions) ** 2)
+        / jnp.sum((test_xc_ref - jnp.mean(test_xc_ref)) ** 2)
+    )
+
+    # Per-sample correlation
+    correlations = []
+    for i in range(NUM_TEST_SAMPLES):
+        corr = jnp.corrcoef(test_predictions[i], test_xc_ref[i])[0, 1]
+        if jnp.isfinite(corr):
+            correlations.append(float(corr))
+
+    mean_correlation = float(jnp.mean(jnp.array(correlations))) if correlations else 0.0
+
+    print(f"  Mean Squared Error (MSE): {mse:.6e}")
+    print(f"  Mean Absolute Error (MAE): {mae:.6e}")
+    print(f"  R-squared (R2): {r2:.4f}")
+    print(f"  Mean Correlation: {mean_correlation:.4f}")
+
+    # Check physics constraints
+    print()
+    print("Physics Constraint Verification:")
+    all_negative = float(jnp.mean(test_predictions < 0))
+    print(f"  XC energy negative: {all_negative * 100:.1f}% of predictions")
+
+    # Step 6: Visualization.
+    print()
+    print("Generating visualizations...")
+
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+
+    # Figure 1: Training curves
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
+    epochs = jnp.arange(1, NUM_EPOCHS + 1)
+    ax1.semilogy(epochs, train_losses, "b-", linewidth=2, label="Train Loss")
+    ax1.semilogy(epochs, test_losses, "r--", linewidth=2, label="Test Loss")
+    ax1.set_xlabel("Epoch", fontsize=12)
+    ax1.set_ylabel("MSE Loss", fontsize=12)
+    ax1.set_title("Training Progress", fontsize=14)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = axes[1]
+    ax2.scatter(
+        test_xc_ref.flatten(),
+        test_predictions.flatten(),
+        alpha=0.3,
+        s=5,
+        c="blue",
+    )
+    min_val = min(test_xc_ref.min(), test_predictions.min())
+    max_val = max(test_xc_ref.max(), test_predictions.max())
+    ax2.plot([min_val, max_val], [min_val, max_val], "r--", linewidth=2, label="Perfect")
+    ax2.set_xlabel("Reference XC Energy (LDA)", fontsize=12)
+    ax2.set_ylabel("Predicted XC Energy", fontsize=12)
+    ax2.set_title(f"Prediction vs Reference (R2 = {r2:.3f})", fontsize=14)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/training_curves.png", dpi=150, bbox_inches="tight")
+    plt.show()
+    print(f"  Saved: {OUTPUT_DIR}/training_curves.png")
+
+    # Figure 2: Sample predictions
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+
+    sample_indices = [0, 10, 20, 30, 40, 50]
+
+    for idx, ax in zip(sample_indices, axes.flatten(), strict=False):
+        x = jnp.arange(GRID_POINTS)
+
+        density_scaled = test_densities[idx] / test_densities[idx].max() * 0.5
+        ax.fill_between(x, 0, density_scaled, alpha=0.3, color="gray", label="Density")
+
+        ax.plot(x, test_xc_ref[idx], "b-", linewidth=2, label="Reference (LDA)")
+        ax.plot(x, test_predictions[idx], "r--", linewidth=2, label="Predicted")
+
+        sample_corr = float(jnp.corrcoef(test_predictions[idx], test_xc_ref[idx])[0, 1])
+
+        ax.set_xlabel("Grid Point", fontsize=10)
+        ax.set_ylabel("XC Energy", fontsize=10)
+        ax.set_title(f"Sample {idx} (corr = {sample_corr:.3f})", fontsize=12)
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    plt.suptitle("Sample XC Energy Predictions", fontsize=14, y=1.02)
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/sample_predictions.png", dpi=150, bbox_inches="tight")
+    plt.show()
+    print(f"  Saved: {OUTPUT_DIR}/sample_predictions.png")
+
+    # Figure 3: Error analysis
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
+    errors = (test_predictions - test_xc_ref).flatten()
+    ax1.hist(errors, bins=50, density=True, alpha=0.7, color="blue", edgecolor="black")
+    ax1.axvline(0, color="r", linestyle="--", linewidth=2)
+    ax1.axvline(
+        jnp.mean(errors),
+        color="g",
+        linestyle="-",
+        linewidth=2,
+        label=f"Mean: {jnp.mean(errors):.4f}",
+    )
+    ax1.set_xlabel("Prediction Error", fontsize=12)
+    ax1.set_ylabel("Density", fontsize=12)
+    ax1.set_title("Error Distribution", fontsize=14)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = axes[1]
+    density_mag = jnp.abs(test_densities).flatten()
+    errors_flat = jnp.abs(errors)
+    ax2.scatter(density_mag, errors_flat, alpha=0.2, s=3, c="blue")
+    ax2.set_xlabel("Density Magnitude", fontsize=12)
+    ax2.set_ylabel("Absolute Error", fontsize=12)
+    ax2.set_title("Error vs Density", fontsize=14)
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/error_analysis.png", dpi=150, bbox_inches="tight")
+    plt.show()
+    print(f"  Saved: {OUTPUT_DIR}/error_analysis.png")
+
+    # Step 7: Assess chemical accuracy.
+    print()
+    print("Chemical Accuracy Assessment:")
+    print("-" * 50)
+
+    accuracy_metrics = model.assess_chemical_accuracy(
+        test_densities[:10],
+        test_gradients[:10],
+        reference_energy=test_xc_ref[:10],
+        deterministic=True,
+    )
+
+    for metric_name, value in accuracy_metrics.items():
+        if isinstance(value, float):
+            if abs(value) < 1e-3 or abs(value) > 1e3:
+                print(f"  {metric_name}: {value:.6e}")
+            else:
+                print(f"  {metric_name}: {value:.6f}")
         else:
-            print(f"  {key}: {value:.6f}")
-    else:
-        print(f"  {key}: {value}")
+            print(f"  {metric_name}: {value}")
 
-# %% [markdown]
-"""
-## Results Summary
-"""
+    # Results summary.
+    print()
+    print("=" * 70)
+    print("RESULTS SUMMARY")
+    print("=" * 70)
+    print()
+    print("Model Configuration:")
+    print(f"  Hidden sizes: {HIDDEN_SIZES}")
+    print(f"  Attention: {USE_ATTENTION} ({NUM_ATTENTION_HEADS} heads)")
+    print(f"  Advanced features: {USE_ADVANCED_FEATURES}")
+    print(f"  Parameters: {param_count:,}")
+    print()
+    print("Training:")
+    print(f"  Epochs: {NUM_EPOCHS}")
+    print(f"  Training samples: {NUM_TRAIN_SAMPLES}")
+    print(f"  Training time: {training_time:.1f}s")
+    print(f"  Final train loss: {train_losses[-1]:.6e}")
+    print(f"  Final test loss: {test_losses[-1]:.6e}")
+    print()
+    print("Evaluation:")
+    print(f"  MSE: {mse:.6e}")
+    print(f"  MAE: {mae:.6e}")
+    print(f"  R-squared: {r2:.4f}")
+    print(f"  Mean correlation: {mean_correlation:.4f}")
+    print()
+    print("Physics Constraints:")
+    print(f"  Negative XC energy: {all_negative * 100:.1f}%")
+    print("=" * 70)
+    print()
+    print("Neural XC Functional training example completed successfully!")
+
+    return {
+        "r2": r2,
+        "final_test_loss": test_losses[-1],
+        "mse": mse,
+        "mae": mae,
+        "mean_correlation": mean_correlation,
+    }
+
 
 # %%
-print()
-print("=" * 70)
-print("RESULTS SUMMARY")
-print("=" * 70)
-print()
-print("Model Configuration:")
-print(f"  Hidden sizes: {HIDDEN_SIZES}")
-print(f"  Attention: {USE_ATTENTION} ({NUM_ATTENTION_HEADS} heads)")
-print(f"  Advanced features: {USE_ADVANCED_FEATURES}")
-print(f"  Parameters: {param_count:,}")
-print()
-print("Training:")
-print(f"  Epochs: {NUM_EPOCHS}")
-print(f"  Training samples: {NUM_TRAIN_SAMPLES}")
-print(f"  Training time: {training_time:.1f}s")
-print(f"  Final train loss: {train_losses[-1]:.6e}")
-print(f"  Final test loss: {test_losses[-1]:.6e}")
-print()
-print("Evaluation:")
-print(f"  MSE: {mse:.6e}")
-print(f"  MAE: {mae:.6e}")
-print(f"  R-squared: {r2:.4f}")
-print(f"  Mean correlation: {mean_correlation:.4f}")
-print()
-print("Physics Constraints:")
-print(f"  Negative XC energy: {all_negative * 100:.1f}%")
-print("=" * 70)
-
-# %%
-print()
-print("Neural XC Functional training example completed successfully!")
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

@@ -33,15 +33,10 @@ import numpy as np
 import optax
 from flax import nnx
 
+mpl.use("Agg")
+
 
 # %%
-# Configuration - matching DeepXDE setup
-print("=" * 70)
-print("Opifex Example: Helmholtz Equation PINN")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # Problem configuration (from DeepXDE: n=2)
 N_MODES = 2  # Number of wavelengths in each direction
 K0 = 2.0 * jnp.pi * N_MODES  # Wave number k0 = 4*pi
@@ -63,14 +58,6 @@ LEARNING_RATE = 1e-3
 
 # Use hard constraint for BCs
 USE_HARD_CONSTRAINT = True
-
-print(f"Wave number: k0 = {float(K0):.4f} (n={N_MODES} modes)")
-print(f"Wavelength: {1.0 / N_MODES:.4f}")
-print("Domain: [0, 1] x [0, 1]")
-print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} boundary")
-print(f"Network: [2] + {HIDDEN_DIMS} + [1]")
-print(f"Hard BC constraint: {USE_HARD_CONSTRAINT}")
-print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
 # %% [markdown]
 # ## Problem Definition
@@ -99,13 +86,6 @@ def source_term(xy):
     x, y = xy[:, 0], xy[:, 1]
     return K0**2 * jnp.sin(K0 * x) * jnp.sin(K0 * y)
 
-
-print()
-print("Helmholtz equation: -nabla^2(u) - k0^2 * u = f(x,y)")
-print(f"  Wave number: k0 = 2*pi*{N_MODES} = {float(K0):.4f}")
-print("  Source term: f = k0^2 * sin(k0*x) * sin(k0*y)")
-print("  Boundary: u = 0 (Dirichlet)")
-print("  Analytical solution: u = sin(k0*x) * sin(k0*y)")
 
 # %% [markdown]
 # ## PINN Architecture with Hard Constraint
@@ -168,54 +148,8 @@ class HelmholtzPINN(nnx.Module):
         return u_hat
 
 
-# %%
-print()
-print("Creating PINN model...")
-
-pinn = HelmholtzPINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
-
-# Count parameters
-n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
-print(f"PINN parameters: {n_params:,}")
-
 # %% [markdown]
 # ## Collocation Points
-
-# %%
-print()
-print("Generating collocation points...")
-
-key = jax.random.PRNGKey(42)
-keys = jax.random.split(key, 6)
-
-# Domain interior points
-x_domain = jax.random.uniform(keys[0], (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
-y_domain = jax.random.uniform(keys[1], (N_DOMAIN,), minval=Y_MIN, maxval=Y_MAX)
-xy_domain = jnp.column_stack([x_domain, y_domain])
-
-# Boundary points (for soft constraint if needed, or evaluation)
-n_per_edge = N_BOUNDARY // 4
-
-# Bottom edge (y = 0)
-x_bottom = jax.random.uniform(keys[2], (n_per_edge,), minval=X_MIN, maxval=X_MAX)
-xy_bottom = jnp.column_stack([x_bottom, jnp.zeros(n_per_edge)])
-
-# Top edge (y = 1)
-x_top = jax.random.uniform(keys[3], (n_per_edge,), minval=X_MIN, maxval=X_MAX)
-xy_top = jnp.column_stack([x_top, jnp.ones(n_per_edge)])
-
-# Left edge (x = 0)
-y_left = jax.random.uniform(keys[4], (n_per_edge,), minval=Y_MIN, maxval=Y_MAX)
-xy_left = jnp.column_stack([jnp.zeros(n_per_edge), y_left])
-
-# Right edge (x = 1)
-y_right = jax.random.uniform(keys[5], (n_per_edge,), minval=Y_MIN, maxval=Y_MAX)
-xy_right = jnp.column_stack([jnp.ones(n_per_edge), y_right])
-
-xy_boundary = jnp.concatenate([xy_bottom, xy_top, xy_left, xy_right], axis=0)
-
-print(f"Domain points:   {xy_domain.shape}")
-print(f"Boundary points: {xy_boundary.shape}")
 
 # %% [markdown]
 # ## Physics-Informed Loss
@@ -287,13 +221,8 @@ def total_loss(pinn, xy_dom, xy_bc, lambda_bc=100.0):
 # %% [markdown]
 # ## Training
 
+
 # %%
-print()
-print("Training PINN...")
-
-opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-
-
 @nnx.jit
 def train_step(pinn, opt, xy_dom, xy_bc):
     """Single training step."""
@@ -306,174 +235,203 @@ def train_step(pinn, opt, xy_dom, xy_bc):
     return loss
 
 
-losses = []
-for epoch in range(EPOCHS):
-    loss = train_step(pinn, opt, xy_domain, xy_boundary)
-    losses.append(float(loss))
-
-    if (epoch + 1) % 1000 == 0 or epoch == 0:
-        print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
-
-print(f"Final loss: {losses[-1]:.6e}")
-
 # %% [markdown]
-# ## Evaluation
+# ## Run the example
+#
+# Builds collocation points, trains the PINN, evaluates against the exact
+# solution, and saves the visualizations.
+
 
 # %%
-print()
-print("Evaluating PINN...")
+def main() -> dict[str, float | int]:
+    """Train a Helmholtz PINN, evaluate against the exact solution, and plot."""
+    print("=" * 70)
+    print("Opifex Example: Helmholtz Equation PINN")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Wave number: k0 = {float(K0):.4f} (n={N_MODES} modes)")
+    print(f"Wavelength: {1.0 / N_MODES:.4f}")
+    print("Domain: [0, 1] x [0, 1]")
+    print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} boundary")
+    print(f"Network: [2] + {HIDDEN_DIMS} + [1]")
+    print(f"Hard BC constraint: {USE_HARD_CONSTRAINT}")
+    print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
+    print("Helmholtz equation: -nabla^2(u) - k0^2 * u = f(x,y)")
+    print("  Source term: f = k0^2 * sin(k0*x) * sin(k0*y)")
+    print("  Boundary: u = 0 (Dirichlet)")
+    print("  Analytical solution: u = sin(k0*x) * sin(k0*y)")
 
-# Create evaluation grid
-nx, ny = 100, 100
-x_eval = jnp.linspace(X_MIN, X_MAX, nx)
-y_eval = jnp.linspace(Y_MIN, Y_MAX, ny)
-xx, yy = jnp.meshgrid(x_eval, y_eval)
-xy_eval = jnp.column_stack([xx.ravel(), yy.ravel()])
+    pinn = HelmholtzPINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
+    n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
+    print(f"PINN parameters: {n_params:,}")
 
-# PINN prediction
-u_pred = pinn(xy_eval).squeeze()
-u_pred_grid = u_pred.reshape(ny, nx)
+    key = jax.random.PRNGKey(42)
+    keys = jax.random.split(key, 6)
 
-# Exact solution
-u_exact_grid = exact_solution(xy_eval).reshape(ny, nx)
+    x_domain = jax.random.uniform(keys[0], (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
+    y_domain = jax.random.uniform(keys[1], (N_DOMAIN,), minval=Y_MIN, maxval=Y_MAX)
+    xy_domain = jnp.column_stack([x_domain, y_domain])
 
-# Compute errors
-error = jnp.abs(u_pred_grid - u_exact_grid)
-l2_error = float(jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2)))
-max_error = float(jnp.max(error))
-mean_error = float(jnp.mean(error))
+    n_per_edge = N_BOUNDARY // 4
+    x_bottom = jax.random.uniform(keys[2], (n_per_edge,), minval=X_MIN, maxval=X_MAX)
+    xy_bottom = jnp.column_stack([x_bottom, jnp.zeros(n_per_edge)])
+    x_top = jax.random.uniform(keys[3], (n_per_edge,), minval=X_MIN, maxval=X_MAX)
+    xy_top = jnp.column_stack([x_top, jnp.ones(n_per_edge)])
+    y_left = jax.random.uniform(keys[4], (n_per_edge,), minval=Y_MIN, maxval=Y_MAX)
+    xy_left = jnp.column_stack([jnp.zeros(n_per_edge), y_left])
+    y_right = jax.random.uniform(keys[5], (n_per_edge,), minval=Y_MIN, maxval=Y_MAX)
+    xy_right = jnp.column_stack([jnp.ones(n_per_edge), y_right])
+    xy_boundary = jnp.concatenate([xy_bottom, xy_top, xy_left, xy_right], axis=0)
+    print(f"Domain points:   {xy_domain.shape}")
+    print(f"Boundary points: {xy_boundary.shape}")
 
-# Mean PDE residual
-residual = compute_pde_residual(pinn, xy_eval)
-mean_residual = float(jnp.mean(jnp.abs(residual)))
+    print("Training PINN...")
+    opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    losses = []
+    for epoch in range(EPOCHS):
+        loss = train_step(pinn, opt, xy_domain, xy_boundary)
+        losses.append(float(loss))
+        if (epoch + 1) % 1000 == 0 or epoch == 0:
+            print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
+    final_loss = losses[-1]
+    print(f"Final loss: {final_loss:.6e}")
 
-# Boundary error (should be ~0 with hard constraint)
-bc_error = float(jnp.mean(jnp.abs(pinn(xy_boundary).squeeze())))
+    print("Evaluating PINN...")
+    nx, ny = 100, 100
+    x_eval = jnp.linspace(X_MIN, X_MAX, nx)
+    y_eval = jnp.linspace(Y_MIN, Y_MAX, ny)
+    xx, yy = jnp.meshgrid(x_eval, y_eval)
+    xy_eval = jnp.column_stack([xx.ravel(), yy.ravel()])
 
-print(f"Relative L2 error:   {l2_error:.6e}")
-print(f"Maximum point error: {max_error:.6e}")
-print(f"Mean point error:    {mean_error:.6e}")
-print(f"Mean PDE residual:   {mean_residual:.6e}")
-print(f"Boundary error:      {bc_error:.6e}")
+    u_pred = pinn(xy_eval).squeeze()
+    u_pred_grid = u_pred.reshape(ny, nx)
+    u_exact_grid = exact_solution(xy_eval).reshape(ny, nx)
 
-# %% [markdown]
-# ## Visualization
+    error = jnp.abs(u_pred_grid - u_exact_grid)
+    l2_error = float(
+        jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2))
+    )
+    max_error = float(jnp.max(error))
+    mean_error = float(jnp.mean(error))
+
+    residual = compute_pde_residual(pinn, xy_eval)
+    mean_residual = float(jnp.mean(jnp.abs(residual)))
+
+    bc_error = float(jnp.mean(jnp.abs(pinn(xy_boundary).squeeze())))
+    print(f"Relative L2 error:   {l2_error:.6e}")
+    print(f"Maximum point error: {max_error:.6e}")
+    print(f"Mean point error:    {mean_error:.6e}")
+    print(f"Mean PDE residual:   {mean_residual:.6e}")
+    print(f"Boundary error:      {bc_error:.6e}")
+
+    output_dir = Path("docs/assets/examples/helmholtz_pinn")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    im0 = axes[0].imshow(
+        np.array(u_pred_grid),
+        extent=[X_MIN, X_MAX, Y_MIN, Y_MAX],
+        origin="lower",
+        cmap="RdBu_r",
+    )
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("y")
+    axes[0].set_title("PINN Solution")
+    plt.colorbar(im0, ax=axes[0])
+
+    im1 = axes[1].imshow(
+        np.array(u_exact_grid),
+        extent=[X_MIN, X_MAX, Y_MIN, Y_MAX],
+        origin="lower",
+        cmap="RdBu_r",
+    )
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("y")
+    axes[1].set_title("Exact Solution")
+    plt.colorbar(im1, ax=axes[1])
+
+    im2 = axes[2].imshow(
+        np.array(error),
+        extent=[X_MIN, X_MAX, Y_MIN, Y_MAX],
+        origin="lower",
+        cmap="hot",
+    )
+    axes[2].set_xlabel("x")
+    axes[2].set_ylabel("y")
+    axes[2].set_title(f"Error (L2={l2_error:.2e})")
+    plt.colorbar(im2, ax=axes[2])
+
+    axes[3].semilogy(losses, linewidth=1)
+    axes[3].set_xlabel("Epoch")
+    axes[3].set_ylabel("Loss")
+    axes[3].set_title("Training Loss")
+    axes[3].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Solution saved to {output_dir / 'solution.png'}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    y_idx = ny // 2
+    axes[0].plot(np.array(x_eval), np.array(u_pred_grid[y_idx, :]), "b-", label="PINN", linewidth=2)
+    axes[0].plot(
+        np.array(x_eval),
+        np.array(u_exact_grid[y_idx, :]),
+        "r--",
+        label="Exact",
+        linewidth=2,
+    )
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("u(x, 0.5)")
+    axes[0].set_title(f"Cross-section at y = {float(y_eval[y_idx]):.2f}")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    x_idx = nx // 2
+    axes[1].plot(np.array(y_eval), np.array(u_pred_grid[:, x_idx]), "b-", label="PINN", linewidth=2)
+    axes[1].plot(
+        np.array(y_eval),
+        np.array(u_exact_grid[:, x_idx]),
+        "r--",
+        label="Exact",
+        linewidth=2,
+    )
+    axes[1].set_xlabel("y")
+    axes[1].set_ylabel("u(0.5, y)")
+    axes[1].set_title(f"Cross-section at x = {float(x_eval[x_idx]):.2f}")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "cross_sections.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Cross-sections saved to {output_dir / 'cross_sections.png'}")
+
+    print("=" * 70)
+    print("Helmholtz Equation PINN example completed")
+    print(f"  Final loss:          {final_loss:.6e}")
+    print(f"  Relative L2 error:   {l2_error:.6e}")
+    print(f"  Maximum error:       {max_error:.6e}")
+    print(f"  Mean error:          {mean_error:.6e}")
+    print(f"  Mean PDE residual:   {mean_residual:.6e}")
+    print(f"  Boundary error:      {bc_error:.6e}")
+    print(f"  Parameters:          {n_params:,}")
+    print(f"Results saved to: {output_dir}")
+    print("=" * 70)
+
+    return {
+        "final_loss": final_loss,
+        "l2_relative_error": l2_error,
+        "max_error": max_error,
+        "mean_error": mean_error,
+        "mean_pde_residual": mean_residual,
+        "bc_error": bc_error,
+        "param_count": int(n_params),
+    }
+
 
 # %%
-# Create output directory
-output_dir = Path("docs/assets/examples/helmholtz_pinn")
-output_dir.mkdir(parents=True, exist_ok=True)
-
-mpl.use("Agg")
-
-# Plot solution comparison
-fig, axes = plt.subplots(1, 4, figsize=(18, 4))
-
-# PINN solution
-im0 = axes[0].imshow(
-    np.array(u_pred_grid),
-    extent=[X_MIN, X_MAX, Y_MIN, Y_MAX],
-    origin="lower",
-    cmap="RdBu_r",
-)
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("y")
-axes[0].set_title("PINN Solution")
-plt.colorbar(im0, ax=axes[0])
-
-# Exact solution
-im1 = axes[1].imshow(
-    np.array(u_exact_grid),
-    extent=[X_MIN, X_MAX, Y_MIN, Y_MAX],
-    origin="lower",
-    cmap="RdBu_r",
-)
-axes[1].set_xlabel("x")
-axes[1].set_ylabel("y")
-axes[1].set_title("Exact Solution")
-plt.colorbar(im1, ax=axes[1])
-
-# Error
-im2 = axes[2].imshow(
-    np.array(error),
-    extent=[X_MIN, X_MAX, Y_MIN, Y_MAX],
-    origin="lower",
-    cmap="hot",
-)
-axes[2].set_xlabel("x")
-axes[2].set_ylabel("y")
-axes[2].set_title(f"Error (L2={l2_error:.2e})")
-plt.colorbar(im2, ax=axes[2])
-
-# Training loss
-axes[3].semilogy(losses, linewidth=1)
-axes[3].set_xlabel("Epoch")
-axes[3].set_ylabel("Loss")
-axes[3].set_title("Training Loss")
-axes[3].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
-plt.close()
-print()
-print(f"Solution saved to {output_dir / 'solution.png'}")
-
-# %%
-# Cross-sections
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-# y = 0.5 cross-section
-y_idx = ny // 2
-axes[0].plot(np.array(x_eval), np.array(u_pred_grid[y_idx, :]), "b-", label="PINN", linewidth=2)
-axes[0].plot(
-    np.array(x_eval),
-    np.array(u_exact_grid[y_idx, :]),
-    "r--",
-    label="Exact",
-    linewidth=2,
-)
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("u(x, 0.5)")
-axes[0].set_title(f"Cross-section at y = {float(y_eval[y_idx]):.2f}")
-axes[0].legend()
-axes[0].grid(True, alpha=0.3)
-
-# x = 0.5 cross-section
-x_idx = nx // 2
-axes[1].plot(np.array(y_eval), np.array(u_pred_grid[:, x_idx]), "b-", label="PINN", linewidth=2)
-axes[1].plot(
-    np.array(y_eval),
-    np.array(u_exact_grid[:, x_idx]),
-    "r--",
-    label="Exact",
-    linewidth=2,
-)
-axes[1].set_xlabel("y")
-axes[1].set_ylabel("u(0.5, y)")
-axes[1].set_title(f"Cross-section at x = {float(x_eval[x_idx]):.2f}")
-axes[1].legend()
-axes[1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig(output_dir / "cross_sections.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Cross-sections saved to {output_dir / 'cross_sections.png'}")
-
-# %%
-# Summary
-print()
-print("=" * 70)
-print("Helmholtz Equation PINN example completed")
-print("=" * 70)
-print()
-print("Results Summary:")
-print(f"  Final loss:          {losses[-1]:.6e}")
-print(f"  Relative L2 error:   {l2_error:.6e}")
-print(f"  Maximum error:       {max_error:.6e}")
-print(f"  Mean error:          {mean_error:.6e}")
-print(f"  Mean PDE residual:   {mean_residual:.6e}")
-print(f"  Boundary error:      {bc_error:.6e}")
-print(f"  Parameters:          {n_params:,}")
-print()
-print(f"Results saved to: {output_dir}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

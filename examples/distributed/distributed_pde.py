@@ -48,14 +48,6 @@ from opifex.core.training.config import TrainingConfig
 from opifex.core.training.trainer import Trainer
 from opifex.distributed.config import DistributedConfig
 
-
-num_devices = jax.device_count()
-print("=" * 60)
-print("Distributed Data-Parallel Training")
-print("=" * 60)
-print(f"JAX backend:  {jax.default_backend()}")
-print(f"Devices:      {num_devices}")
-
 # %% [markdown]
 """
 ## Step 1: Define the Model
@@ -82,10 +74,6 @@ class SimplePDEModel(nnx.Module):
         return self.layer2(nnx.relu(self.layer1(x)))
 
 
-model = SimplePDEModel(features=64, rngs=nnx.Rngs(42))
-n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param)))
-print(f"Model parameters: {n_params:,}")
-
 # %% [markdown]
 """
 ## Step 2: Configure Distributed Training
@@ -93,16 +81,6 @@ print(f"Model parameters: {n_params:,}")
 `DistributedConfig` is a frozen dataclass describing the mesh topology.
 Pass `-1` for a mesh axis size to use all available devices on that axis.
 """
-
-# %%
-distributed_config = DistributedConfig(
-    mesh_shape=(num_devices,),
-    mesh_axis_names=("data",),
-    strategy="data",
-)
-print(f"Mesh shape:   {distributed_config.mesh_shape}")
-print(f"Axis names:   {distributed_config.mesh_axis_names}")
-print(f"Strategy:     {distributed_config.strategy}")
 
 # %% [markdown]
 """
@@ -114,51 +92,12 @@ optimizer creation, JIT compilation, gradient computation — stays
 the same.
 """
 
-# %%
-training_config = TrainingConfig(
-    num_epochs=20,
-    learning_rate=1e-3,
-    batch_size=32,
-    verbose=False,
-    distributed_config=distributed_config,
-)
-
-trainer = Trainer(model, training_config)
-print("Trainer created with distributed config")
-
 # %% [markdown]
 """
 ## Step 4: Generate Data and Train
 
 Synthetic regression data: predict the sum-of-squares from 4 input features.
 """
-
-# %%
-key = jax.random.PRNGKey(0)
-x = jax.random.normal(key, (256, 4))
-y = jnp.sum(x**2, axis=-1, keepdims=True)
-
-print(f"Training data: x={x.shape}, y={y.shape}")
-print()
-print("Training...")
-trained_model, metrics = trainer.fit(train_data=(x, y))
-
-# %% [markdown]
-"""
-## Results
-"""
-
-# %%
-print()
-print("=" * 60)
-print("RESULTS")
-print("=" * 60)
-print(f"  Devices used:    {num_devices}")
-print(f"  Initial loss:    {metrics['initial_train_loss']:.6f}")
-print(f"  Final loss:      {metrics['final_train_loss']:.6f}")
-print("=" * 60)
-print()
-print("Distributed training complete!")
 
 # %% [markdown]
 """
@@ -181,3 +120,72 @@ The `Trainer` automatically:
 - Add model-parallel sharding with `nnx.with_partitioning()`
 - See the [distributed module tests](../../tests/distributed/) for more patterns
 """
+
+
+# %%
+def main() -> dict[str, float | int]:
+    """Run distributed data-parallel PDE training and return summary metrics."""
+    num_devices = jax.device_count()
+    print("=" * 60)
+    print("Distributed Data-Parallel Training")
+    print("=" * 60)
+    print(f"JAX backend:  {jax.default_backend()}")
+    print(f"Devices:      {num_devices}")
+
+    model = SimplePDEModel(features=64, rngs=nnx.Rngs(42))
+    n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param)))
+    print(f"Model parameters: {n_params:,}")
+
+    distributed_config = DistributedConfig(
+        mesh_shape=(num_devices,),
+        mesh_axis_names=("data",),
+        strategy="data",
+    )
+    print(f"Mesh shape:   {distributed_config.mesh_shape}")
+    print(f"Axis names:   {distributed_config.mesh_axis_names}")
+    print(f"Strategy:     {distributed_config.strategy}")
+
+    training_config = TrainingConfig(
+        num_epochs=20,
+        learning_rate=1e-3,
+        batch_size=32,
+        verbose=False,
+        distributed_config=distributed_config,
+    )
+
+    trainer = Trainer(model, training_config)
+    print("Trainer created with distributed config")
+
+    key = jax.random.PRNGKey(0)
+    x = jax.random.normal(key, (256, 4))
+    y = jnp.sum(x**2, axis=-1, keepdims=True)
+
+    print(f"Training data: x={x.shape}, y={y.shape}")
+    print()
+    print("Training...")
+    _, metrics = trainer.fit(train_data=(x, y))
+
+    print()
+    print("=" * 60)
+    print("RESULTS")
+    print("=" * 60)
+    print(f"  Devices used:    {num_devices}")
+    print(f"  Initial loss:    {metrics['initial_train_loss']:.6f}")
+    print(f"  Final loss:      {metrics['final_train_loss']:.6f}")
+    print("=" * 60)
+    print()
+    print("Distributed training complete!")
+
+    return {
+        "num_devices": int(num_devices),
+        "model_parameters": int(n_params),
+        "initial_train_loss": float(metrics["initial_train_loss"]),
+        "final_train_loss": float(metrics["final_train_loss"]),
+    }
+
+
+# %%
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

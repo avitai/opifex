@@ -36,13 +36,6 @@ from opifex.neural.pinns.domain_decomposition import (
     Subdomain,
 )
 
-
-print("=" * 70)
-print("Opifex Example: CPINN on 1D Advection-Diffusion Equation")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # %% [markdown]
 # ## Configuration
 
@@ -64,17 +57,6 @@ LEARNING_RATE = 0.001
 # CPINN configuration (3 subdomains in x-direction)
 NUM_SUBDOMAINS = 3
 HIDDEN_DIMS = [32, 32]
-
-print()
-print(f"Domain: x in [{X_MIN}, {X_MAX}], t in [{T_MIN}, {T_MAX}]")
-print(f"Advection velocity: c = {C}")
-print(f"Diffusion coefficient: D = {D}")
-print(f"Subdomains: {NUM_SUBDOMAINS}")
-print(
-    f"Collocation: {NUM_SUBDOMAINS * N_DOMAIN} domain, {N_BOUNDARY} boundary, {N_INITIAL} initial"
-)
-print(f"Network per subdomain: [2] + {HIDDEN_DIMS} + [1]")
-print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
 # %% [markdown]
 # ## Define the Advection-Diffusion Problem
@@ -99,124 +81,18 @@ def initial_condition(x):
     return jnp.sin(jnp.pi * x)
 
 
-print()
-print("Advection-diffusion: du/dt + c*du/dx = D*d^2u/dx^2")
-print(f"  Advection: c = {C}")
-print(f"  Diffusion: D = {D}")
-print("  IC: u(x, 0) = sin(pi*x)")
-print("  BC: u(0, t) = u(1, t) = 0 (Dirichlet)")
-
 # %% [markdown]
 # ## Create CPINN Model with 3 Subdomains
 #
 # We decompose the domain into 3 subdomains along x:
 # [0, 1/3], [1/3, 2/3], [2/3, 1]
 
+
 # %%
-# Define non-overlapping subdomains in (x, t) space
-x_boundaries = jnp.linspace(X_MIN, X_MAX, NUM_SUBDOMAINS + 1)
-
-subdomains = []
-for i in range(NUM_SUBDOMAINS):
-    bounds = jnp.array(
-        [
-            [x_boundaries[i], x_boundaries[i + 1]],  # x bounds
-            [T_MIN, T_MAX],  # t bounds (full time range)
-        ]
-    )
-    subdomains.append(Subdomain(id=i, bounds=bounds))
-
-# Define interfaces at x = 1/3 and x = 2/3
-interfaces = []
-for i in range(NUM_SUBDOMAINS - 1):
-    x_interface = x_boundaries[i + 1]
-    t_interface = jnp.linspace(T_MIN, T_MAX, N_INTERFACE)
-
-    interface_points = jnp.column_stack(
-        [
-            jnp.full(N_INTERFACE, x_interface),
-            t_interface,
-        ]
-    )
-
-    interfaces.append(
-        Interface(
-            subdomain_ids=(i, i + 1),
-            points=interface_points,
-            normal=jnp.array([1.0, 0.0]),  # Normal in x-direction
-        )
-    )
-
-# CPINN configuration with emphasis on flux conservation
-cpinn_config = CPINNConfig(
-    continuity_weight=10.0,  # Weight for solution continuity
-    flux_weight=10.0,  # Weight for flux conservation
-    conservation_weight=0.1,  # Additional conservation enforcement
-)
-
-# Create CPINN model
-print()
-print("Creating CPINN model...")
-model = CPINN(
-    input_dim=2,  # (x, t)
-    output_dim=1,
-    subdomains=subdomains,
-    interfaces=interfaces,
-    hidden_dims=HIDDEN_DIMS,
-    config=cpinn_config,
-    rngs=nnx.Rngs(42),
-)
-
-
-# Count parameters
 def count_params(m):
     """Count total parameters in model."""
     return sum(p.size for p in jax.tree.leaves(nnx.state(m)))
 
-
-total_params = count_params(model)
-print(f"Total CPINN parameters: {total_params}")
-print(f"Parameters per subdomain: ~{total_params // len(subdomains)}")
-print(f"Number of interfaces: {len(interfaces)}")
-
-# %% [markdown]
-# ## Generate Collocation Points
-
-# %%
-key = jax.random.PRNGKey(42)
-keys = jax.random.split(key, 10)
-
-# Domain interior points for each subdomain
-collocation_points_per_subdomain = []
-for i, subdomain in enumerate(subdomains):
-    x_lo, x_hi = subdomain.bounds[0]
-    x_pts = jax.random.uniform(keys[i], (N_DOMAIN,), minval=x_lo, maxval=x_hi)
-    t_pts = jax.random.uniform(keys[i + NUM_SUBDOMAINS], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)
-    xt_pts = jnp.column_stack([x_pts, t_pts])
-    collocation_points_per_subdomain.append(xt_pts)
-
-# Combine all domain points
-xt_domain = jnp.vstack(collocation_points_per_subdomain)
-
-# Boundary conditions at x=0 and x=1
-t_bc = jax.random.uniform(keys[7], (N_BOUNDARY,), minval=T_MIN, maxval=T_MAX)
-xt_bc_left = jnp.column_stack([jnp.zeros(N_BOUNDARY), t_bc])
-xt_bc_right = jnp.column_stack([jnp.ones(N_BOUNDARY), t_bc])
-xt_bc = jnp.vstack([xt_bc_left, xt_bc_right])
-u_bc = jnp.zeros(xt_bc.shape[0])  # Homogeneous Dirichlet
-
-# Initial condition at t=0
-x_ic = jax.random.uniform(keys[8], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
-xt_ic = jnp.column_stack([x_ic, jnp.zeros(N_INITIAL)])
-u_ic = initial_condition(x_ic)
-
-print()
-print("Generating collocation points...")
-for i, pts in enumerate(collocation_points_per_subdomain):
-    print(f"Subdomain {i} points: {pts.shape}")
-print(f"Boundary points:      {xt_bc.shape}")
-print(f"Initial points:       {xt_ic.shape}")
-print(f"Interface points:     {interfaces[0].points.shape} each")
 
 # %% [markdown]
 # ## Define Physics-Informed Loss
@@ -319,248 +195,379 @@ def total_loss(model, collocation_points, xt_bc, u_bc, xt_ic, u_ic, config):
 
 
 # %% [markdown]
-# ## Training
+# ## Run the Example
+
 
 # %%
-print()
-print("Training CPINN...")
+def main() -> dict[str, float | int]:
+    """Train a 3-subdomain CPINN on the 1D advection-diffusion equation."""
+    print("=" * 70)
+    print("Opifex Example: CPINN on 1D Advection-Diffusion Equation")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
 
-opt = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    print()
+    print(f"Domain: x in [{X_MIN}, {X_MAX}], t in [{T_MIN}, {T_MAX}]")
+    print(f"Advection velocity: c = {C}")
+    print(f"Diffusion coefficient: D = {D}")
+    print(f"Subdomains: {NUM_SUBDOMAINS}")
+    print(
+        f"Collocation: {NUM_SUBDOMAINS * N_DOMAIN} domain, {N_BOUNDARY} boundary, "
+        f"{N_INITIAL} initial"
+    )
+    print(f"Network per subdomain: [2] + {HIDDEN_DIMS} + [1]")
+    print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
+    print()
+    print("Advection-diffusion: du/dt + c*du/dx = D*d^2u/dx^2")
+    print(f"  Advection: c = {C}")
+    print(f"  Diffusion: D = {D}")
+    print("  IC: u(x, 0) = sin(pi*x)")
+    print("  BC: u(0, t) = u(1, t) = 0 (Dirichlet)")
 
-@nnx.jit
-def train_step(model, opt, colloc_pts, xt_bc, u_bc, xt_ic, u_ic):
-    """Single training step with gradient update."""
+    # Define non-overlapping subdomains in (x, t) space
+    x_boundaries = jnp.linspace(X_MIN, X_MAX, NUM_SUBDOMAINS + 1)
 
-    def loss_fn(m):
-        return total_loss(m, colloc_pts, xt_bc, u_bc, xt_ic, u_ic, m.config)
+    subdomains = []
+    for i in range(NUM_SUBDOMAINS):
+        bounds = jnp.array(
+            [
+                [x_boundaries[i], x_boundaries[i + 1]],  # x bounds
+                [T_MIN, T_MAX],  # t bounds (full time range)
+            ]
+        )
+        subdomains.append(Subdomain(id=i, bounds=bounds))
 
-    loss, grads = nnx.value_and_grad(loss_fn)(model)
-    opt.update(model, grads)
-    return loss
+    # Define interfaces at x = 1/3 and x = 2/3
+    interfaces = []
+    for i in range(NUM_SUBDOMAINS - 1):
+        x_interface = x_boundaries[i + 1]
+        t_interface = jnp.linspace(T_MIN, T_MAX, N_INTERFACE)
 
-
-losses = []
-for epoch in range(EPOCHS):
-    loss = train_step(model, opt, collocation_points_per_subdomain, xt_bc, u_bc, xt_ic, u_ic)
-    losses.append(float(loss))
-
-    if (epoch + 1) % 3000 == 0 or epoch == 0:
-        cont_loss = float(model.compute_continuity_loss())
-        flux_loss = float(model.compute_flux_conservation_loss())
-        print(
-            f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}, "
-            f"continuity={cont_loss:.6e}, flux={flux_loss:.6e}"
+        interface_points = jnp.column_stack(
+            [
+                jnp.full(N_INTERFACE, x_interface),
+                t_interface,
+            ]
         )
 
-print(f"Final loss: {losses[-1]:.6e}")
+        interfaces.append(
+            Interface(
+                subdomain_ids=(i, i + 1),
+                points=interface_points,
+                normal=jnp.array([1.0, 0.0]),  # Normal in x-direction
+            )
+        )
 
-# %% [markdown]
-# ## Evaluation
-
-# %%
-print()
-print("Evaluating CPINN...")
-
-# Create evaluation grid
-nx, nt = 100, 50
-x_eval = jnp.linspace(X_MIN, X_MAX, nx)
-t_eval = jnp.linspace(T_MIN, T_MAX, nt)
-X, T = jnp.meshgrid(x_eval, t_eval)
-xt_eval = jnp.column_stack([X.ravel(), T.ravel()])
-
-# Compute predictions using the full CPINN model
-u_pred = model(xt_eval).squeeze().reshape(nt, nx)
-u_exact = exact_solution(X, T)
-
-# Compute errors
-error = jnp.abs(u_pred - u_exact)
-l2_error = jnp.sqrt(jnp.mean((u_pred - u_exact) ** 2))
-rel_l2_error = l2_error / jnp.sqrt(jnp.mean(u_exact**2))
-max_error = jnp.max(error)
-mean_error = jnp.mean(error)
-
-# Compute interface flux conservation
-interface_flux_errors = []
-for interface in interfaces:
-    left_id, right_id = interface.subdomain_ids
-    points = interface.points
-    normal = interface.normal
-
-    # Compute gradients (flux) at interface
-    def get_grad(network, pt):
-        """Compute gradient of network output at point."""
-
-        def u_fn(p):
-            return network(p.reshape(1, 2)).squeeze()
-
-        return jax.grad(u_fn)(pt)
-
-    networks_list = list(model.networks)
-    left_net = networks_list[left_id]
-    right_net = networks_list[right_id]
-    grad_left = jax.vmap(lambda p, net=left_net: get_grad(net, p))(points)
-    grad_right = jax.vmap(lambda p, net=right_net: get_grad(net, p))(points)
-
-    # Normal flux
-    flux_left = jnp.sum(grad_left * normal, axis=-1)
-    flux_right = jnp.sum(grad_right * normal, axis=-1)
-    flux_jump = jnp.mean(jnp.abs(flux_left - flux_right))
-    interface_flux_errors.append(float(flux_jump))
-
-print(f"Relative L2 error:   {rel_l2_error:.6e}")
-print(f"Maximum point error: {max_error:.6e}")
-print(f"Mean point error:    {mean_error:.6e}")
-for i, flux_err in enumerate(interface_flux_errors):
-    print(f"Interface {i} flux jump: {flux_err:.6e}")
-
-# %% [markdown]
-# ## Visualization
-
-# %%
-fig, axes = plt.subplots(2, 3, figsize=(14, 9))
-
-# Predicted solution
-im0 = axes[0, 0].contourf(X, T, u_pred, levels=50, cmap="viridis")
-# Draw interface lines
-for interface in interfaces:
-    x_int = interface.points[0, 0]
-    axes[0, 0].axvline(x=x_int, color="white", linestyle="--", linewidth=1.5)
-axes[0, 0].set_title("CPINN Prediction")
-axes[0, 0].set_xlabel("x")
-axes[0, 0].set_ylabel("t")
-plt.colorbar(im0, ax=axes[0, 0])
-
-# Exact solution
-im1 = axes[0, 1].contourf(X, T, u_exact, levels=50, cmap="viridis")
-axes[0, 1].set_title("Exact Solution")
-axes[0, 1].set_xlabel("x")
-axes[0, 1].set_ylabel("t")
-plt.colorbar(im1, ax=axes[0, 1])
-
-# Point-wise error
-im2 = axes[0, 2].contourf(X, T, error, levels=50, cmap="hot")
-for interface in interfaces:
-    x_int = interface.points[0, 0]
-    axes[0, 2].axvline(x=x_int, color="white", linestyle="--", linewidth=1.5)
-axes[0, 2].set_title(f"Absolute Error (max={max_error:.4e})")
-axes[0, 2].set_xlabel("x")
-axes[0, 2].set_ylabel("t")
-plt.colorbar(im2, ax=axes[0, 2])
-
-# Solution at different times
-t_slices = [0.0, 0.25, 0.5]
-for t_val in t_slices:
-    t_idx = int(t_val / T_MAX * (nt - 1))
-    axes[1, 0].plot(x_eval, u_pred[t_idx, :], label=f"CPINN t={t_val}")
-    axes[1, 0].plot(x_eval, u_exact[t_idx, :], "--", label=f"Exact t={t_val}")
-# Draw interface lines
-for interface in interfaces:
-    x_int = interface.points[0, 0]
-    axes[1, 0].axvline(x=x_int, color="gray", linestyle=":", alpha=0.7)
-axes[1, 0].set_xlabel("x")
-axes[1, 0].set_ylabel("u")
-axes[1, 0].set_title("Solution at Different Times")
-axes[1, 0].legend(fontsize=8, ncol=2)
-axes[1, 0].grid(True, alpha=0.3)
-
-# IC comparison
-axes[1, 1].plot(x_eval, u_pred[0, :], "b-", linewidth=2, label="CPINN t=0")
-axes[1, 1].plot(x_eval, u_exact[0, :], "r--", linewidth=2, label="Exact IC")
-axes[1, 1].set_xlabel("x")
-axes[1, 1].set_ylabel("u")
-axes[1, 1].set_title("Initial Condition")
-axes[1, 1].legend()
-axes[1, 1].grid(True, alpha=0.3)
-
-# Training history
-axes[1, 2].semilogy(losses)
-axes[1, 2].set_xlabel("Epoch")
-axes[1, 2].set_ylabel("Total Loss")
-axes[1, 2].set_title("Training History")
-axes[1, 2].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig(
-    "docs/assets/examples/cpinn_advection_diffusion/solution.png",
-    dpi=150,
-    bbox_inches="tight",
-)
-print()
-print("Saved: docs/assets/examples/cpinn_advection_diffusion/solution.png")
-plt.show()
-
-# %%
-# Analysis: Interface flux conservation
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-# Subdomain predictions comparison
-colors = ["blue", "green", "red"]
-networks_list_viz = list(model.networks)
-for i in range(NUM_SUBDOMAINS):
-    # Evaluate subdomain network across full domain for comparison
-    u_sub = networks_list_viz[i](xt_eval).squeeze().reshape(nt, nx)
-    # Show final time slice
-    axes[0].plot(
-        x_eval,
-        u_sub[-1, :],
-        color=colors[i],
-        linestyle="-" if i == 0 else "--" if i == 1 else ":",
-        linewidth=2,
-        label=f"Subdomain {i}",
+    # CPINN configuration with emphasis on flux conservation
+    cpinn_config = CPINNConfig(
+        continuity_weight=10.0,  # Weight for solution continuity
+        flux_weight=10.0,  # Weight for flux conservation
+        conservation_weight=0.1,  # Additional conservation enforcement
     )
 
-axes[0].plot(x_eval, u_exact[-1, :], "k-", linewidth=1.5, label="Exact")
-for interface in interfaces:
-    x_int = interface.points[0, 0]
-    axes[0].axvline(x=x_int, color="gray", linestyle=":", alpha=0.7)
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("u")
-axes[0].set_title(f"Subdomain Networks at t={T_MAX}")
-axes[0].legend()
-axes[0].grid(True, alpha=0.3)
+    # Create CPINN model
+    print()
+    print("Creating CPINN model...")
+    model = CPINN(
+        input_dim=2,  # (x, t)
+        output_dim=1,
+        subdomains=subdomains,
+        interfaces=interfaces,
+        hidden_dims=HIDDEN_DIMS,
+        config=cpinn_config,
+        rngs=nnx.Rngs(42),
+    )
 
-# Interface profiles
-networks_list_int = list(model.networks)
-for i, interface in enumerate(interfaces):
-    points = interface.points
-    t_vals = points[:, 1]
+    total_params = count_params(model)
+    print(f"Total CPINN parameters: {total_params}")
+    print(f"Parameters per subdomain: ~{total_params // len(subdomains)}")
+    print(f"Number of interfaces: {len(interfaces)}")
 
-    u_left = networks_list_int[i](points).squeeze()
-    u_right = networks_list_int[i + 1](points).squeeze()
+    # Generate collocation points
+    key = jax.random.PRNGKey(42)
+    keys = jax.random.split(key, 10)
 
-    axes[1].plot(t_vals, u_left, "-", label=f"Left of interface {i}")
-    axes[1].plot(t_vals, u_right, "--", label=f"Right of interface {i}")
+    # Domain interior points for each subdomain
+    collocation_points_per_subdomain = []
+    for i, subdomain in enumerate(subdomains):
+        x_lo, x_hi = subdomain.bounds[0]
+        x_pts = jax.random.uniform(keys[i], (N_DOMAIN,), minval=x_lo, maxval=x_hi)
+        t_pts = jax.random.uniform(
+            keys[i + NUM_SUBDOMAINS], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX
+        )
+        xt_pts = jnp.column_stack([x_pts, t_pts])
+        collocation_points_per_subdomain.append(xt_pts)
 
-axes[1].set_xlabel("t")
-axes[1].set_ylabel("u at interface")
-axes[1].set_title("Interface Continuity Check")
-axes[1].legend()
-axes[1].grid(True, alpha=0.3)
+    # Boundary conditions at x=0 and x=1
+    t_bc = jax.random.uniform(keys[7], (N_BOUNDARY,), minval=T_MIN, maxval=T_MAX)
+    xt_bc_left = jnp.column_stack([jnp.zeros(N_BOUNDARY), t_bc])
+    xt_bc_right = jnp.column_stack([jnp.ones(N_BOUNDARY), t_bc])
+    xt_bc = jnp.vstack([xt_bc_left, xt_bc_right])
+    u_bc = jnp.zeros(xt_bc.shape[0])  # Homogeneous Dirichlet
 
-plt.tight_layout()
-plt.savefig(
-    "docs/assets/examples/cpinn_advection_diffusion/analysis.png",
-    dpi=150,
-    bbox_inches="tight",
-)
-print("Saved: docs/assets/examples/cpinn_advection_diffusion/analysis.png")
-plt.show()
+    # Initial condition at t=0
+    x_ic = jax.random.uniform(keys[8], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
+    xt_ic = jnp.column_stack([x_ic, jnp.zeros(N_INITIAL)])
+    u_ic = initial_condition(x_ic)
 
-# %% [markdown]
-# ## Results Summary
+    print()
+    print("Generating collocation points...")
+    for i, pts in enumerate(collocation_points_per_subdomain):
+        print(f"Subdomain {i} points: {pts.shape}")
+    print(f"Boundary points:      {xt_bc.shape}")
+    print(f"Initial points:       {xt_ic.shape}")
+    print(f"Interface points:     {interfaces[0].points.shape} each")
+
+    # Training
+    print()
+    print("Training CPINN...")
+
+    opt = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+
+    @nnx.jit
+    def train_step(model, opt, colloc_pts, xt_bc, u_bc, xt_ic, u_ic):
+        """Single training step with gradient update."""
+
+        def loss_fn(m):
+            return total_loss(m, colloc_pts, xt_bc, u_bc, xt_ic, u_ic, m.config)
+
+        loss, grads = nnx.value_and_grad(loss_fn)(model)
+        opt.update(model, grads)
+        return loss
+
+    losses = []
+    for epoch in range(EPOCHS):
+        loss = train_step(
+            model, opt, collocation_points_per_subdomain, xt_bc, u_bc, xt_ic, u_ic
+        )
+        losses.append(float(loss))
+
+        if (epoch + 1) % 3000 == 0 or epoch == 0:
+            cont_loss = float(model.compute_continuity_loss())
+            flux_loss = float(model.compute_flux_conservation_loss())
+            print(
+                f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}, "
+                f"continuity={cont_loss:.6e}, flux={flux_loss:.6e}"
+            )
+
+    print(f"Final loss: {losses[-1]:.6e}")
+
+    # Evaluation
+    print()
+    print("Evaluating CPINN...")
+
+    # Create evaluation grid
+    nx, nt = 100, 50
+    x_eval = jnp.linspace(X_MIN, X_MAX, nx)
+    t_eval = jnp.linspace(T_MIN, T_MAX, nt)
+    X, T = jnp.meshgrid(x_eval, t_eval)
+    xt_eval = jnp.column_stack([X.ravel(), T.ravel()])
+
+    # Compute predictions using the full CPINN model
+    u_pred = model(xt_eval).squeeze().reshape(nt, nx)
+    u_exact = exact_solution(X, T)
+
+    # Compute errors
+    error = jnp.abs(u_pred - u_exact)
+    l2_error = jnp.sqrt(jnp.mean((u_pred - u_exact) ** 2))
+    rel_l2_error = l2_error / jnp.sqrt(jnp.mean(u_exact**2))
+    max_error = jnp.max(error)
+    mean_error = jnp.mean(error)
+
+    # Compute interface flux conservation
+    interface_flux_errors = []
+    for interface in interfaces:
+        left_id, right_id = interface.subdomain_ids
+        points = interface.points
+        normal = interface.normal
+
+        # Compute gradients (flux) at interface
+        def get_grad(network, pt):
+            """Compute gradient of network output at point."""
+
+            def u_fn(p):
+                return network(p.reshape(1, 2)).squeeze()
+
+            return jax.grad(u_fn)(pt)
+
+        networks_list = list(model.networks)
+        left_net = networks_list[left_id]
+        right_net = networks_list[right_id]
+        grad_left = jax.vmap(lambda p, net=left_net: get_grad(net, p))(points)
+        grad_right = jax.vmap(lambda p, net=right_net: get_grad(net, p))(points)
+
+        # Normal flux
+        flux_left = jnp.sum(grad_left * normal, axis=-1)
+        flux_right = jnp.sum(grad_right * normal, axis=-1)
+        flux_jump = jnp.mean(jnp.abs(flux_left - flux_right))
+        interface_flux_errors.append(float(flux_jump))
+
+    print(f"Relative L2 error:   {rel_l2_error:.6e}")
+    print(f"Maximum point error: {max_error:.6e}")
+    print(f"Mean point error:    {mean_error:.6e}")
+    for i, flux_err in enumerate(interface_flux_errors):
+        print(f"Interface {i} flux jump: {flux_err:.6e}")
+
+    # Visualization
+    fig, axes = plt.subplots(2, 3, figsize=(14, 9))
+
+    # Predicted solution
+    im0 = axes[0, 0].contourf(X, T, u_pred, levels=50, cmap="viridis")
+    # Draw interface lines
+    for interface in interfaces:
+        x_int = interface.points[0, 0]
+        axes[0, 0].axvline(x=x_int, color="white", linestyle="--", linewidth=1.5)
+    axes[0, 0].set_title("CPINN Prediction")
+    axes[0, 0].set_xlabel("x")
+    axes[0, 0].set_ylabel("t")
+    plt.colorbar(im0, ax=axes[0, 0])
+
+    # Exact solution
+    im1 = axes[0, 1].contourf(X, T, u_exact, levels=50, cmap="viridis")
+    axes[0, 1].set_title("Exact Solution")
+    axes[0, 1].set_xlabel("x")
+    axes[0, 1].set_ylabel("t")
+    plt.colorbar(im1, ax=axes[0, 1])
+
+    # Point-wise error
+    im2 = axes[0, 2].contourf(X, T, error, levels=50, cmap="hot")
+    for interface in interfaces:
+        x_int = interface.points[0, 0]
+        axes[0, 2].axvline(x=x_int, color="white", linestyle="--", linewidth=1.5)
+    axes[0, 2].set_title(f"Absolute Error (max={max_error:.4e})")
+    axes[0, 2].set_xlabel("x")
+    axes[0, 2].set_ylabel("t")
+    plt.colorbar(im2, ax=axes[0, 2])
+
+    # Solution at different times
+    t_slices = [0.0, 0.25, 0.5]
+    for t_val in t_slices:
+        t_idx = int(t_val / T_MAX * (nt - 1))
+        axes[1, 0].plot(x_eval, u_pred[t_idx, :], label=f"CPINN t={t_val}")
+        axes[1, 0].plot(x_eval, u_exact[t_idx, :], "--", label=f"Exact t={t_val}")
+    # Draw interface lines
+    for interface in interfaces:
+        x_int = interface.points[0, 0]
+        axes[1, 0].axvline(x=x_int, color="gray", linestyle=":", alpha=0.7)
+    axes[1, 0].set_xlabel("x")
+    axes[1, 0].set_ylabel("u")
+    axes[1, 0].set_title("Solution at Different Times")
+    axes[1, 0].legend(fontsize=8, ncol=2)
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # IC comparison
+    axes[1, 1].plot(x_eval, u_pred[0, :], "b-", linewidth=2, label="CPINN t=0")
+    axes[1, 1].plot(x_eval, u_exact[0, :], "r--", linewidth=2, label="Exact IC")
+    axes[1, 1].set_xlabel("x")
+    axes[1, 1].set_ylabel("u")
+    axes[1, 1].set_title("Initial Condition")
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
+
+    # Training history
+    axes[1, 2].semilogy(losses)
+    axes[1, 2].set_xlabel("Epoch")
+    axes[1, 2].set_ylabel("Total Loss")
+    axes[1, 2].set_title("Training History")
+    axes[1, 2].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        "docs/assets/examples/cpinn_advection_diffusion/solution.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
+    print()
+    print("Saved: docs/assets/examples/cpinn_advection_diffusion/solution.png")
+    plt.close()
+
+    # Analysis: Interface flux conservation
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    # Subdomain predictions comparison
+    colors = ["blue", "green", "red"]
+    networks_list_viz = list(model.networks)
+    for i in range(NUM_SUBDOMAINS):
+        # Evaluate subdomain network across full domain for comparison
+        u_sub = networks_list_viz[i](xt_eval).squeeze().reshape(nt, nx)
+        # Show final time slice
+        axes[0].plot(
+            x_eval,
+            u_sub[-1, :],
+            color=colors[i],
+            linestyle="-" if i == 0 else "--" if i == 1 else ":",
+            linewidth=2,
+            label=f"Subdomain {i}",
+        )
+
+    axes[0].plot(x_eval, u_exact[-1, :], "k-", linewidth=1.5, label="Exact")
+    for interface in interfaces:
+        x_int = interface.points[0, 0]
+        axes[0].axvline(x=x_int, color="gray", linestyle=":", alpha=0.7)
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("u")
+    axes[0].set_title(f"Subdomain Networks at t={T_MAX}")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # Interface profiles
+    networks_list_int = list(model.networks)
+    for i, interface in enumerate(interfaces):
+        points = interface.points
+        t_vals = points[:, 1]
+
+        u_left = networks_list_int[i](points).squeeze()
+        u_right = networks_list_int[i + 1](points).squeeze()
+
+        axes[1].plot(t_vals, u_left, "-", label=f"Left of interface {i}")
+        axes[1].plot(t_vals, u_right, "--", label=f"Right of interface {i}")
+
+    axes[1].set_xlabel("t")
+    axes[1].set_ylabel("u at interface")
+    axes[1].set_title("Interface Continuity Check")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        "docs/assets/examples/cpinn_advection_diffusion/analysis.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
+    print("Saved: docs/assets/examples/cpinn_advection_diffusion/analysis.png")
+    plt.close()
+
+    # Results Summary
+    print()
+    print("=" * 70)
+    print("Results Summary")
+    print("=" * 70)
+    print(f"Final Loss:          {losses[-1]:.6e}")
+    print(f"Relative L2 Error:   {rel_l2_error:.6e}")
+    print(f"Maximum Point Error: {max_error:.6e}")
+    print(f"Mean Point Error:    {mean_error:.6e}")
+    for i, flux_err in enumerate(interface_flux_errors):
+        print(f"Interface {i} Flux Jump: {flux_err:.6e}")
+    print(f"Total Parameters:    {total_params}")
+    print(f"Training Epochs:     {EPOCHS}")
+    print(f"Number of Subdomains:{len(subdomains)}")
+
+    return {
+        "total_params": int(total_params),
+        "final_loss": float(losses[-1]),
+        "rel_l2_error": float(rel_l2_error),
+        "max_error": float(max_error),
+        "mean_error": float(mean_error),
+        "interface_flux_max": float(max(interface_flux_errors)),
+        "num_subdomains": int(len(subdomains)),
+        "epochs": int(EPOCHS),
+    }
+
 
 # %%
-print()
-print("=" * 70)
-print("Results Summary")
-print("=" * 70)
-print(f"Final Loss:          {losses[-1]:.6e}")
-print(f"Relative L2 Error:   {rel_l2_error:.6e}")
-print(f"Maximum Point Error: {max_error:.6e}")
-print(f"Mean Point Error:    {mean_error:.6e}")
-for i, flux_err in enumerate(interface_flux_errors):
-    print(f"Interface {i} Flux Jump: {flux_err:.6e}")
-print(f"Total Parameters:    {total_params}")
-print(f"Training Epochs:     {EPOCHS}")
-print(f"Number of Subdomains:{len(subdomains)}")
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

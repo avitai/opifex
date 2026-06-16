@@ -30,15 +30,10 @@ import numpy as np
 import optax
 from flax import nnx
 
+mpl.use("Agg")
+
 
 # %%
-# Configuration
-print("=" * 70)
-print("Opifex Example: Advection Equation PINN")
-print("=" * 70)
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-
 # Problem configuration
 C = 1.0  # Advection velocity
 
@@ -57,12 +52,6 @@ HIDDEN_DIMS = [40, 40, 40]
 # Training configuration
 EPOCHS = 10000
 LEARNING_RATE = 1e-3
-
-print(f"Advection velocity: c = {C}")
-print(f"Domain: x in [{X_MIN}, {X_MAX}], t in [{T_MIN}, {T_MAX}]")
-print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} inflow, {N_INITIAL} initial")
-print(f"Network: [2] + {HIDDEN_DIMS} + [1]")
-print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
 
 # %% [markdown]
 # ## Problem Definition
@@ -102,13 +91,6 @@ def inflow_condition(t):
     return jnp.exp(-((-C * t - x0) ** 2) / sigma2)
 
 
-print()
-print("Advection equation: du/dt + c*du/dx = 0")
-print(f"  Velocity: c = {C}")
-print("  IC: u(x, 0) = exp(-(x-0.5)^2 / 0.1)")
-print("  BC: u(0, t) = exact solution at inflow")
-print("  Solution: u(x, t) = u0(x - c*t)")
-
 # %% [markdown]
 # ## PINN Architecture
 
@@ -138,43 +120,8 @@ class AdvectionPINN(nnx.Module):
         return self.layers[-1](h)
 
 
-# %%
-print()
-print("Creating PINN model...")
-
-pinn = AdvectionPINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
-
-n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
-print(f"PINN parameters: {n_params:,}")
-
 # %% [markdown]
 # ## Collocation Points
-
-# %%
-print()
-print("Generating collocation points...")
-
-key = jax.random.PRNGKey(42)
-keys = jax.random.split(key, 4)
-
-# Domain interior points
-x_domain = jax.random.uniform(keys[0], (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
-t_domain = jax.random.uniform(keys[1], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)
-xt_domain = jnp.column_stack([x_domain, t_domain])
-
-# Inflow boundary (x = 0)
-t_inflow = jax.random.uniform(keys[2], (N_BOUNDARY,), minval=T_MIN, maxval=T_MAX)
-xt_inflow = jnp.column_stack([jnp.zeros(N_BOUNDARY), t_inflow])
-u_inflow = inflow_condition(t_inflow)
-
-# Initial condition (t = 0)
-x_initial = jax.random.uniform(keys[3], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
-xt_initial = jnp.column_stack([x_initial, jnp.zeros(N_INITIAL)])
-u_initial = initial_condition(x_initial)
-
-print(f"Domain points:   {xt_domain.shape}")
-print(f"Inflow points:   {xt_inflow.shape}")
-print(f"Initial points:  {xt_initial.shape}")
 
 # %% [markdown]
 # ## Physics-Informed Loss
@@ -225,13 +172,8 @@ def total_loss(pinn, xt_dom, xt_ic, u_ic, xt_in, u_in, lambda_bc=10.0):
 # %% [markdown]
 # ## Training
 
+
 # %%
-print()
-print("Training PINN...")
-
-opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-
-
 @nnx.jit
 def train_step(pinn, opt, xt_dom, xt_ic, u_ic, xt_in, u_in):
     """Execute single training step with gradient update."""
@@ -244,185 +186,212 @@ def train_step(pinn, opt, xt_dom, xt_ic, u_ic, xt_in, u_in):
     return loss
 
 
-losses = []
-for epoch in range(EPOCHS):
-    loss = train_step(pinn, opt, xt_domain, xt_initial, u_initial, xt_inflow, u_inflow)
-    losses.append(float(loss))
-
-    if (epoch + 1) % 2000 == 0 or epoch == 0:
-        print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
-
-print(f"Final loss: {losses[-1]:.6e}")
-
 # %% [markdown]
-# ## Evaluation
+# ## Run the example
+#
+# Builds collocation points, trains the PINN, evaluates against the exact
+# translating-Gaussian solution, and saves the visualizations.
+
 
 # %%
-print()
-print("Evaluating PINN...")
+def main() -> dict[str, float | int]:
+    """Train an advection PINN, evaluate against the exact solution, and plot."""
+    print("=" * 70)
+    print("Opifex Example: Advection Equation PINN")
+    print("=" * 70)
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+    print(f"Advection velocity: c = {C}")
+    print(f"Domain: x in [{X_MIN}, {X_MAX}], t in [{T_MIN}, {T_MAX}]")
+    print(f"Collocation: {N_DOMAIN} domain, {N_BOUNDARY} inflow, {N_INITIAL} initial")
+    print(f"Network: [2] + {HIDDEN_DIMS} + [1]")
+    print(f"Training: {EPOCHS} epochs @ lr={LEARNING_RATE}")
+    print("Advection equation: du/dt + c*du/dx = 0")
+    print("  IC: u(x, 0) = exp(-(x-0.5)^2 / 0.1)")
+    print("  BC: u(0, t) = exact solution at inflow")
+    print("  Solution: u(x, t) = u0(x - c*t)")
 
-# Create evaluation grid
-nx, nt = 100, 100
-x_eval = jnp.linspace(X_MIN, X_MAX, nx)
-t_eval = jnp.linspace(T_MIN, T_MAX, nt)
-xx, tt = jnp.meshgrid(x_eval, t_eval)
-xt_eval = jnp.column_stack([xx.ravel(), tt.ravel()])
+    pinn = AdvectionPINN(hidden_dims=HIDDEN_DIMS, rngs=nnx.Rngs(42))
+    n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
+    print(f"PINN parameters: {n_params:,}")
 
-# PINN prediction
-u_pred = pinn(xt_eval).squeeze()
-u_pred_grid = u_pred.reshape(nt, nx)
+    key = jax.random.PRNGKey(42)
+    keys = jax.random.split(key, 4)
 
-# Exact solution
-u_exact_grid = exact_solution(xx, tt)
+    x_domain = jax.random.uniform(keys[0], (N_DOMAIN,), minval=X_MIN, maxval=X_MAX)
+    t_domain = jax.random.uniform(keys[1], (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)
+    xt_domain = jnp.column_stack([x_domain, t_domain])
 
-# Errors
-error = jnp.abs(u_pred_grid - u_exact_grid)
-l2_error = float(
-    jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2 + 1e-10))
-)
-max_error = float(jnp.max(error))
-mean_error = float(jnp.mean(error))
+    t_inflow = jax.random.uniform(keys[2], (N_BOUNDARY,), minval=T_MIN, maxval=T_MAX)
+    xt_inflow = jnp.column_stack([jnp.zeros(N_BOUNDARY), t_inflow])
+    u_inflow = inflow_condition(t_inflow)
 
-# PDE residual
-residual = compute_pde_residual(pinn, xt_eval)
-mean_residual = float(jnp.mean(jnp.abs(residual)))
+    x_initial = jax.random.uniform(keys[3], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
+    xt_initial = jnp.column_stack([x_initial, jnp.zeros(N_INITIAL)])
+    u_initial = initial_condition(x_initial)
+    print(f"Domain points:   {xt_domain.shape}")
+    print(f"Inflow points:   {xt_inflow.shape}")
+    print(f"Initial points:  {xt_initial.shape}")
 
-print(f"Relative L2 error:   {l2_error:.6e}")
-print(f"Maximum point error: {max_error:.6e}")
-print(f"Mean point error:    {mean_error:.6e}")
-print(f"Mean PDE residual:   {mean_residual:.6e}")
+    print("Training PINN...")
+    opt = nnx.Optimizer(pinn, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    losses = []
+    for epoch in range(EPOCHS):
+        loss = train_step(pinn, opt, xt_domain, xt_initial, u_initial, xt_inflow, u_inflow)
+        losses.append(float(loss))
+        if (epoch + 1) % 2000 == 0 or epoch == 0:
+            print(f"  Epoch {epoch + 1:5d}/{EPOCHS}: loss={loss:.6e}")
+    final_loss = losses[-1]
+    print(f"Final loss: {final_loss:.6e}")
 
-# %% [markdown]
-# ## Visualization
+    print("Evaluating PINN...")
+    nx, nt = 100, 100
+    x_eval = jnp.linspace(X_MIN, X_MAX, nx)
+    t_eval = jnp.linspace(T_MIN, T_MAX, nt)
+    xx, tt = jnp.meshgrid(x_eval, t_eval)
+    xt_eval = jnp.column_stack([xx.ravel(), tt.ravel()])
 
-# %%
-output_dir = Path("docs/assets/examples/advection_pinn")
-output_dir.mkdir(parents=True, exist_ok=True)
+    u_pred = pinn(xt_eval).squeeze()
+    u_pred_grid = u_pred.reshape(nt, nx)
+    u_exact_grid = exact_solution(xx, tt)
 
-mpl.use("Agg")
+    error = jnp.abs(u_pred_grid - u_exact_grid)
+    l2_error = float(
+        jnp.sqrt(jnp.sum((u_pred_grid - u_exact_grid) ** 2) / jnp.sum(u_exact_grid**2 + 1e-10))
+    )
+    max_error = float(jnp.max(error))
+    mean_error = float(jnp.mean(error))
 
-fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    residual = compute_pde_residual(pinn, xt_eval)
+    mean_residual = float(jnp.mean(jnp.abs(residual)))
+    print(f"Relative L2 error:   {l2_error:.6e}")
+    print(f"Maximum point error: {max_error:.6e}")
+    print(f"Mean point error:    {mean_error:.6e}")
+    print(f"Mean PDE residual:   {mean_residual:.6e}")
 
-# PINN solution
-im0 = axes[0].imshow(
-    np.array(u_pred_grid),
-    extent=[X_MIN, X_MAX, T_MIN, T_MAX],
-    origin="lower",
-    aspect="auto",
-    cmap="viridis",
-)
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("t")
-axes[0].set_title("PINN Solution")
-plt.colorbar(im0, ax=axes[0])
+    output_dir = Path("docs/assets/examples/advection_pinn")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-# Exact solution
-im1 = axes[1].imshow(
-    np.array(u_exact_grid),
-    extent=[X_MIN, X_MAX, T_MIN, T_MAX],
-    origin="lower",
-    aspect="auto",
-    cmap="viridis",
-)
-axes[1].set_xlabel("x")
-axes[1].set_ylabel("t")
-axes[1].set_title("Exact Solution")
-plt.colorbar(im1, ax=axes[1])
+    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    im0 = axes[0].imshow(
+        np.array(u_pred_grid),
+        extent=[X_MIN, X_MAX, T_MIN, T_MAX],
+        origin="lower",
+        aspect="auto",
+        cmap="viridis",
+    )
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("t")
+    axes[0].set_title("PINN Solution")
+    plt.colorbar(im0, ax=axes[0])
 
-# Error
-im2 = axes[2].imshow(
-    np.array(error),
-    extent=[X_MIN, X_MAX, T_MIN, T_MAX],
-    origin="lower",
-    aspect="auto",
-    cmap="hot",
-)
-axes[2].set_xlabel("x")
-axes[2].set_ylabel("t")
-axes[2].set_title(f"Error (L2={l2_error:.2e})")
-plt.colorbar(im2, ax=axes[2])
+    im1 = axes[1].imshow(
+        np.array(u_exact_grid),
+        extent=[X_MIN, X_MAX, T_MIN, T_MAX],
+        origin="lower",
+        aspect="auto",
+        cmap="viridis",
+    )
+    axes[1].set_xlabel("x")
+    axes[1].set_ylabel("t")
+    axes[1].set_title("Exact Solution")
+    plt.colorbar(im1, ax=axes[1])
 
-# Training loss
-axes[3].semilogy(losses, linewidth=1)
-axes[3].set_xlabel("Epoch")
-axes[3].set_ylabel("Loss")
-axes[3].set_title("Training Loss")
-axes[3].grid(True, alpha=0.3)
+    im2 = axes[2].imshow(
+        np.array(error),
+        extent=[X_MIN, X_MAX, T_MIN, T_MAX],
+        origin="lower",
+        aspect="auto",
+        cmap="hot",
+    )
+    axes[2].set_xlabel("x")
+    axes[2].set_ylabel("t")
+    axes[2].set_title(f"Error (L2={l2_error:.2e})")
+    plt.colorbar(im2, ax=axes[2])
 
-plt.tight_layout()
-plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
-plt.close()
-print()
-print(f"Solution saved to {output_dir / 'solution.png'}")
+    axes[3].semilogy(losses, linewidth=1)
+    axes[3].set_xlabel("Epoch")
+    axes[3].set_ylabel("Loss")
+    axes[3].set_title("Training Loss")
+    axes[3].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Solution saved to {output_dir / 'solution.png'}")
 
-# %%
-# Time snapshots
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    t_indices = [0, nt // 4, nt // 2, 3 * nt // 4]
+    colors = ["b", "g", "r", "m"]
+    for t_idx, color in zip(t_indices, colors, strict=True):
+        t_val = float(t_eval[t_idx])
+        axes[0].plot(
+            np.array(x_eval),
+            np.array(u_pred_grid[t_idx, :]),
+            f"{color}-",
+            label=f"PINN t={t_val:.2f}",
+            linewidth=2,
+        )
+        axes[0].plot(
+            np.array(x_eval),
+            np.array(u_exact_grid[t_idx, :]),
+            f"{color}--",
+            label=f"Exact t={t_val:.2f}",
+            linewidth=1,
+            alpha=0.7,
+        )
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("u(x, t)")
+    axes[0].set_title("Solution at Different Times")
+    axes[0].legend(fontsize=7, ncol=2)
+    axes[0].grid(True, alpha=0.3)
 
-t_indices = [0, nt // 4, nt // 2, 3 * nt // 4]
-colors = ["b", "g", "r", "m"]
-for t_idx, color in zip(t_indices, colors, strict=True):
-    t_val = float(t_eval[t_idx])
-    axes[0].plot(
-        np.array(x_eval),
-        np.array(u_pred_grid[t_idx, :]),
-        f"{color}-",
-        label=f"PINN t={t_val:.2f}",
+    axes[1].plot(
+        np.array(t_eval),
+        np.array(u_pred_grid[:, nx // 4]),
+        "b-",
+        label="PINN x=0.5",
         linewidth=2,
     )
-    axes[0].plot(
-        np.array(x_eval),
-        np.array(u_exact_grid[t_idx, :]),
-        f"{color}--",
-        label=f"Exact t={t_val:.2f}",
-        linewidth=1,
-        alpha=0.7,
+    axes[1].plot(
+        np.array(t_eval),
+        np.array(u_exact_grid[:, nx // 4]),
+        "r--",
+        label="Exact x=0.5",
+        linewidth=2,
     )
-axes[0].set_xlabel("x")
-axes[0].set_ylabel("u(x, t)")
-axes[0].set_title("Solution at Different Times")
-axes[0].legend(fontsize=7, ncol=2)
-axes[0].grid(True, alpha=0.3)
+    axes[1].set_xlabel("t")
+    axes[1].set_ylabel("u(0.5, t)")
+    axes[1].set_title("Evolution at x=0.5")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Analysis saved to {output_dir / 'analysis.png'}")
 
-# Characteristic line
-axes[1].plot(
-    np.array(t_eval),
-    np.array(u_pred_grid[:, nx // 4]),
-    "b-",
-    label="PINN x=0.5",
-    linewidth=2,
-)
-axes[1].plot(
-    np.array(t_eval),
-    np.array(u_exact_grid[:, nx // 4]),
-    "r--",
-    label="Exact x=0.5",
-    linewidth=2,
-)
-axes[1].set_xlabel("t")
-axes[1].set_ylabel("u(0.5, t)")
-axes[1].set_title("Evolution at x=0.5")
-axes[1].legend()
-axes[1].grid(True, alpha=0.3)
+    print("=" * 70)
+    print("Advection Equation PINN example completed")
+    print(f"  Final loss:          {final_loss:.6e}")
+    print(f"  Relative L2 error:   {l2_error:.6e}")
+    print(f"  Maximum error:       {max_error:.6e}")
+    print(f"  Mean error:          {mean_error:.6e}")
+    print(f"  Mean PDE residual:   {mean_residual:.6e}")
+    print(f"  Parameters:          {n_params:,}")
+    print(f"Results saved to: {output_dir}")
+    print("=" * 70)
 
-plt.tight_layout()
-plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
-plt.close()
-print(f"Analysis saved to {output_dir / 'analysis.png'}")
+    return {
+        "final_loss": final_loss,
+        "l2_relative_error": l2_error,
+        "max_error": max_error,
+        "mean_error": mean_error,
+        "mean_pde_residual": mean_residual,
+        "param_count": int(n_params),
+    }
+
 
 # %%
-print()
-print("=" * 70)
-print("Advection Equation PINN example completed")
-print("=" * 70)
-print()
-print("Results Summary:")
-print(f"  Final loss:          {losses[-1]:.6e}")
-print(f"  Relative L2 error:   {l2_error:.6e}")
-print(f"  Maximum error:       {max_error:.6e}")
-print(f"  Mean error:          {mean_error:.6e}")
-print(f"  Mean PDE residual:   {mean_residual:.6e}")
-print(f"  Parameters:          {n_params:,}")
-print()
-print(f"Results saved to: {output_dir}")
-print("=" * 70)
+if __name__ == "__main__":
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")
