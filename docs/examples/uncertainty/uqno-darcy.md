@@ -105,6 +105,48 @@ fraction of functions in the calibration distribution.
 
 ## Implementation
 
+### Step 0: Materialise the Darcy Dataset
+
+The PDE data layer is backed by **datarax**. ``create_darcy_loader``
+returns a frozen ``PDELoaders`` with ``.train`` / ``.val`` pipelines that
+serve channels-first ``(batch, 1, H, W)`` batches. For UQNO we need one
+contiguous in-memory block of ``n_total`` samples, so both pipelines are
+drained and the concatenation is sliced to ``[:n_total]`` before being
+split into the base / residual / calibration / test sets.
+
+```python
+import jax.numpy as jnp
+import numpy as np
+from opifex.data.loaders import create_darcy_loader
+
+n_total = N_TRAIN_BASE + N_TRAIN_RESIDUAL + N_CALIB + N_TEST  # 2100
+
+loaders = create_darcy_loader(
+    n_samples=n_total,
+    batch_size=32,
+    resolution=64,
+    seed=42,
+)
+
+inputs_all, outputs_all = [], []
+for pipeline in (loaders.train, loaders.val):
+    for batch in pipeline:
+        inputs_all.append(jnp.asarray(np.asarray(batch["input"])))
+        outputs_all.append(jnp.asarray(np.asarray(batch["output"])))
+
+inputs = jnp.concatenate(inputs_all, axis=0)[:n_total]
+outputs = jnp.concatenate(outputs_all, axis=0)[:n_total]  # (2100, 1, 64, 64)
+
+splits = [N_TRAIN_BASE, N_TRAIN_RESIDUAL, N_CALIB]
+cuts = [sum(splits[: i + 1]) for i in range(len(splits))]
+x_base, x_residual, x_calib, x_test = jnp.split(inputs, cuts, axis=0)
+y_base, y_residual, y_calib, y_test = jnp.split(outputs, cuts, axis=0)
+```
+
+datarax serves **every** generated sample — it does not drop partial
+batches — so draining both pipelines yields exactly ``n_total`` samples
+and the slice is purely defensive.
+
 ### Step 1: Train the Base Solution Operator
 
 ```python
@@ -159,15 +201,20 @@ quantile_loss = PointwiseQuantileLoss(alpha=0.1, reduction="mean")
 
 
 @nnx.jit
-def residual_train_step(base, residual, opt, x, y):
+def residual_train_step(base, residual, opt, quantile_loss, x, y):
     def loss_fn(r):
         base_pred = jax.lax.stop_gradient(base(x))
-        widths = jnp.abs(r(x))
-        return quantile_loss(y_pred=widths, y=base_pred - y)
+        quantile_widths = jnp.abs(r(x))
+        return quantile_loss(y_pred=quantile_widths, y=base_pred - y)
     loss, grads = nnx.value_and_grad(loss_fn)(residual)
     opt.update(residual, grads)
     return loss
 ```
+
+``PointwiseQuantileLoss`` is registered as a static pytree
+(``jax.tree_util.register_static``), so it can be passed straight into
+the ``nnx.jit``-compiled step as a regular argument — no closure capture
+and no re-tracing per call.
 
 ### Step 3: Compose, Calibrate, Predict
 
@@ -213,31 +260,31 @@ print(f"empirical coverage: {coverage:.3f} (target 1-alpha = {1-0.1:.2f})")
 
 Representative run at resolution 64 (1000 / 500 / 500 / 100 samples for
 base / residual / calibration / test; 120 base + 80 residual epochs;
-~50 s total on a single GPU). Each FNO has **2,368,001** parameters
-(base + residual = 4,736,002).
+~27 s total on a single GPU — 17.6 s base + 8.9 s residual). Each FNO
+has **2,368,001** parameters (base + residual = 4,736,002).
 
 | Metric                                | Value                         |
 |---------------------------------------|-------------------------------|
-| Predictive-mean test rel-L2 (mean)    | **0.0039**                    |
-| Predictive-mean test rel-L2 (min/max) | 0.0025 / 0.0174               |
-| `calibrator.scaling_factor`           | 2.82                          |
+| Predictive-mean test rel-L2 (mean)    | **0.0103**                    |
+| Predictive-mean test rel-L2 (min/max) | 0.0053 / 0.0216               |
+| `calibrator.scaling_factor`           | 4.855470                      |
 | `calibrator.domain_idx`               | 228                           |
 | `calibrator.function_idx`             | 51                            |
-| Empirical pointwise coverage (test)   | 0.979 (target $1-\alpha=0.9$) |
-| Mean band width (physical units)      | 0.0018                        |
+| Empirical pointwise coverage (test)   | 0.975 (target $1-\alpha=0.9$) |
+| Mean band width (physical units)      | 0.025168                      |
 | Predicted std positive everywhere     | yes                           |
-| `\|error\|` vs predicted-std correlation | 0.42                       |
-| Mean `\|error\|` (high vs low uncertainty)| 2.6e-4 vs 1.6e-4           |
+| `\|error\|` vs predicted-std correlation | 0.365                      |
+| Mean `\|error\|` (high vs low uncertainty)| 0.002590 vs 0.001667       |
 
-The predictive mean reaches **~0.4 % relative-L2** error in physical
+The predictive mean reaches **~1.0 % relative-L2** error in physical
 units — the base prediction is visually indistinguishable from the
 smooth ground-truth pressure field. The empirical coverage lands
 **above** the nominal $1 - \alpha = 0.9$: the conformal
 ``get_coeff_quantile_idx`` rule with $\delta = 0.1$ targets a
 *function-level* guarantee that is intentionally conservative
-pointwise, so coverage near 0.98 is expected, not a bug. The predicted
+pointwise, so coverage near 0.975 is expected, not a bug. The predicted
 uncertainty is positive everywhere and correlates positively with the
-absolute error (corr ≈ 0.42); the mean error is larger in the
+absolute error (corr ≈ 0.37); the mean error is larger in the
 high-uncertainty half of the grid than in the low-uncertainty half,
 the qualitative signature of a sensible uncertainty surface.
 

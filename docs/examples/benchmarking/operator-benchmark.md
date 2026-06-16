@@ -57,9 +57,9 @@ jupyter lab examples/benchmarking/operator_benchmark.ipynb
 ## How It Works
 
 The benchmark creates all three operators at each resolution (32x32 and 64x64
-by default), loads Darcy flow data with `create_darcy_loader`, trains each
-operator with the standard recipe, and then evaluates accuracy and inference
-time with `BenchmarkEvaluator.evaluate_model()`.
+by default), loads Darcy flow data with the datarax-backed `create_darcy_loader`,
+trains each operator with the standard recipe, and then evaluates accuracy and
+inference time with `BenchmarkEvaluator.evaluate_model()`.
 
 ```mermaid
 flowchart TB
@@ -160,13 +160,27 @@ trained_model, _ = trainer.fit(
 ### Data Loading and Normalization
 
 ```python
+import numpy as np
+
 from opifex.data.loaders import create_darcy_loader
 
-loader = create_darcy_loader(
-    n_samples=1000, batch_size=32, resolution=64,
-    shuffle=False, seed=42, worker_count=0, enable_normalization=False,
+loaders = create_darcy_loader(
+    n_samples=1000, batch_size=32, resolution=64, seed=42,
 )
-# Collect into arrays, then fit Gaussian stats on TRAIN and normalize all splits.
+# `create_darcy_loader` returns a frozen `PDELoaders` with `.train`/`.val`
+# datarax pipelines. Drain both for one contiguous block; batches are already
+# channels-first `(N, 1, H, W)`.
+inputs: list[np.ndarray] = []
+outputs: list[np.ndarray] = []
+for pipeline in (loaders.train, loaders.val):
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+
+x_train = np.concatenate(inputs, axis=0)[:1000]
+y_train = np.concatenate(outputs, axis=0)[:1000]
+
+# Fit Gaussian stats on TRAIN and normalize all splits.
 x_mean, x_std = x_train.mean(), x_train.std()
 y_mean, y_std = y_train.mean(), y_train.std()
 x_train_norm = (x_train - x_mean) / x_std
@@ -189,27 +203,34 @@ the bottom of the script (`resolution_sizes`, `n_train`, `num_epochs`,
 
 ```text
 INFO:__main__:RESOLUTION 32x32 STUDY
-INFO:__main__:Darcy dataset ready: (992, 1, 32, 32)
+INFO:__main__:Loading Darcy dataset at resolution 32...
+INFO:__main__:Darcy dataset ready: (1000, 1, 32, 32)
 INFO:__main__:UNO created for resolution 32
 INFO:__main__:FNO created for resolution 32
 INFO:__main__:SFNO created for resolution 32
-INFO:__main__:UNO on Darcy: relL2=0.7190%, MSE=2.299543e-07, params=34,465,921, train=30.6s, infer=0.0011s
-INFO:__main__:FNO on Darcy: relL2=0.5017%, MSE=1.173130e-07, params=4,203,009, train=9.6s, infer=0.0009s
-INFO:__main__:SFNO on Darcy: relL2=0.7065%, MSE=2.269025e-07, params=2,101,537, train=7.6s, infer=0.0009s
+INFO:__main__:UNO on Darcy: relL2=1.9485%, MSE=2.837728e-05, params=34,465,921, train=30.0s, infer=0.0011s
+INFO:__main__:FNO on Darcy: relL2=2.3043%, MSE=4.241583e-05, params=4,203,009, train=11.2s, infer=0.0008s
+INFO:__main__:SFNO on Darcy: relL2=2.3631%, MSE=3.867877e-05, params=2,101,537, train=8.6s, infer=0.0008s
 INFO:__main__:RESOLUTION 64x64 STUDY
-INFO:__main__:Darcy dataset ready: (992, 1, 64, 64)
-INFO:__main__:UNO on Darcy: relL2=1.4759%, MSE=1.004127e-06, params=34,465,921, train=37.7s, infer=0.0035s
-INFO:__main__:FNO on Darcy: relL2=0.5381%, MSE=1.346708e-07, params=4,203,009, train=15.2s, infer=0.0040s
-INFO:__main__:SFNO on Darcy: relL2=0.7545%, MSE=2.706596e-07, params=2,101,537, train=12.2s, infer=0.0034s
+INFO:__main__:Loading Darcy dataset at resolution 64...
+INFO:__main__:Darcy dataset ready: (1000, 1, 64, 64)
+INFO:__main__:UNO created for resolution 64
+INFO:__main__:FNO created for resolution 64
+INFO:__main__:SFNO created for resolution 64
+INFO:__main__:UNO on Darcy: relL2=3.1666%, MSE=8.014150e-05, params=34,465,921, train=33.5s, infer=0.0040s
+INFO:__main__:FNO on Darcy: relL2=2.1253%, MSE=3.458589e-05, params=4,203,009, train=13.5s, infer=0.0054s
+INFO:__main__:SFNO on Darcy: relL2=2.5900%, MSE=5.104762e-05, params=2,101,537, train=10.4s, infer=0.0037s
 INFO:__main__:BENCHMARK SUMMARY (Darcy flow, trained operators)
 INFO:__main__:Operator    Res      Rel L2           MSE        Params   Train(s)   Infer(s)
-INFO:__main__:UNO          32    0.7190%     2.300e-07    34,465,921       30.6     0.0011
-INFO:__main__:FNO          32    0.5017%     1.173e-07     4,203,009        9.6     0.0009
-INFO:__main__:SFNO         32    0.7065%     2.269e-07     2,101,537        7.6     0.0009
-INFO:__main__:UNO          64    1.4759%     1.004e-06    34,465,921       37.7     0.0035
-INFO:__main__:FNO          64    0.5381%     1.347e-07     4,203,009       15.2     0.0040
-INFO:__main__:SFNO         64    0.7545%     2.707e-07     2,101,537       12.2     0.0034
-INFO:__main__:Complete study finished in 173.46 seconds!
+INFO:__main__:UNO          32    1.9485%     2.838e-05    34,465,921       30.0     0.0011
+INFO:__main__:FNO          32    2.3043%     4.242e-05     4,203,009       11.2     0.0008
+INFO:__main__:SFNO         32    2.3631%     3.868e-05     2,101,537        8.6     0.0008
+INFO:__main__:UNO          64    3.1666%     8.014e-05    34,465,921       33.5     0.0040
+INFO:__main__:FNO          64    2.1253%     3.459e-05     4,203,009       13.5     0.0054
+INFO:__main__:SFNO         64    2.5900%     5.105e-05     2,101,537       10.4     0.0037
+INFO:__main__:Complete study finished in 147.56 seconds!
+INFO:__main__:   Total benchmark runs: 6
+INFO:__main__:   Successful runs: 6
 INFO:__main__:   Success rate: 100.0%
 ```
 
@@ -217,26 +238,31 @@ INFO:__main__:   Success rate: 100.0%
 
 | Operator | Resolution | Rel L2 | MSE | Parameters | Train (s) | Infer (s) |
 |----------|-----------|--------|-----|------------|-----------|-----------|
-| UNO  | 32 | 0.72% | 2.30e-07 | 34,465,921 | 30.6 | 0.0011 |
-| FNO  | 32 | 0.50% | 1.17e-07 |  4,203,009 |  9.6 | 0.0009 |
-| SFNO | 32 | 0.71% | 2.27e-07 |  2,101,537 |  7.6 | 0.0009 |
-| UNO  | 64 | 1.48% | 1.00e-06 | 34,465,921 | 37.7 | 0.0035 |
-| FNO  | 64 | 0.54% | 1.35e-07 |  4,203,009 | 15.2 | 0.0040 |
-| SFNO | 64 | 0.75% | 2.71e-07 |  2,101,537 | 12.2 | 0.0034 |
+| UNO  | 32 | 1.95% | 2.84e-05 | 34,465,921 | 30.0 | 0.0011 |
+| FNO  | 32 | 2.30% | 4.24e-05 |  4,203,009 | 11.2 | 0.0008 |
+| SFNO | 32 | 2.36% | 3.87e-05 |  2,101,537 |  8.6 | 0.0008 |
+| UNO  | 64 | 3.17% | 8.01e-05 | 34,465,921 | 33.5 | 0.0040 |
+| FNO  | 64 | 2.13% | 3.46e-05 |  4,203,009 | 13.5 | 0.0054 |
+| SFNO | 64 | 2.59% | 5.10e-05 |  2,101,537 | 10.4 | 0.0037 |
+
+All six runs (three operators x two resolutions) complete successfully, for a
+100% success rate. The full study finishes in roughly 148 seconds on a single
+GPU.
 
 ### Aggregate Results (Averaged Across Resolutions)
 
 | Operator | Rel L2 | MSE | Parameters | Train (s) | Infer (s) |
 |----------|--------|-----|------------|-----------|-----------|
-| UNO  | 1.10% | 6.17e-07 | 34,465,921 | 34.1 | 0.0023 |
-| FNO  | 0.52% | 1.26e-07 |  4,203,009 | 12.4 | 0.0024 |
-| SFNO | 0.73% | 2.49e-07 |  2,101,537 |  9.9 | 0.0021 |
+| UNO  | 2.56% | 5.43e-05 | 34,465,921 | 31.8 | 0.0026 |
+| FNO  | 2.21% | 3.85e-05 |  4,203,009 | 12.4 | 0.0031 |
+| SFNO | 2.48% | 4.49e-05 |  2,101,537 |  9.5 | 0.0023 |
 
-All trained operators reach low-single-digit relative L2 error on Darcy flow.
-**FNO** delivers the best accuracy, **SFNO** is the most parameter-efficient and
-the fastest to train, and **UNO** is by far the most parameter-heavy because of
-its dense U-Net encoder/decoder. (Exact numbers vary slightly run-to-run with
-GPU non-determinism.)
+All trained operators reach low-single-digit relative L2 error on Darcy flow at
+both resolutions. **FNO** delivers the best accuracy averaged across resolutions
+and stays resolution-robust (2.30% -> 2.13%), while **UNO** is by far the most
+parameter-heavy because of its dense U-Net encoder/decoder and **SFNO** is the
+most parameter-efficient and the fastest to train. (Exact numbers vary slightly
+run-to-run with GPU non-determinism.)
 
 ## Generated Output
 
@@ -263,7 +289,8 @@ inside `jit`, the cached arrays become tracers.
 
 ### Out of Memory at Higher Resolutions
 
-**Symptom**: CUDA OOM at 96x96 or higher resolutions, most often with UNO.
+**Symptom**: CUDA `RESOURCE_EXHAUSTED` when pushing to resolutions beyond the
+defaults, most often with the parameter-heavy UNO.
 
 **Solution**: Reduce `batch_size` or `hidden_channels`, or test fewer
 resolutions by editing the `resolution_sizes` argument.

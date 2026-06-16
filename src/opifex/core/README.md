@@ -370,13 +370,13 @@ The core module integrates with the Opifex type system for enhanced type safety:
 
 ```python
 # Import common types from the Opifex type system
-from opifex.typing import Array, Scalar, Shape, DType
+from opifex.typing import Array, Float, ArrayShape
 
 # Type-annotated function example
 def typed_spectral_operation(
     data: Array,
-    dx: Scalar,
-    output_shape: Shape
+    dx: Float,
+    output_shape: ArrayShape
 ) -> Array:
     """Type-safe spectral operation."""
     from opifex.core.spectral import spectral_derivative

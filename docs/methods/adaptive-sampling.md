@@ -33,7 +33,7 @@ where:
 ```python
 import jax
 import jax.numpy as jnp
-from opifex.training.adaptive_sampling import RADSampler, RADConfig
+from opifex.core.training.components.adaptive_sampling import RADSampler, RADConfig
 
 # Configure RAD sampling
 config = RADConfig(
@@ -131,7 +131,7 @@ RAR-D progressively adds new collocation points near high-residual regions, incr
 ### RARDRefiner
 
 ```python
-from opifex.training.adaptive_sampling import RARDRefiner, RARDConfig
+from opifex.core.training.components.adaptive_sampling import RARDRefiner, RARDConfig
 
 # Configure refinement
 config = RARDConfig(
@@ -221,7 +221,7 @@ plt.legend()
 ### Computing Sampling Distribution
 
 ```python
-from opifex.training.adaptive_sampling import compute_sampling_distribution
+from opifex.core.training.components.adaptive_sampling import compute_sampling_distribution
 
 residuals = compute_pde_residual(model, points)
 
@@ -321,7 +321,7 @@ if len(current_points) > max_points:
 
 ```python
 from opifex.neural.pinns.domain_decomposition import XPINN
-from opifex.training.adaptive_sampling import RADSampler
+from opifex.core.training.components.adaptive_sampling import RADSampler
 
 model = XPINN(...)
 sampler = RADSampler()
@@ -343,7 +343,7 @@ for subdomain_id in range(len(model.subdomains)):
 ### With Multilevel Training
 
 ```python
-from opifex.training.multilevel import CascadeTrainer
+from opifex.core.training.strategies.multilevel import CascadeTrainer
 
 trainer = CascadeTrainer(...)
 sampler = RADSampler()
@@ -370,7 +370,7 @@ import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
-from opifex.training.adaptive_sampling import RADSampler, RARDRefiner, RADConfig, RARDConfig
+from opifex.core.training.components.adaptive_sampling import RADSampler, RARDRefiner, RADConfig, RARDConfig
 
 # Create model
 class PINN(nnx.Module):

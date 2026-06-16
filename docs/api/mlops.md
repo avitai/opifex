@@ -17,7 +17,7 @@ The MLOps module offers:
 - **Backend Agnostic**: Support for MLflow and extensible to other backends
 - **Physics-Aware**: Specialized tracking for scientific ML workflows
 
-##! Experiment Management
+## Experiment Management
 
 ### ExperimentTracker
 
@@ -187,8 +187,8 @@ def log_model(
         save_optimizer_state: Include optimizer state
 
     Example:
-        >>> from opifex.neural.operators.fno import FNO
-        >>> model = FNO(modes=12, width=64)
+        >>> from opifex.neural.operators.fno import FourierNeuralOperator
+        >>> model = FourierNeuralOperator(in_channels=1, out_channels=1, hidden_channels=64, modes=12, num_layers=4, rngs=nnx.Rngs(0))
         >>> # After training...
         >>> run.log_model(
         ...     model,
@@ -504,8 +504,8 @@ from opifex.mlops import (
     PhysicsDomain,
     NeuralOperatorMetrics
 )
-from opifex.neural.operators.fno import FNO
-from opifex.training import BasicTrainer
+from opifex.neural.operators.fno import FourierNeuralOperator
+from opifex.training.basic_trainer import BasicTrainer
 from opifex.data.loaders import create_darcy_loader
 
 # Initialize experiment tracker
@@ -546,7 +546,7 @@ try:
         resolution=64,
         seed=config.seed,
     )
-    model = FNO(modes=12, width=64, depth=4)
+    model = FourierNeuralOperator(in_channels=1, out_channels=1, hidden_channels=64, modes=12, num_layers=4, rngs=nnx.Rngs(0))
 
     # Train with logging
     trainer = BasicTrainer(model, TrainingConfig(
@@ -641,7 +641,7 @@ for modes, width, lr in product(*param_grid.values()):
     )
 
     # Train and log...
-    model = FNO(modes=modes, width=width)
+    model = FourierNeuralOperator(in_channels=1, out_channels=1, hidden_channels=width, modes=modes, num_layers=4, rngs=nnx.Rngs(0))
     # ... training code ...
 
     run.end_run()

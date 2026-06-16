@@ -189,7 +189,7 @@ weighted_loss = balancer.compute_weighted_loss(losses)
 Use [RAD sampling](adaptive-sampling.md) to focus on high-residual regions:
 
 ```python
-from opifex.training.adaptive_sampling import RADSampler
+from opifex.core.training.components.adaptive_sampling import RADSampler
 
 sampler = RADSampler()
 residuals = model.compute_residual(all_points)
@@ -214,7 +214,7 @@ optimizer = HybridOptimizer(HybridOptimizerConfig(
 Use [multilevel training](multilevel-training.md) for hierarchical convergence:
 
 ```python
-from opifex.training.multilevel import (
+from opifex.core.training.strategies.multilevel import (
     CascadeTrainer, MultilevelAdam, create_network_hierarchy, prolongate,
 )
 

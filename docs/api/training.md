@@ -10,10 +10,9 @@ The `opifex.training` module provides full training infrastructure for scientifi
 - `opifex.core.training.config` - Training configuration classes
 - `opifex.core.training.physics_configs` - Physics-specific configurations
 - `opifex.training.basic_trainer` - Core trainer implementations
-- `opifex.training.metrics` - Metrics tracking and state management
-- `opifex.training.recovery` - Error recovery and stability handling
-- `opifex.training.components` - Modular training components
-- `opifex.training.utils` - Utility functions for safe model operations
+- `opifex.core.training.monitoring.metrics` - Metrics tracking and state management
+- `opifex.core.training.components.recovery` - Error recovery and stability handling
+- `opifex.core.training.components` - Modular training components
 
 ## Core Classes
 
@@ -466,27 +465,6 @@ standard_model = StandardMLP([3, 64, 64, 1], activation="swish", rngs=rngs)
 For molecular and materials property prediction (energies, forces, stress), build
 a machine-learning interatomic potential from `opifex.neural.atomistic` instead;
 see the [Atomistic Potentials guide](../methods/atomistic-potentials.md).
-
-### With Optimization
-
-```python
-from opifex.optimization import MetaOptimizer
-
-# Use with learn-to-optimize
-meta_optimizer = MetaOptimizer()
-trainer = BasicTrainer(model, config, meta_optimizer=meta_optimizer)
-```
-
-### With Geometry
-
-```python
-from opifex.geometry import ComplexDomain
-from opifex.core.conditions import DirichletBC
-
-# Complex domain training
-domain = ComplexDomain(boundaries=["left", "right", "top", "bottom"])
-boundary_conditions = [DirichletBC(boundary="left", value=0.0)]
-```
 
 ## Best Practices
 

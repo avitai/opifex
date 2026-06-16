@@ -270,7 +270,7 @@ plt.title('GradNorm Weight Evolution')
 ### With Adaptive Sampling
 
 ```python
-from opifex.training.adaptive_sampling import RADSampler
+from opifex.core.training.components.adaptive_sampling import RADSampler
 
 sampler = RADSampler()
 balancer = GradNormBalancer(num_losses=3, rngs=nnx.Rngs(0))
@@ -293,7 +293,7 @@ for step in range(num_steps):
 ### With Multilevel Training
 
 ```python
-from opifex.training.multilevel import CascadeTrainer
+from opifex.core.training.strategies.multilevel import CascadeTrainer
 
 trainer = CascadeTrainer(...)
 

@@ -21,7 +21,7 @@ addresses this by processing inputs through both spectral (global) and convoluti
 
 This example uses the standard operator-learning recipe — grid positional embedding,
 Gaussian input/output normalization, and the relative-L2 loss — to reach a low relative
-L2 error (~1%) on Darcy flow, and compares LocalFNO against a standard FNO baseline.
+L2 error (~1-2%) on Darcy flow, and compares LocalFNO against a standard FNO baseline.
 
 ## What You'll Learn
 
@@ -135,6 +135,7 @@ Where `α` is the `mixing_weight` parameter (default 0.5).
 ```python
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import nnx
 
 from opifex.core.training import Trainer, TrainingConfig
@@ -155,25 +156,40 @@ JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
 Resolution: 32x32
 Training samples: 1000, Test samples: 100
-Batch size: 32, Epochs: 120
 FNO config: modes=(12, 12), width=32, layers=4
 Local kernel size: 3
 ```
 
 ### Step 2: Data Loading and Normalization
 
-We collect ~1000 training samples and fit Gaussian statistics on the training set,
-then normalize all splits. Predictions are un-normalized before computing the
-physical-space relative-L2 error.
+`create_darcy_loader` returns a frozen `PDELoaders` bundle whose `.train` and
+`.val` attributes are datarax pipelines that yield channels-first batches
+(`{"input": (b, 1, H, W), "output": (b, 1, H, W)}`). The train/val split is
+controlled by `val_fraction`. We collect each pipeline into arrays, fit Gaussian
+statistics on the training set, then normalize all splits. Predictions are
+un-normalized before computing the physical-space relative-L2 error.
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=1000,
-    batch_size=32,
-    resolution=32,
-    shuffle=True,
-    seed=42,
+n_samples = N_TRAIN + N_TEST
+loaders = create_darcy_loader(
+    n_samples=n_samples,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    val_fraction=N_TEST / n_samples,
+    seed=SEED,
 )
+
+
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+
+X_train, Y_train = _collect(loaders.train)
+X_test, Y_test = _collect(loaders.val)
 
 x_mean, x_std = X_train.mean(), X_train.std()
 y_mean, y_std = Y_train.mean(), Y_train.std()
@@ -184,11 +200,11 @@ Y_train_n = (Y_train - y_mean) / y_std
 **Terminal Output:**
 
 ```text
-Generating Darcy flow data...
-Training data: X=(992, 1, 32, 32), Y=(992, 1, 32, 32)
-Test data:     X=(96, 1, 32, 32), Y=(96, 1, 32, 32)
-Input mean/std:  0.6274 / 0.2146
-Output mean/std: 0.054309 / 0.038000
+Generating Darcy flow data and serving via datarax...
+Training data: X=(1024, 1, 32, 32), Y=(1024, 1, 32, 32)
+Test data:     X=(128, 1, 32, 32), Y=(128, 1, 32, 32)
+Input mean/std:  0.1778 / 0.1302
+Output mean/std: 0.213690 / 0.155666
 ```
 
 ### Step 3: Model Creation
@@ -262,14 +278,14 @@ trained_model, metrics = trainer.fit(
 
 ```text
 Training LocalFNO (Adam lr=0.001, relative-L2 loss)...
-LocalFNO training completed in 20.8s
-  Final train loss: 0.02236589488963927
-  Final val loss:   0.0011326733510941267
+LocalFNO training completed in 28.3s
+  Final train loss: 0.03138274699449539
+  Final val loss:   0.0015184583608061075
 
 Training Standard FNO (Adam lr=0.001, relative-L2 loss)...
-Standard FNO training completed in 12.5s
-  Final train loss: 0.008356716228468765
-  Final val loss:   0.00019725736638065428
+Standard FNO training completed in 12.0s
+  Final train loss: 0.014661458320915699
+  Final val loss:   0.0005813310854136944
 ```
 
 ### Step 5: Evaluation
@@ -282,16 +298,16 @@ relative L2 error, and the test set is run through each model in batches.
 ```text
 Running evaluation...
 LocalFNO Results:
-  Test MSE:         6.723121e-07
-  Relative L2:      0.012391 (min=0.008915, max=0.027407)
+  Test MSE:         3.050878e-05
+  Relative L2:      0.021260 (min=0.011985, max=0.043115)
 
 Standard FNO Results:
-  Test MSE:         3.598657e-07
-  Relative L2:      0.008856 (min=0.005160, max=0.020793)
+  Test MSE:         1.134721e-05
+  Relative L2:      0.012744 (min=0.007010, max=0.035330)
 
 Comparison:
-  MSE improvement (LocalFNO vs FNO): -86.8%
-  Rel L2 improvement: -39.9%
+  MSE improvement (LocalFNO vs FNO): -168.9%
+  Rel L2 improvement: -66.8%
 ```
 
 ### Visualization
@@ -308,15 +324,16 @@ Comparison:
 
 | Metric              | LocalFNO    | Standard FNO |
 |---------------------|-------------|--------------|
-| Test MSE            | 6.72e-07    | 3.60e-07     |
-| Relative L2 Error   | 0.0124      | 0.0089       |
+| Test MSE            | 3.05e-05    | 1.13e-05     |
+| Relative L2 Error   | 0.0213      | 0.0127       |
 | Parameters          | 365,099     | 2,368,001    |
 
-Both operators reach ~1% relative L2 on the corrected Darcy data. The standard FNO
-is slightly more accurate here, while LocalFNO reaches comparable accuracy with
-roughly 6x fewer parameters thanks to its local convolution branch. On smooth
-solutions like Darcy flow the spectral branch dominates; LocalFNO's local branch
-pays off most on problems with sharp gradients or boundary layers.
+Both operators reach low single-digit-percent relative L2 on the corrected Darcy
+data. The standard FNO is slightly more accurate here, while LocalFNO reaches
+comparable accuracy with roughly 6x fewer parameters thanks to its local
+convolution branch. On smooth solutions like Darcy flow the spectral branch
+dominates; LocalFNO's local branch pays off most on problems with sharp gradients
+or boundary layers.
 
 ## Next Steps
 

@@ -52,6 +52,31 @@ design, the three backbones (SchNet, PaiNN, NequIP) and a registry-driven build.
         show_root_heading: true
         show_source: false
 
+### Kohn-Sham DFT solver
+
+::: opifex.neural.quantum.dft.scf
+    options:
+        show_source: false
+
+### SCF acceleration from a predicted Fock
+
+::: opifex.neural.quantum.dft.scf_acceleration
+    options:
+        show_source: false
+
+### Exchange-correlation functionals
+
+::: opifex.neural.quantum.dft.xc
+    options:
+        show_source: false
+
+### Hamiltonian prediction
+
+::: opifex.neural.quantum.hamiltonian
+    options:
+        show_root_heading: true
+        show_source: false
+
 ## Neural Operators
 
 ::: opifex.neural.operators
@@ -126,11 +151,11 @@ arXiv:2008.08400 §3). The math is identical to LUNO
 (``opifex.uncertainty.curvature.linearized_neural_operator_posterior``)
 and is reused directly; what differs is the *context*: the input is a
 PINN forward consuming spatial / spatio-temporal coordinates, and the
-``gp_adapter_spec`` parameter (a Task 6.3 GP adapter spec such as
+``gp_adapter_spec`` parameter (a GP adapter spec such as
 ``TinygpAdapterSpec`` or ``GPJaxAdapterSpec``) is recorded in the
 predictive metadata so consumers can resolve the linearised-Laplace ↔
-GP correspondence. When Phase 11 ships concrete GP fit / predict, the
-helper will gain an alternative direct-GP-fit branch.
+GP correspondence. Concrete GP fit / predict is available through the
+``opifex.uncertainty.gp`` subpackage.
 
 ### `ProbabilisticFourierNeuralOperator` (PNO)
 

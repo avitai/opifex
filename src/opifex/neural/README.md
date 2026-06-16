@@ -1,39 +1,39 @@
-# Opifex Neural: Neural Networks, Training Infrastructure & Neural DFT
+# Opifex Neural: Neural Networks, Operators & Quantum Models
 
-This package implements neural network architectures for scientific machine learning, including Neural Density Functional Theory, all built with FLAX NNX. Version 1.2 and 1.3 have been completed with full neural network primitives, training infrastructure, and neural operator foundations.
+This package implements neural network architectures for scientific machine
+learning, built with FLAX NNX. It spans standard MLPs and activations, neural
+operators, machine-learning interatomic potentials, an equivariant core, and a
+differentiable quantum-chemistry stack.
 
-## ✅ VERSION 1.2 + 1.3 COMPLETED IMPLEMENTATIONS
+## Subpackages
 
-### ✅ **Standard MLP Implementation** (513 lines, `base.py`)
+- **`base` / `activations`** — `StandardMLP` and a registry of activation
+  functions (FLAX NNX, JAX, and scientific extensions such as `mish`, `snake`,
+  `gaussian`).
+- **`atomistic`** — E(3)-aware machine-learning interatomic potentials
+  (SchNet / PaiNN / NequIP backbones) assembled as an `AtomisticModel` with
+  energy / forces / stress and charge / spin / dipole heads, plus fine-tuning
+  utilities (LoRA, parameter EMA, element remapping) and ASE integration.
+- **`equivariant`** — irreps algebra (`Irreps`, `IrrepsArray`), tensor products
+  (`FullyConnectedTensorProduct`, `ChannelwiseTensorProduct`), spherical
+  harmonics, radial bases, gates, and scatter / radius-graph primitives.
+- **`operators`** — neural operators for PDE and function-space learning: FNO and
+  variants (TFNO, UFNO, SFNO, Local/AM/MS-FNO), DeepONet variants, graph / mesh
+  operators (`GraphNeuralOperator`, `MeshGraphNet`), and uncertainty-aware
+  operators. `operators.foundations` re-exports the common entry points.
+- **`pinns`** — physics-informed networks (`SimplePINN`, `MultiScalePINN`) with
+  factory helpers for heat, Poisson, and Navier–Stokes problems.
+- **`bayesian`** — variational layers, calibration tools (`TemperatureScaling`,
+  `PlattScaling`, `IsotonicRegression`), and probabilistic / multi-fidelity PINNs.
+- **`quantum`** — differentiable Kohn–Sham DFT (`SCFSolver`), a trainable neural
+  exchange–correlation functional (`NeuralXCFunctional`), and Hamiltonian /
+  variational-Monte-Carlo models (see [`quantum/README.md`](quantum/README.md)).
+- **`kan` / `clifford`** — Kolmogorov–Arnold and Clifford-algebra building blocks.
 
-**Status**: ✅ FULLY IMPLEMENTED AND TESTED
-**Architecture**: Modern FLAX NNX with stateful transforms
+## Activation Library
 
-**Implemented Components**:
-
-- [x] **StandardMLP Class** - Multi-layer perceptron with configurable architecture
-- [x] **Atomistic Models** (`opifex.neural.atomistic`) - Machine-learning
-      interatomic potentials (SchNet / PaiNN / NequIP backbones with energy /
-      forces / stress heads) for molecular and materials systems
-- [x] **Precision Support** - Both float32 and float64 for chemical accuracy
-- [x] **Dropout Support** - Configurable dropout for regularization
-- [x] **Custom Initialization** - Physics-informed weight initialization
-
-### ✅ **Activation Function Library** (282 lines, `activations.py`)
-
-**Status**: ✅ FULLY IMPLEMENTED AND TESTED
-**Total Functions**: 27 activation functions with registry system
-
-**Implemented Components**:
-
-- [x] **FLAX NNX Activations** - Direct integration with modern FLAX NNX functions
-- [x] **JAX Activations** - Native JAX activation functions
-- [x] **Scientific Extensions** - Physics-informed and quantum-specific activations
-- [x] **Registry Management** - Dynamic registration and retrieval system
-- [x] **Zero Performance Overhead** - Direct function references, no wrapper calls
-- [x] **Complete Integration** - Seamless connection with MLP implementations
-
-**Available Activations**:
+A registry maps names to activation functions and supports dynamic
+registration:
 
 ```python
 # FLAX NNX: celu, elu, gelu, glu, leaky_relu, log_sigmoid, log_softmax,
@@ -44,7 +44,7 @@ This package implements neural network architectures for scientific machine lear
 #            exponential, logarithmic, sinusoidal, cosinusoidal
 ```
 
-## 📚 Full Usage Examples
+## Usage Examples
 
 ### 1. Basic Neural Networks
 
@@ -169,14 +169,14 @@ for act_name in available_activations:
         print(f"{act_name}: Not available")
 ```
 
-### 5. Enhanced Calibration Framework with Physics-Aware Temperature Scaling (NEW)
+### 4. Calibration with Physics-Aware Temperature Scaling
 
 ```python
 from opifex.neural.bayesian import TemperatureScaling
 
-# Initialize enhanced temperature scaling with physics constraints
+# Initialize temperature scaling with physics constraints
 rngs = nnx.Rngs(jax.random.PRNGKey(42))
-enhanced_calibrator = TemperatureScaling(
+calibrator = TemperatureScaling(
     physics_constraints=['energy_conservation', 'positivity', 'boundedness'],
     constraint_strength=0.2,  # Physics constraint penalty weight
     adaptive=True,           # Enable adaptive temperature learning
@@ -188,168 +188,21 @@ predictions = jax.random.normal(key, (100, 1))
 inputs = jax.random.normal(key, (100, 5))
 
 # Get calibrated predictions with constraint enforcement
-calibrated_predictions, constraint_penalty = enhanced_calibrator.apply_physics_aware_calibration(
+calibrated_predictions, constraint_penalty = calibrator.apply_physics_aware_calibration(
     predictions, inputs
 )
 
 # Optimize temperature with physics constraints
 targets = jax.random.normal(key, (100, 1))
-optimal_temp = enhanced_calibrator.optimize_temperature_with_physics_constraints(
+optimal_temp = calibrator.optimize_temperature_with_physics_constraints(
     predictions, targets, inputs
 )
 
-print(f"Calibrated predictions range: [{jnp.min(calibrated_predictions):.3f}, {jnp.max(calibrated_predictions):.3f}]")
 print(f"Physics constraint penalty: {constraint_penalty:.6f}")
 print(f"Optimal temperature: {optimal_temp:.4f}")
-
-# Standard forward pass with uncertainty quantification
-calibrated_preds, aleatoric_uncertainty = enhanced_calibrator(predictions, inputs)
-print(f"Aleatoric uncertainty: {jnp.mean(aleatoric_uncertainty):.6f}")
 ```
 
-### 6. Physics-Informed Bayesian Framework (NEW)
-
-```python
-from opifex.neural.bayesian import (
-    PhysicsInformedPriors,
-    ConservationLawPriors,
-    HierarchicalBayesianFramework,
-    PhysicsAwareUncertaintyPropagation,
-    DomainSpecificPriors
-)
-
-# Physics-Informed Priors for constraint enforcement
-physics_priors = PhysicsInformedPriors(
-    conservation_laws=['energy', 'momentum', 'mass'],
-    boundary_conditions=['dirichlet', 'neumann'],
-    penalty_weight=1.0,
-    rngs=rngs
-)
-
-# Apply physics constraints to model parameters
-unconstrained_params = jax.random.normal(key, (10,))
-constrained_params = physics_priors.apply_constraints(unconstrained_params)
-violation_penalty = physics_priors.compute_violation_penalty(constrained_params)
-
-print(f"Original params range: [{jnp.min(unconstrained_params):.3f}, {jnp.max(unconstrained_params):.3f}]")
-print(f"Constrained params range: [{jnp.min(constrained_params):.3f}, {jnp.max(constrained_params):.3f}]")
-print(f"Constraint violation penalty: {violation_penalty:.6f}")
-
-# Conservation Law Priors with adaptive weighting
-conservation_priors = ConservationLawPriors(
-    conservation_laws=['energy', 'momentum', 'mass'],
-    uncertainty_scale=0.1,
-    prior_strength=1.0,
-    adaptive_weighting=True,
-    rngs=rngs
-)
-
-# Compute physics-aware uncertainty
-predictions = jax.random.normal(key, (100, 1))
-model_uncertainty = jax.random.uniform(key, (100, 1), minval=0.01, maxval=0.1)
-physics_state = jax.random.normal(key, (100, 3))  # Physical state representation
-
-physics_uncertainty = conservation_priors.compute_physics_aware_uncertainty(
-    predictions, model_uncertainty, physics_state
-)
-
-print(f"Model uncertainty mean: {jnp.mean(model_uncertainty):.6f}")
-print(f"Physics-aware uncertainty mean: {jnp.mean(physics_uncertainty):.6f}")
-
-# Sample physics-constrained parameters
-base_params = jax.random.normal(key, (50,))
-constrained_samples = conservation_priors.sample_physics_constrained_params(
-    base_params, constraint_strength=0.8
-)
-print(f"Constraint satisfaction: {jnp.mean(jnp.abs(constrained_samples - base_params)):.6f}")
-
-# Domain-Specific Priors for scientific applications
-quantum_priors = DomainSpecificPriors(
-    domain="quantum_chemistry",
-    parameter_ranges={
-        "bond_length": (0.5, 3.0),
-        "angle": (60.0, 180.0),
-        "energy": (-100.0, 0.0)
-    },
-    distribution_types={
-        "bond_length": "truncated_normal",
-        "angle": "uniform",
-        "energy": "gaussian"
-    },
-    rngs=rngs
-)
-
-# Sample domain-specific parameters
-bond_samples = quantum_priors.sample_domain_priors((20,), "bond_length")
-angle_samples = quantum_priors.sample_domain_priors((20,), "angle")
-energy_samples = quantum_priors.sample_domain_priors((20,), "energy")
-
-print(f"Bond length samples: [{jnp.min(bond_samples):.3f}, {jnp.max(bond_samples):.3f}]")
-print(f"Angle samples: [{jnp.min(angle_samples):.1f}, {jnp.max(angle_samples):.1f}]")
-print(f"Energy samples: [{jnp.min(energy_samples):.3f}, {jnp.max(energy_samples):.3f}]")
-
-# Hierarchical Bayesian Framework for multi-level uncertainty
-hierarchical_framework = HierarchicalBayesianFramework(
-    hierarchy_levels=3,
-    level_dimensions=[64, 32, 16],
-    uncertainty_propagation="multiplicative",
-    correlation_structure="exchangeable",
-    rngs=rngs
-)
-
-# Sample hierarchical parameters
-level_0_params = hierarchical_framework.sample_hierarchical_parameters((10,), level=0)
-level_1_params = hierarchical_framework.sample_hierarchical_parameters((10,), level=1)
-level_2_params = hierarchical_framework.sample_hierarchical_parameters((10,), level=2)
-
-print(f"Level 0 params shape: {level_0_params.shape}")
-print(f"Level 1 params shape: {level_1_params.shape}")
-print(f"Level 2 params shape: {level_2_params.shape}")
-
-# Propagate uncertainty through hierarchy
-base_uncertainty = jnp.ones((10, 64)) * 0.1
-propagated_uncertainty = hierarchical_framework.propagate_uncertainty_hierarchically(
-    base_uncertainty, target_level=2
-)
-print(f"Propagated uncertainty shape: {propagated_uncertainty.shape}")
-
-# Physics-Aware Uncertainty Propagation
-uncertainty_propagator = PhysicsAwareUncertaintyPropagation(
-    conservation_laws=['energy', 'momentum'],
-    constraint_tolerance=1e-6,
-    uncertainty_inflation=1.1,
-    correlation_aware=True,
-    rngs=rngs
-)
-
-# Propagate uncertainty with physics constraints
-input_uncertainty = jax.random.uniform(key, (50, 3), minval=0.01, maxval=0.1)
-model_jacobian = jax.random.normal(key, (50, 3, 3))
-physics_state = jax.random.normal(key, (50, 3))
-
-propagated_physics_uncertainty = uncertainty_propagator.propagate_with_physics_constraints(
-    input_uncertainty, model_jacobian, physics_state
-)
-
-# Compute physics-informed confidence
-confidence = uncertainty_propagator.compute_physics_informed_confidence(
-    predictions, propagated_physics_uncertainty, physics_state
-)
-
-print(f"Input uncertainty mean: {jnp.mean(input_uncertainty):.6f}")
-print(f"Physics-propagated uncertainty mean: {jnp.mean(propagated_physics_uncertainty):.6f}")
-print(f"Physics-informed confidence mean: {jnp.mean(confidence):.6f}")
-
-# Uncertainty-aware constraint projection
-projected_params, projected_uncertainty = uncertainty_propagator.uncertainty_aware_constraint_projection(
-    base_params, input_uncertainty
-)
-
-print(f"Original uncertainty std: {jnp.std(input_uncertainty):.6f}")
-print(f"Projected uncertainty std: {jnp.std(projected_uncertainty):.6f}")
-```
-
-### 7. Advanced Neural Operators (NEW)
+### 5. Neural Operators
 
 ```python
 from opifex.neural.operators.foundations import (
@@ -428,27 +281,11 @@ wno = WaveletNeuralOperator(
     rngs=rngs
 )
 
-# Process time-series signals with multiple frequencies
-def create_multi_frequency_signal(n_samples=256):
-    """Create test signal with multiple frequency components"""
-    t = jnp.linspace(0, 1, n_samples)
-    # Combine low, medium, and high frequency components
-    signal = (jnp.sin(2 * jnp.pi * 5 * t) +           # Low frequency
-             0.5 * jnp.sin(2 * jnp.pi * 20 * t) +      # Medium frequency
-             0.2 * jnp.sin(2 * jnp.pi * 50 * t) +      # High frequency
-             0.1 * jax.random.normal(key, (n_samples,))) # Noise
-    return signal
+test_signal = jax.random.normal(key, (1, 1, 128))
+wavelet_output = wno(test_signal, training=False)
+print(f"Wavelet processing: {test_signal.shape} -> {wavelet_output.shape}")
 
-# Test wavelet decomposition
-test_signal = create_multi_frequency_signal(128)
-signal_batch = test_signal[None, None, :]  # Add batch and channel dims
-wavelet_output = wno(signal_batch, training=False)
-
-print(f"Wavelet processing: {signal_batch.shape} -> {wavelet_output.shape}")
-print(f"Original signal std: {jnp.std(test_signal):.4f}")
-print(f"Processed signal std: {jnp.std(wavelet_output[0, 0, :]):.4f}")
-
-# Deep Operator Networks with enhanced features
+# Deep Operator Networks
 deeponet = DeepONet(
     branch_input_dim=100,  # Number of function evaluation points
     trunk_input_dim=2,     # Spatial coordinates (x, y)
@@ -478,236 +315,17 @@ unified_fno = OperatorNetwork(
     rngs=rngs
 )
 
-unified_deeponet = OperatorNetwork(
-    operator_type="deeponet",
-    config={
-        "branch_input_dim": 64,
-        "trunk_input_dim": 1,
-        "branch_hidden_dims": [64, 64],
-        "trunk_hidden_dims": [32, 32],
-        "latent_dim": 64
-    },
-    rngs=rngs
-)
-
-# Test unified interface
 test_data_fno = jax.random.normal(key, (4, 2, 32))
-test_data_deeponet = (
-    jax.random.normal(key, (4, 64)),     # branch
-    jax.random.normal(key, (4, 32, 1))   # trunk
-)
-
-unified_fno_output = unified_fno(test_data_fno)
-unified_deeponet_output = unified_deeponet(*test_data_deeponet)
-
-print(f"Unified FNO output: {unified_fno_output.shape}")
-print(f"Unified DeepONet output: {unified_deeponet_output.shape}")
-```
-
-### 4. Advanced Neural Network Architectures
-
-```python
-from opifex.neural.base import StandardMLP
-
-# Residual MLP with skip connections
-class ResidualMLP(nnx.Module):
-    """MLP with residual connections"""
-
-    def __init__(self, layer_sizes, activation="relu", rngs=None):
-        super().__init__()
-        self.layer_sizes = layer_sizes
-        self.activation = get_activation(activation)
-
-        # Build layers
-        self.layers = []
-        for i in range(len(layer_sizes) - 1):
-            layer = nnx.Linear(
-                in_features=layer_sizes[i],
-                out_features=layer_sizes[i + 1],
-                rngs=rngs
-            )
-            self.layers.append(layer)
-
-    def __call__(self, x):
-        """Forward pass with residual connections"""
-        hidden = x
-
-        for i, layer in enumerate(self.layers[:-1]):  # All but last layer
-            layer_input = hidden
-            hidden = layer(hidden)
-            hidden = self.activation(hidden)
-
-            # Add residual connection if dimensions match
-            if layer_input.shape[-1] == hidden.shape[-1]:
-                hidden = hidden + layer_input
-
-        # Final layer without residual
-        output = self.layers[-1](hidden)
-        return output
-
-# Multi-scale neural network
-class MultiScaleMLP(nnx.Module):
-    """MLP with multiple resolution pathways"""
-
-    def __init__(self, input_dim, output_dim, scales=[1, 2, 4], rngs=None):
-        super().__init__()
-        self.scales = scales
-
-        # Create pathway for each scale
-        self.pathways = []
-        for scale in scales:
-            hidden_dim = 64 * scale
-            pathway = StandardMLP(
-                layer_sizes=[input_dim, hidden_dim, hidden_dim // 2, output_dim],
-                activation="swish",
-                rngs=rngs
-            )
-            self.pathways.append(pathway)
-
-        # Combination layer
-        self.combiner = nnx.Linear(
-            in_features=len(scales) * output_dim,
-            out_features=output_dim,
-            rngs=rngs
-        )
-
-    def __call__(self, x):
-        """Forward pass through multiple scales"""
-        pathway_outputs = []
-
-        for pathway in self.pathways:
-            output = pathway(x)
-            pathway_outputs.append(output)
-
-        # Concatenate and combine
-        combined = jnp.concatenate(pathway_outputs, axis=-1)
-        final_output = self.combiner(combined)
-
-        return final_output
-
-# Create and test advanced architectures
-residual_model = ResidualMLP(
-    layer_sizes=[10, 64, 64, 64, 1],
-    activation="swish",
-    rngs=rngs
-)
-
-multiscale_model = MultiScaleMLP(
-    input_dim=5,
-    output_dim=3,
-    scales=[1, 2, 4],
-    rngs=rngs
-)
-
-# Test forward passes
-x_res = jax.random.normal(key, (8, 10))
-y_res = residual_model(x_res)
-print(f"Residual MLP output: {y_res.shape}")
-
-x_multi = jax.random.normal(key, (8, 5))
-y_multi = multiscale_model(x_multi)
-print(f"Multi-scale MLP output: {y_multi.shape}")
-```
-
-### 5. Neural Operators Examples
-
-```python
-from opifex.neural.operators.foundations import (
-    FourierNeuralOperator, DeepONet, OperatorNetwork,
-    SpectralConvolution, FourierLayer
-)
-
-# Fourier Neural Operator (FNO)
-fno_config = {
-    "in_channels": 1,
-    "out_channels": 1,
-    "hidden_channels": 64,
-    "modes": 16,
-    "num_layers": 4,
-    "activation": nnx.gelu,
-    "use_mixed_precision": False,
-    "dtype": jnp.float32
-}
-
-fno = OperatorNetwork(
-    operator_type="fno",
-    config=fno_config,
-    rngs=rngs
-)
-
-# Generate 1D function data for FNO
-batch_size, grid_size = 32, 64
-input_functions = jax.random.normal(key, (batch_size, 1, grid_size))
-output_functions = fno(input_functions)
-
-print(f"FNO input shape: {input_functions.shape}")   # (32, 1, 64)
-print(f"FNO output shape: {output_functions.shape}") # (32, 1, 64)
-
-# Deep Operator Network (DeepONet)
-deeponet_config = {
-    "branch_input_dim": 64,  # Number of sensor points
-    "trunk_input_dim": 1,    # Coordinate dimension
-    "branch_hidden_dims": [128, 128],
-    "trunk_hidden_dims": [64, 64],
-    "latent_dim": 128,
-    "enhanced": False,
-    "activation": nnx.tanh,
-    "dtype": jnp.float32
-}
-
-deeponet = OperatorNetwork(
-    operator_type="deeponet",
-    config=deeponet_config,
-    rngs=rngs
-)
-
-# Generate DeepONet training data
-branch_input = jax.random.normal(key, (16, 64))     # Function values at sensors
-trunk_input = jax.random.uniform(key, (16, 100, 1), minval=0, maxval=1)  # Query points
-
-output = deeponet(branch_input, trunk_input)
-print(f"DeepONet output shape: {output.shape}")  # (16, 100)
-
-# Enhanced DeepONet with physics constraints
-enhanced_config = {
-    "branch_input_dim": 64,
-    "trunk_input_dim": 2,
-    "branch_hidden_dims": [128, 64],
-    "trunk_hidden_dims": [64, 32],
-    "latent_dim": 64,
-    "enhanced": True,
-    "use_attention": True,
-    "attention_heads": 4,
-    "sensor_optimization": True,
-    "num_sensors": 32,
-    "physics_constraints": ["mass_conservation"],
-    "activation": nnx.tanh
-}
-
-enhanced_deeponet = OperatorNetwork(
-    operator_type="deeponet",
-    config=enhanced_config,
-    rngs=rngs
-)
-
-# Test enhanced DeepONet
-branch_2d = jax.random.normal(key, (8, 64))
-trunk_2d = jax.random.uniform(key, (8, 50, 2), minval=-1, maxval=1)
-spatial_coords = jax.random.uniform(key, (50, 2), minval=-1, maxval=1)
-
-enhanced_output = enhanced_deeponet(
-    branch_inputs=branch_2d,
-    trunk_input=trunk_2d,
-    spatial_coords=spatial_coords,
-    training=True
-)
-print(f"Enhanced DeepONet output shape: {enhanced_output.shape}")  # (8, 50)
+print(f"Unified FNO output: {unified_fno(test_data_fno).shape}")
 ```
 
 ### 6. Spectral Convolution Layers
 
+`FourierLayer` is the reusable spectral block underlying the FNO models and can
+be composed into custom networks:
+
 ```python
-from opifex.neural.operators.foundations import SpectralConvolution, FourierLayer
+from opifex.neural.operators.foundations import FourierLayer
 
 # Custom spectral convolution network
 class SpectralNet(nnx.Module):
@@ -775,90 +393,12 @@ y_spectral = spectral_net(x_spectral)
 print(f"Spectral network output: {y_spectral.shape}")  # (16, 1, 128)
 ```
 
-### 7. Multi-Physics Neural Networks
-
-```python
-from opifex.neural.base import StandardMLP
-
-class MultiPhysicsNetwork(nnx.Module):
-    """Neural network for coupled physics problems"""
-
-    def __init__(self, physics_types, shared_layers, specific_layers, rngs):
-        super().__init__()
-        self.physics_types = physics_types
-
-        # Shared encoder
-        self.shared_encoder = StandardMLP(
-            layer_sizes=[3] + shared_layers,  # (x, y, t) input
-            activation="swish",
-            rngs=rngs
-        )
-
-        # Physics-specific decoders
-        self.physics_decoders = {}
-        for physics_type in physics_types:
-            decoder = StandardMLP(
-                layer_sizes=[shared_layers[-1]] + specific_layers + [1],
-                activation="tanh",
-                rngs=rngs
-            )
-            self.physics_decoders[physics_type] = decoder
-
-        # Coupling layer
-        self.coupling_layer = StandardMLP(
-            layer_sizes=[len(physics_types), 32, len(physics_types)],
-            activation="relu",
-            rngs=rngs
-        )
-
-    def __call__(self, x, y, t):
-        """Forward pass for multi-physics prediction"""
-        # Combine coordinates
-        coords = jnp.stack([x, y, t], axis=-1)
-
-        # Shared encoding
-        shared_features = self.shared_encoder(coords)
-
-        # Physics-specific predictions
-        physics_outputs = []
-        for physics_type in self.physics_types:
-            decoder = self.physics_decoders[physics_type]
-            output = decoder(shared_features)
-            physics_outputs.append(output)
-
-        # Stack outputs: (batch, n_physics)
-        stacked_outputs = jnp.concatenate(physics_outputs, axis=-1)
-
-        # Apply coupling
-        coupled_outputs = self.coupling_layer(stacked_outputs)
-
-        return coupled_outputs
-
-# Create multi-physics network for heat-fluid coupling
-physics_types = ["temperature", "velocity_x", "velocity_y", "pressure"]
-multi_physics_net = MultiPhysicsNetwork(
-    physics_types=physics_types,
-    shared_layers=[64, 64],
-    specific_layers=[32, 32],
-    rngs=rngs
-)
-
-# Test multi-physics prediction
-x_coords = jax.random.uniform(key, (100,), minval=0, maxval=1)
-y_coords = jax.random.uniform(key, (100,), minval=0, maxval=1)
-t_coords = jax.random.uniform(key, (100,), minval=0, maxval=1)
-
-multi_output = multi_physics_net(x_coords, y_coords, t_coords)
-print(f"Multi-physics output shape: {multi_output.shape}")  # (100, 4)
-print(f"Physics variables: {physics_types}")
-```
-
-### 8. Training Neural Networks
+### 7. Training Neural Networks
 
 ```python
 import optax
 from opifex.core.training.trainer import Trainer
-from opifex.training.physics_losses import PhysicsInformedLoss, PhysicsLossConfig
+from opifex.core.physics.losses import PhysicsInformedLoss, PhysicsLossConfig
 
 # Standard supervised training
 def train_supervised_model():
@@ -917,13 +457,6 @@ def train_supervised_model():
 def train_physics_informed_model():
     """Train with physics constraints"""
 
-    # Heat equation: ∂u/∂t = α ∂²u/∂x²
-    def heat_pde(u_fn, x, t):
-        u_t = jax.grad(lambda t: u_fn(x, t))(t)
-        u_xx = jax.grad(jax.grad(lambda x: u_fn(x, t)))(x)
-        alpha = 0.1
-        return u_t - alpha * u_xx
-
     # Create PINN model
     pinn_model = StandardMLP(
         layer_sizes=[2, 50, 50, 1],  # (x, t) -> u
@@ -944,212 +477,17 @@ def train_physics_informed_model():
         domain_type="1d"
     )
 
-    # Training data
-    n_physics = 1000
-    n_boundary = 100
-
-    # Interior points for PDE
-    x_physics = jax.random.uniform(key, (n_physics,), minval=0, maxval=1)
-    t_physics = jax.random.uniform(key, (n_physics,), minval=0, maxval=1)
-
-    # Boundary points
-    x_boundary = jnp.array([0.0, 1.0])  # Left and right boundaries
-    t_boundary = jax.random.uniform(key, (n_boundary,), minval=0, maxval=1)
-
-    # Training step with physics loss
-    optimizer = nnx.Optimizer(pinn_model, optax.adam(1e-3))
-
-    def pinn_train_step():
-        def loss_fn(model):
-            # Physics loss
-            def u_pred(x, t):
-                return model(jnp.array([x, t])[None, :])[0, 0]
-
-            physics_residuals = jax.vmap(
-                lambda x, t: heat_pde(u_pred, x, t)
-            )(x_physics, t_physics)
-            physics_loss_val = jnp.mean(physics_residuals**2)
-
-            # Boundary loss (u=0 at boundaries)
-            boundary_coords = jnp.stack([
-                jnp.repeat(x_boundary, len(t_boundary) // 2),
-                jnp.tile(t_boundary, 2)
-            ], axis=1)
-            boundary_pred = model(boundary_coords)
-            boundary_loss_val = jnp.mean(boundary_pred**2)
-
-            # Initial condition loss (u(x,0) = sin(πx))
-            x_initial = jax.random.uniform(key, (100,), minval=0, maxval=1)
-            t_initial = jnp.zeros_like(x_initial)
-            initial_coords = jnp.stack([x_initial, t_initial], axis=1)
-            initial_pred = model(initial_coords)
-            initial_true = jnp.sin(jnp.pi * x_initial)[:, None]
-            initial_loss_val = jnp.mean((initial_pred - initial_true)**2)
-
-            total_loss = physics_loss_val + 10 * boundary_loss_val + 10 * initial_loss_val
-            return total_loss
-
-        loss, grads = nnx.value_and_grad(loss_fn)(pinn_model)
-        optimizer.update(grads)
-        return loss
-
-    # PINN training loop
-    for epoch in range(2000):
-        loss = pinn_train_step()
-
-        if epoch % 200 == 0:
-            print(f"PINN Epoch {epoch}, Loss: {loss:.6f}")
-
     return pinn_model
 
-# Train both models
-print("Training supervised model...")
 supervised_model = train_supervised_model()
-
-print("\nTraining physics-informed model...")
 pinn_model = train_physics_informed_model()
-
-print("\nTraining completed!")
 ```
 
-## ✅ ADVANCED BAYESIAN & UNCERTAINTY QUANTIFICATION COMPLETED (Version 1)
-
-### ✅ **PROBABILISTIC FRAMEWORK ENHANCEMENT - VERSION 1 COMPLETE**
-
-**Status**: ✅ **FULLY IMPLEMENTED AND TESTED**
-**Implementation**: `bayesian/uncertainty_quantification.py` - 1,102 lines with advanced uncertainty methods
-**Testing**: ✅ **58/58 Bayesian tests passing (all listed checks passing)**
-**Coverage**: 47% test coverage on uncertainty quantification with full validation
-
-#### Uncertainty Quantification Classes
-
-Canonical entry points (see ``opifex.uncertainty.aggregators``):
-
-- ``UncertaintyQuantifier`` — primary façade for epistemic/aleatoric
-  decomposition + calibration.
-- ``EnhancedUncertaintyQuantifier`` — multi-source variant that wires
-  ``EnsembleEpistemicUncertainty`` + ``DistributionalAleatoricUncertainty``
-  + ``MultiSourceUncertaintyAggregator`` into a single
-  ``enhanced_decompose_uncertainty`` call returning an
-  ``EnhancedUncertaintyComponents`` value object.
-- ``MultiSourceUncertaintyAggregator`` — pure aggregation kernel for
-  combining heterogeneous uncertainty sources.
-
-```python
-from opifex.uncertainty.aggregators import (
-    EnhancedUncertaintyQuantifier,
-    MultiSourceUncertaintyAggregator,
-)
-
-quantifier = EnhancedUncertaintyQuantifier(
-    ensemble_size=5,
-    distributional_output=True,
-    multi_source_aggregation=True,
-)
-result = quantifier.enhanced_decompose_uncertainty(
-    ensemble_predictions=ensemble_predictions,
-    distributional_std=aleatoric_std,
-)
-```
-
-#### ✅ **Enhanced Integration**
-
-**Module Integration**:
-
-- ✅ **Backward Compatibility**: All existing uncertainty quantification methods preserved
-- ✅ **Seamless Integration**: New classes work alongside existing Bayesian framework
-- ✅ **Unified Interface**: Consistent API design across all uncertainty methods
-- ✅ **Production Ready**: Full testing and validation
-
-**Framework Integration**:
-
-- ✅ **Physics-Informed Priors**: Ready for integration with conservation law constraints
-- ✅ **Training Infrastructure**: Compatible with existing training and optimization systems
-- ✅ **Neural Operators**: Uncertainty quantification for operator learning applications
-- ✅ **Neural DFT**: Uncertainty estimation for quantum chemistry applications
-
-### 📋 **REMAINING PROBABILISTIC PHASES**
-
-**Version 2: Enhanced Calibration Framework** ⏳ **PLANNED**
-
-- Advanced temperature scaling with physics constraints
-- Isotonic regression for non-parametric calibration
-- Conformal prediction intervals with coverage guarantees
-
-**Version 3: Physics-Informed Integration** ⏳ **PLANNED**
-
-- Conservation law priors for uncertainty estimation
-- Domain-specific prior distributions
-- Hierarchical Bayesian approaches for scientific computing
-
-**Version 4: Production Integration & Testing** ⏳ **PLANNED**
-
-- Real-time uncertainty estimation capabilities
-- Performance optimization and benchmarking
-- Full integration testing
-
-## ✅ NEURAL OPERATORS FOUNDATIONS COMPLETED (Version 1.3)
-
-### Neural Operators ✅ **COMPLETED**
-
-- **`operators/foundations.py`**: Complete neural operator foundations (641 lines) ✅
-  - **FourierNeuralOperator**: Complete FNO implementation with spectral convolutions
-  - **DeepOperatorNetwork**: Branch-trunk architecture foundations
-  - **SpectralConvolution**: FFT-based spectral convolution layers
-  - **OperatorNetwork**: Universal operator learning interfaces
-- **Testing**: ✅ **26/26 neural operator tests passing (all listed checks passing)**
-- **Code Quality**: ✅ **All lint violations resolved, 17/17 pre-commit hooks passing**
-
-### ✅ **VERSION 1.5 ADVANCED NEURAL OPERATORS - COMPLETED**
-
-#### ✅ **Neural Operator Foundations** - Complete Implementation
-
-**Status**: ✅ **FULLY IMPLEMENTED AND TESTED**
-**Implementation**: `operators/foundations.py` - 894 lines with full operator library
-**Testing**: ✅ **102/102 neural operator tests passing (all listed checks passing)**
-**Coverage**: 93% test coverage on neural operator foundations
-
-**Core Operators**:
-
-- ✅ **Fourier Neural Operators (FNO)**: Spectral convolution with factorization support
-- ✅ **Deep Operator Networks (DeepONet)**: Branch-trunk architecture with physics integration
-- ✅ **Graph Neural Operators (GNO)**: Message passing for irregular domains
-- ✅ **Physics-Informed Neural Operators**: Unified physics constraint framework
-
-**Advanced Operators (NEW)**:
-
-- ✅ **Multi-Scale Fourier Neural Operators (MS-FNO)**: Hierarchical resolution handling
-- ✅ **Latent Neural Operators (LNO)**: Attention-based compression with latent representations
-- ✅ **Wavelet Neural Operators (WNO)**: Multi-scale wavelet decomposition with Daubechies-4
-
-**Enhanced Features**:
-
-- ✅ **Physics-Aware Attention**: Multi-head attention with conservation law constraints
-- ✅ **Sensor Optimization**: Learnable sensor placement for DeepONet
-- ✅ **Multi-Physics Support**: Coupled physics systems with adaptive weighting
-- ✅ **Parameter Factorization**: Tucker and CP decomposition for memory efficiency
-- ✅ **Adaptive Architectures**: Multi-resolution and self-adaptive operators
-
-### Physics-Informed Neural Networks 📋 **PLANNED**
-
-- **`pinn.py`**: Standard physics-informed neural networks
-- **`xpinn.py`**: Extended PINNs with domain decomposition
-- **`vpinn.py`**: Variational PINNs with weak formulations
-- **`cpinn.py`**: Conservative PINNs for conservation laws
-
-### Advanced PINN Variants 📋 **PLANNED**
-
-- **`fourier_pinn.py`**: Fourier PINNs for spectral bias mitigation
-- **`bayesian_pinn.py`**: Bayesian PINNs with uncertainty quantification
-- **`adaptive_pinn.py`**: Adaptive training and loss weighting
-
-## Differentiable Kohn-Sham DFT ✅ **IMPLEMENTED**
+## Differentiable Kohn-Sham DFT
 
 The `quantum/` subpackage provides a native-JAX molecular Kohn-Sham DFT solver
 and a trainable neural exchange-correlation functional (see
 [`quantum/README.md`](quantum/README.md)).
-
-### Core components
 
 - **`quantum/dft/`**: Restricted Kohn-Sham SCF (`SCFSolver`) on the
   McMurchie-Davidson Gaussian-integral backend, with LDA / PBE functionals,
@@ -1158,135 +496,28 @@ and a trainable neural exchange-correlation functional (see
   exchange-correlation functional (`NeuralXCFunctional`) wired into the SCF
   with exact `dE/dtheta` for end-to-end learned-XC training.
 
-### Planned extensions 📋 **PLANNED**
-
-- **`hybrid_dft.py`**: Hybrid classical-neural exchange-correlation.
-- **`multifidelity_dft.py`**: Multi-fidelity quantum mechanical models.
-
-## Implementation Status
-
-### ✅ **VERSION 1.2 + 1.3 COMPLETED**
-
-**Current Status**: ✅ **NEURAL INFRASTRUCTURE COMPLETE**
-**Implementation**: 1,436+ lines across 3 major components (base.py + activations.py + operators/foundations.py)
-**Testing**: ✅ **231 tests passed, 0 skipped** (all critical tests passing)
-**Quality**: Production-ready with full validation
-
-**Completed Tasks**:
-
-- ✅ **Task 1.2.1**: Standard MLP Implementation - Complete FLAX NNX neural networks
-- ✅ **Task 1.2.2**: Activation Function Library - 27 functions with registry system
-- ✅ **Task 1.2.3**: Basic Training Infrastructure - Complete training framework (see `../training/`)
-- ✅ **Task 1.3.1**: Physics-Informed Loss Functions - Multi-physics composition (see `../training/`)
-- ✅ **Task 1.3.2**: Advanced Optimization Algorithms - Meta-optimization (see `../optimization/`)
-- ✅ **Task 1.3.3**: Neural Operator Foundations - FNO, DeepONet, and operator learning primitives
-
-### 🎯 **NEXT TARGET: Version 1.5 Advanced Neural Operators**
-
-**Version ID**: SCIML-VERSION-1.5
-**Priority**: 🔴 **HIGH** - Core neural operator functionality for scientific computing
-**Estimated Duration**: 2-3 weeks
-**Status**: 📋 **READY TO BEGIN** - All prerequisites satisfied
-
-**Implementation Readiness**: ⭐⭐⭐⭐⭐ (5/5)
-
-- ✅ **Complete Foundation**: Version 1.1 + 1.2 + 1.3 + 1.4 provide full neural foundation
-- ✅ **All Dependencies Ready**: JAX ecosystem operational, GPU infrastructure complete
-- ✅ **Architecture Established**: Clear integration patterns with unified interfaces
-- ✅ **Quality Standards**: Production-ready patterns established (231 tests passing)
-- ✅ **Technical Patterns**: Modern Python, JAX integration, full validation
-
-### Creative Version Architecture Complete ✅
-
-All neural architectures have been comprehensively designed during creative phases:
-
-#### Creative Version 1: Neural Operator Architecture ✅ COMPLETE
-
-**Architectural Decisions Finalized**:
-
-- **Modular Component Architecture**: Composition-based design for maximum flexibility
-- **Physics-Cross-Attention**: Multi-head attention with conservation law integration
-- **Parameter Factorization**: Low-rank decompositions for 50-80% memory reduction
-- **Component Composition**: SpectralConvolution, PhysicsCrossAttention, ParameterFactorization
-
-#### Creative Version 2: Physics Loss Architecture ✅ COMPLETE
-
-**Architectural Decisions Finalized**:
-
-- **Hierarchical Loss Composition**: Data, PDE, boundary, and conservation losses
-- **Adaptive Weighting**: Gradient-based automatic balancing
-- **Automatic Residual Computation**: JAX autodiff for arbitrary-order PDE residuals
-- **Multi-Physics Coupling**: Unified framework for coupled physics problems
-
 ## Key Features
 
-- **FLAX NNX Exclusive**: All implementations use modern FLAX NNX ✅
-- **JAX Integration**: Native JAX arrays and automatic differentiation ✅
-- **Type Safety**: Complete type annotations with modern Python syntax ✅
-- **Performance Optimization**: Optimized for scientific computing workloads ✅
-- **Neural DFT Ready**: Foundation prepared for quantum chemistry applications ✅
-- **Full Testing**: Part of 231/231 tests passing ✅
-- **Production Quality**: All pre-commit hooks passing, professional standards ✅
-
-## Getting Started
-
-```python
-import jax
-import jax.numpy as jnp
-import flax.nnx as nnx
-from opifex.neural.base import StandardMLP
-from opifex.neural.activations import get_activation, register_activation
-
-# Basic usage example
-key = jax.random.PRNGKey(42)
-rngs = nnx.Rngs(key)
-
-# Create a neural network
-model = StandardMLP(
-    layer_sizes=[10, 64, 64, 1],
-    activation="swish",
-    rngs=rngs
-)
-
-# Forward pass
-x = jax.random.normal(key, (32, 10))
-y = model(x)
-print(f"Output shape: {y.shape}")  # (32, 1)
-```
+- **FLAX NNX**: All implementations use modern FLAX NNX.
+- **JAX Integration**: Native JAX arrays and automatic differentiation.
+- **Type Safety**: Complete type annotations with modern Python syntax.
+- **Quantum-Chemistry Ready**: Foundation for atomistic and electronic-structure
+  applications.
 
 ## Integration Points
 
-### Core Problems Module ✅
-
-- **Neural DFT Problems**: Direct integration with `ElectronicStructureProblem`
-- **Molecular Systems**: Seamless handling of atomic coordinates and properties
-- **Physics Constraints**: Built-in validation of quantum mechanical principles
-
-### Training Infrastructure ✅
-
-- **Complete Training Framework**: See `../training/basic_trainer.py` (666 lines)
-- **Loss Functions**: MSE, physics-informed, and quantum-specific losses
-- **Optimization**: Integration with Optax optimizers
-- **Metrics**: Full monitoring and validation
-
-### Geometry Integration ✅
-
-- **Molecular Geometry**: Direct integration with 3D molecular systems
-- **Symmetry Handling**: Permutation symmetry for molecular neural networks
-- **Boundary Conditions**: Physics-aware boundary condition enforcement
+- **Core quantum module**: integrates with `ElectronicStructureProblem`,
+  molecular systems, and physics constraints.
+- **Training infrastructure**: see `../training/` for trainers, loss functions
+  (MSE, physics-informed, quantum-specific), and Optax-based optimization.
+- **Geometry**: molecular geometry, permutation symmetry, and boundary
+  conditions integrate with `../geometry/`.
 
 ## Dependencies
 
-- **JAX 0.6.1+**: Core array operations and automatic differentiation ✅
-- **FLAX NNX 0.10.6+**: Modern neural network framework ✅
-- **jaxtyping**: Type annotations for JAX arrays ✅
-- **Python 3.11+**: Modern Python features and type system ✅
-
-## Future Enhancements (Version 1.3+)
-
-### Advanced Neural Components
-
-- **Physics-Informed Loss Functions**: Hierarchical loss composition with adaptive weighting
-- **Neural Operator Primitives**: FNO, DeepONet, and modern operator learning
-- **Advanced Optimization**: Learn-to-optimize foundations and meta-learning
-- **Uncertainty Quantification**: Bayesian neural networks with calibrated uncertainty
+- **JAX**: Core array operations and automatic differentiation.
+- **FLAX NNX**: Modern neural network framework.
+- **jaxtyping**: Type annotations for JAX arrays.
+- **Python 3.11+**: Modern Python features and type system.
+</content>
+</invoke>

@@ -31,14 +31,13 @@ physics_attention = PhysicsAwareAttention(
 )
 
 # Physics-informed neural operator
-from opifex.neural.operators.physics import PhysicsInformedNeuralOperator
+from opifex.neural.operators.physics import PhysicsInformedOperator
 
-pino = PhysicsInformedNeuralOperator(
-    in_channels=2,
-    out_channels=1,
-    hidden_channels=64,
-    modes=16,
-    physics_constraints=['conservation_laws'],
+pino = PhysicsInformedOperator(
+    layer_sizes=[2, 64, 64, 1],
+    physics_type='pde',
+    physics_weight=1.0,
+    data_weight=1.0,
     rngs=rngs
 )
 ```

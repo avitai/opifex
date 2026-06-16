@@ -1,379 +1,405 @@
 # Data API Reference
 
-The `opifex.data` package provides **Grain-based data loading** infrastructure for scientific machine learning applications with JAX-native performance and efficient multi-process data pipelines.
+The `opifex.data` package provides **datarax-based data loading** infrastructure for scientific machine learning applications with JAX-native performance and single-pass streaming pipelines.
 
 ## 🎯 Overview
 
-Opifex uses [Grain](https://github.com/google/grain) for high-performance data loading with:
+Opifex uses [datarax](https://github.com/avitai/datarax) `Pipeline` streaming for high-performance data loading with:
 
-- **On-demand PDE solution generation**: Generate data as needed, no pre-computation
-- **Lazy evaluation**: Memory-efficient streaming for large datasets
-- **Multi-process parallel loading**: Efficient CPU utilization with worker processes
-- **JAX-native pipelines**: Seamless integration with JAX training loops
-- **Composable transforms**: Modular data preprocessing and augmentation
-- **Automatic sharding**: Distributed training support with `grain.ShardByJaxProcess`
+- **Eager PDE solution generation**: jit + vmap generators produce whole datasets in one batched call
+- **Single-pass pipelines**: memory-efficient streaming that consumers drain once
+- **JAX-native batches**: each batch is a plain dict of arrays, ready for JAX training loops
+- **Channels-first contract**: every field is `(n, C, *spatial)` for direct use by neural operators
+- **Reproducible sampling**: deterministic `seed` controls both generation and the train/val split
 
 ### Architecture
 
 ```
 Data Pipeline Flow:
-[DataSource] → [Sampler] → [Transforms] → [Batching] → [DataLoader] → Training
+[generate_* (jit+vmap)] → [train/val split] → [PDELoaders(train, val)] → [Pipeline batches] → Training
 ```
 
 **Components:**
 
-1. **DataSource**: Generates or loads individual samples (e.g., `BurgersDataSource`)
-2. **Sampler**: Controls iteration order and sharding (e.g., `IndexSampler`)
-3. **Transforms**: Process data (normalization, augmentation, spectral features)
-4. **Batching**: Combine samples into batches
-5. **DataLoader**: Orchestrates the entire pipeline with multi-processing
+1. **Generators** (`opifex.data.sources`): eager `generate_*` functions that return a dataset dict `{"input", "output"}`
+2. **Loader factories** (`opifex.data.loaders`): `create_*_loader` builders that wrap generated data in datarax `Pipeline`s
+3. **PDELoaders**: a frozen dataclass bundling the `train` / `val` pipelines plus split sizes and resolution
+4. **Normalization** (`opifex.core.normalization`): `GaussianNormalizer` for optional z-score scaling
 
 ## 🏭 Factory Functions
 
-Factory functions provide the simplest way to create configured data loaders for common PDE problems.
+Factory functions are the simplest way to create configured data loaders for common PDE problems. Each returns a frozen `PDELoaders` dataclass:
+
+```python
+@dataclass(frozen=True)
+class PDELoaders:
+    train: Pipeline   # single-pass datarax pipeline of training batches
+    val: Pipeline     # single-pass datarax pipeline of validation batches
+    n_train: int      # number of training samples
+    n_val: int        # number of validation samples
+    resolution: int   # spatial resolution of the generated fields
+```
+
+A datarax `Pipeline` is **single-pass**: drain it exactly once. Each batch is a dict
+`{"input": (b, C, *spatial), "output": (b, C, *spatial)}` in channels-first layout.
 
 ### create_burgers_loader
 
-Create a data loader for the Burgers equation: `∂u/∂t + u∂u/∂x = ν∂²u/∂x²`
+Create loaders for the Burgers equation: `∂u/∂t + u∂u/∂x = ν∂²u/∂x²` (1D, `C=1`).
 
 ```python
 from opifex.data.loaders import create_burgers_loader
 
-loader = create_burgers_loader(
-    n_samples=1000,              # Number of PDE solutions
-    batch_size=32,               # Batch size for training
-    resolution=64,               # Spatial grid resolution
-    time_steps=5,                # Number of time steps
-    viscosity_range=(0.01, 0.1), # Range for viscosity parameter
-    time_range=(0.0, 2.0),       # Time integration range
-    dimension="2d",              # "1d" or "2d"
-    shuffle=True,                # Shuffle samples
-    seed=42,                     # Random seed
-    worker_count=4,              # Parallel workers
-    enable_normalization=True,   # Apply z-score normalization
-    enable_spectral=False,       # Add FFT features
-    enable_augmentation=False,   # Add noise augmentation
+loaders = create_burgers_loader(
+    n_samples=1000,               # total dataset size (before split)
+    resolution=128,               # spatial grid resolution (1D)
+    batch_size=32,                # batch size for both train and val
+    viscosity_range=(0.1, 0.1),   # range for the viscosity parameter
+    time_range=(0.0, 1.0),        # time integration range
+    val_fraction=0.2,             # fraction held out for validation
+    seed=42,                      # random seed for generation + split
 )
 
-# Use in training loop
-for batch in loader:
-    x = batch["input"]   # Initial condition
-    y = batch["output"]  # Solution trajectory
+# Drain the single-pass training pipeline
+for batch in loaders.train:
+    x = batch["input"]    # (b, 1, resolution) initial condition
+    y = batch["output"]   # (b, 1, resolution) final-time solution
     # Train model...
+
+# Validation pipeline (drain once)
+for batch in loaders.val:
+    ...
 ```
 
 **Parameters:**
 
-- `n_samples` (int): Total dataset size
-- `batch_size` (int): Training batch size
-- `resolution` (int): Spatial discretization resolution
-- `time_steps` (int): Number of time steps in trajectory
-- `viscosity_range` (tuple): Min/max viscosity for generation
-- `time_range` (tuple): Start/end time for integration
-- `dimension` (str): "1d" or "2d" problem dimension
-- `shuffle` (bool): Randomize sample order
-- `seed` (int): Random seed for reproducibility
-- `worker_count` (int): Number of parallel data loading workers
-- `enable_normalization` (bool): Apply z-score normalization
-- `normalization_mean` (float): Mean for normalization (default: 0.0)
-- `normalization_std` (float): Std for normalization (default: 1.0)
-- `enable_spectral` (bool): Add FFT features as additional input
-- `enable_augmentation` (bool): Add Gaussian noise for robustness
-- `augmentation_noise_level` (float): Noise standard deviation (default: 0.01)
+- `n_samples` (int): total dataset size before the train/val split
+- `resolution` (int): spatial discretization (1D)
+- `batch_size` (int): batch size for the train and val pipelines
+- `viscosity_range` (tuple): min/max viscosity for generation
+- `time_range` (tuple): start/end time for integration
+- `val_fraction` (float): fraction of samples held out for validation
+- `seed` (int): random seed for reproducible generation and splitting
 
-**Returns:** `grain.DataLoader` ready for iteration
+**Returns:** `PDELoaders` with `train` / `val` pipelines, `n_train`, `n_val`, and `resolution`.
 
 ### create_darcy_loader
 
-Create a data loader for Darcy flow: `-∇·(a(x)∇u) = f`
+Create loaders for Darcy flow: `-∇·(a(x)∇u) = f` (2D, `C=1`). Maps the permeability
+coefficient field `a(x)` to the steady-state pressure `u(x)`.
 
 ```python
 from opifex.data.loaders import create_darcy_loader
 
-loader = create_darcy_loader(
+loaders = create_darcy_loader(
     n_samples=1000,
+    resolution=64,                # 64×64 grid
     batch_size=32,
-    resolution=85,               # Grid resolution (85×85)
-    viscosity_range=(0.5, 2.0),  # Permeability coefficient range
-    shuffle=True,
+    coeff_range=(0.1, 1.0),       # permeability coefficient range
+    field_type="smooth",          # "smooth" (default) or "binary"
+    val_fraction=0.2,
     seed=42,
-    worker_count=4,
-    enable_normalization=True,
 )
 
-for batch in loader:
-    permeability = batch["input"]   # a(x) - permeability field
-    pressure = batch["output"]      # u(x) - pressure field
+for batch in loaders.train:
+    permeability = batch["input"]   # (b, 1, 64, 64) a(x)
+    pressure = batch["output"]      # (b, 1, 64, 64) u(x)
 ```
 
 **Key Parameters:**
 
-- `resolution` (int): Grid size (default: 85 for 85×85 grid)
-- `viscosity_range` (tuple): Range for permeability coefficient
-- Other parameters same as `create_burgers_loader`
+- `resolution` (int): grid size (default: 64 for a 64×64 grid)
+- `coeff_range` (tuple): range for the permeability coefficient
+- `field_type` (str): `"smooth"` (default) or `"binary"` coefficient fields
+- `val_fraction`, `seed`, `batch_size`, `n_samples`: as in `create_burgers_loader`
 
 ### create_diffusion_loader
 
-Create a data loader for diffusion-advection: `∂u/∂t + v·∇u = κ∇²u`
+Create loaders for diffusion-advection: `∂u/∂t + v·∇u = κ∇²u` (2D, `C=1`).
 
 ```python
 from opifex.data.loaders import create_diffusion_loader
 
-loader = create_diffusion_loader(
+loaders = create_diffusion_loader(
     n_samples=1000,
-    batch_size=32,
     resolution=64,
-    time_steps=5,
-    shuffle=True,
+    batch_size=32,
+    diffusion_range=(0.01, 0.1),  # κ range
+    advection_range=(-1.0, 1.0),  # v range
+    val_fraction=0.2,
     seed=42,
-    worker_count=4,
 )
+
+for batch in loaders.train:
+    x = batch["input"]    # (b, 1, 64, 64) initial field
+    y = batch["output"]   # (b, 1, 64, 64) final-time field
+```
+
+### create_navier_stokes_loader
+
+Create loaders for the incompressible Navier–Stokes equations (2D, `C=2` for the
+`(u, v)` velocity components).
+
+```python
+from opifex.data.loaders import create_navier_stokes_loader
+
+loaders = create_navier_stokes_loader(
+    n_samples=1000,
+    resolution=64,
+    batch_size=32,
+    viscosity_range=(0.001, 0.01),
+    time_range=(0.0, 1.0),
+    val_fraction=0.2,
+    seed=42,
+)
+
+for batch in loaders.train:
+    x = batch["input"]    # (b, 2, 64, 64) initial (u, v)
+    y = batch["output"]   # (b, 2, 64, 64) final-time (u, v)
 ```
 
 ### create_shallow_water_loader
 
-Create a data loader for shallow water equations (conservation of mass and momentum).
+Create loaders for the shallow water equations (2D, `C=3` for `(h, u, v)` — height
+and the two velocity components). No extra physics ranges are exposed.
 
 ```python
 from opifex.data.loaders import create_shallow_water_loader
 
-loader = create_shallow_water_loader(
-    n_samples=500,
-    batch_size=16,
+loaders = create_shallow_water_loader(
+    n_samples=1000,
     resolution=64,
-    shuffle=True,
+    batch_size=32,
+    val_fraction=0.2,
     seed=42,
-    worker_count=4,
 )
+
+for batch in loaders.train:
+    x = batch["input"]    # (b, 3, 64, 64) initial (h, u, v)
+    y = batch["output"]   # (b, 3, 64, 64) final-time (h, u, v)
 ```
 
 ## 📦 Data Sources
 
-Data sources implement the `grain.RandomAccessDataSource` interface for lazy, on-demand data generation.
-
-### BurgersDataSource
-
-Generates Burgers equation solutions on-demand.
+Data sources are eager `generate_*` functions in `opifex.data.sources`. Each is built on
+a `jit` + `vmap` kernel and returns the **whole dataset in one call** as a dict:
 
 ```python
-from opifex.data.sources import BurgersDataSource
+{"input": ndarray, "output": ndarray}   # both channels-first (n, C, *spatial)
+```
 
-source = BurgersDataSource(
+The operator maps a conditioning field (`"input"`) to the **final-time** solution
+(`"output"`). All signatures are keyword-only.
+
+### generate_burgers
+
+Burgers equation (1D, `C=1`).
+
+```python
+from opifex.data.sources import generate_burgers
+
+data = generate_burgers(
+    n_samples=1000,
+    resolution=128,
+    viscosity_range=(0.1, 0.1),
+    time_range=(0.0, 1.0),
+    seed=42,
+)
+print(data["input"].shape)   # (1000, 1, 128)
+print(data["output"].shape)  # (1000, 1, 128)
+```
+
+### generate_darcy
+
+Darcy flow (2D, `C=1`): permeability `a(x)` → pressure `u(x)`.
+
+```python
+from opifex.data.sources import generate_darcy
+
+data = generate_darcy(
     n_samples=1000,
     resolution=64,
-    time_steps=5,
-    viscosity_range=(0.01, 0.1),
-    time_range=(0.0, 2.0),
-    dimension="2d",
+    coeff_range=(0.1, 1.0),
+    field_type="smooth",   # or "binary"
     seed=42,
 )
-
-# Access individual samples
-sample = source[0]  # Returns dict with 'input', 'output', 'coords', 'times'
-print(len(source))  # 1000
+print(data["input"].shape)   # (1000, 1, 64, 64)
 ```
 
-**Features:**
+### generate_diffusion
 
-- Deterministic generation: same index → same sample
-- Lazy evaluation: solutions computed on access
-- Automatic initial condition generation (Gaussian bumps, sine waves, etc.)
-- Numerical PDE solver integration
-
-### DarcyDataSource
-
-Generates Darcy flow solutions (permeability → pressure mapping).
+Diffusion-advection (2D, `C=1`).
 
 ```python
-from opifex.data.sources import DarcyDataSource
+from opifex.data.sources import generate_diffusion
 
-source = DarcyDataSource(
-    n_samples=1000,
-    resolution=85,
-    viscosity_range=(0.5, 2.0),
-    seed=42,
-)
-```
-
-### DiffusionDataSource
-
-Generates diffusion-advection equation solutions.
-
-```python
-from opifex.data.sources import DiffusionDataSource
-
-source = DiffusionDataSource(
+data = generate_diffusion(
     n_samples=1000,
     resolution=64,
-    time_steps=5,
+    diffusion_range=(0.01, 0.1),
+    advection_range=(-1.0, 1.0),
     seed=42,
 )
 ```
 
-### ShallowWaterDataSource
+### generate_navier_stokes
 
-Generates shallow water equation solutions.
+Incompressible Navier–Stokes (2D, `C=2` for `(u, v)`).
 
 ```python
-from opifex.data.sources import ShallowWaterDataSource
+from opifex.data.sources import generate_navier_stokes
 
-source = ShallowWaterDataSource(
+data = generate_navier_stokes(
+    n_samples=1000,
+    resolution=64,
+    viscosity_range=(0.001, 0.01),
+    time_range=(0.0, 1.0),
+    seed=42,
+)
+print(data["output"].shape)  # (1000, 2, 64, 64)
+```
+
+### generate_shallow_water
+
+Shallow water equations (2D, `C=3` for `(h, u, v)`).
+
+```python
+from opifex.data.sources import generate_shallow_water
+
+data = generate_shallow_water(
     n_samples=500,
     resolution=64,
     seed=42,
 )
+print(data["output"].shape)  # (500, 3, 64, 64)
 ```
 
-## 🔄 Transforms
+## 🔄 Normalization
 
-Grain-compliant transforms for data preprocessing and augmentation.
-
-### NormalizeTransform
-
-Apply z-score normalization: `(x - mean) / std`
+The old Grain `opifex.data.transforms` subpackage (z-score / spectral / noise transforms)
+has been removed; there is no in-pipeline transform replacement. Apply normalization
+explicitly with `GaussianNormalizer` from `opifex.core.normalization`.
 
 ```python
-from opifex.data.transforms import NormalizeTransform
+import jax.numpy as jnp
+from opifex.core.normalization import GaussianNormalizer
+from opifex.data.sources import generate_darcy
 
-transform = NormalizeTransform(
-    mean=0.0,
-    std=1.0,
-    epsilon=1e-8,  # Prevent division by zero
-)
+data = generate_darcy(n_samples=1000, resolution=64, seed=42)
+inputs = jnp.asarray(data["input"])
 
-# Normalizes both 'input' and 'output' in sample dict
-normalized_sample = transform.map(sample)
+# Fit on training data, then normalize / denormalize
+normalizer = GaussianNormalizer.fit(inputs)
+normalized = normalizer.normalize(inputs)
+recovered = normalizer.denormalize(normalized)
 ```
 
-### SpectralTransform
-
-Add FFT features for frequency-domain information.
-
-```python
-from opifex.data.transforms import SpectralTransform
-
-transform = SpectralTransform()
-
-# Adds 'input_fft' key with rfft of input
-sample_with_fft = transform.map(sample)
-# Now sample contains: 'input', 'output', 'input_fft'
-```
-
-**Use case:** Neural operators benefit from both spatial and spectral features.
-
-### AddNoiseAugmentation
-
-Add Gaussian noise for data augmentation and robustness.
-
-```python
-from opifex.data.transforms import AddNoiseAugmentation
-
-augment = AddNoiseAugmentation(
-    noise_level=0.01,  # Standard deviation of noise
-    seed=42,
-)
-
-# Only augments 'input', leaves 'output' unchanged
-noisy_sample = augment.map(sample)
-```
-
-**Use case:** Training robust models that handle noisy inputs.
+`GaussianNormalizer` is a frozen container of `mean` / `std`; `fit` computes them from
+data and `normalize` / `denormalize` apply and invert the z-score scaling.
 
 ## 🔧 Advanced Usage
 
-### Custom Pipeline
+### Materializing a Pipeline into Arrays
 
-Build a custom data pipeline with explicit Grain components:
+A `Pipeline` is single-pass. To collect a whole split into arrays, drain it once and stack:
 
 ```python
-import grain.python as grain
-from opifex.data.sources import BurgersDataSource
-from opifex.data.transforms import NormalizeTransform, SpectralTransform
+import jax.numpy as jnp
+from opifex.data.loaders import create_darcy_loader
 
-# 1. Create data source
-source = BurgersDataSource(n_samples=1000, resolution=64, seed=42)
+loaders = create_darcy_loader(n_samples=1000, resolution=64, batch_size=32, seed=42)
 
-# 2. Create sampler
-sampler = grain.IndexSampler(
-    num_records=len(source),
-    shuffle=True,
-    seed=42,
-    shard_options=grain.ShardByJaxProcess(drop_remainder=True),
-)
+inputs, outputs = [], []
+for batch in loaders.train:        # drain exactly once
+    inputs.append(batch["input"])
+    outputs.append(batch["output"])
 
-# 3. Build transformation pipeline
-operations = [
-    NormalizeTransform(mean=0.0, std=1.0),
-    SpectralTransform(),
-    grain.Batch(batch_size=32, drop_remainder=True),
-]
+train_inputs = jnp.concatenate(inputs)    # (n_train, C, *spatial)
+train_outputs = jnp.concatenate(outputs)
+print(loaders.n_train, loaders.n_val, loaders.resolution)
+```
 
-# 4. Create data loader
-loader = grain.DataLoader(
-    data_source=source,
-    sampler=sampler,
-    operations=operations,
-    worker_count=4,
-    worker_buffer_size=20,
-)
+### Custom Pipeline from a Generator
 
-# 5. Use in training
-for batch in loader:
-    # batch["input"]: normalized initial conditions
-    # batch["input_fft"]: FFT features
-    # batch["output"]: normalized solutions
-    pass
+To build a bespoke pipeline, start from a `generate_*` dataset and apply your own
+preprocessing before batching:
+
+```python
+import jax.numpy as jnp
+from opifex.core.normalization import GaussianNormalizer
+from opifex.data.sources import generate_burgers
+
+# 1. Generate the dataset eagerly
+data = generate_burgers(n_samples=1000, resolution=128, seed=42)
+inputs = jnp.asarray(data["input"])
+outputs = jnp.asarray(data["output"])
+
+# 2. Fit and apply normalization
+in_norm = GaussianNormalizer.fit(inputs)
+out_norm = GaussianNormalizer.fit(outputs)
+inputs = in_norm.normalize(inputs)
+outputs = out_norm.normalize(outputs)
+
+# 3. Iterate manual batches in your training loop
+batch_size = 32
+for start in range(0, inputs.shape[0], batch_size):
+    x = inputs[start:start + batch_size]
+    y = outputs[start:start + batch_size]
+    # Train model...
 ```
 
 ### Multi-Resolution Training
 
-Progressive training from coarse to fine resolution:
+Progressive training from coarse to fine resolution — build fresh loaders per resolution:
 
 ```python
+from opifex.data.loaders import create_burgers_loader
+
 resolutions = [32, 64, 128]
 
 for resolution in resolutions:
     print(f"Training at resolution {resolution}")
 
-    loader = create_burgers_loader(
+    loaders = create_burgers_loader(
         n_samples=10000,
-        batch_size=32,
         resolution=resolution,
-        worker_count=4,
+        batch_size=32,
+        seed=42,
     )
 
-    # Train for N epochs at this resolution
     for epoch in range(epochs_per_resolution):
-        for batch in loader:
+        for batch in loaders.train:   # rebuild loaders each epoch to re-drain
             # Train model...
             pass
 ```
 
+> A `Pipeline` is single-pass, so build a fresh `create_*_loader(...)` for each epoch
+> (or materialize the arrays once as shown above and slice them per epoch).
+
 ### Data Inspection
 
-Examine generated data:
+Examine generated data directly from a generator (no pipeline needed):
 
 ```python
-loader = create_darcy_loader(n_samples=100, batch_size=1)
+from opifex.data.sources import generate_darcy
 
-# Get first batch
-batch = next(iter(loader))
+data = generate_darcy(n_samples=100, resolution=64, seed=42)
 
-print(f"Input shape: {batch['input'].shape}")    # Permeability field
-print(f"Output shape: {batch['output'].shape}")  # Pressure field
-print(f"Input range: [{batch['input'].min():.3f}, {batch['input'].max():.3f}]")
+print(f"Input shape: {data['input'].shape}")    # (100, 1, 64, 64) permeability
+print(f"Output shape: {data['output'].shape}")  # (100, 1, 64, 64) pressure
+print(f"Input range: [{data['input'].min():.3f}, {data['input'].max():.3f}]")
 
 # Visualize
 import matplotlib.pyplot as plt
 
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
-plt.imshow(batch['input'][0, 0])  # First sample, first channel
+plt.imshow(data["input"][0, 0])   # first sample, first channel
 plt.colorbar()
 plt.title("Permeability Field")
 
 plt.subplot(1, 2, 2)
-plt.imshow(batch['output'][0, 0])
+plt.imshow(data["output"][0, 0])
 plt.colorbar()
 plt.title("Pressure Field")
 plt.show()
@@ -381,28 +407,21 @@ plt.show()
 
 ## 🎓 Training Integration
 
-### With BasicTrainer
+### With the Unified Trainer
 
 ```python
-from opifex.training.basic_trainer import BasicTrainer, TrainingConfig
+from flax import nnx
+
+from opifex.core.training import Trainer, TrainingConfig
 from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.data.loaders import create_darcy_loader
 
-# Create data loaders
-train_loader = create_darcy_loader(
-    n_samples=8000,
+# Create loaders (single PDELoaders bundle holds train + val)
+loaders = create_darcy_loader(
+    n_samples=10000,
+    resolution=64,
     batch_size=32,
-    resolution=85,
-    shuffle=True,
-    worker_count=4,
-)
-
-val_loader = create_darcy_loader(
-    n_samples=2000,
-    batch_size=32,
-    resolution=85,
-    shuffle=False,
-    worker_count=2,
+    seed=42,
 )
 
 # Create model
@@ -415,31 +434,15 @@ model = FourierNeuralOperator(
     rngs=nnx.Rngs(42),
 )
 
-# Configure training
+# Configure and train
 config = TrainingConfig(
     num_epochs=100,
     learning_rate=1e-3,
     validation_frequency=10,
 )
 
-# Train
-trainer = BasicTrainer(model, config)
-trained_model, history = trainer.train(train_loader, val_loader)
-```
-
-### With Unified Trainer
-
-```python
-from opifex.core.training import Trainer, TrainingConfig
-
-config = TrainingConfig(
-    num_epochs=100,
-    learning_rate=1e-3,
-    batch_size=32,  # Optional, can override loader batch size
-)
-
 trainer = Trainer(model, config)
-trained_model, history = trainer.train(train_loader, val_loader)
+trained_model, history = trainer.train(loaders.train, loaders.val)
 ```
 
 ### Manual Training Loop
@@ -447,79 +450,38 @@ trained_model, history = trainer.train(train_loader, val_loader)
 For complete control over training:
 
 ```python
+import jax.numpy as jnp
 import optax
 from flax import nnx
 
-# Create optimizer
+from opifex.data.loaders import create_burgers_loader
+
+loaders = create_burgers_loader(n_samples=1000, resolution=128, batch_size=32, seed=42)
+
 optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
-# Training loop
 for epoch in range(num_epochs):
-    for batch in train_loader:
+    # Rebuild the loader each epoch — pipelines are single-pass
+    loaders = create_burgers_loader(
+        n_samples=1000, resolution=128, batch_size=32, seed=42
+    )
+    for batch in loaders.train:
         x = batch["input"]
         y_true = batch["output"]
 
-        # Loss function
         def loss_fn(model):
             y_pred = model(x)
             return jnp.mean((y_pred - y_true) ** 2)
 
-        # Compute gradients and update
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         optimizer.update(model, grads)
 
     print(f"Epoch {epoch}, Loss: {loss:.6f}")
 ```
 
-## 📊 Performance Optimization
-
-### Worker Count Tuning
-
-```python
-# CPU-bound tasks: use multiple workers
-loader = create_burgers_loader(
-    n_samples=10000,
-    batch_size=32,
-    worker_count=8,  # Utilize multiple CPU cores
-)
-
-# I/O-bound or simple transforms: fewer workers
-loader = create_darcy_loader(
-    n_samples=1000,
-    batch_size=32,
-    worker_count=2,
-)
-
-# Single process for debugging
-loader = create_diffusion_loader(
-    n_samples=100,
-    batch_size=32,
-    worker_count=0,  # No multiprocessing
-)
-```
-
-### Memory Management
-
-```python
-# Adjust buffer size for memory/speed tradeoff
-import grain.python as grain
-
-loader = grain.DataLoader(
-    data_source=source,
-    sampler=sampler,
-    operations=operations,
-    worker_count=4,
-    worker_buffer_size=10,  # Default: 20, lower = less memory
-)
-```
-
-### Prefetching
-
-Grain automatically prefetches batches in background workers for optimal GPU utilization.
-
 ## 📚 See Also
 
 - [Training API](training.md): Training infrastructure and optimization
 - [Neural Operators API](neural.md): Neural network architectures
 - [Examples](../examples/index.md): Complete training examples
-- [Grain Documentation](https://github.com/google/grain): Official Grain docs
+- [datarax Documentation](https://github.com/avitai/datarax): `Pipeline` streaming internals

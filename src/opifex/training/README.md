@@ -1,155 +1,51 @@
 # Opifex Training: Advanced Training Infrastructure with Physics-Informed Capabilities
 
-This package provides full training infrastructure for scientific machine learning, including physics-informed neural networks, advanced optimization algorithms, and quantum-aware training workflows. Version 1.3 completed all core training infrastructure.
+This package provides training infrastructure for scientific machine learning, including physics-informed neural networks, advanced optimization algorithms, and quantum-aware training workflows.
 
 ## Components
 
-### Training Infrastructure ✅ **IMPLEMENTED**
+### Training Infrastructure
 
-- **`basic_trainer.py`**: Complete training framework with physics-informed capabilities ✅ **IMPLEMENTED**
+- **`basic_trainer.py`**: Training framework with physics-informed capabilities
   - **BasicTrainer**: Standard training workflow with physics-informed capabilities
-  - **ModularTrainer**: Advanced component-based training architecture ✅ **NEW**
-  - **ErrorRecoveryManager**: Production-grade error handling and gradient stability ✅ **NEW**
-  - **FlexibleOptimizerFactory**: Advanced optimizer creation with scheduling ✅ **NEW**
-  - **AdvancedMetricsCollector**: Physics-aware metrics with convergence tracking ✅ **NEW**
-  - **TrainingComponentBase**: Base class for modular training components ✅ **NEW**
-- **`physics_losses.py`**: Multi-physics loss composition and adaptive weighting ✅ **IMPLEMENTED**
+  - **ModularTrainer**: Component-based training architecture
+  - **ErrorRecoveryManager**: Error handling and gradient stability
+  - **FlexibleOptimizerFactory**: Optimizer creation with scheduling
+  - **AdvancedMetricsCollector**: Physics-aware metrics with convergence tracking
+- **`opifex.core.physics.losses`**: Multi-physics loss composition and adaptive weighting
 
-### Quantum Training 📋 **PLANNED FOR FUTURE SPRINTS**
+### Basic and Modular Training
 
-- **`quantum_trainer.py`**: Quantum-aware training algorithms 📋 **PLANNED**
-- **`scf_trainer.py`**: Learned-XC training over the Kohn-Sham SCF (`opifex.neural.quantum.dft`) 📋 **PLANNED**
+`opifex/training/basic_trainer.py` provides both a standard trainer and a
+component-based modular trainer:
 
-## Implementation Status: Advanced Training Infrastructure COMPLETED ✅ READY FOR PRODUCTION
+- **BasicTrainer** - Training framework with FLAX NNX neural networks
+- **Physics-Informed Integration** - PINN training workflow with boundary data support
+- **Training Metrics** - Physics and boundary loss tracking
+- **Checkpointing System** - Orbax-compatible absolute path handling
+- **Training Loop Management** - Epoch-based training with validation and early stopping
+- **Optimization Integration** - Integration with Optax optimizers
+- **Quantum Training Support** - Quantum-aware training workflows
+- **Learning Rate Scheduling** - Adaptive learning rate strategies
 
-**Status**: ✅ **ADVANCED TRAINING INFRASTRUCTURE COMPLETED** - Full production-ready training framework
-**QA Resolution**: ✅ **ALL CRITICAL ISSUES RESOLVED**
-**Quality Score**: 5.0/5.0 ⭐⭐⭐⭐⭐ (12/12 pre-commit hooks passing, all critical tests passing)
-**Test Coverage**: ✅ **73/73 training tests passing** (all listed checks passing, 82% code coverage)
+The modular trainer adds:
 
-### ✅ **Advanced Training Infrastructure Enhancement COMPLETED**
+- **ModularTrainer** - Component-based training framework
+- **Component Composition Architecture** - Pluggable training components
+- **ErrorRecoveryManager** - Gradient clipping, loss explosion detection, NaN recovery, checkpoint restoration
+- **FlexibleOptimizerFactory** - Adam, AdamW, SGD with cosine, exponential, and linear scheduling
+- **AdvancedMetricsCollector** - Physics-aware diagnostics with convergence tracking
 
-#### ✅ **Basic Training Infrastructure** - **COMPLETE** (827 lines)
+### Physics-Informed Loss Functions
 
-#### ✅ **Advanced Training Infrastructure** - **COMPLETE** (2179 lines) ✅ **NEW**
+`opifex.core.physics.losses` provides multi-physics loss composition:
 
-**File**: `opifex/training/basic_trainer.py`
-**Status**: ✅ FULLY IMPLEMENTED WITH PINN INTEGRATION
-**Testing**: Complete physics-informed training integration tests passing (2/2)
-
-**Implemented Components**:
-
-- [x] **BasicTrainer Class** - Complete training framework with FLAX NNX neural networks
-- [x] **Physics-Informed Integration** - Complete PINN training workflow with boundary data support
-- [x] **Enhanced Training Metrics** - Physics and boundary loss tracking
-- [x] **Checkpointing System** - Orbax-compatible absolute path handling
-- [x] **Training Loop Management** - Epoch-based training with validation and early stopping
-- [x] **Optimization Integration** - Seamless integration with Optax optimizers
-- [x] **Quantum Training Support** - Quantum-aware training workflows
-- [x] **Learning Rate Scheduling** - Adaptive learning rate strategies
-
-**Technical Features**:
-
-- [x] **Complete PINN Workflow**: End-to-end physics-informed neural network training
-- [x] **Physics Loss Integration**: Seamless integration with PhysicsInformedLoss system
-- [x] **Enhanced Metrics**: Full tracking of physics losses, boundary losses, and training metrics
-- [x] **Flexible Training Interface**: Support for standard, quantum, and physics-informed training modes
-- [x] **Robust Checkpointing**: Orbax-based checkpointing with proper NNX model state restoration
-- [x] **Type Safety**: Complete JAX Array and jaxtyping annotations
-- [x] **Error Handling**: Full validation and error recovery mechanisms
-
-**Recent QA Fixes Applied**:
-
-- ✅ **RESOLVED**: Test interface alignment - Complete PINN training workflow integration
-- ✅ **RESOLVED**: Added `physics_loss` attribute and `set_physics_loss()` method
-- ✅ **RESOLVED**: Enhanced TrainingMetrics with physics and boundary loss tracking
-- ✅ **RESOLVED**: Fixed Orbax checkpointing with absolute path handling
-- ✅ **RESOLVED**: Implemented `_physics_informed_training_step()` method
-
-**File**: `opifex/training/basic_trainer.py`
-**Status**: ✅ FULLY IMPLEMENTED WITH MODULAR ARCHITECTURE
-**Testing**: Complete modular training integration tests passing (6/6)
-
-**Advanced Components Implemented**:
-
-- [x] **ModularTrainer Class** - Advanced component-based training framework
-- [x] **Component Composition Architecture** - Pluggable training components with flexible integration
-- [x] **Production-Grade Error Recovery** - ErrorRecoveryManager with gradient stability and NaN detection
-- [x] **Flexible Optimizer Factory** - FlexibleOptimizerFactory with advanced scheduling (Adam, AdamW, SGD)
-- [x] **Enhanced Metrics Collection** - AdvancedMetricsCollector with physics-aware diagnostics
-- [x] **Modular Component Base** - TrainingComponentBase enabling extensible training workflows
-- [x] **Backward Compatibility** - Full compatibility with existing BasicTrainer workflows
-
-**Advanced Technical Features**:
-
-- [x] **Error Recovery System**: Gradient clipping, loss explosion detection, NaN recovery, checkpoint restoration
-- [x] **Advanced Optimizer Support**: Adam, AdamW, SGD with cosine, exponential, and linear scheduling
-- [x] **Component-Based Design**: Pluggable architecture enabling custom training component development
-- [x] **Production-Grade Stability**: Full error handling with automatic recovery mechanisms
-- [x] **Physics-Aware Metrics**: Real-time monitoring with convergence tracking and diagnostic analytics
-- [x] **Modular Integration**: Seamless composition of training components for complex scientific workflows
-- [x] **Type Safety**: Complete JAX Array and jaxtyping annotations with FLAX NNX compatibility
-
-**Recent Implementation Achievements**:
-
-- ✅ **IMPLEMENTED**: ModularTrainer with component composition architecture
-- ✅ **IMPLEMENTED**: ErrorRecoveryManager with gradient clipping and loss explosion detection
-- ✅ **IMPLEMENTED**: FlexibleOptimizerFactory with advanced scheduling capabilities
-- ✅ **IMPLEMENTED**: TrainingComponentBase for modular component development
-- ✅ **IMPLEMENTED**: AdvancedMetricsCollector with physics-aware diagnostics and convergence tracking
-
-#### ✅ **Physics-Informed Loss Functions** - **COMPLETE** (831 lines)
-
-**File**: `opifex/training/physics_losses.py`
-**Status**: ✅ FULLY IMPLEMENTED AND TESTED
-**Testing**: All physics-informed loss tests (4/4) passing
-
-**Implemented Components**:
-
-- [x] **PhysicsInformedLoss Class** - Hierarchical multi-physics loss composition
-- [x] **AdaptiveWeightScheduler** - Dynamic weight adaptation with performance monitoring
-- [x] **ConservationLawEnforcer** - Physical constraint enforcement (mass, momentum, energy, quantum)
-- [x] **PDE Residual Computers** - Automatic residual computation for multiple PDE types
-- [x] **Quantum Mechanical Losses** - Density positivity, normalization, and quantum constraints
-- [x] **Adaptive Weight Strategies** - Linear, exponential, and step scheduling algorithms
-- [x] **Performance Monitoring** - Full loss component tracking and analytics
-
-**Technical Features**:
-
-- [x] **Multi-Physics Support**: Unified framework for PDEs, conservation laws, and quantum mechanics
-- [x] **Adaptive Weighting**: Performance-based weight scheduling with automatic adaptation
-- [x] **Conservation Enforcement**: Built-in enforcement of physical conservation laws
-- [x] **Quantum Extensions**: Specialized loss functions for quantum mechanical problems
-- [x] **Residual Computation**: Automatic PDE residual computation for Poisson, wave, and Schrödinger equations
-- [x] **Integration Ready**: Complete compatibility with BasicTrainer and neural network workflows
-- [x] **Type Safety**: Full JAX Array compatibility with automatic differentiation support
-
-**Recent QA Fixes Applied**:
-
-- ✅ **RESOLVED**: Physics loss broadcasting fix - Fixed tensor shape issues in quantum residual computation
-- ✅ **RESOLVED**: Proper harmonic oscillator ground state computation with spatial dimension reduction
-
-### 🎯 **NEXT TARGET: Version 1.5 Advanced Neural Operators**
-
-**Version ID**: SCIML-VERSION-1.5
-**Priority**: 🔴 **HIGH** - Core neural operator functionality for scientific computing
-**Implementation Readiness**: ⭐⭐⭐⭐⭐ (5/5) - Complete foundation with all Version 1.4 tasks completed
-
-#### 📋 **Training Infrastructure Ready for Version 1.5**
-
-- ✅ **Physics-Informed Training**: Complete PINN workflows ready for neural operators
-- ✅ **Adaptive Loss Weighting**: Advanced scheduling ready for operator constraint integration
-- ✅ **Conservation Law Enforcement**: Physical constraints ready for operator learning
-- ✅ **Multi-Physics Support**: Training framework ready for FNO, DeepONet, and Graph Neural Operators
-
-#### 📋 **Future Advanced Training Components**
-
-- [ ] **Neural Operator Training**: Specialized training algorithms for FNO, DeepONet, Graph Neural Operators
-- [ ] **Operator Constraint Training**: Physics-informed training for neural operators
-- [ ] **Advanced Quantum-Aware Trainer**: Specialized training algorithms for quantum mechanical systems
-- [ ] **Enhanced SCF Training Integration**: Learned-XC training over the Kohn-Sham SCF (`opifex.neural.quantum.dft`)
-- [ ] **Probabilistic Training**: Bayesian neural networks and uncertainty quantification
-- [ ] **Multi-Fidelity Training**: Hybrid classical-quantum training strategies
+- **PhysicsInformedLoss** - Hierarchical multi-physics loss composition
+- **AdaptiveWeightScheduler** - Dynamic weight adaptation with performance monitoring
+- **ConservationLawEnforcer** - Physical constraint enforcement (mass, momentum, energy, quantum)
+- **PDE Residual Computers** - Residual computation for multiple PDE types (Poisson, wave, Schrödinger)
+- **Quantum Mechanical Losses** - Density positivity, normalization, and quantum constraints
+- **Adaptive Weight Strategies** - Linear, exponential, and step scheduling algorithms
 
 ## Key Features
 
@@ -161,10 +57,9 @@ This package provides full training infrastructure for scientific machine learni
 - **Robust Checkpointing**: Orbax-based model persistence with NNX compatibility
 - **JAX Integration**: Native JAX Array support with automatic differentiation
 - **Type Safety**: Full type annotations with jaxtyping
-- **Performance Optimized**: FLAX NNX transformations for maximum efficiency
-- **Full Testing**: ✅ **6/6 training tests passing** covering all training workflows
+- **Performance Optimized**: FLAX NNX transformations for efficiency
 
-## 📚 Full Usage Examples
+## Usage Examples
 
 ### 1. Basic Supervised Training
 
@@ -600,7 +495,7 @@ Train with the standard `Trainer` against reference energies and forces. See the
 ### 5. Advanced Training with Custom Schedulers and Callbacks
 
 ```python
-from opifex.training.physics_losses import AdaptiveWeightScheduler
+from opifex.core.physics.losses import AdaptiveWeightScheduler
 
 # Custom training with advanced features
 class AdvancedTrainingCallbacks:
@@ -775,7 +670,7 @@ def analyze_training_dynamics(callbacks):
 analyze_training_dynamics(training_callbacks)
 ```
 
-### 3. Advanced Modular Training with Component Composition
+### 6. Advanced Modular Training with Component Composition
 
 ```python
 import jax
@@ -787,8 +682,7 @@ from opifex.training.basic_trainer import (
     TrainingConfig,
     ErrorRecoveryManager,
     FlexibleOptimizerFactory,
-    AdvancedMetricsCollector,
-    TrainingComponentBase
+    AdvancedMetricsCollector
 )
 
 # Create model and configuration
@@ -916,7 +810,7 @@ print("✅ Advanced modular training demonstration complete!")
 ### Advanced Physics Loss Configuration
 
 ```python
-from opifex.training.physics_losses import (
+from opifex.core.physics.losses import (
     PhysicsInformedLoss,
     AdaptiveWeightScheduler,
     ConservationLawEnforcer
@@ -953,4 +847,4 @@ physics_loss = PhysicsInformedLoss(
 - **[Optimization Package](../optimization/README.md)**: Integration with meta-optimization algorithms
 - **[Geometry Package](../geometry/README.md)**: Support for complex geometries and boundary conditions
 
-For implementation history and detailed achievements, see the main [CHANGELOG.md](../../CHANGELOG.md).
+For implementation history, see the main [CHANGELOG.md](../../CHANGELOG.md).

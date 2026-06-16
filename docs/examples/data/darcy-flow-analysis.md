@@ -21,7 +21,7 @@ consistency, and resolution scaling guides computational budget allocation.
 
 ## What You'll Learn
 
-1. **Generate** Darcy flow datasets with `DarcyDataSource` at multiple resolutions
+1. **Generate** Darcy flow datasets with `generate_darcy` at multiple resolutions
 2. **Analyze** field statistics (mean, std, dynamic range) for permeability and pressure
 3. **Compute** spatial gradient correlations between input and output fields
 4. **Evaluate** resolution scaling performance (samples/second, time scaling)
@@ -31,14 +31,16 @@ consistency, and resolution scaling guides computational budget allocation.
 
 | neuraloperator (PyTorch) | Opifex (JAX) |
 |--------------------------|--------------|
-| `torch.utils.data.DataLoader(dataset)` | `DarcyDataSource(resolution=, n_samples=, seed=)` |
+| `torch.utils.data.DataLoader(dataset)` | `generate_darcy(n_samples=, resolution=, seed=)` |
 | Manual `torch.meshgrid` for coordinates | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
 | `torch.gradient()` (limited) | `jnp.gradient(field, axis=)` (NumPy-compatible) |
-| Manual train/test split | Grain-based deterministic sampling |
+| Manual per-sample loop | Single vmapped on-device batch |
 
-**Key difference**: Opifex uses Google Grain for data loading, providing deterministic
-shuffling and reproducible data pipelines. The `DarcyDataSource` generates synthetic
-Darcy flow data with configurable resolution and viscosity parameters.
+**Key difference**: Opifex generates the whole batch on-device in one call. `generate_darcy`
+is a vmapped generator that returns a `{"input": (n, 1, H, W), "output": (n, 1, H, W)}`
+dictionary for a given resolution and seed, which is then split into a per-sample list for
+analysis. No external data-loading framework is required — generation runs on the JAX
+device and is fully reproducible from the seed.
 
 ## Files
 
@@ -64,7 +66,7 @@ mapping between function spaces.
 graph LR
     A["Permeability k(x)<br/>(Input Field)"] --> B["Darcy PDE<br/>-div(k grad u) = f"]
     B --> C["Pressure u(x)<br/>(Output Field)"]
-    D["DarcyDataSource<br/>(Grain Pipeline)"] --> A
+    D["generate_darcy<br/>(vmapped on-device)"] --> A
     D --> C
 
     style A fill:#e3f2fd
@@ -83,21 +85,20 @@ graph LR
 
 ## Implementation
 
-### Step 1: Data Generation with DarcyDataSource
+### Step 1: Data Generation with generate_darcy
 
-Generate datasets at multiple resolutions using Opifex's Grain-based data source:
+Generate datasets at multiple resolutions using Opifex's vmapped on-device generator.
+`generate_darcy` returns a `{"input", "output"}` dictionary of channels-first
+`(n, 1, H, W)` fields, which is split into a per-sample list for analysis:
 
 ```python
-from opifex.data.sources import DarcyDataSource
+from opifex.data.sources import generate_darcy
 
-data_source = DarcyDataSource(
-    resolution=64,
-    n_samples=100,
-    viscosity_range=(1e-5, 1e-3),
-    seed=42,
-)
-
-samples = [data_source[i] for i in range(100)]
+data = generate_darcy(n_samples=100, resolution=64, seed=42)
+samples = [
+    {"input": data["input"][i], "output": data["output"][i]}
+    for i in range(100)
+]
 ```
 
 **Terminal Output:**
@@ -106,12 +107,12 @@ DARCY FLOW DATASET ANALYSIS
 ================================================================================
 
 Analyzing resolution: 64x64
-  Generated 100 samples in X.XXs
-  Rate: X.X samples/second
+  Generated 100 samples in 1.80s
+  Rate: 55.5 samples/second
 
 Analyzing resolution: 128x128
-  Generated 100 samples in X.XXs
-  Rate: X.X samples/second
+  Generated 100 samples in 4.29s
+  Rate: 23.3 samples/second
 ```
 
 ### Step 2: Field Statistics Analysis
@@ -128,15 +129,15 @@ stats = _compute_field_statistics(fields)
 ANALYSIS COMPLETE
 ================================================================================
 Resolution 64x64:
-  Generation time: X.XXs
-  Samples/second: X.X
-  Input mean: X.XXXX
-  Output mean: X.XXXX
+  Generation time: 1.80s
+  Samples/second: 55.5
+  Input mean: 0.1782
+  Output mean: 0.2214
 Resolution 128x128:
-  Generation time: X.XXs
-  Samples/second: X.X
-  Input mean: X.XXXX
-  Output mean: X.XXXX
+  Generation time: 4.29s
+  Samples/second: 23.3
+  Input mean: 0.1780
+  Output mean: 0.2254
 ```
 
 ### Step 3: Spatial Gradient Analysis
@@ -171,17 +172,18 @@ The analysis generates three plot types:
 
 | Metric | 64x64 | 128x128 | Scaling |
 |--------|-------|---------|---------|
-| Generation Time | ~X.Xs | ~X.Xs | Quadratic |
-| Samples/Second | ~X.X | ~X.X | Inverse quadratic |
-| Input Dynamic Range | ~X.XX | ~X.XX | Resolution-dependent |
-| Output Dynamic Range | ~X.XX | ~X.XX | Resolution-dependent |
+| Generation Time | 1.80s | 4.29s | Quadratic |
+| Samples/Second | 55.5 | 23.3 | Inverse quadratic |
+| Input Mean | 0.1782 | 0.1780 | Resolution-invariant |
+| Output Mean | 0.2214 | 0.2254 | Resolution-invariant |
 
 ### Key Takeaways
 
 - Generation time scales quadratically with resolution (expected for 2D fields)
 - Field statistics remain consistent across resolutions (good for multi-resolution training)
 - Spatial gradient correlations validate physical consistency of generated data
-- Grain-based data loading provides deterministic, reproducible data pipelines
+- The vmapped `generate_darcy` generates the whole batch on-device and is fully
+  reproducible from the seed
 
 ## Next Steps
 
@@ -201,19 +203,20 @@ The analysis generates three plot types:
 
 ### API Reference
 
-- [`DarcyDataSource`](../../api/data.md) - Grain-based Darcy flow data generator
+- [`generate_darcy`](../../api/data.md) - Vmapped on-device Darcy flow data generator
 - [`GridEmbedding2D`](../../api/neural.md) - Spatial coordinate embedding for grid data
 
 ### Troubleshooting
 
-#### DarcyDataSource returns constant fields
+#### generate_darcy returns constant fields
 
 **Symptom**: All samples have identical permeability or pressure fields.
 
-**Cause**: Same seed used without varying sample index.
+**Cause**: The generator is vmapped over a per-sample key derived from the seed; a
+constant batch usually indicates the resolution or sample count was misconfigured.
 
-**Solution**: Access different indices: `data_source[0]`, `data_source[1]`, etc.
-Each index generates a unique sample deterministically.
+**Solution**: Vary the `seed` to produce a different deterministic batch, and confirm
+`n_samples > 1`. Each sample in the returned `(n, 1, H, W)` arrays is distinct.
 
 #### Slow generation at high resolutions
 
@@ -223,7 +226,7 @@ Each index generates a unique sample deterministically.
 
 **Solution**: Generate a smaller number of high-resolution samples:
 ```python
-data_source = DarcyDataSource(resolution=256, n_samples=10, seed=42)
+data = generate_darcy(n_samples=10, resolution=256, seed=42)
 ```
 
 #### NaN values in gradient analysis

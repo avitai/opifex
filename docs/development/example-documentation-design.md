@@ -150,13 +150,13 @@ to the Fourier modes, enabling global receptive fields in a single layer.
 ## Try It: Creating a Spectral Convolution Layer
 
 ```python
-from opifex.neural.operators.fno.spectral import SpectralConvolution2d
+from opifex.neural.operators.fno import FourierSpectralConvolution
 
 # Create spectral convolution: learn in frequency domain
-spec_conv = SpectralConvolution2d(
+spec_conv = FourierSpectralConvolution(
     in_channels=32,
     out_channels=32,
-    modes=(16, 16),  # Number of Fourier modes to keep
+    modes=16,  # Number of Fourier modes to keep
     rngs=nnx.Rngs(0),
 )
 
@@ -1109,7 +1109,6 @@ optimizer = optax.chain(
     optax.clip_by_global_norm(1.0),
     optax.adam(1e-4),
 )
-```
 ```
 
 ---
@@ -2438,16 +2437,16 @@ memory and computation. Start with `modes=(16, 16)` and increase if needed.
 
 # %%
 # Immediately apply the concept
-from opifex.neural.operators.fno.spectral import SpectralConvolution2d
+from opifex.neural.operators.fno import FourierSpectralConvolution
 
 # Low modes (smooth features only)
-conv_low = SpectralConvolution2d(
-    in_channels=32, out_channels=32, modes=(8, 8), rngs=rngs
+conv_low = FourierSpectralConvolution(
+    in_channels=32, out_channels=32, modes=8, rngs=rngs
 )
 
 # High modes (captures fine details)
-conv_high = SpectralConvolution2d(
-    in_channels=32, out_channels=32, modes=(32, 32), rngs=rngs
+conv_high = FourierSpectralConvolution(
+    in_channels=32, out_channels=32, modes=32, rngs=rngs
 )
 
 x = jax.random.normal(jax.random.PRNGKey(0), (1, 64, 64, 32))

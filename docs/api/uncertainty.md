@@ -26,7 +26,7 @@ adapter/backend interfaces for downstream inference engines.
 | `opifex.uncertainty.losses` | Uncertainty-aware loss functions: `PointwiseQuantileLoss` (pinball loss for UQNO residual-quantile training, mirrors `neuralop.losses.data_losses.PointwiseQuantileLoss`). |
 | `opifex.uncertainty.metrics` | Ensemble + interval scoring metrics with no canonical CalibraX home: `predictive_entropy(ensemble_probabilities)` (Gal & Ghahramani 2016), `mutual_information(ensemble_probabilities)` (BALD epistemic decomposition, Houlsby et al. 2011), `interval_score`/`winkler_score(lower, upper, targets, alpha)` (Gneiting & Raftery 2007 strictly proper rule). Pure jax.Array kernels; no forward re-exports — Brier/ECE/pinball/Gaussian-NLL stay in `opifex.uncertainty.calibration`. |
 | `opifex.uncertainty.forecasting_metrics` | Probabilistic forecast metrics: empirical `crps` (CalibraX-canonical formula), `fair_crps` (Ferro 2014; WeatherBenchX `CRPSEnsemble(fair=True)` reference), `energy_score` (Gneiting & Raftery 2007 §4.2), `rank_histogram` (Hamill 2001), `spread_skill_ratio` (Fortin et al. 2014), `pit_histogram` (Diebold-Gunther-Tay 1998), `ranked_probability_score` (Epstein 1969), `event_reliability` (Murphy 1973 Brier decomposition). |
-| `opifex.uncertainty.scientific.domain_metrics` | Domain reliability metrics with the `DomainMetricSummary` value object: PINN (`physics_residual_coverage`, `boundary_condition_coverage`), neural operator (`spectral_coverage`), quantum chemistry (`chemical_accuracy_coverage` — caller-supplied tolerance, no hard-coded default), optimization / L2O (`regret_interval_summary`, `feasibility_coverage`), assimilation (`sensor_reliability_summary` — reduced χ²), parameter inference (`parameter_credible_interval_coverage`). Phase 8 deferred capabilities surface as explicit `UNSUPPORTED_LIKELIHOOD_FREE`, `UNSUPPORTED_ACTIVE_LEARNING`, `UNSUPPORTED_PAC_BAYES` `UQCapability` constants; Phase 8 Task 8.5 flips the `supports_*` flags and `default_strategy` when those backends ship. |
+| `opifex.uncertainty.scientific.domain_metrics` | Domain reliability metrics with the `DomainMetricSummary` value object: PINN (`physics_residual_coverage`, `boundary_condition_coverage`), neural operator (`spectral_coverage`), quantum chemistry (`chemical_accuracy_coverage` — caller-supplied tolerance, no hard-coded default), optimization / L2O (`regret_interval_summary`, `feasibility_coverage`), assimilation (`sensor_reliability_summary` — reduced χ²), parameter inference (`parameter_credible_interval_coverage`). It also provides reliability summaries for the three formerly-deferred surfaces — likelihood-free (`likelihood_free_rank_calibration`, the simulation-based-calibration expected-coverage error over SBC ranks), active learning (`active_learning_acquisition_reliability`, the rank correlation between acquisition score and realized error, reusing calibrax), and PAC-Bayes (`pac_bayes_bound_validity`, certified-bound validity and tightness against a held-out risk) — exposed as the `LIKELIHOOD_FREE_RELIABILITY`, `ACTIVE_LEARNING_RELIABILITY`, `PAC_BAYES_RELIABILITY` `UQCapability` constants. The underlying methods ship in the `opifex.uncertainty.sbi`, `opifex.uncertainty.active` and `opifex.uncertainty.pac_bayes` subpackages (documented below). |
 | `opifex.uncertainty.scientific.quantum` | Quantum-chemistry UQ surfaces. Three ensemble-aggregating callables — `EnergyUncertainty(*, method, units="hartree")` (total / per-state energies), `DensityUncertainty(*, grid_axes)` (per-grid-point electron density), `ExchangeCorrelationUncertainty(*, functional_family)` (XC-functional outputs) — each take an ensemble of predictions stacked along axis 0 (shape `(num_members, ...)`) and return a `PredictiveDistribution` with `mean = ensemble.mean(0)` and across-member `variance` reported as both the marginal `variance` and the `epistemic` / `total_uncertainty` decomposition (`aleatoric = 0`), mirroring the deep-ensemble member aggregation via the shared `opifex.uncertainty._predictive.ensemble_predictive` factory (Rule 1 — DRY); metadata records `method`/`units`/`num_members` (energy), `grid_axes` (density), `functional_family` (XC). `ChemicalAccuracyCoverage(*, tolerance_hartree)` returns the empirical fraction `mean(|prediction - reference| <= tolerance_hartree)`; the module constant `CHEMICAL_ACCURACY_HARTREE ≈ 0.0015936` is 1 kcal/mol in Hartree — the conventional quantum-chemistry "chemical accuracy" benchmark (Pople, Rev. Mod. Phys. 71, 1267 (1999)) — and the `ChemicalAccuracyCoverage.chemical_accuracy()` classmethod pins that tolerance. Pure-JAX; `jit` / `grad` / `vmap`-compatible. |
 | `opifex.uncertainty.scientific.fields` | Canonical `FieldMetadata` (Pattern A) schema plus field/function-space UQ metrics: `spatial_calibration_error`, `function_space_l2_coverage`, `conservation_law_residual_summary`, `residual_uncertainty_alignment`. `FieldMetadata` is the canonical home referenced by `opifex.uncertainty.conformal.fields.FieldSplitConformalRegressor`. |
 | `opifex.uncertainty.scientific.equation_discovery` | Bayesian SINDy: regularized-horseshoe posterior over the SINDy candidate-library coefficients (Hirsh, Barajas-Solano & Kutz 2021 arXiv:2107.02107; Piironen & Vehtari 2017). `BayesianSINDy(library, *, tau0=0.1, slab_nu=4, slab_s=2, noise_lambda=1.0, num_warmup=200, num_samples=400)` ports pysindy's `SBR` numpyro model onto a BlackJAX-NUTS log-density sampled in unconstrained (log) space with change-of-variables Jacobians; `fit(x, x_dot, *, rngs)` returns `PosteriorOverTerms` (β / τ / σ draws + static `feature_names`). `coefficients()` is the posterior-mean β; `term_inclusion_probabilities()` returns per-term `P(|βⱼ| > threshold)` with a scale-relative threshold (10% of the largest per-target posterior-mean magnitude, floored at `1e-3`) since the horseshoe is a continuous shrinkage prior with no exact zeros; `coefficient_posterior_intervals(level=0.95)` returns a `PredictionInterval` from posterior quantiles. **Scope:** the error model is on the derivatives `x_dot` (no ODE integration), matching pysindy's documented `SBR` simplification — `σ` is a derivative-noise scale; the integrated Hirsh eq. 2.4 model is a known upstream TODO. Reuses `opifex.discovery.sindy.library.CandidateLibrary` for `Θ`. |
@@ -555,3 +555,41 @@ modules for physics-aware Bayesian modelling:
 Each module follows the canonical NNX convention: parameters declared
 as `nnx.Param`, indexed with `[...]` (not the deprecated `.value`
 property), pure-array methods trace under `jax.jit` / `jax.grad`.
+
+## Probabilistic-numerics and linear algebra
+
+Matrix-free estimators and decompositions backing scalable Bayesian inference.
+
+::: opifex.uncertainty.linalg
+
+::: opifex.uncertainty.quadrature
+
+## Gaussian processes and state-space models
+
+::: opifex.uncertainty.gp
+
+::: opifex.uncertainty.statespace
+
+::: opifex.uncertainty.markov
+
+::: opifex.uncertainty.assimilation
+
+::: opifex.uncertainty.multi_fidelity
+
+## Inference, sensitivity, and decision-making
+
+::: opifex.uncertainty.sbi
+
+::: opifex.uncertainty.sensitivity
+
+::: opifex.uncertainty.active
+
+::: opifex.uncertainty.pac_bayes
+
+## Aggregation, reliability, and surrogates
+
+::: opifex.uncertainty.aggregators
+
+::: opifex.uncertainty.reliability
+
+::: opifex.uncertainty.surrogate

@@ -74,8 +74,8 @@ def register(
         Unique model ID
 
     Example:
-        >>> from opifex.neural.operators.fno import FNO
-        >>> model = FNO(modes=12, width=32)
+        >>> from opifex.neural.operators.fno import FourierNeuralOperator
+        >>> model = FourierNeuralOperator(in_channels=1, out_channels=1, hidden_channels=32, modes=12, num_layers=4, rngs=nnx.Rngs(0))
         >>> metadata = FunctionalMetadata(
         ...     name="darcy-flow-fno",
         ...     description="FNO for Darcy flow prediction",
@@ -259,7 +259,7 @@ def delete(
 Structured metadata for neural functionals.
 
 ```python
-from opifex.platform.registry import FunctionalMetadata
+from opifex.platform.registry.models import FunctionalMetadata
 
 @dataclass
 class FunctionalMetadata:
@@ -389,8 +389,8 @@ from opifex.platform.registry import (
     RegistryService,
     FunctionalMetadata
 )
-from opifex.neural.operators.fno import FNO
-from opifex.training import BasicTrainer
+from opifex.neural.operators.fno import FourierNeuralOperator
+from opifex.training.basic_trainer import BasicTrainer
 from opifex.data.loaders import create_darcy_loader
 
 # Initialize registry
@@ -403,7 +403,7 @@ train_loader = create_darcy_loader(
     resolution=64,
     seed=42,
 )
-model = FNO(modes=12, width=64, depth=4)
+model = FourierNeuralOperator(in_channels=1, out_channels=1, hidden_channels=64, modes=12, num_layers=4, rngs=nnx.Rngs(0))
 
 config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
 trainer = BasicTrainer(model, config)

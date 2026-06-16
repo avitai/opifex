@@ -50,7 +50,7 @@ This is the pivotal abstraction layer. It defines a standard `SciMLSolver` proto
 - **Bayesian Inference**: BlackJAX HMC / NUTS / MALA via `opifex.uncertainty.inference_backends.blackjax.BlackJAXBackend` (thin adapter over Artifex's BlackJAX wrappers).
 - **Conformal Prediction**: `opifex.uncertainty.conformal` exposes `SplitConformalRegressor`, `ConformalizedQuantileRegressor`, CV+ / jackknife+, EnbPI / ACI, and field-space conformal calibrators — all with explicit `fit / predict / with_state` cycles and exchangeability diagnostics.
 
-This layer transforms any deterministic `SciMLSolver` into a Probabilistic Solver by composing the canonical Phase 1 `PredictiveDistribution` contract with these aggregation utilities.
+This layer transforms any deterministic `SciMLSolver` into a Probabilistic Solver by composing the canonical `PredictiveDistribution` contract with these aggregation utilities.
 
 ### Layer 6: Production Ecosystem
 The top layer handles the lifecycle of models, including versioning, serving, and monitoring, bridging the gap between research and production value.

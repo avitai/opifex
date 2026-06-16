@@ -271,12 +271,11 @@ sfno = SphericalFourierNeuralOperator(
 Branch-trunk architecture for function-to-function mapping:
 
 ```python
-from opifex.neural.operators.deeponet import DeepOperatorNetwork
+from opifex.neural.operators.deeponet import DeepONet
 
-deeponet = DeepOperatorNetwork(
-    branch_layers=[100, 64, 64],
-    trunk_layers=[2, 64, 64],
-    output_dim=1,
+deeponet = DeepONet(
+    branch_sizes=[100, 64, 64],
+    trunk_sizes=[2, 64, 64],
     rngs=rngs
 )
 
@@ -430,7 +429,7 @@ print(f"✅ DISCO: {x.shape} -> {y.shape}")
 Neural operators can be combined with physics-informed training:
 
 ```python
-from opifex.training.physics_losses import PhysicsInformedLoss
+from opifex.core.physics.losses import PhysicsInformedLoss
 from opifex.core.training.trainer import Trainer, TrainingConfig
 
 # Create physics-informed loss

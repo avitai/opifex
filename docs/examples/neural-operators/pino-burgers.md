@@ -20,6 +20,27 @@ $$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\p
 
 where $u$ is velocity, $\nu$ is viscosity, and subscripts denote partial derivatives.
 
+### A genuinely semi-supervised scheme
+
+The PDE data layer is served through **datarax** under a uniform operator
+contract: each sample's input is the initial condition $u(x,0)$ and its target is
+the **final-time** solution $u(x,T)$ only — both channels-first `(N, 1, 64)`. There
+is no dense ground-truth trajectory.
+
+The PINO is trained against this *sparse* supervision. The FNO still predicts the
+full space-time rollout (`out_channels = TIME_STEPS`), but the data loss only
+anchors two frames:
+
+- the predicted **initial** frame to the input IC $u(x,0)$, and
+- the predicted **final** frame to the final-time target $u(x,T)$.
+
+The **physics** loss (Burgers PDE residual) constrains every predicted time step in
+between, filling the unsupervised interior of the trajectory. This is what makes the
+scheme genuinely semi-supervised: the physics term — not labelled data — drives the
+intermediate dynamics. Evaluation accuracy is measured at the supervised final time,
+and the per-time-step output reports the **PDE residual** (physics consistency of the
+rollout), not an error against a ground-truth trajectory.
+
 ## What You'll Learn
 
 1. **Understand** PINO architecture: FNO backbone + physics loss
@@ -71,10 +92,15 @@ jupyter lab examples/neural-operators/pino_burgers.ipynb
 
 PINO combines two loss components:
 
-1. **Data loss**: MSE between predictions and ground truth
-2. **Physics loss**: Mean squared PDE residual
+1. **Data loss (sparse)**: MSE anchoring the predicted IC frame to the input
+   $u(x,0)$ plus the predicted final frame to the final-time target $u(x,T)$ —
+   no dense trajectory supervision
+2. **Physics loss**: Mean squared Burgers PDE residual over the *full* predicted
+   space-time rollout
 
 $$\mathcal{L}_{\text{total}} = w_d \mathcal{L}_{\text{data}} + w_p \mathcal{L}_{\text{physics}}$$
+
+$$\mathcal{L}_{\text{data}} = \underbrace{\big\| \hat u(\cdot, t_1) - u(\cdot, 0) \big\|^2}_{\text{IC anchor}} + \underbrace{\big\| \hat u(\cdot, t_T) - u(\cdot, T) \big\|^2}_{\text{final-time target}}$$
 
 The physics loss ensures predictions satisfy the Burgers equation:
 
@@ -90,8 +116,8 @@ graph LR
 
     subgraph PINO["Physics-Informed Neural Operator"]
         B["FNO Backbone<br/>(4 spectral layers)"]
-        C["Data Loss<br/>MSE(pred, truth)"]
-        D["Physics Loss<br/>PDE Residual"]
+        C["Data Loss (sparse)<br/>IC anchor + final-time target"]
+        D["Physics Loss<br/>PDE Residual over rollout"]
     end
 
     subgraph Output
@@ -141,61 +167,72 @@ Opifex Example: PINO on 1D Burgers Equation
 ======================================================================
 JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
-Resolution: 64
-Time steps: 5
-Viscosity: 0.05
+Resolution: 64, Time steps: 5, Viscosity: 0.05
 Training samples: 200, Test samples: 50
-Batch size: 16, Epochs: 20
 FNO config: modes=16, width=32, layers=4
 Loss weights: data=1.0, physics=0.1
+Grid: dx=0.0312, dt=0.2000
 ```
 
 ### Step 2: Data Loading
 
+`create_burgers_loader` returns a frozen `PDELoaders` (`.train` / `.val`)
+served via datarax. Following the uniform operator contract, each batch's
+`"input"` is the initial condition $u(x,0)$ and `"output"` is the **final-time**
+solution $u(x,T)$ only — both channels-first `(N, 1, resolution)`. The example
+collects the batched pipelines into in-memory arrays for the training loop:
+
 ```python
-train_loader = create_burgers_loader(
-    n_samples=200,
-    batch_size=16,
-    resolution=64,
-    time_steps=5,
-    viscosity_range=(0.01, 0.1),
-    dimension="1d",
-    seed=42,
+n_samples = N_TRAIN + N_TEST
+loaders = create_burgers_loader(
+    n_samples=n_samples,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    viscosity_range=VISCOSITY_RANGE,  # (0.05, 0.05) — fixed for physics loss
+    val_fraction=N_TEST / n_samples,
+    seed=SEED,
 )
+
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+X_train, Y_train = _collect(loaders.train)  # X, Y(final-time): (N, 1, 64)
+X_test, Y_test = _collect(loaders.val)
 ```
 
 **Terminal Output:**
 
 ```text
-Generating 1D Burgers equation data...
-Training data: X=(192, 1, 64), Y=(192, 5, 64)
-Test data:     X=(48, 1, 64), Y=(48, 5, 64)
+Generating 1D Burgers data (jit+vmap) and serving via datarax...
+Training data: X=(208, 1, 64), Y(final-time)=(208, 1, 64)
+Test data:     X=(64, 1, 64), Y(final-time)=(64, 1, 64)
 ```
 
 ### Step 3: Physics Loss Definition
 
-The PDE residual is computed using finite differences:
+The PDE residual is computed over the full predicted rollout `u` of shape
+`(batch, time_steps, resolution)` using finite differences. Spatial derivatives
+are taken at the time midpoint so the time and space stencils align:
 
 ```python
 def compute_burgers_residual(u, dx, dt, nu):
     # Time derivative: (u(t+1) - u(t)) / dt
     u_t = (u[:, 1:, :] - u[:, :-1, :]) / dt
 
-    # Spatial derivatives using central differences
-    u_x = (u[:, :, 2:] - u[:, :, :-2]) / (2 * dx)
-    u_xx = (u[:, :, 2:] - 2 * u[:, :, 1:-1] + u[:, :, :-2]) / (dx**2)
+    # Use u at the midpoint in time for the spatial derivatives
+    u_mid = 0.5 * (u[:, 1:, :] + u[:, :-1, :])
+    u_x = (u_mid[:, :, 2:] - u_mid[:, :, :-2]) / (2 * dx)
+    u_xx = (u_mid[:, :, 2:] - 2 * u_mid[:, :, 1:-1] + u_mid[:, :, :-2]) / (dx**2)
 
-    # Burgers residual
-    residual = u_t + u * u_x - nu * u_xx
-    return residual
-```
+    u_interior = u_mid[:, :, 1:-1]
+    u_t_interior = u_t[:, :, 1:-1]
 
-**Terminal Output:**
-
-```text
-Defining physics loss functions...
-Grid: dx=0.0312, dt=0.2000
-Burgers PDE: u_t + u*u_x = 0.05*u_xx
+    # Burgers residual: u_t + u * u_x - nu * u_xx = 0
+    return u_t_interior + u_interior * u_x - nu * u_xx
 ```
 
 ### Step 4: Model Creation
@@ -203,11 +240,12 @@ Burgers PDE: u_t + u*u_x = 0.05*u_xx
 ```python
 model = FourierNeuralOperator(
     in_channels=1,
-    out_channels=5,  # Predict 5 time steps
-    hidden_channels=32,
-    modes=16,
-    num_layers=4,
-    rngs=nnx.Rngs(42),
+    out_channels=TIME_STEPS,  # predict the full 5-step rollout
+    hidden_channels=HIDDEN_WIDTH,
+    modes=MODES,
+    num_layers=NUM_LAYERS,
+    spatial_dims=1,
+    rngs=nnx.Rngs(SEED),
 )
 ```
 
@@ -215,51 +253,72 @@ model = FourierNeuralOperator(
 
 ```text
 Creating PINO model (FNO backbone)...
-Model parameters: 69,989
+Model parameters: 140,229
 ```
 
 ### Step 5: Custom Training Loop
 
+The data term is sparse: it anchors the predicted IC frame `y_pred[:, :1]` to the
+input `x` and the predicted final frame `y_pred[:, -1:]` to the final-time target
+`y_true` `(batch, 1, resolution)`. The physics term constrains the whole rollout.
+
 ```python
-def pino_loss(model, x, y, physics_weight=0.1):
-    pred = model(x)
-    data_loss = jnp.mean((pred - y) ** 2)
-    physics_loss = jnp.mean(compute_burgers_residual(pred, dx, dt, nu) ** 2)
-    return data_loss + physics_weight * physics_loss, (data_loss, physics_loss)
+def pino_loss_fn(model, x, y_true, dx, dt, nu, data_weight, physics_weight):
+    y_pred = model(x)  # (batch, time_steps, resolution)
+    ic_loss = jnp.mean((y_pred[:, :1, :] - x) ** 2)        # IC anchor
+    final_loss = jnp.mean((y_pred[:, -1:, :] - y_true) ** 2)  # final-time target
+    data_loss = ic_loss + final_loss
+    pde_loss = physics_loss(y_pred, dx, dt, nu)            # residual over rollout
+    total_loss = data_weight * data_loss + physics_weight * pde_loss
+    return total_loss, {"data_loss": data_loss, "physics_loss": pde_loss}
 ```
 
 **Terminal Output:**
 
 ```text
-Setting up PINO training...
 Starting PINO training...
 Optimizer: Adam (lr=0.001)
+Epoch   1/20: Total=0.247254, Data=0.183517, Physics=0.637368
+Epoch   5/20: Total=0.012081, Data=0.005691, Physics=0.063905
+Epoch  10/20: Total=0.004628, Data=0.002027, Physics=0.026006
+Epoch  15/20: Total=0.003003, Data=0.001242, Physics=0.017616
+Epoch  20/20: Total=0.002359, Data=0.000916, Physics=0.014432
 
-Epoch   1/20: Total=0.373948, Data=0.113593, Physics=2.603551
-Epoch   5/20: Total=0.096795, Data=0.061356, Physics=0.354391
-Epoch  10/20: Total=0.065367, Data=0.035909, Physics=0.294572
-Epoch  15/20: Total=0.049430, Data=0.024689, Physics=0.247415
-Epoch  20/20: Total=0.040649, Data=0.020030, Physics=0.206196
-
-Training completed in 2.2s
+Training completed in 1.6s
 ```
 
 ### Step 6: Evaluation
+
+Accuracy is measured at the supervised final time using the predicted final frame
+`predictions[:, -1:]` against the final-time target. The per-time-step output is the
+mean-squared **PDE residual** along the rollout (physics consistency), not an error
+against a ground-truth trajectory — none exists in the sparse-supervision scheme.
+
+```python
+predictions = model(X_test_jnp)          # (N, TIME_STEPS, resolution)
+final_pred = predictions[:, -1:, :]      # predicted u(x, T)
+
+test_mse = float(jnp.mean((final_pred - Y_test_jnp) ** 2))
+test_physics_loss = float(physics_loss(predictions, DX, DT, VISCOSITY))
+
+step_residual = jnp.mean(
+    compute_burgers_residual(predictions, DX, DT, VISCOSITY) ** 2, axis=(0, 2)
+)
+```
 
 **Terminal Output:**
 
 ```text
 Running evaluation...
-Test MSE:          0.022945
-Test Relative L2:  0.625167
-Test Physics Loss: 0.296343
+Test MSE (final time):  0.000460
+Test Relative L2:       0.093838
+Test Physics Loss:      0.019707
 
-Per-time-step MSE:
-  t_1: 0.056789
-  t_2: 0.024147
-  t_3: 0.012882
-  t_4: 0.010615
-  t_5: 0.010288
+Per-time-step PDE residual (physics consistency of the rollout):
+  t_1: 2.719606e-02
+  t_2: 1.252618e-02
+  t_3: 1.791604e-02
+  t_4: 2.118988e-02
 ```
 
 ### Visualization
@@ -274,13 +333,13 @@ Per-time-step MSE:
 
 ## Results Summary
 
-| Metric            | Value      |
-|-------------------|------------|
-| Test MSE          | 0.023      |
-| Relative L2 Error | 0.625      |
-| Physics Residual  | 0.296      |
-| Training Time     | 2.2s (GPU) |
-| Parameters        | 69,989     |
+| Metric                       | Value       |
+|------------------------------|-------------|
+| Test MSE (final time)        | 0.00046     |
+| Relative L2 Error (final t)  | 0.094       |
+| Physics Loss (rollout)       | 0.020       |
+| Training Time                | 1.6s (GPU)  |
+| Parameters                   | 140,229     |
 
 ## Next Steps
 
@@ -336,13 +395,16 @@ optimizer = optax.chain(
 )
 ```
 
-#### High relative L2 error
+#### High final-time relative L2 error
 
-**Symptom**: Relative L2 > 1.0 even after convergence.
+**Symptom**: Final-time relative L2 stays high (well above ~0.1) after convergence.
 
-**Cause**: Burgers shocks are inherently difficult; physics loss may conflict with data fitting.
+**Cause**: With only the IC and final frames supervised, the physics weight may be
+too low to constrain the interior rollout, or Burgers shocks make the physics loss
+conflict with the sparse data anchors.
 
-**Solution**: Increase training data or use curriculum learning:
+**Solution**: Raise `physics_weight` to lean harder on the PDE residual, add training
+samples, or use curriculum learning:
 
 ```python
 # Start with high viscosity (smooth solutions), decrease over epochs

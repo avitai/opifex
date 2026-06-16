@@ -151,7 +151,6 @@ JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
 Resolution: 64x64
 Training samples: 1024, Test samples: 256
-Batch size: 32, Epochs: 100
 Shared FNO config: modes=16, width=32, layers=4
 ```
 
@@ -178,7 +177,6 @@ for app in applications:
 ======================================================================
 OPERATOR DISCOVERY
 ======================================================================
-
 Available operators by category:
   fourier_operators: FNO, TFNO, UFNO, SFNO, LocalFNO, AM-FNO
   deeponet_family: DeepONet, FourierDeepONet, AdaptiveDeepONet
@@ -200,20 +198,43 @@ Recommendations by application:
 ### Step 3: Data Loading and Normalization
 
 The Darcy loader generates a binary high-contrast permeability field and the exact
-pressure solution. We collect it into channels-first arrays and fit Gaussian
-statistics on the training set.
+pressure solution. A single `create_darcy_loader(...)` call returns a frozen
+`PDELoaders` with `.train` and `.val` datarax pipelines, split by `val_fraction`.
+We drain each pipeline into channels-first arrays and fit Gaussian statistics on
+the training set.
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=1024, batch_size=32, resolution=64,
-    field_type="binary", viscosity_range=(3.0, 12.0),
-    shuffle=True, seed=42, worker_count=0,
+n_samples = N_TRAIN + N_TEST
+loaders = create_darcy_loader(
+    n_samples=n_samples,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    field_type="binary",
+    coeff_range=PERMEABILITY_VALUES,
+    val_fraction=N_TEST / n_samples,
+    seed=SEED,
 )
-# ... collect into (N, 1, H, W) arrays, then normalize ...
+
+X_train, Y_train = collect_darcy_split(loaders.train)
+X_test, Y_test = collect_darcy_split(loaders.val)
+# ... fit Gaussian statistics and normalize ...
 x_mean, x_std = X_train.mean(), X_train.std()
 y_mean, y_std = Y_train.mean(), Y_train.std()
 X_train_n = jnp.array((X_train - x_mean) / x_std)
 Y_train_n = jnp.array((Y_train - y_mean) / y_std)
+```
+
+The `collect_darcy_split` helper drains a datarax pipeline into
+channels-first `(N, 1, H, W)` arrays:
+
+```python
+def collect_darcy_split(pipeline: Any) -> tuple[np.ndarray, np.ndarray]:
+    """Drain a datarax pipeline into channels-first ``(N, 1, H, W)`` arrays."""
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 ```
 
 **Terminal Output:**
@@ -221,8 +242,8 @@ Y_train_n = jnp.array((Y_train - y_mean) / y_std)
 Generating Darcy flow data...
 Training data: X=(1024, 1, 64, 64), Y=(1024, 1, 64, 64)
 Test data:     X=(256, 1, 64, 64), Y=(256, 1, 64, 64)
-Input mean/std:  7.5017 / 4.5000
-Output mean/std: 0.005341 / 0.003578
+Input mean/std:  7.4976 / 4.5000
+Output mean/std: 0.005354 / 0.003583
 ```
 
 ### Step 4: Building the Comparison Set
@@ -243,26 +264,30 @@ class GridWrapped(nnx.Module):
         return self.operator(append_grid_coordinates(x))
 
 
+grid_in_channels = 1 + 2  # permeability + (x, y) coordinate channels
 operators = {
     "Dense FNO": FourierNeuralOperator(
-        in_channels=1, out_channels=1, hidden_channels=32,
-        modes=16, num_layers=4, positional_embedding=True, rngs=nnx.Rngs(42),
+        in_channels=1, out_channels=1, hidden_channels=HIDDEN_CHANNELS,
+        modes=MODES, num_layers=NUM_LAYERS, positional_embedding=True,
+        rngs=nnx.Rngs(SEED),
     ),
     "Tucker TFNO": create_tucker_fno(
-        in_channels=1, out_channels=1, hidden_channels=32,
-        modes=(16, 16), rank=0.5, num_layers=4, rngs=nnx.Rngs(43),
+        in_channels=1, out_channels=1, hidden_channels=HIDDEN_CHANNELS,
+        modes=(MODES, MODES), rank=TUCKER_RANK, num_layers=NUM_LAYERS,
+        rngs=nnx.Rngs(SEED + 1),
     ),
     "CP TFNO": create_cp_fno(
-        in_channels=1, out_channels=1, hidden_channels=32,
-        modes=(16, 16), rank=0.5, num_layers=4, rngs=nnx.Rngs(44),
+        in_channels=1, out_channels=1, hidden_channels=HIDDEN_CHANNELS,
+        modes=(MODES, MODES), rank=CP_RANK, num_layers=NUM_LAYERS,
+        rngs=nnx.Rngs(SEED + 2),
     ),
     "Local FNO": GridWrapped(LocalFourierNeuralOperator(
-        in_channels=3, out_channels=1, hidden_channels=32,
-        modes=(16, 16), num_layers=4, rngs=nnx.Rngs(45),
+        in_channels=grid_in_channels, out_channels=1, hidden_channels=HIDDEN_CHANNELS,
+        modes=(MODES, MODES), num_layers=NUM_LAYERS, rngs=nnx.Rngs(SEED + 3),
     )),
     "U-FNO": GridWrapped(UFourierNeuralOperator(
-        in_channels=3, out_channels=1, hidden_channels=32,
-        modes=(16, 16), num_levels=3, rngs=nnx.Rngs(46),
+        in_channels=grid_in_channels, out_channels=1, hidden_channels=HIDDEN_CHANNELS,
+        modes=(MODES, MODES), num_levels=UFNO_LEVELS, rngs=nnx.Rngs(SEED + 4),
     )),
 }
 ```
@@ -281,7 +306,7 @@ Comparison operators (parameter counts):
     The dense FNO uses full spectral weights, while the Tucker and CP factorized
     FNOs store the same spectral operators in low-rank form. At `rank=0.5` the
     Tucker TFNO is **28x** smaller and the CP TFNO is **282x** smaller than the
-    dense FNO -- and on this benchmark they are *also* more accurate.
+    dense FNO -- and on this benchmark they stay within a hair of its accuracy.
 
 ### Step 5: Training Each Operator
 
@@ -311,23 +336,23 @@ TRAINING COMPARISON
 
 ----------------------------------------------------------------------
 Training Dense FNO (4,203,009 params)...
-  Dense FNO: rel-L2=0.0395, MSE=6.570e-08, time=15.8s, final val loss=0.0011
+  Dense FNO: rel-L2=0.0177, MSE=1.404e-08, time=13.2s, final val loss=0.0016
 
 ----------------------------------------------------------------------
 Training Tucker TFNO (150,017 params)...
-  Tucker TFNO: rel-L2=0.0169, MSE=1.201e-08, time=17.8s, final val loss=0.0011
+  Tucker TFNO: rel-L2=0.0183, MSE=1.433e-08, time=13.8s, final val loss=0.0010
 
 ----------------------------------------------------------------------
 Training CP TFNO (14,913 params)...
-  CP TFNO: rel-L2=0.0256, MSE=2.854e-08, time=16.8s, final val loss=0.0023
+  CP TFNO: rel-L2=0.0253, MSE=2.778e-08, time=13.5s, final val loss=0.0026
 
 ----------------------------------------------------------------------
 Training Local FNO (610,859 params)...
-  Local FNO: rel-L2=0.0342, MSE=4.934e-08, time=23.4s, final val loss=0.0038
+  Local FNO: rel-L2=0.0367, MSE=5.626e-08, time=19.0s, final val loss=0.0049
 
 ----------------------------------------------------------------------
 Training U-FNO (6,994,881 params)...
-  U-FNO: rel-L2=0.0339, MSE=4.857e-08, time=43.9s, final val loss=0.0082
+  U-FNO: rel-L2=0.0293, MSE=3.993e-08, time=32.6s, final val loss=0.0028
 ```
 
 ### Step 6: Mean-Predictor Floor
@@ -342,7 +367,7 @@ mean_baseline_rel_l2 = float(jnp.mean(relative_l2(mean_field, Y_test_jnp)))
 
 **Terminal Output:**
 ```text
-Mean-predictor relative-L2: 0.5572
+Mean-predictor relative-L2: 0.5576
 Every trained operator must beat this floor to be useful.
 ```
 
@@ -356,32 +381,32 @@ COMPARISON SUMMARY (sorted by relative-L2)
 
 Operator          Rel-L2         MSE      Params   vs FNO   Time(s)
 -------------------------------------------------------------------
-Tucker TFNO       0.0169   1.201e-08     150,017   28.02x      17.8
-CP TFNO           0.0256   2.854e-08      14,913  281.84x      16.8
-U-FNO             0.0339   4.857e-08   6,994,881    0.60x      43.9
-Local FNO         0.0342   4.934e-08     610,859    6.88x      23.4
-Dense FNO         0.0395   6.570e-08   4,203,009    1.00x      15.8
-Mean predictor    0.5572
+Dense FNO         0.0177   1.404e-08   4,203,009    1.00x      13.2
+Tucker TFNO       0.0183   1.433e-08     150,017   28.02x      13.8
+CP TFNO           0.0253   2.778e-08      14,913  281.84x      13.5
+U-FNO             0.0293   3.993e-08   6,994,881    0.60x      32.6
+Local FNO         0.0367   5.626e-08     610,859    6.88x      19.0
+Mean predictor    0.5576
 
-Best accuracy: Tucker TFNO (rel-L2=0.0169)
+Best accuracy: Dense FNO (rel-L2=0.0177)
 ```
 
 ### Comparison Table
 
 | Operator | Test Rel-L2 | Test MSE | Parameters | Size vs Dense FNO |
 |----------|------------|----------|------------|-------------------|
-| Tucker TFNO | **0.0169** | 1.201e-08 | 150,017 | 28.02x smaller |
-| CP TFNO | 0.0256 | 2.854e-08 | 14,913 | 281.84x smaller |
-| U-FNO | 0.0339 | 4.857e-08 | 6,994,881 | 0.60x (larger) |
-| Local FNO | 0.0342 | 4.934e-08 | 610,859 | 6.88x smaller |
-| Dense FNO | 0.0395 | 6.570e-08 | 4,203,009 | 1.00x (baseline) |
-| Mean predictor | 0.5572 | -- | -- | -- |
+| Dense FNO | **0.0177** | 1.404e-08 | 4,203,009 | 1.00x (baseline) |
+| Tucker TFNO | 0.0183 | 1.433e-08 | 150,017 | 28.02x smaller |
+| CP TFNO | 0.0253 | 2.778e-08 | 14,913 | 281.84x smaller |
+| U-FNO | 0.0293 | 3.993e-08 | 6,994,881 | 0.60x (larger) |
+| Local FNO | 0.0367 | 5.626e-08 | 610,859 | 6.88x smaller |
+| Mean predictor | 0.5576 | -- | -- | -- |
 
 ### Predictions (Best Operator)
 
 ![Operator tour predictions](../../assets/examples/operator_tour/predictions.png)
 
-The most accurate operator (Tucker TFNO) recovers the Darcy pressure field with a
+The most accurate operator (Dense FNO) recovers the Darcy pressure field with a
 small absolute error concentrated near the high-contrast permeability interfaces.
 
 ### Accuracy, Size, and Cost
@@ -395,10 +420,11 @@ parameter count (lower is more efficient), and training time.
 
 - Trained five Fourier-family operators on the *same* Darcy benchmark with the
   *same* recipe, so accuracy and size are directly comparable
-- Established a clear floor: every operator beats the mean predictor (0.5572) by
+- Established a clear floor: every operator beats the mean predictor (0.5576) by
   more than an order of magnitude
-- Demonstrated the Tensorized FNO compression story -- the Tucker and CP FNOs are
-  both **smaller and more accurate** than the dense FNO on this benchmark
+- Demonstrated the Tensorized FNO compression story -- the Tucker TFNO matches the
+  dense FNO's accuracy (0.0183 vs 0.0177) at **28x** fewer parameters, and the CP
+  TFNO stays competitive (0.0253) at **282x** fewer parameters
 - Verified that Local FNO and U-FNO learn the operator competitively when given
   the same grid-embedding recipe
 
@@ -440,7 +466,7 @@ parameter count (lower is more efficient), and training time.
 
 ### An operator does not beat the mean predictor
 
-**Symptom**: A trained operator's relative-L2 is near `0.5572` (the mean-predictor floor).
+**Symptom**: A trained operator's relative-L2 is near `0.5576` (the mean-predictor floor).
 
 **Cause**: The model is not learning -- usually a missing positional embedding or
 un-normalized targets.

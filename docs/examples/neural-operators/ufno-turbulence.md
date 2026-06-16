@@ -3,7 +3,7 @@
 | Metadata | Value |
 |----------|-------|
 | **Level** | Advanced |
-| **Runtime** | ~5 min (CPU) / ~17 sec (GPU) |
+| **Runtime** | ~5 min (CPU) / ~12 sec (GPU) |
 | **Prerequisites** | JAX, Flax NNX, Multi-scale Analysis, Energy Conservation |
 | **Format** | Python + Jupyter |
 | **Memory** | ~2 GB RAM |
@@ -11,20 +11,22 @@
 ## Overview
 
 This example demonstrates training a U-Net enhanced Fourier Neural Operator (U-FNO) for
-multi-scale turbulence modeling using the Opifex framework. The U-FNO combines the
-hierarchical encoder-decoder structure of U-Net with Fourier spectral convolutions,
-enabling the network to capture turbulent dynamics across multiple spatial scales
-simultaneously.
+multi-scale 2D Navier-Stokes turbulence modeling using the Opifex framework. The U-FNO
+combines the hierarchical encoder-decoder structure of U-Net with Fourier spectral
+convolutions, enabling the network to capture turbulent dynamics across multiple spatial
+scales simultaneously. The operator maps the **initial velocity field** `(u, v)` to the
+**final-time velocity field** of an incompressible Navier-Stokes flow.
 
 The key feature of this example is **physics-aware training with custom energy conservation
 loss**. Rather than relying on generic MSE loss alone, we register a custom loss function
 via `trainer.custom_losses` that penalizes deviations in predicted kinetic energy from the
 ground truth -- a physically meaningful constraint for turbulence modeling.
 
-The pipeline covers: loading 2D turbulent Burgers data via `create_burgers_loader` (Google
-Grain), augmenting inputs with `GridEmbedding2D` for spatial positional encoding, creating
-the model with `create_turbulence_ufno` factory, training with `Trainer.fit()` plus custom
-energy loss, and full evaluation with multi-scale spectral analysis.
+The pipeline covers: loading 2D Navier-Stokes turbulence data via
+`create_navier_stokes_loader` (datarax), augmenting inputs with `GridEmbedding2D` for
+spatial positional encoding, creating the model with `create_turbulence_ufno` factory,
+training with `Trainer.fit()` plus custom energy loss, and full evaluation with multi-scale
+spectral analysis of the velocity-magnitude field.
 
 ## What You'll Learn
 
@@ -40,7 +42,7 @@ energy loss, and full evaluation with multi-scale spectral analysis.
 |--------------------------|--------------|
 | `UFNO(n_modes, hidden_channels, uno_n_modes, ...)` | `create_turbulence_ufno(in_channels=, out_channels=, rngs=)` |
 | Manual grid coordinate concatenation | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
-| `torch.utils.data.DataLoader(dataset)` | `create_burgers_loader(dimension="2d", ...)` (Google Grain) |
+| `torch.utils.data.DataLoader(dataset)` | `create_navier_stokes_loader(...)` (datarax `PDELoaders`) |
 | Manual energy loss + `loss.backward()` | `trainer.custom_losses["energy"] = fn` + `trainer.fit()` |
 | `model.to(device)` | Automatic device placement via JAX |
 
@@ -50,6 +52,7 @@ energy loss, and full evaluation with multi-scale spectral analysis.
 2. **Custom loss API**: Register physics losses via `trainer.custom_losses` dict -- no manual gradient computation needed
 3. **Explicit PRNG**: JAX's `rngs=nnx.Rngs(42)` for reproducible model initialization
 4. **XLA compilation**: Automatic JIT compilation during `Trainer.fit()` for GPU/TPU acceleration
+5. **Frozen loaders**: `create_navier_stokes_loader` returns a `PDELoaders` object exposing pre-split `.train` / `.val` datarax pipelines
 
 ## Files
 
@@ -83,7 +86,7 @@ for turbulence, where energy cascades across spatial scales.
 ```mermaid
 graph LR
     subgraph Input
-        A["Turbulent Field<br/>+ Grid Coords<br/>(3 x 64 x 64)"]
+        A["Initial Velocity (u, v)<br/>+ Grid Coords<br/>(4 x 64 x 64)"]
     end
 
     subgraph Encoder["U-FNO Encoder"]
@@ -96,7 +99,7 @@ graph LR
     end
 
     subgraph Output
-        E["Predicted Field<br/>(1 x 64 x 64)"]
+        E["Final Velocity (u, v)<br/>(2 x 64 x 64)"]
     end
 
     A --> B --> C --> D --> E
@@ -114,28 +117,29 @@ Each spectral layer at each resolution performs:
 3. **Inverse FFT**: Back to spatial domain
 4. **Skip connection**: Add local linear transform
 
-### 2D Turbulent Burgers Equation
+### 2D Navier-Stokes Turbulence
 
-The 2D Burgers equation is a standard benchmark for turbulence modeling:
+The incompressible 2D Navier-Stokes equations describe turbulent fluid flow:
 
-$$\frac{\partial u}{\partial t} + u \cdot \nabla u = \nu \nabla^2 u$$
+$$\frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla)\mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u}, \quad \nabla \cdot \mathbf{u} = 0$$
 
 | Variable | Meaning | Role |
 |----------|---------|------|
-| $u(x, t)$ | Velocity field | Prognostic variable |
+| $\mathbf{u}(x, t) = (u, v)$ | Velocity field | Prognostic variable (2 channels) |
+| $p$ | Pressure | Enforces incompressibility |
 | $\nu$ | Viscosity | Controls turbulence intensity |
 | $\nabla^2$ | Laplacian | Diffusion operator |
 
 Lower viscosity values produce more turbulent (chaotic) flows. The synthetic data uses
 viscosity in range [0.001, 0.005] to generate highly turbulent regimes. The model learns
-to map the initial condition to the final time step.
+to map the **initial velocity field** $(u, v)$ to the **final-time velocity field** $(u, v)$.
 
 ### Grid Embedding for Positional Encoding
 
 `GridEmbedding2D` appends normalized spatial coordinates (x, y) as additional input
 channels. For turbulence modeling, this provides the network with positional context,
-helping it learn spatially varying dynamics. A 1-channel velocity field becomes a
-3-channel tensor (velocity + x-coord + y-coord) after embedding.
+helping it learn spatially varying dynamics. A 2-channel velocity field $(u, v)$ becomes a
+4-channel tensor (u + v + x-coord + y-coord) after embedding.
 
 ## Implementation
 
@@ -155,7 +159,7 @@ import numpy as np
 from flax import nnx
 
 from opifex.core.training import Trainer, TrainingConfig
-from opifex.data.loaders.factory import create_burgers_loader
+from opifex.data.loaders.factory import create_navier_stokes_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.ufno import create_turbulence_ufno
 ```
@@ -163,7 +167,7 @@ from opifex.neural.operators.fno.ufno import create_turbulence_ufno
 **Terminal Output:**
 ```
 ======================================================================
-Opifex Example: Full U-FNO for Turbulence Modeling
+Opifex Example: Full U-FNO for 2D Navier-Stokes Turbulence Modeling
 ======================================================================
 JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
@@ -174,18 +178,18 @@ JAX devices: [CudaDevice(id=0)]
 Define experiment parameters as simple variables:
 
 ```python
-RESOLUTION = 64
-N_TRAIN = 300
-N_TEST = 60
-BATCH_SIZE = 16
-NUM_EPOCHS = 5
-LEARNING_RATE = 1e-3
-IN_CHANNELS = 1
-OUT_CHANNELS = 1
-SEED = 42
+resolution = 64
+n_train = 300
+n_test = 60
+batch_size = 16
+num_epochs = 5
+learning_rate = 1e-3
+in_channels = 2  # (u, v) velocity components
+out_channels = 2  # (u, v) velocity components
+seed = 42
 
-OUTPUT_DIR = Path("docs/assets/examples/ufno_turbulence")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+output_dir = Path("docs/assets/examples/ufno_turbulence")
+output_dir.mkdir(parents=True, exist_ok=True)
 ```
 
 **Terminal Output:**
@@ -196,51 +200,56 @@ Batch: 16, Epochs: 5
 
 | Hyperparameter | Value | Purpose |
 |----------------|-------|---------|
-| `RESOLUTION` | 64 | Spatial grid resolution (64x64) |
-| `N_TRAIN` / `N_TEST` | 300 / 60 | Training and test samples |
-| `BATCH_SIZE` | 16 | Samples per training batch |
-| `NUM_EPOCHS` | 5 | Training epochs |
-| `LEARNING_RATE` | 1e-3 | Adam optimizer learning rate |
-| `IN_CHANNELS` / `OUT_CHANNELS` | 1 / 1 | Scalar velocity field in/out |
+| `resolution` | 64 | Spatial grid resolution (64x64) |
+| `n_train` / `n_test` | 300 / 60 | Training and test samples |
+| `batch_size` | 16 | Samples per training batch |
+| `num_epochs` | 5 | Training epochs |
+| `learning_rate` | 1e-3 | Adam optimizer learning rate |
+| `in_channels` / `out_channels` | 2 / 2 | Velocity field $(u, v)$ in/out |
 
-### Step 3: Data Loading with Grain
+### Step 3: Data Loading with datarax
 
-The `create_burgers_loader` generates synthetic 2D turbulent Burgers equation data and wraps
-it in a Google Grain DataLoader. The Burgers output contains multiple time steps -- we extract
-the last time step as the prediction target.
+The `create_navier_stokes_loader` generates synthetic 2D Navier-Stokes turbulence data and
+returns a frozen `PDELoaders` object with pre-split `.train` / `.val` datarax pipelines.
+Batches are channels-first dicts where `input` and `output` are each shaped `(batch, 2, H, W)`
+-- the 2 channels are the `(u, v)` velocity components (initial velocity in, final velocity out).
 
 ```python
-train_loader = create_burgers_loader(
-    n_samples=N_TRAIN, batch_size=BATCH_SIZE, dimension="2d",
-    resolution=RESOLUTION, viscosity_range=(0.001, 0.005),
-    time_range=(0.0, 1.0), shuffle=True, seed=SEED + 2000, worker_count=0)
+n_samples = n_train + n_test
+loaders = create_navier_stokes_loader(
+    n_samples=n_samples,
+    batch_size=batch_size,
+    resolution=resolution,
+    viscosity_range=(0.001, 0.005),
+    time_range=(0.0, 1.0),
+    val_fraction=n_test / n_samples,
+    seed=seed,
+)
 
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
+def _collect(pipeline: object) -> tuple[np.ndarray, np.ndarray]:
+    """Materialize a datarax pipeline into channels-first (N, 2, H, W) arrays."""
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
-# Add channel dimension, then extract last time step from Burgers output
-if X_train.ndim == 3:
-    X_train, Y_train = X_train[:, None, :, :], Y_train[:, None, :, :]
-if Y_train.ndim == 5:  # (batch, 1, time_steps, H, W) -> (batch, 1, H, W)
-    Y_train = Y_train[:, :, -1, :, :]
+x_train, y_train = _collect(loaders.train)
+x_test, y_test = _collect(loaders.val)
 ```
 
 **Terminal Output:**
 ```
-Loading 2D Turbulent Burgers data via Grain...
-Train: X=(288, 1, 64, 64), Y=(288, 1, 64, 64)
-Test:  X=(48, 1, 64, 64), Y=(48, 1, 64, 64)
+Loading 2D Navier-Stokes turbulence data via datarax...
+Train: X=(304, 2, 64, 64), Y=(304, 2, 64, 64)
+Test:  X=(64, 2, 64, 64), Y=(64, 2, 64, 64)
 ```
 
-!!! note "Burgers Time Steps"
-    The Burgers data loader produces output with shape `(batch, time_steps, H, W)`.
-    After adding a channel dimension and extracting the last time step, the final target
-    shape is `(batch, 1, H, W)` -- matching the model's single-channel output.
+!!! note "Frozen PDELoaders"
+    `create_navier_stokes_loader` returns a `PDELoaders` object that pre-splits the data
+    into `.train` and `.val` datarax pipelines according to `val_fraction`. Each batch is a
+    channels-first dict with `input` / `output` shaped `(batch, 2, H, W)` -- already matching
+    the model's two-channel `(u, v)` velocity layout, so no reshaping is required.
 
 ### Step 4: Model Creation with Grid Embedding
 
@@ -249,18 +258,19 @@ Create a `GridEmbedding2D` to inject spatial coordinates and the U-FNO model via
 
 ```python
 grid_embedding = GridEmbedding2D(
-    in_channels=IN_CHANNELS, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]])
+    in_channels=in_channels, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]])
 
 model = create_turbulence_ufno(
     in_channels=grid_embedding.out_channels,
-    out_channels=OUT_CHANNELS, rngs=nnx.Rngs(SEED))
+    out_channels=out_channels, rngs=nnx.Rngs(seed))
 ```
 
 **Terminal Output:**
 ```
 Creating U-FNO model with grid embedding...
-GridEmbedding2D: 1 -> 3 channels
-U-FNO: 3 -> 1 channels
+GridEmbedding2D: 2 -> 4 channels
+U-FNO: 4 -> 2 channels
+Model parameters: 240,130,562
 ```
 
 ### Step 5: Apply Grid Embedding to Data
@@ -275,15 +285,15 @@ def apply_embedding(x_data, embedding):
     x_embedded = embedding(x_grid)                      # (B, H, W, C+2)
     return np.array(jnp.moveaxis(x_embedded, -1, 1))    # (B, C+2, H, W)
 
-X_train_emb = apply_embedding(X_train, grid_embedding)
-X_test_emb = apply_embedding(X_test, grid_embedding)
+x_train_emb = apply_embedding(x_train, grid_embedding)
+x_test_emb = apply_embedding(x_test, grid_embedding)
 ```
 
 **Terminal Output:**
 ```
 Applying grid embedding to data...
-Embedded train: (288, 3, 64, 64)
-Embedded test:  (48, 3, 64, 64)
+Embedded train: (304, 4, 64, 64)
+Embedded test:  (64, 4, 64, 64)
 ```
 
 !!! tip "Why Pre-Apply Grid Embedding?"
@@ -301,9 +311,9 @@ training objective.
 
 ```python
 config = TrainingConfig(
-    num_epochs=NUM_EPOCHS, learning_rate=LEARNING_RATE,
-    batch_size=BATCH_SIZE, verbose=True)
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+    num_epochs=num_epochs, learning_rate=learning_rate,
+    batch_size=batch_size, verbose=True)
+trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
 
 # Register energy conservation as custom loss
 def energy_loss_fn(model, x, y_pred, y_true):
@@ -315,8 +325,8 @@ def energy_loss_fn(model, x, y_pred, y_true):
 trainer.custom_losses["energy"] = energy_loss_fn
 
 trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train_emb), jnp.array(Y_train)),
-    val_data=(jnp.array(X_test_emb), jnp.array(Y_test)))
+    train_data=(jnp.array(x_train_emb), jnp.array(y_train)),
+    val_data=(jnp.array(x_test_emb), jnp.array(y_test)))
 ```
 
 **Terminal Output:**
@@ -326,7 +336,7 @@ Optimizer: Adam (lr=0.001)
 Custom loss: energy conservation (weight=0.1)
 
 Starting training...
-Done in 16.5s | Train: 0.0011161690248021234 | Val: 0.004518489353358746
+Done in 11.5s | Train: 0.000789 | Val: 0.001596
 ```
 
 !!! info "Custom Loss Signature"
@@ -340,26 +350,28 @@ Evaluate the trained U-FNO on the test set with MSE, per-sample relative L2 erro
 energy conservation metrics:
 
 ```python
-predictions = trained_model(X_test_jnp)
+x_test_jnp = jnp.array(x_test_emb)
+y_test_jnp = jnp.array(y_test)
+predictions = trained_model(x_test_jnp)
 
-test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
+test_mse = float(jnp.mean((predictions - y_test_jnp) ** 2))
 
 per_sample_errors = []
-for i in range(Y_test_jnp.shape[0]):
-    p, t = predictions[i:i+1], Y_test_jnp[i:i+1]
+for i in range(y_test_jnp.shape[0]):
+    p, t = predictions[i:i+1], y_test_jnp[i:i+1]
     per_sample_errors.append(
         float(jnp.sqrt(jnp.sum((p-t)**2)) / jnp.sqrt(jnp.sum(t**2))))
 
 pred_energy = jnp.mean(predictions**2, axis=(2, 3))
-target_energy = jnp.mean(Y_test_jnp**2, axis=(2, 3))
+target_energy = jnp.mean(y_test_jnp**2, axis=(2, 3))
 energy_conservation = float(jnp.mean(jnp.abs(pred_energy - target_energy)))
 ```
 
 **Terminal Output:**
 ```
 Running full evaluation...
-MSE: 0.000600 | Rel L2: 0.079943+/-0.031530
-Energy Conservation: 0.003490
+MSE: 0.000166 | Rel L2: 0.056688+/-0.063488
+Energy Conservation: 0.003750
 ```
 
 ### Visualization
@@ -367,8 +379,8 @@ Energy Conservation: 0.003490
 The example generates four sets of visualizations:
 
 1. **Training curves**: Final loss, MSE, relative L2, energy conservation, and per-sample error
-2. **Sample predictions**: Input, ground truth, U-FNO prediction, and absolute error for test samples
-3. **Multi-scale analysis**: Frequency content comparison and energy spectrum analysis
+2. **Sample predictions**: Initial velocity magnitude, ground-truth final, U-FNO final, and absolute error (all on $|v| = \sqrt{u^2 + v^2}$)
+3. **Multi-scale analysis**: Frequency content and energy spectrum of the velocity-magnitude field
 4. **Error analysis**: Error distribution, per-sample error, cumulative distribution, and statistics
 
 #### Training Curves
@@ -377,7 +389,7 @@ The example generates four sets of visualizations:
 
 #### Sample Predictions
 
-![U-FNO turbulence predictions showing input fields, ground truth, U-FNO predictions, and absolute error for three test samples](../../assets/examples/ufno_turbulence/sample_predictions.png)
+![U-FNO Navier-Stokes predictions showing initial velocity magnitude, ground-truth final velocity magnitude, U-FNO predictions, and absolute error for three test samples](../../assets/examples/ufno_turbulence/sample_predictions.png)
 
 #### Multi-Scale Analysis
 
@@ -392,49 +404,51 @@ The example generates four sets of visualizations:
 **Terminal Output:**
 ```
 ======================================================================
-Full U-FNO Turbulence example completed in 16.5s
-Mean Relative L2 Error: 0.079943
+Full U-FNO Navier-Stokes turbulence example completed in 11.5s
+Mean Relative L2 Error: 0.056688
 Results saved to: docs/assets/examples/ufno_turbulence
 ======================================================================
 ```
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Test MSE | 0.000600 | Mean squared error on test set |
-| Test Relative L2 | 0.079943 +/- 0.031530 | Mean +/- std relative L2 error |
-| Energy Conservation | 0.003490 | Mean energy deviation (lower is better) |
-| Final Train Loss | 0.001116 | Training loss at epoch 5 |
-| Final Val Loss | 0.004518 | Validation loss at epoch 5 |
-| Training Time | 16.5s | On GPU (CudaDevice) |
+| Test MSE | 0.000166 | Mean squared error on test set |
+| Test Relative L2 | 0.056688 +/- 0.063488 | Mean +/- std relative L2 error |
+| Energy Conservation | 0.003750 | Mean energy deviation (lower is better) |
+| Final Train Loss | 0.000789 | Training loss at epoch 5 |
+| Final Val Loss | 0.001596 | Validation loss at epoch 5 |
+| Model Parameters | 240,130,562 | Total trainable parameters |
+| Training Time | 11.5s | On GPU (CudaDevice) |
 | Resolution | 64x64 | Spatial grid resolution |
 
 ### What We Achieved
 
 - Built a U-FNO with `GridEmbedding2D` positional encoding and `create_turbulence_ufno` factory
+- Mapped initial velocity $(u, v)$ to final-time velocity for 2D Navier-Stokes turbulence
 - Trained with custom energy conservation loss via `trainer.custom_losses["energy"]` API
-- Achieved ~8% relative L2 error with only 5 epochs on 288 training samples
-- Energy conservation error of 0.003490, showing the physics loss effectively constrains predictions
+- Achieved ~5.7% relative L2 error with only 5 epochs on 304 training samples
+- Energy conservation error of 0.003750, showing the physics loss effectively constrains predictions
 - Generated multi-scale spectral analysis comparing U-FNO frequency content to ground truth
 
 ### Interpretation
 
 The U-FNO captures turbulent dynamics effectively even with minimal training. The
-relative L2 error of ~0.08 with just 5 epochs demonstrates the architecture's efficiency
-for multi-scale problems. The low energy conservation error (0.003490) confirms that the
+relative L2 error of ~0.057 with just 5 epochs demonstrates the architecture's efficiency
+for multi-scale problems. The low energy conservation error (0.003750) confirms that the
 custom physics loss successfully constrains the model to preserve kinetic energy. The
-spectral analysis shows good agreement between predicted and ground truth frequency
-content, with the U-FNO accurately capturing both low-frequency structure and
-higher-frequency turbulent features.
+spectral analysis of the velocity-magnitude field shows good agreement between predicted
+and ground-truth frequency content, with the U-FNO accurately capturing both low-frequency
+structure and higher-frequency turbulent features.
 
 ## Next Steps
 
 ### Experiments to Try
 
-1. **Longer training**: Increase `NUM_EPOCHS` to 50-100 for substantially improved accuracy
+1. **Longer training**: Increase `num_epochs` to 50-100 for substantially improved accuracy
 2. **Stronger physics loss**: Increase the energy loss weight from 0.1 to 0.5 or add vorticity preservation
-3. **Higher resolution**: Use `RESOLUTION=128` or `RESOLUTION=256` for finer turbulent structures
+3. **Higher resolution**: Use `resolution=128` or `resolution=256` for finer turbulent structures
 4. **Lower viscosity**: Set `viscosity_range=(0.0001, 0.001)` for more chaotic turbulent regimes
-5. **Compare with standard FNO**: Run the same problem with `FourierNeuralOperator` to see the U-Net advantage
+5. **Compare with standard FNO**: Run the same Navier-Stokes problem with `FourierNeuralOperator` to see the U-Net advantage
 
 ### Related Examples
 
@@ -453,7 +467,7 @@ higher-frequency turbulent features.
 - [`GridEmbedding2D`](../../api/neural.md) - 2D spatial coordinate embedding layer
 - [`Trainer`](../../api/training.md) - Training orchestration with custom loss support
 - [`TrainingConfig`](../../api/training.md) - Training hyperparameter configuration
-- [`create_burgers_loader`](../../api/data.md) - Grain-based Burgers equation data loader
+- [`create_navier_stokes_loader`](../../api/data.md) - datarax-based 2D Navier-Stokes turbulence data loader
 
 ## Troubleshooting
 
@@ -481,27 +495,13 @@ config = TrainingConfig(gradient_checkpointing=True, gradient_checkpoint_policy=
 **Solution**:
 ```python
 # Reduce learning rate
-LEARNING_RATE = 1e-4  # Was 1e-3
+learning_rate = 1e-4  # Was 1e-3
 
 # Or reduce energy loss weight
 def energy_loss_fn(model, x, y_pred, y_true):
     pred_energy = jnp.mean(y_pred**2, axis=(2, 3))
     target_energy = jnp.mean(y_true**2, axis=(2, 3))
     return 0.01 * jnp.mean(jnp.abs(pred_energy - target_energy))  # Was 0.1
-```
-
-### Burgers data shape mismatch
-
-**Symptom**: Shape error when training -- model output doesn't match target shape.
-
-**Cause**: Burgers 2D output includes multiple time steps `(batch, time_steps, H, W)`.
-The time step dimension must be handled before training.
-
-**Solution**: The example handles this automatically by extracting the last time step:
-```python
-# After adding channel dim: (batch, 1, time_steps, H, W) -> (batch, 1, H, W)
-if Y_train.ndim == 5:
-    Y_train = Y_train[:, :, -1, :, :]
 ```
 
 ### Grid embedding layout mismatch

@@ -13,7 +13,7 @@
 Train a Fourier Neural Operator (FNO) on Darcy flow using Opifex APIs.
 This example demonstrates:
 
-- **create_darcy_loader**: On-demand PDE data generation
+- **create_darcy_loader**: datarax-backed PDE data generation
 - **FourierNeuralOperator**: Spectral convolution for operator learning
 - **GridEmbedding2D**: Positional encoding for resolution invariance
 - **Trainer.fit()**: Streamlined training workflow
@@ -51,21 +51,49 @@ jupyter lab examples/getting-started/first_neural_operator.ipynb
 ### Step 1: Load Data
 
 Generate Darcy flow data at multiple resolutions for training and testing.
+Each call to `create_darcy_loader()` builds a datarax pipeline at its own
+resolution and returns a frozen `PDELoaders` with `.train` and `.val` splits.
+A small `_drain()` helper iterates both splits and concatenates them into a
+single contiguous block of channels-first `(N, 1, H, W)` arrays.
 
 ```python
+import numpy as np
+
 from opifex.data.loaders import create_darcy_loader
 
-# Training data at 32x32
-train_loader = create_darcy_loader(
-    n_samples=1000, batch_size=32, resolution=32,
-    shuffle=True, seed=42, worker_count=0, enable_normalization=False,
+
+# Each split is a separate datarax generation at its own resolution. The
+# train/val pipelines are both drained for a single contiguous block of
+# channels-first ``(N, 1, H, W)`` samples.
+def _drain(loaders) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for pipeline in (loaders.train, loaders.val):
+        for batch in pipeline:
+            inputs.append(np.asarray(batch["input"]))
+            outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+
+# Training data at low resolution.
+X_train, Y_train = _drain(
+    create_darcy_loader(
+        n_samples=1000, batch_size=32, resolution=32, seed=42
+    )
 )
 
-# Test data at 32x32 (same resolution)
-test_loader_32 = create_darcy_loader(n_samples=100, resolution=32, ...)
+# Test data at the SAME resolution.
+X_test_32, Y_test_32 = _drain(
+    create_darcy_loader(
+        n_samples=100, batch_size=100, resolution=32, seed=42 + 1000
+    )
+)
 
-# Test data at 64x64 (zero-shot super-resolution!)
-test_loader_64 = create_darcy_loader(n_samples=100, resolution=64, ...)
+# Test data at a HIGHER resolution - for zero-shot super-resolution!
+X_test_64, Y_test_64 = _drain(
+    create_darcy_loader(
+        n_samples=100, batch_size=100, resolution=64, seed=42 + 2000
+    )
+)
 ```
 
 **Terminal Output:**
@@ -80,10 +108,10 @@ Training resolution: 32x32
 Test resolutions: 32x32, 64x64 (zero-shot)
 
 Loading Darcy flow data...
-  Training data (32x32): X=(992, 1, 32, 32), Y=(992, 1, 32, 32)
-  Test data (32x32): X=(100, 1, 32, 32), Y=(100, 1, 32, 32)
-  Test data (64x64): X=(100, 1, 64, 64), Y=(100, 1, 64, 64) <- UNSEEN resolution!
-  Normalization: Y_mean=0.0543, Y_std=0.0380
+  Training data (32x32): X=(1024, 1, 32, 32), Y=(1024, 1, 32, 32)
+  Test data (32x32): X=(200, 1, 32, 32), Y=(200, 1, 32, 32)
+  Test data (64x64): X=(200, 1, 64, 64), Y=(200, 1, 64, 64) <- UNSEEN resolution!
+  Normalization: Y_mean=0.2145, Y_std=0.1557
 ```
 
 ### Step 2: Create FNO with Grid Embedding
@@ -152,7 +180,7 @@ trained_model, metrics = trainer.fit(
 Training on 32x32 resolution...
 --------------------------------------------------
 --------------------------------------------------
-Training completed in 18.2s
+Training completed in 19.3s
 ```
 
 ### Step 4: Zero-Shot Super-Resolution Test
@@ -173,8 +201,8 @@ rel_l2_64 = compute_relative_l2(predictions_64, Y_test_64)
 ======================================================================
 ZERO-SHOT SUPER-RESOLUTION TEST
 ======================================================================
-  Test at 32x32 (training resolution): 2.01% relative L2
-  Test at 64x64 (ZERO-SHOT, 2x): 5.92% relative L2
+  Test at 32x32 (training resolution): 14.57% relative L2
+  Test at 64x64 (ZERO-SHOT, 2x): 11.62% relative L2
 
 NOTE: The 64x64 test uses different samples, so high error is expected.
 True zero-shot super-resolution requires testing the same physics at
@@ -190,8 +218,8 @@ Compare predictions at both resolutions:
 
 The visualization shows:
 
-- **Row 1 (32x32)**: Training resolution with 2.0% error - model captures the pressure field
-- **Row 2 (64x64)**: Zero-shot test at 2x resolution on different samples (~6% error)
+- **Row 1 (32x32)**: Training resolution with 14.6% error - model captures the pressure field
+- **Row 2 (64x64)**: Zero-shot test at 2x resolution on different samples (~12% error)
 
 The FNO Prediction column uses the same color scale as Ground Truth for fair comparison.
 
@@ -200,10 +228,10 @@ The FNO Prediction column uses the same color scale as Ground Truth for fair com
 | Metric                | Value      |
 |-----------------------|------------|
 | Parameters            | 2,368,001  |
-| Training Time         | 18.2s      |
+| Training Time         | 19.3s      |
 | Epochs                | 200        |
-| Test Error (32x32)    | 2.01%      |
-| Test Error (64x64)    | 5.92%      |
+| Test Error (32x32)    | 14.57%     |
+| Test Error (64x64)    | 11.62%     |
 
 **Note**: The 64x64 test uses different physics samples than training. For true
 zero-shot super-resolution (same sample at different resolutions), see the

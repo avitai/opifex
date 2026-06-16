@@ -362,7 +362,7 @@ Modular components that can be combined flexibly:
 ```python
 # Compose different components
 from opifex.training.basic_trainer import ModularTrainer
-from opifex.training.recovery import ErrorRecoveryManager
+from opifex.core.training.components.recovery import ErrorRecoveryManager
 
 trainer = ModularTrainer(
     model=model,

@@ -3,7 +3,7 @@
 | Metadata          | Value                           |
 |-------------------|---------------------------------|
 | **Level**         | Intermediate                    |
-| **Runtime**       | ~2 min (CPU) / ~30s (GPU)       |
+| **Runtime**       | ~2 min (CPU) / ~20s (GPU)       |
 | **Prerequisites** | JAX, Flax NNX, Neural Operators basics |
 | **Format**        | Python + Jupyter                |
 | **Memory**        | ~1 GB RAM                       |
@@ -18,7 +18,7 @@ spatial locations.
 
 This example applies the standard operator-learning recipe -- ~1000 training
 samples, Gaussian input/output normalization, and the relative-L2 objective --
-to drive the test relative L2 error below 0.04.
+to drive the test relative L2 error to ~0.096.
 
 ## What You'll Learn
 
@@ -142,22 +142,46 @@ Sensors: 1024, Latent dim: 128
 ### Step 2: Data Preparation and Normalization
 
 DeepONet requires reshaping grid data into sensor values and coordinate queries.
-We then fit Gaussian statistics on the training split and standardize the branch
-input and the target -- the standard operator-learning normalization:
+`create_darcy_loader` returns a frozen `PDELoaders` whose `.train`/`.val`
+datarax pipelines yield channels-first dicts with `"input"`/`"output"` of shape
+`(b, 1, res, res)`; we collect both splits and drop the channel axis. We then
+fit Gaussian statistics on the training split and standardize the branch input
+and the target -- the standard operator-learning normalization:
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=1000, batch_size=1000, resolution=32,
-    shuffle=True, seed=42, worker_count=0,
+n_samples = N_TRAIN + N_TEST
+loaders = create_darcy_loader(
+    n_samples=n_samples,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    val_fraction=N_TEST / n_samples,
+    seed=SEED,
 )
-train_batch = next(iter(train_loader))
+
+
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+
+X_train_grid, Y_train_grid = _collect(loaders.train)  # (N, 1, res, res)
+X_test_grid, Y_test_grid = _collect(loaders.val)  # (N, 1, res, res)
+
+# Drop the channel axis so the viz/grid views are (N, res, res).
+X_train_grid = X_train_grid[:, 0]
+Y_train_grid = Y_train_grid[:, 0]
+X_test_grid = X_test_grid[:, 0]
+Y_test_grid = Y_test_grid[:, 0]
 
 # Flatten grid to sensor values for branch input
-X_train_branch = X_train_grid.reshape(N, -1)  # (1000, 1024)
+X_train_branch = X_train_grid.reshape(X_train_grid.shape[0], -1)  # (1024, 1024)
 
 # Create coordinate grid for trunk input
-x_coords = np.linspace(0, 1, 32)
-y_coords = np.linspace(0, 1, 32)
+x_coords = np.linspace(0, 1, RESOLUTION)
+y_coords = np.linspace(0, 1, RESOLUTION)
 xx, yy = np.meshgrid(x_coords, y_coords)
 trunk_coords = np.stack([xx.ravel(), yy.ravel()], axis=-1)  # (1024, 2)
 
@@ -171,11 +195,11 @@ Y_train_flat_n = (Y_train_flat - y_mean) / y_std
 **Terminal Output:**
 
 ```text
-Branch input: (1000, 1024)
+Branch input: (1024, 1024)
 Trunk input:  (1024, 2)
-Target:       (1000, 1024)
-Input mean/std:  0.6275 / 0.2148
-Output mean/std: 0.054309 / 0.038002
+Target:       (1024, 1024)
+Input mean/std:  0.1778 / 0.1302
+Output mean/std: 0.213690 / 0.155666
 ```
 
 ### Step 3: Model Creation
@@ -240,26 +264,26 @@ def train_step(model, opt, x_branch, y_target):
 Optimizer: Adam + warmup-cosine (peak lr=0.001), loss: relative L2
 
 Starting training (300 epochs)...
-  Epoch   1/300: train_rel_l2=0.990947, val_rel_l2=0.560450
-  Epoch  20/300: train_rel_l2=0.355812, val_rel_l2=0.197688
-  Epoch  40/300: train_rel_l2=0.347150, val_rel_l2=0.195451
-  Epoch  60/300: train_rel_l2=0.342758, val_rel_l2=0.191856
-  Epoch  80/300: train_rel_l2=0.336159, val_rel_l2=0.189663
-  Epoch 100/300: train_rel_l2=0.328133, val_rel_l2=0.190137
-  Epoch 120/300: train_rel_l2=0.255010, val_rel_l2=0.144321
-  Epoch 140/300: train_rel_l2=0.241402, val_rel_l2=0.145491
-  Epoch 160/300: train_rel_l2=0.225800, val_rel_l2=0.131987
-  Epoch 180/300: train_rel_l2=0.119539, val_rel_l2=0.065086
-  Epoch 200/300: train_rel_l2=0.095772, val_rel_l2=0.050080
-  Epoch 220/300: train_rel_l2=0.085921, val_rel_l2=0.059536
-  Epoch 240/300: train_rel_l2=0.075493, val_rel_l2=0.043733
-  Epoch 260/300: train_rel_l2=0.071263, val_rel_l2=0.040686
-  Epoch 280/300: train_rel_l2=0.069616, val_rel_l2=0.039738
-  Epoch 300/300: train_rel_l2=0.068979, val_rel_l2=0.039431
+  Epoch   1/300: train_rel_l2=0.976938, val_rel_l2=0.570805
+  Epoch  20/300: train_rel_l2=0.361212, val_rel_l2=0.220560
+  Epoch  40/300: train_rel_l2=0.346964, val_rel_l2=0.226637
+  Epoch  60/300: train_rel_l2=0.343366, val_rel_l2=0.218275
+  Epoch  80/300: train_rel_l2=0.343839, val_rel_l2=0.218670
+  Epoch 100/300: train_rel_l2=0.275530, val_rel_l2=0.178635
+  Epoch 120/300: train_rel_l2=0.263607, val_rel_l2=0.173579
+  Epoch 140/300: train_rel_l2=0.254315, val_rel_l2=0.171776
+  Epoch 160/300: train_rel_l2=0.227417, val_rel_l2=0.160063
+  Epoch 180/300: train_rel_l2=0.141780, val_rel_l2=0.108270
+  Epoch 200/300: train_rel_l2=0.130007, val_rel_l2=0.104614
+  Epoch 220/300: train_rel_l2=0.122391, val_rel_l2=0.098307
+  Epoch 240/300: train_rel_l2=0.118580, val_rel_l2=0.097228
+  Epoch 260/300: train_rel_l2=0.116379, val_rel_l2=0.096163
+  Epoch 280/300: train_rel_l2=0.115441, val_rel_l2=0.095856
+  Epoch 300/300: train_rel_l2=0.114946, val_rel_l2=0.095595
 
-Training completed in 22.8s
-Final train rel-L2: 6.897857e-02
-Final val rel-L2:   3.943070e-02
+Training completed in 20.5s
+Final train rel-L2: 1.149460e-01
+Final val rel-L2:   9.559528e-02
 ```
 
 ### Step 5: Evaluation
@@ -274,14 +298,14 @@ predictions = predict_in_batches(model, X_test_jax) * y_std + y_mean
 **Terminal Output:**
 
 ```text
-Test MSE:         6.597305e-06
-Test Relative L2: 0.039431
-Min Relative L2:  0.022188
-Max Relative L2:  0.062939
+Test MSE:         6.161190e-04
+Test Relative L2: 0.095595
+Min Relative L2:  0.045070
+Max Relative L2:  0.420210
 
 ======================================================================
-DeepONet Darcy Flow example completed in 22.8s
-Test MSE: 0.000007, Relative L2: 0.039431
+DeepONet Darcy Flow example completed in 20.5s
+Test MSE: 0.000616, Relative L2: 0.095595
 Results saved to: docs/assets/examples/deeponet_darcy
 ======================================================================
 ```
@@ -316,18 +340,18 @@ are encoded in the latent space.
 
 | Metric                  | Value       |
 |-------------------------|-------------|
-| Test MSE                | 6.60e-6     |
-| Relative L2 Error       | 0.0394      |
-| Min / Max Relative L2   | 0.0222 / 0.0629 |
-| Training Time           | 22.8s (GPU) |
+| Test MSE                | 6.16e-4     |
+| Relative L2 Error       | 0.0956      |
+| Min / Max Relative L2   | 0.0451 / 0.4202 |
+| Training Time           | 20.5s (GPU) |
 | Parameters              | 411,008     |
-| Final Train rel-L2      | 6.90e-2     |
-| Final Val rel-L2        | 3.94e-2     |
+| Final Train rel-L2      | 1.15e-1     |
+| Final Val rel-L2        | 9.56e-2     |
 
 The operator-learning recipe -- 1000 training samples, Gaussian normalization,
 and the relative-L2 objective with a warmup-cosine schedule -- drives the test
-relative L2 below 0.04, an order of magnitude better than an unnormalized
-MSE-trained baseline.
+relative L2 to ~0.096, substantially better than an unnormalized MSE-trained
+baseline.
 
 ## Next Steps
 

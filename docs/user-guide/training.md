@@ -147,9 +147,9 @@ For complex scientific applications, the `ModularTrainer` provides a component-b
 
 ```python
 from opifex.training.basic_trainer import ModularTrainer
-from opifex.training.recovery import ErrorRecoveryManager
-from opifex.training.components import FlexibleOptimizerFactory
-from opifex.training.metrics import AdvancedMetricsCollector
+from opifex.core.training.components.recovery import ErrorRecoveryManager
+from opifex.core.training.components import FlexibleOptimizerFactory
+from opifex.core.training.monitoring.metrics import AdvancedMetricsCollector
 
 # Configure advanced training components
 error_recovery = ErrorRecoveryManager(
@@ -534,7 +534,7 @@ regularized_trainer = RegularizedTrainer(
 ### Advanced Metrics Collection
 
 ```python
-from opifex.training.metrics import AdvancedMetricsCollector
+from opifex.core.training.monitoring.metrics import AdvancedMetricsCollector
 import matplotlib.pyplot as plt
 
 class ComprehensiveMetricsCollector(AdvancedMetricsCollector):
@@ -666,7 +666,7 @@ This thorough training guide provides the complete infrastructure for advanced s
 Multilevel training accelerates convergence by training from coarse to fine representations, leveraging multigrid insights for neural network optimization.
 
 ```python
-from opifex.training.multilevel import CascadeTrainer, MultilevelConfig
+from opifex.core.training.strategies.multilevel import CascadeTrainer, MultilevelConfig
 
 # Configure coarse-to-fine training
 config = MultilevelConfig(
@@ -703,7 +703,7 @@ For full details on MLP and FNO hierarchies, see the [Multilevel Training Guide]
 Adaptive sampling focuses computational resources on high-residual regions, improving training efficiency for PINNs:
 
 ```python
-from opifex.training.adaptive_sampling import RADSampler, RADConfig
+from opifex.core.training.components.adaptive_sampling import RADSampler, RADConfig
 
 # Configure residual-based sampling
 config = RADConfig(

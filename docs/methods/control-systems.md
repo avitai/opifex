@@ -2,21 +2,46 @@
 
 ## Overview
 
-The Opifex control systems module provides differentiable predictive control components for scientific machine learning applications. This includes system identification networks that learn system dynamics from data and model predictive control (MPC) frameworks that enable optimal control with constraints and safety guarantees.
+The `opifex.optimization.control` module provides differentiable predictive control components for scientific machine learning. It is organized into two layers:
+
+- **Model Predictive Control (MPC)** — a differentiable, JAX/NNX-based receding-horizon controller with neural or user-supplied dynamics, constraint projection, real-time optimization, and a safety-critical variant with control barrier functions, emergency control, and backup policies.
+- **System identification** — neural networks that learn system dynamics from input/output data, with optional physics constraints, online adaptation, and joint control-policy learning.
+
+All components are built on `flax.nnx`, so they compose with `jax.jit`, `jax.grad`/`nnx.grad`, and `jax.vmap`.
+
+```python
+from opifex.optimization.control import (
+    # MPC
+    MPCConfig,
+    MPCObjective,
+    MPCResult,
+    DifferentiableMPC,
+    RecedingHorizonController,
+    SafetyCriticalMPC,
+    ControlBarrier,
+    ConstraintProjector,
+    PredictiveModel,
+    RealTimeOptimizer,
+    # System identification
+    SystemIdentifier,
+    PhysicsConstrainedSystemID,
+    PhysicsConstraint,
+    OnlineSystemLearner,
+    ControlIntegratedSystemID,
+    SystemDynamicsModel,
+    BenchmarkValidationResult,
+)
+```
 
 ## Theoretical Foundation
 
 ### System Identification
 
-System identification is the process of learning mathematical models of dynamical systems from input-output data. In the context of scientific machine learning, we use neural networks to learn complex, nonlinear system dynamics:
+System identification learns a mathematical model of a dynamical system from input/output data. In opifex, a neural network learns the discrete-time one-step map:
 
-$$\dot{x}(t) = f_{\theta}(x(t), u(t), t)$$
+$$x_{k+1} = f_{\theta}(x_k, u_k)$$
 
-where:
-
-- $x(t)$ is the system state
-- $u(t)$ is the control input
-- $f_{\theta}$ is a neural network parameterized by $\theta$
+where $x_k$ is the system state, $u_k$ is the input/control vector, and $f_{\theta}$ is a neural network parameterized by $\theta$.
 
 ### Model Predictive Control
 
@@ -30,603 +55,400 @@ subject to:
 - $x_k \in \mathcal{X}$ (state constraints)
 - $u_k \in \mathcal{U}$ (input constraints)
 
-## Core Components
+Only the first control action of the optimized sequence is applied; the problem is re-solved at the next step (receding horizon).
 
-### 1. System Identification Networks
+## Model Predictive Control
 
-Neural networks that learn system dynamics from data:
+### Configuration: `MPCConfig`
+
+`MPCConfig` is a frozen dataclass that captures the horizon, dimensions, objective weights, and optimizer settings. The `objective_weights` dictionary uses the keys `"state"`, `"control"`, and (optionally) `"terminal"`.
 
 ```python
-from opifex.optimization.control import SystemIdentifier, SystemDynamicsModel
+from opifex.optimization.control import MPCConfig
 
-# Define system dynamics model
-dynamics_model = SystemDynamicsModel(
+config = MPCConfig(
+    horizon=15,
+    control_dim=1,
+    state_dim=2,
+    objective_weights={"state": 1.0, "control": 0.1, "terminal": 10.0},
+)
+```
+
+Available fields (with defaults): `horizon=10`, `control_dim=2`, `state_dim=4`, `prediction_steps=None` (defaults to `horizon`), `objective_weights=None` (defaults to `{"state": 1.0, "control": 0.1, "terminal": 10.0}`), `max_iterations=50`, `tolerance=1e-4`, `time_limit=0.01`, `learning_rate=0.01`.
+
+### `DifferentiableMPC`
+
+`DifferentiableMPC` solves the receding-horizon problem. `compute_control` is `@nnx.jit`-compiled and returns an `MPCResult` whose first control action is applied to the plant. You can supply your own dynamics with `set_dynamics(fn)` (`fn(state, control) -> state_derivative`, integrated with a simple Euler step) or let it build a default neural `PredictiveModel`.
+
+```python
+import jax.numpy as jnp
+from opifex.optimization.control import MPCConfig, DifferentiableMPC
+
+config = MPCConfig(
+    horizon=15,
+    control_dim=1,
+    state_dim=2,
+    objective_weights={"state": 1.0, "control": 0.1},
+)
+mpc = DifferentiableMPC(config=config)
+
+# Damped oscillator: x_dot = A x + B u
+A = jnp.array([[0.0, 1.0], [-1.0, -0.5]])
+B = jnp.array([[0.0], [1.0]])
+mpc.set_dynamics(lambda x, u: A @ x + B @ u)
+
+state = jnp.array([1.0, 0.0])
+reference = jnp.zeros((15, 2))           # horizon x state_dim
+result = mpc.compute_control(state, reference)
+
+print(result.control_action.shape)       # (1,) — first action only
+print(result.predicted_trajectory.shape) # (15, 2)
+print(float(result.objective_value), bool(result.converged))
+```
+
+`MPCResult` is a `NamedTuple` with fields `control_action`, `predicted_trajectory`, `objective_value`, `converged`, `iterations`, `computation_time`, `emergency_activated`, `backup_used`, and `timeout_occurred`.
+
+Because `compute_control` is differentiable, you can take gradients of the objective with respect to the state or the controller parameters:
+
+```python
+from flax import nnx
+
+def loss_fn(mpc, state, reference):
+    return mpc.compute_control(state, reference).objective_value
+
+grad_fn = nnx.grad(loss_fn, argnums=1)   # gradient w.r.t. the state
+gradients = grad_fn(mpc, state, reference)
+```
+
+A batch of independent MPC problems can be solved at once with `compute_control_batch`, which returns a `BatchMPCResult` (`control_actions`, `predicted_trajectories`, `objective_values`).
+
+### Objective: `MPCObjective`
+
+`MPCObjective` wraps the weighted quadratic cost. It is callable as `objective(states, controls, reference)`:
+
+```python
+import jax.numpy as jnp
+from opifex.optimization.control import MPCObjective
+
+objective = MPCObjective({"state": 1.0, "control": 0.1, "terminal": 10.0})
+cost = objective(
+    states=jnp.ones((10, 4)),
+    controls=jnp.ones((10, 2)),
+    reference=jnp.zeros((10, 4)),
+)
+```
+
+The objective is `state_cost + control_cost + terminal_cost`, where the terminal term is applied only to the last state when a `"terminal"` weight is present.
+
+### Neural dynamics: `PredictiveModel`
+
+When no custom dynamics are supplied, `DifferentiableMPC` constructs a `PredictiveModel`: an NNX network that predicts the next state via a residual connection (`x + Δx`). You can also build and pass one explicitly.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from opifex.optimization.control import MPCConfig, DifferentiableMPC, PredictiveModel
+
+model = PredictiveModel(
     state_dim=4,
-    input_dim=2,
-    hidden_dims=[64, 64, 32],
-    activation="tanh",
-    physics_informed=True
+    control_dim=2,
+    hidden_dims=[64, 32],
+    prediction_horizon=10,
+    rngs=nnx.Rngs(0),
 )
 
-# Create system identifier
-system_id = SystemIdentifier(
-    model=dynamics_model,
-    learning_rate=1e-3,
-    regularization_strength=1e-4
-)
+# Single-step and multi-step rollouts
+next_state = model.predict_step(jnp.zeros(4), jnp.zeros(2))      # (4,)
+trajectory = model.predict_trajectory(jnp.zeros(4), jnp.ones((10, 2)))  # (11, 4)
 
-# Train on system data
-trained_model = system_id.fit(
-    state_data=state_trajectories,
-    input_data=control_inputs,
-    num_epochs=1000
+mpc = DifferentiableMPC(
+    config=MPCConfig(horizon=10, control_dim=2, state_dim=4),
+    dynamics_model=model,
 )
 ```
 
-#### Key Features
+`PredictiveModel` also supports physics-informed conservation terms via `physics_informed=True` and `conservation_laws=["energy", "momentum"]`.
 
-- **Physics-Informed Learning**: Incorporate known physical constraints
-- **Uncertainty Quantification**: Bayesian neural networks for uncertainty
-- **Online Learning**: Continuous adaptation to changing dynamics
-- **Multi-Step Prediction**: Long-horizon prediction capabilities
+### Constraint projection: `ConstraintProjector`
 
-### 2. Physics-Constrained System Identification
-
-Incorporate physical laws and constraints into system learning:
+`ConstraintProjector` enforces box bounds on states and controls (and optional learned safety projections). It is an NNX module that can be passed to `DifferentiableMPC` to clip control sequences during optimization.
 
 ```python
-from opifex.optimization.control import PhysicsConstrainedSystemID, PhysicsConstraint
+import jax.numpy as jnp
+from flax import nnx
+from opifex.optimization.control import ConstraintProjector
 
-# Define physics constraints
-energy_conservation = PhysicsConstraint(
-    constraint_type="energy_conservation",
-    constraint_fn=lambda x, u: energy_function(x) - initial_energy,
-    weight=1.0
+projector = ConstraintProjector(
+    state_dim=4,
+    control_dim=2,
+    state_bounds={"lower": [-2, -1, -jnp.pi, -5], "upper": [2, 1, jnp.pi, 5]},
+    control_bounds={"lower": [-1, -1], "upper": [1, 1]},
+    rngs=nnx.Rngs(0),
 )
 
-momentum_conservation = PhysicsConstraint(
-    constraint_type="momentum_conservation",
-    constraint_fn=lambda x, u: momentum_function(x) - initial_momentum,
-    weight=0.5
-)
-
-# Physics-constrained system ID
-physics_system_id = PhysicsConstrainedSystemID(
-    base_model=dynamics_model,
-    physics_constraints=[energy_conservation, momentum_conservation],
-    constraint_weight=0.1
-)
+clipped = projector.project_control(jnp.array([2.0, -2.0]))   # -> [1., -1.]
+projected_state = projector.project_state(jnp.array([3.0, 2.0, 0.0, 0.0]))
 ```
 
-### 3. Online System Learning
+Custom nonlinear constraints can be added with `add_custom_constraint(fn)`, where `fn(state)` returns a scalar that should be `<= 0` when feasible. The projector applies a gradient step toward feasibility for any violated custom constraint.
 
-Continuous learning and adaptation of system models:
+### Real-time optimization: `RealTimeOptimizer`
 
-```python
-from opifex.optimization.control import OnlineSystemLearner
-
-online_learner = OnlineSystemLearner(
-    base_model=dynamics_model,
-    adaptation_rate=0.01,
-    forgetting_factor=0.99,
-    uncertainty_threshold=0.1
-)
-
-# Online adaptation
-for t in range(time_horizon):
-    # Get new measurement
-    x_new, u_new = get_measurement(t)
-
-    # Update model
-    online_learner.update(x_new, u_new)
-
-    # Get current model
-    current_model = online_learner.get_current_model()
-```
-
-### 4. Differentiable Model Predictive Control
-
-Differentiable MPC implementation with automatic differentiation:
+`RealTimeOptimizer` is the gradient-descent solver `DifferentiableMPC` uses internally. The JIT-compatible `optimize` runs a fixed number of iterations; `optimize_with_time_limit` adds wall-clock enforcement (and is therefore not JIT-compatible).
 
 ```python
-from opifex.optimization.control import DifferentiableMPC, MPCConfig, MPCObjective
-
-# Define MPC objective
-objective = MPCObjective(
-    state_cost_weight=1.0,
-    input_cost_weight=0.1,
-    terminal_cost_weight=10.0,
-    reference_trajectory=reference_traj
-)
-
-# Configure MPC
-mpc_config = MPCConfig(
-    prediction_horizon=20,
-    control_horizon=5,
-    state_constraints=state_bounds,
-    input_constraints=input_bounds,
-    terminal_constraints=terminal_set
-)
-
-# Create differentiable MPC
-mpc_controller = DifferentiableMPC(
-    system_model=trained_model,
-    objective=objective,
-    config=mpc_config
-)
-
-# Solve MPC problem
-control_action = mpc_controller.solve(
-    current_state=x_current,
-    reference=reference_trajectory
-)
-```
-
-#### MPC Features
-
-- **Constraint Handling**: State and input constraints
-- **Terminal Constraints**: Stability guarantees
-- **Receding Horizon**: Real-time implementation
-- **Differentiable Optimization**: End-to-end learning
-
-### 5. Safety-Critical MPC
-
-MPC with safety guarantees using control barrier functions:
-
-```python
-from opifex.optimization.control import SafetyCriticalMPC, ControlBarrier
-
-# Define safety constraints
-safety_barrier = ControlBarrier(
-    barrier_function=lambda x: safety_distance - distance_to_obstacle(x),
-    barrier_gradient=lambda x: -gradient_distance_to_obstacle(x),
-    safety_margin=0.1
-)
-
-# Safety-critical MPC
-safe_mpc = SafetyCriticalMPC(
-    base_mpc=mpc_controller,
-    control_barriers=[safety_barrier],
-    safety_filter_enabled=True
-)
-
-# Safe control action
-safe_control = safe_mpc.solve_safe(
-    current_state=x_current,
-    reference=reference_trajectory
-)
-```
-
-### 6. Real-Time Optimization
-
-High-performance MPC for real-time applications:
-
-```python
+import jax.numpy as jnp
 from opifex.optimization.control import RealTimeOptimizer
 
-rt_optimizer = RealTimeOptimizer(
-    solver="osqp",
-    max_iterations=100,
-    tolerance=1e-4,
-    warm_start=True,
-    parallel_processing=True
-)
+optimizer = RealTimeOptimizer(max_iterations=50, tolerance=1e-4, learning_rate=0.1)
+result = optimizer.optimize(lambda x: jnp.sum((x - 1.0) ** 2), None, jnp.zeros(2))
 
-# Real-time MPC solve
-start_time = time.time()
-control_action = rt_optimizer.solve_realtime(
-    mpc_problem=mpc_problem,
-    time_limit_ms=10  # 10ms time limit
-)
-solve_time = time.time() - start_time
+print(result.solution, bool(result.converged))   # -> ~[1., 1.] True
 ```
 
-## Advanced Control Methods
+`optimize` returns an `OptimizationResult` (`solution`, `converged`, `iterations`, `timeout_occurred`). It accepts a `warm_start_solution` argument to seed from a previous solve.
 
-### 1. Receding Horizon Control
+## Receding Horizon Control
 
-Implementation of receding horizon control with adaptive horizons:
+`RecedingHorizonController` wraps an MPC controller and drives it through a closed-loop simulation. It pads short reference windows automatically and exposes `compute_control` and `simulate_tracking`.
 
 ```python
+import jax.numpy as jnp
 from opifex.optimization.control import RecedingHorizonController
 
-rhc_controller = RecedingHorizonController(
-    system_model=dynamics_model,
-    prediction_horizon=20,
+controller = RecedingHorizonController(
+    mpc_horizon=10,
     control_horizon=5,
-    adaptive_horizon=True,
-    horizon_adaptation_strategy="performance_based"
+    state_dim=4,
+    control_dim=2,
+    sampling_time=0.1,
 )
 
-# Control loop
-for t in range(simulation_time):
-    # Measure current state
-    x_current = measure_state(t)
+# One control step
+result = controller.compute_control(
+    jnp.array([1.0, 0.0, 0.0, 0.0]),
+    jnp.zeros((10, 4)),
+)
+print(result.control_action.shape)   # (2,)
 
-    # Solve MPC problem
-    u_optimal = rhc_controller.solve(x_current, reference_trajectory[t:])
-
-    # Apply first control action
-    apply_control(u_optimal[0])
-
-    # Update horizon if needed
-    rhc_controller.adapt_horizon(performance_metrics)
+# Track a reference trajectory end-to-end
+t = jnp.linspace(0, 2 * jnp.pi, 50)
+reference = jnp.column_stack([jnp.sin(t), jnp.cos(t), jnp.zeros_like(t), jnp.zeros_like(t)])
+final_state = controller.simulate_tracking(reference[0], reference)
 ```
 
-### 2. Constraint Projection
+Passing `safety_critical=True` makes the controller use a `SafetyCriticalMPC` internally.
 
-Handling complex constraints through projection methods:
+## Safety and Constraints
+
+### `SafetyCriticalMPC` and `ControlBarrier`
+
+`SafetyCriticalMPC` extends `DifferentiableMPC` with three safety layers: control barrier functions, an emergency controller (engaged when the state leaves a safe region), and a backup policy (engaged when the MPC problem is judged infeasible). Use `compute_safe_control` instead of `compute_control` to activate these checks.
 
 ```python
-from opifex.optimization.control import ConstraintProjector
-from opifex.core.training.trainer import Trainer
+import jax.numpy as jnp
+from opifex.optimization.control import SafetyCriticalMPC, ControlBarrier
 
-# Define constraint sets
-state_constraints = {
-    "box": {"lower": [-10, -5], "upper": [10, 5]},
-    "ellipsoid": {"center": [0, 0], "shape": [[1, 0], [0, 4]]},
-    "polytope": {"A": A_matrix, "b": b_vector}
-}
-
-constraint_projector = ConstraintProjector(
-    constraint_sets=state_constraints,
-    projection_method="alternating_projections",
-    max_iterations=50
+safe_mpc = SafetyCriticalMPC(
+    horizon=8,
+    control_dim=2,
+    state_dim=4,
+    safety_barriers=True,
+    emergency_control=True,
+    backup_policy=True,
 )
 
-# Project onto feasible set
-feasible_state = constraint_projector.project(infeasible_state)
+# A control barrier function returns a value that is >= 0 in the safe set.
+barrier = ControlBarrier(constraint=lambda state: 1.0 - jnp.sum(state**2))
+safe_mpc.add_barrier(barrier)
+
+# A dangerous state triggers the emergency controller.
+dangerous_state = jnp.array([1.5, 1.5, 0.0, 0.0])
+result = safe_mpc.compute_safe_control(dangerous_state, jnp.zeros((8, 4)))
+print(bool(result.emergency_activated))   # True
+
+# Barriers can also be queried directly.
+is_safe = barrier.is_safe_control(jnp.array([0.5, 0.5, 0.0, 0.0]), jnp.array([0.1, 0.1]))
+print(bool(is_safe))                       # True
 ```
 
-### 3. Control-Integrated System Identification
+The returned `MPCResult` exposes `emergency_activated` and `backup_used` flags so the caller can tell which path produced the action.
 
-Joint learning of system dynamics and control policies:
+## System Identification
+
+### `SystemIdentifier`
+
+`SystemIdentifier` is the base neural one-step predictor. It is called as `model(state, input_val)` and returns the predicted next state.
 
 ```python
+import jax
+import jax.numpy as jnp
+from flax import nnx
+from opifex.optimization.control import SystemIdentifier
+
+system_id = SystemIdentifier(
+    state_dim=4,
+    input_dim=2,
+    hidden_dim=64,
+    num_layers=3,
+    rngs=nnx.Rngs(0),
+)
+
+next_state = system_id(jnp.zeros(4), jnp.zeros(2))   # (4,)
+```
+
+Train it with standard NNX gradients on one-step prediction error:
+
+```python
+def loss_fn(model, states, inputs, targets):
+    predictions = jax.vmap(model, in_axes=(0, 0))(states, inputs)
+    return jnp.mean((predictions - targets) ** 2)
+
+# states[:-1], inputs[:-1] -> states[1:]
+loss, grads = nnx.value_and_grad(loss_fn)(
+    system_id, states[:-1], inputs[:-1], states[1:]
+)
+```
+
+`validate_on_benchmark(name, test_data)` evaluates one-step prediction error and returns a `BenchmarkValidationResult` (`benchmark_name`, `metrics`, `validation_passed`, `details`):
+
+```python
+result = system_id.validate_on_benchmark(
+    "linear_system",
+    {"states": states[:-1], "inputs": inputs[:-1], "targets": states[1:]},
+)
+print(result.metrics["prediction_error"])
+```
+
+### Parameterized dynamics: `SystemDynamicsModel`
+
+`SystemDynamicsModel` provides an explicit linear (`x_{k+1} = A x_k + B u_k`, with learnable `A`/`B`) or nonlinear (MLP) state-transition model.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from opifex.optimization.control import SystemDynamicsModel
+
+linear_model = SystemDynamicsModel(
+    model_type="linear", state_dim=3, input_dim=2, rngs=nnx.Rngs(0)
+)
+nonlinear_model = SystemDynamicsModel(
+    model_type="nonlinear", state_dim=2, input_dim=1, hidden_dims=[32, 32], rngs=nnx.Rngs(0)
+)
+
+next_state = linear_model(jnp.zeros(3), jnp.zeros(2))   # (3,)
+```
+
+### Physics-constrained identification: `PhysicsConstrainedSystemID`
+
+`PhysicsConstrainedSystemID` extends `SystemIdentifier` with a learned energy function and a list of `PhysicsConstraint`s. Each constraint declares a `name`, a `constraint_type` (`"conservation"`, `"stability"`, or `"symmetry"`), a `tolerance`, and a `weight`.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from opifex.optimization.control import PhysicsConstrainedSystemID, PhysicsConstraint
+
+energy_conservation = PhysicsConstraint(
+    name="energy_conservation",
+    constraint_type="conservation",
+    tolerance=1e-3,
+    weight=1.0,
+)
+
+model = PhysicsConstrainedSystemID(
+    state_dim=2,
+    input_dim=1,
+    constraints=[energy_conservation],
+    rngs=nnx.Rngs(0),
+)
+
+out = model.predict_with_constraints(jnp.array([1.0, -0.5]), jnp.array([0.1]))
+print(out.keys())                       # dict_keys(['prediction', 'constraint_violations'])
+energy = model.compute_energy(jnp.zeros(2))
+```
+
+`predict_with_constraints` returns the prediction together with per-constraint violation diagnostics (`constraint`, `violation`, `satisfied`).
+
+### Online adaptation: `OnlineSystemLearner`
+
+`OnlineSystemLearner` adapts the model in real time from streaming observations via `update_online(state, input_val, target)`.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from opifex.optimization.control import OnlineSystemLearner
+
+learner = OnlineSystemLearner(
+    state_dim=2,
+    input_dim=1,
+    learning_rate=1e-3,
+    adaptation_rate=0.95,
+    buffer_size=100,
+    rngs=nnx.Rngs(0),
+)
+
+update = learner.update_online(
+    jnp.array([1.0, -0.5]), jnp.array([0.1]), jnp.array([0.9, -0.4])
+)
+print(update.keys())                    # loss, adaptation_strength, effective_lr
+print(learner.get_memory_info())        # buffer_size, current_size, total_updates
+```
+
+Set `adaptive_lr=True` to shrink the effective learning rate when recent prediction error spikes.
+
+### Joint control learning: `ControlIntegratedSystemID`
+
+`ControlIntegratedSystemID` learns the system model and a control policy together. It exposes `compute_control_action`, `joint_optimization`, `simulate_closed_loop`, and `validate_control_benchmark`.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
 from opifex.optimization.control import ControlIntegratedSystemID
 
-integrated_learner = ControlIntegratedSystemID(
-    system_model=dynamics_model,
-    controller_model=controller_network,
-    joint_optimization=True,
-    control_regularization=0.01
+model = ControlIntegratedSystemID(
+    state_dim=2, input_dim=1, control_dim=1, rngs=nnx.Rngs(0)
 )
 
-# Joint training
-trained_system, trained_controller = integrated_learner.fit(
-    trajectory_data=trajectories,
-    control_objectives=objectives,
-    num_epochs=2000
+# Policy action toward a target state
+action = model.compute_control_action(
+    current_state=jnp.array([1.0, -0.5]), target_state=jnp.zeros(2)
 )
-```
+print(action.shape)                     # (1,)
 
-## Applications in Scientific Computing
-
-### 1. Fluid Flow Control
-
-Control of fluid flows using MPC with learned dynamics:
-
-```python
-from opifex.optimization.control import FluidFlowController
-
-# Fluid dynamics model
-fluid_model = SystemDynamicsModel(
-    state_dim=100,  # Discretized velocity field
-    input_dim=10,   # Actuator inputs
-    physics_constraints=["incompressibility", "no_slip_boundary"]
+# Roll out the closed loop with the learned model + policy
+sim = model.simulate_closed_loop(
+    initial_state=jnp.array([2.0, -1.0]), target_state=jnp.zeros(2), steps=10
 )
+print(sim["states"].shape, sim["actions"].shape)   # (11, 2) (10, 1)
 
-# Flow controller
-flow_controller = FluidFlowController(
-    fluid_model=fluid_model,
-    control_objective="drag_reduction",
-    actuator_constraints=actuator_limits
-)
-
-# Control fluid flow
-control_sequence = flow_controller.optimize_flow(
-    initial_flow_field=initial_field,
-    target_flow_field=target_field,
-    time_horizon=100
-)
-```
-
-### 2. Chemical Process Control
-
-MPC for chemical reactor control with safety constraints:
-
-```python
-from opifex.optimization.control import ChemicalProcessController
-
-# Chemical reactor model
-reactor_model = SystemDynamicsModel(
-    state_dim=5,  # Concentrations and temperature
-    input_dim=3,  # Feed rates and cooling
-    physics_constraints=["mass_balance", "energy_balance"]
-)
-
-# Process controller
-process_controller = ChemicalProcessController(
-    reactor_model=reactor_model,
-    safety_constraints=safety_limits,
-    economic_objective=profit_function
-)
-
-# Optimize process operation
-optimal_operation = process_controller.optimize_operation(
-    current_state=reactor_state,
-    production_targets=targets,
-    time_horizon=24  # 24 hours
-)
-```
-
-### 3. Robotics Control
-
-Control of robotic systems with learned dynamics:
-
-```python
-from opifex.optimization.control import RoboticsController
-
-# Robot dynamics model
-robot_model = SystemDynamicsModel(
-    state_dim=12,  # Joint positions and velocities
-    input_dim=6,   # Joint torques
-    physics_constraints=["joint_limits", "torque_limits"]
-)
-
-# Robotics controller
-robot_controller = RoboticsController(
-    robot_model=robot_model,
-    task_objective="trajectory_tracking",
-    collision_avoidance=True
-)
-
-# Execute robot task
-control_trajectory = robot_controller.plan_trajectory(
-    start_pose=start_pose,
-    goal_pose=goal_pose,
-    obstacles=obstacle_list
-)
-```
-
-## Performance Analysis
-
-### Computational Complexity
-
-- **System Identification**: $O(N \cdot M \cdot K)$ where $N$ is data points, $M$ is model parameters, $K$ is epochs
-- **MPC Solve**: $O(H^3 \cdot n^3)$ where $H$ is horizon length, $n$ is state dimension
-- **Real-Time MPC**: $O(I \cdot H \cdot n^2)$ where $I$ is solver iterations
-
-### Control Performance Metrics
-
-```python
-from opifex.optimization.control import ControlPerformanceAnalyzer
-
-analyzer = ControlPerformanceAnalyzer(
-    metrics=["tracking_error", "control_effort", "constraint_violations"],
-    reference_controller=baseline_controller
-)
-
-# Analyze control performance
-performance_report = analyzer.analyze(
-    controller=mpc_controller,
-    test_scenarios=test_cases,
-    simulation_time=1000
-)
-
-print(f"Tracking RMSE: {performance_report.tracking_rmse}")
-print(f"Control effort: {performance_report.control_effort}")
-print(f"Constraint violations: {performance_report.constraint_violations}")
-```
-
-### Stability Analysis
-
-```python
-from opifex.optimization.control import StabilityAnalyzer
-
-stability_analyzer = StabilityAnalyzer(
-    system_model=dynamics_model,
-    controller=mpc_controller,
-    analysis_methods=["lyapunov", "linearization", "simulation"]
-)
-
-# Analyze closed-loop stability
-stability_report = stability_analyzer.analyze_stability(
-    operating_points=equilibrium_points,
-    disturbance_bounds=disturbance_limits
-)
-
-print(f"Stable region: {stability_report.stable_region}")
-print(f"Lyapunov exponent: {stability_report.lyapunov_exponent}")
-```
-
-## Integration with Other Components
-
-### 1. Neural Network Integration
-
-Using neural operators for system identification:
-
-```python
-from opifex.neural.operators.fno import FourierNeuralOperator
-from opifex.optimization.control import NeuralOperatorSystemID
-
-# Use FNO for system dynamics
-fno_dynamics = FourierNeuralOperator(
-    in_channels=2, out_channels=2,
-    hidden_channels=64, modes=32,
-    num_layers=4, rngs=nnx.Rngs(42),
-)
-
-# Neural operator system ID
-no_system_id = NeuralOperatorSystemID(
-    neural_operator=fno_dynamics,
-    temporal_resolution=0.01,
-    spatial_resolution=64
-)
-```
-
-### 2. Physics-Informed Integration
-
-Combining with physics-informed neural networks:
-
-```python
-from opifex.core.physics.losses import PhysicsInformedLoss
-from opifex.optimization.control import PhysicsInformedMPC
-
-# Physics-informed loss
-physics_loss = PhysicsInformedLoss(
-    pde_loss_weight=1.0,
-    boundary_loss_weight=10.0,
-    conservation_loss_weight=5.0
-)
-
-# Physics-informed MPC
-pi_mpc = PhysicsInformedMPC(
-    system_model=dynamics_model,
-    physics_loss=physics_loss,
-    physics_weight=0.1
-)
-```
-
-### 3. Optimization Integration
-
-Using meta-optimization for controller tuning:
-
-```python
-from opifex.optimization.meta_optimization import MetaOptimizer
-from opifex.optimization.control import MetaOptimizedMPC
-
-# Meta-optimizer for MPC tuning
-meta_optimizer = MetaOptimizer(
-    config=meta_config,
-    rngs=nnx.Rngs(42)
-)
-
-# Meta-optimized MPC
-meta_mpc = MetaOptimizedMPC(
-    base_mpc=mpc_controller,
-    meta_optimizer=meta_optimizer,
-    tuning_objectives=["tracking", "efficiency", "robustness"]
-)
-```
-
-## Benchmarking and Validation
-
-### Control Benchmarks
-
-Standard benchmarks for control system evaluation:
-
-```python
-from opifex.optimization.control import ControlBenchmarkSuite
-
-benchmark_suite = ControlBenchmarkSuite(
-    benchmarks=["cartpole", "pendulum", "quadrotor", "chemical_reactor"],
-    metrics=["tracking_error", "control_effort", "robustness"],
-    noise_levels=[0.0, 0.01, 0.05, 0.1]
-)
-
-# Run benchmarks
-benchmark_results = benchmark_suite.run_benchmarks(
-    controller=mpc_controller,
-    baseline_controllers=baseline_controllers
-)
-```
-
-### Validation Framework
-
-```python
-from opifex.optimization.control import BenchmarkValidationResult
-
-validation_result = BenchmarkValidationResult(
-    controller=mpc_controller,
-    benchmark_problems=benchmark_problems,
-    validation_metrics=validation_metrics
-)
-
-# Generate validation report
-validation_report = validation_result.generate_report()
-print(validation_report.summary)
+# Joint identification + control loss for training
+losses = model.joint_optimization(jnp.zeros((20, 2)), jnp.zeros((20, 2)))
+print(losses.keys())  # system_id_loss, control_loss, total_loss
 ```
 
 ## Best Practices
 
-### 1. System Identification
+### System Identification
 
-- **Data Quality**: Ensure rich, informative training data
-- **Physics Constraints**: Incorporate known physical laws
-- **Validation**: Always validate on held-out test data
-- **Uncertainty**: Quantify model uncertainty for robust control
+- **Data quality**: ensure rich, informative excitation in the training trajectories.
+- **Physics constraints**: encode known conservation/stability laws with `PhysicsConstrainedSystemID` when available.
+- **Validation**: always evaluate one-step (and multi-step) prediction error on held-out data via `validate_on_benchmark`.
 
-### 2. MPC Design
+### MPC Design
 
-- **Horizon Selection**: Balance performance and computational cost
-- **Constraint Formulation**: Ensure constraints are well-posed
-- **Terminal Conditions**: Design appropriate terminal costs/constraints
-- **Real-Time Implementation**: Consider computational limitations
+- **Horizon selection**: balance tracking performance against per-step compute (`compute_control` is `@nnx.jit`-compiled).
+- **Objective weights**: tune the `"state"`, `"control"`, and `"terminal"` weights in `MPCConfig.objective_weights` to trade off tracking vs. control effort.
+- **Warm starting**: `DifferentiableMPC` caches the previous control sequence; `RealTimeOptimizer.optimize` accepts an explicit `warm_start_solution`.
 
-### 3. Safety-Critical Applications
+### Safety-Critical Applications
 
-- **Formal Verification**: Use formal methods when possible
-- **Redundancy**: Implement backup control systems
-- **Monitoring**: Continuous monitoring of system performance
-- **Graceful Degradation**: Design for graceful failure modes
-
-### 4. Performance Optimization
-
-- **Warm Starting**: Use previous solutions as initial guesses
-- **Parallel Processing**: Leverage parallel computation
-- **Model Reduction**: Use reduced-order models when appropriate
-- **Adaptive Methods**: Adapt parameters based on performance
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Infeasible MPC Problems**: Check constraint compatibility
-2. **Slow Convergence**: Tune solver parameters and warm starting
-3. **Poor Tracking**: Adjust cost function weights and horizon length
-4. **Instability**: Verify terminal conditions and constraint satisfaction
-
-### Debugging Tools
-
-```python
-from opifex.optimization.control import MPCDebugger
-
-debugger = MPCDebugger(
-    mpc_controller=mpc_controller,
-    logging_enabled=True,
-    visualization_enabled=True
-)
-
-# Debug MPC performance
-debug_report = debugger.debug_performance(
-    test_scenario=problematic_scenario,
-    debug_duration=100
-)
-
-print(debug_report.issues_found)
-print(debug_report.recommendations)
-```
-
-## Future Directions
-
-### Research Areas
-
-1. **Learning-Based MPC**: Integration of learning and control
-2. **Distributed MPC**: Multi-agent and networked control
-3. **Stochastic MPC**: Handling uncertainty and disturbances
-4. **Quantum Control**: Control of quantum systems
-
-### Planned Enhancements
-
-1. **GPU Acceleration**: GPU-accelerated MPC solvers
-2. **Federated Control**: Distributed control across networks
-3. **Neuromorphic Control**: Control on neuromorphic hardware
-4. **Quantum-Classical Hybrid**: Hybrid quantum-classical control
+- **Barriers**: register `ControlBarrier`s and call `compute_safe_control` so emergency/backup paths can engage.
+- **Graceful degradation**: inspect `result.emergency_activated` and `result.backup_used` to log and react to fallback activations.
+- **Constraints**: clip controls and states with `ConstraintProjector`, including custom nonlinear constraints.
 
 ## See Also
 
-- [Optimization User Guide](../user-guide/optimization.md) - General optimization concepts
-- [Meta-Optimization](meta-optimization.md) - Meta-learning for optimization
-- [Neural Networks](../user-guide/neural-networks.md) - Neural network integration
-- [API Reference](../api/optimization.md) - Complete API documentation
+- [Optimization User Guide](../user-guide/optimization.md) — general optimization concepts
+- [Meta-Optimization](meta-optimization.md) — meta-learning for optimization
+- [Neural Networks](../user-guide/neural-networks.md) — neural network integration
+- [API Reference](../api/optimization.md) — complete API documentation

@@ -71,8 +71,8 @@ The following JAX ecosystem dependencies are validated and operational:
 
 ### Core JAX Ecosystem
 
-- **JAX 0.8.0**: Core framework with CUDA support
-- **FLAX 0.12.0**: NNX neural network framework (exclusive)
+- **JAX 0.8.0+**: Core framework with CUDA support
+- **FLAX 0.12.0+**: NNX neural network framework (exclusive)
 - **Optax 0.2.6+**: Optimization algorithms
 - **Optimistix 0.0.10+**: Root finding & minimization
 - **Lineax 0.0.8+**: Linear solvers

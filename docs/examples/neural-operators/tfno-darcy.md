@@ -128,8 +128,12 @@ Opifex provides three tensor factorization methods:
 
 ```python
 import jax
+import jax.numpy as jnp
+import numpy as np
 from flax import nnx
 
+from opifex.core.evaluation import predict_in_batches
+from opifex.core.metrics import per_sample_relative_l2
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
@@ -147,27 +151,42 @@ JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
 Resolution: 64x64
 Training samples: 1024, Test samples: 256
-Batch size: 32, Epochs: 100
-FNO config: modes=(16, 16), width=32, layers=4
-Tucker rank: 0.5
+FNO config: modes=(16, 16), width=32, layers=4, rank=0.5
 ```
 
 ### Step 2: Data Loading
 
 The loader generates a binary high-contrast permeability field `a(x) ∈ {3, 12}` (the
 standard Darcy benchmark) and the exact pressure solution of `-∇·(a∇u) = 1` with zero
-Dirichlet boundary conditions.
+Dirichlet boundary conditions. `create_darcy_loader()` returns a frozen `PDELoaders`
+container with `.train` and `.val` datarax pipelines; the train/val split is driven by
+`val_fraction`. Each batch is already channels-first `(b, 1, H, W)`, so no reshape is
+needed — we simply iterate the pipelines and concatenate the batches.
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=1024,
-    batch_size=32,
-    resolution=64,
+n_samples = N_TRAIN + N_TEST
+loaders = create_darcy_loader(
+    n_samples=n_samples,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
     field_type="binary",  # high-contrast benchmark (a in {3, 12})
-    viscosity_range=(3.0, 12.0),
-    shuffle=True,
-    seed=42,
+    coeff_range=PERMEABILITY_VALUES,
+    val_fraction=N_TEST / n_samples,
+    seed=SEED,
 )
+
+
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+
+X_train, Y_train = _collect(loaders.train)
+X_test, Y_test = _collect(loaders.val)
+# Batches are already channels-first (N, 1, H, W) for Darcy.
 ```
 
 **Terminal Output:**
@@ -176,8 +195,8 @@ train_loader = create_darcy_loader(
 Generating Darcy flow data...
 Training data: X=(1024, 1, 64, 64), Y=(1024, 1, 64, 64)
 Test data:     X=(256, 1, 64, 64), Y=(256, 1, 64, 64)
-Input mean/std:  7.5017 / 4.5000
-Output mean/std: 0.005341 / 0.003578
+Input mean/std:  7.4976 / 4.5000
+Output mean/std: 0.005354 / 0.003583
 ```
 
 ### Step 3: Model Creation
@@ -188,8 +207,8 @@ model = create_tucker_fno(
     out_channels=1,
     hidden_channels=32,
     modes=(16, 16),
-    num_layers=4,
     rank=0.5,
+    num_layers=4,
     rngs=nnx.Rngs(42),
 )
 stats = model.get_compression_stats()
@@ -202,12 +221,9 @@ Creating TFNO model (Tucker-factorized)...
 Creating dense FNO for comparison...
 
 Model: Tucker-Factorized FNO (TFNO)
-  Modes: (16, 16), Hidden width: 32, Layers: 4
-  Tucker rank: 0.5
   TFNO parameters: 150,017
   Dense FNO parameters: 4,203,009
   Parameter reduction: 96.4%
-
 Spectral-weight compression (all factorized layers):
   Factorized params: 70,656
   Dense equivalent:  1,048,576
@@ -236,11 +252,10 @@ trained_model, metrics = trainer.fit(train_data, val_data)
 ```text
 Setting up Trainer...
 Optimizer: Adam (lr=0.001), loss: relative L2
-
 Starting training...
-Training completed in 21.4s
-Final train loss: 0.031862245697993785
-Final val loss:   0.0009037216077558696
+Training completed in 16.5s
+Final train loss: 0.03156339004635811
+Final val loss:   0.0015274095349013805
 ```
 
 ### Step 5: Evaluation
@@ -252,14 +267,14 @@ measured.
 
 ```text
 Running evaluation...
-Test MSE:         2.518951e-08
-Test Relative L2: 0.024156
-Min Relative L2:  0.014786
-Max Relative L2:  0.046641
+Test MSE:         1.225686e-08
+Test Relative L2: 0.017142
+Min Relative L2:  0.012656
+Max Relative L2:  0.029196
 
 ======================================================================
-TFNO Darcy example completed in 21.4s
-Test MSE: 2.518951e-08, Relative L2: 0.024156
+TFNO Darcy example completed in 16.5s
+Test MSE: 1.225686e-08, Relative L2: 0.017142
 Parameters: TFNO=150,017 vs dense FNO=4,203,009
 Results saved to: docs/assets/examples/tfno_darcy
 ======================================================================
@@ -279,15 +294,15 @@ Results saved to: docs/assets/examples/tfno_darcy
 
 | Metric                    | Value         |
 |---------------------------|---------------|
-| Test Relative L2          | 0.024         |
-| Test MSE                  | 2.5e-08       |
-| Training Time             | 21.4s (GPU)   |
+| Test Relative L2          | 0.017         |
+| Test MSE                  | 1.2e-08       |
+| Training Time             | 16.5s (GPU)   |
 | TFNO Parameters           | 150,017       |
 | Dense FNO Parameters      | 4,203,009     |
 | Parameter Reduction       | 96.4%         |
 
 The Tucker factorization compresses the spectral weights by **15×** (96.4% fewer
-parameters than the dense FNO) while the TFNO still reaches a **~2.4% relative L2 error**
+parameters than the dense FNO) while the TFNO still reaches a **~1.7% relative L2 error**
 on held-out Darcy flow — the prediction is visually indistinguishable from the
 ground-truth pressure field.
 

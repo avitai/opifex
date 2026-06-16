@@ -107,6 +107,7 @@ nav:
       - Neural Operators:
           - FNO on Darcy Flow: examples/neural-operators/fno-darcy.md
           - FNO on Burgers Equation: examples/neural-operators/fno-burgers.md
+          - FNO on Navier-Stokes: examples/neural-operators/fno-navier-stokes.md
           - SFNO on Climate Data: examples/neural-operators/sfno-climate-simple.md
           - SFNO with Conservation Laws: examples/neural-operators/sfno-climate-full.md
           - U-FNO on Turbulence: examples/neural-operators/ufno-turbulence.md
@@ -177,6 +178,7 @@ nav:
   - API Reference:
       - Core: api/core.md
       - Neural: api/neural.md
+      - Equivariant: api/equivariant.md
       - Training: api/training.md
       - Geometry: api/geometry.md
       - Optimization: api/optimization.md

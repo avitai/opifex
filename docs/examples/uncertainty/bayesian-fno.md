@@ -154,11 +154,11 @@ def train_step(member, optimizer, x, y):
 
 ```text
 Training ensemble members...
-  Member 1/4: NLL +0.6485 -> -2.6133
-  Member 2/4: NLL +0.6307 -> -1.8761
-  Member 3/4: NLL +0.4165 -> -1.9256
-  Member 4/4: NLL +0.4596 -> -2.9653
-Training time: 60.9s
+  Member 1/4: NLL +0.7451 -> -2.9116
+  Member 2/4: NLL +0.6524 -> -1.3052
+  Member 3/4: NLL +0.5145 -> -2.3262
+  Member 4/4: NLL +0.4694 -> -2.2192
+Training time: 63.4s
 ```
 
 ### Step 3: Predict and Calibrate
@@ -171,17 +171,17 @@ split so the `1.64-sigma` interval covers ~90% of the residuals.
 
 ```text
 Calibrating predictive uncertainty...
-  Calibration std scale: 0.1747
+  Calibration std scale: 0.2316
 
 Evaluating on test set...
 
 Results:
-  Predictive-mean Relative L2: 0.004603
-  Min / Max Relative L2:       0.002121 / 0.008210
-  Test MSE:                    1.004284e-07
-  Mean predictive std:         3.129095e-04
-  Mean aleatoric std:          1.749189e-03
-  Mean epistemic std:          3.466309e-04
+  Predictive-mean Relative L2: 0.009013
+  Min / Max Relative L2:       0.003607 / 0.023608
+  Test MSE:                    6.115206e-06
+  Mean predictive std:         2.180397e-03
+  Mean aleatoric std:          9.141234e-03
+  Mean epistemic std:          2.010190e-03
 ```
 
 ### Step 4: Calibration Analysis
@@ -190,11 +190,11 @@ Results:
 
 ```text
 Uncertainty calibration analysis...
-  Coverage @ 1.64-sigma: 89.2% (target 90%)
-  1-sigma coverage:           68.3%
-  2-sigma coverage:           94.5%
-  Error-uncertainty corr (per-sample): 0.4206
-  Error-uncertainty corr (per-pixel):  0.1276
+  Coverage @ 1.64-sigma: 87.8% (target 90%)
+  1-sigma coverage:           66.3%
+  2-sigma coverage:           93.4%
+  Error-uncertainty corr (per-sample): 0.1709
+  Error-uncertainty corr (per-pixel):  0.3546
 ```
 
 ## Visualization
@@ -207,15 +207,15 @@ Uncertainty calibration analysis...
 
 | Metric                              | Value         |
 |-------------------------------------|---------------|
-| Predictive-mean Relative L2         | 0.004603      |
-| Min / Max Relative L2               | 0.002121 / 0.008210 |
-| Coverage @ 1.64-sigma               | 89.2%         |
-| 2-sigma coverage                    | 94.5%         |
-| Error-uncertainty corr (per-sample) | 0.4206        |
-| Error-uncertainty corr (per-pixel)  | 0.1276        |
+| Predictive-mean Relative L2         | 0.009013      |
+| Min / Max Relative L2               | 0.003607 / 0.023608 |
+| Coverage @ 1.64-sigma               | 87.8%         |
+| 2-sigma coverage                    | 93.4%         |
+| Error-uncertainty corr (per-sample) | 0.1709        |
+| Error-uncertainty corr (per-pixel)  | 0.3546        |
 | Parameters per member               | 2,372,066     |
 | Ensemble parameters                 | 9,488,264     |
-| Training time                       | ~61s          |
+| Training time                       | ~63s          |
 
 The predictive mean visually matches the smooth ground-truth pressure
 field, and the calibrated predictive std is larger where the absolute

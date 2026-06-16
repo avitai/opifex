@@ -17,14 +17,14 @@ the surface of a sphere rather than a flat 2D grid.
 
 This example demonstrates training a simple SFNO on synthetic shallow water equation
 data using Opifex's `create_climate_sfno` factory, the `create_shallow_water_loader`
-for streaming data via Google Grain, and the `Trainer` with `TrainingConfig` for the
+for building datarax data loaders, and the `Trainer` with `TrainingConfig` for the
 training loop. In under 50 lines of configuration code, you build, train, and evaluate
 a spherical neural operator.
 
 ## What You'll Learn
 
 1. **Create** an SFNO with the `create_climate_sfno` factory
-2. **Load** climate data with `create_shallow_water_loader` (Grain-based streaming)
+2. **Load** climate data with `create_shallow_water_loader` (datarax loaders)
 3. **Train** with Opifex's `Trainer.fit()` API and `TrainingConfig`
 4. **Evaluate** and visualize climate predictions on a spherical domain
 
@@ -34,7 +34,7 @@ a spherical neural operator.
 |--------------------------|--------------|
 | `SFNO(spectral_transform, ...)` | `create_climate_sfno(in_channels=, out_channels=, lmax=, rngs=)` |
 | Manual spherical harmonics setup | Built-in SHT with configurable `lmax` |
-| `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (Google Grain) |
+| `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (datarax) |
 | `trainer.train(epochs=N)` | `Trainer(model, config, rngs).fit(train_data)` |
 | Manual `torch.meshgrid` for sphere | Spherical grid handled internally by SFNO |
 | `model.to(device)` | Automatic device placement via JAX |
@@ -44,7 +44,7 @@ a spherical neural operator.
 1. **Factory function**: `create_climate_sfno` pre-configures spherical harmonic layers, reducing boilerplate
 2. **Explicit PRNG**: Opifex uses JAX's explicit `rngs=nnx.Rngs(42)` instead of global random state
 3. **XLA compilation**: Automatic JIT compilation of training steps for faster throughput
-4. **Grain data loading**: Streaming data loaders with built-in batching and shuffling
+4. **datarax data loading**: Data loaders with built-in batching and train/val splitting
 
 ## Files
 
@@ -118,7 +118,9 @@ producing 3-channel fields (height + two velocity components) on a latitude-long
 ### Step 1: Imports and Setup
 
 ```python
+import math
 import time
+import warnings
 from pathlib import Path
 
 import jax
@@ -169,52 +171,46 @@ Batch size: 4, Epochs: 5
 Output directory: docs/assets/examples/sfno_climate_simple
 ```
 
-### Step 3: Load Data with Grain
+### Step 3: Load Data with datarax
 
 Opifex provides `create_shallow_water_loader` which generates synthetic shallow water
-equation data and wraps it in a Google Grain DataLoader for efficient streaming and
-batching.
+equation data and returns a frozen `PDELoaders` (with `.train` and `.val` datarax
+pipelines), splitting off a validation fraction internally.
 
 ```python
-train_loader = create_shallow_water_loader(
-    n_samples=N_TRAIN,
+n_samples = N_TRAIN + N_TEST
+loaders = create_shallow_water_loader(
+    n_samples=n_samples,
     batch_size=BATCH_SIZE,
     resolution=RESOLUTION,
-    shuffle=True,
+    val_fraction=N_TEST / n_samples,
     seed=SEED,
-    worker_count=0,
 )
 
-test_loader = create_shallow_water_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    # Batches are channels-first dicts: input/output each (batch, 3, H, W).
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
-
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
+x_train, y_train = _collect(loaders.train)
+x_test, y_test = _collect(loaders.val)
 ```
 
 **Terminal Output:**
 ```
-Loading shallow water equation data via Grain...
-Training data: X=(48, 3, 32, 32), Y=(48, 3, 32, 32)
-Test data:     X=(8, 3, 32, 32), Y=(8, 3, 32, 32)
+Loading shallow water equation data via datarax...
+Training data: X=(52, 3, 32, 32), Y=(52, 3, 32, 32)
+Test data:     X=(12, 3, 32, 32), Y=(12, 3, 32, 32)
 ```
 
 !!! note "Data Shape Convention"
-    The data uses channels-first format `(batch, channels, height, width)` where 3
-    channels correspond to the shallow water equation prognostic variables. The loader
-    automatically handles reshaping from 3D to 4D tensors if needed.
+    The data uses channels-first format `(batch, channels, height, width)` where the 3
+    channels correspond to the shallow water equation prognostic variables (fluid height
+    plus two velocity components). `in_channels` is derived directly from
+    `x_train.shape[1]`, so it is 3 for this dataset.
 
 ### Step 4: Create the SFNO Model
 
@@ -223,8 +219,8 @@ modeling. It sets up spherical harmonic convolution layers with the specified ma
 degree `lmax`.
 
 ```python
-in_channels = X_train.shape[1]
-out_channels = Y_train.shape[1]
+in_channels = x_train.shape[1]
+out_channels = y_train.shape[1]
 
 model = create_climate_sfno(
     in_channels=in_channels,
@@ -262,8 +258,8 @@ trainer = Trainer(
 )
 
 trained_model, metrics = trainer.fit(
-    train_data=(jnp.array(X_train), jnp.array(Y_train)),
-    val_data=(jnp.array(X_test), jnp.array(Y_test)),
+    train_data=(jnp.array(x_train), jnp.array(y_train)),
+    val_data=(jnp.array(x_test), jnp.array(y_test)),
 )
 ```
 
@@ -273,9 +269,9 @@ Setting up Trainer...
 Optimizer: Adam (lr=0.001)
 
 Starting training...
-Training completed in 2.3s
-Final train loss: 0.0024079871363937855
-Final val loss:   0.012890275567770004
+Training completed in 2.7s
+Final train loss: 0.000446284597273916
+Final val loss:   0.022472964599728584
 ```
 
 ### Step 6: Evaluation
@@ -283,23 +279,26 @@ Final val loss:   0.012890275567770004
 Evaluate the trained model on the test set by computing MSE and relative L2 error.
 
 ```python
-predictions = trained_model(X_test_jnp)
+x_test_jnp = jnp.array(x_test)
+y_test_jnp = jnp.array(y_test)
 
-test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
+predictions = trained_model(x_test_jnp)
+
+test_mse = float(jnp.mean((predictions - y_test_jnp) ** 2))
 
 # Relative L2 error per sample
-pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
-Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
+pred_diff = (predictions - y_test_jnp).reshape(predictions.shape[0], -1)
+y_flat = y_test_jnp.reshape(y_test_jnp.shape[0], -1)
 rel_l2 = float(
-    jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1))
+    jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(y_flat, axis=1))
 )
 ```
 
 **Terminal Output:**
 ```
 Evaluating on test set...
-Test MSE:         0.002347
-Test Relative L2: 0.082419
+Test MSE:         0.000339
+Test Relative L2: 0.030804
 ```
 
 ### Visualization
@@ -314,14 +313,14 @@ fig.suptitle("Spherical FNO Climate Prediction (Opifex)", fontsize=14, fontweigh
 sample_idx = 0
 
 # Input
-im0 = axes[0].imshow(X_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
+im0 = axes[0].imshow(x_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
 axes[0].set_title("Input")
 axes[0].set_xlabel("Longitude")
 axes[0].set_ylabel("Latitude")
 plt.colorbar(im0, ax=axes[0], shrink=0.8)
 
 # Ground truth
-im1 = axes[1].imshow(Y_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
+im1 = axes[1].imshow(y_test[sample_idx, 0], cmap="RdBu_r", aspect="equal")
 axes[1].set_title("Ground Truth")
 axes[1].set_xlabel("Longitude")
 plt.colorbar(im1, ax=axes[1], shrink=0.8)
@@ -334,7 +333,7 @@ axes[2].set_xlabel("Longitude")
 plt.colorbar(im2, ax=axes[2], shrink=0.8)
 
 # Absolute error
-error = np.abs(pred_np - Y_test[sample_idx, 0])
+error = np.abs(pred_np - y_test[sample_idx, 0])
 im3 = axes[3].imshow(error, cmap="plasma", aspect="equal")
 axes[3].set_title("Absolute Error")
 axes[3].set_xlabel("Longitude")
@@ -357,26 +356,26 @@ Visualization saved to docs/assets/examples/sfno_climate_simple/sfno_results.png
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Final Train Loss | 0.0024 | After 5 epochs |
-| Final Val Loss | 0.0129 | On held-out test set |
-| Test MSE | 0.002347 | Mean squared error |
-| Test Relative L2 | 0.082419 | L2 relative error |
-| Training Time | 2.3s | On single GPU |
+| Final Train Loss | 0.00045 | After 5 epochs |
+| Final Val Loss | 0.0225 | On held-out validation set |
+| Test MSE | 0.000339 | Mean squared error |
+| Test Relative L2 | 0.030804 | L2 relative error |
+| Training Time | 2.7s | On single GPU |
 | Resolution | 32x32 | Latitude x longitude grid |
 | Spherical Modes | lmax=8 | Spherical harmonic degree |
 
 ### What We Achieved
 
 - Trained a Spherical FNO on synthetic shallow water equation data in under 3 seconds
-- Achieved a relative L2 error of ~0.08 with only 5 epochs and 48 training samples
-- Demonstrated the full pipeline: data loading (Grain), model creation (factory), training (Trainer), evaluation, and visualization
+- Achieved a relative L2 error of ~0.031 with only 5 epochs and 52 training samples
+- Demonstrated the full pipeline: data loading (datarax), model creation (factory), training (Trainer), evaluation, and visualization
 - Used `create_climate_sfno` factory to set up spherical harmonic layers with minimal configuration
 
 ### Interpretation
 
 The SFNO captures the global structure of the shallow water solution through spectral
-convolutions in spherical harmonic space. With only 5 training epochs and 48 samples,
-the relative L2 error of ~0.08 is reasonable for this quick demonstration. The error
+convolutions in spherical harmonic space. With only 5 training epochs and 52 samples,
+the relative L2 error of ~0.031 is reasonable for this quick demonstration. The error
 map shows that prediction accuracy is relatively uniform across the spatial domain.
 Increasing epochs, training samples, and `lmax` will improve accuracy further.
 
@@ -403,7 +402,7 @@ Increasing epochs, training samples, and `lmax` will improve accuracy further.
 ### API Reference
 
 - [`create_climate_sfno`](../../api/neural.md) - SFNO factory for climate modeling
-- [`create_shallow_water_loader`](../../api/data.md) - Grain-based shallow water data loader
+- [`create_shallow_water_loader`](../../api/data.md) - datarax shallow water data loader
 - [`Trainer`](../../api/training.md) - Training orchestration
 - [`TrainingConfig`](../../api/training.md) - Training hyperparameters
 
@@ -456,10 +455,16 @@ optimizer = optax.chain(
 
 **Symptom**: Shape error when passing data to the model.
 
-**Cause**: Data is 3D `(batch, height, width)` instead of 4D `(batch, channels, height, width)`.
+**Cause**: `create_shallow_water_loader` yields channels-first 4D batches
+`(batch, 3, height, width)`, and `in_channels` must match `x_train.shape[1]` (3 for
+the shallow water fields). A mismatch usually means custom data with a different
+channel count or a missing channel axis.
 
-**Solution**: The example handles this automatically, but if using custom data:
+**Solution**: Derive the channel count from the data and add a channel axis if your
+custom arrays are 3D:
 ```python
-if X_train.ndim == 3:
-    X_train = X_train[:, None, :, :]  # Add channel dimension
+if x_train.ndim == 3:
+    x_train = x_train[:, None, :, :]  # Add channel dimension
+
+in_channels = x_train.shape[1]
 ```

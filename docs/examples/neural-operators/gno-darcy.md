@@ -24,8 +24,8 @@ GNO samples local neighborhoods rather than global spectral modes, which makes i
 genuinely harder to train on a regular Darcy grid than FNO or UNO. To make it
 converge we apply the standard operator-learning recipe: ~1000 training samples,
 **Gaussian normalization** of the input/output fields, the scale-invariant
-**relative-L2 loss**, and mini-batched optimization. The raw Darcy pressure is tiny
-(~0.05 in magnitude), so without normalization the loss gradients are negligible and
+**relative-L2 loss**, and mini-batched optimization. The raw Darcy pressure has a
+small magnitude, so without normalization the loss gradients are negligible and
 the model collapses toward predicting a constant (relative-L2 error above 1).
 
 ## What You'll Learn
@@ -168,7 +168,6 @@ JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
 Resolution: 16x16
 Training samples: 1000, Test samples: 100
-Batch size: 32, Epochs: 150
 GNO config: hidden_dim=64, layers=4
 Graph connectivity: 8-neighbor
 ```
@@ -176,42 +175,44 @@ Graph connectivity: 8-neighbor
 ### Step 2: Data Loading and Graph Conversion
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=1000,
+n_samples = 1000 + 100
+loaders = create_darcy_loader(
+    n_samples=n_samples,
     batch_size=32,
     resolution=16,
-    shuffle=True,
+    val_fraction=100 / n_samples,
     seed=42,
 )
 
-# Collect every batch (not just the first) and add a channel dimension.
-X_train, Y_train = collect_split(train_loader)  # NCHW
+# Drain every batch from each split into NCHW arrays.
+X_train_np, Y_train_np = collect_split(loaders.train)
+X_test_np, Y_test_np = collect_split(loaders.val)
 
 # Fit Gaussian statistics on the training split, normalize all splits.
-x_mean, x_std = X_train.mean(), X_train.std()
-y_mean, y_std = Y_train.mean(), Y_train.std()
-X_train_n = (X_train - x_mean) / x_std
-Y_train_n = (Y_train - y_mean) / y_std
+x_mean, x_std = X_train_np.mean(), X_train_np.std()
+y_mean, y_std = Y_train_np.mean(), Y_train_np.std()
+X_train_n = (X_train_np - x_mean) / x_std
+Y_train_n = (Y_train_np - y_mean) / y_std
 
 # Convert the normalized grids to graph format.
 train_nodes, train_edges, train_edge_feats = grid_to_graph_data(
-    X_train_n, connectivity=8
+    jnp.array(X_train_n), connectivity=8
 )
-train_targets, _, _ = grid_to_graph_data(Y_train_n, connectivity=8)
+train_targets, _, _ = grid_to_graph_data(jnp.array(Y_train_n), connectivity=8)
 ```
 
 **Terminal Output:**
 
 ```text
 Generating Darcy flow data...
-Grid data: X=(992, 1, 16, 16), Y=(992, 1, 16, 16)
-Input mean/std:  0.6350 / 0.2281
-Output mean/std: 0.049656 / 0.039027
+Grid data: X=(1024, 1, 16, 16), Y=(1024, 1, 16, 16)
+Input mean/std:  0.1825 / 0.1384
+Output mean/std: 0.192145 / 0.156734
 
 Converting grids to graphs...
-Node features shape: (992, 256, 3)
-Edge indices shape:  (992, 1860, 2)
-Edge features shape: (992, 1860, 2)
+Node features shape: (1024, 256, 3)
+Edge indices shape:  (1024, 1860, 2)
+Edge features shape: (1024, 1860, 2)
 Num nodes per graph: 256 (16x16)
 Num edges per graph: 1860
 ```
@@ -264,23 +265,23 @@ def train_step(model, opt, nodes, edges, edge_feats, targets):
 
 ```text
 Training GNO...
-  Epoch   1/150: loss=6.366672
-  Epoch  10/150: loss=0.152864
-  Epoch  20/150: loss=0.140062
-  Epoch  30/150: loss=0.112039
-  Epoch  40/150: loss=0.088015
-  Epoch  50/150: loss=0.071424
-  Epoch  60/150: loss=0.071945
-  Epoch  70/150: loss=0.078770
-  Epoch  80/150: loss=0.060371
-  Epoch  90/150: loss=0.056902
-  Epoch 100/150: loss=0.058171
-  Epoch 110/150: loss=0.069797
-  Epoch 120/150: loss=0.056847
-  Epoch 130/150: loss=0.055809
-  Epoch 140/150: loss=0.059946
-  Epoch 150/150: loss=0.060746
-Final GNO loss: 6.074574e-02
+  Epoch   1/150: loss=6.190335
+  Epoch  10/150: loss=0.222464
+  Epoch  20/150: loss=0.169386
+  Epoch  30/150: loss=0.132922
+  Epoch  40/150: loss=0.127297
+  Epoch  50/150: loss=0.123379
+  Epoch  60/150: loss=0.116710
+  Epoch  70/150: loss=0.102355
+  Epoch  80/150: loss=0.124145
+  Epoch  90/150: loss=0.102509
+  Epoch 100/150: loss=0.092786
+  Epoch 110/150: loss=0.091702
+  Epoch 120/150: loss=0.098324
+  Epoch 130/150: loss=0.094405
+  Epoch 140/150: loss=0.092193
+  Epoch 150/150: loss=0.090054
+Final GNO loss: 9.005379e-02
 ```
 
 ### Step 5: Evaluation
@@ -290,8 +291,8 @@ Final GNO loss: 6.074574e-02
 ```text
 Running evaluation...
 GNO Results:
-  Test MSE:         6.411563e-06
-  Relative L2:      0.038602 (min=0.019114, max=0.127797)
+  Test MSE:         2.524304e-04
+  Relative L2:      0.060991 (min=0.025296, max=0.153613)
 ```
 
 Predictions are un-normalized back to physical pressure (`pred * y_std + y_mean`)
@@ -312,17 +313,17 @@ space. The test forward pass is run in batches to bound memory use.
 
 | Metric              | GNO         |
 |---------------------|-------------|
-| Test MSE            | 6.41e-06    |
-| Relative L2 Error   | 0.0386      |
+| Test MSE            | 2.52e-04    |
+| Relative L2 Error   | 0.0610      |
 | Parameters          | 100,291     |
 | Resolution          | 16x16       |
 
 **Note:** With the operator-learning recipe (Gaussian normalization +
-relative-L2 loss + ~1000 samples + 150 epochs), GNO reaches a ~3.9% relative-L2
+relative-L2 loss + ~1000 samples + 150 epochs), GNO reaches a ~6.1% relative-L2
 error on Darcy flow — comfortably below the 10% target for graph operators on a
 regular grid. Without normalization the same model collapses to a constant
-prediction (relative-L2 error above 7), because the raw Darcy pressure scale
-(~0.05) starves the gradients. GNO remains slightly less accurate than spectral
+prediction (relative-L2 error above 1), because the raw Darcy pressure scale
+starves the gradients. GNO remains slightly less accurate than spectral
 operators (FNO, UNO) on uniform grids, where Fourier convolutions are optimal,
 but it excels on problems with non-uniform meshes, complex boundaries, or
 varying node densities where FNO cannot be applied.
@@ -379,13 +380,14 @@ BATCH_SIZE = 8
 (worse than predicting the mean).
 
 **Cause**: Missing normalization and/or a raw-MSE loss. The Darcy pressure field
-is tiny (~0.05), so unnormalized MSE gradients are negligible and the model
-collapses toward a constant. Loading only the first batch (`next(iter(loader))`)
-instead of the full training set has the same effect.
+has a small magnitude, so unnormalized MSE gradients are negligible and the model
+collapses toward a constant. Draining only the first batch instead of the full
+training split has the same effect.
 
 **Solution**: Fit Gaussian statistics on the training split, normalize the input
 and output fields, train with the scale-invariant `relative_l2` loss, and
-un-normalize predictions before scoring. Collect every batch from the loader.
+un-normalize predictions before scoring. Drain every batch from `loaders.train`
+and `loaders.val` via `collect_split`.
 
 ### GNO is less accurate than FNO on regular grids
 

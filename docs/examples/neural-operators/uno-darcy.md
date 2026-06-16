@@ -3,7 +3,7 @@
 | Metadata | Value |
 |----------|-------|
 | **Level** | Intermediate |
-| **Runtime** | ~5 min (CPU) / ~36 sec (GPU) |
+| **Runtime** | ~5 min (CPU) / ~38 sec (GPU) |
 | **Prerequisites** | JAX, Flax NNX, Neural Operators basics |
 | **Format** | Python + Jupyter |
 | **Memory** | ~2 GB RAM |
@@ -18,7 +18,7 @@ unseen during training without any fine-tuning.
 
 You will build a UNO model using Opifex's `create_uno` factory, apply the standard
 operator-learning recipe (grid positional embedding, Gaussian normalization, and the
-relative-L2 loss), load Darcy flow training data with the Grain-based
+relative-L2 loss), load Darcy flow training data with the datarax-based
 `create_darcy_loader`, train with the `Trainer` / `TrainingConfig` API, evaluate
 predictions on the test set, and then demonstrate zero-shot super-resolution by running
 inference at 2x the training resolution.
@@ -27,7 +27,7 @@ inference at 2x the training resolution.
 
 1. **Create** a UNO model with the `create_uno` factory function
 2. **Apply** the operator-learning recipe: `GridEmbedding2D`, Gaussian normalization, relative-L2 loss
-3. **Load** Darcy flow data using `create_darcy_loader` (Google Grain streaming)
+3. **Load** Darcy flow data using `create_darcy_loader` (datarax `PDELoaders`)
 4. **Train** with Opifex's `Trainer.fit()` API and `TrainingConfig`
 5. **Evaluate** predictions using MSE and relative L2 error
 6. **Demonstrate** zero-shot super-resolution at higher resolutions than training
@@ -40,7 +40,7 @@ compares:
 | NeuralOperator (PyTorch) | Opifex (JAX) |
 |--------------------------|--------------|
 | `UNO(in_channels, out_channels, hidden_channels, uno_out_channels, ...)` | `create_uno(input_channels=, output_channels=, hidden_channels=, modes=, n_layers=, rngs=)` |
-| `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=)` (Google Grain) |
+| `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=)` (datarax `PDELoaders`) |
 | `trainer = Trainer(model, ...)` then `trainer.train(...)` | `Trainer(model=, config=, rngs=)` then `trainer.fit(train_data, val_data)` |
 | `model.eval(); with torch.no_grad(): ...` | `trained_model(x, deterministic=True)` |
 | Manual `torch.meshgrid` for grid embeddings | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
@@ -51,7 +51,7 @@ compares:
 1. **Factory function**: Opifex provides `create_uno` for streamlined model construction instead of direct class instantiation
 2. **Explicit PRNG**: Opifex uses JAX's explicit `rngs=nnx.Rngs(42)` instead of global random state
 3. **XLA compilation**: Automatic JIT compilation during `Trainer.fit()` for significant speedups
-4. **Grain data loading**: Efficient, reproducible streaming via Google Grain instead of PyTorch DataLoader
+4. **datarax data loading**: Efficient, reproducible batching via datarax `PDELoaders` (a frozen `.train` / `.val` pair) instead of PyTorch DataLoader
 
 ## Files
 
@@ -153,6 +153,8 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 
 # Opifex framework imports
+from opifex.core.evaluation import predict_in_batches
+from opifex.core.metrics import per_sample_relative_l2
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
@@ -211,55 +213,39 @@ Batch size: 32, Epochs: 120
 UNO config: hidden=32, modes=12, layers=3
 ```
 
-### Step 3: Data Loading with Grain
+### Step 3: Data Loading with datarax
 
 Opifex provides `create_darcy_loader` which generates Darcy flow equation data
-(permeability-to-pressure mapping) and wraps it in a Google Grain DataLoader for
-efficient streaming and batching.
+(permeability-to-pressure mapping) and returns a frozen `PDELoaders` bundle with
+`.train` and `.val` datarax pipelines. The split between train and validation is
+controlled by `val_fraction`. datarax yields channels-first batches
+(`{"input": (b, 1, H, W), "output": (b, 1, H, W)}`), so since UNO works
+channels-last we move the channel axis to the end once, at the data boundary.
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
+n_samples = N_TRAIN + N_TEST
+loaders = create_darcy_loader(
+    n_samples=n_samples,
     batch_size=BATCH_SIZE,
     resolution=RESOLUTION,
-    shuffle=True,
+    val_fraction=N_TEST / n_samples,
     seed=SEED,
-    worker_count=0,
 )
 
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-)
 
-# Collect data from loaders into arrays for Trainer.fit()
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
+# datarax yields channels-first {"input": (b, 1, H, W), "output": (b, 1, H, W)};
+# UNO (and its grid embedding, eval, and visualization) work channels-last, so
+# we move the channel axis to the end once here, at the data boundary.
+def _collect(pipeline):
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.moveaxis(np.asarray(batch["input"]), 1, -1))
+        outputs.append(np.moveaxis(np.asarray(batch["output"]), 1, -1))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
 
-X_test_list, Y_test_list = [], []
-for batch in test_loader:
-    X_test_list.append(batch["input"])
-    Y_test_list.append(batch["output"])
-
-X_test = np.concatenate(X_test_list, axis=0)
-Y_test = np.concatenate(Y_test_list, axis=0)
-
-# Ensure 4D tensors: (batch, height, width, channels)
-if X_train.ndim == 3:
-    X_train = X_train[..., np.newaxis]
-    Y_train = Y_train[..., np.newaxis]
-if X_test.ndim == 3:
-    X_test = X_test[..., np.newaxis]
-    Y_test = Y_test[..., np.newaxis]
+X_train, Y_train = _collect(loaders.train)
+X_test, Y_test = _collect(loaders.val)
 
 print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
 print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
@@ -267,9 +253,9 @@ print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
 
 **Terminal Output:**
 ```
-Loading Darcy flow data via Grain...
-Training data: X=(992, 32, 32, 1), Y=(992, 32, 32, 1)
-Test data:     X=(96, 32, 32, 1), Y=(96, 32, 32, 1)
+Loading Darcy flow data via datarax...
+Training data: X=(1024, 32, 32, 1), Y=(1024, 32, 32, 1)
+Test data:     X=(128, 32, 32, 1), Y=(128, 32, 32, 1)
 ```
 
 ### Step 4: Normalization
@@ -293,8 +279,8 @@ print(f"Output mean/std: {y_mean:.6f} / {y_std:.6f}")
 
 **Terminal Output:**
 ```
-Input mean/std:  0.6274 / 0.2146
-Output mean/std: 0.054309 / 0.038000
+Input mean/std:  0.1778 / 0.1302
+Output mean/std: 0.213690 / 0.155666
 ```
 
 ### Step 5: Model Creation
@@ -420,9 +406,9 @@ Setting up Trainer...
 Optimizer: Adam (lr=0.001), loss: relative L2
 
 Starting training...
-Training completed in 36.1s
-Final train loss: 0.009135831673178942
-Final val loss:   0.0001948659773916006
+Training completed in 37.5s
+Final train loss: 0.021239429712295532
+Final val loss:   0.00038610619958490133
 ```
 
 ### Step 7: Evaluation
@@ -435,24 +421,14 @@ higher resolutions.
 X_test_jnp = jnp.array(X_test_n)
 Y_test_jnp = jnp.array(Y_test)
 
-
-def predict_in_batches(forward, inputs, batch_size=128):
-    """Run the model over the inputs in batches to bound memory use."""
-    outputs = [
-        forward(inputs[i : i + batch_size], deterministic=True)
-        for i in range(0, inputs.shape[0], batch_size)
-    ]
-    return jnp.concatenate(outputs, axis=0)
-
-
-predictions = predict_in_batches(trained_model, X_test_jnp) * y_std + y_mean
+predictions = (
+    predict_in_batches(lambda b: trained_model(b, deterministic=True), X_test_jnp) * y_std
+    + y_mean
+)
 
 test_mse = float(jnp.mean((predictions - Y_test_jnp) ** 2))
 
-# Relative L2 error per sample
-pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
-Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)
+per_sample_rel_l2 = per_sample_relative_l2(predictions, Y_test_jnp)
 mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 
 print(f"Test MSE:         {test_mse:.6e}")
@@ -464,10 +440,10 @@ print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
 **Terminal Output:**
 ```
 Evaluating on test set...
-Test MSE:         1.051382e-07
-Test Relative L2: 0.004708
-Min Relative L2:  0.002296
-Max Relative L2:  0.013812
+Test MSE:         1.618521e-05
+Test Relative L2: 0.014812
+Min Relative L2:  0.006976
+Max Relative L2:  0.039569
 ```
 
 ### Step 8: Zero-Shot Super-Resolution
@@ -508,7 +484,7 @@ print(f"Super-resolution L2 error: {sr_error:.6f}")
 **Terminal Output:**
 ```
 Testing zero-shot super-resolution: 32 -> 64
-Super-resolution L2 error: 0.229863
+Super-resolution L2 error: 0.295490
 ```
 
 !!! note "Interpreting Super-Resolution Error"
@@ -541,8 +517,8 @@ Predictions saved to docs/assets/examples/uno_darcy/uno_predictions.png
 Super-resolution saved to docs/assets/examples/uno_darcy/uno_superresolution.png
 
 ======================================================================
-UNO Darcy Flow example completed in 36.1s
-Test MSE: 1.051382e-07, Relative L2: 0.004708
+UNO Darcy Flow example completed in 37.5s
+Test MSE: 1.618521e-05, Relative L2: 0.014812
 Results saved to: docs/assets/examples/uno_darcy
 ======================================================================
 ```
@@ -551,28 +527,28 @@ Results saved to: docs/assets/examples/uno_darcy
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Training Loss (final) | 9.14e-03 | Relative-L2 on training set |
-| Validation Loss (final) | 1.95e-04 | Relative-L2 on held-out validation |
-| Test MSE | 1.05e-07 | Mean squared error on physical pressure |
-| Test Relative L2 | 0.0047 | Mean relative L2 across 96 test samples |
-| Min / Max Relative L2 | 0.0023 / 0.0138 | Best and worst test sample |
-| Super-Resolution L2 (32 -> 64) | 0.2299 | Zero-shot inference at 2x resolution |
+| Training Loss (final) | 2.12e-02 | Relative-L2 on training set |
+| Validation Loss (final) | 3.86e-04 | Relative-L2 on held-out validation |
+| Test MSE | 1.62e-05 | Mean squared error on physical pressure |
+| Test Relative L2 | 0.0148 | Mean relative L2 across 128 test samples |
+| Min / Max Relative L2 | 0.0070 / 0.0396 | Best and worst test sample |
+| Super-Resolution L2 (32 -> 64) | 0.2955 | Zero-shot inference at 2x resolution |
 | Total Parameters | 19,785,857 | hidden=32, modes=12, layers=3 |
-| Training Time | 36.1 sec | Single GPU (CUDA) |
+| Training Time | 37.5 sec | Single GPU (CUDA) |
 
 ### What We Achieved
 
 - Built a UNO model with spectral convolutions and U-Net skip connections using a single `create_uno` call, wrapped with a `GridEmbedding2D` positional encoding
 - Applied the standard operator-learning recipe -- grid embedding, Gaussian normalization, and the relative-L2 loss
-- Trained on 1000 Darcy flow samples streamed through Google Grain in ~36 seconds on GPU
-- Reached **0.47% mean relative L2 error** on the held-out test set
+- Trained on 1024 Darcy flow samples batched through datarax in ~38 seconds on GPU
+- Reached **1.48% mean relative L2 error** on the held-out test set
 - Demonstrated **zero-shot super-resolution** by predicting at 64x64 after training at 32x32
 - Produced visualizations comparing predictions against ground truth with error maps
 
 ### Interpretation
 
 With the full operator-learning recipe, the UNO learns the permeability-to-pressure
-mapping to a sub-1% relative L2 error. Three ingredients drive this: the
+mapping to roughly 1.5% relative L2 error. Three ingredients drive this: the
 `GridEmbedding2D` coordinate channels give the spectral layers absolute position
 information for the boundary-value problem; Gaussian normalization standardizes the
 input and output fields so the spectral weights converge cleanly; and the relative-L2
@@ -605,7 +581,7 @@ architectures.
 - [`create_uno`](../../api/neural.md) - UNO factory function
 - [`Trainer`](../../api/training.md) - Training orchestration with JIT compilation
 - [`TrainingConfig`](../../api/training.md) - Training hyperparameter configuration
-- [`create_darcy_loader`](../../api/data.md) - Grain-based Darcy flow data loader
+- [`create_darcy_loader`](../../api/data.md) - datarax-based Darcy flow data loader
 
 ## Troubleshooting
 

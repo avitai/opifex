@@ -3,7 +3,7 @@
 | Metadata | Value |
 |----------|-------|
 | **Level** | Advanced |
-| **Runtime** | ~10 min (CPU) / ~4 sec (GPU) |
+| **Runtime** | ~10 min (CPU) / ~3 sec (GPU) |
 | **Prerequisites** | JAX, Flax NNX, Spherical Harmonics, Conservation Laws |
 | **Format** | Python + Jupyter |
 | **Memory** | ~2 GB RAM |
@@ -13,7 +13,7 @@
 
 This example demonstrates full Spherical Fourier Neural Operator (SFNO) functionality for climate modeling using the Opifex framework with JAX/Flax NNX. The SFNO extends the standard FNO to spherical geometries by replacing Fourier transforms with spherical harmonic transforms, making it the natural architecture for global climate and weather prediction tasks where data lives on the surface of a sphere.
 
-The example covers the full pipeline: creating an SFNO model with `create_climate_sfno`, loading shallow water equation data via `create_shallow_water_loader` (Google Grain), training with conservation-aware physics loss through `ConservationConfig`, evaluating energy and mass conservation, and performing spherical harmonic spectral analysis of predictions.
+The example covers the full pipeline: creating an SFNO model with `create_climate_sfno`, loading shallow water equation data via `create_shallow_water_loader` (datarax), training with conservation-aware physics loss through `ConservationConfig`, evaluating energy and mass conservation, and performing spherical harmonic spectral analysis of predictions.
 
 Conservation-aware training is a key feature of this example. By configuring `ConservationConfig` with energy and mass conservation laws, the `Trainer` adds physics-informed loss terms that penalize violations of fundamental physical invariants -- ensuring the learned operator respects the underlying physics of climate dynamics.
 
@@ -33,7 +33,7 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 | `SphericalConv(in_ch, out_ch, modes)` | Spherical spectral convolution via `lmax` parameter |
 | Manual conservation loss implementation | `ConservationConfig(laws=["energy", "mass"])` built into `Trainer` |
 | `trainer.train(epochs=100)` | `Trainer(model, config, rngs).fit(train_data, val_data)` |
-| `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (Google Grain) |
+| `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (datarax) |
 
 **Key differences:**
 
@@ -55,7 +55,7 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 
 1. **No YAML required**: Pure Python configuration vs mandatory Hydra config files
 2. **Simpler setup**: No complex config directory structure needed
-3. **JAX ecosystem**: Native integration with Flax, Optax, Grain
+3. **JAX ecosystem**: Native integration with Flax, Optax, datarax
 
 ## Files
 
@@ -216,36 +216,46 @@ Batch: 8, Epochs: 5, lmax: 8
 | `NUM_EPOCHS` | 5 | Training iterations (increase for better accuracy) |
 | `LEARNING_RATE` | 1e-3 | Adam optimizer step size |
 
-### Step 3: Data Loading with Grain
+### Step 3: Data Loading with datarax
 
-Load shallow water equation data using Opifex's Grain-based data loader:
+Load shallow water equation data using Opifex's datarax-backed loader. A single
+call to `create_shallow_water_loader` returns a frozen `PDELoaders` bundle whose
+`.train` and `.val` pipelines are produced from one dataset split by
+`val_fraction`. Each pipeline yields batches, which we concatenate into arrays:
 
 ```python
-train_loader = create_shallow_water_loader(
-    n_samples=N_TRAIN, batch_size=BATCH_SIZE, resolution=RESOLUTION,
-    shuffle=True, seed=SEED + 3000, worker_count=0)
-test_loader = create_shallow_water_loader(
-    n_samples=N_TEST, batch_size=BATCH_SIZE, resolution=RESOLUTION,
-    shuffle=False, seed=SEED + 4000, worker_count=0)
+n_samples = N_TRAIN + N_TEST
+loaders = create_shallow_water_loader(
+    n_samples=n_samples,
+    batch_size=BATCH_SIZE,
+    resolution=RESOLUTION,
+    val_fraction=N_TEST / n_samples,
+    seed=SEED,
+)
 
-X_train_list, Y_train_list = [], []
-for batch in train_loader:
-    X_train_list.append(batch["input"])
-    Y_train_list.append(batch["output"])
-X_train = np.concatenate(X_train_list, axis=0)
-Y_train = np.concatenate(Y_train_list, axis=0)
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+X_train, Y_train = _collect(loaders.train)
+X_test, Y_test = _collect(loaders.val)
 ```
 
 **Terminal Output:**
 ```
-Loading shallow water equation data via Grain...
+Loading shallow water equation data via datarax...
 Train: X=(200, 3, 32, 32), Y=(200, 3, 32, 32)
 Test:  X=(40, 3, 32, 32), Y=(40, 3, 32, 32)
 ```
 
-!!! note "Data Shape Convention"
-    The data shape is `(samples, channels, lat, lon)` where the 3 channels correspond
-    to the height field and two velocity components of the shallow water equations.
+!!! note "Channels-First 3-Field Data"
+    Shallow water has three physical fields, so datarax yields channels-first
+    batches of shape `(batch, 3, lat, lon)` and the collected arrays are
+    `(samples, 3, lat, lon)`. The 3 channels are the height field and the two
+    velocity components. No manual reshape is needed.
 
 ### Step 4: Model Creation
 
@@ -288,7 +298,7 @@ Setting up Trainer with conservation-aware loss...
 Optimizer: Adam (lr=0.001), Conservation: energy, mass
 
 Starting training...
-Done in 3.5s | Train: 0.03277627006173134 | Val: 0.0024642879143357277
+Done in 2.7s | Train: 0.03161391243338585 | Val: 0.006293342448771
 ```
 
 !!! tip "ConservationConfig"
@@ -324,9 +334,9 @@ mass_conservation = float(jnp.mean(jnp.abs(pred_mass - target_mass)))
 
 **Terminal Output:**
 ```
-Running evaluation...
-MSE: 0.004308 | Rel L2: 0.111657+/-0.002223
-Energy Conserv: 0.060785 | Mass Conserv: 0.031266
+Running full evaluation...
+MSE: 0.003198 | Rel L2: 0.096190+/-0.002121
+Energy Conserv: 0.061405 | Mass Conserv: 0.034254
 ```
 
 ### Step 7: Visualizations
@@ -367,13 +377,13 @@ Generating error analysis...
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Test MSE | 0.004308 | Mean squared error on test set |
-| Relative L2 Error | 0.111657 +/- 0.002223 | Per-sample mean +/- std |
-| Energy Conservation Error | 0.060785 | Mean absolute energy discrepancy |
-| Mass Conservation Error | 0.031266 | Mean absolute mass discrepancy |
-| Training Time | 3.5s | On single GPU (CudaDevice) |
-| Final Training Loss | 0.0328 | After 5 epochs |
-| Final Validation Loss | 0.0025 | After 5 epochs |
+| Test MSE | 0.003198 | Mean squared error on test set |
+| Relative L2 Error | 0.096190 +/- 0.002121 | Per-sample mean +/- std |
+| Energy Conservation Error | 0.061405 | Mean absolute energy discrepancy |
+| Mass Conservation Error | 0.034254 | Mean absolute mass discrepancy |
+| Training Time | 2.7s | On single GPU (CudaDevice) |
+| Final Training Loss | 0.0316 | After 5 epochs |
+| Final Validation Loss | 0.0063 | After 5 epochs |
 
 ### What We Achieved
 
@@ -384,13 +394,13 @@ Generating error analysis...
 
 ### Interpretation
 
-The SFNO with only 5 epochs of training achieves a relative L2 error of ~0.112. The conservation metrics show that the model maintains reasonable energy and mass fidelity. The spectral analysis shows that low-degree spherical harmonic modes (large-scale climate patterns) are captured well, while higher-degree modes require additional training. Increasing `NUM_EPOCHS`, `lmax`, and `RESOLUTION` will improve accuracy and conservation properties.
+The SFNO with only 5 epochs of training achieves a relative L2 error of ~0.096. The conservation metrics show that the model maintains reasonable energy and mass fidelity. The spectral analysis shows that low-degree spherical harmonic modes (large-scale climate patterns) are captured well, while higher-degree modes require additional training. Increasing `NUM_EPOCHS`, `lmax`, and `RESOLUTION` will improve accuracy and conservation properties.
 
 **Terminal Output (final summary):**
 ```
 ======================================================================
-Full SFNO Climate example completed in 3.5s
-Mean Relative L2 Error: 0.111657
+Full SFNO Climate example completed in 2.7s
+Mean Relative L2 Error: 0.096190
 Results saved to: docs/assets/examples/sfno_climate_comprehensive
 ======================================================================
 ```
@@ -421,7 +431,7 @@ Results saved to: docs/assets/examples/sfno_climate_comprehensive
 - [`ConservationConfig`](../../api/training.md) - Conservation law configuration for physics-aware training
 - [`Trainer`](../../api/training.md) - Training orchestration with conservation support
 - [`TrainingConfig`](../../api/training.md) - Training hyperparameter configuration
-- [`create_shallow_water_loader`](../../api/data.md) - Grain-based shallow water equation data loader
+- [`create_shallow_water_loader`](../../api/data.md) - datarax-backed shallow water equation data loader
 
 ## Troubleshooting
 
@@ -485,13 +495,15 @@ model = create_climate_sfno(
 
 ### Slow data loading
 
-**Symptom**: Data loading via Grain takes unexpectedly long.
+**Symptom**: Materializing the datarax pipelines into arrays takes unexpectedly long.
 
-**Cause**: Worker count misconfigured or system I/O bottleneck.
+**Cause**: The synthetic shallow water fields are generated on demand; large
+`n_samples` or `resolution` increases generation cost.
 
-**Solution**: Adjust `worker_count` based on available CPU cores:
+**Solution**: Reduce the dataset size or grid resolution, or cache the collected
+arrays once and reuse them across runs:
 ```python
-train_loader = create_shallow_water_loader(
-    n_samples=200, batch_size=8, resolution=32,
-    shuffle=True, seed=42, worker_count=4)  # Use multiple workers
+loaders = create_shallow_water_loader(
+    n_samples=240, batch_size=8, resolution=32,
+    val_fraction=40 / 240, seed=42)  # smaller / coarser is faster
 ```

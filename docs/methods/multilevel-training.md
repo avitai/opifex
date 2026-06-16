@@ -25,7 +25,7 @@ The `CascadeTrainer` provides a generic framework for multilevel training, suppo
 ```python
 from flax import nnx
 import optax
-from opifex.training.multilevel import (
+from opifex.core.training.strategies.multilevel import (
     CascadeTrainer,
     create_network_hierarchy,
     prolongate,
@@ -99,7 +99,7 @@ while True:
 Transfer operators move parameters between hierarchy levels.
 
 ```python
-from opifex.training.multilevel import prolongate, restrict
+from opifex.core.training.strategies.multilevel import prolongate, restrict
 
 # Prolongate: coarse -> fine (copy and pad)
 fine_model = prolongate(coarse_model, fine_model)
@@ -117,7 +117,7 @@ coarse_model = restrict(fine_model, coarse_model)
 You can use `create_network_hierarchy` or manually create a list of models.
 
 ```python
-from opifex.training.multilevel import create_network_hierarchy
+from opifex.core.training.strategies.multilevel import create_network_hierarchy
 
 hierarchy = create_network_hierarchy(
     input_dim=2,
@@ -140,7 +140,7 @@ For Fourier Neural Operators, the hierarchy is based on the number of Fourier mo
 ### FNO Training Example
 
 ```python
-from opifex.training.multilevel import (
+from opifex.core.training.strategies.multilevel import (
     create_fno_hierarchy,
     prolongate_fno_modes,
 )
@@ -210,7 +210,7 @@ config = MultilevelConfig(
 **With Adaptive Sampling:**
 
 ```python
-from opifex.training.adaptive_sampling import RADSampler
+from opifex.core.training.components.adaptive_sampling import RADSampler
 
 sampler = RADSampler()
 
@@ -321,7 +321,7 @@ import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
-from opifex.training.multilevel import (
+from opifex.core.training.strategies.multilevel import (
     CascadeTrainer,
     MultilevelAdam,
     create_network_hierarchy,

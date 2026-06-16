@@ -33,7 +33,7 @@ same synthetic Darcy data and recipe.
 ## What You'll Learn
 
 1. **Compose** `GridEmbedding2D` with `FourierNeuralOperator` for positional encoding
-2. **Load** Darcy flow data with `create_darcy_loader` (Grain-based)
+2. **Load** Darcy flow data with `create_darcy_loader` (datarax pipelines)
 3. **Apply** Gaussian normalization and the **relative-L2 loss** via `LossConfig`
 4. **Use** `AdamW`, weight decay, and an exponential learning-rate schedule
 5. **Evaluate** with L2 relative error and a train-vs-test overfitting check
@@ -232,62 +232,55 @@ LR schedule: exponential, x0.5 every 60 epochs
 ### Step 3: Data Loading
 
 We generate Darcy flow data with `create_darcy_loader` (smooth Darcy, solved with the
-accurate direct solver) and collect the streamed batches into arrays for `Trainer.fit()`.
-The FNO expects channels-first inputs `(batch, channels, H, W)`, so we add the channel
-axis after collecting.
+accurate direct solver) and serve it via datarax pipelines. `create_darcy_loader` returns
+a frozen `PDELoaders` with `.train` / `.val` datarax pipelines, split by `val_fraction`.
+The batches are already channels-first `{"input": (b, 1, H, W), "output": (b, 1, H, W)}`,
+so we just drain each pipeline into arrays for `Trainer.fit()`.
 
 ```python
-train_loader = create_darcy_loader(
-    n_samples=N_TRAIN,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=True,
-    seed=SEED,
-    worker_count=0,
-    enable_normalization=False,
-)
-test_loader = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    shuffle=False,
-    seed=SEED + 1000,
-    worker_count=0,
-    enable_normalization=False,
+loaders = create_darcy_loader(
+    n_samples=n_samples,
+    batch_size=batch_size,
+    resolution=resolution,
+    val_fraction=n_test / n_samples,
+    seed=seed,
 )
 
-# Collect batches into arrays, then add the channel axis: (N, H, W) -> (N, 1, H, W)
-X_train = np.concatenate([b["input"] for b in train_loader], axis=0)[:, np.newaxis]
-Y_train = np.concatenate([b["output"] for b in train_loader], axis=0)[:, np.newaxis]
+# Collect the datarax pipelines into arrays for Trainer.fit(). Batches are
+# channels-first {"input": (b, 1, H, W), "output": (b, 1, H, W)}.
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+
+x_train, y_train = _collect(loaders.train)
+x_test, y_test = _collect(loaders.val)
 ```
 
 **Terminal Output:**
 ```
-Loading Darcy flow data via Grain...
-Training data: X=(992, 1, 32, 32), Y=(992, 1, 32, 32)
-Test data:     X=(96, 1, 32, 32), Y=(96, 1, 32, 32)
+Generating Darcy flow data (jit+vmap) and serving via datarax...
+Training data: X=(1024, 1, 32, 32), Y=(1024, 1, 32, 32)
+Test data:     X=(128, 1, 32, 32), Y=(128, 1, 32, 32)
 ```
-
-!!! note "Batch counts are multiples of the batch size"
-    `create_darcy_loader` drops the final partial batch (`drop_remainder`), so 1000
-    samples at `BATCH_SIZE=32` yields 992 training samples and 100 samples yields 96 test
-    samples.
 
 We fit Gaussian statistics on the training set, normalize all splits, and un-normalize
 predictions before measuring the physical-space relative L2 error:
 
 ```python
-x_mean, x_std = X_train.mean(), X_train.std()
-y_mean, y_std = Y_train.mean(), Y_train.std()
+x_mean, x_std = x_train.mean(), x_train.std()
+y_mean, y_std = y_train.mean(), y_train.std()
 
-X_train_n = (X_train - x_mean) / x_std
-Y_train_n = (Y_train - y_mean) / y_std
+x_train_n = (x_train - x_mean) / x_std
+y_train_n = (y_train - y_mean) / y_std
 ```
 
 **Terminal Output:**
 ```
-Input mean/std:  0.6274 / 0.2146
-Output mean/std: 0.054309 / 0.038000
+Input mean/std:  0.1778 / 0.1302
+Output mean/std: 0.213690 / 0.155666
 ```
 
 ### Step 4: Model Creation -- Composing GridEmbedding2D with FNO
@@ -413,9 +406,9 @@ Optimizer: AdamW (lr=0.005, weight_decay=0.0001)
 Loss: relative L2 (the standard operator-learning objective)
 
 Starting training...
-Training completed in 17.7s
-Final train loss: 0.004179991293518293
-Final val loss:   2.6368774342699908e-05
+Training completed in 18.4s
+Final train loss: 0.006624664645642042
+Final val loss:   0.0001833601709222421
 ```
 
 ### Step 6: Full Evaluation
@@ -426,30 +419,30 @@ compare their relative L2 errors to expose any overfitting:
 
 ```python
 # Un-normalize predictions back to physical pressure units
-predictions = predict_in_batches(trained_model, X_test_jnp) * y_std + y_mean
-train_predictions = predict_in_batches(trained_model, X_train_jnp) * y_std + y_mean
+predictions = predict_in_batches(trained_model, x_test_jnp) * y_std + y_mean
+train_predictions = predict_in_batches(trained_model, x_train_jnp) * y_std + y_mean
 
 # Test relative L2 (per sample) in physical units
-pred_diff = (predictions - Y_test_jnp).reshape(predictions.shape[0], -1)
-Y_flat = Y_test_jnp.reshape(Y_test_jnp.shape[0], -1)
-per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_flat, axis=1)
+test_mse = float(jnp.mean((predictions - y_test_jnp) ** 2))
+per_sample_rel_l2 = per_sample_relative_l2(predictions, y_test_jnp)
 mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
+train_rel_l2 = float(relative_l2_error(train_predictions, y_train_jnp))
 ```
 
 **Terminal Output:**
 ```
 Running evaluation...
-Train Relative L2: 0.002413
-Test  Relative L2: 0.002980
-Overfitting gap (test - train): +0.000567
-Test MSE:         4.007969e-08
-Min Relative L2:  0.001981
-Max Relative L2:  0.008293
+Train Relative L2: 0.004973
+Test  Relative L2: 0.007588
+Overfitting gap (test - train): +0.002615
+Test MSE:         4.024144e-06
+Min Relative L2:  0.004003
+Max Relative L2:  0.021948
 ```
 
 !!! info "Reading the Relative L2 Error"
     Errors are measured in physical pressure units after un-normalizing the predictions.
-    A test relative L2 of ~0.3% with a sub-0.1% train-vs-test gap confirms the FNO learns
+    A test relative L2 of ~0.76% with a sub-0.3% train-vs-test gap confirms the FNO learns
     the Darcy operator accurately and generalizes well on this data.
 
 ### Step 7: Visualization
@@ -458,17 +451,17 @@ Generate full visualizations including sample predictions, error maps, and
 error distribution analysis.
 
 ```python
-n_vis = min(4, len(X_test))
+n_vis = min(4, len(x_test))
 fig, axes = plt.subplots(n_vis, 4, figsize=(16, 4 * n_vis))
 fig.suptitle(
     "FNO Darcy Flow Predictions (Opifex)", fontsize=14, fontweight="bold"
 )
 
 for i in range(n_vis):
-    axes[i, 0].imshow(X_test[i, 0], cmap="viridis")    # Input (permeability)
-    axes[i, 1].imshow(Y_test[i, 0], cmap="RdBu_r")     # Ground truth
+    axes[i, 0].imshow(x_test[i, 0], cmap="viridis")    # Input (permeability)
+    axes[i, 1].imshow(y_test[i, 0], cmap="RdBu_r")     # Ground truth
     axes[i, 2].imshow(pred_np, cmap="RdBu_r")           # FNO prediction
-    error = np.abs(pred_np - Y_test[i, 0])
+    error = np.abs(pred_np - y_test[i, 0])
     axes[i, 3].imshow(error, cmap="Reds")               # Absolute error
 
 plt.savefig(OUTPUT_DIR / "sample_predictions.png", dpi=150, bbox_inches="tight")
@@ -494,22 +487,22 @@ Error analysis saved to docs/assets/examples/fno_darcy/error_analysis.png
 **Terminal Output:**
 ```
 ======================================================================
-FNO Darcy Flow example completed in 17.7s
-Test MSE: 4.007969e-08, Relative L2: 0.002980
+FNO Darcy Flow example completed in 18.4s
+Test MSE: 4.024144e-06, Relative L2: 0.007588
 Results saved to: docs/assets/examples/fno_darcy
 ======================================================================
 ```
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Train Relative L2 | 0.002413 | Mean relative L2 on the training set (physical units) |
-| Test Relative L2 | 0.002980 | Mean relative L2 on the test set (physical units) |
-| Min Relative L2 | 0.001981 | Best per-sample test relative L2 |
-| Max Relative L2 | 0.008293 | Worst per-sample test relative L2 |
-| Test MSE | 4.01e-08 | Mean squared error on the test set |
-| Final Train Loss | 4.18e-3 | Relative-L2 training loss at epoch 200 |
-| Final Val Loss | 2.64e-5 | Relative-L2 validation loss at epoch 200 |
-| Training Time | 17.7s | On GPU (CudaDevice) |
+| Train Relative L2 | 0.004973 | Mean relative L2 on the training set (physical units) |
+| Test Relative L2 | 0.007588 | Mean relative L2 on the test set (physical units) |
+| Min Relative L2 | 0.004003 | Best per-sample test relative L2 |
+| Max Relative L2 | 0.021948 | Worst per-sample test relative L2 |
+| Test MSE | 4.02e-06 | Mean squared error on the test set |
+| Final Train Loss | 6.62e-3 | Relative-L2 training loss at epoch 200 |
+| Final Val Loss | 1.83e-4 | Relative-L2 validation loss at epoch 200 |
+| Training Time | 18.4s | On GPU (CudaDevice) |
 | Total Parameters | 2,368,001 | FNO + GridEmbedding2D |
 
 ### What We Achieved
@@ -523,8 +516,8 @@ Results saved to: docs/assets/examples/fno_darcy
 ### Interpretation
 
 This example demonstrates the full Opifex neural operator workflow on Opifex's own Darcy
-data. The FNO reaches a train relative L2 around 0.24% and a test relative L2 around 0.30%
-in physical pressure units, with a sub-0.1% train-vs-test gap. The relative-L2 loss,
+data. The FNO reaches a train relative L2 around 0.50% and a test relative L2 around 0.76%
+in physical pressure units, with a sub-0.3% train-vs-test gap. The relative-L2 loss,
 weight decay, and LR schedule together drive accurate operator learning without
 overfitting, consistent with the [UNO](uno-darcy.md) and
 [Your First Neural Operator](../getting-started/first-neural-operator.md) examples on the
@@ -616,14 +609,3 @@ def __call__(self, x):
     x_chw = jnp.moveaxis(x_embedded, -1, 1)
     return self.fno(x_chw)
 ```
-
-### Fewer samples than requested
-
-**Symptom**: The collected arrays show 992 / 96 samples even though `N_TRAIN` / `N_TEST`
-are 1000 / 100.
-
-**Cause**: `create_darcy_loader` drops the final partial batch (`drop_remainder=True`), so
-the sample count is rounded down to a multiple of `BATCH_SIZE`.
-
-**Solution**: This is expected. Choose `N_TRAIN` / `N_TEST` as multiples of `BATCH_SIZE`
-(e.g. 1024 / 128) to keep every sample.
