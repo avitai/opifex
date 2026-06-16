@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -265,7 +265,7 @@ def main() -> dict[str, float | int]:
     output_dir = Path("docs/assets/examples/poisson_pinn")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    _fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     im0 = axes[0].imshow(np.array(u_pred_grid), extent=[0, 1, 0, 1], origin="lower", cmap="viridis")
     axes[0].set_title("PINN Solution")
     axes[0].set_xlabel("x")
@@ -294,7 +294,7 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"Solution saved to {output_dir / 'solution.png'}")
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     idx_y = ny // 2
     axes[0].plot(np.array(x_eval), np.array(u_pred_grid[idx_y, :]), "b-", label="PINN", linewidth=2)
     axes[0].plot(np.array(x_eval), np.array(u_exact[idx_y, :]), "r--", label="Exact", linewidth=2)

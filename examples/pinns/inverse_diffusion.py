@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -340,7 +340,7 @@ def main() -> dict[str, float | int]:
     output_dir = Path("docs/assets/examples/inverse_diffusion_pinn")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    _fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
     # Row 1: Solution comparison
     im0 = axes[0, 0].imshow(
@@ -430,7 +430,7 @@ def main() -> dict[str, float | int]:
     print(f"Solution saved to {output_dir / 'solution.png'}")
 
     # Parameter convergence analysis
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
     axes[0].plot(C_history, "b-", linewidth=2, label="Discovered C")
     axes[0].axhline(y=C_TRUE, color="r", linestyle="--", linewidth=2, label=f"True C = {C_TRUE}")

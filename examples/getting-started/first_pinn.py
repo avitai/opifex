@@ -251,7 +251,7 @@ def main() -> dict[str, float | int]:
     output_dir = Path("docs/assets/examples/first_pinn")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 
     # Solution comparison.
     ax = axes[0]

@@ -48,6 +48,7 @@ from opifex.core.training.config import TrainingConfig
 from opifex.core.training.trainer import Trainer
 from opifex.distributed.config import DistributedConfig
 
+
 # %% [markdown]
 """
 ## Step 1: Define the Model
@@ -57,9 +58,8 @@ Any `nnx.Module` works — the distributed machinery is orthogonal
 to the model definition.
 """
 
+
 # %%
-
-
 class SimplePDEModel(nnx.Module):
     """Toy feed-forward surrogate for a PDE solution operator."""
 

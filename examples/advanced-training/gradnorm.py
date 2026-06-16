@@ -6,7 +6,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -47,7 +46,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
-
 
 # %%
 from opifex.core.physics.gradnorm import (
@@ -479,7 +477,7 @@ def main() -> dict[str, float | int]:
     mpl.use("Agg")
 
     # Figure 1: Loss comparison
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # Total loss
     ax1 = axes[0, 0]
@@ -536,7 +534,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {OUTPUT_DIR}/training_comparison.png")
 
     # Figure 2: Solution comparison
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
     # Exact solution
     ax1 = axes[0]

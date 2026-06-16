@@ -189,6 +189,29 @@ def setup_test_logging(caplog):
     logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_uq_registry():  # pyright: ignore[reportUnusedFunction]
+    """Snapshot and restore the process-global ``UQRegistry`` singleton per test.
+
+    The registry is a shared singleton populated at import time. Some suites
+    register extra capabilities, and their per-file ``_reset_registry`` fixtures
+    clear it *before* -- but not after -- each test, so under pytest-xdist's worker
+    distribution a polluting test can leak bare-name capabilities onto a later test
+    (e.g. ``test_every_operator_has_exactly_one_capability_declaration``). Capturing
+    the baseline before each test and restoring it afterwards makes the registry
+    hermetic regardless of execution order, without modifying any test.
+    """
+    from opifex.uncertainty.registry import UQRegistry
+
+    registry = UQRegistry()
+    snapshot = {name: registry.get(name) for name in registry.list_names()}
+    yield
+    registry = UQRegistry()
+    registry.clear()
+    for name, capability in snapshot.items():
+        registry.register(name, capability)
+
+
 @pytest.fixture
 def sample_data():
     """Provide sample data for testing using JAX's default device selection."""

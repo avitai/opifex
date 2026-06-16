@@ -350,7 +350,9 @@ def main() -> dict[str, float | int]:
 
     print()
     print("Per-time-step PDE residual (physics consistency of the rollout):")
-    step_residual = jnp.mean(compute_burgers_residual(predictions, DX, DT, VISCOSITY) ** 2, axis=(0, 2))
+    step_residual = jnp.mean(
+        compute_burgers_residual(predictions, DX, DT, VISCOSITY) ** 2, axis=(0, 2)
+    )
     for t in range(int(step_residual.shape[0])):
         print(f"  t_{t + 1}: {float(step_residual[t]):.6e}")
 

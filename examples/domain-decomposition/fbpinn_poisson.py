@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -41,6 +41,7 @@ from opifex.neural.pinns.domain_decomposition import (
     FBPINNConfig,
     Subdomain,
 )
+
 
 # %% [markdown]
 # ## Configuration
@@ -374,7 +375,7 @@ def main() -> dict[str, float | int]:
     # Verify window weights sum to 1 (partition of unity)
     weights = model.compute_window_weights(t_eval)
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # Solution comparison
     axes[0, 0].plot(t_eval, u_exact, "b-", linewidth=2, label="Exact")
@@ -422,7 +423,7 @@ def main() -> dict[str, float | int]:
     plt.close()
 
     # Analysis: Individual subdomain networks and hard BC effect
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
     # Show the hard BC constraint effect
     t_test = jnp.linspace(0, 1, 100).reshape(-1, 1)
@@ -478,7 +479,7 @@ def main() -> dict[str, float | int]:
         "rel_l2_error": float(rel_l2_error),
         "max_error": float(max_error),
         "mean_pde_residual": float(mean_pde_residual),
-        "num_subdomains": int(len(subdomains)),
+        "num_subdomains": len(subdomains),
         "epochs": int(EPOCHS),
     }
 

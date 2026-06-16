@@ -192,9 +192,7 @@ def main() -> dict[str, float | int]:
     # Relative L2 error per sample
     pred_diff = (predictions - y_test_jnp).reshape(predictions.shape[0], -1)
     y_flat = y_test_jnp.reshape(y_test_jnp.shape[0], -1)
-    rel_l2 = float(
-        jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(y_flat, axis=1))
-    )
+    rel_l2 = float(jnp.mean(jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(y_flat, axis=1)))
 
     print(f"Test MSE:         {test_mse:.6f}")
     print(f"Test Relative L2: {rel_l2:.6f}")

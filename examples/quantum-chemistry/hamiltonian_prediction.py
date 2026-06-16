@@ -358,9 +358,7 @@ def main() -> dict[str, float | int]:
     print(f"off_diagonal_blocks: {off_diagonal_blocks.shape}  (one (14,14) block per edge)")
 
     # The diagonal blocks are symmetric (the forward applies the QHNet D + D^T).
-    diag_symmetry = float(
-        jnp.max(jnp.abs(diagonal_blocks - jnp.swapaxes(diagonal_blocks, -1, -2)))
-    )
+    diag_symmetry = float(jnp.max(jnp.abs(diagonal_blocks - jnp.swapaxes(diagonal_blocks, -1, -2))))
     print(f"max diagonal-block asymmetry: {diag_symmetry:.2e}")
 
     # Heterogeneous-batch consistency: flat-batch blocks vs per-molecule blocks.

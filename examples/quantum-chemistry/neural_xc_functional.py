@@ -6,7 +6,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -58,13 +57,12 @@ import matplotlib.pyplot as plt
 import optax
 from flax import nnx
 
-
 # %%
 from opifex.neural.quantum import NeuralXCFunctional
 
 
 # %% [markdown]
-"""
+r"""
 ## Step 1: Generate Training Data
 
 We generate synthetic electron density data and compute reference XC energies
@@ -76,6 +74,7 @@ $$E_{xc}^{LDA} = -C_x \\int \\rho^{4/3} dr$$
 
 where $C_x \\approx 0.738$ for exchange.
 """
+
 
 # %%
 def generate_density_sample(key: jax.Array, grid_points: int) -> jax.Array:
@@ -206,9 +205,7 @@ def main() -> dict[str, float | int]:
 
     train_keys = jax.random.split(key, NUM_TRAIN_SAMPLES + 1)
     key = train_keys[0]
-    train_densities = jnp.stack(
-        [generate_density_sample(k, GRID_POINTS) for k in train_keys[1:]]
-    )
+    train_densities = jnp.stack([generate_density_sample(k, GRID_POINTS) for k in train_keys[1:]])
 
     test_keys = jax.random.split(key, NUM_TEST_SAMPLES + 1)
     key = test_keys[0]
@@ -362,7 +359,7 @@ def main() -> dict[str, float | int]:
     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
     # Figure 1: Training curves
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     ax1 = axes[0]
     epochs = jnp.arange(1, NUM_EPOCHS + 1)
@@ -397,7 +394,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {OUTPUT_DIR}/training_curves.png")
 
     # Figure 2: Sample predictions
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    _fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
     sample_indices = [0, 10, 20, 30, 40, 50]
 
@@ -425,7 +422,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {OUTPUT_DIR}/sample_predictions.png")
 
     # Figure 3: Error analysis
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     ax1 = axes[0]
     errors = (test_predictions - test_xc_ref).flatten()

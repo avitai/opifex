@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201
 r"""Jupytext Conversion & Synchronization Utility.
 
 A complete tool for converting and synchronizing between Python scripts (.py)
@@ -90,7 +89,7 @@ def validate_python_for_jupytext(py_file: Path) -> tuple[bool, list[str]]:
     issues = []
 
     try:
-        with open(py_file, "r", encoding="utf-8") as f:
+        with open(py_file, encoding="utf-8") as f:
             lines = f.readlines()
 
         # Pattern 1: print() with "\n" or other escape sequences in string concatenation
@@ -211,7 +210,7 @@ def convert_py_to_nb(py_file: Path, verbose: bool = False) -> bool:
     if success:
         # Post-process to remove cell IDs for deterministic output
         try:
-            with open(nb_file, "r") as f:
+            with open(nb_file) as f:
                 notebook = json.load(f)
 
             # Remove cell IDs
@@ -264,9 +263,8 @@ def convert_nb_to_py(nb_file: Path, verbose: bool = False) -> bool:
     if success:
         print(f"✅ Created {py_file}")
         return True
-    else:
-        print(f"❌ Failed to convert {nb_file}")
-        return False
+    print(f"❌ Failed to convert {nb_file}")
+    return False
 
 
 def sync_pair(file_path: Path, verbose: bool = False) -> bool:
@@ -315,9 +313,8 @@ def sync_pair(file_path: Path, verbose: bool = False) -> bool:
     if success:
         print("✅ Synchronized pair")
         return True
-    else:
-        print("❌ Failed to sync pair")
-        return False
+    print("❌ Failed to sync pair")
+    return False
 
 
 def batch_convert_directory(
@@ -415,7 +412,7 @@ def validate_sync(directory: Path, verbose: bool = False) -> tuple[int, int, int
         # Check if files have jupytext pairing metadata
         # Check the notebook file since that's where --set-formats adds metadata
         try:
-            with open(nb_file, "r") as f:
+            with open(nb_file) as f:
                 notebook = json.load(f)
 
             # Check if notebook has jupytext metadata with formats

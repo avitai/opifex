@@ -254,6 +254,7 @@ temporarily load the EMA shadow into the model and restore the live weights
 afterwards, so the training trajectory itself is untouched.
 """
 
+
 # %%
 def main() -> dict[str, float | int]:
     """Load rMD17 aspirin, train the two-phase NequIP potential, and report MLIP error."""
@@ -354,9 +355,7 @@ def main() -> dict[str, float | int]:
     print(f"Trainable parameters: {num_params}")
 
     @nnx.jit
-    def predict_batch(
-        model: AtomisticModel, positions: jax.Array
-    ) -> tuple[jax.Array, jax.Array]:
+    def predict_batch(model: AtomisticModel, positions: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Vectorized jitted energy+forces prediction over a stacked batch."""
 
         def single(pos: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -447,10 +446,10 @@ def main() -> dict[str, float | int]:
 
     print()
     print("Starting training...")
+    print(f"Phase 1 (energy warm-up): epochs 1-{WARMUP_EPOCHS}, force_weight={FORCE_WEIGHT_WARMUP}")
     print(
-        f"Phase 1 (energy warm-up): epochs 1-{WARMUP_EPOCHS}, force_weight={FORCE_WEIGHT_WARMUP}"
+        f"Phase 2 (main): epochs {WARMUP_EPOCHS + 1}-{NUM_EPOCHS}, force_weight={FORCE_WEIGHT_MAIN}"
     )
-    print(f"Phase 2 (main): epochs {WARMUP_EPOCHS + 1}-{NUM_EPOCHS}, force_weight={FORCE_WEIGHT_MAIN}")
     start_time = time.time()
     loss_history: list[float] = []
     for epoch in range(NUM_EPOCHS):

@@ -55,7 +55,6 @@ from pathlib import Path  # noqa: TC003
 import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
-import pyscf
 from flax import nnx
 from jaxtyping import Array, Float, Int  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
@@ -203,6 +202,8 @@ def _overlap_cached(
     Returns:
         The ``(n_ao, n_ao)`` overlap matrix ``mol.intor('int1e_ovlp_sph')``.
     """
+    import pyscf  # optional ``neural-dft`` extra; imported lazily so core paths don't require it
+
     atom = [[int(z), tuple(pos)] for z, pos in zip(atomic_numbers, positions_bohr, strict=True)]
     mol = pyscf.gto.M(atom=atom, basis="def2svp", unit="Bohr", verbose=0)
     return np.asarray(mol.intor("int1e_ovlp_sph"), dtype=np.float64)

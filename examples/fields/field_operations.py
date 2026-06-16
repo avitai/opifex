@@ -1,10 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: py:percent
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
+#       format_version: '1.3'
 # ---
 
 # %% [markdown]
@@ -13,7 +14,7 @@
 # This example demonstrates Opifex's JAX-native field abstractions for
 # scientific computing on structured grids, inspired by PhiFlow.
 
-# %% Imports
+# %%
 import jax.numpy as jnp
 import matplotlib as mpl
 
@@ -65,6 +66,7 @@ OUTPUT_DIR = Path("docs/assets/examples/field_operations")
 # | `semi_lagrangian` | Scalar + Velocity | Scalar | Backward trace + bilinear interp |
 # | `pressure_solve_spectral` | Vector | Vector + Scalar | FFT Poisson solver |
 
+
 # %%
 def main() -> dict[str, float | int]:
     """Run field operator demos and return finite scalar metrics."""
@@ -97,7 +99,7 @@ def main() -> dict[str, float | int]:
     lap_error = jnp.max(jnp.abs(lap_u.values - lap_exact))
     print(f"Laplacian max error: {lap_error:.6f}")
 
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    _fig, axes = plt.subplots(1, 4, figsize=(16, 4))
 
     im0 = axes[0].imshow(u.values.T, origin="lower", cmap="RdBu_r")
     axes[0].set_title("u = sin(x)cos(y)")
@@ -154,7 +156,7 @@ def main() -> dict[str, float | int]:
     print(f"Peak before advection: {jnp.max(field.values):.4f}")
     print(f"Peak after advection:  {jnp.max(advected.values):.4f}")
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     axes[0].imshow(field.values.T, origin="lower", cmap="hot")
     axes[0].set_title("Initial Gaussian pulse")
     axes[1].imshow(advected.values.T, origin="lower", cmap="hot")
@@ -179,7 +181,7 @@ def main() -> dict[str, float | int]:
     max_divergence_after = jnp.max(jnp.abs(div_after.values))
     print(f"Divergence after projection:  max={max_divergence_after:.4f}")
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(12, 4))
     im0 = axes[0].imshow(div_before.values.T, origin="lower", cmap="RdBu_r")
     axes[0].set_title("Divergence (before)")
     plt.colorbar(im0, ax=axes[0], shrink=0.8)

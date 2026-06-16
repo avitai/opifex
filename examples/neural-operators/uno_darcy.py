@@ -291,7 +291,9 @@ def main() -> dict[str, float | int]:
 
     params = nnx.state(model, nnx.Param)
     param_count = int(sum(x.size for x in jax.tree_util.tree_leaves(params)))
-    print(f"Model: UNO + GridEmbedding2D (hidden={hidden_channels}, modes={modes}, layers={n_layers})")
+    print(
+        f"Model: UNO + GridEmbedding2D (hidden={hidden_channels}, modes={modes}, layers={n_layers})"
+    )
     print(f"Input channels: {in_channels} (+ 2 grid coords = {in_channels + 2} after embedding)")
     print(f"Output channels: {out_channels}")
     print(f"Total parameters: {param_count:,}")

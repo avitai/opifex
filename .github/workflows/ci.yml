@@ -40,6 +40,12 @@ jobs:
     name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
     needs: lint
     runs-on: ${{ matrix.os }}
+    # Fast PR gate: parallelised across cores, slow/integration suites run in
+    # tests-extended.yml. ~7.5k JAX tests take ~95m on the macOS M1 runners and
+    # ~170m on the slower 4-core ubuntu runners; cap well above both (and below
+    # the 6h job ceiling). A per-test --timeout=1800 (raised from the default 300
+    # below) bounds hangs while tolerating heavy tests slowed by xdist contention.
+    timeout-minutes: 240
     strategy:
       matrix:
         os: [ubuntu-latest, macos-14]
@@ -64,12 +70,26 @@ jobs:
       - name: Install dependencies
         run: uv pip install -e ".[dev,test]"
 
+      - name: Ensure ripgrep is available
+        # A few migration-guard tests shell out to `rg`; ubuntu images ship it,
+        # macOS images do not.
+        run: |
+          command -v rg >/dev/null 2>&1 || {
+            if [ "$RUNNER_OS" = "macOS" ]; then brew install ripgrep; \
+            else sudo apt-get update && sudo apt-get install -y ripgrep; fi
+          }
+
       - name: Run tests
         env:
           JAX_PLATFORMS: cpu
           JAX_ENABLE_X64: "0"
+          # test_jax_configuration_applied imports opifex in a clean subprocess and
+          # asserts jax has a compilation cache dir; set it like the dev environment.
+          JAX_COMPILATION_CACHE_DIR: ${{ github.workspace }}/.cache/jax
         run: |
-          uv run pytest tests/ -v \
+          uv run pytest tests/ -n auto \
+            -m "not slow and not integration and not e2e and not performance and not benchmark and not distributed and not gpu_required" \
+            --timeout=1800 \
             --cov=src/opifex \
             --cov-report=xml \
             --cov-report=term-missing

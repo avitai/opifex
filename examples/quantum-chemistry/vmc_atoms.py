@@ -283,6 +283,7 @@ Carlo standard error `sigma / sqrt(N)`. We run all three systems and keep each
 result for the table and the convergence plot.
 """
 
+
 # %%
 def main() -> dict[str, float | int]:
     """Optimise all systems, render diagnostics, and return per-system energy errors."""
@@ -295,7 +296,9 @@ def main() -> dict[str, float | int]:
     print(f"JAX devices: {jax.devices()}")
     print(f"x64 enabled: {jax.config.read('jax_enable_x64')}")
     print(f"Systems: {', '.join(s.name for s in SYSTEMS)}")
-    print(f"Ansatz: FermiNet, hidden_one={HIDDEN_ONE}, hidden_two={HIDDEN_TWO}, dets={DETERMINANTS}")
+    print(
+        f"Ansatz: FermiNet, hidden_one={HIDDEN_ONE}, hidden_two={HIDDEN_TWO}, dets={DETERMINANTS}"
+    )
     print(
         f"Sampler: harmonic-mean Metropolis, {SAMPLER_STEPS} sweeps/step, "
         f"step_size={STEP_SIZE} bohr"

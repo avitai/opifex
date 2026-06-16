@@ -212,9 +212,7 @@ def test_likelihood_free_rank_calibration_is_well_calibrated_for_uniform_ranks()
     dm = _import_dm()
     num_samples = 100
     ranks = jnp.arange(0, num_samples + 1)  # exactly one of each rank == uniform
-    summary = dm.likelihood_free_rank_calibration(
-        ranks=ranks, num_posterior_samples=num_samples
-    )
+    summary = dm.likelihood_free_rank_calibration(ranks=ranks, num_posterior_samples=num_samples)
     assert summary.metric_name == "likelihood_free_rank_calibration"
     assert float(summary.value) < 0.05
 
@@ -275,14 +273,9 @@ def test_formerly_deferred_capabilities_are_now_supported() -> None:
 
     dm = _import_dm()
     assert dm.LIKELIHOOD_FREE_RELIABILITY.supports_likelihood_free is True
-    assert (
-        dm.LIKELIHOOD_FREE_RELIABILITY.default_strategy
-        is DefaultStrategy.LIKELIHOOD_FREE_SBI
-    )
+    assert dm.LIKELIHOOD_FREE_RELIABILITY.default_strategy is DefaultStrategy.LIKELIHOOD_FREE_SBI
     assert dm.ACTIVE_LEARNING_RELIABILITY.supports_active_learning is True
-    assert (
-        dm.ACTIVE_LEARNING_RELIABILITY.default_strategy is DefaultStrategy.ACTIVE_LEARNING
-    )
+    assert dm.ACTIVE_LEARNING_RELIABILITY.default_strategy is DefaultStrategy.ACTIVE_LEARNING
     assert dm.PAC_BAYES_RELIABILITY.supports_pac_bayes_certificate is True
     assert dm.PAC_BAYES_RELIABILITY.default_strategy is DefaultStrategy.PAC_BAYES
 

@@ -288,9 +288,7 @@ def main() -> dict[str, float | int]:
         ]
 
         for col, (data, cmap, vmin, vmax) in enumerate(panels):
-            im = axes[row, col].imshow(
-                data.T, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax
-            )
+            im = axes[row, col].imshow(data.T, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax)
             if row == 0:
                 axes[row, col].set_title(col_titles[col])
             if col == 0:

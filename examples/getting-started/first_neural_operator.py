@@ -357,7 +357,7 @@ def main() -> dict[str, float | int]:
 
     start_time = time.time()
 
-    trained_model, metrics = trainer.fit(
+    trained_model, _metrics = trainer.fit(
         train_data=(jnp.array(X_train), jnp.array(Y_train)),
         val_data=(jnp.array(X_test_32), jnp.array(Y_test_32)),
     )
@@ -399,7 +399,7 @@ def main() -> dict[str, float | int]:
     print("=" * 70)
 
     # --- Visualization ---
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    _fig, axes = plt.subplots(2, 4, figsize=(16, 8))
 
     # Compute shared color scales for fair comparison
     idx = 0
@@ -439,9 +439,7 @@ def main() -> dict[str, float | int]:
 
     # Row 2: Zero-shot super-resolution (64x64)
     axes[1, 0].imshow(X_test_64[idx, 0], cmap="viridis")
-    axes[1, 0].set_ylabel(
-        f"Zero-Shot 2x\n({TEST_RESOLUTION_2}x{TEST_RESOLUTION_2})", fontsize=11
-    )
+    axes[1, 0].set_ylabel(f"Zero-Shot 2x\n({TEST_RESOLUTION_2}x{TEST_RESOLUTION_2})", fontsize=11)
     axes[1, 0].axis("off")
 
     axes[1, 1].imshow(gt_64, cmap="RdBu_r", vmin=vmin_64, vmax=vmax_64)

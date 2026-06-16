@@ -6,7 +6,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -66,6 +65,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+
 
 # %% [markdown]
 r"""
@@ -695,8 +695,7 @@ def main() -> dict[str, float | int]:
     print(f"{'Method':<25} {'Steps':<8} {'Loss':<12} {'PDE Residual':<12}")
     print("-" * 50)
     print(
-        f"{'MAML + adapt':<25} {ADAPT_STEPS:<8} "
-        f"{maml_mean_loss:<12.6f} {maml_mean_residual:<12.6f}"
+        f"{'MAML + adapt':<25} {ADAPT_STEPS:<8} {maml_mean_loss:<12.6f} {maml_mean_residual:<12.6f}"
     )
     print(
         f"{'Reptile + adapt':<25} {ADAPT_STEPS:<8} "
@@ -741,8 +740,7 @@ def main() -> dict[str, float | int]:
     print("Efficiency Comparison:")
     print("-" * 50)
     print(
-        f"  MAML ({ADAPT_STEPS} steps) achieves similar residual "
-        f"as scratch ({SCRATCH_STEPS} steps)"
+        f"  MAML ({ADAPT_STEPS} steps) achieves similar residual as scratch ({SCRATCH_STEPS} steps)"
     )
     print(f"  Effective speedup: ~{SCRATCH_STEPS // ADAPT_STEPS}x fewer gradient steps needed")
     print("=" * 70)
@@ -754,7 +752,7 @@ def main() -> dict[str, float | int]:
     mpl.use("Agg")
 
     # Figure 1: Meta-training curves
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     ax1 = axes[0]
     ax1.semilogy(maml_losses, label="MAML", color="blue", linewidth=2)
@@ -801,7 +799,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {OUTPUT_DIR}/meta_training.png")
 
     # Figure 2: Per-viscosity breakdown
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     ax1 = axes[0]
     x_pos = np.arange(len(test_viscosities))
@@ -903,7 +901,7 @@ def main() -> dict[str, float | int]:
         "reptile_mean_residual": float(reptile_mean_residual),
         "scratch_short_mean_residual": float(scratch_short_mean_residual),
         "scratch_long_mean_residual": float(scratch_long_mean_residual),
-        "num_test_viscosities": int(len(test_viscosities)),
+        "num_test_viscosities": len(test_viscosities),
     }
 
 

@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -43,6 +43,7 @@ from opifex.neural.pinns.domain_decomposition import (
     XPINN,
     XPINNConfig,
 )
+
 
 # %% [markdown]
 # ## Configuration
@@ -380,7 +381,7 @@ def main() -> dict[str, float | int]:
     print(f"Interface jump:          {interface_jump:.6e}")
 
     # Visualization
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    _fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
     # Predicted solution
     im0 = axes[0, 0].contourf(X, T, u_pred, levels=50, cmap="RdBu_r")
@@ -445,7 +446,7 @@ def main() -> dict[str, float | int]:
     plt.close()
 
     # Analysis plots
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
     # IC comparison
     axes[0].plot(x_eval, u_ic_exact, "b-", linewidth=2, label="Exact IC")
@@ -489,7 +490,7 @@ def main() -> dict[str, float | int]:
         "ic_error": float(ic_error),
         "bc_error": float(bc_error),
         "interface_jump": float(interface_jump),
-        "num_subdomains": int(len(subdomains)),
+        "num_subdomains": len(subdomains),
         "epochs": int(EPOCHS),
     }
 

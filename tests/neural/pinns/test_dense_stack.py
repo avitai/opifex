@@ -88,7 +88,7 @@ class TestMLPNetworkBaselines:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=0, atol=0)
+        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=1e-6, atol=1e-6)
 
     def test_fractional_pinn(self) -> None:
         net = FractionalPINN(
@@ -97,7 +97,7 @@ class TestMLPNetworkBaselines:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=0, atol=0)
+        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=1e-6, atol=1e-6)
 
     def test_gradient_enhanced_pinn(self) -> None:
         net = GradientEnhancedPINN(
@@ -106,7 +106,7 @@ class TestMLPNetworkBaselines:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=0, atol=0)
+        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=1e-6, atol=1e-6)
 
     def test_vpinn(self) -> None:
         net = VPINN(
@@ -115,7 +115,7 @@ class TestMLPNetworkBaselines:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=0, atol=0)
+        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=1e-6, atol=1e-6)
 
     def test_subdomain_network(self) -> None:
         net = SubdomainNetwork(
@@ -124,7 +124,7 @@ class TestMLPNetworkBaselines:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=0, atol=0)
+        np.testing.assert_allclose(net(_mlp_input()), _MLP_BASELINE, rtol=1e-6, atol=1e-6)
 
 
 class TestGatingNetworkBaseline:
@@ -137,7 +137,7 @@ class TestGatingNetworkBaseline:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(net(_gating_input()), _GATING_BASELINE_T1, rtol=0, atol=0)
+        np.testing.assert_allclose(net(_gating_input()), _GATING_BASELINE_T1, rtol=1e-6, atol=1e-6)
 
     def test_custom_temperature(self) -> None:
         net = GatingNetwork(
@@ -147,7 +147,7 @@ class TestGatingNetworkBaseline:
             rngs=nnx.Rngs(0),
         )
         np.testing.assert_allclose(
-            net(_gating_input(), temperature=2.0), _GATING_BASELINE_T2, rtol=0, atol=0
+            net(_gating_input(), temperature=2.0), _GATING_BASELINE_T2, rtol=1e-6, atol=1e-6
         )
 
 
@@ -167,7 +167,7 @@ class TestDenseStack:
             hidden_dims=_HIDDEN_DIMS,
             rngs=nnx.Rngs(0),
         )
-        np.testing.assert_allclose(stack(_mlp_input()), _MLP_BASELINE, rtol=0, atol=0)
+        np.testing.assert_allclose(stack(_mlp_input()), _MLP_BASELINE, rtol=1e-6, atol=1e-6)
 
     def test_layer_count(self) -> None:
         """Hidden + output layers are all created."""

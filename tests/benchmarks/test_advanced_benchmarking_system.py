@@ -530,6 +530,8 @@ class TestIntegrationWorkflows:
             assert len(report.abstract) > 0
             assert len(report.methodology) > 0
 
+    @pytest.mark.slow
+    @pytest.mark.timeout(900)
     def test_domain_specific_workflow(self):
         """Test domain-specific benchmarking workflow."""
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -102,8 +102,7 @@ def _burgers_ic(key: jax.Array, resolution: int) -> jax.Array:
     sqrt_eigenvalues = (
         jnp.sqrt(2.0)
         * _BURGERS_GRF_SIGMA
-        * ((2.0 * jnp.pi * wavenumbers) ** 2 + _BURGERS_GRF_TAU**2)
-        ** (-_BURGERS_GRF_GAMMA / 2.0)
+        * ((2.0 * jnp.pi * wavenumbers) ** 2 + _BURGERS_GRF_TAU**2) ** (-_BURGERS_GRF_GAMMA / 2.0)
     )
     sqrt_eigenvalues = sqrt_eigenvalues.at[0].set(0.0)  # zero mean
     real_key, imag_key = jax.random.split(key)

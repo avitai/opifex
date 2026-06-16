@@ -194,6 +194,10 @@ scientific-data = [
   "meshio>=5.3.0"
 ]
 test = [
+  # Async SQLite driver + greenlet (SQLAlchemy asyncio needs greenlet; it is pulled
+  # in transitively on Linux but not on macOS) for the registry persistence tests.
+  "aiosqlite>=0.20.0",
+  "greenlet>=3.0.0",
   "beartype>=0.14.1",
   "coverage>=7.9.2",
   # Reference pseudo-spectral PDE solvers, used to cross-check
@@ -577,6 +581,7 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "BLE001", # Broad except acceptable in demonstration code
   "C901", # Demonstration scripts may inline multi-stage walkthroughs
   "PLR0915", # main() inlines a full example walkthrough (load, train, eval, plot)
+  "PLR0912", # main() inlines the branchy walkthrough (config switches, eval/plot paths)
   "ARG001", # Demonstration callbacks/closures keep interface params
   "ARG005", # Demonstration lambdas keep interface params
   "PLR0913" # Walkthroughs configure models/loaders with one kwarg per setting
@@ -584,6 +589,8 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "scripts/*" = [
   "E501", # Line too long (development scripts can be longer)
   "PLR0912", # Too many branches (complex utility scripts)
+  "PLR0911", # CLI entry points dispatch over many subcommands/return codes
+  "PLR0915", # CLI entry points inline full setup/dispatch/teardown
   "RUF013", # Implicit Optional (legacy script patterns)
   "PTH113", # os.path.isfile (legacy compatibility)
   "PTH112", # os.path.isdir (legacy compatibility)
@@ -738,8 +745,16 @@ keep-runtime-typing = false
 
 # UV Configuration for optimal performance
 [tool.uv]
+# Security pins for vulnerable transitive dependencies (advisories with a fix).
 constraint-dependencies = [
-  "werkzeug>=3.1.6" # CVE-2026-27199
+  "werkzeug>=3.1.6", # CVE-2026-27199
+  "aiohttp>=3.14.0", # cross-origin redirect + untrusted-data deserialization
+  "tornado>=6.5.6", # out-of-bounds memory access
+  "cryptography>=48.0.1", # GHSA-537c-gmf6-5ccf
+  "python-multipart>=0.0.31", # CVE-2026-53538/53539/53540
+  "starlette>=1.3.1", # CVE-2026-54282/54283
+  "pip>=26.1.2", # PYSEC-2026-196
+  "bleach>=6.4.0" # GHSA-gj48-438w-jh9v / GHSA-8rfp-98v4-mmr6 / GHSA-g75f-g53v-794x (6.3.0-only)
 ]
 python-preference = "only-managed"
 

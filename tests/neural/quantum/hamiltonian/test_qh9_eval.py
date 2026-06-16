@@ -57,10 +57,18 @@ _QH9_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 _CHEMICAL_TOLERANCE_HARTREE = 5e-3  # ~3.6 mHa stored-Fock vs fresh-SCF residual + margin.
 
 requires_qh9_db = pytest.mark.skipif(not _QH9_DB.exists(), reason="QH9Stable.db not available")
-requires_pyscf_dft = pytest.mark.skipif(
-    importlib.util.find_spec("pyscf.dft") is None,
-    reason="pyscf.dft not available",
-)
+
+
+def _has_pyscf_dft() -> bool:
+    """Whether ``pyscf.dft`` is importable. ``find_spec`` raises (not returns
+    ``None``) for a submodule when the parent package is absent, so guard it."""
+    try:
+        return importlib.util.find_spec("pyscf.dft") is not None
+    except ModuleNotFoundError:
+        return False
+
+
+requires_pyscf_dft = pytest.mark.skipif(not _has_pyscf_dft(), reason="pyscf.dft not available")
 
 
 def _first_examples(n: int) -> list:
@@ -193,6 +201,7 @@ def test_occupied_orbital_count_is_half_electrons() -> None:
 # End-to-end evaluate_fock on a real molecule
 # ---------------------------------------------------------------------------
 @requires_qh9_db
+@requires_pyscf_dft
 def test_evaluate_fock_returns_expected_keys_and_finite_values() -> None:
     """:func:`evaluate_fock` returns the documented keys with finite values."""
     expected_keys = {
@@ -224,6 +233,7 @@ def test_evaluate_fock_returns_expected_keys_and_finite_values() -> None:
 
 
 @requires_qh9_db
+@requires_pyscf_dft
 def test_evaluate_fock_identical_fock_is_perfect() -> None:
     """Comparing a target Fock against itself gives zero ε-MAE and unit ψ-sim."""
     with jax_experimental.enable_x64():

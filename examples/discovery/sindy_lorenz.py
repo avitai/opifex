@@ -1,10 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: py:percent
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
+#       format_version: '1.3'
 # ---
 
 # %% [markdown]
@@ -16,7 +17,7 @@
 #
 # We recover the Lorenz attractor equations from a simulated trajectory.
 
-# %% Imports
+# %%
 import time
 
 import jax
@@ -67,6 +68,7 @@ from opifex.discovery.sindy.utils import finite_difference
 # | SINDy (clean derivatives) | >0.999 | 7 |
 # | SINDy (numerical derivatives) | >0.99 | ~7 |
 # | EnsembleSINDy | >0.999 | 7 (with uncertainty) |
+
 
 # %%
 def main() -> dict[str, float | int]:

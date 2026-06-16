@@ -1004,6 +1004,7 @@ finishes quickly. Trained operators reach a low-single-digit relative L2 error
 on Darcy flow, so the accuracy column is meaningful for comparison.
 """
 
+
 # %%
 def main() -> dict[str, float | int]:
     """Run the comparative study and return a finite summary of the results."""

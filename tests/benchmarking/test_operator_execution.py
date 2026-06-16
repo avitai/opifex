@@ -221,9 +221,7 @@ class TestTrainingLoop:
         executor = OperatorExecutor(config)
 
         # Use actual datarax loaders (one generation split into train/val).
-        loaders = create_darcy_loader(
-            n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3
-        )
+        loaders = create_darcy_loader(n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3)
 
         # Execute benchmark
         result = executor.execute_training_benchmark(

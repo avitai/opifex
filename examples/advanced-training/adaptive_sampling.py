@@ -6,7 +6,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -195,9 +194,7 @@ def main() -> dict[str, float | int]:
     pinn_adaptive = BurgersPINN(hidden_dims=[32, 32, 32], rngs=nnx.Rngs(SEED))
     pinn_uniform = BurgersPINN(hidden_dims=[32, 32, 32], rngs=nnx.Rngs(SEED))
 
-    n_params = sum(
-        x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn_adaptive, nnx.Param))
-    )
+    n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn_adaptive, nnx.Param)))
     print("  Architecture: [2] -> [32] -> [32] -> [32] -> [1]")
     print(f"  Parameters: {n_params:,}")
 
@@ -253,7 +250,7 @@ def main() -> dict[str, float | int]:
         noise_scale=0.1,
     )
 
-    sampler = RADSampler(rad_config)  # noqa: F841
+    sampler = RADSampler(rad_config)
     refiner = RARDRefiner(rard_config)
 
     print(f"  RAD beta: {rad_config.beta}")
@@ -385,7 +382,7 @@ def main() -> dict[str, float | int]:
     u_uniform = pinn_uniform(xt_eval).squeeze()
 
     # Figure 1: Training comparison
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # Loss curves
     ax1 = axes[0, 0]
@@ -465,7 +462,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {OUTPUT_DIR}/training_comparison.png")
 
     # Figure 2: Collocation point distribution
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     # Final adaptive points
     ax1 = axes[0]

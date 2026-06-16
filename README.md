@@ -75,7 +75,7 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 - **Advanced Training**: NTK analysis, GradNorm loss balancing, adaptive sampling (RAR-D)
 - **Optimization**: Learn-to-optimize, meta-optimization (MAML/Reptile), and second-order methods
 - **Unified SciML Solvers**: Standardized protocol for PINNs, Neural Operators, and Hybrid solvers
-- **59 Working Examples**: Full coverage from getting started to advanced research workflows
+- **58 Working Examples**: Full coverage from getting started to advanced research workflows
 
 For detailed feature documentation, see [Features](docs/features.md).
 

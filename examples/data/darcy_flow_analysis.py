@@ -254,8 +254,7 @@ def analyze_darcy_flow_dataset(
         start_time = time.time()
         data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=42)
         samples = [
-            {"input": data["input"][i], "output": data["output"][i]}
-            for i in range(n_samples)
+            {"input": data["input"][i], "output": data["output"][i]} for i in range(n_samples)
         ]
         generation_time = time.time() - start_time
 

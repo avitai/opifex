@@ -24,11 +24,17 @@ The canonical wiring being exercised (FermiNet ``loss.py`` + ``train.py``):
 
 from __future__ import annotations
 
+import pytest
+
+
+# ``kfac_jax`` ships in the optional ``quantum-chemistry`` extra; skip the whole
+# module cleanly when it (and thus the preconditioner it backs) is unavailable.
+kfac_jax = pytest.importorskip("kfac_jax")
+
 import itertools
 
 import jax
 import jax.numpy as jnp
-import kfac_jax
 import numpy as np
 
 from opifex.neural.quantum.vmc.kfac_preconditioner import (

@@ -6,7 +6,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -227,9 +226,7 @@ def main() -> dict[str, float | int]:
     print(f"  Slow-converging modes: {n_slow}/{len(eigenvalues)}")
 
     # Estimate epochs to convergence
-    est_epochs = estimate_epochs_to_convergence(
-        eigenvalues, learning_rate, target_reduction=0.01
-    )
+    est_epochs = estimate_epochs_to_convergence(eigenvalues, learning_rate, target_reduction=0.01)
     est_epochs_int = int(min(float(est_epochs), 1e9))  # Cap at 1 billion for display
     print(f"  Estimated epochs to 99% convergence: {est_epochs_int:,}")
 
@@ -278,8 +275,7 @@ def main() -> dict[str, float | int]:
             ntk_history["eigenvalues"].append(np.array(jnp.maximum(eigenvalues, 1e-10)))
 
             print(
-                f"  Step {step:4d}: loss={loss:.6e}, "
-                f"cond={ntk_history['condition_number'][-1]:.2e}"
+                f"  Step {step:4d}: loss={loss:.6e}, cond={ntk_history['condition_number'][-1]:.2e}"
             )
 
     # Final NTK computation
@@ -325,7 +321,7 @@ def main() -> dict[str, float | int]:
     mpl.use("Agg")
 
     # Figure 1: NTK Eigenvalue Spectrum Evolution
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # Eigenvalue spectrum at different training stages
     ax1 = axes[0, 0]
@@ -391,7 +387,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {output_dir}/ntk_evolution.png")
 
     # Figure 2: Solution and Error
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     # Solution comparison
     ax1 = axes[0]

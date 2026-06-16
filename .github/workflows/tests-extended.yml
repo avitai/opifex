@@ -1,0 +1,58 @@
+name: Extended Tests
+
+# Slow, integration, e2e, performance, benchmark, distributed and gpu_required
+# suites are deselected from the fast PR gate (ci.yml) and run here on a nightly
+# schedule and on demand, so their results are isolated and easy to inspect.
+on:
+  schedule:
+    - cron: "0 3 * * *" # nightly at 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  extended-tests:
+    name: Extended Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-suffix: "extended-${{ matrix.python-version }}"
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        # Extras so integration suites exercise ase/pyscf/kfac-jax instead of skipping.
+        run: uv pip install -e ".[dev,test,neural-dft,quantum-chemistry]"
+
+      - name: Ensure ripgrep is available
+        # A few migration-guard tests shell out to `rg`; macOS images lack it.
+        run: |
+          command -v rg >/dev/null 2>&1 || {
+            if [ "$RUNNER_OS" = "macOS" ]; then brew install ripgrep; \
+            else sudo apt-get update && sudo apt-get install -y ripgrep; fi
+          }
+
+      - name: Run extended suites
+        env:
+          JAX_PLATFORMS: cpu
+          JAX_ENABLE_X64: "0"
+          JAX_COMPILATION_CACHE_DIR: ${{ github.workspace }}/.cache/jax
+        # Serial on purpose: several slow suites toggle jax x64 / global config and
+        # are sensitive to xdist worker distribution. Nightly tolerates the runtime.
+        run: |
+          uv run pytest tests/ \
+            -m "slow or integration or e2e or performance or benchmark or distributed or gpu_required" \
+            --cov-fail-under=0

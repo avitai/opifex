@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -308,7 +308,7 @@ def main() -> dict[str, float | int]:
     output_dir = Path("docs/assets/examples/burgers_pinn")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     im0 = axes[0].imshow(
         np.array(u_pred_grid),
         extent=[X_MIN, X_MAX, T_MIN, T_MAX],
@@ -350,7 +350,7 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"Solution saved to {output_dir / 'solution.png'}")
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     axes[0].plot(np.array(x_eval), np.array(u_initial_exact), "b-", label="Exact", linewidth=2)
     axes[0].plot(np.array(x_eval), np.array(u_initial_pred), "r--", label="PINN", linewidth=2)
     axes[0].set_xlabel("x")

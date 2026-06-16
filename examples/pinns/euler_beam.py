@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -297,7 +297,7 @@ def main() -> dict[str, float | int]:
     output_dir = Path("docs/assets/examples/euler_beam_pinn")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     axes[0].plot(np.array(x_eval), np.array(w_pred), "b-", label="PINN", linewidth=2)
     axes[0].plot(np.array(x_eval), np.array(w_exact), "r--", label="Exact", linewidth=2, alpha=0.7)
     axes[0].set_xlabel("x")
@@ -323,7 +323,7 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"Solution saved to {output_dir / 'solution.png'}")
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    _fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     _, w_x_all, w_xx_all, w_xxx_all, w_xxxx_all = compute_derivatives(pinn, x_eval)
     w_x_exact = exact_derivative(x_eval.squeeze())
     w_xx_exact = exact_second_derivative(x_eval.squeeze())
@@ -403,7 +403,12 @@ def main() -> dict[str, float | int]:
         "max_error": max_error,
         "mean_error": mean_error,
         "bc_error": float(
-            (abs(float(w_0[0])) + abs(float(w_x_0[0])) + abs(float(w_xx_1[0])) + abs(float(w_xxx_1[0])))
+            (
+                abs(float(w_0[0]))
+                + abs(float(w_x_0[0]))
+                + abs(float(w_xx_1[0]))
+                + abs(float(w_xxx_1[0]))
+            )
             / 4
         ),
         "param_count": int(n_params),

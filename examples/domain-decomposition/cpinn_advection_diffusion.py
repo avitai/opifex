@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -35,6 +35,7 @@ from opifex.neural.pinns.domain_decomposition import (
     Interface,
     Subdomain,
 )
+
 
 # %% [markdown]
 # ## Configuration
@@ -339,9 +340,7 @@ def main() -> dict[str, float | int]:
 
     losses = []
     for epoch in range(EPOCHS):
-        loss = train_step(
-            model, opt, collocation_points_per_subdomain, xt_bc, u_bc, xt_ic, u_ic
-        )
+        loss = train_step(model, opt, collocation_points_per_subdomain, xt_bc, u_bc, xt_ic, u_ic)
         losses.append(float(loss))
 
         if (epoch + 1) % 3000 == 0 or epoch == 0:
@@ -411,7 +410,7 @@ def main() -> dict[str, float | int]:
         print(f"Interface {i} flux jump: {flux_err:.6e}")
 
     # Visualization
-    fig, axes = plt.subplots(2, 3, figsize=(14, 9))
+    _fig, axes = plt.subplots(2, 3, figsize=(14, 9))
 
     # Predicted solution
     im0 = axes[0, 0].contourf(X, T, u_pred, levels=50, cmap="viridis")
@@ -484,7 +483,7 @@ def main() -> dict[str, float | int]:
     plt.close()
 
     # Analysis: Interface flux conservation
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
     # Subdomain predictions comparison
     colors = ["blue", "green", "red"]
@@ -561,7 +560,7 @@ def main() -> dict[str, float | int]:
         "max_error": float(max_error),
         "mean_error": float(mean_error),
         "interface_flux_max": float(max(interface_flux_errors)),
-        "num_subdomains": int(len(subdomains)),
+        "num_subdomains": len(subdomains),
         "epochs": int(EPOCHS),
     }
 

@@ -232,7 +232,6 @@ Performance comparisons and GPU optimization guides.
 | Example | Focus | Runtime |
 |---------|-------|---------|
 | [Neural Operator Benchmark](benchmarking/operator-benchmark.md) | UNO, FNO, SFNO across resolutions | ~15 min |
-| [GPU Profiling & Optimization](benchmarking/gpu-profiling.md) | Memory pools, mixed precision, JIT analysis | ~5 min |
 
 ```bash
 python examples/benchmarking/operator_benchmark.py

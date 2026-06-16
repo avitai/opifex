@@ -6,7 +6,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -57,7 +56,6 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from flax import nnx
 
-
 # %%
 from opifex.core.training.config import MetaOptimizerConfig
 from opifex.optimization.l2o import (
@@ -90,6 +88,7 @@ When discretizing `-∇·(κ∇u) = f` on a grid, we obtain systems `Au = b` whe
 Each problem corresponds to different parameter values (κ, f), representing
 different physical scenarios (e.g., varying thermal conductivity, different heat sources).
 """
+
 
 # %%
 def create_discrete_elliptic_problem(key, dim):
@@ -138,6 +137,7 @@ We compare L2O performance against a traditional iterative solver (steepest desc
 In practice, PDE systems are solved using iterative methods like Conjugate Gradient,
 GMRES, or multigrid. Here we use steepest descent as a simple baseline.
 """
+
 
 # %%
 def solve_elliptic_iterative(a_matrix, b_vector, steps=100):
@@ -188,6 +188,7 @@ Show how the L2O engine recommends algorithms based on problem characteristics.
 """
 ## Results Summary
 """
+
 
 # %%
 def main() -> dict[str, float | int]:
@@ -396,7 +397,7 @@ def main() -> dict[str, float | int]:
     iterative_errors_valid = iterative_errors[jnp.isfinite(iterative_errors)]
 
     # Figure 1: Error comparison
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     # Left: Error distribution
     ax1 = axes[0]
@@ -447,7 +448,7 @@ def main() -> dict[str, float | int]:
     print(f"  Saved: {OUTPUT_DIR}/comparison.png")
 
     # Figure 2: Error vs time trade-off
-    fig, ax = plt.subplots(figsize=(8, 6))
+    _fig, ax = plt.subplots(figsize=(8, 6))
 
     # Filter valid data for scatter plot
     l2o_mask = jnp.isfinite(l2o_errors)

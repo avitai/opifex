@@ -12,5 +12,5 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _enable_float64(reset_jax_config: None) -> None:
+def _enable_float64(reset_jax_config: None) -> None:  # pyright: ignore[reportUnusedFunction]
     jax.config.update("jax_enable_x64", True)

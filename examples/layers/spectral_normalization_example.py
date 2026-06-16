@@ -394,7 +394,7 @@ Comparing Lipschitz constants between regular and spectral normalized networks.
 
 
 # %%
-def demonstrate_stability_analysis():  # noqa: PLR0915
+def demonstrate_stability_analysis():
     """Demonstrate stability analysis and Lipschitz constant control."""
     print()
     print("STABILITY ANALYSIS & LIPSCHITZ CONTROL")

@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+
 
 mpl.use("Agg")
 
@@ -327,7 +328,7 @@ def main() -> dict[str, float | int]:
     output_dir = Path("docs/assets/examples/wave_pinn")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    _fig, axes = plt.subplots(1, 4, figsize=(18, 4))
     im0 = axes[0].imshow(
         np.array(u_pred_grid),
         extent=[X_MIN, X_MAX, T_MIN, T_MAX],
@@ -378,7 +379,7 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"Solution saved to {output_dir / 'solution.png'}")
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    _fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     t_indices = [0, nt // 4, nt // 2, 3 * nt // 4]
     colors = ["b", "g", "r", "m"]
     for t_idx, color in zip(t_indices, colors, strict=True):

@@ -14,7 +14,8 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType  # noqa: TC003 — keep eager; avoid TYPE_CHECKING-only imports
+
 
 EXAMPLES_ROOT = Path(__file__).resolve().parents[2] / "examples"
 

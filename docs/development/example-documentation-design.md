@@ -2636,7 +2636,6 @@ Before committing:
 
 | Example | Location | Demonstrates |
 |---------|----------|--------------|
-| Full Profiling | [`examples/benchmarking/gpu_profiling.py`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/gpu_profiling.py) | Advanced performance analysis |
 | Neural Operator Benchmark | [`examples/benchmarking/operator_benchmark.py`](https://github.com/avitai/opifex/blob/main/examples/benchmarking/operator_benchmark.py) | Cross-architecture comparison |
 
 ### PDEBench Reference Datasets

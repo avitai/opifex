@@ -1,11 +1,11 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -377,7 +377,7 @@ def main() -> dict[str, float | int]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Plot velocity and pressure fields
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    _fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
     im0 = axes[0, 0].imshow(
         np.array(u_pred),
@@ -455,7 +455,7 @@ def main() -> dict[str, float | int]:
     print(f"Solution saved to {output_dir / 'solution.png'}")
 
     # Training loss and cross-sections
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    _fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
     axes[0].semilogy(losses, linewidth=1)
     axes[0].set_xlabel("Epoch")

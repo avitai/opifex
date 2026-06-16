@@ -57,6 +57,10 @@ class MLflowBackend(Experiment):
 
     def _setup_mlflow(self) -> None:
         """Initialize MLflow client and configuration."""
+        # MLflow 3.13+ raises on the filesystem tracking backend unless this opt-out
+        # is set; opifex supports local ``file://`` stores, so honour them by default
+        # without overriding an explicit operator preference.
+        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
         # Configure MLflow tracking URI
         tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-tracking-server:5000")
         mlflow.set_tracking_uri(tracking_uri)

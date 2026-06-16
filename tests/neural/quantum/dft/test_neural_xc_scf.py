@@ -27,6 +27,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import pytest
 from flax import nnx
 
 from opifex.core.quantum.backend import JaxGaussianBackend
@@ -140,6 +141,7 @@ def test_neural_xc_sigma_channel_is_live_for_gga_gradients() -> None:
     assert float(jnp.max(jnp.abs(v_rho - other))) > 1e-6
 
 
+@pytest.mark.slow
 def test_learned_xc_fit_to_pbe_reduces_loss_monotonically() -> None:
     """A few optimiser steps fitting the neural XC to PBE energies reduce the loss.
 

@@ -308,7 +308,6 @@ resolutions by editing the `resolution_sizes` argument.
 
 | Example | Level | What You'll Learn |
 |---------|-------|-------------------|
-| [GPU Profiling](./gpu-profiling.md) | Advanced | Memory and compute optimization |
 | [FNO Darcy](../neural-operators/fno-darcy.md) | Intermediate | Training FNO on Darcy flow |
 | [UNO Darcy](../neural-operators/uno-darcy.md) | Intermediate | Multi-resolution neural operator |
 

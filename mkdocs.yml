@@ -174,7 +174,6 @@ nav:
           - Distributed PDE Training: examples/distributed/distributed-pde.md
       - Benchmarking:
           - Neural Operator Benchmark: examples/benchmarking/operator-benchmark.md
-          - GPU Profiling & Optimization: examples/benchmarking/gpu-profiling.md
   - API Reference:
       - Core: api/core.md
       - Neural: api/neural.md

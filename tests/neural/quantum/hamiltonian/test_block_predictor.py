@@ -26,6 +26,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import optax
+import pytest
 from flax import nnx
 
 from opifex.geometry.algebra.wigner import wigner_d
@@ -178,6 +179,7 @@ def test_block_equivariance() -> None:
 # ------------------------------------------------- heterogeneous-batch consistency
 
 
+@pytest.mark.slow
 def test_heterogeneous_batch_matches_separate() -> None:
     """Concatenating two different molecules gives the same per-molecule blocks.
 

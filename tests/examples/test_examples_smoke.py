@@ -15,8 +15,8 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from tests.examples._harness import discover_examples, load_example
+
 
 _EXAMPLES = discover_examples()
 _IDS = [str(p.relative_to(p.parents[1])) for p in _EXAMPLES]
