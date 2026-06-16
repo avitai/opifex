@@ -7,18 +7,21 @@ from opifex.uncertainty.scientific._uq_capabilities import (
     SCIENTIFIC_FIELD_CAPABILITIES,
 )
 from opifex.uncertainty.scientific.domain_metrics import (
+    active_learning_acquisition_reliability,
+    ACTIVE_LEARNING_RELIABILITY,
     boundary_condition_coverage,
     chemical_accuracy_coverage,
     DomainMetricSummary,
     feasibility_coverage,
+    likelihood_free_rank_calibration,
+    LIKELIHOOD_FREE_RELIABILITY,
+    pac_bayes_bound_validity,
+    PAC_BAYES_RELIABILITY,
     parameter_credible_interval_coverage,
     physics_residual_coverage,
     regret_interval_summary,
     sensor_reliability_summary,
     spectral_coverage,
-    UNSUPPORTED_ACTIVE_LEARNING,
-    UNSUPPORTED_LIKELIHOOD_FREE,
-    UNSUPPORTED_PAC_BAYES,
 )
 from opifex.uncertainty.scientific.equation_discovery import (
     BayesianSINDy,
@@ -110,11 +113,11 @@ for _name, _capability in SCIENTIFIC_FIELD_CAPABILITIES.items():
 
 
 __all__ = [
+    "ACTIVE_LEARNING_RELIABILITY",
     "CHEMICAL_ACCURACY_HARTREE",
+    "LIKELIHOOD_FREE_RELIABILITY",
+    "PAC_BAYES_RELIABILITY",
     "SCIENTIFIC_FIELD_CAPABILITIES",
-    "UNSUPPORTED_ACTIVE_LEARNING",
-    "UNSUPPORTED_LIKELIHOOD_FREE",
-    "UNSUPPORTED_PAC_BAYES",
     "BayesianSINDy",
     "CalibrationSpec",
     "ChemicalAccuracyCoverage",
@@ -158,6 +161,7 @@ __all__ = [
     "StochasticGalerkinSurrogate",
     "StrategySpec",
     "TornadoxAdapterSpec",
+    "active_learning_acquisition_reliability",
     "aggregate_solver_solutions",
     "boundary_condition_coverage",
     "chemical_accuracy_coverage",
@@ -171,6 +175,8 @@ __all__ = [
     "fit_pce_coefficients",
     "function_space_l2_coverage",
     "gauss_quadrature",
+    "likelihood_free_rank_calibration",
+    "pac_bayes_bound_validity",
     "parameter_credible_interval_coverage",
     "pce_mean_variance",
     "pce_summary",

@@ -38,9 +38,17 @@ import jax.numpy as jnp
 _ALLOWED_REDUCTIONS = ("sum", "mean")
 
 
+@jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class PointwiseQuantileLoss:
     """Self-scaling pinball loss for UQNO residual-quantile training.
+
+    This loss carries no array state — only the hashable hyperparameters
+    ``alpha`` and ``reduction`` — so it is registered as a *static* pytree
+    (``jax.tree_util.register_static``, the idiom flax NNX uses for its own
+    metadata classes). Transforms (``jax.jit``/``jax.vmap``/``nnx.jit``) then
+    treat an instance as static configuration, letting it be passed directly
+    as a parameter to jitted train steps without ``static_argnames``.
 
     Args:
         alpha: Pointwise miscoverage rate in ``(0, 1)``. Together with

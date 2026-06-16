@@ -121,12 +121,7 @@ def test_perfect_prediction_loss_is_smaller_than_zero_prediction() -> None:
 
 
 def test_pointwise_quantile_loss_is_jit_compatible() -> None:
-    """`PointwiseQuantileLoss` traces under ``jax.jit`` via a thin closure.
-
-    Canonical usage pattern: wrap the loss instance in a lambda so jit
-    sees a plain function (slotted frozen dataclasses can't be
-    weak-referenced by jit's cache directly).
-    """
+    """`PointwiseQuantileLoss` traces under ``jax.jit`` when closed over."""
     y_pred, y = _toy_inputs()
     loss_fn = PointwiseQuantileLoss(alpha=0.1, reduction="sum")
 
@@ -137,6 +132,47 @@ def test_pointwise_quantile_loss_is_jit_compatible() -> None:
     out = jitted_loss(y_pred, y)
     eager_out = loss_fn(y_pred=y_pred, y=y)
     assert bool(jnp.allclose(out, eager_out, rtol=1e-5, atol=1e-6))
+
+
+def test_pointwise_quantile_loss_passes_directly_as_jit_static_arg() -> None:
+    """The loss can be passed DIRECTLY as a ``jax.jit`` argument.
+
+    Because the loss is a hashable, array-free config object registered as a
+    static pytree (``jax.tree_util.register_static`` — the same idiom flax NNX
+    uses for its metadata classes), transforms treat the instance as static.
+    No ``static_argnames`` and no closure wrapper are required, so it composes
+    cleanly inside jitted train steps that receive it as a parameter.
+    """
+    y_pred, y = _toy_inputs()
+
+    @jax.jit
+    def jitted(loss: PointwiseQuantileLoss, yp: jax.Array, yt: jax.Array) -> jax.Array:
+        return loss(y_pred=yp, y=yt)
+
+    loss = PointwiseQuantileLoss(alpha=0.1, reduction="mean")
+    out = jitted(loss, y_pred, y)
+    assert bool(jnp.isfinite(out))
+    assert bool(jnp.allclose(out, loss(y_pred=y_pred, y=y), rtol=1e-5, atol=1e-6))
+
+
+def test_pointwise_quantile_loss_passes_directly_through_nnx_jit() -> None:
+    """The loss flows through ``nnx.jit`` as a direct parameter.
+
+    Mirrors the UQNO residual training step, which receives the loss as an
+    argument alongside its NNX modules. A static pytree config object is the
+    principled way to pass non-array hyperparameters through ``nnx.jit``.
+    """
+    from flax import nnx
+
+    y_pred, y = _toy_inputs()
+
+    @nnx.jit
+    def jitted(loss: PointwiseQuantileLoss, yp: jax.Array, yt: jax.Array) -> jax.Array:
+        return loss(y_pred=yp, y=yt)
+
+    loss = PointwiseQuantileLoss(alpha=0.1, reduction="mean")
+    out = jitted(loss, y_pred, y)
+    assert bool(jnp.isfinite(out))
 
 
 def test_pointwise_quantile_loss_is_grad_compatible() -> None:

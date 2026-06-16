@@ -82,8 +82,7 @@ def diagonal_ek1_step(
         ``(new_mean, new_cov_sqrt, error_estimate, sigma)``:
         - ``new_mean`` with shape ``(num_derivatives + 1, ode_dim)``;
         - ``new_cov_sqrt`` with shape ``(ode_dim, n + 1, n + 1)``;
-        - ``error_estimate`` and ``sigma`` per-dimension arrays of shape
-          ``(ode_dim,)`` for adaptive step-size control.
+        - ``error_estimate``/``sigma``: per-dimension ``(ode_dim,)`` arrays for step-size control.
     """
     state_dim = mean.shape[0]
     ode_dim = mean.shape[1]

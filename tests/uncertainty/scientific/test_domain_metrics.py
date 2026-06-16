@@ -9,9 +9,10 @@ Domain coverage from the audit's "Required Opifex UQ Capability Matrix":
 * Optimization / L2O — regret interval, feasibility coverage.
 * Assimilation — sensor-reliability summary from residual vs supplied
   sensor noise.
-* Likelihood-free, active-learning, PAC-Bayes — surfaced as explicit
-  ``UQCapability`` UNSUPPORTED entries; the flag and ``default_strategy``
-  flip when those backends ship.
+* Likelihood-free — SBC rank-calibration (expected-coverage error).
+* Active learning — acquisition reliability (rank correlation between
+  acquisition score and realized error).
+* PAC-Bayes — bound validity / tightness on held-out risk.
 
 Each metric returns a `DomainMetricSummary` value object carrying the
 metric name, scalar value, and assumption / tolerance metadata.
@@ -206,34 +207,84 @@ def test_sensor_reliability_summary_chi_squared_under_correct_noise() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_likelihood_free_capability_is_unsupported() -> None:
-    """Likelihood-free is deferred; the constant records the unsupported state."""
+def test_likelihood_free_rank_calibration_is_well_calibrated_for_uniform_ranks() -> None:
+    """Uniform SBC ranks (perfect calibration) yield near-zero coverage error."""
+    dm = _import_dm()
+    num_samples = 100
+    ranks = jnp.arange(0, num_samples + 1)  # exactly one of each rank == uniform
+    summary = dm.likelihood_free_rank_calibration(
+        ranks=ranks, num_posterior_samples=num_samples
+    )
+    assert summary.metric_name == "likelihood_free_rank_calibration"
+    assert float(summary.value) < 0.05
+
+
+def test_likelihood_free_rank_calibration_flags_overconfident_posterior() -> None:
+    """Ranks piled at zero (over-confident posterior) give a large coverage error."""
+    dm = _import_dm()
+    ranks = jnp.zeros(256, dtype=jnp.int32)
+    summary = dm.likelihood_free_rank_calibration(ranks=ranks, num_posterior_samples=100)
+    assert float(summary.value) > 0.3
+
+
+def test_active_learning_reliability_rewards_error_tracking_acquisition() -> None:
+    """Acquisition scores that track realized error score reliability ~ +1."""
+    dm = _import_dm()
+    scores = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    summary = dm.active_learning_acquisition_reliability(
+        acquisition_scores=scores, realized_errors=scores
+    )
+    assert summary.metric_name == "active_learning_acquisition_reliability"
+    assert float(summary.value) == pytest.approx(1.0, abs=1e-5)
+
+
+def test_active_learning_reliability_penalizes_anticorrelated_acquisition() -> None:
+    """Acquisition that targets the lowest-error points scores ~ -1."""
+    dm = _import_dm()
+    scores = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    summary = dm.active_learning_acquisition_reliability(
+        acquisition_scores=scores, realized_errors=scores[::-1]
+    )
+    assert float(summary.value) == pytest.approx(-1.0, abs=1e-5)
+
+
+def test_pac_bayes_bound_validity_holds_when_bound_exceeds_test_risk() -> None:
+    """A valid certificate upper-bounds the held-out risk; the margin is the slack."""
+    dm = _import_dm()
+    summary = dm.pac_bayes_bound_validity(
+        bound_value=jnp.asarray(0.30), test_empirical_risk=jnp.asarray(0.20)
+    )
+    assert summary.metric_name == "pac_bayes_bound_validity"
+    assert float(summary.value) == pytest.approx(0.10, abs=1e-6)
+    assert dict(summary.metadata)["bound_holds"] is True
+
+
+def test_pac_bayes_bound_validity_detects_violation() -> None:
+    """A bound below the held-out risk is invalid (negative margin)."""
+    dm = _import_dm()
+    summary = dm.pac_bayes_bound_validity(
+        bound_value=jnp.asarray(0.15), test_empirical_risk=jnp.asarray(0.25)
+    )
+    assert float(summary.value) < 0.0
+    assert dict(summary.metadata)["bound_holds"] is False
+
+
+def test_formerly_deferred_capabilities_are_now_supported() -> None:
+    """Likelihood-free, active-learning and PAC-Bayes reliability now ship."""
     from opifex.uncertainty.registry import DefaultStrategy
 
     dm = _import_dm()
-    cap = dm.UNSUPPORTED_LIKELIHOOD_FREE
-    assert cap.supports_likelihood_free is False
-    assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
-    assert cap.source_package == "opifex"
-    assert "deferred" in cap.notes.lower() or "not yet" in cap.notes.lower()
-
-
-def test_active_learning_capability_is_unsupported() -> None:
-    from opifex.uncertainty.registry import DefaultStrategy
-
-    dm = _import_dm()
-    cap = dm.UNSUPPORTED_ACTIVE_LEARNING
-    assert cap.supports_active_learning is False
-    assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
-
-
-def test_pac_bayes_capability_is_unsupported() -> None:
-    from opifex.uncertainty.registry import DefaultStrategy
-
-    dm = _import_dm()
-    cap = dm.UNSUPPORTED_PAC_BAYES
-    assert cap.supports_pac_bayes_certificate is False
-    assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
+    assert dm.LIKELIHOOD_FREE_RELIABILITY.supports_likelihood_free is True
+    assert (
+        dm.LIKELIHOOD_FREE_RELIABILITY.default_strategy
+        is DefaultStrategy.LIKELIHOOD_FREE_SBI
+    )
+    assert dm.ACTIVE_LEARNING_RELIABILITY.supports_active_learning is True
+    assert (
+        dm.ACTIVE_LEARNING_RELIABILITY.default_strategy is DefaultStrategy.ACTIVE_LEARNING
+    )
+    assert dm.PAC_BAYES_RELIABILITY.supports_pac_bayes_certificate is True
+    assert dm.PAC_BAYES_RELIABILITY.default_strategy is DefaultStrategy.PAC_BAYES
 
 
 # ---------------------------------------------------------------------------
@@ -253,9 +304,12 @@ def test_public_domain_metrics_surface() -> None:
         "regret_interval_summary",
         "feasibility_coverage",
         "sensor_reliability_summary",
-        "UNSUPPORTED_LIKELIHOOD_FREE",
-        "UNSUPPORTED_ACTIVE_LEARNING",
-        "UNSUPPORTED_PAC_BAYES",
+        "likelihood_free_rank_calibration",
+        "active_learning_acquisition_reliability",
+        "pac_bayes_bound_validity",
+        "LIKELIHOOD_FREE_RELIABILITY",
+        "ACTIVE_LEARNING_RELIABILITY",
+        "PAC_BAYES_RELIABILITY",
     }
     missing = expected - set(dir(dm))
     assert not missing, f"missing public domain-metric symbols: {sorted(missing)}"

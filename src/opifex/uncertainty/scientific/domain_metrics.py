@@ -1,9 +1,9 @@
 """Scientific-domain reliability metrics.
 
 Covers PINN / neural-operator / quantum-chemistry / optimization /
-assimilation summary functions plus explicit UNSUPPORTED capability
-entries for the deferred surfaces (likelihood-free, active-learning,
-PAC-Bayes).
+assimilation summary functions, plus reliability summaries for the
+likelihood-free (simulation-based-calibration), active-learning and
+PAC-Bayes surfaces that consume the corresponding subpackages' outputs.
 
 All kernels are pure :class:`jax.Array` transformations; the returned
 :class:`DomainMetricSummary` carries the metric name, scalar value, and
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+from calibrax.metrics.functional.statistical import spearman_rank_correlation
 from flax import struct
 
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
@@ -273,35 +274,141 @@ def sensor_reliability_summary(
 
 
 # ---------------------------------------------------------------------------
-# Deferred capability entries
+# Likelihood-free: simulation-based-calibration rank reliability
 # ---------------------------------------------------------------------------
 
 
-_DEFERRED_NOTES = (
-    "Capability not yet implemented; flip the supports_* flag and "
-    "default_strategy to the concrete value when the backend ships."
+def likelihood_free_rank_calibration(
+    *,
+    ranks: jax.Array,
+    num_posterior_samples: int,
+    num_levels: int = 20,
+) -> DomainMetricSummary:
+    """Simulation-based-calibration reliability: expected-coverage error.
+
+    Under simulation-based calibration (Talts et al., 2018) a correctly
+    calibrated posterior makes the rank of the true parameter among
+    ``num_posterior_samples`` draws uniform on ``{0, ..., num_posterior_samples}``.
+    This reports the *expected coverage error*: averaged over ``num_levels``
+    central credibility levels, the absolute gap between the empirical coverage of
+    the central interval and its nominal level. ``0`` is perfectly calibrated.
+    Consumes the ranks from
+    :func:`opifex.uncertainty.sbi.simulation_based_calibration`.
+
+    Args:
+        ranks: SBC ranks, any shape; values in ``[0, num_posterior_samples]``.
+        num_posterior_samples: Posterior draws per simulation (the rank ceiling).
+        num_levels: Number of central credibility levels to average over.
+    """
+    normalized = jnp.ravel(ranks).astype(jnp.float32) / float(num_posterior_samples)
+    levels = jnp.linspace(1.0, num_levels, num_levels) / (num_levels + 1.0)
+    half_width = levels / 2.0
+    within = (normalized[None, :] >= (0.5 - half_width[:, None])) & (
+        normalized[None, :] <= (0.5 + half_width[:, None])
+    )
+    empirical_coverage = jnp.mean(within.astype(jnp.float32), axis=1)
+    expected_coverage_error = jnp.mean(jnp.abs(empirical_coverage - levels))
+    return _make_summary(
+        metric_name="likelihood_free_rank_calibration",
+        value=expected_coverage_error,
+        extra=(
+            ("num_simulations", int(jnp.ravel(ranks).shape[0])),
+            ("num_posterior_samples", int(num_posterior_samples)),
+            ("num_levels", int(num_levels)),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Active learning: acquisition reliability
+# ---------------------------------------------------------------------------
+
+
+def active_learning_acquisition_reliability(
+    *,
+    acquisition_scores: jax.Array,
+    realized_errors: jax.Array,
+) -> DomainMetricSummary:
+    """Active-learning reliability: rank correlation of acquisition vs error.
+
+    A reliable acquisition function assigns higher utility to the points where
+    the model is actually less accurate. This is the Spearman rank correlation
+    (reused from ``calibrax``) between the per-candidate ``acquisition_scores``
+    and the ``realized_errors`` measured once those points are labelled: ``+1``
+    means the acquisition perfectly targets the highest-error points, ``<= 0``
+    means it does not.
+
+    Args:
+        acquisition_scores: Per-candidate acquisition utilities, shape ``(M,)``.
+        realized_errors: Realized model errors on the same candidates, ``(M,)``.
+    """
+    correlation = spearman_rank_correlation(acquisition_scores, realized_errors)
+    return _make_summary(
+        metric_name="active_learning_acquisition_reliability",
+        value=correlation,
+        extra=(("num_candidates", int(acquisition_scores.shape[0])),),
+    )
+
+
+# ---------------------------------------------------------------------------
+# PAC-Bayes: certified-bound validity / tightness
+# ---------------------------------------------------------------------------
+
+
+def pac_bayes_bound_validity(
+    *,
+    bound_value: jax.Array,
+    test_empirical_risk: jax.Array,
+) -> DomainMetricSummary:
+    """PAC-Bayes reliability: does the certified bound hold on held-out risk?
+
+    A PAC-Bayes certificate
+    (:func:`opifex.uncertainty.pac_bayes.pac_bayes_certificate`) upper-bounds the
+    population risk with high probability. This checks the guarantee against a
+    held-out empirical risk: the margin ``bound_value - test_empirical_risk`` is
+    non-negative when the bound holds, and its magnitude is the slack -- a smaller
+    margin is a tighter, more informative certificate.
+
+    Args:
+        bound_value: The certified population-risk upper bound.
+        test_empirical_risk: Empirical risk on a held-out set (population proxy).
+    """
+    margin = bound_value - test_empirical_risk
+    return _make_summary(
+        metric_name="pac_bayes_bound_validity",
+        value=margin,
+        extra=(
+            ("bound_holds", bool(margin >= 0.0)),
+            ("bound_value", float(bound_value)),
+            ("test_empirical_risk", float(test_empirical_risk)),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Capability declarations (these reliability surfaces now ship)
+# ---------------------------------------------------------------------------
+
+
+LIKELIHOOD_FREE_RELIABILITY = UQCapability(
+    supports_likelihood_free=True,
+    default_strategy=DefaultStrategy.LIKELIHOOD_FREE_SBI,
+    source_package="opifex",
+    notes="SBC rank-calibration via likelihood_free_rank_calibration.",
 )
 
 
-UNSUPPORTED_LIKELIHOOD_FREE = UQCapability(
-    supports_likelihood_free=False,
-    default_strategy=DefaultStrategy.UNSUPPORTED,
+ACTIVE_LEARNING_RELIABILITY = UQCapability(
+    supports_active_learning=True,
+    default_strategy=DefaultStrategy.ACTIVE_LEARNING,
     source_package="opifex",
-    notes=_DEFERRED_NOTES,
+    notes="Acquisition reliability via active_learning_acquisition_reliability.",
 )
 
 
-UNSUPPORTED_ACTIVE_LEARNING = UQCapability(
-    supports_active_learning=False,
-    default_strategy=DefaultStrategy.UNSUPPORTED,
+PAC_BAYES_RELIABILITY = UQCapability(
+    supports_pac_bayes_certificate=True,
+    default_strategy=DefaultStrategy.PAC_BAYES,
     source_package="opifex",
-    notes=_DEFERRED_NOTES,
-)
-
-
-UNSUPPORTED_PAC_BAYES = UQCapability(
-    supports_pac_bayes_certificate=False,
-    default_strategy=DefaultStrategy.UNSUPPORTED,
-    source_package="opifex",
-    notes=_DEFERRED_NOTES,
+    notes="Bound validity / tightness via pac_bayes_bound_validity.",
 )
