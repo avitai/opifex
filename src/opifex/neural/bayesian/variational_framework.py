@@ -7,11 +7,15 @@ with physics-informed priors and amortized uncertainty estimation.
 from __future__ import annotations
 
 import dataclasses
+import math
 
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from flax import nnx
+
+from opifex.uncertainty.objectives import ObjectiveConfig, UQLossComponents
+from opifex.uncertainty.types import PredictiveDistribution
 
 
 # Lazy import for distrax to avoid tf_keras dependency issues
@@ -41,7 +45,8 @@ from jaxtyping import Array, Float  # noqa: TC002
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
+    from typing import Any
 
 
 @dataclasses.dataclass
@@ -82,25 +87,60 @@ class VariationalConfig:
 
 
 class MeanFieldGaussian(nnx.Module):
-    """Mean-field Gaussian variational posterior.
+    """Mean-field Gaussian variational posterior over a weight vector.
 
-    This class implements a factorized Gaussian posterior distribution for
-    variational inference in neural networks.
+    The factorized posterior ``q(w) = N(mu, diag(sigma^2))`` over a weight
+    vector ``w in R^num_params`` is the variational object injected into a base
+    network by :class:`AmortizedVariationalFramework`.
+
+    On its own it is also a complete **Bayesian linear model** (Bishop, *PRML*
+    3.3): for an input ``x in R^num_params`` the prediction ``f(x) = w . x`` has
+    the closed-form predictive ``f(x) ~ N(mu . x, sum_i x_i^2 sigma_i^2)`` --
+    Gaussian because the map is linear and ``q(w)`` is Gaussian. A homoscedastic
+    Gaussian observation noise ``y ~ N(f(x), sigma_y^2)`` (the learnable
+    ``log_observation_std``) completes the likelihood, so the layer exposes the
+    platform UQ protocol surfaces (:meth:`predict_distribution`,
+    :meth:`loss_components`, :meth:`negative_elbo`, :meth:`kl_divergence`)
+    directly, with the expected NLL available in closed form (no sampling).
     """
 
-    def __init__(self, num_params: int, *, rngs: nnx.Rngs) -> None:
+    def __init__(
+        self,
+        num_params: int,
+        *,
+        rngs: nnx.Rngs,
+        prior_mean: float = 0.0,
+        prior_std: float = 1.0,
+        observation_noise: float = 0.1,
+    ) -> None:
         """Initialize the mean-field Gaussian posterior.
 
         Args:
-            num_params: Number of parameters in the posterior.
+            num_params: Number of weights ``w`` the posterior factorizes over.
             rngs: Random number generator state.
+            prior_mean: Mean of the factorized Gaussian prior ``p(w)`` used by
+                :meth:`kl_divergence`.
+            prior_std: Standard deviation of the prior ``p(w)``; must be
+                positive.
+            observation_noise: Initial homoscedastic observation-noise standard
+                deviation ``sigma_y`` of the Gaussian likelihood; learnable via
+                ``log_observation_std``. Must be positive.
         """
         super().__init__()
+        if prior_std <= 0.0:
+            raise ValueError(f"prior_std must be positive; got {prior_std!r}.")
+        if observation_noise <= 0.0:
+            raise ValueError(f"observation_noise must be positive; got {observation_noise!r}.")
         self.num_params = num_params
+        # Static prior configuration (Python floats -> not pytree leaves).
+        self._prior_mean = float(prior_mean)
+        self._prior_std = float(prior_std)
 
-        # Variational parameters
+        # Variational parameters of q(w) = N(mu, diag(exp(2 log_std))).
         self.mean = nnx.Param(nnx.initializers.zeros_init()(rngs.params(), (num_params,)))
         self.log_std = nnx.Param(nnx.initializers.constant(-2.0)(rngs.params(), (num_params,)))
+        # Learnable homoscedastic observation noise of the Gaussian likelihood.
+        self.log_observation_std = nnx.Param(jnp.asarray(math.log(observation_noise)))
 
     def sample(self, num_samples: int, *, rngs: nnx.Rngs) -> Float[Array, "samples params"]:
         """Sample from variational posterior.
@@ -131,16 +171,22 @@ class MeanFieldGaussian(nnx.Module):
             )
         )
 
-    def kl_divergence(self, prior_mean: float = 0.0, prior_std: float = 1.0) -> Float[Array, ""]:
-        """Compute KL divergence from prior.
+    def kl_divergence(
+        self, prior_mean: float | None = None, prior_std: float | None = None
+    ) -> Float[Array, ""]:
+        """Compute ``KL(q(w) || p(w))`` from the factorized Gaussian prior.
 
         Args:
-            prior_mean: Mean of the prior distribution.
-            prior_std: Standard deviation of the prior distribution.
+            prior_mean: Prior mean; defaults to the value supplied at
+                construction (``prior_mean=0.0`` unless overridden).
+            prior_std: Prior standard deviation; defaults to the value supplied
+                at construction (``prior_std=1.0`` unless overridden).
 
         Returns:
             KL divergence scalar value.
         """
+        prior_mean = self._prior_mean if prior_mean is None else prior_mean
+        prior_std = self._prior_std if prior_std is None else prior_std
         distrax = jax.tree.map(lambda x: x, _get_distrax())  # type: ignore # noqa: PGH003
         posterior_dist = distrax.MultivariateNormalDiag(
             self.mean.value, jnp.exp(self.log_std.value)
@@ -150,6 +196,133 @@ class MeanFieldGaussian(nnx.Module):
             jnp.full_like(self.mean.value, prior_std),
         )
         return jnp.array(posterior_dist.kl_divergence(prior_dist))
+
+    def _predictive_moments(
+        self, x: Float[Array, "batch params"]
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Return ``(predictive mean, epistemic variance, observation variance)``.
+
+        Closed-form moments of the Bayesian-linear prediction ``f(x) = w . x``
+        under ``q(w) = N(mu, diag(sigma^2))``: ``E[f] = mu . x`` and
+        ``Var[f] = sum_i x_i^2 sigma_i^2``. ``sigma_y^2`` is the homoscedastic
+        observation (aleatoric) variance.
+        """
+        x = jnp.asarray(x)
+        if x.shape[-1] != self.num_params:
+            raise ValueError(
+                "input feature dimension must equal num_params="
+                f"{self.num_params}; got x.shape={x.shape}."
+            )
+        weight_variance = jnp.exp(2.0 * self.log_std.value)
+        predictive_mean = x @ self.mean.value
+        epistemic_variance = (x**2) @ weight_variance
+        observation_variance = jnp.exp(2.0 * self.log_observation_std.value)
+        return predictive_mean, epistemic_variance, observation_variance
+
+    def predict_distribution(
+        self,
+        x: Float[Array, "batch params"],
+        *,
+        rngs: nnx.Rngs | None = None,  # noqa: ARG002 — deterministic closed form; rngs unused
+    ) -> PredictiveDistribution:
+        """Return the closed-form Bayesian-linear predictive for inputs ``x``.
+
+        The predictive ``f(x) ~ N(mu . x, x^2 . sigma^2)`` plus the homoscedastic
+        observation noise ``sigma_y^2`` gives ``epistemic = x^2 . sigma^2``,
+        ``aleatoric = sigma_y^2``, and ``total = epistemic + aleatoric`` -- all
+        in closed form, so no Monte-Carlo ``rngs`` are needed.
+
+        Args:
+            x: Inputs of shape ``(batch, num_params)`` (or ``(num_params,)``).
+            rngs: Unused -- the predictive is exact; accepted for protocol
+                conformance with stochastic models.
+
+        Returns:
+            A :class:`PredictiveDistribution` with mean, variance, and the
+            epistemic / aleatoric / total decomposition.
+        """
+        predictive_mean, epistemic_variance, observation_variance = self._predictive_moments(x)
+        aleatoric_variance = jnp.broadcast_to(observation_variance, epistemic_variance.shape)
+        total_variance = epistemic_variance + aleatoric_variance
+        return PredictiveDistribution(
+            mean=predictive_mean,
+            variance=total_variance,
+            epistemic=epistemic_variance,
+            aleatoric=aleatoric_variance,
+            total_uncertainty=total_variance,
+            metadata=(
+                ("method", "bayesian_linear_closed_form"),
+                ("model", "mean_field_gaussian"),
+            ),
+        )
+
+    def loss_components(
+        self,
+        batch: Mapping[str, Any],
+        *,
+        config: ObjectiveConfig,
+        rngs: nnx.Rngs | None = None,  # noqa: ARG002 — closed-form ELBO; rngs unused
+    ) -> UQLossComponents:
+        """Return the per-batch negative-ELBO decomposition.
+
+        The expected negative log-likelihood under ``q(w)`` is available in
+        closed form for the Gaussian likelihood::
+
+            E_q[NLL] = 0.5 log(2 pi sigma_y^2)
+                       + (mean((y - mu.x)^2) + mean(Var_q[f])) / (2 sigma_y^2)
+
+        and is combined with ``KL(q || p)`` by :meth:`UQLossComponents.from_components`
+        using the weights / dataset scaling in ``config``.
+
+        Args:
+            batch: Mapping with required fields ``x`` (``(batch, num_params)``)
+                and ``y`` (``(batch,)``).
+            config: Loss weights and dataset metadata.
+            rngs: Unused -- the expected NLL is exact; accepted for protocol
+                conformance.
+
+        Returns:
+            The optimizer-facing :class:`UQLossComponents` decomposition.
+        """
+        missing = [field for field in ("x", "y") if field not in batch]
+        if missing:
+            raise ValueError(f"batch missing required field(s): {missing!r}")
+        x = jnp.asarray(batch["x"])
+        y = jnp.asarray(batch["y"])
+
+        predictive_mean, predictive_variance, observation_variance = self._predictive_moments(x)
+        squared_error = (y - predictive_mean) ** 2
+        expected_nll = 0.5 * jnp.log(2.0 * jnp.pi * observation_variance) + (
+            jnp.mean(squared_error) + jnp.mean(predictive_variance)
+        ) / (2.0 * observation_variance)
+        kl = self.kl_divergence()
+
+        return UQLossComponents.from_components(
+            config=config,
+            negative_log_likelihood=expected_nll,
+            kl=kl,
+            metadata=(("source", "mean_field_gaussian"),),
+        )
+
+    def negative_elbo(
+        self,
+        batch: Mapping[str, Any],
+        *,
+        config: ObjectiveConfig,
+        rngs: nnx.Rngs | None = None,
+    ) -> Float[Array, ""]:
+        """Return the scalar negative-ELBO objective for one batch.
+
+        Args:
+            batch: Mapping with required fields ``x`` and ``y``.
+            config: Loss weights and dataset metadata.
+            rngs: Forwarded to :meth:`loss_components` (unused there).
+
+        Returns:
+            The scalar ``total`` of :meth:`loss_components` -- the value passed
+            to ``jax.value_and_grad`` / ``optimizer.update``.
+        """
+        return self.loss_components(batch, config=config, rngs=rngs).total
 
 
 class UncertaintyEncoder(nnx.Module):
