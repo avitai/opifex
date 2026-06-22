@@ -3,13 +3,9 @@
 Plan exit criteria (``07-phase-registry-docs-examples.md`` lines 572-680):
 
 1. Every expected scientific-domain name (equation discovery, quantum
-   chemistry, L2O, training trainers, data assimilation, mlops,
+   chemistry, training trainers, data assimilation, mlops,
    monitoring/reporting) is registered in the singleton
    :class:`UQRegistry`.
-2. ``l2o:BayesianSchedulerOptimizer`` carries
-   ``native_bayesian=False`` and
-   ``default_strategy=DefaultStrategy.UNSUPPORTED`` with a docstring
-   note pointing at Phase 8 Task 8.3 / 8.5.
 3. ``trainer:UncertaintyGuidedTrainer`` and
    ``trainer:MultiFidelityUncertaintyTrainer`` carry
    ``default_strategy=DefaultStrategy.UNSUPPORTED`` with mocked-
@@ -39,7 +35,6 @@ from opifex.discovery._uq_capabilities import DISCOVERY_CAPABILITIES
 from opifex.discovery.sindy._uq_capabilities import SINDY_CAPABILITIES
 from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
-from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.assimilation._uq_capabilities import ASSIMILATION_CAPABILITIES
 from opifex.uncertainty.monitoring._uq_capabilities import MONITORING_CAPABILITIES
@@ -50,7 +45,6 @@ _ALL_TASK_7_5_CAPABILITIES: dict[str, UQCapability] = {
     **DISCOVERY_CAPABILITIES,
     **SINDY_CAPABILITIES,
     **QUANTUM_CAPABILITIES,
-    **L2O_CAPABILITIES,
     **TRAINING_CAPABILITIES,
     **ASSIMILATION_CAPABILITIES,
     **MLOPS_CAPABILITIES,
@@ -97,13 +91,6 @@ _TASK_7_5_QUANTUM_NAMES: frozenset[str] = frozenset(
 )
 
 
-_TASK_7_5_L2O_NAMES: frozenset[str] = frozenset(
-    {
-        "l2o:BayesianSchedulerOptimizer",
-    }
-)
-
-
 _TASK_7_5_TRAINER_NAMES: frozenset[str] = frozenset(
     {
         "trainer:UncertaintyGuidedTrainer",
@@ -144,7 +131,6 @@ _TASK_7_5_MONITORING_NAMES: frozenset[str] = frozenset(
 _TASK_7_5_EXPECTED: frozenset[str] = (
     _TASK_7_5_DISCOVERY_NAMES
     | _TASK_7_5_QUANTUM_NAMES
-    | _TASK_7_5_L2O_NAMES
     | _TASK_7_5_TRAINER_NAMES
     | _TASK_7_5_ASSIMILATION_NAMES
     | _TASK_7_5_MLOPS_NAMES
@@ -224,31 +210,6 @@ def test_quantum_surface_declares_three_adapter_strategies(
     assert cap.supports_ensemble is True
     assert cap.supports_conformal is True
     assert cap.supports_calibration is True
-
-
-# ---------------------------------------------------------------------------
-# L2O declarations.
-# ---------------------------------------------------------------------------
-
-
-def test_bayesian_scheduler_optimizer_capability_flags(uq_registry: UQRegistry) -> None:
-    """Phase 8 Task 8.5 flipped BayesianSchedulerOptimizer to BAYESIAN.
-
-    Phase 8 Task 8.3 replaced the original random-exploration heuristic
-    with a real EI acquisition that delegates to
-    :func:`opifex.uncertainty.active.expected_improvement`
-    (``adaptive_schedulers.py``); Task 8.5 then advertises the upgraded
-    surface honestly via ``native_bayesian=True`` +
-    :attr:`DefaultStrategy.BAYESIAN`.
-    """
-    cap = uq_registry.require("l2o:BayesianSchedulerOptimizer")
-    assert cap.native_bayesian is True
-    assert cap.default_strategy is DefaultStrategy.BAYESIAN
-    assert cap.native_nnx_module is True
-    # Plan-mandated docstring breadcrumb retains the Phase 8 task IDs so
-    # the audit trail from UNSUPPORTED → BAYESIAN is preserved.
-    assert "Phase 8 Task 8.3" in cap.notes
-    assert "Phase 8 Task 8.5" in cap.notes
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +349,6 @@ def test_monitoring_inputs_metadata_only(uq_registry: UQRegistry) -> None:
     [
         ("discovery:", _TASK_7_5_DISCOVERY_NAMES),
         ("quantum:", _TASK_7_5_QUANTUM_NAMES),
-        ("l2o:", _TASK_7_5_L2O_NAMES),
         ("trainer:", _TASK_7_5_TRAINER_NAMES),
         ("assimilation:", _TASK_7_5_ASSIMILATION_NAMES),
         ("mlops:", _TASK_7_5_MLOPS_NAMES),

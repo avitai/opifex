@@ -18,9 +18,6 @@ Implements:
   2. evaluates the acquisition function on it;
   3. picks the argmax candidate;
   4. queries the oracle and feeds the new ``(x, y)`` back.
-
-  This is the canonical driver used by the rewritten
-  :class:`opifex.optimization.l2o.adaptive_schedulers.BayesianSchedulerOptimizer`.
 """
 
 from __future__ import annotations

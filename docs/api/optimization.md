@@ -52,47 +52,51 @@ Physics-aware optimization with scientific validation and benchmarking.
 
 Advanced neural optimization methods that achieve significant speedups on learned problem families.
 
+### Tasks and the optimiser interface
+
+Objective-carrying `Task`/`TaskFamily` abstractions and the shared stateful `Optimizer`
+interface (with the optax-wrapped baseline family).
+
+::: opifex.optimization.l2o.core
+
+::: opifex.optimization.l2o.optimizers
+
+### Concrete tasks
+
+`QuadraticTaskFamily` (convex smoke task) and `MLPTaskFamily` (the non-convex small-MLP
+training showcase task).
+
+::: opifex.optimization.l2o.tasks
+
+### Learned optimisers
+
+Coordinatewise learned optimisers (the per-parameter MLP of Metz et al. 2020) and their
+input features.
+
+::: opifex.optimization.l2o.features
+
+::: opifex.optimization.l2o.learned
+
+### PES meta-training
+
+Persistent Evolution Strategies meta-training (Vicol et al. 2021).
+
+::: opifex.optimization.l2o.meta_train
+
+### Baselines and benchmarking
+
+optimistix classical baselines and honest learning-curve / speedup-at-target benchmarking.
+
+::: opifex.optimization.l2o.baselines
+
+::: opifex.optimization.l2o.benchmark
+
 ### L2O Engine
 
-Core learn-to-optimize engine with parametric optimization solvers.
+High-level orchestrator: meta-train a learned optimiser on a task family, apply it,
+benchmark it honestly, and persist `theta`.
 
-::: opifex.optimization.l2o.l2o_engine
-
-### Advanced Meta-Learning
-
-MAML, Reptile, and gradient-based meta-learning approaches.
-
-::: opifex.optimization.l2o.advanced_meta_learning
-
-### Adaptive Schedulers
-
-Bayesian and performance-aware scheduling algorithms.
-
-::: opifex.optimization.l2o.adaptive_schedulers
-
-### Multi-Objective Optimization
-
-Pareto frontier approximation and multi-objective optimization.
-
-::: opifex.optimization.l2o.multi_objective
-
-### Parametric Solvers
-
-Neural networks for parametric programming and constraint satisfaction.
-
-::: opifex.optimization.l2o.parametric_solver
-
-### Constraint Learning
-
-Automated constraint satisfaction learning algorithms.
-
-::: opifex.optimization.l2o.constraint_learning
-
-### Reinforcement Learning Optimization
-
-RL-based optimization strategy selection and learning.
-
-::: opifex.optimization.l2o.rl_optimization
+::: opifex.optimization.l2o.engine
 
 ## Control Systems
 
@@ -126,13 +130,15 @@ The optimization module is organized into several key components:
 
 ### L2O Submodule (`l2o/`)
 
-- **`l2o_engine.py`**: Core L2O engine and parametric solvers
-- **`advanced_meta_learning.py`**: MAML, Reptile, and gradient-based methods
-- **`adaptive_schedulers.py`**: Bayesian and performance-aware schedulers
-- **`multi_objective.py`**: Multi-objective optimization algorithms
-- **`parametric_solver.py`**: Parametric programming solvers
-- **`constraint_learning.py`**: Constraint satisfaction learning
-- **`rl_optimization.py`**: Reinforcement learning optimization
+- **`core.py`**: `Task`/`TaskFamily` (objective-carrying) and the `Optimizer` interface
+- **`optimizers.py`**: `Optimizer` ABC + `OptaxOptimizer` (hand-designed baseline family)
+- **`tasks.py`**: `QuadraticTaskFamily` and the `MLPTaskFamily` showcase task
+- **`features.py`**: per-parameter input features (momentum/RMS, time embedding)
+- **`learned.py`**: `LearnedOptimizer` ABC, `MLPLearnedOptimizer`, `LearnableSGD`
+- **`meta_train.py`**: Persistent Evolution Strategies (PES) meta-training
+- **`baselines.py`**: optimistix classical baselines and tuned-optax baselines
+- **`benchmark.py`**: honest learning-curve and speedup-at-target benchmarking
+- **`engine.py`**: high-level `L2OEngine` orchestrator
 
 ### Control Submodule (`control/`)
 

@@ -1,114 +1,75 @@
-"""Learn-to-Optimize (L2O) algorithms for scientific machine learning.
+"""Learn-to-Optimize (L2O): meta-learned optimisers for scientific optimisation.
 
-This module implements neural network-based optimization algorithms that learn to solve
-families of optimization problems with significant speedup over traditional methods.
+A learned optimiser is meta-trained to minimise a *distribution* of objectives, each carried by
+a :class:`~opifex.optimization.l2o.core.Task`, and applied to held-out tasks where it can beat a
+*tuned* classical baseline. The design follows Google's ``learned_optimization`` library and the
+L2O literature (Andrychowicz et al. 2016, ``arXiv:1606.04474``; Metz et al. 2020,
+``arXiv:2009.11243``; Vicol et al. 2021 PES, ``arXiv:2112.13835``); classical baselines use
+``optimistix``. Every reported number is measured — there are no fabricated objectives or
+speedups.
 
-Key Features:
-- Parametric programming solver networks
-- Constraint satisfaction learning
-- Unified L2O engine integrating multiple optimization strategies
-- Advanced meta-learning algorithms (MAML, Reptile, Gradient-based)
-- Meta-L2O integration for self-improving optimization
-- Multi-objective optimization with Pareto frontier approximation
-- Reinforcement learning-based optimization strategy selection
-- >100x speedup on learned problem families
-- Integration with traditional solvers via Optimistix
+Public surface:
+
+- :class:`~opifex.optimization.l2o.core.Task` / :class:`~opifex.optimization.l2o.core.TaskFamily`
+  — objective-carrying abstractions (``init``/``loss``/``normalizer``) and a task distribution.
+- :class:`~opifex.optimization.l2o.optimizers.Optimizer` ABC + ``OptaxOptimizer`` — the shared
+  stateful optimiser interface, with an optax-wrapped hand-designed family.
+- :class:`~opifex.optimization.l2o.learned.LearnedOptimizer` ABC + ``MLPLearnedOptimizer`` /
+  ``LearnableSGD`` — coordinatewise meta-learned update rules.
+- :func:`~opifex.optimization.l2o.meta_train.meta_train` — PES meta-training.
+- baselines/benchmark helpers and the high-level :class:`L2OEngine` orchestrator.
 """
 
-from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES
-from opifex.optimization.l2o.adaptive_schedulers import (
-    BayesianSchedulerOptimizer,
-    create_l2o_engine_with_adaptive_schedulers,
-    MetaSchedulerConfig,
-    MultiscaleScheduler,
-    PerformanceAwareScheduler,
-    SchedulerIntegration,
+from opifex.optimization.l2o.baselines import (
+    loss_curve,
+    optimistix_minimise,
+    tuned_optax_baseline,
 )
-from opifex.optimization.l2o.advanced_meta_learning import (
-    GradientBasedMetaLearner,
-    GradientBasedMetaLearningConfig,
-    MAMLConfig,
-    MAMLOptimizer,
-    MetaL2OIntegration,
-    ReptileConfig,
-    ReptileOptimizer,
+from opifex.optimization.l2o.benchmark import (
+    benchmark_on_held_out_tasks,
+    speedup_at_target,
+    steps_to_target,
 )
-from opifex.optimization.l2o.l2o_engine import (
-    L2OEngine,
-    L2OEngineConfig,
-    OptimizationProblemEncoder,
-    ParametricOptimizationSolver,
+from opifex.optimization.l2o.core import single_task_to_family, Task, TaskFamily
+from opifex.optimization.l2o.engine import L2OEngine
+from opifex.optimization.l2o.learned import (
+    AdafacMLPLearnedOptimizer,
+    LearnableSGD,
+    LearnedOptimizer,
+    MLPLearnedOptimizer,
 )
-from opifex.optimization.l2o.multi_objective import (
-    MultiObjectiveConfig,
-    MultiObjectiveL2OEngine,
-    ObjectiveScalarizer,
-    ParetoFrontierOptimizer,
-    PerformanceIndicators,
+from opifex.optimization.l2o.meta_train import init_pes_state, meta_train, pes_gradient_step
+from opifex.optimization.l2o.optimizers import OptaxOptimizer, Optimizer
+from opifex.optimization.l2o.tasks import (
+    MLPTask,
+    MLPTaskFamily,
+    QuadraticTask,
+    QuadraticTaskFamily,
 )
-from opifex.optimization.l2o.parametric_solver import (
-    ConstraintHandler,
-    OptimizationProblem,
-    ParametricProgrammingSolver,
-    SolverConfig,
-)
-from opifex.optimization.l2o.rl_optimization import (
-    ActionInterpreter,
-    DQNNetwork,
-    Experience,
-    ExperienceReplayBuffer,
-    RewardFunction,
-    RLOptimizationAgent,
-    RLOptimizationConfig,
-    RLOptimizationEngine,
-    StateEncoder,
-)
-from opifex.uncertainty.registry import UQRegistry
-
-
-# UQ capability registration — Task 7.5. Guarded against duplicate
-# registration on repeat imports (Rule 13).
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in L2O_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
 
 
 __all__ = [
-    "L2O_CAPABILITIES",
-    "ActionInterpreter",
-    "BayesianSchedulerOptimizer",
-    "ConstraintHandler",
-    "DQNNetwork",
-    "Experience",
-    "ExperienceReplayBuffer",
-    "GradientBasedMetaLearner",
-    "GradientBasedMetaLearningConfig",
+    "AdafacMLPLearnedOptimizer",
     "L2OEngine",
-    "L2OEngineConfig",
-    "MAMLConfig",
-    "MAMLOptimizer",
-    "MetaL2OIntegration",
-    "MetaSchedulerConfig",
-    "MultiObjectiveConfig",
-    "MultiObjectiveL2OEngine",
-    "MultiscaleScheduler",
-    "ObjectiveScalarizer",
-    "OptimizationProblem",
-    "OptimizationProblemEncoder",
-    "ParametricOptimizationSolver",
-    "ParametricProgrammingSolver",
-    "ParetoFrontierOptimizer",
-    "PerformanceAwareScheduler",
-    "PerformanceIndicators",
-    "RLOptimizationAgent",
-    "RLOptimizationConfig",
-    "RLOptimizationEngine",
-    "ReptileConfig",
-    "ReptileOptimizer",
-    "RewardFunction",
-    "SchedulerIntegration",
-    "SolverConfig",
-    "StateEncoder",
-    "create_l2o_engine_with_adaptive_schedulers",
+    "LearnableSGD",
+    "LearnedOptimizer",
+    "MLPLearnedOptimizer",
+    "MLPTask",
+    "MLPTaskFamily",
+    "OptaxOptimizer",
+    "Optimizer",
+    "QuadraticTask",
+    "QuadraticTaskFamily",
+    "Task",
+    "TaskFamily",
+    "benchmark_on_held_out_tasks",
+    "init_pes_state",
+    "loss_curve",
+    "meta_train",
+    "optimistix_minimise",
+    "pes_gradient_step",
+    "single_task_to_family",
+    "speedup_at_target",
+    "steps_to_target",
+    "tuned_optax_baseline",
 ]

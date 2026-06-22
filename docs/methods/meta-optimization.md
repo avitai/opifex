@@ -46,10 +46,9 @@ where:
 #### Implementation
 
 ```python
-from opifex.core.training.config import MetaOptimizerConfig
 from opifex.optimization.meta_optimization import LearnToOptimize
 
-# LearnToOptimize is initialized directly (not via MetaOptimizerConfig)
+# LearnToOptimize is initialized directly
 l2o = LearnToOptimize(
     meta_network_layers=[128, 64, 32],
     base_optimizer="adam",
@@ -70,73 +69,9 @@ previous_updates = jnp.zeros((0, params.size))
 update = l2o.compute_update(gradient, previous_updates)
 ```
 
-### 2. Model-Agnostic Meta-Learning (MAML)
+### 2. Learned Optimizers
 
-MAML learns good parameter initializations that can be quickly adapted to new tasks:
-
-$$\phi^* = \arg\min_{\phi} \sum_{\tau \sim \mathcal{T}} \mathcal{L}_{\tau}(U_{\tau}(\phi))$$
-
-where $U_{\tau}(\phi)$ represents the updated parameters after one or more gradient steps on task $\tau$.
-
-#### MAML Implementation
-
-```python
-from opifex.optimization.l2o import MAMLOptimizer, MAMLConfig
-
-config = MAMLConfig(
-    inner_learning_rate=1e-2,
-    meta_learning_rate=1e-3,
-    num_inner_steps=5,
-    first_order=False  # Use second-order gradients
-)
-
-maml = MAMLOptimizer(config=config, rngs=nnx.Rngs(42))
-
-# Meta-training
-maml.meta_train(
-    support_tasks=support_tasks,
-    query_tasks=query_tasks,
-    num_meta_epochs=1000
-)
-```
-
-### 3. Reptile Algorithm
-
-Reptile is a simpler alternative to MAML that performs gradient descent on the meta-parameters:
-
-$$\phi \leftarrow \phi + \epsilon \sum_{\tau} (U_{\tau}(\phi) - \phi)$$
-
-#### Reptile Implementation
-
-```python
-from opifex.optimization.l2o import ReptileOptimizer, ReptileConfig
-
-config = ReptileConfig(
-    inner_learning_rate=1e-2,
-    meta_learning_rate=1e-3,
-    num_inner_steps=10
-)
-
-reptile = ReptileOptimizer(config=config, rngs=nnx.Rngs(42))
-```
-
-### 4. Gradient-Based Meta-Learning
-
-Advanced gradient-based approaches that learn optimization trajectories:
-
-```python
-from opifex.optimization.l2o import GradientBasedMetaLearner, GradientBasedMetaLearningConfig
-from opifex.core.training.trainer import Trainer
-
-config = GradientBasedMetaLearningConfig(
-    meta_learning_rate=1e-3,
-    trajectory_length=20,
-    use_second_order=True,
-    regularization_strength=1e-4
-)
-
-gb_meta = GradientBasedMetaLearner(config=config, rngs=nnx.Rngs(42))
-```
+See [Learn-to-Optimize Methods](l2o.md) for opifex's learned-optimiser stack (per-parameter MLP optimisers meta-trained with Persistent Evolution Strategies).
 
 ## Advanced Features
 
@@ -249,54 +184,6 @@ Specialized algorithms for energy minimization:
 - **Level Shifting**: Improved convergence for difficult cases
 - **Density Mixing**: Optimal mixing of density matrices
 
-## Multi-Objective Meta-Optimization
-
-Meta-optimization for problems with multiple competing objectives:
-
-```python
-from opifex.optimization.l2o import MultiObjectiveL2OEngine, MultiObjectiveConfig
-
-config = MultiObjectiveConfig(
-    num_objectives=3,
-    pareto_frontier_approximation=True,
-    scalarization_method="weighted_sum",
-    diversity_preservation=True
-)
-
-mo_optimizer = MultiObjectiveL2OEngine(config=config, rngs=nnx.Rngs(42))
-
-# Optimize multiple objectives
-pareto_solutions = mo_optimizer.optimize(
-    objectives=[accuracy_loss, efficiency_loss, complexity_loss],
-    constraints=constraints,
-    num_solutions=50
-)
-```
-
-## Reinforcement Learning for Optimization
-
-Using RL to learn optimization strategies:
-
-```python
-from opifex.optimization.l2o import RLOptimizationEngine, RLOptimizationConfig
-
-config = RLOptimizationConfig(
-    state_encoding_dim=128,
-    action_space_size=10,
-    reward_function="convergence_speed",
-    exploration_strategy="epsilon_greedy"
-)
-
-rl_optimizer = RLOptimizationEngine(config=config, rngs=nnx.Rngs(42))
-
-# Train RL agent
-rl_optimizer.train(
-    training_environments=optimization_problems,
-    num_episodes=1000,
-    max_steps_per_episode=200
-)
-```
-
 ## Performance Analysis
 
 ### Convergence Guarantees
@@ -304,8 +191,6 @@ rl_optimizer.train(
 Meta-optimization algorithms provide different convergence guarantees:
 
 1. **L2O**: Convergence depends on the expressiveness of the meta-network
-2. **MAML**: Converges to a good initialization under certain conditions
-3. **Reptile**: Converges to the average of optimal parameters across tasks
 
 ### Computational Complexity
 
@@ -396,9 +281,7 @@ meta_optimizer = MetaOptimizer(config=config, rngs=nnx.Rngs(42))
 ## References
 
 1. Andrychowicz, M., et al. "Learning to learn by gradient descent by gradient descent." NIPS 2016.
-2. Finn, C., Abbeel, P., & Levine, S. "Model-agnostic meta-learning for fast adaptation of deep networks." ICML 2017.
-3. Nichol, A., Achiam, J., & Schulman, J. "On first-order meta-learning algorithms." arXiv preprint 2018.
-4. Chen, Y., et al. "Learning to optimize: A primer and a benchmark." JMLR 2022.
+2. Chen, Y., et al. "Learning to optimize: A primer and a benchmark." JMLR 2022.
 
 ## See Also
 

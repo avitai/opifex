@@ -302,17 +302,18 @@ Key considerations:
 
 ### What optimization algorithms does Opifex provide?
 
-**Meta-Optimization:**
+**Meta-Optimization** (`opifex.optimization.meta_optimization`):
 
-- MAML (Model-Agnostic Meta-Learning)
-- Reptile
+- `LearnToOptimize` — neural meta-learning optimiser
+- `MetaOptimizer` — integrated meta-optimization system
+- `AdaptiveLearningRateScheduler`, `WarmStartingStrategy`
 
-**Learn-to-Optimize (L2O):**
+**Learn-to-Optimize (L2O)** (`opifex.optimization.l2o`):
 
-- Parametric programming solvers (`ParametricProgrammingSolver`)
-- Multi-objective optimization (`MultiObjectiveL2OEngine`)
-- RL-based optimization strategy selection (`RLOptimizationEngine`)
-- Adaptive schedulers (`PerformanceAwareScheduler`, `BayesianSchedulerOptimizer`)
+- Per-parameter learned optimisers (`MLPLearnedOptimizer`) meta-trained with Persistent
+  Evolution Strategies (`meta_train`), orchestrated by `L2OEngine`
+- Objective-carrying `Task` / `TaskFamily` (`QuadraticTaskFamily`, `MLPTaskFamily`)
+- Honest benchmarking against tuned `optimistix` / optax baselines (`benchmark_on_held_out_tasks`)
 
 **Second-Order Methods:**
 

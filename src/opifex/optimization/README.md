@@ -14,15 +14,21 @@ This package provides advanced optimization algorithms for scientific machine le
   - `monitoring.py`: Performance monitoring and analytics
   - `meta_optimizer.py`: Integrated meta-optimization system
 
-- **`l2o/`**: Unified Learn-to-Optimize engine combining multiple optimization approaches
-  - `l2o_engine.py`: Unified L2O engine integrating parametric and gradient-based solvers
-  - `parametric_solver.py`: Parametric programming solvers for structured problems
-  - `adaptive_schedulers.py`: Advanced scheduling with Bayesian optimization
-  - `multi_objective.py`: Multi-objective optimization algorithms
-  - `constraint_learning.py`: Automated constraint satisfaction learning
-  - `rl_optimization.py`: Reinforcement learning-based optimization strategy selection
+- **`l2o/`**: Learn-to-Optimize — per-parameter learned optimisers meta-trained with Persistent
+  Evolution Strategies (after Google's `learned_optimization`; Andrychowicz 2016, Metz 2020,
+  Vicol 2021)
+  - `core.py`: objective-carrying `Task` / `TaskFamily` and the `Optimizer` interface
+  - `optimizers.py`: `Optimizer` ABC + `OptaxOptimizer` (hand-designed baseline family)
+  - `tasks.py`: `QuadraticTaskFamily` and the `MLPTaskFamily` showcase task
+  - `features.py`: per-parameter input features (momentum/RMS EMAs, tanh time embedding)
+  - `learned.py`: `LearnedOptimizer` ABC, `MLPLearnedOptimizer`, `LearnableSGD`
+  - `meta_train.py`: PES meta-training estimator + outer-Adam loop
+  - `baselines.py`: optimistix classical baselines and tuned-optax baselines
+  - `benchmark.py`: honest learning-curve and speedup-at-target benchmarking
+  - `engine.py`: high-level `L2OEngine` (meta-train / apply / benchmark / persist)
 
-The `l2o/` package provides a higher-level unified engine that **uses** the neural learner from `meta_optimization/` and combines it with parametric solvers for a full optimization framework.
+The `l2o/` package is self-contained and independent of `meta_optimization/`; see
+`docs/methods/l2o.md` for the method description.
 
 ### Meta-Optimization Components
 

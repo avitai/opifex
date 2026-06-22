@@ -38,6 +38,7 @@ _SCANNED_MODULES: tuple[str, ...] = (
     "opifex.uncertainty",
     "opifex.neural.bayesian",
     "opifex.neural.operators.specialized.uqno",
+    "opifex.optimization.l2o",
 )
 
 

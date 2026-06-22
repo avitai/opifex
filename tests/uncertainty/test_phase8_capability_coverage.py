@@ -32,7 +32,6 @@ import pytest
 # We therefore do NOT need explicit ``import opifex.<sub>`` side-effect
 # lines — the capability-table imports already pull the subpackage in.
 from opifex.neural.bayesian._uq_capabilities import BAYESIAN_MODEL_CAPABILITIES
-from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.active._uq_capabilities import ACTIVE_CAPABILITIES
 from opifex.uncertainty.pac_bayes._uq_capabilities import PAC_BAYES_CAPABILITIES
@@ -52,7 +51,6 @@ _ALL_PHASE_8_CAPABILITIES: dict[str, UQCapability] = {
     **SBI_CAPABILITIES,
     **ACTIVE_CAPABILITIES,
     **TRAINING_CAPABILITIES,
-    **L2O_CAPABILITIES,
     **SCIENTIFIC_FIELD_CAPABILITIES,
     **BAYESIAN_MODEL_CAPABILITIES,
 }
@@ -197,17 +195,6 @@ def test_multi_fidelity_trainer_default_strategy_flipped(
     cap = uq_registry.require("trainer:MultiFidelityUncertaintyTrainer")
     assert cap.default_strategy is DefaultStrategy.ENSEMBLE
     assert cap.supports_ensemble is True
-
-
-def test_bayesian_scheduler_optimizer_flag_flipped(
-    uq_registry: UQRegistry,
-) -> None:
-    """Task 8.3's GP-acquisition rewrite (``adaptive_schedulers.py``
-    delegates to ``opifex.uncertainty.active.expected_improvement``)
-    flips the L2O Bayesian flag from UNSUPPORTED → BAYESIAN."""
-    cap = uq_registry.require("l2o:BayesianSchedulerOptimizer")
-    assert cap.native_bayesian is True
-    assert cap.default_strategy is DefaultStrategy.BAYESIAN
 
 
 # ---------------------------------------------------------------------------

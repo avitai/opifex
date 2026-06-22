@@ -1,41 +1,35 @@
-# Learn-to-Optimize (L2O): Neural Optimization for Parametric PDE Families
+# Learn-to-Optimize (L2O): A Meta-Trained Optimiser for Neural-Network Training
 
 | Level | Runtime | Prerequisites | Format | Memory |
 | --- | --- | --- | --- | --- |
-| Intermediate | ~1 min | Basic JAX, understanding of PDEs | Tutorial | ~500 MB |
+| Intermediate | ~25 s (GPU) | JAX basics, gradient-based optimisation | Tutorial | ~1 GB |
 
 ## Overview
 
-This example demonstrates Opifex's **Learn-to-Optimize (L2O) engine** for solving
-families of parametric PDEs. In scientific computing, we often need to solve the
-same type of PDE (e.g., diffusion, Poisson) with varying parameters. L2O learns
-problem-specific optimization strategies that transfer across the parameter space.
+This example meta-trains a **learned optimiser** — a small neural network that *is* an optimiser
+update rule — and shows it generalising to held-out neural-network training problems where it
+beats a *properly tuned* classical optimiser.
 
-When discretizing elliptic PDEs like `-∇·(κ∇u) = f`, we obtain linear systems
-`Au = b` where `A` is symmetric positive definite (SPD). The matrix `A` depends
-on the diffusion coefficient `κ`, while `b` depends on the source term `f`. L2O
-learns to solve these parametric systems more efficiently than generic iterative methods.
+A hand-designed optimiser (SGD, Adam) applies the same fixed update rule to every problem. A
+*learned* optimiser is trained so that its update rule is itself good across a whole
+*distribution* of objectives. Opifex follows the design of Google's `learned_optimization`
+library and the L2O literature.
 
-**Key insight:** Traditional solvers treat each problem independently. L2O learns
-problem structure from a family of related problems, amortizing the cost of
-optimization across many instances.
+**Key insight:** L2O's genuine advantage shows on *non-convex, stochastic* training — where a
+single fixed learning rate is most compromised and the learned optimiser's implicit learning-rate
+schedule (a tanh embedding of the step index) gives it a real edge. The showcase task here is
+therefore small neural-network training, not a convex toy.
 
 ## What You'll Learn
 
-1. **Configure** the L2O engine with parametric and hybrid solver modes
-2. **Create** a family of discrete elliptic PDE problems with varying parameters
-3. **Solve** problems using L2O's automatic algorithm selection
-4. **Compare** L2O performance against traditional iterative solvers
-5. **Leverage** meta-learning to improve across problem instances
-
-## Coming from Traditional Solvers?
-
-| Traditional Approach | L2O Approach |
-| --- | --- |
-| Conjugate Gradient | `L2OEngine` with adaptive selection |
-| Fixed iteration count | Problem-dependent strategy |
-| Independent solves | Meta-learning across problems |
-| Manual tuning | Automatic algorithm recommendation |
+1. **Tasks carry their objective** — `Task` / `TaskFamily` provide a meta-training distribution
+   and a held-out meta-test split.
+2. **A per-parameter MLP optimiser** — `MLPLearnedOptimizer` maps per-parameter features to a
+   `(direction, magnitude)` update, shared across all coordinates.
+3. **PES meta-training** — Persistent Evolution Strategies meta-trains the optimiser without
+   back-propagating through the unroll.
+4. **Honest benchmarking** — compare against *distribution-tuned* Adam and SGD on held-out tasks
+   and report speedup-at-target, scoped to in-distribution generalisation.
 
 ## Files
 
@@ -56,274 +50,186 @@ source activate.sh && python examples/optimization/learn_to_optimize.py
 source activate.sh && jupyter lab examples/optimization/learn_to_optimize.ipynb
 ```
 
-## Core Concepts
+## Background
 
-### Parametric PDE Families
+- **Andrychowicz et al. 2016**, *Learning to learn by gradient descent by gradient descent*
+  ([arXiv:1606.04474](https://arxiv.org/abs/1606.04474)).
+- **Metz et al. 2020**, *Tasks, stability, architecture, and compute*
+  ([arXiv:2009.11243](https://arxiv.org/abs/2009.11243)) — the per-parameter MLP optimiser.
+- **Vicol et al. 2021**, *Persistent Evolution Strategies*
+  ([arXiv:2112.13835](https://arxiv.org/abs/2112.13835)) — the meta-training estimator.
+- **Eldan et al. 2023** ([arXiv:2310.18191](https://arxiv.org/abs/2310.18191)) — the cautionary
+  critique on out-of-distribution generalisation, which is why every claim below is scoped to
+  held-out tasks *from the meta-training family*.
 
-Many scientific computing applications involve solving similar PDEs repeatedly:
-
-- **Heat conduction** with varying thermal conductivity
-- **Diffusion problems** with different source terms
-- **Structural mechanics** with varying material properties
-
-L2O exploits this structure by learning problem-specific optimization strategies.
-
-### L2O Engine Architecture
-
-```mermaid
-graph TD
-    A[Problem Family] --> B[Problem Encoder]
-    B --> C[Algorithm Selector]
-    C --> D{Solver Type}
-    D -->|Parametric| E[Parametric Solver]
-    D -->|Gradient| F[Gradient Solver]
-    D -->|Hybrid| G[Hybrid Strategy]
-    E --> H[Solution]
-    F --> H
-    G --> H
-    H --> I[Meta-Learning Update]
-    I --> B
-```
+See [Learn-to-Optimize Methods](../../methods/l2o.md) for the full method description.
 
 ## Implementation
 
-### Step 1: Configure the L2O Engine
+### Step 1: A family of small neural-network training tasks
+
+Each task is a teacher-student MLP regression: a random *teacher* MLP generates targets from
+Gaussian inputs, and the *student* (same architecture) is trained by MSE on stochastic
+minibatches. The optimum (loss 0) is realisable, but the landscape is non-convex in the student
+weights — the genuine L2O setting. A fresh teacher and dataset per task force the meta-trained
+optimiser to generalise across many training problems.
 
 ```python
-from opifex.optimization.l2o import L2OEngine, L2OEngineConfig, OptimizationProblem
-from opifex.core.training.config import MetaOptimizerConfig
+from opifex.optimization.l2o import L2OEngine, MLPLearnedOptimizer, MLPTaskFamily
 
-# L2O engine configuration
-l2o_config = L2OEngineConfig(
-    solver_type="hybrid",  # parametric, gradient, or hybrid
-    problem_encoder_layers=[64, 32, 16],
-    use_traditional_fallback=True,
-    enable_meta_learning=True,
-    integration_mode="unified",
-    adaptive_selection=True,
+family = MLPTaskFamily(
+    input_dim=8, hidden_dim=16, output_dim=4, num_data=512, batch_size=32
 )
+learned_optimizer = MLPLearnedOptimizer(hidden_size=32, hidden_layers=2, step_mult=0.03)
+engine = L2OEngine(learned_optimizer, family)
+```
 
-# Meta-optimizer for learning across problems
-meta_config = MetaOptimizerConfig(
-    meta_algorithm="l2o",
-    base_optimizer="adam",
-    meta_learning_rate=1e-3,
-    adaptation_steps=10,
+**Terminal Output:**
+
+```text
+Building MLP task family and learned optimiser...
+------------------------------------------------------------------------
+  Inner task: teacher-student MLP 8->16->4 (MSE)
+  Tasks per PES step: 32
+  Learned optimiser: per-parameter MLP (32x2), 19 input features
+```
+
+### Step 2: Meta-train the learned optimiser with PES
+
+`L2OEngine.meta_train` runs Persistent Evolution Strategies: it perturbs the optimiser
+meta-parameters antithetically, unrolls the inner training on 32 tasks in parallel, and feeds the
+unbiased ES gradient estimate to an outer Adam. The whole inner unroll is JIT-compiled and
+scanned — there is no Python-level optimisation loop.
+
+```python
+meta_losses = engine.meta_train(
+    jax.random.key(0),
+    num_outer_steps=3000, num_tasks=32,
+    trunc_length=20, total_horizon=100,
+    perturbation_std=0.01, meta_learning_rate=3e-3,
 )
-
-rngs = nnx.Rngs(42)
-l2o_engine = L2OEngine(l2o_config, meta_config, rngs=rngs)
 ```
 
 **Terminal Output:**
 
 ```text
-Configuring L2O Engine...
---------------------------------------------------
-  Solver type: hybrid
-  Integration mode: unified
-  Meta-learning: True
-  Encoder layers: [64, 32, 16]
-
-Initializing L2O Engine...
-  L2O Engine initialized successfully!
+Meta-training with PES...
+------------------------------------------------------------------------
+  Outer steps: 3000
+  Meta-loss (first 20 steps avg): 1.1082
+  Meta-loss (last 20 steps avg):  0.0929
+  Meta-loss reduction: 11.93x
 ```
 
-### Step 2: Create Parametric PDE Family
+### Step 3: Meta-test on a held-out split vs tuned Adam and SGD
+
+The trained optimiser is applied to 48 fresh tasks (a different RNG stream = in-distribution
+held-out split) and compared against **distribution-tuned** Adam and SGD baselines: a single
+learning rate is selected on the task distribution and applied unchanged to every held-out task
+(a per-task sweep would be an undeployable oracle). The speedup is measured at a per-task target
+loss (10% of the baseline's initial loss), censoring any task that never reaches it.
 
 ```python
-def create_discrete_elliptic_problem(key, dim):
-    """Create a discrete elliptic PDE problem.
-
-    Simulates discretization of: -∇·(κ∇u) = f
-    """
-    key1, key2 = jax.random.split(key)
-
-    # SPD matrix (discrete diffusion operator)
-    a_raw = jax.random.normal(key1, (dim, dim))
-    a_matrix = jnp.dot(a_raw.T, a_raw) + jnp.eye(dim) * 0.1
-
-    # Source term
-    b_vector = jax.random.normal(key2, (dim,))
-
-    return a_matrix, b_vector
-
-# Generate 50 problems with varying parameters
-for _ in range(50):
-    a, b, params = create_discrete_elliptic_problem(key, dim=10)
-    problem = OptimizationProblem(dimension=10, problem_type="quadratic")
-    problems.append((problem, a, b))
+adam_result = engine.benchmark(
+    jax.random.key(1), num_tasks=48, num_steps=100,
+    target_fraction=0.1, transformation=optax.adam,
+)
+sgd_result = engine.benchmark(
+    jax.random.key(2), num_tasks=48, num_steps=100,
+    target_fraction=0.1, transformation=optax.sgd,
+)
 ```
 
 **Terminal Output:**
 
 ```text
-Creating parametric PDE problem family...
---------------------------------------------------
-  Created 50 parametric elliptic PDE problems
-  Discretization dimension: 10
-  Parameter dimension: 20
+Meta-testing on held-out tasks vs distribution-tuned baselines...
+------------------------------------------------------------------------
+  Held-out tasks: 48
+  Learned final loss (mean):    1.6052
+  Tuned-Adam final loss (mean): 1.8185 (lr=0.100)
+  Tuned-SGD final loss (mean):  2.7426 (lr=0.100)
+  Median speedup @ 10%-target vs tuned Adam: 1.82x
+  Median speedup @ 10%-target vs tuned SGD:  2.67x
 ```
 
-### Step 3: Solve with L2O
-
-```python
-for i, ((problem, _a, _b), params) in enumerate(zip(problems, params_list)):
-    algorithm, solution = l2o_engine.solve_automatically(problem, params)
-    solutions.append(solution)
-    algorithms_used.append(algorithm)
-```
-
-**Terminal Output:**
+## Results
 
 ```text
-Solving optimization problems...
---------------------------------------------------
-  Solved 10/50 problems...
-  Solved 20/50 problems...
-  Solved 30/50 problems...
-  Solved 40/50 problems...
-  Solved 50/50 problems...
-
-  Total L2O time: 5.7789s
-  Mean time per problem: 0.115579s
-  Algorithm distribution: parametric=50, gradient=0
+========================================================================
+RESULTS SUMMARY
+========================================================================
+  Meta-loss reduction:            11.93x
+  Learned final loss (held-out):  1.6052
+  Tuned-Adam final loss:          1.8185
+  Tuned-SGD final loss:           2.7426
+  Speedup vs tuned Adam:          1.82x
+  Speedup vs tuned SGD:           2.67x
+========================================================================
 ```
 
-### Step 4: Compare with Iterative Solver
+The meta-trained optimiser **decisively beats tuned SGD** (≈2.7× faster to the target, lower final
+loss) and **beats tuned Adam** (≈1.8× faster, lower final loss) on held-out tasks — and it trains
+in ~25 s on a GPU. The claim is scoped to held-out tasks drawn from the meta-training family; it is
+not an out-of-distribution result (cf. [arXiv:2310.18191](https://arxiv.org/abs/2310.18191)).
 
-```python
-def solve_elliptic_iterative(a_matrix, b_vector, steps=100):
-    """Solve with steepest descent."""
-    x = jnp.zeros(a_matrix.shape[0])
-    eigvals = jnp.linalg.eigvalsh(a_matrix)
-    step_size = 0.9 / jnp.max(eigvals)
-
-    for _ in range(steps):
-        grad = jnp.dot(a_matrix, x) - 0.5 * b_vector
-        x = x - step_size * grad
-    return x
-```
-
-**Terminal Output:**
-
-```text
-Performance Comparison:
---------------------------------------------------
-  L2O Mean Error:     3.707257
-  Iterative Mean Error:      4.535482
-  L2O Mean Time:      115.579ms
-  Iterative Mean Time:       8.171ms
-  Speedup Factor:     0.1x
-```
-
-### Step 5: Meta-Learning Across Problems
-
-```python
-for i, ((problem, _a, _b), params) in enumerate(zip(problems[:10], params_list[:10])):
-    solution, metadata = l2o_engine.solve_with_meta_learning(
-        problem, params, problem_id=i
-    )
-```
-
-**Terminal Output:**
-
-```text
-Demonstrating meta-learning...
---------------------------------------------------
-  Problems in memory: 10
-  Solutions in memory: 10
-  Meta-learning enabled: True
-```
-
-### Step 6: Algorithm Recommendation
-
-```python
-test_cases = [
-    ("Small quadratic", OptimizationProblem(dimension=5, problem_type="quadratic")),
-    ("Large quadratic", OptimizationProblem(dimension=150, problem_type="quadratic")),
-    ("Linear", OptimizationProblem(dimension=20, problem_type="linear")),
-    ("Nonlinear", OptimizationProblem(dimension=30, problem_type="nonlinear")),
-]
-
-for name, problem in test_cases:
-    recommendation = l2o_engine.recommend_algorithm(problem, jnp.zeros(20))
-    print(f"  {name}: {recommendation}")
-```
-
-**Terminal Output:**
-
-```text
-Algorithm Recommendations:
---------------------------------------------------
-  Small quadratic (dim=5): parametric
-  Large quadratic (dim=150): gradient
-  Linear (dim=20): parametric
-  Nonlinear (dim=30): hybrid
-```
+| Method | Held-out final loss (mean) | Speedup @ 10%-target |
+| --- | --- | --- |
+| **Learned (L2O)** | **1.61** | — |
+| Tuned Adam | 1.82 | 1.82× (learned is faster) |
+| Tuned SGD | 2.74 | 2.67× (learned is faster) |
 
 ## Visualization
 
-### Error Distribution Comparison
+### Meta-training curve and held-out learning curves
 
-![Error and Time Distribution](../../assets/examples/learn_to_optimize/comparison.png)
+The left panel is the PES meta-training curve (raw per-step loss faint, rolling-mean trend bold —
+the standard presentation for an evolution-strategies estimate). The right panel is the meta-test:
+the learned optimiser (blue) descends below tuned Adam (orange) and tuned SGD (green) on held-out
+tasks.
 
-### Error vs Time Trade-off
+![PES meta-training curve and held-out learning curves](../../assets/examples/learn_to_optimize/learning_curves.png)
 
-![Error vs Time Trade-off](../../assets/examples/learn_to_optimize/tradeoff.png)
+### Representative held-out task
 
-## Results Summary
+A single held-out task: the learned optimiser versus per-task-tuned Adam and tuned SGD.
 
-| Metric | L2O | Iterative Solver |
-| --- | --- | --- |
-| Mean Error | 3.71 | 4.54 |
-| Mean Time per Problem | 115.58 ms | 8.17 ms |
-| Algorithm Selection | Automatic | Manual |
-| Meta-Learning | Yes | No |
-
-**Note:** The L2O engine demonstrates better accuracy but longer runtime in this example
-because it includes problem encoding and algorithm selection overhead. For larger batches
-of similar problems, the amortized cost per problem decreases significantly.
+![Representative held-out task](../../assets/examples/learn_to_optimize/reference_task.png)
 
 ## Next Steps
 
 ### Experiments to Try
 
-1. **Increase problem count**: L2O benefits more with larger problem families
-2. **Vary problem dimensions**: Test performance scaling with problem size
-3. **Train the L2O optimizer**: The engine can be meta-trained for specific problem families
-4. **Custom problem encoders**: Design domain-specific encodings for your PDE family
+- Increase `num_outer_steps` or `num_tasks` for a stronger learned optimiser (PES variance drops
+  with more parallel tasks).
+- Vary the task family (`hidden_dim`, `num_data`, `batch_size`) and watch generalisation change.
+- Swap in `LearnableSGD` to validate the PES estimator against a single learnable learning rate.
+- Persist and reload the meta-learned parameters with `engine.save_theta` / `engine.load_theta`.
 
 ### Related Examples
 
-- [Meta-Optimization](./meta-optimization.md) - MAML/Reptile for PDE solver adaptation
-- [Neural XC Functional](../quantum-chemistry/neural-xc-functional.md) - Learned exchange-correlation for Kohn-Sham DFT
-- [PINN Training](../pinns/poisson.md) - Physics-informed neural networks
+- [Meta-Optimization](meta-optimization.md) — the `opifex.optimization.meta_optimization`
+  framework.
 
 ### API Reference
 
-- [`L2OEngine`](../../api/optimization.md) - Learn-to-Optimize engine
-- [`L2OEngineConfig`](../../api/optimization.md) - L2O configuration
-- [`OptimizationProblem`](../../api/optimization.md) - Problem definition
-- [`MetaOptimizerConfig`](../../api/training.md) - Meta-optimizer configuration
+- [Learn-to-Optimize Methods](../../methods/l2o.md)
+- [Optimization API](../../api/optimization.md)
 
 ## Troubleshooting
 
-### L2O slower than iterative solver
+### The meta-training curve is noisy
 
-This is expected for small problem batches. L2O includes:
+PES is an evolution-strategies estimator, so the per-step meta-loss is inherently noisy; the
+example overlays a rolling mean to show the trend. Increasing `num_tasks` lowers the variance.
 
-- Problem encoding overhead
-- Algorithm selection logic
-- Meta-learning bookkeeping
+### Meta-training diverges
 
-For production use, pre-train the L2O engine on your problem family.
+A too-large `meta_learning_rate` (outer Adam) or `step_mult` can destabilise PES — reduce them, or
+increase `num_tasks` (≥32 keeps PES stable for this task). The reference defaults
+(`step_mult=1e-3`) are calibrated for much longer training; this short demo uses `step_mult=0.03`.
 
-### NaN in solutions
+### The learned optimiser does not beat the baseline
 
-Check that your problem matrices are well-conditioned. The L2O engine includes
-fallback to traditional methods when numerical issues are detected.
-
-### Memory issues
-
-Reduce `problem_encoder_layers` or `adaptation_steps` for memory-constrained environments.
+Generalisation is scoped to held-out tasks from the *meta-training* family. A learned optimiser
+trained on one family is not expected to beat tuned baselines on a different distribution.

@@ -26,13 +26,12 @@ Enterprise-grade optimization systems for deployment and scaling:
 
 ### 3. Learn-to-Optimize (L2O) Algorithms
 
-Advanced neural optimization methods that achieve >100x speedup on learned problem families:
+Neural optimizers whose update rule is meta-learned over a family of related tasks. The implementation follows Andrychowicz et al. (2016, arXiv:1606.04474), Metz et al. (2020, arXiv:2009.11243), and the Persistent Evolution Strategies estimator of Vicol et al. (2021, arXiv:2112.13835):
 
-- **Parametric Programming Solvers**: Neural networks for parametric optimization
-- **Constraint Learning**: Automated constraint satisfaction learning
-- **Multi-Objective Optimization**: Pareto frontier approximation
-- **Reinforcement Learning Optimization**: Strategy selection via RL
-- **Advanced Meta-Learning**: MAML, Reptile, and gradient-based approaches
+- **Task and TaskFamily abstractions**: each task carries its own `init`, `loss`, and `normalizer`; a family exposes `sample` to draw fresh tasks
+- **Per-parameter learned optimizers**: an MLP maps gradient features to per-coordinate updates (`MLPLearnedOptimizer`), plus a learnable scalar step size (`LearnableSGD`)
+- **PES meta-training**: unbiased gradient estimates over truncated unrolls without backpropagating through the full optimization trajectory
+- **Honest benchmarking**: held-out tasks compared against a *tuned* optax baseline, reporting per-task and median speedups to a target loss
 
 ### 4. Control Systems
 
@@ -76,25 +75,32 @@ Meta-learning allows optimization algorithms to learn from experience across mul
 
 ### Learn-to-Optimize (L2O)
 
-L2O algorithms use neural networks to learn optimization update rules. These learned optimizers can significantly outperform traditional methods on specific problem families:
+L2O algorithms use neural networks to learn optimization update rules. The learned optimizer is meta-trained on a `TaskFamily` and can outperform a *tuned* classical baseline on held-out tasks drawn from that same family (in-distribution). The high-level entry point is `L2OEngine`:
 
 ```python
-from opifex.optimization.l2o import L2OEngine, L2OEngineConfig
+import jax
+from opifex.optimization.l2o import L2OEngine, MLPLearnedOptimizer, MLPTaskFamily
 
-# Configure L2O engine
-config = L2OEngineConfig(
-    meta_learning_rate=1e-3,
-    num_unroll_steps=20,
-    problem_encoding_dim=128
+# A family of non-convex teacher-student MLP training tasks
+family = MLPTaskFamily(input_dim=8, hidden_dim=16, output_dim=4)
+
+# Wrap a per-parameter learned optimizer in the engine
+engine = L2OEngine(MLPLearnedOptimizer(step_mult=0.03), family)
+
+# Meta-train with Persistent Evolution Strategies (PES)
+losses = engine.meta_train(
+    jax.random.key(0),
+    num_outer_steps=3000,
+    num_tasks=32,
+    meta_learning_rate=3e-3,
 )
 
-# Create and train L2O engine
-l2o_engine = L2OEngine(config=config, rngs=nnx.Rngs(42))
-trained_engine = l2o_engine.meta_train(training_problems)
-
-# Use for new optimization problems
-solution = trained_engine.optimize(new_problem, num_steps=100)
+# Benchmark on held-out tasks against a tuned optax baseline
+result = engine.benchmark(jax.random.key(1), num_tasks=48, num_steps=100)
+# result["median_speedup"] ~ 1.8x vs tuned Adam, ~2.7x vs tuned SGD
 ```
+
+The reported speedups hold only on tasks drawn from the meta-training family. As the VeLO-scaling analysis of Thérien et al. (2023, arXiv:2310.18191) documents, learned optimizers do not reliably transfer outside their training distribution, so benchmark numbers should always be read as in-distribution.
 
 ### Quantum-Aware Optimization
 
@@ -174,27 +180,45 @@ deployment = AdaptiveDeploymentSystem(
 )
 ```
 
-### Multi-Objective Optimization
+### Low-Level L2O Building Blocks
+
+When more control is needed than `L2OEngine` provides, the same components can be composed directly. `meta_train` returns the learned parameters `theta` and a loss curve; `benchmark_on_held_out_tasks` evaluates against a tuned optax baseline:
 
 ```python
-from opifex.optimization.l2o import MultiObjectiveL2OEngine, MultiObjectiveConfig
-
-# Configure multi-objective optimization
-config = MultiObjectiveConfig(
-    num_objectives=3,
-    pareto_frontier_approximation=True,
-    scalarization_method="weighted_sum"
+import jax
+from opifex.optimization.l2o import (
+    MLPLearnedOptimizer,
+    MLPTaskFamily,
+    meta_train,
+    benchmark_on_held_out_tasks,
 )
 
-# Create multi-objective optimizer
-mo_optimizer = MultiObjectiveL2OEngine(config=config, rngs=nnx.Rngs(42))
+family = MLPTaskFamily(input_dim=8, hidden_dim=16, output_dim=4)
+learned_optimizer = MLPLearnedOptimizer(step_mult=0.03)
 
-# Optimize with multiple objectives
-pareto_solutions = mo_optimizer.optimize(
-    objectives=[accuracy_loss, efficiency_loss, complexity_loss],
-    constraints=constraints
+theta, loss_curve = meta_train(
+    learned_optimizer,
+    family,
+    jax.random.key(0),
+    num_outer_steps=3000,
+    num_tasks=32,
+    trunc_length=20,
+    total_horizon=100,
+    meta_learning_rate=3e-3,
 )
+
+report = benchmark_on_held_out_tasks(
+    learned_optimizer,
+    theta,
+    family,
+    jax.random.key(1),
+    num_tasks=48,
+    num_steps=100,
+)
+print(report["median_speedup"], report["fraction_reached_target"])
 ```
+
+For a convex smoke test, swap `MLPTaskFamily` for `QuadraticTaskFamily(dim=...)`. A single fixed task can be lifted into a family with `single_task_to_family`.
 
 ## Integration with Other Components
 
@@ -216,70 +240,51 @@ trained_model = trainer.train(
 )
 ```
 
-### Neural Network Integration
+### Applying a Learned Optimizer to a Task
 
-Compatible with all neural network architectures:
+A meta-trained optimizer is applied by constructing a concrete `Optimizer` from `theta` and running it on a task. `L2OEngine.optimize` (or the lower-level `loss_curve` helper) drives this loop and returns the per-step training loss:
 
 ```python
-from opifex.neural.operators.fno import FourierNeuralOperator
-from opifex.neural.operators.deeponet import DeepONet
-from opifex.optimization.l2o import L2OEngine
+import jax
+from opifex.optimization.l2o import L2OEngine, MLPLearnedOptimizer, MLPTaskFamily
 
-# Optimize neural operators with L2O
-rngs = nnx.Rngs(42)
-fno_model = FourierNeuralOperator(
-    in_channels=2,
-    out_channels=1,
-    hidden_channels=64,
-    modes=32,
-    num_layers=4,
-    rngs=rngs
-)
-l2o_engine = L2OEngine(config=config, rngs=nnx.Rngs(42))
+family = MLPTaskFamily(input_dim=8, hidden_dim=16, output_dim=4)
+engine = L2OEngine(MLPLearnedOptimizer(step_mult=0.03), family)
+engine.meta_train(jax.random.key(0), num_outer_steps=3000, num_tasks=32)
 
-optimized_fno = l2o_engine.optimize_model(
-    model=fno_model,
-    training_data=data,
-    validation_data=val_data
-)
+# Draw a fresh held-out task and roll out the learned optimizer on it
+task = family.sample(jax.random.key(2))
+start = task.init(jax.random.key(3))
+curve = engine.optimize(task, start, num_steps=100, key=jax.random.key(4))
 ```
+
+Because each `Task` carries its own `init`, `loss`, and `normalizer`, any differentiable training objective (including neural-operator training losses) can be expressed as a `Task` and wrapped into a `TaskFamily` for meta-training.
 
 ## Performance Characteristics
 
-### Speedup Metrics
+### L2O Speedups
 
-- **L2O Algorithms**: >100x speedup on learned problem families
-- **Meta-Optimization**: 10-50x faster convergence on related problems
-- **Adaptive Scheduling**: 20-30% improvement in training efficiency
-- **Production Optimization**: 40-60% reduction in computational costs
+Speedups are measured as the ratio of steps a tuned classical baseline needs to reach a target loss versus the steps the learned optimizer needs, and are only meaningful on held-out tasks drawn from the meta-training family:
 
-### Memory Efficiency
-
-- **Intelligent GPU Memory Management**: Up to 80% memory usage reduction
-- **Adaptive Batching**: Dynamic batch size optimization
-- **Memory Pool Management**: Efficient allocation and deallocation
-
-### Scalability
-
-- **Multi-Cloud Deployment**: Seamless scaling across cloud providers
-- **Edge Network**: Global distribution with sub-millisecond latency
-- **Resource Optimization**: Automatic scaling based on demand
+- On the showcase `MLPTaskFamily`, a meta-trained `MLPLearnedOptimizer` reaches the target loss roughly 1.8x faster than tuned Adam and 2.7x faster than tuned SGD.
+- `benchmark` / `benchmark_on_held_out_tasks` report `median_speedup` and `fraction_reached_target` so claims stay reproducible.
+- Per the VeLO-scaling analysis (Thérien et al., 2023, arXiv:2310.18191), learned optimizers do not reliably generalize beyond their training distribution; out-of-distribution speedups should not be assumed.
 
 ## Best Practices
 
-### 1. Problem Family Selection
+### 1. Task Family Selection
 
-For L2O to be effective, problems should share structural similarities:
+For L2O to be effective, the tasks a `TaskFamily` samples should share structural similarities, since speedups only hold in-distribution:
 
-- Similar parameter spaces
-- Related objective functions
-- Common constraint patterns
+- Similar parameter spaces and dimensionality
+- Related loss surfaces (e.g. the same architecture with resampled data)
+- Consistent loss normalization across sampled tasks
 
 ### 2. Meta-Training Strategy
 
-- Start with diverse training problems
-- Gradually increase problem complexity
-- Use validation problems to prevent overfitting
+- Sample diverse tasks from the family during meta-training
+- Tune `trunc_length` and `total_horizon` so PES unrolls cover the optimization regime of interest
+- Evaluate with `benchmark` on held-out tasks before trusting any speedup claim
 
 ### 3. Production Deployment
 
@@ -300,7 +305,7 @@ For L2O to be effective, problems should share structural similarities:
 1. **Slow Convergence**: Check learning rate scheduling and warm-starting
 2. **Memory Issues**: Enable intelligent GPU memory management
 3. **Numerical Instability**: Use physics-informed constraints
-4. **Poor Generalization**: Increase diversity in meta-training problems
+4. **Poor Generalization**: Increase task diversity in the meta-training `TaskFamily`; expect degradation on out-of-distribution tasks
 
 ### Performance Optimization
 
