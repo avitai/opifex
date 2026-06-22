@@ -172,7 +172,7 @@ class MixedPrecisionTrainer:
     """Mixed precision trainer for neural operators.
 
     A self-contained training strategy (it does not inherit from the
-    application-layer ``BasicTrainer``): ``opifex.core`` must never depend on
+    application-layer trainers): ``opifex.core`` must never depend on
     the higher-level ``opifex.training`` package. The trainer manages its own
     mixed-precision policy, loss scaling and overflow handling; the model and
     optimizer are passed explicitly to :meth:`train_step`.

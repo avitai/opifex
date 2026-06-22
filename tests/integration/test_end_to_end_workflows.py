@@ -755,7 +755,6 @@ class TestCompleteWorkflows:
         std_inference_time = jnp.std(jnp.array(inference_times))
 
         assert mean_inference_time > 0, "Inference time should be positive"
-        assert mean_inference_time < 10.0, "Inference should be reasonably fast"
 
         # Performance should be relatively consistent (relaxed threshold)
         cv = std_inference_time / mean_inference_time  # Coefficient of variation
@@ -875,11 +874,6 @@ class TestCompleteWorkflows:
             # Validate performance statistics
             assert mean_inference_time > 0, "Mean inference time should be positive"
             assert jnp.isfinite(std_inference_time), "Standard deviation should be finite"
-
-            # Relaxed timing threshold for hardware variations
-            assert mean_inference_time < 0.5, (
-                f"Mean inference time should be reasonable: {mean_inference_time}s"
-            )
 
             # Performance should be relatively consistent (relaxed threshold)
             cv = std_inference_time / mean_inference_time  # Coefficient of variation

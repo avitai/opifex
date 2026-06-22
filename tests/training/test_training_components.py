@@ -32,14 +32,11 @@ class TestTrainingComponent:
         """Test setup method (should do nothing in base class)."""
         component = TrainingComponent()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Should not raise any errors

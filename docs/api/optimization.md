@@ -14,33 +14,9 @@ Advanced meta-optimization algorithms that learn to optimize across families of 
 
 ### Production Optimization
 
-Enterprise-grade optimization systems for deployment and scaling in production environments.
+Optimization systems for deployment and scaling in production environments.
 
 ::: opifex.optimization.production
-
-### Performance Monitoring
-
-AI-powered performance monitoring with predictive scaling and anomaly detection.
-
-::: opifex.optimization.performance_monitoring
-
-### Adaptive Deployment
-
-AI-driven deployment strategies with automatic rollback capabilities.
-
-::: opifex.optimization.adaptive_deployment
-
-### Global Resource Management
-
-Multi-cloud optimization with cost intelligence and sustainability tracking.
-
-::: opifex.deployment.resource_management
-
-### Intelligent Edge Network
-
-Global edge computing with sub-millisecond latency optimization.
-
-::: opifex.optimization.edge_network
 
 ### Scientific Computing Integration
 
@@ -121,11 +97,7 @@ The optimization module is organized into several key components:
 ### Core Components
 
 - **`meta_optimization/`**: Meta-optimization framework with L2O algorithms (modular package)
-- **`production.py`**: Production optimization and deployment systems
-- **`performance_monitoring.py`**: AI-powered performance monitoring
-- **`adaptive_deployment.py`**: Adaptive deployment with rollback automation
-- **`../deployment/resource_management.py`**: Global resource management and cost optimization (imported from deployment module)
-- **`edge_network.py`**: Intelligent edge network optimization
+- **`production.py`**: Production optimization (adaptive JIT, GPU memory planning)
 - **`scientific_integration.py`**: Physics-aware optimization integration
 
 ### L2O Submodule (`l2o/`)
@@ -149,17 +121,15 @@ The optimization module is organized into several key components:
 
 ### Meta-Optimization Features
 
-- Learn-to-Optimize (L2O) algorithms with >100x speedup
+- Learn-to-Optimize (L2O) algorithms with meta-learned update rules
 - Adaptive learning rate scheduling
 - Warm-starting strategies for related problems
-- Performance monitoring and analytics
 
 ### Production Optimization Features
 
 - Hybrid performance platform with adaptive JIT
 - Intelligent GPU memory management
-- AI-powered deployment strategies
-- Global resource management across cloud providers
+- Physics-aware scientific validation of optimized models
 
 ### Control Systems Features
 
@@ -192,21 +162,24 @@ l2o = LearnToOptimize(config=config, rngs=nnx.Rngs(42))
 optimized_params = l2o.optimize(params, objective_fn, num_steps=1000)
 ```
 
-### Production Deployment
+### Production Optimization
 
 ```python
-from opifex.optimization.production import HybridPerformancePlatform
-from opifex.optimization.adaptive_deployment import AdaptiveDeploymentSystem
+from opifex.optimization.production import HybridPerformancePlatform, WorkloadProfile
 
-platform = HybridPerformancePlatform(
-    gpu_memory_optimization=True,
-    adaptive_jit=True
+platform = HybridPerformancePlatform()
+
+workload = WorkloadProfile(
+    batch_size=32,
+    sequence_length=128,
+    memory_footprint=2.0,
+    compute_intensity=8.0,
+    latency_requirement=10.0,
+    throughput_requirement=100.0,
+    model_complexity="medium",
 )
 
-deployment = AdaptiveDeploymentSystem(
-    canary_percentage=10,
-    ai_driven_strategies=True
-)
+optimized = platform.optimize_for_production(model, workload)
 ```
 
 ### Control System
@@ -225,11 +198,10 @@ control_action = mpc.solve(current_state, reference_trajectory)
 
 ## Performance Characteristics
 
-- **L2O Speedup**: >100x on learned problem families
-- **Meta-Optimization**: 10-50x faster convergence on related problems
-- **Production Optimization**: 40-60% reduction in computational costs
-- **Edge Network**: Sub-millisecond latency optimization
-- **Memory Efficiency**: Up to 80% memory usage reduction
+- **L2O Speedup**: meta-learned optimizers accelerate convergence on learned problem families
+- **Meta-Optimization**: faster convergence on related problems via warm-starting
+- **Production Optimization**: adaptive JIT kernel fusion with measured speedups
+- **Memory Efficiency**: pool-based GPU memory planning for co-located models
 
 ## Integration
 

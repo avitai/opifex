@@ -480,7 +480,7 @@ class TestJITCompatibility:
 
     def test_standardized_fft_jit_compilation(self):
         """Test that standardized FFT functions can be JIT compiled."""
-        import time
+        import chex
 
         # Test data
         x_1d = jax.random.normal(jax.random.PRNGKey(0), (4, 3, 32))
@@ -501,24 +501,17 @@ class TestJITCompatibility:
         assert fft_2d.shape == (4, 3, 16, 11)  # rfft2 output
         assert fft_3d.shape == (4, 3, 8, 12, 9)  # rfftn output
 
-        # Test performance improvement with JIT
-        # Warmup
-        _ = jitted_fft_2d(x_2d)
+        # The compiled FFT is reused, not retraced, across repeated calls (the real JIT
+        # invariant; wall-clock speed is environment-dependent and not asserted).
+        chex.clear_trace_counter()
 
-        # Time JIT version
-        start_time = time.time()
+        @jax.jit
+        @chex.assert_max_traces(n=1)
+        def traced_fft_2d(arr: jax.Array) -> jax.Array:
+            return standardized_fft(arr, 2)
+
         for _ in range(10):
-            _ = jitted_fft_2d(x_2d)
-        jit_time = time.time() - start_time
-
-        # Time non-JIT version
-        start_time = time.time()
-        for _ in range(10):
-            _ = standardized_fft(x_2d, 2)
-        non_jit_time = time.time() - start_time
-
-        # JIT should be faster or at least not significantly slower
-        assert jit_time <= non_jit_time * 2.0
+            traced_fft_2d(x_2d)  # pyright: ignore[reportCallIssue]
 
     def test_standardized_ifft_jit_compilation(self):
         """Test that standardized IFFT functions can be JIT compiled."""

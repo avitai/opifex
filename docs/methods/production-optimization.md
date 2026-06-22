@@ -4,10 +4,8 @@
 
 Production optimization in Opifex provides the **Hybrid Performance Platform**: a set of
 components for taking a trained neural operator and preparing it for production
-deployment. It covers adaptive JIT compilation, intelligent GPU memory management,
-AI-powered performance monitoring and prediction, adaptive deployment with predictive
-scaling, edge-network routing, global resource management, and physics-aware scientific
-validation.
+deployment. It covers adaptive JIT compilation, intelligent GPU memory management, and
+physics-aware scientific validation.
 
 Every public class below lives in a single module, `opifex.optimization.production`,
 which re-exports the building blocks from the supporting submodules. You can therefore
@@ -15,20 +13,13 @@ import the entire production surface from one place:
 
 ```python
 from opifex.optimization.production import (
-    AIAnomalyDetector,
-    AdaptiveDeploymentSystem,
     AdaptiveJAXOptimizer,
-    GlobalResourceManager,
     HybridPerformancePlatform,
-    IntelligentEdgeNetwork,
     IntelligentGPUMemoryManager,
     OptimizationStrategy,
     OptimizedModel,
     PerformanceMetrics,
-    PerformanceMonitor,
-    PerformancePredictor,
     PhysicsDomain,
-    PredictiveScaler,
     ScientificComputingIntegrator,
     WorkloadProfile,
 )
@@ -193,190 +184,7 @@ manager = IntelligentGPUMemoryManager(
 )
 ```
 
-### 5. Performance Monitoring and Prediction
-
-The monitoring stack combines three classes:
-
-- `AIAnomalyDetector` — an autoencoder that flags anomalous metric vectors.
-- `PerformancePredictor` — a small network that forecasts latency, throughput, and memory.
-- `PerformanceMonitor` — a real-time monitor that collects metrics and drives the two
-  models above.
-
-```python
-from flax import nnx
-from opifex.optimization.production import (
-    AIAnomalyDetector,
-    PerformanceMonitor,
-    PerformancePredictor,
-)
-
-rngs = nnx.Rngs(0)
-
-anomaly_detector = AIAnomalyDetector(rngs=rngs)
-performance_predictor = PerformancePredictor(rngs=rngs)
-
-monitor = PerformanceMonitor(
-    anomaly_detector=anomaly_detector,
-    performance_predictor=performance_predictor,
-    collection_interval=1.0,  # seconds
-)
-```
-
-`PerformanceMonitor` exposes async methods (`start_monitoring`, `stop_monitoring`,
-`collect_current_metrics`, `predict_future_performance`) and keeps a `metrics_history`
-list. Collecting a single snapshot:
-
-```python
-import asyncio
-
-metrics = asyncio.run(monitor.collect_current_metrics())
-print(metrics.latency_ms, metrics.throughput_rps)
-```
-
-The anomaly detector returns a boolean mask and per-sample reconstruction error:
-
-```python
-import jax.numpy as jnp
-
-is_anomaly, reconstruction_error = anomaly_detector.detect_anomalies(jnp.ones((1, 16)))
-```
-
-### 6. Predictive Scaling
-
-`PredictiveScaler` wraps a `PerformanceMonitor` and turns its forecasts into scale-up /
-scale-down / maintain decisions, bounded by replica limits.
-
-```python
-from opifex.optimization.production import PredictiveScaler
-
-scaler = PredictiveScaler(
-    performance_monitor=monitor,
-    scale_up_threshold=1.2,
-    scale_down_threshold=0.8,
-    min_replicas=1,
-    max_replicas=10,
-)
-
-print(scaler.current_replicas)  # 1
-
-# evaluate_scaling_decision() is async and needs >= 10 metrics in history;
-# it returns a dict with "action", "target_replicas", "reason", "confidence".
-```
-
-### 7. Adaptive Deployment
-
-`AdaptiveDeploymentSystem` orchestrates AI-driven deployments (canary, blue-green,
-rolling) with automatic rollback. It is composed from four collaborators, all of which
-share a single `DeploymentAI`.
-
-```python
-from flax import nnx
-from opifex.optimization.adaptive_deployment import (
-    AdaptiveDeploymentSystem,
-    CanaryController,
-    DeploymentAI,
-    RollbackEngine,
-    TrafficShaper,
-)
-
-rngs = nnx.Rngs(0)
-deployment_ai = DeploymentAI(rngs=rngs)
-
-deployment_system = AdaptiveDeploymentSystem(
-    deployment_ai=deployment_ai,
-    canary_controller=CanaryController(deployment_ai=deployment_ai),
-    traffic_shaper=TrafficShaper(deployment_ai=deployment_ai),
-    rollback_engine=RollbackEngine(deployment_ai=deployment_ai),
-)
-
-stats = deployment_system.get_system_statistics()
-# Keys include: total_deployments, active_deployments, successful_deployments,
-# rolled_back_deployments, success_rate, rollback_rate, ...
-```
-
-`deploy_model(deployment_id, config, system_features)` (async) drives a deployment using
-a `DeploymentConfig` and a system-state feature vector; `get_deployment_status` and
-`get_system_statistics` report progress.
-
-#### Deployment Strategies
-
-The available strategies are defined by `DeploymentStrategy` in
-`opifex.optimization.adaptive_deployment`:
-
-1. **Canary** (`DeploymentStrategy.CANARY`): gradual traffic rollout with health checks.
-2. **Blue-Green** (`DeploymentStrategy.BLUE_GREEN`): zero-downtime swap with instant rollback.
-3. **Rolling** (`DeploymentStrategy.ROLLING`): sequential instance updates.
-4. **A/B Test** (`DeploymentStrategy.A_B_TEST`), **Shadow**, **Feature Flag**: additional
-   traffic-management modes.
-
-### 8. Intelligent Edge Network
-
-`IntelligentEdgeNetwork` routes inference requests to the lowest-latency edge region with
-caching and regional failover. It is built from an `EdgeGateway`, a `LatencyOptimizer`, an
-`EdgeCache`, and a `RegionalFailover`.
-
-```python
-from flax import nnx
-from opifex.optimization.edge_network import (
-    EdgeCache,
-    EdgeGateway,
-    EdgeRegion,
-    IntelligentEdgeNetwork,
-    LatencyOptimizer,
-    RegionalFailover,
-)
-
-gateway = EdgeGateway(primary_regions=[EdgeRegion.US_EAST, EdgeRegion.EU_WEST])
-latency_optimizer = LatencyOptimizer(rngs=nnx.Rngs(0))
-edge_cache = EdgeCache()
-regional_failover = RegionalFailover(edge_gateway=gateway)
-
-edge_network = IntelligentEdgeNetwork(
-    edge_gateway=gateway,
-    latency_optimizer=latency_optimizer,
-    edge_cache=edge_cache,
-    regional_failover=regional_failover,
-    target_latency_ms=0.5,
-)
-```
-
-`process_inference_request(...)` (async) is the main entry point; it consults the cache,
-selects an optimal region via the gateway, and falls back through `RegionalFailover` on
-health-check failure. Available regions are enumerated by `EdgeRegion` (e.g. `US_EAST`,
-`US_WEST`, `EU_WEST`, `EU_CENTRAL`, `ASIA_PACIFIC`, `ASIA_NORTHEAST`).
-
-### 9. Global Resource Management
-
-`GlobalResourceManager` coordinates multi-cloud allocation, GPU pooling, cost control, and
-sustainability tracking. It lives in `opifex.deployment.resource_management` and is
-re-exported through `opifex.optimization.production`. It is assembled from four
-sub-managers.
-
-```python
-from flax import nnx
-from opifex.deployment.resource_management.global_manager import (
-    CostController,
-    GPUPoolManager,
-    GlobalResourceManager,
-    ResourceOrchestrator,
-    SustainabilityTracker,
-)
-
-orchestrator = ResourceOrchestrator(rngs=nnx.Rngs(0))
-
-resource_manager = GlobalResourceManager(
-    resource_orchestrator=orchestrator,
-    gpu_pool_manager=GPUPoolManager(resource_orchestrator=orchestrator),
-    cost_controller=CostController(budget_limit_usd_per_day=10000.0),
-    sustainability_tracker=SustainabilityTracker(carbon_reduction_target_percentage=30.0),
-)
-```
-
-`allocate_resources_with_intelligence(resource_requirements, constraints,
-sustainability_priority)` (async) returns an allocation result with GPU allocations, a
-cost estimate, a carbon footprint, and a performance estimate.
-
-### 10. Scientific Computing Integration
+### 5. Scientific Computing Integration
 
 `ScientificComputingIntegrator` adds physics-aware validation to the optimization
 pipeline. It checks conservation laws, numerical precision, and domain benchmarks against
@@ -408,15 +216,13 @@ The supported domains are enumerated by `PhysicsDomain`: `QUANTUM_CHEMISTRY`,
 ## The Hybrid Performance Platform
 
 `HybridPerformancePlatform` is the top-level orchestrator. It wires together the JIT
-optimizer, memory manager, performance monitor, scientific integrator, and predictive
-scaler, and exposes a single `optimize_for_production` entry point. It is a Flax NNX module
-and therefore requires an `rngs` argument so it can build its internal AI components.
+optimizer, memory manager, and scientific integrator, and exposes a single
+`optimize_for_production` entry point.
 
 ```python
-from flax import nnx
 from opifex.optimization.production import HybridPerformancePlatform
 
-platform = HybridPerformancePlatform(rngs=nnx.Rngs(0))
+platform = HybridPerformancePlatform()
 
 optimized = platform.optimize_for_production(model, workload)
 
@@ -429,10 +235,10 @@ print(optimized.optimization_metadata["memory_plan"])             # memory alloc
 output = optimized.model(jnp.ones((workload.batch_size, 64)))
 ```
 
-`optimize_for_production` runs a multi-stage pipeline: JIT optimization, memory planning,
-performance-monitoring setup, scientific validation, predictive-scaling recommendations,
-and a final production-readiness check (latency, throughput, and memory against the
-workload requirements).
+`optimize_for_production` runs a five-step pipeline: JIT optimization, GPU memory planning,
+scientific validation, a production-readiness check (latency, throughput, and memory
+against the workload requirements), and folding the scientific-accuracy bonus into the
+reported metrics.
 
 You can inject custom components and tune the latency target and physics domain:
 
@@ -449,24 +255,7 @@ platform = HybridPerformancePlatform(
     memory_manager=IntelligentGPUMemoryManager(fragmentation_threshold=0.2),
     physics_domain=PhysicsDomain.FLUID_DYNAMICS,
     target_latency_ms=1.0,
-    rngs=nnx.Rngs(0),
 )
-```
-
-### Continuous Monitoring and Status
-
-The platform can run continuous monitoring (async) and report a consolidated status:
-
-```python
-import asyncio
-
-# Start / stop continuous monitoring (async)
-# await platform.start_continuous_monitoring()
-# await platform.stop_continuous_monitoring()
-
-status = platform.get_comprehensive_status()
-# Keys: platform_type, physics_domain, monitoring_active,
-#       metrics_history_length, current_replicas, latest_metrics (if available)
 ```
 
 ## End-to-End Example
@@ -505,7 +294,7 @@ workload = WorkloadProfile(
     model_complexity="medium",
 )
 
-platform = HybridPerformancePlatform(rngs=nnx.Rngs(0))
+platform = HybridPerformancePlatform()
 optimized = platform.optimize_for_production(model, workload)
 
 print("strategy:", optimized.optimization_type)
@@ -519,27 +308,14 @@ print("output shape:", output.shape)  # (32, 64)
 
 ## Best Practices
 
-### 1. Deployment Strategy Selection
-
-- **Low-Risk Changes**: prefer `DeploymentStrategy.ROLLING`.
-- **High-Risk Changes**: use `DeploymentStrategy.CANARY` with the `RollbackEngine` enabled.
-- **Critical Systems**: use `DeploymentStrategy.BLUE_GREEN` for instant rollback.
-- **Comparisons**: use `DeploymentStrategy.A_B_TEST`.
-
-### 2. Resource Optimization
+### 1. Resource Optimization
 
 - Let `IntelligentGPUMemoryManager.optimize_multi_model_allocation` plan co-located models
   rather than sizing pools by hand.
-- Use `GlobalResourceManager` with a `SustainabilityTracker` when carbon footprint matters.
-- Drive scaling from `PredictiveScaler` so replica changes follow forecasts, not raw load.
+- Pick pool sizes that match the model's per-batch footprint estimated by
+  `estimate_model_memory_usage`.
 
-### 3. Monitoring and Alerting
-
-- Keep a `PerformanceMonitor` running and feed its `metrics_history` to `PredictiveScaler`.
-- Use `AIAnomalyDetector` for unsupervised anomaly flagging on metric vectors.
-- Surface platform health with `HybridPerformancePlatform.get_comprehensive_status`.
-
-### 4. Performance Optimization
+### 2. Performance Optimization
 
 - Profile first: build an accurate `WorkloadProfile` before optimizing.
 - Measure impact: rely on the measured `improvement_factor`, not assumed speedups.

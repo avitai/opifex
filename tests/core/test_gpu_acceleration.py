@@ -77,23 +77,17 @@ class TestRooflineMemoryManager:
         assert batch_size >= 32  # Minimum reasonable batch size
 
     def test_efficiency_caching(self):
-        """Test that efficiency calculations are cached."""
+        """Repeated identical queries are served from the cache, not recomputed."""
         manager = RooflineMemoryManager()
 
-        # First call
-        start_time = time.time()
         efficiency1 = manager.estimate_operation_efficiency("matmul", 1000, 1000, 1000)
-        first_call_time = time.time() - start_time
-
-        # Second call (should be cached)
-        start_time = time.time()
+        cache_after_first = dict(manager.operation_cache)
         efficiency2 = manager.estimate_operation_efficiency("matmul", 1000, 1000, 1000)
-        second_call_time = time.time() - start_time
 
-        # Results should be identical
+        # The result is identical and the second query added no new cache entry (it hit the cache).
         assert efficiency1 == efficiency2
-        # Second call should be faster (cached)
-        assert second_call_time < first_call_time
+        assert len(cache_after_first) == 1
+        assert manager.operation_cache == cache_after_first
 
 
 class TestMixedPrecisionOptimizer:
@@ -466,24 +460,12 @@ class TestIntegrationScenarios:
         x = jnp.ones((256, 256))
         y = jnp.ones((256, 256))
 
-        # Time optimized version
-        start_time = time.time()
         optimized_result = manager.optimal_matrix_multiply(x, y)
-        optimized_result.block_until_ready()
-        optimized_time = time.time() - start_time
-
-        # Time baseline version
-        start_time = time.time()
         baseline_result = jnp.dot(x, y)
-        baseline_result.block_until_ready()
-        baseline_time = time.time() - start_time
 
-        # Results should be equivalent
+        # The optimised path must produce the same result as the plain matmul. (Wall-clock
+        # speed is environment-dependent and not asserted; correctness is the contract.)
         np.testing.assert_allclose(optimized_result, baseline_result, rtol=1e-3)
-
-        # Performance should be reasonable (not more than 10x slower)
-        # This is a loose bound to account for compilation overhead
-        assert optimized_time < baseline_time * 10
 
 
 # Performance benchmarks (not strict tests, but useful for monitoring)

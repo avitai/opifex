@@ -111,13 +111,10 @@ class Trainer(nnx.Module):
             wrt=nnx.Param,  # Only optimize parameters
         )
 
-        # ✅ SIMPLIFIED: Initialize training state (no manual opt_state)
+        # nnx.Optimizer manages the optax state internally — no manual opt_state to track.
         self.state = TrainingState(
             model=model,
-            # nnx.Optimizer manages state internally
-            optimizer=self.optimizer,  # pyright: ignore[reportArgumentType]
-            # DEPRECATED: Kept for backward compat, but unused
-            opt_state=None,  # pyright: ignore[reportArgumentType]
+            optimizer=self.optimizer,
             step=0,
             epoch=0,
             best_loss=float("inf"),

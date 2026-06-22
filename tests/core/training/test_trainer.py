@@ -590,20 +590,17 @@ class TestMetricsCollection:
 class TestPerformance:
     """Test performance characteristics."""
 
-    def test_training_performance(self, mock_model, sample_data):
-        """Test that training completes in reasonable time."""
-        import time
-
+    def test_training_completes_and_returns_metrics(self, mock_model, sample_data):
+        """A short fit runs to completion and returns a trained model with finite loss."""
         config = TrainingConfig(num_epochs=2, learning_rate=1e-3)
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
-        start_time = time.time()
-        trainer.fit(train_data=(x[:80], y[:80]))
-        elapsed = time.time() - start_time
+        trained_model, metrics = trainer.fit(train_data=(x[:80], y[:80]))
 
-        # Should complete quickly
-        assert elapsed < 10.0  # 10 seconds is generous
+        assert isinstance(trained_model, nnx.Module)
+        assert "final_train_loss" in metrics
+        assert jnp.isfinite(metrics["final_train_loss"])
 
     def test_memory_efficiency(self, temp_checkpoint_dir):
         """Test memory efficiency of trainer."""
@@ -721,38 +718,19 @@ class TestJITCompilation:
         assert isinstance(metrics, dict)
         assert "val_loss" in metrics
 
-    def test_jit_performance_improvement(self, mock_model, sample_data):
-        """Test that nnx.Optimizer provides good performance.
+    def test_repeated_training_steps_stay_finite(self, mock_model, sample_data):
+        """Repeated training steps run through nnx.Optimizer and keep producing finite losses.
 
-        With nnx.Optimizer + nnx.value_and_grad, training is automatically
-        optimized. Test that multiple calls execute efficiently.
+        (The compile-once JIT invariant is asserted directly in
+        ``test_trainer_optimizer.py`` via ``chex.assert_max_traces``; wall-clock speed is
+        environment-dependent and not asserted here.)
         """
-        import time
-
         config = TrainingConfig(learning_rate=1e-3)
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
         x_batch, y_batch = x[:10], y[:10]
 
-        # Warm-up (first calls include compilation)
-        for _ in range(3):
-            trainer.training_step(x_batch, y_batch)
-
-        # Time subsequent calls (should be fast - compiled)
-        times = []
         for _ in range(10):
-            start = time.perf_counter()
             loss, _ = trainer.training_step(x_batch, y_batch)
-            if hasattr(loss, "block_until_ready"):
-                loss.block_until_ready()
-            times.append(time.perf_counter() - start)
-
-        mean_time = sum(times) / len(times)
-
-        # With nnx.value_and_grad optimization, should be reasonably fast
-        # Each training step should complete in milliseconds
-        assert mean_time < 0.1, (
-            f"Training step too slow: {mean_time:.6f}s. "
-            f"nnx.Optimizer should provide efficient training."
-        )
+            assert jnp.isfinite(loss)

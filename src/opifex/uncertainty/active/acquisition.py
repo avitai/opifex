@@ -4,7 +4,7 @@ Every kernel takes a :class:`opifex.uncertainty.types.PredictiveDistribution`
 and returns a ``jax.Array`` of per-candidate utility scores. The kernels
 are JAX-traceable (``jit`` / ``grad`` / ``vmap`` safe) and never call into
 ``flax.nnx``; that boundary is enforced by the duplicate-code gate at
-``basic_trainer.py``.
+``uncertainty_trainers.py``.
 
 Reference (read-only): ``trieste``. Each acquisition function cites the
 exact trieste source line it ports from. The opifex port substitutes
@@ -381,7 +381,7 @@ def acquire(
 
     The top-``batch_size`` candidates (by descending score) are returned
     inside an :class:`AcquiredBatch`. This is the entry point invoked by
-    the rewritten :class:`opifex.training.basic_trainer.ActiveUncertaintyLearner`
+    the rewritten :class:`opifex.training.uncertainty_trainers.ActiveUncertaintyLearner`
     — the trainer wraps the predictive distribution and delegates here.
 
     Note: this is a "naive top-K" greedy batch over single-point scores;

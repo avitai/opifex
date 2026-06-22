@@ -13,16 +13,14 @@ The meta-optimization system learns to optimize across families of related probl
 - **Learn-to-Optimize (L2O)**: Neural networks that learn optimization algorithms
 - **Adaptive Learning Rate Scheduling**: Performance-based adaptation with multiple strategies
 - **Warm-Starting**: Parameter transfer between related optimization problems
-- **Performance Monitoring**: Full tracking and analytics
 
 ### 2. Production Optimization
 
 Enterprise-grade optimization systems for deployment and scaling:
 
-- **Hybrid Performance Platform**: Adaptive JIT optimization with AI-powered monitoring
+- **Hybrid Performance Platform**: Adaptive JIT optimization with kernel-fusion strategies
 - **Intelligent GPU Memory Management**: Optimized memory allocation and usage
-- **Adaptive Deployment System**: AI-driven deployment strategies with rollback automation
-- **Global Resource Management**: Multi-cloud optimization and cost intelligence
+- **Scientific Validation**: Physics-aware checks folded into the optimization pipeline
 
 ### 3. Learn-to-Optimize (L2O) Algorithms
 
@@ -50,15 +48,6 @@ Physics-aware optimization with scientific validation:
 - **Numerical Validation**: Stability and accuracy verification
 - **Scientific Benchmarking**: Standardized performance evaluation
 - **Domain-Specific Profiling**: Physics domain optimization profiling
-
-### 6. Edge Network Optimization
-
-Intelligent edge computing with global distribution:
-
-- **Latency Optimization**: Sub-millisecond response times
-- **Regional Failover**: Automatic failover strategies
-- **Edge Caching**: Intelligent caching with performance optimization
-- **Global Load Balancing**: Distributed traffic management
 
 ## Core Concepts
 
@@ -159,25 +148,28 @@ optimized_params = l2o.optimize(
 )
 ```
 
-### Production Deployment
+### Production Optimization
 
 ```python
-from opifex.optimization.production import HybridPerformancePlatform
-from opifex.optimization.adaptive_deployment import AdaptiveDeploymentSystem
+from opifex.optimization.production import HybridPerformancePlatform, WorkloadProfile
 
-# Create production optimization platform
-platform = HybridPerformancePlatform(
-    gpu_memory_optimization=True,
-    adaptive_jit=True,
-    performance_monitoring=True
+# Create the production optimization platform
+platform = HybridPerformancePlatform()
+
+# Describe the production workload
+workload = WorkloadProfile(
+    batch_size=32,
+    sequence_length=128,
+    memory_footprint=2.0,
+    compute_intensity=8.0,
+    latency_requirement=10.0,
+    throughput_requirement=100.0,
+    model_complexity="medium",
 )
 
-# Setup adaptive deployment
-deployment = AdaptiveDeploymentSystem(
-    canary_percentage=10,
-    rollback_threshold=0.95,
-    ai_driven_strategies=True
-)
+# Optimize a trained model for production
+optimized = platform.optimize_for_production(model, workload)
+print(optimized.optimization_metadata["production_ready"])
 ```
 
 ### Low-Level L2O Building Blocks
@@ -286,11 +278,11 @@ For L2O to be effective, the tasks a `TaskFamily` samples should share structura
 - Tune `trunc_length` and `total_horizon` so PES unrolls cover the optimization regime of interest
 - Evaluate with `benchmark` on held-out tasks before trusting any speedup claim
 
-### 3. Production Deployment
+### 3. Production Optimization
 
-- Monitor performance metrics continuously
-- Use canary deployments for safety
-- Implement automatic rollback mechanisms
+- Profile the workload with an accurate `WorkloadProfile` before optimizing
+- Rely on the measured `improvement_factor`, not assumed speedups
+- Gate physics workloads on the scientific validation score
 
 ### 4. Physics-Informed Optimization
 
@@ -310,9 +302,8 @@ For L2O to be effective, the tasks a `TaskFamily` samples should share structura
 ### Performance Optimization
 
 1. **Enable JIT Compilation**: Use adaptive JIT for production
-2. **Optimize Memory Usage**: Enable intelligent memory management
-3. **Use Appropriate Batch Sizes**: Enable adaptive batching
-4. **Monitor Resource Usage**: Use performance monitoring tools
+2. **Optimize Memory Usage**: Enable intelligent GPU memory planning
+3. **Use Appropriate Batch Sizes**: Match the workload's batch size to its latency target
 
 ## Second-Order Optimization
 

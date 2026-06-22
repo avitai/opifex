@@ -4,8 +4,7 @@ This module tests JIT compilation compatibility for spectral utility functions
 to ensure optimal performance in scientific computing applications.
 """
 
-import time
-
+import chex
 import jax
 import jax.numpy as jnp
 
@@ -38,24 +37,17 @@ class TestJITCompatibility:
         assert jnp.all(psd >= 0)
         assert jnp.isfinite(psd).all()
 
-        # Test performance improvement
-        # Warmup
-        _ = jitted_psd(x)
+        # The compiled PSD is reused, not retraced, across repeated calls (the real JIT
+        # invariant; wall-clock speed is environment-dependent and not asserted).
+        chex.clear_trace_counter()
 
-        # Time JIT version
-        start_time = time.time()
+        @jax.jit
+        @chex.assert_max_traces(n=1)
+        def traced_psd(arr: jax.Array) -> jax.Array:
+            return power_spectral_density(arr, 2, [0.1, 0.15])
+
         for _ in range(5):
-            _ = jitted_psd(x)
-        jit_time = time.time() - start_time
-
-        # Time non-JIT version
-        start_time = time.time()
-        for _ in range(5):
-            _ = power_spectral_density(x, 2, [0.1, 0.15])
-        non_jit_time = time.time() - start_time
-
-        # JIT should be faster or at least not significantly slower
-        assert jit_time <= non_jit_time * 2.0
+            traced_psd(x)  # pyright: ignore[reportCallIssue]
 
     def test_energy_spectrum_jit_compilation(self):
         """Test that energy spectrum can be JIT compiled."""

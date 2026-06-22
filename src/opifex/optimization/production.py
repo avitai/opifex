@@ -1,42 +1,27 @@
-"""Production optimization for Opifex framework.
+"""Production optimisation for the Opifex framework.
 
-This module implements the Hybrid Performance Platform for production deployment
-with adaptive JIT compilation, GPU memory management, and performance optimization.
-
-Version 7.4: Production Optimization Implementation
-Selected Architecture: Hybrid Performance Platform + Intelligent Edge + Adaptive
-Optimization
+The :class:`HybridPerformancePlatform` combines adaptive JIT compilation
+(:class:`AdaptiveJAXOptimizer`), GPU memory-pool planning
+(:class:`IntelligentGPUMemoryManager`), and physics/numerical validation
+(:class:`~opifex.optimization.scientific_integration.ScientificComputingIntegrator`) into a
+single production-optimisation pass. Serving telemetry, autoscaling, and edge/deployment
+orchestration are out of scope (owned by external infrastructure such as KServe / Ray Serve /
+k8s HPA / Prometheus).
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import time
-from collections.abc import Callable, Coroutine  # noqa: TC003 — used in eager type aliases
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable  # noqa: TC003 — used in an eager type annotation
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast, Protocol, TypeVar
+from typing import Any, cast, Protocol
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 from flax.nnx import Module
 
-from opifex.deployment.resource_management import GlobalResourceManager  # noqa: TC001
-from opifex.optimization.adaptive_deployment import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
-    AdaptiveDeploymentSystem,
-)
-from opifex.optimization.edge_network import (  # noqa: TC001 — kept eager for runtime isinstance checks downstream
-    IntelligentEdgeNetwork,
-)
-from opifex.optimization.performance_monitoring import (
-    AIAnomalyDetector,
-    PerformanceMonitor,
-    PerformancePredictor,
-    PredictiveScaler,
-)
 from opifex.optimization.scientific_integration import (
     PhysicsDomain,
     ScientificComputingIntegrator,
@@ -89,34 +74,6 @@ def get_model_input_features(model: Module) -> int:
 
     except (AttributeError, TypeError) as e:
         raise ValueError(f"Cannot determine input features for model {type(model)}: {e}") from e
-
-
-_AwaitableT = TypeVar("_AwaitableT")
-
-
-def _run_awaitable_sync(
-    coro_factory: Callable[[], Coroutine[Any, Any, _AwaitableT]],
-) -> _AwaitableT:
-    """Execute an async coroutine from a synchronous context safely.
-
-    ``asyncio.run`` raises ``RuntimeError`` when invoked from a thread that
-    already owns an event loop, which is exactly what happens if a caller
-    invokes ``HybridPerformancePlatform.optimize_model`` from inside an
-    async pipeline. To preserve correctness under both calling contexts,
-    we bridge through a worker thread when an active loop is detected —
-    the fresh thread owns its own loop and never deadlocks.
-
-    ``coro_factory`` must be a zero-arg callable that returns a fresh
-    coroutine — coroutines are single-shot, so we need a factory so each
-    branch (or any retry) can build its own instance.
-    """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro_factory())
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(lambda: asyncio.run(coro_factory())).result()
 
 
 class OptimizationStrategy(Enum):
@@ -495,77 +452,39 @@ class IntelligentGPUMemoryManager(nnx.Module):
 
 
 class HybridPerformancePlatform(nnx.Module):
-    """Hybrid Performance Platform for production optimization.
+    """Production optimisation orchestrator: JIT, GPU memory, and scientific validation.
 
-    This is the main orchestrator for Version 7.4 Production Optimization,
-    integrating all 6 major components: JIT optimization, edge network,
-    adaptive deployment, performance monitoring, scientific validation,
-    and global resource management.
+    Combines the three genuine optimisation components — :class:`AdaptiveJAXOptimizer`
+    (``jax.jit`` kernel fusion), :class:`IntelligentGPUMemoryManager` (memory-pool planning), and
+    :class:`~opifex.optimization.scientific_integration.ScientificComputingIntegrator` (physics /
+    numerical validation) — into a single production-optimisation pass. It does not perform
+    serving telemetry or autoscaling; those concerns belong to external infrastructure
+    (KServe / Ray Serve / k8s HPA / Prometheus).
     """
 
     def __init__(
         self,
         jit_optimizer: AdaptiveJAXOptimizer | None = None,
         memory_manager: IntelligentGPUMemoryManager | None = None,
-        performance_monitor: PerformanceMonitor | None = None,
         scientific_integrator: ScientificComputingIntegrator | None = None,
-        predictive_scaler: PredictiveScaler | None = None,
-        edge_network: IntelligentEdgeNetwork | None = None,
-        deployment_system: AdaptiveDeploymentSystem | None = None,
-        resource_manager: GlobalResourceManager | None = None,
         physics_domain: PhysicsDomain = PhysicsDomain.GENERAL,
         target_latency_ms: float = 0.5,
-        *,
-        rngs: nnx.Rngs,
     ) -> None:
         super().__init__()
-
-        # Core optimization components
         self.jit_optimizer = jit_optimizer or AdaptiveJAXOptimizer()
         self.memory_manager = memory_manager or IntelligentGPUMemoryManager()
-
-        # Version 7.4 enhancements
         self.physics_domain = physics_domain
         self.target_latency_ms = target_latency_ms
-
-        # Initialize AI components for performance monitoring
-        if performance_monitor is None:
-            anomaly_detector = AIAnomalyDetector(rngs=rngs)
-            performance_predictor = PerformancePredictor(rngs=rngs)
-            self.performance_monitor = PerformanceMonitor(
-                anomaly_detector=anomaly_detector,
-                performance_predictor=performance_predictor,
-            )
-        else:
-            self.performance_monitor = performance_monitor
-
-        # Initialize scientific computing integration
         self.scientific_integrator = scientific_integrator or ScientificComputingIntegrator(
             domain=physics_domain
         )
 
-        # Initialize predictive scaling
-        self.predictive_scaler = predictive_scaler or PredictiveScaler(
-            performance_monitor=self.performance_monitor
-        )
-
-        # Initialize Version 7.4 new components
-        self.edge_network = edge_network
-        self.deployment_system = deployment_system
-        self.resource_manager = resource_manager
-
     def optimize_for_production(self, model: Module, workload: WorkloadProfile) -> OptimizedModel:
-        """Full production optimization for a model.
-
-        This method now includes Version 7.4 enhancements:
-        - AI-powered performance monitoring
-        - Scientific computing validation
-        - Predictive scaling recommendations
-        """
-        # Step 1: JIT optimization (existing)
+        """Full production optimisation for a model: JIT, memory, and scientific validation."""
+        # Step 1: JIT optimization
         optimized_model = self.jit_optimizer.optimize_neural_operator(model, workload)
 
-        # Step 2: Memory optimization (existing)
+        # Step 2: Memory optimization
         memory_allocation = self.memory_manager.optimize_multi_model_allocation(
             [(optimized_model.model, workload.batch_size)]
         )
@@ -583,11 +502,7 @@ class HybridPerformancePlatform(nnx.Module):
             }
         )
 
-        # Step 3: Version 7.4 - Performance monitoring setup
-        with contextlib.suppress(Exception):
-            _run_awaitable_sync(self.performance_monitor.collect_current_metrics)
-
-        # Step 4: Version 7.4 - Scientific validation
+        # Step 3: Scientific validation
         if callable(model):
             # Generate sample input for validation
             input_features = get_model_input_features(model)
@@ -631,28 +546,7 @@ class HybridPerformancePlatform(nnx.Module):
                 # Log scientific validation error and continue
                 optimized_model.optimization_metadata["scientific_validation_error"] = str(e)
 
-        # Step 5: Version 7.4 - Predictive scaling recommendations
-        try:
-            if len(self.performance_monitor.metrics_history) >= 10:
-                scaling_decision = _run_awaitable_sync(
-                    self.predictive_scaler.evaluate_scaling_decision
-                )
-                optimized_model.optimization_metadata["scaling_recommendation"] = scaling_decision
-            else:
-                # Collect some initial metrics for future scaling decisions
-                for _ in range(5):
-                    metrics = _run_awaitable_sync(self.performance_monitor.collect_current_metrics)
-                    self.performance_monitor.metrics_history.append(metrics)
-
-                optimized_model.optimization_metadata["scaling_recommendation"] = {
-                    "action": "monitor",
-                    "reason": "Collecting baseline metrics",
-                }
-        except Exception as e:  # noqa: BLE001 -- predictive scaling backends may raise arbitrary errors
-            # Log predictive scaling error and continue
-            optimized_model.optimization_metadata["scaling_error"] = str(e)
-
-        # Step 6: Determine production readiness
+        # Step 4: Determine production readiness against the workload requirements
         is_production_ready = (
             optimized_model.performance_metrics.latency_ms <= self.target_latency_ms
             and optimized_model.performance_metrics.throughput_rps
@@ -660,19 +554,15 @@ class HybridPerformancePlatform(nnx.Module):
             and optimized_model.performance_metrics.memory_usage_gb
             <= workload.memory_footprint * 1.2  # Allow 20% overhead
         )
-
-        # Add production readiness flag
         optimized_model.optimization_metadata["production_ready"] = is_production_ready
 
-        # Step 6: Update performance metrics with Version 7.4 enhancements
+        # Step 5: Fold the scientific-accuracy bonus into the measured performance metrics
         enhanced_metrics = PerformanceMetrics(
             latency_ms=optimized_model.performance_metrics.latency_ms,
             throughput_rps=optimized_model.performance_metrics.throughput_rps,
             memory_usage_gb=optimized_model.performance_metrics.memory_usage_gb,
             improvement_factor=optimized_model.performance_metrics.improvement_factor,
         )
-
-        # Add Version 7.4 scientific metrics
         if "scientific_validation" in optimized_model.optimization_metadata:
             scientific_score = optimized_model.optimization_metadata["scientific_validation"].get(
                 "overall_scientific_score", 0.0
@@ -684,34 +574,3 @@ class HybridPerformancePlatform(nnx.Module):
         optimized_model.performance_metrics = enhanced_metrics
 
         return optimized_model
-
-    async def start_continuous_monitoring(self) -> None:
-        """Start continuous performance monitoring for production systems."""
-        await self.performance_monitor.start_monitoring()
-
-    async def stop_continuous_monitoring(self) -> None:
-        """Stop continuous performance monitoring."""
-        await self.performance_monitor.stop_monitoring()
-
-    def get_comprehensive_status(self) -> dict[str, Any]:
-        """Get full status of the hybrid performance platform."""
-        status = {
-            "platform_type": "hybrid_performance_platform",
-            "physics_domain": self.physics_domain.value,
-            "monitoring_active": self.performance_monitor.is_monitoring,
-            "metrics_history_length": len(self.performance_monitor.metrics_history),
-            "current_replicas": self.predictive_scaler.current_replicas,
-        }
-
-        # Add latest performance metrics if available
-        if self.performance_monitor.metrics_history:
-            latest_metrics = self.performance_monitor.metrics_history[-1]
-            status["latest_metrics"] = {
-                "timestamp": latest_metrics.timestamp,
-                "latency_ms": latest_metrics.latency_ms,
-                "throughput_rps": latest_metrics.throughput_rps,
-                "memory_usage_gb": latest_metrics.memory_usage_gb,
-                "gpu_utilization": latest_metrics.gpu_utilization,
-            }
-
-        return status

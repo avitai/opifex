@@ -23,7 +23,7 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.training.basic_trainer import (
+from opifex.training.uncertainty_trainers import (
     ActiveUncertaintyLearner,
     MultiFidelityUncertaintyTrainer,
     UncertaintyGuidedTrainer,

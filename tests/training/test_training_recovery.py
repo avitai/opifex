@@ -47,14 +47,11 @@ class TestErrorRecoveryManager:
         """Test setup method."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         manager.setup(model, training_state)
@@ -66,14 +63,12 @@ class TestErrorRecoveryManager:
         """Test training stability check - loss explosion."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
         params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Create normal gradients
@@ -93,14 +88,12 @@ class TestErrorRecoveryManager:
         """Test training stability check - gradient explosion."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
         params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Create large gradients (norm > 10.0)
@@ -119,14 +112,12 @@ class TestErrorRecoveryManager:
         """Test training stability check - NaN loss."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
         params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         grads = jax.tree_util.tree_map(lambda x: jnp.ones_like(x) * 0.01, params)
@@ -144,14 +135,12 @@ class TestErrorRecoveryManager:
         """Test training stability check - NaN gradients."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
         params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Create gradients with NaN values
@@ -170,14 +159,12 @@ class TestErrorRecoveryManager:
         """Test training stability check - stable training."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
         params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Create normal gradients
@@ -240,14 +227,11 @@ class TestErrorRecoveryManager:
         """Test recovery from loss explosion."""
         manager = ErrorRecoveryManager({"learning_rate": 1e-3})
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Set last stable state
@@ -265,14 +249,11 @@ class TestErrorRecoveryManager:
         """Test recovery from NaN loss."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Set last stable state
@@ -289,14 +270,11 @@ class TestErrorRecoveryManager:
         """Test that recovery fails after max retries."""
         manager = ErrorRecoveryManager({"max_retries": 2})
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         manager.last_stable_state = training_state
@@ -313,14 +291,11 @@ class TestErrorRecoveryManager:
         """Test updating stable state."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
             step=100,
         )
 
@@ -339,14 +314,11 @@ class TestErrorRecoveryManager:
         """Test cleanup method."""
         manager = ErrorRecoveryManager()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         training_state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         manager.setup(model, training_state)

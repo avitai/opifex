@@ -1,6 +1,6 @@
-"""DeepONet adapter for BasicTrainer compatibility.
+"""DeepONet adapter for Trainer compatibility.
 
-DeepONet requires two separate inputs (branch, trunk) but BasicTrainer
+DeepONet requires two separate inputs (branch, trunk) but Trainer
 expects models with a single input. This adapter bridges the gap.
 """
 
@@ -13,9 +13,9 @@ from flax import nnx
 
 
 class DeepONetTrainerAdapter(nnx.Module):
-    """Wraps a DeepONet for single-input BasicTrainer compatibility.
+    """Wraps a DeepONet for single-input Trainer compatibility.
 
-    BasicTrainer calls models as ``model(x)`` with a single input.
+    Trainer calls models as ``model(x)`` with a single input.
     DeepONet requires ``model(branch_input, trunk_input)``.
 
     This adapter accepts a dict input with ``'branch'`` and ``'trunk'``

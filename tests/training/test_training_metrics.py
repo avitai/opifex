@@ -104,14 +104,11 @@ class TestTrainingState:
     def test_training_state_creation(self):
         """Test training state initialization."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
             step=0,
             epoch=0,
         )
@@ -124,14 +121,11 @@ class TestTrainingState:
     def test_training_state_step_increment(self):
         """Test training state step incrementation."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
             step=0,
             epoch=0,
         )
@@ -146,14 +140,11 @@ class TestTrainingState:
     def test_training_state_with_updates_returns_new_instance(self):
         """`with_updates` returns a new state via replace, leaving the original intact."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
             step=0,
             epoch=0,
         )
@@ -175,14 +166,11 @@ class TestTrainingState:
     def test_enhanced_training_state_physics_metrics(self):
         """Test enhanced training state physics metrics tracking."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Test physics metrics
@@ -202,14 +190,11 @@ class TestTrainingState:
     def test_enhanced_training_state_chemical_accuracy(self):
         """Test chemical accuracy tracking in enhanced training state."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Test chemical accuracy tracking
@@ -228,14 +213,11 @@ class TestTrainingState:
     def test_enhanced_training_state_scf_convergence(self):
         """Test SCF convergence tracking in enhanced training state."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Test SCF convergence tracking
@@ -251,14 +233,11 @@ class TestTrainingState:
     def test_enhanced_training_state_diagnostics(self):
         """Test training diagnostics in enhanced training state."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Test gradient norm tracking
@@ -282,14 +261,11 @@ class TestTrainingState:
     def test_enhanced_training_state_physics_summary(self):
         """Test physics summary generation in enhanced training state."""
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Add various metrics
@@ -409,14 +385,11 @@ class TestAdvancedMetricsCollector:
         """Test convergence metrics collection."""
         collector = AdvancedMetricsCollector()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
-        optimizer = optax.adam(1e-3)
-        params = nnx.to_tree(nnx.state(model, nnx.Param))
-        opt_state = optimizer.init(params)
+        optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
         state = TrainingState(
             model=model,
             optimizer=optimizer,
-            opt_state=opt_state,
         )
 
         # Add some history

@@ -12,7 +12,6 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-import optax  # noqa: TC002
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
@@ -75,13 +74,13 @@ class TrainingMetrics:
 class TrainingState:
     """Enhanced training state management with full physics-aware metrics.
 
-    Modernized for Flax NNX compliance while maintaining optax flexibility.
+    The optimiser is an ``nnx.Optimizer`` (Flax NNX), which manages the optax state
+    internally — there is no separate ``opt_state`` to thread.
     """
 
-    # Core training state - maintaining optax compatibility
+    # Core training state
     model: nnx.Module
-    optimizer: optax.GradientTransformation
-    opt_state: optax.OptState
+    optimizer: nnx.Optimizer
     step: int = 0
     epoch: int = 0
     rngs: nnx.Rngs = field(default_factory=lambda: nnx.Rngs(0))

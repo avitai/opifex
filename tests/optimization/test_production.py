@@ -387,8 +387,7 @@ class TestHybridPerformancePlatform:
 
     def test_platform_initialization(self):
         """Test platform initialization with default components."""
-        rngs = nnx.Rngs(0)
-        platform = HybridPerformancePlatform(rngs=rngs)
+        platform = HybridPerformancePlatform()
 
         assert isinstance(platform.jit_optimizer, AdaptiveJAXOptimizer)
         assert isinstance(platform.memory_manager, IntelligentGPUMemoryManager)
@@ -398,9 +397,8 @@ class TestHybridPerformancePlatform:
         custom_optimizer = AdaptiveJAXOptimizer(performance_threshold=1.5)
         custom_manager = IntelligentGPUMemoryManager(fragmentation_threshold=0.2)
 
-        rngs = nnx.Rngs(0)
         platform = HybridPerformancePlatform(
-            jit_optimizer=custom_optimizer, memory_manager=custom_manager, rngs=rngs
+            jit_optimizer=custom_optimizer, memory_manager=custom_manager
         )
 
         assert platform.jit_optimizer is custom_optimizer
@@ -408,8 +406,7 @@ class TestHybridPerformancePlatform:
 
     def test_optimize_for_production(self, sample_model, sample_workload):
         """Test full production optimization."""
-        rngs = nnx.Rngs(0)
-        platform = HybridPerformancePlatform(rngs=rngs)
+        platform = HybridPerformancePlatform()
 
         optimized_model = platform.optimize_for_production(sample_model, sample_workload)
 
@@ -450,8 +447,7 @@ class TestProductionOptimizationIntegration:
             WorkloadProfile(64, 32, 0.5, 5.0, 2.0, 500.0, "simple"),  # Latency critical
         ]
 
-        rngs = nnx.Rngs(0)
-        platform = HybridPerformancePlatform(rngs=rngs)
+        platform = HybridPerformancePlatform()
         input_features = get_model_input_features(sample_model)
 
         for workload in workloads:
