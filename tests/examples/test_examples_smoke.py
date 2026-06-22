@@ -34,8 +34,14 @@ def test_example_exposes_main(path) -> None:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("path", _EXAMPLES, ids=_IDS)
-def test_example_main_runs(path) -> None:
-    """Running ``main()`` returns a dict of finite scalar metrics."""
+def test_example_main_runs(path, monkeypatch) -> None:
+    """Running ``main()`` returns a dict of finite scalar metrics.
+
+    Sets ``OPIFEX_EXAMPLE_SMOKE=1`` so the heavy training examples run a reduced
+    (few-iteration) version within the test timeout; the full run (CLI / notebook)
+    is unaffected.
+    """
+    monkeypatch.setenv("OPIFEX_EXAMPLE_SMOKE", "1")
     module = load_example(path)
     summary = module.main()
     assert isinstance(summary, dict) and summary, f"{path}: main() must return a non-empty dict"

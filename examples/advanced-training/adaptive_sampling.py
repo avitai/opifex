@@ -40,6 +40,7 @@ Based on DeepXDE's Residual-based Adaptive Refinement (RAR) algorithm.
 """
 
 # %%
+import os
 from pathlib import Path
 
 import jax
@@ -178,7 +179,8 @@ def main() -> dict[str, float | int]:
     REFINE_FREQUENCY = 200
     N_REFINE_POINTS = 25
     LEARNING_RATE = 1e-3
-    TRAINING_STEPS = 1000
+    # Smoke mode (set by the example test): a few steps that return finite metrics fast.
+    TRAINING_STEPS = 20 if os.environ.get("OPIFEX_EXAMPLE_SMOKE") else 1000
 
     # Output directory
     OUTPUT_DIR = "docs/assets/examples/adaptive_sampling"

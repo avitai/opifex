@@ -32,6 +32,7 @@ from opifex.neural.equivariant.radial import (
     polynomial_cutoff,
 )
 from opifex.neural.equivariant.spherical_harmonics import spherical_harmonics
+from opifex.neural.equivariant.symmetric_contraction import SymmetricContraction
 from opifex.neural.equivariant.tensor_product import (
     ChannelwiseTensorProduct,
     FullyConnectedTensorProduct,
@@ -54,6 +55,7 @@ __all__ = [
     "IrrepsArray",
     "NormGate",
     "PiecewiseLinearBasis",
+    "SymmetricContraction",
     "TensorProduct",
     "apply_scalar_weights",
     "cosine_cutoff",

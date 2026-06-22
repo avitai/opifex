@@ -19,6 +19,7 @@ import jax.numpy as jnp
 from opifex.geometry.algebra import SO3Group
 from opifex.geometry.algebra.wigner import wigner_d
 from opifex.neural.equivariant import Gate, gate, Irreps, IrrepsArray
+from opifex.neural.equivariant.gate import normalize_activation
 
 
 _RNG = SO3Group()
@@ -53,6 +54,35 @@ class TestGate:
         assert result.irreps == Irreps("4x0e")
         expected = jax.nn.gelu(x.array)
         assert jnp.allclose(result.array, expected, atol=1e-5)
+
+    def test_normalize_act_off_by_default(self) -> None:
+        """The shared gate leaves activations un-normalised unless asked."""
+        x = _random_input(Irreps("4x0e"), 3)
+        assert jnp.allclose(gate(x).array, jax.nn.gelu(x.array), atol=1e-5)
+
+    def test_normalize_act_rescales_activation(self) -> None:
+        """``normalize_act=True`` applies the unit-second-moment-rescaled activation."""
+        x = _random_input(Irreps("4x0e"), 3)
+        result = gate(x, even_act=jax.nn.silu, normalize_act=True)
+        expected = normalize_activation(jax.nn.silu)(x.array)
+        assert jnp.allclose(result.array, expected, atol=1e-5)
+
+
+class TestNormalizeActivation:
+    def test_unit_second_moment_under_standard_normal(self) -> None:
+        """The rescaled activation has E[phi(z)^2]=1 for z~N(0,1)."""
+        normalized = normalize_activation(jax.nn.silu)
+        samples = jax.random.normal(jax.random.PRNGKey(0), (200_000,))
+        second_moment = jnp.mean(normalized(samples) ** 2)
+        assert jnp.allclose(second_moment, 1.0, atol=2e-2)
+
+    def test_factor_is_constant_positive_scale(self) -> None:
+        """Normalisation is a pure positive rescale: phi_norm(x)/phi(x) is constant."""
+        normalized = normalize_activation(jax.nn.tanh)
+        x = jnp.asarray([0.3, 0.7, 1.5, -0.9])
+        ratios = normalized(x) / jax.nn.tanh(x)
+        assert jnp.all(ratios > 0.0)
+        assert jnp.allclose(ratios, ratios[0], atol=1e-5)
 
     def test_scalars_invariant(self) -> None:
         """Scalar outputs do not change under rotation (l=0 is invariant)."""

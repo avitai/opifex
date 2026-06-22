@@ -82,6 +82,16 @@ def test_parse_dtypes_are_float32_arrays(synthetic_rmd17_npz: Path) -> None:
     assert parsed.atomic_numbers.dtype == np.int32
 
 
+def test_parse_float64_preserves_double_precision(synthetic_rmd17_npz: Path) -> None:
+    """``dtype=np.float64`` keeps coordinates/energies/forces in double precision."""
+    parsed = parse_rmd17_npz(synthetic_rmd17_npz, dtype=np.float64)
+    assert parsed.positions.dtype == np.float64
+    assert parsed.energy.dtype == np.float64
+    assert parsed.forces.dtype == np.float64
+    # Nuclear charges stay integral regardless of the float dtype.
+    assert parsed.atomic_numbers.dtype == np.int32
+
+
 def test_parse_atomic_numbers_values(synthetic_rmd17_npz: Path) -> None:
     parsed = parse_rmd17_npz(synthetic_rmd17_npz)
     np.testing.assert_array_equal(parsed.atomic_numbers, np.array([6, 1, 8, 1, 6]))

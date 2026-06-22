@@ -45,6 +45,7 @@ import numpy as np
 from datarax.pipeline import Pipeline
 from datarax.sources import MemorySource, MemorySourceConfig
 from flax import nnx
+from numpy.typing import DTypeLike  # noqa: TC002
 
 
 logger = logging.getLogger(__name__)
@@ -195,14 +196,20 @@ class RMD17Loaders:
 # =============================================================================
 
 
-def parse_rmd17_npz(npz_path: Path) -> RMD17Data:
+def parse_rmd17_npz(npz_path: Path, *, dtype: DTypeLike = np.float32) -> RMD17Data:
     """Parse an ``rmd17_<molecule>.npz`` file into an :class:`RMD17Data`.
 
-    Casts coordinates/energies/forces to ``float32`` and nuclear charges to
-    ``int32`` while preserving the documented physical units.
+    Casts coordinates/energies/forces to ``dtype`` and nuclear charges to
+    ``int32`` while preserving the documented physical units. The native
+    figshare archive stores floats in ``float64``; pass ``dtype=np.float64`` to
+    retain full double precision (e.g. for an ``x64`` training run whose force
+    gradients would otherwise be capped), or keep the ``float32`` default for
+    the standard single-precision path.
 
     Args:
         npz_path: Path to a (real or synthetic) rMD17 npz file.
+        dtype: Floating dtype for coordinates/energies/forces (default
+            ``float32``).
 
     Returns:
         Parsed, unit-annotated arrays.
@@ -219,9 +226,9 @@ def parse_rmd17_npz(npz_path: Path) -> RMD17Data:
         missing = [key for key in required if key not in archive]
         if missing:
             raise KeyError(f"rMD17 npz {npz_path} missing keys: {missing}")
-        positions = np.asarray(archive["coords"], dtype=np.float32)
-        energy = np.asarray(archive["energies"], dtype=np.float32)
-        forces = np.asarray(archive["forces"], dtype=np.float32)
+        positions = np.asarray(archive["coords"], dtype=dtype)
+        energy = np.asarray(archive["energies"], dtype=dtype)
+        forces = np.asarray(archive["forces"], dtype=dtype)
         atomic_numbers = np.asarray(archive["nuclear_charges"], dtype=np.int32)
 
     return RMD17Data(
@@ -453,6 +460,7 @@ def create_rmd17_loader(
     data_dir: Path | None = None,
     split_index: int = 1,
     npz_path: Path | None = None,
+    dtype: DTypeLike = np.float32,
 ) -> RMD17Loaders:
     """Create batched train/val datarax pipelines for an rMD17 molecule.
 
@@ -472,6 +480,9 @@ def create_rmd17_loader(
         npz_path: Optional path to a pre-existing rMD17 npz. When provided,
             no download occurs and a seeded random split is used. This is the
             constructor hook used by network-free tests.
+        dtype: Floating dtype for coordinates/energies/forces (default
+            ``float32``). Pass ``np.float64`` to keep the archive's native
+            double precision for an ``x64`` run.
 
     Returns:
         An :class:`RMD17Loaders` bundle (train/val pipelines + metadata).
@@ -500,7 +511,7 @@ def create_rmd17_loader(
         resolved_npz = download_rmd17_molecule(config.molecule, cache_dir)
         use_archive_splits = True
 
-    data = parse_rmd17_npz(resolved_npz)
+    data = parse_rmd17_npz(resolved_npz, dtype=dtype)
     train_indices, val_indices = _resolve_split_indices(
         data, config, cache_dir=cache_dir, use_archive_splits=use_archive_splits
     )

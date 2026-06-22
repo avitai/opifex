@@ -5,8 +5,7 @@ deferred per-element reference-energy / output-normaliser gap documented in
 :class:`~opifex.neural.atomistic.heads.energy.EnergyHead`. It follows the MACE
 ``ScaleShiftBlock`` affine map ``E_phys = scale * E_raw + n_atoms * shift``
 (Batzner et al. 2022, NequIP, arXiv:2101.03164; the ``../mace``
-``mace/modules/blocks.py`` ``ScaleShiftBlock`` and
-``mace/modules/utils.py`` ``compute_mean_std_atomic_inter_energy`` statistics).
+Batatia et al. 2022, MACE, NeurIPS).
 
 Load-bearing checks:
 
@@ -31,6 +30,7 @@ from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.scale_shift import (
     AtomicScaleShift,
     fit_atomic_scale_shift,
+    fit_atomic_scale_shift_from_forces,
 )
 from opifex.neural.equivariant import scatter_sum
 
@@ -82,6 +82,24 @@ class TestFitAtomicScaleShift:
             shift = jnp.mean(energies / atom_counts)
             expected_scale = jnp.std(energies - atom_counts * shift)
             assert jnp.allclose(fitted.scale, expected_scale, atol=1e-9)
+
+    def test_from_forces_scale_is_rms_of_forces(self) -> None:
+        """The force convention sets ``scale = sqrt(mean(F^2))`` (force RMS)."""
+        with jax.enable_x64(True):
+            energies = jnp.asarray([6.0, 10.0, 8.0], dtype=jnp.float64)
+            atom_counts = jnp.asarray([3.0, 5.0, 4.0], dtype=jnp.float64)
+            forces = jnp.asarray([[1.0, -2.0, 0.5], [3.0, 0.0, -1.5]], dtype=jnp.float64)
+            fitted = fit_atomic_scale_shift_from_forces(energies, atom_counts, forces)
+            assert jnp.allclose(fitted.scale, jnp.sqrt(jnp.mean(forces**2)), atol=1e-9)
+
+    def test_from_forces_shift_matches_energy_convention(self) -> None:
+        """The force convention keeps the per-atom-energy-mean ``shift``."""
+        with jax.enable_x64(True):
+            energies = jnp.asarray([6.0, 10.0, 8.0], dtype=jnp.float64)
+            atom_counts = jnp.asarray([3.0, 5.0, 4.0], dtype=jnp.float64)
+            forces = jnp.asarray([[1.0, -2.0, 0.5]], dtype=jnp.float64)
+            fitted = fit_atomic_scale_shift_from_forces(energies, atom_counts, forces)
+            assert jnp.allclose(fitted.shift, jnp.mean(energies / atom_counts), atol=1e-9)
 
 
 class TestAtomicScaleShiftRoundTrip:

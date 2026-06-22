@@ -28,6 +28,7 @@ from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 # Eager (not TYPE_CHECKING): the ``nnx.Data[AtomicScaleShift | None]`` class
 # annotation below is resolved by Flax NNX at runtime, so the name must exist.
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift  # noqa: TC001
+from opifex.neural.dtypes import default_float_dtype
 
 
 class EnergyHead(nnx.Module):
@@ -57,8 +58,9 @@ class EnergyHead(nnx.Module):
         """Build the per-atom energy MLP and store the optional scale-shift."""
         super().__init__()
         width = hidden_dim if hidden_dim is not None else feature_dim
-        self.hidden = nnx.Linear(feature_dim, width, rngs=rngs)
-        self.readout = nnx.Linear(width, 1, rngs=rngs)
+        dtype = default_float_dtype()
+        self.hidden = nnx.Linear(feature_dim, width, param_dtype=dtype, rngs=rngs)
+        self.readout = nnx.Linear(width, 1, param_dtype=dtype, rngs=rngs)
         self.scale_shift = scale_shift
 
     @property

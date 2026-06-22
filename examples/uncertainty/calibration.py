@@ -143,6 +143,7 @@ def demonstrate_platt_scaling():
     print(f"Uncalibrated ECE: {uncalib_ece:.4f}")
     print(f"Calibrated ECE: {calib_ece:.4f}")
     print(f"ECE Improvement: {((uncalib_ece - calib_ece) / uncalib_ece * 100):.1f}%")
+    return {"platt_uncalibrated_ece": float(uncalib_ece), "platt_calibrated_ece": float(calib_ece)}
 
 
 # %% [markdown]
@@ -219,6 +220,10 @@ def demonstrate_isotonic_regression():
     print(
         f"Reliability improvement: {((before_reliability - after_reliability) / before_reliability * 100):.1f}%"
     )
+    return {
+        "isotonic_reliability_before": float(before_reliability),
+        "isotonic_reliability_after": float(after_reliability),
+    }
 
 
 # %% [markdown]
@@ -254,6 +259,7 @@ def demonstrate_conformal_prediction():
     print("Testing different coverage levels:")
     print("-" * 30)
 
+    coverage_metrics: dict[str, float] = {}
     for coverage in coverage_levels:
         alpha = 1 - coverage
 
@@ -272,6 +278,8 @@ def demonstrate_conformal_prediction():
         print(f"Average interval width: {avg_width:.3f}")
         print(f"Coverage error: {abs(empirical_coverage - coverage):.3f}")
         print()
+        coverage_metrics[f"conformal_coverage_{int(coverage * 100)}"] = empirical_coverage
+    return coverage_metrics
 
 
 # %% [markdown]
@@ -328,6 +336,10 @@ def demonstrate_enhanced_temperature_scaling():
     print(f"Average adaptive temperature: {jnp.mean(adaptive_temps):.3f}")
     print(f"Temperature std: {jnp.std(adaptive_temps):.3f}")
     print(f"Average aleatoric uncertainty: {jnp.mean(aleatoric_uncertainty):.3f}")
+    return {
+        "temperature_adaptive_mean": float(jnp.mean(adaptive_temps)),
+        "temperature_aleatoric_mean": float(jnp.mean(aleatoric_uncertainty)),
+    }
 
 
 # %% [markdown]
@@ -464,8 +476,8 @@ After running this demo you should observe:
 
 
 # %%
-def main():
-    """Run all calibration demonstrations."""
+def main() -> dict[str, float]:
+    """Run all calibration demonstrations and return their finite metrics."""
     print("Opifex Enhanced Calibration Methods Demonstration")
     print("=" * 60)
     print()
@@ -473,35 +485,23 @@ def main():
     print("implemented in the Opifex framework, providing advanced")
     print("calibration methods for scientific machine learning applications.")
 
-    try:
-        # Run individual method demonstrations
-        demonstrate_platt_scaling()
-        demonstrate_isotonic_regression()
-        demonstrate_conformal_prediction()
-        demonstrate_enhanced_temperature_scaling()
+    summary: dict[str, float] = {}
+    # Run individual method demonstrations, collecting their finite metrics.
+    summary.update(demonstrate_platt_scaling())
+    summary.update(demonstrate_isotonic_regression())
+    summary.update(demonstrate_conformal_prediction())
+    summary.update(demonstrate_enhanced_temperature_scaling())
+    # Run integrated pipeline demonstration (prints its own report).
+    demonstrate_integrated_calibration_pipeline()
 
-        # Run integrated pipeline demonstration
-        demonstrate_integrated_calibration_pipeline()
-
-        print()
-        print("ALL DEMONSTRATIONS COMPLETED SUCCESSFULLY!")
-        print()
-        print("=" * 60)
-        print()
-        print("Key achievements demonstrated:")
-        print("  Platt Scaling: Parametric binary classification calibration")
-        print("  Isotonic Regression: Non-parametric monotonic calibration")
-        print("  Conformal Prediction: Finite-sample coverage guarantees")
-        print("  Enhanced Temperature Scaling: Adaptive physics-aware calibration")
-        print("  Integrated Pipeline: Seamless combination of all methods")
-        print()
-        print("The Opifex framework now provides enterprise-grade uncertainty")
-        print("calibration capabilities for scientific computing applications!")
-
-    except Exception as e:
-        print()
-        print(f"Error during demonstration: {e}")
-        print("Please check the implementation and try again.")
+    print()
+    print("ALL DEMONSTRATIONS COMPLETED")
+    print()
+    print("=" * 60)
+    print()
+    print("Methods demonstrated: Platt scaling, isotonic regression, conformal")
+    print("prediction, enhanced temperature scaling, and the integrated pipeline.")
+    return summary
 
 
 # %%

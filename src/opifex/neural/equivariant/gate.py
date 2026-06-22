@@ -8,11 +8,10 @@ without breaking equivariance.  The *gate* (Weiler et al. 2018; Geiger & Smidt
 * scaling each higher-``l`` multiplicity by an *activated scalar gate* -- a
   multiplication of an equivariant vector by an invariant scalar is equivariant.
 
-Ported from ``e3nn-jax`` (``../e3nn-jax/e3nn_jax/_src/gate.py``).  As in the
-reference, the gate scalars are the **rightmost** scalars of the input: with
-``n`` non-scalar multiplicities, the last ``n`` scalar channels become gates and
-the remaining scalars are "extra" channels that pass through ``even_act`` /
-``odd_act``.  The output drops the gate scalars.
+The gate scalars are the **rightmost** scalars of the input: with ``n`` non-scalar
+multiplicities, the last ``n`` scalar channels become gates and the remaining
+scalars are "extra" channels that pass through ``even_act`` / ``odd_act``.  The
+output drops the gate scalars.
 """
 
 from __future__ import annotations
@@ -21,6 +20,7 @@ from collections.abc import Callable  # noqa: TC003
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
@@ -29,13 +29,38 @@ from opifex.neural.equivariant._invariants import norm
 from opifex.neural.equivariant.irreps import Irrep, Irreps, IrrepsArray
 
 
+# Probabilists' Hermite (Gauss-Hermite) nodes/weights for the standard normal,
+# used to normalise activations to unit second moment. Module-level constants so
+# the resulting scalar factor is a compile-time fold.
+_HERMITE_NODES, _HERMITE_WEIGHTS = np.polynomial.hermite_e.hermegauss(64)
+_GAUSSIAN_WEIGHT_NORM = float(np.sqrt(2.0 * np.pi))
+
+
 def soft_odd(x: jax.Array) -> jax.Array:
     r"""Smooth odd activation ``(1 - exp(-x^2)) x`` for odd scalars.
 
-    The default activation for ``0o`` channels in ``e3nn-jax``: odd
-    (``f(-x) = -f(x)``) so that it preserves the parity of an odd scalar.
+    The standard activation for ``0o`` channels: odd (``f(-x) = -f(x)``) so that
+    it preserves the parity of an odd scalar.
     """
     return (1.0 - jnp.exp(-(x**2))) * x
+
+
+def normalize_activation(
+    act: Callable[[jax.Array], jax.Array],
+) -> Callable[[jax.Array], jax.Array]:
+    r"""Rescale ``act`` to unit second moment under a standard normal input.
+
+    Returns ``x -> act(x) / sqrt(E_{z~N(0,1)}[act(z)^2])``, so an activation fed
+    unit-variance scalars emits unit-variance outputs and the downstream
+    weight-init variance budget is preserved. The second moment is evaluated once
+    by Gauss-Hermite quadrature; the resulting scalar factor is constant-folded by
+    XLA.
+    """
+    nodes = jnp.asarray(_HERMITE_NODES)
+    weights = jnp.asarray(_HERMITE_WEIGHTS)
+    second_moment = jnp.sum(weights * act(nodes) ** 2) / _GAUSSIAN_WEIGHT_NORM
+    factor = jax.lax.rsqrt(second_moment)
+    return lambda x: act(x) * factor
 
 
 def gate(
@@ -44,6 +69,7 @@ def gate(
     even_act: Callable[[jax.Array], jax.Array] = jax.nn.gelu,
     odd_act: Callable[[jax.Array], jax.Array] = soft_odd,
     gate_act: Callable[[jax.Array], jax.Array] = jax.nn.sigmoid,
+    normalize_act: bool = False,
 ) -> IrrepsArray:
     r"""Apply the equivariant gate nonlinearity.
 
@@ -54,6 +80,10 @@ def gate(
         odd_act: Activation for odd scalars (``0o``). Default :func:`soft_odd`.
         gate_act: Activation applied to the gate scalars. Default
             :func:`jax.nn.sigmoid`.
+        normalize_act: If ``True``, each activation is rescaled to unit second
+            moment under a standard-normal input (see :func:`normalize_activation`)
+            so feature magnitudes do not drift across stacked gated layers. Default
+            ``False`` (the consumer opts in -- e.g. the NequIP backbone).
 
     Returns:
         An :class:`IrrepsArray` whose scalar blocks are the activated extra
@@ -63,6 +93,10 @@ def gate(
         ValueError: If there are fewer scalar channels than non-scalar
             multiplicities (no gate available for some vector).
     """
+    if normalize_act:
+        even_act = normalize_activation(even_act)
+        odd_act = normalize_activation(odd_act)
+        gate_act = normalize_activation(gate_act)
     scalar_blocks = [
         (index, block) for index, block in enumerate(x.irreps.blocks) if block[1].l == 0
     ]
@@ -211,7 +245,7 @@ class Gate(nnx.Module):
 
 
 class NormGate(nnx.Module):
-    r"""Norm-gated equivariant nonlinearity (QHNet ``NormGate``).
+    r"""Norm-gated equivariant nonlinearity.
 
     Unlike :func:`gate` -- which consumes the *rightmost* scalars as dedicated
     gates -- this gate drives **every** multiplicity from a learnable MLP of the
@@ -219,8 +253,7 @@ class NormGate(nnx.Module):
     channels (the gating signal is therefore rotation-invariant). The MLP output
     replaces the scalar channels and scales each non-scalar multiplicity, so the
     output layout equals the input layout. This is the nonlinearity used
-    throughout QHNet's self / pair interaction layers
-    (``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py`` ``NormGate``).
+    throughout the QHNet self / pair interaction layers (Yu et al. 2023).
 
     Scaling an equivariant feature by an invariant gate is equivariant, so the
     module is rotation-equivariant; reusing :func:`opifex.neural.equivariant.norm`

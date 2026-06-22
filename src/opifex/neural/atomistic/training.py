@@ -286,8 +286,15 @@ def _batch_loss(
     *,
     energy_weight: float,
     force_weight: float,
+    per_atom_energy: bool = False,
 ) -> Array:
-    """Weighted energy + forces MSE over a stacked :class:`AtomisticBatch`."""
+    """Weighted energy + forces MSE over a stacked :class:`AtomisticBatch`.
+
+    When ``per_atom_energy`` is set the energy error is divided by the atom count
+    before squaring (the per-atom-energy MSE convention), so the energy term is
+    size-intensive and naturally commensurate with the per-component force MSE at
+    equal weights -- the balance a conservative energy+force model is trained on.
+    """
 
     def predict(positions: Array) -> tuple[Array, Array]:
         system = MolecularSystem(atomic_numbers=batch.atomic_numbers, positions=positions)
@@ -295,7 +302,10 @@ def _batch_loss(
         return outputs["energy"], outputs["forces"]
 
     predicted_energies, predicted_forces = jax.vmap(predict)(batch.positions)
-    energy_mse = jnp.mean((predicted_energies - batch.energies) ** 2)
+    energy_error = predicted_energies - batch.energies
+    if per_atom_energy:
+        energy_error = energy_error / batch.atomic_numbers.shape[0]
+    energy_mse = jnp.mean(energy_error**2)
     force_mse = jnp.mean((predicted_forces - batch.forces) ** 2)
     return energy_weight * energy_mse + force_weight * force_mse
 
@@ -376,6 +386,7 @@ def make_scanned_epoch(
     *,
     energy_weight: float = 1.0,
     force_weight: float = 1.0,
+    per_atom_energy: bool = False,
     ema_decay: float | None = None,
 ) -> Callable[
     [AtomisticModel, nnx.Optimizer, AtomisticBatch, nnx.State | None],
@@ -411,6 +422,9 @@ def make_scanned_epoch(
         optimizer: An ``nnx.Optimizer`` wrapping ``model`` (``wrt=nnx.Param``).
         energy_weight: Weight of the energy MSE term.
         force_weight: Weight of the forces MSE term.
+        per_atom_energy: If ``True``, divide the energy error by the atom count
+            before squaring (per-atom-energy MSE), making the energy term
+            size-intensive and commensurate with the force MSE at equal weights.
         ema_decay: If set, the EMA shadow state is threaded through the scan carry
             and blended inside the scan body (``ema = d*ema + (1-d)*params``); the
             returned carry holds the updated shadow. If ``None``, the EMA carry is
@@ -428,7 +442,13 @@ def make_scanned_epoch(
     del model, optimizer  # captured by the caller; the step is parametric in them.
 
     def loss_fn(model: AtomisticModel, batch: AtomisticBatch) -> Array:
-        return _batch_loss(model, batch, energy_weight=energy_weight, force_weight=force_weight)
+        return _batch_loss(
+            model,
+            batch,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+            per_atom_energy=per_atom_energy,
+        )
 
     decay_array = jnp.asarray(ema_decay) if ema_decay is not None else None
 

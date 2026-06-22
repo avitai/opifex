@@ -14,10 +14,9 @@ Bessel expansion, with no bias so ``R(0) = 0`` and smoothly cut off at ``r_c``):
    m_i = \frac{1}{\sqrt{\bar n}} \sum_{j \in \mathcal N(i)}
        R(r_{ij}) \odot \bigl(h_j \otimes_{\text{CG}} Y(\hat r_{ij})\bigr).
 
-A self-interaction :class:`~opifex.neural.equivariant.EquivariantLinear`, an
-equivariant :func:`~opifex.neural.equivariant.gate` nonlinearity and a residual
-self-connection complete each layer (the convolution outline of the reference
-``../jax-md/jax_md/_nn/nequip.py``). The final ``0e`` (scalar) channel is read
+Equivariant linear mixings before and after the tensor product, an equivariant
+:func:`~opifex.neural.equivariant.gate` nonlinearity and a residual
+self-connection complete each layer. The final ``0e`` (scalar) channel is read
 out per atom; because the whole network is E(3)-equivariant and the readout
 selects an invariant scalar, the per-atom ``node_features`` are E(3)- and
 permutation-invariant -- the contract
@@ -38,25 +37,25 @@ the graph + scatter primitives via the shared
 :class:`opifex.core.quantum.protocols.Backbone` protocol (self-registered
 ``"nequip"``).
 
-Deferred: a MACE-style higher-body-order **symmetric contraction** upgrade
-(Batatia et al. 2022, "MACE", arXiv:2206.07697; reference
-``../mace/mace/modules/symmetric_contraction.py``) would replace the two-body
-edge tensor product with a many-body product basis. It is intentionally *not*
-built here; the :class:`NequIPConfig` ``correlation`` field is the documented
-hook for it (validated to ``1`` for now).
+Body order is set by :class:`NequIPConfig` ``correlation``: ``1`` is the two-body
+edge tensor product with a gate nonlinearity, while ``> 1`` adds a MACE-style
+higher-body-order **symmetric contraction**
+(:class:`~opifex.neural.equivariant.SymmetricContraction`) on the aggregated
+message -- a per-element product basis that replaces the gate as the body-order
+nonlinearity (Batatia et al. 2022, "MACE", arXiv:2206.07697). ``correlation > 1``
+requires uniform-multiplicity hidden irreps and ``species`` (the per-element
+weights).
 
 References:
-    * Batzner et al. 2022, arXiv:2101.03164 -- the architecture.
-    * ``../jax-md/jax_md/_nn/nequip.py`` (Flax + e3nn-jax) -- the convolution
-      outline (linear, TP + aggregate, neighbour normalisation, self-connection,
-      gate) validated against numerically.
-    * ``../e3nn-jax`` -- the irreps / tensor-product / gate semantics reused.
+    * Batzner et al. 2022, arXiv:2101.03164 -- the two-body architecture.
+    * Batatia et al. 2022, arXiv:2206.07697 -- the higher-body-order contraction.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+import jax
 import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
@@ -64,6 +63,7 @@ from jaxtyping import Array, Float  # noqa: TC002
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_backbone
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
+from opifex.neural.dtypes import default_float_dtype
 from opifex.neural.equivariant import (
     apply_scalar_weights,
     BesselBasis,
@@ -75,15 +75,17 @@ from opifex.neural.equivariant import (
     IrrepsArray,
     scatter_sum,
     spherical_harmonics,
+    SymmetricContraction,
 )
+from opifex.neural.equivariant._assembly import from_chunks
 
 
 _MAX_ATOMIC_NUMBER = 118
 """Highest supported nuclear charge; the embedding table has one row per Z=0..118."""
 
 _DEFAULT_CORRELATION = 1
-"""Body-order correlation. Only ``1`` (two-body edge TP) is implemented; the
-MACE-style symmetric-contraction upgrade (>1) is a documented deferral."""
+"""Default body-order correlation: ``1`` is the two-body edge tensor product;
+``> 1`` enables the MACE-style symmetric contraction."""
 
 
 def _gate_input_irreps(hidden_irreps: Irreps) -> Irreps:
@@ -122,8 +124,23 @@ class NequIPConfig:
         cutoff: Connection / cutoff radius ``r_c`` (in the system's length units).
         average_num_neighbors: Constant ``sqrt`` normaliser for the aggregated
             message (NequIP's ``n_neighbors`` internal normalisation).
-        correlation: Body-order correlation. Only ``1`` is implemented; ``>1``
-            (MACE symmetric contraction) is a documented deferral.
+        correlation: Body-order correlation. ``1`` is the two-body edge tensor
+            product with a gate nonlinearity; ``> 1`` adds the MACE-style symmetric
+            contraction (requires uniform-multiplicity ``hidden_irreps`` and
+            ``species``).
+        sh_normalization: Normalisation convention for the edge spherical-harmonic
+            embedding, one of ``"component"`` (default; unit per-component variance,
+            the NequIP convention that keeps the embedding at the unit scale the
+            tensor-product weight init assumes), ``"integral"`` or ``"norm"``.
+        normalize_gate_act: If ``True`` (default), the gate rescales each activation
+            to unit second moment under a standard-normal input, so feature
+            magnitudes do not drift across stacked gated interaction layers.
+        species: Sorted distinct atomic numbers in the dataset (e.g. ``(1, 6, 8)``
+            for an H/C/O system). When non-empty, each interaction's self-connection
+            is **species-indexed** (a per-element residual, the NequIP convention:
+            the skip is a tensor product of the node features with the one-hot atom
+            type) instead of a single shared linear -- giving every element its own
+            self-interaction. Empty (default) uses the shared linear self-connection.
     """
 
     hidden_irreps: str = "16x0e + 8x1o + 4x2e"
@@ -134,6 +151,9 @@ class NequIPConfig:
     cutoff: float = 5.0
     average_num_neighbors: float = 1.0
     correlation: int = _DEFAULT_CORRELATION
+    sh_normalization: str = "component"
+    normalize_gate_act: bool = True
+    species: tuple[int, ...] = ()
 
 
 class _RadialNetwork(nnx.Module):
@@ -148,10 +168,17 @@ class _RadialNetwork(nnx.Module):
     def __init__(self, config: NequIPConfig, num_weights: int, *, rngs: nnx.Rngs) -> None:
         """Build the two-layer bias-free radial MLP."""
         super().__init__()
+        dtype = default_float_dtype()
         self.hidden = nnx.Linear(
-            config.num_radial_basis, config.radial_hidden_dim, use_bias=False, rngs=rngs
+            config.num_radial_basis,
+            config.radial_hidden_dim,
+            use_bias=False,
+            param_dtype=dtype,
+            rngs=rngs,
         )
-        self.out = nnx.Linear(config.radial_hidden_dim, num_weights, use_bias=False, rngs=rngs)
+        self.out = nnx.Linear(
+            config.radial_hidden_dim, num_weights, use_bias=False, param_dtype=dtype, rngs=rngs
+        )
 
     def __call__(
         self, radial: Float[Array, "max_edges num_radial_basis"]
@@ -160,8 +187,43 @@ class _RadialNetwork(nnx.Module):
         return self.out(nnx.silu(self.hidden(radial)))
 
 
+def _to_channel_basis(features: IrrepsArray) -> Array:
+    """Uniform-multiplicity features -> ``(..., channels, single_particle_dim)``.
+
+    Concatenates the per-irrep chunks (each ``(..., channels, ir.dim)``) along the
+    last axis, giving the single-particle basis the symmetric contraction consumes.
+    Requires every irrep block to share one multiplicity (the channel count).
+    """
+    return jnp.concatenate(list(features.chunks), axis=-1)
+
+
+def _from_channel_basis(channel_array: Array, hidden_irreps: Irreps) -> IrrepsArray:
+    """Inverse of :func:`_to_channel_basis`: channel basis -> ``hidden_irreps``."""
+    chunks: list[Array | None] = []
+    cursor = 0
+    for _, irrep in hidden_irreps:
+        chunks.append(channel_array[..., cursor : cursor + irrep.dim])
+        cursor += irrep.dim
+    return from_chunks(hidden_irreps, chunks, channel_array.shape[:-2], channel_array.dtype)
+
+
 class _ConvolutionLayer(nnx.Module):
-    """One NequIP tensor-product convolution + self-interaction + gate layer."""
+    """One NequIP interaction block (Batzner et al. 2022).
+
+    1. ``linear_up`` -- an equivariant linear self-mixing of the node features
+       *before* the edge tensor product (the ``linear_1`` step),
+    2. the edge tensor product ``h_j (x) Y(r_hat)`` modulated by the radial
+       network, scatter-summed onto receivers and divided by
+       ``sqrt(avg_num_neighbors)``,
+    3. ``linear_down`` -- an equivariant linear mixing of the aggregated message
+       (the ``linear_2`` step),
+    4. a self-connection (residual) added *before* the gate, and
+    5. the gate nonlinearity (``silu`` even / ``tanh`` odd, ``silu`` gates).
+
+    The two equivariant linear mixings (``linear_up`` / ``linear_down``) are the
+    learned-capacity core of the NequIP interaction; omitting them materially
+    under-fits forces (energy gradients) on hard molecular benchmarks.
+    """
 
     def __init__(
         self,
@@ -172,19 +234,91 @@ class _ConvolutionLayer(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """Build the edge TP, radial network, self-interaction and gate-output linear."""
+        """Build the interaction submodules (gated, or product basis if correlation>1)."""
         super().__init__()
         self.node_irreps = node_irreps
         self.hidden_irreps = hidden_irreps
-        self._gate_irreps = _gate_input_irreps(hidden_irreps)
+        self._num_species = len(config.species)
+        self._correlation = config.correlation
+        # linear_up: equivariant self-mixing of node features before the edge TP.
+        self.linear_up = EquivariantLinear(node_irreps, node_irreps, rngs=rngs)
+        # Two-body (correlation=1) gate output vs higher-body-order (correlation>1)
+        # symmetric contraction. The contraction is the body-order nonlinearity, so it
+        # replaces the gate; it needs species conditioning and uniform-multiplicity
+        # hidden irreps (the channel-wise product basis).
+        if self._correlation > 1:
+            self._message_irreps = hidden_irreps
+            multiplicities = {mul for mul, _ in hidden_irreps}
+            if len(multiplicities) != 1:
+                raise ValueError(
+                    "correlation > 1 requires uniform-multiplicity hidden_irreps "
+                    f"(one channel count), got {hidden_irreps!r}."
+                )
+            if self._num_species == 0:
+                raise ValueError("correlation > 1 requires config.species (per-element weights).")
+            channels = multiplicities.pop()
+            single = Irreps(tuple((1, ir) for _, ir in hidden_irreps))
+            self._channels = channels
+            self.linear_down = EquivariantLinear(hidden_irreps, hidden_irreps, rngs=rngs)
+            self.symmetric_contraction = SymmetricContraction(
+                single,
+                single,
+                correlation=self._correlation,
+                num_species=self._num_species,
+                num_channels=channels,
+                rngs=rngs,
+            )
+            self.product_linear = EquivariantLinear(hidden_irreps, hidden_irreps, rngs=rngs)
+            self.self_interaction: EquivariantLinear | FullyConnectedTensorProduct = (
+                FullyConnectedTensorProduct(
+                    node_irreps, Irreps(f"{self._num_species}x0e"), hidden_irreps, rngs=rngs
+                )
+            )
+        else:
+            self._message_irreps = _gate_input_irreps(hidden_irreps)
+            self._normalize_gate_act = config.normalize_gate_act
+            self.linear_down = EquivariantLinear(
+                self._message_irreps, self._message_irreps, rngs=rngs
+            )
+            if self._num_species > 0:
+                self.self_interaction = FullyConnectedTensorProduct(
+                    node_irreps, Irreps(f"{self._num_species}x0e"), self._message_irreps, rngs=rngs
+                )
+            else:
+                self.self_interaction = EquivariantLinear(
+                    node_irreps, self._message_irreps, rngs=rngs
+                )
         # Edge tensor product: h_j (x) Y(r_hat) -> message irreps.
         self.tensor_product = FullyConnectedTensorProduct(
-            node_irreps, sh_irreps, self._gate_irreps, rngs=rngs
+            node_irreps, sh_irreps, self._message_irreps, rngs=rngs
         )
-        self.radial_network = _RadialNetwork(config, self._gate_irreps.num_irreps, rngs=rngs)
-        # Self-interaction (residual self-connection) onto the post-gate layout.
-        self.self_interaction = EquivariantLinear(node_irreps, hidden_irreps, rngs=rngs)
+        self.radial_network = _RadialNetwork(config, self._message_irreps.num_irreps, rngs=rngs)
         self.average_num_neighbors = config.average_num_neighbors
+
+    def _aggregate_message(
+        self,
+        node_features: IrrepsArray,
+        edge_sh: IrrepsArray,
+        geometry: EdgeGeometry,
+        radial: Float[Array, "max_edges num_radial_basis"],
+        envelope: Float[Array, "max_edges 1"],
+        num_atoms: int,
+    ) -> Array:
+        """Form the radial-weighted edge tensor product, aggregated onto receivers."""
+        mixed_nodes = self.linear_up(node_features)
+        sender_features = IrrepsArray(mixed_nodes.irreps, mixed_nodes.array[geometry.senders])
+        message = self.tensor_product(sender_features, edge_sh)
+        message = apply_scalar_weights(message, self.radial_network(radial) * envelope)
+        aggregated = scatter_sum(message.array, geometry.receivers, num_segments=num_atoms)
+        return aggregated / jnp.sqrt(self.average_num_neighbors)
+
+    def _self_connection(self, node_features: IrrepsArray, node_attrs: IrrepsArray | None) -> Array:
+        """Per-element (or shared) residual self-connection."""
+        if isinstance(self.self_interaction, FullyConnectedTensorProduct):
+            if node_attrs is None:
+                raise ValueError("species-indexed self-connection requires node_attrs.")
+            return self.self_interaction(node_features, node_attrs).array
+        return self.self_interaction(node_features).array
 
     def __call__(
         self,
@@ -194,8 +328,9 @@ class _ConvolutionLayer(nnx.Module):
         radial: Float[Array, "max_edges num_radial_basis"],
         envelope: Float[Array, "max_edges 1"],
         num_atoms: int,
+        node_attrs: IrrepsArray | None = None,
     ) -> IrrepsArray:
-        """Return the updated node features after one convolution layer.
+        """Return the updated node features after one interaction block.
 
         Args:
             node_features: Current per-atom steerable features.
@@ -204,19 +339,40 @@ class _ConvolutionLayer(nnx.Module):
             radial: Radial-basis expansion of the edge lengths.
             envelope: Smooth cutoff envelope per edge (zero on padded slots).
             num_atoms: Number of atoms (static segment count for the scatter).
+            node_attrs: One-hot atom-type attributes; required for the
+                species-indexed self-connection / symmetric contraction.
 
         Returns:
-            The post-gate node features with ``self.hidden_irreps``.
+            The updated node features with ``self.hidden_irreps``.
         """
-        sender_features = IrrepsArray(node_features.irreps, node_features.array[geometry.senders])
-        message = self.tensor_product(sender_features, edge_sh)
-        weights = self.radial_network(radial) * envelope
-        message = apply_scalar_weights(message, weights)
-        aggregated = scatter_sum(message.array, geometry.receivers, num_segments=num_atoms)
-        aggregated = aggregated / jnp.sqrt(self.average_num_neighbors)
-        gated = gate(IrrepsArray(self._gate_irreps, aggregated))
-        self_connection = self.self_interaction(node_features)
-        return IrrepsArray(self.hidden_irreps, gated.array + self_connection.array)
+        aggregated = self._aggregate_message(
+            node_features, edge_sh, geometry, radial, envelope, num_atoms
+        )
+        mixed_message = self.linear_down(IrrepsArray(self._message_irreps, aggregated))
+        self_connection = self._self_connection(node_features, node_attrs)
+        if self._correlation > 1:
+            if node_attrs is None:
+                raise ValueError("correlation > 1 requires node_attrs (species one-hot).")
+            # Symmetric contraction (body-order nonlinearity) on the channel basis.
+            channel_basis = _to_channel_basis(mixed_message)  # (n, channels, single.dim)
+            single_irreps = self.symmetric_contraction.irreps_in
+            contracted = self.symmetric_contraction(
+                IrrepsArray(single_irreps, channel_basis), node_attrs.array
+            )
+            product = _from_channel_basis(contracted.array, self.hidden_irreps)
+            return IrrepsArray(
+                self.hidden_irreps, self.product_linear(product).array + self_connection
+            )
+        combined = IrrepsArray(self._message_irreps, mixed_message.array + self_connection)
+        # Gate with the NequIP activations (silu even / tanh odd, silu gates),
+        # normalised to unit second moment when configured.
+        return gate(
+            combined,
+            even_act=jax.nn.silu,
+            odd_act=jax.nn.tanh,
+            gate_act=jax.nn.silu,
+            normalize_act=self._normalize_gate_act,
+        )
 
 
 @register_backbone("nequip")
@@ -233,21 +389,16 @@ class NequIP(nnx.Module):
         rngs: Random number generators (keyword-only) seeding all weights.
 
     Raises:
-        ValueError: If ``config.correlation`` is not ``1`` (the MACE-style
-            higher-correlation upgrade is a documented deferral) or the hidden
-            irreps carry no ``0e`` scalar channel to read out.
+        ValueError: If ``config.correlation < 1`` or the hidden irreps carry no
+            ``0e`` scalar channel to read out.
     """
 
     def __init__(self, *, config: NequIPConfig | None = None, rngs: nnx.Rngs) -> None:
         """Build the embedding, edge SH layout, radial basis and convolution layers."""
         super().__init__()
         self.config = config if config is not None else NequIPConfig()
-        if self.config.correlation != _DEFAULT_CORRELATION:
-            raise ValueError(
-                f"NequIP supports correlation={_DEFAULT_CORRELATION} (two-body edge "
-                f"tensor product) only; correlation={self.config.correlation} requires "
-                "the MACE-style symmetric contraction, which is a documented deferral."
-            )
+        if self.config.correlation < 1:
+            raise ValueError(f"correlation must be >= 1, got {self.config.correlation}.")
         self.hidden_irreps = Irreps(self.config.hidden_irreps)
         self._num_scalars = sum(mul for mul, ir in self.hidden_irreps.blocks if ir.l == 0)
         if self._num_scalars == 0:
@@ -260,12 +411,21 @@ class NequIP(nnx.Module):
         self.embedding = nnx.Embed(
             num_embeddings=_MAX_ATOMIC_NUMBER + 1,
             features=self._num_scalars,
+            param_dtype=default_float_dtype(),
             rngs=rngs,
         )
         self._embedding_irreps = Irreps(f"{self._num_scalars}x0e")
         self.embedding_linear = EquivariantLinear(
             self._embedding_irreps, self.hidden_irreps, rngs=rngs
         )
+        # Optional species conditioning: a static atomic-number -> compact type-index
+        # lookup feeding the per-element one-hot self-connection (see NequIPConfig).
+        self._num_species = len(self.config.species)
+        if self._num_species > 0:
+            lookup = [0] * (_MAX_ATOMIC_NUMBER + 1)
+            for type_index, atomic_number in enumerate(self.config.species):
+                lookup[atomic_number] = type_index
+            self._species_lookup = jnp.asarray(lookup, dtype=jnp.int32)
         self.radial_basis = BesselBasis(self.config.num_radial_basis, self.config.cutoff)
         self.layers = nnx.List(
             [
@@ -295,14 +455,26 @@ class NequIP(nnx.Module):
         lengths = geometry.lengths[:, 0]
         radial = self.radial_basis(lengths)
         envelope = (cosine_cutoff(lengths, self.config.cutoff) * geometry.mask[:, 0])[:, None]
-        edge_sh = spherical_harmonics(self.sh_irreps, geometry.vectors)
+        # The edge embedding uses the configured SH normalization ("component" by
+        # default): unit per-component variance keeps every message at the scale the
+        # tensor-product weight init assumes. "integral" is ~sqrt(4*pi) larger and
+        # silently mis-conditions the network.
+        edge_sh = spherical_harmonics(
+            self.sh_irreps, geometry.vectors, normalization=self.config.sh_normalization
+        )
         scalar_embedding = IrrepsArray(
             self._embedding_irreps, self.embedding(system.atomic_numbers)
         )
         node_features = self.embedding_linear(scalar_embedding)
+        # One-hot atom-type attributes for the species-indexed self-connection.
+        node_attrs: IrrepsArray | None = None
+        if self._num_species > 0:
+            type_index = self._species_lookup[system.atomic_numbers]
+            one_hot = jax.nn.one_hot(type_index, self._num_species, dtype=node_features.array.dtype)
+            node_attrs = IrrepsArray(Irreps(f"{self._num_species}x0e"), one_hot)
         for layer in self.layers:
             node_features = layer(
-                node_features, edge_sh, geometry, radial, envelope, system.n_atoms
+                node_features, edge_sh, geometry, radial, envelope, system.n_atoms, node_attrs
             )
         # Read out the invariant 0e scalar channels (first block by SH ordering).
         scalar_features = node_features.chunks[0].reshape(system.n_atoms, self._num_scalars)

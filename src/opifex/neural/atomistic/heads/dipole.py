@@ -33,6 +33,7 @@ from jaxtyping import Array  # noqa: TC002
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
 from opifex.neural.atomistic.heads.charge import conserve_total_charge
+from opifex.neural.dtypes import default_float_dtype
 
 
 @register_property_head("dipole")
@@ -56,8 +57,9 @@ class DipoleHead(nnx.Module):
         """Build the per-atom partial-charge MLP feeding the dipole sum."""
         super().__init__()
         width = hidden_dim if hidden_dim is not None else feature_dim
-        self.hidden = nnx.Linear(feature_dim, width, rngs=rngs)
-        self.readout = nnx.Linear(width, 1, rngs=rngs)
+        dtype = default_float_dtype()
+        self.hidden = nnx.Linear(feature_dim, width, param_dtype=dtype, rngs=rngs)
+        self.readout = nnx.Linear(width, 1, param_dtype=dtype, rngs=rngs)
 
     @property
     def implemented_properties(self) -> tuple[str, ...]:

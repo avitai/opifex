@@ -51,6 +51,7 @@ from jaxtyping import Array  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
+from opifex.neural.dtypes import default_float_dtype
 
 
 logger = logging.getLogger(__name__)
@@ -89,8 +90,9 @@ class PolarizabilityHead(nnx.Module):
         # Static structural config (it also fixes the readout width), so a plain
         # Python attribute -- not an nnx leaf -- keeps it jit-static.
         self.isotropic_only = isotropic_only
-        self.hidden = nnx.Linear(feature_dim, width, rngs=rngs)
-        self.readout = nnx.Linear(width, n_channels, rngs=rngs)
+        dtype = default_float_dtype()
+        self.hidden = nnx.Linear(feature_dim, width, param_dtype=dtype, rngs=rngs)
+        self.readout = nnx.Linear(width, n_channels, param_dtype=dtype, rngs=rngs)
 
     @property
     def implemented_properties(self) -> tuple[str, ...]:

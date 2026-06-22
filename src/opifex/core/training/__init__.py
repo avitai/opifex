@@ -12,6 +12,7 @@ high performance with JAX compatibility.
 
 from __future__ import annotations
 
+from opifex.core.training.callbacks import EarlyStopping, PlateauMode, ReduceLROnPlateau
 from opifex.core.training.config import (
     CheckpointConfig,
     LossConfig,
@@ -55,6 +56,7 @@ __all__ = [
     "ConservationConfig",
     "ConstraintConfig",
     "DFTConfig",
+    "EarlyStopping",
     "ElectronicStructureConfig",
     "LoggingConfig",
     "LossConfig",
@@ -65,7 +67,9 @@ __all__ = [
     # Optimizer config and functions
     "OptimizerConfig",
     "PerformanceConfig",
+    "PlateauMode",
     "QuantumTrainingConfig",
+    "ReduceLROnPlateau",
     "SCFConfig",
     # Trainer
     "Trainer",

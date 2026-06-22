@@ -33,6 +33,7 @@ from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift
 from opifex.neural.atomistic.training import (
+    _batch_loss,
     _ema_blend,
     AtomisticBatch,
     energy_forces_loss,
@@ -191,6 +192,18 @@ class TestEnergyForcesLoss:
         good = energy_forces_loss(model, systems, energies, forces, force_weight=1.0)
         bad = energy_forces_loss(model, systems, energies, forces + 50.0, force_weight=1.0)
         assert float(bad) > float(good)
+
+    def test_per_atom_energy_divides_energy_term_by_atom_count_squared(self) -> None:
+        """``per_atom_energy`` scales the energy MSE by ``1/n_atoms**2``."""
+        model = _build_model()
+        systems, energies, forces = _synthetic_dataset()
+        batch = AtomisticBatch.from_systems(systems, energies, forces)
+        n_atoms = batch.atomic_numbers.shape[0]
+        per_struct = _batch_loss(model, batch, energy_weight=1.0, force_weight=0.0)
+        per_atom = _batch_loss(
+            model, batch, energy_weight=1.0, force_weight=0.0, per_atom_energy=True
+        )
+        assert jnp.allclose(per_atom, per_struct / n_atoms**2, rtol=1e-6)
 
     def test_loss_is_differentiable_through_forces(self) -> None:
         """Grad-of-grad: params gradient flows through the ForcesHead autodiff."""

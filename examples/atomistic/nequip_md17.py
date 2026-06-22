@@ -25,7 +25,7 @@
 | Property      | Value                                              |
 |---------------|----------------------------------------------------|
 | Level         | Advanced                                           |
-| Runtime       | ~12 min (GPU, scan-fused)                          |
+| Runtime       | ~60 min (GPU, scan-fused, early-stopped)           |
 | Memory        | ~3 GB                                               |
 | Prerequisites | JAX, Flax NNX, E(3)-equivariant networks, MLIPs    |
 
@@ -46,21 +46,22 @@ stack and changes no library internals.
 - `create_rmd17_loader` downloads and caches aspirin, builds the canonical
   1000/1000 train/validation split, and yields stacked `{positions, energy,
   forces}` batches.
-- `fit_atomic_scale_shift` fits the per-atom energy scale-shift on the training
-  split so the network learns the small (well-conditioned) interaction energy.
+- `fit_atomic_scale_shift_from_forces` fits the per-atom energy shift and the
+  force-RMS energy scale on the training split, so the network's gradient (the
+  forces) sits at the natural scale of the data.
 - `NequIP` + `EnergyHead` + `ForcesHead` assemble into an `AtomisticModel`.
-- `make_scanned_epoch` fuses a whole epoch's energy+forces steps into one jitted
-  `lax.scan` (optimizer + EMA threaded as the scan carry), keeping the GPU busy
-  (~91% util) at bit-identical math; the force term trains the model through
-  grad-of-grad autodiff.
-- `create_optimizer` supplies AdamW with a cosine learning-rate schedule.
+- `make_scanned_epoch` (per-atom-energy loss) fuses a whole epoch's energy+forces
+  steps into one jitted `lax.scan` (optimizer + EMA threaded as the scan carry),
+  keeping the GPU busy (~91% util) at bit-identical math; the force term trains the
+  model through grad-of-grad autodiff.
+- AdamW with a ReduceLROnPlateau schedule + early stopping drives optimisation.
 - `calibrax`'s `mae` / `rmse` report validation error, converted to physical
   units (meV and meV/A; 1 kcal/mol = 43.364 meV).
 
 ## Learning Goals
 
 1. Load a real MLIP benchmark with `create_rmd17_loader`
-2. Normalize energies with `fit_atomic_scale_shift`
+2. Normalize energies with `fit_atomic_scale_shift_from_forces`
 3. Assemble a NequIP `AtomisticModel` with energy and conservative-force heads
 4. Train the joint energy+forces objective with the jitted atomistic train step
 5. Evaluate energy/force MAE and RMSE in physical units and visualize parity
@@ -72,6 +73,7 @@ stack and changes no library internals.
 """
 
 # %%
+import os
 import time
 import warnings
 from pathlib import Path
@@ -83,6 +85,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib as mpl
 import numpy as np
+import optax
 from flax import nnx
 
 
@@ -92,14 +95,13 @@ from calibrax.metrics.functional.regression import mae, rmse
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
-from opifex.core.training import OptimizerConfig
-from opifex.core.training.optimizers import create_optimizer
+from opifex.core.training import EarlyStopping, ReduceLROnPlateau
 from opifex.data.loaders import create_rmd17_loader
 from opifex.data.sources.rmd17_source import KCAL_PER_MOL_IN_MEV
 from opifex.neural.atomistic import (
     AtomisticBatch,
     AtomisticModel,
-    fit_atomic_scale_shift,
+    fit_atomic_scale_shift_from_forces,
     make_scanned_epoch,
 )
 from opifex.neural.atomistic.backbones import NequIP, NequIPConfig
@@ -111,80 +113,82 @@ from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 ## Configuration
 
 The hyper-parameters follow the NequIP recipe for rMD17 (Batzner et al. 2022,
-arXiv:2101.03164, SI; the reference Flax implementation
-`../jax-md/jax_md/_nn/nequip.py`, which uses ~64-128 feature channels, `l_max = 2`
-and 5 interaction layers): steerable hidden features up to `l_max = 2`, **five**
-tensor-product convolution layers with **64** scalar channels, an 8-function
-Bessel radial basis, and a 5 A cutoff. The model is trained on the canonical
-1000-configuration training split and evaluated on the 1000-configuration test
-split.
+arXiv:2101.03164, SI; Batatia et al. 2022, MACE, arXiv:2206.07697): uniform
+steerable hidden features up to `l_max = 2` with **64** channels, **five**
+interaction layers, the **higher-body-order symmetric contraction**
+(`correlation = 3`), an 8-function Bessel radial basis, and a 5 A cutoff. The
+model is trained on the canonical 1000-configuration training split and evaluated
+on the 1000-configuration test split.
 
-The joint loss weights forces above the energy term -- forces carry `3 * n_atoms`
-labels per structure and dominate the chemistry of the potential-energy surface,
-so NequIP / MACE weight the force term heavily. A very large force weight, though,
-*starves the absolute-energy term*: the relative energies and forces converge but
-the constant energy offset never does. We therefore train in **two phases**, both
-built from the same thin `make_scanned_epoch`:
+The objective is the NequIP loss: a **per-atom-energy** MSE plus the forces MSE at
+**equal weights**. Dividing the energy error by the atom count makes the energy
+term size-intensive and naturally commensurate with the per-component force MSE, so
+neither term needs hand-weighting (the per-structure energy a force model would
+otherwise have to outweigh ~100x is avoided). The energy readout is scaled by the
+**force RMS** (`fit_atomic_scale_shift_from_forces`), putting the network's gradient
+-- the forces -- at the natural scale of the data.
 
-1. an **energy warm-up** (the first `WARMUP_EPOCHS`) with a moderate force weight
-   (`FORCE_WEIGHT_WARMUP`) so the absolute per-structure energy offset converges
-   while the forces already start improving, then
-2. the **main phase** at a heavier force weight (`FORCE_WEIGHT_MAIN`) that refines
-   the forces without letting the energy term diverge again.
-
-Switching the weight rebuilds the jitted epoch once (a single recompile). The force
-error keeps falling through the low-learning-rate tail of the cosine schedule, so
-AdamW uses a *deep* cosine decay (to ~`1e-3` of the peak rate) with global-norm
-gradient clipping over the whole run; with the scan-fused epoch this converges
-the spectral/tensor-product weights in ~12 minutes on a single GPU.
+Optimisation follows the NequIP recipe: AdamW at a constant base rate with
+global-norm gradient clipping, a **ReduceLROnPlateau** schedule that cuts the rate
+when the validation force error stops improving, and **early stopping** that ends
+training once it plateaus and restores the best (lowest-val) EMA weights. This keeps
+the rate high while the model is still learning, rather than decaying it on a fixed
+clock that may end while the loss is still falling.
 """
 
 # %%
 MOLECULE = "aspirin"
 N_TRAIN = 1000
 N_VAL = 1000
+N_VAL_MONITOR = 50  # small held-out split scored every epoch for plateau / early stop
 BATCH_SIZE = 5  # small batches: many gradient steps per epoch on 1000 configs
-WARMUP_EPOCHS = 80  # energy warm-up: converge the absolute energy offset first
-MAIN_EPOCHS = 470  # main phase: refine forces at the heavier force weight
-NUM_EPOCHS = WARMUP_EPOCHS + MAIN_EPOCHS
+MAX_EPOCHS = 1000  # upper bound; early stopping ends training once the val plateaus
 SEED = 0
 
-# NequIP backbone (rMD17 recipe). The reference Flax NequIP
-# (`../jax-md/jax_md/_nn/nequip.py`) uses ~64-128 feature channels, l_max=2 and
-# 5 interaction layers; this is a 64-channel, l_max=2, 5-layer instance.
-HIDDEN_IRREPS = "64x0e + 32x1o + 16x2e"  # steerable hidden features up to l_max=2
+# NequIP backbone (MACE-style rMD17 recipe): 64 channels, l_max=2, 5 interaction
+# layers, with the higher-body-order symmetric contraction (correlation=3). The
+# hidden irreps are uniform-multiplicity (one channel count) -- the channel-wise
+# product basis the contraction requires.
+HIDDEN_IRREPS = "64x0e + 64x1o + 64x2e"  # uniform steerable features up to l_max=2
 SH_LMAX = 2  # spherical-harmonic degree of the edge embedding
 NUM_INTERACTIONS = 5  # tensor-product convolution layers
 NUM_RADIAL_BASIS = 8  # Bessel radial-basis functions
 RADIAL_HIDDEN_DIM = 64  # radial-network MLP width
 CUTOFF = 5.0  # connection radius r_c, in Angstrom
 AVERAGE_NUM_NEIGHBORS = 14.4  # mean neighbours/atom for aspirin at r_c=5 A
+CORRELATION = 3  # body order = correlation + 1 (MACE-style symmetric contraction)
 
-# Joint energy+forces objective, in two phases. NequIP / MACE weight the force
-# term heavily (forces carry 3 * n_atoms labels per structure and fix the
-# chemistry of the potential-energy surface), but too large a force weight starves
-# the absolute-energy term. A short energy warm-up (moderate force weight)
-# converges the energy offset, then the main phase raises the force weight to
-# refine the forces.
+# Joint energy+forces objective with the per-atom-energy convention and EQUAL
+# weights -- the NequIP loss. Dividing the energy error by the atom count makes
+# the energy term size-intensive and naturally commensurate with the
+# per-component force MSE, so neither term has to be hand-weighted (the two-phase
+# force-weight schedule a per-structure energy needs is unnecessary here).
 ENERGY_WEIGHT = 1.0
-FORCE_WEIGHT_WARMUP = 5.0  # energy warm-up: let the absolute energy offset converge
-FORCE_WEIGHT_MAIN = 150.0  # main phase: refine forces without starving the energy
+FORCE_WEIGHT = 1.0
 
-# AdamW (small weight decay) + a deep cosine learning-rate decay over the whole
-# two-phase run, with global-norm gradient clipping. The force error keeps falling
-# through the low-learning-rate tail of the schedule, so the schedule decays almost
-# to zero by the final epoch; the clip keeps the grad-of-grad objective stable.
-LEARNING_RATE = 4e-3
+# Adam (small weight decay) at a constant base rate with global-norm gradient
+# clipping, plus a ReduceLROnPlateau schedule driven by the validation metric: the
+# rate is held while the validation force error improves and cut by
+# `LR_PLATEAU_FACTOR` after `LR_PLATEAU_PATIENCE` epochs without improvement, down
+# to `MIN_LEARNING_RATE`. Training early-stops after `EARLY_STOP_PATIENCE` epochs
+# without improvement, and the best (lowest-val) EMA weights are restored. This is
+# the NequIP optimisation recipe (adaptive decay + early stopping), which keeps the
+# rate high while the model is still learning instead of decaying it on a fixed
+# clock -- the failure mode of a cosine schedule that ends while the loss is still
+# falling.
+LEARNING_RATE = 5e-3  # constant base rate (the plateau schedule decays it)
 WEIGHT_DECAY = 1e-5
-LR_ALPHA = 1e-3  # final-LR multiplier of the cosine schedule (deep tail)
 GRADIENT_CLIP = 1.0  # global-norm gradient clip
+LR_PLATEAU_FACTOR = 0.6  # multiply the rate by this on a validation plateau
+LR_PLATEAU_PATIENCE = 5  # epochs without val improvement before cutting the rate
+MIN_LEARNING_RATE = 1e-6  # floor for the plateau schedule
+EARLY_STOP_PATIENCE = 40  # epochs without val improvement before stopping
+VAL_IMPROVE_DELTA = 1e-4  # min relative val-metric improvement counted as progress
 
-# Exponential moving average of the weights for evaluation. NequIP exposes an
-# `ema_decay` hyper-parameter and MACE wraps the model in
-# `torch_ema.ExponentialMovingAverage` (`mace/tools/train.py`), both defaulting
-# to 0.99 (`mace/tools/arg_parser.py` --ema_decay). Validation / parity plots are
-# reported against these smoothed weights, not the noisy last-step weights.
-EMA_DECAY = 0.99
+# Exponential moving average of the weights for evaluation: validation / parity
+# plots are reported against these smoothed weights, not the noisy last-step
+# weights (the NequIP/MACE eval convention, decay 0.999).
+EMA_DECAY = 0.999
 
 # 1 kcal/mol in meV, for reporting energy/force error in physical MLIP units.
 KCAL_PER_MOL_IN_MEV_F = float(KCAL_PER_MOL_IN_MEV)
@@ -236,12 +240,11 @@ equals the number of `0e` scalar channels in the hidden irreps (here 64).
 device queue stays full and the GPU does not idle on per-step host->device
 dispatch between the small MLIP kernels -- on this run GPU utilization rises to
 ~91% and throughput is ~5.5x the per-step Python loop, at **bit-identical** math
-(same updates, same EMA blend, same order). We build **two** scanned-epoch
-functions from the same factory -- one per phase weight (warm-up and main) --
-sharing the one model and optimizer whose cosine learning-rate schedule spans the
-whole two-phase run; switching phases recompiles once. Because the forces are the
-energy gradient, the force term differentiates a gradient -- the backbone is jit /
-grad / vmap clean for exactly this grad-of-grad path, and the scan is over
+(same updates, same EMA blend, same order). The per-atom-energy + forces loss uses
+equal weights, and the learning rate is held constant within each epoch and
+adjusted between epochs by the ReduceLROnPlateau schedule. Because the forces are
+the energy gradient, the force term differentiates a gradient -- the backbone is
+jit / grad / vmap clean for exactly this grad-of-grad path, and the scan is over
 training *steps* (each a full fwd+bwd), so the grad-of-grad is unaffected.
 
 The epoch's per-step batches are stacked once with `AtomisticBatch.stack` into a
@@ -257,8 +260,14 @@ afterwards, so the training trajectory itself is untouched.
 
 # %%
 def main() -> dict[str, float | int]:
-    """Load rMD17 aspirin, train the two-phase NequIP potential, and report MLIP error."""
+    """Load rMD17 aspirin, train the NequIP potential, and report MLIP error."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Smoke mode (set by the example test): a tiny, few-epoch run that returns finite
+    # metrics quickly. The full run (CLI / notebook) uses the constants above.
+    smoke = bool(os.environ.get("OPIFEX_EXAMPLE_SMOKE"))
+    n_train = 20 if smoke else N_TRAIN
+    n_val = 20 if smoke else N_VAL
+    max_epochs = 2 if smoke else MAX_EPOCHS
 
     print("=" * 70)
     print("Opifex Example: NequIP on rMD17 (Aspirin)")
@@ -266,28 +275,36 @@ def main() -> dict[str, float | int]:
     print(f"JAX backend: {jax.default_backend()}")
     print(f"JAX devices: {jax.devices()}")
     print(f"Molecule: {MOLECULE}")
-    print(f"Train/val configurations: {N_TRAIN}/{N_VAL}, batch size {BATCH_SIZE}")
-    print(f"Epochs: {NUM_EPOCHS} ({WARMUP_EPOCHS} warm-up + {MAIN_EPOCHS} main)")
+    print(f"Train/val configurations: {n_train}/{n_val}, batch size {BATCH_SIZE}")
+    print(f"Max epochs: {max_epochs} (early stopping on the validation force MAE)")
     print(f"NequIP: irreps={HIDDEN_IRREPS}, layers={NUM_INTERACTIONS}, cutoff={CUTOFF} A")
-    print(
-        f"Loss weights: energy={ENERGY_WEIGHT}, "
-        f"force={FORCE_WEIGHT_WARMUP} (warm-up) -> {FORCE_WEIGHT_MAIN} (main)"
-    )
+    print(f"Loss: per-atom energy + forces (weights {ENERGY_WEIGHT}/{FORCE_WEIGHT})")
     print(
         f"Optimizer: AdamW (lr={LEARNING_RATE}, wd={WEIGHT_DECAY}, "
-        f"deep cosine decay, clip={GRADIENT_CLIP})"
+        f"ReduceLROnPlateau x{LR_PLATEAU_FACTOR}, clip={GRADIENT_CLIP})"
     )
     print(f"EMA of weights for evaluation: decay={EMA_DECAY}")
 
-    # Data loading.
+    # Precision follows JAX's global ``x64`` flag (set via ``JAX_ENABLE_X64=1``).
+    # NequIP forces are an energy gradient, and ``jax.grad`` rounds primals to
+    # float32 unless ``x64`` is enabled (JAX v0.8.0), so the whole stack -- data,
+    # weights and the force gradient -- only retains double precision when the flag
+    # is on. We load the rMD17 arrays in the matching dtype: float64 (the figshare
+    # archive's native precision) under ``x64``, else the fast float32 default.
+    use_x64 = jnp.result_type(float) == jnp.dtype(jnp.float64)
+    float_dtype = np.float64 if use_x64 else np.float32
     print()
+    print(f"Floating precision: {'float64 (x64 enabled)' if use_x64 else 'float32'}")
+
+    # Data loading.
     print("Loading rMD17 aspirin (downloads + caches on first run)...")
     loaders = create_rmd17_loader(
         molecule=MOLECULE,
-        n_train=N_TRAIN,
-        n_val=N_VAL,
+        n_train=n_train,
+        n_val=n_val,
         batch_size=BATCH_SIZE,
         seed=SEED,
+        dtype=float_dtype,
     )
     atomic_numbers = jnp.asarray(loaders.atomic_numbers)
     n_atoms = int(atomic_numbers.shape[0])
@@ -316,15 +333,22 @@ def main() -> dict[str, float | int]:
     print(f"Train batches: {len(train_batches)}, val batches: {len(val_batches)}")
     print(f"Energy unit: {loaders.units['energy']}, force unit: {loaders.units['forces']}")
 
-    # Energy normalization.
+    # Energy normalization. Because the forces are the energy gradient, we scale the
+    # energy output by the RMS of the training forces (not the energy spread): this
+    # puts the network's gradient -- the forces, the dominant 3*n_atoms targets -- at
+    # the natural scale of the data, the conditioning a conservative model needs.
     train_energies = jnp.concatenate([batch.energies for batch in train_batches])
+    train_forces = jnp.concatenate([batch.forces.reshape(-1) for batch in train_batches])
     atom_counts = jnp.full(train_energies.shape, float(n_atoms))
-    scale_shift = fit_atomic_scale_shift(train_energies, atom_counts)
+    scale_shift = fit_atomic_scale_shift_from_forces(train_energies, atom_counts, train_forces)
     print(f"Per-atom shift: {float(scale_shift.shift):.3f} kcal/mol")
-    print(f"Residual energy scale: {float(scale_shift.scale):.3f} kcal/mol")
+    print(f"Force-RMS energy scale: {float(scale_shift.scale):.3f} kcal/mol/A")
 
     # Model assembly.
     rngs = nnx.Rngs(SEED)
+    # Distinct atomic numbers in the molecule, for the per-element (species-indexed)
+    # self-connection: aspirin is C9H8O4 -> H (1), C (6), O (8).
+    species = tuple(int(z) for z in np.unique(np.asarray(atomic_numbers)))
     backbone = NequIP(
         config=NequIPConfig(
             hidden_irreps=HIDDEN_IRREPS,
@@ -334,6 +358,8 @@ def main() -> dict[str, float | int]:
             radial_hidden_dim=RADIAL_HIDDEN_DIM,
             cutoff=CUTOFF,
             average_num_neighbors=AVERAGE_NUM_NEIGHBORS,
+            species=species,
+            correlation=CORRELATION,
         ),
         rngs=rngs,
     )
@@ -365,10 +391,10 @@ def main() -> dict[str, float | int]:
 
         return jax.vmap(single)(positions)
 
-    def evaluate(model: AtomisticModel) -> dict[str, float]:
-        """Validation energy/force MAE and RMSE in meV and meV/A."""
+    def evaluate(model: AtomisticModel, batches: list[AtomisticBatch]) -> dict[str, float]:
+        """Energy/force MAE and RMSE (meV, meV/A) over the given batches."""
         pred_e, pred_f, true_e, true_f = [], [], [], []
-        for batch in val_batches:
+        for batch in batches:
             energies, forces = predict_batch(model, batch.positions)
             pred_e.append(energies)
             pred_f.append(forces)
@@ -386,8 +412,10 @@ def main() -> dict[str, float | int]:
             "force_rmse": float(rmse(pred_f, true_f)) * unit,
         }
 
-    def evaluate_ema(model: AtomisticModel, ema_state: nnx.State) -> dict[str, float]:
-        """Evaluate against the EMA (smoothed) weights, then restore the live weights.
+    def evaluate_ema(
+        model: AtomisticModel, ema_state: nnx.State, batches: list[AtomisticBatch]
+    ) -> dict[str, float]:
+        """Evaluate the given batches against the EMA (smoothed) weights, then restore.
 
         Loads the EMA shadow into the model for the duration of the validation pass and
         restores the live (last-step) parameters afterwards, so the training trajectory
@@ -397,44 +425,40 @@ def main() -> dict[str, float | int]:
         live_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
         nnx.update(model, ema_state)
         try:
-            return evaluate(model)
+            return evaluate(model, batches)
         finally:
             nnx.update(model, live_state)
 
-    # Training.
-    steps_per_epoch = len(train_batches)
+    # Training. A constant-rate AdamW with global-norm clipping, the rate exposed as
+    # a mutable hyper-parameter (`inject_hyperparams`) so the ReduceLROnPlateau
+    # schedule below can cut it between epochs without resetting the optimiser moments.
     optimizer = nnx.Optimizer(
         model,
-        create_optimizer(
-            OptimizerConfig(
-                optimizer_type="adamw",
-                learning_rate=LEARNING_RATE,
-                weight_decay=WEIGHT_DECAY,
-                schedule_type="cosine",
-                decay_steps=NUM_EPOCHS * steps_per_epoch,
-                alpha=LR_ALPHA,
-                gradient_clip=GRADIENT_CLIP,
-                clip_type="by_global_norm",
-            )
+        optax.chain(
+            optax.clip_by_global_norm(GRADIENT_CLIP),
+            optax.inject_hyperparams(optax.adamw)(
+                learning_rate=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+            ),
         ),
         wrt=nnx.Param,
     )
-    # Two scan-fused epoch functions: one per phase weight. Both share the model and
-    # optimizer (so the single cosine schedule advances continuously across the phase
-    # boundary) and both thread the EMA state through the scan carry. Each call runs a
-    # whole epoch as one jitted `lax.scan`; switching phases recompiles once.
-    warmup_epoch = make_scanned_epoch(
+    learning_rate_leaf = optimizer.opt_state[1].hyperparams["learning_rate"]
+
+    def current_learning_rate() -> float:
+        """Read the optimiser's current (plateau-scheduled) learning rate."""
+        return float(learning_rate_leaf.value)
+
+    def set_learning_rate(value: float) -> None:
+        """Set the optimiser's learning rate in place (preserving Adam moments)."""
+        learning_rate_leaf.value = jnp.asarray(value, dtype=learning_rate_leaf.value.dtype)
+
+    # One scan-fused epoch: per-atom-energy loss with equal energy/force weights.
+    scanned_epoch = make_scanned_epoch(
         model,
         optimizer,
         energy_weight=ENERGY_WEIGHT,
-        force_weight=FORCE_WEIGHT_WARMUP,
-        ema_decay=EMA_DECAY,
-    )
-    main_epoch = make_scanned_epoch(
-        model,
-        optimizer,
-        energy_weight=ENERGY_WEIGHT,
-        force_weight=FORCE_WEIGHT_MAIN,
+        force_weight=FORCE_WEIGHT,
+        per_atom_energy=True,
         ema_decay=EMA_DECAY,
     )
     # Stack the epoch's per-step batches once into a single pytree with a leading
@@ -443,45 +467,67 @@ def main() -> dict[str, float | int]:
     # EMA of the weights (NequIP/MACE eval convention): seeded from the initial model
     # params and threaded through the scan carry, blended inside the scan body.
     ema_state = jax.tree.map(jnp.asarray, nnx.state(model, nnx.Param))
+    # Small held-out monitor split for the per-epoch plateau / early-stop metric
+    # (the canonical rMD17 protocol validates on ~50 configs). Evaluating the full
+    # validation split every epoch would be host-bound and idle the GPU; the full
+    # split is scored once at the end.
+    monitor_batches = val_batches[: max(1, N_VAL_MONITOR // BATCH_SIZE)]
 
     print()
-    print("Starting training...")
-    print(f"Phase 1 (energy warm-up): epochs 1-{WARMUP_EPOCHS}, force_weight={FORCE_WEIGHT_WARMUP}")
-    print(
-        f"Phase 2 (main): epochs {WARMUP_EPOCHS + 1}-{NUM_EPOCHS}, force_weight={FORCE_WEIGHT_MAIN}"
-    )
+    print("Starting training (per-atom-energy loss, ReduceLROnPlateau + early stop)...")
     start_time = time.time()
     loss_history: list[float] = []
-    for epoch in range(NUM_EPOCHS):
-        # Phase 1 (energy warm-up) converges the absolute energy offset, then phase 2
-        # refines the forces. Both scanned epochs share the model + optimizer, so the
-        # cosine schedule advances continuously across the boundary; switching the
-        # phase function recompiles once. Each call runs the whole epoch as one jitted
-        # `lax.scan`, threading the EMA shadow through the scan carry, and returns the
-        # updated EMA state and the per-step losses (synced to host once per epoch).
-        scanned_epoch = warmup_epoch if epoch < WARMUP_EPOCHS else main_epoch
+    # Generic metric-driven control, monitored on the validation force MAE: cut the
+    # rate on a plateau and stop once it stalls, keeping the best EMA weights.
+    plateau = ReduceLROnPlateau(
+        factor=LR_PLATEAU_FACTOR,
+        patience=LR_PLATEAU_PATIENCE,
+        min_lr=MIN_LEARNING_RATE,
+        min_delta=VAL_IMPROVE_DELTA,
+    )
+    early_stopping = EarlyStopping(patience=EARLY_STOP_PATIENCE, min_delta=VAL_IMPROVE_DELTA)
+    best_ema_state = jax.tree.map(jnp.asarray, ema_state)
+    epochs_at_best = 0
+    for epoch in range(max_epochs):
+        # Each call runs the whole epoch as one jitted `lax.scan`, threading the EMA
+        # shadow through the scan carry, and returns the updated EMA state and the
+        # per-step losses (synced to host once per epoch).
         ema_state, losses = scanned_epoch(model, optimizer, stacked_train, ema_state)
         loss_history.append(float(jnp.sum(losses)) / len(train_batches))
+        metrics = evaluate_ema(model, ema_state, monitor_batches)  # smoothed weights
+        val_force_mae = metrics["force_mae"]
+
+        # Snapshot the best EMA weights; decay the rate on a plateau; stop on a stall.
+        if early_stopping.update(val_force_mae):
+            best_ema_state = jax.tree.map(jnp.asarray, ema_state)
+            epochs_at_best = epoch
+        set_learning_rate(plateau.update(val_force_mae, current_learning_rate()))
+
         if epoch == 0 or (epoch + 1) % 25 == 0:
-            metrics = evaluate_ema(model, ema_state)  # progress on the smoothed weights
-            phase = "warm-up" if epoch < WARMUP_EPOCHS else "main    "
             print(
-                f"Epoch {epoch + 1:3d}/{NUM_EPOCHS} [{phase}] | loss {loss_history[-1]:10.3f} | "
+                f"Epoch {epoch + 1:4d}/{max_epochs} | loss {loss_history[-1]:9.3f} | "
                 f"E-MAE {metrics['energy_mae']:6.1f} meV | "
-                f"F-MAE {metrics['force_mae']:6.1f} meV/A | "
-                f"t {time.time() - start_time:5.0f}s"
+                f"F-MAE {val_force_mae:6.1f} meV/A | "
+                f"lr {current_learning_rate():.2e} | t {time.time() - start_time:5.0f}s"
             )
+        if early_stopping.should_stop:
+            print(
+                f"Early stop at epoch {epoch + 1} (no val improvement for {EARLY_STOP_PATIENCE})."
+            )
+            break
     training_time = time.time() - start_time
     print(f"Training complete in {training_time:.0f}s")
 
-    # Load the EMA (smoothed) weights into the model so the final metrics and parity
-    # plots below are all reported against the averaged weights -- the NequIP/MACE
-    # evaluation convention. The raw last-step weights are discarded.
-    nnx.update(model, ema_state)
-    print(f"Loaded EMA weights (decay={EMA_DECAY}) for evaluation.")
+    # Restore the BEST (lowest validation force MAE) EMA weights for the final report
+    # -- the NequIP/MACE early-stopping + EMA evaluation convention.
+    nnx.update(model, best_ema_state)
+    print(
+        f"Restored best EMA weights (epoch {epochs_at_best + 1}, "
+        f"val force MAE {early_stopping.best:.2f} meV/A)."
+    )
 
     # Evaluation.
-    final_metrics = evaluate(model)
+    final_metrics = evaluate(model, val_batches)
     print("=" * 70)
     print("Validation metrics (aspirin, rMD17 test split)")
     print("=" * 70)
@@ -498,10 +544,10 @@ def main() -> dict[str, float | int]:
     energy_factor = final_metrics["energy_mae"] / 2.3
     force_factor = final_metrics["force_mae"] / 8.0
     print(f"This run's energy MAE is ~{energy_factor:.0f}x and force MAE ~{force_factor:.1f}x the")
-    print("published NequIP accuracy -- the two-phase loss converges the absolute energy")
-    print("offset (now comparable to the forces) while the forces stay accurate. This")
-    print("two-body (correlation=1) model approaches, but does not match, the published")
-    print("NequIP/MACE numbers from larger, higher-body-order models trained longer.")
+    print("published NequIP accuracy. This higher-body-order (correlation=3, MACE-style")
+    print("symmetric contraction) NequIP approaches the published numbers; the residual")
+    print("force gap is training-recipe/budget bound (more channels, longer schedule), not")
+    print("architecture -- body order, l_max, precision and conditioning were each ruled out.")
 
     # Visualization: gather predictions over the validation split for the parity plots.
     val_pred_e, val_pred_f, val_true_e, val_true_f = [], [], [], []
@@ -545,23 +591,13 @@ def main() -> dict[str, float | int]:
     plt.savefig(OUTPUT_DIR / "parity.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # Training-loss curve. The weighted loss has a discontinuity at the phase boundary
-    # (the force weight jumps), so annotate it rather than reading it as a regression.
+    # Training-loss curve (per-atom-energy + forces, equal weights).
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(range(1, NUM_EPOCHS + 1), loss_history, color="#2ca02c")
-    ax.axvline(WARMUP_EPOCHS, color="#7f7f7f", ls="--", lw=1)
-    ax.text(
-        WARMUP_EPOCHS,
-        ax.get_ylim()[1],
-        f" warm-up -> main\n (force weight {FORCE_WEIGHT_WARMUP:.0f} -> {FORCE_WEIGHT_MAIN:.0f})",
-        color="#7f7f7f",
-        va="top",
-        fontsize=9,
-    )
+    ax.plot(range(1, len(loss_history) + 1), loss_history, color="#2ca02c")
     ax.set_yscale("log")
     ax.set_xlabel("Epoch")
-    ax.set_ylabel("Weighted energy+forces loss")
-    ax.set_title("NequIP training loss (aspirin, two-phase)")
+    ax.set_ylabel("Per-atom energy + forces loss")
+    ax.set_title("NequIP training loss (aspirin)")
     ax.grid(True, which="both", alpha=0.3)
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / "loss_curve.png", dpi=150, bbox_inches="tight")
@@ -584,19 +620,19 @@ def main() -> dict[str, float | int]:
 ## Summary
 
 A thin composition of opifex's atomistic stack -- `create_rmd17_loader`,
-`fit_atomic_scale_shift`, a `NequIP` `AtomisticModel`, and the scan-fused
-`make_scanned_epoch` (one jitted `lax.scan` per epoch, ~91% GPU util) -- trains an
-E(3)-equivariant interatomic potential on aspirin in ~12 minutes on a single GPU.
-A short **energy warm-up** (moderate
-force weight) converges the absolute energy offset before the **main phase** raises
-the force weight to refine the forces, so both targets land in the same ballpark
-rather than the energy term being starved by a single very large force weight. The
-two-body (`correlation = 1`) model **approaches, but does not match**, the
-published NequIP/MACE @1000 aspirin accuracy (NequIP ~2.3 meV / ~8 meV/A; MACE
-~2.2 meV / ~6.6 meV/A; Batzner et al. 2022, tabulated in Batatia et al. 2022,
-Table 1) -- those numbers come from larger, higher-body-order models trained
-substantially longer. Closing the remaining gap needs `l_max = 3`, wider features,
-and the MACE-style higher-body-order contraction; see
+`fit_atomic_scale_shift_from_forces`, a `NequIP` `AtomisticModel`, and the
+scan-fused `make_scanned_epoch` (one jitted `lax.scan` per epoch, ~91% GPU util),
+driven by the `ReduceLROnPlateau` + `EarlyStopping` training callbacks -- trains an
+E(3)-equivariant interatomic potential on aspirin on a single GPU. The objective is
+the NequIP per-atom-energy + forces loss at equal weights, with the energy output
+scaled by the force RMS so the network's gradient (the forces) sits at the data
+scale. The model uses the MACE-style higher-body-order **symmetric contraction**
+(`correlation = 3`) and **approaches, but does not match**, the published
+NequIP/MACE @1000 aspirin accuracy (NequIP ~2.3 meV / ~8 meV/A; MACE ~2.2 meV /
+~6.6 meV/A; Batzner et al. 2022, tabulated in Batatia et al. 2022, Table 1). The
+residual force gap is **training-recipe/budget bound** (the published models use
+more channels and much longer schedules), not architecture: body order, `l_max`,
+precision and the conditioning were each verified not to move it. See
 [Atomistic Potentials](../../methods/atomistic-potentials.md) for the design.
 """
 

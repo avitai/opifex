@@ -41,7 +41,11 @@ from opifex.neural.atomistic.foundation import (
 from opifex.neural.atomistic.long_range import latent_ewald_energy, LatentEwaldHead
 from opifex.neural.atomistic.lora import apply_lora, LoRALinear
 from opifex.neural.atomistic.multitask import MultiTaskEnergyHead, TASK_NAME_KEY
-from opifex.neural.atomistic.scale_shift import AtomicScaleShift, fit_atomic_scale_shift
+from opifex.neural.atomistic.scale_shift import (
+    AtomicScaleShift,
+    fit_atomic_scale_shift,
+    fit_atomic_scale_shift_from_forces,
+)
 from opifex.neural.atomistic.training import (
     AtomisticBatch,
     energy_forces_loss,
@@ -73,6 +77,7 @@ __all__ = [
     "apply_lora",
     "energy_forces_loss",
     "fit_atomic_scale_shift",
+    "fit_atomic_scale_shift_from_forces",
     "fit_atomistic",
     "freeze_backbone",
     "latent_ewald_energy",

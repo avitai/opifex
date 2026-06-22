@@ -215,12 +215,14 @@ def main() -> dict[str, float | int]:
     plt.show()
     print(f"Saved: {output_dir}/spectral-norm-stability.png")
 
+    # The plain network's final/max MSE are non-finite *by design* (it destabilises);
+    # the demonstration is recorded as the finite ``plain_diverged`` flag rather than
+    # returned as a NaN metric.
     return {
         "depth": depth,
         "learning_rate": learning_rate,
-        "plain_final_mse": plain_final,
+        "plain_diverged": float(plain_diverged),
         "spectral_final_mse": spectral_final,
-        "plain_max_mse": plain_max,
         "spectral_lipschitz_bound": lipschitz_bound(spectral),
     }
 

@@ -39,6 +39,7 @@ resolution scaling, and data quality metrics.
 
 # %%
 import argparse
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -441,66 +442,59 @@ def create_visualization(
 
 
 # %%
-def main():
-    """Run full Darcy flow analysis validation."""
-    parser = argparse.ArgumentParser(description="Analyze Darcy flow dataset characteristics")
-    parser.add_argument(
-        "--n_samples",
-        type=int,
-        default=100,
-        help="Number of samples to generate for analysis",
-    )
-    parser.add_argument(
-        "--resolutions",
-        nargs="+",
-        type=int,
-        default=[64, 128],
-        help="Grid resolutions to analyze",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="docs/assets/examples/darcy_flow_analysis_files",
-        help="Output directory for results",
-    )
-    parser.add_argument(
-        "--save_plots",
-        action="store_true",
-        default=True,
-        help="Save generated plots to disk",
-    )
+def main(
+    n_samples: int = 100,
+    resolutions: tuple[int, ...] = (64, 128),
+    output_dir: str = "docs/assets/examples/darcy_flow_analysis_files",
+    save_plots: bool = True,
+) -> dict[str, float]:
+    """Run full Darcy flow analysis and return finite summary metrics."""
+    # Smoke mode (set by the example test): a few small-resolution samples.
+    if os.environ.get("OPIFEX_EXAMPLE_SMOKE"):
+        n_samples, resolutions, save_plots = 4, (32,), False
 
-    args = parser.parse_args()
-
-    # Run analysis
     print("Starting full Darcy flow dataset analysis...")
     results = analyze_darcy_flow_dataset(
-        n_samples=args.n_samples,
-        resolutions=args.resolutions,
-        output_dir=args.output_dir,
+        n_samples=n_samples,
+        resolutions=list(resolutions),
+        output_dir=output_dir,
     )
 
-    # Create visualizations
-    preprocessing_results = {}  # Placeholder for future preprocessing analysis
-
+    preprocessing_results: dict = {}
     save_path = None
-    if args.save_plots:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        save_path = f"{args.output_dir}/darcy_analysis"
+    if save_plots:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        save_path = f"{output_dir}/darcy_analysis"
     create_visualization(results, preprocessing_results, save_path)
 
-    # Print summary
     print()
     print("=" * 80)
     print("ANALYSIS COMPLETE")
     print("=" * 80)
+    summary: dict[str, float] = {}
     for res, data in results["datasets"].items():
         print(f"Resolution {res}x{res}:")
         print(f"  Generation time: {data['generation_time']:.2f}s")
         print(f"  Samples/second: {data['samples_per_second']:.1f}")
         print(f"  Input mean: {data['input_stats']['mean']:.4f}")
         print(f"  Output mean: {data['output_stats']['mean']:.4f}")
+        summary[f"input_mean_{res}"] = float(data["input_stats"]["mean"])
+        summary[f"output_mean_{res}"] = float(data["output_stats"]["mean"])
+    return summary
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Analyze Darcy flow dataset characteristics")
+    parser.add_argument("--n_samples", type=int, default=100)
+    parser.add_argument("--resolutions", nargs="+", type=int, default=[64, 128])
+    parser.add_argument(
+        "--output_dir", type=str, default="docs/assets/examples/darcy_flow_analysis_files"
+    )
+    parser.add_argument("--save_plots", action="store_true", default=True)
+    cli = parser.parse_args()
+    main(
+        n_samples=cli.n_samples,
+        resolutions=tuple(cli.resolutions),
+        output_dir=cli.output_dir,
+        save_plots=cli.save_plots,
+    )

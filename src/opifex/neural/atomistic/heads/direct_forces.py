@@ -55,6 +55,7 @@ from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_property_head
+from opifex.neural.dtypes import default_float_dtype
 
 
 VECTOR_FEATURES_KEY = "node_vectors"
@@ -89,10 +90,13 @@ class DirectForcesHead(nnx.Module):
         """Build the invariant gate MLP and the equivariant vector mixing map."""
         super().__init__()
         width = hidden_dim if hidden_dim is not None else feature_dim
-        self.gate_hidden = nnx.Linear(feature_dim, width, rngs=rngs)
-        self.gate_out = nnx.Linear(width, feature_dim, rngs=rngs)
+        dtype = default_float_dtype()
+        self.gate_hidden = nnx.Linear(feature_dim, width, param_dtype=dtype, rngs=rngs)
+        self.gate_out = nnx.Linear(width, feature_dim, param_dtype=dtype, rngs=rngs)
         # Bias-free linear over channels (spatial axis untouched) stays equivariant.
-        self.vector_mix = nnx.Linear(feature_dim, feature_dim, use_bias=False, rngs=rngs)
+        self.vector_mix = nnx.Linear(
+            feature_dim, feature_dim, use_bias=False, param_dtype=dtype, rngs=rngs
+        )
 
     @property
     def implemented_properties(self) -> tuple[str, ...]:

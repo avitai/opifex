@@ -12,13 +12,14 @@ where ``E_raw`` is the bare sum-of-atomic-energies the network predicts. The
 ``scale`` puts the network output on the (per-atom-energy) scale of the data and
 the per-atom ``shift`` adds back the mean atomic reference energy, so the network
 only has to learn the small *interaction* energy -- the dramatically easier and
-better-conditioned target (Batzner et al. 2022, NequIP, arXiv:2101.03164; the
-``../mace`` ``ScaleShiftBlock`` in ``mace/modules/blocks.py``).
+better-conditioned target (Batzner et al. 2022, NequIP, arXiv:2101.03164;
+Batatia et al. 2022, MACE, NeurIPS).
 
-The statistics fit by :func:`fit_atomic_scale_shift` are the MACE
-``compute_mean_std_atomic_inter_energy`` recipe (``mace/modules/utils.py``):
-``shift`` is the mean per-atom energy and ``scale`` is the standard deviation of
-the per-configuration residual energy.
+Two scale conventions are provided: :func:`fit_atomic_scale_shift` sets ``scale``
+to the standard deviation of the per-configuration residual energy, while
+:func:`fit_atomic_scale_shift_from_forces` sets it to the root-mean-square of the
+force components (the convention a conservative energy+force model needs, since
+forces are the energy gradient). Both set ``shift`` to the mean per-atom energy.
 
 :class:`AtomicScaleShift` is a :func:`flax.struct.dataclass` so it is an
 immutable, ``jit``/``grad``/``vmap``-traceable JAX PyTree (the same container
@@ -85,8 +86,7 @@ def fit_atomic_scale_shift(
 ) -> AtomicScaleShift:
     r"""Fit an :class:`AtomicScaleShift` from per-configuration energies.
 
-    Implements the MACE ``compute_mean_std_atomic_inter_energy`` statistics
-    (``mace/modules/utils.py``):
+    Uses the MACE mean/std interaction-energy statistics:
 
     .. math::
         \text{shift} = \operatorname{mean}_c (E_c / n_c), \qquad
@@ -107,4 +107,40 @@ def fit_atomic_scale_shift(
     return AtomicScaleShift(scale=scale, shift=shift)
 
 
-__all__ = ["AtomicScaleShift", "fit_atomic_scale_shift"]
+def fit_atomic_scale_shift_from_forces(
+    energies: Float[Array, " n_configs"],
+    atom_counts: Float[Array, " n_configs"],
+    forces: Float[Array, "*force_dims"],
+) -> AtomicScaleShift:
+    r"""Fit an :class:`AtomicScaleShift` using the force-RMS scale convention.
+
+    .. math::
+        \text{shift} = \operatorname{mean}_c (E_c / n_c), \qquad
+        \text{scale} = \sqrt{\operatorname{mean}(F^2)},
+
+    so ``shift`` is the mean atomic reference energy (as in
+    :func:`fit_atomic_scale_shift`) and ``scale`` is the root-mean-square of the
+    force components. Because forces are the energy gradient, scaling the energy
+    output by the force RMS puts the network's *gradient* (the forces) at the
+    natural scale of the data, which is the conditioning a conservative
+    energy+force model needs (the convention used for force-field training).
+
+    Args:
+        energies: Total energy of each configuration, shape ``(n_configs,)``.
+        atom_counts: Number of atoms in each configuration, shape ``(n_configs,)``.
+        forces: Force components over the training set (any shape; flattened for
+            the RMS), e.g. ``(n_configs, n_atoms, 3)``.
+
+    Returns:
+        The fitted :class:`AtomicScaleShift`.
+    """
+    shift = jnp.mean(energies / atom_counts)
+    scale = jnp.sqrt(jnp.mean(jnp.asarray(forces) ** 2))
+    return AtomicScaleShift(scale=scale, shift=shift)
+
+
+__all__ = [
+    "AtomicScaleShift",
+    "fit_atomic_scale_shift",
+    "fit_atomic_scale_shift_from_forces",
+]

@@ -58,6 +58,7 @@ from jaxtyping import Array, Float  # noqa: TC002
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_backbone
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
+from opifex.neural.dtypes import default_float_dtype
 from opifex.neural.equivariant import BesselBasis, cosine_cutoff, scatter_sum
 
 
@@ -92,9 +93,12 @@ class _MessageBlock(nnx.Module):
         """Build the scalar feature MLP and the radial filter-generating linear."""
         super().__init__()
         feature_dim = config.feature_dim
-        self.scalar_hidden = nnx.Linear(feature_dim, feature_dim, rngs=rngs)
-        self.scalar_out = nnx.Linear(feature_dim, 3 * feature_dim, rngs=rngs)
-        self.filter = nnx.Linear(config.num_radial_basis, 3 * feature_dim, rngs=rngs)
+        dtype = default_float_dtype()
+        self.scalar_hidden = nnx.Linear(feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
+        self.scalar_out = nnx.Linear(feature_dim, 3 * feature_dim, param_dtype=dtype, rngs=rngs)
+        self.filter = nnx.Linear(
+            config.num_radial_basis, 3 * feature_dim, param_dtype=dtype, rngs=rngs
+        )
 
     def __call__(
         self,
@@ -144,11 +148,16 @@ class _UpdateBlock(nnx.Module):
         """Build the equivariant vector linears ``U, V`` and the gated scalar MLP."""
         super().__init__()
         feature_dim = config.feature_dim
+        dtype = default_float_dtype()
         # Bias-free linear maps over the channel axis keep equivariance (no l-mix).
-        self.vector_u = nnx.Linear(feature_dim, feature_dim, use_bias=False, rngs=rngs)
-        self.vector_v = nnx.Linear(feature_dim, feature_dim, use_bias=False, rngs=rngs)
-        self.update_hidden = nnx.Linear(2 * feature_dim, feature_dim, rngs=rngs)
-        self.update_out = nnx.Linear(feature_dim, 3 * feature_dim, rngs=rngs)
+        self.vector_u = nnx.Linear(
+            feature_dim, feature_dim, use_bias=False, param_dtype=dtype, rngs=rngs
+        )
+        self.vector_v = nnx.Linear(
+            feature_dim, feature_dim, use_bias=False, param_dtype=dtype, rngs=rngs
+        )
+        self.update_hidden = nnx.Linear(2 * feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
+        self.update_out = nnx.Linear(feature_dim, 3 * feature_dim, param_dtype=dtype, rngs=rngs)
 
     def __call__(
         self,
@@ -201,6 +210,7 @@ class PaiNN(nnx.Module):
         self.embedding = nnx.Embed(
             num_embeddings=_MAX_ATOMIC_NUMBER + 1,
             features=self.config.feature_dim,
+            param_dtype=default_float_dtype(),
             rngs=rngs,
         )
         self.radial_basis = BesselBasis(self.config.num_radial_basis, self.config.cutoff)

@@ -45,6 +45,7 @@ from jaxtyping import Array, Float  # noqa: TC002
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_backbone
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
+from opifex.neural.dtypes import default_float_dtype
 from opifex.neural.equivariant import BesselBasis, cosine_cutoff, scatter_sum
 
 
@@ -93,11 +94,16 @@ class _InteractionBlock(nnx.Module):
         """Build the filter-generating MLP and the atomwise update MLP."""
         super().__init__()
         feature_dim = config.feature_dim
-        self.atomwise_in = nnx.Linear(feature_dim, feature_dim, rngs=rngs)
-        self.filter_in = nnx.Linear(config.num_radial_basis, config.filter_hidden_dim, rngs=rngs)
-        self.filter_out = nnx.Linear(config.filter_hidden_dim, feature_dim, rngs=rngs)
-        self.update_hidden = nnx.Linear(feature_dim, feature_dim, rngs=rngs)
-        self.update_out = nnx.Linear(feature_dim, feature_dim, rngs=rngs)
+        dtype = default_float_dtype()
+        self.atomwise_in = nnx.Linear(feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
+        self.filter_in = nnx.Linear(
+            config.num_radial_basis, config.filter_hidden_dim, param_dtype=dtype, rngs=rngs
+        )
+        self.filter_out = nnx.Linear(
+            config.filter_hidden_dim, feature_dim, param_dtype=dtype, rngs=rngs
+        )
+        self.update_hidden = nnx.Linear(feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
+        self.update_out = nnx.Linear(feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
 
     def __call__(
         self,
@@ -151,6 +157,7 @@ class SchNet(nnx.Module):
         self.embedding = nnx.Embed(
             num_embeddings=_MAX_ATOMIC_NUMBER + 1,
             features=self.config.feature_dim,
+            param_dtype=default_float_dtype(),
             rngs=rngs,
         )
         self.radial_basis = BesselBasis(self.config.num_radial_basis, self.config.cutoff)

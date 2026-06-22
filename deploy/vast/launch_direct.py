@@ -104,9 +104,21 @@ class LaunchConfig:
     train_args: tuple[str, ...]
     fetch: Path | None
     dry_run: bool
+    entrypoint: str | None = None
+    setup_extras: tuple[str, ...] = ("neural-dft",)
+    env_vars: tuple[str, ...] = ()
     ssh_timeout_minutes: float = 25.0
     keep_on_failure: bool = False
     onstart_extra: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def syncs_examples(self) -> bool:
+        """Whether the run needs the (normally excluded) ``examples/`` tree synced.
+
+        A custom ``--entrypoint`` (e.g. running an example script) requires the
+        ``examples/`` and ``tests/`` trees the QH9 trainer path deliberately omits.
+        """
+        return self.entrypoint is not None
 
 
 def _vastai(args: list[str], *, capture: bool = False) -> str:
@@ -305,8 +317,26 @@ def _wait_for_ssh(
     )
 
 
+def _repo_excludes(config: LaunchConfig) -> tuple[str, ...]:
+    """Return the rsync excludes for the repo upload.
+
+    Drops ``examples``/``tests`` from the default excludes when a custom
+    entrypoint needs them (e.g. running an example), keeping the big cache/data
+    dirs excluded so the upload stays small.
+    """
+    if not config.syncs_examples:
+        return _RSYNC_EXCLUDES
+    return tuple(pattern for pattern in _RSYNC_EXCLUDES if pattern not in {"examples", "tests"})
+
+
 def _rsync(
-    config: LaunchConfig, host: str, port: int, source: str, dest: str, *, excludes: bool
+    config: LaunchConfig,
+    host: str,
+    port: int,
+    source: str,
+    dest: str,
+    *,
+    exclude_patterns: tuple[str, ...] = (),
 ) -> None:
     """Rsync ``source`` to ``root@host:dest`` over the instance's SSH.
 
@@ -318,9 +348,8 @@ def _rsync(
     """
     ssh = f"ssh -i {config.ssh_key} -p {port} -o StrictHostKeyChecking=no"
     command = ["rsync", "-az", "--info=stats1", "-e", ssh]
-    if excludes:
-        for pattern in _RSYNC_EXCLUDES:
-            command.extend(["--exclude", pattern])
+    for pattern in exclude_patterns:
+        command.extend(["--exclude", pattern])
     command.extend([source, f"root@{host}:{dest}"])
     logger.info("$ %s", " ".join(command))
     subprocess.run(command, check=True)
@@ -362,18 +391,30 @@ def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
     sm_120 codegen) and the generated ``activate.sh``, so the remote environment
     matches a local checkout exactly rather than an ad-hoc venv.
     """
+    extra_flags = " ".join(f"--extra {shlex.quote(extra)}" for extra in config.setup_extras)
     setup = (
         'set -e; export PATH="$HOME/.local/bin:$PATH"; '
         "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh; "
-        # ``neural-dft`` pulls in pyscf, which the QH9 training entrypoint imports
-        # transitively (qh9_eval); without it the run dies at import on a fresh box.
+        # Extras are configurable: the QH9 trainer needs ``neural-dft`` (pyscf, which
+        # qh9_eval imports transitively); an example may need none or different ones.
         f"cd {_REMOTE_REPO}; chmod +x setup.sh; "
-        "./setup.sh --backend cuda12 --python 3.12 --extra neural-dft; "
+        f"./setup.sh --backend cuda12 --python 3.12 {extra_flags}; "
         'source activate.sh; python -c "import jax; print(jax.devices())"'
     )
     _remote(config, host, port, setup)
     forwarded = " ".join(shlex.quote(a) for a in config.train_args)
-    # Write the training command to a script FILE and run that in tmux, rather than
+    # The run command: a custom ``--entrypoint`` (e.g. an example script) verbatim,
+    # otherwise the QH9 block trainer with its DB/out/batch/epoch flags.
+    if config.entrypoint is not None:
+        run_command = f"exec {config.entrypoint}"
+    else:
+        run_command = (
+            "exec uv run python scripts/train_qh9_blocks.py --dataset stable "
+            f"--db {_REMOTE_DB} --batch-size {config.batch_size} "
+            f"--epochs {config.epochs} --out {config.remote_out} {forwarded}"
+        )
+    env_export = f"export {' '.join(config.env_vars)}" if config.env_vars else ":"
+    # Write the run command to a script FILE and run that in tmux, rather than
     # embedding it (with shlex-quoted args) inside a nested ``tmux '...'`` string --
     # the nested single quotes broke the invocation, and a bare ``python`` did not
     # resolve in the non-interactive tmux shell. The script exports the uv path,
@@ -386,12 +427,8 @@ def _setup_and_launch(config: LaunchConfig, host: str, port: int) -> None:
             f"cd {_REMOTE_REPO}",
             'export PATH="$HOME/.local/bin:$PATH"',
             "source activate.sh",
-            "export JAX_ENABLE_X64=1 XLA_PYTHON_CLIENT_PREALLOCATE=false",
-            (
-                "exec uv run python scripts/train_qh9_blocks.py --dataset stable "
-                f"--db {_REMOTE_DB} --batch-size {config.batch_size} "
-                f"--epochs {config.epochs} --out {config.remote_out} {forwarded}"
-            ),
+            env_export,
+            run_command,
         ]
     )
     write_script = (
@@ -423,14 +460,21 @@ def launch(config: LaunchConfig) -> None:
     instance_id = _create_instance(config, offer_id)
     try:
         host, port = _wait_for_ssh(config, instance_id, timeout_minutes=config.ssh_timeout_minutes)
-        _rsync(config, host, port, f"{_REPO_ROOT}/", f"{_REMOTE_REPO}/", excludes=True)
+        _rsync(
+            config,
+            host,
+            port,
+            f"{_REPO_ROOT}/",
+            f"{_REMOTE_REPO}/",
+            exclude_patterns=_repo_excludes(config),
+        )
         # DB transfer: prefer the fast instance-side download when a URL is staged;
         # otherwise rsync the local copy (upstream-bound -- see _download_remote_db).
         if config.db_url is not None:
             _download_remote_db(config, host, port)
         elif config.db is not None:
             _remote(config, host, port, f"mkdir -p {Path(_REMOTE_DB).parent}")
-            _rsync(config, host, port, str(config.db), _REMOTE_DB, excludes=False)
+            _rsync(config, host, port, str(config.db), _REMOTE_DB)
         _setup_and_launch(config, host, port)
     except BaseException as error:
         # Any failure -- including a stalled ``loading`` timeout or Ctrl-C -- must
@@ -490,6 +534,27 @@ def _parse_args(argv: list[str] | None) -> LaunchConfig:
     parser.add_argument("--remote-out", default=_REMOTE_OUT, help="Remote run directory.")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument(
+        "--entrypoint",
+        default=None,
+        help="Custom remote run command (run in the activated venv via tmux), e.g. "
+        "'uv run python examples/atomistic/nequip_md17.py'. Overrides the default QH9 "
+        "trainer and syncs the examples/ + tests/ trees; --db is then optional.",
+    )
+    parser.add_argument(
+        "--setup-extra",
+        action="append",
+        default=None,
+        help="uv extra passed to setup.sh (repeatable). Default: neural-dft (QH9).",
+    )
+    parser.add_argument(
+        "--env",
+        action="append",
+        default=None,
+        dest="env_vars",
+        help="KEY=VALUE env var exported before the run (repeatable). Default: "
+        "JAX_ENABLE_X64=1 XLA_PYTHON_CLIENT_PREALLOCATE=false.",
+    )
     parser.add_argument("--fetch", type=Path, default=None, help="Local dir to fetch results into.")
     parser.add_argument("--dry-run", action="store_true", help="Select an offer and stop.")
     parser.add_argument(
@@ -522,6 +587,15 @@ def _parse_args(argv: list[str] | None) -> LaunchConfig:
         train_args=tuple(namespace.train_args),
         fetch=namespace.fetch,
         dry_run=namespace.dry_run,
+        entrypoint=namespace.entrypoint,
+        setup_extras=(
+            tuple(namespace.setup_extra) if namespace.setup_extra is not None else ("neural-dft",)
+        ),
+        env_vars=(
+            tuple(namespace.env_vars)
+            if namespace.env_vars is not None
+            else ("JAX_ENABLE_X64=1", "XLA_PYTHON_CLIENT_PREALLOCATE=false")
+        ),
         ssh_timeout_minutes=namespace.ssh_timeout_minutes,
         keep_on_failure=namespace.keep_on_failure,
     )
