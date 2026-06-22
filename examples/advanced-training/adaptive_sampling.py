@@ -50,12 +50,12 @@ import numpy as np
 import optax
 from flax import nnx
 
+from opifex.core.metrics import relative_l2_error
 from opifex.core.training.components.adaptive_sampling import (
-    RADConfig,
-    RADSampler,
     RARDConfig,
     RARDRefiner,
 )
+from opifex.physics.spectral.steppers import solve_burgers_spectral
 
 
 # %% [markdown]
@@ -170,10 +170,13 @@ def main() -> dict[str, float | int]:
     """Train adaptive vs uniform PINNs and return finite summary metrics."""
     # Configuration
     SEED = 42
-    N_INITIAL_POINTS = 200
-    N_UNIFORM_POINTS = 400  # Total for uniform baseline
+    # Tight collocation budget: with few points, WHERE they sit matters. Uniform spreads
+    # them thin and under-resolves the steepening front; RAR-D concentrates the same budget
+    # there. Both methods end with the same total number of points (fair comparison).
+    N_INITIAL_POINTS = 100
+    N_UNIFORM_POINTS = 200  # Total for uniform baseline (== adaptive's final budget)
     REFINE_FREQUENCY = 200
-    N_REFINE_POINTS = 50
+    N_REFINE_POINTS = 25
     LEARNING_RATE = 1e-3
     TRAINING_STEPS = 1000
 
@@ -203,7 +206,7 @@ def main() -> dict[str, float | int]:
     print("Generating initial training data...")
 
     key = jax.random.PRNGKey(SEED)
-    NU = 0.01  # Viscosity (low = sharp gradients)
+    NU = 0.01  # moderate viscosity: a steep (but resolvable) travelling front
     X_MIN, X_MAX = 0.0, 2.0 * jnp.pi
     T_MAX = 0.5
 
@@ -243,17 +246,13 @@ def main() -> dict[str, float | int]:
     print()
     print("Setting up adaptive sampling...")
 
-    rad_config = RADConfig(beta=1.0)
     rard_config = RARDConfig(
         num_new_points=N_REFINE_POINTS,
         percentile_threshold=90.0,  # Focus on top 10% residual regions
         noise_scale=0.1,
     )
-
-    sampler = RADSampler(rad_config)
     refiner = RARDRefiner(rard_config)
 
-    print(f"  RAD beta: {rad_config.beta}")
     print(f"  Refinement points per step: {rard_config.num_new_points}")
     print(f"  Refinement frequency: {REFINE_FREQUENCY} steps")
 
@@ -365,6 +364,39 @@ def main() -> dict[str, float | int]:
     uniform_history["max_residual"].append(float(jnp.max(jnp.abs(residuals))))
 
     print(f"  Final: loss={loss:.6e}")
+
+    # Step 6.5: Solution accuracy against a real spectral reference (the meaningful comparison).
+    # Comparing each method's TRAINING loss is unfair: adaptive deliberately concentrates points
+    # where the residual is hardest, so its training loss need not be lower even when its SOLUTION
+    # is more accurate. Both PINNs solve the SAME periodic Burgers problem, so we score each against
+    # a high-resolution spectral reference (opifex `solve_burgers_spectral`) on a common (x, t) grid.
+    print()
+    print("Evaluating solution accuracy against a spectral reference...")
+    n_ref_space, n_ref_time = 256, 21
+    x_ref = jnp.linspace(X_MIN, X_MAX, n_ref_space, endpoint=False)  # periodic grid
+    ref_field = solve_burgers_spectral(
+        -jnp.sin(x_ref),
+        NU,
+        domain_extent=X_MAX,
+        time_final=T_MAX,
+        num_steps=2000,
+        num_snapshots=n_ref_time - 1,
+    )  # (n_ref_time, n_ref_space), including the t=0 initial condition
+    t_ref = jnp.linspace(0.0, T_MAX, n_ref_time)
+    grid_x, grid_t = jnp.meshgrid(x_ref, t_ref)
+    xt_ref = jnp.stack([grid_x.ravel(), grid_t.ravel()], axis=1)
+
+    def solution_rel_l2(pinn: BurgersPINN) -> float:
+        """Relative L2 of a trained PINN against the spectral reference field."""
+        pred = pinn(xt_ref).squeeze().reshape(n_ref_time, n_ref_space)
+        return float(relative_l2_error(pred[None], ref_field[None]))
+
+    adaptive_solution_l2 = solution_rel_l2(pinn_adaptive)
+    uniform_solution_l2 = solution_rel_l2(pinn_uniform)
+    error_reduction = (1.0 - adaptive_solution_l2 / uniform_solution_l2) * 100.0
+    print(f"  Adaptive solution relative L2: {adaptive_solution_l2:.4f}")
+    print(f"  Uniform  solution relative L2: {uniform_solution_l2:.4f}")
+    print(f"  Adaptive reduces the solution error by {error_reduction:.0f}% vs uniform")
 
     # Step 7: Evaluate and visualize
     print()
@@ -521,6 +553,8 @@ def main() -> dict[str, float | int]:
         "adaptive_max_residual": float(adaptive_history["max_residual"][-1]),
         "uniform_max_residual": float(uniform_history["max_residual"][-1]),
         "adaptive_final_points": int(adaptive_history["n_points"][-1]),
+        "adaptive_solution_l2": adaptive_solution_l2,
+        "uniform_solution_l2": uniform_solution_l2,
     }
 
 

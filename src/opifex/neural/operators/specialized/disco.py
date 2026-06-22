@@ -1,409 +1,147 @@
-"""DISCO Convolution Layers - Discrete-Continuous Convolutions.
+"""Discrete-continuous (DISCO) convolutions on arbitrary point sets.
 
-This module implements Discrete-Continuous (DISCO) convolution layers that can handle
-both structured (regular grids) and unstructured (irregular grids) spatial data.
+A DISCO convolution (Ocampo, Price & McEwen 2023, *Scalable and equivariant spherical CNNs by
+discrete-continuous (DISCO) convolutions*, ``arXiv:2209.13603``; the algorithm implemented by
+NVIDIA ``torch_harmonics`` and used in spherical neural operators for weather/climate)
+parameterises the convolution kernel as a *continuous* function and evaluates the convolution as a
+quadrature sum against the input samples:
 
-Based on: "Universal Approximation with Certified Networks via
-          Discrete-Continuous Neural Networks"
+    (kappa * f)(x_o) = integral kappa(x_o - x) f(x) dx  ~=  sum_i q_i kappa(x_o - x_i) f(x_i),
 
-Key Features:
-- DiscreteContinuousConv2d: General DISCO convolution for 2D data
-- EquidistantDiscreteContinuousConv2d: Optimized for regular grids
-- DiscreteContinuousConvTranspose2d: Transpose/deconvolution version
-- Support for irregular sampling patterns
-- Physics-informed geometric constraints
+where ``q_i`` is the quadrature weight (the measure each input sample represents). The kernel
+``kappa(r) = sum_k w_k phi_k(r)`` is a sum of fixed continuous radial basis functions ``phi_k`` with
+learnable per-channel coefficients ``w_k``. The radial basis is the piecewise-linear hat basis of
+the reference (opifex's :class:`~opifex.neural.equivariant.PiecewiseLinearBasis`, faithful to
+``torch_harmonics``'s ``PiecewiseLinearFilterBasis``), and the filter is normalised per output point
+and per basis function so each basis integrates to one against the quadrature
+(``torch_harmonics``'s ``_normalize_convolution_filter_matrix``) — a partition of unity that gives
+consistent magnitude and discretisation invariance.
+
+Because the kernel is continuous and the sum is a quadrature, the operator is
+*discretisation-aware*: it acts on arbitrary — including irregular and non-uniform — point
+distributions, and the same learned kernel applied on a finer grid approximates the same
+continuous operator. This is the capability standard discrete convolutions lack: the kernel lives
+in physical coordinates, not pixels.
 """
 
-from collections.abc import Callable, Sequence
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import nnx
+
+from opifex.neural.equivariant import PiecewiseLinearBasis
+
+
+if TYPE_CHECKING:
+    from jaxtyping import Array, Float
+
+
+def build_disco_filter(
+    out_coords: jax.Array,
+    in_coords: jax.Array,
+    quad_weights: jax.Array,
+    basis: PiecewiseLinearBasis,
+    *,
+    eps: float = 1e-9,
+) -> jax.Array:
+    """Build the normalised DISCO quadrature filter ``psi[o, i, k]``.
+
+    For each output point ``o``, input point ``i`` and basis function ``k`` the entry is
+    ``q_i * phi_k(|x_o - x_i|)`` normalised so ``sum_i psi[o, i, k] = 1``
+    (``torch_harmonics``'s ``_normalize_convolution_filter_matrix``), making each basis a weighted
+    average over the support.
+
+    Args:
+        out_coords: Output sample positions, shape ``(num_out, 2)``.
+        in_coords: Input sample positions, shape ``(num_in, 2)``.
+        quad_weights: Per-input quadrature weights, shape ``(num_in,)``.
+        basis: The radial :class:`PiecewiseLinearBasis` (its ``cutoff`` is the support radius).
+        eps: Normalisation floor.
+
+    Returns:
+        Filter tensor of shape ``(num_out, num_in, num_basis)``.
+    """
+    diff = out_coords[:, None, :] - in_coords[None, :, :]
+    distances = jnp.linalg.norm(diff, axis=-1)
+    psi = basis(distances) * quad_weights[None, :, None]  # (num_out, num_in, num_basis)
+    norm = jnp.sum(psi, axis=1, keepdims=True)  # (num_out, 1, num_basis)
+    return psi / (norm + eps)
+
+
+def regular_grid(resolution: int, extent: float = 1.0) -> tuple[jax.Array, jax.Array]:
+    """Return ``(coords, quad_weights)`` for a uniform ``resolution x resolution`` grid on a square.
+
+    ``coords`` is ``(resolution**2, 2)``; ``quad_weights`` is the uniform cell area
+    ``(extent / resolution)**2`` for every point (the measure each sample represents).
+    """
+    axis = (jnp.arange(resolution) + 0.5) * (extent / resolution)
+    yy, xx = jnp.meshgrid(axis, axis, indexing="ij")
+    coords = jnp.stack([yy.reshape(-1), xx.reshape(-1)], axis=-1)
+    cell_area = (extent / resolution) ** 2
+    quad_weights = jnp.full((resolution * resolution,), cell_area)
+    return coords, quad_weights
 
 
 class DiscreteContinuousConv2d(nnx.Module):
-    """Discrete-Continuous convolution for 2D data.
+    """Discrete-continuous convolution between two (possibly irregular) point sets.
 
-    This layer performs convolution operations that can handle both regular
-    and irregular spatial grids by learning continuous kernel functions.
+    The convolution geometry — input/output sample positions and quadrature weights — is fixed
+    at construction, so the normalised continuous-kernel quadrature filter is precomputed once. The
+    learnable parameters are the per-basis channel-mixing weights
+    ``(num_basis, in_channels, out_channels)`` and an optional bias; they are independent of the
+    geometry, so the *same* learned kernel can be applied on a different grid (the resolution-
+    transfer property).
 
-    Args:
-        in_channels: Number of input channels
-        out_channels: Number of output channels
-        kernel_size: Size of the convolution kernel
-        stride: Stride of the convolution
-        padding: Padding mode ('VALID' or 'SAME')
-        use_bias: Whether to use bias parameters
-        activation: Activation function to apply
-        rngs: Random number generator state
+    Forward input is ``(batch, num_in, in_channels)`` point features; output is
+    ``(batch, num_out, out_channels)``.
     """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int | tuple[int, int] = 3,
-        stride: int | tuple[int, int] = 1,
-        padding: str = "SAME",
-        use_bias: bool = True,
-        activation: Callable | None = None,
+        in_coords: jax.Array,
+        out_coords: jax.Array,
+        quad_weights: jax.Array,
         *,
+        num_basis: int = 4,
+        radius: float,
+        use_bias: bool = True,
         rngs: nnx.Rngs,
     ) -> None:
+        """Precompute the quadrature filter and initialise the per-basis channel weights."""
         super().__init__()
-
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = (
-            kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
+        self.num_basis = num_basis
+        self.radius = radius
+        # Reference piecewise-linear radial basis; precompute the normalised (num_out, num_in,
+        # num_basis) quadrature filter — a fixed function of the geometry, stored as a buffer.
+        radial_basis = PiecewiseLinearBasis(num_basis=num_basis, cutoff=radius)
+        self.filter = nnx.Variable(
+            build_disco_filter(out_coords, in_coords, quad_weights, radial_basis)
         )
-        self.stride = stride if isinstance(stride, tuple) else (stride, stride)
-        self.padding = padding
-        self.use_bias = use_bias
-        self.activation = activation
-
-        # Initialize continuous kernel parameters
-        # We parameterize the kernel as a small neural network
-        hidden_dim = max(16, min(64, out_channels))
-
-        # Coordinate encoding network
-        self.coord_encoder = nnx.Sequential(
-            nnx.Linear(2, hidden_dim, rngs=rngs),  # 2D coordinates
-            nnx.gelu,
-            nnx.Linear(hidden_dim, hidden_dim, rngs=rngs),
-            nnx.gelu,
+        scale = float(np.sqrt(1.0 / (in_channels * num_basis)))
+        self.weight = nnx.Param(
+            scale * jax.random.normal(rngs.params(), (num_basis, in_channels, out_channels))
         )
+        self.bias = nnx.Param(jnp.zeros((out_channels,))) if use_bias else None
 
-        # Kernel value network
-        self.kernel_network = nnx.Linear(
-            hidden_dim,
-            in_channels * out_channels,
-            rngs=rngs,
-        )
-
-        # Bias parameters
-        if self.use_bias:
-            # Initialize bias with small random values for proper testing
-            bias_init = jax.random.normal(rngs.params(), (out_channels,)) * 0.01
-            self.bias = nnx.Param(bias_init)
-
-    def _get_kernel_coordinates(self, kernel_size: tuple[int, int]) -> jnp.ndarray:
-        """Generate normalized coordinates for kernel positions.
-
-        Args:
-            kernel_size: (height, width) of kernel
-
-        Returns:
-            Coordinate array of shape (kernel_h * kernel_w, 2)
-        """
-        h, w = kernel_size
-
-        # Create coordinate grid centered at origin
-        y_coords = jnp.linspace(-1.0, 1.0, h)
-        x_coords = jnp.linspace(-1.0, 1.0, w)
-
-        yy, xx = jnp.meshgrid(y_coords, x_coords, indexing="ij")
-        return jnp.stack([xx.flatten(), yy.flatten()], axis=1)
-
-    def _generate_continuous_kernel(self) -> jnp.ndarray:
-        """Generate continuous kernel weights.
-
-        Returns:
-            Kernel weights of shape (kernel_h, kernel_w, in_channels, out_channels)
-        """
-        # Get kernel coordinates
-        coords = self._get_kernel_coordinates(self.kernel_size)
-
-        # Encode coordinates
-        coord_features = self.coord_encoder(coords)
-
-        # Generate kernel values
-        kernel_values = self.kernel_network(coord_features)
-
-        # Reshape to kernel format
-        kernel_h, kernel_w = self.kernel_size
-        return kernel_values.reshape(kernel_h, kernel_w, self.in_channels, self.out_channels)
-
-    def __call__(
-        self,
-        x: jnp.ndarray,
-        spatial_coords: jnp.ndarray | None = None,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
-        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
-    ) -> jnp.ndarray:
-        """Apply DISCO convolution to input.
-
-        Args:
-            x: Input tensor of shape (batch, height, width, channels)
-            spatial_coords: Optional spatial coordinates for irregular grids
-            deterministic: Whether to use deterministic mode
-
-        Returns:
-            Output tensor after DISCO convolution
-        """
-        # JAX-native precision handling - no explicit type casting needed
-
-        # Generate continuous kernel
-        kernel = self._generate_continuous_kernel()
-
-        # Apply convolution using JAX's lax.conv_general_dilated
-        if self.padding == "SAME":
-            padding = "SAME"
-        elif self.padding == "VALID":
-            padding = "VALID"
-        # Convert to proper padding format for conv_general_dilated
-        elif isinstance(self.padding, list | tuple):
-            if len(self.padding) > 0 and isinstance(self.padding[0], int):
-                # Ensure integer padding tuples
-                padding = tuple((int(p), int(p)) for p in self.padding)
-            else:
-                # Handle nested tuples/lists, ensure all values are integers
-                padding_list = []
-                for p in self.padding:
-                    if isinstance(p, list | tuple) and len(p) >= 2:
-                        padding_list.append((int(p[0]), int(p[1])))
-                    elif isinstance(p, int | float):
-                        padding_list.append((int(p), int(p)))
-                    else:
-                        padding_list.append((0, 0))  # Fallback
-                padding = tuple(padding_list)
-        else:
-            padding = "SAME"  # Default fallback
-
-        # Standard convolution for regular grids
-        output = jax.lax.conv_general_dilated(
-            x,
-            kernel,
-            window_strides=self.stride,
-            padding=padding,
-            dimension_numbers=("NHWC", "HWIO", "NHWC"),
-        )
-
-        # Add bias if enabled
-        if self.use_bias:
-            output = output + self.bias
-
-        # Apply activation if specified
-        if self.activation is not None:
-            output = self.activation(output)
-
+    def __call__(self, x: Float[Array, "batch num_in in_channels"]) -> jax.Array:
+        """Apply the DISCO convolution: quadrature over input samples and the continuous kernel."""
+        # out[b, o, d] = sum_{i, k} filter[o, i, k] * x[b, i, c] * weight[k, c, d]
+        output = jnp.einsum("oik,bic,kcd->bod", self.filter.value, x, self.weight.value)
+        if self.bias is not None:
+            output = output + self.bias.value
         return output
 
 
-class EquidistantDiscreteContinuousConv2d(DiscreteContinuousConv2d):
-    """Optimized DISCO convolution for equidistant (regular) grids.
-
-    This is a specialized version of DISCO convolution that takes advantage
-    of the regular grid structure for improved efficiency.
-    """
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int | tuple[int, int] = 3,
-        stride: int | tuple[int, int] = 1,
-        padding: str = "SAME",
-        use_bias: bool = True,
-        activation: Callable | None = None,
-        grid_spacing: float = 1.0,
-        *,
-        rngs: nnx.Rngs,
-    ) -> None:
-        super().__init__(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-            use_bias=use_bias,
-            activation=activation,
-            rngs=rngs,
-        )
-
-        self.grid_spacing = grid_spacing
-
-    def _get_kernel_coordinates(self, kernel_size: tuple[int, int]) -> jnp.ndarray:
-        """Generate coordinates scaled by grid spacing."""
-        coords = super()._get_kernel_coordinates(kernel_size)
-        return coords * self.grid_spacing
-
-
-class DiscreteContinuousConvTranspose2d(DiscreteContinuousConv2d):
-    """Transpose version of DISCO convolution for upsampling.
-
-    This implements the transpose/deconvolution version of DISCO convolution,
-    useful for decoder networks and upsampling operations.
-    """
-
-    def __call__(
-        self,
-        x: jnp.ndarray,
-        spatial_coords: jnp.ndarray | None = None,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
-        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries spatial coords and a deterministic flag
-    ) -> jnp.ndarray:
-        """Apply DISCO transpose convolution to input.
-
-        Args:
-            x: Input tensor of shape (batch, height, width, channels)
-            spatial_coords: Optional spatial coordinates for irregular grids
-            deterministic: Whether to use deterministic mode
-
-        Returns:
-            Output tensor after DISCO transpose convolution
-        """
-        # Generate continuous kernel
-        kernel = self._generate_continuous_kernel()
-
-        # Apply transpose convolution
-        if self.padding == "SAME":
-            padding = "SAME"
-        elif self.padding == "VALID":
-            padding = "VALID"
-        # Convert to proper padding format for conv_transpose
-        elif isinstance(self.padding, list | tuple):
-            if len(self.padding) > 0 and isinstance(self.padding[0], int):
-                # Ensure integer padding tuples
-                padding = tuple((int(p), int(p)) for p in self.padding)
-            else:
-                # Handle nested tuples/lists, ensure all values are integers
-                padding_list = []
-                for p in self.padding:
-                    if isinstance(p, list | tuple) and len(p) >= 2:
-                        padding_list.append((int(p[0]), int(p[1])))
-                    elif isinstance(p, int | float):
-                        padding_list.append((int(p), int(p)))
-                    else:
-                        padding_list.append((0, 0))  # Fallback
-                padding = tuple(padding_list)
-        else:
-            padding = "SAME"  # Default fallback
-
-        # Transpose convolution using conv_transpose
-        output = jax.lax.conv_transpose(
-            x,
-            kernel,
-            strides=self.stride,
-            padding=padding,
-            dimension_numbers=("NHWC", "HWIO", "NHWC"),
-        )
-
-        # Add bias if enabled
-        if self.use_bias:
-            output = output + self.bias
-
-        # Apply activation if specified
-        if self.activation is not None:
-            output = self.activation(output)
-
-        return output
-
-
-def create_disco_encoder(
-    in_channels: int,
-    hidden_channels: Sequence[int] = (32, 64, 128),
-    kernel_size: int = 3,
-    activation: Callable = nnx.gelu,
-    use_equidistant: bool = True,
-    *,
-    rngs: nnx.Rngs,
-) -> nnx.Sequential:
-    """Create a DISCO convolution encoder network.
-
-    Args:
-        in_channels: Number of input channels
-        hidden_channels: Sequence of hidden layer channels
-        kernel_size: Kernel size for convolutions
-        activation: Activation function
-        use_equidistant: Whether to use equidistant optimization
-        rngs: Random number generator state
-
-    Returns:
-        Sequential model with DISCO convolution layers
-    """
-    layers = []
-
-    # Select convolution class
-    conv_class = (
-        EquidistantDiscreteContinuousConv2d if use_equidistant else DiscreteContinuousConv2d
-    )
-
-    # Input layer (with downsampling for encoder)
-    layers.append(
-        conv_class(
-            in_channels=in_channels,
-            out_channels=hidden_channels[0],
-            kernel_size=kernel_size,
-            stride=2,  # Downsampling from the first layer
-            activation=activation,
-            rngs=rngs,
-        )
-    )
-
-    # Hidden layers
-    for i in range(1, len(hidden_channels)):
-        layers.append(
-            conv_class(
-                in_channels=hidden_channels[i - 1],
-                out_channels=hidden_channels[i],
-                kernel_size=kernel_size,
-                stride=2,  # Downsampling
-                activation=activation,
-                rngs=rngs,
-            )
-        )
-
-    return nnx.Sequential(*layers)
-
-
-def create_disco_decoder(
-    hidden_channels: Sequence[int],
-    out_channels: int,
-    kernel_size: int = 3,
-    activation: Callable = nnx.gelu,
-    final_activation: Callable | None = None,
-    use_equidistant: bool = True,  # noqa: ARG001 - decoder-factory interface accepts a grid selector
-    *,
-    rngs: nnx.Rngs,
-) -> nnx.Sequential:
-    """Create a DISCO convolution decoder network.
-
-    Args:
-        hidden_channels: Sequence of hidden layer channels (in reverse order)
-        out_channels: Number of output channels
-        kernel_size: Kernel size for convolutions
-        activation: Activation function for hidden layers
-        final_activation: Activation function for output layer
-        use_equidistant: Whether to use equidistant optimization
-        rngs: Random number generator state
-
-    Returns:
-        Sequential model with DISCO transpose convolution layers
-    """
-    layers = []
-
-    # Hidden layers (upsampling)
-    for i in range(len(hidden_channels) - 1):
-        layers.append(
-            DiscreteContinuousConvTranspose2d(
-                in_channels=hidden_channels[i],
-                out_channels=hidden_channels[i + 1],
-                kernel_size=kernel_size,
-                stride=2,  # Upsampling
-                activation=activation,
-                rngs=rngs,
-            )
-        )
-
-    # Output layer (use transpose conv for upsampling to match encoder downsampling)
-    layers.append(
-        DiscreteContinuousConvTranspose2d(
-            in_channels=hidden_channels[-1],
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=2,  # Final upsampling layer
-            activation=final_activation,
-            rngs=rngs,
-        )
-    )
-
-    return nnx.Sequential(*layers)
+__all__ = [
+    "DiscreteContinuousConv2d",
+    "build_disco_filter",
+    "regular_grid",
+]

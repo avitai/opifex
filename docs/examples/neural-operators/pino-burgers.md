@@ -3,69 +3,76 @@
 | Metadata          | Value                           |
 |-------------------|---------------------------------|
 | **Level**         | Advanced                        |
-| **Runtime**       | ~5 min (CPU) / ~1 min (GPU)     |
+| **Runtime**       | ~3 min (CPU) / ~1-2 min (GPU)   |
 | **Prerequisites** | JAX, Flax NNX, FNO, PDEs basics |
 | **Format**        | Python + Jupyter                |
 | **Memory**        | ~2 GB RAM                       |
 
 ## Overview
 
-This tutorial demonstrates training a Physics-Informed Neural Operator (PINO) on the
-1D Burgers equation. PINO combines the FNO architecture with physics-informed loss,
-enabling training with reduced data requirements by enforcing PDE constraints.
+This tutorial trains a Physics-Informed Neural Operator (PINO) on the 1D viscous
+Burgers equation. PINO pairs the FNO architecture with a physics-informed loss so
+the learned operator both fits the data *and* satisfies the governing PDE.
 
 The Burgers equation:
 
 $$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\partial^2 u}{\partial x^2}$$
 
-where $u$ is velocity, $\nu$ is viscosity, and subscripts denote partial derivatives.
+where $u$ is velocity, $\nu$ is viscosity, and subscripts denote partial
+derivatives. The spatial domain is the periodic interval $[0, 1)$.
 
-### A genuinely semi-supervised scheme
+### The genuine PINO setup
 
-The PDE data layer is served through **datarax** under a uniform operator
-contract: each sample's input is the initial condition $u(x,0)$ and its target is
-the **final-time** solution $u(x,T)$ only — both channels-first `(N, 1, 64)`. There
-is no dense ground-truth trajectory.
+Following Li et al. (2021), *Physics-Informed Neural Operator for Learning
+Partial Differential Equations*, and the reference implementation in
+`neuraloperator` (`scripts/train_burgers_pino.py`), the operator maps the initial
+condition $u(x, 0)$ — broadcast/repeated across the time axis — to the **full
+space-time solution** $u(t, x)$, a 2D field over $(\text{time}, \text{space})$.
 
-The PINO is trained against this *sparse* supervision. The FNO still predicts the
-full space-time rollout (`out_channels = TIME_STEPS`), but the data loss only
-anchors two frames:
+A 2D FNO is the backbone: the input is the tiled initial condition of shape
+`(batch, 1, nt, nx)` and the output is the predicted field `(batch, 1, nt, nx)`.
 
-- the predicted **initial** frame to the input IC $u(x,0)$, and
-- the predicted **final** frame to the final-time target $u(x,T)$.
+Training minimises three terms (cf. `neuralop.losses.equation_losses`
+`BurgersEqnLoss` + `ICLoss`):
 
-The **physics** loss (Burgers PDE residual) constrains every predicted time step in
-between, filling the unsupervised interior of the trajectory. This is what makes the
-scheme genuinely semi-supervised: the physics term — not labelled data — drives the
-intermediate dynamics. Evaluation accuracy is measured at the supervised final time,
-and the per-time-step output reports the **PDE residual** (physics consistency of the
-rollout), not an error against a ground-truth trajectory.
+- **data loss**: mean relative L2 between the predicted and the ground-truth
+  space-time trajectory,
+- **IC loss**: MSE between the predicted $t = 0$ slice and the true initial
+  condition,
+- **equation loss**: the mean-squared Burgers PDE residual
+  $u_t + u\,u_x - \nu\,u_{xx}$ evaluated by finite differences over the whole
+  predicted field.
+
+The viscosity $\nu = 0.01$ is shared between the data-generating spectral solver
+and the equation loss, so the supervised physics is self-consistent.
 
 ## What You'll Learn
 
-1. **Understand** PINO architecture: FNO backbone + physics loss
-2. **Implement** PDE residual computation using finite differences
-3. **Configure** multi-objective loss weighting
-4. **Analyze** physics loss contribution to training dynamics
-5. **Compare** data-only FNO vs physics-informed PINO
+1. **Understand** the PINO operator: IC tiled over time $\to$ full $u(t, x)$ field
+2. **Implement** the Burgers PDE residual with finite differences
+3. **Combine** data + IC + equation losses with fixed weights
+4. **Generate** self-consistent Burgers trajectories with the spectral solver
 
 ## Coming from NeuralOperator (PyTorch)?
 
-If you are familiar with the neuraloperator library's PINO examples:
+If you are familiar with the `neuraloperator` library's PINO example:
 
-| NeuralOperator (PyTorch)              | Opifex (JAX)                                  |
-|---------------------------------------|-----------------------------------------------|
-| `FNO(..., physics_loss=True)`         | `FourierNeuralOperator` + custom physics loss |
-| Manual PDE residual computation       | `compute_burgers_residual()` helper           |
-| `trainer.train(..., physics_weight)`  | Custom training loop with weighted losses     |
-| `torch.autograd.grad` for derivatives | `jax.grad` or finite differences              |
+| NeuralOperator (PyTorch)                  | Opifex (JAX)                                   |
+|-------------------------------------------|------------------------------------------------|
+| `FNO(n_modes=(16,16), ...)` (2D)          | `FourierNeuralOperator(spatial_dims=2, ...)`   |
+| `BurgersEqnLoss(visc=0.01, method="fdm")` | `equation_loss()` finite-difference residual   |
+| `ICLoss()`                                | MSE on the predicted `pred[:, 0, :]` slice     |
+| `LpLoss(d=2, p=2)`                         | `relative_l2()` over the full trajectory       |
+| `Relobralo` adaptive aggregator           | Fixed weights (data / IC / equation)           |
+| `Burgers1dTimeDataProcessor` (repeat `x`) | `tile_ic()` repeats the IC over the time axis  |
 
 **Key differences:**
 
-1. **Modular physics loss**: Opifex separates FNO backbone from physics constraints
-2. **Finite difference residual**: Uses explicit finite differences for PDE residual
-3. **Custom training loop**: Full control over loss weighting and optimization
-4. **JAX transforms**: Use `jax.vmap` for batched residual computation
+1. **On-device data generation**: trajectories are built with the pseudo-spectral
+   ETDRK4 Burgers solver, vmapped over the batch — no external data files
+2. **Fixed loss weights**: a clean, reproducible alternative to the reference's
+   Relobralo aggregator; the weights follow the same (data, IC, equation) ordering
+3. **JAX transforms**: a single `jit(vmap(...))` call generates the whole dataset
 
 ## Files
 
@@ -90,61 +97,51 @@ jupyter lab examples/neural-operators/pino_burgers.ipynb
 
 ### Physics-Informed Loss
 
-PINO combines two loss components:
+The total loss combines three components:
 
-1. **Data loss (sparse)**: MSE anchoring the predicted IC frame to the input
-   $u(x,0)$ plus the predicted final frame to the final-time target $u(x,T)$ —
-   no dense trajectory supervision
-2. **Physics loss**: Mean squared Burgers PDE residual over the *full* predicted
-   space-time rollout
+$$\mathcal{L}_{\text{total}} = w_d\,\mathcal{L}_{\text{data}} + w_{ic}\,\mathcal{L}_{\text{IC}} + w_{eq}\,\mathcal{L}_{\text{eqn}}$$
 
-$$\mathcal{L}_{\text{total}} = w_d \mathcal{L}_{\text{data}} + w_p \mathcal{L}_{\text{physics}}$$
+with fixed weights $w_d = 1.0$, $w_{ic} = 5.0$, $w_{eq} = 0.5$, where
 
-$$\mathcal{L}_{\text{data}} = \underbrace{\big\| \hat u(\cdot, t_1) - u(\cdot, 0) \big\|^2}_{\text{IC anchor}} + \underbrace{\big\| \hat u(\cdot, t_T) - u(\cdot, T) \big\|^2}_{\text{final-time target}}$$
+$$\mathcal{L}_{\text{data}} = \mathbb{E}\left[\frac{\lVert \hat u - u \rVert_2}{\lVert u \rVert_2}\right], \qquad
+\mathcal{L}_{\text{IC}} = \mathbb{E}\left[\big(\hat u(0, \cdot) - u(0, \cdot)\big)^2\right]$$
 
-The physics loss ensures predictions satisfy the Burgers equation:
+and the equation loss is the mean-squared Burgers PDE residual over the full
+predicted field:
 
-$$\mathcal{L}_{\text{physics}} = \mathbb{E}\left[\left(u_t + u \cdot u_x - \nu u_{xx}\right)^2\right]$$
+$$\mathcal{L}_{\text{eqn}} = \mathbb{E}\left[\left(u_t + u\,u_x - \nu\,u_{xx}\right)^2\right]$$
 
 ### PINO Architecture
 
 ```mermaid
 graph LR
     subgraph Input
-        A["Initial Condition<br/>u(x,0) : R^(1×64)"]
+        A["Initial Condition<br/>u(x,0) tiled over time<br/>R^(1×11×128)"]
     end
 
     subgraph PINO["Physics-Informed Neural Operator"]
-        B["FNO Backbone<br/>(4 spectral layers)"]
-        C["Data Loss (sparse)<br/>IC anchor + final-time target"]
-        D["Physics Loss<br/>PDE Residual over rollout"]
+        B["2D FNO Backbone<br/>(4 spectral layers)"]
+        C["Data Loss<br/>relative L2 vs u(t,x)"]
+        D["IC Loss<br/>MSE on t=0 slice"]
+        E["Equation Loss<br/>Burgers PDE residual"]
     end
 
     subgraph Output
-        E["Solution Trajectory<br/>u(x,t₁..t₅) : R^(5×64)"]
+        F["Space-Time Solution<br/>u(t,x) : R^(1×11×128)"]
     end
 
-    A --> B --> E
-    E --> C
-    E --> D
-    C --> F["Total Loss"]
-    D --> F
+    A --> B --> F
+    F --> C
+    F --> D
+    F --> E
+    C --> G["Total Loss"]
+    D --> G
+    E --> G
 
     style A fill:#e3f2fd,stroke:#1976d2
-    style E fill:#c8e6c9,stroke:#388e3c
-    style F fill:#fff3e0,stroke:#f57c00
+    style F fill:#c8e6c9,stroke:#388e3c
+    style G fill:#fff3e0,stroke:#f57c00
 ```
-
-### Loss Weighting
-
-The `physics_weight` parameter controls the balance:
-
-| physics_weight | Effect                                |
-|----------------|---------------------------------------|
-| 0.0            | Data-only FNO (no physics constraint) |
-| 0.01 - 0.1     | Mild physics regularization           |
-| 0.1 - 1.0      | Strong physics constraint             |
-| > 1.0          | Physics-dominated training            |
 
 ## Implementation
 
@@ -155,8 +152,8 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.data.loaders import create_burgers_loader
 from opifex.neural.operators.fno.base import FourierNeuralOperator
+from opifex.physics.spectral.steppers import solve_burgers_spectral
 ```
 
 **Terminal Output:**
@@ -167,84 +164,75 @@ Opifex Example: PINO on 1D Burgers Equation
 ======================================================================
 JAX backend: gpu
 JAX devices: [CudaDevice(id=0)]
-Resolution: 64, Time steps: 5, Viscosity: 0.05
-Training samples: 200, Test samples: 50
+Grid: nx=128, nt=11, viscosity=0.01
+Trajectories: train=1000, test=200
 FNO config: modes=16, width=32, layers=4
-Loss weights: data=1.0, physics=0.1
-Grid: dx=0.0312, dt=0.2000
+Loss weights: data=1.0, ic=5.0, equation=0.5
+Spacings: dx=0.00781, dt=0.10000
 ```
 
-### Step 2: Data Loading
+### Step 2: Data Generation
 
-`create_burgers_loader` returns a frozen `PDELoaders` (`.train` / `.val`)
-served via datarax. Following the uniform operator contract, each batch's
-`"input"` is the initial condition $u(x,0)$ and `"output"` is the **final-time**
-solution $u(x,T)$ only — both channels-first `(N, 1, resolution)`. The example
-collects the batched pipelines into in-memory arrays for the training loop:
+Initial conditions are periodic spectral Gaussian random fields (the canonical
+FNO/PINO benchmark IC, covariance $\sigma^2(-\Delta + \tau^2 I)^{-\gamma}$). Each
+IC is evolved to the full trajectory $u(t, x)$ with the pseudo-spectral ETDRK4
+Burgers solver, vmapped over the batch on device. `solve_burgers_spectral`
+returns `(num_snapshots + 1, nx)` real snapshots **including** the initial
+condition, i.e. exactly the `nt = NUM_TIME` time frames the model trains on.
 
 ```python
-n_samples = N_TRAIN + N_TEST
-loaders = create_burgers_loader(
-    n_samples=n_samples,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    viscosity_range=VISCOSITY_RANGE,  # (0.05, 0.05) — fixed for physics loss
-    val_fraction=N_TEST / n_samples,
-    seed=SEED,
-)
+def per_sample(key):
+    ic = _burgers_ic(key, NUM_SPACE)
+    return solve_burgers_spectral(
+        ic, VISCOSITY, domain_extent=1.0, time_final=1.0,
+        num_steps=250, num_snapshots=NUM_TIME - 1,
+    )
 
-def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
-    inputs, outputs = [], []
-    for batch in pipeline:
-        inputs.append(np.asarray(batch["input"]))
-        outputs.append(np.asarray(batch["output"]))
-    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
-
-X_train, Y_train = _collect(loaders.train)  # X, Y(final-time): (N, 1, 64)
-X_test, Y_test = _collect(loaders.val)
+keys = jax.vmap(jax.random.PRNGKey)(seed + jnp.arange(n_samples))
+trajectories = jax.jit(jax.vmap(per_sample))(keys)  # (n, nt, nx)
 ```
 
 **Terminal Output:**
 
 ```text
-Generating 1D Burgers data (jit+vmap) and serving via datarax...
-Training data: X=(208, 1, 64), Y(final-time)=(208, 1, 64)
-Test data:     X=(64, 1, 64), Y(final-time)=(64, 1, 64)
+Generating Burgers space-time trajectories (jit+vmap spectral solver)...
+Train trajectories: (1000, 11, 128)
+Test trajectories:  (200, 11, 128)
 ```
 
-### Step 3: Physics Loss Definition
+### Step 3: PDE Residual
 
-The PDE residual is computed over the full predicted rollout `u` of shape
-`(batch, time_steps, resolution)` using finite differences. Spatial derivatives
-are taken at the time midpoint so the time and space stencils align:
+The residual is computed by finite differences over the predicted field
+`(batch, nt, nx)`: a forward difference in time, periodic central differences in
+space. This mirrors `neuralop.losses.equation_losses.BurgersEqnLoss`
+(`method="fdm"`).
 
 ```python
 def compute_burgers_residual(u, dx, dt, nu):
-    # Time derivative: (u(t+1) - u(t)) / dt
-    u_t = (u[:, 1:, :] - u[:, :-1, :]) / dt
-
-    # Use u at the midpoint in time for the spatial derivatives
-    u_mid = 0.5 * (u[:, 1:, :] + u[:, :-1, :])
-    u_x = (u_mid[:, :, 2:] - u_mid[:, :, :-2]) / (2 * dx)
-    u_xx = (u_mid[:, :, 2:] - 2 * u_mid[:, :, 1:-1] + u_mid[:, :, :-2]) / (dx**2)
-
-    u_interior = u_mid[:, :, 1:-1]
-    u_t_interior = u_t[:, :, 1:-1]
-
-    # Burgers residual: u_t + u * u_x - nu * u_xx = 0
-    return u_t_interior + u_interior * u_x - nu * u_xx
+    u_t = (u[:, 1:, :] - u[:, :-1, :]) / dt          # forward diff in time
+    u_level = u[:, :-1, :]
+    u_right = jnp.roll(u_level, shift=-1, axis=-1)    # periodic wrap
+    u_left = jnp.roll(u_level, shift=1, axis=-1)
+    u_x = (u_right - u_left) / (2.0 * dx)
+    u_xx = (u_right - 2.0 * u_level + u_left) / (dx**2)
+    return u_t + u_level * u_x - nu * u_xx
 ```
 
 ### Step 4: Model Creation
 
+The IC is tiled over the time axis to shape `(batch, 1, nt, nx)`; a 2D FNO maps it
+to the full space-time field. Space is periodic, so no domain padding is used.
+
 ```python
 model = FourierNeuralOperator(
     in_channels=1,
-    out_channels=TIME_STEPS,  # predict the full 5-step rollout
-    hidden_channels=HIDDEN_WIDTH,
-    modes=MODES,
-    num_layers=NUM_LAYERS,
-    spatial_dims=1,
+    out_channels=1,
+    hidden_channels=32,
+    modes=16,
+    num_layers=4,
+    spatial_dims=2,
+    positional_embedding=True,
+    domain_padding=0.0,
     rngs=nnx.Rngs(SEED),
 )
 ```
@@ -252,78 +240,74 @@ model = FourierNeuralOperator(
 **Terminal Output:**
 
 ```text
-Creating PINO model (FNO backbone)...
-Model parameters: 140,229
+Creating PINO model (2D FNO backbone over (time, space))...
+Model parameters: 4,203,009
 ```
 
-### Step 5: Custom Training Loop
+### Step 5: Training
 
-The data term is sparse: it anchors the predicted IC frame `y_pred[:, :1]` to the
-input `x` and the predicted final frame `y_pred[:, -1:]` to the final-time target
-`y_true` `(batch, 1, resolution)`. The physics term constrains the whole rollout.
+AdamW with a cosine-decayed learning rate (decayed over the total number of
+mini-batch updates). Each step adds the data, IC, and equation losses with fixed
+weights.
 
 ```python
-def pino_loss_fn(model, x, y_true, dx, dt, nu, data_weight, physics_weight):
-    y_pred = model(x)  # (batch, time_steps, resolution)
-    ic_loss = jnp.mean((y_pred[:, :1, :] - x) ** 2)        # IC anchor
-    final_loss = jnp.mean((y_pred[:, -1:, :] - y_true) ** 2)  # final-time target
-    data_loss = ic_loss + final_loss
-    pde_loss = physics_loss(y_pred, dx, dt, nu)            # residual over rollout
-    total_loss = data_weight * data_loss + physics_weight * pde_loss
-    return total_loss, {"data_loss": data_loss, "physics_loss": pde_loss}
+def pino_loss_fn(model, ic_tiled, trajectory, ic):
+    pred = model(ic_tiled)[:, 0]                       # (batch, nt, nx)
+    data_loss = relative_l2(pred, trajectory)          # data L2
+    ic_loss = jnp.mean((pred[:, 0, :] - ic) ** 2)      # IC anchor
+    eqn_loss = equation_loss(pred, DX, DT, VISCOSITY)  # PDE residual
+    total = data_loss + 5.0 * ic_loss + 0.5 * eqn_loss
+    return total, {"data": data_loss, "ic": ic_loss, "equation": eqn_loss}
 ```
 
 **Terminal Output:**
 
 ```text
 Starting PINO training...
-Optimizer: Adam (lr=0.001)
-Epoch   1/20: Total=0.247254, Data=0.183517, Physics=0.637368
-Epoch   5/20: Total=0.012081, Data=0.005691, Physics=0.063905
-Epoch  10/20: Total=0.004628, Data=0.002027, Physics=0.026006
-Epoch  15/20: Total=0.003003, Data=0.001242, Physics=0.017616
-Epoch  20/20: Total=0.002359, Data=0.000916, Physics=0.014432
+Optimizer: AdamW (cosine-decayed lr from 0.001)
+Epoch    1/800: Total=1.388993, Data=0.633944, IC=8.641672e-02, Equation=6.459318e-01
+Epoch  100/800: Total=0.089785, Data=0.039767, IC=2.801668e-03, Equation=7.201982e-02
+Epoch  200/800: Total=0.086708, Data=0.037631, IC=2.748990e-03, Equation=7.066499e-02
+Epoch  300/800: Total=0.085388, Data=0.036472, IC=2.710348e-03, Equation=7.072789e-02
+Epoch  400/800: Total=0.084342, Data=0.035752, IC=2.695936e-03, Equation=7.022096e-02
+Epoch  500/800: Total=0.084057, Data=0.035349, IC=2.689569e-03, Equation=7.052071e-02
+Epoch  600/800: Total=0.083881, Data=0.035248, IC=2.685199e-03, Equation=7.041378e-02
+Epoch  700/800: Total=0.083803, Data=0.035190, IC=2.684461e-03, Equation=7.038072e-02
+Epoch  800/800: Total=0.083786, Data=0.035148, IC=2.684370e-03, Equation=7.043306e-02
 
-Training completed in 1.6s
+Training completed in 61.0s
 ```
 
 ### Step 6: Evaluation
 
-Accuracy is measured at the supervised final time using the predicted final frame
-`predictions[:, -1:]` against the final-time target. The per-time-step output is the
-mean-squared **PDE residual** along the rollout (physics consistency), not an error
-against a ground-truth trajectory — none exists in the sparse-supervision scheme.
+Accuracy is the relative L2 over the **full** held-out trajectory. The IC RMS
+error and the mean PDE residual (physics consistency) are reported on the test
+set.
 
 ```python
-predictions = model(X_test_jnp)          # (N, TIME_STEPS, resolution)
-final_pred = predictions[:, -1:, :]      # predicted u(x, T)
-
-test_mse = float(jnp.mean((final_pred - Y_test_jnp) ** 2))
-test_physics_loss = float(physics_loss(predictions, DX, DT, VISCOSITY))
-
-step_residual = jnp.mean(
-    compute_burgers_residual(predictions, DX, DT, VISCOSITY) ** 2, axis=(0, 2)
-)
+predictions = model(test_input)[:, 0]                       # (N, nt, nx)
+test_rel_l2 = float(relative_l2(predictions, test_traj))
+test_ic_error = float(jnp.sqrt(jnp.mean((predictions[:, 0] - test_ic) ** 2)))
+test_residual = float(equation_loss(predictions, DX, DT, VISCOSITY))
 ```
 
 **Terminal Output:**
 
 ```text
 Running evaluation...
-Test MSE (final time):  0.000460
-Test Relative L2:       0.093838
-Test Physics Loss:      0.019707
-
-Per-time-step PDE residual (physics consistency of the rollout):
-  t_1: 2.719606e-02
-  t_2: 1.252618e-02
-  t_3: 1.791604e-02
-  t_4: 2.118988e-02
+Test relative L2 (full trajectory): 0.033574
+Test IC RMS error (t=0 slice):      5.167113e-02
+Test mean PDE residual (MSE):        2.177162e-01
 ```
 
 ### Visualization
 
-#### Sample Predictions
+#### Sample Space-Time Solutions
+
+Ground truth, prediction, and absolute error for three test trajectories. The
+error concentrates near $t = 0$ — where the initial condition has the sharpest
+features — and along the convective shock fronts, exactly where Burgers dynamics
+are hardest.
 
 ![PINO Predictions](../../assets/examples/pino_burgers/predictions.png)
 
@@ -333,23 +317,28 @@ Per-time-step PDE residual (physics consistency of the rollout):
 
 ## Results Summary
 
-| Metric                       | Value       |
-|------------------------------|-------------|
-| Test MSE (final time)        | 0.00046     |
-| Relative L2 Error (final t)  | 0.094       |
-| Physics Loss (rollout)       | 0.020       |
-| Training Time                | 1.6s (GPU)  |
-| Parameters                   | 140,229     |
+| Metric                          | Value        |
+|---------------------------------|--------------|
+| Test relative L2 (full traj.)   | 0.0336       |
+| Test IC RMS error (t=0 slice)   | 0.052        |
+| Test mean PDE residual (MSE)    | 0.218        |
+| Final total training loss       | 0.084        |
+| Training Time                   | 61s (GPU)    |
+| Parameters                      | 4,203,009    |
+
+The PINO recovers the full space-time Burgers solution operator to about **3.4%
+relative L2** on held-out trajectories, with the predicted $t = 0$ slice closely
+matching the true initial condition.
 
 ## Next Steps
 
 ### Experiments to Try
 
-1. **Vary physics_weight**: Try values 0.01, 0.1, 1.0 and compare convergence
-2. **Compare with FNO**: Run data-only FNO (physics_weight=0) for baseline
-3. **Adaptive weighting**: Implement SoftAdapt or ReLoBRaLo for automatic balancing
-4. **2D Burgers**: Extend to 2D advection-diffusion
-5. **Spectral derivatives**: Replace finite differences with FFT-based differentiation
+1. **Vary the loss weights** (data / IC / equation) and study the trade-off
+2. **Adaptive weighting**: swap fixed weights for SoftAdapt or ReLoBRaLo
+3. **Denser time grid**: increase `NUM_TIME` for finer temporal resolution
+4. **Spectral derivatives**: replace finite differences with FFT-based residuals
+5. **Varying viscosity**: add $\nu$ as an extra input channel to the operator
 
 ### Related Examples
 
@@ -357,57 +346,35 @@ Per-time-step PDE residual (physics consistency of the rollout):
 |-------------------------------------------------|--------------|-------------------------------|
 | [FNO on Burgers Equation](fno-burgers.md)       | Intermediate | Data-only FNO baseline        |
 | [FNO on Darcy Flow](fno-darcy.md)               | Intermediate | 2D elliptic PDE               |
-| [Heat Equation PINN](../pinns/heat-equation.md) | Beginner     | Physics-only neural network   |
+| [Burgers PINN](../pinns/burgers.md)             | Beginner     | Physics-only neural network   |
 | [TFNO on Darcy Flow](tfno-darcy.md)             | Intermediate | Tensorized FNO with compress. |
 
 ### API Reference
 
-- [`FourierNeuralOperator`](../../api/neural.md) - FNO model class
-- [`create_burgers_loader`](../../api/data.md) - Burgers equation data loader
+- [`FourierNeuralOperator`](../../api/neural.md) — FNO model class
+- [`solve_burgers_spectral`](../../api/physics.md) — pseudo-spectral Burgers solver
 
 ### Troubleshooting
 
-#### Physics loss dominates training
+#### Training loss freezes early
 
-**Symptom**: Data loss not decreasing while physics loss drops quickly.
+**Symptom**: the loss stops changing after a few dozen epochs.
 
-**Cause**: `physics_weight` too high relative to data loss scale.
+**Cause**: the cosine learning-rate schedule decays over too few steps. It is
+stepped once per **mini-batch update**, not per epoch.
 
-**Solution**: Reduce `physics_weight` or normalize both losses:
-
-```python
-physics_weight = 0.01  # Start small
-# Or normalize: physics_loss / jax.lax.stop_gradient(physics_loss) * target_scale
-```
-
-#### NaN in physics loss
-
-**Symptom**: Physics loss becomes `nan` during training.
-
-**Cause**: Numerical instability in finite difference computation with large gradients.
-
-**Solution**: Use gradient clipping or reduce learning rate:
+**Solution**: set the decay length to `NUM_EPOCHS * n_batches`:
 
 ```python
-optimizer = optax.chain(
-    optax.clip_by_global_norm(1.0),
-    optax.adam(1e-4),  # Lower learning rate
-)
+schedule = optax.cosine_decay_schedule(LEARNING_RATE, NUM_EPOCHS * n_batches)
 ```
 
-#### High final-time relative L2 error
+#### High PDE residual relative to the data error
 
-**Symptom**: Final-time relative L2 stays high (well above ~0.1) after convergence.
+**Symptom**: the test PDE residual is larger than the data relative L2.
 
-**Cause**: With only the IC and final frames supervised, the physics weight may be
-too low to constrain the interior rollout, or Burgers shocks make the physics loss
-conflict with the sparse data anchors.
+**Cause**: the finite-difference residual amplifies errors near the steep IC and
+the convective shocks, where the field has large spatial gradients.
 
-**Solution**: Raise `physics_weight` to lean harder on the PDE residual, add training
-samples, or use curriculum learning:
-
-```python
-# Start with high viscosity (smooth solutions), decrease over epochs
-for epoch in range(epochs):
-    nu = max(0.01, 0.1 - epoch * 0.005)  # Curriculum
-```
+**Solution**: raise `EQUATION_WEIGHT`, refine the grid (`NUM_SPACE`, `NUM_TIME`),
+or use spectral derivatives for a more accurate residual.

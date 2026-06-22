@@ -25,8 +25,10 @@ if TYPE_CHECKING:
 import jax
 import jax.numpy as jnp
 import numpy as np
-from datarax.core.config import StructuralConfig
+from datarax.core.config import MapOperatorConfig, StructuralConfig
 from datarax.core.data_source import DataSourceModule
+from datarax.operators.map_operator import MapOperator
+from datarax.pipeline import Pipeline
 from flax import nnx
 
 
@@ -64,7 +66,9 @@ class PDEBenchConfig(StructuralConfig):
         split: Which split to load ("train" or "test")
         input_steps: Number of input time steps (default: 1)
         output_steps: Number of output time steps to predict (default: 1)
-        normalize: Whether to normalize data to [0, 1] (default: True)
+        normalize: Whether to attach a per-channel min-max normalisation operator
+            (a datarax ``MapOperator``) in :func:`create_pdebench_loader` (default: True)
+        shuffle: Whether ``get_batch_at`` shuffles via the supplied key (default: False)
         dtype: JAX dtype for arrays (default: jnp.float32)
         field_keys: Tuple of HDF5 dataset keys for multi-field datasets (optional).
             If provided, these keys are stacked along the last axis.
@@ -78,6 +82,7 @@ class PDEBenchConfig(StructuralConfig):
     input_steps: int = 1
     output_steps: int = 1
     normalize: bool = True
+    shuffle: bool = False
     dtype: Any = jnp.float32
     field_keys: tuple[str, ...] | None = None
 
@@ -105,18 +110,20 @@ class PDEBenchConfig(StructuralConfig):
 
 
 class PDEBenchSource(DataSourceModule):
-    """Eager-loading source for PDEBench HDF5 datasets.
+    """Eager-loading datarax source for PDEBench HDF5 datasets.
 
-    Loads entire HDF5 dataset to JAX arrays at init, then provides
-    pure-JAX iteration. Each element is a dict with:
+    Reads the HDF5 file at ``__init__``, splits train/test, and performs the PDE-specific
+    input/target time-window pairing (the one piece datarax has no operator for). After that it is
+    a standard datarax :class:`~datarax.core.data_source.DataSourceModule`: it implements the
+    stateless :meth:`get_batch_at` / :meth:`element_spec` contract so it can be driven by a datarax
+    :class:`~datarax.pipeline.Pipeline`. Each element is a dict with:
         - "input": jax.Array of shape (input_steps, *spatial, channels)
         - "target": jax.Array of shape (output_steps, *spatial, channels)
-        - "coordinates": dict of spatial/temporal grids (if available)
 
-    Follows the same patterns as HFEagerSource:
-        - All I/O at __init__, pure JAX after
-        - Index-based __getitem__ and __iter__
-        - get_batch() for batched access
+    Coordinate grids (if present) are exposed via :attr:`coordinates`. Normalisation is *not* baked
+    into the stored arrays — it is a datarax :class:`~datarax.operators.map_operator.MapOperator`
+    obtained from :meth:`normalize_operator` and attached as a pipeline stage (see
+    :func:`create_pdebench_loader`), keeping the source pure data and transforms composable.
 
     Example:
         >>> config = PDEBenchConfig(
@@ -125,8 +132,8 @@ class PDEBenchSource(DataSourceModule):
         ...     input_steps=10,
         ...     output_steps=10,
         ... )
-        >>> source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        >>> batch = source.get_batch(32)
+        >>> loader = create_pdebench_loader(config, batch_size=32)
+        >>> batch = loader.step()
         >>> batch["input"].shape   # (32, 10, 1024, 1)
     """
 
@@ -188,20 +195,19 @@ class PDEBenchSource(DataSourceModule):
             inputs = data
             targets = data
 
-        # Normalize if requested (per-channel min-max to [0, 1])
-        if config.normalize:
-            inputs, targets = self._normalize(inputs, targets)
-
-        # Convert to JAX arrays
+        # Store raw arrays; normalisation is a composable MapOperator, not baked in here.
         self.inputs = jnp.array(inputs, dtype=config.dtype)
         self.targets = jnp.array(targets, dtype=config.dtype)
         coord_dict = (
             {k: jnp.array(v, dtype=config.dtype) for k, v in coords.items()} if coords else None
         )
         self.coordinates = nnx.data(coord_dict)
+        self._shuffle = config.shuffle
 
-        # Internal iteration state
-        self._position = nnx.Variable(0)
+        # Per-channel min-max statistics for the optional normalisation operator.
+        norm_min, norm_scale = self._compute_norm_stats(self.inputs, self.targets)
+        self._norm_min = nnx.data(norm_min)
+        self._norm_scale = nnx.data(norm_scale)
 
         logger.info(
             "Loaded %s: %d samples (%s split)",
@@ -298,117 +304,130 @@ class PDEBenchSource(DataSourceModule):
         return np.stack(all_inputs), np.stack(all_targets)
 
     @staticmethod
-    def _normalize(
-        inputs: np.ndarray,
-        targets: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Per-channel min-max normalization to [0, 1]."""
-        # Compute global min/max across both inputs and targets
-        combined = np.concatenate(
-            [
-                inputs.reshape(-1, inputs.shape[-1]),
-                targets.reshape(-1, targets.shape[-1]),
-            ],
-            axis=0,
+    def _compute_norm_stats(
+        inputs: jax.Array,
+        targets: jax.Array,
+    ) -> tuple[jax.Array, jax.Array]:
+        """Per-channel min-max statistics ``(min, scale)`` over inputs and targets.
+
+        Returned arrays have shape ``(channels,)`` so they broadcast against both a single element
+        ``(steps, *spatial, C)`` and a batch ``(size, steps, *spatial, C)`` on the last axis.
+        ``scale`` is ``max - min`` with zeros replaced by one to avoid division by zero.
+        """
+        channels = inputs.shape[-1]
+        combined = jnp.concatenate(
+            [inputs.reshape(-1, channels), targets.reshape(-1, channels)], axis=0
         )
-        ch_min = combined.min(axis=0, keepdims=True)
-        ch_max = combined.max(axis=0, keepdims=True)
-        denom = ch_max - ch_min
-        denom = np.where(denom == 0, 1.0, denom)  # avoid division by zero
+        ch_min = combined.min(axis=0)
+        ch_scale = combined.max(axis=0) - ch_min
+        ch_scale = jnp.where(ch_scale == 0, 1.0, ch_scale)
+        return ch_min, ch_scale
 
-        # Reshape for broadcasting
-        shape = [1] * (inputs.ndim - 1) + [inputs.shape[-1]]
-        ch_min_r = ch_min.reshape(shape)
-        denom_r = denom.reshape(shape)
+    def normalize_operator(self, *, rngs: nnx.Rngs | None = None) -> MapOperator | None:
+        """Return the per-channel min-max normalisation as a datarax ``MapOperator``.
 
-        inputs_norm = (inputs - ch_min_r) / denom_r
-        targets_norm = (targets - ch_min_r) / denom_r
+        The operator rescales the ``"input"`` and ``"target"`` fields (leaving ``"coordinates"``
+        untouched) to ``[0, 1]`` using the statistics computed at load. Returns ``None`` when the
+        config has ``normalize=False`` so the loader attaches no normalisation stage.
+        """
+        if not self.config.normalize:  # type: ignore[attr-defined]
+            return None
+        ch_min, ch_scale = self._norm_min, self._norm_scale
 
-        return inputs_norm, targets_norm
+        def rescale(value: jax.Array, key: jax.Array) -> jax.Array:  # noqa: ARG001 - deterministic
+            return (value - ch_min) / ch_scale
+
+        # ``precomputed_stats={}`` keeps the operator on the static-stats path (the normalisation
+        # constants are baked into ``rescale``); no per-batch statistics are needed.
+        return MapOperator(
+            MapOperatorConfig(
+                subtree={"input": None, "target": None},
+                precomputed_stats={},
+            ),
+            fn=rescale,
+            rngs=rngs,
+        )
 
     def __len__(self) -> int:
-        """Return the total number of data elements."""
+        """Return the total number of windowed elements."""
         return self.inputs.shape[0]
 
-    def __iter__(self) -> Iterator[dict[str, Any]]:  # type: ignore[override]
-        """Iterate over data elements."""
-        self._position.value = 0
-        for i in range(len(self)):
-            yield self[i]
+    def element_spec(self) -> dict[str, jax.ShapeDtypeStruct]:
+        """Per-element ``{"input", "target"}`` shapes/dtypes (datarax contract)."""
+        return {
+            "input": jax.ShapeDtypeStruct(self.inputs.shape[1:], self.inputs.dtype),
+            "target": jax.ShapeDtypeStruct(self.targets.shape[1:], self.targets.dtype),
+        }
 
-    def __getitem__(self, index: int) -> dict[str, Any]:  # type: ignore[override]
-        """Get element by index.
+    def get_batch_at(
+        self,
+        start: int | jax.Array,
+        size: int,
+        key: jax.Array | None = None,
+    ) -> dict[str, jax.Array]:
+        """Stateless indexed batch access for ``Pipeline`` iteration (mirrors ``MemorySource``).
 
-        Args:
-            index: Index (supports negative indexing).
-
-        Returns:
-            Dict with 'input', 'target', and optionally 'coordinates'.
-
-        Raises:
-            IndexError: If index is out of bounds.
+        Returns ``size`` records from logical position ``start`` (wrapping at the end). When the
+        source is configured with ``shuffle=True`` and a ``key`` is supplied, indices are drawn
+        from a per-call permutation of ``key`` (deterministic for a given ``(start, size, key)``).
+        Internal state is never mutated, so the call is JAX-traceable under ``nnx.scan``.
         """
+        n = len(self)
+        start_arr = jnp.asarray(start, dtype=jnp.int32)
+        indices = (start_arr + jnp.arange(size, dtype=jnp.int32)) % jnp.int32(n)
+        if self._shuffle and key is not None:
+            indices = jax.random.permutation(key, n)[indices]
+        return {
+            "input": jnp.take(self.inputs, indices, axis=0, mode="wrap"),
+            "target": jnp.take(self.targets, indices, axis=0, mode="wrap"),
+        }
+
+    def __getitem__(self, index: int) -> dict[str, jax.Array]:  # type: ignore[override]
+        """Return the raw ``{"input", "target"}`` element at ``index`` (supports negatives)."""
         n = len(self)
         if index < 0:
             index += n
         if index < 0 or index >= n:
             raise IndexError(f"Index {index} out of range [0, {n})")
+        return {"input": self.inputs[index], "target": self.targets[index]}
 
-        element: dict[str, Any] = {
-            "input": self.inputs[index],
-            "target": self.targets[index],
-        }
-        if self.coordinates is not None:
-            element["coordinates"] = self.coordinates
+    def __iter__(self) -> Iterator[dict[str, jax.Array]]:  # type: ignore[override]
+        """Iterate raw elements in order (debug/inspection; training uses the ``Pipeline``)."""
+        for i in range(len(self)):
+            yield self[i]
 
-        return element
 
-    def get_batch(
-        self,
-        batch_size: int,
-        key: jax.Array | None = None,
-    ) -> dict[str, Any]:
-        """Get a batch of data.
+def create_pdebench_loader(
+    config: PDEBenchConfig,
+    *,
+    batch_size: int,
+    seed: int = 0,
+) -> Pipeline:
+    """Build a datarax ``Pipeline`` over a :class:`PDEBenchSource` (canonical loader pattern).
 
-        Args:
-            batch_size: Number of elements in the batch.
-            key: Optional RNG key for stateless random sampling.
-                If None, uses sequential sampling from current position.
+    Mirrors the sibling loaders (``rmd17``/``qh9``): the source supplies the windowed
+    ``{"input", "target"}`` records via its ``get_batch_at`` contract and the pipeline drives
+    batched iteration. When ``config.normalize`` is set, the per-channel min-max
+    :class:`~datarax.operators.map_operator.MapOperator` from
+    :meth:`PDEBenchSource.normalize_operator` is attached as the single transform stage.
 
-        Returns:
-            Batch dict with arrays having batch_size as first dimension.
-        """
-        n = len(self)
-        if key is not None:
-            # Stateless: random indices from key
-            indices = jax.random.randint(
-                key,
-                shape=(batch_size,),
-                minval=0,
-                maxval=n,
-            )
-        else:
-            # Sequential from current position
-            pos = self._position.value
-            indices = jnp.arange(pos, pos + batch_size) % n
-            self._position.value = (pos + batch_size) % n
+    Args:
+        config: PDEBench source configuration.
+        batch_size: Records per batch.
+        seed: Seed for the source's shuffle stream and the pipeline rngs.
 
-        batch: dict[str, Any] = {
-            "input": self.inputs[indices],
-            "target": self.targets[indices],
-        }
-        if self.coordinates is not None:
-            batch["coordinates"] = self.coordinates
-
-        return batch
-
-    def reset(self, seed: int | None = None) -> None:  # noqa: ARG002 - reset interface accepts an optional seed
-        """Reset iteration to the beginning.
-
-        Args:
-            seed: Optional seed (unused, kept for API compat).
-        """
-        self._position.value = 0
+    Returns:
+        A configured datarax ``Pipeline`` (drive it with ``.step()`` or ``.scan()``).
+    """
+    source = PDEBenchSource(config, rngs=nnx.Rngs(seed))
+    normalize_op = source.normalize_operator(rngs=nnx.Rngs(seed))
+    stages: list[nnx.Module] = [normalize_op] if normalize_op is not None else []
+    return Pipeline(
+        source=source,
+        stages=stages,
+        batch_size=batch_size,
+        rngs=nnx.Rngs(seed),
+    )
 
 
 # =============================================================================
@@ -426,12 +445,14 @@ class VTKMeshConfig(StructuralConfig):
         node_features: Tuple of point data array names
         cell_features: Tuple of cell data array names
         include_connectivity: Whether to build edge lists (default: True)
+        shuffle: Whether ``get_batch_at`` shuffles via the supplied key (default: False)
     """
 
     directory: Path | None = None
     file_pattern: str = "*.vtu"
     node_features: tuple[str, ...] | None = None
     cell_features: tuple[str, ...] | None = None
+    shuffle: bool = False
     include_connectivity: bool = True
 
     def __post_init__(self) -> None:
@@ -447,14 +468,39 @@ class VTKMeshConfig(StructuralConfig):
 # =============================================================================
 
 
-class VTKMeshSource(DataSourceModule):
-    """Eager-loading source for VTK unstructured mesh files.
+def _stack_padded(meshes: list[dict[str, Any]], key: str, axis: int, target: int) -> jax.Array:
+    """Pad each mesh's ``key`` array to ``target`` along ``axis`` (zeros) and stack over meshes."""
 
-    Each element is a dict with:
-        - "node_positions": jax.Array of shape (num_nodes, 3)
-        - "node_features": jax.Array of shape (num_nodes, F)
-        - "edge_index": jax.Array of shape (2, num_edges)  # COO format
-        - "cell_features": jax.Array of shape (num_cells, G) (optional)
+    def pad(array: jax.Array) -> jax.Array:
+        widths = [(0, 0)] * array.ndim
+        widths[axis] = (0, target - array.shape[axis])
+        return jnp.pad(array, widths)
+
+    return jnp.stack([pad(mesh[key]) for mesh in meshes])
+
+
+def _stack_masks(meshes: list[dict[str, Any]], key: str, axis: int, target: int) -> jax.Array:
+    """Stack per-mesh masks (1.0 over each mesh's real extent along ``axis``, 0.0 for padding)."""
+    return jnp.stack(
+        [(jnp.arange(target) < mesh[key].shape[axis]).astype(jnp.float32) for mesh in meshes]
+    )
+
+
+class VTKMeshSource(DataSourceModule):
+    """Eager-loading datarax source for VTK unstructured mesh files.
+
+    Meshes are ragged (per-file node/edge counts differ), so at load each ragged axis is padded to
+    the dataset maximum and a boolean mask is carried, giving uniform arrays that satisfy the
+    datarax static-shape contract (``get_batch_at`` / ``element_spec``) and JIT. Each element is a
+    dict with (``max_nodes``/``max_edges``/``max_cells`` are the dataset maxima):
+        - "node_positions": jax.Array of shape (max_nodes, 3)
+        - "node_mask": jax.Array of shape (max_nodes,) — 1.0 for real nodes, 0.0 for padding
+        - "node_features": jax.Array of shape (max_nodes, F) (if ``node_features`` configured)
+        - "edge_index": jax.Array of shape (2, max_edges)  # COO (if ``include_connectivity``)
+        - "edge_mask": jax.Array of shape (max_edges,) (with ``edge_index``)
+        - "cell_features"/"cell_mask": shape (max_cells, G)/(max_cells,) (if ``cell_features``)
+
+    Drive batched iteration with :func:`create_vtk_mesh_loader` (a datarax ``Pipeline``).
 
     Implementation notes:
         - Uses meshio for VTK I/O (lazy import)
@@ -519,14 +565,15 @@ class VTKMeshSource(DataSourceModule):
 
             mesh_list.append(element)
 
-        self.meshes = nnx.data(mesh_list)
-
-        # Iteration state
-        self._position = nnx.Variable(0)
+        # Meshes are ragged (per-file node/edge counts differ). Pad each ragged axis to the
+        # dataset maximum and carry boolean masks, so the records stack into uniform arrays that
+        # satisfy the datarax static-shape contract (get_batch_at / element_spec) and JIT.
+        self._fields = nnx.data(self._pad_and_stack(mesh_list))
+        self._shuffle = config.shuffle
 
         logger.info(
             "Loaded %d meshes from %s",
-            len(self.meshes),
+            len(self),
             directory,
         )
 
@@ -582,32 +629,109 @@ class VTKMeshSource(DataSourceModule):
         edges = np.array(sorted(edges_set), dtype=np.int32)
         return edges.T  # (2, num_edges)
 
-    def __len__(self) -> int:
-        """Return number of meshes."""
-        return len(self.meshes)
+    @staticmethod
+    def _pad_and_stack(meshes: list[dict[str, Any]]) -> dict[str, jax.Array]:
+        """Pad each mesh's ragged arrays to the dataset maximum and stack into uniform arrays.
 
-    def __iter__(self) -> Iterator[dict[str, Any]]:  # type: ignore[override]
-        """Iterate over meshes."""
-        self._position.value = 0
-        for i in range(len(self)):
-            yield self[i]
-
-    def __getitem__(self, index: int) -> dict[str, Any]:  # type: ignore[override]
-        """Get mesh element by index.
-
-        Args:
-            index: Index (supports negative indexing).
-
-        Raises:
-            IndexError: If index is out of bounds.
+        Node-indexed fields (``node_positions``, ``node_features``) are padded along axis 0 to
+        ``max_nodes`` and gain a ``node_mask``; ``edge_index`` is padded along axis 1 to
+        ``max_edges`` and gains an ``edge_mask``; ``cell_features`` is padded to ``max_cells`` with
+        a ``cell_mask``. Returns a dict of stacked arrays each with a leading mesh axis. An empty
+        mesh list yields an empty dict (``len == 0``).
         """
+        if not meshes:
+            return {}
+
+        fields: dict[str, jax.Array] = {}
+        max_nodes = max(m["node_positions"].shape[0] for m in meshes)
+        fields["node_positions"] = _stack_padded(meshes, "node_positions", 0, max_nodes)
+        fields["node_mask"] = _stack_masks(meshes, "node_positions", 0, max_nodes)
+
+        if all("node_features" in m for m in meshes):
+            fields["node_features"] = _stack_padded(meshes, "node_features", 0, max_nodes)
+
+        if all("edge_index" in m for m in meshes):
+            max_edges = max(m["edge_index"].shape[1] for m in meshes)
+            fields["edge_index"] = _stack_padded(meshes, "edge_index", 1, max_edges)
+            fields["edge_mask"] = _stack_masks(meshes, "edge_index", 1, max_edges)
+
+        if all("cell_features" in m for m in meshes):
+            max_cells = max(m["cell_features"].shape[0] for m in meshes)
+            fields["cell_features"] = _stack_padded(meshes, "cell_features", 0, max_cells)
+            fields["cell_mask"] = _stack_masks(meshes, "cell_features", 0, max_cells)
+
+        return fields
+
+    def __len__(self) -> int:
+        """Return the number of meshes."""
+        if not self._fields:
+            return 0
+        return next(iter(self._fields.values())).shape[0]
+
+    def element_spec(self) -> dict[str, jax.ShapeDtypeStruct]:
+        """Per-mesh padded field shapes/dtypes, including masks (datarax contract)."""
+        return {
+            key: jax.ShapeDtypeStruct(value.shape[1:], value.dtype)
+            for key, value in self._fields.items()
+        }
+
+    def get_batch_at(
+        self,
+        start: int | jax.Array,
+        size: int,
+        key: jax.Array | None = None,
+    ) -> dict[str, jax.Array]:
+        """Stateless indexed batch of padded meshes (datarax contract, mirrors ``MemorySource``).
+
+        Returns ``size`` meshes from logical position ``start`` (wrapping). With ``shuffle=True``
+        and a ``key`` the indices come from a per-call permutation of ``key``. Stateless and
+        JAX-traceable, so it composes with ``Pipeline`` / ``nnx.scan``.
+        """
+        n = len(self)
+        indices = (jnp.asarray(start, dtype=jnp.int32) + jnp.arange(size, dtype=jnp.int32)) % (
+            jnp.int32(n)
+        )
+        if self._shuffle and key is not None:
+            indices = jax.random.permutation(key, n)[indices]
+        return {
+            key_name: jnp.take(value, indices, axis=0, mode="wrap")
+            for key_name, value in self._fields.items()
+        }
+
+    def __getitem__(self, index: int) -> dict[str, jax.Array]:  # type: ignore[override]
+        """Return the padded fields (+ masks) for the mesh at ``index`` (supports negatives)."""
         n = len(self)
         if index < 0:
             index += n
         if index < 0 or index >= n:
             raise IndexError(f"Index {index} out of range [0, {n})")
-        return self.meshes[index]
+        return {key: value[index] for key, value in self._fields.items()}
 
-    def reset(self, seed: int | None = None) -> None:  # noqa: ARG002 - reset interface accepts an optional seed
-        """Reset iteration state."""
-        self._position.value = 0
+    def __iter__(self) -> Iterator[dict[str, jax.Array]]:  # type: ignore[override]
+        """Iterate padded meshes in order (training uses the ``Pipeline``)."""
+        for i in range(len(self)):
+            yield self[i]
+
+
+def create_vtk_mesh_loader(
+    config: VTKMeshConfig,
+    *,
+    batch_size: int,
+    seed: int = 0,
+) -> Pipeline:
+    """Build a datarax ``Pipeline`` over a :class:`VTKMeshSource` (canonical loader pattern).
+
+    The source supplies padded, masked mesh records via its ``get_batch_at`` contract and the
+    pipeline drives batched iteration; no transform stages are attached by default. Drive it with
+    ``.step()`` or ``.scan()``.
+
+    Args:
+        config: VTK mesh source configuration.
+        batch_size: Meshes per batch.
+        seed: Seed for the source's shuffle stream and the pipeline rngs.
+
+    Returns:
+        A configured datarax ``Pipeline``.
+    """
+    source = VTKMeshSource(config, rngs=nnx.Rngs(seed))
+    return Pipeline(source=source, stages=[], batch_size=batch_size, rngs=nnx.Rngs(seed))

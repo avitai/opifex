@@ -1,409 +1,417 @@
+"""U-shaped Neural Operator (U-NO).
+
+A faithful Flax-NNX reimplementation of the U-shaped Neural Operator of
+Rahman, Ross & Azizzadenesheli, "U-NO: U-shaped Neural Operators", TMLR 2022
+(https://arxiv.org/abs/2204.11127), mirroring the reference implementation in
+``neuralop.models.uno.UNO``.
+
+Unlike a conv U-Net, U-NO changes spatial resolution ONLY in the Fourier domain
+(via :class:`~opifex.neural.operators.fno.base.SpectralConvResize` /
+:func:`~opifex.neural.operators.fno.base.spectral_resample`) — there are no
+strided convolutions and no pixel pooling or interpolation anywhere. This makes
+the operator discretisation invariant, giving genuine zero-shot
+super-resolution: a model trained at one grid resolution evaluates accurately at
+a finer one.
+
+Architecture (channels-first, ``(batch, channels, *spatial)``):
+
+- a lifting :class:`ChannelMLP` (``in + grid -> hidden``),
+- ``n_layers`` FNO blocks, each a spectral convolution with per-layer resolution
+  scaling ``uno_scalings[i]`` followed by a channel MLP, a linear skip resampled
+  to the block's output resolution, and a GELU non-linearity,
+- horizontal U-skips (``horizontal_skips_map``) that resample a stored encoder
+  feature into the current resolution in Fourier space and concatenate it on the
+  channel axis,
+- a projection :class:`ChannelMLP` (``hidden -> out``).
 """
-U-Net Neural Operator (UNO) Implementation
 
-This module implements the U-Net style Neural Operator, which combines the multi-scale
-feature extraction capabilities of U-Net architectures with spectral convolutions
-for operator learning.
-
-Key Features:
-- U-Net encoder-decoder architecture with skip connections
-- 2D Spectral convolutions using existing Opifex FourierLayer
-- Multi-scale feature processing
-- Zero-shot super-resolution capabilities
-"""
-
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.neural.operators.fno.base import FourierLayer
+from opifex.neural.operators.fno.base import (
+    _resolve_output_size,
+    spectral_resample,
+    SpectralConvResize,
+)
 
 
-class UNetBlock(nnx.Module):
-    """U-Net style convolutional block with normalization and activation."""
+class ChannelMLP(nnx.Module):
+    """Pointwise (1x1) channel-mixing MLP over a channels-first spatial field.
+
+    Applies ``n_layers`` 1x1 "convolutions" (pointwise linear maps over the
+    channel axis) with a GELU between hidden layers, matching
+    ``neuralop.layers.channel_mlp.ChannelMLP``.
+    """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int = 3,
-        stride: int = 1,
-        use_norm: bool = True,
-        activation: Callable = nnx.gelu,
+        hidden_channels: int | None = None,
+        n_layers: int = 2,
         *,
+        activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
     ) -> None:
-        """Initialize U-Net block.
+        """Initialise the channel MLP.
 
         Args:
-            in_channels: Number of input channels
-            out_channels: Number of output channels
-            kernel_size: Convolution kernel size
-            stride: Convolution stride
-            use_norm: Whether to use normalization
-            activation: Activation function
-            rngs: Random number generators
+            in_channels: Number of input channels.
+            out_channels: Number of output channels.
+            hidden_channels: Width of the hidden layers; defaults to
+                ``in_channels``.
+            n_layers: Number of pointwise linear layers (>= 1).
+            activation: Non-linearity applied between hidden layers.
+            rngs: Random number generators (keyword-only).
         """
         super().__init__()
-
         self.activation = activation
-        self.use_norm = use_norm
-
-        # First convolution
-        self.conv1 = nnx.Conv(
-            in_features=in_channels,
-            out_features=out_channels,
-            kernel_size=(kernel_size, kernel_size),
-            strides=(stride, stride),
-            padding="SAME",
-            rngs=rngs,
+        hidden = hidden_channels if hidden_channels is not None else in_channels
+        widths = [in_channels] + [hidden] * (n_layers - 1) + [out_channels]
+        self.layers = nnx.List(
+            [
+                nnx.Linear(in_features=widths[i], out_features=widths[i + 1], rngs=rngs)
+                for i in range(n_layers)
+            ]
         )
 
-        # Second convolution
-        self.conv2 = nnx.Conv(
-            in_features=out_channels,
-            out_features=out_channels,
-            kernel_size=(kernel_size, kernel_size),
-            strides=(1, 1),
-            padding="SAME",
-            rngs=rngs,
-        )
-
-        # Normalization layers
-        if use_norm:
-            self.norm1 = nnx.GroupNorm(
-                num_groups=min(8, out_channels),
-                num_features=out_channels,
-                rngs=rngs,
-            )
-            self.norm2 = nnx.GroupNorm(
-                num_groups=min(8, out_channels),
-                num_features=out_channels,
-                rngs=rngs,
-            )
-
-    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:  # noqa: ARG002 - nnx forward interface carries a deterministic flag
-        """Apply U-Net block.
-
-        Args:
-            x: Input tensor
-            deterministic: Whether to use deterministic mode
-
-        Returns:
-            Processed tensor
-        """
-        # First convolution and normalization
-        h = self.conv1(x)
-
-        if self.use_norm:
-            h = self.norm1(h)
-
-        h = self.activation(h)
-
-        # Second convolution and normalization
-        h = self.conv2(h)
-
-        if self.use_norm:
-            h = self.norm2(h)
-
-        return self.activation(h)
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Apply the channel MLP to a ``(batch, channels, *spatial)`` field."""
+        # Move channels last for the pointwise Linear, then restore.
+        spatial = len(x.shape) - 2
+        perm = [0, *range(2, 2 + spatial), 1]
+        inv_perm = [0, spatial + 1, *range(1, spatial + 1)]
+        h = jnp.transpose(x, perm)
+        for i, layer in enumerate(self.layers):
+            h = layer(h)
+            if i < len(self.layers) - 1:
+                h = self.activation(h)
+        return jnp.transpose(h, inv_perm)
 
 
-class UNeuralOperator(nnx.Module):
-    """U-Net Neural Operator for operator learning.
+class UNOBlock(nnx.Module):
+    """A single U-NO Fourier block: spectral conv (+resize) + channel MLP + skip.
 
-    Combines U-Net architecture with Fourier layers for effective
-    operator learning with multi-scale feature processing.
-
-    This implementation follows the Opifex framework patterns and uses
-    existing FourierLayer components for 2D spectral convolutions.
+    Mirrors ``neuralop.layers.fno_block.FNOBlocks`` for one layer: the spectral
+    convolution applies the per-layer resolution scaling, a linear skip is
+    resampled to the same output resolution and added, a channel-mixing MLP
+    refines the result, and a GELU non-linearity closes the block.
     """
 
     def __init__(
         self,
-        input_channels: int = 1,
-        output_channels: int = 1,
-        hidden_channels: int = 64,
-        modes: int = 16,
-        n_layers: int = 4,
-        use_spectral: bool = True,
-        activation: Callable = nnx.gelu,
+        in_channels: int,
+        out_channels: int,
+        n_modes: tuple[int, ...],
+        scaling: Sequence[float],
         *,
+        channel_mlp_expansion: float = 0.5,
+        activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
     ) -> None:
-        """Initialize UNO.
+        """Initialise the block.
 
         Args:
-            input_channels: Number of input channels
-            output_channels: Number of output channels
-            hidden_channels: Base number of hidden channels
-            modes: Number of Fourier modes for spectral convolutions
-            n_layers: Number of U-Net layers (encoder/decoder pairs)
-            use_spectral: Whether to use spectral convolutions
-            activation: Activation function
-            rngs: Random number generators
+            in_channels: Number of input channels.
+            out_channels: Number of output channels.
+            n_modes: Retained Fourier modes ``(modes_h, modes_w)``.
+            scaling: Per-axis resolution scaling for this block.
+            channel_mlp_expansion: Hidden width of the channel MLP as a fraction
+                of ``out_channels``.
+            activation: Block non-linearity.
+            rngs: Random number generators (keyword-only).
         """
         super().__init__()
-
-        self.input_channels = input_channels
-        self.output_channels = output_channels
-        self.hidden_channels = hidden_channels
-        self.modes = modes
-        self.n_layers = n_layers
-        self.use_spectral = use_spectral
+        self.scaling = tuple(float(s) for s in scaling)
         self.activation = activation
-
-        # Input projection
-        self.input_proj = nnx.Conv(
-            in_features=input_channels,
-            out_features=hidden_channels,
-            kernel_size=(1, 1),
+        self.spectral_conv = SpectralConvResize(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            n_modes=n_modes,
+            rngs=rngs,
+        )
+        # Linear skip connection (1x1 conv), resampled to the block output size.
+        self.skip = nnx.Linear(in_features=in_channels, out_features=out_channels, rngs=rngs)
+        mlp_hidden = max(1, round(out_channels * channel_mlp_expansion))
+        self.channel_mlp = ChannelMLP(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            hidden_channels=mlp_hidden,
+            n_layers=2,
+            activation=activation,
             rngs=rngs,
         )
 
-        # Build architecture components
-        self.encoder_blocks, encoder_channels = self._build_encoder(
-            hidden_channels, n_layers, activation, rngs
-        )
-
-        if use_spectral:
-            self.spectral_layers = self._build_spectral_layers(
-                encoder_channels[-1], modes, activation, rngs
-            )
-
-        self.decoder_blocks, self.upsample_convs, self.needs_upsample = self._build_decoder(
-            encoder_channels, hidden_channels, n_layers, activation, rngs
-        )
-
-        # Output projection
-        self.output_proj = nnx.Conv(
-            in_features=hidden_channels,
-            out_features=output_channels,
-            kernel_size=(1, 1),
-            rngs=rngs,
-        )
-
-    def _build_encoder(
-        self,
-        hidden_channels: int,
-        n_layers: int,
-        activation: Callable,
-        rngs: nnx.Rngs,
-    ) -> tuple[nnx.List[UNetBlock], list[int]]:
-        """Build encoder blocks."""
-        encoder_blocks_temp = []
-        encoder_channels = [hidden_channels]
-        current_channels = hidden_channels
-
-        for i in range(n_layers):
-            if i < n_layers - 1:
-                stride = 2
-                next_channels = current_channels * 2
-            else:
-                stride = 1
-                next_channels = current_channels
-
-            block = UNetBlock(
-                in_channels=current_channels,
-                out_channels=next_channels,
-                stride=stride,
-                activation=activation,
-                rngs=rngs,
-            )
-            encoder_blocks_temp.append(block)
-            encoder_channels.append(next_channels)
-            current_channels = next_channels
-
-        return nnx.List(encoder_blocks_temp), encoder_channels
-
-    def _build_spectral_layers(
-        self,
-        channels: int,
-        modes: int,
-        activation: Callable,
-        rngs: nnx.Rngs,
-    ) -> nnx.List[FourierLayer]:
-        """Build spectral layers."""
-        spectral_layers_temp = []
-        for _ in range(2):
-            layer = FourierLayer(
-                in_channels=channels,
-                out_channels=channels,
-                modes=modes,
-                activation=activation,
-                rngs=rngs,
-            )
-            spectral_layers_temp.append(layer)
-        return nnx.List(spectral_layers_temp)
-
-    def _build_decoder(
-        self,
-        encoder_channels: list[int],
-        hidden_channels: int,
-        n_layers: int,
-        activation: Callable,
-        rngs: nnx.Rngs,
-    ) -> tuple[nnx.List[UNetBlock], nnx.List[nnx.Conv], nnx.List[bool]]:
-        """Build decoder blocks."""
-        decoder_blocks_temp = []
-        upsample_convs_temp = []
-        needs_upsample_temp = []
-
-        skip_channels = list(reversed(encoder_channels[:-1]))
-        current_channels = encoder_channels[-1]
-
-        for i in range(n_layers):
-            if i < n_layers - 1:
-                upsampled_ch = current_channels // 2
-                skip_ch = skip_channels[i]
-                in_ch = upsampled_ch + skip_ch
-                out_ch = upsampled_ch
-
-                upsample_conv = nnx.Conv(
-                    in_features=current_channels,
-                    out_features=upsampled_ch,
-                    kernel_size=(3, 3),
-                    strides=(1, 1),
-                    padding="SAME",
-                    rngs=rngs,
-                )
-                upsample_convs_temp.append(upsample_conv)
-                needs_upsample_temp.append(True)
-                current_channels = upsampled_ch
-            else:
-                skip_ch = skip_channels[i]
-                in_ch = current_channels + skip_ch
-                out_ch = hidden_channels
-                needs_upsample_temp.append(False)
-
-            block = UNetBlock(
-                in_channels=in_ch,
-                out_channels=out_ch,
-                activation=activation,
-                rngs=rngs,
-            )
-            decoder_blocks_temp.append(block)
-
-            if i == n_layers - 1:
-                current_channels = out_ch
-
-        return (
-            nnx.List(decoder_blocks_temp),
-            nnx.List(upsample_convs_temp),
-            nnx.List(needs_upsample_temp),
-        )
+    def _apply_skip(self, x: jax.Array, output_size: tuple[int, ...]) -> jax.Array:
+        """Pointwise linear skip, resampled to ``output_size`` in Fourier space."""
+        spatial = len(x.shape) - 2
+        perm = [0, *range(2, 2 + spatial), 1]
+        inv_perm = [0, spatial + 1, *range(1, spatial + 1)]
+        h = jnp.transpose(self.skip(jnp.transpose(x, perm)), inv_perm)
+        if h.shape[-spatial:] != tuple(output_size):
+            h = spectral_resample(h, tuple(output_size), axes=tuple(range(-spatial, 0)))
+        return h
 
     def __call__(
         self,
         x: jax.Array,
         *,
-        deterministic: bool = True,
+        output_shape: tuple[int, ...] | None = None,
     ) -> jax.Array:
-        """Forward pass through UNO.
+        """Apply the block.
 
         Args:
-            x: Input tensor of shape (batch, height, width, channels)
-            deterministic: Whether to use deterministic mode
+            x: Input ``(batch, in_channels, height, width)``.
+            output_shape: Explicit output spatial size; overrides the per-layer
+                scaling factor (used by the final layer to hit an exact size).
 
         Returns:
-            Output tensor of shape (batch, height, width, output_channels)
+            Output ``(batch, out_channels, *output_size)``.
         """
-        # Input projection
-        x = self.input_proj(x)
+        output_size = _resolve_output_size(x.shape[-2:], output_shape, self.scaling)
+        spectral = self.spectral_conv(x, output_shape=output_size)
+        skip = self._apply_skip(x, output_size)
+        h = self.activation(spectral + skip)
+        return self.channel_mlp(h)
 
-        # Store skip connections
-        skip_connections = [x]
 
-        # Encoder path
-        h = x
-        for i, block in enumerate(self.encoder_blocks):
-            h = block(h, deterministic=deterministic)
-            if i < len(self.encoder_blocks) - 1:
-                skip_connections.append(h)
+class UNeuralOperator(nnx.Module):
+    """U-shaped Neural Operator (U-NO).
 
-        # Apply Fourier layers at bottleneck using existing Opifex components
-        if self.use_spectral:
-            for layer in self.spectral_layers:
-                # Convert from (batch, height, width, channels) to (batch, channels, height, width)  # noqa: E501
-                h_fourier = jnp.transpose(h, (0, 3, 1, 2))
+    Discretisation-invariant operator that performs all resolution changes in
+    the Fourier domain. See the module docstring for the architecture and the
+    reference (Rahman et al., TMLR 2022).
+    """
 
-                # Apply Fourier layer
-                h_fourier = layer(h_fourier)
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        hidden_channels: int,
+        uno_out_channels: Sequence[int],
+        uno_n_modes: Sequence[Sequence[int]],
+        uno_scalings: Sequence[Sequence[float]],
+        n_layers: int,
+        *,
+        lifting_channels: int = 256,
+        projection_channels: int = 256,
+        channel_mlp_expansion: float = 0.5,
+        horizontal_skips_map: dict[int, int] | None = None,
+        activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Initialise the U-NO.
 
-                # Convert back to (batch, height, width, channels)
-                h = jnp.transpose(h_fourier, (0, 2, 3, 1))
+        Args:
+            in_channels: Number of input channels (including any grid channels).
+            out_channels: Number of output channels.
+            hidden_channels: Lifting width fed into the first Fourier block.
+            uno_out_channels: Output channels of each Fourier block (length
+                ``n_layers``).
+            uno_n_modes: Retained Fourier modes per block, ``[[mh, mw], ...]``
+                (length ``n_layers``).
+            uno_scalings: Per-axis resolution scaling per block,
+                ``[[sh, sw], ...]`` (length ``n_layers``). The product across
+                blocks is the end-to-end scaling and is typically 1.0.
+            n_layers: Number of Fourier blocks.
+            lifting_channels: Hidden width of the lifting MLP.
+            projection_channels: Hidden width of the projection MLP.
+            channel_mlp_expansion: Channel-MLP expansion inside each block.
+            horizontal_skips_map: ``{dst: src}`` horizontal U-skip map. Defaults
+                to ``{n-1-i: i for i in range(n // 2)}`` (e.g. ``{4: 0, 3: 1}``
+                for ``n_layers=5``).
+            activation: Block / projection non-linearity.
+            rngs: Random number generators (keyword-only).
 
-        # Decoder path
-        upsample_idx = 0
-        for i, (block, skip) in enumerate(
-            zip(self.decoder_blocks, reversed(skip_connections), strict=False)
+        Raises:
+            ValueError: If the per-layer list lengths do not match ``n_layers``.
+        """
+        super().__init__()
+        for name, seq in (
+            ("uno_out_channels", uno_out_channels),
+            ("uno_n_modes", uno_n_modes),
+            ("uno_scalings", uno_scalings),
         ):
-            # Upsample if not the final layer
-            if self.needs_upsample[i]:
-                # First upsample spatially (2x)
-                h_upsampled = jax.image.resize(
-                    h,
-                    (h.shape[0], h.shape[1] * 2, h.shape[2] * 2, h.shape[3]),
-                    method="bilinear",
+            if len(seq) != n_layers:
+                raise ValueError(f"{name} must have length n_layers={n_layers}, got {len(seq)}")
+
+        self.n_layers = n_layers
+        self.n_dim = len(uno_n_modes[0])
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.hidden_channels = hidden_channels
+        self.uno_out_channels = list(uno_out_channels)
+        self.uno_n_modes = [tuple(m) for m in uno_n_modes]
+        self.uno_scalings = [[float(s) for s in sc] for sc in uno_scalings]
+
+        # Default horizontal skip map: {n-1: 0, n-2: 1, ...} for the first half.
+        if horizontal_skips_map is None:
+            horizontal_skips_map = {n_layers - i - 1: i for i in range(n_layers // 2)}
+        self.horizontal_skips_map = horizontal_skips_map
+
+        # End-to-end scaling = product of per-layer scalings (per axis).
+        scaling = [1.0] * self.n_dim
+        for layer_scaling in self.uno_scalings:
+            scaling = [a * b for a, b in zip(scaling, layer_scaling, strict=True)]
+        self.end_to_end_scaling_factor = scaling
+
+        self.lifting = ChannelMLP(
+            in_channels=in_channels,
+            out_channels=hidden_channels,
+            hidden_channels=lifting_channels,
+            n_layers=2,
+            activation=activation,
+            rngs=rngs,
+        )
+
+        blocks: list[UNOBlock] = []
+        horizontal_skips: dict[str, nnx.Linear] = {}
+        prev_out = hidden_channels
+        for i in range(n_layers):
+            if i in self.horizontal_skips_map:
+                prev_out += self.uno_out_channels[self.horizontal_skips_map[i]]
+            blocks.append(
+                UNOBlock(
+                    in_channels=prev_out,
+                    out_channels=self.uno_out_channels[i],
+                    n_modes=self.uno_n_modes[i],
+                    scaling=self.uno_scalings[i],
+                    channel_mlp_expansion=channel_mlp_expansion,
+                    activation=activation,
+                    rngs=rngs,
                 )
-                # Then apply convolution to reduce channels
-                h = self.upsample_convs[upsample_idx](h_upsampled)
-                upsample_idx += 1
+            )
+            if i in self.horizontal_skips_map.values():
+                horizontal_skips[str(i)] = nnx.Linear(
+                    in_features=self.uno_out_channels[i],
+                    out_features=self.uno_out_channels[i],
+                    rngs=rngs,
+                )
+            prev_out = self.uno_out_channels[i]
 
-            # Ensure spatial dimensions match for concatenation
-            if h.shape[1:3] != skip.shape[1:3]:
-                # Resize h to match skip connection spatial dimensions
-                target_shape = (h.shape[0], skip.shape[1], skip.shape[2], h.shape[3])
-                h = jax.image.resize(h, target_shape, method="bilinear")
+        self.fno_blocks = nnx.List(blocks)
+        self.horizontal_skips = nnx.Dict(horizontal_skips)
 
-            # Concatenate skip connection
-            h = jnp.concatenate([h, skip], axis=-1)
+        self.projection = ChannelMLP(
+            in_channels=prev_out,
+            out_channels=out_channels,
+            hidden_channels=projection_channels,
+            n_layers=2,
+            activation=activation,
+            rngs=rngs,
+        )
 
-            # Apply decoder block
-            h = block(h, deterministic=deterministic)
+    def _apply_horizontal_skip(self, skip_idx: int, x: jax.Array) -> jax.Array:
+        """Pointwise linear horizontal skip on a stored encoder feature."""
+        layer = self.horizontal_skips[str(skip_idx)]
+        spatial = len(x.shape) - 2
+        perm = [0, *range(2, 2 + spatial), 1]
+        inv_perm = [0, spatial + 1, *range(1, spatial + 1)]
+        return jnp.transpose(layer(jnp.transpose(x, perm)), inv_perm)
 
-            # Output projection
-        return self.output_proj(h)
+    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:  # noqa: ARG002 - nnx forward interface carries a deterministic flag
+        """Apply the U-NO.
+
+        Args:
+            x: Input of shape ``(batch, in_channels, height, width)``
+                (channels-first).
+            deterministic: Present for interface compatibility; U-NO has no
+                stochastic layers.
+
+        Returns:
+            Output of shape ``(batch, out_channels, *output_size)`` where the
+            spatial size is ``round(input_size * end_to_end_scaling_factor)``.
+        """
+        x = self.lifting(x)
+
+        # Final end-to-end output resolution (applied exactly on the last block).
+        output_shape = tuple(
+            round(size * scale)
+            for size, scale in zip(
+                x.shape[-self.n_dim :], self.end_to_end_scaling_factor, strict=True
+            )
+        )
+
+        skip_outputs: dict[int, jax.Array] = {}
+        for layer_idx in range(self.n_layers):
+            if layer_idx in self.horizontal_skips_map:
+                skip_val = skip_outputs[self.horizontal_skips_map[layer_idx]]
+                if skip_val.shape[-self.n_dim :] != x.shape[-self.n_dim :]:
+                    skip_val = spectral_resample(
+                        skip_val,
+                        tuple(x.shape[-self.n_dim :]),
+                        axes=tuple(range(-self.n_dim, 0)),
+                    )
+                skip_val = self._apply_horizontal_skip(
+                    self.horizontal_skips_map[layer_idx], skip_val
+                )
+                x = jnp.concatenate([x, skip_val], axis=1)
+
+            block_output_shape = output_shape if layer_idx == self.n_layers - 1 else None
+            x = self.fno_blocks[layer_idx](x, output_shape=block_output_shape)
+
+            if layer_idx in self.horizontal_skips_map.values():
+                skip_outputs[layer_idx] = x
+
+        return self.projection(x)
 
 
 def create_uno(
-    input_channels: int = 1,
-    output_channels: int = 1,
+    in_channels: int = 1,
+    out_channels: int = 1,
     hidden_channels: int = 64,
-    modes: int = 16,
-    n_layers: int = 4,
     *,
+    uno_out_channels: Sequence[int] | None = None,
+    uno_n_modes: Sequence[Sequence[int]] | None = None,
+    uno_scalings: Sequence[Sequence[float]] | None = None,
+    n_layers: int = 5,
     rngs: nnx.Rngs,
 ) -> UNeuralOperator:
-    """Create a UNO model with standard configuration.
+    """Create a U-NO with a Darcy-style default configuration.
+
+    The default mirrors the reference ``examples/models/plot_UNO_darcy.py``: a
+    five-layer encoder/decoder with channels ``[32, 64, 64, 64, 32]``, modes
+    ``[8, 8]`` per block, and scalings whose product is 1.0 (output resolution
+    equals input resolution).
 
     Args:
-        input_channels: Number of input channels
-        output_channels: Number of output channels
-        hidden_channels: Base number of hidden channels
-        modes: Number of Fourier modes
-        n_layers: Number of U-Net layers
-        rngs: Random number generators
+        in_channels: Number of input channels (including grid channels).
+        out_channels: Number of output channels.
+        hidden_channels: Lifting width.
+        uno_out_channels: Per-block output channels (defaults to the Darcy set).
+        uno_n_modes: Per-block Fourier modes (defaults to the Darcy set).
+        uno_scalings: Per-block resolution scalings (defaults to the Darcy set).
+        n_layers: Number of Fourier blocks.
+        rngs: Random number generators (keyword-only).
 
     Returns:
-        Configured UNO model
+        A configured :class:`UNeuralOperator`.
     """
+    if uno_out_channels is None:
+        uno_out_channels = [32, 64, 64, 64, 32]
+    if uno_n_modes is None:
+        uno_n_modes = [[8, 8], [8, 8], [4, 4], [8, 8], [8, 8]]
+    if uno_scalings is None:
+        uno_scalings = [[1.0, 1.0], [0.5, 0.5], [1.0, 1.0], [2.0, 2.0], [1.0, 1.0]]
+
     return UNeuralOperator(
-        input_channels=input_channels,
-        output_channels=output_channels,
+        in_channels=in_channels,
+        out_channels=out_channels,
         hidden_channels=hidden_channels,
-        modes=modes,
+        uno_out_channels=uno_out_channels,
+        uno_n_modes=uno_n_modes,
+        uno_scalings=uno_scalings,
         n_layers=n_layers,
-        use_spectral=True,
         rngs=rngs,
     )
 
 
-# Export the main components
 __all__ = [
-    "UNetBlock",
+    "ChannelMLP",
+    "UNOBlock",
     "UNeuralOperator",
     "create_uno",
 ]

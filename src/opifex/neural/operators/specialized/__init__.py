@@ -23,13 +23,11 @@ specific problem domains and advanced use cases:
 
 # Existing specialized operators
 # NEW: Geometry-Informed Neural Operator
-# DISCO Convolution Layers
+# DISCO (discrete-continuous) Convolution Layers
 from opifex.neural.operators.specialized.disco import (
-    create_disco_decoder,
-    create_disco_encoder,
+    build_disco_filter,
     DiscreteContinuousConv2d,
-    DiscreteContinuousConvTranspose2d,
-    EquidistantDiscreteContinuousConv2d,
+    regular_grid,
 )
 
 # Fourier Continuation Layers
@@ -75,10 +73,9 @@ from opifex.neural.operators.specialized.spectral_normalization import (
     SpectralNormalizedConv,
 )
 
-# NEW: Uncertainty Quantification Neural Operator
+# U-shaped Neural Operator
 from opifex.neural.operators.specialized.uno import (
     create_uno,
-    UNetBlock,
     UNeuralOperator,
 )
 from opifex.neural.operators.specialized.uqno import (
@@ -94,8 +91,6 @@ __all__ = [
     "BayesianLinear",
     "BayesianSpectralConvolution",
     "DiscreteContinuousConv2d",
-    "DiscreteContinuousConvTranspose2d",
-    "EquidistantDiscreteContinuousConv2d",
     "FourierBoundaryHandler",
     "FourierContinuationExtender",
     "GINOBlock",
@@ -115,20 +110,19 @@ __all__ = [
     "SpectralNorm",
     "SpectralNormalizedConv",
     "SymmetricContinuation",
-    "UNetBlock",
     "UNeuralOperator",
     "UncertaintyQuantificationNeuralOperator",
     "WaveletNeuralOperator",
+    "build_disco_filter",
     "create_3d_gino",
     "create_adaptive_mesh_gino",
     "create_cad_gino",
     "create_continuation_pipeline",
-    "create_disco_decoder",
-    "create_disco_encoder",
     "create_molecular_mgno",
     "create_multiscale_gino",
     "create_nbody_mgno",
     "create_plasma_mgno",
     "create_uno",
+    "regular_grid",
     "spectral_norm_summary",
 ]

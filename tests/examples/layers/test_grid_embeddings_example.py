@@ -1,229 +1,66 @@
-"""Test Grid Embeddings Example - Opifex Framework.
+"""Integration test for the grid-embeddings ablation example.
 
-Test-driven development for grid embeddings layer example that reproduces
-neuraloperator plot_embeddings.py with Opifex framework components.
+The example trains an FNO with and without :class:`GridEmbedding2D` on Darcy flow and reports the
+relative-L2 gap. This test exercises the example's real building blocks on a tiny synthetic problem
+(small grid, few epochs) so it runs fast while still pinning the structural contract: the embedded
+model adds the two coordinate channels and both models train end-to-end through the example helpers.
+The full-scale accuracy claim is produced by running ``main()`` itself.
 """
+
+from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-import pytest
-
-
-def test_grid_embeddings_example_imports():
-    """Test that the grid embeddings example imports work correctly."""
-    # Test should pass after implementation
-    from examples.layers.grid_embeddings_example import (
-        demonstrate_grid_embedding_2d,
-        demonstrate_grid_embedding_nd,
-        demonstrate_sinusoidal_embedding,
-        visualize_coordinate_grids,
-    )
-
-    # Test that all functions are callable
-    assert callable(demonstrate_grid_embedding_2d)
-    assert callable(demonstrate_grid_embedding_nd)
-    assert callable(demonstrate_sinusoidal_embedding)
-    assert callable(visualize_coordinate_grids)
-
-
-def test_demonstrate_grid_embedding_2d():
-    """Test 2D grid embedding demonstration function."""
-    from examples.layers.grid_embeddings_example import demonstrate_grid_embedding_2d
-
-    # Test basic functionality
-    result = demonstrate_grid_embedding_2d(
-        spatial_shape=(32, 32),
-        batch_size=4,
-        in_channels=3,
-        grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
-    )
-
-    # Verify output structure
-    assert "embedded_data" in result
-    assert "coordinate_grids" in result
-    assert "embedding_info" in result
-
-    # Verify shapes
-    embedded_data = result["embedded_data"]
-    assert embedded_data.shape == (4, 32, 32, 5)  # 3 input + 2 coordinate channels
-
-    # Verify coordinate grids
-    x_grid, y_grid = result["coordinate_grids"]
-    assert x_grid.shape == (32, 32)
-    assert y_grid.shape == (32, 32)
-
-    # Verify coordinate ranges
-    assert jnp.allclose(x_grid.min(), 0.0, atol=1e-6)
-    assert jnp.allclose(x_grid.max(), 1.0, atol=1e-6)
-    assert jnp.allclose(y_grid.min(), 0.0, atol=1e-6)
-    assert jnp.allclose(y_grid.max(), 1.0, atol=1e-6)
-
-
-def test_demonstrate_grid_embedding_nd():
-    """Test N-dimensional grid embedding demonstration function."""
-    from examples.layers.grid_embeddings_example import demonstrate_grid_embedding_nd
-
-    # Test 3D case
-    result_3d = demonstrate_grid_embedding_nd(
-        spatial_shape=(16, 16, 16),
-        batch_size=2,
-        in_channels=2,
-        grid_boundaries=[[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
-    )
-
-    # Verify 3D output structure
-    assert "embedded_data" in result_3d
-    assert "coordinate_grids" in result_3d
-    assert "embedding_info" in result_3d
-
-    # Verify 3D shapes
-    embedded_data = result_3d["embedded_data"]
-    assert embedded_data.shape == (2, 16, 16, 16, 5)  # 2 input + 3 coordinate channels
-
-    # Test 1D case
-    result_1d = demonstrate_grid_embedding_nd(
-        spatial_shape=(64,), batch_size=3, in_channels=1, grid_boundaries=[[-1.0, 1.0]]
-    )
-
-    # Verify 1D output structure
-    embedded_data_1d = result_1d["embedded_data"]
-    assert embedded_data_1d.shape == (3, 64, 2)  # 1 input + 1 coordinate channel
-
-
-def test_demonstrate_sinusoidal_embedding():
-    """Test sinusoidal embedding demonstration function."""
-    from examples.layers.grid_embeddings_example import demonstrate_sinusoidal_embedding
-
-    # Test basic functionality
-    result = demonstrate_sinusoidal_embedding(
-        spatial_shape=(32, 32), batch_size=4, in_channels=3, num_frequencies=8
-    )
-
-    # Verify output structure
-    assert "embedded_data" in result
-    assert "embedding_info" in result
-    assert "frequency_analysis" in result
-
-    # Verify shapes - sinusoidal embedding outputs input_channels * 2 * num_frequencies
-    embedded_data = result["embedded_data"]
-    expected_out_channels = 3 * 2 * 8  # input_channels * 2 * num_frequencies = 48
-    assert embedded_data.shape == (4, 32, 32, expected_out_channels)
-
-    # Verify frequency analysis
-    freq_analysis = result["frequency_analysis"]
-    assert "frequencies" in freq_analysis
-    assert "embedding_patterns" in freq_analysis
-
-
-def test_visualize_coordinate_grids():
-    """Test coordinate grid visualization function."""
-    from examples.layers.grid_embeddings_example import visualize_coordinate_grids
-
-    # Test basic visualization (should not error)
-    try:
-        visualize_coordinate_grids(
-            spatial_shape=(16, 16),
-            grid_boundaries=[[-1.0, 1.0], [-1.0, 1.0]],
-        )
-        visualization_success = True
-    except Exception as e:
-        visualization_success = False
-        pytest.fail(f"Visualization failed: {e}")
-
-    assert visualization_success
-
-
-def test_embedding_jax_compatibility():
-    """Test that example functions work with JAX transformations."""
-    from examples.layers.grid_embeddings_example import demonstrate_grid_embedding_2d
-
-    # Test basic functionality (not JIT compilation since modules can't be JIT-compiled)
-    result = demonstrate_grid_embedding_2d(
-        spatial_shape=(8, 8),
-        batch_size=2,
-        in_channels=1,
-        grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
-    )
-
-    # Should work and return expected results
-    assert "embedded_data" in result
-    assert result["embedded_data"].shape == (2, 8, 8, 3)
-
-    # Test that embedded data is a valid JAX array
-    embedded_data = result["embedded_data"]
-    assert isinstance(embedded_data, jnp.ndarray)
-
-    # Test that we can apply JAX transformations to the embedded data
-    sum_result = jnp.sum(embedded_data)
-    assert isinstance(sum_result, jnp.ndarray)
-
-
-def test_embedding_gradient_flow():
-    """Test that embeddings support gradient computation."""
-    from examples.layers.grid_embeddings_example import demonstrate_grid_embedding_2d
-
-    # Test gradient computation on embedded data
-    result = demonstrate_grid_embedding_2d(spatial_shape=(4, 4), batch_size=1, in_channels=1)
-    embedded_data = result["embedded_data"]
-
-    # Define a simple loss function that operates on the embedded data
-    def loss_fn(data):
-        return jnp.sum(data**2)
-
-    # Should support gradient computation on the embedded data
-    grad_fn = jax.grad(loss_fn)
-    try:
-        grad_result = grad_fn(embedded_data)
-        gradient_success = True
-        # Verify gradient has the same shape as input
-        assert grad_result.shape == embedded_data.shape
-    except Exception:
-        gradient_success = False
-
-    assert gradient_success
-
-
-@pytest.mark.parametrize(
-    ("spatial_shape", "expected_dims"),
-    [
-        ((16, 16), 2),
-        ((8, 8, 8), 3),
-        ((32,), 1),
-        ((4, 8, 16), 3),
-    ],
+import numpy as np
+from examples.layers.grid_embeddings_example import (
+    _eval_relative_l2,
+    _train_one,
+    FNO,
+    FNOWithGridEmbedding,
 )
-def test_multi_dimensional_embedding_shapes(spatial_shape, expected_dims):
-    """Test embedding shapes for various spatial dimensions."""
-    from examples.layers.grid_embeddings_example import demonstrate_grid_embedding_nd
+from flax import nnx
 
-    result = demonstrate_grid_embedding_nd(
-        spatial_shape=spatial_shape,
-        batch_size=2,
-        in_channels=1,
-        grid_boundaries=[[0.0, 1.0] for _ in range(expected_dims)],
+
+_FNO_KWARGS = {"modes": 4, "hidden_channels": 8, "num_layers": 2}
+
+
+def _tiny_darcy(resolution: int = 16, n: int = 32, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
+    """A small smooth input/output pair, channels-first ``(n, 1, H, W)``, for fast training."""
+    key = jax.random.key(seed)
+    x = jax.random.normal(key, (n, 1, resolution, resolution))
+    # A fixed smooth map gives the model something learnable in a couple of epochs.
+    y = jnp.tanh(x)
+    return np.asarray(x), np.asarray(y)
+
+
+def test_grid_embedding_adds_two_coordinate_channels() -> None:
+    """``FNOWithGridEmbedding`` feeds the FNO 3 channels (permeability + x + y)."""
+    embedded = FNOWithGridEmbedding(**_FNO_KWARGS, rngs=nnx.Rngs(0))
+    assert embedded.grid_embedding.out_channels == 3
+    # The embedding turns the 1-channel field into a 3-channel (field, x, y) input.
+    sample = jnp.asarray(_tiny_darcy(n=1)[0]).transpose(0, 2, 3, 1)  # (1, H, W, 1)
+    assert embedded.grid_embedding(sample).shape == (1, 16, 16, 3)
+
+
+def test_both_models_share_a_single_output_channel() -> None:
+    """Plain and embedded models differ only on the input side; both predict one field."""
+    plain = FNO(**_FNO_KWARGS, rngs=nnx.Rngs(0))
+    embedded = FNOWithGridEmbedding(**_FNO_KWARGS, rngs=nnx.Rngs(0))
+    x = jnp.asarray(_tiny_darcy()[0][:2])
+    assert plain(x).shape == (2, 1, 16, 16)
+    assert embedded(x).shape == (2, 1, 16, 16)
+
+
+def test_example_helpers_train_and_evaluate_end_to_end() -> None:
+    """The example's ``_train_one`` / ``_eval_relative_l2`` run and yield a finite error."""
+    x, y = _tiny_darcy()
+    trained = _train_one(
+        FNOWithGridEmbedding(**_FNO_KWARGS, rngs=nnx.Rngs(0)),
+        x,
+        y,
+        num_epochs=2,
+        seed=0,
     )
-
-    embedded_data = result["embedded_data"]
-    expected_shape = (2, *spatial_shape, 1 + expected_dims)
-    assert embedded_data.shape == expected_shape
-
-
-@pytest.mark.parametrize("num_frequencies", [4, 8, 16, 32])
-def test_sinusoidal_frequency_variations(num_frequencies):
-    """Test sinusoidal embeddings with different frequency counts."""
-    from examples.layers.grid_embeddings_example import demonstrate_sinusoidal_embedding
-
-    result = demonstrate_sinusoidal_embedding(
-        spatial_shape=(16, 16),
-        batch_size=1,
-        in_channels=2,
-        num_frequencies=num_frequencies,
-    )
-
-    embedded_data = result["embedded_data"]
-    expected_out_channels = 2 * 2 * num_frequencies  # input_channels * 2 * frequencies
-    assert embedded_data.shape == (1, 16, 16, expected_out_channels)
-
-    # Verify frequency information
-    freq_analysis = result["frequency_analysis"]
-    assert len(freq_analysis["frequencies"]) == num_frequencies
+    error = _eval_relative_l2(trained, x, y, y_mean=0.0, y_std=1.0)
+    assert np.isfinite(error)
+    assert error >= 0.0

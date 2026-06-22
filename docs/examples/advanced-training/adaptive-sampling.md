@@ -6,8 +6,8 @@
 
 ## Overview
 
-This example demonstrates how to use Residual-based Adaptive Distribution (RAD)
-sampling for more efficient PINN training. RAD concentrates collocation points
+This example demonstrates Residual-based Adaptive Refinement (RAR-D) for more
+efficient PINN training. RAR-D concentrates collocation points
 in regions with high PDE residual, focusing computational effort where it's
 needed most.
 
@@ -22,7 +22,7 @@ Residual-based Adaptive Refinement (RAR) algorithm (Lu et al., 2021).
 ## What You'll Learn
 
 1. **Understand** why uniform sampling can be inefficient
-2. **Implement** RAD sampling with `RADSampler`
+2. **Implement** RAR-D refinement with `RARDRefiner`
 3. **Use** RAR-D for progressive point refinement with `RARDRefiner`
 4. **Compare** adaptive vs uniform sampling performance
 5. **Visualize** collocation point distribution evolution
@@ -32,7 +32,7 @@ Residual-based Adaptive Refinement (RAR) algorithm (Lu et al., 2021).
 | DeepXDE | Opifex |
 | --- | --- |
 | `data.add_anchors(X[x_id])` | `RARDRefiner.refine(points, residuals, bounds, key)` |
-| `dde.callbacks.PDEPointResampler` | `RADSampler.sample(points, residuals, batch_size, key)` |
+| `dde.callbacks.PDEPointResampler` | `RARDRefiner.refine(points, residuals, bounds, key)` |
 | `np.argmax(err_eq)` | `compute_sampling_distribution(residuals, beta=1.0)` |
 
 ## Files
@@ -65,7 +65,7 @@ For solutions with localized features (e.g., Burgers equation shock):
 | Uniform | Many wasted in smooth regions | Poor near sharp gradients |
 | Adaptive | Concentrated near high residual | Better overall accuracy |
 
-### RAD Algorithm
+### RAR-D Algorithm
 
 Residual-based Adaptive Distribution samples with probability:
 
@@ -102,20 +102,15 @@ RAR-D adds new points near high-residual regions:
 
 ```python
 from opifex.core.training.components.adaptive_sampling import (
-    RADConfig,
-    RADSampler,
     RARDConfig,
     RARDRefiner,
 )
 
-rad_config = RADConfig(beta=1.0)
 rard_config = RARDConfig(
-    num_new_points=50,
-    percentile_threshold=90.0,
+    num_new_points=25,
+    percentile_threshold=90.0,  # focus refinement on the top 10% residual region
     noise_scale=0.1,
 )
-
-sampler = RADSampler(rad_config)
 refiner = RARDRefiner(rard_config)
 ```
 
@@ -123,8 +118,7 @@ refiner = RARDRefiner(rard_config)
 
 ```text
 Setting up adaptive sampling...
-  RAD beta: 1.0
-  Refinement points per step: 50
+  Refinement points per step: 25
   Refinement frequency: 200 steps
 ```
 
@@ -150,11 +144,11 @@ for step in range(TRAINING_STEPS):
 ```text
 Training PINN with adaptive sampling...
 --------------------------------------------------
-  Step  200: loss=9.415656e-01, points=250, max_res=1.4598e+00
-  Step  400: loss=7.176247e-01, points=300, max_res=7.7730e-01
-  Step  600: loss=1.621699e-01, points=350, max_res=5.8985e-01
-  Step  800: loss=3.899994e-02, points=400, max_res=4.8565e-01
-  Final: loss=2.555421e-02, points=400
+  Step  200: loss=9.168496e-01, points=125, max_res=1.5502e+00
+  Step  400: loss=6.883082e-01, points=150, max_res=1.0713e+00
+  Step  600: loss=1.955346e-01, points=175, max_res=5.9579e-01
+  Step  800: loss=3.781535e-02, points=200, max_res=6.6150e-01
+  Final: loss=2.236790e-02, points=200
 ```
 
 ### Step 3: Compare with Uniform Sampling
@@ -172,12 +166,26 @@ for step in range(TRAINING_STEPS):
 ```text
 Training PINN with uniform sampling (baseline)...
 --------------------------------------------------
-  Step    0: loss=1.423288e+01
-  Step  200: loss=9.186593e-01
-  Step  400: loss=6.885869e-01
-  Step  600: loss=2.289787e-01
-  Step  800: loss=4.357543e-02
-  Final: loss=2.493745e-02
+  Step    0: loss=1.424544e+01
+  Step  200: loss=9.168183e-01
+  Step  400: loss=6.857803e-01
+  Step  600: loss=2.191314e-01
+  Step  800: loss=4.407514e-02
+  Final: loss=2.650756e-02
+```
+
+### Step 4: Compare solution accuracy against a spectral reference
+
+Comparing each method's **training loss** is unfair — adaptive deliberately concentrates points
+where the residual is hardest, so its training loss need not be lower even when its *solution* is
+more accurate. Both PINNs solve the same periodic Burgers problem, so we score each against a
+high-resolution spectral reference (`solve_burgers_spectral`) on a common grid:
+
+```text
+Evaluating solution accuracy against a spectral reference...
+  Adaptive solution relative L2: 0.0749
+  Uniform  solution relative L2: 0.0821
+  Adaptive reduces the solution error by 9% vs uniform
 ```
 
 ## Visualization
@@ -192,17 +200,23 @@ Training PINN with uniform sampling (baseline)...
 
 ## Results Summary
 
-| Method | Final Points | Final Loss | Max Residual |
-| --- | --- | --- | --- |
-| Adaptive (RAR-D) | 400 | 2.56e-02 | 4.63e-01 |
-| Uniform | 400 | 2.49e-02 | 3.84e-01 |
+Both methods use the same **total** collocation budget (200 points); only the *placement* differs.
+Accuracy is measured against the spectral reference solution, not the training loss.
+
+| Method | Final Points | Solution Relative L2 |
+| --- | --- | --- |
+| Adaptive (RAR-D) | 200 | **0.0749** |
+| Uniform | 200 | 0.0821 |
 
 **Key Observations:**
 
-- Both methods achieve similar final loss with same point count
-- Adaptive sampling concentrates points in shock region
-- Uniform sampling distributes points evenly
-- Adaptive methods shine for problems with very localized features
+- At a tight point budget, **adaptive RAR-D reduces the solution error by ~9%** over uniform with the
+  same number of points — it concentrates the scarce points on the steep travelling front where
+  uniform sampling under-resolves.
+- The meaningful comparison is *solution* error against a reference, not training loss on each
+  method's own (different) collocation points.
+- The advantage grows when points are scarce relative to the localized feature; with a very dense
+  uniform grid the gap shrinks.
 
 ## Next Steps
 
@@ -221,9 +235,9 @@ Training PINN with uniform sampling (baseline)...
 
 ### API Reference
 
-- [`RADSampler`](https://opifex.readthedocs.io/en/latest/api/adaptive.html#radsampler)
 - [`RARDRefiner`](https://opifex.readthedocs.io/en/latest/api/adaptive.html#rardrefiner)
-- [`compute_sampling_distribution`](https://opifex.readthedocs.io/en/latest/api/adaptive.html#compute-sampling-distribution)
+- [`RARDConfig`](https://opifex.readthedocs.io/en/latest/api/adaptive.html#rardconfig)
+- [`solve_burgers_spectral`](https://opifex.readthedocs.io/en/latest/api/physics.html#solve-burgers-spectral)
 
 ## Troubleshooting
 
@@ -247,5 +261,5 @@ Training PINN with uniform sampling (baseline)...
 ### Memory growing too fast
 
 - Cap maximum number of points
-- Use `RADSampler.sample()` to resample fixed batch instead of growing
+- Tune `percentile_threshold` / `num_new_points` to trade concentration vs coverage
 - Consider periodic pruning of low-residual points

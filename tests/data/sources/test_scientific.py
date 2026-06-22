@@ -10,13 +10,26 @@ from pathlib import Path
 from typing import Any
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
+from datarax.pipeline import Pipeline
 from flax import nnx
+
+from opifex.data.sources.scientific import create_pdebench_loader
 
 
 # Lazy-import guards for optional deps
 h5py = pytest.importorskip("h5py")
+
+
+def _pipeline_batch(loader: Pipeline) -> dict[str, Any]:
+    """Fetch one batch from a datarax pipeline.
+
+    ``Pipeline.step`` is decorated with ``@nnx.jit``, which pyright misreads as an unbound method
+    (``reportCallIssue``); the call is correct at runtime, so the suppression is localised here.
+    """
+    return loader.step()  # pyright: ignore[reportCallIssue]
 
 
 # =============================================================================
@@ -409,37 +422,52 @@ class TestPDEBenchSlidingWindow:
 
 
 class TestPDEBenchNormalization:
-    """Normalization tests."""
+    """Normalization is a composable datarax MapOperator, not baked into the source arrays."""
 
-    def test_normalize_true(self, pdebench_hdf5_file: Path) -> None:
-        """With normalize=True, values should be rescaled."""
+    def test_normalize_operator_is_map_operator(self, pdebench_hdf5_file: Path) -> None:
+        """normalize=True yields a datarax MapOperator; normalize=False yields None."""
+        from datarax.operators.map_operator import MapOperator
+
+        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+
+        on = PDEBenchSource(
+            PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True),
+            rngs=nnx.Rngs(0),
+        )
+        off = PDEBenchSource(
+            PDEBenchConfig(
+                file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=False
+            ),
+            rngs=nnx.Rngs(0),
+        )
+        assert isinstance(on.normalize_operator(rngs=nnx.Rngs(0)), MapOperator)
+        assert off.normalize_operator(rngs=nnx.Rngs(0)) is None
+
+    def test_loader_normalizes_to_unit_range(self, pdebench_hdf5_file: Path) -> None:
+        """A normalize=True loader rescales input/target into [0, 1] (per-channel min-max)."""
+        from opifex.data.sources.scientific import PDEBenchConfig
+
+        config = PDEBenchConfig(
+            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
+        )
+        loader = create_pdebench_loader(config, batch_size=4)
+        batch = _pipeline_batch(loader)
+        for field in ("input", "target"):
+            values = np.array(batch[field])
+            assert np.isfinite(values).all()
+            assert values.min() >= -1e-5
+            assert values.max() <= 1.0 + 1e-5
+
+    def test_raw_source_arrays_are_unnormalized(self, pdebench_hdf5_file: Path) -> None:
+        """The source itself holds raw data — normalization happens in the pipeline stage."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
-            file_path=pdebench_hdf5_file,
-            dataset_name="1D_Burgers",
-            normalize=True,
+            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
         )
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        element = source[0]
-        inp = np.array(element["input"])
-        # Normalized: should have mean ~0 and std ~1 (approximately)
-        # Or min-max [0,1] depending on implementation
-        assert np.isfinite(inp).all()
-
-    def test_normalize_false(self, pdebench_hdf5_file: Path) -> None:
-        """With normalize=False, raw data values are preserved."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
-
-        config = PDEBenchConfig(
-            file_path=pdebench_hdf5_file,
-            dataset_name="1D_Burgers",
-            normalize=False,
-        )
-        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        element = source[0]
-        inp = np.array(element["input"])
-        assert np.isfinite(inp).all()
+        # Raw standard-normal data has negative values; min-max would not.
+        assert float(np.array(source.inputs).min()) < 0.0
 
 
 # =============================================================================
@@ -527,53 +555,59 @@ class TestPDEBenchRandomAccess:
 
 
 class TestPDEBenchBatch:
-    """Batch retrieval — follows datarax get_batch pattern."""
+    """Datarax contract: stateless get_batch_at + element_spec (Pipeline-drivable)."""
 
-    def test_get_batch_shape(self, pdebench_hdf5_file: Path) -> None:
-        """get_batch should return dict with batched arrays."""
+    def test_get_batch_at_shape(self, pdebench_hdf5_file: Path) -> None:
+        """get_batch_at returns size records with batched input/target arrays."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
-        config = PDEBenchConfig(
-            file_path=pdebench_hdf5_file,
-            dataset_name="1D_Burgers",
-        )
+        config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        batch = source.get_batch(4)
+        batch = source.get_batch_at(0, 4)
         assert batch["input"].shape[0] == 4
         assert batch["target"].shape[0] == 4
-
-    def test_get_batch_stateless_with_key(
-        self,
-        pdebench_hdf5_file: Path,
-    ) -> None:
-        """Stateless batch with explicit key should be deterministic."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
-
-        config = PDEBenchConfig(
-            file_path=pdebench_hdf5_file,
-            dataset_name="1D_Burgers",
-        )
-        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        key = jax.random.PRNGKey(42)
-        b1 = source.get_batch(4, key=key)
-        b2 = source.get_batch(4, key=key)
-        np.testing.assert_array_equal(
-            np.array(b1["input"]),
-            np.array(b2["input"]),
-        )
-
-    def test_get_batch_jax_arrays(self, pdebench_hdf5_file: Path) -> None:
-        """Batch values should be JAX arrays."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
-
-        config = PDEBenchConfig(
-            file_path=pdebench_hdf5_file,
-            dataset_name="1D_Burgers",
-        )
-        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        batch = source.get_batch(2)
         assert isinstance(batch["input"], jax.Array)
-        assert isinstance(batch["target"], jax.Array)
+
+    def test_get_batch_at_is_stateless(self, pdebench_hdf5_file: Path) -> None:
+        """Repeated calls at the same start return the same records (no internal counter)."""
+        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+
+        config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
+        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
+        b1 = source.get_batch_at(2, 3)
+        b2 = source.get_batch_at(2, 3)
+        np.testing.assert_array_equal(np.array(b1["input"]), np.array(b2["input"]))
+
+    def test_get_batch_at_traceable_under_jit(self, pdebench_hdf5_file: Path) -> None:
+        """get_batch_at accepts a traced start (composes with nnx.scan / jit)."""
+        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+
+        config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
+        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
+        graphdef, state = nnx.split(source)
+
+        @jax.jit
+        def fetch(state: nnx.State, start: jax.Array) -> jax.Array:
+            return nnx.merge(graphdef, state).get_batch_at(start, 2)["input"]
+
+        out = fetch(state, jnp.asarray(1))
+        assert out.shape[0] == 2
+
+    def test_element_spec(self, pdebench_hdf5_file: Path) -> None:
+        """element_spec describes one element's input/target shapes and dtypes."""
+        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+
+        config = PDEBenchConfig(
+            file_path=pdebench_hdf5_file,
+            dataset_name="1D_Burgers",
+            input_steps=3,
+            output_steps=2,
+        )
+        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
+        spec = source.element_spec()
+        assert spec["input"].shape[0] == 3
+        assert spec["target"].shape[0] == 2
+        assert spec["input"].dtype == source.inputs.dtype
 
 
 # =============================================================================
@@ -617,11 +651,11 @@ class TestPDEBenchIteration:
             assert "target" in element
             break  # just check first
 
-    def test_reset_allows_reiteration(
+    def test_iteration_is_stateless_and_repeatable(
         self,
         pdebench_hdf5_file: Path,
     ) -> None:
-        """After reset(), iteration should start from the beginning."""
+        """Iteration carries no internal counter — re-iterating yields the same elements."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
@@ -630,7 +664,6 @@ class TestPDEBenchIteration:
         )
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
         first_pass = [np.array(e["input"]) for e in source]
-        source.reset()
         second_pass = [np.array(e["input"]) for e in source]
         assert len(first_pass) == len(second_pass)
         np.testing.assert_array_equal(first_pass[0], second_pass[0])
@@ -642,10 +675,10 @@ class TestPDEBenchIteration:
 
 
 class TestPDEBenchCoordinates:
-    """Coordinate grid loading tests."""
+    """Coordinate grids are domain metadata, exposed via the ``coordinates`` attribute."""
 
     def test_coordinates_loaded(self, pdebench_hdf5_file: Path) -> None:
-        """When /x and /t exist in HDF5, they should appear in element."""
+        """When /x and /t exist in HDF5, they are accessible on source.coordinates."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
@@ -653,10 +686,47 @@ class TestPDEBenchCoordinates:
             dataset_name="1D_Burgers",
         )
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        element = source[0]
-        assert "coordinates" in element
-        assert "x" in element["coordinates"]
-        assert "t" in element["coordinates"]
+        assert source.coordinates is not None
+        assert "x" in source.coordinates
+        assert "t" in source.coordinates
+
+
+class TestPDEBenchLoader:
+    """create_pdebench_loader builds a datarax Pipeline over the source."""
+
+    def test_loader_returns_pipeline(self, pdebench_hdf5_file: Path) -> None:
+        """The loader returns a datarax Pipeline whose step() yields batched dicts."""
+        from opifex.data.sources.scientific import PDEBenchConfig
+
+        config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
+        loader = create_pdebench_loader(config, batch_size=4)
+        assert isinstance(loader, Pipeline)
+        batch = _pipeline_batch(loader)
+        assert batch["input"].shape[0] == 4
+        assert batch["target"].shape[0] == 4
+
+    def test_loader_iterates_full_dataset(self, pdebench_hdf5_file: Path) -> None:
+        """Successive step() calls advance through the dataset (pipeline-driven position)."""
+        from opifex.data.sources.scientific import PDEBenchConfig
+
+        config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
+        loader = create_pdebench_loader(config, batch_size=4)
+        b0 = _pipeline_batch(loader)
+        b1 = _pipeline_batch(loader)
+        assert b0["input"].shape == b1["input"].shape
+
+    def test_loader_shuffle_uses_key(self, pdebench_hdf5_file: Path) -> None:
+        """With shuffle=True the source draws shuffled indices from the pipeline key."""
+        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+
+        config = PDEBenchConfig(
+            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", shuffle=True
+        )
+        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
+        sequential = np.array(source.get_batch_at(0, 8)["input"])
+        shuffled = np.array(source.get_batch_at(0, 8, key=jax.random.key(1))["input"])
+        # Shuffled selection differs from the contiguous slice (with high probability).
+        assert not np.array_equal(sequential, shuffled)
 
 
 # =============================================================================
@@ -871,3 +941,57 @@ class TestVTKMeshSource:
         config = VTKMeshConfig(directory=tmp_path)
         source = VTKMeshSource(config, rngs=nnx.Rngs(0))
         assert len(source) == 0
+
+    def test_element_has_node_mask(self, vtu_directory: Path) -> None:
+        """Each padded element carries a node_mask flagging real (non-padded) nodes."""
+        from opifex.data.sources.scientific import VTKMeshConfig, VTKMeshSource
+
+        config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
+        source = VTKMeshSource(config, rngs=nnx.Rngs(0))
+        element = source[0]
+        assert "node_mask" in element
+        # All meshes are 50 nodes => max=50, no padding, mask all ones.
+        assert element["node_mask"].shape == (50,)
+        assert float(element["node_mask"].sum()) == 50.0
+
+    def test_element_spec_and_get_batch_at(self, vtu_directory: Path) -> None:
+        """element_spec declares padded shapes; get_batch_at returns a stacked, batched dict."""
+        from opifex.data.sources.scientific import VTKMeshConfig, VTKMeshSource
+
+        config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
+        source = VTKMeshSource(config, rngs=nnx.Rngs(0))
+        spec = source.element_spec()
+        assert spec["node_positions"].shape == (50, 3)
+        batch = source.get_batch_at(0, 2)
+        assert batch["node_positions"].shape == (2, 50, 3)
+        assert batch["edge_index"].shape[1] == 2  # (batch, 2, max_edges)
+
+    def test_varying_size_meshes_are_padded_with_masks(self, tmp_path: Path) -> None:
+        """Ragged meshes pad to the dataset max; node_mask records each mesh's real node count."""
+        import meshio  # type: ignore[reportMissingImports]
+
+        from opifex.data.sources.scientific import VTKMeshConfig, VTKMeshSource
+
+        sizes = [30, 50]
+        for index, num_nodes in enumerate(sizes):
+            points = np.random.default_rng(index).standard_normal((num_nodes, 3)).astype(np.float32)
+            cells: list[Any] = [("triangle", np.array([[0, 1, 2], [2, 3, 4]]))]
+            meshio.Mesh(points=points, cells=cells).write(tmp_path / f"mesh_{index}.vtu")
+
+        source = VTKMeshSource(VTKMeshConfig(directory=tmp_path), rngs=nnx.Rngs(0))
+        # Both meshes padded to max=50 nodes.
+        assert source[0]["node_positions"].shape == (50, 3)
+        assert source[1]["node_positions"].shape == (50, 3)
+        # The 30-node mesh's mask has exactly 30 real nodes; the 50-node mesh has 50.
+        assert float(source[0]["node_mask"].sum()) == 30.0
+        assert float(source[1]["node_mask"].sum()) == 50.0
+
+    def test_loader_returns_pipeline(self, vtu_directory: Path) -> None:
+        """create_vtk_mesh_loader builds a datarax Pipeline whose step() yields batched meshes."""
+        from opifex.data.sources.scientific import create_vtk_mesh_loader, VTKMeshConfig
+
+        config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
+        loader = create_vtk_mesh_loader(config, batch_size=2)
+        assert isinstance(loader, Pipeline)
+        batch = _pipeline_batch(loader)
+        assert batch["node_positions"].shape[0] == 2

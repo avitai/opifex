@@ -200,7 +200,7 @@ WEIGHT_DECAY = 1e-4  # regularization to combat overfitting
 MODES = 12
 HIDDEN_WIDTH = 32
 NUM_LAYERS = 4
-DOMAIN_PADDING = 8  # pad spatial dims to soften the Gibbs phenomenon
+DOMAIN_PADDING = 0.25  # fraction of each spatial dim (resolution-invariant Gibbs padding)
 SEED = 42
 
 OUTPUT_DIR = Path("docs/assets/examples/fno_darcy")
@@ -227,7 +227,7 @@ LR schedule: exponential, x0.5 every 60 epochs
 | `WEIGHT_DECAY` | 1e-4 | L2 weight decay (regularization) |
 | `MODES` | 12 | Number of Fourier modes retained per dimension |
 | `HIDDEN_WIDTH` | 32 | Width of the spectral layers |
-| `DOMAIN_PADDING` | 8 | Spatial padding to reduce the Gibbs phenomenon |
+| `DOMAIN_PADDING` | 0.25 | Spatial padding *fraction* (resolution-invariant) to reduce the Gibbs phenomenon |
 
 ### Step 3: Data Loading
 
@@ -302,7 +302,7 @@ class FNOWithEmbedding(nnx.Module):
         num_layers: int,
         grid_boundaries: list[list[float]],
         *,
-        domain_padding: int,
+        domain_padding: float,
         rngs: nnx.Rngs,
     ) -> None:
         super().__init__()

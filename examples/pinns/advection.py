@@ -343,7 +343,8 @@ def main() -> dict[str, float | int]:
     axes[0].set_xlabel("x")
     axes[0].set_ylabel("u(x, t)")
     axes[0].set_title("Solution at Different Times")
-    axes[0].legend(fontsize=7, ncol=2)
+    # Traveling bumps fill the axes, so place the legend outside (loc="best" would cover data).
+    axes[0].legend(fontsize=7, ncol=2, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     axes[0].grid(True, alpha=0.3)
 
     axes[1].plot(

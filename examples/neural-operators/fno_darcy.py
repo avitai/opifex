@@ -129,7 +129,7 @@ class FNOWithEmbedding(nnx.Module):
         num_layers: int,
         grid_boundaries: list[list[float]],
         *,
-        domain_padding: int,
+        domain_padding: float,
         rngs: nnx.Rngs,
     ) -> None:
         """Build the grid embedding and the underlying FNO.
@@ -141,8 +141,8 @@ class FNOWithEmbedding(nnx.Module):
             hidden_channels: Number of FNO hidden channels.
             num_layers: Number of spectral layers.
             grid_boundaries: Per-axis ``[min, max]`` grid extents.
-            domain_padding: Pixels padded on each spatial axis to reduce the
-                Gibbs phenomenon for the non-periodic Darcy problem.
+            domain_padding: Fraction of each spatial axis to pad (resolution-invariant)
+                to reduce the Gibbs phenomenon for the non-periodic Darcy problem.
             rngs: Random number generators.
         """
         super().__init__()
@@ -228,7 +228,7 @@ def main() -> dict[str, float | int]:
     modes = 12  # retained Fourier modes per axis
     hidden_width = 32
     num_layers = 4
-    domain_padding = 8  # pad spatial dims to soften the Gibbs phenomenon (non-periodic)
+    domain_padding = 0.25  # fraction of each spatial dim (resolution-invariant Gibbs padding)
     seed = 42
 
     # Exponential LR schedule: halve the rate every 60 epochs.

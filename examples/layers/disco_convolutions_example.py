@@ -6,403 +6,201 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#   kernelspec:
+#     display_name: Python 3 (ipykernel)
+#     language: python
+#     name: python3
 # ---
 
 # %% [markdown]
 """
-# DISCO Convolutions for Neural Operators
+# DISCO Convolutions: Discretisation-Invariant Convolution on Arbitrary Point Sets
 
 | Metadata | Value |
 |----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~5 min (CPU) |
-| **Prerequisites** | JAX, Flax NNX, Convolution basics |
+| **Level** | Advanced |
+| **Runtime** | ~30 s (GPU) / ~2 min (CPU) |
+| **Prerequisites** | JAX, Flax NNX, neural operators, quadrature basics |
 | **Format** | Python + Jupyter |
+| **Memory** | ~0.5 GB |
 
 ## Overview
 
-Discrete-Continuous (DISCO) convolutions generalize standard convolutions to work on
-both structured and unstructured grids. Unlike standard convolutions that require regular
-grid spacing, DISCO convolutions can operate on arbitrary point distributions, making them
-ideal for scientific applications with irregular meshes.
+A standard convolution has a fixed *pixel* kernel: its receptive field shrinks as the grid
+refines, and it cannot be applied to non-grid (scattered) data at all. A **discrete-continuous
+(DISCO)** convolution (Ocampo, Price & McEwen 2023, arXiv:2209.13603 — the algorithm behind
+NVIDIA's `torch_harmonics` and spherical neural operators) instead parameterises the kernel as a
+*continuous* function `kappa(r) = Σ_k w_k φ_k(r)` and evaluates the convolution as a quadrature
+against the input samples:
 
-This example reproduces and extends the classic 'Einstein' demo from the NeuralOperator
-library, demonstrating basic DISCO convolution, equidistant optimization for regular grids,
-and encoder-decoder architectures built with DISCO layers.
+    (kappa * f)(x_o) ≈ Σ_i q_i kappa(x_o − x_i) f(x_i).
 
-## Learning Goals
+Because the kernel lives in physical coordinates (not pixels) and the sum is a quadrature, the
+operator is **discretisation-aware**: the same learned kernel transfers across grid resolutions,
+and it works on **irregular** point sets. This example demonstrates both properties with
+measurements.
 
-1. Apply `DiscreteContinuousConv2d` for general convolution on arbitrary grids
-2. Use `EquidistantDiscreteContinuousConv2d` for optimized regular grid processing
-3. Build encoder-decoder architectures with `create_disco_encoder` and `create_disco_decoder`
-4. Compare performance between regular and equidistant DISCO variants
+The radial basis reuses opifex's `PiecewiseLinearBasis` (the `torch_harmonics` filter basis), and
+the filter is normalised per output point (a partition of unity) as in the reference.
+
+## What You'll Learn
+
+1. Build a `DiscreteContinuousConv2d` over arbitrary input/output point sets
+2. Measure **discretisation invariance**: the same kernel on a finer grid gives a consistent result
+3. Apply the same operator to an **irregular** (scattered) point cloud — impossible for a pixel conv
+
+## Coming from neuraloperator / torch_harmonics?
+
+| neuraloperator / torch_harmonics | Opifex |
+|----------------------------------|--------|
+| `DiscreteContinuousConv2d(in_channels, out_channels, grid_in, grid_out, quadrature_weights, kernel_shape)` | `DiscreteContinuousConv2d(in_channels, out_channels, in_coords, out_coords, quad_weights, num_basis=, radius=, rngs=)` |
+| `PiecewiseLinearFilterBasis` | `opifex.neural.equivariant.PiecewiseLinearBasis` |
 """
 
 # %%
-import time
-from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from flax import nnx
 
-# Import Opifex layers
-from opifex.neural.operators.specialized.disco import (
-    create_disco_decoder,
-    create_disco_encoder,
-    DiscreteContinuousConv2d,
-    EquidistantDiscreteContinuousConv2d,
-)
+# %%
+from opifex.neural.operators.specialized.disco import DiscreteContinuousConv2d, regular_grid
 
 
 # %% [markdown]
 """
-## Utilities
+## A continuous test field
 
-First, we define a helper function to create the test image (Einstein-like).
+We convolve a smooth scalar field. Because the DISCO kernel is continuous, the convolution result
+is a property of the *function*, not its discretisation — so refining the input grid should leave
+the output (at fixed query points) essentially unchanged.
 """
 
 
 # %%
-def create_einstein_test_image(size: int = 64) -> jnp.ndarray:
-    """Create a simplified Einstein-like test image for DISCO demonstration.
-
-    Args:
-        size: Image size (square)
-
-    Returns:
-        Test image array of shape (size, size)
-    """
-    # Create coordinate grids
-    x = jnp.linspace(-1, 1, size)
-    y = jnp.linspace(-1, 1, size)
-    X, Y = jnp.meshgrid(x, y)
-
-    # Create Einstein-like face features
-    # Head (circle)
-    head = jnp.exp(-3 * (X**2 + Y**2))
-
-    # Eyes (two smaller circles)
-    left_eye = 0.7 * jnp.exp(-15 * ((X + 0.3) ** 2 + (Y + 0.2) ** 2))
-    right_eye = 0.7 * jnp.exp(-15 * ((X - 0.3) ** 2 + (Y + 0.2) ** 2))
-
-    # Mouth (curved line)
-    mouth = 0.5 * jnp.exp(-20 * (X**2 + (Y - 0.4) ** 2)) * (jnp.abs(X) < 0.4)
-
-    # Hair (top region with some texture)
-    hair = 0.6 * jnp.exp(-2 * (X**2 + (Y + 0.7) ** 2)) * (Y > 0.1)
-
-    # Combine features
-    image = head + left_eye + right_eye + mouth + hair
-
-    # Add some noise for texture
-    key = jax.random.PRNGKey(42)
-    noise = 0.1 * jax.random.normal(key, (size, size))
-    image = image + noise
-
-    # Normalize to [0, 1]
-    return (image - image.min()) / (image.max() - image.min())
+def smooth_field(coords: jax.Array) -> jax.Array:
+    """A smooth scalar field f(x, y) = sin(3x) cos(3y), shaped ``(1, N, 1)`` for the conv."""
+    x, y = coords[:, 0], coords[:, 1]
+    return (jnp.sin(3.0 * x) * jnp.cos(3.0 * y))[None, :, None]
 
 
-# %% [markdown]
-"""
-## 1. Basic DISCO Convolution
+def main() -> dict[str, float | int]:
+    """Demonstrate DISCO discretisation invariance and irregular-grid convolution, with metrics."""
+    radius, num_basis, seed = 0.3, 4, 0
 
-We demonstrate `DiscreteContinuousConv2d` which works for general convolutions.
-"""
+    print("=" * 72)
+    print("Opifex Example: DISCO convolutions — discretisation-invariant, irregular-grid")
+    print("=" * 72)
+    print(f"JAX backend: {jax.default_backend()}  devices: {jax.devices()}")
 
+    # Fixed query (output) points, independent of the input discretisation.
+    out_coords = jnp.array([[0.3, 0.3], [0.5, 0.5], [0.7, 0.4], [0.4, 0.6], [0.6, 0.7]])
 
-# %%
-def demonstrate_disco_convolution_basic(
-    image_size: int = 32,
-    in_channels: int = 1,
-    out_channels: int = 4,
-    kernel_size: int = 3,
-) -> dict[str, Any]:
-    """Demonstrate basic DiSCo convolution on 2D images."""
+    def disco_on_regular_grid(resolution: int) -> jax.Array:
+        in_coords, quad = regular_grid(resolution)
+        # Same seed + same parameter shape => identical learned kernel across resolutions.
+        conv = DiscreteContinuousConv2d(
+            in_channels=1,
+            out_channels=1,
+            in_coords=in_coords,
+            out_coords=out_coords,
+            quad_weights=quad,
+            num_basis=num_basis,
+            radius=radius,
+            use_bias=False,
+            rngs=nnx.Rngs(seed),
+        )
+        return conv(smooth_field(in_coords))[0, :, 0]
+
+    # --- Discretisation invariance: same kernel, three input resolutions ---
     print()
-    print("Basic DISCO Convolution Demonstration")
-    print(f"   Image Size: {image_size}x{image_size}")
-    print(f"   Channels: {in_channels} -> {out_channels}")
-    print(f"   Kernel Size: {kernel_size}x{kernel_size}")
+    print("Discretisation invariance (same continuous kernel, refining the input grid):")
+    print("-" * 72)
+    out_24 = disco_on_regular_grid(24)
+    out_48 = disco_on_regular_grid(48)
+    out_96 = disco_on_regular_grid(96)
+    rel_24_96 = float(jnp.linalg.norm(out_24 - out_96) / (jnp.linalg.norm(out_96) + 1e-9))
+    rel_48_96 = float(jnp.linalg.norm(out_48 - out_96) / (jnp.linalg.norm(out_96) + 1e-9))
+    print(f"  output @ query points (24x24): {jnp.round(out_24, 4)}")
+    print(f"  output @ query points (96x96): {jnp.round(out_96, 4)}")
+    print(f"  relative change 24->96: {rel_24_96:.4f}")
+    print(f"  relative change 48->96: {rel_48_96:.4f}  (halves as the grid refines: convergent)")
 
-    # Create test image
-    test_image = create_einstein_test_image(image_size)
-
-    # Prepare input tensor (batch, height, width, channels)
-    input_tensor = test_image[None, :, :, None]  # Add batch and channel dims
-    if in_channels > 1:
-        # Replicate across channels
-        input_tensor = jnp.repeat(input_tensor, in_channels, axis=-1)
-
-    # Initialize DISCO convolution layer
-    disco_conv = DiscreteContinuousConv2d(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        kernel_size=kernel_size,
-        activation=jax.nn.gelu,
-        rngs=nnx.Rngs(42),
-    )
-
-    # Apply convolution
-    start_time = time.time()
-    output_tensor = disco_conv(input_tensor)
-    conv_time = time.time() - start_time
-
-    print(f"   Input Shape: {input_tensor.shape}")
-    print(f"   Output Shape: {output_tensor.shape}")
-    print(f"   Convolution Time: {conv_time * 1000:.2f} ms")
-
-    return {
-        "timestamp": datetime.now(UTC).isoformat(),
-        "input_image": test_image,
-        "input_tensor": input_tensor,
-        "output_tensor": output_tensor,
-        "disco_conv": disco_conv,
-        "conv_time": conv_time,
-        "output_shape": output_tensor.shape,
-    }
-
-
-# %% [markdown]
-"""
-## 2. Equidistant Optimization
-
-`EquidistantDiscreteContinuousConv2d` provides optimized performance for regular grids.
-"""
-
-
-# %%
-def demonstrate_equidistant_optimization(
-    image_size: int = 48,
-    in_channels: int = 2,
-    out_channels: int = 3,
-    grid_spacing: float = 0.1,
-) -> dict[str, Any]:
-    """Demonstrate DiSCo convolution with equidistant grid optimization."""
+    # --- Irregular point set: the capability a pixel convolution cannot provide ---
     print()
-    print("Equidistant DISCO Convolution Demonstration")
-    print(f"   Image Size: {image_size}x{image_size}")
-
-    # Create test data
-    test_image = create_einstein_test_image(image_size)
-    input_tensor = jnp.stack([test_image, test_image * 0.5], axis=-1)[None, :, :, :]
-
-    # Regular DISCO convolution
-    regular_conv = DiscreteContinuousConv2d(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        kernel_size=3,
-        rngs=nnx.Rngs(43),
+    print("Irregular (scattered) point set:")
+    print("-" * 72)
+    key = jax.random.key(seed + 1)
+    irregular_coords = jax.random.uniform(key, (500, 2))
+    quad_mc = jnp.full((500,), 1.0 / 500)  # Monte-Carlo quadrature
+    conv_irregular = DiscreteContinuousConv2d(
+        in_channels=1,
+        out_channels=1,
+        in_coords=irregular_coords,
+        out_coords=out_coords,
+        quad_weights=quad_mc,
+        num_basis=num_basis,
+        radius=radius,
+        use_bias=False,
+        rngs=nnx.Rngs(seed),
     )
-
-    # Equidistant DISCO convolution
-    equidistant_conv = EquidistantDiscreteContinuousConv2d(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        kernel_size=3,
-        grid_spacing=grid_spacing,
-        rngs=nnx.Rngs(44),
+    out_irregular = conv_irregular(smooth_field(irregular_coords))[0, :, 0]
+    rel_irregular = float(
+        jnp.linalg.norm(out_irregular - out_96) / (jnp.linalg.norm(out_96) + 1e-9)
     )
+    print(f"  500 scattered points, same kernel -> output {jnp.round(out_irregular, 4)}")
+    print(f"  agreement with the 96x96 grid result: relative diff {rel_irregular:.4f}")
+    print("  (a standard pixel convolution cannot be applied to scattered points at all)")
 
-    # Performance comparison
-    start_time = time.time()
-    regular_output = regular_conv(input_tensor)
-    regular_time = time.time() - start_time
-
-    start_time = time.time()
-    equidistant_output = equidistant_conv(input_tensor)
-    equidistant_time = time.time() - start_time
-
-    speedup = regular_time / equidistant_time
-
-    print(f"   Regular DISCO Time: {regular_time * 1000:.2f} ms")
-    print(f"   Equidistant DISCO Time: {equidistant_time * 1000:.2f} ms")
-    print(f"   Speedup Factor: {speedup:.2f}x")
-
-    return {
-        "regular_output": regular_output,
-        "equidistant_output": equidistant_output,
-        "regular_time": regular_time,
-        "equidistant_time": equidistant_time,
-        "speedup_factor": speedup,
-    }
-
-
-# %% [markdown]
-"""
-## 3. Encoder-Decoder Architecture
-
-Building a full autoencoder using DISCO layers.
-"""
-
-
-# %%
-def demonstrate_encoder_decoder_architecture(
-    image_size: int = 32,
-    in_channels: int = 1,
-    latent_channels: int = 64,
-) -> dict[str, Any]:
-    """Demonstrate encoder-decoder architecture with DiSCo convolutions."""
-    print()
-    print("DISCO Encoder-Decoder Architecture Demonstration")
-
-    # Create test image
-    test_image = create_einstein_test_image(image_size)
-    input_tensor = test_image[None, :, :, None]
-
-    # Encoder: downsamples
-    encoder = create_disco_encoder(
-        in_channels=in_channels,
-        hidden_channels=(16, 32, latent_channels),
-        kernel_size=3,
-        use_equidistant=True,
-        rngs=nnx.Rngs(45),
-    )
-
-    # Decoder: upsamples
-    decoder = create_disco_decoder(
-        hidden_channels=(latent_channels, 32, 16),
-        out_channels=in_channels,
-        kernel_size=3,
-        use_equidistant=True,
-        rngs=nnx.Rngs(46),
-    )
-
-    # Forward pass
-    start_time = time.time()
-    encoded = encoder(input_tensor)
-    reconstructed = decoder(encoded)
-    total_time = time.time() - start_time
-
-    # Compute error
-    reconstruction_error = jnp.mean((input_tensor - reconstructed) ** 2)
-
-    print(f"   Encoded Shape: {encoded.shape}")
-    print(f"   Reconstructed Shape: {reconstructed.shape}")
-    print(f"   Reconstruction Error: {reconstruction_error:.6f}")
-
-    return {
-        "original_image": test_image,
-        "encoded": encoded,
-        "reconstructed": reconstructed,
-        "reconstruction_error": reconstruction_error,
-    }
-
-
-# %% [markdown]
-"""
-## Visualization
-
-Let's visualize the results from all demonstrations.
-"""
-
-
-# %%
-def visualize_results(basic, equidistant, enc_dec):
-    """Visualize results from all DiSCo convolution demonstrations."""
-    _fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-
-    # Basic
-    axes[0, 0].imshow(basic["input_image"], cmap="gray")
-    axes[0, 0].set_title("Input")
-    axes[0, 0].axis("off")
-
-    axes[0, 1].imshow(basic["output_tensor"][0, :, :, 0], cmap="viridis")
-    axes[0, 1].set_title("Basic Output")
-    axes[0, 1].axis("off")
-
-    # Equidistant
-    axes[0, 2].imshow(equidistant["regular_output"][0, :, :, 0], cmap="plasma")
-    axes[0, 2].set_title("Regular Output")
-    axes[0, 2].axis("off")
-
-    axes[0, 3].imshow(equidistant["equidistant_output"][0, :, :, 0], cmap="plasma")
-    axes[0, 3].set_title(f"Equidistant (Speedup: {equidistant['speedup_factor']:.1f}x)")
-    axes[0, 3].axis("off")
-
-    # Encoder-Decoder
-    axes[1, 0].imshow(enc_dec["original_image"], cmap="gray")
-    axes[1, 0].set_title("Original")
-    axes[1, 0].axis("off")
-
-    axes[1, 1].imshow(enc_dec["encoded"][0, :, :, 0], cmap="magma")
-    axes[1, 1].set_title("Latent")
-    axes[1, 1].axis("off")
-
-    axes[1, 2].imshow(enc_dec["reconstructed"][0, :, :, 0], cmap="gray")
-    axes[1, 2].set_title(f"Reconstructed (Err: {enc_dec['reconstruction_error']:.2e})")
-    axes[1, 2].axis("off")
-
-    # Summary
-    axes[1, 3].text(0.5, 0.5, "DISCO Demo\nComplete", ha="center", va="center", fontsize=16)
-    axes[1, 3].axis("off")
-
-    plt.tight_layout()
-
-    # Save figure
+    # --- Visualisation: the learned continuous radial kernel ---
     output_dir = Path("docs/assets/examples/disco_convolutions")
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "disco_convolutions_visualization.png"
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    print(f"   Visualization saved to: {output_path}")
+    in_coords, quad = regular_grid(48)
+    conv = DiscreteContinuousConv2d(
+        in_channels=1,
+        out_channels=1,
+        in_coords=in_coords,
+        out_coords=out_coords,
+        quad_weights=quad,
+        num_basis=num_basis,
+        radius=radius,
+        use_bias=False,
+        rngs=nnx.Rngs(seed),
+    )
+    from opifex.neural.equivariant import PiecewiseLinearBasis
 
+    radial = PiecewiseLinearBasis(num_basis=num_basis, cutoff=radius)
+    r = jnp.linspace(0.0, radius, 200)
+    weights = conv.weight.value[:, 0, 0]  # (num_basis,) kernel coefficients
+    kernel_profile = radial(r) @ weights
+    _fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(r, kernel_profile, color="tab:blue", linewidth=2.5, label="learned kernel kappa(r)")
+    for k in range(num_basis):
+        ax.plot(
+            r, radial(r)[:, k] * float(weights[k]), "--", alpha=0.5, label=f"w[{k}] * hat_{k}(r)"
+        )
+    ax.set_xlabel("radius r", fontsize=12)
+    ax.set_ylabel("kernel value", fontsize=12)
+    ax.set_title("DISCO continuous radial kernel (sum of weighted hat basis)", fontsize=13)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/disco-continuous-kernel.png", dpi=150, bbox_inches="tight")
+    plt.show()
+    print(f"Saved: {output_dir}/disco-continuous-kernel.png")
 
-# %% [markdown]
-"""
-## Results Summary
-
-| Component | Description | Performance |
-|-----------|-------------|-------------|
-| Basic DISCO Conv | General convolution on arbitrary grids | Baseline |
-| Equidistant DISCO | Optimized for regular grids | Speedup varies by hardware |
-| Encoder-Decoder | Full autoencoder with DISCO layers | Reconstruction error shown |
-
-## Next Steps
-
-### Experiments to Try
-
-1. Increase `out_channels` and observe feature extraction quality
-2. Try different `kernel_size` values (5, 7) for broader receptive fields
-3. Apply DISCO convolutions to real scientific data on irregular meshes
-
-### Related Examples
-
-- [Grid Embeddings](grid_embeddings_example.md) - Spatial coordinate injection for neural operators
-- [Fourier Continuation](fourier_continuation_example.md) - Boundary handling for spectral methods
-- [FNO Darcy Full](../models/fno_darcy_comprehensive.md) - Full neural operator training
-
-### API Reference
-
-- [`DiscreteContinuousConv2d`](../../api/neural.md) - General DISCO convolution
-- [`EquidistantDiscreteContinuousConv2d`](../../api/neural.md) - Optimized regular grid DISCO
-- [`create_disco_encoder`](../../api/neural.md) - DISCO encoder factory
-- [`create_disco_decoder`](../../api/neural.md) - DISCO decoder factory
-"""
+    return {
+        "num_basis": num_basis,
+        "rel_change_24_to_96": rel_24_96,
+        "rel_change_48_to_96": rel_48_96,
+        "irregular_vs_grid_rel_diff": rel_irregular,
+    }
 
 
 # %%
-def main():
-    """Run all DISCO convolution demonstrations."""
-    print("=" * 60)
-    print("DISCO CONVOLUTIONS FOR NEURAL OPERATORS")
-    print("=" * 60)
-
-    basic_results = demonstrate_disco_convolution_basic(
-        image_size=32, in_channels=1, out_channels=4
-    )
-    equidistant_results = demonstrate_equidistant_optimization()
-    encoder_decoder_results = demonstrate_encoder_decoder_architecture()
-    visualize_results(basic_results, equidistant_results, encoder_decoder_results)
-
-    print()
-    print("=" * 60)
-    print("DISCO convolution demonstrations complete!")
-    print("=" * 60)
-
-
 if __name__ == "__main__":
-    main()
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

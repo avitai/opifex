@@ -172,8 +172,8 @@ N_SENSORS = 50       # Sensor points for input function
 N_TRAIN = 1000       # Training samples
 N_TEST = 200         # Test samples
 BATCH_SIZE = 32
-NUM_EPOCHS = 100
-LEARNING_RATE = 1e-3
+NUM_EPOCHS = 1500    # ~46k Adam steps — matches the DeepXDE benchmark training budget
+LEARNING_RATE = 1e-3  # cosine-decayed
 LATENT_DIM = 64      # Branch/trunk output dimension
 SEED = 42
 ```
@@ -182,7 +182,7 @@ SEED = 42
 ```
 Sensors: 50
 Training samples: 1000, Test samples: 200
-Batch size: 32, Epochs: 100
+Batch size: 32, Epochs: 1500
 Learning rate: 0.001, Latent dim: 64
 ```
 
@@ -191,7 +191,7 @@ Learning rate: 0.001, Latent dim: 64
 | `N_SENSORS` | 50 | Number of input function sample points |
 | `LATENT_DIM` | 64 | Shared embedding dimension |
 | `N_TRAIN` | 1000 | Training dataset size |
-| `NUM_EPOCHS` | 100 | Training iterations |
+| `NUM_EPOCHS` | 1500 | Training iterations (cosine-decayed Adam) |
 
 ### Step 3: Data Generation
 
@@ -288,18 +288,18 @@ def train_step(model, opt, x_branch, x_trunk, y_target):
 **Terminal Output:**
 ```
 Setting up training...
-Optimizer: Adam (lr=0.001)
+Optimizer: Adam (cosine-decayed lr from 0.001)
 
 Starting training...
-Epoch   1/100: train_loss=0.050603, val_loss=0.029469
-Epoch  20/100: train_loss=0.007051, val_loss=0.008144
-Epoch  40/100: train_loss=0.003344, val_loss=0.003918
-Epoch  60/100: train_loss=0.003260, val_loss=0.003864
-Epoch  80/100: train_loss=0.003127, val_loss=0.003372
-Epoch 100/100: train_loss=0.003279, val_loss=0.003349
-Training completed in 5.0s
-Final train loss: 0.003279
-Final val loss:   0.003349
+Epoch    1/1500: train_loss=0.054886, val_loss=0.036016
+Epoch  300/1500: train_loss=0.001126, val_loss=0.001363
+Epoch  600/1500: train_loss=0.000533, val_loss=0.000685
+Epoch  900/1500: train_loss=0.000297, val_loss=0.000408
+Epoch 1200/1500: train_loss=0.000196, val_loss=0.000246
+Epoch 1500/1500: train_loss=0.000178, val_loss=0.000211
+Training completed in 60.2s
+Final train loss: 0.000178
+Final val loss:   0.000211
 ```
 
 ### Step 6: Evaluation
@@ -307,11 +307,16 @@ Final val loss:   0.003349
 **Terminal Output:**
 ```
 Running evaluation...
-Test MSE:         0.003349
-Test Relative L2: 0.199779
-Min Relative L2:  0.030667
-Max Relative L2:  0.890716
+Test MSE:         0.000211
+Test Relative L2: 0.048944
+Min Relative L2:  0.005472
+Max Relative L2:  0.245322
 ```
+
+The longer, cosine-decayed schedule reaches **MSE 2.1e-4** and **4.9% mean relative L2** (from 20%
+at the original 100-epoch budget). The per-sample relative L2 spread (0.5%–24.5%) is dominated by a
+few inputs whose antiderivative has small norm, so the absolute MSE is the more comparable metric to
+the DeepXDE benchmark.
 
 ### Step 7: Visualization
 
@@ -332,19 +337,19 @@ Loss curves and error distribution analysis:
 **Terminal Output:**
 ```
 ======================================================================
-DeepONet Antiderivative example completed in 5.0s
-Test MSE: 0.003349, Relative L2: 0.199779
+DeepONet Antiderivative example completed in 60.2s
+Test MSE: 0.000211, Relative L2: 0.048944
 Results saved to: docs/assets/examples/deeponet_antiderivative
 ======================================================================
 ```
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Test MSE | 0.0033 | Mean squared error |
-| Mean Relative L2 | 0.20 | ~20% average relative error |
-| Min Relative L2 | 0.031 | Best per-sample error |
-| Max Relative L2 | 0.89 | Worst per-sample error |
-| Training Time | 5.0s | On GPU (CudaDevice) |
+| Test MSE | 2.1e-04 | Mean squared error (DeepXDE-benchmark range) |
+| Mean Relative L2 | 0.049 | ~4.9% average relative error |
+| Min Relative L2 | 0.0055 | Best per-sample error |
+| Max Relative L2 | 0.245 | Worst per-sample error (small-norm targets) |
+| Training Time | 60.2s | On GPU (CudaDevice) |
 | Parameters | 56,320 | Branch + Trunk networks |
 
 ### What We Achieved
@@ -352,7 +357,7 @@ Results saved to: docs/assets/examples/deeponet_antiderivative
 - Built DeepONet with separate branch (function) and trunk (location) networks
 - Generated antiderivative data using GRF basis functions
 - Enforced zero IC constraint via output transformation
-- Achieved ~20% relative L2 error with smooth input functions
+- Reached test MSE 2.1e-4 / 4.9% mean relative L2 with a cosine-decayed Adam schedule
 - Visualized predictions showing accurate antiderivative approximation
 
 ### Interpretation

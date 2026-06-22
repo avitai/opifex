@@ -204,6 +204,7 @@ Explore and validate the synthetic datasets used by neural operator examples.
 | [Darcy Flow Analysis](data/darcy-flow-analysis.md) | FNO prediction validation, error analysis |
 | [Spectral Analysis](data/spectral-analysis.md) | Power spectrum and mode analysis |
 | [PDEBench Data Loading](data/pdebench-loading.md) | Loading PDEBench HDF5 datasets |
+| [VTK Mesh Loading](data/vtk-mesh-loading.md) | Batching irregular meshes (pad-to-max + masks) on datarax |
 
 ```bash
 python examples/data/darcy_flow_analysis.py

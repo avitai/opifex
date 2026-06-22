@@ -197,34 +197,11 @@ def main() -> dict[str, float | int]:
     print(f"\nMean coefficient uncertainty: {ensemble_mean_uncertainty:.4f}")
     print(f"Max coefficient uncertainty:  {float(jnp.max(ensemble.coef_std)):.4f}")
 
-    # PySINDy is an optional reference dependency; import lazily inside main().
-    import pysindy as ps
-
-    # Convert to numpy for PySINDy
-    x_np = np.array(x_data)
-    x_dot_np = np.array(x_dot)
-
-    # PySINDy fit
-    t_start = time.perf_counter()
-    pysindy_model = ps.SINDy(
-        optimizer=ps.STLSQ(threshold=0.3),
-        feature_library=ps.PolynomialLibrary(degree=2),
-    )
-    pysindy_model.fit(x_np, t=dt, x_dot=x_dot_np)
-    pysindy_time = time.perf_counter() - t_start
-
-    # Opifex fit (timed)
+    # Opifex SINDy fit (the showcase), timed.
     t_start = time.perf_counter()
     opifex_model = SINDy(SINDyConfig(polynomial_degree=2, threshold=0.3))
     opifex_model.fit(x_data, x_dot)
     opifex_time = time.perf_counter() - t_start
-
-    # Compare
-    print("=== PySINDy (Reference) ===")
-    pysindy_model.print()
-    pysindy_r2 = pysindy_model.score(x_np, t=dt, x_dot=x_dot_np)
-    print(f"R² score: {pysindy_r2:.6f}")
-    print(f"Time: {pysindy_time:.4f}s")
 
     print()
     print("=== Opifex SINDy (JAX-native) ===")
@@ -234,8 +211,26 @@ def main() -> dict[str, float | int]:
     print(f"R² score: {opifex_r2:.6f}")
     print(f"Time: {opifex_time:.4f}s")
 
-    print()
-    print(f"Opifex R² matches PySINDy: {abs(opifex_r2 - pysindy_r2) < 0.001}")
+    # Optional cross-check against the reference PySINDy library, if it is installed.
+    # PySINDy is only a validation reference — opifex's own SINDy above is the example's
+    # subject — so its absence must not break the example.
+    try:
+        import pysindy as ps
+    except ImportError:
+        print("\n(PySINDy not installed — skipping the optional reference cross-check.)")
+    else:
+        x_np = np.array(x_data)
+        x_dot_np = np.array(x_dot)
+        pysindy_model = ps.SINDy(
+            optimizer=ps.STLSQ(threshold=0.3),
+            feature_library=ps.PolynomialLibrary(degree=2),
+        )
+        pysindy_model.fit(x_np, t=dt, x_dot=x_dot_np)
+        pysindy_r2 = float(pysindy_model.score(x_np, t=dt, x_dot=x_dot_np))
+        print("\n=== PySINDy (reference cross-check) ===")
+        pysindy_model.print()
+        print(f"R² score: {pysindy_r2:.6f}")
+        print(f"Opifex R² matches PySINDy: {abs(opifex_r2 - pysindy_r2) < 0.001}")
 
     # Demonstrate finite difference differentiation
     x_dot_numerical = finite_difference(x_data, dt)

@@ -11,17 +11,20 @@
 
 [PDEBench](https://github.com/pdebench/PDEBench) provides HDF5-formatted
 simulation trajectories across 1D/2D/3D PDEs (Burgers, Navier-Stokes, Darcy Flow,
-advection, etc.). Opifex's `PDEBenchSource` provides an eager-loading interface
-that converts HDF5 data to JAX arrays at initialization, then offers pure-JAX
-iteration for training neural operators.
+advection, etc.). Opifex's `PDEBenchSource` is a **datarax `DataSourceModule`**: it reads the HDF5
+file at init, performs the PDE-specific input/target time-window pairing (the one step datarax has
+no operator for), and then exposes the standard datarax contract (`element_spec` /
+stateless, JAX-traceable `get_batch_at`) so it is driven by a datarax **`Pipeline`**. Normalisation
+is a composable datarax **`MapOperator`** stage, not baked into the stored arrays.
+`create_pdebench_loader` assembles the source and (optional) normalize stage into a `Pipeline`.
 
 ## What You'll Learn
 
 1. **Create** synthetic HDF5 data matching the PDEBench format
-2. **Load** datasets with `PDEBenchSource` — all I/O at init
-3. **Inspect** shapes, sliding window pairs, and coordinate grids
-4. **Batch** data for training with stateful and stateless modes
-5. **Split** data into train/test sets
+2. **Build** a datarax `Pipeline` over the dataset with `create_pdebench_loader`
+3. **Inspect** the source's datarax contract (`element_spec`, `get_batch_at`) and coordinate grids
+4. **Batch** data via the pipeline's JAX-traceable `.step()` / `.scan()`
+5. **Normalize** with a `MapOperator` stage and **split** into train/test sets
 
 ## Files
 
@@ -65,18 +68,17 @@ t10–t14 → t15–t19 (window 10)
 graph LR
     A["HDF5 File"] -->|h5py| B["PDEBenchSource.__init__"]
     B -->|split| C["Train / Test"]
-    C -->|window| D["Input / Target Pairs"]
-    D -->|normalize| E["JAX Arrays"]
-    E -->|"get_batch()"| F["Training Loop"]
-    E -->|"__iter__()"| G["Epoch Iteration"]
+    C -->|window pairing| D["Source (get_batch_at / element_spec)"]
+    D -->|datarax Pipeline| E["MapOperator normalize stage"]
+    E -->|".step() / .scan()"| F["Training Loop"]
 ```
 
 ## Code Walkthrough
 
-### Loading the Dataset
+### Building the loader (source + normalize stage + Pipeline)
 
 ```python
-from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+from opifex.data.sources.scientific import PDEBenchConfig, create_pdebench_loader
 
 config = PDEBenchConfig(
     file_path=Path("data/1D_Burgers.hdf5"),
@@ -85,46 +87,51 @@ config = PDEBenchConfig(
     split="train",
     input_steps=5,
     output_steps=5,
-    normalize=True,
+    normalize=True,   # attaches a per-channel min-max MapOperator stage
 )
-source = PDEBenchSource(config, rngs=nnx.Rngs(0))
+loader = create_pdebench_loader(config, batch_size=32)
 ```
 
-### Batching for Training
+### Batching for training
 
 ```python
-# Stateful: sequential batches
-batch = source.get_batch(batch_size=32)
+# JAX-traceable single step (sequential position advances internally)
+batch = loader.step()          # {"input": (32, 5, 64, 1), "target": (32, 5, 64, 1)}
 
-# Stateless: random batches (for evaluation)
-batch = source.get_batch(batch_size=32, key=jax.random.key(42))
+# GPU-fused epoch — fetch + normalize + train_step compiled together
+losses = loader.scan(train_step, length=steps_per_epoch, modules=(model, optimizer))
 ```
+
+The source itself is still inspectable directly — `loader.source.element_spec()`,
+`loader.source.get_batch_at(start, size)`, and `loader.source.coordinates`.
 
 ## Expected Output
 
 ```
+========================================================================
+Opifex Example: PDEBench loading on datarax (Source + MapOperator + Pipeline)
+========================================================================
+JAX backend: gpu
 Created synthetic HDF5: /tmp/.../1D_Burgers_synth.hdf5
   tensor shape: (20, 20, 64, 1)
   x shape:      (64,)
   t shape:      (20,)
 
-Dataset loaded: 176 sliding window pairs
-  inputs shape:  (176, 5, 64, 1)
-  targets shape: (176, 5, 64, 1)
-  coordinates:   True
-    x: (64,)
-    t: (20,)
+Windowed pairs: 176  (input_steps=5, output_steps=5)
+  element_spec input:  (5, 64, 1)
+  element_spec target: (5, 64, 1)
+  coordinates: ['x', 't']
 
-Train samples: 176
-Test samples:  44
-============================================================
-PDEBench Loading Example — Complete
-============================================================
-Backend:      gpu
+Pipeline.step() batch: input (4, 5, 64, 1), target (4, 5, 64, 1)
+  normalized input range: [0.3212, 0.6788]  (MapOperator stage)
+
+Train pairs: 176   Test pairs: 44
+========================================================================
 ```
 
 ## Next Steps
 
 - Download real PDEBench data from [PDEBench](https://github.com/pdebench/PDEBench)
+- Drive training with `loader.scan(step_fn, length=...)` for a GPU-fused epoch
 - Train an FNO on the loaded data — see [FNO Darcy](../neural-operators/fno-darcy.md)
 - See [Darcy Flow Analysis](darcy-flow-analysis.md) for a related data example

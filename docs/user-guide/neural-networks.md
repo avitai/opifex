@@ -184,55 +184,34 @@ latent_no = LatentNeuralOperator(
 
 ### DISCO Convolutions
 
-Advanced discrete-continuous convolutions for irregular data:
+Discrete-continuous convolutions for irregular data: the kernel `kappa(r) = Σ_k w_k φ_k(r)` lives
+in physical coordinates and is evaluated as a quadrature over the input samples, so the same learned
+kernel transfers across grid resolutions and applies directly to scattered points
+(Ocampo, Price & McEwen 2023, `arXiv:2209.13603`):
 
 ```python
-from opifex.neural.operators.specialized import (
-    DiscreteContinuousConv2d,
-    EquidistantDiscreteContinuousConv2d,
-    create_disco_encoder,
-    create_disco_decoder
-)
+from opifex.neural.operators.specialized import DiscreteContinuousConv2d, regular_grid
 
-# DISCO convolution for irregular grids
+# Geometry (positions + quadrature weights) is fixed at construction; in_coords/out_coords may be
+# any (irregular) point sets — here a uniform grid mapped to a coarser output grid.
+in_coords, quad = regular_grid(64)   # (4096, 2) + cell-area quadrature weights
+out_coords, _ = regular_grid(32)     # read out on a coarser (1024-point) grid
+
 disco_conv = DiscreteContinuousConv2d(
     in_channels=3,
     out_channels=16,
-    kernel_size=5,
-    activation=nnx.gelu,
-    rngs=rngs
+    in_coords=in_coords,
+    out_coords=out_coords,
+    quad_weights=quad,
+    num_basis=4,
+    radius=0.1,
+    rngs=rngs,
 )
 
-# Optimized DISCO for regular grids (10x+ speedup)
-equi_disco = EquidistantDiscreteContinuousConv2d(
-    in_channels=3,
-    out_channels=16,
-    kernel_size=5,
-    grid_spacing=0.1,
-    rngs=rngs
-)
-
-# Test with 2D spatial data
-x = jax.random.normal(jax.random.PRNGKey(5), (8, 64, 64, 3))
+# Input: (batch, num_in_points, channels)
+x = jax.random.normal(jax.random.key(5), (8, 4096, 3))
 disco_output = disco_conv(x)
-equi_output = equi_disco(x)
-
-print(f"DISCO: {x.shape} -> {disco_output.shape}")
-print(f"Equidistant DISCO: {x.shape} -> {equi_output.shape}")
-
-# Encoder-decoder with DISCO
-encoder = create_disco_encoder(
-    in_channels=3,
-    hidden_channels=[32, 64, 128],
-    rngs=rngs
-)
-
-decoder = create_disco_decoder(
-    in_channels=128,
-    hidden_channels=[64, 32],
-    out_channels=1,
-    rngs=rngs
-)
+print(f"DISCO: {x.shape} -> {disco_output.shape}")  # (8, 4096, 3) -> (8, 1024, 16)
 ```
 
 ## Physics-Informed Neural Networks (PINNs)

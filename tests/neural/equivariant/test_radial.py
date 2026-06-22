@@ -26,8 +26,39 @@ from opifex.neural.equivariant import (
     BesselBasis,
     cosine_cutoff,
     GaussianBasis,
+    PiecewiseLinearBasis,
     polynomial_cutoff,
 )
+
+
+class TestPiecewiseLinearBasis:
+    """The piecewise-linear hat basis (DISCO filter basis, faithful to torch_harmonics)."""
+
+    def test_shape_and_compact_support(self) -> None:
+        """Returns ``(..., num_basis)``; vanishes beyond the cutoff."""
+        basis = PiecewiseLinearBasis(num_basis=5, cutoff=1.0)
+        values = basis(jnp.array([0.0, 0.3, 0.6, 1.5]))
+        assert values.shape == (4, 5)
+        assert jnp.all(values[-1] == 0.0)  # r = 1.5 > cutoff -> all zero
+        assert jnp.all(values >= 0.0)
+
+    def test_hats_are_bounded_tents_that_overlap(self) -> None:
+        """Within the support the hats are bounded by 1 and overlap (tent functions)."""
+        basis = PiecewiseLinearBasis(num_basis=6, cutoff=1.0)
+        radii = jnp.linspace(0.0, 1.0, 50)
+        values = basis(radii)
+        assert jnp.all(values <= 1.0 + 1e-6)
+        # Somewhere inside the support more than one hat is active (overlapping tents).
+        assert jnp.max(jnp.sum(values > 0.0, axis=-1)) >= 2
+
+    def test_is_transform_safe(self) -> None:
+        """The basis is jit/grad/vmap clean."""
+        basis = PiecewiseLinearBasis(num_basis=4, cutoff=2.0)
+        radius = jnp.array([0.5, 1.0])
+        assert jnp.all(jnp.isfinite(jax.jit(basis)(radius)))
+        grad = jax.grad(lambda r: jnp.sum(basis(r)))(radius)
+        assert jnp.all(jnp.isfinite(grad))
+        assert jax.vmap(basis)(radius).shape == (2, 4)
 
 
 class TestBesselBasis:

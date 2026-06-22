@@ -4,17 +4,21 @@ This module provides specialized neural operator implementations for advanced op
 
 ## Available Components
 
-### 🎯 **Discrete-Continuous (DISCO) Convolutions** ✅ **NEW**
+### 🎯 **Discrete-Continuous (DISCO) Convolutions**
 
-Advanced convolution layers that handle both structured (regular grids) and unstructured (irregular grids) spatial data through continuous kernel functions.
+Convolution on arbitrary (including irregular) point sets via a continuous kernel evaluated as a
+quadrature, after Ocampo, Price & McEwen 2023 (`arXiv:2209.13603`; the `torch_harmonics` algorithm).
 
 **Key Features:**
 
-- **DiscreteContinuousConv2d**: General DISCO convolution for 2D data with arbitrary grid patterns
-- **EquidistantDiscreteContinuousConv2d**: Optimized version for regular grids with 10x+ speedup
-- **DiscreteContinuousConvTranspose2d**: Transpose/deconvolution for upsampling operations
-- **Factory Functions**: `create_disco_encoder()` and `create_disco_decoder()` for easy architecture building
-- **Physics-Informed**: Support for irregular sampling patterns and geometric constraints
+- **DiscreteContinuousConv2d**: continuous-kernel convolution between two point sets; the kernel
+  `kappa(r) = Σ_k w_k φ_k(r)` lives in physical coordinates, so the same learned kernel transfers
+  across grid resolutions and applies directly to scattered (non-grid) data.
+- **build_disco_filter**: the normalised quadrature filter `psi[o, i, k]` (per-output partition of
+  unity, faithful to `torch_harmonics._normalize_convolution_filter_matrix`).
+- **regular_grid**: uniform grid coordinates and cell-area quadrature weights.
+- Radial basis reuses `opifex.neural.equivariant.PiecewiseLinearBasis` (the `torch_harmonics`
+  `PiecewiseLinearFilterBasis`).
 
 ### Advanced Specialized Operators ✅ **IMPLEMENTED**
 
@@ -42,52 +46,30 @@ import jax
 import jax.numpy as jnp
 from opifex.neural.operators.specialized import (
     DiscreteContinuousConv2d,
-    EquidistantDiscreteContinuousConv2d,
-    create_disco_encoder,
-    create_disco_decoder
+    regular_grid,
 )
 
-# Basic DISCO convolution
-rngs = nnx.Rngs(jax.random.PRNGKey(42))
+# Geometry (positions + quadrature weights) is fixed at construction; here a uniform grid maps
+# to a coarser output grid, but in_coords/out_coords may be any (irregular) point sets.
+rngs = nnx.Rngs(42)
+in_coords, quad = regular_grid(64)      # (4096, 2) coordinates + cell-area quadrature weights
+out_coords, _ = regular_grid(32)        # read out on a different (1024-point) grid
+
 disco_conv = DiscreteContinuousConv2d(
     in_channels=3,
     out_channels=16,
-    kernel_size=5,
-    activation=nnx.gelu,
-    rngs=rngs
+    in_coords=in_coords,
+    out_coords=out_coords,
+    quad_weights=quad,
+    num_basis=4,
+    radius=0.1,
+    rngs=rngs,
 )
 
-# Input: (batch, height, width, channels)
-x = jax.random.normal(jax.random.PRNGKey(0), (8, 64, 64, 3))
+# Input: (batch, num_in_points, channels)
+x = jax.random.normal(jax.random.key(0), (8, 4096, 3))
 output = disco_conv(x)
-print(f"DISCO: {x.shape} -> {output.shape}")  # (8, 64, 64, 3) -> (8, 64, 64, 16)
-
-# Optimized version for regular grids
-equi_disco = EquidistantDiscreteContinuousConv2d(
-    in_channels=3,
-    out_channels=16,
-    kernel_size=5,
-    grid_spacing=0.1,  # Regular grid optimization
-    rngs=rngs
-)
-
-# Factory functions for encoder-decoder architectures
-encoder = create_disco_encoder(
-    in_channels=3,
-    hidden_channels=[32, 64, 128],
-    rngs=rngs
-)
-
-decoder = create_disco_decoder(
-    hidden_channels=[128, 64, 32],
-    out_channels=1,
-    rngs=rngs
-)
-
-# Complete encoder-decoder pipeline
-encoded = encoder(x)
-reconstructed = decoder(encoded)
-print(f"Encoder-Decoder: {x.shape} -> {encoded.shape} -> {reconstructed.shape}")
+print(f"DISCO: {x.shape} -> {output.shape}")  # (8, 4096, 3) -> (8, 1024, 16)
 ```
 
 ### Advanced Specialized Operators

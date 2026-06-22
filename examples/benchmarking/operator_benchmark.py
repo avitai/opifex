@@ -211,19 +211,19 @@ class UNOWithGrid(nnx.Module):
         in_channels: int,
         out_channels: int,
         hidden_channels: int,
-        modes: int,
-        n_layers: int,
+        modes: int,  # noqa: ARG002 - kept for a uniform wrapper signature across operators
+        n_layers: int,  # noqa: ARG002 - kept for a uniform wrapper signature across operators
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """Build the grid embedding and the underlying UNO.
+        """Build the grid embedding and the underlying U-NO.
 
         Args:
             in_channels: Number of physical input channels (before the grid).
             out_channels: Number of output channels.
-            hidden_channels: Base number of UNO hidden channels.
-            modes: Number of Fourier modes for the spectral layers.
-            n_layers: Number of U-Net encoder/decoder stages.
+            hidden_channels: Base number of U-NO hidden channels.
+            modes: Unused; kept so every benchmark wrapper shares one signature.
+            n_layers: Unused; kept so every benchmark wrapper shares one signature.
             rngs: Random number generators.
         """
         super().__init__()
@@ -231,17 +231,16 @@ class UNOWithGrid(nnx.Module):
             in_channels=in_channels,
             grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
         )
+        # U-NO uses the reference five-block Darcy config (end-to-end scaling 1.0).
         self.uno = create_uno(
-            input_channels=self.grid_embedding.out_channels,
-            output_channels=out_channels,
+            in_channels=self.grid_embedding.out_channels,
+            out_channels=out_channels,
             hidden_channels=hidden_channels,
-            modes=modes,
-            n_layers=n_layers,
             rngs=rngs,
         )
 
     def __call__(self, x: jax.Array) -> jax.Array:
-        """Append grid coordinates, then apply the UNO.
+        """Append grid coordinates, then apply the U-NO.
 
         Args:
             x: Input of shape ``(batch, channels, height, width)``.
@@ -251,8 +250,8 @@ class UNOWithGrid(nnx.Module):
         """
         x_hwc = jnp.moveaxis(x, 1, -1)
         x_embedded = self.grid_embedding(x_hwc)
-        out_hwc = self.uno(x_embedded, deterministic=True)
-        return jnp.moveaxis(out_hwc, -1, 1)
+        x_chw = jnp.moveaxis(x_embedded, -1, 1)
+        return self.uno(x_chw, deterministic=True)
 
 
 # %% [markdown]

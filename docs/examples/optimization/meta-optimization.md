@@ -1,41 +1,41 @@
-# Meta-Optimization: MAML and Reptile for PDE Solver Families
+# Meta-Optimization: MAML and Reptile for a Family of PDEs
 
-| Level | Runtime | Prerequisites | Format | Memory |
-| --- | --- | --- | --- | --- |
-| Advanced | ~25 min | PINN basics, basic meta-learning | Tutorial | ~1 GB |
+| Metadata | Value |
+|----------|-------|
+| **Level** | Advanced |
+| **Runtime** | ~3 min (GPU) / ~10 min (CPU) |
+| **Prerequisites** | JAX, Flax NNX, PINNs, gradient-based meta-learning |
+| **Format** | Python + Jupyter |
+| **Memory** | ~1 GB |
 
 ## Overview
 
-This example demonstrates meta-learning algorithms (**MAML** and **Reptile**) for training
-Physics-Informed Neural Networks (PINNs) that can rapidly adapt to new PDE problems.
-Meta-learning enables **few-shot adaptation** - learning to solve new PDEs with just
-~100 gradient steps instead of ~1000 by leveraging experience from related problems.
+Solving a *family* of PDEs that differ only in a parameter (here the Burgers viscosity `nu`) by
+training a fresh physics-informed network (PINN) for each instance wastes the structure shared
+across the family. **Gradient-based meta-learning** instead learns a single initialisation `theta`
+such that a handful of ordinary gradient steps adapt it to any new `nu` — amortising the shared
+physics into the starting point.
 
-**SciML Context:**
-When solving families of PDEs with varying parameters (e.g., viscosity in Burgers equation),
-we want solvers that quickly adapt to new parameter values. Meta-learning finds PINN
-initializations that capture the common structure across the parameter space.
+This example meta-learns that initialisation with opifex's `maml_meta_train` and
+`reptile_meta_train` (the real algorithms — MAML, Finn et al. 2017,
+[arXiv:1703.03400](https://arxiv.org/abs/1703.03400); Reptile, Nichol et al. 2018,
+[arXiv:1803.02999](https://arxiv.org/abs/1803.02999)), then measures few-shot adaptation on
+**held-out** viscosities against training a fresh network from a random initialisation.
 
-**Key Result:**
-MAML achieves **60% lower loss** and **27% lower PDE residual** compared to random
-initialization with the same step budget. This represents a ~10x speedup in convergence.
+The Burgers PINN is expressed as a `Task` / `TaskFamily` (the same abstraction the
+learned-optimiser stack uses), so the example only supplies the physics — the meta-learning comes
+from the library.
+
+**Key result:** both meta-learned initialisations solve unseen viscosities **zero-shot** (MAML
+0.156, Reptile 0.168 task loss) to a loss **65% below** what a random initialisation reaches after
+100 SGD adaptation steps (0.445).
 
 ## What You'll Learn
 
-1. **Understand** how meta-learning applies to parametric PDE families
-2. **Implement** MAML and Reptile for PINN initialization
-3. **Create** task distributions from PDEs with varying physics parameters
-4. **Evaluate** few-shot adaptation vs training from scratch
-5. **Compare** MAML and Reptile performance tradeoffs
-
-## Coming from Other Meta-Learning Frameworks?
-
-| Framework | Opifex Equivalent |
-| --- | --- |
-| `learn2learn` MAML | Manual MAML with `nnx.value_and_grad` |
-| `higher` inner loop | `maml_inner_loop()` |
-| Reptile implementations | `reptile_meta_step()` |
-| Task distributions | Burgers equation with varying viscosity |
+1. Express a PDE-solver family as an opifex `Task` / `TaskFamily`
+2. Meta-learn a PINN initialisation with `maml_meta_train` and `reptile_meta_train`
+3. Measure few-shot `adapt`-ation on unseen viscosities via the learning curve vs a from-scratch
+   baseline
 
 ## Files
 
@@ -44,33 +44,34 @@ initialization with the same step budget. This represents a ~10x speedup in conv
 
 ## Quick Start
 
-### Run the script
-
 ```bash
 source activate.sh && python examples/optimization/meta_optimization.py
 ```
 
-### Run the notebook
-
-```bash
-source activate.sh && jupyter lab examples/optimization/meta_optimization.ipynb
-```
-
 ## Core Concepts
 
-### Meta-Learning for PINNs
+### Task / TaskFamily
 
-Traditional approach: Train a separate PINN for each PDE instance (varying parameters).
-Meta-learning approach: Find PINN initialization that enables rapid adaptation.
+The meta-trainers operate on a `TaskFamily` — a distribution over objectives. A `BurgersTask` is
+one viscosity (`init` samples PINN parameters; `loss` is the physics-informed loss on freshly
+sampled collocation points), and `BurgersTaskFamily.sample` draws a viscosity uniformly from
+`[NU_MIN, NU_MAX]`. Parameters are a plain pytree of `(weight, bias)` tuples so the meta-trainers
+can differentiate through inner adaptation.
 
-```mermaid
-graph TD
-    A[Task Distribution] --> B[Meta-Training]
-    B --> C[Meta-Parameters θ*]
-    C --> D[New Viscosity ν]
-    D --> E[Few-Shot Adaptation<br/>100 steps]
-    E --> F[Task-Specific PINN]
-    F --> G[Solve Burgers with ν]
+```python
+@dataclass(frozen=True)
+class BurgersTask(Task):
+    nu: jax.Array
+
+    def init(self, key):
+        return init_pinn_params(key)
+
+    def loss(self, params, key):
+        xt_domain, xt_initial, u_initial, xt_boundary = sample_collocation(key)
+        loss_pde = jnp.mean(burgers_residual(params, xt_domain, self.nu) ** 2)
+        loss_ic = jnp.mean((pinn_forward(params, xt_initial).squeeze() - u_initial) ** 2)
+        loss_bc = jnp.mean(pinn_forward(params, xt_boundary).squeeze() ** 2)
+        return loss_pde + loss_ic + loss_bc
 ```
 
 ### Task Distribution: Burgers Equation
@@ -79,237 +80,156 @@ The Burgers equation with varying viscosity ν:
 
 $$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\partial^2 u}{\partial x^2}$$
 
-- **Low viscosity** (ν → 0): Sharp gradients, shock-like behavior
-- **High viscosity** (ν → ∞): Smooth, diffusion-dominated solutions
-- **Meta-learning**: Captures common wave-like structure across viscosity range
+- **Low viscosity** (ν → 0): sharp gradients, shock-like behaviour
+- **High viscosity**: smooth, diffusion-dominated solutions
+- **Meta-learning**: captures the common structure across the viscosity range
 
 ### MAML vs Reptile
 
 | Aspect | MAML | Reptile |
 | --- | --- | --- |
-| Gradient order | First-order (approximation) | First-order only |
-| Meta-gradient | Post-adaptation gradients | Direction to adapted params |
-| Loss improvement | **60.3%** | 29.8% |
-| Residual improvement | **26.8%** | 3.9% |
-| Training time | Faster | Slower (more inner steps) |
+| Meta-objective | Post-adaptation (query) loss, differentiated through the inner steps (`first_order=True` here) | Move `theta` towards each task's adapted parameters |
+| Inner trajectory | Short (5 steps) | Longer (20 steps) — needed to move `theta` |
+| Zero-shot loss (this run) | **0.156** | 0.168 |
+
+## Coming from Other Meta-Learning Frameworks?
+
+| Framework | Opifex |
+| --- | --- |
+| `learn2learn` / `higher` MAML | `maml_meta_train(task_family, init_params, key, ..., first_order=False)` |
+| Reptile implementations | `reptile_meta_train(task_family, init_params, key, ...)` |
+| Inner-loop fine-tuning | `adapt(task, init_params, key, inner_steps=, inner_lr=)` |
+| Task distribution | `TaskFamily.sample(key) -> Task` |
 
 ## Implementation
 
-### Step 1: Define PINN Architecture
+### Step 1: Meta-train both initialisations
 
 ```python
-class BurgersPINN(nnx.Module):
-    """Simple PINN for Burgers equation with variable viscosity."""
+from opifex.optimization.l2o.meta_learning import adapt, maml_meta_train, reptile_meta_train
 
-    def __init__(self, hidden_dim: int = 32, *, rngs: nnx.Rngs):
-        super().__init__()
-        self.linear1 = nnx.Linear(2, hidden_dim, rngs=rngs)
-        self.linear2 = nnx.Linear(hidden_dim, hidden_dim, rngs=rngs)
-        self.linear3 = nnx.Linear(hidden_dim, 1, rngs=rngs)
+family = BurgersTaskFamily()
+init_params = init_pinn_params(init_key)  # shared starting point
 
-    def __call__(self, xt: jax.Array) -> jax.Array:
-        h = jnp.tanh(self.linear1(xt))
-        h = jnp.tanh(self.linear2(h))
-        return self.linear3(h)
+maml_params, maml_curve = maml_meta_train(
+    family, init_params, maml_key,
+    num_outer_steps=300, num_tasks=8, inner_steps=5, inner_lr=0.01,
+    meta_lr=1e-3, first_order=True,
+)
+reptile_params, reptile_curve = reptile_meta_train(
+    family, init_params, reptile_key,
+    num_outer_steps=300, num_tasks=8, inner_steps=20, inner_lr=0.01, meta_lr=0.3,
+)
 ```
 
 **Terminal Output:**
 
 ```text
-Creating PINN architecture...
-  Architecture: [2] -> [32] -> [32] -> [1]
-  Parameters: 1,185
+PINN architecture (2, 32, 32, 1)  (1,185 parameters)
+Task family: Burgers viscosity ~ U[0.005, 0.05]
+
+Meta-training MAML (first-order) for 300 steps...
+Meta-training Reptile for 300 steps...
+  MAML    meta-loss: 0.4461 -> 0.1442
+  Reptile meta-loss: 0.4434 -> 0.1620
 ```
 
-### Step 2: Define Task Distribution
+### Step 2: Few-shot learning curve on held-out viscosities
+
+For each held-out viscosity, `adapt` (plain SGD — the inner rule meta-training assumes) from each
+initialisation and record the task loss after `k` steps:
 
 ```python
-# Viscosity range for Burgers equation
-NU_MIN = 0.005
-NU_MAX = 0.05
-
-# Generate training and test viscosities
-all_viscosities = jnp.linspace(NU_MIN, NU_MAX, 12)
-train_viscosities = all_viscosities[::2][:8]  # Even indices
-test_viscosities = all_viscosities[1::2][:4]   # Odd indices (held-out)
+def few_shot_loss(start, nu, key, steps):
+    task = BurgersTask(nu=nu)
+    adapted = adapt(task, start, key, inner_steps=steps, inner_lr=0.01)
+    return float(task.loss(adapted, jax.random.fold_in(key, 7)))
 ```
 
 **Terminal Output:**
 
 ```text
-Creating viscosity distribution...
-  Training viscosities (6): ['0.0050', '0.0132', '0.0214', '0.0295', '0.0377', '0.0459']
-  Test viscosities (4):     ['0.0091', '0.0173', '0.0255', '0.0336']
+Few-shot adaptation on 4 held-out viscosities
+(SGD, inner_lr=0.01); task loss after k steps, averaged over viscosities:
+------------------------------------------------------------------------
+  steps         0        1        2        5       10       20       50      100
+  MAML          0.1563   0.1484   0.1461   0.1460   0.1449   0.1466   0.1463   0.1453
+  Reptile       0.1682   0.1681   0.1680   0.1681   0.1669   0.1679   0.1675   0.1651
+  Random init   0.4846   0.4728   0.4652   0.4523   0.4455   0.4454   0.4484   0.4445
+
+========================================================================
+RESULTS — task loss on held-out viscosities (lower is better)
+========================================================================
+  MAML        zero-shot (0 steps): 0.1563
+  Reptile     zero-shot (0 steps): 0.1682
+  Random init zero-shot (0 steps): 0.4846
+  Random init after 100 steps : 0.4445
+
+  The best meta-init solves unseen viscosities ZERO-SHOT to a loss 65% below what a
+  random init reaches after 100 SGD steps.
 ```
 
-### Step 3: Implement MAML Inner Loop
-
-```python
-def maml_inner_loop(pinn, params, xt_domain, xt_initial, u_initial, xt_boundary, nu, inner_lr, inner_steps):
-    """MAML inner loop: adapt to a specific task (viscosity)."""
-    set_pinn_params(pinn, params)
-
-    for _ in range(inner_steps):
-        def loss_fn(model):
-            return pinn_loss(model, xt_domain, xt_initial, u_initial, xt_boundary, nu)
-
-        _loss, grads = nnx.value_and_grad(loss_fn)(pinn)
-        current_params = get_pinn_params(pinn)
-        new_params = jax.tree_util.tree_map(
-            lambda p, g: p - inner_lr * g, current_params, grads
-        )
-        set_pinn_params(pinn, new_params)
-
-    return get_pinn_params(pinn)
-```
-
-### Step 4: Meta-Training
-
-```python
-# MAML meta-training
-for meta_step in range(META_STEPS):
-    maml_meta_params, meta_loss = maml_meta_step(
-        maml_pinn, maml_meta_params, train_viscosities,
-        xt_domain, xt_initial, u_initial, xt_boundary,
-        INNER_LR, INNER_STEPS, META_LR
-    )
-```
-
-**Terminal Output:**
-
-```text
-Meta-training with MAML...
---------------------------------------------------
-  Step  20/100: meta-loss = 0.363298
-  Step  40/100: meta-loss = 0.361948
-  Step  60/100: meta-loss = 0.360616
-  Step  80/100: meta-loss = 0.359299
-  Step 100/100: meta-loss = 0.357963
-  MAML training time: 547.54s
-
-Meta-training with Reptile...
---------------------------------------------------
-  Step  20/100: meta-loss = 0.346515
-  Step  40/100: meta-loss = 0.346402
-  Step  60/100: meta-loss = 0.346301
-  Step  80/100: meta-loss = 0.346206
-  Step 100/100: meta-loss = 0.346107
-  Reptile training time: 803.55s
-```
-
-### Step 5: Evaluate Few-Shot Adaptation
-
-```python
-# Test on held-out viscosities
-for nu in test_viscosities:
-    # MAML: Start from meta-learned initialization, train 100 steps
-    maml_final_loss, _ = train_pinn(eval_pinn, maml_meta_params, nu, ...)
-
-    # Random: Start from random initialization, train 100 steps
-    scratch_short_loss, _ = train_pinn(eval_pinn, random_init_params, nu, ...)
-
-    # Random (10x): Train 1000 steps for fair comparison
-    scratch_long_loss, _ = train_pinn(eval_pinn, random_init_params, nu, ...)
-```
-
-**Terminal Output:**
-
-```text
-Evaluating few-shot adaptation on held-out viscosities...
---------------------------------------------------
-  Testing viscosity nu = 0.0091...
-  Testing viscosity nu = 0.0173...
-  Testing viscosity nu = 0.0255...
-  Testing viscosity nu = 0.0336...
-
-======================================================================
-RESULTS SUMMARY
-======================================================================
-
-Few-Shot Adaptation Results (lower is better):
---------------------------------------------------
-Method                    Steps    Loss         PDE Residual
---------------------------------------------------
-MAML + adapt              100      0.047380     0.120840
-Reptile + adapt           100      0.083847     0.158825
-Random init (same)        100      0.119419     0.165191
-Random init (10x steps)   1000     0.007518     0.067208
-
-Improvement over Random Init (same step budget):
---------------------------------------------------
-  MAML:    60.3% lower loss, 26.8% lower residual
-  Reptile: 29.8% lower loss, 3.9% lower residual
-```
+The meta-learned initialisations start in a low-loss basin and stay there; the random
+initialisation descends slowly with SGD and never catches up within 100 steps.
 
 ## Visualization
 
-### Meta-Training Convergence
-
-![Meta-Training Curves](../../assets/examples/meta_optimization/meta_training.png)
-
-### Per-Viscosity Performance
-
-![Error Distribution](../../assets/examples/meta_optimization/error_distribution.png)
+![Meta-training convergence (left) and the few-shot adaptation learning curve on held-out viscosities (right)](../../assets/examples/meta_optimization/meta_optimization.png)
 
 ## Results Summary
 
-| Method | Steps | Loss | PDE Residual | Improvement |
-| --- | --- | --- | --- | --- |
-| MAML + adapt | 100 | 0.047 | 0.121 | **60.3% lower loss** |
-| Reptile + adapt | 100 | 0.084 | 0.159 | 29.8% lower loss |
-| Random init | 100 | 0.119 | 0.165 | Baseline |
-| Random init | 1000 | 0.008 | 0.067 | 10x compute |
+| Initialisation | Zero-shot loss | Loss after 100 SGD steps |
+| --- | --- | --- |
+| MAML | **0.156** | 0.145 |
+| Reptile | 0.168 | 0.165 |
+| Random | 0.485 | 0.445 |
 
 **Key Findings:**
 
-- MAML achieves 60% better loss with same compute budget as random init
-- Meta-learned initialization captures common Burgers equation structure
-- MAML (100 steps) approaches quality of random init (1000 steps) = **10x speedup**
-- Reptile is simpler but less effective for this problem
+- Both meta-learned initialisations solve held-out viscosities zero-shot to a loss the random
+  initialisation cannot reach in 100 SGD steps (a 65% reduction).
+- MAML edges out Reptile here; Reptile needs a longer inner trajectory (20 vs 5 steps) to move its
+  initialisation, after which it is competitive.
+- The benefit is in the *initialisation*: the few-shot curves are nearly flat for the meta-inits
+  because they already sit near the family's shared solution.
 
 ## Next Steps
 
 ### Experiments to Try
 
-1. **Wider viscosity range**: Test generalization to ν ∈ [0.001, 0.1]
-2. **More meta-training**: 200+ meta-steps for better initialization
-3. **Second-order MAML**: Enable for potentially better gradients
-4. **Different PDEs**: Apply to heat equation, wave equation families
+1. **Second-order MAML**: pass `first_order=False` to `maml_meta_train` (more expensive — the PINN
+   loss already uses second-order autodiff — but a tighter meta-gradient).
+2. **Wider viscosity range**: widen `[NU_MIN, NU_MAX]` and watch the random-init gap grow.
+3. **More meta-training**: raise `META_STEPS` and `num_tasks` for a lower zero-shot loss.
+4. **Different PDEs**: define a new `TaskFamily` for a heat- or wave-equation family.
 
 ### Related Examples
 
-- [Learn-to-Optimize (L2O)](./learn-to-optimize.md) - Parametric optimization
-- [Burgers PINN](../pinns/burgers.md) - Single-viscosity PINN training
-- [Poisson PINN](../pinns/poisson.md) - Elliptic PDE solving
+- [Learn-to-Optimize (L2O)](./learn-to-optimize.md) — meta-learning an *update rule* (vs the
+  *initialisation* meta-learned here)
 
 ### API Reference
 
-- [`nnx.value_and_grad`](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/transforms.html#flax.nnx.value_and_grad)
-- [`nnx.state`](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/state.html)
-- [`nnx.update`](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html#flax.nnx.update)
+- `opifex.optimization.l2o.meta_learning.maml_meta_train`
+- `opifex.optimization.l2o.meta_learning.reptile_meta_train`
+- `opifex.optimization.l2o.meta_learning.adapt`
+- `opifex.optimization.l2o.core.Task`, `opifex.optimization.l2o.core.TaskFamily`
 
 ## Troubleshooting
 
-### Meta-loss not decreasing
+### Reptile meta-loss barely moves
 
-- Increase `META_LR` (meta learning rate)
-- Reduce `INNER_STEPS` to avoid overfitting to individual tasks
-- Ensure viscosity range provides sufficient diversity
+Reptile's update moves `theta` towards each task's adapted parameters; with too few inner steps the
+adapted parameters barely differ from `theta`, so the move is tiny. Increase `inner_steps` (this
+example uses 20) or raise `meta_lr`.
 
-### MAML slower than expected
+### MAML init good for few steps but drifts over many
 
-- Use first-order MAML approximation (no second-order gradients)
-- Reduce number of training viscosities
-- Use smaller PINN architecture
+MAML optimises the initialisation for its inner step count. Evaluate few-shot quality near that
+budget, or meta-train with more inner steps to match the intended adaptation length.
 
-### Poor generalization to test viscosities
+### Plain-SGD adaptation is unstable over many steps
 
-- Increase viscosity diversity in training set
-- Ensure test viscosities are within training range
-- Try more meta-training iterations
-
-### Memory issues
-
-- Reduce collocation point count
-- Use smaller hidden dimensions
-- Reduce meta batch size (train on fewer viscosities per step)
+PINNs trained with plain SGD plateau and can diverge at higher learning rates over long horizons.
+Keep the adaptation horizon short (the meta-learning win is in *few* steps) and the inner learning
+rate modest.

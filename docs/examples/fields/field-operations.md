@@ -18,11 +18,12 @@ Gradient, partial derivatives, and Laplacian of $u(x,y) = \sin(x)\cos(y)$
 on a $128 \times 128$ periodic grid with $[0, 2\pi]^2$ domain.
 
 ```
-Gradient x-component max error: 0.000402
+Gradient max error (both components): 0.000403
 Laplacian max error: 0.000550
 ```
 
-Second-order central finite differences achieve sub-0.1% error at this resolution.
+Second-order central finite differences achieve sub-0.1% error at this resolution, validated
+against the closed forms $\nabla u = (\cos x \cos y, -\sin x \sin y)$ and $\nabla^2 u = -2\sin x \cos y$.
 
 ## Semi-Lagrangian Advection
 

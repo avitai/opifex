@@ -170,6 +170,7 @@ nav:
           - Darcy Flow Analysis: examples/data/darcy-flow-analysis.md
           - Spectral Analysis: examples/data/spectral-analysis.md
           - PDEBench Data Loading: examples/data/pdebench-loading.md
+          - VTK Mesh Loading: examples/data/vtk-mesh-loading.md
       - Distributed Computing:
           - Distributed PDE Training: examples/distributed/distributed-pde.md
       - Benchmarking:

@@ -111,6 +111,53 @@ class GaussianBasis(nnx.Module):
         return jnp.exp(self._coefficient * shifted**2)
 
 
+class PiecewiseLinearBasis(nnx.Module):
+    r"""Piecewise-linear (hat) radial basis on ``[0, cutoff]``.
+
+    Faithful to the isotropic basis of ``torch_harmonics``'s ``PiecewiseLinearFilterBasis``
+    (``torch-harmonics/torch_harmonics/filter_basis.py``), the canonical filter basis for
+    discrete-continuous (DISCO) convolutions (Ocampo, Price & McEwen 2023, ``arXiv:2209.13603``).
+    The ``num_basis`` hat functions have collocation spacing ``dr = 2 * cutoff / (num_basis + 1)``
+    and half-width ``dr``: ``phi_k(r) = max(0, 1 - |r - r_k| / dr)`` restricted to ``r <= cutoff``,
+    with centres ``r_k = k * dr`` (odd ``num_basis``) or ``(k + 0.5) * dr`` (even). Each function is
+    continuous and compactly supported, so no separate cutoff envelope is needed.
+    """
+
+    def __init__(self, num_basis: int, cutoff: float, *, rngs: nnx.Rngs | None = None) -> None:
+        """Build the piecewise-linear basis.
+
+        Args:
+            num_basis: Number of hat functions (>= 1).
+            cutoff: Support radius ``r_c`` (positive).
+            rngs: Unused (the basis is parameter-free); accepted for interface uniformity.
+        """
+        super().__init__()
+        del rngs
+        if num_basis < 1:
+            raise ValueError(f"num_basis must be >= 1, got {num_basis}")
+        if cutoff <= 0.0:
+            raise ValueError(f"cutoff must be positive, got {cutoff}")
+        self.num_basis = num_basis
+        self.cutoff = cutoff
+        self._dr = 2.0 * cutoff / (num_basis + 1)
+        offset = 0.0 if num_basis % 2 == 1 else 0.5
+        self._centres = jnp.asarray((np.arange(num_basis) + offset) * self._dr)
+
+    def __call__(self, radius: Float[Array, ...]) -> Float[Array, "... num_basis"]:
+        """Evaluate the hat basis at the given distances.
+
+        Args:
+            radius: Distances of shape ``(...)``.
+
+        Returns:
+            Array of shape ``(..., num_basis)``.
+        """
+        distance = jnp.abs(radius[..., None] - self._centres)
+        values = 1.0 - distance / self._dr
+        support = (distance <= self._dr) & (radius[..., None] <= self.cutoff)
+        return jnp.where(support, values, 0.0)
+
+
 def polynomial_cutoff(radius: Float[Array, ...], cutoff: float, *, p: int = 6) -> Float[Array, ...]:
     r"""Smooth polynomial cutoff envelope decaying from ``1`` to ``0`` on ``[0, r_c]``.
 

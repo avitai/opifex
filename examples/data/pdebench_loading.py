@@ -27,17 +27,19 @@ PDEBench is a full benchmark suite for scientific machine learning,
 providing HDF5-formatted simulation trajectories across 1D/2D/3D PDEs
 (Burgers, Navier-Stokes, Darcy Flow, etc.).
 
-Opifex's `PDEBenchSource` provides an eager-loading interface that converts
-HDF5 data to JAX arrays at initialization, then offers pure-JAX iteration
-for training neural operators.
+Opifex's `PDEBenchSource` is a **datarax `DataSourceModule`**: it reads the HDF5 file at init,
+performs the PDE-specific input/target time-window pairing (the one step datarax has no operator
+for), and then exposes the standard datarax contract (`get_batch_at` / `element_spec`) so it is
+driven by a datarax **`Pipeline`**. Normalisation is a datarax **`MapOperator`** stage, not baked
+into the arrays. `create_pdebench_loader` assembles the source + normalize stage into a Pipeline.
 
 ## Learning Goals
 
 1. **Create** a synthetic HDF5 file matching the PDEBench format
-2. **Load** the dataset with `PDEBenchSource` — all I/O at init
-3. **Inspect** shapes, sliding window pairs, and coordinate grids
-4. **Batch** data for training with `get_batch()`
-5. **Iterate** over the full dataset with epoch reset
+2. **Build** a datarax `Pipeline` over the dataset with `create_pdebench_loader`
+3. **Batch** data for training via the pipeline's `.step()` (JAX-traceable)
+4. **Inspect** the source's element contract (`element_spec`, `get_batch_at`) and coordinate grids
+5. **Normalize** with a composable `MapOperator` stage (train/test via the `split` config)
 """
 
 # %%
@@ -50,7 +52,11 @@ import jax.numpy as jnp
 import numpy as np
 from flax import nnx
 
-from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+from opifex.data.sources.scientific import (
+    create_pdebench_loader,
+    PDEBenchConfig,
+    PDEBenchSource,
+)
 
 
 # %% [markdown]
@@ -105,168 +111,131 @@ def create_synthetic_pdebench_hdf5(
 
 # %% [markdown]
 """
-## Step 2: Load with PDEBenchSource
+## Step 2: The source — HDF5 read, split, window pairing, datarax contract
 
-`PDEBenchSource` handles all file I/O at `__init__`:
-1. Reads the HDF5 file
-2. Applies train/test split along the sample axis
-3. Creates sliding window input/target pairs over time
-4. Optionally normalizes to [0, 1]
-5. Converts everything to JAX arrays
-
-After init, the source is pure JAX — no more file I/O.
+`PDEBenchSource` reads the file at `__init__`, splits train/test, and creates the input/target
+time-window pairs. It then satisfies the datarax `DataSourceModule` contract — `element_spec()`
+declares per-element shapes and `get_batch_at(start, size, key)` is a stateless, JAX-traceable
+fetch — so a `Pipeline` can drive it. Coordinate grids are domain metadata on `source.coordinates`.
 """
 
+
 # %%
-# Create temporary synthetic data
-tmp_dir = tempfile.mkdtemp()
-hdf5_path = Path(tmp_dir) / "1D_Burgers_synth.hdf5"
-create_synthetic_pdebench_hdf5(hdf5_path, n_samples=20, n_timesteps=20)
+def build_source(hdf5_path: Path) -> PDEBenchSource:
+    """Construct a train-split PDEBenchSource over the synthetic 1D Burgers file."""
+    config = PDEBenchConfig(
+        file_path=hdf5_path,
+        dataset_name="1D_Burgers",
+        train_split=0.8,
+        split="train",
+        input_steps=5,
+        output_steps=5,
+        normalize=True,
+    )
+    return PDEBenchSource(config, rngs=nnx.Rngs(0))
 
-# Configure and load
-config = PDEBenchConfig(
-    file_path=hdf5_path,
-    dataset_name="1D_Burgers",
-    train_split=0.8,
-    split="train",
-    input_steps=5,
-    output_steps=5,
-    normalize=True,
-)
-source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-
-print(f"\nDataset loaded: {len(source)} sliding window pairs")
-print(f"  inputs shape:  {source.inputs.shape}")
-print(f"  targets shape: {source.targets.shape}")
-print(f"  coordinates:   {source.coordinates is not None}")
-if source.coordinates is not None:
-    for k, v in source.coordinates.items():
-        print(f"    {k}: {v.shape}")
 
 # %% [markdown]
 """
-## Step 3: Inspect Individual Elements
+## Step 3: Build a datarax Pipeline with `create_pdebench_loader`
 
-Each element is a dict with:
-- `"input"`: shape `(input_steps, *spatial, channels)`
-- `"target"`: shape `(output_steps, *spatial, channels)`
-- `"coordinates"`: dict of spatial/temporal grids (if available)
+The loader assembles the source and (because `normalize=True`) a per-channel min-max
+`MapOperator` stage into a `Pipeline`. `pipeline.step()` fetches one batch through the source's
+`get_batch_at` and runs the normalize stage — the whole call is JAX-traceable, so it composes with
+`pipeline.scan(...)` for a GPU-fused training epoch.
 """
-
-# %%
-element = source[0]
-print("Element keys:", list(element.keys()))
-print(f"  input shape:  {element['input'].shape}")
-print(f"  target shape: {element['target'].shape}")
-
-# Verify normalization
-print(
-    f"\n  input range:  [{float(jnp.min(element['input'])):.4f}, "
-    f"{float(jnp.max(element['input'])):.4f}]"
-)
-print(
-    f"  target range: [{float(jnp.min(element['target'])):.4f}, "
-    f"{float(jnp.max(element['target'])):.4f}]"
-)
 
 # %% [markdown]
 """
-## Step 4: Batch Retrieval for Training
+## Step 4: Train vs test splits
 
-`get_batch()` supports two modes:
-1. **Stateful** (no key): sequential batches from current position
-2. **Stateless** (with key): random batches for evaluation
+Two loaders differing only in the `split` config give normalized train/test pipelines.
 """
+
 
 # %%
-# Stateful sequential batch
-batch = source.get_batch(batch_size=4)
-print("Sequential batch:")
-print(f"  input shape:  {batch['input'].shape}")
-print(f"  target shape: {batch['target'].shape}")
+def main() -> dict[str, float | int]:
+    """Build PDEBench train/test datarax pipelines and report the loaded contract + batch."""
+    print("=" * 72)
+    print("Opifex Example: PDEBench loading on datarax (Source + MapOperator + Pipeline)")
+    print("=" * 72)
+    print(f"JAX backend: {jax.default_backend()}")
 
-# Stateless random batch
-key = jax.random.key(42)
-random_batch = source.get_batch(batch_size=8, key=key)
-print("\nRandom batch:")
-print(f"  input shape:  {random_batch['input'].shape}")
-print(f"  target shape: {random_batch['target'].shape}")
+    tmp_dir = tempfile.mkdtemp()
+    hdf5_path = Path(tmp_dir) / "1D_Burgers_synth.hdf5"
+    create_synthetic_pdebench_hdf5(hdf5_path, n_samples=20, n_timesteps=20)
 
-# %% [markdown]
-"""
-## Step 5: Full Epoch Iteration
+    # --- Source contract ---
+    source = build_source(hdf5_path)
+    spec = source.element_spec()
+    print(f"\nWindowed pairs: {len(source)}  (input_steps=5, output_steps=5)")
+    print(f"  element_spec input:  {spec['input'].shape}")
+    print(f"  element_spec target: {spec['target'].shape}")
+    print(f"  coordinates: {None if source.coordinates is None else list(source.coordinates)}")
 
-Iterate over all elements in the dataset.
-Call `reset()` to start a new epoch.
-"""
+    # --- datarax Pipeline (train) ---
+    batch_size = 4
+    train_config = PDEBenchConfig(
+        file_path=hdf5_path,
+        dataset_name="1D_Burgers",
+        train_split=0.8,
+        split="train",
+        input_steps=5,
+        output_steps=5,
+        normalize=True,
+    )
+    test_config = PDEBenchConfig(
+        file_path=hdf5_path,
+        dataset_name="1D_Burgers",
+        train_split=0.8,
+        split="test",
+        input_steps=5,
+        output_steps=5,
+        normalize=True,
+    )
+    train_loader = create_pdebench_loader(train_config, batch_size=batch_size)
+    test_loader = create_pdebench_loader(test_config, batch_size=batch_size)
 
-# %%
-# Full iteration
-count = 0
-for _element in source:
-    count += 1
-print(f"Iterated over {count} elements (dataset has {len(source)})")
+    batch = train_loader.step()
+    input_min, input_max = float(jnp.min(batch["input"])), float(jnp.max(batch["input"]))
+    print(f"\nPipeline.step() batch: input {batch['input'].shape}, target {batch['target'].shape}")
+    print(f"  normalized input range: [{input_min:.4f}, {input_max:.4f}]  (MapOperator stage)")
 
-# Reset for another epoch
-source.reset()
-batch_after_reset = source.get_batch(batch_size=2)
-print(f"After reset, batch input shape: {batch_after_reset['input'].shape}")
+    print(f"\nTrain pairs: {len(train_loader.source)}   Test pairs: {len(test_loader.source)}")
+    print("=" * 72)
 
-# %% [markdown]
-"""
-## Step 6: Train vs Test Split
+    return {
+        "train_pairs": len(train_loader.source),
+        "test_pairs": len(test_loader.source),
+        "batch_size": batch_size,
+        "input_min": input_min,
+        "input_max": input_max,
+    }
 
-Create separate sources for training and evaluation
-by changing the `split` parameter.
-"""
-
-# %%
-test_config = PDEBenchConfig(
-    file_path=hdf5_path,
-    dataset_name="1D_Burgers",
-    train_split=0.8,
-    split="test",
-    input_steps=5,
-    output_steps=5,
-    normalize=True,
-)
-test_source = PDEBenchSource(test_config, rngs=nnx.Rngs(0))
-
-print(f"Train samples: {len(source)}")
-print(f"Test samples:  {len(test_source)}")
 
 # %% [markdown]
 """
 ## Results Summary
 
-| Metric | Value |
-|--------|-------|
-| I/O Strategy | Eager — all at init, pure JAX after |
-| Window Pairing | Sliding window over time axis |
-| Normalization | Per-channel min-max to [0, 1] |
-| Batch Modes | Stateful (sequential) and stateless (random) |
-| Split Support | Train/test via `split` parameter |
+| Aspect | How it is built |
+|--------|-----------------|
+| Source | `PDEBenchSource` (datarax `DataSourceModule`): HDF5 read + split + window pairing |
+| Contract | `element_spec()` + stateless, traceable `get_batch_at(start, size, key)` |
+| Normalization | datarax `MapOperator` stage (per-channel min-max), not baked into arrays |
+| Batching | datarax `Pipeline.step()` / `.scan()` |
+| Splits | Train/test via the `split` config |
 
 ## Next Steps
 
-- Use `PDEBenchSource` with real PDEBench `.hdf5` files from
+- Use the loader with real PDEBench `.hdf5` files from
   [PDEBench](https://github.com/pdebench/PDEBench)
-- Train an FNO or DeepONet on the loaded data
+- Drive training with `pipeline.scan(step_fn, length=...)` for a GPU-fused epoch
 - See [Darcy Flow Analysis](darcy_flow_analysis.md) for a related example
 """
 
 
 # %%
-def main():
-    """Run the PDEBench loading example."""
-    print("=" * 60)
-    print("PDEBench Loading Example — Complete")
-    print("=" * 60)
-    print(f"Loaded {len(source)} train + {len(test_source)} test pairs")
-    print(f"Input shape:  {source.inputs.shape}")
-    print(f"Target shape: {source.targets.shape}")
-    print(f"Backend:      {jax.default_backend()}")
-
-
 if __name__ == "__main__":
-    main()
+    summary = main()
+    for metric_name, metric_value in summary.items():
+        print(f"{metric_name}: {metric_value}")

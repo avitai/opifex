@@ -41,6 +41,8 @@ from opifex.data.sources.rmd17_source import (
     RMD17Loaders,
 )
 from opifex.data.sources.scientific import (
+    create_pdebench_loader,
+    create_vtk_mesh_loader,
     PDEBenchConfig,
     PDEBenchSource,
     VTKMeshConfig,
@@ -61,8 +63,10 @@ __all__ = [
     "RMD17Loaders",
     "VTKMeshConfig",
     "VTKMeshSource",
+    "create_pdebench_loader",
     "create_qh9_padded_sources",
     "create_rmd17_loader",
+    "create_vtk_mesh_loader",
     "cut_fock_to_blocks",
     "download_rmd17_molecule",
     "generate_burgers",

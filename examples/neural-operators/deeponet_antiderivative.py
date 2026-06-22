@@ -63,6 +63,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
+from opifex.core.metrics import per_sample_relative_l2
 from opifex.neural.operators.deeponet import DeepONet
 
 
@@ -78,7 +79,7 @@ N_SENSORS = 50  # Number of sensor points for input function
 N_TRAIN = 1000  # Training samples
 N_TEST = 200  # Test samples
 BATCH_SIZE = 32
-NUM_EPOCHS = 100
+NUM_EPOCHS = 1500  # ~46k Adam steps (1000/32 batches/epoch); DeepXDE trains this benchmark long
 LEARNING_RATE = 1e-3
 LATENT_DIM = 64  # Shared dimension for branch/trunk outputs
 
@@ -248,15 +249,17 @@ def main() -> dict[str, float | int]:
     Y_train_jax = jnp.array(Y_train)
     Y_test_jax = jnp.array(Y_test)
 
-    opt = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
-    print(f"Optimizer: Adam (lr={LEARNING_RATE})")
+    # Cosine-decayed Adam: the constant-lr short run plateaued well above the achievable error.
+    n_batches = N_TRAIN // BATCH_SIZE
+    lr_schedule = optax.cosine_decay_schedule(LEARNING_RATE, decay_steps=NUM_EPOCHS * n_batches)
+    opt = nnx.Optimizer(model, optax.adam(lr_schedule), wrt=nnx.Param)
+    print(f"Optimizer: Adam (cosine-decayed lr from {LEARNING_RATE})")
 
     # --- Training loop ---
     print()
     print("Starting training...")
     start_time = time.time()
 
-    n_batches = N_TRAIN // BATCH_SIZE
     train_losses: list[float] = []
     val_losses: list[float] = []
 
@@ -299,8 +302,7 @@ def main() -> dict[str, float | int]:
     predictions = eval_model(model, X_branch_test_jax, trunk_jax)
 
     test_mse = float(jnp.mean((predictions - Y_test_jax) ** 2))
-    pred_diff = predictions - Y_test_jax
-    per_sample_rel_l2 = jnp.linalg.norm(pred_diff, axis=1) / jnp.linalg.norm(Y_test_jax, axis=1)
+    per_sample_rel_l2 = per_sample_relative_l2(predictions, Y_test_jax)
     mean_rel_l2 = float(jnp.mean(per_sample_rel_l2))
 
     print(f"Test MSE:         {test_mse:.6f}")

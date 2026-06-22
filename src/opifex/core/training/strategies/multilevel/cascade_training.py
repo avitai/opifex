@@ -13,7 +13,7 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 import jax.numpy as jnp
 from flax import nnx
@@ -21,21 +21,24 @@ from flax import nnx
 from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam  # noqa: TC001
 
 
+# The concrete model type a hierarchy is built from (e.g. MultilevelMLP, a multilevel FNO).
+ModelT = TypeVar("ModelT", bound=nnx.Module)
+
 # Protocol for prolongate function: (coarse_model, fine_model) -> fine_model
-ProlongateFn = Callable[[nnx.Module, nnx.Module], nnx.Module]
+ProlongateFn = Callable[[ModelT, ModelT], ModelT]
 
 # Protocol for optim state transition: (old_val, new_shape) -> new_val
 StateTransitionFn = Callable[[Any, tuple[int, ...]], Any]
 
 
-class CascadeTrainer:
+class CascadeTrainer(Generic[ModelT]):
     """Manages training across a hierarchy of models."""
 
     def __init__(
         self,
-        hierarchy: Sequence[nnx.Module],
+        hierarchy: Sequence[ModelT],
         optimizer: MultilevelAdam,
-        prolongate_fn: ProlongateFn,
+        prolongate_fn: ProlongateFn[ModelT],
         state_transition_fn: StateTransitionFn | None = None,
     ) -> None:
         """Initialize Cascade Trainer.
@@ -60,7 +63,7 @@ class CascadeTrainer:
         # Initialize optimizer with the first (coarsest) model
         self.optimizer.init(self.get_current_model())
 
-    def get_current_model(self) -> nnx.Module:
+    def get_current_model(self) -> ModelT:
         """Return the model at the current level."""
         return self.hierarchy[self.current_level]
 

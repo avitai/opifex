@@ -122,26 +122,29 @@ problems. The grid embedding works directly on UNO's channels-last input.
 
 # %%
 class UNOWithGrid(nnx.Module):
-    """UNO with a 2D grid positional embedding on the (channels-last) input."""
+    """UNO with a 2D grid positional embedding on the (channels-last) input.
+
+    The U-NO operates channels-first ``(batch, channels, H, W)`` (opifex's
+    operator convention), so this wrapper appends the grid coordinates on the
+    channels-last input, transposes into channels-first for the operator, and
+    transposes the prediction back. All resolution changes inside the U-NO occur
+    in the Fourier domain, so this wrapper is itself discretisation invariant.
+    """
 
     def __init__(
         self,
         input_channels: int,
         output_channels: int,
         hidden_channels: int,
-        modes: int,
-        n_layers: int,
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        """Build the grid embedding and the underlying UNO.
+        """Build the grid embedding and the underlying U-NO.
 
         Args:
             input_channels: Number of physical input channels (before the grid).
             output_channels: Number of output channels.
-            hidden_channels: Base number of UNO hidden channels.
-            modes: Number of Fourier modes for the spectral layers.
-            n_layers: Number of U-Net encoder/decoder stages.
+            hidden_channels: Base number of U-NO hidden channels.
             rngs: Random number generators.
         """
         super().__init__()
@@ -149,27 +152,33 @@ class UNOWithGrid(nnx.Module):
             in_channels=input_channels,
             grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
         )
+        # Reference Darcy config (Rahman et al. 2022 / neuralop plot_UNO_darcy):
+        # five-layer encoder/decoder, end-to-end spatial scaling product 1.0.
         self.uno = create_uno(
-            input_channels=self.grid_embedding.out_channels,
-            output_channels=output_channels,
+            in_channels=self.grid_embedding.out_channels,
+            out_channels=output_channels,
             hidden_channels=hidden_channels,
-            modes=modes,
-            n_layers=n_layers,
+            uno_out_channels=[32, 64, 64, 64, 32],
+            uno_n_modes=[[8, 8], [8, 8], [4, 4], [8, 8], [8, 8]],
+            uno_scalings=[[1.0, 1.0], [0.5, 0.5], [1.0, 1.0], [2.0, 2.0], [1.0, 1.0]],
+            n_layers=5,
             rngs=rngs,
         )
 
     def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:
-        """Append grid coordinates, then apply the UNO.
+        """Append grid coordinates, then apply the U-NO.
 
         Args:
             x: Input of shape (batch, height, width, input_channels).
-            deterministic: Whether to run the UNO in deterministic mode.
+            deterministic: Whether to run the U-NO in deterministic mode.
 
         Returns:
             Output of shape (batch, height, width, output_channels).
         """
         x_embedded = self.grid_embedding(x)
-        return self.uno(x_embedded, deterministic=deterministic)
+        x_cf = jnp.transpose(x_embedded, (0, 3, 1, 2))
+        y_cf = self.uno(x_cf, deterministic=deterministic)
+        return jnp.transpose(y_cf, (0, 2, 3, 1))
 
 
 # %% [markdown]
@@ -217,9 +226,7 @@ def main() -> dict[str, float | int]:
     batch_size = 32
     num_epochs = 120
     learning_rate = 1e-3
-    hidden_channels = 32
-    modes = 12
-    n_layers = 3
+    hidden_channels = 64
     seed = 42
 
     output_dir = Path("docs/assets/examples/uno_darcy")
@@ -233,7 +240,7 @@ def main() -> dict[str, float | int]:
     print(f"Resolution: {resolution}x{resolution}")
     print(f"Training samples: {n_train}, Test samples: {n_test}")
     print(f"Batch size: {batch_size}, Epochs: {num_epochs}")
-    print(f"UNO config: hidden={hidden_channels}, modes={modes}, layers={n_layers}")
+    print(f"UNO config: hidden={hidden_channels}, 5-layer Fourier U (Rahman et al. 2022)")
 
     # --- Data loading via datarax ---
     print()
@@ -284,16 +291,12 @@ def main() -> dict[str, float | int]:
         input_channels=in_channels,
         output_channels=out_channels,
         hidden_channels=hidden_channels,
-        modes=modes,
-        n_layers=n_layers,
         rngs=nnx.Rngs(seed),
     )
 
     params = nnx.state(model, nnx.Param)
     param_count = int(sum(x.size for x in jax.tree_util.tree_leaves(params)))
-    print(
-        f"Model: UNO + GridEmbedding2D (hidden={hidden_channels}, modes={modes}, layers={n_layers})"
-    )
+    print(f"Model: UNO + GridEmbedding2D (hidden={hidden_channels}, 5-layer Fourier U)")
     print(f"Input channels: {in_channels} (+ 2 grid coords = {in_channels + 2} after embedding)")
     print(f"Output channels: {out_channels}")
     print(f"Total parameters: {param_count:,}")
@@ -353,27 +356,38 @@ def main() -> dict[str, float | int]:
     print(f"Min Relative L2:  {float(jnp.min(per_sample_rel_l2)):.6f}")
     print(f"Max Relative L2:  {float(jnp.max(per_sample_rel_l2)):.6f}")
 
-    # --- Zero-shot super-resolution ---
+    # --- Zero-shot super-resolution (genuine discretisation-invariance test) ---
+    # The FNO/UNO spectral parametrisation is resolution-independent, so a model trained at one
+    # resolution can be evaluated at a finer one. We test this the way neuraloperator does: on a
+    # SEPARATELY generated, real high-resolution Darcy solve (independent samples, true PDE
+    # solutions at the fine grid) — NOT a bilinear upsample of the coarse solution. The train-fitted
+    # normalisation transfers because the permeability/pressure distributions are resolution-free.
     print()
     target_resolution = resolution * 2
     print(f"Testing zero-shot super-resolution: {resolution} -> {target_resolution}")
+    print(f"Generating a real {target_resolution}x{target_resolution} Darcy test set...")
+    sr_loaders = create_darcy_loader(
+        n_samples=n_test,
+        batch_size=batch_size,
+        resolution=target_resolution,
+        val_fraction=1.0,  # all samples in the eval split
+        seed=seed + 1,
+    )
+    x_high, y_high = _collect(sr_loaders.val)
+    x_high_n = jnp.array((x_high - x_mean) / x_std)
+    y_high_jnp = jnp.array(y_high)
 
-    x_sample = x_test_jnp[0:1]
-    x_high_res = jax.image.resize(
-        x_sample,
-        (1, target_resolution, target_resolution, in_channels),
-        method="bilinear",
+    pred_high = (
+        predict_in_batches(lambda b: trained_model(b, deterministic=True), x_high_n) * y_std
+        + y_mean
     )
-    y_pred_high = trained_model(x_high_res, deterministic=True) * y_std + y_mean
-    y_true_high = jax.image.resize(
-        y_test_jnp[0:1],
-        (1, target_resolution, target_resolution, out_channels),
-        method="bilinear",
+    sr_per_sample = per_sample_relative_l2(pred_high, y_high_jnp)
+    sr_error = float(jnp.mean(sr_per_sample))
+    print(
+        f"Super-resolution mean relative L2 ({len(x_high)} real {target_resolution}^2 solves): "
+        f"{sr_error:.6f}"
     )
-    sr_error = float(
-        jnp.sqrt(jnp.sum((y_pred_high - y_true_high) ** 2)) / jnp.sqrt(jnp.sum(y_true_high**2))
-    )
-    print(f"Super-resolution L2 error: {sr_error:.6f}")
+    print(f"  (in-distribution {resolution}^2 error was {mean_rel_l2:.6f})")
 
     # --- Visualization: sample predictions ---
     print()
@@ -423,16 +437,16 @@ def main() -> dict[str, float | int]:
         fontweight="bold",
     )
 
-    im0 = axes[0].imshow(np.array(x_high_res[0, :, :, 0]), cmap="viridis", aspect="equal")
-    axes[0].set_title("Input (High Res)")
+    im0 = axes[0].imshow(np.array(x_high[0, :, :, 0]), cmap="viridis", aspect="equal")
+    axes[0].set_title(f"Input ({target_resolution}^2, real)")
     plt.colorbar(im0, ax=axes[0], shrink=0.8)
 
-    im1 = axes[1].imshow(np.array(y_pred_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
-    axes[1].set_title("UNO Prediction")
+    im1 = axes[1].imshow(np.array(pred_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
+    axes[1].set_title("UNO Prediction (zero-shot)")
     plt.colorbar(im1, ax=axes[1], shrink=0.8)
 
-    im2 = axes[2].imshow(np.array(y_true_high[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
-    axes[2].set_title("Ground Truth (Upsampled)")
+    im2 = axes[2].imshow(np.array(y_high_jnp[0, :, :, 0]), cmap="RdBu_r", aspect="equal")
+    axes[2].set_title("Ground Truth (real high-res solve)")
     plt.colorbar(im2, ax=axes[2], shrink=0.8)
 
     plt.tight_layout()
@@ -468,10 +482,10 @@ After running this example you should observe:
 
 ## Next Steps
 
-- Increase `hidden_channels` and `modes` for higher capacity
+- Increase `hidden_channels` and the per-layer `uno_out_channels` for capacity
 - Experiment with more training samples and epochs
 - Compare UNO vs FNO on this problem (see `fno_darcy.py`)
-- Try `UNeuralOperator` directly with `use_spectral=True` for spectral convolutions
+- Construct `UNeuralOperator` directly with custom `uno_scalings` for deeper Us
 - Explore the SFNO architecture for climate/spherical data
 """
 

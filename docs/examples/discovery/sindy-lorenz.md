@@ -67,24 +67,26 @@ derivatives (blue solid) across all three state variables.
 The coefficient matrix shows 7 nonzero terms out of 30 possible
 (3 equations x 10 library terms), matching the known Lorenz structure.
 
-## Comparison with PySINDy Reference
+## Optional cross-check against PySINDy
 
-Both implementations recover identical equations and R² scores:
+Opifex's SINDy is the subject of this example. As an *optional* validation, the example also
+cross-checks against the reference [PySINDy](https://github.com/dynamicslab/pysindy) library **if it
+is installed** — if not, that step is skipped and the example still runs end-to-end on opifex's
+SINDy. When PySINDy is present, both recover identical equations and R² scores:
 
 ```
-=== PySINDy (Reference) ===
-(x0)' = -10.000 x0 +  10.000 x1
-(x1)' =  28.000 x0 + -1.000 x1 + -1.000 x0 x2
-(x2)' = -2.667 x2 +  1.000 x0 x1
-R² score: 1.000000
-Time: 0.0079s
-
 === Opifex SINDy (JAX-native) ===
 dx/dt = -10.000 x + 10.000 y
 dy/dt = 27.991 x + -0.998 y + -1.000 x z
 dz/dt = -2.667 z + 1.000 x y
 R² score: 1.000000
-Time: 0.0180s
+
+=== PySINDy (reference cross-check) ===
+(x0)' = -10.000 x0 +  10.000 x1
+(x1)' =  28.000 x0 + -1.000 x1 + -1.000 x0 x2
+(x2)' = -2.667 x2 +  1.000 x0 x1
+R² score: 1.000000
+Opifex R² matches PySINDy: True
 ```
 
 Both achieve R² = 1.000000. Opifex matches PySINDy's accuracy on the Lorenz

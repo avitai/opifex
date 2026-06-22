@@ -13,77 +13,58 @@ This module provides advanced neural operator implementations for learning mappi
 
 ## 🚀 **Core Neural Operators**
 
-### 1. Discrete-Continuous (DISCO) Convolutions ✅ **WORKING**
+### 1. Discrete-Continuous (DISCO) Convolutions
 
-Advanced convolution layers that handle both structured and unstructured spatial data through continuous kernel functions.
+Convolution on arbitrary (including irregular) point sets via a continuous kernel evaluated as a
+quadrature (Ocampo, Price & McEwen 2023, `arXiv:2209.13603`; the `torch_harmonics` algorithm). The
+kernel `kappa(r) = Σ_k w_k φ_k(r)` lives in physical coordinates, so the same learned kernel
+transfers across grid resolutions and applies directly to scattered data.
 
 ```python
 import jax
-import jax.numpy as jnp
 from flax import nnx
-from opifex.neural.operators.specialized import (
-    DiscreteContinuousConv2d,
-    EquidistantDiscreteContinuousConv2d,
-    create_disco_encoder,
-    create_disco_decoder
-)
+from opifex.neural.operators.specialized import DiscreteContinuousConv2d, regular_grid
 
-# Basic DISCO convolution for irregular grids
-rngs = nnx.Rngs(jax.random.PRNGKey(42))
+# Geometry (positions + quadrature weights) is fixed at construction.
+rngs = nnx.Rngs(42)
+in_coords, quad = regular_grid(64)   # (4096, 2) + cell-area quadrature weights
+out_coords, _ = regular_grid(32)     # read out on a coarser (1024-point) grid
+
 disco_conv = DiscreteContinuousConv2d(
     in_channels=3,
     out_channels=16,
-    kernel_size=5,
-    activation=nnx.gelu,
-    rngs=rngs
+    in_coords=in_coords,
+    out_coords=out_coords,
+    quad_weights=quad,
+    num_basis=4,
+    radius=0.1,
+    rngs=rngs,
 )
 
-# Optimized for regular grids (10x+ speedup)
-equi_disco = EquidistantDiscreteContinuousConv2d(
-    in_channels=3,
-    out_channels=16,
-    kernel_size=5,
-    grid_spacing=0.1,
-    rngs=rngs
-)
-
-# Test with 2D data
-x = jax.random.normal(jax.random.PRNGKey(0), (8, 64, 64, 3))  # (batch, h, w, channels)
+# Input: (batch, num_in_points, channels)
+x = jax.random.normal(jax.random.key(0), (8, 4096, 3))
 output = disco_conv(x)
-print(f"DISCO: {x.shape} -> {output.shape}")  # (8, 64, 64, 3) -> (8, 64, 64, 16)
-
-# Encoder-decoder architecture with DISCO
-encoder = create_disco_encoder(in_channels=3, hidden_channels=[32, 64], rngs=rngs)
-decoder = create_disco_decoder(hidden_channels=[64, 32], out_channels=1, rngs=rngs)
-
-encoded = encoder(x)
-reconstructed = decoder(encoded)
-print(f"DISCO Encoder-Decoder: {x.shape} -> {encoded.shape} -> {reconstructed.shape}")
+print(f"DISCO: {x.shape} -> {output.shape}")  # (8, 4096, 3) -> (8, 1024, 16)
 ```
 
 #### Complete DISCO Convolution Example
 
-For full DISCO convolution demonstrations:
+For a full demonstration of discretisation invariance and irregular-grid convolution:
 
-**`examples/layers/disco_convolutions_example.py`** - Production-ready example featuring:
+**`examples/layers/disco_convolutions_example.py`** — measured example featuring:
 
-- **Basic DISCO Functionality**: General convolution for structured/unstructured grids
-- **Equidistant Optimization**: 10x+ speedup for regular grids with performance comparison
-- **Encoder-Decoder Architectures**: Multi-scale feature learning with factory functions
-- **Performance Analysis**: Full timing and visualization of results
+- **Discretisation invariance**: the same continuous kernel converges as the input grid refines
+  (relative change 0.083 at 24→96 to 0.011 at 48→96).
+- **Irregular-grid capability**: the same operator runs on 500 scattered points via Monte-Carlo
+  quadrature — impossible for a pixel convolution.
+- **The learned continuous kernel**: visualised as a weighted sum of radial hat basis functions.
 
 ```bash
 # Activate environment first
 source ./activate.sh
 
-# Run the complete DISCO example
+# Run the DISCO example
 python examples/layers/disco_convolutions_example.py
-
-# Expected output:
-# ✅ Basic DISCO convolution: ~900ms
-# ⚡ Equidistant speedup: 9.92x on regular grids
-# 🏗️ Encoder-decoder architecture working
-# 📊 Full visualizations created
 ```
 
 **Technical Achievements**:

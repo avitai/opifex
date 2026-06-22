@@ -6,383 +6,275 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#   kernelspec:
+#     display_name: Python 3 (ipykernel)
+#     language: python
+#     name: python3
 # ---
 
 # %% [markdown]
 """
-# Grid Embeddings for Neural Operators
+# Grid Embeddings: Why Positional Coordinates Matter for Neural Operators
 
 | Metadata | Value |
 |----------|-------|
-| **Level** | Beginner |
-| **Runtime** | ~2 min (CPU) |
-| **Prerequisites** | JAX, NumPy, Neural Operators basics |
+| **Level** | Intermediate |
+| **Runtime** | ~3 min (GPU) / ~12 min (CPU) |
+| **Prerequisites** | JAX, Flax NNX, [FNO on Darcy](../neural-operators/fno-darcy.md) |
 | **Format** | Python + Jupyter |
+| **Memory** | ~1 GB |
 
 ## Overview
 
-Grid embeddings inject spatial coordinate information into neural operator inputs,
-enabling the model to learn position-dependent features. This is essential for
-operators like FNO that operate on spatially structured data.
+A Fourier Neural Operator sees only channel values at grid points — it has no
+intrinsic notion of *where* each point sits in the domain. `GridEmbedding2D` injects
+the spatial coordinates as extra input channels, giving the operator positional
+awareness. This is standard practice in neural-operator libraries (it is on by default
+in `neuraloperator`), but *how much does it actually help?*
 
-## Learning Goals
+This example answers that with a controlled **ablation**: we train two otherwise-identical
+FNOs on Darcy flow — one with `GridEmbedding2D`, one without — and measure the difference
+in test accuracy (relative L2). Everything else (modes, width, depth, optimiser, data,
+seed) is held fixed, so the gap is attributable to the positional encoding alone.
 
-1. **Create** spatial coordinate embeddings with `GridEmbedding2D`
-2. **Generalize** embeddings to N dimensions with `GridEmbeddingND`
-3. **Apply** frequency-based positional encoding with `SinusoidalEmbedding`
-4. **Visualize** embedding coordinate grids and their effects
+## What You'll Learn
+
+1. Compose `GridEmbedding2D` with a `FourierNeuralOperator`
+2. Quantify grid embedding's effect on test error (relative L2) with a clean ablation
+3. Visualise the coordinate channels the embedding appends to the input
+4. Understand why a boundary-value problem (fixed zero boundary) rewards positional awareness
+
+## Coming from neuraloperator (PyTorch)?
+
+| neuraloperator | Opifex |
+|----------------|--------|
+| `GridEmbeddingND(in_channels, dim, grid_boundaries)` | `GridEmbedding2D(in_channels=, grid_boundaries=)` / `GridEmbeddingND(...)` |
+| `FNO(..., positional_embedding='grid')` (default on) | compose `GridEmbedding2D` then `FourierNeuralOperator` explicitly |
 """
 
 # %%
-import time
 from pathlib import Path
-from typing import Any
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
+from flax import nnx
 
-from opifex.neural.operators.common.embeddings import (
-    GridEmbedding2D,
-    GridEmbeddingND,
-    regular_grid_2d,
-    SinusoidalEmbedding,
-)
+# %%
+from opifex.core.evaluation import predict_in_batches
+from opifex.core.metrics import relative_l2_error
+from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig, OptimizationConfig
+from opifex.data.loaders import create_darcy_loader
+from opifex.neural.operators.common.embeddings import GridEmbedding2D
+from opifex.neural.operators.fno.base import FourierNeuralOperator
 
 
 # %% [markdown]
 """
-# Grid Embeddings for Neural Operators
+## The two models
 
-| Metadata | Value |
-|----------|-------|
-| **Level** | Beginner |
-| **Runtime** | ~2 min (CPU) |
-| **Prerequisites** | JAX, NumPy, Neural Operators basics |
-| **Format** | Python + Jupyter |
-
-## Overview
-
-Grid embeddings inject spatial coordinate information into neural operator inputs,
-enabling the model to learn position-dependent features. This is essential for
-operators like FNO that operate on spatially structured data.
-
-This example demonstrates three embedding methods available in Opifex:
-`GridEmbedding2D` for standard 2D coordinate injection, `GridEmbeddingND` for
-arbitrary dimensions, and `SinusoidalEmbedding` for frequency-based positional
-encoding (Transformer-style).
-
-## Learning Goals
-
-1. Create spatial coordinate embeddings with `GridEmbedding2D`
-2. Generalize embeddings to N dimensions with `GridEmbeddingND`
-3. Apply frequency-based positional encoding with `SinusoidalEmbedding`
-4. Visualize embedding coordinate grids
+Both models are the same FNO; the only difference is whether a `GridEmbedding2D`
+prepends the two normalised spatial coordinates to the single permeability channel
+(1 -> 3 input channels). Everything else — modes, width, depth, domain padding — is
+identical, so any accuracy gap is attributable to the positional encoding alone.
 """
 
 
 # %%
-def demonstrate_grid_embedding_2d(
-    spatial_shape: tuple[int, int] = (32, 32),
-    batch_size: int = 4,
-    in_channels: int = 3,
-    grid_boundaries: list[list[float]] | None = None,
-) -> dict[str, Any]:
-    """Demonstrate 2D grid embedding functionality."""
-    if grid_boundaries is None:
-        grid_boundaries = [[0.0, 1.0], [0.0, 1.0]]
+class FNO(nnx.Module):
+    """Plain FNO (no positional encoding): maps the 1-channel permeability directly."""
 
-    print()
-    print("Grid Embedding 2D Demonstration")
-    print(f"   Spatial Shape: {spatial_shape}")
-    print(f"   Grid Boundaries: {grid_boundaries}")
+    def __init__(
+        self, modes: int, hidden_channels: int, num_layers: int, *, rngs: nnx.Rngs
+    ) -> None:
+        """Build a single-input-channel FNO with domain padding."""
+        super().__init__()
+        self.fno = FourierNeuralOperator(
+            in_channels=1,
+            out_channels=1,
+            hidden_channels=hidden_channels,
+            modes=modes,
+            num_layers=num_layers,
+            domain_padding=0.25,
+            rngs=rngs,
+        )
 
-    # Create grid embedding
-    embedding = GridEmbedding2D(in_channels=in_channels, grid_boundaries=grid_boundaries)
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Forward pass for ``(batch, 1, H, W)`` permeability fields."""
+        return self.fno(x)
 
-    # Generate sample input data
-    rng_key = jax.random.PRNGKey(42)
-    sample_input = jax.random.normal(rng_key, (batch_size, *spatial_shape, in_channels))
 
-    # Apply embedding
-    start_time = time.time()
-    embedded_data = embedding(sample_input)
-    embedding_time = time.time() - start_time
+class FNOWithGridEmbedding(nnx.Module):
+    """FNO with `GridEmbedding2D`: appends the (x, y) coordinates as input channels."""
 
-    # Get coordinate grids
-    x_grid, y_grid = embedding.get_grid(spatial_shape)
+    def __init__(
+        self, modes: int, hidden_channels: int, num_layers: int, *, rngs: nnx.Rngs
+    ) -> None:
+        """Build a grid-embedded FNO (1 physical channel + 2 coordinate channels)."""
+        super().__init__()
+        self.grid_embedding = GridEmbedding2D(
+            in_channels=1, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]]
+        )
+        self.fno = FourierNeuralOperator(
+            in_channels=self.grid_embedding.out_channels,  # 3
+            out_channels=1,
+            hidden_channels=hidden_channels,
+            modes=modes,
+            num_layers=num_layers,
+            domain_padding=0.25,
+            rngs=rngs,
+        )
 
-    print(f"   Input Shape: {sample_input.shape}")
-    print(f"   Output Shape: {embedded_data.shape}")
-    print(f"   Output Channels: {embedding.out_channels}")
-    print(f"   Embedding Time: {embedding_time * 1000:.2f} ms")
-
-    return {
-        "embedded_data": embedded_data,
-        "coordinate_grids": (x_grid, y_grid),
-        "sample_input": sample_input,
-        "embedding": embedding,
-        "embedding_info": {
-            "type": "GridEmbedding2D",
-            "in_channels": in_channels,
-            "out_channels": embedding.out_channels,
-            "grid_boundaries": grid_boundaries,
-        },
-    }
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Embed grid coordinates (channels-last) then apply the FNO (channels-first)."""
+        x_hwc = jnp.moveaxis(x, 1, -1)
+        x_embedded = self.grid_embedding(x_hwc)
+        return self.fno(jnp.moveaxis(x_embedded, -1, 1))
 
 
 # %% [markdown]
 """
-## 2. N-Dimensional Grid Embedding
+## Run the ablation
 
-Generalizing to arbitrary dimensions.
+`main()` generates Darcy data, trains both models identically, evaluates each on the
+held-out test set, and returns the comparison metrics.
 """
 
 
 # %%
-def demonstrate_grid_embedding_nd(
-    spatial_shape: tuple[int, ...],
-    batch_size: int = 2,
-    in_channels: int = 2,
-    grid_boundaries: list[list[float]] | None = None,
-) -> dict[str, Any]:
-    """Demonstrate N-dimensional grid embedding functionality."""
-    dim = len(spatial_shape)
-    if grid_boundaries is None:
-        grid_boundaries = [[0.0, 1.0] for _ in range(dim)]
+def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
+    """Materialise a datarax pipeline into ``(inputs, outputs)`` arrays (channels-first)."""
+    inputs, outputs = [], []
+    for batch in pipeline:
+        inputs.append(np.asarray(batch["input"]))
+        outputs.append(np.asarray(batch["output"]))
+    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
 
+
+def _train_one(
+    model: nnx.Module, x_train_n: np.ndarray, y_train_n: np.ndarray, *, num_epochs: int, seed: int
+) -> nnx.Module:
+    """Train a model with the standard relative-L2 / AdamW operator-learning recipe."""
+    config = TrainingConfig(
+        num_epochs=num_epochs,
+        batch_size=32,
+        validation_frequency=num_epochs,  # no separate val split here
+        verbose=False,
+        loss_config=LossConfig(loss_type="relative_l2"),
+        optimization_config=OptimizationConfig(
+            optimizer="adamw", learning_rate=5e-3, weight_decay=1e-4
+        ),
+    )
+    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+    trained, _ = trainer.fit(train_data=(x_train_n, y_train_n))
+    return trained
+
+
+def _eval_relative_l2(
+    model: nnx.Module, x_n: np.ndarray, y: np.ndarray, *, y_mean: float, y_std: float
+) -> float:
+    """Mean relative-L2 error of un-normalised predictions against physical targets."""
+    pred_n = predict_in_batches(model, jnp.asarray(x_n), batch_size=32)
+    pred = np.asarray(pred_n) * y_std + y_mean
+    return float(relative_l2_error(jnp.asarray(pred), jnp.asarray(y)))
+
+
+def main() -> dict[str, float | int]:
+    """Train FNO with vs without GridEmbedding2D and report the accuracy comparison."""
+    resolution = 32
+    n_train, n_test = 1000, 100
+    num_epochs, seed = 120, 42
+
+    print("=" * 72)
+    print("Opifex Example: Grid Embeddings — FNO ablation on Darcy flow")
+    print("=" * 72)
+    print(f"JAX backend: {jax.default_backend()}  devices: {jax.devices()}")
+
+    # --- Data ---
     print()
-    print(f"Grid Embedding {dim}D Demonstration")
-    print(f"   Spatial Shape: {spatial_shape}")
-    print(f"   Dimensions: {dim}")
+    print(f"Generating Darcy data at {resolution}x{resolution}...")
+    loaders = create_darcy_loader(
+        n_samples=n_train + n_test,
+        batch_size=32,
+        resolution=resolution,
+        val_fraction=n_test / (n_train + n_test),
+        seed=seed,
+    )
+    x_train, y_train = _collect(loaders.train)
+    x_test, y_test = _collect(loaders.val)
 
-    # Create N-dimensional grid embedding
-    embedding = GridEmbeddingND(in_channels=in_channels, dim=dim, grid_boundaries=grid_boundaries)
+    # Normalisation fit on train, applied to both splits.
+    x_mean, x_std = x_train.mean(), x_train.std()
+    y_mean, y_std = y_train.mean(), y_train.std()
+    x_train_n = (x_train - x_mean) / x_std
+    y_train_n = (y_train - y_mean) / y_std
+    x_test_n = (x_test - x_mean) / x_std
 
-    # Generate sample input data
-    rng_key = jax.random.PRNGKey(43)
-    sample_input = jax.random.normal(rng_key, (batch_size, *spatial_shape, in_channels))
+    fno_kwargs = {"modes": 12, "hidden_channels": 32, "num_layers": 4}
 
-    # Apply embedding
-    start_time = time.time()
-    embedded_data = embedding(sample_input)
-    embedding_time = time.time() - start_time
-
-    print(f"   Input Shape: {sample_input.shape}")
-    print(f"   Output Shape: {embedded_data.shape}")
-    print(f"   Output Channels: {embedding.out_channels}")
-    print(f"   Coordinate Channels: {dim}")
-    print(f"   Embedding Time: {embedding_time * 1000:.2f} ms")
-
-    # Get coordinate grids for each dimension
-    coordinate_grids = embedding.get_grid(spatial_shape)
-
-    return {
-        "embedded_data": embedded_data,
-        "coordinate_grids": coordinate_grids,
-        "sample_input": sample_input,
-        "embedding": embedding,
-        "embedding_info": {
-            "type": "GridEmbeddingND",
-            "dim": dim,
-            "in_channels": in_channels,
-            "out_channels": embedding.out_channels,
-            "grid_boundaries": grid_boundaries,
-        },
-    }
-
-
-# %% [markdown]
-"""
-## 3. Sinusoidal Embedding
-
-Frequency-based positional encoding (Transformer-style).
-"""
-
-
-# %%
-def demonstrate_sinusoidal_embedding(
-    spatial_shape: tuple[int, int] = (32, 32),
-    batch_size: int = 4,
-    in_channels: int = 3,
-    num_frequencies: int = 8,
-) -> dict[str, Any]:
-    """Demonstrate sinusoidal embedding functionality."""
+    # --- Train both models identically (same data, seed, and FNO hyperparameters) ---
     print()
-    print("Sinusoidal Embedding Demonstration")
-    print(f"   Spatial Shape: {spatial_shape}")
-    print(f"   Frequencies: {num_frequencies}")
-
-    # Create sinusoidal embedding
-    embedding = SinusoidalEmbedding(
-        in_channels=in_channels,
-        num_frequencies=num_frequencies,
-        embedding_type="transformer",
+    print(f"Training FNO WITHOUT grid embedding ({num_epochs} epochs)...")
+    plain = _train_one(
+        FNO(**fno_kwargs, rngs=nnx.Rngs(seed)),
+        x_train_n,
+        y_train_n,
+        num_epochs=num_epochs,
+        seed=seed,
+    )
+    print(f"Training FNO WITH GridEmbedding2D ({num_epochs} epochs)...")
+    embedded = _train_one(
+        FNOWithGridEmbedding(**fno_kwargs, rngs=nnx.Rngs(seed)),
+        x_train_n,
+        y_train_n,
+        num_epochs=num_epochs,
+        seed=seed,
     )
 
-    # Generate sample input data (batch, n_points, channels)
-    rng_key = jax.random.PRNGKey(44)
-    h, w = spatial_shape
-    n_points = h * w
-
-    # Create coordinate data
-    x_coords = jnp.linspace(0, 1, w)
-    y_coords = jnp.linspace(0, 1, h)
-    x_grid, y_grid = jnp.meshgrid(x_coords, y_coords, indexing="xy")
-
-    # Flatten spatial coordinates to (n_points, 2)
-    coord_flat = jnp.stack([x_grid.flatten(), y_grid.flatten()], axis=-1)
-    coord_batched = jnp.repeat(coord_flat[None, :, :], batch_size, axis=0)
-
-    # Add input channels
-    input_features = jax.random.normal(rng_key, (batch_size, n_points, in_channels))
-    sample_input = (
-        input_features  # Using features directly as SinusoidalEmbedding usually expects features
-    )
-
-    # Apply embedding
-    start_time = time.time()
-    embedded_data = embedding(sample_input)
-    embedding_time = time.time() - start_time
-
-    # Reshape back to spatial for display
-    embedded_spatial = embedded_data.reshape(batch_size, h, w, -1)
-
-    print(f"   Input Shape: {sample_input.shape}")
-    print(f"   Output Shape: {embedded_data.shape}")
-    print(f"   Output Channels: {embedding.out_channels}")
-    print(f"   Embedding Time: {embedding_time * 1000:.2f} ms")
-
-    # Compute frequency analysis (use float32 to avoid int32 overflow for large num_frequencies)
-    frequencies = jnp.array([2**i for i in range(num_frequencies)], dtype=jnp.float32)
-
-    return {
-        "embedded_data": embedded_spatial,
-        "sample_input": sample_input,
-        "embedding": embedding,
-        "embedding_info": {
-            "type": "SinusoidalEmbedding",
-            "in_channels": in_channels,
-            "out_channels": embedding.out_channels,
-            "num_frequencies": num_frequencies,
-        },
-        "frequency_analysis": {
-            "frequencies": frequencies,
-            "embedding_patterns": embedded_spatial[0, :, :, :num_frequencies],
-        },
-    }
-
-
-# %% [markdown]
-"""
-## Visualization
-
-Visualizing the generated coordinate grids.
-"""
-
-
-# %%
-def visualize_coordinate_grids(
-    spatial_shape: tuple[int, int] = (16, 16),
-    grid_boundaries: list[list[float]] | None = None,
-) -> None:
-    """Visualize coordinate grids and embedding effects."""
-    if grid_boundaries is None:
-        grid_boundaries = [[-1.0, 1.0], [-1.0, 1.0]]
+    plain_l2 = _eval_relative_l2(plain, x_test_n, y_test, y_mean=y_mean, y_std=y_std)
+    embedded_l2 = _eval_relative_l2(embedded, x_test_n, y_test, y_mean=y_mean, y_std=y_std)
 
     print()
-    print("Coordinate Grid Visualization")
+    print("=" * 72)
+    print("RESULTS — test relative L2 error (lower is better)")
+    print("=" * 72)
+    print(f"  FNO (no grid embedding):  {plain_l2:.4f}")
+    print(f"  FNO + GridEmbedding2D:    {embedded_l2:.4f}")
+    print(
+        f"  Grid embedding reduces the relative-L2 error by "
+        f"{(1 - embedded_l2 / plain_l2) * 100:.0f}% on this boundary-value problem."
+    )
 
-    # Generate coordinate grids
-    x_grid, y_grid = regular_grid_2d(spatial_shape, grid_boundaries)
-
-    # Create visualization
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle("Grid Embedding Coordinate Visualization", fontsize=16)
-
-    # X coordinates
-    im1 = axes[0, 0].imshow(x_grid, cmap="viridis", aspect="equal")
-    axes[0, 0].set_title("X Coordinates")
-    plt.colorbar(im1, ax=axes[0, 0])
-
-    # Y coordinates
-    im2 = axes[0, 1].imshow(y_grid, cmap="plasma", aspect="equal")
-    axes[0, 1].set_title("Y Coordinates")
-    plt.colorbar(im2, ax=axes[0, 1])
-
-    # Magnitude
-    coord_magnitude = jnp.sqrt(x_grid**2 + y_grid**2)
-    im3 = axes[1, 0].imshow(coord_magnitude, cmap="coolwarm", aspect="equal")
-    axes[1, 0].set_title("Coordinate Magnitude")
-    plt.colorbar(im3, ax=axes[1, 0])
-
-    # Contours
-    axes[1, 1].contour(x_grid, levels=10, colors="blue", alpha=0.6)
-    axes[1, 1].contour(y_grid, levels=10, colors="red", alpha=0.6)
-    axes[1, 1].set_title("Coordinate Contours")
-    axes[1, 1].legend(["X contours", "Y contours"])
-
-    plt.tight_layout()
+    # --- Visualisation: the two grid-coordinate channels GridEmbedding2D adds ---
     output_dir = Path("docs/assets/examples/grid_embeddings")
     output_dir.mkdir(parents=True, exist_ok=True)
-    plt.savefig(
-        output_dir / "coordinate_grids.png",
-        dpi=150,
-        bbox_inches="tight",
-    )
-    plt.close()
-    print("Saved coordinate grid visualization")
+    embedding = GridEmbedding2D(in_channels=1, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]])
+    sample = jnp.asarray(x_test[:1]).transpose(0, 2, 3, 1)  # (1, H, W, 1)
+    embedded_sample = np.asarray(embedding(sample))[0]  # (H, W, 3)
+    _fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+    titles = ["Permeability (input)", "Grid coord x", "Grid coord y"]
+    for ax, title, channel in zip(axes, titles, range(3), strict=True):
+        im = ax.imshow(embedded_sample[..., channel], cmap="viridis")
+        ax.set_title(title, fontsize=12)
+        ax.axis("off")
+        _fig.colorbar(im, ax=ax, fraction=0.046)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/grid-embedding-channels.png", dpi=150, bbox_inches="tight")
+    plt.show()
+    print(f"Saved: {output_dir}/grid-embedding-channels.png")
 
-
-# %% [markdown]
-"""
-## Results Summary
-
-| Embedding Method | Input Channels | Output Channels | Added Dimensions |
-|-----------------|----------------|-----------------|------------------|
-| GridEmbedding2D | 3 | 5 | +2 (x, y coordinates) |
-| GridEmbeddingND (3D) | 2 | 5 | +3 (x, y, z coordinates) |
-| SinusoidalEmbedding | 3 | 51 | +48 (frequency encodings) |
-
-## Next Steps
-
-### Experiments to Try
-
-1. Change `grid_boundaries` to non-standard ranges (e.g., `[[-1, 1], [0, 2*pi]]`)
-2. Increase `num_frequencies` in sinusoidal embedding and observe channel growth
-3. Apply embeddings to real Darcy flow data before FNO training
-
-### Related Examples
-
-- [DISCO Convolutions](disco_convolutions_example.md) - Convolutions on arbitrary grids
-- [FNO Darcy Full](../models/fno_darcy_comprehensive.md) - FNO using grid embeddings
-- [Fourier Continuation](fourier_continuation_example.md) - Boundary handling for spectral methods
-
-### API Reference
-
-- [`GridEmbedding2D`](../../api/neural.md) - 2D spatial coordinate injection
-- [`GridEmbeddingND`](../../api/neural.md) - N-dimensional coordinate embedding
-- [`SinusoidalEmbedding`](../../api/neural.md) - Frequency-based positional encoding
-"""
+    return {
+        "resolution": resolution,
+        "plain_relative_l2": plain_l2,
+        "embedded_relative_l2": embedded_l2,
+        "error_reduction_percent": (1 - embedded_l2 / plain_l2) * 100,
+    }
 
 
 # %%
-def main():
-    """Run all grid embedding demonstrations."""
-    print("=" * 60)
-    print("GRID EMBEDDINGS FOR NEURAL OPERATORS")
-    print("=" * 60)
-
-    grid_2d_results = demonstrate_grid_embedding_2d()
-    grid_nd_results = demonstrate_grid_embedding_nd(spatial_shape=(16, 16, 16))
-    sinusoidal_results = demonstrate_sinusoidal_embedding()
-    visualize_coordinate_grids()
-
-    print()
-    print("=" * 60)
-    print("Grid embedding demonstrations complete!")
-    print("=" * 60)
-
-
 if __name__ == "__main__":
-    main()
+    summary = main()
+    for key, value in summary.items():
+        print(f"{key}: {value}")

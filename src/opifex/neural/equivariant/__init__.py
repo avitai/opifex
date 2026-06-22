@@ -28,6 +28,7 @@ from opifex.neural.equivariant.radial import (
     BesselBasis,
     cosine_cutoff,
     GaussianBasis,
+    PiecewiseLinearBasis,
     polynomial_cutoff,
 )
 from opifex.neural.equivariant.spherical_harmonics import spherical_harmonics
@@ -52,6 +53,7 @@ __all__ = [
     "Irreps",
     "IrrepsArray",
     "NormGate",
+    "PiecewiseLinearBasis",
     "TensorProduct",
     "apply_scalar_weights",
     "cosine_cutoff",

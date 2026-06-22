@@ -38,6 +38,7 @@ from opifex.optimization.l2o.learned import (
     LearnedOptimizer,
     MLPLearnedOptimizer,
 )
+from opifex.optimization.l2o.meta_learning import adapt, maml_meta_train, reptile_meta_train
 from opifex.optimization.l2o.meta_train import init_pes_state, meta_train, pes_gradient_step
 from opifex.optimization.l2o.optimizers import OptaxOptimizer, Optimizer
 from opifex.optimization.l2o.tasks import (
@@ -62,12 +63,15 @@ __all__ = [
     "QuadraticTaskFamily",
     "Task",
     "TaskFamily",
+    "adapt",
     "benchmark_on_held_out_tasks",
     "init_pes_state",
     "loss_curve",
+    "maml_meta_train",
     "meta_train",
     "optimistix_minimise",
     "pes_gradient_step",
+    "reptile_meta_train",
     "single_task_to_family",
     "speedup_at_target",
     "steps_to_target",

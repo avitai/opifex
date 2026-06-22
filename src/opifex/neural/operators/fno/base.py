@@ -12,7 +12,8 @@ MODERNIZATION APPLIED:
 - Robust edge case handling for various input dimensions
 """
 
-from collections.abc import Callable
+import itertools
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import jax
@@ -384,6 +385,186 @@ class FourierLayer(nnx.Module):
         }
 
 
+def spectral_resample(
+    x: jax.Array,
+    output_size: tuple[int, ...],
+    axes: Sequence[int],
+) -> jax.Array:
+    """Resize a real spatial field along ``axes`` purely in the Fourier domain.
+
+    The field is transformed with a real n-dimensional FFT, its low-frequency
+    modes (around DC, plus the matching negative frequencies on every non-last
+    axis) are copied into a new-sized spectral array, and an inverse real FFT of
+    size ``output_size`` is taken. Because data only moves between Fourier modes
+    — never through pixel pooling or spatial interpolation — this is the
+    discretisation-invariant resize used by U-NO: a band-limited field sampled
+    at any resolution maps to the same continuous function.
+
+    Mirrors the spectral branch of ``neuralop.layers.resample.resample`` (mode
+    indexing and ``norm="forward"``), adapted to JAX. ``output_size`` is a static
+    Python tuple so the function traces cleanly under ``jax.jit``.
+
+    Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2022,
+    https://arxiv.org/abs/2204.11127, and the neuraloperator library.
+
+    Args:
+        x: Input of shape ``(batch, channels, *spatial)`` (channels-first).
+        output_size: Target spatial size, one entry per axis in ``axes``.
+        axes: Spatial axes to resize (e.g. ``(-2, -1)`` for 2D).
+
+    Returns:
+        Resized field with the spatial extent on ``axes`` set to ``output_size``.
+    """
+    axes = tuple(axes)
+    old_size = tuple(x.shape[a] for a in axes)
+    if old_size == tuple(output_size):
+        return x
+
+    x_ft = jnp.fft.rfftn(x, axes=axes, norm="forward")
+
+    # rfft halves the last axis; build the target spectral shape accordingly.
+    new_fft_size = list(output_size)
+    new_fft_size[-1] = new_fft_size[-1] // 2 + 1
+    src_fft_size = tuple(x_ft.shape[a] for a in axes)
+    # Only copy modes that exist in BOTH the source and target spectra.
+    keep = [min(n, s) for n, s in zip(new_fft_size, src_fft_size, strict=True)]
+
+    out_shape = list(x_ft.shape)
+    for a, size in zip(axes, new_fft_size, strict=True):
+        out_shape[a] = size
+    out_fft = jnp.zeros(tuple(out_shape), dtype=x_ft.dtype)
+
+    # Low positive + low negative frequencies around DC on every non-last axis;
+    # only the low (non-redundant) half on the last (rfft) axis.
+    mode_indexing = [((None, m // 2), (-(m // 2), None)) for m in keep[:-1]] + [((None, keep[-1]),)]
+    lead = (slice(None),) * (x.ndim - len(axes))  # leading (batch, channels, ...) axes
+    for boundaries in itertools.product(*mode_indexing):
+        idx = (*lead, *(slice(*b) for b in boundaries))
+        out_fft = out_fft.at[idx].set(x_ft[idx])
+
+    return jnp.fft.irfftn(out_fft, s=tuple(output_size), axes=axes, norm="forward")
+
+
+def _resolve_output_size(
+    spatial: tuple[int, ...],
+    output_shape: tuple[int, ...] | None,
+    scaling_factor: Sequence[float] | None,
+) -> tuple[int, ...]:
+    """Resolve the target spatial size from an explicit shape or a scale factor.
+
+    ``output_shape`` takes precedence; otherwise ``round(N * scale)`` per axis;
+    otherwise the input size is preserved.
+    """
+    if output_shape is not None:
+        return tuple(output_shape)
+    if scaling_factor is not None:
+        return tuple(round(n * s) for n, s in zip(spatial, scaling_factor, strict=True))
+    return spatial
+
+
+class SpectralConvResize(nnx.Module):
+    """2D spectral convolution that can change resolution in the Fourier domain.
+
+    Combines the Li et al. (2021) low-mode spectral contraction with the U-NO
+    Fourier-domain resize: after contracting the kept modes, the inverse real
+    FFT is taken at the requested output size, so the layer maps a field at
+    resolution ``N`` to one at ``round(N * scale)`` without any strided
+    convolution or pixel interpolation. This is what makes U-NO discretisation
+    invariant (genuine zero-shot super-resolution).
+
+    Both quadrants of the ``rfft2`` spectrum (positive and negative
+    y-frequencies) are used with separate weight tensors, matching opifex's
+    :class:`FourierLayer` 2D convention. Weights are stored as separate
+    real/imaginary :class:`nnx.Param` arrays to avoid the JAX complex-gradient
+    convention issue (optax issue #196).
+
+    Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2022,
+    https://arxiv.org/abs/2204.11127, and
+    ``neuralop.layers.spectral_convolution.SpectralConv``.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        n_modes: tuple[int, ...],
+        *,
+        rngs: nnx.Rngs,
+    ) -> None:
+        """Initialise the resolution-scaling spectral convolution.
+
+        Args:
+            in_channels: Number of input channels.
+            out_channels: Number of output channels.
+            n_modes: Number of retained Fourier modes ``(modes_h, modes_w)``.
+            rngs: Random number generators (keyword-only).
+        """
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.modes_h, self.modes_w = int(n_modes[0]), int(n_modes[1])
+
+        scale = 1.0 / (in_channels * out_channels)
+        shape = (in_channels, out_channels, self.modes_h, self.modes_w)
+        k1r, k1i, k2r, k2i = jax.random.split(rngs.params(), 4)
+        self.weights_1_real = nnx.Param(scale * jax.random.uniform(k1r, shape))
+        self.weights_1_imag = nnx.Param(scale * jax.random.uniform(k1i, shape))
+        self.weights_2_real = nnx.Param(scale * jax.random.uniform(k2r, shape))
+        self.weights_2_imag = nnx.Param(scale * jax.random.uniform(k2i, shape))
+
+    def __call__(
+        self,
+        x: jax.Array,
+        *,
+        output_scaling_factor: Sequence[float] | None = None,
+        output_shape: tuple[int, ...] | None = None,
+    ) -> jax.Array:
+        """Apply the spectral convolution and inverse-transform at a new size.
+
+        Args:
+            x: Input of shape ``(batch, in_channels, height, width)``.
+            output_scaling_factor: Per-axis spatial scale; the output size is
+                ``round(N * scale)``. Ignored if ``output_shape`` is given.
+            output_shape: Explicit output spatial size ``(height, width)``.
+
+        Returns:
+            Output of shape ``(batch, out_channels, *output_size)``.
+        """
+        batch_size = x.shape[0]
+        h, w = x.shape[-2:]
+        out_h, out_w = _resolve_output_size((h, w), output_shape, output_scaling_factor)
+
+        x_ft = jnp.fft.rfft2(x, axes=(-2, -1), norm="forward")
+        ft_h, ft_w = x_ft.shape[-2:]
+        modes_h = min(self.modes_h, ft_h // 2)
+        modes_w = min(self.modes_w, ft_w)
+
+        w1 = (
+            self.weights_1_real[...][:, :, :modes_h, :modes_w]
+            + 1j * self.weights_1_imag[...][:, :, :modes_h, :modes_w]
+        )
+        w2 = (
+            self.weights_2_real[...][:, :, :modes_h, :modes_w]
+            + 1j * self.weights_2_imag[...][:, :, :modes_h, :modes_w]
+        )
+
+        # Positive and negative y-frequency quadrants (top-left / bottom-left).
+        out_1 = jnp.einsum("bixy,ioxy->boxy", x_ft[:, :, :modes_h, :modes_w], w1)
+        out_2 = jnp.einsum("bixy,ioxy->boxy", x_ft[:, :, -modes_h:, :modes_w], w2)
+
+        # Assemble in a spectrum sized for the OUTPUT resolution, so the inverse
+        # real FFT directly produces the resized field (U-NO Fourier resize).
+        out_ft_h = out_h
+        out_ft_w = out_w // 2 + 1
+        out_ft = jnp.zeros((batch_size, self.out_channels, out_ft_h, out_ft_w), dtype=out_1.dtype)
+        place_h = min(modes_h, out_ft_h // 2 if out_ft_h > 1 else out_ft_h)
+        place_w = min(modes_w, out_ft_w)
+        out_ft = out_ft.at[:, :, :place_h, :place_w].set(out_1[:, :, :place_h, :place_w])
+        out_ft = out_ft.at[:, :, -place_h:, :place_w].set(out_2[:, :, -place_h:, :place_w])
+
+        return jnp.fft.irfft2(out_ft, s=(out_h, out_w), axes=(-2, -1), norm="forward")
+
+
 class FourierNeuralOperator(nnx.Module):
     """Fourier Neural Operator for learning solution operators of PDEs.
 
@@ -405,7 +586,7 @@ class FourierNeuralOperator(nnx.Module):
         factorization_rank: float | None = None,
         positional_embedding: bool = False,
         use_mixed_precision: bool = False,
-        domain_padding: int = 0,
+        domain_padding: float = 0.0,
         spatial_dims: int = 2,
         rngs: nnx.Rngs,
     ) -> None:
@@ -424,8 +605,11 @@ class FourierNeuralOperator(nnx.Module):
                 channels to the input before lifting (needed for boundary-value
                 problems such as Darcy flow).
             use_mixed_precision: Whether to use mixed precision
-            domain_padding: Pixels to pad spatial dims (reduces Gibbs phenomenon
-                for non-periodic problems). Set to 2 for Darcy flow.
+            domain_padding: Fraction of each spatial dimension to zero-pad before the
+                spectral layers (reduces the Gibbs phenomenon for non-periodic problems
+                such as Darcy flow). Specified as a fraction (e.g. 0.25), NOT pixels, so
+                the padding scales with resolution and preserves the FNO's
+                discretisation-invariance / zero-shot super-resolution property. 0 disables.
             spatial_dims: Number of spatial dimensions (1, 2, or 3). Determines
                 which spectral weights are allocated per layer.
             rngs: Random number generators (keyword-only)
@@ -521,9 +705,12 @@ class FourierNeuralOperator(nnx.Module):
         # Input projection (lifting)
         x = self._apply_pointwise_linear(x, self.input_projection)
 
-        # Domain padding for non-periodic problems (reduces Gibbs phenomenon)
+        # Domain padding for non-periodic problems (reduces Gibbs phenomenon). The pad is a
+        # FRACTION of each spatial size computed from the current input, so it scales with
+        # resolution and keeps the operator discretisation-invariant (zero-shot super-resolution).
+        pad_amounts = [round(self.domain_padding * size) for size in x.shape[2:]]
         if self.domain_padding > 0:
-            pad_widths = [(0, 0), (0, 0)] + [(0, self.domain_padding)] * (x.ndim - 2)
+            pad_widths = [(0, 0), (0, 0)] + [(0, pad) for pad in pad_amounts]
             x = jnp.pad(x, pad_widths, mode="constant")
 
         # Apply Fourier layers (no activation on last layer per Li et al.)
@@ -536,10 +723,10 @@ class FourierNeuralOperator(nnx.Module):
                 skip = layer._apply_skip_connection(x)
                 x = spectral + skip
 
-        # Remove domain padding
+        # Remove domain padding (per-axis amounts computed above)
         if self.domain_padding > 0:
             slices = [slice(None), slice(None)] + [
-                slice(None, -self.domain_padding) for _ in range(x.ndim - 2)
+                (slice(None, -pad) if pad > 0 else slice(None)) for pad in pad_amounts
             ]
             x = x[tuple(slices)]
 

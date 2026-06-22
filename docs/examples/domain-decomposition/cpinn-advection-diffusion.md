@@ -85,8 +85,11 @@ $$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = D \frac{\par
 
 With:
 - IC: $u(x, 0) = \sin(\pi x)$
-- BC: $u(0, t) = u(1, t) = 0$
+- BC: Dirichlet trace of the exact solution at $x=0,1$ (method of manufactured solutions)
 - Exact solution: $u = e^{-D\pi^2 t} \sin(\pi(x - ct))$
+
+The advecting reference field is non-zero on the boundaries ($u(0,t) = e^{-D\pi^2 t}\sin(-\pi c t)$),
+so the well-posed problem imposes that exact Dirichlet trace rather than homogeneous BCs.
 
 ## Implementation
 
@@ -181,13 +184,13 @@ model = CPINN(
 
 ```text
 Training CPINN...
-  Epoch     1/15000: loss=1.079845e+01, continuity=6.138672e-02, flux=6.033957e-02
-  Epoch  3000/15000: loss=6.894563e-01, continuity=4.332390e-03, flux=3.168827e-04
-  Epoch  6000/15000: loss=6.735609e-01, continuity=3.912574e-03, flux=1.536087e-04
-  Epoch  9000/15000: loss=6.671914e-01, continuity=3.762073e-03, flux=8.244074e-05
-  Epoch 12000/15000: loss=6.644503e-01, continuity=3.738873e-03, flux=1.525210e-04
-  Epoch 15000/15000: loss=6.613127e-01, continuity=4.147666e-03, flux=8.659219e-05
-Final loss: 6.613127e-01
+  Epoch     1/15000: loss=1.637436e+01, continuity=6.350811e-02, flux=5.993834e-02
+  Epoch  3000/15000: loss=4.612467e-03, continuity=1.844373e-05, flux=1.749452e-04
+  Epoch  6000/15000: loss=9.350888e-04, continuity=3.856273e-06, flux=2.063716e-05
+  Epoch  9000/15000: loss=4.903653e-04, continuity=2.900715e-06, flux=1.414888e-05
+  Epoch 12000/15000: loss=7.380115e-04, continuity=1.571379e-05, flux=6.686303e-05
+  Epoch 15000/15000: loss=2.750690e-04, continuity=1.433311e-06, flux=6.760231e-06
+Final loss: 2.750690e-04
 ```
 
 ### Step 5: Evaluation
@@ -196,11 +199,11 @@ Final loss: 6.613127e-01
 
 ```text
 Evaluating CPINN...
-Relative L2 error:   5.006685e-01
-Maximum point error: 9.465379e-01
-Mean point error:    2.442773e-01
-Interface 0 flux jump: 3.994612e-03
-Interface 1 flux jump: 1.048680e-02
+Relative L2 error:   1.975690e-03
+Maximum point error: 1.181185e-02
+Mean point error:    1.093630e-03
+Interface 0 flux jump: 2.526049e-03
+Interface 1 flux jump: 1.803844e-03
 ```
 
 ## Visualization
@@ -213,19 +216,19 @@ Interface 1 flux jump: 1.048680e-02
 
 | Metric              | Value       |
 |---------------------|-------------|
-| Final Loss          | 0.66        |
-| Relative L2 Error   | 50%         |
-| Maximum Error       | 0.95        |
-| Interface 0 Flux Jump| 3.99e-03   |
-| Interface 1 Flux Jump| 1.05e-02   |
-| Continuity Loss     | 4.15e-03    |
-| Flux Loss           | 8.66e-05    |
+| Final Loss          | 2.75e-04    |
+| Relative L2 Error   | 0.20%       |
+| Maximum Error       | 1.18e-02    |
+| Interface 0 Flux Jump| 2.53e-03   |
+| Interface 1 Flux Jump| 1.80e-03   |
 | Parameters          | 3,555       |
 | Training Epochs     | 15,000      |
 
-**Note**: The high L2 error is due to the challenging nature of advection-dominated
-problems for domain decomposition. The key achievement is the small flux jumps
-(~0.01) demonstrating conservation at interfaces.
+The 3-subdomain CPINN matches the manufactured exact solution to **0.2% relative L2 error**, with
+small interface flux jumps (~2e-3) confirming conservation across the subdomain boundaries. (An
+earlier version imposed homogeneous Dirichlet BCs that were inconsistent with the advecting
+reference field, which produced a spurious ~50% error; the boundary condition now uses the exact
+solution's Dirichlet trace.)
 
 ## Next Steps
 

@@ -9,10 +9,31 @@
 # ---
 
 # %% [markdown]
-# # Field Operations: Differential Operators and Fluid Simulation
-#
-# This example demonstrates Opifex's JAX-native field abstractions for
-# scientific computing on structured grids, inspired by PhiFlow.
+"""
+# Field Operations: Differential Operators and Fluid Simulation
+
+| Metadata | Value |
+|----------|-------|
+| **Level** | Intermediate |
+| **Runtime** | ~20 s (GPU) / ~40 s (CPU) |
+| **Prerequisites** | JAX, finite differences, vector calculus |
+| **Format** | Python + Jupyter |
+| **Memory** | ~0.5 GB |
+
+## Overview
+
+Opifex provides JAX-native field abstractions (a `CenteredGrid` on a physical `Box` with an
+`Extrapolation` boundary rule), inspired by [PhiFlow](https://github.com/tum-pbs/PhiFlow). This
+example does not just call the operators — it **validates** them against closed-form analytical
+solutions and demonstrates an incompressible projection, reporting the errors as metrics.
+
+## What You'll Learn
+
+1. Build fields on a physical domain and apply `gradient` / `laplacian` / `divergence` / `curl_2d`
+2. Verify the finite-difference operators against analytical truth (O(h²) accuracy)
+3. Advect a pulse with `semi_lagrangian` and project a field divergence-free with
+   `pressure_solve_spectral` (Helmholtz-Hodge)
+"""
 
 # %%
 import jax.numpy as jnp
@@ -40,31 +61,61 @@ from opifex.fields import (
 OUTPUT_DIR = Path("docs/assets/examples/field_operations")
 
 # %% [markdown]
-# ## 1. Creating Fields on Physical Domains
+"""
+## 1. Creating fields on physical domains
+
+A `CenteredGrid` wraps values with a physical `Box` domain and a boundary `Extrapolation`, so cell
+size `dx` is derived from the domain — operators work in physical units, not pixels. We use the
+smooth test field `u(x, y) = sin(x) cos(y)` on a periodic `[0, 2π]²` grid.
+"""
 
 # %% [markdown]
-# ## 2. Differential Operators
+"""
+## 2. Differential operators (validated against analytical truth)
+
+`gradient` and `laplacian` use second-order central finite differences. Against the closed forms
+`∇u = (cos x cos y, -sin x sin y)` and `∇²u = -2 sin x cos y`, the max errors are ~`4e-4` and
+`5.5e-4` at 128² — sub-0.1%, consistent with O(h²).
+"""
 
 # %% [markdown]
-# ## 3. Vorticity (2D Curl)
+"""
+## 3. Vorticity (2D curl)
+
+The field `v = (-sin y, sin x)` has max vorticity `≈ 2.0` and is analytically divergence-free;
+`divergence(v)` returns ~`0` numerically, confirming the discrete operators are consistent.
+"""
 
 # %% [markdown]
-# ## 4. Semi-Lagrangian Advection
+"""
+## 4. Semi-Lagrangian advection
+
+A Gaussian pulse advected 10 steps under a uniform velocity is transported with little numerical
+diffusion — the peak is conserved (`0.998 → 0.997`).
+"""
 
 # %% [markdown]
-# ## 5. Incompressible Pressure Projection
+"""
+## 5. Incompressible pressure projection
+
+`pressure_solve_spectral` performs the Helmholtz-Hodge decomposition via an FFT Poisson solve,
+removing the divergent component. Here it drives the max divergence from `~2.0` to `~1.7e-3`
+(a ~1200x reduction) — the projection step at the heart of incompressible fluid solvers.
+"""
 
 # %% [markdown]
-# ## Summary
-#
-# | Operation | Input | Output | Method |
-# |-----------|-------|--------|--------|
-# | `gradient(u)` | Scalar | Vector | Central FD, O(h²) |
-# | `laplacian(u)` | Scalar | Scalar | Central FD, O(h²) |
-# | `divergence(v)` | Vector | Scalar | Central FD, O(h²) |
-# | `curl_2d(v)` | Vector | Scalar | Central FD, O(h²) |
-# | `semi_lagrangian` | Scalar + Velocity | Scalar | Backward trace + bilinear interp |
-# | `pressure_solve_spectral` | Vector | Vector + Scalar | FFT Poisson solver |
+"""
+## Summary
+
+| Operation | Input | Output | Method |
+|-----------|-------|--------|--------|
+| `gradient(u)` | Scalar | Vector | Central FD, O(h²) |
+| `laplacian(u)` | Scalar | Scalar | Central FD, O(h²) |
+| `divergence(v)` | Vector | Scalar | Central FD, O(h²) |
+| `curl_2d(v)` | Vector | Scalar | Central FD, O(h²) |
+| `semi_lagrangian` | Scalar + Velocity | Scalar | Backward trace + bilinear interp |
+| `pressure_solve_spectral` | Vector | Vector + Scalar | FFT Poisson solver |
+"""
 
 
 # %%
@@ -87,11 +138,12 @@ def main() -> dict[str, float | int]:
     grad_u = gradient(u)
     print(f"Gradient shape: {grad_u.values.shape}")  # (128, 128, 2)
 
-    # Analytical: ∇u = (cos(x)cos(y), -sin(x)sin(y))
+    # Analytical: ∇u = (cos(x)cos(y), -sin(x)sin(y)) — validate BOTH components.
     grad_exact_x = jnp.cos(coords[..., 0]) * jnp.cos(coords[..., 1])
     grad_exact_y = -jnp.sin(coords[..., 0]) * jnp.sin(coords[..., 1])
-    grad_error = jnp.max(jnp.abs(grad_u.values[..., 0] - grad_exact_x))
-    print(f"Gradient x-component max error: {grad_error:.6f}")
+    grad_exact = jnp.stack([grad_exact_x, grad_exact_y], axis=-1)
+    grad_error = jnp.max(jnp.abs(grad_u.values - grad_exact))
+    print(f"Gradient max error (both components): {grad_error:.6f}")
 
     lap_u = laplacian(u)
     # Analytical: ∇²u = -2 sin(x) cos(y)

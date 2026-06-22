@@ -65,7 +65,9 @@ HIDDEN_DIMS = [32, 32]
 # We solve the 1D advection-diffusion equation:
 # $$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = D \frac{\partial^2 u}{\partial x^2}$$
 #
-# With initial condition $u(x, 0) = \sin(\pi x)$ and homogeneous Dirichlet BCs.
+# With initial condition $u(x, 0) = \sin(\pi x)$ and Dirichlet BCs taken from the exact
+# solution's boundary trace (method of manufactured solutions), so the problem is well-posed and
+# the analytic ``exact_solution`` is the true reference.
 
 
 # %%
@@ -225,7 +227,7 @@ def main() -> dict[str, float | int]:
     print(f"  Advection: c = {C}")
     print(f"  Diffusion: D = {D}")
     print("  IC: u(x, 0) = sin(pi*x)")
-    print("  BC: u(0, t) = u(1, t) = 0 (Dirichlet)")
+    print("  BC: Dirichlet trace of the exact solution (manufactured solution)")
 
     # Define non-overlapping subdomains in (x, t) space
     x_boundaries = jnp.linspace(X_MIN, X_MAX, NUM_SUBDOMAINS + 1)
@@ -301,12 +303,15 @@ def main() -> dict[str, float | int]:
         xt_pts = jnp.column_stack([x_pts, t_pts])
         collocation_points_per_subdomain.append(xt_pts)
 
-    # Boundary conditions at x=0 and x=1
+    # Boundary conditions at x=0 and x=1. The reference field advects, so its boundary trace is
+    # time-varying (u(0, t) = exp(-D pi^2 t) sin(-pi c t) != 0). We impose that exact Dirichlet
+    # trace (method of manufactured solutions) so the problem is well-posed and consistent with
+    # ``exact_solution`` — homogeneous BCs would solve a different problem.
     t_bc = jax.random.uniform(keys[7], (N_BOUNDARY,), minval=T_MIN, maxval=T_MAX)
     xt_bc_left = jnp.column_stack([jnp.zeros(N_BOUNDARY), t_bc])
     xt_bc_right = jnp.column_stack([jnp.ones(N_BOUNDARY), t_bc])
     xt_bc = jnp.vstack([xt_bc_left, xt_bc_right])
-    u_bc = jnp.zeros(xt_bc.shape[0])  # Homogeneous Dirichlet
+    u_bc = exact_solution(xt_bc[:, 0], xt_bc[:, 1])  # Dirichlet trace of the exact solution
 
     # Initial condition at t=0
     x_ic = jax.random.uniform(keys[8], (N_INITIAL,), minval=X_MIN, maxval=X_MAX)
@@ -440,20 +445,21 @@ def main() -> dict[str, float | int]:
     axes[0, 2].set_ylabel("t")
     plt.colorbar(im2, ax=axes[0, 2])
 
-    # Solution at different times
+    # Solution at different times (solid = CPINN, dashed = exact).
     t_slices = [0.0, 0.25, 0.5]
     for t_val in t_slices:
         t_idx = int(t_val / T_MAX * (nt - 1))
-        axes[1, 0].plot(x_eval, u_pred[t_idx, :], label=f"CPINN t={t_val}")
-        axes[1, 0].plot(x_eval, u_exact[t_idx, :], "--", label=f"Exact t={t_val}")
+        line = axes[1, 0].plot(x_eval, u_pred[t_idx, :], label=f"t={t_val}")[0]
+        # Exact share the line colour and carry no separate legend entry (keeps the legend small).
+        axes[1, 0].plot(x_eval, u_exact[t_idx, :], "--", color=line.get_color(), label="_nolegend_")
     # Draw interface lines
     for interface in interfaces:
         x_int = interface.points[0, 0]
         axes[1, 0].axvline(x=x_int, color="gray", linestyle=":", alpha=0.7)
     axes[1, 0].set_xlabel("x")
     axes[1, 0].set_ylabel("u")
-    axes[1, 0].set_title("Solution at Different Times")
-    axes[1, 0].legend(fontsize=8, ncol=2)
+    axes[1, 0].set_title("Solution at times (solid=CPINN, dashed=exact)")
+    axes[1, 0].legend(fontsize=8, loc="best")
     axes[1, 0].grid(True, alpha=0.3)
 
     # IC comparison

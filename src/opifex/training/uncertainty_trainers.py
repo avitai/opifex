@@ -359,5 +359,3 @@ class ActiveUncertaintyLearner:
             **kwargs,
         )
         return [int(i) for i in batch.indices]
-
-

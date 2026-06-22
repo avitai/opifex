@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+from flax import nnx  # noqa: TC002 - keep flax eager (project rule), used in annotations
 
 from opifex.optimization.l2o import features
 from opifex.optimization.l2o.learned import AdafacMLPLearnedOptimizer
@@ -84,7 +85,7 @@ def test_adafac_inner_step_is_jit_and_vmap_over_theta_safe() -> None:
     task = MLPTaskFamily(input_dim=4, hidden_dim=8, output_dim=2).sample(jax.random.key(0))
     start = task.init(jax.random.key(1))
 
-    def one_step(theta: object) -> jax.Array:
+    def one_step(theta: nnx.State) -> jax.Array:
         optimizer = lopt.opt_fn(theta)
         state = optimizer.init(start, num_steps=10)
         _loss, grad = task.loss_and_grad(optimizer.get_params(state), jax.random.key(2))

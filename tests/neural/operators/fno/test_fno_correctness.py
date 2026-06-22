@@ -99,14 +99,14 @@ class TestDomainPadding:
     """FNO should support domain padding for non-periodic problems."""
 
     def test_padding_does_not_change_output_shape(self):
-        """With padding, output shape matches input spatial dims."""
+        """With fractional domain padding, output shape matches input spatial dims."""
         model = FourierNeuralOperator(
             in_channels=1,
             out_channels=1,
             hidden_channels=8,
             modes=4,
             num_layers=2,
-            domain_padding=2,
+            domain_padding=0.25,  # fraction of each spatial dim (resolution-invariant)
             rngs=nnx.Rngs(0),
         )
         x = jnp.ones((2, 1, 16, 16))
