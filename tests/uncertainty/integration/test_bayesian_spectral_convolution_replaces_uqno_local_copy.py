@@ -77,16 +77,16 @@ def test_bayesian_spectral_convolution_kl_matches_kernel_helper_2d() -> None:
     assert layer_kl == expected
 
 
-def test_bayesian_spectral_convolution_sampling_requires_caller_owned_rngs() -> None:
-    """Sampling without caller-owned ``rngs`` raises — the UQNO migration must thread rngs."""
-    import pytest
-
+def test_bayesian_spectral_convolution_samples_without_caller_owned_rngs() -> None:
+    """Without a per-call ``rngs`` the layer samples via its own stored stream
+    (mirrors :class:`nnx.Dropout`); a caller may still thread rngs to override."""
     layer = BayesianSpectralConvolution(
         in_channels=2, out_channels=3, modes=(4, 4), rngs=nnx.Rngs(0)
     )
     x = jnp.ones((1, 2, 8, 8))
-    with pytest.raises(ValueError, match=r"posterior"):
-        layer(x, rngs=None)
+    out_a = layer(x)
+    out_b = layer(x)
+    assert not jnp.array_equal(out_a, out_b)
 
 
 def test_bayesian_spectral_convolution_sampling_with_explicit_key_is_deterministic_given_key() -> (

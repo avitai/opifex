@@ -326,6 +326,9 @@ class BenchmarkEvaluator:
 def _default_forward(model: Any, inputs: Any) -> Any:
     """Default forward function for model evaluation.
 
+    Models are invoked through ``__call__`` (the NNX convention); callers that
+    need a different evaluation path pass an explicit ``forward_fn``.
+
     Args:
         model: Model to evaluate.
         inputs: Input data.
@@ -333,11 +336,7 @@ def _default_forward(model: Any, inputs: Any) -> Any:
     Returns:
         Model predictions.
     """
-    if callable(model):
-        return model(inputs)
-    if hasattr(model, "forward"):
-        return model.forward(inputs)
-    raise ValueError(f"Model {type(model)} has no callable interface")
+    return model(inputs)
 
 
 __all__ = [

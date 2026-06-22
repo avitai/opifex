@@ -16,6 +16,8 @@ import optax  # noqa: TC002
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
+from opifex.core.physics.losses import PhysicsResidualReporter
+
 
 # Constants for unit conversions
 HARTREE_TO_KCAL_MOL = 627.50960803  # Conversion factor from Hartree to kcal/mol
@@ -233,12 +235,10 @@ class AdvancedMetricsCollector:
         Returns:
             Dictionary of physics metrics
         """
-        from opifex.core.training.utils_legacy import safe_model_call
-
         metrics = {}
 
-        # Basic prediction accuracy
-        y_pred = safe_model_call(model, x)
+        # Basic prediction accuracy. Train/eval mode is set by the caller.
+        y_pred = model(x)  # pyright: ignore[reportCallIssue]
         mse_loss = jnp.mean((y_pred - y_true) ** 2)
         mae_loss = jnp.mean(jnp.abs(y_pred - y_true))
 
@@ -246,16 +246,14 @@ class AdvancedMetricsCollector:
         metrics["mae_loss"] = float(mae_loss)
         metrics["max_error"] = float(jnp.max(jnp.abs(y_pred - y_true)))
 
-        # Physics-specific metrics if available
-        if physics_loss is not None:
-            if hasattr(physics_loss, "compute_residuals"):
-                residual = physics_loss.compute_residuals(model, x)
-                metrics["physics_residual"] = float(residual)
-
-            if hasattr(physics_loss, "check_conservation_violations"):
-                violations = physics_loss.check_conservation_violations(model, x)
-                for violation_type, value in violations.items():
-                    metrics[f"{violation_type}_violation"] = float(value)
+        # Physics residual diagnostics when the loss reports them. Uses the
+        # PhysicsResidualReporter protocol with its real
+        # ``(predictions, targets, inputs) -> dict`` signature (reusing the
+        # forward pass above) rather than guessing the interface.
+        if isinstance(physics_loss, PhysicsResidualReporter):
+            residuals = physics_loss.compute_residuals(y_pred, y_true, x)
+            for name, value in residuals.items():
+                metrics[name] = float(value)
 
         # Chemical accuracy if quantum chemistry problem
         if y_true.shape[-1] == 1:  # Energy prediction

@@ -236,15 +236,6 @@ class PhysicsCrossAttention(nnx.Module):
             rngs=rngs,
         )
 
-        # Add aliases for other components
-        self.physics_proj = self.physics_projection
-        self.cross_physics_attention = self.cross_attention_layers[
-            0
-        ]  # Alias for main cross attention
-        self.conservation_enforcer = (
-            self.conservation_projection
-        )  # Alias for conservation projection
-
     def __call__(
         self,
         x: jax.Array,

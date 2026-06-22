@@ -435,19 +435,20 @@ class L2OEngine:
             Tuple of (algorithm_used, solution)
         """
         # Simple heuristic for algorithm selection
+        # The parametric (learned) solver handles quadratic/linear problems whose
+        # structure is captured by ``problem_params``. Anything else would need
+        # the problem's actual objective to gradient-solve, which
+        # OptimizationProblem does not carry — fail fast rather than minimise a
+        # placeholder ``sum(x**2)`` and return a meaningless vector.
         if problem.problem_type in ["quadratic", "linear"] and problem.dimension <= 50:
-            algorithm = "parametric"
-            solution = self.solve_parametric_problem(problem, problem_params)
-        else:
-            algorithm = "gradient"
+            return "parametric", self.solve_parametric_problem(problem, problem_params)
 
-            # Convert problem to loss function
-            def loss_fn(x):
-                return jnp.sum(x**2)  # Simplified loss
-
-            solution = self.solve_gradient_problem(loss_fn, jnp.zeros(problem.dimension))
-
-        return algorithm, solution
+        raise NotImplementedError(
+            f"solve_automatically supports quadratic/linear problems up to dimension "
+            f"50 via the parametric solver; got problem_type={problem.problem_type!r}, "
+            f"dimension={problem.dimension}. Gradient solving needs the problem's "
+            f"objective — call solve_gradient_problem(loss_fn, x0) directly."
+        )
 
     def solve_with_meta_learning(
         self,

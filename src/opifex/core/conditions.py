@@ -138,6 +138,34 @@ class BoundaryCondition(ABC):
     def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
         """Evaluate boundary condition at given position and time."""
 
+    def apply(
+        self,
+        params: jax.Array,
+        x: jax.Array | None = None,
+        t: float = 0.0,
+        weight: float = 1.0,
+        **kwargs: Any,
+    ) -> jax.Array:
+        """Apply this boundary condition to a parameter array.
+
+        The default is the identity: boundary conditions that do not mask the
+        raw parameter vector (e.g. :class:`WavefunctionBC`) leave it unchanged.
+        ``DirichletBC``/``NeumannBC``/``RobinBC`` override this to constrain the
+        relevant entries.
+
+        Args:
+            params: Parameter array to constrain.
+            x: Optional spatial coordinates for function evaluation.
+            t: Time for time-dependent conditions.
+            weight: Scaling applied by overriding conditions.
+            **kwargs: Accepted for a uniform call signature across conditions.
+
+        Returns:
+            The (possibly constrained) parameter array.
+        """
+        del x, t, weight, kwargs
+        return params
+
 
 class InitialCondition:
     """Initial condition specification for time-dependent problems."""
@@ -231,11 +259,7 @@ class DirichletBC(BoundaryCondition):
 
     def validate(self) -> bool:
         """Validate Dirichlet boundary condition."""
-        try:
-            # Check if value is callable or numeric
-            return callable(self.value) or isinstance(self.value, int | float)
-        except (AttributeError, TypeError):
-            return False
+        return callable(self.value) or isinstance(self.value, int | float)
 
     def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
         """Evaluate Dirichlet condition at given position and time."""
@@ -343,11 +367,7 @@ class NeumannBC(BoundaryCondition):
 
     def validate(self) -> bool:
         """Validate Neumann boundary condition."""
-        try:
-            # Check if value is callable or numeric
-            return callable(self.value) or isinstance(self.value, int | float)
-        except (AttributeError, TypeError):
-            return False
+        return callable(self.value) or isinstance(self.value, int | float)
 
     def evaluate(self, x: jax.Array, t: float = 0.0) -> jax.Array:
         """Evaluate Neumann condition at given position and time."""
@@ -363,6 +383,7 @@ class NeumannBC(BoundaryCondition):
         x: jax.Array | None = None,  # noqa: ARG002 - boundary-condition callable interface
         t: float = 0.0,  # noqa: ARG002 - boundary-condition callable interface
         weight: float = 1.0,
+        **kwargs: Any,  # noqa: ARG002 - uniform BoundaryCondition.apply signature
     ) -> jax.Array:
         """Apply Neumann boundary condition to parameters.
 
@@ -529,6 +550,7 @@ class RobinBC(BoundaryCondition):
         x: jax.Array | None = None,
         t: float = 0.0,
         weight: float = 1.0,
+        **kwargs: Any,  # noqa: ARG002 - uniform BoundaryCondition.apply signature
     ) -> jax.Array:
         """Apply Robin boundary condition to parameters.
 
@@ -848,10 +870,7 @@ class _SymbolicFields:
         self.physics_law = physics_law
 
     def _symbolic_fields_valid(self) -> bool:
-        try:
-            return not (not self.expression or not self.variables)
-        except (AttributeError, TypeError):
-            return False
+        return bool(self.expression and self.variables)
 
 
 # Physics-law constraint-type registries, used by the per-class
@@ -1113,7 +1132,7 @@ class BoundaryConditionCollection:
         """
         result = params
         for bc in self.conditions:
-            # Check if BC has apply method (should be DirichletBC, NeumannBC, RobinBC)
-            if hasattr(bc, "apply"):
-                result = bc.apply(result, x=x, t=t, weight=weight)  # type: ignore[attr-defined]
+            # Every BoundaryCondition implements apply (identity by default), so
+            # the call is uniform — no capability probing needed.
+            result = bc.apply(result, x=x, t=t, weight=weight)
         return result

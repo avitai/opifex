@@ -19,10 +19,10 @@ from calibrax.core.models import Metric
 from opifex.benchmarking.analysis_engine import (
     _calculate_confidence,
     _estimate_complexity,
-    _infer_domain,
     _test_statistical_significance,
     AnalysisEngine,
     ComparisonReport,
+    infer_domain,
     InsightReport,
     RecommendationReport,
     ScalingAnalysis,
@@ -293,32 +293,32 @@ class TestDomainInference:
 
     def test_quantum_computing_domain(self):
         """Test inference of quantum computing domain."""
-        assert _infer_domain("QuantumChemistry") == "quantum_computing"
-        assert _infer_domain("dft_energies") == "quantum_computing"
-        assert _infer_domain("molecular_dynamics") == "quantum_computing"
+        assert infer_domain("QuantumChemistry") == "quantum_computing"
+        assert infer_domain("dft_energies") == "quantum_computing"
+        assert infer_domain("molecular_dynamics") == "quantum_computing"
 
     def test_fluid_dynamics_domain(self):
         """Test inference of fluid dynamics domain."""
-        assert _infer_domain("NavierStokes2D") == "fluid_dynamics"
-        assert _infer_domain("Burgers1D") == "fluid_dynamics"
-        assert _infer_domain("DarcyFlow") == "fluid_dynamics"
+        assert infer_domain("NavierStokes2D") == "fluid_dynamics"
+        assert infer_domain("Burgers1D") == "fluid_dynamics"
+        assert infer_domain("DarcyFlow") == "fluid_dynamics"
 
     def test_materials_science_domain(self):
         """Test inference of materials science domain."""
-        assert _infer_domain("CrystalEnergies") == "materials_science"
-        assert _infer_domain("SolidMechanics") == "materials_science"
-        assert _infer_domain("material_properties") == "materials_science"
+        assert infer_domain("CrystalEnergies") == "materials_science"
+        assert infer_domain("SolidMechanics") == "materials_science"
+        assert infer_domain("material_properties") == "materials_science"
 
     def test_climate_modeling_domain(self):
         """Test inference of climate modeling domain."""
-        assert _infer_domain("WeatherPrediction") == "climate_modeling"
-        assert _infer_domain("climate_data") == "climate_modeling"
-        assert _infer_domain("atmospheric_pressure") == "climate_modeling"
+        assert infer_domain("WeatherPrediction") == "climate_modeling"
+        assert infer_domain("climate_data") == "climate_modeling"
+        assert infer_domain("atmospheric_pressure") == "climate_modeling"
 
     def test_general_domain_fallback(self):
         """Test fallback to general domain."""
-        assert _infer_domain("SomeRandomDataset") == "general"
-        assert _infer_domain("TestDataset") == "general"
+        assert infer_domain("SomeRandomDataset") == "general"
+        assert infer_domain("TestDataset") == "general"
 
 
 class TestOperatorRecommendations:

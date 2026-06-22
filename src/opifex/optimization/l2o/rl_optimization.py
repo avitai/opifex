@@ -381,7 +381,9 @@ class RLOptimizationAgent(nnx.Module):
         self.epsilon = config.epsilon_start
         self.step_count = 0
         self.episode_count = 0
-        self.rng_key = rngs.params()
+        # Keep the Rngs bundle as NNX state (tracked under split/merge/vmap)
+        # rather than storing a raw key array and splitting it in place.
+        self.rngs = rngs
 
     def _update_target_network(self) -> None:
         """Update target network with current DQN weights."""
@@ -449,12 +451,9 @@ class RLOptimizationAgent(nnx.Module):
         Returns:
             Selected action index
         """
-        if training:
-            self.rng_key, subkey = jax.random.split(self.rng_key)
-            if jax.random.uniform(subkey) < self.epsilon:
-                # Random exploration
-                self.rng_key, subkey = jax.random.split(self.rng_key)
-                return int(jax.random.randint(subkey, (), 0, self.config.action_dim))
+        if training and jax.random.uniform(self.rngs.exploration()) < self.epsilon:
+            # Random exploration; each draw pulls a fresh key from the stream.
+            return int(jax.random.randint(self.rngs.exploration(), (), 0, self.config.action_dim))
         # Greedy action selection
         q_values = self.dqn(state)
         return int(jnp.argmax(q_values))
@@ -509,15 +508,14 @@ class RLOptimizationAgent(nnx.Module):
         max_next_q_values = jnp.max(next_q_values, axis=1)
         targets = rewards + self.config.discount_factor * max_next_q_values * (1 - dones)
 
-        # Define loss function
-        def loss_fn(params):
-            dqn_with_params = nnx.merge(nnx.graphdef(self.dqn), params)
-            q_values = dqn_with_params(states)
+        # Define loss function. nnx.value_and_grad differentiates w.r.t. the
+        # module's parameters directly — no manual state split/merge needed.
+        def loss_fn(dqn):
+            q_values = dqn(states)
             action_q_values = q_values[jnp.arange(len(actions)), actions]
             return jnp.mean(optax.l2_loss(action_q_values, targets))
 
-        # Compute gradients and update
-        loss, grads = nnx.value_and_grad(loss_fn)(nnx.state(self.dqn, nnx.Param))
+        loss, grads = nnx.value_and_grad(loss_fn)(self.dqn)
         self.optimizer.update(self.dqn, grads)
 
         # Update target network periodically

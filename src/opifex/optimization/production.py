@@ -79,8 +79,13 @@ def get_model_input_features(model: Module) -> int:
         # Add more model type support as needed
         # For transformer models, attention layers, etc.
 
-        # Default fallback for simple test models
-        return 64
+        # Fail fast rather than fabricating a dimension: a wrong guess silently
+        # propagates as a downstream shape mismatch.
+        raise ValueError(
+            f"Cannot determine input features for model {type(model).__name__}: "
+            "expected a '.linear' submodule exposing 'in_features', or a nested "
+            "'.original_model'."
+        )
 
     except (AttributeError, TypeError) as e:
         raise ValueError(f"Cannot determine input features for model {type(model)}: {e}") from e

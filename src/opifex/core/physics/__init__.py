@@ -34,6 +34,7 @@ from opifex.core.physics.losses import (
     PhysicsInformedLoss,
     PhysicsLossComposer,
     PhysicsLossConfig,
+    PhysicsResidualReporter,
     ResidualComputer,
 )
 from opifex.core.physics.pde_registry import PDEResidualRegistry
@@ -60,6 +61,7 @@ __all__ = [
     "PhysicsInformedLoss",
     "PhysicsLossComposer",
     "PhysicsLossConfig",
+    "PhysicsResidualReporter",
     "ResidualComputer",
     "apply_boundary_condition",
     "apply_dirichlet",

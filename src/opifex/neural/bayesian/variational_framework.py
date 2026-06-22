@@ -115,7 +115,9 @@ class MeanFieldGaussian(nnx.Module):
         eps = jax.random.normal(rngs.sample(), (num_samples, self.num_params))
         return self.mean.value + jnp.exp(self.log_std.value) * eps
 
-    def log_prob(self, samples: Float[Array, "samples params"]) -> Float[Array, samples]:  # type: ignore[reportUndefinedVariable]  # noqa: F821
+    def log_prob(
+        self, samples: Float[Array, "samples params"]
+    ) -> Float[Array, "samples"]:  # noqa: F821, UP037 — jaxtyping shape string, not a forward ref
         """Compute log probability of samples.
 
         Args:

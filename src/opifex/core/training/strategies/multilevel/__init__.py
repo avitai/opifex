@@ -12,7 +12,6 @@ Key Components:
 
 from opifex.core.training.strategies.multilevel.cascade_training import CascadeTrainer
 from opifex.core.training.strategies.multilevel.coarse_to_fine import (
-    CascadeTrainer as LegacyCascadeTrainer,
     create_network_hierarchy,
     MultilevelConfig,
     MultilevelMLP,
@@ -34,7 +33,6 @@ from opifex.core.training.strategies.multilevel.multilevel_fno import (
 
 __all__ = [
     "CascadeTrainer",
-    "LegacyCascadeTrainer",
     "MultilevelAdam",
     "MultilevelConfig",
     "MultilevelFNOConfig",

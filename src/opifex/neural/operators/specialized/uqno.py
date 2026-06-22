@@ -60,7 +60,6 @@ recipe.
 from __future__ import annotations
 
 import math
-from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -382,44 +381,12 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
         )
 
 
-# ---------------------------------------------------------------------------
-# Backwards-incompatibility shims (Task 3.8 rewrite removed these)
-# ---------------------------------------------------------------------------
-
-
-def _legacy_factory_unavailable(name: str) -> Any:
-    """Return a callable that raises a clear "removed" message."""
-
-    def _factory(*_args: Any, **_kwargs: Any) -> Any:
-        raise NotImplementedError(
-            f"{name!r} was removed by the conformal-UQNO rewrite. Compose "
-            f"the new orchestrator manually: "
-            f"UncertaintyQuantificationNeuralOperator("
-            f"base=UQNOBaseSolutionOperator(...), "
-            f"residual=UQNOResidualOperator(...)). See "
-            f"examples/uncertainty/uqno_darcy.py for the full training + "
-            f"calibration recipe."
-        )
-
-    return _factory
-
-
-create_safety_critical_uqno = _legacy_factory_unavailable("create_safety_critical_uqno")
-create_robust_design_uqno = _legacy_factory_unavailable("create_robust_design_uqno")
-create_bayesian_inverse_uqno = _legacy_factory_unavailable("create_bayesian_inverse_uqno")
-UQNOLayer = _legacy_factory_unavailable("UQNOLayer")
-
-
 __all__ = [
     "BayesianLinear",
     "BayesianSpectralConvolution",
     "UQNOBaseSolutionOperator",
     "UQNOConformalCalibrator",
-    "UQNOLayer",
     "UQNOResidualOperator",
     "UncertaintyQuantificationNeuralOperator",
-    "create_bayesian_inverse_uqno",
-    "create_robust_design_uqno",
-    "create_safety_critical_uqno",
     "get_coeff_quantile_idx",
 ]

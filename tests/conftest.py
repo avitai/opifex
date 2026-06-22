@@ -130,53 +130,42 @@ def safe_context():
 
 
 def pytest_runtest_setup(item):
-    """Set up for each test run - ensure clean JAX state."""
-    try:
-        jax.clear_caches()
+    """Skip GPU/CUDA-marked tests when no GPU device is available.
 
-        if hasattr(item, "get_closest_marker"):
-            gpu_marker = item.get_closest_marker("gpu")
-            cuda_marker = item.get_closest_marker("cuda")
+    Note: the XLA compilation cache is intentionally NOT cleared here. Clearing
+    it per test forces every test to recompile its jitted functions from
+    scratch; it should only ever be cleared periodically to mitigate a genuine
+    leak. Leaving it intact lets compiled executables be reused across tests. It
+    holds host-side compiled code only, not GPU buffers, so keeping it does not
+    affect device-memory usage on a single GPU.
+    """
+    if not hasattr(item, "get_closest_marker"):
+        return
 
-            if gpu_marker or cuda_marker:
-                import gc
-
-                gc.collect()
-
-                try:
-                    gpu_devices = jax.devices("gpu")
-                    if not gpu_devices:
-                        pytest.skip("GPU test skipped: No GPU devices available")
-                except Exception:
-                    pytest.skip("GPU test skipped: GPU not accessible")
-
-    except Exception:
-        pass
-
-
-def pytest_runtest_teardown(item, nextitem):
-    """Teardown after each test run - clean up GPU memory."""
-    try:
-        jax.clear_caches()
-
+    if item.get_closest_marker("gpu") or item.get_closest_marker("cuda"):
         import gc
 
         gc.collect()
+        try:
+            gpu_devices = jax.devices("gpu")
+        except RuntimeError:
+            pytest.skip("GPU test skipped: GPU not accessible")
+        else:
+            if not gpu_devices:
+                pytest.skip("GPU test skipped: No GPU devices available")
 
-        if hasattr(item, "get_closest_marker"):
-            gpu_marker = item.get_closest_marker("gpu")
-            cuda_marker = item.get_closest_marker("cuda")
 
-            if gpu_marker or cuda_marker:
-                try:
-                    dummy = jnp.array([1.0])
-                    dummy.block_until_ready()
-                    del dummy
-                except Exception:
-                    pass
+def pytest_runtest_teardown(item, nextitem):
+    """Reclaim device memory after each test.
 
-    except Exception:
-        pass
+    Drops Python references to ``jax.Array`` buffers via ``gc.collect()`` (the
+    correct lever for device memory). The compilation cache is deliberately left
+    intact so compiled executables are reused across tests — clearing it does
+    not free GPU buffers and only forces recompilation.
+    """
+    import gc
+
+    gc.collect()
 
 
 @pytest.fixture(autouse=True)

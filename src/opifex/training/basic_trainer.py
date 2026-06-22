@@ -31,6 +31,7 @@ from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
 from tqdm import tqdm  # type: ignore[import]
 
+from opifex.core.physics.losses import PhysicsResidualReporter
 from opifex.core.training.components import (
     FlexibleOptimizerFactory,
     TrainingComponent as TrainingComponentBase,
@@ -48,9 +49,6 @@ from opifex.core.training.monitoring.metrics import (
 
 # Import from core modules
 from opifex.core.training.optimizers import create_optimizer, OptimizerConfig
-from opifex.core.training.utils_legacy import (
-    safe_model_call,
-)
 from opifex.uncertainty.active.acquisition import (
     acquire as _active_acquire,
     AcquisitionStrategy,
@@ -235,12 +233,15 @@ class ModularTrainer:
 
                 return loss, metrics
 
-            except Exception as e:
+            except FloatingPointError as e:
+                # Only genuine numerical instability (NaN/Inf under jax_debug_nans)
+                # is recoverable. Structural errors — TypeError, ValueError, shape
+                # mismatches — are code bugs and must propagate (fail-fast), not be
+                # retried and relabelled as instability.
                 if attempt == self.error_recovery.max_retries:
                     raise RuntimeError(f"Training failed after all recovery attempts: {e}") from e
 
-                # Log error and attempt recovery
-                logger.warning("Training error on attempt %d: %s", attempt + 1, e)
+                logger.warning("Numerical instability on attempt %d: %s", attempt + 1, e)
                 self.training_state = self.error_recovery.recover_from_instability(
                     "general_error", self.training_state
                 )
@@ -262,9 +263,13 @@ class ModularTrainer:
             Tuple of (loss, gradients, metrics)
         """
 
+        # Set training mode so dropout/batch-norm are active on models that
+        # expose those attributes.
+        self.model.train()
+
         @nnx.value_and_grad
         def loss_fn(model):
-            y_pred = safe_model_call(model, x)
+            y_pred = model(x)
 
             # Base loss
             if self.config.loss_config.loss_type == "mse":
@@ -349,7 +354,8 @@ class ModularTrainer:
         Returns:
             Validation loss
         """
-        y_pred = safe_model_call(self.model, x_val)
+        self.model.eval()
+        y_pred = self.model(x_val)  # pyright: ignore[reportCallIssue]
         return jnp.mean((y_pred - y_val) ** 2)
 
     def get_comprehensive_metrics_summary(self, window_size: int = 10) -> dict[str, Any]:
@@ -547,7 +553,9 @@ class BasicTrainer:
         Returns:
             Scalar loss value
         """
-        y_pred = safe_model_call(self.state.model, x, deterministic=False, rngs=self.state.rngs)
+        # Dropout/RNG is owned by the model's own stochastic layers; train/eval
+        # mode is set by the caller (``training_step``/``validation_step``).
+        y_pred = self.state.model(x)  # pyright: ignore[reportCallIssue]
 
         if self.config.loss_config.loss_type == "mse":
             data_loss = jnp.mean((y_pred - y_true) ** 2)
@@ -580,19 +588,18 @@ class BasicTrainer:
         Returns:
             Scalar loss value including quantum constraints
         """
-        # Flatten positions to match model input expectations
-        # This is the most direct and safe approach to avoid segfaults
+        # Flatten positions to the model's expected (batch, features) input.
         batch_size = positions.shape[0]
         flat_positions = positions.reshape(batch_size, -1)
 
-        # Use safe model call to avoid type issues and potential problems
-        energies_pred = safe_model_call(self.state.model, flat_positions, deterministic=True)
+        # Energy evaluation runs in eval mode (deterministic).
+        self.state.model.eval()
+        energies_pred = self.state.model(flat_positions)  # pyright: ignore[reportCallIssue]
 
         # Ensure energies_pred has the right shape
         if energies_pred.ndim == 1:
             energies_pred = energies_pred[:, None]
 
-        # Simple MSE loss - no complex quantum transformations that cause segfaults
         energy_loss = jnp.mean((energies_pred - energies_true) ** 2)
 
         total_loss = energy_loss
@@ -628,6 +635,9 @@ class BasicTrainer:
         Returns:
             Loss value
         """
+
+        # Training mode (dropout/batch-norm active on models that expose them).
+        self.state.model.train()
 
         # Define loss function with modern NNX pattern for better performance
         def _loss(_model):
@@ -676,12 +686,6 @@ class BasicTrainer:
         self.state.step += 1
         current_loss = loss_value
 
-        # Update RNG state for next iteration (modern NNX pattern)
-        if hasattr(nnx, "reseed"):
-            new_rngs = nnx.reseed(self.state.rngs)
-            if new_rngs is not None:
-                self.state.rngs = new_rngs
-
         # Update loss tracking
         if current_loss < self.state.best_loss:
             self.state.best_loss = float(current_loss)
@@ -694,17 +698,15 @@ class BasicTrainer:
         # Update advanced metrics history with physics metrics
         self.advanced_metrics.update_metrics_history(physics_metrics)
 
-        # Track physics-specific metrics if available
-        if self.physics_loss is not None and hasattr(self.physics_loss, "compute_residuals"):
-            # Compute physics-specific metrics
-            residual_loss = self.physics_loss.compute_residuals(self.state.model, x)
-            self.state.update_physics_metric("residual_loss", float(residual_loss))
-
-            # Check conservation law violations if physics loss supports it
-            if hasattr(self.physics_loss, "check_conservation_violations"):
-                violations = self.physics_loss.check_conservation_violations(self.state.model, x)
-                for violation_type, value in violations.items():
-                    self.state.update_conservation_violation(violation_type, float(value))
+        # Track physics residual diagnostics when the loss reports them. Uses
+        # the PhysicsResidualReporter protocol with its real
+        # ``(predictions, targets, inputs) -> dict`` signature instead of
+        # guessing the interface via ``hasattr``.
+        if isinstance(self.physics_loss, PhysicsResidualReporter):
+            predictions = self.state.model(x)  # pyright: ignore[reportCallIssue]
+            residuals = self.physics_loss.compute_residuals(predictions, y_true, x)
+            for name, value in residuals.items():
+                self.state.update_physics_metric(name, float(value))
 
         # Collect convergence metrics
         convergence_metrics = self.advanced_metrics.collect_convergence_metrics(self.state)
@@ -728,6 +730,9 @@ class BasicTrainer:
         Returns:
             Validation loss value
         """
+        # Evaluation mode disables dropout/uses running stats on models that
+        # expose those attributes (was previously masked by the safe-call shim).
+        self.state.model.eval()
         val_loss = self.compute_loss(x_val, y_val)
 
         # Update validation loss tracking
@@ -747,11 +752,13 @@ class BasicTrainer:
         # Update advanced metrics history with validation metrics
         self.advanced_metrics.update_metrics_history(prefixed_val_metrics)
 
-        # Track physics-specific validation metrics if available
-        if self.physics_loss is not None and hasattr(self.physics_loss, "compute_residuals"):
-            # Compute physics-specific validation metrics
-            residual_loss = self.physics_loss.compute_residuals(self.state.model, x_val)
-            self.state.update_physics_metric("val_residual_loss", float(residual_loss))
+        # Track physics residual diagnostics when the loss reports them
+        # (real PhysicsResidualReporter signature; eval mode already set above).
+        if isinstance(self.physics_loss, PhysicsResidualReporter):
+            predictions = self.state.model(x_val)  # pyright: ignore[reportCallIssue]
+            residuals = self.physics_loss.compute_residuals(predictions, y_val, x_val)
+            for name, value in residuals.items():
+                self.state.update_physics_metric(f"val_{name}", float(value))
 
         return val_loss
 
@@ -890,6 +897,9 @@ class BasicTrainer:
         """Physics-informed training step using attached physics loss."""
         # Extract boundary data once at the start
         boundary_inputs, boundary_targets = boundary_data
+
+        # Training mode (dropout/batch-norm active where applicable).
+        self.state.model.train()
 
         def loss_fn(model):
             # Compute model predictions

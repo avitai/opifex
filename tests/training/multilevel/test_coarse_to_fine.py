@@ -130,59 +130,47 @@ class TestTransferOperators:
 class TestCascadeTrainer:
     """Test cascade (sequential) training."""
 
-    def test_create_trainer(self):
-        """Should create cascade trainer."""
+    @staticmethod
+    def _build_trainer(num_levels: int):
+        """Construct the canonical CascadeTrainer over an MLP hierarchy."""
+        from opifex.core.training.strategies.multilevel.cascade_training import CascadeTrainer
         from opifex.core.training.strategies.multilevel.coarse_to_fine import (
-            CascadeTrainer,
-            MultilevelConfig,
+            create_network_hierarchy,
+            prolongate,
         )
+        from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
 
-        config = MultilevelConfig(num_levels=3)
-        trainer = CascadeTrainer(
+        hierarchy = create_network_hierarchy(
             input_dim=1,
             output_dim=1,
             base_hidden_dims=[32],
-            config=config,
+            num_levels=num_levels,
+            coarsening_factor=0.5,
             rngs=nnx.Rngs(0),
         )
+        return CascadeTrainer(
+            hierarchy=hierarchy,
+            optimizer=MultilevelAdam(learning_rate=0.01),
+            prolongate_fn=prolongate,
+        )
+
+    def test_create_trainer(self):
+        """Should create cascade trainer."""
+        trainer = self._build_trainer(num_levels=3)
 
         assert trainer is not None
         assert len(trainer.hierarchy) == 3
 
     def test_get_current_model(self):
         """Should return current level model."""
-        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
-            CascadeTrainer,
-            MultilevelConfig,
-        )
-
-        config = MultilevelConfig(num_levels=2)
-        trainer = CascadeTrainer(
-            input_dim=1,
-            output_dim=1,
-            base_hidden_dims=[32],
-            config=config,
-            rngs=nnx.Rngs(0),
-        )
+        trainer = self._build_trainer(num_levels=2)
 
         model = trainer.get_current_model()
         assert model is not None
 
     def test_advance_level(self):
         """Should advance to next level."""
-        from opifex.core.training.strategies.multilevel.coarse_to_fine import (
-            CascadeTrainer,
-            MultilevelConfig,
-        )
-
-        config = MultilevelConfig(num_levels=3)
-        trainer = CascadeTrainer(
-            input_dim=1,
-            output_dim=1,
-            base_hidden_dims=[32],
-            config=config,
-            rngs=nnx.Rngs(0),
-        )
+        trainer = self._build_trainer(num_levels=3)
 
         initial_level = trainer.current_level
         trainer.advance_level()
@@ -244,35 +232,39 @@ class TestTrainingIntegration:
 
     def test_train_coarse_then_fine(self):
         """Should train coarse level first, then fine."""
-        import optax
-
+        from opifex.core.training.strategies.multilevel.cascade_training import CascadeTrainer
         from opifex.core.training.strategies.multilevel.coarse_to_fine import (
-            CascadeTrainer,
-            MultilevelConfig,
+            create_network_hierarchy,
+            prolongate,
         )
+        from opifex.core.training.strategies.multilevel.multilevel_adam import MultilevelAdam
 
-        config = MultilevelConfig(num_levels=2)
-        trainer = CascadeTrainer(
+        hierarchy = create_network_hierarchy(
             input_dim=1,
             output_dim=1,
             base_hidden_dims=[16],
-            config=config,
+            num_levels=2,
+            coarsening_factor=0.5,
             rngs=nnx.Rngs(0),
+        )
+        trainer = CascadeTrainer(
+            hierarchy=hierarchy,
+            optimizer=MultilevelAdam(learning_rate=0.01),
+            prolongate_fn=prolongate,
         )
 
         x = jnp.array([[0.1], [0.5], [0.9]])
         y_target = jnp.array([[0.1], [0.5], [0.9]])
 
-        # Train at coarse level
+        # Train at coarse level using the trainer's own optimizer
         model = trainer.get_current_model()
-        optimizer = nnx.Optimizer(model, optax.adam(0.01), wrt=nnx.Param)
 
         def loss_fn(model):
             return jnp.mean((model(x) - y_target) ** 2)
 
         for _ in range(5):
-            _loss, grads = nnx.value_and_grad(loss_fn)(model)
-            optimizer.update(model, grads)
+            grads = nnx.grad(loss_fn)(model)
+            trainer.optimizer.update(model, grads)
 
         # Advance and train at fine level
         trainer.advance_level()

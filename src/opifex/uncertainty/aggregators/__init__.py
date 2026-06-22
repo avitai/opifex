@@ -18,13 +18,7 @@ from opifex.uncertainty.aggregators.basic import (
     EpistemicUncertainty,
     UncertaintyQuantifier,
 )
-
-# Re-export the private bin-stats helper so callers importing it from the
-# original ``opifex.uncertainty.aggregators`` path keep working.
-from opifex.uncertainty.aggregators.calibration import (
-    _bin_calibration_stats,
-    CalibrationAssessment,
-)
+from opifex.uncertainty.aggregators.calibration import CalibrationAssessment
 from opifex.uncertainty.aggregators.enhanced import (
     DistributionalAleatoricUncertainty,
     EnhancedUncertaintyQuantifier,
@@ -52,5 +46,4 @@ __all__ = [
     "UncertaintyComponents",
     "UncertaintyIntegrationResults",
     "UncertaintyQuantifier",
-    "_bin_calibration_stats",
 ]

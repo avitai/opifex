@@ -41,7 +41,7 @@ def test_calibration_assessment_methods_are_jit_compatible() -> None:
     def jitted_ece(c: jax.Array, a: jax.Array) -> jax.Array:
         # `expected_calibration_error` returns a Python float at the boundary.
         # Inside jit we let the kernel produce its scalar array result.
-        from opifex.uncertainty.aggregators import _bin_calibration_stats
+        from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
 
         boundaries = jnp.linspace(0.0, 1.0, 11)
         bin_c, bin_a, counts = _bin_calibration_stats(
@@ -57,7 +57,7 @@ def test_calibration_assessment_methods_are_jit_compatible() -> None:
 
 def test_bin_stats_zeroes_empty_bins() -> None:
     """When no samples fall in a bin, the returned stats are zero (not nan)."""
-    from opifex.uncertainty.aggregators import _bin_calibration_stats
+    from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
 
     confidences = jnp.array([0.1, 0.1, 0.1])  # all in bin 0
     accuracies = jnp.array([1.0, 1.0, 1.0])

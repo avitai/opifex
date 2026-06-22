@@ -25,7 +25,7 @@ Classes:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +35,27 @@ from opifex.core.physics.conservation import symmetry_violation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+@runtime_checkable
+class PhysicsResidualReporter(Protocol):
+    """Structural interface for physics losses that report residuals.
+
+    A physics loss is residual-reporting when it exposes
+    ``compute_residuals(predictions, targets, inputs)`` returning a mapping
+    of named residual scalars (e.g. ``{"data_loss": ..., "physics_residual":
+    ...}``). Trainers use this Protocol to optionally collect residual
+    diagnostics without guessing the interface via ``hasattr``.
+    """
+
+    def compute_residuals(
+        self,
+        predictions: jax.Array,
+        targets: jax.Array,
+        inputs: jax.Array,
+    ) -> dict[str, jax.Array]:
+        """Return named physics residual scalars for the given batch."""
+        ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -147,11 +147,7 @@ from opifex.neural.operators.specialized.operator_network import OperatorNetwork
 from opifex.neural.operators.specialized.uqno import (
     BayesianLinear,
     BayesianSpectralConvolution,
-    create_bayesian_inverse_uqno,
-    create_robust_design_uqno,
-    create_safety_critical_uqno,
     UncertaintyQuantificationNeuralOperator,
-    UQNOLayer,
 )
 
 # Specialized existing operators
@@ -498,13 +494,11 @@ __all__ = [
     "UFNODecoderBlock",
     "UFNOEncoderBlock",
     "UFourierNeuralOperator",
-    "UQNOLayer",
     "UncertaintyQuantificationNeuralOperator",
     "WaveletNeuralOperator",
     # Utility constructors
     "create_3d_gino",
     "create_adaptive_mesh_gino",
-    "create_bayesian_inverse_uqno",
     "create_cad_gino",
     "create_climate_sfno",
     "create_cp_fno",
@@ -519,8 +513,6 @@ __all__ = [
     "create_operator",
     "create_planetary_sfno",
     "create_plasma_mgno",
-    "create_robust_design_uqno",
-    "create_safety_critical_uqno",
     "create_shallow_ufno",
     "create_shock_amfno",
     "create_tt_fno",

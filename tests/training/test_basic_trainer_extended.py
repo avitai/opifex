@@ -208,9 +208,12 @@ class TestBasicTrainerTrainingStep:
 
     def test_training_step_with_physics_loss(self):
         """Test training step with physics loss enabled."""
-        # Create a mock physics loss with compute_residuals method
+        # Mock a PhysicsResidualReporter: compute_residuals(predictions, targets,
+        # inputs) -> dict of named residual scalars (the real contract).
         mock_physics_loss = MagicMock()
-        mock_physics_loss.compute_residuals = MagicMock(return_value=jnp.array(0.1))
+        mock_physics_loss.compute_residuals = MagicMock(
+            return_value={"physics_residual": jnp.array(0.1)}
+        )
         self.trainer.set_physics_loss(mock_physics_loss)
 
         x = jnp.ones((8, 4))
@@ -220,6 +223,9 @@ class TestBasicTrainerTrainingStep:
 
         assert isinstance(loss, jnp.ndarray)
         mock_physics_loss.compute_residuals.assert_called()
+        # Called with the forward-pass predictions, targets, and inputs.
+        call_args = mock_physics_loss.compute_residuals.call_args[0]
+        assert len(call_args) == 3
 
 
 class TestBasicTrainerValidationStep:

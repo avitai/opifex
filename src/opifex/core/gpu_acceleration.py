@@ -657,33 +657,3 @@ class OptimizedGPUManager:
                 }
 
         return results
-
-
-# Backward compatibility functions (will be deprecated)
-def safe_matrix_multiply(x: Array, y: Array) -> Array:
-    """Legacy safe matrix multiplication - use OptimizedGPUManager instead."""
-    manager = OptimizedGPUManager()
-    return manager.optimal_matrix_multiply(x, y)
-
-
-def optimized_matrix_multiply(x: Array, y: Array) -> Array:
-    """Legacy optimized matrix multiplication - use OptimizedGPUManager instead."""
-    manager = OptimizedGPUManager()
-    return manager.optimal_matrix_multiply(x, y)
-
-
-def benchmark_gpu_operations() -> dict[str, Any]:
-    """Legacy benchmark function - OptimizedGPUManager.benchmark_with_prefetching."""
-    manager = OptimizedGPUManager()
-    test_sizes = [64, 128, 256, 512]
-    results = manager.benchmark_with_prefetching(manager.optimal_matrix_multiply, test_sizes)
-
-    return {
-        "benchmark_results": results,
-        "backend_info": {
-            "backend": jax.default_backend(),
-            "devices": [str(d) for d in jax.devices()],
-            "memory_gb": manager.roofline_manager.hw_specs["memory_gb"],
-        },
-        "hardware_specs": manager.roofline_manager.hw_specs,
-    }

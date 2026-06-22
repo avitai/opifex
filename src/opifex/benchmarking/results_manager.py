@@ -130,7 +130,7 @@ class ResultsManager:
 
         return result_id
 
-    def load_result(self, result_id: str) -> BenchmarkResult | None:
+    def load_results(self, result_id: str) -> BenchmarkResult | None:
         """Load benchmark result by ID.
 
         Args:
@@ -155,13 +155,6 @@ class ResultsManager:
             return BenchmarkResult.from_dict(result_data)
         except (OSError, json.JSONDecodeError, KeyError):
             return None
-
-    def load_results(self, result_id: str) -> BenchmarkResult | None:
-        """Load benchmark results by ID.
-
-        Alias for :meth:`load_result` for backward compatibility.
-        """
-        return self.load_result(result_id)
 
     def query_results(
         self,

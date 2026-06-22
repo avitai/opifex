@@ -81,11 +81,25 @@ def test_sampling_with_different_explicit_keys_produces_different_outputs() -> N
     assert not jnp.array_equal(out_a, out_b)
 
 
-def test_sampling_without_rngs_raises_value_error_with_posterior_hint() -> None:
+def test_sampling_without_rngs_uses_stored_stream_for_fresh_samples() -> None:
+    """Without a per-call ``rngs``, sampling falls back to the layer's own
+    stored stream (mirrors :class:`nnx.Dropout`); successive calls advance the
+    stream and draw fresh samples."""
     layer = _make_layer()
     x = jnp.ones((2, 4))
-    with pytest.raises(ValueError, match=r"posterior"):
-        layer(x, rngs=None)
+    out_a = layer(x)
+    out_b = layer(x)
+    assert not jnp.array_equal(out_a, out_b)
+
+
+def test_stored_stream_is_independent_of_caller_rngs() -> None:
+    """The layer's stored sampling stream is forked at construction, so it does
+    not consume or depend on the caller's parameter-init rngs."""
+    layer = _make_layer()
+    x = jnp.ones((2, 4))
+    # Sampling via the stored stream works even though no rngs is threaded in.
+    out = layer(x)
+    assert out.shape == (2, 3)
 
 
 def test_sampling_routes_through_artifex_extract_rng_key(
@@ -287,11 +301,14 @@ def test_bayesian_spectral_sampling_with_explicit_key_is_deterministic_given_key
     assert jnp.array_equal(a, b)
 
 
-def test_bayesian_spectral_sampling_without_rngs_raises() -> None:
+def test_bayesian_spectral_sampling_without_rngs_uses_stored_stream() -> None:
+    """Without a per-call ``rngs``, sampling falls back to the layer's stored
+    stream (mirrors :class:`nnx.Dropout`); successive calls draw fresh samples."""
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
-    with pytest.raises(ValueError, match=r"posterior"):
-        layer(x, rngs=None)
+    out_a = layer(x)
+    out_b = layer(x)
+    assert not jnp.array_equal(out_a, out_b)
 
 
 def test_bayesian_spectral_rejects_mismatched_input_channels() -> None:

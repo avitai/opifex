@@ -84,6 +84,14 @@ class BayesianLinear(nnx.Module):
         self.bias_mean = nnx.Param(jnp.zeros(out_features))
         self.bias_logvar = nnx.Param(jnp.full(out_features, -10.0))
 
+        # Store an independent posterior-sampling stream as module state
+        # (mirrors nnx.Dropout, which forks and stores its own rngs). The layer
+        # can then sample on a plain ``layer(x)`` call without the caller
+        # threading rngs through every forward; the stream advances per call so
+        # repeated forwards draw fresh Monte-Carlo samples. A per-call ``rngs``
+        # still overrides this stored stream.
+        self.rngs = nnx.Rngs(posterior=rngs.params())
+
     def __call__(
         self,
         x: jax.Array,
@@ -99,25 +107,18 @@ class BayesianLinear(nnx.Module):
         2. ``self.deterministic`` (module attribute set recursively by
            the NNX inference-mode toggle).
 
-        When the resolved mode is non-deterministic, ``rngs`` MUST be
-        provided so the reparameterization-trick sample has a caller-owned
-        key. When deterministic, ``rngs`` is ignored and the posterior
-        mean is returned.
+        When the resolved mode is non-deterministic, sampling uses the
+        per-call ``rngs`` when supplied, otherwise the module's own stored
+        posterior stream (``self.rngs``). When deterministic, ``rngs`` is
+        ignored and the posterior mean is returned.
         """
         is_deterministic = deterministic if deterministic is not None else self.deterministic
         if is_deterministic:
             weight = self.weight_mean[...]
             bias = self.bias_mean[...]
         else:
-            if rngs is None:
-                raise ValueError(
-                    "BayesianLinear sampling requires caller-owned `rngs` "
-                    "(nnx.Rngs with a posterior/sample/default stream, or a "
-                    "jax.Array key); pass deterministic=True or switch the "
-                    "module to inference mode to skip sampling."
-                )
             key = extract_rng_key(
-                rngs,
+                rngs if rngs is not None else self.rngs,
                 streams=_POSTERIOR_STREAMS,
                 context="BayesianLinear sampling",
             )
@@ -226,6 +227,11 @@ class BayesianSpectralConvolution(nnx.Module):
             self.weight_neg_h_imag_mean = nnx.Param(init(rngs.params(), base_shape))
             self.weight_neg_h_imag_logvar = nnx.Param(jnp.full(base_shape, -3.0))
 
+        # Independent posterior-sampling stream stored as module state (mirrors
+        # nnx.Dropout / BayesianLinear): enables sampling on a plain ``layer(x)``
+        # call without threading rngs; a per-call ``rngs`` still overrides it.
+        self.rngs = nnx.Rngs(posterior=rngs.params())
+
     def __call__(
         self,
         x: jax.Array,
@@ -249,15 +255,8 @@ class BayesianSpectralConvolution(nnx.Module):
         if is_deterministic:
             weights = self._mean_weights()
         else:
-            if rngs is None:
-                raise ValueError(
-                    "BayesianSpectralConvolution sampling requires caller-owned "
-                    "`rngs` (nnx.Rngs with a posterior/sample/default stream, or a "
-                    "jax.Array key); pass deterministic=True or switch the module "
-                    "to inference mode to skip sampling."
-                )
             key = extract_rng_key(
-                rngs,
+                rngs if rngs is not None else self.rngs,
                 streams=_POSTERIOR_STREAMS,
                 context="BayesianSpectralConvolution sampling",
             )

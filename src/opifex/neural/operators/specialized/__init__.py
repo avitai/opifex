@@ -85,7 +85,6 @@ from opifex.neural.operators.specialized.uqno import (
     BayesianLinear,
     BayesianSpectralConvolution,
     UncertaintyQuantificationNeuralOperator,
-    UQNOLayer,
 )
 from opifex.neural.operators.specialized.wavelet import WaveletNeuralOperator
 
@@ -118,7 +117,6 @@ __all__ = [
     "SymmetricContinuation",
     "UNetBlock",
     "UNeuralOperator",
-    "UQNOLayer",
     "UncertaintyQuantificationNeuralOperator",
     "WaveletNeuralOperator",
     "create_3d_gino",

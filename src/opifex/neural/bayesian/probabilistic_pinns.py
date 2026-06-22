@@ -182,6 +182,34 @@ def _coerce_predictive_mode(mode: PredictiveMode | str) -> PredictiveMode:
         raise ValueError(f"Unknown predictive mode {mode!r}; legal values: {valid!r}.") from exc
 
 
+class _DeterministicLinear(nnx.Module):
+    """Deterministic linear layer sharing the ``BayesianLinear`` call interface.
+
+    Wrapping ``nnx.Linear`` lets a PINN's layer stack be uniform: every layer
+    accepts ``(x, *, deterministic, rngs)`` and exposes ``kl_divergence()``. The
+    deterministic layer ignores the sampling controls and contributes zero KL,
+    so forward and KL loops iterate without per-layer type dispatch.
+    """
+
+    def __init__(self, in_features: int, out_features: int, *, rngs: nnx.Rngs) -> None:
+        """Initialize the wrapped dense layer."""
+        self.linear = nnx.Linear(in_features, out_features, rngs=rngs)
+
+    def __call__(
+        self,
+        x: jax.Array,
+        *,
+        deterministic: bool | None = None,  # noqa: ARG002 - uniform layer interface
+        rngs: nnx.Rngs | jax.Array | None = None,  # noqa: ARG002 - uniform layer interface
+    ) -> jax.Array:
+        """Apply the dense layer (sampling controls are inert)."""
+        return self.linear(x)
+
+    def kl_divergence(self) -> jax.Array:
+        """Return zero KL — a deterministic layer has no variational parameters."""
+        return jnp.array(0.0)
+
+
 class MultiFidelityPINN(nnx.Module):
     """
     Multi-Fidelity Physics-Informed Neural Network with proper configuration.
@@ -275,10 +303,10 @@ class MultiFidelityPINN(nnx.Module):
         self.activation = activation_map.get(activation, nnx.tanh)
 
     def _create_layer(self, in_dim: int, out_dim: int, use_bayesian: bool, rngs: nnx.Rngs):
-        """Create a layer (either Bayesian or Linear) based on the configuration."""
+        """Create a layer (Bayesian or deterministic) with a uniform interface."""
         if use_bayesian:
             return BayesianLinear(in_dim, out_dim, rngs=rngs)
-        return nnx.Linear(in_dim, out_dim, rngs=rngs)
+        return _DeterministicLinear(in_dim, out_dim, rngs=rngs)
 
     def _build_low_fidelity_network(
         self, hidden_layers: list[int], use_bayesian: bool, rngs: nnx.Rngs
@@ -356,16 +384,10 @@ class MultiFidelityPINN(nnx.Module):
         """
         h = x
         for layer in self.low_fidelity_layers:
-            if isinstance(layer, BayesianLinear):
-                h = self.activation(layer(h, deterministic=deterministic, rngs=self.rngs))
-            else:
-                h = self.activation(layer(h))
+            h = self.activation(layer(h, deterministic=deterministic, rngs=self.rngs))
 
         # Output prediction
-        if isinstance(self.low_fidelity_output, BayesianLinear):
-            prediction = self.low_fidelity_output(h, deterministic=deterministic, rngs=self.rngs)
-        else:
-            prediction = self.low_fidelity_output(h)
+        prediction = self.low_fidelity_output(h, deterministic=deterministic, rngs=self.rngs)
 
         # Estimate uncertainty (simplified - could be improved with ensemble)
         uncertainty = jnp.std(prediction, axis=-1, keepdims=True) + 1e-6
@@ -385,18 +407,12 @@ class MultiFidelityPINN(nnx.Module):
         h = correction_input
 
         for layer in self.high_fidelity_networks[0][:-1]:
-            if isinstance(layer, BayesianLinear):
-                h = self.activation(layer(h, deterministic=deterministic, rngs=self.rngs))
-            else:
-                h = self.activation(layer(h))
+            h = self.activation(layer(h, deterministic=deterministic, rngs=self.rngs))
 
         # Correction prediction
-        if isinstance(self.high_fidelity_networks[0][-1], BayesianLinear):
-            correction = self.high_fidelity_networks[0][-1](
-                h, deterministic=deterministic, rngs=self.rngs
-            )
-        else:
-            correction = self.high_fidelity_networks[0][-1](h)
+        correction = self.high_fidelity_networks[0][-1](
+            h, deterministic=deterministic, rngs=self.rngs
+        )
 
         high_pred = low_pred + correction
 
@@ -615,7 +631,7 @@ class ProbabilisticPINN(nnx.Module):
             if use_bayesian:
                 layer = BayesianLinear(prev_dim, hidden_dim, rngs=rngs)
             else:
-                layer = nnx.Linear(prev_dim, hidden_dim, rngs=rngs)
+                layer = _DeterministicLinear(prev_dim, hidden_dim, rngs=rngs)
             layers_temp.append(layer)
             prev_dim = hidden_dim
         # Assignment outside the loop avoids the NNX hazard of rebinding
@@ -626,7 +642,7 @@ class ProbabilisticPINN(nnx.Module):
         if use_bayesian:
             self.output_layer = BayesianLinear(prev_dim, output_dim, rngs=rngs)
         else:
-            self.output_layer = nnx.Linear(prev_dim, output_dim, rngs=rngs)
+            self.output_layer = _DeterministicLinear(prev_dim, output_dim, rngs=rngs)
 
     def __call__(self, x: jax.Array, *, deterministic: bool | None = None) -> jax.Array:
         """Forward pass through probabilistic PINN using ``self.rngs``.
@@ -646,13 +662,8 @@ class ProbabilisticPINN(nnx.Module):
         """Forward pass routing every Bayesian-layer sample through ``rngs``."""
         h = x
         for layer in self.layers:
-            if isinstance(layer, BayesianLinear):
-                h = nnx.tanh(layer(h, deterministic=deterministic, rngs=rngs))
-            else:
-                h = nnx.tanh(layer(h))
-        if isinstance(self.output_layer, BayesianLinear):
-            return self.output_layer(h, deterministic=deterministic, rngs=rngs)
-        return self.output_layer(h)
+            h = nnx.tanh(layer(h, deterministic=deterministic, rngs=rngs))
+        return self.output_layer(h, deterministic=deterministic, rngs=rngs)
 
     def kl_divergence(self) -> jax.Array:
         """Sum the per-layer KL divergences for every Bayesian layer.
@@ -664,11 +675,8 @@ class ProbabilisticPINN(nnx.Module):
         if not self.use_bayesian:
             return total
         for layer in self.layers:
-            if isinstance(layer, BayesianLinear):
-                total = total + layer.kl_divergence()
-        if isinstance(self.output_layer, BayesianLinear):
-            total = total + self.output_layer.kl_divergence()
-        return total
+            total = total + layer.kl_divergence()
+        return total + self.output_layer.kl_divergence()
 
     def predict_distribution(
         self,

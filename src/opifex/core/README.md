@@ -438,7 +438,6 @@ print(f"GPU memory usage: {memory_usage}")
 from opifex.core.gpu_acceleration import (
     OptimizedGPUManager,
     MixedPrecisionOptimizer,
-    safe_matrix_multiply
 )
 
 # Set up GPU optimization
@@ -450,7 +449,7 @@ x = jax.random.normal(jax.random.PRNGKey(0), (1000, 1000))
 y = jax.random.normal(jax.random.PRNGKey(1), (1000, 1000))
 
 # Safe matrix multiplication with memory management
-result = safe_matrix_multiply(x, y)
+result = gpu_manager.optimal_matrix_multiply(x, y)
 
 print(f"✅ GPU-optimized computation complete: {result.shape}")
 ```

@@ -19,14 +19,11 @@ from opifex.core.device_utils import (
 )
 from opifex.core.gpu_acceleration import (
     AsyncMemoryManager,
-    benchmark_gpu_operations,
     CachedProgressiveTester,
     MemoryPoolManager,
     MixedPrecisionOptimizer,
-    optimized_matrix_multiply,
     OptimizedGPUManager,
     RooflineMemoryManager,
-    safe_matrix_multiply,
 )
 from opifex.core.problems import (
     create_neural_dft_problem,
@@ -64,7 +61,6 @@ __all__ = [
     "QuantumProblem",
     "RobinBC",
     "RooflineMemoryManager",
-    "benchmark_gpu_operations",
     "configure_jax_precision",
     "create_molecular_system",
     "create_neural_dft_problem",
@@ -74,6 +70,4 @@ __all__ = [
     "get_device_info",
     "get_platform",
     "is_gpu_available",
-    "optimized_matrix_multiply",
-    "safe_matrix_multiply",
 ]

@@ -437,7 +437,7 @@ def _analyze_domain_specific_aspects(
     domain_observations: list[str],
 ) -> None:
     """Analyze domain-specific performance aspects."""
-    domain = _infer_domain(dataset_name)
+    domain = infer_domain(dataset_name)
     mse = metrics.get("mse", float("inf"))
     relative_error = metrics.get("relative_error", float("inf"))
 
@@ -486,9 +486,6 @@ def _analyze_performance_accuracy_tradeoff(
         insights.append("Excellent performance-accuracy trade-off")
     elif efficiency_score < 1:
         suggestions.append("Consider balancing accuracy requirements with computational cost")
-
-
-_infer_domain = infer_domain  # Re-export for backward compat with tests
 
 
 def _calculate_confidence(result: BenchmarkResult) -> float:
