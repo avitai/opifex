@@ -54,8 +54,8 @@ Opifex provides extensive support for modern scientific machine learning paradig
 
 ### Training Infrastructure
 
-- **ModularTrainer**: Component-based training architecture with pluggable components for flexible composition
-- **BasicTrainer**: Training framework with physics-informed capabilities and PINN integration
+- **Trainer**: NNX-native trainer built on `nnx.Optimizer` with pluggable components and physics-informed / PINN integration
+- **EarlyStopping & ReduceLROnPlateau**: Callbacks for validation-driven stopping and learning-rate scheduling
 - **ErrorRecoveryManager**: Robust error handling with gradient stability, NaN detection, and loss explosion recovery
 - **FlexibleOptimizerFactory**: Advanced optimizer creation (Adam, AdamW, SGD) with cosine, exponential, and linear scheduling
 - **AdvancedMetricsCollector**: Physics-aware metrics with convergence tracking, chemical accuracy monitoring, and SCF diagnostics
@@ -66,15 +66,17 @@ Opifex provides extensive support for modern scientific machine learning paradig
 
 ### Optimization
 
-- **Learn-to-Optimize (L2O)**: Neural meta-learning framework with 158/158 tests passing
-  - **Parametric Programming Solver**: Neural optimization with constraint handling
+- **Learn-to-Optimize (L2O)**: Neural meta-learning framework over a unified Task/Optimizer abstraction
   - **L2O Engine**: Unified meta-optimization with problem encoding
-  - **Meta-Learning**: MAML, Reptile, and gradient-based algorithms for few-shot adaptation
-  - **Multi-Objective Optimization**: Pareto frontier approximation with learned scalarization
-  - **Reinforcement Learning**: DQN-based optimization strategy selection with experience replay
+  - **Learned Optimizers**: Per-parameter MLP and Adafactor-feature optimizers meta-trained with persistent evolution strategies
+  - **Meta-Learning**: MAML and Reptile gradient-based algorithms for few-shot adaptation
+  - **Classical Baselines**: Honest, distribution-tuned benchmarks against tuned Adam and SGD
+  - **Parametric Programming Solver** *(planned)*: Neural optimization with constraint handling
+  - **Multi-Objective Optimization** *(planned)*: Pareto frontier approximation with learned scalarization
+  - **Reinforcement Learning** *(planned)*: DQN-based optimization strategy selection with experience replay
+- **Second-Order Methods**: Hessian-aware and hybrid optimizers
 - **Adaptive Learning Rates**: Performance-aware scheduling with convergence monitoring
-- **Meta-Optimizers**: Learned optimization strategies with 100x+ potential speedup
-- **Performance Monitoring**: Thorough tracking and analytics with quality indicators
+- **Meta-Optimizers**: Learned optimization strategies that outperform tuned Adam and SGD on the benchmark distribution
 
 ### Benchmarking System
 

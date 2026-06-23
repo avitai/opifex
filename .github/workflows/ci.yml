@@ -37,19 +37,26 @@ jobs:
         run: uv run ruff format --check
 
   test:
-    name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
     needs: lint
     runs-on: ${{ matrix.os }}
-    # Fast PR gate: parallelised across cores, slow/integration suites run in
-    # tests-extended.yml. ~7.5k JAX tests take ~95m on the macOS M1 runners and
-    # ~170m on the slower 4-core ubuntu runners; cap well above both (and below
-    # the 6h job ceiling). A per-test --timeout=1800 (raised from the default 300
-    # below) bounds hangs while tolerating heavy tests slowed by xdist contention.
-    timeout-minutes: 240
+    # Fast PR gate: slow/integration suites run in tests-extended.yml. The ~7.5k
+    # JAX unit tests are parallelised two ways — pytest-split shards the suite
+    # across `group` runners, and `-n auto` (xdist) fans each shard across the
+    # runner's cores. Per-shard wall time is roughly total / 6. Observed shards
+    # run ~65-105 min on the slower macOS-14 runners, so the cap is 180 min: it
+    # clears the heaviest shard with margin while still bounding hangs (well below
+    # the 6h job ceiling). pytest-split falls back to an even split by test count;
+    # committing a .test_durations file (generate with `pytest --store-durations`,
+    # ideally from a CI run) would balance by execution time and tighten this. A
+    # per-test --timeout=1800 (raised from the default 300 below) bounds
+    # individual stuck tests.
+    timeout-minutes: 180
     strategy:
       matrix:
         os: [ubuntu-latest, macos-14]
         python-version: ["3.11", "3.12"]
+        group: [1, 2, 3, 4, 5, 6]
       fail-fast: false
 
     steps:
@@ -86,26 +93,33 @@ jobs:
           # test_jax_configuration_applied imports opifex in a clean subprocess and
           # asserts jax has a compilation cache dir; set it like the dev environment.
           JAX_COMPILATION_CACHE_DIR: ${{ github.workspace }}/.cache/jax
+          # Each shard runs only ~1/6 of the suite, so the 80% threshold is NOT
+          # enforced per shard (--cov-fail-under=0 overrides the pyproject
+          # addopts); the combined gate runs in the `coverage` job. Write the
+          # data file under a shard-unique name so the artifacts never collide.
+          COVERAGE_FILE: ${{ github.workspace }}/covdata/.coverage.${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.group }}
         run: |
+          mkdir -p "${{ github.workspace }}/covdata"
           uv run pytest tests/ -n auto \
+            --splits 6 --group ${{ matrix.group }} --splitting-algorithm least_duration \
             -m "not slow and not integration and not e2e and not performance and not benchmark and not distributed and not gpu_required" \
             --timeout=1800 \
             --cov=src/opifex \
-            --cov-report=xml \
+            --cov-fail-under=0 \
             --cov-report=term-missing
 
-      - name: Upload coverage artifact
+      - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: coverage.xml
+          name: covdata-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.group }}
+          path: covdata/.coverage.*
+          include-hidden-files: true
         if: always()
 
   coverage:
     name: Coverage Report
     needs: test
     runs-on: ubuntu-latest
-    if: always()
     permissions:
       actions: read
       contents: read
@@ -114,16 +128,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download coverage data
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-suffix: "coverage"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install coverage
+        run: uv venv && uv pip install "coverage[toml]>=7"
+
+      - name: Download shard coverage data
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-*
-          path: artifacts
+          pattern: covdata-*
+          path: covdata
+          merge-multiple: true
+
+      - name: Combine coverage and enforce the 80% gate
+        # Union of all shards == the full suite, so the aggregate threshold is
+        # the real quality gate (each shard alone covers only ~1/6).
+        run: |
+          uv run coverage combine covdata
+          uv run coverage xml
+          uv run coverage report --fail-under=80
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          directory: artifacts
+          files: coverage.xml
           flags: unittests
           fail_ci_if_error: false
           use_oidc: true

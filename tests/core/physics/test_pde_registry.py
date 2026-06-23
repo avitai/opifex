@@ -15,6 +15,26 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.physics.pde_registry import PDEResidualRegistry
+
+
+@pytest.fixture(autouse=True)
+def _restore_pde_registry():  # pyright: ignore[reportUnusedFunction]
+    """Snapshot and restore the global PDE registry around every test.
+
+    ``PDEResidualRegistry`` holds process-global state. Several tests call
+    ``_clear_registry()`` and register fakes (e.g. a stand-in ``poisson``); without
+    restoration that wipes the import-time built-ins for whatever test runs next,
+    so under ``pytest-randomly`` ordering (and sharded CI) a polluting test could
+    fail an unrelated one. Snapshotting here keeps every test isolated.
+    """
+    saved = dict(PDEResidualRegistry._registry)
+    try:
+        yield
+    finally:
+        PDEResidualRegistry._registry.clear()
+        PDEResidualRegistry._registry.update(saved)
+
 
 class TestBasicRegistration:
     """Test basic registration and retrieval of PDE residuals."""

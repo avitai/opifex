@@ -64,18 +64,19 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 
 ## ✨ Key Features
 
-- **Neural Operators**: FNO, DeepONet, SFNO, U-FNO, UNO, TFNO, GNO, PINO, Local FNO, and more (26 architectures)
+- **Neural Operators**: FNO, DeepONet, SFNO, U-FNO, UNO, TFNO, GNO, PINO, Local FNO, DISCO, and more (26 architectures)
 - **Physics-Informed Neural Networks**: Standard PINNs plus domain decomposition (FBPINN, XPINN, CPINN)
-- **Atomistic Potentials**: E(3)-equivariant SchNet, PaiNN, and NequIP backbones with energy/forces/stress heads and an ASE calculator
+- **Atomistic Potentials**: E(3)-equivariant SchNet, PaiNN, and NequIP backbones (with MACE-style higher body-order via symmetric contraction), energy/forces/stress heads, and an ASE calculator
 - **Quantum Chemistry**: Differentiable Kohn-Sham DFT, neural exchange-correlation functionals, variational Monte Carlo, and equivariant Hamiltonian prediction (QH9)
 - **Equivariant Core**: Native E(3) algebra — irreps, Clebsch-Gordan, Wigner-D, and spherical harmonics
 - **Uncertainty Quantification**: Conformal prediction, calibration, Gaussian processes, Bayesian quadrature, probabilistic numerics, simulation-based inference, and a broad adapter suite (ensembles, last-layer, SNGP, evidential)
 - **Equation Discovery**: SINDy, Ensemble SINDy, Weak SINDy, and Bayesian SINDy
 - **Field Operations**: JAX-native differential operators, advection, and pressure projection on structured grids
+- **Data Loading**: JAX-native pipelines for PDEBench tensors and VTK unstructured meshes on the datarax Source/Pipeline contract
 - **Advanced Training**: NTK analysis, GradNorm loss balancing, adaptive sampling (RAR-D)
 - **Optimization**: Learn-to-optimize, meta-optimization (MAML/Reptile), and second-order methods
 - **Unified SciML Solvers**: Standardized protocol for PINNs, Neural Operators, and Hybrid solvers
-- **58 Working Examples**: Full coverage from getting started to advanced research workflows
+- **59 Working Examples**: Full coverage from getting started to advanced research workflows
 
 For detailed feature documentation, see [Features](docs/features.md).
 

@@ -92,4 +92,9 @@ class TestSymmetricBasis:
             out = np.einsum("pijk,i,j->pk", u, vector, vector)
             out_rot = np.einsum("pijk,i,j->pk", u, rotated, rotated)
             d_out = np.asarray(wigner_d(ir.l, rotation))
-            np.testing.assert_allclose(out_rot, out @ d_out.T, atol=1e-7)
+            # ``wigner_d`` follows the active JAX precision: under the default
+            # CI config (JAX_ENABLE_X64=0) it is float32, so the equivariance
+            # identity holds only to float32 precision. Use a float32-appropriate
+            # tolerance so the check is deterministic regardless of whether x64
+            # happens to be enabled.
+            np.testing.assert_allclose(out_rot, out @ d_out.T, atol=1e-5)

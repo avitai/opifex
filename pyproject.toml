@@ -87,6 +87,7 @@ dev = [
   "pytest-env>=1.1.5",
   "pytest-json-report>=1.5.0",
   "pytest-randomly>=3.15",
+  "pytest-split>=0.10.0",
   "pytest-timeout>=2.4.0",
   "pytest-xdist>=3.8.0",
   # Development tools
@@ -210,6 +211,7 @@ test = [
   "pytest-env>=1.1.5",
   "pytest-json-report>=1.5.0",
   "pytest-randomly>=3.15",
+  "pytest-split>=0.10.0",
   "pytest-timeout>=2.4.0",
   "pytest-xdist>=3.8.0"
 ]
@@ -249,6 +251,10 @@ skips = ["*/tests/*", "tests/*", "*/scripts/*", "scripts/*"]
 branch = true
 omit = ["*/tests/*", "*/conftest.py", "*/__pycache__/*", "*/scripts/*", "*/examples/*", "*/example_data/*"]
 parallel = true
+# relative_files lets coverage data from the sharded CI runners (different
+# absolute workspace paths across ubuntu/macOS) combine cleanly in the
+# aggregation job; see .github/workflows/ci.yml.
+relative_files = true
 source = ["src/opifex"]
 
 [tool.hatch]

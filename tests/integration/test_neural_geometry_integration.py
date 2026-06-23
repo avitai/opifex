@@ -11,6 +11,7 @@ This improves code readability and debugging experience.
 
 import jax
 import jax.numpy as jnp
+import pytest
 from flax import nnx
 
 from opifex.neural.operators.foundations import DeepONet, FourierNeuralOperator
@@ -244,8 +245,14 @@ class TestGeometryConstraintPreservation:
 class TestPerformanceIntegration:
     """Test performance characteristics of neural-geometry integration."""
 
+    @pytest.mark.performance
     def test_neural_geometry_performance(self, integration_framework, performance_benchmark):
-        """Test performance of neural operators on geometric domains."""
+        """Test performance of neural operators on geometric domains.
+
+        Marked ``performance``: it asserts a wall-clock ``mean_time < 1.0`` whose
+        first call includes XLA compilation, so it is flaky in the fast gate and
+        belongs in the performance lane.
+        """
 
         # Create test scenario
         def neural_geometry_operation():

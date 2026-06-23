@@ -437,8 +437,14 @@ class TestOptimizationStrategy:
 class TestProductionOptimizationIntegration:
     """Integration tests for production optimization components."""
 
+    @pytest.mark.performance
     def test_end_to_end_optimization(self, sample_model):
-        """Test end-to-end optimization workflow."""
+        """Test end-to-end optimization workflow.
+
+        Marked ``performance``: ``production_ready`` is derived from *measured*
+        latency / throughput / memory against the workload thresholds, so it is
+        load-dependent and belongs in the performance lane, not the fast gate.
+        """
         # Create different workload scenarios
         workloads = [
             WorkloadProfile(32, 128, 2.0, 8.0, 10.0, 100.0, "medium"),
