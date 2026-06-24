@@ -7,14 +7,24 @@ high performance, and production-ready architecture.
 
 import logging
 import os
+from email.utils import parseaddr
+from importlib.metadata import metadata, PackageNotFoundError
 from pathlib import Path
 
 import jax
 
 
-__version__ = "0.1.0"
-__author__ = "Opifex Team"
-__email__ = "team@opifex.io"
+try:
+    # Single source of truth: project metadata declared in pyproject.toml, read
+    # from the installed package rather than duplicated here. ``Author-email`` is
+    # the PEP 621 combined ``"Name <email>"`` form, split via ``parseaddr``.
+    _metadata = metadata("opifex")
+    __version__ = _metadata["Version"]
+    __author__, __email__ = parseaddr(_metadata["Author-email"] or "")
+except PackageNotFoundError:  # running from a source tree without an install
+    __version__ = "0.0.0+unknown"
+    __author__ = ""
+    __email__ = ""
 
 
 def _append_xla_flags(flags: list[str]) -> None:

@@ -3,7 +3,7 @@ build-backend = "hatchling.build"
 requires = ["hatchling>=1.18"]
 
 [project]
-authors = [{email = "opifex@avitai.bio", name = "Opifex Team"}]
+authors = [{email = "mahdi@avitai.bio", name = "Mahdi Shafiei"}]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
@@ -56,7 +56,7 @@ license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.1.0"
+version = "0.2.0"
 
 [project.optional-dependencies]
 all = ["opifex[dev,docs,gpu,platform,profiling,scientific-data,test]"]
