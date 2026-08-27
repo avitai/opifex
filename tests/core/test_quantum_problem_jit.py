@@ -18,8 +18,8 @@ and float64) and are marked ``slow``; they run on H2 in the STO-3G minimal basis
 against PySCF in the dedicated DFT test suite.
 
 References: Szabo & Ostlund, *Modern Quantum Chemistry*, Ch. 3 (the
-energy/force relation ``F = -dE/dR``); JAX static-shape rules in
-``memory-bank/guides/jax_guide.md``.
+energy/force relation ``F = -dE/dR``); the JAX sharp-bits guide on
+static shapes under ``jit``.
 """
 
 from __future__ import annotations

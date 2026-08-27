@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np  # noqa: TC002  # pyproject dep — keep eager (see CLAUDE.md)
+import numpy as np  # noqa: TC002  # runtime dependency, not type-only: keep the import eager
 from datarax.pipeline import Pipeline
 from datarax.sources import MemorySource, MemorySourceConfig
 from flax import nnx
