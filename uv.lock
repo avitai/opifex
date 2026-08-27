@@ -5635,7 +5635,7 @@ requires-dist = [
     { name = "radon", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "redis", marker = "extra == 'platform'", specifier = ">=6.2.0" },
     { name = "rich", marker = "extra == 'dev'", specifier = ">=14.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.5" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.2,<0.16" },
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "sqlalchemy", marker = "extra == 'platform'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'platform'", specifier = ">=2.0.0" },
