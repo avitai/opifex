@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax so pyright can
       # resolve the optional-extra imports in src/ (deployment, quantum) it type-checks.
-      run: uv pip install -e ".[dev,neural-dft,quantum-chemistry]"
+      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry
 
     - name: Run pre-commit hooks
       run: |
@@ -76,7 +76,7 @@ jobs:
     - name: Install dependencies
       # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax so pyright can
       # resolve the optional-extra imports in src/ (deployment, quantum) it type-checks.
-      run: uv pip install -e ".[dev,neural-dft,quantum-chemistry]"
+      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry
 
     - name: Generate type safety report
       run: |
