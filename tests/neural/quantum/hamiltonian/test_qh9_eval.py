@@ -30,7 +30,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from flax import nnx
-from jax import experimental as jax_experimental
 
 from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR
 from opifex.data.sources.qh9_source import read_qh9_sqlite
@@ -92,7 +91,7 @@ def test_ground_truth_fock_matches_pyscf_orbital_energies(index: int) -> None:
     """
     from pyscf import dft, gto
 
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         examples = _first_examples(index + 1)
         example = examples[index]
         atomic_numbers = np.asarray(example.atomic_numbers)
@@ -127,7 +126,7 @@ def _symmetric_matrix(seed: int, n: int) -> jnp.ndarray:
 
 def test_identical_fock_gives_zero_energy_mae_and_unit_similarity() -> None:
     """Identical Fock matrices give ε-MAE 0 and ψ-similarity 1.0."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         overlap = jnp.eye(8, dtype=jnp.float64)
         fock = _symmetric_matrix(0, 8)
         energies, coefficients = cal_orbital_and_energies(overlap, fock)
@@ -139,7 +138,7 @@ def test_identical_fock_gives_zero_energy_mae_and_unit_similarity() -> None:
 
 def test_perturbed_fock_degrades_metrics_monotonically() -> None:
     """Increasing Fock perturbation monotonically raises ε-MAE and lowers ψ-sim."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         overlap = jnp.eye(8, dtype=jnp.float64)
         fock = _symmetric_matrix(0, 8)
         delta = _symmetric_matrix(1, 8)
@@ -166,7 +165,7 @@ def test_perturbed_fock_degrades_metrics_monotonically() -> None:
 # ---------------------------------------------------------------------------
 def test_cal_orbital_and_energies_jit_matches_eager() -> None:
     """The jitted Löwdin eigensolve matches the eager path."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         overlap = _symmetric_matrix(2, 6) + 6.0 * jnp.eye(6, dtype=jnp.float64)
         fock = _symmetric_matrix(3, 6)
         eager_energies, _ = cal_orbital_and_energies(overlap, fock)
@@ -176,7 +175,7 @@ def test_cal_orbital_and_energies_jit_matches_eager() -> None:
 
 def test_cal_orbital_and_energies_vmap_batches() -> None:
     """The Löwdin eigensolve vmaps over a batch of (overlap, Fock) pairs."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         overlaps = jnp.stack(
             [_symmetric_matrix(s, 5) + 6.0 * jnp.eye(5, dtype=jnp.float64) for s in (10, 11)]
         )
@@ -211,7 +210,7 @@ def test_evaluate_fock_returns_expected_keys_and_finite_values() -> None:
         "homo_lumo_gap_mae",
         "hamiltonian_mae",
     }
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         example = _first_examples(1)[0]
         atomic_numbers = np.asarray(example.atomic_numbers)
         positions = np.asarray(example.system.positions, dtype=np.float64)
@@ -236,7 +235,7 @@ def test_evaluate_fock_returns_expected_keys_and_finite_values() -> None:
 @requires_pyscf_dft
 def test_evaluate_fock_identical_fock_is_perfect() -> None:
     """Comparing a target Fock against itself gives zero ε-MAE and unit ψ-sim."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         example = _first_examples(1)[0]
         atomic_numbers = np.asarray(example.atomic_numbers)
         positions = np.asarray(example.system.positions, dtype=np.float64)
@@ -278,7 +277,7 @@ class TestLatestCheckpoint:
 @requires_pyscf_dft
 def test_evaluate_examples_aggregates_over_molecules() -> None:
     """:func:`evaluate_examples` returns finite, well-formed aggregate metrics."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         examples = _first_examples(3)
         predictor = BlockHamiltonianPredictor(config=BlockHamiltonianConfig(), rngs=nnx.Rngs(0))
         metrics = evaluate_examples(predictor, examples)

@@ -112,7 +112,7 @@ def interpolate_smoothed_state(
         return latent_mean, latent_var
 
     test_means, test_variances = jax.vmap(predict_one)(times_test, bucket_indices)
-    test_variances = jnp.clip(test_variances, a_min=_PSEUDO_NOISE_FLOOR)
+    test_variances = jnp.clip(test_variances, min=_PSEUDO_NOISE_FLOOR)
     return test_means, test_variances
 
 

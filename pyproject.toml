@@ -82,6 +82,42 @@ cuda-dev = [
   # Automatically configured via scripts/fresh_cuda_setup.sh
   "opifex[cuda12,dev]"
 ]
+cuda12 = [
+  # Named for the CUDA major version, as JAX names its own extras (cuda12, cuda12-local,
+  # cuda13). "gpu" was wrong twice over: this repo also ships a `metal` extra, and Metal is
+  # a GPU, and JAX already publishes cuda13, which "gpu" could not name without changing
+  # meaning. setup.sh already spoke this vocabulary — `--backend cuda12` — and mapped it to
+  # `--extra gpu`.
+  #
+  # `cuda12`, not `cuda12_local`. They are not spellings of one thing: cuda12 resolves
+  # jax-cuda12-plugin[with-cuda], which delivers the CUDA wheels, while cuda12_local resolves
+  # the bare plugin and expects a CUDA toolkit already installed on the machine. setup.sh
+  # states the opposite intent — "does not rely on a system CUDA toolkit" — so the local
+  # variant was the wrong one, and the NVIDIA wheels listed below were hand-rolling what
+  # with-cuda provides.
+  #
+  # No jaxlib line: every jax cuda12 extra requires jaxlib<=X,>=X at its own version, so the
+  # lockstep a manual pin was there to guarantee is enforced upstream. An exact pin here also
+  # governed everything else, because uv resolves ONE universal lockfile across all extras:
+  # it held dev, test and docs at jax 0.8.0 while no workflow installs this extra at all.
+  "jax[cuda12]>=0.8.0",
+  # The floors below are STRICTER than jax-cuda12-plugin[with-cuda] requires and are kept
+  # deliberately; curand and nvtx are not in with-cuda at all. Do not delete them as
+  # duplicates.
+  "nvidia-cublas-cu12>=12.8",
+  "nvidia-cuda-cupti-cu12>=12.8",
+  "nvidia-cuda-nvcc-cu12>=12.8", # CUDA compiler (>=12.8 emits Blackwell sm_120 SASS; <12.8 PTX-JITs, ~1.6x slower)
+  "nvidia-cuda-nvrtc-cu12>=12.8", # CUDA runtime compiler
+  "nvidia-cuda-runtime-cu12>=12.8",
+  "nvidia-cudnn-cu12>=9.8",
+  "nvidia-cufft-cu12>=11.4",
+  "nvidia-curand-cu12>=10.3",
+  "nvidia-cusolver-cu12>=11.7",
+  "nvidia-cusparse-cu12>=12.3",
+  "nvidia-nccl-cu12>=2.20", # Additional CUDA ML libraries
+  "nvidia-nvjitlink-cu12>=12.8",
+  "nvidia-nvtx-cu12>=12.8"
+]
 dev = [
   "build>=1.0.3",
   # Testing and coverage dependencies
@@ -128,42 +164,6 @@ docs = [
   "mkdocstrings>=0.28.3",
   "mkdocstrings-python>=1.1.2",
   "pymdown-extensions>=10.14.3"
-]
-cuda12 = [
-  # Named for the CUDA major version, as JAX names its own extras (cuda12, cuda12-local,
-  # cuda13). "gpu" was wrong twice over: this repo also ships a `metal` extra, and Metal is
-  # a GPU, and JAX already publishes cuda13, which "gpu" could not name without changing
-  # meaning. setup.sh already spoke this vocabulary — `--backend cuda12` — and mapped it to
-  # `--extra gpu`.
-  #
-  # `cuda12`, not `cuda12_local`. They are not spellings of one thing: cuda12 resolves
-  # jax-cuda12-plugin[with-cuda], which delivers the CUDA wheels, while cuda12_local resolves
-  # the bare plugin and expects a CUDA toolkit already installed on the machine. setup.sh
-  # states the opposite intent — "does not rely on a system CUDA toolkit" — so the local
-  # variant was the wrong one, and the NVIDIA wheels listed below were hand-rolling what
-  # with-cuda provides.
-  #
-  # No jaxlib line: every jax cuda12 extra requires jaxlib<=X,>=X at its own version, so the
-  # lockstep a manual pin was there to guarantee is enforced upstream. An exact pin here also
-  # governed everything else, because uv resolves ONE universal lockfile across all extras:
-  # it held dev, test and docs at jax 0.8.0 while no workflow installs this extra at all.
-  "jax[cuda12]>=0.8.0",
-  # The floors below are STRICTER than jax-cuda12-plugin[with-cuda] requires and are kept
-  # deliberately; curand and nvtx are not in with-cuda at all. Do not delete them as
-  # duplicates.
-  "nvidia-cublas-cu12>=12.8",
-  "nvidia-cuda-cupti-cu12>=12.8",
-  "nvidia-cuda-nvcc-cu12>=12.8", # CUDA compiler (>=12.8 emits Blackwell sm_120 SASS; <12.8 PTX-JITs, ~1.6x slower)
-  "nvidia-cuda-nvrtc-cu12>=12.8", # CUDA runtime compiler
-  "nvidia-cuda-runtime-cu12>=12.8",
-  "nvidia-cudnn-cu12>=9.8",
-  "nvidia-cufft-cu12>=11.4",
-  "nvidia-curand-cu12>=10.3",
-  "nvidia-cusolver-cu12>=11.7",
-  "nvidia-cusparse-cu12>=12.3",
-  "nvidia-nccl-cu12>=2.20", # Additional CUDA ML libraries
-  "nvidia-nvjitlink-cu12>=12.8",
-  "nvidia-nvtx-cu12>=12.8"
 ]
 metal = [
   # Metal acceleration for Apple Silicon Macs (M1/M2/M3+)
@@ -528,6 +528,15 @@ ignore = [
   "E731", # Do not assign a lambda expression (JAX functional programming)
   "E741", # Ambiguous variable name (mathematical variables)
   "F722", # Forward annotation syntax error (JAX typing)
+  # PEP 695 generic syntax (`def f[T]`, `class C[T]`). Enabled by target-version py312, but
+  # the docstring gate is pydocstyle 6.3.0, whose parser predates PEP 695: it reports D101 /
+  # D103 "missing docstring" for generic functions and for generic classes with a bound, on
+  # definitions whose docstring is plainly present. 6.3.0 is the final release (2023-01-17),
+  # so there is no version that reads this syntax. Re-enable these together with replacing
+  # pydocstyle with ruff's own D rules, which parse it correctly.
+  "UP046", # Generic class uses Generic subclass instead of type parameters
+  "UP047", # Generic function should use type parameters
+  "UP049", # Private type parameter name
   "S101", # Use of assert (common in scientific computing)
   "PLR2004", # Magic value used in comparison (constants)
   "NPY002", # Replace legacy np.random.* random number generators

@@ -277,7 +277,7 @@ def predict_linear_multi_fidelity_gp(
     mean = k_cross @ state.alpha
     v_solve = jax.scipy.linalg.solve_triangular(state.cholesky, k_cross.T, lower=True)
     variance = jnp.diag(k_test) - jnp.sum(v_solve**2, axis=0)
-    variance = jnp.clip(variance, a_min=_PSEUDO_NOISE_FLOOR)
+    variance = jnp.clip(variance, min=_PSEUDO_NOISE_FLOOR)
     return gaussian_process_predictive(
         mean,
         variance,

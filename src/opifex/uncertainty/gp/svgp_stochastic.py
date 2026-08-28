@@ -252,7 +252,7 @@ def _latent_marginal_moments(
     lw_a = state.whitened_root_cov.T @ a_matrix
     diag_k_bb = jnp.full((x_batch.shape[0],), state.output_scale**2)
     var_batch = diag_k_bb - jnp.sum(a_matrix * a_matrix, axis=0) + jnp.sum(lw_a * lw_a, axis=0)
-    return mean_batch, jnp.clip(var_batch, a_min=1e-12)
+    return mean_batch, jnp.clip(var_batch, min=1e-12)
 
 
 def _whitened_kl_divergence(

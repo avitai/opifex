@@ -325,7 +325,9 @@ class TestLaplaceLayerAdvanced:
             "weights_residue",
             "weights_residue_imag",
         ]:
-            g = getattr(grads, name)
+            # nnx.grad returns a State whose leaves are Variables, not bare arrays, so the
+            # array has to be unwrapped before comparing it elementwise.
+            g = getattr(grads, name).value
             assert jnp.any(g != 0), f"No gradient for {name}"
 
     def test_skip_connection_contributes(self, rngs):

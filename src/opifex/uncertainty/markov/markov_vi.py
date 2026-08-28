@@ -199,7 +199,7 @@ def fit_markov_vi_gp(
             smoothed_state_covs,
             observation_matrix,
         ).reshape(times.shape[0])
-        new_latent_variance = jnp.clip(new_latent_variance, a_min=_PSEUDO_NOISE_FLOOR)
+        new_latent_variance = jnp.clip(new_latent_variance, min=_PSEUDO_NOISE_FLOOR)
         return (
             new_latent_mean,
             new_latent_variance,
