@@ -214,7 +214,7 @@ def _kalman_with_pseudo_observations(
         smoothed_state_covs,
         observation_matrix,
     ).reshape(n)
-    smoothed_obs_variances = jnp.clip(smoothed_obs_variances, a_min=_PSEUDO_NOISE_FLOOR)
+    smoothed_obs_variances = jnp.clip(smoothed_obs_variances, min=_PSEUDO_NOISE_FLOOR)
     return (
         smoothed_state_means,
         smoothed_state_covs,

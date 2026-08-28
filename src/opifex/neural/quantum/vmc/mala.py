@@ -147,7 +147,7 @@ class MALASampler:
             return drift
         flat = drift.reshape(drift.shape[0], -1)
         norm = jnp.linalg.norm(flat, axis=-1, keepdims=True)
-        scale = jnp.minimum(1.0, self.max_drift_norm / jnp.clip(norm, a_min=1e-12))
+        scale = jnp.minimum(1.0, self.max_drift_norm / jnp.clip(norm, min=1e-12))
         return (flat * scale).reshape(drift.shape)
 
     def _acceptance_ratio(

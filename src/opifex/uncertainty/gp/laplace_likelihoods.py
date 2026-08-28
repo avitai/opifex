@@ -356,7 +356,7 @@ def _beta_components_factory(*, scale: float) -> LikelihoodComponentsFn:
         alpha = mean * scale_arr
         beta = scale_arr - alpha
         # Numerical safety for y at the unit-interval boundaries.
-        y_clipped = jnp.clip(y, a_min=1e-6, a_max=1.0 - 1e-6)
+        y_clipped = jnp.clip(y, min=1e-6, max=1.0 - 1e-6)
         log_y = jnp.log(y_clipped)
         log_one_minus_y = jnp.log(1.0 - y_clipped)
         log_lik = jnp.sum(
@@ -374,7 +374,7 @@ def _beta_components_factory(*, scale: float) -> LikelihoodComponentsFn:
         polygamma_alpha = jax.scipy.special.polygamma(1, alpha)
         polygamma_beta = jax.scipy.special.polygamma(1, beta)
         w_diag = (scale_arr**2) * (sigmoid_derivative**2) * (polygamma_alpha + polygamma_beta)
-        w_diag_clipped = jnp.clip(w_diag, a_min=_LAPLACE_W_FLOOR)
+        w_diag_clipped = jnp.clip(w_diag, min=_LAPLACE_W_FLOOR)
         return log_lik, grad, w_diag_clipped, jnp.sqrt(w_diag_clipped)
 
     return _components

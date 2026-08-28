@@ -369,7 +369,7 @@ def _beta_per_obs_log_likelihood_factory(*, scale: float):
         mean = jax.nn.sigmoid(f)
         alpha = mean * scale_arr
         beta = scale_arr - alpha
-        y_clipped = jnp.clip(y, a_min=1e-6, a_max=1.0 - 1e-6)
+        y_clipped = jnp.clip(y, min=1e-6, max=1.0 - 1e-6)
         return (
             (alpha - 1.0) * jnp.log(y_clipped)
             + (beta - 1.0) * jnp.log(1.0 - y_clipped)

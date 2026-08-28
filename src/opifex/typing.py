@@ -11,7 +11,10 @@ from collections.abc import Sequence
 from typing import Any
 
 import jax
-from jax import core
+
+# jax.core.concrete_or_error was removed in jax 0.11.0; jax's own deprecation message
+# names jax.extend.core.concrete_or_error as the replacement, and it is the same object.
+from jax.extend import core
 
 # jaxtyping support - assumed to be available
 from jaxtyping import Array, Float, Int

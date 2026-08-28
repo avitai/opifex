@@ -46,7 +46,7 @@ def _pairwise_distances(x1: jax.Array, x2: jax.Array) -> jax.Array:
     """Return the ``(n, m)`` Euclidean pairwise-distance matrix."""
     diff = x1[:, None, :] - x2[None, :, :]
     sq_distance = jnp.sum(diff**2, axis=-1)
-    return jnp.sqrt(jnp.clip(sq_distance, a_min=0.0))
+    return jnp.sqrt(jnp.clip(sq_distance, min=0.0))
 
 
 def _require_positive_kernel_hparams(*, lengthscale: float, output_scale: float) -> None:

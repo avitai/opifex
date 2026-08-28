@@ -190,7 +190,7 @@ def predict_nonlinear_multi_fidelity_gp(
     # Law of total variance:
     # Var(y) = E_q[Var(y | sample)] + Var_q(E[y | sample]).
     pooled_variance = jnp.mean(variances, axis=0) + jnp.var(means, axis=0)
-    pooled_variance = jnp.clip(pooled_variance, a_min=_PSEUDO_NOISE_FLOOR)
+    pooled_variance = jnp.clip(pooled_variance, min=_PSEUDO_NOISE_FLOOR)
     return gaussian_process_predictive(
         pooled_mean,
         pooled_variance,

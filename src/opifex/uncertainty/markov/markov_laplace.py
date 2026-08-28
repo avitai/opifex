@@ -220,7 +220,7 @@ def fit_markov_laplace_gp(
         final_state_covs,
         observation_matrix,
     ).reshape(times.shape[0])
-    latent_variances = jnp.clip(latent_variances, a_min=_PSEUDO_NOISE_FLOOR)
+    latent_variances = jnp.clip(latent_variances, min=_PSEUDO_NOISE_FLOOR)
     # Laplace-approximated log marginal (RW06 eq. 3.32 in state-space form):
     # log Z ≈ log p(y | f̂) - ½ Σ_i log(1 + W_i V_i) where V_i is the
     # prior marginal variance at i (≈ kernel.measurement P_∞ ...). Use a

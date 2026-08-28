@@ -237,9 +237,9 @@ def per_molecule_block_loss(
         "mae",
     )
 
-    total_count = jnp.clip(diag_count + off_count, a_min=1.0)
+    total_count = jnp.clip(diag_count + off_count, min=1.0)
     valid_molecule = (diag_count + off_count) > 0
-    denom = jnp.clip(jnp.sum(valid_molecule.astype(total_count.dtype)), a_min=1.0)
+    denom = jnp.clip(jnp.sum(valid_molecule.astype(total_count.dtype)), min=1.0)
 
     per_molecule_mae = (diag_mae + off_mae) / total_count
     per_molecule_mse = (diag_mse + off_mse) / total_count

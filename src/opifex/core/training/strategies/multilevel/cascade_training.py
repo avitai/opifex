@@ -13,7 +13,7 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 import jax.numpy as jnp
 from flax import nnx
@@ -31,7 +31,7 @@ ProlongateFn = Callable[[ModelT, ModelT], ModelT]
 StateTransitionFn = Callable[[Any, tuple[int, ...]], Any]
 
 
-class CascadeTrainer[ModelT: nnx.Module]:
+class CascadeTrainer(Generic[ModelT]):
     """Manages training across a hierarchy of models."""
 
     def __init__(

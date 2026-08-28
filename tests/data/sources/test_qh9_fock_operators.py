@@ -20,7 +20,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax import experimental as jax_experimental
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.data.sources.qh9_blocks import cut_fock_to_blocks
@@ -101,7 +100,7 @@ def _operators() -> tuple[FockSphericalDecodeOperator, FockBlockCutOperator]:
 @pytest.mark.parametrize(("atoms", "seed"), _COMPOSITIONS)
 def test_apply_per_molecule_equals_numpy_cut(atoms: list[int], seed: int) -> None:
     """One ``apply`` per molecule reproduces the NumPy decode + cut bit-for-bit."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         example, spherical = _make_example(atoms, seed)
         diag, diag_mask, off, off_mask, edge_index = cut_fock_to_blocks(
             example.atomic_numbers, spherical
@@ -122,7 +121,7 @@ def test_apply_per_molecule_equals_numpy_cut(atoms: list[int], seed: int) -> Non
 
 def test_decode_apply_equals_matrix_transform() -> None:
     """The decode operator reproduces ``matrix_transform_def2svp`` exactly."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         example, spherical = _make_example([8, 1, 1], 11)
         n_ao = example.n_ao
         padded = {k: jnp.asarray(v) for k, v in _pad_molecule(example, _config()).items()}
@@ -138,7 +137,7 @@ def test_decode_apply_equals_matrix_transform() -> None:
 
 def test_apply_on_raw_chain_equals_per_molecule_numpy() -> None:
     """The decode->cut chain vmapped over a padded batch matches NumPy per molecule."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         examples = tuple(_make_example(atoms, seed)[0] for atoms, seed in _COMPOSITIONS)
         config = _config()
         batch = {
@@ -220,7 +219,7 @@ def test_real_qh9_molecules_match_numpy(tmp_path: Path) -> None:
     """On several real QH9 molecules the operators match the NumPy cut to 1e-10."""
     if not _REAL_DB.exists():
         pytest.skip("real QH9-Stable database not present")
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         examples = read_qh9_sqlite(_REAL_DB, limit=8)
         # Pick molecules of differing size/composition.
         chosen = tuple(examples[: min(6, len(examples))])

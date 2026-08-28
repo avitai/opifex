@@ -87,7 +87,8 @@ class TestWavefunctionBC:
         x = jnp.array([1.0, 2.0, 3.0])
 
         result = bc.evaluate(x)
-        expected = jnp.full_like(x, 1.0 + 0.5j) + 0j
+        # The imaginary part must survive: full_like(x, ...) used to drop it silently.
+        expected = jnp.full(x.shape, 1.0 + 0.5j)
         assert jnp.allclose(result, expected)
 
 

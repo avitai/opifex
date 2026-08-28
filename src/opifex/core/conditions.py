@@ -667,7 +667,12 @@ class WavefunctionBC(BoundaryCondition):
         if self.condition_type == "normalization":
             return jnp.full_like(x[..., 0], self.norm_value or 1.0)
         if self.condition_type == "periodic" and self.value is not None:
-            return jnp.full_like(x, self.value)
+            # ``value`` is declared ``complex | float`` and documented as auto-converted to
+            # complex, so the result dtype has to be able to hold it. ``full_like`` forces
+            # ``x``'s dtype, which for a real ``x`` silently discarded the imaginary part
+            # until jax 0.11 started rejecting the lossy cast outright.
+            dtype = jnp.promote_types(x.dtype, jnp.complex64)
+            return jnp.full(x.shape, complex(self.value), dtype=dtype)
         return jnp.zeros_like(x)
 
 

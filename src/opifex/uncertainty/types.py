@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from dataclasses import field
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -69,7 +69,10 @@ _VARIANCE_ATOL: float = 1e-6
 MetadataItems = tuple[tuple[str, Any], ...]
 
 
-def require_fitted_state[StateT](state: StateT | None, *, surface: str) -> StateT:
+_StateT = TypeVar("_StateT")
+
+
+def require_fitted_state(state: _StateT | None, *, surface: str) -> _StateT:
     """Return ``state`` if it has been fitted; raise ``RuntimeError`` otherwise.
 
     Centralises the predict-before-fit guard so every conformal /
