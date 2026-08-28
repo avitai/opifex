@@ -97,7 +97,12 @@ dev = [
   "python-dotenv>=1",
   "radon>=6.0",
   "rich>=14.0.0",
-  "ruff>=0.1.5",
+  # Constrained to the locked minor. The lint job resolves dev dependencies fresh, so an
+  # open floor means CI silently runs whatever ruff released most recently: on 2026-08-27
+  # that was 0.16.5 against a lock pinning 0.15.2, which reported 33 errors and wanted to
+  # reformat 105 files. The same tree is clean under 0.15.2. Adopting a newer ruff is a
+  # deliberate change, not something a Tuesday should do to the gate.
+  "ruff>=0.15.2,<0.16",
   "twine>=4.0.2"
 ]
 docs = [
