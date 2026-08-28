@@ -177,9 +177,8 @@ class MolecularSystem:
         Derived from the (static) atomic numbers via NumPy so it stays a concrete
         Python ``int`` even when accessed inside ``jax.jit`` on an eagerly built
         system: NumPy reductions do not trace, unlike ``jnp.sum`` which would
-        yield a tracer and break array sizing / control flow under ``jit``. See
-        ``memory-bank/guides/jax_guide.md`` (static metadata) and
-        ``flax-nnx-guide.md`` (counts/shapes are static attributes).
+        yield a tracer and break array sizing / control flow under ``jit``.
+        Counts and shapes stay static attributes rather than traced arrays.
         """
         return int(np.asarray(self.atomic_numbers).sum()) - self.charge
 

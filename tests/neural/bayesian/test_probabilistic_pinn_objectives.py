@@ -234,8 +234,7 @@ def test_negative_elbo_dataset_size_scales_kl() -> None:
 def test_loss_components_works_inside_nnx_value_and_grad() -> None:
     """``loss_components`` is consumable by ``nnx.value_and_grad(..., has_aux=True)``.
 
-    Follows the canonical Flax NNX pattern from
-    ``memory-bank/guides/flax-nnx-guide.md`` — ``rngs`` is passed as an
+    Follows the canonical Flax NNX pattern: ``rngs`` is passed as an
     argument so ``nnx.value_and_grad`` tracks it as part of the traced
     graph (closing over an outer ``rngs`` would raise
     ``TraceContextError`` when ``RngStream`` is advanced across trace
