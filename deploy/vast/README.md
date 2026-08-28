@@ -25,7 +25,7 @@ python deploy/vast/launch_direct.py \
 It registers the SSH key with vast, provisions the cheapest matching single-GPU
 offer (a plain CUDA image; the onstart installs sshd and injects the key),
 rsyncs `src/`/`scripts/`/`deploy/` and the database, runs
-`uv sync --extra gpu --extra neural-dft` then **forces the bundled
+`uv sync --extra cuda12 --extra neural-dft` then **forces the bundled
 `jax[cuda12]==0.8.0`** (so it runs on Blackwell regardless of the image's CUDA),
 and starts `scripts/train_qh9_blocks.py` in a `tmux` session. Args after `--` are
 forwarded to the trainer. Monitor / teardown commands are printed at the end.
@@ -61,7 +61,7 @@ python deploy/vast/launch.py \
 `launch.py` runs `sky launch --infra vast`, which provisions the instance from
 `qh9_train.sky.yaml`, rsyncs the working tree (only `src/`, `scripts/`, `deploy/`
 and packaging — see `.skyignore`) and the 29 GB `QH9Stable.db`, runs
-`uv sync --extra gpu --extra neural-dft`, then `scripts/train_qh9_blocks.py`. On
+`uv sync --extra cuda12 --extra neural-dft`, then `scripts/train_qh9_blocks.py`. On
 completion the remote run directory (`train.log`, `metrics.json`, `checkpoints/`)
 is fetched into `--download-dir`.
 
