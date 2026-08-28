@@ -518,6 +518,6 @@ and a trainable neural exchange-correlation functional (see
 - **JAX**: Core array operations and automatic differentiation.
 - **FLAX NNX**: Modern neural network framework.
 - **jaxtyping**: Type annotations for JAX arrays.
-- **Python 3.11+**: Modern Python features and type system.
+- **Python 3.12+**: Modern Python features and type system.
 </content>
 </invoke>

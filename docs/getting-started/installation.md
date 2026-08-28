@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Python 3.11+** (Required for JAX ecosystem compatibility)
+- **Python 3.12+** (Required for JAX ecosystem compatibility)
 - **CUDA-compatible GPU** (Optional but recommended for performance)
 - **Git** for repository management
 - **uv** package manager (will be installed automatically)
@@ -176,7 +176,7 @@ After successful installation:
 
 ## Verification Checklist
 
-- [ ] Python 3.11+ installed
+- [ ] Python 3.12+ installed
 - [ ] Repository cloned successfully
 - [ ] Virtual environment created and activated
 - [ ] All dependencies installed via `uv sync`

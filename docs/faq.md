@@ -32,7 +32,7 @@ uv pip install -e .
 
 **Minimum Requirements:**
 
-- Python 3.11+
+- Python 3.12+
 - JAX 0.8.0+
 - NumPy 1.24+
 - Flax 0.12.0+

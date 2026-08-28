@@ -7,17 +7,17 @@ manifolds in scientific machine learning applications.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Protocol, runtime_checkable, TypeAlias
+from typing import Protocol, runtime_checkable
 
 import jax
 from jaxtyping import Float  # noqa: TC002
 
 
 # Type aliases for geometric objects
-ManifoldPoint: TypeAlias = jax.Array  # Points on manifold
-TangentVector: TypeAlias = jax.Array  # Tangent vectors at points
-MetricTensor: TypeAlias = jax.Array  # Riemannian metric tensor
-ConnectionForm: TypeAlias = jax.Array  # Christoffel symbols
+type ManifoldPoint = jax.Array  # Points on manifold
+type TangentVector = jax.Array  # Tangent vectors at points
+type MetricTensor = jax.Array  # Riemannian metric tensor
+type ConnectionForm = jax.Array  # Christoffel symbols
 
 
 @runtime_checkable

@@ -6,26 +6,22 @@ and reliability diagram computation.
 """
 
 from collections.abc import Callable, Sequence
-from typing import TypeVar
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 
 
-_Params = TypeVar("_Params")
-
-
-def _gradient_descent(
-    loss_fn: Callable[[_Params], jax.Array],
-    init_params: _Params,
+def _gradient_descent[Params](
+    loss_fn: Callable[[Params], jax.Array],
+    init_params: Params,
     *,
     n_steps: int,
     lr: float,
-    project: Callable[[_Params], _Params] | None = None,
-    update: Callable[[_Params, _Params], _Params] | None = None,
-    on_step: Callable[[_Params], None] | None = None,
-) -> _Params:
+    project: Callable[[Params], Params] | None = None,
+    update: Callable[[Params, Params], Params] | None = None,
+    on_step: Callable[[Params], None] | None = None,
+) -> Params:
     """Run a fixed-iteration gradient-descent loop over an arbitrary pytree.
 
     Centralises the ``for _ in range(n_steps): g = grad(loss)(p); p = step(p, g);

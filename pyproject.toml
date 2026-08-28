@@ -61,7 +61,7 @@ description = "Opifex Computational Framework - JAX-native platform for scientif
 license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 version = "0.2.0"
 
 [project.optional-dependencies]
@@ -381,7 +381,7 @@ exclude = [
 include = ["src", "tests"]
 pythonPlatform = "Linux"
 # Modern Python features
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 reportArgumentType = "warning" # Relax argument type checking for scientific computing
 reportAssignmentType = "warning" # Relax assignment type checking for scientific arrays
 reportAttributeAccessIssue = "warning" # Relax attribute access for dynamic scientific objects
@@ -486,7 +486,7 @@ testpaths = ["tests"]
 extend-include = ["*.ipynb"]
 line-length = 100
 src = ["src/opifex"]
-target-version = "py311" # Enforce Python 3.11+ features
+target-version = "py312" # Enforce Python 3.12+ features
 
 [tool.ruff.lint]
 # Exclude files
