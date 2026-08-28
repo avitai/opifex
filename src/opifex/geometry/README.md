@@ -332,5 +332,5 @@ For *learning* on graphs, use the dedicated neural subsystems:
 
 - **JAX**: Core array operations and automatic differentiation.
 - **jaxtyping**: Type annotations for JAX arrays (Float, Int shapes).
-- **Python 3.11+**: Modern Python features and type system.
+- **Python 3.12+**: Modern Python features and type system.
 </content>

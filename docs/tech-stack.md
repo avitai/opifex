@@ -201,11 +201,11 @@ All dependencies are pinned to specific versions to ensure reproducibility and s
 
 | Component | Version | Python | CUDA | Notes |
 |-----------|---------|--------|------|-------|
-| JAX | 0.8.0 | 3.11+ | 12.0+ | Core framework |
-| FLAX | 0.12.0 | 3.11+ | - | Neural networks |
-| Optax | 0.2.6+ | 3.11+ | - | Optimization |
-| BlackJAX | 1.2.5+ | 3.11+ | - | MCMC sampling |
-| Diffrax | 0.4.0+ | 3.11+ | - | Differential equations |
+| JAX | 0.8.0+ | 3.12+ | 12.0+ | Core framework |
+| FLAX | 0.12.1+ | 3.12+ | - | Neural networks |
+| Optax | 0.2.8+ | 3.12+ | - | Optimization |
+| BlackJAX | 1.2.5+ | 3.12+ | - | MCMC sampling |
+| Diffrax | 0.4.0+ | 3.12+ | - | Differential equations |
 
 ### Update Policy
 

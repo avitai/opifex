@@ -137,7 +137,7 @@ exclude = [
   "**/__pycache__", "**/.venv", "scripts", "memory-bank",
   "documents", "examples",
 ]
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 pythonPlatform = "Linux"
 typeCheckingMode = "basic"
 reportMissingImports = true
@@ -180,7 +180,7 @@ def neural_operator_forward(
 
 ```toml
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 src = ["src/opifex"]
 extend-include = ["*.ipynb"]
@@ -389,7 +389,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.12'
       - name: Install dependencies
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh

@@ -11,7 +11,7 @@ optimisers (e.g. learned optimisers conditioning on training fraction) know the 
 from __future__ import annotations
 
 import abc
-from typing import Generic, TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +35,7 @@ class OptaxOptState(struct.PyTreeNode):
 StateT = TypeVar("StateT", bound=struct.PyTreeNode)
 
 
-class Optimizer(abc.ABC, Generic[StateT]):
+class Optimizer[StateT: struct.PyTreeNode](abc.ABC):
     """Stateful optimiser interface (object-aware, not an ``optax.GradientTransformation``).
 
     The state is opaque to callers; use :meth:`get_params` to read the current optimisee

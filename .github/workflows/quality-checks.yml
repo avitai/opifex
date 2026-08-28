@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
         enable-cache: true
 
     - name: Set up Python
-      run: uv python install 3.11
+      run: uv python install 3.12
 
     - name: Create virtual environment
       run: uv venv

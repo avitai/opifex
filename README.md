@@ -31,7 +31,7 @@
 
 <!-- Project Info Badges -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![JAX](https://img.shields.io/badge/JAX-native-orange.svg)](https://jax.readthedocs.io/)
 [![FLAX NNX](https://img.shields.io/badge/FLAX-NNX-green.svg)](https://flax.readthedocs.io/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -87,7 +87,7 @@ For detailed feature documentation, see [Features](docs/features.md).
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - CUDA-compatible GPU (optional but recommended)
 
 ### Installation

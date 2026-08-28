@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import operator
 from collections.abc import Sequence
-from typing import Any, TypeAlias
+from typing import Any
 
 import jax
 from jax import core
@@ -21,38 +21,38 @@ JAXTYPING_AVAILABLE = True
 
 
 # Core axis type definitions
-Axis: TypeAlias = int | Sequence[int] | None
-SingleAxis: TypeAlias = int
-MultiAxis: TypeAlias = Sequence[int]
-OptionalAxis: TypeAlias = Axis | None
+type Axis = int | Sequence[int] | None
+type SingleAxis = int
+type MultiAxis = Sequence[int]
+type OptionalAxis = Axis | None
 
 # JAX array types
-JAXArray: TypeAlias = jax.Array
-ArrayShape: TypeAlias = tuple[int, ...]
+type JAXArray = jax.Array
+type ArrayShape = tuple[int, ...]
 
 # Grid spacing type definitions
-GridSpacing: TypeAlias = float | Sequence[float] | jax.Array
-ScalarSpacing: TypeAlias = float
-SequenceSpacing: TypeAlias = Sequence[float]
-ArraySpacing: TypeAlias = jax.Array
+type GridSpacing = float | Sequence[float] | jax.Array
+type ScalarSpacing = float
+type SequenceSpacing = Sequence[float]
+type ArraySpacing = jax.Array
 
 # Spectral domain type definitions (jaxtyping-enhanced)
 # Shape-aware types for spectral operations
-SpatialField: TypeAlias = Float[Array, "batch channels *spatial"]
-FrequencyField: TypeAlias = Float[Array, "batch channels *frequencies"]
-SpectralTensor: TypeAlias = Float[Array, "batch channels *dims"]
+type SpatialField = Float[Array, "batch channels *spatial"]
+type FrequencyField = Float[Array, "batch channels *frequencies"]
+type SpectralTensor = Float[Array, "batch channels *dims"]
 
 # Grid and coordinate types
-GridSpacingArray: TypeAlias = Float[Array, "dims"]  # noqa: F821
-CoordinateGrid: TypeAlias = Float[Array, "*spatial_dims coord_dim"]
+type GridSpacingArray = Float[Array, "dims"]  # noqa: F821
+type CoordinateGrid = Float[Array, "*spatial_dims coord_dim"]
 
 # Frequency domain types
-FrequencyGrid: TypeAlias = Float[Array, "*frequency_dims"]
-WavenumberGrid: TypeAlias = Float[Array, "*wavenumber_dims"]
+type FrequencyGrid = Float[Array, "*frequency_dims"]
+type WavenumberGrid = Float[Array, "*wavenumber_dims"]
 
 # Neural operator specific types
-FourierModes: TypeAlias = Int[Array, "dims"]  # noqa: F821
-SpectralWeights: TypeAlias = Float[Array, "in_channels out_channels *modes"]
+type FourierModes = Int[Array, "dims"]  # noqa: F821
+type SpectralWeights = Float[Array, "in_channels out_channels *modes"]
 
 
 def ensure_optional_axes(x: Axis) -> Axis:

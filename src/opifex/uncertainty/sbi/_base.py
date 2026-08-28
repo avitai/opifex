@@ -22,7 +22,7 @@ log-posterior closure:
 from __future__ import annotations
 
 from collections.abc import Callable  # noqa: TC003 — eager per opifex convention
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -49,12 +49,10 @@ _TRAIN_STREAMS: tuple[str, ...] = ("sbi_train", "params", "default")
 _SAMPLE_STREAMS: tuple[str, ...] = ("sbi_sample", "sample", "default")
 _SBI_BACKEND_FAMILIES: tuple[str, ...] = ("flow", "sampler")
 
+
 # Model type for the generic training loop: each estimator passes its own
 # concrete ``nnx.Module`` subclass (flow / classifier) plus a matching loss
 # closure, so the loop must be parametric to keep the two type-aligned.
-_ModelT = TypeVar("_ModelT", bound=nnx.Module)
-
-
 @struct.dataclass(slots=True, kw_only=True)
 class _SBIFittedState:
     """Shared fitted-state container for the SBI neural estimators (pattern (B)).
@@ -208,11 +206,11 @@ def _build_conditional_flow(
     return ConditionalRealNVP(cfg, rngs=rngs)
 
 
-def _train_loop(
+def _train_loop[ModelT: nnx.Module](
     *,
-    model: _ModelT,
+    model: ModelT,
     optimizer: nnx.Optimizer,
-    loss_fn: Callable[[_ModelT], jax.Array],
+    loss_fn: Callable[[ModelT], jax.Array],
     num_steps: int,
 ) -> jax.Array:
     """Run ``num_steps`` of full-batch Adam on ``model`` and stack the losses.
@@ -225,7 +223,7 @@ def _train_loop(
     """
 
     @nnx.jit
-    def step(m: _ModelT, opt: nnx.Optimizer) -> jax.Array:
+    def step(m: ModelT, opt: nnx.Optimizer) -> jax.Array:
         """Run one gradient-descent training step and return the batch loss."""
         loss, grads = nnx.value_and_grad(loss_fn)(m)
         opt.update(m, grads)
