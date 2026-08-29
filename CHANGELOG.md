@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-29
+
 ### Changed
+
+- **Requires Python 3.12 or later.** jax 0.11.0 dropped 3.11, and this release
+  takes that jax line.
+- **The `gpu` extra is renamed `cuda12`,** and resolves `jax[cuda12]` rather than
+  `jax[cuda12_local]`. The local variant expects a CUDA toolkit already on the
+  machine, which contradicts what `setup.sh` promises; the hand-listed NVIDIA
+  wheels existed only to supply what the pip-managed variant already provides.
+  The exact jax pin is dropped: uv resolves one universal lockfile across every
+  extra, so it governed the jax that `dev`, `test` and `docs` received while no
+  workflow installed this extra at all.
+- Resolves to jax 0.11.1, jaxlib 0.11.1, flax 0.12.9, optax 0.2.8 and grain
+  0.2.18, matching the sibling packages, and raises the floors on
+  `avitai-artifex` to 0.1.4, `calibrax` to 0.1.2 and `datarax` to 0.1.5.
+- `distrax>=0.1.9` is now required. 0.1.7 calls `jax.core.is_concrete` and
+  `jax.core.valid_jaxtype`, both removed in jax 0.11.0.
+- Call sites moved off `jnp.clip(a_min=, a_max=)`, `jax.experimental.enable_x64`
+  and `jax.core.concrete_or_error`, removed in jax 0.10.0, 0.9.0 and 0.11.0.
 
 - **Breaking: neural operators take their training mode from nnx, not a `training`
   argument.** The `training` parameter is removed from every operator entry point
@@ -34,6 +53,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     attribute and a `set_view` method, matching `nnx.BatchNorm`. Under `eval()`
     the spectral-norm vectors are no longer written back; previously inference
     silently mutated them, since the flag defaulted to `True`.
+
+### Fixed
+
+- `PowerIteration` sizes its `u` and `v` vectors for the weight they normalize.
+  They had been scalar placeholders re-drawn inside `__call__`, so under `eval()`
+  nothing was ever written back and every forward pass restarted the estimate
+  from a fresh random vector instead of sharpening it.
+- `SpectralNorm` writes its re-estimated vectors through `.value`, which replaces
+  them, rather than an indexed assignment that cannot change shape.
+- `WavefunctionBC` keeps the imaginary part of a complex boundary value; the
+  result dtype had been forced to the input's real dtype, discarding it silently.
 
 ## [0.2.0] - 2026-06-24
 

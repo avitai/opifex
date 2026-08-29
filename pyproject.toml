@@ -53,16 +53,16 @@ dependencies = [
   # loads triton's 441 MB native library in every CPU test process, which segfaults
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
-  "avitai-artifex>=0.1.3",
-  "calibrax>=0.1.1",
-  "datarax>=0.1.3"
+  "avitai-artifex>=0.1.4",
+  "calibrax>=0.1.2",
+  "datarax>=0.1.5"
 ]
 description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
 license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"
 requires-python = ">=3.12"
-version = "0.2.0"
+version = "0.2.1"
 
 [project.optional-dependencies]
 all = ["opifex[cuda12,dev,docs,platform,probabilistic,profiling,scientific-data,test]"]
