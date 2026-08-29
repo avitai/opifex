@@ -345,7 +345,15 @@ class TestSpectralLinear:
         output_normal = spectral_linear(input_data)
 
         assert output_jit.shape == output_normal.shape
-        assert jnp.allclose(output_jit, output_normal, rtol=1e-5)
+        # atol is required here, and jnp.allclose defaults it to 1e-8, which is below one
+        # float32 ULP (1.19e-07) and so leaves the check effectively pure-relative. The
+        # fused (jit) and unfused (eager) paths sum the spectral-norm dot products in
+        # different orders; measured over 15 seed/shape combinations the outputs differ by
+        # at most 5.96e-07 in absolute terms, 0 to 5 ULP at the arrays' scale, while the
+        # relative difference swings from 0 to 3.5e-05 purely with how near zero the
+        # smallest output element falls. 1e-06 clears that floor and stays far below a
+        # real error, which would be orders of magnitude larger.
+        assert jnp.allclose(output_jit, output_normal, rtol=1e-5, atol=1e-6)
 
 
 class TestSpectralNormalizedConv:
