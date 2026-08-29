@@ -28,9 +28,13 @@ jobs:
       run: uv venv
 
     - name: Install dependencies
-      # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax so pyright can
-      # resolve the optional-extra imports in src/ (deployment, quantum) it type-checks.
-      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry
+      # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax, and platform brings
+      # fastapi, sqlalchemy and prometheus-client, so pyright can resolve the
+      # optional-extra imports in src/ (deployment, platform, quantum) it type-checks.
+      # platform used to arrive transitively through avitai-artifex's runtime
+      # dependencies; 0.1.4 moved those behind an extra, so it is named here rather
+      # than inherited by accident.
+      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry --extra platform
 
     - name: Run pre-commit hooks
       run: |
@@ -74,9 +78,13 @@ jobs:
       run: uv venv
 
     - name: Install dependencies
-      # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax so pyright can
-      # resolve the optional-extra imports in src/ (deployment, quantum) it type-checks.
-      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry
+      # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax, and platform brings
+      # fastapi, sqlalchemy and prometheus-client, so pyright can resolve the
+      # optional-extra imports in src/ (deployment, platform, quantum) it type-checks.
+      # platform used to arrive transitively through avitai-artifex's runtime
+      # dependencies; 0.1.4 moved those behind an extra, so it is named here rather
+      # than inherited by accident.
+      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry --extra platform
 
     - name: Generate type safety report
       run: |
