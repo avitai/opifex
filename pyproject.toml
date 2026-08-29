@@ -185,7 +185,6 @@ probabilistic = [
   "tf-keras>=2.19.0",
   "tfp-nightly>=0.26.0.dev20251024"
 ]
-
 profiling = [
   # Performance profiling and analysis dependencies
   "tensorflow>=2.20.0", # TensorFlow for JAX profiler integration
