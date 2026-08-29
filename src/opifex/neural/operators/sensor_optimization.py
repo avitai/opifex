@@ -37,6 +37,9 @@ class SensorOptimization(nnx.Module):
         self.num_sensors = num_sensors
         self.spatial_dim = spatial_dim
         self.optimization_method = optimization_method
+        # nnx mode flag: when True the stored sensor weights are used as they are,
+        # with gradients stopped. train()/eval() set it recursively, as for nnx.BatchNorm.
+        self.use_running_average = False
 
         if optimization_method == "learnable":
             # Learnable sensor positions with improved initialization
@@ -66,25 +69,32 @@ class SensorOptimization(nnx.Module):
             # Add fixed sensor weights for test compatibility
             self.sensor_weights = nnx.Param(jnp.ones((num_sensors,)))
 
+    def set_view(self, use_running_average: bool | None = None) -> None:
+        """Class method used by ``nnx.view``.
+
+        Args:
+            use_running_average: if True, the stored sensor weights are used
+                as they are and gradients through them are stopped.
+        """
+        if use_running_average is not None:
+            self.use_running_average = use_running_average
+
     def __call__(
         self,
         x: jax.Array,
         sensor_positions: jax.Array | None = None,
-        *,
-        training: bool = False,
     ) -> jax.Array:
         """Apply sensor optimization.
 
         Args:
             x: Input field (batch, spatial_dims..., features)
             sensor_positions: Optional sensor positions for optimization
-            training: Whether in training mode (enables learnable weights and noise)
 
         Returns:
             Optimized sensor measurements (batch, num_sensors, features)
         """
-        # Apply sensor weights if available (training mode affects weight application)
-        weighted_x = self._apply_sensor_weights(x, training=training)
+        # Apply sensor weights if available; the mode decides gradient flow.
+        weighted_x = self._apply_sensor_weights(x)
 
         # Extract sensor measurements
         measurements = self._extract_sensor_measurements(weighted_x, sensor_positions)
@@ -92,12 +102,11 @@ class SensorOptimization(nnx.Module):
         # Ensure output has correct shape
         return self._adjust_measurement_shape(measurements, x.shape[0])
 
-    def _apply_sensor_weights(self, x: jax.Array, *, training: bool = False) -> jax.Array:
+    def _apply_sensor_weights(self, x: jax.Array) -> jax.Array:
         """Apply sensor weights to input data.
 
         Args:
             x: Input field data
-            training: Whether in training mode (affects weight application)
 
         Returns:
             Weighted input data
@@ -107,9 +116,9 @@ class SensorOptimization(nnx.Module):
 
         weights = self.sensor_weights.value
 
-        # In inference mode with learnable optimization, stop gradients for efficiency
-        # In training mode, gradients flow through weights for learning
-        if not training and self.optimization_method == "learnable":
+        # Under eval() with learnable optimization, stop gradients for efficiency;
+        # under train() they flow through the weights so they can be learned.
+        if self.use_running_average and self.optimization_method == "learnable":
             # Inference mode: stop gradients for computational efficiency
             weights = jax.lax.stop_gradient(weights)
 

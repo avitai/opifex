@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: neural operators take their training mode from nnx, not a `training`
+  argument.** The `training` parameter is removed from every operator entry point
+  (26 functions across 10 modules). Mode is module state, as it is throughout Flax
+  NNX: call `model.train()` or `model.eval()`, which set `deterministic` and
+  `use_running_average` recursively, or build a view with
+  `nnx.view(model, use_running_average=True)`.
+
+  ```python
+  # before
+  y = operator(x, training=False)
+
+  # after
+  operator.eval()
+  y = operator(x)
+  ```
+
+  Two consequences worth checking when upgrading:
+
+  - Operators that previously defaulted to `training=False` now follow the nnx
+    default of training mode, so dropout is **active** unless `eval()` is called.
+    Anything relying on a deterministic forward must now say so explicitly.
+  - `PowerIteration` and `SensorOptimization` gained a `use_running_average`
+    attribute and a `set_view` method, matching `nnx.BatchNorm`. Under `eval()`
+    the spectral-norm vectors are no longer written back; previously inference
+    silently mutated them, since the flag defaulted to `True`.
+
 ## [0.2.0] - 2026-06-24
 
 ### Added

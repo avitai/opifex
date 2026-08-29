@@ -243,7 +243,8 @@ ms_fno = MultiScaleFourierNeuralOperator(
 
 # Handle multi-scale turbulence data
 turbulence_data = jax.random.normal(key, (4, 2, 128, 128))
-ms_output = ms_fno(turbulence_data, training=True)
+ms_fno.train()  # nnx mode; use ms_fno.eval() for inference
+ms_output = ms_fno(turbulence_data)
 print(f"Multi-scale FNO output: {ms_output.shape}")  # (4, 1, 128, 128)
 
 # Latent Neural Operator for efficient compression
@@ -263,10 +264,10 @@ lno = LatentNeuralOperator(
 large_data = jax.random.normal(key, (2, 4, 512))  # Large spatial resolution
 physics_params = jax.random.normal(key, (2, 2))  # Physics parameters
 
+lno.train()
 compressed_output = lno(
     large_data,
     physics_info=physics_params,
-    training=True
 )
 print(f"Latent operator compression: {large_data.shape} -> {compressed_output.shape}")
 
@@ -282,7 +283,8 @@ wno = WaveletNeuralOperator(
 )
 
 test_signal = jax.random.normal(key, (1, 1, 128))
-wavelet_output = wno(test_signal, training=False)
+wno.eval()
+wavelet_output = wno(test_signal)
 print(f"Wavelet processing: {test_signal.shape} -> {wavelet_output.shape}")
 
 # Deep Operator Networks

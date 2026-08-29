@@ -73,7 +73,7 @@ class TestSpectralNeuralOperator:
             jax.random.PRNGKey(42), (batch_size, basic_operator.input_dim)
         )
 
-        output = basic_operator(input_data, training=True)
+        output = basic_operator(input_data)
 
         assert output.shape == (batch_size, basic_operator.output_dim)
         assert not jnp.any(jnp.isnan(output))
@@ -86,7 +86,7 @@ class TestSpectralNeuralOperator:
             jax.random.PRNGKey(42), (batch_size, seq_len, basic_operator.input_dim)
         )
 
-        output = basic_operator(input_data, training=True)
+        output = basic_operator(input_data)
 
         assert output.shape == (batch_size, seq_len, basic_operator.output_dim)
         assert not jnp.any(jnp.isnan(output))
@@ -96,10 +96,12 @@ class TestSpectralNeuralOperator:
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, basic_operator.input_dim))
 
         # Training mode
-        output_train = basic_operator(input_data, training=True)
+        basic_operator.train()
+        output_train = basic_operator(input_data)
 
         # Inference mode
-        output_inference = basic_operator(input_data, training=False)
+        basic_operator.eval()
+        output_inference = basic_operator(input_data)
 
         # Outputs should have same shape
         assert output_train.shape == output_inference.shape
@@ -128,7 +130,7 @@ class TestSpectralNeuralOperator:
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, basic_operator.input_dim))
 
         def loss_fn(operator, x):
-            output = operator(x, training=True)
+            output = operator(x)
             return jnp.mean(output**2)
 
         # Compute gradients
@@ -181,7 +183,8 @@ class TestSpectralNeuralOperator:
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, basic_operator.input_dim))
 
         # Test basic forward pass works (JAX JIT has issues with spectral norm state)
-        output_normal = basic_operator(input_data, training=False)
+        basic_operator.eval()
+        output_normal = basic_operator(input_data)
 
         # Test that the operator is callable and produces valid output
         assert output_normal.shape == (4, basic_operator.output_dim)
@@ -193,7 +196,8 @@ class TestSpectralNeuralOperator:
         single_input = jax.random.normal(jax.random.PRNGKey(42), (1, basic_operator.input_dim))
         batch_input = jnp.repeat(single_input, 4, axis=0)
 
-        output = basic_operator(batch_input, training=False)
+        basic_operator.eval()
+        output = basic_operator(batch_input)
 
         # All outputs should be identical (within numerical precision)
         for i in range(1, output.shape[0]):
@@ -378,8 +382,10 @@ class TestSpectralNeuralOperatorEdgeCases:
 
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 16))
 
-        # Multiple calls in inference mode should produce the same output
-        output1 = operator(input_data, training=False)
-        output2 = operator(input_data, training=False)
+        # Multiple calls in inference mode should produce the same output. eval()
+        # freezes the spectral-norm state, which is what makes them comparable.
+        operator.eval()
+        output1 = operator(input_data)
+        output2 = operator(input_data)
 
         assert jnp.allclose(output1, output2, rtol=1e-6)

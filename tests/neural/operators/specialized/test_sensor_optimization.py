@@ -155,7 +155,7 @@ class TestSensorOptimization:
         )
 
         def loss_fn(model, input_function, spatial_coords):
-            output = model(input_function, spatial_coords, training=True)
+            output = model(input_function, spatial_coords)
             return jnp.mean(output**2)
 
         batch_size = 2

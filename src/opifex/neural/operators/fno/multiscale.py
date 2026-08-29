@@ -133,9 +133,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         else:
             self.dropout = None
 
-    def _apply_scale_layers(
-        self, x: jax.Array, scale_idx: int, training: bool = False
-    ) -> jax.Array:
+    def _apply_scale_layers(self, x: jax.Array, scale_idx: int) -> jax.Array:
         """Apply Fourier layers for a specific scale."""
         for layer in self.scale_layers[scale_idx]:
             if self.use_gradient_checkpointing:
@@ -147,7 +145,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             else:
                 x = layer(x)
 
-            if self.dropout is not None and training:
+            if self.dropout is not None:
                 x = self.dropout(x)
 
         return x
@@ -194,7 +192,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             return x.transpose(0, 3, 1, 2)  # Back to (batch, hidden_channels, height, width)
         raise ValueError(f"Unsupported input shape: {x.shape}")
 
-    def _process_multiple_scales(self, x: jax.Array, training: bool) -> list[jax.Array]:
+    def _process_multiple_scales(self, x: jax.Array) -> list[jax.Array]:
         """Process input at multiple scales."""
         scale_outputs = []
         for scale_idx in range(self.num_scales):
@@ -203,7 +201,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
             x_scale = self._downsample(x, downsample_factor)
 
             # Apply scale-specific Fourier layers
-            x_scale = self._apply_scale_layers(x_scale, scale_idx, training)
+            x_scale = self._apply_scale_layers(x_scale, scale_idx)
 
             # Upsample back to original resolution
             x_scale = self._upsample(x_scale, x.shape)
@@ -211,12 +209,11 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
 
         return scale_outputs
 
-    def __call__(self, x: jax.Array, *, training: bool = False) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Apply Multi-Scale FNO.
 
         Args:
             x: Input tensor (batch, in_channels, *spatial_dims)
-            training: Whether in training mode
 
         Returns:
             Output tensor (batch, out_channels, *spatial_dims)
@@ -225,7 +222,7 @@ class MultiScaleFourierNeuralOperator(nnx.Module):
         x = self._apply_input_projection(x)
 
         # Process at multiple scales
-        scale_outputs = self._process_multiple_scales(x, training)
+        scale_outputs = self._process_multiple_scales(x)
 
         # Combine scale outputs
         combined = jnp.concatenate(scale_outputs, axis=1)

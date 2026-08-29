@@ -247,7 +247,6 @@ class TestMultiPhysicsDeepONet:
         output = model(
             sample_data["branch_inputs"],
             sample_data["trunk_input"],
-            training=True,
         )
 
         expected_shape = sample_data["trunk_input"].shape[:-1]
