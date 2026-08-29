@@ -43,7 +43,7 @@ setup: |
   export PATH="$HOME/.local/bin:$PATH"
   cd ~/sky_workdir
   uv venv --python 3.12 .venv
-  uv sync --extra gpu --extra neural-dft
+  uv sync --extra cuda12 --extra neural-dft
 
 run: |
   set -euo pipefail

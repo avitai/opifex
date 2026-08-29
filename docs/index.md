@@ -14,7 +14,7 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - CUDA-compatible GPU (optional but recommended)
 
 ### Installation

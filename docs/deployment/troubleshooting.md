@@ -137,7 +137,7 @@ source ./activate.sh
 
 **Symptom**: `XlaRuntimeError: CUDA not found` or CUDA library loading failures.
 
-Opifex uses JAX's locally-bundled CUDA runtime (installed via the `gpu` extra). You do not need a system CUDA toolkit or `LD_LIBRARY_PATH` injection. If you see CUDA errors:
+Opifex installs the CUDA runtime as pip wheels, via the `cuda12` extra, which resolves `jax[cuda12]`. You do not need a system CUDA toolkit or `LD_LIBRARY_PATH` injection. (`jax[cuda12_local]` is the variant for a system-installed toolkit; opifex deliberately does not use it.) If you see CUDA errors:
 
 ```bash
 # Verify the GPU extra is installed

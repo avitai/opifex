@@ -168,5 +168,5 @@ report = runner.generate_publication_report(
 
 - **JAX**: Core array operations and JIT-accelerated evaluation.
 - **calibrax**: `BenchmarkResult` and `StatisticalAnalyzer` primitives.
-- **Python 3.11+**: Modern Python features and type system.
+- **Python 3.12+**: Modern Python features and type system.
 </content>

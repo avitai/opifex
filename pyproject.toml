@@ -14,11 +14,18 @@ classifiers = [
 dependencies = [
   "jax>=0.8.0",
   # JAX - upgraded to 0.8.0 for performance and NNX compatibility
-  "flax>=0.12.0",
+  # 0.12.1 is where nnx Variable gained set_value / get_value. datarax's pipeline
+  # iterator calls them at every yield boundary, so on 0.12.0 every test that drives a
+  # datarax loader dies with "'ArrayImpl' object has no attribute 'set_value'".
+  "flax>=0.12.1",
   # FLAX NNX - upgraded to 0.12.0 for modern nnx.Optimizer API
   "diffrax>=0.4.0",
   # differential equations
-  "optax>=0.2.6",
+  # 0.2.8 removed optax/contrib/_complex_valued.py's module-level
+  # jax.config.update("jax_pmap_shmap_merge", False). jax removed that config option, so
+  # any optax below 0.2.8 raises AttributeError while flax.nnx imports optax, which takes
+  # out collection for the entire suite rather than one test.
+  "optax>=0.2.8",
   # optimization - upgraded for Flax 0.12.0 compatibility
   "optimistix>=0.0.10",
   # root finding, minimisation, fixed points, and least squares.
@@ -41,7 +48,12 @@ dependencies = [
   "pyyaml>=6.0.2",
   "tqdm>=4.67.1",
   # PyPI distribution for Avitai Artifex; imports remain under ``artifex``.
-  "avitai-artifex>=0.1.0",
+  # 0.1.3 is the first release that does not declare triton and jax-triton as runtime
+  # dependencies on Linux. Below it, importing artifex.generative_models.core.layers
+  # loads triton's 441 MB native library in every CPU test process, which segfaults
+  # the pytest workers during collection. The floor states that requirement so a
+  # conservative re-lock cannot silently drop back to 0.1.0.
+  "avitai-artifex>=0.1.3",
   "calibrax>=0.1.1",
   "datarax>=0.1.3"
 ]
@@ -49,11 +61,11 @@ description = "Opifex Computational Framework - JAX-native platform for scientif
 license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 version = "0.2.0"
 
 [project.optional-dependencies]
-all = ["opifex[dev,docs,gpu,platform,probabilistic,profiling,scientific-data,test]"]
+all = ["opifex[cuda12,dev,docs,platform,probabilistic,profiling,scientific-data,test]"]
 all-cpu = [
   # CPU-only installation with all development dependencies (no GPU)
   # Use for Linux CPU-only or macOS Intel systems
@@ -68,7 +80,7 @@ cuda-dev = [
   # Comprehensive CUDA development environment
   # Includes all dev tools, testing, and GPU support
   # Automatically configured via scripts/fresh_cuda_setup.sh
-  "opifex[dev,gpu]"
+  "opifex[cuda12,dev]"
 ]
 dev = [
   "build>=1.0.3",
@@ -117,10 +129,28 @@ docs = [
   "mkdocstrings-python>=1.1.2",
   "pymdown-extensions>=10.14.3"
 ]
-gpu = [
-  # GPU dependencies - Complete CUDA stack installed locally in venv
-  "jax[cuda12_local]==0.8.0",
-  "jaxlib==0.8.0", # Core CUDA runtime and libraries
+cuda12 = [
+  # Named for the CUDA major version, as JAX names its own extras (cuda12, cuda12-local,
+  # cuda13). "gpu" was wrong twice over: this repo also ships a `metal` extra, and Metal is
+  # a GPU, and JAX already publishes cuda13, which "gpu" could not name without changing
+  # meaning. setup.sh already spoke this vocabulary — `--backend cuda12` — and mapped it to
+  # `--extra gpu`.
+  #
+  # `cuda12`, not `cuda12_local`. They are not spellings of one thing: cuda12 resolves
+  # jax-cuda12-plugin[with-cuda], which delivers the CUDA wheels, while cuda12_local resolves
+  # the bare plugin and expects a CUDA toolkit already installed on the machine. setup.sh
+  # states the opposite intent — "does not rely on a system CUDA toolkit" — so the local
+  # variant was the wrong one, and the NVIDIA wheels listed below were hand-rolling what
+  # with-cuda provides.
+  #
+  # No jaxlib line: every jax cuda12 extra requires jaxlib<=X,>=X at its own version, so the
+  # lockstep a manual pin was there to guarantee is enforced upstream. An exact pin here also
+  # governed everything else, because uv resolves ONE universal lockfile across all extras:
+  # it held dev, test and docs at jax 0.8.0 while no workflow installs this extra at all.
+  "jax[cuda12]>=0.8.0",
+  # The floors below are STRICTER than jax-cuda12-plugin[with-cuda] requires and are kept
+  # deliberately; curand and nvtx are not in with-cuda at all. Do not delete them as
+  # duplicates.
   "nvidia-cublas-cu12>=12.8",
   "nvidia-cuda-cupti-cu12>=12.8",
   "nvidia-cuda-nvcc-cu12>=12.8", # CUDA compiler (>=12.8 emits Blackwell sm_120 SASS; <12.8 PTX-JITs, ~1.6x slower)
@@ -150,7 +180,7 @@ neural-dft = [
 # Workshop-inspired comprehensive development environments
 opifex-dev = [
   # Comprehensive Opifex development environment
-  "opifex[dev,gpu,neural-dft,quantum-chemistry]"
+  "opifex[cuda12,dev,neural-dft,quantum-chemistry]"
 ]
 pdebench = [
   # PDEBench competitor comparison — run reference PyTorch FNO alongside our JAX FNO
@@ -351,7 +381,7 @@ exclude = [
 include = ["src", "tests"]
 pythonPlatform = "Linux"
 # Modern Python features
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 reportArgumentType = "warning" # Relax argument type checking for scientific computing
 reportAssignmentType = "warning" # Relax assignment type checking for scientific arrays
 reportAttributeAccessIssue = "warning" # Relax attribute access for dynamic scientific objects
@@ -456,7 +486,7 @@ testpaths = ["tests"]
 extend-include = ["*.ipynb"]
 line-length = 100
 src = ["src/opifex"]
-target-version = "py311" # Enforce Python 3.11+ features
+target-version = "py312" # Enforce Python 3.12+ features
 
 [tool.ruff.lint]
 # Exclude files

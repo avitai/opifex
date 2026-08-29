@@ -19,7 +19,6 @@ the global optimum is realisable yet the landscape is non-convex.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
 
 import jax
 import jax.numpy as jnp
@@ -28,7 +27,7 @@ from opifex.optimization.l2o.core import Task, TaskFamily
 
 
 # A per-layer MLP parameter pytree is a list of ``(weight, bias)`` tuples.
-MLPParams: TypeAlias = list[tuple[jax.Array, jax.Array]]
+type MLPParams = list[tuple[jax.Array, jax.Array]]
 
 
 def _init_mlp_params(key: jax.Array, layer_sizes: tuple[int, ...], scale: float) -> MLPParams:

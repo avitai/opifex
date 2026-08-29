@@ -30,7 +30,9 @@ Options:
 
 Notes:
   - Opifex uses uv for all repo-maintained setup and test workflows.
-  - Linux CUDA development uses JAX's locally-bundled CUDA runtime via the `gpu` extra.
+  - Linux CUDA development uses the `cuda12` extra, which resolves jax[cuda12] and so
+    pulls the CUDA runtime as pip wheels. Not jax[cuda12_local]: that variant is for a
+    CUDA toolkit already installed on the machine, which is the opposite of the next line.
   - The setup does not rely on a system CUDA toolkit or custom LD_LIBRARY_PATH injection.
   - The generated backend file is .opifex.env. User-owned .env is not modified.
 EOF
@@ -128,7 +130,7 @@ SYNC_ARGS=(sync --extra dev --extra test)
 case "$BACKEND" in
     cpu) ;;
     cuda12)
-        SYNC_ARGS+=(--extra gpu)
+        SYNC_ARGS+=(--extra cuda12)
         ;;
     metal)
         SYNC_ARGS+=(--extra metal)

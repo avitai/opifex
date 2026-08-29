@@ -123,7 +123,7 @@ docker run --rm --gpus all opifex:latest python -c "import opifex; print('OK')"
 
 The `Dockerfile` uses a two-layer caching strategy:
 
-1. **Layer 1 (dependencies)**: Copies `pyproject.toml`, `uv.lock`, and installs `.[dev,gpu,test]` extras via `uv`. Cached unless lock files change.
+1. **Layer 1 (dependencies)**: Copies `pyproject.toml`, `uv.lock`, and installs `.[cuda12,dev,test]` extras via `uv`. Cached unless lock files change.
 2. **Layer 2 (source)**: Copies `src/`, `tests/`, `scripts/`, `examples/` and reinstalls in editable mode.
 
 Key environment variables set in the image:
