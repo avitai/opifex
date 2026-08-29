@@ -37,12 +37,6 @@ dependencies = [
   "beartype>=0.15.0",
   "orbax-checkpoint>=0.11.13",
   # checkpointing
-  "distrax>=0.1.0,<0.2.0",
-  # probabilistic programming
-  "tfp-nightly==0.26.0.dev20251024",
-  # probabilistic modeling and Bayesian inference - specific nightly for JAX 0.8.0 compatibility
-  "tf-keras>=2.19.0",
-  # Required by tensorflow-probability for variational inference
   "typing_extensions>=4.5.0",
   "pyyaml>=6.0.2",
   "tqdm>=4.67.1",
@@ -59,16 +53,16 @@ requires-python = ">=3.11"
 version = "0.2.0"
 
 [project.optional-dependencies]
-all = ["opifex[dev,docs,gpu,platform,profiling,scientific-data,test]"]
+all = ["opifex[dev,docs,gpu,platform,probabilistic,profiling,scientific-data,test]"]
 all-cpu = [
   # CPU-only installation with all development dependencies (no GPU)
   # Use for Linux CPU-only or macOS Intel systems
-  "opifex[dev,docs,test,profiling]"
+  "opifex[dev,docs,probabilistic,test,profiling]"
 ]
 all-macos = [
   # macOS Apple Silicon with Metal acceleration
   # Use for macOS ARM64 systems with Metal GPU support
-  "opifex[dev,docs,metal,test]"
+  "opifex[dev,docs,metal,probabilistic,test]"
 ]
 cuda-dev = [
   # Comprehensive CUDA development environment
@@ -103,7 +97,12 @@ dev = [
   "python-dotenv>=1",
   "radon>=6.0",
   "rich>=14.0.0",
-  "ruff>=0.1.5",
+  # Constrained to the locked minor. The lint job resolves dev dependencies fresh, so an
+  # open floor means CI silently runs whatever ruff released most recently: on 2026-08-27
+  # that was 0.16.5 against a lock pinning 0.15.2, which reported 33 errors and wanted to
+  # reformat 105 files. The same tree is clean under 0.15.2. Adopting a newer ruff is a
+  # deliberate change, not something a Tuesday should do to the gate.
+  "ruff>=0.15.2,<0.16",
   "twine>=4.0.2"
 ]
 docs = [
@@ -176,6 +175,17 @@ platform = [
   "psycopg2-binary>=2.9.0",
   "pgcli>=4.0.0"
 ]
+# Variational inference via distrax and TensorFlow Probability. Kept out of the base
+# install: tf-keras is what pulls TensorFlow into a JAX-native package, TFP is already
+# registered as an OPTIONAL backend in uncertainty/inference_backends/optional.py, and
+# the single distrax import site (neural/bayesian/variational_framework.py) is lazy.
+# The exact nightly pin is dropped: nightlies get pruned from PyPI.
+probabilistic = [
+  "distrax>=0.1.0,<0.2.0",
+  "tf-keras>=2.19.0",
+  "tfp-nightly>=0.26.0.dev20251024"
+]
+
 profiling = [
   # Performance profiling and analysis dependencies
   "tensorflow>=2.20.0", # TensorFlow for JAX profiler integration
@@ -760,7 +770,8 @@ constraint-dependencies = [
   "python-multipart>=0.0.31", # CVE-2026-53538/53539/53540
   "starlette>=1.3.1", # CVE-2026-54282/54283
   "pip>=26.1.2", # PYSEC-2026-196
-  "bleach>=6.4.0" # GHSA-gj48-438w-jh9v / GHSA-8rfp-98v4-mmr6 / GHSA-g75f-g53v-794x (6.3.0-only)
+  "bleach>=6.4.0", # GHSA-gj48-438w-jh9v / GHSA-8rfp-98v4-mmr6 / GHSA-g75f-g53v-794x (6.3.0-only)
+  "setuptools>=83.0.0" # PYSEC-2026-3447
 ]
 python-preference = "only-managed"
 

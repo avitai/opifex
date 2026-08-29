@@ -30,8 +30,14 @@ jobs:
       run: uv pip install -e ".[dev]"
 
     - name: Run security audit
+      # PYSEC-2026-3552 is a PKCS#7 EnvelopedData Bleichenbacher oracle in
+      # pkcs7_decrypt_der / _pem / _smime. cryptography reaches opifex only
+      # transitively, through mlflow, google-auth and secretstorage; no file under
+      # src/ imports cryptography or names pkcs7 or EnvelopedData. The fix is
+      # cryptography 50.0.0 and mlflow requires cryptography<50, so the resolver
+      # cannot take it. Reviewed 2026-08-27; revisit when mlflow relaxes that ceiling.
       run: |
-        uv run pip-audit --skip-editable
+        uv run pip-audit --skip-editable --ignore-vuln PYSEC-2026-3552
 
     - name: Run Bandit security linter
       run: |
