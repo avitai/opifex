@@ -19,6 +19,7 @@ Key Features:
 from collections.abc import Sequence
 from typing import Any
 
+import flax.errors
 import jax
 import jax.numpy as jnp
 from flax import nnx
@@ -95,11 +96,21 @@ class PowerIteration(nnx.Module):
         # Update stored vectors if training and not in JAX transformation
         if training:
             try:
-                self.u[...] = u
-                self.v[...] = v
-            except (TypeError, jax.errors.TracerArrayConversionError):
-                # In-place state mutation is invalid inside jit/grad traces;
-                # callers update outside the transform when this is hit.
+                # Assign through .value, not u[...]: the vectors start as shape-(1,)
+                # placeholders and are re-drawn above to (height,) / (width,), so the write
+                # has to REPLACE the value. Variable.__setitem__ routes through
+                # `.at[index].set()`, an in-place scatter that keeps the existing shape and
+                # rejects the new one with ValueError.
+                self.u.value = u
+                self.v.value = v
+            except (
+                TypeError,
+                jax.errors.TracerArrayConversionError,
+                flax.errors.TraceContextError,
+            ):
+                # State mutation is invalid inside jit/grad traces; callers update outside
+                # the transform when this is hit. flax raises TraceContextError for a write
+                # to a Variable owned by an outer trace.
                 pass
 
         # Compute spectral norm: sigma = u^T W v

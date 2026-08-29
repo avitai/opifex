@@ -17,7 +17,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from flax import nnx
-from jax import experimental as jax_experimental
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.data.sources.qh9_blocks import cut_fock_to_blocks
@@ -125,7 +124,7 @@ def _eager_target_batch(batch: dict, examples: tuple, config: QH9PaddedConfig) -
 
 def test_fused_loss_matches_eager_cut_loss() -> None:
     """The operator-target per-molecule loss equals the eager NumPy-cut loss."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         batch, predictor, config, examples = _batch_and_predictor()
         decode_op, cut_op = _operators()
         decoded, _ = decode_op._apply_on_raw(batch, {}, {})
@@ -140,7 +139,7 @@ def test_fused_loss_matches_eager_cut_loss() -> None:
 
 def test_fused_step_compiles_once_and_decreases_loss() -> None:
     """Repeated calls reuse one compile and the loss decreases."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         batch, predictor, _, _ = _batch_and_predictor()
         decode_op, cut_op = _operators()
         optimizer = nnx.Optimizer(
@@ -159,7 +158,7 @@ def test_fused_step_compiles_once_and_decreases_loss() -> None:
 
 def test_fused_eval_step_returns_finite_mae() -> None:
     """The fused eval step returns a finite Hamiltonian MAE without updating."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         batch, predictor, _, _ = _batch_and_predictor()
         decode_op, cut_op = _operators()
         eval_step = make_fused_block_eval_step(decode_op, cut_op)
@@ -169,7 +168,7 @@ def test_fused_eval_step_returns_finite_mae() -> None:
 
 def test_fused_step_is_grad_clean() -> None:
     """The fused loss is differentiable w.r.t. the predictor parameters."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         batch, predictor, _, _ = _batch_and_predictor()
         decode_op, cut_op = _operators()
 
@@ -189,7 +188,7 @@ def test_fused_step_is_grad_clean() -> None:
 @pytest.mark.parametrize("swap_edges", [True, False])
 def test_predict_blocks_vmapped_shapes(swap_edges: bool) -> None:
     """The vmapped predictor returns per-molecule block stacks of fixed shape."""
-    with jax_experimental.enable_x64():
+    with jax.enable_x64(True):
         batch, predictor, config, _ = _batch_and_predictor()
         decode_op, cut_op = _operators()
         decoded, _ = decode_op._apply_on_raw(batch, {}, {})

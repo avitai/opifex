@@ -112,7 +112,7 @@ def _esg_entropy(
     entropy is computed by 1D Simpson-rule integration over +/- 8
     standard deviations of the ESG.
     """
-    safe_correlation = jnp.clip(correlation, a_min=-1.0 + 1e-6, a_max=1.0 - 1e-6)
+    safe_correlation = jnp.clip(correlation, min=-1.0 + 1e-6, max=1.0 - 1e-6)
     minus_cdf = jnp.maximum(1.0 - jax.scipy.stats.norm.cdf(gamma), _PSEUDO_NOISE_FLOOR)
     pdf_gamma = jax.scipy.stats.norm.pdf(gamma)
     esg_mean = safe_correlation * pdf_gamma / minus_cdf
@@ -196,7 +196,7 @@ def mumbo_acquisition(
     )
     if target_predictive.variance is None:
         raise RuntimeError("Target-level candidate predictive missing variance.")
-    target_vars = jnp.clip(target_predictive.variance, a_min=_PSEUDO_NOISE_FLOOR)
+    target_vars = jnp.clip(target_predictive.variance, min=_PSEUDO_NOISE_FLOOR)
     target_stds = jnp.sqrt(target_vars)
 
     def per_candidate_acquisition(

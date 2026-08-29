@@ -238,7 +238,7 @@ def predict_laplace_latent_moments(
         state.cholesky_b, state.sqrt_w[:, None] * k_cross, lower=True
     )
     latent_variance = state.output_scale**2 - jnp.sum(v * v, axis=0)
-    latent_variance = jnp.clip(latent_variance, a_min=1e-12)
+    latent_variance = jnp.clip(latent_variance, min=1e-12)
     return latent_mean, latent_variance
 
 

@@ -258,7 +258,7 @@ class TestConditionsEnhancement:
         # Test periodic condition
         bc_periodic = WavefunctionBC(condition_type="periodic", value=1.0 + 1.0j)
         result_periodic = bc_periodic.evaluate(x)
-        expected_periodic = jnp.full_like(x, 1.0 + 1.0j) + 0j
+        expected_periodic = jnp.full(x.shape, 1.0 + 1.0j)
         assert jnp.allclose(result_periodic, expected_periodic)
 
         # Test boundary condition (fallback case)
