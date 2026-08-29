@@ -234,6 +234,12 @@ scientific-data = [
   "meshio>=5.3.0"
 ]
 test = [
+  # The suite imports fastapi, sqlalchemy and prometheus-client through
+  # src/opifex/deployment and src/opifex/platform. They used to arrive transitively
+  # through avitai-artifex's runtime dependencies; 0.1.4 moved those behind an extra,
+  # so what the suite needs is declared here rather than in each workflow that runs
+  # it. Referencing the extra keeps one source of truth for their versions.
+  "opifex[platform]",
   # Async SQLite driver + greenlet (SQLAlchemy asyncio needs greenlet; it is pulled
   # in transitively on Linux but not on macOS) for the registry persistence tests.
   "aiosqlite>=0.20.0",
