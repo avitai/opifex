@@ -263,10 +263,12 @@ class TestPhysicsCrossAttention:
         )
 
         # Test in training mode
-        output_train = model(sample_data_single_system, training=True)
+        model.train()
+        output_train = model(sample_data_single_system)
 
         # Test in evaluation mode
-        output_eval = model(sample_data_single_system, training=False)
+        model.eval()
+        output_eval = model(sample_data_single_system)
 
         assert output_train.shape == sample_data_single_system.shape
         assert output_eval.shape == sample_data_single_system.shape

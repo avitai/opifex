@@ -71,27 +71,26 @@ class SpectralNeuralOperator(nnx.Module):
             hidden_dims[-1], output_dim, power_iterations=power_iterations, rngs=rngs
         )
 
-    def __call__(self, x: jax.Array, training: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Forward pass through spectral neural operator.
 
         Args:
             x: Input tensor of shape (batch, features) or (batch, seq_len, features)
-            training: Whether in training mode
 
         Returns:
             Output tensor with same spatial dims as input
         """
         # Input projection
-        x = self.input_proj(x, training=training)
+        x = self.input_proj(x)
         x = nnx.gelu(x)
 
         # Hidden layers
         for layer in self.hidden_layers:
-            x = layer(x, training=training)
+            x = layer(x)
             x = nnx.gelu(x)
 
         # Output projection
-        return self.output_proj(x, training=training)
+        return self.output_proj(x)
 
 
 def create_spectral_neural_operator(

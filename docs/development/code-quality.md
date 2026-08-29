@@ -168,10 +168,13 @@ from flax import nnx
 def neural_operator_forward(
     model: nnx.Module,
     x: Float[Array, "batch spatial_dims channels"],
-    training: bool = False
 ) -> Float[Array, "batch spatial_dims output_channels"]:
-    """Type-safe neural operator forward pass."""
-    return model(x, training=training)
+    """Type-safe neural operator forward pass.
+
+    Training mode is module state in nnx, not a call argument: the caller sets it
+    once with ``model.train()`` or ``model.eval()``.
+    """
+    return model(x)
 ```
 
 ### Ruff Code Quality

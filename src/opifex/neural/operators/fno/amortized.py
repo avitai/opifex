@@ -162,7 +162,7 @@ class AmortizedSpectralConvolution(nnx.Module):
         perm = [self.n_dim, self.n_dim + 1, *range(self.n_dim)]
         return jnp.transpose(spatial_kernel, perm)
 
-    def __call__(self, x_ft: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:  # noqa: ARG002 - nnx forward interface carries a training flag
+    def __call__(self, x_ft: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Forward pass through amortized spectral convolution."""
         # Extract spatial dimensions from input
         input_modes = x_ft.shape[2:]  # Skip batch and channel dimensions
@@ -302,7 +302,7 @@ class AmortizedFourierNeuralOperator(nnx.Module):
 
         return result
 
-    def __call__(self, x: jax.Array, training: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Forward pass through Amortized FNO."""
         # Input projection - handle channels properly
         x_input = jnp.moveaxis(x, 1, -1)  # Move channels to last
@@ -323,7 +323,7 @@ class AmortizedFourierNeuralOperator(nnx.Module):
             x_ft = jnp.fft.rfftn(x, axes=tuple(range(2, x.ndim)))
 
             # Apply amortized spectral convolution
-            x_conv, _reg_loss = conv(x_ft, training)
+            x_conv, _reg_loss = conv(x_ft)
 
             # IFFT back to spatial domain with target size
             x_conv = jnp.fft.irfftn(x_conv, s=target_size, axes=tuple(range(2, x_conv.ndim)))

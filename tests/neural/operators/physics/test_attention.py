@@ -72,7 +72,7 @@ class TestPhysicsAwareAttention:
         x = jnp.ones((batch_size, seq_len, embed_dim))
         physics_info = jnp.ones((batch_size, num_constraints))
 
-        output = attention(x, physics_info=physics_info, training=True)
+        output = attention(x, physics_info=physics_info)
 
         assert output.shape == (batch_size, seq_len, embed_dim)
         assert jnp.all(jnp.isfinite(output))
@@ -90,7 +90,8 @@ class TestPhysicsAwareAttention:
         )
 
         x = jnp.ones((batch_size, seq_len, embed_dim))
-        output = attention(x, training=False)
+        attention.eval()
+        output = attention(x)
 
         assert output.shape == (batch_size, seq_len, embed_dim)
         assert jnp.all(jnp.isfinite(output))
@@ -139,6 +140,6 @@ class TestPhysicsAwareAttention:
             x = jnp.ones((batch_size, seq_len, embed_dim))
             physics_info = jnp.ones((batch_size, 1))
 
-            output = attention(x, physics_info=physics_info, training=True)
+            output = attention(x, physics_info=physics_info)
             assert output.shape == (batch_size, seq_len, embed_dim)
             assert jnp.all(jnp.isfinite(output))

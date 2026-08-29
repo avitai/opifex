@@ -48,7 +48,7 @@ class TestPowerIteration:
         """Test spectral norm computation for 2D matrices."""
         weight = jax.random.normal(jax.random.PRNGKey(42), (64, 32))
 
-        spectral_norm, normalized_weight = power_iter(weight, training=True)
+        spectral_norm, normalized_weight = power_iter(weight)
 
         assert spectral_norm.shape == ()  # Scalar
         assert normalized_weight.shape == weight.shape
@@ -60,28 +60,53 @@ class TestPowerIteration:
         """Test spectral norm computation for higher-dimensional tensors."""
         weight = jax.random.normal(jax.random.PRNGKey(42), (3, 3, 32, 64))
 
-        spectral_norm, normalized_weight = power_iter(weight, training=True)
+        spectral_norm, normalized_weight = power_iter(weight)
 
         assert spectral_norm.shape == ()  # Scalar
         assert normalized_weight.shape == weight.shape
         assert spectral_norm > 0
         assert not jnp.isnan(spectral_norm)
 
-    def test_training_vs_inference_mode(self, power_iter):
-        """Test behavior difference between training and inference modes."""
+    def test_eval_mode_leaves_the_stored_vectors_untouched(self, power_iter):
+        """``eval()`` must freeze the power-iteration state.
+
+        The previous test only checked that both modes returned a positive,
+        finite norm, which held whether or not the vectors were written back, so
+        nothing detected inference silently mutating them.
+        """
         weight = jax.random.normal(jax.random.PRNGKey(42), (32, 16))
+        power_iter.eval()
 
-        # Training mode - should update u, v vectors
-        spectral_norm_train, _ = power_iter(weight, training=True)
+        before_u, before_v = power_iter.u[...], power_iter.v[...]
+        spectral_norm, _ = power_iter(weight)
 
-        # Inference mode - should not update u, v vectors
-        spectral_norm_inference, _ = power_iter(weight, training=False)
+        assert jnp.array_equal(power_iter.u[...], before_u)
+        assert jnp.array_equal(power_iter.v[...], before_v)
+        assert spectral_norm > 0
+        assert not jnp.isnan(spectral_norm)
 
-        # Both should produce valid spectral norms
-        assert spectral_norm_train > 0
-        assert spectral_norm_inference > 0
-        assert not jnp.isnan(spectral_norm_train)
-        assert not jnp.isnan(spectral_norm_inference)
+    def test_train_mode_updates_the_stored_vectors(self, power_iter):
+        """``train()`` must write the re-estimated vectors back."""
+        weight = jax.random.normal(jax.random.PRNGKey(42), (32, 16))
+        power_iter.train()
+
+        before_u = power_iter.u[...]
+        spectral_norm, _ = power_iter(weight)
+
+        assert not jnp.array_equal(power_iter.u[...], before_u)
+        assert power_iter.u[...].shape == (32,)
+        assert spectral_norm > 0
+        assert not jnp.isnan(spectral_norm)
+
+    def test_mode_reaches_power_iteration_through_a_parent(self, rngs):
+        """``eval()`` on the owner must reach the nested PowerIteration."""
+        layer = SpectralLinear(in_features=32, out_features=16, rngs=rngs)
+        layer.eval()
+
+        before_u = layer.power_iter.u[...]
+        layer(jax.random.normal(jax.random.PRNGKey(0), (4, 32)))
+
+        assert jnp.array_equal(layer.power_iter.u[...], before_u)
 
     def test_iterative_convergence(self, rngs):
         """Test that more iterations lead to better spectral norm estimates."""
@@ -91,8 +116,8 @@ class TestPowerIteration:
         power_iter_1 = PowerIteration(num_iterations=1, rngs=rngs)
         power_iter_5 = PowerIteration(num_iterations=5, rngs=rngs)
 
-        spectral_norm_1, _ = power_iter_1(weight, training=True)
-        spectral_norm_5, _ = power_iter_5(weight, training=True)
+        spectral_norm_1, _ = power_iter_1(weight)
+        spectral_norm_5, _ = power_iter_5(weight)
 
         # Both should produce positive values
         assert spectral_norm_1 > 0
@@ -108,7 +133,7 @@ class TestPowerIteration:
         original_spectral_norm = s[0]
 
         # Apply power iteration normalization
-        estimated_spectral_norm, normalized_weight = power_iter(weight, training=True)
+        estimated_spectral_norm, normalized_weight = power_iter(weight)
 
         # Check that normalization reduces spectral norm
         _, s_normalized, _ = jnp.linalg.svd(normalized_weight, full_matrices=False)
@@ -131,13 +156,13 @@ class TestPowerIteration:
 
         # Test with zero matrix
         zero_weight = jnp.zeros((16, 16))
-        spectral_norm, normalized_weight = power_iter(zero_weight, training=True)
+        spectral_norm, normalized_weight = power_iter(zero_weight)
         assert not jnp.isnan(spectral_norm)
         assert not jnp.any(jnp.isnan(normalized_weight))
 
         # Test with very small weights
         small_weight = jnp.ones((16, 16)) * 1e-8
-        spectral_norm, normalized_weight = power_iter(small_weight, training=True)
+        spectral_norm, normalized_weight = power_iter(small_weight)
         assert not jnp.isnan(spectral_norm)
         assert not jnp.any(jnp.isnan(normalized_weight))
 
@@ -173,7 +198,7 @@ class TestSpectralNorm:
         """Test forward pass through spectral normalized layer."""
         input_data = jax.random.normal(jax.random.PRNGKey(42), (8, 32))
 
-        output = spectral_layer(input_data, training=True)
+        output = spectral_layer(input_data)
 
         assert output.shape == (8, 16)
         assert not jnp.any(jnp.isnan(output))
@@ -186,7 +211,7 @@ class TestSpectralNorm:
         original_weight = spectral_layer.layer.kernel.value.copy()
 
         # Forward pass
-        _ = spectral_layer(input_data, training=True)
+        _ = spectral_layer(input_data)
 
         # Weight should be restored to original after forward pass
         restored_weight = spectral_layer.layer.kernel.value
@@ -197,7 +222,7 @@ class TestSpectralNorm:
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32))
 
         def loss_fn(layer, x):
-            output = layer(x, training=True)
+            output = layer(x)
             return jnp.mean(output**2)
 
         grad_fn = nnx.grad(loss_fn, argnums=0)
@@ -211,11 +236,14 @@ class TestSpectralNorm:
         """Test behavior in training vs inference mode."""
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32))
 
-        output_train = spectral_layer(input_data, training=True)
-        output_inference = spectral_layer(input_data, training=False)
+        spectral_layer.train()
+        output_train = spectral_layer(input_data)
+        spectral_layer.eval()
+        output_inference = spectral_layer(input_data)
 
         assert output_train.shape == output_inference.shape
-        # Outputs may differ slightly due to spectral norm updates
+        # eval() freezes the power-iteration state, so a repeat is bit-identical.
+        assert jnp.array_equal(spectral_layer(input_data), output_inference)
 
     def test_invalid_layer_error(self, rngs):
         """Test error handling for layers without kernel/weight."""
@@ -277,7 +305,7 @@ class TestSpectralLinear:
         """Test forward pass through SpectralLinear."""
         input_data = jax.random.normal(jax.random.PRNGKey(42), (8, 32))
 
-        output = spectral_linear(input_data, training=True)
+        output = spectral_linear(input_data)
 
         assert output.shape == (8, 16)
         assert not jnp.any(jnp.isnan(output))
@@ -298,7 +326,7 @@ class TestSpectralLinear:
 
         # Forward pass should work without issues
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32))
-        output = spectral_linear(input_data, training=True)
+        output = spectral_linear(input_data)
 
         assert not jnp.any(jnp.isnan(output))
         assert output.shape == (4, 16)
@@ -307,12 +335,14 @@ class TestSpectralLinear:
         """Test compatibility with JAX transformations."""
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32))
 
+        spectral_linear.eval()
+
         @nnx.jit
         def jitted_forward(layer, x):
-            return layer(x, training=False)
+            return layer(x)
 
         output_jit = jitted_forward(spectral_linear, input_data)
-        output_normal = spectral_linear(input_data, training=False)
+        output_normal = spectral_linear(input_data)
 
         assert output_jit.shape == output_normal.shape
         assert jnp.allclose(output_jit, output_normal, rtol=1e-5)
@@ -359,7 +389,7 @@ class TestSpectralNormalizedConv:
         # Input: (batch, height, width, channels)
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32, 32, 3))
 
-        output = spectral_conv(input_data, training=True)
+        output = spectral_conv(input_data)
 
         # Output should maintain spatial dimensions with SAME padding
         assert output.shape[0] == 4  # batch size
@@ -447,7 +477,7 @@ class TestAdaptiveSpectralNorm:
         """Test forward pass through adaptive spectral normalized layer."""
         input_data = jax.random.normal(jax.random.PRNGKey(42), (8, 32))
 
-        output = adaptive_spectral_layer(input_data, training=True)
+        output = adaptive_spectral_layer(input_data)
 
         assert output.shape == (8, 16)
         assert not jnp.any(jnp.isnan(output))
@@ -457,7 +487,7 @@ class TestAdaptiveSpectralNorm:
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32))
 
         def loss_fn(layer, x):
-            output = layer(x, training=True)
+            output = layer(x)
             return jnp.mean(output**2)
 
         grad_fn = nnx.grad(loss_fn, argnums=0)
@@ -478,7 +508,7 @@ class TestAdaptiveSpectralNorm:
         )
 
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 32))
-        output = layer(input_data, training=True)
+        output = layer(input_data)
 
         assert output.shape == (4, 16)
         assert not jnp.any(jnp.isnan(output))
@@ -526,7 +556,7 @@ class TestSpectralMultiHeadAttention:
         batch_size = 4
         input_data = jax.random.normal(jax.random.PRNGKey(42), (batch_size, seq_len, 64))
 
-        output = spectral_attention(input_data, training=True)
+        output = spectral_attention(input_data)
 
         assert output.shape == (batch_size, seq_len, 64)
         assert not jnp.any(jnp.isnan(output))
@@ -541,7 +571,7 @@ class TestSpectralMultiHeadAttention:
         mask = jnp.tril(jnp.ones((seq_len, seq_len)))
         mask = jnp.expand_dims(mask, axis=0)  # Add batch dimension
 
-        output = spectral_attention(input_data, mask=mask, training=True)
+        output = spectral_attention(input_data, mask=mask)
 
         assert output.shape == (batch_size, seq_len, 64)
         assert not jnp.any(jnp.isnan(output))
@@ -570,7 +600,7 @@ class TestSpectralMultiHeadAttention:
         input_data = jax.random.normal(jax.random.PRNGKey(42), (2, 8, 64))
 
         def loss_fn(layer, x):
-            output = layer(x, training=True)
+            output = layer(x)
             return jnp.mean(output**2)
 
         grad_fn = nnx.grad(loss_fn, argnums=0)
@@ -728,10 +758,12 @@ class TestSpectralNormalizationEdgeCases:
         layer = SpectralLinear(16, 8, rngs=rngs)
         input_data = jax.random.normal(jax.random.PRNGKey(42), (4, 16))
 
-        # Multiple forward passes in inference mode should be identical
-        output1 = layer(input_data, training=False)
-        output2 = layer(input_data, training=False)
-        output3 = layer(input_data, training=False)
+        # Multiple forward passes in inference mode should be identical; eval()
+        # freezes the power-iteration state, which is what makes them so.
+        layer.eval()
+        output1 = layer(input_data)
+        output2 = layer(input_data)
+        output3 = layer(input_data)
 
         assert jnp.allclose(output1, output2, rtol=1e-6)
         assert jnp.allclose(output2, output3, rtol=1e-6)

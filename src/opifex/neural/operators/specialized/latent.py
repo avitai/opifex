@@ -159,14 +159,12 @@ class LatentNeuralOperator(nnx.Module):
         x: jax.Array,
         *,
         physics_info: jax.Array | None = None,
-        training: bool = False,
     ) -> jax.Array:
         """Apply Latent Neural Operator.
 
         Args:
             x: Input tensor (batch, channels, *spatial_dims)
             physics_info: Optional physics information
-            training: Whether in training mode
 
         Returns:
             Output tensor (batch, out_channels, *spatial_dims)
@@ -193,22 +191,19 @@ class LatentNeuralOperator(nnx.Module):
             attended_latent = encoder_layer(
                 jnp.concatenate([current_latent, x_embedded], axis=1),
                 physics_info=physics_info,
-                training=training,
             )[:, : self.num_latent_tokens, :]
 
             # Residual connection and normalization
             current_latent = norm(current_latent + attended_latent)
 
-            if self.dropout is not None and training:
+            if self.dropout is not None:
                 current_latent = self.dropout(current_latent)
 
         # Latent self-attention
-        processed_latent = self.latent_self_attention(
-            current_latent, physics_info=physics_info, training=training
-        )
+        processed_latent = self.latent_self_attention(current_latent, physics_info=physics_info)
         processed_latent = self.latent_norm(current_latent + processed_latent)
 
-        if self.dropout is not None and training:
+        if self.dropout is not None:
             processed_latent = self.dropout(processed_latent)
 
         # Decoder: latent to function
@@ -220,13 +215,12 @@ class LatentNeuralOperator(nnx.Module):
             attended_output = decoder_layer(
                 jnp.concatenate([current_output, processed_latent], axis=1),
                 physics_info=physics_info,
-                training=training,
             )[:, : x_embedded.shape[1], :]
 
             # Residual connection and normalization
             current_output = norm(current_output + attended_output)
 
-            if self.dropout is not None and training:
+            if self.dropout is not None:
                 current_output = self.dropout(current_output)
 
         # Output projection and reshape back to original spatial dimensions
