@@ -352,7 +352,6 @@ class MultiPhysicsDeepONet(nnx.Module):
         self,
         branch_encoding: jax.Array,
         physics_info: jax.Array | None,
-        training: bool,
     ) -> jax.Array:
         """Apply physics-aware attention to branch encodings."""
         if self.use_attention and hasattr(self, "physics_attention"):
@@ -364,9 +363,7 @@ class MultiPhysicsDeepONet(nnx.Module):
             reshaped_encoding = branch_encoding.reshape(batch_size * num_systems, 1, latent_dim)
 
             # Apply attention
-            attended_encoding = self.physics_attention(
-                reshaped_encoding, physics_info=physics_info, training=training
-            )
+            attended_encoding = self.physics_attention(reshaped_encoding, physics_info=physics_info)
 
             # Reshape back: [batch, num_systems, latent_dim]
             return attended_encoding.reshape(batch_size, num_systems, latent_dim)
@@ -380,7 +377,6 @@ class MultiPhysicsDeepONet(nnx.Module):
         *,
         spatial_coords: jax.Array | None = None,
         physics_info: jax.Array | None = None,
-        training: bool = False,
     ) -> jax.Array:
         """Apply Multi-Physics DeepONet.
 
@@ -390,7 +386,6 @@ class MultiPhysicsDeepONet(nnx.Module):
                 [batch, num_locations, trunk_dim]
             spatial_coords: Spatial coordinates for sensor optimization
             physics_info: Physics information for attention mechanism
-            training: Whether in training mode
 
         Returns:
             Per-physics function values at the query locations. The trailing
@@ -416,7 +411,7 @@ class MultiPhysicsDeepONet(nnx.Module):
         branch_encoding = self._encode_branch_inputs(branch_input_list)
 
         # Apply physics-aware attention (cross-physics coupling)
-        branch_encoding = self._apply_physics_attention(branch_encoding, physics_info, training)
+        branch_encoding = self._apply_physics_attention(branch_encoding, physics_info)
 
         # Encode trunk inputs with per-physics trunks:
         # (batch, num_locations, num_physics, latent_dim)

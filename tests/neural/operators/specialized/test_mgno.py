@@ -206,6 +206,10 @@ class TestMultipoleGraphNeuralOperator:
         features = jax.random.normal(k_feat, (batch_size, num_nodes, 4))
         positions = jax.random.normal(k_pos, (batch_size, num_nodes, 3))
 
+        # Comparing eager against jit requires a deterministic forward, so the
+        # dropout has to be off. In nnx that is eval(); it used to be implicit in a
+        # `training=False` default argument.
+        mgno.eval()
         eager_out = mgno(features, positions)
 
         @nnx.jit

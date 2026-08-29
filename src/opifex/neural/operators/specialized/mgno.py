@@ -265,14 +265,13 @@ class MGNOLayer(nnx.Module):
         # Shape: (batch_size, channels, num_neighbors) -> (batch_size, channels)
         return jnp.mean(messages, axis=2)
 
-    def __call__(self, x: jax.Array, positions: jax.Array, training: bool = False) -> jax.Array:
+    def __call__(self, x: jax.Array, positions: jax.Array) -> jax.Array:
         """
         Forward pass through MGNO layer with full error handling.
 
         Args:
             x: Input features (batch, num_points, channels)
             positions: Particle positions (batch, num_points, coord_dim)
-            training: Whether in training mode
 
         Returns:
             Output features (batch, num_points, channels)
@@ -291,9 +290,8 @@ class MGNOLayer(nnx.Module):
         update_input = jnp.concatenate([multipole_features, local_messages], axis=-1)
         updated_features = self.update_mlp(update_input)
 
-        # Apply dropout during training.
-        if training:
-            updated_features = self.dropout(updated_features)
+        # nnx.Dropout is a no-op under eval(); it needs no caller-side gate.
+        updated_features = self.dropout(updated_features)
 
         # Residual connection with layer normalization.
         return self.layer_norm(x_orig + updated_features)
@@ -360,14 +358,13 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         # Global dropout for regularization
         self.dropout = nnx.Dropout(rate=dropout_rate, rngs=rngs)
 
-    def __call__(self, x: jax.Array, positions: jax.Array, training: bool = False) -> jax.Array:
+    def __call__(self, x: jax.Array, positions: jax.Array) -> jax.Array:
         """
         Forward pass with full error handling and stability.
 
         Args:
             x: Input features (batch, num_points, in_channels)
             positions: Particle positions (batch, num_points, coord_dim)
-            training: Whether in training mode
 
         Returns:
             Output features (batch, num_points, out_channels)
@@ -385,10 +382,9 @@ class MultipoleGraphNeuralOperator(nnx.Module):
         # Apply MGNO layers. Errors propagate (fail fast) — a failing layer is
         # never silently skipped, which would otherwise yield a wrong result.
         for layer in self.mgno_layers:
-            x = layer(x, positions, training=training)
+            x = layer(x, positions)
             x = nnx.gelu(x)
-            if training:
-                x = self.dropout(x)
+            x = self.dropout(x)
 
         # Output projection. On failure the error propagates rather than being
         # masked by an all-zero prediction.

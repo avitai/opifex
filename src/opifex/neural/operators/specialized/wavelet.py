@@ -202,12 +202,11 @@ class WaveletNeuralOperator(nnx.Module):
 
         return current
 
-    def __call__(self, x: jax.Array, *, training: bool = False) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Apply Wavelet Neural Operator.
 
         Args:
             x: Input tensor (batch, channels, spatial_dim)
-            training: Whether in training mode
 
         Returns:
             Output tensor (batch, out_channels, spatial_dim)
@@ -288,9 +287,9 @@ class WaveletNeuralOperator(nnx.Module):
 
         # Apply cross-level attention for global feature interaction
         # Reshape for attention: (batch, spatial, channels)
-        attended_output = self.cross_level_attention(
-            processed_output.transpose(0, 2, 1), training=training
-        ).transpose(0, 2, 1)
+        attended_output = self.cross_level_attention(processed_output.transpose(0, 2, 1)).transpose(
+            0, 2, 1
+        )
 
         # Output projection
         return self.output_proj(attended_output.transpose(0, 2, 1)).transpose(0, 2, 1)

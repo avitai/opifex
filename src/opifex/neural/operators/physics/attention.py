@@ -97,20 +97,18 @@ class PhysicsAwareAttention(nnx.Module):
         x: jax.Array,
         *,
         physics_info: jax.Array | None = None,
-        training: bool = False,
     ) -> jax.Array:
         """Apply physics-aware attention.
 
         Args:
             x: Input tensor (batch, seq_len, embed_dim)
             physics_info: Physics constraint information
-            training: Whether in training mode
 
         Returns:
             Output tensor with physics-aware attention applied
         """
         # Apply multi-head attention
-        attention_output = self.attention(x, deterministic=not training)
+        attention_output = self.attention(x)
 
         # Apply physics constraints if available
         if (
@@ -241,7 +239,6 @@ class PhysicsCrossAttention(nnx.Module):
         x: jax.Array,
         *,
         physics_info: jax.Array | None = None,
-        training: bool = False,
     ) -> jax.Array:
         """Apply Physics-Cross-Attention mechanism.
 
@@ -249,7 +246,6 @@ class PhysicsCrossAttention(nnx.Module):
             x: Input tensor for single system: (batch, seq_len, embed_dim)
                      or multi-system: (batch, num_systems, seq_len, embed_dim)
             physics_info: Physics constraint information
-            training: Whether in training mode
 
         Returns:
             Output tensor with physics-aware cross-attention applied
@@ -257,21 +253,20 @@ class PhysicsCrossAttention(nnx.Module):
         # Detect input format
         if x.ndim == 3:
             # Single system: (batch, seq_len, embed_dim)
-            return self._apply_single_system_attention(x, physics_info, training)
+            return self._apply_single_system_attention(x, physics_info)
         if x.ndim == 4:
             # Multi-system: (batch, num_systems, seq_len, embed_dim)
-            return self._apply_multi_system_attention(x, physics_info, training)
+            return self._apply_multi_system_attention(x, physics_info)
         raise ValueError(f"Input must be 3D or 4D, got {x.ndim}D")
 
     def _apply_single_system_attention(
         self,
         x: jax.Array,
         physics_info: jax.Array | None,
-        training: bool,
     ) -> jax.Array:
         """Apply attention for single physics system."""
         # Apply cross-attention
-        attention_output = self.cross_attention_layers[0](x, deterministic=not training)
+        attention_output = self.cross_attention_layers[0](x)
 
         # Apply physics constraints
         if physics_info is not None:
@@ -289,14 +284,12 @@ class PhysicsCrossAttention(nnx.Module):
         self,
         x: jax.Array,
         physics_info: jax.Array | None,
-        training: bool,
     ) -> jax.Array:
         """Apply attention for multiple physics systems.
 
         Args:
             x: Input (batch, num_systems, seq_len, embed_dim)
             physics_info: Physics constraint information
-            training: Whether in training mode
 
         Returns:
             Output (batch, num_systems, seq_len, embed_dim)
@@ -313,7 +306,7 @@ class PhysicsCrossAttention(nnx.Module):
             attention_layer = self.cross_attention_layers[
                 min(system_idx, len(self.cross_attention_layers) - 1)
             ]
-            system_output = attention_layer(system_input, deterministic=not training)
+            system_output = attention_layer(system_input)
 
             # Apply physics constraints for this system
             if physics_info is not None:
@@ -337,7 +330,7 @@ class PhysicsCrossAttention(nnx.Module):
         # Apply cross-system coupling if enabled
         if self.cross_system_coupling and num_systems > 1:
             # For multi-system, apply coupling but maintain the multi-system structure
-            return self._apply_cross_system_coupling_multi(stacked_outputs, physics_info, training)
+            return self._apply_cross_system_coupling_multi(stacked_outputs, physics_info)
 
         return stacked_outputs
 
@@ -345,14 +338,12 @@ class PhysicsCrossAttention(nnx.Module):
         self,
         system_outputs: jax.Array,
         physics_info: jax.Array | None,  # noqa: ARG002 - coupling interface receives physics metadata
-        training: bool,  # noqa: ARG002 - nnx forward interface carries a training flag
     ) -> jax.Array:
         """Apply cross-system coupling while maintaining multi-system output structure.
 
         Args:
             system_outputs: (batch, num_systems, seq_len, embed_dim)
             physics_info: Physics constraint information
-            training: Whether in training mode
 
         Returns:
             Coupled output (batch, num_systems, seq_len, embed_dim)
@@ -426,7 +417,6 @@ class PhysicsCrossAttention(nnx.Module):
         x: jax.Array,
         *,
         physics_info: jax.Array | None = None,
-        training: bool = False,
     ) -> tuple[jax.Array, jax.Array]:
         """Forward pass returning the output and its conservation-law residual.
 
@@ -438,12 +428,11 @@ class PhysicsCrossAttention(nnx.Module):
             x: Input tensor.
             physics_info: Optional physics constraint information passed to the
                 forward pass.
-            training: Whether in training mode.
 
         Returns:
             Tuple of ``(output, conservation_loss)``.
         """
-        output = self.__call__(x, physics_info=physics_info, training=training)
+        output = self.__call__(x, physics_info=physics_info)
         conservation_loss = self._compute_conservation_loss(output)
         return output, conservation_loss
 

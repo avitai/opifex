@@ -38,6 +38,7 @@ class PowerIteration(nnx.Module):
         self,
         num_iterations: int = 1,
         eps: float = 1e-12,
+        use_running_average: bool = False,
         *,
         rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
     ) -> None:
@@ -46,21 +47,39 @@ class PowerIteration(nnx.Module):
         Args:
             num_iterations: Number of power iteration steps
             eps: Small epsilon for numerical stability
+            use_running_average: When True, reuse the stored vectors instead of
+                writing the re-estimated ones back. ``nnx.Module.train()`` and
+                ``nnx.Module.eval()`` set this recursively, as they do for
+                ``nnx.BatchNorm``; the default matches nnx, which constructs
+                modules in training mode.
             rngs: Random number generators for initialization
         """
         self.num_iterations = num_iterations
         self.eps = eps
+        self.use_running_average = use_running_average
 
         # Initialize with dummy values - will be updated during first call
         self.u = nnx.Param(jnp.array([1.0]))
         self.v = nnx.Param(jnp.array([1.0]))
 
-    def __call__(self, weight: jax.Array, training: bool = True) -> tuple[jax.Array, jax.Array]:
+    def set_view(self, use_running_average: bool | None = None) -> None:
+        """Class method used by ``nnx.view``.
+
+        Args:
+            use_running_average: if True, the stored vectors are reused instead
+                of being re-estimated and written back.
+        """
+        if use_running_average is not None:
+            self.use_running_average = use_running_average
+
+    def __call__(self, weight: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Estimate spectral norm using power iteration.
+
+        Whether the re-estimated vectors are written back is decided by
+        ``use_running_average``, which ``train()`` and ``eval()`` set.
 
         Args:
             weight: Weight matrix of shape (..., out_features, in_features)
-            training: Whether in training mode (updates u, v vectors)
 
         Returns:
             Tuple of (spectral_norm, normalized_weight)
@@ -93,8 +112,8 @@ class PowerIteration(nnx.Module):
             u = weight_2d @ v
             u = u / (jnp.linalg.norm(u) + self.eps)
 
-        # Update stored vectors if training and not in JAX transformation
-        if training:
+        # Write the re-estimated vectors back unless the stored ones are in use.
+        if not self.use_running_average:
             try:
                 # Assign through .value, not u[...]: the vectors start as shape-(1,)
                 # placeholders and are re-drawn above to (height,) / (width,), so the write
@@ -153,12 +172,11 @@ class SpectralNorm(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array, training: bool = True, **kwargs) -> jax.Array:
+    def __call__(self, x: jax.Array, **kwargs) -> jax.Array:
         """Apply spectral normalization and forward pass.
 
         Args:
             x: Input tensor
-            training: Whether in training mode
             **kwargs: Additional arguments passed to the layer
 
         Returns:
@@ -175,7 +193,7 @@ class SpectralNorm(nnx.Module):
         original_weight = getattr(self.layer, weight_name)[...]
 
         # Apply spectral normalization
-        _, normalized_weight = self.power_iter(original_weight, training)
+        _, normalized_weight = self.power_iter(original_weight)
 
         # Temporarily set normalized weight
         original_value = getattr(self.layer, weight_name)[...]
@@ -231,18 +249,17 @@ class SpectralLinear(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array, training: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Forward pass with spectral normalization.
 
         Args:
             x: Input tensor of shape (..., in_features)
-            training: Whether in training mode
 
         Returns:
             Output tensor of shape (..., out_features)
         """
         # Apply spectral normalization to kernel
-        _, normalized_kernel = self.power_iter(self.linear.kernel[...], training)
+        _, normalized_kernel = self.power_iter(self.linear.kernel[...])
 
         # Manually compute linear transformation with normalized kernel
         # Flax Linear kernel shape is (in_features, out_features)
@@ -308,18 +325,17 @@ class SpectralNormalizedConv(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array, training: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Forward pass with spectral normalization.
 
         Args:
             x: Input tensor
-            training: Whether in training mode
 
         Returns:
             Output tensor from spectrally normalized convolution
         """
         # Apply spectral normalization to kernel
-        _, normalized_kernel = self.power_iter(self.conv.kernel[...], training)
+        _, normalized_kernel = self.power_iter(self.conv.kernel[...])
 
         # Temporarily set normalized kernel
         original_kernel = self.conv.kernel[...]
@@ -375,12 +391,11 @@ class AdaptiveSpectralNorm(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array, training: bool = True, **kwargs) -> jax.Array:
+    def __call__(self, x: jax.Array, **kwargs) -> jax.Array:
         """Apply adaptive spectral normalization and forward pass.
 
         Args:
             x: Input tensor
-            training: Whether in training mode
             **kwargs: Additional arguments passed to the layer
 
         Returns:
@@ -397,7 +412,7 @@ class AdaptiveSpectralNorm(nnx.Module):
         original_weight = getattr(self.layer, weight_name)[...]
 
         # Apply spectral normalization with adaptive bound
-        _, normalized_weight = self.power_iter(original_weight, training)
+        _, normalized_weight = self.power_iter(original_weight)
 
         # Scale by learnable bound
         bound_value = self.bound[...]
@@ -493,14 +508,12 @@ class SpectralMultiHeadAttention(nnx.Module):
         self,
         x: jax.Array,
         mask: jax.Array | None = None,
-        training: bool = True,
     ) -> jax.Array:
         """Apply spectral normalized multi-head attention.
 
         Args:
             x: Input tensor of shape (batch, seq_len, features)
             mask: Optional attention mask
-            training: Whether in training mode
 
         Returns:
             Output tensor of shape (batch, seq_len, out_features)
@@ -508,9 +521,9 @@ class SpectralMultiHeadAttention(nnx.Module):
         batch_size, seq_len, _ = x.shape
 
         # Compute Q, K, V with spectral normalization
-        q = self.query_proj(x, training=training)
-        k = self.key_proj(x, training=training)
-        v = self.value_proj(x, training=training)
+        q = self.query_proj(x)
+        k = self.key_proj(x)
+        v = self.value_proj(x)
 
         # Reshape for multi-head attention
         q = q.reshape(batch_size, seq_len, self.num_heads, self.head_dim)
@@ -540,7 +553,7 @@ class SpectralMultiHeadAttention(nnx.Module):
         out = out.reshape(batch_size, seq_len, self.qkv_features)
 
         # Final projection with spectral normalization
-        return self.out_proj(out, training=training)
+        return self.out_proj(out)
 
 
 def _extract_spectral_layer_weight(obj: Any) -> Any:
@@ -584,7 +597,10 @@ def _collect_spectral_norms(obj: Any, spectral_norms: list[float]) -> None:
     if isinstance(obj, spectral_types) and hasattr(obj, "power_iter"):
         weight = _extract_spectral_layer_weight(obj)
         if weight is not None:
-            spectral_norm, _ = obj.power_iter(weight, training=False)
+            # A diagnostic must not mutate: nnx.view yields a copy with the stored
+            # vectors in use, sharing the arrays and leaving `obj` untouched.
+            frozen = nnx.view(obj.power_iter, use_running_average=True)
+            spectral_norm, _ = frozen(weight)
             spectral_norms.append(float(spectral_norm))
 
     for child in _spectral_norm_children(obj):
