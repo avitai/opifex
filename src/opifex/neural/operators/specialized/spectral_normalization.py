@@ -25,6 +25,45 @@ import jax.numpy as jnp
 from flax import nnx
 
 
+def _matrix_shape(weight_shape: tuple[int, ...]) -> tuple[int, int]:
+    """Return the 2D shape a weight is flattened to before power iteration.
+
+    Mirrors the reshape in :meth:`PowerIteration.__call__`, so the stored vectors
+    are sized exactly as that method expects them.
+
+    Args:
+        weight_shape: Shape of the weight to be normalized.
+
+    Returns:
+        Tuple of (height, width) of the flattened matrix.
+
+    Raises:
+        ValueError: If the weight has fewer than two dimensions.
+    """
+    if len(weight_shape) < 2:
+        raise ValueError(f"Spectral normalization needs a matrix, got shape {weight_shape}")
+    width = weight_shape[-1]
+    height = 1
+    for dim in weight_shape[:-1]:
+        height *= dim
+    return height, width
+
+
+def _layer_weight_shape(layer: Any) -> tuple[int, ...] | None:
+    """Return the shape of a layer's kernel/weight, or None when it exposes neither.
+
+    Args:
+        layer: The layer that will be spectrally normalized.
+
+    Returns:
+        The weight shape, or None when the layer has no usable kernel or weight.
+    """
+    weight = getattr(layer, "kernel", getattr(layer, "weight", None))
+    value = getattr(weight, "value", None)
+    shape = getattr(value, "shape", None)
+    return tuple(shape) if shape is not None and len(shape) >= 2 else None
+
+
 class PowerIteration(nnx.Module):
     """Power iteration algorithm for estimating the spectral norm.
 
@@ -40,7 +79,8 @@ class PowerIteration(nnx.Module):
         eps: float = 1e-12,
         use_running_average: bool = False,
         *,
-        rngs: nnx.Rngs,  # noqa: ARG002 - nnx.Module constructor receives rngs
+        weight_shape: tuple[int, ...] | None = None,
+        rngs: nnx.Rngs,
     ) -> None:
         """Initialize power iteration algorithm.
 
@@ -52,15 +92,29 @@ class PowerIteration(nnx.Module):
                 ``nnx.Module.eval()`` set this recursively, as they do for
                 ``nnx.BatchNorm``; the default matches nnx, which constructs
                 modules in training mode.
+            weight_shape: Shape of the weight this will normalize. Given it, the
+                vectors start at the size they will be used at, so they persist
+                across calls and the estimate sharpens. Omit it only when the
+                weight cannot be known at construction, such as a wrapper around
+                a layer that exposes no kernel.
             rngs: Random number generators for initialization
         """
         self.num_iterations = num_iterations
         self.eps = eps
         self.use_running_average = use_running_average
 
-        # Initialize with dummy values - will be updated during first call
-        self.u = nnx.Param(jnp.array([1.0]))
-        self.v = nnx.Param(jnp.array([1.0]))
+        # Size the vectors for the weight they will iterate on. Left as scalar
+        # placeholders they never match, so __call__ re-draws them on every pass and
+        # each estimate starts from a fresh random vector instead of the previous one.
+        # Power iteration only sharpens by carrying its vectors forward, which is what
+        # flax.nnx.SpectralNorm means by updating u "over time".
+        if weight_shape is not None:
+            height, width = _matrix_shape(weight_shape)
+            self.u = nnx.Param(jax.random.normal(rngs.default(), (height,)) / jnp.sqrt(height))
+            self.v = nnx.Param(jax.random.normal(rngs.default(), (width,)) / jnp.sqrt(width))
+        else:
+            self.u = nnx.Param(jnp.array([1.0]))
+            self.v = nnx.Param(jnp.array([1.0]))
 
     def set_view(self, use_running_average: bool | None = None) -> None:
         """Class method used by ``nnx.view``.
@@ -169,6 +223,7 @@ class SpectralNorm(nnx.Module):
         self.power_iter = PowerIteration(
             num_iterations=power_iterations,
             eps=eps,
+            weight_shape=_layer_weight_shape(self.layer),
             rngs=rngs,
         )
 
@@ -246,6 +301,7 @@ class SpectralLinear(nnx.Module):
         self.power_iter = PowerIteration(
             num_iterations=power_iterations,
             eps=eps,
+            weight_shape=_layer_weight_shape(self.linear),
             rngs=rngs,
         )
 
@@ -322,6 +378,7 @@ class SpectralNormalizedConv(nnx.Module):
         self.power_iter = PowerIteration(
             num_iterations=power_iterations,
             eps=eps,
+            weight_shape=_layer_weight_shape(self.conv),
             rngs=rngs,
         )
 
@@ -388,6 +445,7 @@ class AdaptiveSpectralNorm(nnx.Module):
         self.power_iter = PowerIteration(
             num_iterations=power_iterations,
             eps=eps,
+            weight_shape=_layer_weight_shape(self.layer),
             rngs=rngs,
         )
 
