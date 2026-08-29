@@ -345,7 +345,14 @@ class TestSpectralLinear:
         output_normal = spectral_linear(input_data)
 
         assert output_jit.shape == output_normal.shape
-        assert jnp.allclose(output_jit, output_normal, rtol=1e-5)
+        # atol is required, not just rtol. The fused (jit) and unfused (eager) paths sum
+        # the spectral-norm dot products in different orders, and on arm64 the outputs
+        # differ by up to 3e-07 -- about 2.5 float32 ULP at this array's scale. A pure
+        # relative tolerance is unsatisfiable for the near-zero entries: it asks an
+        # element of 0.0085 to agree to 8.5e-08, below one ULP of the dominant scale.
+        # 1e-06 sits well above the reassociation noise and far below a real defect,
+        # which would be orders of magnitude larger.
+        assert jnp.allclose(output_jit, output_normal, rtol=1e-5, atol=1e-6)
 
 
 class TestSpectralNormalizedConv:
