@@ -907,9 +907,8 @@ def carma_kernel(
     * CARMA(2, 1) ≡ Celerite Complex term (Foreman-Mackey+ 2017).
 
     The opifex implementation ships the direct ``O(n²)`` Gram. The
-    scalable ``O(n)`` state-space quasiseparable port is filed as a
-    deferred follow-up in
-    ``memory-bank/.../notes/06-task-11.1-deferred-items.md`` (D7).
+    scalable ``O(n)`` state-space quasiseparable port is a deferred
+    follow-up.
 
     Args:
         alpha: ``(p,)`` array of AR coefficients ``α_0, …, α_{p-1}``.

@@ -4,7 +4,7 @@
 
 ## A unified scientific machine learning framework built on JAX/Flax NNX
 
-*From Latin "opifex" — worker, skilled maker*
+*From Latin "opifex" - worker, skilled maker*
 
 [Documentation](docs/) • [Getting Started](docs/getting-started/installation.md) • [Examples](examples/) • [Contributing](docs/development/contributing.md)
 
@@ -38,9 +38,8 @@
 
 ---
 
-> **⚠️ Early Development - API Unstable**
->
-> Opifex is currently in early development and undergoing rapid iteration. Please be aware of the following implications:
+> **Research preview.** Opifex is under rapid iteration and the API will change while we iterate
+> toward v1.0. What that means concretely:
 >
 > | Area | Status | Impact |
 > |------|--------|--------|
@@ -48,7 +47,11 @@
 > | **Tests** | 🔄 In Flux | Test suite is being expanded. Some tests may fail or be skipped. Coverage metrics are improving but not yet full. |
 > | **Documentation** | 🔄 Evolving | Docs may not reflect current implementation. Code examples might be outdated. Refer to source code and tests for accurate usage. |
 >
-> We recommend waiting for a stable release (v1.0) before using Opifex in production. For research and experimentation, proceed with the understanding that APIs will evolve.
+> Pin a version if you need stability, and do not put it in production yet. For research and
+> experimentation it is ready to use today, with the understanding that APIs will evolve.
+>
+> This is public this early on purpose. Issues, questions and pull requests genuinely steer
+> what gets built next, and a star tells us which layer to push on.
 
 ---
 
@@ -68,7 +71,7 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 - **Physics-Informed Neural Networks**: Standard PINNs plus domain decomposition (FBPINN, XPINN, CPINN)
 - **Atomistic Potentials**: E(3)-equivariant SchNet, PaiNN, and NequIP backbones (with MACE-style higher body-order via symmetric contraction), energy/forces/stress heads, and an ASE calculator
 - **Quantum Chemistry**: Differentiable Kohn-Sham DFT, neural exchange-correlation functionals, variational Monte Carlo, and equivariant Hamiltonian prediction (QH9)
-- **Equivariant Core**: Native E(3) algebra — irreps, Clebsch-Gordan, Wigner-D, and spherical harmonics
+- **Equivariant Core**: Native E(3) algebra - irreps, Clebsch-Gordan, Wigner-D, and spherical harmonics
 - **Uncertainty Quantification**: Conformal prediction, calibration, Gaussian processes, Bayesian quadrature, probabilistic numerics, simulation-based inference, and a broad adapter suite (ensembles, last-layer, SNGP, evidential)
 - **Equation Discovery**: SINDy, Ensemble SINDy, Weak SINDy, and Bayesian SINDy
 - **Field Operations**: JAX-native differential operators, advection, and pressure projection on structured grids

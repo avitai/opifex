@@ -104,10 +104,7 @@ def test_default_strategy_string_values_are_snake_case() -> None:
 
 
 def test_default_strategy_includes_probabilistic_numerics_foundation_members() -> None:
-    """Probabilistic-numerics foundation adds three strategy members.
-
-    Cite: ``memory-bank/implementation-plans/uncertainty-quantification-platform-2026-05-15/06-phase-solvers-probnum-classical-uq.md``.
-    """
+    """Probabilistic-numerics foundation adds three strategy members."""
     assert DefaultStrategy.RANDOMIZED_LINALG == "randomized_linalg"
     assert DefaultStrategy.BAYESIAN_QUADRATURE == "bayesian_quadrature"
     assert DefaultStrategy.STATE_SPACE_FILTERING == "state_space_filtering"
