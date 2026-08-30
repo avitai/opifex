@@ -29,7 +29,16 @@ import pytest
 
 # ``kfac_jax`` ships in the optional ``quantum-chemistry`` extra; skip the whole
 # module cleanly when it (and thus the preconditioner it backs) is unavailable.
-kfac_jax = pytest.importorskip("kfac_jax")
+#
+# importorskip is not enough: it only catches ImportError, and kfac_jax 0.0.8, its
+# latest release, fails at import with AttributeError because it annotates a loss tag
+# with ``jax.core.Effects``, which jax removed in 0.11.0. The package is installed and
+# simply cannot be imported, so the bare importorskip let that AttributeError escape
+# and abort collection for the entire run rather than skipping this module.
+try:
+    import kfac_jax
+except (ImportError, AttributeError) as exc:  # both mean the package is unusable here
+    pytest.skip(f"kfac_jax is unusable: {exc}", allow_module_level=True)
 
 import itertools
 
