@@ -54,6 +54,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the spectral-norm vectors are no longer written back; previously inference
     silently mutated them, since the flag defaulted to `True`.
 
+### Known limitations
+
+- `kfac_jax` cannot be imported on the jax this release requires. Its latest
+  release, 0.0.8, annotates a loss tag with `jax.core.Effects`, which jax removed
+  in 0.11.0, so importing it raises `AttributeError`. The `quantum-chemistry`
+  extra still declares `kfac-jax>=0.0.8` so a future compatible release is picked
+  up automatically, but `opifex.neural.quantum.vmc.kfac_preconditioner` is
+  unusable until then, and its tests skip with that reason.
+
 ### Fixed
 
 - `PowerIteration` sizes its `u` and `v` vectors for the weight they normalize.
