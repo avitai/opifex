@@ -240,6 +240,11 @@ test = [
   # so what the suite needs is declared here rather than in each workflow that runs
   # it. Referencing the extra keeps one source of truth for their versions.
   "opifex[platform]",
+  # tests/examples/test_examples_smoke.py imports every example module, and
+  # examples/data/pdebench_loading.py imports h5py alongside
+  # opifex.data.sources.scientific. scientific-data is the extra backing that
+  # module; pdebench also carries h5py but drags in torch.
+  "opifex[scientific-data]",
   # Async SQLite driver + greenlet (SQLAlchemy asyncio needs greenlet; it is pulled
   # in transitively on Linux but not on macOS) for the registry persistence tests.
   "aiosqlite>=0.20.0",
