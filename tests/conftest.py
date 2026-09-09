@@ -296,6 +296,22 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "cuda_local: mark test as requiring local .venv CUDA")
 
 
+def pytest_collection_finish(session: pytest.Session) -> None:
+    """Fail collection when a test module switched x64 on at import.
+
+    Modules are imported in collection order, so a module-level
+    ``jax.config.update("jax_enable_x64", True)`` makes every module collected
+    after it build float64 constants, which then meet the per-test x64-off
+    bookend (``jnp.log10`` on such an array raises ``TypeError``). Enable x64
+    inside a fixture instead (``tests/uncertainty/curvature/conftest.py``).
+    """
+    if jax.config.jax_enable_x64:
+        session.shouldfail = (
+            "jax_enable_x64 is on after collection: a test module enabled it at "
+            "import time; enable it in a fixture instead"
+        )
+
+
 def pytest_collection_modifyitems(config, items):
     """Modify test collection based on environment capabilities."""
     dep_manager = get_dependency_manager()

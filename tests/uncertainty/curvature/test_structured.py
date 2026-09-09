@@ -32,7 +32,7 @@ from opifex.uncertainty.curvature.structured import (
 
 # All residual checks run in float64 so the structured-vs-dense agreement can
 # be asserted at ~1e-10; the jit/grad/vmap smokes are dtype-agnostic.
-jax.config.update("jax_enable_x64", True)
+pytestmark = pytest.mark.usefixtures("float64")
 
 _RESIDUAL_TOLERANCE = 1e-9
 

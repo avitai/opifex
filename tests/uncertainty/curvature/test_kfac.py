@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import pytest
 
 from opifex.uncertainty.curvature.kfac import (
     kfac_factors,
@@ -28,7 +29,7 @@ from opifex.uncertainty.curvature.structured import (
 )
 
 
-jax.config.update("jax_enable_x64", True)
+pytestmark = pytest.mark.usefixtures("float64")
 
 
 def _mlp_apply(parameters: tuple[jax.Array, ...], inputs: jax.Array) -> jax.Array:
