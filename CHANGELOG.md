@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-09
+
 ### Fixed
 
 - The PIKAN reference in `opifex.neural.kan.pikan` names its authors (Toscano et
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/comparisons/jax-pde-landscape.md`: jNO, jinns, PINNx, DeepXDE and
   NeuralPDE.jl next to opifex, by what each states about itself.
 - README install path from PyPI (`uv add opifex`), and the `mlflow` extra.
+- Dependency floors: `substrax>=0.1.4`, `datarax>=0.1.6`, `calibrax>=0.1.5`,
+  `avitai-artifex>=0.1.5`.
 
 ### Changed
 
@@ -75,12 +79,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `opifex.uncertainty.metrics`, `opifex.uncertainty.calibration` (the
   calibrator stays) and `opifex.core.metrics` are calibrax's since calibrax
   0.1.3 (`calibrax.metrics.functional.{forecasting,uncertainty,calibration,regression}`).
-  The opifex names remain for this release as keyword-argument wrappers that
+  The 26 opifex names remain for this release as keyword-argument wrappers that
   emit a `DeprecationWarning` naming the calibrax function, and are removed in
-  0.2.3. Internal call sites (the trainer's relative L2 loss, the calibration
-  aggregators' ECE, MCE and reliability bins, the examples and the guides) call
-  calibrax directly; opifex's tests of the metric formulas went with the code,
-  calibrax's suite carries them.
+  0.2.3: `opifex.uncertainty.forecasting_metrics.{crps, fair_crps, energy_score,
+  rank_histogram, spread_skill_ratio, pit_histogram, ranked_probability_score,
+  event_reliability, ensemble_ranked_probability_score,
+  ranked_probability_skill_score}`, `opifex.uncertainty.metrics.{predictive_entropy,
+  mutual_information, interval_score, winkler_score, anees, non_credibility_index,
+  chi2_confidence_intervals}`, `opifex.uncertainty.calibration.{gaussian_nll,
+  brier_score, expected_calibration_error, pinball_loss, picp, mpiw,
+  regression_calibration_error}` and `opifex.core.metrics.{per_sample_relative_l2,
+  relative_l2_error}`. Internal call sites (the trainer's relative L2 loss, the
+  calibration aggregators' ECE, MCE and reliability bins, the examples and the
+  guides) call calibrax directly; opifex's tests of the metric formulas went with
+  the code, calibrax's suite carries them.
+- `opifex.benchmarking.BenchmarkRegistry` and
+  `opifex.benchmarking.benchmark_registry.BenchmarkRegistry` resolve to
+  `OperatorBenchmarkRegistry` through a module `__getattr__` that emits a
+  `DeprecationWarning`; the old name is removed in 0.2.3.
 
 ### Removed
 

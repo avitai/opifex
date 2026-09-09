@@ -424,7 +424,7 @@ wheels = [
 
 [[package]]
 name = "avitai-artifex"
-version = "0.1.4"
+version = "0.1.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blackjax" },
@@ -434,7 +434,6 @@ dependencies = [
     { name = "distrax" },
     { name = "flax" },
     { name = "grain" },
-    { name = "graphviz" },
     { name = "jax" },
     { name = "jaxtyping" },
     { name = "matplotlib" },
@@ -448,14 +447,13 @@ dependencies = [
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "scipy" },
+    { name = "substrax" },
     { name = "tqdm" },
-    { name = "trimesh" },
-    { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/e8/c8d71593a160439d6a96e7f43f4fe5c67dc26bd8880411ed183b0a3ce797/avitai_artifex-0.1.4.tar.gz", hash = "sha256:8fe082caf5937b592ec9983b519027cb2a877165996e9366f84f596b98f12cd2", size = 684180, upload-time = "2026-08-29T21:41:44.692Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/51/871f755d76d09e5623ddf812a8cbe99ec52ea7772999ebd138eda47a4428/avitai_artifex-0.1.5.tar.gz", hash = "sha256:a7c8e0ea0ba3632d6ba8a9c3890a2f088e1f0a60d6637253ae1abd5ca8b3a3ee", size = 637769, upload-time = "2026-09-09T16:21:36.774Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/3c/eed8dcc74a28e1622236d398eafee8bf426c123d059548b4f3ef2516a6ef/avitai_artifex-0.1.4-py3-none-any.whl", hash = "sha256:d192e865b4b1ac7d21f40628e600e1e3fcddf456603195ab25ec7cf1e4a2d0cf", size = 925344, upload-time = "2026-08-29T21:41:42.692Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/42/4644a77873b1979ec48cb4121aeef2f583366e0421d7ec5f0b5a076a93b8/avitai_artifex-0.1.5-py3-none-any.whl", hash = "sha256:aea7944aadca031dc6145b9dcc328b9645abda57129c845bc14e56325a70a365", size = 854302, upload-time = "2026-09-09T16:21:34.219Z" },
 ]
 
 [[package]]
@@ -2015,15 +2013,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d1/13/98fbf8d67552f102488ffc16c6f559ce71ea15f6294728d33928ab5ff14d/graphql-relay-3.2.0.tar.gz", hash = "sha256:1ff1c51298356e481a0be009ccdff249832ce53f30559c1338f22a0e0d17250c", size = 50027, upload-time = "2022-04-16T11:03:45.447Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/74/16/a4cf06adbc711bd364a73ce043b0b08d8fa5aae3df11b6ee4248bcdad2e0/graphql_relay-3.2.0-py3-none-any.whl", hash = "sha256:c9b22bd28b170ba1fe674c74384a8ff30a76c8e26f88ac3aa1584dd3179953e5", size = 16940, upload-time = "2022-04-16T11:03:43.895Z" },
-]
-
-[[package]]
-name = "graphviz"
-version = "0.21"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f8/b3/3ac91e9be6b761a4b30d66ff165e54439dcd48b83f4e20d644867215f6ca/graphviz-0.21.tar.gz", hash = "sha256:20743e7183be82aaaa8ad6c93f8893c923bd6658a04c32ee115edb3c8a835f78", size = 200434, upload-time = "2025-06-15T09:35:05.824Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl", hash = "sha256:54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42", size = 47300, upload-time = "2025-06-15T09:35:04.433Z" },
 ]
 
 [[package]]
@@ -4373,7 +4362,7 @@ wheels = [
 
 [[package]]
 name = "opifex"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "avitai-artifex" },
@@ -4841,7 +4830,7 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'platform'", specifier = ">=1.13.0" },
     { name = "ase", marker = "extra == 'neural-dft'", specifier = ">=3.22.0" },
     { name = "asyncpg", marker = "extra == 'platform'", specifier = ">=0.29.0" },
-    { name = "avitai-artifex", specifier = ">=0.1.4" },
+    { name = "avitai-artifex", specifier = ">=0.1.5" },
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.5" },
     { name = "basis-set-exchange", marker = "extra == 'quantum-chemistry'", specifier = ">=0.9.0" },
     { name = "beartype", specifier = ">=0.15.0" },
@@ -4966,7 +4955,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.5.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'platform'", specifier = ">=0.34.3" },
 ]
-provides-extras = ["all", "all-cpu", "all-macos", "cuda-dev", "cuda12", "dev", "docs", "mlflow", "metal", "neural-dft", "opifex-dev", "pdebench", "platform", "probabilistic", "profiling", "quantum-chemistry", "scientific-data", "test"]
+provides-extras = ["all", "all-cpu", "all-macos", "cuda-dev", "cuda12", "dev", "docs", "metal", "mlflow", "neural-dft", "opifex-dev", "pdebench", "platform", "probabilistic", "profiling", "quantum-chemistry", "scientific-data", "test"]
 
 [[package]]
 name = "opt-einsum"
@@ -6830,15 +6819,6 @@ wheels = [
 ]
 
 [[package]]
-name = "shellingham"
-version = "1.5.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
-]
-
-[[package]]
 name = "simplejson"
 version = "3.20.2"
 source = { registry = "https://pypi.org/simple" }
@@ -7413,18 +7393,6 @@ wheels = [
 ]
 
 [[package]]
-name = "trimesh"
-version = "4.11.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/41/de14e2fa9b2d99214c60402fc57d2efb201f2925b16d6bee289565901d83/trimesh-4.11.2.tar.gz", hash = "sha256:30fbde5b8dd7c157e7ff4d54286cb35291844fd3f4d0364e8b2727f1b308fb06", size = 835044, upload-time = "2026-02-10T16:00:27.58Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/b9/da09903ea53b677a58ba770112de6fe8b2acb8b4cd9bffae4ff6cfe7c072/trimesh-4.11.2-py3-none-any.whl", hash = "sha256:25e3ab2620f9eca5c9376168c67aabdd32205dad1c4eea09cd45cd4a3edf775a", size = 740328, upload-time = "2026-02-10T16:00:25.246Z" },
-]
-
-[[package]]
 name = "triton"
 version = "3.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -7457,21 +7425,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/92/3c/58f808a359700f39a967dffede33efeac809262c03303fa3eec6afff8f49/twine-7.0.0.tar.gz", hash = "sha256:85cdb29c518efef867360ae4acd4b0dfd61c8654a22fca08e6f8539f05022177", size = 215032, upload-time = "2026-07-27T15:59:00.825Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/96/08/ddcdc06225eaad6de0e48e1002b06d919dbde20582d0662c7af51308e5d6/twine-7.0.0-py3-none-any.whl", hash = "sha256:b854164df26db268af05f49aa5c0344b10e27a494343ff05b1e0bad3b135f5a7", size = 43204, upload-time = "2026-07-27T15:58:59.26Z" },
-]
-
-[[package]]
-name = "typer"
-version = "0.24.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "annotated-doc" },
-    { name = "click" },
-    { name = "rich" },
-    { name = "shellingham" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f5/24/cb09efec5cc954f7f9b930bf8279447d24618bb6758d4f6adf2574c41780/typer-0.24.1.tar.gz", hash = "sha256:e39b4732d65fbdcde189ae76cf7cd48aeae72919dea1fdfc16593be016256b45", size = 118613, upload-time = "2026-02-21T16:54:40.609Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4a/91/48db081e7a63bb37284f9fbcefda7c44c277b18b0e13fbc36ea2335b71e6/typer-0.24.1-py3-none-any.whl", hash = "sha256:112c1f0ce578bfb4cab9ffdabc68f031416ebcc216536611ba21f04e9aa84c9e", size = 56085, upload-time = "2026-02-21T16:54:41.616Z" },
 ]
 
 [[package]]
