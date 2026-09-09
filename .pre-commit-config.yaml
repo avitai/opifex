@@ -53,7 +53,7 @@ repos:
     hooks:
       - id: ruff-github-actions-check
         name: ruff-github-actions-check (mirrors CI)
-        entry: uv run ruff check --output-format=github
+        entry: uv run --no-sync ruff check --output-format=github
         language: system
         types: [python]
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
@@ -61,7 +61,7 @@ repos:
         always_run: true
       - id: ruff-critical-check
         name: ruff-critical-check (fast CI-critical rules only)
-        entry: uv run ruff check --select=RUF005,B904,F821,F822,F823 --output-format=github
+        entry: uv run --no-sync ruff check --select=RUF005,B904,F821,F822,F823 --output-format=github
         language: system
         types: [python]
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
@@ -92,7 +92,7 @@ repos:
     hooks:
       - id: pyright
         name: pyright
-        entry: uv run pyright --warnings
+        entry: uv run --no-sync pyright --warnings
         language: system
         types: [python]
         pass_filenames: false
@@ -103,16 +103,38 @@ repos:
     hooks:
       - id: lint-imports
         name: lint-imports
-        entry: uv run lint-imports
+        entry: uv run --no-sync lint-imports
         language: system
         types: [python]
         pass_filenames: false
         always_run: true
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
 
+  # pyproject.toml is well-formed against the packaging metadata schema
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+
+  # Docstring coverage floor ([tool.interrogate]) and docstring/signature agreement
+  - repo: local
+    hooks:
+      - id: interrogate
+        name: interrogate (docstring coverage)
+        entry: uv run --no-sync interrogate -c pyproject.toml src/
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: pydoclint
+        name: pydoclint (docstring sections match signatures; baseline only shrinks)
+        entry: uv run --no-sync pydoclint --config=pyproject.toml --baseline quality/pydoclint_baseline.txt --auto-regenerate-baseline True src/
+        language: system
+        pass_filenames: false
+        files: ^(src/opifex/.*\.py|quality/pydoclint_baseline\.txt|pyproject\.toml)$
+
   # Workshop-inspired security scanning
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.3
+    rev: 1.8.6
     hooks:
       - id: bandit
         args: ["-c", "pyproject.toml"]

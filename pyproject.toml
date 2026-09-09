@@ -120,6 +120,8 @@ cuda12 = [
 ]
 dev = [
   "build>=1.0.3",
+  "interrogate>=1.5",
+  "pydoclint>=0.5",
   # Testing and coverage dependencies
   "coverage>=7.9.2",
   "pytest>=8.4.1",
@@ -249,6 +251,7 @@ test = [
   # in transitively on Linux but not on macOS) for the registry persistence tests.
   "aiosqlite>=0.20.0",
   "greenlet>=3.0.0",
+  "hypothesis>=6.100",
   "beartype>=0.14.1",
   "coverage>=7.9.2",
   # Reference pseudo-spectral PDE solvers, used to cross-check
@@ -296,6 +299,10 @@ skips = [
 # Allow assert statements in test files and scripts only
 [tool.bandit.assert_used]
 skips = ["*/tests/*", "tests/*", "*/scripts/*", "scripts/*"]
+
+[tool.coverage.report]
+# The floor every test run enforces; CI combines the shards and applies it once.
+fail_under = 80
 
 [tool.coverage.run]
 branch = true
@@ -353,6 +360,18 @@ documentation = "docs/setup/cuda-setup.md"
 environment_file = ".opifex.env"
 fallback_to_cpu = true
 setup_scripts = ["setup.sh", "scripts/setup_env.py"]
+
+[tool.pydoclint]
+allow-init-docstring = true
+arg-type-hints-in-docstring = false
+# Instance attributes are documented under Attributes per the Google style; pydoclint would
+# compare them with class-level attributes only.
+check-class-attributes = false
+# Annotations are the source of truth for types; docstrings carry the prose.
+check-return-types = false
+check-yield-types = false
+exclude = "\\.venv|memory-bank|documents|custom_modes|\\.cursor|example_data"
+style = "google"
 
 # Pydocstyle documentation configuration
 [tool.pydocstyle]
@@ -442,6 +461,7 @@ addopts = [
   "-vv",
   "--tb=short",
   "--strict-markers",
+  "--strict-config",
   "--disable-warnings",
   "--cov=src/opifex",
   "--cov-report=html",
@@ -670,9 +690,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/benchmarking/evaluation_engine.py" = [
   "T201" # Print statements for evaluation warnings and feedback
 ]
-"src/opifex/core/gpu_optimization.py" = [
-  "T201" # Print statements for benchmark results and user feedback
-]
 # Physics-loss and conservation interfaces carry the full residual context
 # (network, coordinates, targets, rngs) mandated by the loss-strategy protocol.
 "src/opifex/core/physics/losses.py" = [
@@ -731,9 +748,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 # into a config object would obscure, not clarify, the architecture.
 "src/opifex/neural/**/*.py" = [
   "PLR0913" # nnx.Module constructors / operator factories: one kwarg per hyperparameter
-]
-"src/opifex/neural/bayesian/blackjax_integration.py" = [
-  "T201" # Print statements for MCMC fallback warnings
 ]
 "src/opifex/optimization/production.py" = [
   "PLR0913" # nnx.Module assembling production subsystems: one kwarg per component

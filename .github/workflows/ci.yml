@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --extra dev
 
+      - name: Check the lockfile is current
+        run: uv lock --check
+
       - name: Run Ruff linter
         run: uv run ruff check --output-format=github
 
@@ -190,7 +193,7 @@ jobs:
         run: uv build
 
       - name: Check package
-        run: uv run twine check dist/*
+        run: uv run twine check --strict dist/*
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

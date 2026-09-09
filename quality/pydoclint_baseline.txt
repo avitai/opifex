@@ -1,0 +1,871 @@
+src/opifex/benchmarking/analysis_engine.py
+    DOC501: Method `AnalysisEngine.compare_operators` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `AnalysisEngine.compare_operators` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/benchmarking/baseline_repository.py
+    DOC501: Method `BaselineRepository.get_best_baseline` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BaselineRepository.get_best_baseline` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/benchmarking/benchmark_runner.py
+    DOC501: Method `BenchmarkRunner.run_comprehensive_benchmark` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BenchmarkRunner.run_comprehensive_benchmark` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `BenchmarkRunner.execute_domain_specific_suite` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BenchmarkRunner.execute_domain_specific_suite` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/benchmarking/evaluation_engine.py
+    DOC501: Method `BenchmarkEvaluator.evaluate_model` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BenchmarkEvaluator.evaluate_model` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/benchmarking/pdebench_integration.py
+    DOC501: Method `PDEBenchLoader.get_dataset_info` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PDEBenchLoader.get_dataset_info` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/benchmarking/report_generator.py
+    DOC501: Method `PDEBenchReportGenerator.save_report` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PDEBenchReportGenerator.save_report` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/benchmarking/results_manager.py
+    DOC501: Method `ResultsManager.export_database` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ResultsManager.export_database` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/benchmarking/validators/chemical_accuracy.py
+    DOC304: Class `ChemicalAccuracyValidator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC502: Method `ChemicalAccuracyValidator.assess` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/benchmarking/validators/conservation.py
+    DOC304: Class `ConservationValidator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/benchmarking/visualization_tools.py
+    DOC501: Method `PDEBenchVisualizer.create_comparison_chart` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PDEBenchVisualizer.create_comparison_chart` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `PDEBenchVisualizer.create_multi_metric_comparison` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PDEBenchVisualizer.create_multi_metric_comparison` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/conditions.py
+    DOC501: Method `BoundaryCondition.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BoundaryCondition.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `InitialCondition.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `InitialCondition.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC101: Method `NeumannBC.apply`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `NeumannBC.apply`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [**kwargs: Any].
+    DOC501: Method `RobinBC.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `RobinBC.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC101: Method `RobinBC.apply`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `RobinBC.apply`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [**kwargs: Any].
+    DOC501: Method `WavefunctionBC.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `WavefunctionBC.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `DensityConstraint.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `DensityConstraint.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `SymmetryConstraint.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SymmetryConstraint.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `QuantumInitialCondition.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `QuantumInitialCondition.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `QuantumConstraint.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `QuantumConstraint.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/physics/boundaries.py
+    DOC502: Function `apply_mixed` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC001: Function/method `apply_boundary_condition`: Potential formatting errors in docstring. Error message: Expected a colon in 'For ``BoundaryType.MIXED`` the keyword arguments are forwarded to'. (Note: DOC001 could trigger other unrelated violations under this function/method too. Please fix the docstring formatting first.)
+--------------------
+src/opifex/core/physics/losses.py
+    DOC502: Method `ResidualComputer.compute_residual` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/core/physics/ntk/diagnostics.py
+    DOC501: Method `NTKTrainingDiagnostics.predict_errors_at` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `NTKTrainingDiagnostics.predict_errors_at` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/physics/ntk/wrapper.py
+    DOC501: Function `flatten_jacobian` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `flatten_jacobian` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/physics/pde_registry.py
+    DOC503: Method `PDEResidualRegistry.register` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['KeyError', 'TypeError', 'ValueError']. Raised exceptions in the body: ['TypeError', 'ValueError'].
+    DOC502: Method `PDEResidualRegistry.get_info` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/core/quantum/_flat_harness.py
+    DOC101: Function `_build_quartet_gather`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_build_quartet_gather`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [flat: FlatPrimitives, members: list[np.ndarray], quartets: np.ndarray].
+--------------------
+src/opifex/core/quantum/backend.py
+    DOC304: Class `JaxGaussianBackend`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/core/quantum/molecular_system.py
+    DOC501: Function `create_molecular_system` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `create_molecular_system` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/quantum/operators.py
+    DOC501: Method `MomentumOperator.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MomentumOperator.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['NotImplementedError'].
+    DOC501: Method `KineticEnergyOperator.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `KineticEnergyOperator.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['NotImplementedError'].
+    DOC501: Method `PotentialEnergyOperator.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PotentialEnergyOperator.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/quantum/protocols.py
+    DOC304: Class `RadiusNeighborList`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/core/quantum/registry.py
+    DOC101: Method `_AtomisticRegistry.register`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `_AtomisticRegistry.register`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [item: type, name: str].
+    DOC101: Method `_AtomisticRegistry.require`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `_AtomisticRegistry.require`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [name: str].
+    DOC201: Method `_AtomisticRegistry.require` does not have a return section in docstring
+--------------------
+src/opifex/core/spectral/fft_operations.py
+    DOC503: Function `spectral_derivative` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['TypeError', 'ValueError']. Raised exceptions in the body: ['ValueError'].
+    DOC502: Function `fft_frequency_grid` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/core/spectral/spectral_utils.py
+    DOC101: Function `energy_spectrum`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `energy_spectrum`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [axis: Axis | None].
+    DOC101: Function `spectral_energy`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `spectral_energy`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [axis: Axis | None].
+    DOC101: Function `wavenumber_grid`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `wavenumber_grid`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [axis: Axis | None].
+    DOC503: Function `wavenumber_grid` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['ValueError']. Raised exceptions in the body: ['AssertionError', 'ValueError'].
+--------------------
+src/opifex/core/spectral/validation.py
+    DOC503: Function `validate_grid_spacing` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['TypeError', 'ValueError']. Raised exceptions in the body: ['TypeError'].
+--------------------
+src/opifex/core/testing_infrastructure.py
+    DOC201: Function `requires_dependency` does not have a return section in docstring
+--------------------
+src/opifex/core/training/callbacks.py
+    DOC304: Class `EarlyStopping`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `EarlyStopping`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+    DOC304: Class `ReduceLROnPlateau`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `ReduceLROnPlateau`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/core/training/components/__init__.py
+    DOC503: Method `MixedPrecisionComponent.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['TypeError', 'ValueError']. Raised exceptions in the body: ['TypeError'].
+--------------------
+src/opifex/core/training/components/recovery.py
+    DOC501: Method `ErrorRecoveryManager.recover_from_instability` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ErrorRecoveryManager.recover_from_instability` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/core/training/monitoring/flops.py
+    DOC501: Method `FlopsCounter.count_backward_flops` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FlopsCounter.count_backward_flops` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['AttributeError', 'TypeError'].
+--------------------
+src/opifex/core/training/strategies/mixed_precision.py
+    DOC501: Function `align_for_tensorcore` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `align_for_tensorcore` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/training/strategies/multilevel/cascade_training.py
+    DOC501: Method `CascadeTrainer.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `CascadeTrainer.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/core/training/trainer.py
+    DOC304: Class `Trainer`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/data/sources/qh9_padded_source.py
+    DOC304: Class `QH9PaddedSource`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC502: Function `create_qh9_padded_sources` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC503: Function `create_qh9_dynamic_padded_sources` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['FileNotFoundError', 'ValueError']. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/data/sources/qh9_source.py
+    DOC502: Function `def2svp_decode_indices` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC502: Function `matrix_transform_def2svp` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/data/sources/rmd17_source.py
+    DOC502: Function `create_rmd17_loader` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/data/sources/scientific.py
+    DOC501: Method `PDEBenchSource._create_sliding_windows` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PDEBenchSource._create_sliding_windows` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC101: Method `VTKMeshSource._cells_to_coo`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `VTKMeshSource._cells_to_coo`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [cells: list[Any]].
+--------------------
+src/opifex/deployment/ase_calculator.py
+    DOC304: Class `OpifexCalculator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `OpifexCalculator`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+    DOC503: Method `OpifexCalculator.calculate` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['PropertyNotImplementedError']. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/deployment/core_serving.py
+    DOC101: Method `ModelRegistry._registered_name_for`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `ModelRegistry._registered_name_for`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [model: nnx.Module].
+    DOC201: Method `ModelRegistry._registered_name_for` does not have a return section in docstring
+    DOC502: Method `ModelRegistry.register_model` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC101: Method `ModelRegistry._build_abstract_template`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `ModelRegistry._build_abstract_template`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [model_info: dict[str, Any]].
+    DOC201: Method `ModelRegistry._build_abstract_template` does not have a return section in docstring
+    DOC503: Method `ModelRegistry._build_abstract_template` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['KeyError', 'TypeError', 'ValueError']. Raised exceptions in the body: ['ValueError'].
+    DOC503: Method `ModelRegistry.get_model` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['KeyError', 'RuntimeError', 'TypeError', 'ValueError']. Raised exceptions in the body: ['RuntimeError', 'ValueError'].
+    DOC501: Method `ModelRegistry.get_latest_version` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ModelRegistry.get_latest_version` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `ModelRegistry.get_model_by_version` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ModelRegistry.get_model_by_version` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `InferenceEngine.predict` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `InferenceEngine.predict` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError', 'ValueError'].
+    DOC501: Method `ModelServer.predict` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ModelServer.predict` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError', 'ValueError'].
+--------------------
+src/opifex/deployment/monitoring/logging.py
+    DOC402: Method `StructuredLogger.timed_operation` has "yield" statements, but the docstring does not have a "Yields" section
+    DOC501: Method `StructuredLogger.timed_operation` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `StructuredLogger.timed_operation` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['Exception'].
+--------------------
+src/opifex/deployment/resource_management/global_manager.py
+    DOC502: Method `GlobalResourceManager.allocate_resources_with_intelligence` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/deployment/servable_registry.py
+    DOC101: Method `ServableModelRegistry.register`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `ServableModelRegistry.register`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [item: type[nnx.Module], name: str].
+    DOC101: Method `ServableModelRegistry.require`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `ServableModelRegistry.require`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [name: str].
+    DOC201: Method `ServableModelRegistry.require` does not have a return section in docstring
+--------------------
+src/opifex/deployment/server.py
+    DOC501: Function `predict` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `predict` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['HTTPException'].
+--------------------
+src/opifex/discovery/sindy/ensemble_sindy.py
+    DOC501: Method `EnsembleSINDy.predict` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `EnsembleSINDy.predict` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+    DOC501: Method `EnsembleSINDy.equations` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `EnsembleSINDy.equations` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/discovery/sindy/library.py
+    DOC501: Method `CandidateLibrary.get_feature_names` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `CandidateLibrary.get_feature_names` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+    DOC101: Method `CandidateLibrary._compute_powers`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `CandidateLibrary._compute_powers`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [degree: int, n_features: int].
+--------------------
+src/opifex/discovery/sindy/weak_sindy.py
+    DOC501: Method `WeakSINDy.predict` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `WeakSINDy.predict` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+    DOC501: Method `WeakSINDy.equations` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `WeakSINDy.equations` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/discovery/symbolic.py
+    DOC501: Method `SymbolicRegressor.predict` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SymbolicRegressor.predict` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+    DOC501: Method `SymbolicRegressor.best_equation` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SymbolicRegressor.best_equation` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/fields/operations.py
+    DOC501: Function `_pad_field` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `_pad_field` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `curl_2d` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `curl_2d` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/geometry/algebra/wigner.py
+    DOC501: Function `clebsch_gordan_numpy` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `clebsch_gordan_numpy` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `_generators_numpy` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `_generators_numpy` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `clebsch_gordan` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `clebsch_gordan` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `wigner_d` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `wigner_d` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `wigner_d_fast` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `wigner_d_fast` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/geometry/csg/molecular.py
+    DOC501: Method `PeriodicCell.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PeriodicCell.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/geometry/csg/primitives.py
+    DOC501: Method `Interval.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Interval.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `Rectangle.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Rectangle.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `Circle.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Circle.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/geometry/manifolds/base.py
+    DOC501: Method `Manifold.christoffel_symbols` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Manifold.christoffel_symbols` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['NotImplementedError'].
+    DOC501: Method `Manifold.parallel_transport` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Manifold.parallel_transport` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['NotImplementedError'].
+--------------------
+src/opifex/geometry/manifolds/hyperbolic.py
+    DOC501: Method `HyperbolicManifold.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `HyperbolicManifold.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `HyperbolicManifold.random_point` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `HyperbolicManifold.random_point` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/geometry/manifolds/operators.py
+    DOC304: Class `ManifoldNeuralOperator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/geometry/manifolds/riemannian.py
+    DOC501: Method `RiemannianManifold.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `RiemannianManifold.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/geometry/manifolds/spherical.py
+    DOC501: Method `SphericalManifold.random_point` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SphericalManifold.random_point` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/activations.py
+    DOC503: Function `get_activation` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['ValueError']. Raised exceptions in the body: ['TypeError', 'ValueError'].
+    DOC501: Function `register_activation` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `register_activation` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['TypeError', 'ValueError'].
+    DOC501: Function `snake_activation` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `snake_activation` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `gaussian_activation` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `gaussian_activation` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/atomistic/backbones/nequip.py
+    DOC501: Method `_ConvolutionLayer.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `_ConvolutionLayer.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC304: Class `NequIP`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `NequIP`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/backbones/painn.py
+    DOC304: Class `PaiNN`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/backbones/schnet.py
+    DOC304: Class `SchNet`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/base.py
+    DOC304: Class `AtomisticModel`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `AtomisticModel`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/conditioning.py
+    DOC304: Class `_IntegerEmbedding`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `ChargeSpinConditioning`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/heads/charge.py
+    DOC304: Class `ChargeHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/heads/dipole.py
+    DOC304: Class `DipoleHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/heads/direct_forces.py
+    DOC304: Class `DirectForcesHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/heads/energy.py
+    DOC304: Class `EnergyHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/heads/evidential.py
+    DOC304: Class `EvidentialEnergyHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/heads/polarizability.py
+    DOC304: Class `PolarizabilityHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/long_range.py
+    DOC304: Class `LatentEwaldHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/lora.py
+    DOC304: Class `LoRALinear`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `LoRALinear`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/atomistic/multitask.py
+    DOC304: Class `MultiTaskEnergyHead`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `MultiTaskEnergyHead`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+    DOC101: Method `MultiTaskEnergyHead.task_head`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `MultiTaskEnergyHead.task_head`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [task_name: str].
+    DOC201: Method `MultiTaskEnergyHead.task_head` does not have a return section in docstring
+    DOC501: Method `MultiTaskEnergyHead.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiTaskEnergyHead.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['TypeError'].
+    DOC201: Method `MultiTaskEnergyHead.with_task` does not have a return section in docstring
+    DOC201: Method `MultiTaskEnergyHead.without_task` does not have a return section in docstring
+--------------------
+src/opifex/neural/base.py
+    DOC501: Method `StandardMLP.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `StandardMLP.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/bayesian/probabilistic_pinns.py
+    DOC501: Method `MultiFidelityPINN.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiFidelityPINN.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['TypeError', 'ValueError'].
+    DOC501: Method `MultiFidelityPINN.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiFidelityPINN.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `ProbabilisticPINN.boundary_coverage` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ProbabilisticPINN.boundary_coverage` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `create_multifidelity_pinn` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `create_multifidelity_pinn` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/bayesian/variational_framework.py
+    DOC501: Method `MeanFieldGaussian.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MeanFieldGaussian.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `MeanFieldGaussian.loss_components` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MeanFieldGaussian.loss_components` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/equivariant/cartesian.py
+    DOC501: Function `_symmetric_to_l2_basis` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `_symmetric_to_l2_basis` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/equivariant/radial.py
+    DOC501: Method `BesselBasis.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BesselBasis.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `GaussianBasis.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `GaussianBasis.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `PiecewiseLinearBasis.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PiecewiseLinearBasis.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/equivariant/symmetric_contraction.py
+    DOC304: Class `SymmetricContraction`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `SymmetricContraction`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/operators/__init__.py
+    DOC101: Function `get_operator_capability`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `get_operator_capability`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [operator_type: str].
+    DOC201: Function `get_operator_capability` does not have a return section in docstring
+    DOC502: Function `get_operator_capability` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/neural/operators/common/embeddings.py
+    DOC501: Method `GridEmbeddingND.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `GridEmbeddingND.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `GridEmbeddingND._generate_grid` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `GridEmbeddingND._generate_grid` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `SinusoidalEmbedding.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SinusoidalEmbedding.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `SinusoidalEmbedding.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SinusoidalEmbedding.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['AssertionError', 'ValueError'].
+    DOC501: Function `grid_resolutions_from_boundaries` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `grid_resolutions_from_boundaries` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['NotImplementedError', 'RuntimeError'].
+--------------------
+src/opifex/neural/operators/common/tensor_ops.py
+    DOC501: Function `standardized_fft` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `standardized_fft` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `standardized_ifft` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `standardized_ifft` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC503: Function `safe_einsum` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['ValueError']. Raised exceptions in the body: ['Exception'].
+--------------------
+src/opifex/neural/operators/deeponet/base.py
+    DOC501: Method `DeepONet.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `DeepONet.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `DeepONet.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `DeepONet.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `MultiFidelityDeepONet.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiFidelityDeepONet.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `MultiFidelityDeepONet.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiFidelityDeepONet.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['AssertionError', 'ValueError'].
+--------------------
+src/opifex/neural/operators/deeponet/multiphysics.py
+    DOC501: Method `MultiPhysicsDeepONet._normalize_trunk_input` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiPhysicsDeepONet._normalize_trunk_input` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/deeponet/pod.py
+    DOC501: Method `PODDeepONet.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PODDeepONet.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/fno/_factorized.py
+    DOC501: Function `tucker_ranks` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `tucker_ranks` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/fno/factorized.py
+    DOC501: Method `FactorizedFourierLayer.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FactorizedFourierLayer.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/fno/local.py
+    DOC501: Method `LocalFourierLayer.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `LocalFourierLayer.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC101: Method `LocalFourierNeuralOperator.analyze_global_local_contributions`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `LocalFourierNeuralOperator.analyze_global_local_contributions`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [x: Array].
+--------------------
+src/opifex/neural/operators/fno/multiscale.py
+    DOC501: Method `MultiScaleFourierNeuralOperator.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiScaleFourierNeuralOperator.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/fno/tensorly_integration.py
+    DOC501: Method `TensorLyTuckerInitializer.decompose_tensor` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `TensorLyTuckerInitializer.decompose_tensor` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+    DOC501: Method `TensorLyTTInitializer.decompose_tensor` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `TensorLyTTInitializer.decompose_tensor` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+    DOC501: Method `TensorLyEnhancedDecomposition.multiply_factorized` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `TensorLyEnhancedDecomposition.multiply_factorized` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['NotImplementedError'].
+--------------------
+src/opifex/neural/operators/graph/mesh_graph_net.py
+    DOC502: Method `MeshGraphNet.__init__` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/neural/operators/graph/utils.py
+    DOC501: Function `_create_edge_indices` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `_create_edge_indices` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/physics/attention.py
+    DOC501: Method `PhysicsAwareAttention.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PhysicsAwareAttention.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `PhysicsCrossAttention.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PhysicsCrossAttention.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `PhysicsCrossAttention.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PhysicsCrossAttention.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/specialized/fourier_continuation.py
+    DOC102: Method `FourierContinuationExtender.__init__`: Docstring contains more arguments than in function signature.
+    DOC103: Method `FourierContinuationExtender.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the docstring but not in the function signature: [precision: ].
+    DOC501: Method `FourierContinuationExtender.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FourierContinuationExtender.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `FourierContinuationExtender.extend_1d` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FourierContinuationExtender.extend_1d` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `FourierContinuationExtender.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FourierContinuationExtender.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC101: Method `FourierBoundaryHandler.__init__`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `FourierBoundaryHandler.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [extension_length: int].
+    DOC501: Method `FourierBoundaryHandler.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FourierBoundaryHandler.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `FourierBoundaryHandler.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `FourierBoundaryHandler.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `create_continuation_pipeline` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `create_continuation_pipeline` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/specialized/gino.py
+    DOC501: Method `GeometryAttention.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `GeometryAttention.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `GeometryAttention.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `GeometryAttention.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/specialized/lno.py
+    DOC101: Method `LaplaceLayer.__init__`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `LaplaceLayer.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+    DOC101: Method `LaplaceNeuralOperator.__init__`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `LaplaceNeuralOperator.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+    DOC101: Function `create_lno`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `create_lno`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+--------------------
+src/opifex/neural/operators/specialized/mgno.py
+    DOC501: Method `MultipoleGraphNeuralOperator.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultipoleGraphNeuralOperator.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/specialized/operator_network.py
+    DOC106: Method `OperatorNetwork.__call__`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+--------------------
+src/opifex/neural/operators/specialized/spectral_normalization.py
+    DOC501: Method `SpectralNorm.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SpectralNorm.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `AdaptiveSpectralNorm.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `AdaptiveSpectralNorm.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `SpectralMultiHeadAttention.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SpectralMultiHeadAttention.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/operators/specialized/transolver.py
+    DOC101: Method `PhysicsAttention.__init__`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `PhysicsAttention.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+    DOC101: Method `TransolverBlock.__init__`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `TransolverBlock.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+    DOC101: Method `Transolver.__init__`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `Transolver.__init__`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+    DOC101: Function `create_transolver`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `create_transolver`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+--------------------
+src/opifex/neural/operators/specialized/uqno.py
+    DOC201: Function `get_coeff_quantile_idx` does not have a return section in docstring
+    DOC501: Function `get_coeff_quantile_idx` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `get_coeff_quantile_idx` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC201: Method `UncertaintyQuantificationNeuralOperator.calibrate` does not have a return section in docstring
+--------------------
+src/opifex/neural/pinns/domain_decomposition/base.py
+    DOC501: Function `uniform_partition` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `uniform_partition` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/pinns/domain_decomposition/fbpinn.py
+    DOC501: Function `create_window_function` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `create_window_function` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/pinns/fpinn.py
+    DOC101: Function `create_fpinn`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `create_fpinn`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+--------------------
+src/opifex/neural/pinns/gst_pinn.py
+    DOC101: Function `create_gst_pinn`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `create_gst_pinn`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+--------------------
+src/opifex/neural/pinns/vpinn.py
+    DOC101: Function `create_vpinn`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `create_vpinn`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [compute_dtype: Any, param_dtype: Any].
+--------------------
+src/opifex/neural/quantum/dft/_energy.py
+    DOC101: Function `_density_on_grid`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_density_on_grid`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [ao_gradients: Array, ao_values: Array, density: Array].
+    DOC101: Function `_density_from_fock`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_density_from_fock`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [fock: Array, n_occupied: int, orthogonaliser: Array].
+--------------------
+src/opifex/neural/quantum/dft/grid.py
+    DOC101: Function `_becke_partition_weights`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_becke_partition_weights`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [centers: np.ndarray, points: np.ndarray, radii: np.ndarray].
+--------------------
+src/opifex/neural/quantum/dft/scf.py
+    DOC304: Class `SCFSolver`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC501: Method `SCFSolver.energy_from_state` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SCFSolver.energy_from_state` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/quantum/hamiltonian/_block_expansion.py
+    DOC304: Class `HamiltonianBlockExpansion`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/quantum/hamiltonian/_refinement.py
+    DOC304: Class `SelfInteractionLayer`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/quantum/hamiltonian/block_predictor.py
+    DOC304: Class `BlockHamiltonianPredictor`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `BlockHamiltonianPredictor`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+    DOC101: Method `BlockHamiltonianPredictor._encode`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `BlockHamiltonianPredictor._encode`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [atomic_numbers: Int[Array, ' n_atoms'], edge_index: Int[Array, '2 n_edges'], positions: Float[Array, 'n_atoms 3']].
+    DOC501: Method `BlockHamiltonianPredictor._encode` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BlockHamiltonianPredictor._encode` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/neural/quantum/hamiltonian/so2_convolution.py
+    DOC304: Class `SO2Linear`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `SO2EdgeConvolution`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `SO2ConvolutionLayer`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `SO2PairInteractionLayer`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `SO2PairInteractionLayer`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/quantum/neural_xc.py
+    DOC501: Method `MultiHeadAttention.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiHeadAttention.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `MultiHeadAttention.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiHeadAttention.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `DensityFeatureExtractor.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `DensityFeatureExtractor.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `NeuralXCFunctional.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `NeuralXCFunctional.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/neural/quantum/vmc/wavefunctions/ferminet.py
+    DOC304: Class `FermiNet`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `FermiNet`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/neural/quantum/vmc/wavefunctions/psiformer.py
+    DOC304: Class `_MultiHeadSelfAttention`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `_AttentionLayer`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `PsiFormer`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `PsiFormer`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/optimization/control/system_id.py
+    DOC501: Method `SystemDynamicsModel.__call__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `SystemDynamicsModel.__call__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/optimization/production.py
+    DOC501: Method `AdaptiveJAXOptimizer.benchmark_model_performance` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `AdaptiveJAXOptimizer.benchmark_model_performance` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/physics/solvers/burgers.py
+    DOC501: Method `Burgers2DSolver.__init__` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Burgers2DSolver.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `Burgers2DSolver.solve` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `Burgers2DSolver.solve` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/physics/solvers/diffusion_advection.py
+    DOC501: Function `solve_diffusion_advection_2d` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `solve_diffusion_advection_2d` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/platform/registry/core.py
+    DOC502: Method `RegistryService.register_functional` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC503: Method `RegistryService.retrieve_functional` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['AccessDenied', 'FunctionalNotFound']. Raised exceptions in the body: ['AccessDenied', 'FunctionalNotFound', 'VersionNotFound'].
+    DOC101: Method `RegistryService._save_sync`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `RegistryService._save_sync`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [*objects: object].
+--------------------
+src/opifex/platform/registry/database.py
+    DOC501: Method `RegistryDatabase.session` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `RegistryDatabase.session` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['Exception'].
+--------------------
+src/opifex/platform/registry/version.py
+    DOC501: Method `VersionManager.create_branch` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `VersionManager.create_branch` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/solvers/adapters/artifex.py
+    DOC101: Method `ArtifexSolverAdapter.solve`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `ArtifexSolverAdapter.solve`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [config: SolverConfig | None, initial_state: SolverState | None, problem: Problem].
+    DOC201: Method `ArtifexSolverAdapter.solve` does not have a return section in docstring
+    DOC101: Method `ArtifexSolverAdapter.sample_batch`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `ArtifexSolverAdapter.sample_batch`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [num_samples: int, problem: Problem, rngs: nnx.Rngs].
+    DOC201: Method `ArtifexSolverAdapter.sample_batch` does not have a return section in docstring
+--------------------
+src/opifex/solvers/ude.py
+    DOC107: Method `NeuralODE.vector_field`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC107: Method `UDESolver.vector_field`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+--------------------
+src/opifex/training/uncertainty_trainers.py
+    DOC501: Method `ActiveUncertaintyLearner.acquire_samples` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `ActiveUncertaintyLearner.acquire_samples` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/typing.py
+    DOC502: Function `ensure_optional_axes` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC503: Function `normalize_axis` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['ValueError']. Raised exceptions in the body: ['TypeError', 'ValueError'].
+--------------------
+src/opifex/uncertainty/active/batch_active.py
+    DOC501: Function `q_expected_hypervolume_improvement` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `q_expected_hypervolume_improvement` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `batch_hypervolume_sharpe_ratio_indicator` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `batch_hypervolume_sharpe_ratio_indicator` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `fantasizer` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `fantasizer` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/active/rembo.py
+    DOC101: Function `rembo_lift_batched`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `rembo_lift_batched`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [lower: jax.Array, upper: jax.Array]. Arguments in the docstring but not in the function signature: [lower / upper: ].
+--------------------
+src/opifex/uncertainty/aggregators/enhanced.py
+    DOC501: Method `EnsembleEpistemicUncertainty.add_model` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `EnsembleEpistemicUncertainty.add_model` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `EnsembleEpistemicUncertainty.aggregate_predictions` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `EnsembleEpistemicUncertainty.aggregate_predictions` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `MultiSourceUncertaintyAggregator.aggregate_uncertainties` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `MultiSourceUncertaintyAggregator.aggregate_uncertainties` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/calibration/temperature.py
+    DOC101: Method `TemperatureScaling.predict`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `TemperatureScaling.predict`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [logits: jax.Array].
+    DOC201: Method `TemperatureScaling.predict` does not have a return section in docstring
+    DOC502: Method `TemperatureScaling.predict` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/conformal/advanced.py
+    DOC501: Function `jackknife_plus_intervals` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `jackknife_plus_intervals` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `cv_plus_intervals` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `cv_plus_intervals` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/conformal/fields.py
+    DOC201: Method `FieldSplitConformalRegressor.fit` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/curvature/structured.py
+    DOC304: Class `IdentityOperator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `DiagonalOperator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `KroneckerProduct`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `BlockDiagonal`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC304: Class `LowRankUpdate`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+--------------------
+src/opifex/uncertainty/distributions.py
+    DOC101: Function `from_distribution`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `from_distribution`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [distribution: Any].
+    DOC201: Function `from_distribution` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/gp/kernels.py
+    DOC501: Function `constrained_rbf_kernel` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `constrained_rbf_kernel` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/gp/quasisep_carma.py
+    DOC502: Function `fit_quasisep_carma_gp` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/inference_backends/blackjax.py
+    DOC304: Class `BlackJAXBackend`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `BlackJAXBackend`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+--------------------
+src/opifex/uncertainty/monitoring/reliability_report.py
+    DOC001: Function/method `build_reliability_report`: Potential formatting errors in docstring. Error message: Expected a colon in 'calibration_ece, calibration_nll, brier_score, empirical_coverage,'. (Note: DOC001 could trigger other unrelated violations under this function/method too. Please fix the docstring formatting first.)
+--------------------
+src/opifex/uncertainty/multi_fidelity/linear.py
+    DOC501: Function `linear_multi_fidelity_kernel` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `linear_multi_fidelity_kernel` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `fit_linear_multi_fidelity_gp` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `fit_linear_multi_fidelity_gp` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/multi_fidelity/mumbo.py
+    DOC501: Function `mumbo_acquisition` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `mumbo_acquisition` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/uncertainty/multi_fidelity/nonlinear.py
+    DOC501: Function `fit_nonlinear_multi_fidelity_gp` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `fit_nonlinear_multi_fidelity_gp` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `predict_nonlinear_multi_fidelity_gp` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `predict_nonlinear_multi_fidelity_gp` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/uncertainty/pac_bayes/bounds.py
+    DOC502: Function `mcallester_bound` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC502: Function `quadratic_bound` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/pac_bayes/certificates.py
+    DOC101: Function `_extract_kl`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_extract_kl`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [posterior: Any].
+    DOC201: Function `_extract_kl` does not have a return section in docstring
+    DOC503: Function `pac_bayes_certificate` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['KeyError', 'ValueError']. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/pac_bayes/objectives.py
+    DOC502: Function `pac_bayes_kl_objective` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/priors_physics.py
+    DOC501: Method `DomainSpecificPriors.sample_domain_priors` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `DomainSpecificPriors.sample_domain_priors` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `HierarchicalBayesianFramework.sample_hierarchical_parameters` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `HierarchicalBayesianFramework.sample_hierarchical_parameters` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/registry.py
+    DOC201: Method `UQCapability.with_adapter` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/sbi/_base.py
+    DOC502: Function `_simulate_training_data` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC201: Function `_build_conditional_flow` does not have a return section in docstring
+    DOC201: Function `_mcmc_posterior_predictive` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/sbi/diagnostics.py
+    DOC501: Function `simulation_based_calibration` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `simulation_based_calibration` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
+--------------------
+src/opifex/uncertainty/sbi/likelihood_estimation.py
+    DOC101: Method `NeuralLikelihoodEstimator.fit`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `NeuralLikelihoodEstimator.fit`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [num_simulations: int, rngs: nnx.Rngs, simulator: Simulator].
+    DOC201: Method `NeuralLikelihoodEstimator.fit` does not have a return section in docstring
+    DOC502: Method `NeuralLikelihoodEstimator.fit` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/sbi/posterior_estimation.py
+    DOC101: Method `NeuralPosteriorEstimator.fit`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `NeuralPosteriorEstimator.fit`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [num_simulations: int, rngs: nnx.Rngs, simulator: Simulator].
+    DOC201: Method `NeuralPosteriorEstimator.fit` does not have a return section in docstring
+    DOC502: Method `NeuralPosteriorEstimator.fit` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/sbi/ratio_estimation.py
+    DOC101: Method `NeuralRatioEstimator.fit`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `NeuralRatioEstimator.fit`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [num_simulations: int, rngs: nnx.Rngs, simulator: Simulator].
+    DOC201: Method `NeuralRatioEstimator.fit` does not have a return section in docstring
+    DOC502: Method `NeuralRatioEstimator.fit` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+--------------------
+src/opifex/uncertainty/sbi/simulators.py
+    DOC201: Function `sample_joint` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/scientific/domain_metrics.py
+    DOC201: Function `feasibility_coverage` does not have a return section in docstring
+    DOC201: Function `likelihood_free_rank_calibration` does not have a return section in docstring
+    DOC201: Function `active_learning_acquisition_reliability` does not have a return section in docstring
+    DOC201: Function `pac_bayes_bound_validity` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/scientific/equation_discovery.py
+    DOC304: Class `BayesianSINDy`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
+    DOC305: Class `BayesianSINDy`: Class docstring has a "Raises" section; please put it in the __init__() docstring
+    DOC501: Method `BayesianSINDy.coefficient_posterior_intervals` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `BayesianSINDy.coefficient_posterior_intervals` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/scientific/polynomial_chaos.py
+    DOC101: Function `pce_summary`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `pce_summary`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [coefficients: jax.Array, family: str].
+    DOC201: Function `pce_summary` does not have a return section in docstring
+    DOC501: Method `PolynomialChaosBasis.evaluate` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `PolynomialChaosBasis.evaluate` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Method `KarhunenLoeveExpansion.from_kernel` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Method `KarhunenLoeveExpansion.from_kernel` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `tensor_grid_gauss_hermite` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `tensor_grid_gauss_hermite` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `_smolyak_index_set` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `_smolyak_index_set` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `smolyak_sparse_grid` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `smolyak_sparse_grid` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/scientific/sampling.py
+    DOC101: Function `random_sample`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `random_sample`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [lower: jax.Array, upper: jax.Array]. Arguments in the docstring but not in the function signature: [lower / upper: ].
+    DOC502: Function `random_sample` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC101: Function `latin_hypercube_sample`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `latin_hypercube_sample`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [lower: jax.Array, upper: jax.Array]. Arguments in the docstring but not in the function signature: [lower / upper: ].
+    DOC502: Function `latin_hypercube_sample` has a "Raises" section in the docstring, but there are not "raise" statements in the body
+    DOC101: Function `halton_sequence`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `halton_sequence`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [lower: jax.Array, upper: jax.Array]. Arguments in the docstring but not in the function signature: [lower / upper: ].
+--------------------
+src/opifex/uncertainty/scientific/stochastic_fields.py
+    DOC501: Function `sample_kle_field` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `sample_kle_field` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `sample_pce_field` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `sample_pce_field` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/scientific/stochastic_galerkin.py
+    DOC501: Function `fit_galerkin_surrogate` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `fit_galerkin_surrogate` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC501: Function `fit_collocation_surrogate` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `fit_collocation_surrogate` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+    DOC101: Function `_select_key`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_select_key`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [default_streams: tuple[str, ...], rngs: Mapping[str, jax.Array]].
+    DOC201: Function `_select_key` does not have a return section in docstring
+--------------------
+src/opifex/uncertainty/statespace/cakf.py
+    DOC101: Function `cakf_update`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `cakf_update`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [key: jax.Array | None, policy: CAKFPolicy].
+    DOC501: Function `cakf_update` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `cakf_update` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+src/opifex/uncertainty/types.py
+    DOC101: Method `PredictiveDistribution.quantile`: Docstring contains fewer arguments than in function signature.
+    DOC103: Method `PredictiveDistribution.quantile`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [alpha: float].
+    DOC201: Method `PredictiveDistribution.quantile` does not have a return section in docstring
+    DOC201: Method `PredictiveDistribution.std` does not have a return section in docstring
+--------------------
+src/opifex/visualization/field_plotting.py
+    DOC501: Function `plot_2d_field` has raise statements, but the docstring does not have a "Raises" section
+    DOC503: Function `plot_2d_field` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------

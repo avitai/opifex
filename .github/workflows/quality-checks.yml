@@ -53,11 +53,6 @@ jobs:
       run: |
         uv run ruff check --select I --diff
 
-    - name: Security audit
-      run: |
-        uv run pip-audit --local --desc
-      continue-on-error: true  # Don't fail build on audit issues
-
   type-safety-report:
     runs-on: ubuntu-latest
     needs: quality-checks

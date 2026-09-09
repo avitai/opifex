@@ -498,6 +498,8 @@ docs/development/nnx-migration.md
 
 # Codex / external-agent dropfiles
 /.codex
+.agents
+skills-lock.json
 
 # Benchmark output data and one-off scripts
 benchmark-data/

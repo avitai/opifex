@@ -39,7 +39,7 @@ jobs:
         run: uv build
 
       - name: Verify package
-        run: uv run twine check dist/*
+        run: uv run twine check --strict dist/*
 
       - name: Test clean-environment import
         run: |
