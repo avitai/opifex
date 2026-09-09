@@ -54,8 +54,9 @@ dependencies = [
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.4",
-  "calibrax>=0.1.2",
-  "datarax>=0.1.5"
+  "calibrax>=0.1.5",
+  "datarax>=0.1.6",
+  "substrax>=0.1.4"
 ]
 description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
 license = {file = "LICENSE"}

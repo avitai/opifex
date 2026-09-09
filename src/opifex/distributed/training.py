@@ -11,16 +11,14 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 import jax
-from datarax.distributed import (
-    create_data_parallel_sharding,
-    data_parallel_rules,
-    MeshRules,
-    partition_spec_for_names,
-    place_batch_on_shards as datarax_place_batch_on_shards,
-    spmd_train_step,
-)
 from flax import nnx
 from jax.sharding import Mesh  # noqa: TC002
+from substrax.mesh import data_parallel_rules, MeshRules, partition_spec_for_names
+from substrax.spmd import (
+    create_data_parallel_sharding,
+    place_batch_on_shards as substrax_place_batch_on_shards,
+    spmd_train_step,
+)
 
 
 if TYPE_CHECKING:
@@ -29,7 +27,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Re-export useful datarax sharding utilities
+# Re-export the substrax sharding utilities the trainer composes
 __all__ = [
     "MeshRules",
     "create_distributed_train_step",
@@ -45,7 +43,7 @@ def create_distributed_train_step(
 ) -> Callable[..., jax.Array]:
     """Create a JIT-compiled, mesh-aware training step.
 
-    Uses datarax's ``spmd_train_step`` under the hood, which leverages
+    Uses substrax's ``spmd_train_step`` under the hood, which leverages
     ``nnx.value_and_grad`` and relies on the XLA compiler for automatic
     gradient AllReduce based on input sharding.
 
@@ -92,7 +90,7 @@ def shard_batch(
         The batch with arrays sharded along the first dimension.
     """
     sharding = create_data_parallel_sharding(mesh, data_axis)
-    return datarax_place_batch_on_shards(batch, sharding)
+    return substrax_place_batch_on_shards(batch, sharding)
 
 
 def create_sharded_model(

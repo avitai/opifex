@@ -118,3 +118,17 @@ class TestDistributedManagerInfo:
         assert "strategy" in info
         assert info["strategy"] == "data"
         assert "total_devices" in info
+
+
+def test_created_mesh_leaves_sharding_inference_to_xla() -> None:
+    """The trainer's data-parallel step needs Auto axes; explicit axes fail its backward pass."""
+    import jax
+
+    from opifex.distributed.config import DistributedConfig
+    from opifex.distributed.manager import DistributedManager
+
+    mesh = DistributedManager(
+        DistributedConfig(mesh_shape=(1,), mesh_axis_names=("data",))
+    ).create_mesh()
+
+    assert mesh.axis_types == (jax.sharding.AxisType.Auto,)

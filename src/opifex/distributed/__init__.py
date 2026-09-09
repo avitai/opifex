@@ -1,7 +1,7 @@
 """Distributed training module for Opifex.
 
 Provides PDE-specific distributed training infrastructure on top of
-``datarax.distributed``, using modern JAX SPMD patterns.
+``substrax.mesh`` and ``substrax.spmd``, using modern JAX SPMD patterns.
 
 Components:
     - :class:`DistributedConfig`: Immutable training configuration.
@@ -9,9 +9,9 @@ Components:
     - :func:`create_distributed_train_step`: JIT-compiled sharded training.
     - :func:`shard_batch`: Shard data across the data axis.
     - :func:`create_sharded_model`: Init model under a mesh context.
-    - :class:`MeshRules`: Logical-to-physical axis mapping (from datarax).
+    - :class:`MeshRules`: Logical-to-physical axis mapping (from substrax).
     - :func:`partition_spec_for_names`: Convert logical axis names to a
-      ``PartitionSpec`` using Datarax's current sharding API.
+      ``PartitionSpec`` using substrax's sharding API.
 """
 
 from opifex.distributed.config import DistributedConfig

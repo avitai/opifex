@@ -1,7 +1,7 @@
 """Distributed mesh management for Opifex.
 
-Wraps ``datarax.distributed.DeviceMeshManager`` to create and manage
-JAX device meshes for distributed PDE training.
+Wraps ``substrax.mesh.DeviceMeshManager`` to create and manage JAX device
+meshes for distributed PDE training.
 """
 
 from __future__ import annotations
@@ -21,13 +21,15 @@ logger = logging.getLogger(__name__)
 class DistributedManager:
     """Manage JAX device meshes for distributed training.
 
-    Wraps ``datarax.distributed.DeviceMeshManager`` for mesh creation
-    and provides sharding/replication utilities.
+    Wraps ``substrax.mesh.DeviceMeshManager`` for mesh creation and provides
+    sharding/replication utilities. The meshes it creates leave sharding
+    inference to XLA (``AxisType.Auto``), which the data-parallel training step
+    relies on.
 
     Args:
         config: Distributed training configuration.
         mesh_manager: Optional ``DeviceMeshManager`` for dependency injection
-            (SWE Rule 3). If ``None``, imports from datarax.
+            (SWE Rule 3). If ``None``, uses substrax's.
     """
 
     def __init__(
@@ -37,7 +39,7 @@ class DistributedManager:
     ) -> None:
         self._config = config
         if mesh_manager is None:
-            from datarax.distributed import DeviceMeshManager
+            from substrax.mesh import DeviceMeshManager
 
             mesh_manager = DeviceMeshManager
         self._mesh_manager = mesh_manager

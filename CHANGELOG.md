@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Distributed training on jax 0.11: `jax.make_mesh` now defaults to explicit
+  axis types, under which the backward pass of any layer over a batch sharded
+  along `data` raised `ShardingTypeError` ("Contracting dimensions are
+  sharded"), and the FNO's spectral scatter raised it on a data-sharded batch.
+  `DistributedManager` builds its meshes through substrax 0.1.4, whose
+  `DeviceMeshManager` creates `Auto` axes unless asked otherwise, and the
+  regression test pins the axis type; the two distributed trainer tests and the
+  distributed PDE example pass again.
+
+### Changed
+
+- Depends on `substrax>=0.1.4`; `opifex.distributed` composes `substrax.mesh` and
+  `substrax.spmd` (the `datarax.distributed` package it used is gone in datarax
+  0.1.6). Floors: `datarax>=0.1.6`, `calibrax>=0.1.5`.
+- CI runs the gates the sibling repositories run: the lockfile check, `twine
+  check --strict`, a blocking bandit, one blocking pip-audit, the 80 percent
+  coverage floor in `[tool.coverage.report]`, pytest `--strict-config`, and the
+  validate-pyproject, interrogate (floor 95, measured 95.2) and pydoclint hooks
+  (a checked-in baseline of 551 findings that can only shrink). Ruff selects the
+  `ANN` and `D` families (Google convention) with the exemptions the pydocstyle
+  hook carried; the 163 file-rule pairs `src/` carried at adoption live in
+  `quality/ruff_baseline.json`, rendered into the per-file-ignores table by
+  `scripts/check_ruff_baseline.py`, which fails when a pair grows, a cleared
+  pair is still listed, or the table drifts. The pydocstyle hook is gone.
+- Publishing uses PyPI trusted publishing (OIDC); no API token is stored.
+
 ## [0.2.1] - 2026-08-29
 
 ### Changed
