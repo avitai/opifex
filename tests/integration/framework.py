@@ -11,8 +11,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-
-from opifex.core.device_utils import get_device_info
+from substrax.devices import detect_devices
 
 
 class OpifexTestFramework:
@@ -26,7 +25,7 @@ class OpifexTestFramework:
     """
 
     def __init__(self) -> None:
-        self.device_info = get_device_info()
+        self.device_info = detect_devices()
         self.test_data_manager = TestDataManager()
         self.performance_monitor = PerformanceMonitor()
         self._setup_test_environment()

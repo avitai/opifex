@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- `opifex.core.get_device_info`, `get_platform` and `is_gpu_available` are
+  wrappers over `substrax.devices.detect_devices()` that emit a
+  `DeprecationWarning`; they are removed in 0.2.3. `configure_jax_precision`
+  stays.
 - The metric functions of `opifex.uncertainty.forecasting_metrics`,
   `opifex.uncertainty.metrics`, `opifex.uncertainty.calibration` (the
   calibrator stays) and `opifex.core.metrics` are calibrax's since calibrax
@@ -61,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `RooflineMemoryManager` reads its peak throughput, bandwidth and ridge point
+  from calibrax's `detect_hardware_specs()` (the spec table every Avitai library
+  shares) with the platform from substrax and the device's own memory
+  statistics; `MixedPrecisionOptimizer` reads the accelerator class from
+  substrax and the tensor-core shapes from calibrax instead of matching device
+  names. The integration harness reads `substrax.devices.detect_devices()`.
 - Depends on `substrax>=0.1.4`; `opifex.distributed` composes `substrax.mesh` and
   `substrax.spmd` (the `datarax.distributed` package it used is gone in datarax
   0.1.6). Floors: `datarax>=0.1.6`, `calibrax>=0.1.5`.

@@ -20,7 +20,9 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from calibrax.profiling import detect_hardware_specs
 from jax import Array
+from substrax.devices import detect_devices, DeviceKind
 
 from opifex.core.timing import block_until_ready
 
@@ -31,6 +33,29 @@ _logger = logging.getLogger(__name__)
 # or in containerized CI where memory_stats() is unsupported. Catch the
 # concrete shapes those failures take, not bare Exception.
 _HW_PROBE_FAILURE = (AttributeError, KeyError, RuntimeError, TypeError)
+_DEFAULT_ACCELERATOR_MEMORY_GB = 24.0
+
+
+def _device_memory_gb(kind: DeviceKind) -> float:
+    """Memory of the first device in GiB from its statistics, else a 24 GiB default.
+
+    Args:
+        kind: The accelerator class substrax detected.
+
+    Returns:
+        The reported memory in GiB, or the default when the device has no statistics.
+    """
+    if kind is DeviceKind.CPU:
+        return _DEFAULT_ACCELERATOR_MEMORY_GB
+    device = jax.devices()[0]
+    try:
+        stats = device.memory_stats() if hasattr(device, "memory_stats") else None
+    except _HW_PROBE_FAILURE as exc:
+        _logger.warning("memory_stats() probe failed (%s); using the default.", exc)
+        return _DEFAULT_ACCELERATOR_MEMORY_GB
+    if not stats:
+        return _DEFAULT_ACCELERATOR_MEMORY_GB
+    return stats.get("bytes_limit", _DEFAULT_ACCELERATOR_MEMORY_GB * 1024**3) / (1024**3)
 
 
 class RooflineMemoryManager:
@@ -41,64 +66,18 @@ class RooflineMemoryManager:
         self.operation_cache = {}
 
     def _get_hardware_specs(self) -> dict[str, Any]:
-        """Get actual hardware specifications with dynamic detection."""
-        try:
-            device = jax.devices()[0]
-            if device.platform == "gpu":
-                # Try to get actual GPU memory
-                try:
-                    if hasattr(device, "memory_stats"):
-                        memory_stats = device.memory_stats()
-                        memory_gb = memory_stats.get("bytes_limit", 24 * 1024**3) / (1024**3)
-                    else:
-                        memory_gb = 24.0  # Reasonable default for modern GPUs
-                except _HW_PROBE_FAILURE as exc:
-                    _logger.warning(
-                        "GPU memory_stats() probe failed (%s); using 24 GB default.", exc
-                    )
-                    memory_gb = 24.0
+        """Roofline numbers from calibrax's spec table for the accelerator substrax detects.
 
-                # Detect GPU type for optimal settings
-                device_kind = str(device.device_kind).lower()
-                if any(name in device_kind for name in ["h100", "a100"]):
-                    return {
-                        "memory_gb": memory_gb,
-                        "peak_flops": 9.89e14,  # H100 bf16
-                        "memory_bandwidth": 3.35e12,  # H100 HBM
-                        "critical_intensity": 298,
-                        "platform": "gpu",
-                        "supports_tensorcore": True,
-                    }
-                return {
-                    "memory_gb": memory_gb,
-                    "peak_flops": 5e13,  # Conservative GPU estimate
-                    "memory_bandwidth": 1e12,
-                    "critical_intensity": 200,
-                    "platform": "gpu",
-                    "supports_tensorcore": True,
-                }
-
-            if device.platform == "tpu":
-                return {
-                    "memory_gb": 32.0,  # TPU v5e
-                    "peak_flops": 1.97e14,
-                    "memory_bandwidth": 8.2e11,
-                    "critical_intensity": 240,
-                    "platform": "tpu",
-                    "supports_tensorcore": False,
-                }
-        except _HW_PROBE_FAILURE as exc:
-            _logger.warning("Hardware spec probe failed (%s); using CPU fallback.", exc)
-
-        # Fallback to CPU specifications
-        return {
-            "memory_gb": 16.0,
-            "peak_flops": 1e12,
-            "memory_bandwidth": 1e11,
-            "critical_intensity": 100,
-            "platform": "cpu",
-            "supports_tensorcore": False,
-        }
+        ``memory_gb`` comes from the device's own memory statistics when it reports
+        them; the platform, the peak throughput, the bandwidth and the ridge point
+        are the shared ones every Avitai library uses.
+        """
+        info = detect_devices()
+        specs = dict(detect_hardware_specs())
+        specs["platform"] = info.platform
+        specs["supports_tensorcore"] = bool(specs.get("tensor_core_shapes"))
+        specs["memory_gb"] = _device_memory_gb(info.kind)
+        return specs
 
     def estimate_operation_efficiency(self, operation_type: str, *shapes) -> dict[str, Any]:
         """Estimate operation efficiency using roofline model."""
@@ -177,42 +156,33 @@ class MixedPrecisionOptimizer:
         self.hardware_config = self._detect_hardware()
 
     def _detect_hardware(self) -> dict[str, Any]:
-        """Detect hardware capabilities for optimal precision selection."""
-        try:
-            device = jax.devices()[0]
-            if device.platform == "gpu":
-                # Check for TensorCore support
-                device_kind = str(device.device_kind).lower()
-                if any(name in device_kind for name in ["h100", "a100", "v100"]):
-                    return {
-                        "supports_tensorcore": True,
-                        "optimal_dtype": jnp.bfloat16,
-                        "tensor_shapes": [(16, 16, 8), (32, 8, 16)],
-                        "precision": jax.lax.Precision.HIGH,
-                        "alignment": 16,
-                    }
-                return {
-                    "supports_tensorcore": True,  # Assume modern GPU
-                    "optimal_dtype": jnp.bfloat16,
-                    "tensor_shapes": [(16, 16, 8)],
-                    "precision": jax.lax.Precision.HIGH,
-                    "alignment": 16,
-                }
-            if device.platform == "tpu":
-                return {
-                    "supports_tensorcore": False,
-                    "optimal_dtype": jnp.bfloat16,
-                    "tensor_shapes": [(128, 128)],
-                    "precision": jax.lax.Precision.DEFAULT,
-                    "alignment": 128,
-                }
-        except _HW_PROBE_FAILURE as exc:
-            _logger.warning("TensorCore capability probe failed (%s); using CPU defaults.", exc)
+        """Precision settings for the accelerator substrax detects.
 
+        Tensor-core shapes come from calibrax's spec table; GPUs and TPUs compute in
+        bfloat16 with their native alignment, the CPU keeps float32.
+        """
+        kind = detect_devices().kind
+        shapes = list(detect_hardware_specs().get("tensor_core_shapes", []))
+        if kind is DeviceKind.GPU:
+            return {
+                "supports_tensorcore": bool(shapes),
+                "optimal_dtype": jnp.bfloat16,
+                "tensor_shapes": shapes,
+                "precision": jax.lax.Precision.HIGH,
+                "alignment": 16,
+            }
+        if kind is DeviceKind.TPU:
+            return {
+                "supports_tensorcore": bool(shapes),
+                "optimal_dtype": jnp.bfloat16,
+                "tensor_shapes": shapes,
+                "precision": jax.lax.Precision.DEFAULT,
+                "alignment": 128,
+            }
         return {
             "supports_tensorcore": False,
             "optimal_dtype": jnp.float32,
-            "tensor_shapes": [],
+            "tensor_shapes": shapes,
             "precision": jax.lax.Precision.DEFAULT,
             "alignment": 1,
         }

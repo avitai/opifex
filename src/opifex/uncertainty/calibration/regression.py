@@ -12,7 +12,7 @@ from typing import Any
 import jax.numpy as jnp
 from calibrax.metrics.functional import uncertainty as _uncertainty
 
-from opifex.uncertainty._deprecated_metric import warn_deprecated_metric
+from opifex._deprecated import warn_deprecated
 
 
 _HOME = "calibrax.metrics.functional.uncertainty"
@@ -34,7 +34,7 @@ def picp(*, lower: Any, upper: Any, target: Any, validate: bool = False) -> Any:
     Raises:
         ValueError: If ``validate`` and any interval is inverted.
     """
-    warn_deprecated_metric(f"{_HERE}.picp", f"{_HOME}.picp")
+    warn_deprecated(f"{_HERE}.picp", f"{_HOME}.picp")
     if validate and bool(jnp.any(jnp.asarray(upper) < jnp.asarray(lower))):
         raise ValueError("picp: encountered upper < lower in input interval.")
     return _uncertainty.picp(lower, upper, target)
@@ -42,7 +42,7 @@ def picp(*, lower: Any, upper: Any, target: Any, validate: bool = False) -> Any:
 
 def mpiw(*, lower: Any, upper: Any) -> Any:
     """Mean prediction-interval width: calibrax's ``mpiw``."""
-    warn_deprecated_metric(f"{_HERE}.mpiw", f"{_HOME}.mpiw")
+    warn_deprecated(f"{_HERE}.mpiw", f"{_HOME}.mpiw")
     return _uncertainty.mpiw(lower, upper)
 
 
@@ -50,7 +50,7 @@ def regression_calibration_error(
     *, mean: Any, variance: Any, target: Any, quantile_levels: Any
 ) -> Any:
     """Regression calibration error: calibrax's ``regression_calibration_error``."""
-    warn_deprecated_metric(
+    warn_deprecated(
         f"{_HERE}.regression_calibration_error", f"{_HOME}.regression_calibration_error"
     )
     return _uncertainty.regression_calibration_error(

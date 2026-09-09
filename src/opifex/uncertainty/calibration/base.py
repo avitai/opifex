@@ -18,7 +18,7 @@ from calibrax.metrics.functional import (
     uncertainty as _uncertainty,
 )
 
-from opifex.uncertainty._deprecated_metric import warn_deprecated_metric
+from opifex._deprecated import warn_deprecated
 
 
 _HERE = "opifex.uncertainty.calibration"
@@ -39,9 +39,7 @@ def gaussian_nll(*, mean: Any, variance: Any, target: Any, validate: bool = Fals
     Raises:
         ValueError: If ``validate`` and any variance entry is non-positive.
     """
-    warn_deprecated_metric(
-        f"{_HERE}.gaussian_nll", "calibrax.metrics.functional.uncertainty.gaussian_nll"
-    )
+    warn_deprecated(f"{_HERE}.gaussian_nll", "calibrax.metrics.functional.uncertainty.gaussian_nll")
     if validate and bool(jnp.any(jnp.asarray(variance) <= 0.0)):
         raise ValueError("gaussian_nll: variance must be strictly positive elementwise.")
     return _uncertainty.gaussian_nll(mean, variance, target)
@@ -49,15 +47,13 @@ def gaussian_nll(*, mean: Any, variance: Any, target: Any, validate: bool = Fals
 
 def brier_score(*, probabilities: Any, targets: Any) -> Any:
     """Brier score: calibrax's ``calibration.brier_score``."""
-    warn_deprecated_metric(
-        f"{_HERE}.brier_score", "calibrax.metrics.functional.calibration.brier_score"
-    )
+    warn_deprecated(f"{_HERE}.brier_score", "calibrax.metrics.functional.calibration.brier_score")
     return _calibration.brier_score(probabilities, targets)
 
 
 def expected_calibration_error(*, probabilities: Any, targets: Any, num_bins: int = 10) -> Any:
     """ECE: calibrax's ``calibration.expected_calibration_error``."""
-    warn_deprecated_metric(
+    warn_deprecated(
         f"{_HERE}.expected_calibration_error",
         "calibrax.metrics.functional.calibration.expected_calibration_error",
     )
@@ -66,9 +62,7 @@ def expected_calibration_error(*, probabilities: Any, targets: Any, num_bins: in
 
 def pinball_loss(*, predictions: Any, targets: Any, quantile: float) -> Any:
     """Pinball loss: calibrax's ``regression.quantile_loss``."""
-    warn_deprecated_metric(
-        f"{_HERE}.pinball_loss", "calibrax.metrics.functional.regression.quantile_loss"
-    )
+    warn_deprecated(f"{_HERE}.pinball_loss", "calibrax.metrics.functional.regression.quantile_loss")
     return _regression.quantile_loss(predictions, targets, quantile=quantile)
 
 

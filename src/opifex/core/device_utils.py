@@ -1,93 +1,52 @@
-"""Device utilities for JAX device detection and management.
+"""Device helpers: one-release wrappers over substrax's device identity.
 
-This module provides utilities for detecting and managing JAX devices
-in a consistent way across the Opifex framework.
+``get_device_info``, ``get_platform`` and ``is_gpu_available`` read
+``substrax.devices.detect_devices()``; each call emits a ``DeprecationWarning``
+and the names are removed in 0.2.3. ``configure_jax_precision`` stays.
 """
+
+from __future__ import annotations
 
 import logging
 
+import jax
+from substrax.devices import detect_devices, DeviceKind
+
+from opifex._deprecated import warn_deprecated
+
 
 _logger = logging.getLogger(__name__)
-
-# JAX raises these when devices / backends are missing or the runtime
-# is not initialized. They are the only failure modes we accept as
-# legitimate "JAX is unusable here" signals; everything else propagates.
-_JAX_UNAVAILABLE = (ImportError, RuntimeError, AttributeError)
+_HOME = "substrax.devices.detect_devices"
 
 
 def get_device_info() -> dict[str, str | bool | int | list[str]]:
-    """Get full information about available JAX devices.
+    """The visible devices as substrax reports them, in the historical dictionary shape.
 
     Returns:
-        Dictionary containing device information with the following keys:
-        - available_devices: List of available device strings
-        - default_backend: Default JAX backend (cpu, gpu, tpu)
-        - device_count: Number of available devices
-        - gpu_available: Whether GPU backend is available
-        - cpu_available: Whether CPU backend is available
-
-    Example:
-        >>> device_info = get_device_info()
-        >>> print(f"Backend: {device_info['default_backend']}")
-        >>> print(f"GPU available: {device_info['gpu_available']}")
+        ``available_devices``, ``default_backend``, ``device_count``,
+        ``gpu_available`` and ``cpu_available``.
     """
-    try:
-        import jax
-
-        devices = jax.devices()
-        backend = jax.default_backend()
-
-        return {
-            "available_devices": [str(d) for d in devices],
-            "default_backend": backend,
-            "device_count": len(devices),
-            "gpu_available": backend == "gpu",
-            "cpu_available": True,  # CPU is always available as fallback
-        }
-    except _JAX_UNAVAILABLE as exc:
-        _logger.warning("JAX device probe failed (%s); reporting CPU-only fallback.", exc)
-        return {
-            "available_devices": ["cpu:0"],
-            "default_backend": "cpu",
-            "device_count": 1,
-            "gpu_available": False,
-            "cpu_available": True,
-        }
+    warn_deprecated("opifex.core.get_device_info", _HOME)
+    info = detect_devices()
+    return {
+        "available_devices": list(info.device_kinds),
+        "default_backend": info.platform,
+        "device_count": info.count,
+        "gpu_available": info.kind is DeviceKind.GPU,
+        "cpu_available": True,
+    }
 
 
 def get_platform() -> str:
-    """Get the current JAX platform/backend.
-
-    Returns:
-        String indicating the current JAX backend (cpu, gpu, tpu)
-
-    Example:
-        >>> platform = get_platform()
-        >>> print(f"Running on: {platform}")
-    """
-    try:
-        import jax
-
-        return jax.default_backend()
-    except _JAX_UNAVAILABLE as exc:
-        _logger.warning("JAX backend probe failed (%s); defaulting to 'cpu'.", exc)
-        return "cpu"
+    """The default JAX backend name: ``substrax.devices.detect_devices().platform``."""
+    warn_deprecated("opifex.core.get_platform", _HOME)
+    return detect_devices().platform
 
 
 def is_gpu_available() -> bool:
-    """Check if GPU backend is available.
-
-    Returns:
-        True if GPU backend is available, False otherwise
-
-    Example:
-        >>> if is_gpu_available():
-        ...     print("GPU acceleration available")
-    """
-    device_info = get_device_info()
-    gpu_available = device_info.get("gpu_available", False)
-    # Ensure we return a boolean even if the value is not what we expect
-    return gpu_available is True
+    """Whether the default backend is a GPU: ``detect_devices().kind is DeviceKind.GPU``."""
+    warn_deprecated("opifex.core.is_gpu_available", _HOME)
+    return detect_devices().kind is DeviceKind.GPU
 
 
 def configure_jax_precision(enable_x64: bool = True) -> None:
@@ -95,14 +54,5 @@ def configure_jax_precision(enable_x64: bool = True) -> None:
 
     Args:
         enable_x64: Whether to enable 64-bit precision (default: True)
-
-    Example:
-        >>> configure_jax_precision(enable_x64=True)
-        >>> # JAX will now use 64-bit precision
     """
-    try:
-        import jax
-
-        jax.config.update("jax_enable_x64", enable_x64)
-    except _JAX_UNAVAILABLE as exc:
-        _logger.warning("JAX precision configuration failed (%s); leaving default precision.", exc)
+    jax.config.update("jax_enable_x64", enable_x64)
