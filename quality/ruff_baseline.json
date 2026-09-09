@@ -155,13 +155,6 @@
     "src/opifex/geometry/topology/graphs.py": {
       "ANN202": 1
     },
-    "src/opifex/mlops/backends/mlflow_backend.py": {
-      "ANN202": 1
-    },
-    "src/opifex/mlops/experiment.py": {
-      "ANN001": 1,
-      "ANN201": 6
-    },
     "src/opifex/neural/bayesian/calibration_tools.py": {
       "ANN001": 2,
       "ANN202": 2

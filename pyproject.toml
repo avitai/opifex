@@ -66,16 +66,16 @@ requires-python = ">=3.12"
 version = "0.2.1"
 
 [project.optional-dependencies]
-all = ["opifex[cuda12,dev,docs,platform,probabilistic,profiling,scientific-data,test]"]
+all = ["opifex[cuda12,dev,docs,mlflow,platform,probabilistic,profiling,scientific-data,test]"]
 all-cpu = [
   # CPU-only installation with all development dependencies (no GPU)
   # Use for Linux CPU-only or macOS Intel systems
-  "opifex[dev,docs,probabilistic,test,profiling]"
+  "opifex[dev,docs,mlflow,probabilistic,test,profiling]"
 ]
 all-macos = [
   # macOS Apple Silicon with Metal acceleration
   # Use for macOS ARM64 systems with Metal GPU support
-  "opifex[dev,docs,metal,probabilistic,test]"
+  "opifex[dev,docs,metal,mlflow,probabilistic,test]"
 ]
 cuda-dev = [
   # Comprehensive CUDA development environment
@@ -173,6 +173,10 @@ metal = [
   # Provides GPU-like acceleration on macOS
   "jax-metal>=0.1.0"
 ]
+mlflow = [
+  # The MLflow experiment backend records through substrax's MLFlowLogger.
+  "substrax[mlflow]>=0.1.4"
+]
 neural-dft = [
   # Neural DFT specific dependencies for quantum chemistry
   "ase>=3.22.0", # Atomic Simulation Environment
@@ -248,6 +252,8 @@ test = [
   # opifex.data.sources.scientific. scientific-data is the extra backing that
   # module; pdebench also carries h5py but drags in torch.
   "opifex[scientific-data]",
+  # tests/mlops exercises the MLflow backend against a local file store.
+  "opifex[mlflow]",
   # Async SQLite driver + greenlet (SQLAlchemy asyncio needs greenlet; it is pulled
   # in transitively on Linux but not on macOS) for the registry persistence tests.
   "aiosqlite>=0.20.0",
@@ -866,8 +872,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/geometry/pytree_utils.py" = ["ANN001"]
 "src/opifex/geometry/topology/base.py" = ["ANN001", "ANN202"]
 "src/opifex/geometry/topology/graphs.py" = ["ANN202"]
-"src/opifex/mlops/backends/mlflow_backend.py" = ["ANN202"]
-"src/opifex/mlops/experiment.py" = ["ANN001", "ANN201"]
 "src/opifex/neural/bayesian/calibration_tools.py" = ["ANN001", "ANN202"]
 "src/opifex/neural/bayesian/probabilistic_pinns.py" = ["ANN202"]
 "src/opifex/neural/bayesian/variational_framework.py" = ["ANN202"]

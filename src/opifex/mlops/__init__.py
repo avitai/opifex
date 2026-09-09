@@ -1,16 +1,15 @@
-"""Opifex MLOps - Unified experiment tracking and model lifecycle management.
+"""Experiment tracking for scientific machine learning.
 
-This package provides a tool-agnostic interface for experiment tracking, model
-versioning, and deployment automation optimized for scientific machine learning
-workflows.
+``ExperimentTracker`` creates an ``Experiment`` on a registered backend; the MLflow
+backend records physics-informed metadata, domain metrics records and Orbax model
+checkpoints in an MLflow run through substrax's tracking and checkpoint layers.
 """
 
-from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
-from opifex.mlops.backends import MLFLOW_AVAILABLE, MLflowBackend
+from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES, register_mlops_capabilities
+from opifex.mlops.backends import MLflowBackend
 from opifex.mlops.experiment import (
     Experiment,
     ExperimentConfig,
-    ExperimentTracker,
     Framework,
     L2OMetrics,
     NeuralDFTMetrics,
@@ -20,23 +19,10 @@ from opifex.mlops.experiment import (
     PINNMetrics,
     QuantumMetrics,
 )
-from opifex.uncertainty.registry import UQRegistry
+from opifex.mlops.tracker import ExperimentTracker
 
-
-# UQ capability registration — Task 7.5. Guarded against duplicate
-# registration on repeat imports (Rule 13).
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in MLOPS_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
-
-
-__version__ = "1.0.0"
-__author__ = "Opifex Team"
-__email__ = "team@opifex.io"
 
 __all__ = [
-    "MLFLOW_AVAILABLE",
     "MLOPS_CAPABILITIES",
     "Experiment",
     "ExperimentConfig",
@@ -50,17 +36,5 @@ __all__ = [
     "PhysicsDomain",
     "PhysicsMetadata",
     "QuantumMetrics",
+    "register_mlops_capabilities",
 ]
-
-# Package metadata
-SUPPORTED_PHYSICS_DOMAINS = [
-    "neural-operators",
-    "l2o",
-    "neural-dft",
-    "pinn",
-    "quantum-computing",
-]
-
-SUPPORTED_FRAMEWORKS = ["jax", "pytorch", "tensorflow"]
-
-SUPPORTED_BACKENDS = ["mlflow"] if MLFLOW_AVAILABLE else []

@@ -1,395 +1,190 @@
-"""
-MLflow backend implementation for Opifex unified experiment tracking.
+"""MLflow backend: an ``Experiment`` whose run is a substrax ``MLFlowLogger``."""
 
-This backend provides MLflow integration with scientific computing optimizations
-including physics-informed metadata, GPU tracking, and large model artifact handling.
-"""
+from __future__ import annotations
 
 import os
+import tempfile
+from dataclasses import asdict
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
+from substrax.checkpoint import OrbaxCheckpointStore
+from substrax.tracking import MLFlowLogger
+
+from opifex.mlops.experiment import Experiment
+from opifex.mlops.records import flatten_physics_metrics, physics_metadata_params
+
 
 if TYPE_CHECKING:
-    # Type checking imports - will be resolved during static analysis
-    import mlflow  # type: ignore[import-untyped]
-    import mlflow.pytorch  # type: ignore[import-untyped]
-    import mlflow.sklearn  # type: ignore[import-untyped]
-    import mlflow.tensorflow  # type: ignore[import-untyped]
-    from mlflow.tracking import MlflowClient  # type: ignore[import-untyped]
-else:
-    # Runtime imports - only used when MLflow is actually available
-    try:
-        import mlflow
-        import mlflow.pytorch
+    from substrax.checkpoint import ModelLike
 
-        # mlflow.sklearn imported but not used - remove it
-        import mlflow.tensorflow
-        from mlflow.tracking import MlflowClient
-    except ImportError as e:
-        raise ImportError(
-            "MLflow dependencies not available. This backend should only be "
-            "imported when MLflow is installed."
-        ) from e
+    from opifex.mlops.backends.run_logger import RunLogger
+    from opifex.mlops.experiment import ExperimentConfig, PhysicsMetadata, PhysicsMetrics
 
-from opifex.mlops.experiment import (
-    Experiment,
-    ExperimentConfig,
-    L2OMetrics,
-    NeuralDFTMetrics,
-    NeuralOperatorMetrics,
-    PhysicsMetadata,
-    PINNMetrics,
-    QuantumMetrics,
+
+_TRACKING_URI_VARIABLE = "MLFLOW_TRACKING_URI"
+_CONTEXT_FIELDS = (
+    "description",
+    "research_group",
+    "project_id",
+    "paper_reference",
+    "dataset_id",
+    "git_commit",
+    "environment_hash",
+    "random_seed",
 )
 
 
 class MLflowBackend(Experiment):
-    """MLflow backend implementation with scientific computing optimizations."""
+    """Records an experiment in an MLflow run.
 
-    def __init__(self, config: ExperimentConfig) -> None:
+    ``start`` opens the run through substrax's ``MLFlowLogger`` in the experiment
+    ``opifex_<physics domain>_<name>`` on the tracking URI from
+    ``backend_config["tracking_uri"]`` or ``MLFLOW_TRACKING_URI`` (MLflow's default
+    store otherwise). A ``logger`` given at construction is used instead, which is
+    how tests and other run stores plug in. Models are logged as Orbax checkpoints
+    written by substrax's store.
+
+    Args:
+        config: The experiment configuration.
+        logger: The run to record in; opened on ``start`` when omitted.
+    """
+
+    def __init__(self, config: ExperimentConfig, *, logger: RunLogger | None = None) -> None:
         super().__init__(config)
-        self.client = None
-        self.experiment_id = None
-        self.run_id = None
-        self._setup_mlflow()
+        self._logger = logger
+        self._tracking_uri: str | None = config.backend_config.get(
+            "tracking_uri"
+        ) or os.environ.get(_TRACKING_URI_VARIABLE)
 
-    def _setup_mlflow(self) -> None:
-        """Initialize MLflow client and configuration."""
-        # MLflow 3.13+ raises on the filesystem tracking backend unless this opt-out
-        # is set; opifex supports local ``file://`` stores, so honour them by default
-        # without overriding an explicit operator preference.
-        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
-        # Configure MLflow tracking URI
-        tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-tracking-server:5000")
-        mlflow.set_tracking_uri(tracking_uri)
+    @property
+    def logger(self) -> RunLogger:
+        """The run being recorded in.
 
-        # Initialize client
-        self.client = MlflowClient()
-
-        # Set experiment
-        experiment_name = f"opifex_{self.config.physics_domain.value}_{self.config.name}"
-        try:
-            experiment = mlflow.get_experiment_by_name(experiment_name)
-            if experiment is None:
-                self.experiment_id = mlflow.create_experiment(
-                    experiment_name,
-                    tags={
-                        "opifex.physics_domain": self.config.physics_domain.value,
-                        "opifex.framework": self.config.framework.value,
-                        "opifex.version": "1.0.0",
-                        "opifex.research_group": self.config.research_group or "default",
-                    },
-                )
-            else:
-                self.experiment_id = experiment.experiment_id
-        except (RuntimeError, OSError, ConnectionError, ValueError, AttributeError):
-            # Fallback to default experiment
-            self.experiment_id = "0"
+        Raises:
+            RuntimeError: If the experiment has not been started.
+        """
+        if self.id is None or self._logger is None:
+            raise RuntimeError("The experiment has not been started; call start() first.")
+        return self._logger
 
     async def start(self) -> str:
-        """Start MLflow run with scientific metadata."""
+        """Open the run and log the configuration; returns the run id."""
         self.start_time = datetime.now(UTC)
+        if self._logger is None:
+            self._logger = self._open_run(self.start_time)
+        self.id = self._logger.run_id
+        self.status = "running"
+        self._logger.log_hyperparams(self._initial_params())
+        return self.id
 
-        # Start MLflow run
-        run = mlflow.start_run(
-            experiment_id=self.experiment_id,
-            run_name=f"{self.config.name}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
-            tags={
-                "opifex.physics_domain": self.config.physics_domain.value,
-                "opifex.framework": self.config.framework.value,
-                "opifex.backend": "mlflow",
-                "opifex.research_group": self.config.research_group or "default",
-                "opifex.project_id": self.config.project_id or "default",
-                "opifex.git_commit": self.config.git_commit or "unknown",
-                "opifex.description": self.config.description or "",
-            },
+    def _open_run(self, started: datetime) -> MLFlowLogger:
+        """Start an MLflow run for this experiment."""
+        # MLflow 3.13+ refuses the filesystem store unless this opt-out is set; local
+        # ``file://`` stores are supported, so honour them without overriding an
+        # explicit operator choice.
+        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+        return MLFlowLogger(
+            self.config.name,
+            experiment_name=f"opifex_{self.config.physics_domain.value}_{self.config.name}",
+            run_name=f"{self.config.name}_{started:%Y%m%d_%H%M%S}",
+            tracking_uri=self._tracking_uri,
         )
 
-        self.run_id = run.info.run_id
-        self.id = self.run_id
-        self.status = "running"
-
-        # Log initial configuration
-        await self._log_initial_config()
-
-        return self.run_id
-
-    async def _log_initial_config(self) -> None:
-        """Log initial experiment configuration and metadata."""
-        # Log basic parameters
-        params = {
-            "physics_domain": self.config.physics_domain.value,
-            "framework": self.config.framework.value,
-            "random_seed": self.config.random_seed,
-            "enable_gpu_tracking": self.config.enable_gpu_tracking,
-            "enable_physics_validation": self.config.enable_physics_validation,
+    def _initial_params(self) -> dict[str, Any]:
+        """The configuration as run parameters: identity, context, backend, physics."""
+        config = self.config
+        params: dict[str, Any] = {
+            "physics_domain": config.physics_domain.value,
+            "framework": config.framework.value,
+            "enable_gpu_tracking": config.enable_gpu_tracking,
+            "enable_memory_tracking": config.enable_memory_tracking,
+            "enable_physics_validation": config.enable_physics_validation,
         }
-
-        if self.config.backend_config:
-            for key, value in self.config.backend_config.items():
-                params[f"backend.{key}"] = value
-
-        mlflow.log_params(params)
-
-        # Log physics metadata if available
-        if self.config.physics_metadata:
-            await self._log_physics_metadata(self.config.physics_metadata)
-
-    async def _log_physics_metadata(self, metadata: PhysicsMetadata) -> None:
-        """Log physics-informed metadata."""
-        physics_params = {}
-
-        # Log basic physics parameters
-        self._add_basic_physics_params(metadata, physics_params)
-
-        # Log physics collections (laws, symmetries, conditions)
-        self._add_physics_collections(metadata, physics_params)
-
-        # Log physics constants and system parameters
-        self._add_physics_mappings(metadata, physics_params)
-
-        mlflow.log_params(physics_params)
-
-    def _add_basic_physics_params(self, metadata: PhysicsMetadata, params: dict) -> None:
-        """Add basic physics parameters to the params dictionary."""
-        basic_fields = [
-            ("pde_type", "physics.pde_type"),
-            ("dimensionality", "physics.dimensionality"),
-            ("coordinate_system", "physics.coordinate_system"),
-            ("temporal_scheme", "physics.temporal_scheme"),
-            ("time_horizon", "physics.time_horizon"),
-        ]
-
-        for field_name, param_key in basic_fields:
-            value = getattr(metadata, field_name)
-            if value:
-                params[param_key] = value
-
-        # Handle special string conversion cases
-        if metadata.domain_bounds:
-            params["physics.domain_bounds"] = str(metadata.domain_bounds)
-        if metadata.grid_resolution:
-            params["physics.grid_resolution"] = str(metadata.grid_resolution)
-
-    def _add_physics_collections(self, metadata: PhysicsMetadata, params: dict) -> None:
-        """Add physics collections (laws, symmetries, conditions) to params."""
-        collection_fields = [
-            ("conservation_laws", "physics.conservation_laws"),
-            ("symmetries", "physics.symmetries"),
-            ("boundary_conditions", "physics.boundary_conditions"),
-        ]
-
-        for field_name, param_key in collection_fields:
-            value = getattr(metadata, field_name)
-            if value:
-                params[param_key] = ",".join(value)
-
-    def _add_physics_mappings(self, metadata: PhysicsMetadata, params: dict) -> None:
-        """Add physics constants and system parameters to params."""
-        if metadata.physical_constants:
-            for name, value in metadata.physical_constants.items():
-                params[f"physics.constants.{name}"] = value
-
-        if metadata.system_parameters:
-            for name, value in metadata.system_parameters.items():
-                params[f"physics.system.{name}"] = value
+        context = {name: getattr(config, name) for name in _CONTEXT_FIELDS}
+        params.update({name: value for name, value in context.items() if value is not None})
+        params.update({f"backend.{key}": value for key, value in config.backend_config.items()})
+        if config.physics_metadata is not None:
+            params.update(physics_metadata_params(config.physics_metadata))
+        return params
 
     async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None) -> None:
-        """Log scalar metrics to MLflow."""
-        mlflow.log_metrics(metrics, step=step)
+        """Log scalar metrics at ``step``."""
+        self.logger.log_scalars(metrics, step)
         self._metrics.update(metrics)
 
-    async def log_physics_metrics(
-        self,
-        metrics: NeuralOperatorMetrics
-        | L2OMetrics
-        | NeuralDFTMetrics
-        | PINNMetrics
-        | QuantumMetrics,
-        step: int | None = None,
-    ) -> None:
-        """Log physics-informed metrics specific to the domain."""
-
-        # Convert dataclass to dictionary
-        if hasattr(metrics, "__dataclass_fields__"):
-            metrics_dict = {}
-            for field_name, field_value in metrics.__dict__.items():
-                if field_value is not None:
-                    if isinstance(field_value, dict):
-                        # Flatten nested dictionaries
-                        for sub_key, sub_value in field_value.items():
-                            metrics_dict[f"{field_name}.{sub_key}"] = sub_value
-                    elif isinstance(field_value, list):
-                        # Convert lists to strings or summary statistics
-                        if all(isinstance(x, int | float) for x in field_value):
-                            metrics_dict[f"{field_name}.mean"] = sum(field_value) / len(field_value)
-                            metrics_dict[f"{field_name}.min"] = min(field_value)
-                            metrics_dict[f"{field_name}.max"] = max(field_value)
-                        else:
-                            metrics_dict[field_name] = str(field_value)
-                    else:
-                        metrics_dict[field_name] = field_value
-
-            await self.log_metrics(metrics_dict, step=step)
-        else:
-            # Convert to dict for non-dataclass metrics
-            metrics_dict = metrics.__dict__ if hasattr(metrics, "__dict__") else {}
-            await self.log_metrics(metrics_dict, step=step)
+    async def log_physics_metrics(self, metrics: PhysicsMetrics, step: int | None = None) -> None:
+        """Log a physics metrics record, flattened to one metric per field."""
+        await self.log_metrics(flatten_physics_metrics(metrics), step=step)
 
     async def log_parameters(self, params: dict[str, Any]) -> None:
-        """Log experiment parameters and hyperparameters."""
-        # Convert complex types to strings for MLflow compatibility
-        mlflow_params = {}
-        for key, value in params.items():
-            if isinstance(value, dict | list):
-                mlflow_params[key] = str(value)
-            else:
-                mlflow_params[key] = value
-
-        mlflow.log_params(mlflow_params)
+        """Log hyperparameters."""
+        self.logger.log_hyperparams(params)
         self._parameters.update(params)
 
     async def log_artifact(self, local_path: str, artifact_path: str | None = None) -> None:
-        """Log an artifact (model, plot, data file)."""
-        mlflow.log_artifact(local_path, artifact_path)
-
-        # Track artifact in internal registry
-        artifact_name = artifact_path or Path(local_path).name
-        self._artifacts[artifact_name] = local_path
+        """Log one file under ``artifact_path`` in the run's artifacts."""
+        self.logger.log_artifact(local_path, artifact_path)
+        self._artifacts[artifact_path or Path(local_path).name] = local_path
 
     async def log_model(
         self,
-        model: Any,
+        model: ModelLike,
         model_name: str,
         physics_metadata: PhysicsMetadata | None = None,
     ) -> None:
-        """Log a trained model with scientific metadata."""
+        """Log ``model`` as an Orbax checkpoint under ``model_name`` in the run's artifacts.
 
-        # Determine framework and log accordingly
-        model_info = None
+        The checkpoint is substrax's: the model state under step 0 next to a JSON
+        metadata record carrying the framework, the physics domain and
+        ``physics_metadata``. ``OrbaxCheckpointStore(<artifact dir>).restore(step=0)``
+        reads it back.
 
-        try:
-            # Try JAX/Flax model logging
-            if hasattr(model, "params") or (
-                isinstance(model, (dict)) and "params" in str(type(model))
-            ):
-                # Custom JAX model logging
-                model_info = await self._log_jax_model(model, model_name, physics_metadata)
-        except ImportError:
-            pass
-
-        try:
-            # Try PyTorch model logging
-            import torch  # type: ignore[import-untyped]
-
-            if isinstance(model, torch.nn.Module):
-                model_info = mlflow.pytorch.log_model(
+        Args:
+            model: An ``nnx.Module``, a Flax ``TrainState`` or a state dictionary.
+            model_name: Artifact directory of the checkpoint within the run.
+            physics_metadata: Recorded in the checkpoint's metadata when given.
+        """
+        additional_metadata = {
+            "framework": self.config.framework.value,
+            "physics_domain": self.config.physics_domain.value,
+        }
+        with tempfile.TemporaryDirectory() as staging:
+            directory = Path(staging) / model_name
+            with OrbaxCheckpointStore(directory, max_to_keep=1) as store:
+                store.save(
                     model,
-                    model_name,
-                    signature=await self._infer_model_signature(model),  # pyright: ignore[reportArgumentType]
-                    metadata={
-                        "physics_domain": self.config.physics_domain.value,
-                        "framework": "pytorch",
-                        **(physics_metadata.__dict__ if physics_metadata else {}),
-                    },
+                    step=0,
+                    physics_metadata=None if physics_metadata is None else asdict(physics_metadata),
+                    additional_metadata=additional_metadata,
                 )
-        except ImportError:
-            pass
-
-        try:
-            # Try TensorFlow model logging
-            import tensorflow as tf  # type: ignore[import-untyped]
-
-            if isinstance(model, tf.keras.Model | tf.Module):  # pyright: ignore[reportAttributeAccessIssue]
-                model_info = mlflow.tensorflow.log_model(
-                    model,
-                    model_name,
-                    signature=await self._infer_model_signature(model),  # pyright: ignore[reportArgumentType]
-                    metadata={
-                        "physics_domain": self.config.physics_domain.value,
-                        "framework": "tensorflow",
-                        **(physics_metadata.__dict__ if physics_metadata else {}),
-                    },
-                )
-        except ImportError:
-            pass
-
-        if model_info is None:
-            # Fallback: serialize model as pickle
-            import pickle  # nosec B403
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
-                pickle.dump(model, f)
-                await self.log_artifact(f.name, f"{model_name}/model.pkl")
-
-    async def _log_jax_model(
-        self,
-        model: Any,
-        model_name: str,
-        physics_metadata: PhysicsMetadata | None = None,
-    ):
-        """Log JAX/Flax model with custom serialization."""
-        import json
-        import pickle  # nosec B403
-        import tempfile
-
-        # Create model directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            model_dir = Path(temp_dir) / model_name
-            model_dir.mkdir(parents=True, exist_ok=True)
-
-            # Save model state
-            model_path = model_dir / "model.pkl"
-            with open(model_path, "wb") as f:
-                pickle.dump(model, f)
-
-            # Save metadata
-            metadata = {
-                "framework": "jax",
-                "physics_domain": self.config.physics_domain.value,
-                "model_type": str(type(model)),
-                **(physics_metadata.__dict__ if physics_metadata else {}),
-            }
-
-            metadata_path = model_dir / "metadata.json"
-            with open(metadata_path, "w") as f:
-                json.dump(metadata, f, indent=2, default=str)
-
-            # Log as artifact directory
-            mlflow.log_artifacts(str(model_dir), model_name)
-
-            return {"artifact_path": model_name}
-
-    async def _infer_model_signature(self, model: Any) -> None:  # noqa: ARG002 - signature-inference interface receives the model
-        """Infer MLflow model signature from model."""
-        # This would need implementation based on model inspection
-        # For now, return None to allow model logging without signature
-        return
+            self.logger.log_artifacts(directory, model_name)
+        self._artifacts[model_name] = model_name
 
     async def end(self, status: str = "completed") -> None:
-        """End the MLflow run."""
+        """Log the duration and the outcome, then close the run."""
         self.end_time = datetime.now(UTC)
         self.status = status
-
-        # Log final metrics
-        if self.start_time:
-            duration_seconds = (self.end_time - self.start_time).total_seconds()
-            await self.log_metrics(
-                {
-                    "experiment.duration_seconds": duration_seconds,
-                    "experiment.status": 1 if status == "completed" else 0,
-                }
-            )
-
-        # End MLflow run
-        mlflow.end_run(status="FINISHED" if status == "completed" else "FAILED")
+        duration = (
+            0.0 if self.start_time is None else (self.end_time - self.start_time).total_seconds()
+        )
+        await self.log_metrics(
+            {
+                "experiment.duration_seconds": duration,
+                "experiment.status": 1.0 if status == "completed" else 0.0,
+            }
+        )
+        self.logger.close()
 
     def get_experiment_url(self) -> str | None:
-        """Get the URL to view this experiment in MLflow UI."""
-        if self.run_id:
-            tracking_uri = mlflow.get_tracking_uri()
-            return f"{tracking_uri}/#/experiments/{self.experiment_id}/runs/{self.run_id}"
-        return None
+        """The run's page in the MLflow UI, while a run opened on a known tracking URI is active."""
+        logger = self._logger
+        if (
+            not isinstance(logger, MLFlowLogger)
+            or logger.active_run is None
+            or self._tracking_uri is None
+        ):
+            return None
+        experiment_id = logger.active_run.info.experiment_id
+        return f"{self._tracking_uri}/#/experiments/{experiment_id}/runs/{logger.run_id}"

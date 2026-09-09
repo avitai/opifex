@@ -33,7 +33,7 @@ import pytest
 
 from opifex.discovery._uq_capabilities import DISCOVERY_CAPABILITIES
 from opifex.discovery.sindy._uq_capabilities import SINDY_CAPABILITIES
-from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
+from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES, register_mlops_capabilities
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.assimilation._uq_capabilities import ASSIMILATION_CAPABILITIES
@@ -63,6 +63,7 @@ def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
     suite is order-independent.
     """
     registry = UQRegistry()
+    register_mlops_capabilities(registry)
     for name, capability in _ALL_TASK_7_5_CAPABILITIES.items():
         if name not in registry:
             registry.register(name, capability)

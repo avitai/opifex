@@ -18,6 +18,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regression test pins the axis type; the two distributed trainer tests and the
   distributed PDE example pass again.
 
+### Changed
+
+- `opifex.mlops.MLflowBackend` records through substrax's `MLFlowLogger` (or any
+  injected `opifex.mlops.backends.RunLogger`), which it opens on `start` in the
+  experiment `opifex_<domain>_<name>` on `backend_config["tracking_uri"]` or
+  `MLFLOW_TRACKING_URI`. `log_model` writes an Orbax checkpoint through substrax's
+  `OrbaxCheckpointStore` and logs the directory; nothing is pickled. Physics
+  metadata becomes `physics.<field>` and `physics.<field>.<key>` run parameters
+  and metrics records are flattened by `opifex.mlops.records` (the slotted
+  records could not be logged before: the backend read `__dict__`, which
+  `slots=True` removes). The MLflow SDK is the new `mlflow` extra.
+- `opifex.mlops.ExperimentTracker` (now `opifex.mlops.tracker`) registers the
+  MLflow backend from the start, defaults to it, lists `backends`, and resolves
+  `backend="auto"` to its `default_backend`; the physics-domain heuristic that
+  chose backends which did not exist is gone. Importing `opifex.mlops` no longer
+  registers `mlops:ExperimentTracker` in the `UQRegistry`;
+  `register_mlops_capabilities(registry)` does, idempotently.
+
 ### Deprecated
 
 - `opifex.core.get_device_info`, `get_platform` and `is_gpu_available` are
@@ -37,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `opifex.mlops.Framework.PYTORCH` and `TENSORFLOW`, the PyTorch and TensorFlow
+  branches of `MLflowBackend.log_model`, the pickle fallback,
+  `opifex.mlops.{MLFLOW_AVAILABLE, SUPPORTED_BACKENDS, SUPPORTED_FRAMEWORKS,
+  SUPPORTED_PHYSICS_DOMAINS, __version__, __author__, __email__}` and the
+  `ImportError`-swallowing stand-in in `opifex.mlops.backends`.
 - `opifex.core.training.monitoring.flops.FlopsCounter`, an estimator that
   multiplied the parameter count by the input size (times 1.2). FLOP counting is
   calibrax's `FlopsCounter`, which reads XLA's cost analysis of the lowered

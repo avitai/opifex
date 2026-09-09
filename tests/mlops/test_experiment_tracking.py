@@ -1,30 +1,47 @@
-"""Tests for MLOps experiment tracking functionality."""
+"""The experiment tracker, its configuration records and the mlops package surface."""
 
-from unittest.mock import Mock
+from __future__ import annotations
+
+import importlib
+from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 import pytest
 
+import opifex.mlops
+from opifex.mlops import register_mlops_capabilities
+from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
+from opifex.mlops.backends.mlflow_backend import MLflowBackend
+from opifex.mlops.experiment import (
+    Experiment,
+    ExperimentConfig,
+    Framework,
+    PhysicsDomain,
+    PhysicsMetadata,
+)
+from opifex.mlops.tracker import ExperimentTracker
+from opifex.uncertainty.registry import DefaultStrategy, UQRegistry
+
+
+if TYPE_CHECKING:
+    from typing import Any
+
+
+def _config(**overrides: Any) -> ExperimentConfig:
+    values: dict[str, Any] = {
+        "name": "test_experiment",
+        "physics_domain": PhysicsDomain.NEURAL_OPERATORS,
+        "framework": Framework.JAX,
+    }
+    values.update(overrides)
+    return ExperimentConfig(**values)
+
 
 class TestPhysicsMetadata:
-    """Test physics metadata class."""
+    def test_every_field_defaults_to_none(self) -> None:
+        assert all(value is None for value in asdict(PhysicsMetadata()).values())
 
-    def test_initialization_default(self):
-        """Test default initialization."""
-        from opifex.mlops.experiment import PhysicsMetadata
-
-        metadata = PhysicsMetadata()
-        assert metadata.pde_type is None
-        assert metadata.dimensionality is None
-        assert metadata.boundary_conditions is None
-        assert metadata.domain_bounds is None
-        assert metadata.time_horizon is None
-        assert metadata.material_properties is None
-        assert metadata.system_parameters is None
-
-    def test_initialization_custom(self):
-        """Test custom initialization."""
-        from opifex.mlops.experiment import PhysicsMetadata
-
+    def test_fields_are_kept_as_given(self) -> None:
         metadata = PhysicsMetadata(
             pde_type="navier_stokes",
             dimensionality=2,
@@ -34,186 +51,171 @@ class TestPhysicsMetadata:
             material_properties={"viscosity": 0.01},
             system_parameters={"reynolds_number": 1000},
         )
-        assert metadata.pde_type == "navier_stokes"
-        assert metadata.dimensionality == 2
-        assert metadata.boundary_conditions == ["dirichlet"]
-        assert metadata.domain_bounds == (0.0, 1.0, 0.0, 1.0)
-        assert metadata.time_horizon == 1.0
-        assert metadata.material_properties is not None
-        assert metadata.material_properties["viscosity"] == 0.01
-        assert metadata.system_parameters is not None
-        assert metadata.system_parameters["reynolds_number"] == 1000
+
+        assert asdict(metadata) == {
+            **asdict(PhysicsMetadata()),
+            "pde_type": "navier_stokes",
+            "dimensionality": 2,
+            "boundary_conditions": ["dirichlet"],
+            "domain_bounds": (0.0, 1.0, 0.0, 1.0),
+            "time_horizon": 1.0,
+            "material_properties": {"viscosity": 0.01},
+            "system_parameters": {"reynolds_number": 1000},
+        }
 
 
 class TestExperimentConfig:
-    """Test experiment configuration."""
+    def test_defaults(self) -> None:
+        config = _config()
 
-    def test_initialization_default(self):
-        """Test default initialization."""
-        from opifex.mlops.experiment import ExperimentConfig, Framework, PhysicsDomain
-
-        config = ExperimentConfig(
-            name="test_experiment",
-            physics_domain=PhysicsDomain.NEURAL_OPERATORS,
-            framework=Framework.JAX,
-        )
-        assert config.name == "test_experiment"
-        assert config.physics_domain == PhysicsDomain.NEURAL_OPERATORS
-        assert config.framework == Framework.JAX
         assert config.description is None
         assert config.tags == []
         assert config.backend == "auto"
+        assert config.physics_metadata is None
         assert config.research_group is None
 
-    def test_initialization_custom(self):
-        """Test custom initialization."""
-        from opifex.mlops.experiment import (
-            ExperimentConfig,
-            Framework,
-            PhysicsDomain,
-            PhysicsMetadata,
-        )
-
+    def test_custom_values_are_kept(self) -> None:
         metadata = PhysicsMetadata(pde_type="navier_stokes")
-        config = ExperimentConfig(
+        config = _config(
             name="fluid_dynamics_experiment",
-            physics_domain=PhysicsDomain.NEURAL_OPERATORS,
-            framework=Framework.JAX,
-            description="Test fluid dynamics experiment",
             tags=["neural_operator", "fluid_dynamics"],
             physics_metadata=metadata,
             backend="mlflow",
             research_group="opifex_team",
-            project_id="fluid_sim_2024",
             random_seed=42,
         )
+
         assert config.name == "fluid_dynamics_experiment"
-        assert config.physics_domain == PhysicsDomain.NEURAL_OPERATORS
-        assert config.framework == Framework.JAX
-        assert config.description == "Test fluid dynamics experiment"
         assert config.tags == ["neural_operator", "fluid_dynamics"]
-        assert config.physics_metadata == metadata
+        assert config.physics_metadata is metadata
         assert config.backend == "mlflow"
         assert config.research_group == "opifex_team"
-        assert config.project_id == "fluid_sim_2024"
         assert config.random_seed == 42
 
 
 class TestEnums:
-    """Test enum definitions."""
+    def test_physics_domains(self) -> None:
+        assert {domain.value for domain in PhysicsDomain} == {
+            "neural-operators",
+            "l2o",
+            "neural-dft",
+            "pinn",
+            "quantum-computing",
+        }
 
-    def test_physics_domain_enum(self):
-        """Test PhysicsDomain enum."""
-        from opifex.mlops.experiment import PhysicsDomain
+    def test_jax_is_the_only_framework(self) -> None:
+        assert [framework.value for framework in Framework] == ["jax"]
 
-        assert PhysicsDomain.NEURAL_OPERATORS.value == "neural-operators"
-        assert PhysicsDomain.L2O.value == "l2o"
-        assert PhysicsDomain.NEURAL_DFT.value == "neural-dft"
-        assert PhysicsDomain.PINN.value == "pinn"
-        assert PhysicsDomain.QUANTUM_COMPUTING.value == "quantum-computing"
 
-    def test_framework_enum(self):
-        """Test Framework enum."""
-        from opifex.mlops.experiment import Framework
+class _NullExperiment(Experiment):
+    """An experiment that records nothing."""
 
-        assert Framework.JAX.value == "jax"
-        assert Framework.PYTORCH.value == "pytorch"
-        assert Framework.TENSORFLOW.value == "tensorflow"
+    async def start(self) -> str:
+        return "null"
+
+    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None) -> None:
+        pass
+
+    async def log_physics_metrics(self, metrics: object, step: int | None = None) -> None:
+        pass
+
+    async def log_parameters(self, params: dict[str, Any]) -> None:
+        pass
+
+    async def log_artifact(self, local_path: str, artifact_path: str | None = None) -> None:
+        pass
+
+    async def log_model(
+        self, model: object, model_name: str, physics_metadata: PhysicsMetadata | None = None
+    ) -> None:
+        pass
+
+    async def end(self, status: str = "completed") -> None:
+        pass
 
 
 class TestExperimentTracker:
-    """Test experiment tracker factory."""
-
-    def test_initialization(self):
-        """Test ExperimentTracker initialization."""
-        from opifex.mlops.experiment import ExperimentTracker
-
+    def test_mlflow_is_registered_by_default(self) -> None:
         tracker = ExperimentTracker()
-        assert tracker.default_backend == "auto"
-        assert tracker._backend_registry == {}
 
-    def test_register_backend(self):
-        """Test backend registration."""
-        from opifex.mlops.experiment import ExperimentTracker
+        assert tracker.default_backend == "mlflow"
+        assert tracker.backends == ("mlflow",)
 
+    def test_registered_backends_are_listed(self) -> None:
         tracker = ExperimentTracker()
-        mock_backend_class = Mock()
 
-        tracker.register_backend("test_backend", mock_backend_class)
+        tracker.register_backend("null", _NullExperiment)
 
-        assert "test_backend" in tracker._backend_registry
-        assert tracker._backend_registry["test_backend"] == mock_backend_class
+        assert tracker.backends == ("mlflow", "null")
 
+    @pytest.mark.asyncio
+    async def test_auto_resolves_to_the_tracker_default(self) -> None:
+        tracker = ExperimentTracker(default_backend="null")
+        tracker.register_backend("null", _NullExperiment)
 
-class TestMLOpsImports:
-    """Test MLOps import functionality."""
+        experiment = await tracker.create_experiment(_config(backend="auto"))
 
-    def test_basic_imports(self):
-        """Test that basic MLOps components can be imported."""
-        from opifex.mlops import (
-            ExperimentConfig,
-            ExperimentTracker,
-            Framework,
-            MLFLOW_AVAILABLE,
-            PhysicsDomain,
-            PhysicsMetadata,
-        )
+        assert isinstance(experiment, _NullExperiment)
 
-        # Test that classes can be instantiated
-        metadata = PhysicsMetadata()
-        assert metadata is not None
+    @pytest.mark.asyncio
+    async def test_the_config_backend_wins_over_the_default(self) -> None:
+        tracker = ExperimentTracker(default_backend="null")
+        tracker.register_backend("null", _NullExperiment)
 
-        config = ExperimentConfig(
-            name="test",
-            physics_domain=PhysicsDomain.NEURAL_OPERATORS,
-            framework=Framework.JAX,
-        )
-        assert config is not None
+        experiment = await tracker.create_experiment(_config(backend="mlflow"))
 
+        assert isinstance(experiment, MLflowBackend)
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_backend_names_the_registered_ones(self) -> None:
         tracker = ExperimentTracker()
-        assert tracker is not None
 
-        # Test that MLFLOW_AVAILABLE is a boolean
-        assert isinstance(MLFLOW_AVAILABLE, bool)
-
-    def test_metadata_serialization(self):
-        """Test that metadata can be converted to dict.
-
-        Phase 3c added ``slots=True`` to the metadata dataclasses, which
-        removes ``__dict__``. ``dataclasses.asdict`` is the canonical
-        serialisation entry point for slotted dataclasses (it walks
-        ``__dataclass_fields__`` directly).
-        """
-        from dataclasses import asdict
-
-        from opifex.mlops.experiment import PhysicsMetadata
-
-        metadata = PhysicsMetadata(pde_type="navier_stokes", dimensionality=2)
-        metadata_dict = asdict(metadata)
-        assert isinstance(metadata_dict, dict)
-        assert metadata_dict["pde_type"] == "navier_stokes"
-        assert metadata_dict["dimensionality"] == 2
-
-    def test_experiment_config_with_metadata(self):
-        """Test experiment config with physics metadata."""
-        from opifex.mlops.experiment import (
-            ExperimentConfig,
-            Framework,
-            PhysicsDomain,
-            PhysicsMetadata,
-        )
-
-        metadata = PhysicsMetadata(pde_type="navier_stokes")
-        config = ExperimentConfig(
-            name="test_experiment",
-            physics_domain=PhysicsDomain.NEURAL_OPERATORS,
-            framework=Framework.JAX,
-            physics_metadata=metadata,
-        )
-        assert config.physics_metadata == metadata
-        assert config.physics_metadata is not None
-        assert config.physics_metadata.pde_type == "navier_stokes"
+        with pytest.raises(ValueError, match=r"'wandb'.*mlflow"):
+            await tracker.create_experiment(_config(backend="wandb"))
 
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+class TestPackageSurface:
+    def test_public_names(self) -> None:
+        assert set(opifex.mlops.__all__) == {
+            "MLOPS_CAPABILITIES",
+            "Experiment",
+            "ExperimentConfig",
+            "ExperimentTracker",
+            "Framework",
+            "L2OMetrics",
+            "MLflowBackend",
+            "NeuralDFTMetrics",
+            "NeuralOperatorMetrics",
+            "PINNMetrics",
+            "PhysicsDomain",
+            "PhysicsMetadata",
+            "QuantumMetrics",
+            "register_mlops_capabilities",
+        }
+        assert opifex.mlops.ExperimentTracker is ExperimentTracker
+        for name in (
+            "SUPPORTED_FRAMEWORKS",
+            "SUPPORTED_BACKENDS",
+            "MLFLOW_AVAILABLE",
+            "__version__",
+        ):
+            assert not hasattr(opifex.mlops, name), name
+
+    def test_importing_the_package_does_not_register_capabilities(self) -> None:
+        UQRegistry.reset()
+        try:
+            importlib.reload(opifex.mlops)
+
+            assert "mlops:ExperimentTracker" not in UQRegistry()
+        finally:
+            register_mlops_capabilities(UQRegistry())
+
+    def test_register_mlops_capabilities_is_idempotent(self) -> None:
+        registry = UQRegistry()
+
+        register_mlops_capabilities(registry)
+        register_mlops_capabilities(registry)
+
+        capability = registry.require("mlops:ExperimentTracker")
+        assert capability is MLOPS_CAPABILITIES["mlops:ExperimentTracker"]
+        assert capability.default_strategy is DefaultStrategy.UNSUPPORTED

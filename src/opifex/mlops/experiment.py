@@ -4,6 +4,8 @@ This module provides physics-informed metadata and experiment tracking
 capabilities for scientific machine learning workflows.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -12,6 +14,8 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+    from substrax.checkpoint import ModelLike
 
 
 class PhysicsDomain(Enum):
@@ -25,11 +29,9 @@ class PhysicsDomain(Enum):
 
 
 class Framework(Enum):
-    """Machine learning frameworks supported by Opifex."""
+    """The machine learning framework an experiment runs on."""
 
     JAX = "jax"
-    PYTORCH = "pytorch"
-    TENSORFLOW = "tensorflow"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -201,6 +203,12 @@ class QuantumMetrics:
     parameter_gradient_magnitude: float | None = None
 
 
+type PhysicsMetrics = (
+    NeuralOperatorMetrics | L2OMetrics | NeuralDFTMetrics | PINNMetrics | QuantumMetrics
+)
+"""The domain metrics records an experiment logs."""
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentConfig:
     """Configuration for scientific computing experiments."""
@@ -216,7 +224,7 @@ class ExperimentConfig:
     physics_metadata: PhysicsMetadata | None = None
 
     # Backend configuration
-    backend: str = "auto"  # auto, mlflow, wandb, neptune, opifex
+    backend: str = "auto"  # "auto" defers to the tracker's default backend
     backend_config: dict[str, Any] = field(default_factory=dict)
 
     # Research context
@@ -254,40 +262,32 @@ class Experiment(ABC):
         """Start the experiment and return experiment ID."""
 
     @abstractmethod
-    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None):
+    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None) -> None:
         """Log scalar metrics."""
 
     @abstractmethod
-    async def log_physics_metrics(
-        self,
-        metrics: NeuralOperatorMetrics
-        | L2OMetrics
-        | NeuralDFTMetrics
-        | PINNMetrics
-        | QuantumMetrics,
-        step: int | None = None,
-    ):
+    async def log_physics_metrics(self, metrics: PhysicsMetrics, step: int | None = None) -> None:
         """Log physics-informed metrics specific to the domain."""
 
     @abstractmethod
-    async def log_parameters(self, params: dict[str, Any]):
+    async def log_parameters(self, params: dict[str, Any]) -> None:
         """Log experiment parameters and hyperparameters."""
 
     @abstractmethod
-    async def log_artifact(self, local_path: str, artifact_path: str | None = None):
+    async def log_artifact(self, local_path: str, artifact_path: str | None = None) -> None:
         """Log an artifact (model, plot, data file)."""
 
     @abstractmethod
     async def log_model(
         self,
-        model: Any,
+        model: ModelLike,
         model_name: str,
         physics_metadata: PhysicsMetadata | None = None,
-    ):
+    ) -> None:
         """Log a trained model with scientific metadata."""
 
     @abstractmethod
-    async def end(self, status: str = "completed"):
+    async def end(self, status: str = "completed") -> None:
         """End the experiment."""
 
     def get_experiment_url(self) -> str | None:
@@ -305,46 +305,3 @@ class Experiment(ABC):
     def get_artifacts(self) -> dict[str, str]:
         """Get all logged artifacts."""
         return self._artifacts.copy()
-
-
-class ExperimentTracker:
-    """Factory for creating experiment instances with appropriate backends."""
-
-    def __init__(self, default_backend: str = "auto") -> None:
-        self.default_backend = default_backend
-        self._backend_registry: dict[str, type[Experiment]] = {}
-
-    def register_backend(self, name: str, backend_class) -> None:
-        """Register a new backend implementation."""
-        self._backend_registry[name] = backend_class
-
-    async def create_experiment(self, config: ExperimentConfig) -> Experiment:
-        """Create an experiment with the appropriate backend."""
-        backend = config.backend if config.backend != "auto" else self._select_backend(config)
-
-        if backend not in self._backend_registry:
-            available = list(self._backend_registry.keys())
-            raise ValueError(f"Backend '{backend}' not found. Available: {available}")
-
-        backend_class = self._backend_registry[backend]
-        return backend_class(config)
-
-    def _select_backend(self, config: ExperimentConfig) -> str:
-        """Auto-select the best backend for the experiment configuration."""
-        # Logic for automatic backend selection based on:
-        # - Physics domain
-        # - Available backends
-        # - User preferences
-        # - Performance requirements
-
-        if config.physics_domain in [
-            PhysicsDomain.NEURAL_DFT,
-            PhysicsDomain.QUANTUM_COMPUTING,
-        ]:
-            # These domains benefit from detailed scientific metadata
-            return "opifex"
-        if config.research_group and "collaboration" in config.tags:
-            # Research collaboration scenarios
-            return "wandb"
-        # Default enterprise backend
-        return "mlflow"

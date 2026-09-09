@@ -1,22 +1,20 @@
-"""UQ capability declarations for the MLOps surfaces (Task 7.5).
+"""UQ capability declarations for the MLOps surfaces.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.mlops.__init__``.
-
-``opifex.mlops`` is a metric-publication surface: ``ExperimentTracker``
-forwards UQ-flavoured metrics (Brier / ECE / NLL / coverage) to MLflow
-or other registered backends, but it does not compute uncertainty
-itself. Capability is therefore ``UNSUPPORTED`` — the honest reading
-per the plan's "UNSUPPORTED placeholder if monitoring is
-metric-publication-only" rule.
-
-Plan reference: ``07-phase-registry-docs-examples.md`` lines 624-627.
+``opifex.mlops`` is a metric-publication surface: ``ExperimentTracker`` forwards
+UQ-flavoured metrics (Brier, ECE, NLL, coverage) to a run, but computes no
+uncertainty itself, so its capability is ``UNSUPPORTED``. Registration is
+explicit: importing the package registers nothing.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+
+
+if TYPE_CHECKING:
+    from opifex.uncertainty.registry import UQRegistry
 
 
 _EXPERIMENT_TRACKER_CAPABILITY = UQCapability(
@@ -25,10 +23,9 @@ _EXPERIMENT_TRACKER_CAPABILITY = UQCapability(
     notes=(
         "ExperimentTracker publishes UQ-flavoured metrics (Brier / ECE / "
         "NLL / coverage / interval width) to MLflow or other registered "
-        "backends. It does not own any uncertainty computation — that "
-        "lives in opifex.uncertainty.monitoring + the calibration / "
-        "conformal adapters. Declared UNSUPPORTED for the registry per "
-        "the plan's 'metric-publication-only' rule."
+        "backends. It does not own any uncertainty computation, which "
+        "lives in opifex.uncertainty.monitoring and the calibration and "
+        "conformal adapters."
     ),
 )
 
@@ -38,4 +35,11 @@ MLOPS_CAPABILITIES: dict[str, UQCapability] = {
 }
 
 
-__all__ = ["MLOPS_CAPABILITIES"]
+def register_mlops_capabilities(registry: UQRegistry) -> None:
+    """Register the MLOps capabilities in ``registry``; already-registered names are kept."""
+    for name, capability in MLOPS_CAPABILITIES.items():
+        if name not in registry:
+            registry.register(name, capability)
+
+
+__all__ = ["MLOPS_CAPABILITIES", "register_mlops_capabilities"]
