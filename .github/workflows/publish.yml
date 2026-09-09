@@ -1,12 +1,10 @@
 # Publish to PyPI when a GitHub Release is created.
 #
-# Authentication uses API tokens stored as repo secrets:
-#   PYPI_API_TOKEN       — account-scoped token used by the pypi job
-#   TEST_PYPI_API_TOKEN  — account-scoped token used by the testpypi job
-#
-# To migrate to OIDC trusted publishing later, replace the `password` inputs
-# with `permissions: id-token: write` on each publish job and register the
-# project at https://pypi.org/manage/account/publishing/.
+# Authentication is PyPI trusted publishing (OIDC): each publish job requests an
+# id-token and PyPI trusts the identity
+#   repo:avitai/opifex:environment:pypi     (project opifex, workflow publish.yml)
+#   repo:avitai/opifex:environment:testpypi (TestPyPI)
+# registered at https://pypi.org/manage/account/publishing/. No API token is stored.
 
 name: Publish to PyPI
 
@@ -104,6 +102,9 @@ jobs:
       name: testpypi
       url: https://test.pypi.org/project/opifex/
 
+    permissions:
+      id-token: write
+
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -115,7 +116,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           verbose: true
           skip-existing: true
 
@@ -147,6 +147,9 @@ jobs:
       name: pypi
       url: https://pypi.org/project/opifex/
 
+    permissions:
+      id-token: write
+
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -157,5 +160,4 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
           verbose: true
