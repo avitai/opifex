@@ -27,7 +27,7 @@ over the stored residuals :math:`r_i = f(y_i) - y_i`, whose Lagrange solution is
 -- exactly Pulay's DIIS system. The next iterate extrapolates the stored
 :math:`f`-values, optionally relaxed by a mixing factor ``beta``.
 
-References
+References:
 ----------
 .. [Anderson1965] D. G. Anderson, "Iterative procedures for nonlinear integral
    equations," *J. ACM* **12**, 547 (1965).

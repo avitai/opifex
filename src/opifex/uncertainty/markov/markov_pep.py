@@ -38,7 +38,7 @@ canonical bayesnewton recipe (Wilkinson, Solin, Adam 2020+,
 7. **Predict** — interpolate the converged smoothed state forward via
    the same Kalman state-space machinery as Markov-Laplace and Markov-VI.
 
-References
+References:
 ----------
 * Minka 2001 — *Expectation Propagation for Approximate Bayesian
   Inference*, UAI.

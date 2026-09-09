@@ -21,7 +21,7 @@ Sibling reference (READ-ONLY port — never imported at runtime):
 from the Caratheodory-Tchernychova-Lyons recombination of
 github.com/FraCose/Recombination_Random_Algos.
 
-References
+References:
 ----------
 * Adachi, M. et al. 2022 — *Fast Bayesian Inference with Batch
   Bayesian Quadrature via Kernel Recombination*, NeurIPS.

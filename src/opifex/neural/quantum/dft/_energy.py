@@ -22,7 +22,7 @@ The exchange-correlation matrix supports both the LDA (a single density-dependen
 potential) and the PBE GGA (the ``v_rho`` and ``v_sigma`` pair contracted with
 the AO gradients) functionals.
 
-References
+References:
 ----------
 * X. Zhang, G. K.-L. Chan, *J. Chem. Phys.* **157**, 204801 (2022),
   arXiv:2207.13836 -- implicit differentiation of the SCF fixed point.

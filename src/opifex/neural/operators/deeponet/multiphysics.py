@@ -20,7 +20,7 @@ axis to give an output of shape ``(batch, n_points, num_physics_systems)``.
 This mirrors ``IndependentStrategy`` in DeepXDE
 (``deepxde/nn/deeponet_strategy.py``).
 
-References
+References:
 ----------
 - L. Lu, P. Jin, G. Pang, Z. Zhang, G. E. Karniadakis. "Learning nonlinear
   operators via DeepONet based on the universal approximation theorem of

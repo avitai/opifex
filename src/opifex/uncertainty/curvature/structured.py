@@ -26,7 +26,7 @@ Structured identities implemented here
   matrix-determinant lemma.
 * Diagonal and identity operators as the scalable terminal cases.
 
-References
+References:
 ----------
 * Potapczynski, A. et al. 2023 — *CoLA: Exploiting Compositional
   Structure for Automatic and Efficient Numerical Linear Algebra*,

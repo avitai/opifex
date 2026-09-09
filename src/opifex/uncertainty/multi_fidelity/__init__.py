@@ -14,7 +14,7 @@ acquisition pillar (MUMBO):
   Moss, Leslie, Rayson 2020 MUMBO max-value entropy acquisition for
   multi-fidelity Bayesian optimisation.
 
-References
+References:
 ----------
 * Kennedy, O'Hagan 2000 — *Predicting the output from a complex
   computer code when fast approximations are available*, Biometrika.

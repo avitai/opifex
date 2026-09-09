@@ -22,7 +22,7 @@ The functional derivative (the XC potential) is the GGA pair
 :math:`\sigma=|\nabla\rho|^2`, obtained by automatic differentiation -- both
 channels are live (the density-gradient channel is not zeroed).
 
-References
+References:
 ----------
 * J. P. Perdew, K. Burke, M. Ernzerhof, *Phys. Rev. Lett.* **77**, 3865 (1996).
 * J. Sun, A. Ruzsinszky, J. P. Perdew, *Phys. Rev. Lett.* **115**, 036402 (2015)

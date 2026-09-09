@@ -8,7 +8,7 @@ Canonical reference (line-by-line port):
   blocks; the HVP recipe is the standard pattern from
   Pearlmutter (1994) *Fast Exact Multiplication by the Hessian*.
 
-References
+References:
 ----------
 * Pearlmutter, B. A. 1994 — *Fast Exact Multiplication by the Hessian*,
   Neural Computation 6(1).

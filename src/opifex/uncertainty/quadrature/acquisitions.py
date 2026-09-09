@@ -45,7 +45,7 @@ Sibling references (READ-ONLY ports — never imported at runtime):
 This module is the Phase 8.3 active-learning prerequisite per the
 design notes.
 
-References
+References:
 ----------
 * Osborne, M. A. et al. 2012 — *Active Learning of Model Evidence
   Using Bayesian Quadrature*, NeurIPS 25.

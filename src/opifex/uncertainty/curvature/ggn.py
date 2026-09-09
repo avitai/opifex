@@ -18,7 +18,7 @@ Canonical reference:
   forward-over-reverse recipe ``vjp ∘ (H_y L) ∘ jvp`` from
   Martens 2014.
 
-References
+References:
 ----------
 * Schraudolph, N. N. 2002 — *Fast Curvature Matrix-Vector Products for
   Second-Order Gradient Descent*, Neural Computation 14(7).

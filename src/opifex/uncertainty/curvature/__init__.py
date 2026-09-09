@@ -8,7 +8,7 @@ public adapter contract for the diagonal-Laplace posterior
 :mod:`.laplace` so the curvature kernels and the spec that consumes
 them live in a single canonical home.
 
-References
+References:
 ----------
 * MacKay, D. J. C. 1992 — *A practical Bayesian framework for
   backpropagation networks*, Neural Computation 4(3).

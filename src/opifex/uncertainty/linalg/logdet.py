@@ -17,7 +17,7 @@ Algorithm
 Sibling reference (line-by-line port): ``matfree/matfree/funm.py:178
 integrand_funm_sym_logdet``.
 
-References
+References:
 ----------
 * Ubaru, Chen, Saad 2017 — *Fast estimation of tr(f(A)) via stochastic
   Lanczos quadrature*, SIAM J. Matrix Anal. Appl.

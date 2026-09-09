@@ -22,7 +22,7 @@ cola's ``cola/linalg/tbd/randomized_svd.py`` lacks the subspace iteration
 and does not call ``qr`` on the sketch image; this implementation follows
 the canonical HMT recipe directly from the paper.
 
-References
+References:
 ----------
 * Halko, Martinsson, Tropp arXiv:0909.4061 — *Finding structure with
   randomness: probabilistic algorithms for constructing approximate

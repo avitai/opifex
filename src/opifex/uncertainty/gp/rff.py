@@ -40,7 +40,7 @@ Compared with exact GP the cost reduces from ``O(n³)`` to
 ``O(n D² + D³)``; for ``D ≪ n`` this is the canonical large-N
 work-around (Rahimi & Recht 2007, GPJax ``rff.py``).
 
-References
+References:
 ----------
 * Rahimi, A., Recht, B. 2007 — *Random Features for Large-Scale Kernel
   Machines*, NeurIPS, arXiv:0708.0234 (PRIMARY).

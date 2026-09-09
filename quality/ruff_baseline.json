@@ -1,0 +1,351 @@
+{
+  "entries": {
+    "src/opifex/benchmarking/evaluation_engine.py": {
+      "ANN202": 1
+    },
+    "src/opifex/benchmarking/operator_executor.py": {
+      "ANN001": 4,
+      "ANN202": 2
+    },
+    "src/opifex/benchmarking/profiling/event_coordinator.py": {
+      "ANN201": 1
+    },
+    "src/opifex/benchmarking/profiling/profiling_harness.py": {
+      "ANN201": 1
+    },
+    "src/opifex/core/conditions.py": {
+      "ANN001": 1,
+      "D417": 2
+    },
+    "src/opifex/core/gpu_acceleration.py": {
+      "ANN002": 1,
+      "ANN201": 1
+    },
+    "src/opifex/core/optimization/fusion_optimizer.py": {
+      "ANN001": 4,
+      "ANN202": 4
+    },
+    "src/opifex/core/physics/autodiff_engine.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/core/physics/boundaries.py": {
+      "ANN003": 1
+    },
+    "src/opifex/core/physics/gradnorm.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/core/physics/losses.py": {
+      "ANN001": 1,
+      "ANN003": 6
+    },
+    "src/opifex/core/physics/ntk/wrapper.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/core/problems.py": {
+      "ANN003": 7
+    },
+    "src/opifex/core/quantum/_eager_reference.py": {
+      "ANN001": 23,
+      "ANN202": 2
+    },
+    "src/opifex/core/quantum/_flat_harness.py": {
+      "ANN001": 18,
+      "ANN202": 2
+    },
+    "src/opifex/core/quantum/operators.py": {
+      "ANN002": 10,
+      "ANN003": 10
+    },
+    "src/opifex/core/spectral/spectral_utils.py": {
+      "D417": 3
+    },
+    "src/opifex/core/testing_infrastructure.py": {
+      "ANN001": 3,
+      "ANN002": 2,
+      "ANN003": 3,
+      "ANN201": 2,
+      "ANN202": 1
+    },
+    "src/opifex/core/training/components/__init__.py": {
+      "ANN201": 1,
+      "ANN202": 2
+    },
+    "src/opifex/core/training/monitoring/flops.py": {
+      "ANN003": 4
+    },
+    "src/opifex/core/training/optimizers.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/core/training/strategies/incremental_trainer.py": {
+      "ANN001": 2,
+      "ANN202": 1
+    },
+    "src/opifex/core/training/strategies/mixed_precision.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/core/training/trainer.py": {
+      "ANN001": 4,
+      "ANN002": 1,
+      "ANN003": 1,
+      "ANN202": 1
+    },
+    "src/opifex/data/preprocessing/spectral_analysis.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/deployment/kubernetes/manifest_generator.py": {
+      "ANN003": 1
+    },
+    "src/opifex/deployment/monitoring/logging.py": {
+      "ANN003": 16,
+      "ANN201": 3
+    },
+    "src/opifex/deployment/server.py": {
+      "ANN001": 4,
+      "ANN202": 6
+    },
+    "src/opifex/diagnostics/ntk_computation.py": {
+      "ANN001": 2,
+      "ANN202": 1
+    },
+    "src/opifex/fields/field.py": {
+      "ANN001": 2,
+      "ANN201": 1,
+      "ANN206": 1
+    },
+    "src/opifex/geometry/algebra/groups.py": {
+      "ANN001": 6,
+      "ANN202": 4
+    },
+    "src/opifex/geometry/csg/molecular.py": {
+      "ANN001": 6,
+      "ANN202": 1,
+      "ANN206": 2
+    },
+    "src/opifex/geometry/csg/operations.py": {
+      "ANN001": 9,
+      "ANN201": 1,
+      "ANN202": 6
+    },
+    "src/opifex/geometry/csg/primitives.py": {
+      "ANN001": 11,
+      "ANN202": 8
+    },
+    "src/opifex/geometry/manifolds/hyperbolic.py": {
+      "ANN001": 5,
+      "ANN202": 3
+    },
+    "src/opifex/geometry/manifolds/operators.py": {
+      "ANN001": 2,
+      "ANN202": 2
+    },
+    "src/opifex/geometry/manifolds/riemannian.py": {
+      "ANN001": 15,
+      "ANN201": 3,
+      "ANN202": 10
+    },
+    "src/opifex/geometry/manifolds/spherical.py": {
+      "ANN001": 3,
+      "ANN202": 2
+    },
+    "src/opifex/geometry/pytree_utils.py": {
+      "ANN001": 9
+    },
+    "src/opifex/geometry/topology/base.py": {
+      "ANN001": 3,
+      "ANN202": 2
+    },
+    "src/opifex/geometry/topology/graphs.py": {
+      "ANN202": 1
+    },
+    "src/opifex/mlops/backends/mlflow_backend.py": {
+      "ANN202": 1
+    },
+    "src/opifex/mlops/experiment.py": {
+      "ANN001": 1,
+      "ANN201": 6
+    },
+    "src/opifex/neural/bayesian/calibration_tools.py": {
+      "ANN001": 2,
+      "ANN202": 2
+    },
+    "src/opifex/neural/bayesian/probabilistic_pinns.py": {
+      "ANN202": 1
+    },
+    "src/opifex/neural/bayesian/variational_framework.py": {
+      "ANN202": 1
+    },
+    "src/opifex/neural/operators/common/tensor_ops.py": {
+      "ANN001": 2,
+      "ANN002": 1,
+      "ANN003": 2,
+      "ANN201": 1,
+      "ANN202": 1
+    },
+    "src/opifex/neural/operators/fno/amortized.py": {
+      "ANN003": 3
+    },
+    "src/opifex/neural/operators/fno/factorized.py": {
+      "ANN001": 6,
+      "ANN202": 3
+    },
+    "src/opifex/neural/operators/fno/local.py": {
+      "ANN003": 3
+    },
+    "src/opifex/neural/operators/fno/multigrid_tfno.py": {
+      "ANN202": 1
+    },
+    "src/opifex/neural/operators/fno/spherical.py": {
+      "ANN003": 4
+    },
+    "src/opifex/neural/operators/fno/tensorly_integration.py": {
+      "ANN003": 1
+    },
+    "src/opifex/neural/operators/fno/ufno.py": {
+      "ANN003": 3
+    },
+    "src/opifex/neural/operators/graph/gno.py": {
+      "ANN001": 3,
+      "ANN202": 2
+    },
+    "src/opifex/neural/operators/graph/utils.py": {
+      "ANN001": 2,
+      "ANN202": 1
+    },
+    "src/opifex/neural/operators/physics/informed.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/neural/operators/specialized/lno.py": {
+      "D417": 1
+    },
+    "src/opifex/neural/operators/specialized/operator_network.py": {
+      "ANN001": 8,
+      "ANN002": 1,
+      "ANN003": 1,
+      "ANN202": 6
+    },
+    "src/opifex/neural/operators/specialized/spectral_normalization.py": {
+      "ANN003": 2
+    },
+    "src/opifex/neural/operators/specialized/transolver.py": {
+      "D417": 1
+    },
+    "src/opifex/neural/pinns/domain_decomposition/cpinn.py": {
+      "ANN001": 2,
+      "ANN202": 2
+    },
+    "src/opifex/neural/pinns/domain_decomposition/fbpinn.py": {
+      "ANN003": 1
+    },
+    "src/opifex/neural/pinns/domain_decomposition/xpinn.py": {
+      "ANN001": 3,
+      "ANN202": 2
+    },
+    "src/opifex/neural/pinns/fpinn.py": {
+      "ANN001": 3,
+      "ANN202": 2,
+      "D417": 1
+    },
+    "src/opifex/neural/pinns/gst_pinn.py": {
+      "ANN001": 3,
+      "ANN202": 3,
+      "D417": 1
+    },
+    "src/opifex/neural/pinns/multi_scale.py": {
+      "ANN001": 2,
+      "ANN202": 2
+    },
+    "src/opifex/neural/pinns/vpinn.py": {
+      "D417": 1
+    },
+    "src/opifex/optimization/control/mpc.py": {
+      "ANN001": 16,
+      "ANN003": 1,
+      "ANN202": 10
+    },
+    "src/opifex/optimization/control/system_id.py": {
+      "ANN001": 5,
+      "ANN202": 3
+    },
+    "src/opifex/optimization/l2o/features.py": {
+      "ANN202": 2
+    },
+    "src/opifex/optimization/meta_optimization/neural_learner.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/optimization/production.py": {
+      "ANN001": 4,
+      "ANN202": 4
+    },
+    "src/opifex/optimization/second_order/nnx_integration.py": {
+      "ANN001": 4,
+      "ANN202": 3
+    },
+    "src/opifex/physics/solvers/burgers.py": {
+      "ANN001": 5,
+      "ANN202": 3
+    },
+    "src/opifex/physics/solvers/diffusion_advection.py": {
+      "ANN001": 2,
+      "ANN202": 1
+    },
+    "src/opifex/physics/solvers/navier_stokes.py": {
+      "ANN001": 5,
+      "ANN202": 2
+    },
+    "src/opifex/physics/solvers/shallow_water.py": {
+      "ANN001": 3,
+      "ANN202": 2
+    },
+    "src/opifex/platform/registry/core.py": {
+      "ANN202": 1
+    },
+    "src/opifex/solvers/ude.py": {
+      "ANN001": 4
+    },
+    "src/opifex/typing.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    },
+    "src/opifex/uncertainty/active/rembo.py": {
+      "D417": 1
+    },
+    "src/opifex/uncertainty/inference_backends/_pathfinder_algorithm.py": {
+      "ANN202": 2
+    },
+    "src/opifex/uncertainty/markov/markov_laplace_likelihoods.py": {
+      "ANN202": 1
+    },
+    "src/opifex/uncertainty/markov/markov_pep_likelihoods.py": {
+      "ANN202": 3
+    },
+    "src/opifex/uncertainty/markov/markov_pl_likelihoods.py": {
+      "ANN202": 3
+    },
+    "src/opifex/uncertainty/monitoring/reliability_report.py": {
+      "D417": 1
+    },
+    "src/opifex/uncertainty/scientific/sampling.py": {
+      "ANN202": 1,
+      "D417": 3
+    },
+    "src/opifex/uncertainty/statespace/cakf.py": {
+      "D417": 1
+    },
+    "src/opifex/visualization/animation.py": {
+      "ANN001": 1,
+      "ANN202": 1
+    }
+  },
+  "scan_paths": [
+    "src"
+  ],
+  "version": 1
+}

@@ -36,7 +36,7 @@ For Gaussian likelihood the linearisation is exact:
 ``A = 1, b = 0, omega = sigma_squared``, so PL reduces to the conjugate
 Kalman path in one iteration — verified by the slice 30 cross-check.
 
-References
+References:
 ----------
 * Garcia-Fernandez, Tronarp, Sarkka 2018 — *Gaussian process
   classification using posterior linearisation*, IEEE SPL.

@@ -15,7 +15,7 @@ Canonical reference (line-by-line port):
   ``parallel_smoothing_operator`` (line 329),
   ``_parallel_rts`` (line 338).
 
-References
+References:
 ----------
 * Särkkä & García-Fernández 2021 — *Temporal parallelization of Bayesian
   smoothers*, IEEE TAC arXiv:1905.13002.

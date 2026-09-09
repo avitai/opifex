@@ -22,7 +22,7 @@ therefore ``jit`` / ``grad`` / ``vmap`` compatible.
 Normalization matches ``torch-harmonics`` with ``norm="ortho"`` and the
 Condon-Shortley phase enabled, i.e. orthonormal real spherical harmonics.
 
-References
+References:
 ----------
 - Bonev et al. 2023, "Spherical Fourier Neural Operators" (arXiv:2306.03838).
 - ``torch_harmonics/sht.py`` (``RealSHT.forward`` lines 119-132,

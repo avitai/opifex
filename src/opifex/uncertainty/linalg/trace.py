@@ -25,7 +25,7 @@ Algorithms
   Fisher information matrices). Sibling reference:
   ``traceax/src/traceax/_estimators.py:241 XNysTraceEstimator``.
 
-References
+References:
 ----------
 * Hutchinson 1990 — *A stochastic estimator of the trace of the influence
   matrix*.

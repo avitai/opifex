@@ -27,7 +27,7 @@ will gain an alternative branch that fits a real GP on top of the PINN
 features rather than relying solely on the linearised-Laplace
 equivalence — the current adapter-mediated form is forward-compatible.
 
-References
+References:
 ----------
 * Immer, A., Korzepa, M., Bauer, M. 2021 — *Improving predictions of
   Bayesian neural nets via local linearisation*, AISTATS,

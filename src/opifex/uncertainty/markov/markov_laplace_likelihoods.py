@@ -19,7 +19,7 @@ slice ships **Bernoulli + Poisson + Student-t + Beta + Gaussian on
 the Laplace path** (Bernoulli was shipped in slice 25; the other four
 land here).
 
-References
+References:
 ----------
 * Wilkinson, Solin, Adam 2020+ — ``bayesnewton`` likelihood +
   inference catalogue.

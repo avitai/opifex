@@ -34,7 +34,7 @@ components shipped in
 :mod:`opifex.uncertainty.gp.laplace_likelihoods` work without
 modification on Markov-GP priors.
 
-References
+References:
 ----------
 * Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
   Laplace family (PRIMARY reference for the state-space-Newton

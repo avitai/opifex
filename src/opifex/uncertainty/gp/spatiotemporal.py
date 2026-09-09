@@ -61,7 +61,7 @@ Sibling reference implementations consulted (READ-ONLY — never imported):
   (line 626) — ``predict`` (line 766) and
   ``conditional_posterior_to_data`` (line 745).
 
-References
+References:
 ----------
 * Sarkka, S. 2013 — *Bayesian Filtering and Smoothing*, CUP.
 """

@@ -35,7 +35,7 @@ Reference implementations consulted (READ-ONLY — never imported):
   identical Algorithm-2.1 Cholesky pattern, wrapped in ``eqx.Module``.
 * GPJax ``gpjax/gps.py:ConjugatePosterior`` — same algebra.
 
-References
+References:
 ----------
 * Rasmussen, C. E., Williams, C. K. I. 2006 — *Gaussian Processes for
   Machine Learning*, MIT Press; Algorithm 2.1 §2.2 (PRIMARY).

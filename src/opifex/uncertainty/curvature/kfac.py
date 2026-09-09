@@ -35,7 +35,7 @@ block-diagonal-of-Kronecker posterior precision (Ritter, Botev & Barber
 2018) built from :mod:`opifex.uncertainty.curvature.structured`, and exposes
 the linearised predictive variance ``diag(J Σ J^\top)``.
 
-References
+References:
 ----------
 * Martens, J. & Grosse, R. 2015 — *Optimizing Neural Networks with
   Kronecker-factored Approximate Curvature*, arXiv:1503.05671.

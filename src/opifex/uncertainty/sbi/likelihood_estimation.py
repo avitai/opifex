@@ -18,7 +18,7 @@ construction, training loop, and MCMC predictive block are shared with
 NPE / NRE via :mod:`opifex.uncertainty.sbi._base`; NLE keeps only its
 likelihood-flow loss and log-posterior closures.
 
-References
+References:
 ----------
 * Papamakarios, Sterratt, Murray (2019) — Sequential Neural Likelihood,
   ``arXiv:1805.07226``.

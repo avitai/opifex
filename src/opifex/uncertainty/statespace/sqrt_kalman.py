@@ -9,7 +9,7 @@ Canonical reference (line-by-line port):
   (line 51) for the update step and ``triu_via_qr`` (line 138) for the
   predict step.
 
-References
+References:
 ----------
 * Kaminski, Bryson, Schmidt 1971 — *Discrete square root filtering: a
   survey of current techniques*, IEEE TAC 16(6).

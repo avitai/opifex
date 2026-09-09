@@ -34,7 +34,7 @@ Algorithm
 Cost weighting (dividing by per-level query cost) is left to the
 caller — different BO loops apply it differently.
 
-References
+References:
 ----------
 * Moss, Leslie, Rayson 2020 — *MUMBO: MUlti-task Max-value Bayesian
   Optimisation*, ECML-PKDD.

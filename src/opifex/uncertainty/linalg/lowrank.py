@@ -16,7 +16,7 @@ Sibling references (line-by-line ports):
 * ``eepperly/Randomly-Pivoted-Cholesky/rpcholesky.py::cholesky_helper``
   with ``alg='rp'``.
 
-References
+References:
 ----------
 * Harbrecht, Peters, Schneider — *On the low-rank approximation by the
   pivoted Cholesky decomposition*, Appl. Numer. Math. 2012.

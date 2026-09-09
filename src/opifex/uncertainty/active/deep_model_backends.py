@@ -11,7 +11,7 @@ a ``predict(x) -> PredictiveDistribution`` callable. The two backend
 classes here adapt user-supplied prediction functions (one per
 ensemble member, or one for the whole deep model) into that shape.
 
-References
+References:
 ----------
 * Lakshminarayanan, Pritzel, Blundell 2017 — *Simple and Scalable
   Predictive Uncertainty Estimation using Deep Ensembles*, NIPS.

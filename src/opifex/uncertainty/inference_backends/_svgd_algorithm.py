@@ -22,7 +22,7 @@ Sibling reference (READ-ONLY port — never imported at runtime):
   ``median_heuristic`` (line 138), ``update_median_heuristic``
   (line 163).
 
-References
+References:
 ----------
 * Liu, Q. & Wang, D. 2016 — *Stein Variational Gradient Descent: A
   General Purpose Bayesian Inference Algorithm*, NeurIPS 29.

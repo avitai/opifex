@@ -17,7 +17,7 @@ Ports the trust-region BO family from
 Pattern-A frozen-slotted-kw-only dataclasses throughout; no equinox
 dependency; pure JAX arrays for the centre / length / bounds.
 
-References
+References:
 ----------
 * Eriksson, Pearce, Gardner, Turner, Poloczek 2019 — *Scalable Global
   Optimization via Local Bayesian Optimization (TuRBO)*, NeurIPS.

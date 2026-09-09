@@ -63,7 +63,7 @@ Reference implementations consulted (READ-ONLY)
 * ``../bayesnewton/bayesnewton/kernels.py`` — analogous celerite
   state-space layer.
 
-References
+References:
 ----------
 * Foreman-Mackey, D., Agol, E., Ambikasaran, S., Angus, R. 2017 —
   *Fast and scalable Gaussian process modeling with applications to

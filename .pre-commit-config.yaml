@@ -67,6 +67,12 @@ repos:
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
         pass_filenames: false
         always_run: true
+      - id: ruff-baseline
+        name: ruff-baseline (per-file ignores only shrink)
+        entry: uv run --no-sync python scripts/check_ruff_baseline.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: check-file-length
         name: check-file-length (warn >1500, fail >2000 lines)
         entry: bash
@@ -140,15 +146,6 @@ repos:
         args: ["-c", "pyproject.toml"]
         exclude: ^(memory-bank|documents|custom_modes|.cursor|tests|example_data)/
         additional_dependencies: ["bandit[toml]"]
-
-  # Workshop-inspired documentation quality
-  - repo: https://github.com/pycqa/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|tests|example_data)/
-        additional_dependencies: ["pydocstyle[toml]"]
-        args: ["--config=pyproject.toml"]
 
   # Strip notebook output cells before commit (keeps diffs clean)
   - repo: https://github.com/kynan/nbstripout

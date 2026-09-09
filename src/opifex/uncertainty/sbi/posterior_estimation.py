@@ -17,7 +17,7 @@ construction, and training loop are shared with NLE / NRE via
 :mod:`opifex.uncertainty.sbi._base`; NPE keeps only its posterior-flow
 loss and sampling closures.
 
-References
+References:
 ----------
 * Greenberg, Nonnenmacher, Macke (2019) — Automatic Posterior
   Transformation for Likelihood-free Inference, ``arXiv:1905.07488``.

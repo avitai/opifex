@@ -25,7 +25,7 @@ inputs, feeding each sample as the ``(d+1)``-th input column of the
 level-``i`` GP, and averaging the level-``i`` mean / variance across
 samples.
 
-References
+References:
 ----------
 * Perdikaris, Raissi, Damianou, Lawrence, Karniadakis 2017 — *Nonlinear
   information fusion algorithms for data-efficient multi-fidelity

@@ -374,23 +374,6 @@ exclude = "\\.venv|memory-bank|documents|custom_modes|\\.cursor|example_data"
 style = "google"
 
 # Pydocstyle documentation configuration
-[tool.pydocstyle]
-# Allow missing docstrings in certain contexts for scientific code
-add-ignore = [
-  "D100", # Missing docstring in public module
-  "D104", # Missing docstring in public package
-  "D105", # Missing docstring in magic method
-  "D107", # Missing docstring in __init__
-  "D202", # No blank lines allowed after function docstring (conflicts with black)
-  "D212", # Multi-line docstring summary should start at the first line (conflicts with scientific style)
-  "D401", # First line should be in imperative mood (relaxed for scientific descriptions)
-  "D402", # First line should not be the function's "signature" (common in scientific docs)
-  "D415" # First line should end with a period (relaxed for scientific descriptions)
-]
-convention = "google"
-# Match only relevant directories, exclude test and utility directories
-match-dir = "(?!tests|memory-bank|documents|custom_modes|.cursor|example_data).*"
-
 [tool.pyright]
 exclude = [
   "**/__pycache__",
@@ -553,6 +536,16 @@ extend-select = ["UP", "BLE"] # Enforce modern Python syntax + Rule 6 (no blind 
 fixable = ["ALL"]
 ignore = [
   # Scientific computing and JAX-specific ignores
+  "ANN401", # Any is the honest type at pytree, callback and config boundaries
+  "D100", # Missing docstring in public module
+  "D104", # Missing docstring in public package
+  "D105", # Missing docstring in magic method
+  "D107", # Missing docstring in __init__
+  "D202", # No blank lines allowed after function docstring (conflicts with the formatter)
+  "D212", # Multi-line summary on the first line (the tree uses the second line)
+  "D401", # First line in imperative mood (relaxed for scientific descriptions)
+  "D402", # First line should not be the function's signature
+  "D415", # First line should end with punctuation (relaxed for scientific descriptions)
   "A003", # Class attribute shadows builtin (SQLAlchemy id columns)
   "E402", # Module level import not at top of file (JAX imports)
   "E721", # Do not compare types (JAX dtype comparisons)
@@ -637,29 +630,26 @@ select = [
   "TRY", # tryceratops
   "NPY", # NumPy-specific rules
   "RUF", # Ruff-specific rules
-  "C901" # mccabe cyclomatic complexity (Rule 2 / SRP)
+  "C901", # mccabe cyclomatic complexity (Rule 2 / SRP)
+  "ANN", # flake8-annotations (Rule 4: every parameter and return annotated)
+  "D" # pydocstyle, Google convention (replaces the pydocstyle hook)
 ]
 unfixable = []
 
-[tool.ruff.lint.flake8-type-checking]
-# Enforce TYPE_CHECKING imports for better performance
-runtime-evaluated-base-classes = ["pydantic.BaseModel"]
-
-[tool.ruff.lint.isort]
-combine-as-imports = true
-extra-standard-library = ["typing_extensions"]
-known-first-party = ["opifex"]
-known-third-party = ["jax", "flax", "numpy", "scipy"]
-lines-after-imports = 2
-order-by-type = false
-
-[tool.ruff.lint.mccabe]
-max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
-
 # Per-file ignores for development scripts
-[tool.ruff.lint.per-file-ignores]
+[tool.ruff.lint.extend-per-file-ignores]
+"conftest.py" = [
+  "ANN", # Fixtures
+  "D" # Fixtures
+]
+"docs/**" = [
+  "ANN", # Documentation snippets
+  "D" # Documentation snippets
+]
 # Example files with print statements for demonstration
 "examples/*" = [
+  "ANN", # Demonstrations read as scripts; annotations are the library's job
+  "D", # Demonstration cells and helpers are narrated in prose, not docstrings
   "T201", # Print statements (examples need output)
   "F841", # Unused variables (demonstrations may not use all variables)
   "E501", # Long lines in example comments
@@ -672,6 +662,8 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "PLR0913" # Walkthroughs configure models/loaders with one kwarg per setting
 ]
 "scripts/*" = [
+  "ANN", # Utility scripts
+  "D", # Utility scripts
   "E501", # Line too long (development scripts can be longer)
   "PLR0912", # Too many branches (complex utility scripts)
   "PLR0911", # CLI entry points dispatch over many subcommands/return codes
@@ -794,6 +786,8 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 ]
 # Test files with scientific computing patterns
 "tests/*" = [
+  "ANN", # Test signatures are fixtures and parametrisations
+  "D", # Test names carry the intent
   "T201", # Print statements in tests for debugging
   "E501", # Long lines in test descriptions
   "RUF003", # Mathematical symbols in comments
@@ -814,6 +808,117 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
   "E501", # Long test descriptions
   "RUF003" # Mathematical symbols
 ]
+
+[tool.ruff.lint.flake8-type-checking]
+# Enforce TYPE_CHECKING imports for better performance
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+extra-standard-library = ["typing_extensions"]
+known-first-party = ["opifex"]
+known-third-party = ["jax", "flax", "numpy", "scipy"]
+lines-after-imports = 2
+order-by-type = false
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
+
+[tool.ruff.lint.per-file-ignores]
+# Rendered by scripts/check_ruff_baseline.py from quality/ruff_baseline.json; regenerate with --write-baseline, never edit by hand.
+"src/opifex/benchmarking/evaluation_engine.py" = ["ANN202"]
+"src/opifex/benchmarking/operator_executor.py" = ["ANN001", "ANN202"]
+"src/opifex/benchmarking/profiling/event_coordinator.py" = ["ANN201"]
+"src/opifex/benchmarking/profiling/profiling_harness.py" = ["ANN201"]
+"src/opifex/core/conditions.py" = ["ANN001", "D417"]
+"src/opifex/core/gpu_acceleration.py" = ["ANN002", "ANN201"]
+"src/opifex/core/optimization/fusion_optimizer.py" = ["ANN001", "ANN202"]
+"src/opifex/core/physics/autodiff_engine.py" = ["ANN001", "ANN202"]
+"src/opifex/core/physics/boundaries.py" = ["ANN003"]
+"src/opifex/core/physics/gradnorm.py" = ["ANN001", "ANN202"]
+"src/opifex/core/physics/losses.py" = ["ANN001", "ANN003"]
+"src/opifex/core/physics/ntk/wrapper.py" = ["ANN001", "ANN202"]
+"src/opifex/core/problems.py" = ["ANN003"]
+"src/opifex/core/quantum/_eager_reference.py" = ["ANN001", "ANN202"]
+"src/opifex/core/quantum/_flat_harness.py" = ["ANN001", "ANN202"]
+"src/opifex/core/quantum/operators.py" = ["ANN002", "ANN003"]
+"src/opifex/core/spectral/spectral_utils.py" = ["D417"]
+"src/opifex/core/testing_infrastructure.py" = ["ANN001", "ANN002", "ANN003", "ANN201", "ANN202"]
+"src/opifex/core/training/components/__init__.py" = ["ANN201", "ANN202"]
+"src/opifex/core/training/monitoring/flops.py" = ["ANN003"]
+"src/opifex/core/training/optimizers.py" = ["ANN001", "ANN202"]
+"src/opifex/core/training/strategies/incremental_trainer.py" = ["ANN001", "ANN202"]
+"src/opifex/core/training/strategies/mixed_precision.py" = ["ANN001", "ANN202"]
+"src/opifex/core/training/trainer.py" = ["ANN001", "ANN002", "ANN003", "ANN202"]
+"src/opifex/data/preprocessing/spectral_analysis.py" = ["ANN001", "ANN202"]
+"src/opifex/deployment/kubernetes/manifest_generator.py" = ["ANN003"]
+"src/opifex/deployment/monitoring/logging.py" = ["ANN003", "ANN201"]
+"src/opifex/deployment/server.py" = ["ANN001", "ANN202"]
+"src/opifex/diagnostics/ntk_computation.py" = ["ANN001", "ANN202"]
+"src/opifex/fields/field.py" = ["ANN001", "ANN201", "ANN206"]
+"src/opifex/geometry/algebra/groups.py" = ["ANN001", "ANN202"]
+"src/opifex/geometry/csg/molecular.py" = ["ANN001", "ANN202", "ANN206"]
+"src/opifex/geometry/csg/operations.py" = ["ANN001", "ANN201", "ANN202"]
+"src/opifex/geometry/csg/primitives.py" = ["ANN001", "ANN202"]
+"src/opifex/geometry/manifolds/hyperbolic.py" = ["ANN001", "ANN202"]
+"src/opifex/geometry/manifolds/operators.py" = ["ANN001", "ANN202"]
+"src/opifex/geometry/manifolds/riemannian.py" = ["ANN001", "ANN201", "ANN202"]
+"src/opifex/geometry/manifolds/spherical.py" = ["ANN001", "ANN202"]
+"src/opifex/geometry/pytree_utils.py" = ["ANN001"]
+"src/opifex/geometry/topology/base.py" = ["ANN001", "ANN202"]
+"src/opifex/geometry/topology/graphs.py" = ["ANN202"]
+"src/opifex/mlops/backends/mlflow_backend.py" = ["ANN202"]
+"src/opifex/mlops/experiment.py" = ["ANN001", "ANN201"]
+"src/opifex/neural/bayesian/calibration_tools.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/bayesian/probabilistic_pinns.py" = ["ANN202"]
+"src/opifex/neural/bayesian/variational_framework.py" = ["ANN202"]
+"src/opifex/neural/operators/common/tensor_ops.py" = ["ANN001", "ANN002", "ANN003", "ANN201", "ANN202"]
+"src/opifex/neural/operators/fno/amortized.py" = ["ANN003"]
+"src/opifex/neural/operators/fno/factorized.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/operators/fno/local.py" = ["ANN003"]
+"src/opifex/neural/operators/fno/multigrid_tfno.py" = ["ANN202"]
+"src/opifex/neural/operators/fno/spherical.py" = ["ANN003"]
+"src/opifex/neural/operators/fno/tensorly_integration.py" = ["ANN003"]
+"src/opifex/neural/operators/fno/ufno.py" = ["ANN003"]
+"src/opifex/neural/operators/graph/gno.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/operators/graph/utils.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/operators/physics/informed.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/operators/specialized/lno.py" = ["D417"]
+"src/opifex/neural/operators/specialized/operator_network.py" = ["ANN001", "ANN002", "ANN003", "ANN202"]
+"src/opifex/neural/operators/specialized/spectral_normalization.py" = ["ANN003"]
+"src/opifex/neural/operators/specialized/transolver.py" = ["D417"]
+"src/opifex/neural/pinns/domain_decomposition/cpinn.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/pinns/domain_decomposition/fbpinn.py" = ["ANN003"]
+"src/opifex/neural/pinns/domain_decomposition/xpinn.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/pinns/fpinn.py" = ["ANN001", "ANN202", "D417"]
+"src/opifex/neural/pinns/gst_pinn.py" = ["ANN001", "ANN202", "D417"]
+"src/opifex/neural/pinns/multi_scale.py" = ["ANN001", "ANN202"]
+"src/opifex/neural/pinns/vpinn.py" = ["D417"]
+"src/opifex/optimization/control/mpc.py" = ["ANN001", "ANN003", "ANN202"]
+"src/opifex/optimization/control/system_id.py" = ["ANN001", "ANN202"]
+"src/opifex/optimization/l2o/features.py" = ["ANN202"]
+"src/opifex/optimization/meta_optimization/neural_learner.py" = ["ANN001", "ANN202"]
+"src/opifex/optimization/production.py" = ["ANN001", "ANN202"]
+"src/opifex/optimization/second_order/nnx_integration.py" = ["ANN001", "ANN202"]
+"src/opifex/physics/solvers/burgers.py" = ["ANN001", "ANN202"]
+"src/opifex/physics/solvers/diffusion_advection.py" = ["ANN001", "ANN202"]
+"src/opifex/physics/solvers/navier_stokes.py" = ["ANN001", "ANN202"]
+"src/opifex/physics/solvers/shallow_water.py" = ["ANN001", "ANN202"]
+"src/opifex/platform/registry/core.py" = ["ANN202"]
+"src/opifex/solvers/ude.py" = ["ANN001"]
+"src/opifex/typing.py" = ["ANN001", "ANN202"]
+"src/opifex/uncertainty/active/rembo.py" = ["D417"]
+"src/opifex/uncertainty/inference_backends/_pathfinder_algorithm.py" = ["ANN202"]
+"src/opifex/uncertainty/markov/markov_laplace_likelihoods.py" = ["ANN202"]
+"src/opifex/uncertainty/markov/markov_pep_likelihoods.py" = ["ANN202"]
+"src/opifex/uncertainty/markov/markov_pl_likelihoods.py" = ["ANN202"]
+"src/opifex/uncertainty/monitoring/reliability_report.py" = ["D417"]
+"src/opifex/uncertainty/scientific/sampling.py" = ["ANN202", "D417"]
+"src/opifex/uncertainty/statespace/cakf.py" = ["D417"]
+"src/opifex/visualization/animation.py" = ["ANN001", "ANN202"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.pylint]
 max-args = 8 # Allow more arguments for scientific functions

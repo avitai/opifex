@@ -15,7 +15,7 @@ Canonical reference (line-by-line port):
 * ``../ComputationAwareKalman.jl/src/filter/policy.jl`` — ``CGPolicy``
   (default search direction is the residual vector).
 
-References
+References:
 ----------
 * Pförtner, Wenger, Cockayne, Hennig 2024 — *Computation-Aware Kalman
   Filtering and Smoothing*, arXiv:2405.08971 (PRIMARY — the CAKF /

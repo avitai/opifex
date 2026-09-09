@@ -27,7 +27,7 @@ approximated** class probability (RW06 eq. 3.25):
         \frac{\bar{f}_*}{\sqrt{1 + \pi\,\mathrm{Var}(f_*) / 8}}
     \right).
 
-References
+References:
 ----------
 * Williams, C. K. I., Barber, D. 1998 — *Bayesian Classification with
   Gaussian Processes*, IEEE TPAMI 20(12).

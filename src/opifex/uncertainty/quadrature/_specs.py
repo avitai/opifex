@@ -16,7 +16,7 @@ algorithms enumerated in the design notes:
   the emukit (NumPy) baselines for benchmarking — emukit is vendored,
   not user-installed, per the design unification (fix #231).
 
-References
+References:
 ----------
 * Gunter, T. et al. 2014 — *Sampling for Inference in Probabilistic
   Models with Fast Bayesian Quadrature*, NeurIPS. (WSABI-L)

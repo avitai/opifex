@@ -57,12 +57,16 @@ class MorrisResult:
 def _build_trajectory(rng_key: jax.Array, dim: int, num_levels: int) -> tuple[jax.Array, jax.Array]:
     """Draw a single Morris trajectory of length ``dim + 1``.
 
-    Returns
-    -------
-    points: shape ``(d + 1, d)`` — successive trajectory points in
-        ``[0, 1]^d`` (caller scales to the actual box).
-    order: shape ``(d,)`` — the permutation of dimensions perturbed
-        between successive points.
+    Args:
+        rng_key: Key for the starting point, the permutation and the signs.
+        dim: Number of input dimensions ``d``.
+        num_levels: Number of grid levels per dimension.
+
+    Returns:
+        ``(points, order)``: points of shape ``(d + 1, d)`` are the successive
+        trajectory points in ``[0, 1]^d`` (the caller scales to the actual box);
+        order of shape ``(d,)`` is the permutation of dimensions perturbed between
+        successive points.
     """
     delta = num_levels / (2.0 * (num_levels - 1))
 

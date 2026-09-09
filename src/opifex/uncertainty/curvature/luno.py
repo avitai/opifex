@@ -33,7 +33,7 @@ making it a runtime import. The local implementation uses
 diagonal posterior covariance ``1 / precision_diagonal`` to compute the
 marginal variance in pure JAX.
 
-References
+References:
 ----------
 * Magnani, E. et al. 2024 — *Linearised neural operators for function
   uncertainty quantification*, arXiv:2406.04317 (PRIMARY).

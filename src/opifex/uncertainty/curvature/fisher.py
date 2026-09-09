@@ -15,7 +15,7 @@ Canonical reference:
   product. opifex computes it via the canonical
   ``jax.vmap(jax.grad(per_sample_loss))`` recipe.
 
-References
+References:
 ----------
 * Daxberger, E. et al. 2021 — *Laplace Redux — Effortless Bayesian Deep
   Learning*, arXiv:2106.14806.

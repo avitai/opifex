@@ -12,7 +12,7 @@ Two pieces of logic are byte-identical across the four inference paths
   ``predict_one`` body; only the metadata stamped on the returned
   :class:`PredictiveDistribution` differs.
 
-References
+References:
 ----------
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP §9 (state-space GP
   interpolation via the SDE transition matrix).

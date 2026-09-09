@@ -17,7 +17,7 @@ Gaussian-posterior constraints:
             -\frac{\mu_{g_k}(x)}{\sigma_{g_k}(x)}
           \right).
 
-References
+References:
 ----------
 * Gardner, Kusner, Xu, Weinberger, Cunningham 2014 — *Bayesian
   Optimization with Inequality Constraints*, ICML.

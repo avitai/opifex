@@ -82,7 +82,7 @@ Reference implementations consulted (READ-ONLY)
   formula matched by the whitened ↔ unwhitened equivalence test.
 * ``../GPJax/gpjax/objectives.py:280-405`` (uncollapsed ELBO).
 
-References
+References:
 ----------
 * Hensman, J., Fusi, N., Lawrence, N. D. 2013 — *Gaussian Processes
   for Big Data*, UAI (PRIMARY).

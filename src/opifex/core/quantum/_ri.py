@@ -15,7 +15,7 @@ so the storage/compute drops to :math:`O(N^3)` (the three-index tensor
 least-squares minimiser of the Coulomb self-interaction of the residual density,
 which is why the *Coulomb* metric :math:`(P|Q)` (not the overlap metric) appears.
 
-References
+References:
 ----------
 * J. L. Whitten, *J. Chem. Phys.* **58**, 4496 (1973) -- the original Gaussian
   expansion of charge distributions (the "RI" idea).

@@ -8,7 +8,7 @@ The initial slice provides only the no-GP baseline
 SOBER, FFBQ) will land as additional modules and re-export from this
 package's namespace.
 
-References
+References:
 ----------
 * Rasmussen, C. E. & Ghahramani, Z. 2003 — *Bayesian Monte Carlo*,
   NeurIPS 16.

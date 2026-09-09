@@ -22,7 +22,7 @@ Canonical reference (line-by-line port):
 * ``../probnum/src/probnum/randprocs/markov/continuous/_mfd.py``
   ``matrix_fraction_decomposition``.
 
-References
+References:
 ----------
 * Van Loan, C. F. 1978 — *Computing integrals involving the matrix
   exponential*, IEEE TAC 23(3).

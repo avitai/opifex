@@ -19,7 +19,7 @@ who want to wire one of these backends into the opifex distribution
 protocol must install the corresponding package themselves
 (``uv pip install bijx`` / ``flowjax`` / ``distrax``).
 
-References
+References:
 ----------
 * Hoogeboom, Cohen, Tomczak 2021+ — ``bijx`` normalizing-flow library
   (NNX-native). https://github.com/bijx

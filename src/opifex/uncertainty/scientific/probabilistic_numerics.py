@@ -55,7 +55,7 @@ Specialised algorithmic specs:
   multivariate diffusion machinery (time-dependent / time-invariant)
   (valid only with EK0 or DiagonalEK1 plus blockdiag covariance).
 
-References
+References:
 ----------
 * Tronarp+ 2019 arXiv:1810.03440 — *Probabilistic Solutions to ODEs as
   Non-Linear Bayesian Filtering*.

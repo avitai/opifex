@@ -17,7 +17,7 @@ Canonical reference (line-by-line port):
   ``observe_cov_sqrtm`` (line 335), ``correct_cov_sqrtm`` (line 353),
   ``correct_mean`` (line 366).
 
-References
+References:
 ----------
 * Krämer, Schmidt, Hennig 2022 — *Probabilistic ODE Solutions in Millions
   of Dimensions*, arXiv:2110.11812.

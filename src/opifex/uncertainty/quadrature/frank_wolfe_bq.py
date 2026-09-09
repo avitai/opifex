@@ -20,7 +20,7 @@ the catalogue) refers to this Frank-Wolfe BQ — the design notes pin
 the algorithm to Briol+ 2015 with a file at
 ``quadrature/frank_wolfe_bq.py`` (design fix #190).
 
-References
+References:
 ----------
 * Briol, F.-X. et al. 2015 — *Frank-Wolfe Bayesian Quadrature:
   Probabilistic Integration with Theoretical Guarantees*, NeurIPS.

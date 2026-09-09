@@ -23,7 +23,7 @@ Training data per fidelity level is supplied as the parallel tuples
 augmented design matrix (input plus integer level column) and runs a
 single Cholesky factorisation on the joint Gram matrix.
 
-References
+References:
 ----------
 * Kennedy, O'Hagan 2000 — *Predicting the output from a complex
   computer code when fast approximations are available*, Biometrika

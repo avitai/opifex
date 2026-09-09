@@ -17,7 +17,7 @@ predictive block are shared with NPE / NLE via
 :mod:`opifex.uncertainty.sbi._base`; NRE keeps only its classifier module,
 binary-cross-entropy loss, and log-ratio posterior closures.
 
-References
+References:
 ----------
 * Hermans, Begy, Louppe (2020) — Likelihood-free MCMC with Amortized
   Approximate Ratio Estimators, ``arXiv:1903.04057``.

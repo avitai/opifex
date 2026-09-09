@@ -898,7 +898,7 @@ class BayesianLastLayerAdapter:
     sampling. This is the GLM / linearised-Laplace pushforward for a
     linear head, equivalently the neural-linear model.
 
-    References
+    References:
     ----------
     * Ober, S. W. & Rasmussen, C. E. 2019 — *Benchmarking the Neural
       Linear Model for Regression*, arXiv:1912.08416.
@@ -939,7 +939,7 @@ class VBLLAdapter:
     (``../vbll/vbll/jax/layers/regression.py``) implements regression
     only. There is intentionally no classification path here.
 
-    References
+    References:
     ----------
     * Harrison, J., Willes, J. & Snoek, J. 2024 — *Variational Bayesian
       Last Layers*, arXiv:2404.11599.
@@ -978,7 +978,7 @@ class DUEAdapter:
     ``SpectralNorm`` / ``SpectralLinear``); the caller fits the feature map +
     SVGP and passes both through :class:`DUEState`.
 
-    References
+    References:
     ----------
     * van Amersfoort, J., Smith, L., Jesson, A., Key, O. & Gal, Y. 2021 —
       *On Feature Collapse and Deep Kernel Learning for Single Forward Pass
@@ -1019,7 +1019,7 @@ class SNGPAdapter:
     classification mean-field-logit adjustment is exposed honestly as
     :func:`sngp_mean_field_logits` but is NOT applied in the predict path.
 
-    References
+    References:
     ----------
     * Liu, J. et al. 2020 — *Simple and Principled Uncertainty Estimation with
       Deterministic Deep Learning via Distance Awareness* (SNGP),

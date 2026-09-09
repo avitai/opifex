@@ -18,7 +18,7 @@ Algorithms
 
 Sibling reference (line-by-line port): ``matfree/matfree/eig.py``.
 
-References
+References:
 ----------
 * Lanczos 1950, Arnoldi 1951, Golub & Kahan 1965 (see :mod:`.krylov`).
 * Golub & Van Loan §10.1.4 — projection-based partial eigenvalue methods.

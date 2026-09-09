@@ -14,7 +14,7 @@ API:
 * :func:`rembo_lift_batched` — vectorised version for a batch of
   candidates.
 
-References
+References:
 ----------
 * Wang, Hutter, Zoghi, Matheson, de Freitas 2013 — *Bayesian
   Optimization in High Dimensions via Random Embeddings*, IJCAI.

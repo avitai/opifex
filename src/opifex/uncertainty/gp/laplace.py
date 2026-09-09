@@ -32,7 +32,7 @@ Implementation notes — **jittability**
   ``@dataclass(frozen=True, slots=True, kw_only=True)`` carrying
   ``jax.Array`` leaves.
 
-References
+References:
 ----------
 * Williams, C. K. I., Barber, D. 1998 — *Bayesian Classification with
   Gaussian Processes*, IEEE TPAMI 20(12).

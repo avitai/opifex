@@ -81,43 +81,37 @@ def compute_residual_error(
     simplest error indicator, directly measuring how well the solution satisfies
     the PDE.
 
-    Mathematical Background
-    -----------------------
-    For a PDE operator L and solution u, the residual is:
-        R(u) = L(u) - f
+    Mathematical Background:
+        For a PDE operator L and solution u, the residual is:
+            R(u) = L(u) - f
 
     The error estimate is:
         error = |R(u)|
 
     A perfect solution has R(u) = 0 everywhere.
 
-    Parameters
-    ----------
-    model : Callable
-        Neural network model u(x). Not used directly, but maintained for
-        API consistency with other error estimation functions.
-    x : Float[Array, "batch dim"]
-        Spatial points where error is estimated.
-    residual : Float[Array, "batch"]
-        Pre-computed PDE residual at points x.
+    Args:
+        model:
+            Neural network model u(x). Not used directly, but maintained for
+            API consistency with other error estimation functions.
+        x:
+            Spatial points where error is estimated.
+        residual:
+            Pre-computed PDE residual at points x.
 
-    Returns
-    -------
-    Float[Array, "batch"]
+    Returns:
         Error estimate at each point. Equal to |residual|.
 
-    Notes
-    -----
-    - Error scales linearly with residual magnitude
-    - Zero residual implies zero error (perfect solution)
-    - JIT-compatible and vmap-compatible
+    Note:
+        - Error scales linearly with residual magnitude
+        - Zero residual implies zero error (perfect solution)
+        - JIT-compatible and vmap-compatible
 
-    Examples
-    --------
-    >>> residual = jnp.array([0.1, 0.5, 0.01, 0.3])
-    >>> x = jnp.array([[0.5, 0.5], [1.0, 1.0], [0.0, 0.0], [0.25, 0.75]])
-    >>> error = compute_residual_error(lambda x: x, x, residual)
-    >>> assert jnp.allclose(error, jnp.abs(residual))
+    Example:
+        >>> residual = jnp.array([0.1, 0.5, 0.01, 0.3])
+        >>> x = jnp.array([[0.5, 0.5], [1.0, 1.0], [0.0, 0.0], [0.25, 0.75]])
+        >>> error = compute_residual_error(lambda x: x, x, residual)
+        >>> assert jnp.allclose(error, jnp.abs(residual))
     """
     # Error is simply the absolute value of the residual
     # This measures how far the solution is from satisfying the PDE
@@ -135,45 +129,39 @@ def compute_gradient_error(
     magnitude indicates rapid variation, suggesting the solution may need higher
     resolution in those regions.
 
-    Mathematical Background
-    -----------------------
-    For solution u(x), the gradient-based error is:
-        error = ||∇u|| = sqrt(Σᵢ (∂u/∂xᵢ)²)
+    Mathematical Background:
+        For solution u(x), the gradient-based error is:
+            error = ||∇u|| = sqrt(Σᵢ (∂u/∂xᵢ)²)
 
     This is useful for:
     - Detecting sharp features (shocks, boundary layers)
     - Identifying regions needing refinement
     - Monitoring solution smoothness
 
-    Parameters
-    ----------
-    model : Callable
-        Neural network model u(x) mapping spatial coordinates to scalar output.
-    x : Float[Array, "batch dim"]
-        Spatial points where error is estimated. Shape (batch, spatial_dim).
-    autodiff_engine : Any
-        AutoDiffEngine class providing compute_gradient method.
+    Args:
+        model:
+            Neural network model u(x) mapping spatial coordinates to scalar output.
+        x:
+            Spatial points where error is estimated. Shape (batch, spatial_dim).
+        autodiff_engine:
+            AutoDiffEngine class providing compute_gradient method.
 
-    Returns
-    -------
-    Float[Array, "batch"]
+    Returns:
         Gradient magnitude ||∇u|| at each point.
 
-    Notes
-    -----
-    - Constant functions have zero gradient error
-    - Linear functions have constant gradient error
-    - JIT-compatible (uses AutoDiffEngine exclusively)
-    - Works for any spatial dimension
+    Note:
+        - Constant functions have zero gradient error
+        - Linear functions have constant gradient error
+        - JIT-compatible (uses AutoDiffEngine exclusively)
+        - Works for any spatial dimension
 
-    Examples
-    --------
-    >>> from opifex.core.physics.autodiff_engine import AutoDiffEngine
-    >>> def u(x): return 2.0 * x[..., 0] + 3.0 * x[..., 1]  # Linear
-    >>> x = jnp.array([[0.5, 0.5], [1.0, 1.0]])
-    >>> error = compute_gradient_error(u, x, AutoDiffEngine)
-    >>> expected = jnp.sqrt(2.0**2 + 3.0**2)  # √13 ≈ 3.606
-    >>> assert jnp.allclose(error, expected)
+    Example:
+        >>> from opifex.core.physics.autodiff_engine import AutoDiffEngine
+        >>> def u(x): return 2.0 * x[..., 0] + 3.0 * x[..., 1]  # Linear
+        >>> x = jnp.array([[0.5, 0.5], [1.0, 1.0]])
+        >>> error = compute_gradient_error(u, x, AutoDiffEngine)
+        >>> expected = jnp.sqrt(2.0**2 + 3.0**2)  # √13 ≈ 3.606
+        >>> assert jnp.allclose(error, expected)
     """
     # Compute gradient using AutoDiffEngine
     grad_u = autodiff_engine.compute_gradient(model, x)
@@ -195,10 +183,9 @@ def compute_hessian_error(
     High curvature indicates regions where the solution changes rapidly, requiring
     finer resolution.
 
-    Mathematical Background
-    -----------------------
-    For solution u(x), the Hessian matrix is:
-        H_ij = ∂²u/∂xᵢ∂xⱼ
+    Mathematical Background:
+        For solution u(x), the Hessian matrix is:
+            H_ij = ∂²u/∂xᵢ∂xⱼ
 
     The Frobenius norm is:
         ||H||_F = sqrt(Σᵢⱼ H_ij²)
@@ -208,36 +195,31 @@ def compute_hessian_error(
     - Identifying second-order features
     - Refining near inflection points
 
-    Parameters
-    ----------
-    model : Callable
-        Neural network model u(x) mapping spatial coordinates to scalar output.
-    x : Float[Array, "batch dim"]
-        Spatial points where error is estimated. Shape (batch, spatial_dim).
-    autodiff_engine : Any
-        AutoDiffEngine class providing compute_hessian method.
+    Args:
+        model:
+            Neural network model u(x) mapping spatial coordinates to scalar output.
+        x:
+            Spatial points where error is estimated. Shape (batch, spatial_dim).
+        autodiff_engine:
+            AutoDiffEngine class providing compute_hessian method.
 
-    Returns
-    -------
-    Float[Array, "batch"]
+    Returns:
         Frobenius norm of Hessian ||H||_F at each point.
 
-    Notes
-    -----
-    - Linear functions have zero Hessian error
-    - Quadratic functions have constant Hessian error
-    - JIT-compatible (uses AutoDiffEngine exclusively)
-    - More expensive than gradient error (second derivatives)
+    Note:
+        - Linear functions have zero Hessian error
+        - Quadratic functions have constant Hessian error
+        - JIT-compatible (uses AutoDiffEngine exclusively)
+        - More expensive than gradient error (second derivatives)
 
-    Examples
-    --------
-    >>> from opifex.core.physics.autodiff_engine import AutoDiffEngine
-    >>> def u(x): return jnp.sum(x**2, axis=-1)  # u = x² + y²
-    >>> x = jnp.array([[0.5, 0.5], [1.0, 1.0]])
-    >>> error = compute_hessian_error(u, x, AutoDiffEngine)
-    >>> # Hessian of u = x² + y² is [[2, 0], [0, 2]]
-    >>> # Frobenius norm: sqrt(2² + 2²) = sqrt(8) ≈ 2.828
-    >>> assert jnp.allclose(error, jnp.sqrt(8.0), atol=1e-4)
+    Example:
+        >>> from opifex.core.physics.autodiff_engine import AutoDiffEngine
+        >>> def u(x): return jnp.sum(x**2, axis=-1)  # u = x² + y²
+        >>> x = jnp.array([[0.5, 0.5], [1.0, 1.0]])
+        >>> error = compute_hessian_error(u, x, AutoDiffEngine)
+        >>> # Hessian of u = x² + y² is [[2, 0], [0, 2]]
+        >>> # Frobenius norm: sqrt(2² + 2²) = sqrt(8) ≈ 2.828
+        >>> assert jnp.allclose(error, jnp.sqrt(8.0), atol=1e-4)
     """
     # Compute Hessian using AutoDiffEngine
     hessian = autodiff_engine.compute_hessian(model, x)
@@ -268,50 +250,44 @@ def identify_refinement_zones(
     Creates a boolean mask indicating which points should be refined based on
     either a fixed threshold or a percentile-based selection.
 
-    Refinement Strategy
-    -------------------
-    - **Fixed Threshold**: Refine points where error > threshold
-    - **Percentile-Based**: Refine top (100 - percentile)% of points
+    Refinement Strategy:
+        - **Fixed Threshold**: Refine points where error > threshold
+        - **Percentile-Based**: Refine top (100 - percentile)% of points
 
     Percentile-based selection is more adaptive and ensures a consistent
     fraction of points are refined regardless of absolute error magnitude.
 
-    Parameters
-    ----------
-    error_indicator : Float[Array, "batch"]
-        Error estimate at each point (from any error estimation function).
-    threshold : float, default=0.1
-        Fixed threshold for refinement. Points with error > threshold are refined.
-        Ignored if percentile is provided.
-    percentile : float | None, default=None
-        If provided, refine points with error above this percentile.
-        For example, percentile=75 means refine top 25% of points.
+    Args:
+        error_indicator:
+            Error estimate at each point (from any error estimation function).
+        threshold:
+            Fixed threshold for refinement. Points with error > threshold are refined.
+            Ignored if percentile is provided.
+        percentile:
+            If provided, refine points with error above this percentile.
+            For example, percentile=75 means refine top 25% of points.
 
-    Returns
-    -------
-    Float[Array, "batch"]
+    Returns:
         Boolean mask indicating points needing refinement (True = refine).
 
-    Notes
-    -----
-    - If percentile is provided, threshold is ignored
-    - Percentile must be in [0, 100] if provided
-    - Returns all False if no points exceed threshold
-    - JIT-compatible
+    Note:
+        - If percentile is provided, threshold is ignored
+        - Percentile must be in [0, 100] if provided
+        - Returns all False if no points exceed threshold
+        - JIT-compatible
 
-    Examples
-    --------
-    >>> # Fixed threshold
-    >>> error = jnp.array([0.05, 0.15, 0.03, 0.25])
-    >>> needs_refinement = identify_refinement_zones(error, threshold=0.1)
-    >>> assert jnp.array_equal(needs_refinement, [False, True, False, True])
-    >>>
-    >>> # Percentile-based
-    >>> error = jnp.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-    >>> needs_refinement = identify_refinement_zones(
-    ...     error, percentile=75.0
-    ... )
-    >>> assert jnp.sum(needs_refinement) == 2  # Top 25% = 2 points
+    Example:
+        >>> # Fixed threshold
+        >>> error = jnp.array([0.05, 0.15, 0.03, 0.25])
+        >>> needs_refinement = identify_refinement_zones(error, threshold=0.1)
+        >>> assert jnp.array_equal(needs_refinement, [False, True, False, True])
+        >>>
+        >>> # Percentile-based
+        >>> error = jnp.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+        >>> needs_refinement = identify_refinement_zones(
+        ...     error, percentile=75.0
+        ... )
+        >>> assert jnp.sum(needs_refinement) == 2  # Top 25% = 2 points
     """
     if percentile is not None:
         # Percentile-based refinement

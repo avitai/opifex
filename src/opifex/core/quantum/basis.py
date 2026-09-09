@@ -30,7 +30,7 @@ combination is then renormalised so that the contracted AO has unit self-overlap
 folded into the stored contraction coefficients so the integral engine never has
 to renormalise again.
 
-References
+References:
 ----------
 * T. Helgaker, P. Jorgensen, J. Olsen, *Molecular Electronic-Structure Theory*,
   Wiley (2000), Ch. 9 (Gaussian basis functions and their normalisation).

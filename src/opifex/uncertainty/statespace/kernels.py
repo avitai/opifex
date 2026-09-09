@@ -12,7 +12,7 @@ Canonical reference (line-by-line port):
   321), ``Cosine`` (line 770), ``Periodic`` (line 802),
   ``QuasiPeriodicMatern12`` (line 882).
 
-References
+References:
 ----------
 * Särkkä & Solin 2019 — *Applied Stochastic Differential Equations* §12.3
   and Table 12.2.

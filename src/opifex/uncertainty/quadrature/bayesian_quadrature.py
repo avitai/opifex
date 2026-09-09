@@ -34,7 +34,7 @@ arrays (rather than a measure object) so they compose cleanly with
 :class:`opifex.uncertainty.quadrature.measures.GaussianMeasure`
 dataclass to be a registered pytree.
 
-References
+References:
 ----------
 * Briol, F.-X. et al. 2019 — *Probabilistic Integration*, Statistical
   Science 34(1).

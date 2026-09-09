@@ -13,7 +13,7 @@ Five Pattern-A frozen dataclasses declaring metadata for GP backends:
   ``DeprecationWarning`` pointing at :class:`BayesnewtonAdapterSpec`
   (per kalman-jax's own README:1).
 
-References
+References:
 ----------
 * Pinder, T. & Dodd, D. 2022 — *GPJax: a Gaussian process framework in
   JAX*. arXiv:2208.05459.

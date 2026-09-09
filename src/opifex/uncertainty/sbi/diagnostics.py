@@ -11,7 +11,7 @@
   ``1 - var_post / var_prior`` across observations. Informative likelihoods
   produce contraction > 0; uninformative observations produce ~0.
 
-References
+References:
 ----------
 * Talts, Betancourt, Simpson, Vehtari, Gelman (2018) — ``arXiv:1804.06788``.
 """

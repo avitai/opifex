@@ -19,7 +19,7 @@ Public API
 Sibling reference (line-by-line port): ``bayesnewton/bayesnewton/ops.py``
 ``_sequential_kf`` (line 154) and ``_sequential_rts`` (line 288).
 
-References
+References:
 ----------
 * Kalman 1960; Rauch, Tung, Striebel 1965; Särkkä 2013.
 """

@@ -73,7 +73,7 @@ Reference implementations consulted (READ-ONLY)
 * ``../bayesnewton/bayesnewton/kernels.py`` — analogous state-space
   layer for celerite/CARMA covariances.
 
-References
+References:
 ----------
 * Kelly, B. C., et al. 2014 — *Flexible and scalable methods for
   quantifying stochastic variability in the era of massive time-domain

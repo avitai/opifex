@@ -31,7 +31,7 @@ follow-up commit when reverse-mode gradient support is needed.
 
 Sibling reference: ``matfree/matfree/lstsq.py:18 lsmr``.
 
-References
+References:
 ----------
 * Fong, Saunders 2011 — *LSMR: An iterative algorithm for sparse
   least-squares problems*, SIAM J. Sci. Comput.

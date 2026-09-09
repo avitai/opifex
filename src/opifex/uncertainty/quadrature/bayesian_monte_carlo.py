@@ -21,7 +21,7 @@ Canonical reference:
 * ``../emukit/emukit/quadrature/loop/bayesian_monte_carlo_loop.py``
   ``BayesianMonteCarlo`` (line 18).
 
-References
+References:
 ----------
 * Rasmussen, C. E. & Ghahramani, Z. 2003 — *Bayesian Monte Carlo*,
   NeurIPS 16.

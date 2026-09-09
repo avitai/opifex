@@ -25,7 +25,7 @@ evidential energy head:
 All functions are ``jit``/``grad``/``vmap`` safe (pure ``jax.numpy``; no Python
 control flow on array values, no in-place mutation).
 
-References
+References:
 ----------
 * Amini, A.; Schwarting, W.; Soleimany, A.; Rus, D. "Deep Evidential
   Regression." *NeurIPS* 2020.

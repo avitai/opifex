@@ -29,7 +29,7 @@ PNO with the existing :class:`LaplaceAdapterSpec` from
 :mod:`opifex.uncertainty.curvature` or with a deep-ensemble adapter
 (:class:`FNODeepEnsembleAdapterSpec`).
 
-References
+References:
 ----------
 * Kendall, A., Gal, Y. 2017 — *What Uncertainties Do We Need in
   Bayesian Deep Learning for Computer Vision?*, NeurIPS,

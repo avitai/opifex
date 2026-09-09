@@ -30,7 +30,7 @@ Reference implementations consulted (READ-ONLY)
 * ``../bayesnewton/bayesnewton/likelihoods.py:StudentsT`` (line 1011).
 * ``../bayesnewton/bayesnewton/likelihoods.py:Beta`` (line 1047).
 
-References
+References:
 ----------
 * Rasmussen, C. E., Williams, C. K. I. 2006 — *Gaussian Processes for
   Machine Learning*, MIT Press; §3.4 Algorithm 3.1 (PRIMARY).

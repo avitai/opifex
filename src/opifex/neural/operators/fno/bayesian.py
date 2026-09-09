@@ -25,7 +25,7 @@ CASpec instance whose CAKF posterior has been advanced by one
 (``in_channels``, ``out_channels``, ``modes``, …) but carries a
 refined ``(cakf_mean, cakf_factor)`` pair.
 
-References
+References:
 ----------
 * Pförtner, M., Wenger, J., Cockayne, J., Hennig, P. 2024 —
   *Computation-Aware Kalman Filtering and Smoothing*,

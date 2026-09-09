@@ -23,7 +23,7 @@ returning a ``(n, m)`` Gram matrix for inputs ``(n, d)`` and
 this shape; the ICM wrapper produced by
 :func:`multi_output_icm_kernel` matches it exactly.
 
-References
+References:
 ----------
 * Rasmussen, C. E., Williams, C. K. I. 2006 — *Gaussian Processes for
   Machine Learning*, MIT Press; §4.2 (Matern family).
@@ -278,7 +278,7 @@ def damped_oscillator_kernel(
     Raises:
         ValueError: If ``quality_factor <= 0.5``.
 
-    Notes
+    Notes:
     -----
     Only the underdamped regime (``Q > 1/2``) is implemented here.
     The critically-damped (``Q = 1/2``) and overdamped (``Q < 1/2``)

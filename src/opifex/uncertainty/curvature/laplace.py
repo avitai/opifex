@@ -25,7 +25,7 @@ Canonical reference:
   precision formula. opifex computes the empirical-Fisher term via
   :func:`empirical_fisher_diagonal` and adds ``τ * 1`` for the prior.
 
-References
+References:
 ----------
 * Daxberger, E. et al. 2021 — *Laplace Redux — Effortless Bayesian Deep
   Learning*, arXiv:2106.14806.
@@ -199,7 +199,7 @@ class LaplaceAdapterSpec:
     built with :func:`diagonal_laplace_posterior` from the user's
     per-sample loss and dataset.
 
-    References
+    References:
     ----------
     * Daxberger, E. et al. 2021 — *Laplace Redux*, arXiv:2106.14806.
     * MacKay, D. J. C. 1992 — *A practical Bayesian framework for

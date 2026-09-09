@@ -7,7 +7,7 @@ kernels, multi-output ICM/LCM, RFF approximations, natural-gradient
 SVGP, heteroscedastic likelihoods, OAK kernels, and CARMA/Celerite/SHO
 state-space kernels per the Phase-11 plan.
 
-References
+References:
 ----------
 * Rasmussen, C. E., Williams, C. K. I. 2006 — *Gaussian Processes for
   Machine Learning*, MIT Press; Algorithm 2.1 §2.2 (PRIMARY for

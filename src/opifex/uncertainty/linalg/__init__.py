@@ -13,7 +13,7 @@ reference implementations only — opifex never carries them as runtime
 dependencies. Algorithms are implemented natively in JAX and cite the
 sibling source line-by-line.
 
-References
+References:
 ----------
 * matfree — Krämer arXiv:2405.17277 (differentiable Lanczos/Arnoldi).
 * traceax — Nahid et al. (XTrace, XNysTrace, Hutch++).

@@ -5,7 +5,7 @@ Builds on the linear-Gaussian state-space layer in
 ``LikelihoodComponentsFn`` interface introduced for non-conjugate GP
 inference in :mod:`opifex.uncertainty.gp.laplace` (Task 11.1 D5).
 
-References
+References:
 ----------
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP (state-space
   GPs + iterated extended Kalman smoothing).

@@ -36,7 +36,7 @@ class GeometryEncoder(nnx.Module):
     then passed through an MLP to produce per-point geometry features. This is
     the geometry-embedding component of the Geometry-Informed Neural Operator.
 
-    References
+    References:
     ----------
     Li, Z. et al. (2023). "Geometry-Informed Neural Operator for Large-Scale
     3D PDEs." NeurIPS 2023, arXiv:2309.00583. The transformer-style sinusoidal

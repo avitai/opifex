@@ -19,7 +19,7 @@ Algorithms
 
 Sibling reference (line-by-line port): ``matfree/matfree/funm.py``.
 
-References
+References:
 ----------
 * Higham — *Functions of Matrices: Theory and Computation* (2008).
 * Krämer arXiv:2405.17277.

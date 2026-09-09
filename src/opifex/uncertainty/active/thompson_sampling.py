@@ -11,7 +11,7 @@ sample axis of size 1) and returns the argmin over the candidate set
 objective. Flip the sign of ``mean`` and ``samples`` for a
 maximisation convention.
 
-References
+References:
 ----------
 * Russo, Van Roy, Kazerouni, Osband, Wen 2018 — *A Tutorial on
   Thompson Sampling*, FnT in ML 11(1).

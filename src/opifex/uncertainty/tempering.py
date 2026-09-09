@@ -35,7 +35,7 @@ Three schedule shapes are supported:
 * :attr:`TemperingScheduleType.COSINE` — half-cosine smoothing between
   the endpoints (``σ(t) = σ_T + 0.5 (σ_0 - σ_T) (1 + cos(π t / T))``).
 
-References
+References:
 ----------
 * Beck, J., Bosch, N., Deistler, M., Kadhim, K. L., Macke, J. H.,
   Hennig, P., Tronarp, F. 2024 — *Diffusion Tempering Improves

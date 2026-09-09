@@ -11,7 +11,7 @@ Ports ``../trieste/acquisition/rule.py:492,680``:
 These two together cover both the "hard skip" (Greedy) and "soft
 skip" (Optimization) regimes for asynchronous BO in trieste.
 
-References
+References:
 ----------
 * Kandasamy+ 2018 — *Parallelised Bayesian Optimisation via Thompson
   Sampling*, AISTATS.

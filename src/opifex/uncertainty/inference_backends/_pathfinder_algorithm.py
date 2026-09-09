@@ -23,7 +23,7 @@ The vendored primitives:
 * :func:`pathfinder_sample` — draws from the selected Gaussian
   (blackjax ``sample`` line 200).
 
-References
+References:
 ----------
 * Zhang, L., Carpenter, B., Gelman, A., Vehtari, A. 2022 —
   *Pathfinder: Parallel quasi-Newton variational inference*, JMLR

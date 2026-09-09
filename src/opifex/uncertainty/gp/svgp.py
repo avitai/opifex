@@ -43,7 +43,7 @@ Implementation notes
   exactly (zero-mean prior; same ``A / B / L_B`` factorisation).
   GPJax is the reference implementation, not a runtime dependency.
 
-References
+References:
 ----------
 * Titsias, M. K. 2009 — *Variational Learning of Inducing Variables in
   Sparse Gaussian Processes*, AISTATS (PRIMARY).

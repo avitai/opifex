@@ -31,7 +31,7 @@ curvature) ``E_grad`` and ``E_W`` coincide with the mode-evaluated
 versions — VI and Laplace then produce identical posteriors, which
 serves as the slice-27 numerical cross-check.
 
-References
+References:
 ----------
 * Khan, Lin 2017 — *Conjugate-Computation Variational Inference*,
   ICML.

@@ -33,7 +33,7 @@ forbid early termination under ``jax.jit``, we mask via ``jnp.where``:
 Callers detect lucky breakdown by checking for zero entries in the
 off-diagonal / sub-Hessenberg.
 
-References
+References:
 ----------
 * Lanczos 1950 — *An iteration method for the solution of the eigenvalue
   problem of linear differential and integral operators*.

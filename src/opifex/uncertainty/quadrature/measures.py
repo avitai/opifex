@@ -11,7 +11,7 @@ Canonical reference:
 * ``../emukit/emukit/quadrature/measures/lebesgue_measure.py``
   ``LebesgueMeasure``.
 
-References
+References:
 ----------
 * Briol, F.-X. et al. 2019 — *Probabilistic Integration*,
   Statistical Science 34(1).

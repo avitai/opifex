@@ -11,7 +11,7 @@ matvecs. Sibling reference (line-by-line port):
 ``matfree/matfree/stochtrace.py::integrand_wrap_moments`` plus the outer
 Hutchinson aggregator.
 
-References
+References:
 ----------
 * Hutchinson 1990 — stochastic trace estimator with Rademacher probes.
 * matfree — Krämer arXiv:2405.17277, ``stochtrace.py``.

@@ -44,7 +44,7 @@ The reported total energy is the proper Kohn-Sham energy
 :math:`E = \operatorname{Tr}[D\,h_\text{core}] + \tfrac12 \operatorname{Tr}[D\,J]
 + E_{xc} + E_{nn}`.
 
-References
+References:
 ----------
 * P. Pulay, *Chem. Phys. Lett.* **73**, 393 (1980) -- DIIS; D. G. Anderson,
   *J. ACM* **12**, 547 (1965) -- Anderson acceleration (the density-space DIIS

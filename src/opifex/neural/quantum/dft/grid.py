@@ -14,7 +14,7 @@ The grid is deliberately simple (a coarse product angular grid rather than a
 Lebedev grid) but is a genuine molecular quadrature, sufficient to reproduce the
 PySCF total energy to better than ``1e-4`` Ha on small molecules.
 
-References
+References:
 ----------
 * A. D. Becke, *J. Chem. Phys.* **88**, 2547 (1988) -- the fuzzy-cell weight
   scheme (eq. 13-22) and the recommended three iterations of the smoothing

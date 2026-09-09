@@ -46,7 +46,7 @@ are enforced by bounding :math:`F_{xc}`:
   identity :math:`E_x[\rho/2,\rho/2]=E_x[\rho]`, again structural in the
   enhancement-factor form.
 
-References
+References:
 ----------
 * E. H. Lieb, S. Oxford, *Int. J. Quantum Chem.* **19**, 427 (1981) -- the
   lower bound :math:`E_{xc}\ge -C_{LO}\int\rho^{4/3}`; refined constant

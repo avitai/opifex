@@ -8,7 +8,7 @@ ComputationAwareKalman.jl}`` serve as reference implementations only —
 opifex never carries them as runtime dependencies. Algorithms here are
 JAX-native and cite the sibling repo line-by-line.
 
-References
+References:
 ----------
 * Kalman 1960 — *A New Approach to Linear Filtering and Prediction Problems*.
 * Rauch, Tung, Striebel 1965 — *Maximum Likelihood Estimates of Linear

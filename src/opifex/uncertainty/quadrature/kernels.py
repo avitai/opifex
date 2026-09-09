@@ -45,7 +45,7 @@ for ``qKq``. The implementation here takes per-dim arrays
 (``lengthscales``, ``lower``, ``upper``) of shape ``(d,)`` and folds
 the dimensions automatically.
 
-References
+References:
 ----------
 * Briol, F.-X. et al. 2019 — *Probabilistic Integration*, Statistical
   Science 34(1). (Survey including closed-form integrals.)

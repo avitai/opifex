@@ -53,7 +53,7 @@ factor of :math:`s_l[i]` per row) and :math:`N_l[j]` is the PySCF
 spherical-harmonic column constant. Equivalently
 :math:`\mathrm{cart2sph}(l) = \mathrm{diag}(1/s_l^2)\,T_l\,\mathrm{diag}(N_l)`.
 
-References
+References:
 ----------
 * H. B. Schlegel, M. J. Frisch, *Int. J. Quantum Chem.* **54**, 83 (1995)
   (transformation between Cartesian and pure spherical harmonic Gaussians).

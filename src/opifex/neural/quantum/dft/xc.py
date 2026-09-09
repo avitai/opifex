@@ -31,7 +31,7 @@ than a hand-coded derivative. For the LDA the potential is
 :math:`(\partial(\rho\varepsilon)/\partial\rho,\;
 \partial(\rho\varepsilon)/\partial\sigma)` with :math:`\sigma=|\nabla\rho|^2`.
 
-References
+References:
 ----------
 * P. A. M. Dirac, *Proc. Cambridge Philos. Soc.* **26**, 376 (1930) (exchange).
 * S. H. Vosko, L. Wilk, M. Nusair, *Can. J. Phys.* **58**, 1200 (1980),
