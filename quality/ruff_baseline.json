@@ -73,9 +73,6 @@
       "ANN201": 1,
       "ANN202": 2
     },
-    "src/opifex/core/training/monitoring/flops.py": {
-      "ANN003": 4
-    },
     "src/opifex/core/training/optimizers.py": {
       "ANN001": 1,
       "ANN202": 1

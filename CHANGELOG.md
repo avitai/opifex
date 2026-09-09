@@ -31,6 +31,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calibrax directly; opifex's tests of the metric formulas went with the code,
   calibrax's suite carries them.
 
+### Removed
+
+- `opifex.core.training.monitoring.flops.FlopsCounter`, an estimator that
+  multiplied the parameter count by the input size (times 1.2). FLOP counting is
+  calibrax's `FlopsCounter`, which reads XLA's cost analysis of the lowered
+  function; `opifex.benchmarking.profiling` re-exports it.
+- opifex's copy of the checkpoint store. `opifex.core.training.components.checkpoint_store`
+  re-exports substrax's `CheckpointStore`, `ModelLike` and `OrbaxCheckpointStore`
+  (the same save/restore/list/best-step surface, TrainState helpers included); the
+  store's tests live with it in substrax.
+- opifex's copies of the best-metric tracker, `EarlyStopping` and `PlateauMode`;
+  `opifex.core.training.callbacks` re-exports substrax's and keeps
+  `ReduceLROnPlateau` composed on substrax's tracker (it acts once per epoch on
+  a validation metric between scanned epochs, which optax's per-step
+  `reduce_on_plateau` transformation does not express).
+
 ### Changed
 
 - Depends on `substrax>=0.1.4`; `opifex.distributed` composes `substrax.mesh` and

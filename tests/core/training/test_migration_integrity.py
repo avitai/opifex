@@ -2,17 +2,17 @@ import pytest
 
 
 def test_monitoring_migration():
-    """Verify metrics and flops are available in core and re-exported legacy."""
+    """Verify the monitoring metrics are available in core."""
     # This will fail until migration is complete
     try:
-        from opifex.core.training.monitoring import flops, metrics
+        from opifex.core.training.monitoring import metrics
     except ImportError:
         pytest.fail("Failed to import monitoring modules from core")
 
-    # Verify integrity of migrated classes
+    # Verify integrity of migrated classes; FLOP counting is calibrax's
+    # (opifex.benchmarking.profiling re-exports it), not a monitoring module.
     assert hasattr(metrics, "TrainingMetrics")
     assert hasattr(metrics, "AdvancedMetricsCollector")
-    assert hasattr(flops, "FlopsCounter")
 
 
 def test_components_migration():

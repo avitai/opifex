@@ -131,8 +131,6 @@ src/opifex/core/testing_infrastructure.py
     DOC201: Function `requires_dependency` does not have a return section in docstring
 --------------------
 src/opifex/core/training/callbacks.py
-    DOC304: Class `EarlyStopping`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
-    DOC305: Class `EarlyStopping`: Class docstring has a "Raises" section; please put it in the __init__() docstring
     DOC304: Class `ReduceLROnPlateau`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
     DOC305: Class `ReduceLROnPlateau`: Class docstring has a "Raises" section; please put it in the __init__() docstring
 --------------------

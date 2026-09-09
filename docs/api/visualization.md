@@ -328,9 +328,8 @@ def plot_flops_analysis(
         matplotlib Figure object
 
     Example:
-        >>> from opifex.core.training.monitoring.flops import FlopsCounter
-        >>> counter = FlopsCounter(model)
-        >>> flops = counter.count(sample_input)
+        >>> from opifex.benchmarking.profiling import FlopsCounter  # calibrax's
+        >>> flops = FlopsCounter().count(model, sample_input)
         >>> fig = plot_flops_analysis(
         ...     flops,
         ...     title="FNO Computational Cost"

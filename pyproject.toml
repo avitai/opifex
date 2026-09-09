@@ -846,7 +846,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/core/spectral/spectral_utils.py" = ["D417"]
 "src/opifex/core/testing_infrastructure.py" = ["ANN001", "ANN002", "ANN003", "ANN201", "ANN202"]
 "src/opifex/core/training/components/__init__.py" = ["ANN201", "ANN202"]
-"src/opifex/core/training/monitoring/flops.py" = ["ANN003"]
 "src/opifex/core/training/optimizers.py" = ["ANN001", "ANN202"]
 "src/opifex/core/training/strategies/incremental_trainer.py" = ["ANN001", "ANN202"]
 "src/opifex/core/training/strategies/mixed_precision.py" = ["ANN001", "ANN202"]
