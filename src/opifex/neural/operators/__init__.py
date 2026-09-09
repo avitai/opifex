@@ -142,6 +142,7 @@ from opifex.neural.operators.specialized.mgno import (
     MultipoleGraphNeuralOperator,
 )
 from opifex.neural.operators.specialized.operator_network import OperatorNetwork
+from opifex.neural.operators.specialized.uno import UNeuralOperator
 
 # UQNO - Uncertainty quantification operators
 from opifex.neural.operators.specialized.uqno import (
@@ -181,6 +182,7 @@ OPERATOR_REGISTRY: dict[str, type] = {
     "LocalFNO": LocalFourierNeuralOperator,
     "AM-FNO": AmortizedFourierNeuralOperator,
     "MS-FNO": MultiScaleFourierNeuralOperator,
+    "UNO": UNeuralOperator,
     # DeepONet variants
     "FourierDeepONet": FourierEnhancedDeepONet,
     "AdaptiveDeepONet": AdaptiveDeepONet,
@@ -341,7 +343,7 @@ def list_operators(category: str | None = None) -> dict[str, Sequence[str]]:
     # they stay consistent with the registry; the other (purely
     # structural) categories remain hand-curated.
     categories: dict[str, Sequence[str]] = {
-        "fourier_operators": ["FNO", "TFNO", "UFNO", "SFNO", "LocalFNO", "AM-FNO"],
+        "fourier_operators": ["FNO", "TFNO", "UFNO", "SFNO", "LocalFNO", "AM-FNO", "MS-FNO", "UNO"],
         "deeponet_family": ["DeepONet", "FourierDeepONet", "AdaptiveDeepONet"],
         "graph_operators": ["GNO", "MGNO"],
         "uncertainty_aware": list(OPERATOR_CAPABILITY_CATEGORIES["uncertainty_aware"]),
@@ -381,6 +383,14 @@ def get_operator_info(operator_type: str) -> dict[str, Any]:
         "UFNO": {
             "description": ("U-Net style FNO with encoder-decoder for multi-scale problems"),
             "best_for": ["turbulent flow", "multi-scale", "fine details"],
+            "parameters": "High",
+            "computational_cost": "High",
+        },
+        "UNO": {
+            "description": (
+                "U-shaped neural operator whose resolution changes happen in the Fourier domain"
+            ),
+            "best_for": ["multi-scale", "discretisation invariance", "deep operators"],
             "parameters": "High",
             "computational_cost": "High",
         },
@@ -494,6 +504,7 @@ __all__ = [
     "UFNODecoderBlock",
     "UFNOEncoderBlock",
     "UFourierNeuralOperator",
+    "UNeuralOperator",
     "UncertaintyQuantificationNeuralOperator",
     "WaveletNeuralOperator",
     # Utility constructors

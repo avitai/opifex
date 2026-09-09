@@ -67,7 +67,7 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 
 ## ✨ Key Features
 
-- **Neural Operators**: FNO, DeepONet, SFNO, U-FNO, UNO, TFNO, GNO, PINO, Local FNO, DISCO, and more (26 architectures)
+- **Neural Operators**: FNO, DeepONet, PINO, TFNO, UFNO, SFNO, LocalFNO, AM-FNO, MS-FNO, UNO, FourierDeepONet, AdaptiveDeepONet, MultiPhysicsDeepONet, GINO, MGNO, UQNO, LNO, WNO, GNO, OperatorNet (20 registered architectures; `opifex.neural.operators.OPERATOR_REGISTRY`)
 - **Physics-Informed Neural Networks**: Standard PINNs plus domain decomposition (FBPINN, XPINN, CPINN)
 - **Atomistic Potentials**: E(3)-equivariant SchNet, PaiNN, and NequIP backbones (with MACE-style higher body-order via symmetric contraction), energy/forces/stress heads, and an ASE calculator
 - **Quantum Chemistry**: Differentiable Kohn-Sham DFT, neural exchange-correlation functionals, variational Monte Carlo, and equivariant Hamiltonian prediction (QH9)
@@ -91,6 +91,15 @@ For detailed feature documentation, see [Features](docs/features.md).
 - CUDA-compatible GPU (optional but recommended)
 
 ### Installation
+
+opifex is on PyPI:
+
+```bash
+uv add opifex            # or: pip install opifex
+uv add "opifex[mlflow]"  # with the MLflow experiment backend
+```
+
+To work on opifex itself, clone the repository and use the managed environment:
 
 ```bash
 # Clone the repository

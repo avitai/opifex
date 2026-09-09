@@ -6,7 +6,9 @@ KAN variants: dense, efficient, chebyshev, fourier, legendre,
 rbf, sine.
 
 Reference:
-    Hao et al. "From PINNs to PIKANs" (arXiv, Oct 2024).
+    Toscano, Oommen, Varghese, Zou, Ahmadi Daryakenari, Wu and Karniadakis,
+    "From PINNs to PIKANs: Recent Advances in Physics-Informed Machine Learning"
+    (arXiv:2410.13228, 2024).
 """
 
 from __future__ import annotations

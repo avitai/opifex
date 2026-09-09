@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The PIKAN reference in `opifex.neural.kan.pikan` names its authors (Toscano et
+  al., arXiv:2410.13228); it read "Hao et al.".
 - Distributed training on jax 0.11: `jax.make_mesh` now defaults to explicit
   axis types, under which the backward pass of any layer over a batch sharded
   along `data` raised `ShardingTypeError` ("Contracting dimensions are
@@ -17,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DeviceMeshManager` creates `Auto` axes unless asked otherwise, and the
   regression test pins the axis type; the two distributed trainer tests and the
   distributed PDE example pass again.
+
+### Added
+
+- `UNO` in `opifex.neural.operators.OPERATOR_REGISTRY`: `UNeuralOperator` had a
+  guide and an example but could not be created through `create_operator`.
+- `scripts/derive_status.py`, which renders the README's Neural Operators bullet
+  from the registry and, with `--check` in the quality checks, fails when the
+  README names an architecture the registry does not hold or miscounts them (it
+  said 26 and named DISCO, which does not exist; the registry holds 20).
+- `docs/comparisons/jax-pde-landscape.md`: jNO, jinns, PINNx, DeepXDE and
+  NeuralPDE.jl next to opifex, by what each states about itself.
+- README install path from PyPI (`uv add opifex`), and the `mlflow` extra.
 
 ### Changed
 

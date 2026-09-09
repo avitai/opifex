@@ -62,6 +62,7 @@ _OPERATOR_CAPABILITIES: dict[str, UQCapability] = {
     "LocalFNO": _adapter_baseline(),
     "AM-FNO": _adapter_baseline(),
     "MS-FNO": _adapter_baseline(),
+    "UNO": _adapter_baseline(),
     # DeepONet variants
     "FourierDeepONet": _adapter_baseline(),
     "AdaptiveDeepONet": _adapter_baseline(),

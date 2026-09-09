@@ -82,6 +82,7 @@ nav:
       - Geometry & Domains: user-guide/geometry.md
   - Scientific Methods:
       - Neural Operators: methods/neural-operators.md
+      - The JAX PDE landscape: comparisons/jax-pde-landscape.md
       - Physics-Informed Neural Networks: methods/pinns.md
       - Domain Decomposition PINNs: methods/domain-decomposition-pinns.md
       - NTK Analysis: methods/ntk-analysis.md
