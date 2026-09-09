@@ -18,14 +18,18 @@ Date: October 2025
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from flax.training.dynamic_scale import DynamicScale
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from opifex.core.training.components.lifecycle import TrainingComponent
-from opifex.core.training.strategies.mixed_precision_ops import check_for_overflow
 
 
 class CheckpointComponent(TrainingComponent):
@@ -117,24 +121,16 @@ class CheckpointComponent(TrainingComponent):
         self._checkpoints.clear()
 
 
-class MixedPrecisionState:
-    """State for mixed precision training."""
-
-    def __init__(self, loss_scale: float) -> None:
-        """Initialize mixed precision state.
-
-        Args:
-            loss_scale: Initial loss scale value
-        """
-        self.loss_scale = loss_scale
-        self.overflow_count = 0
-        self.step_count = 0
-
-
 class MixedPrecisionComponent(TrainingComponent):
-    """Component for mixed precision training.
+    """Mixed precision training over flax's dynamic loss scaling.
 
-    Handles automatic mixed precision with loss scaling and overflow detection.
+    The component casts inputs to the compute dtype (``create_precision_policy``)
+    and differentiates through ``flax.training.dynamic_scale.DynamicScale``, which
+    scales the loss, unscales the gradients, reports whether the step was finite,
+    backs the scale off on a non-finite step and grows it after
+    ``growth_interval`` finite ones. Configuration keys: ``compute_dtype``,
+    ``param_dtype``, ``loss_scale`` (initial), ``dynamic_loss_scaling``,
+    ``growth_factor``, ``backoff_factor``, ``growth_interval``, ``min_loss_scale``.
     """
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -144,33 +140,58 @@ class MixedPrecisionComponent(TrainingComponent):
             config: Configuration including compute_dtype, param_dtype, loss_scale
 
         Raises:
-            TypeError: If dtype is not a valid JAX dtype
-            ValueError: If dtype configuration is invalid
+            TypeError: If a dtype is given as a string rather than a JAX dtype
         """
         super().__init__(config)
-
-        # Validate dtype configuration
         compute_dtype = self.config.get("compute_dtype", jnp.bfloat16)
-        if isinstance(compute_dtype, str):
-            raise TypeError(f"Invalid dtype: {compute_dtype}. Must be a JAX dtype.")
-
+        param_dtype = self.config.get("param_dtype", jnp.float32)
+        for dtype in (compute_dtype, param_dtype):
+            if isinstance(dtype, str):
+                raise TypeError(f"Invalid dtype: {dtype}. Must be a JAX dtype.")
         self.compute_dtype = compute_dtype
-        self.param_dtype = self.config.get("param_dtype", jnp.float32)
-        self.loss_scale = self.config.get("loss_scale", 2**15)
-        self.dynamic_loss_scaling = self.config.get("dynamic_loss_scaling", True)
-        self.precision_state = MixedPrecisionState(self.loss_scale)
+        self.param_dtype = param_dtype
+        self.initial_loss_scale = float(self.config.get("loss_scale", 2**15))
+        self.dynamic_loss_scaling = bool(self.config.get("dynamic_loss_scaling", True))
+        self.dynamic_scale = self._fresh_dynamic_scale()
+        self.overflow_count = 0
+        self.step_count = 0
+
+    def _fresh_dynamic_scale(self) -> DynamicScale:
+        """A DynamicScale at the initial scale; static scaling neither grows nor backs off."""
+        if not self.dynamic_loss_scaling:
+            return DynamicScale(
+                growth_factor=1.0,
+                backoff_factor=1.0,
+                growth_interval=1,
+                scale=self.initial_loss_scale,
+                minimum_scale=self.initial_loss_scale,
+            )
+        return DynamicScale(
+            growth_factor=float(self.config.get("growth_factor", 2.0)),
+            backoff_factor=float(self.config.get("backoff_factor", 0.5)),
+            growth_interval=int(self.config.get("growth_interval", 100)),
+            scale=self.initial_loss_scale,
+            minimum_scale=float(self.config.get("min_loss_scale", 1.0)),
+        )
+
+    @property
+    def loss_scale(self) -> float:
+        """The current loss scale."""
+        return float(self.dynamic_scale.scale)
 
     def setup(self, model: nnx.Module, training_state: Any) -> None:  # noqa: ARG002 - training-component lifecycle interface
-        """Initialize precision state.
+        """Reset the loss scale and the counters for a new run.
 
         Args:
             model: The neural network model
             training_state: Current training state
         """
-        self.precision_state = MixedPrecisionState(self.loss_scale)
+        self.dynamic_scale = self._fresh_dynamic_scale()
+        self.overflow_count = 0
+        self.step_count = 0
 
-    def create_precision_policy(self):
-        """Create mixed precision policy function.
+    def create_precision_policy(self) -> Callable[[jax.Array], jax.Array]:
+        """Create the cast that moves parameter-dtype arrays to the compute dtype.
 
         Returns:
             Callable policy function for mixed precision
@@ -184,61 +205,48 @@ class MixedPrecisionComponent(TrainingComponent):
 
         return policy
 
-    def scale_gradients(self, grads: dict[str, jax.Array]) -> dict[str, jax.Array]:
-        """Scale gradients by loss scale.
+    def value_and_grad(
+        self, loss_fn: Callable[..., jax.Array]
+    ) -> Callable[..., tuple[jax.Array, jax.Array, Any]]:
+        """Differentiate ``loss_fn(model, *args)`` under dynamic loss scaling.
+
+        The returned callable evaluates the scaled loss, unscales the gradients
+        and updates the component's scale and counters; it returns
+        ``(is_finite, loss, grads)``. Callers skip the optimizer update when
+        ``is_finite`` is false.
 
         Args:
-            grads: Gradient dictionary
+            loss_fn: ``(model, *args) -> scalar loss``.
 
         Returns:
-            Scaled gradients
+            A callable with the same arguments as ``loss_fn``.
         """
-        return jax.tree.map(
-            lambda g: g * self.precision_state.loss_scale,
-            grads,
-        )
 
-    def check_overflow(self, grads: dict[str, jax.Array]) -> bool:
-        """Check for NaN or Inf in gradients.
+        def step(model: nnx.Module, *args: Any) -> tuple[jax.Array, jax.Array, Any]:
+            graphdef, state = nnx.split(model)
 
-        Delegates to the shared
-        :func:`opifex.core.training.strategies.mixed_precision_ops.check_for_overflow`
-        primitive so the overflow-detection logic has a single source of truth.
+            def pure_loss(pure_state: Any) -> jax.Array:
+                return loss_fn(nnx.merge(graphdef, pure_state), *args)
 
-        Args:
-            grads: Gradient dictionary
+            self.dynamic_scale, is_finite, loss, grads = self.dynamic_scale.value_and_grad(
+                pure_loss
+            )(state)
+            self.step_count += 1
+            if not bool(is_finite):
+                self.overflow_count += 1
+            return is_finite, loss, grads
 
-        Returns:
-            True if overflow detected, False otherwise
-        """
-        return check_for_overflow(grads)
+        return step
 
-    def update_loss_scale(self, has_overflow: bool) -> None:
-        """Update loss scale based on overflow.
-
-        Args:
-            has_overflow: Whether overflow was detected
-        """
-        if not self.dynamic_loss_scaling:
-            return
-
-        if has_overflow:
-            # Reduce loss scale on overflow
-            self.precision_state.loss_scale = max(
-                self.precision_state.loss_scale / 2.0,
-                1.0,
-            )
-            self.precision_state.overflow_count += 1
-        else:
-            # Increase loss scale periodically if stable
-            if self.precision_state.step_count % 100 == 0:
-                self.precision_state.loss_scale = min(
-                    self.precision_state.loss_scale * 2.0,
-                    2**24,
-                )
-            self.precision_state.overflow_count = 0
-
-        self.precision_state.step_count += 1
+    def get_mixed_precision_stats(self) -> dict[str, Any]:
+        """Report the loss scale, the dtypes and the step counters."""
+        return {
+            "loss_scale": self.loss_scale,
+            "overflow_count": self.overflow_count,
+            "step_count": self.step_count,
+            "compute_dtype": str(self.compute_dtype),
+            "param_dtype": str(self.param_dtype),
+        }
 
 
 class FlexibleOptimizerFactory(TrainingComponent):
@@ -359,7 +367,6 @@ class RecoveryComponent(TrainingComponent):
 __all__ = [
     "CheckpointComponent",
     "MixedPrecisionComponent",
-    "MixedPrecisionState",
     "RecoveryComponent",
     "TrainingComponent",
 ]

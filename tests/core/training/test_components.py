@@ -212,7 +212,8 @@ class TestCheckpointComponent:
 
 
 class TestMixedPrecisionComponent:
-    """Tests for the MixedPrecisionComponent class."""
+    """Construction and lifecycle of the mixed-precision component (its scaling is
+    pinned in test_mixed_precision_component.py)."""
 
     def test_mixed_precision_initialization(self):
         """Test mixed precision component initialization."""
@@ -222,74 +223,23 @@ class TestMixedPrecisionComponent:
             "loss_scale": 2**15,
         }
         component = MixedPrecisionComponent(config=config)
-
-        assert component.config["compute_dtype"] == jnp.bfloat16
-        assert component.config["param_dtype"] == jnp.float32
-        assert component.config["loss_scale"] == 2**15
+        assert component.compute_dtype == jnp.bfloat16
+        assert component.param_dtype == jnp.float32
+        assert component.loss_scale == 2**15
 
     def test_mixed_precision_setup(self, simple_model, training_state):
-        """Test mixed precision setup with model."""
+        """Setup resets the dynamic scale for a new run."""
         component = MixedPrecisionComponent()
-
         component.setup(simple_model, training_state)
-
-        # Should initialize precision state
-        assert hasattr(component, "precision_state")
-        assert component.precision_state.loss_scale > 0
+        assert component.loss_scale > 0
+        assert component.step_count == 0
 
     def test_mixed_precision_policy_application(self):
-        """Test mixed precision policy is created correctly."""
-        config = {"compute_dtype": jnp.bfloat16}
-        component = MixedPrecisionComponent(config=config)
-
-        # Should create precision policy
-        assert hasattr(component, "create_precision_policy")
-
+        """The precision policy is a callable cast."""
+        component = MixedPrecisionComponent(config={"compute_dtype": jnp.bfloat16})
         policy = component.create_precision_policy()
         assert callable(policy)
-
-    def test_mixed_precision_gradient_scaling(self):
-        """Test gradient scaling functionality."""
-        component = MixedPrecisionComponent(config={"loss_scale": 1024.0})
-
-        # Test gradient scaling
-        grads = {"w": jnp.array([1.0, 2.0, 3.0])}
-        scaled_grads = component.scale_gradients(grads)
-
-        assert jnp.allclose(scaled_grads["w"], grads["w"] * 1024.0)
-
-    def test_mixed_precision_overflow_detection(self):
-        """Test overflow detection in gradients."""
-        component = MixedPrecisionComponent()
-
-        # Test with normal gradients
-        normal_grads = {"w": jnp.array([1.0, 2.0, 3.0])}
-        assert not component.check_overflow(normal_grads)
-
-        # Test with NaN gradients
-        nan_grads = {"w": jnp.array([1.0, jnp.nan, 3.0])}
-        assert component.check_overflow(nan_grads)
-
-        # Test with Inf gradients
-        inf_grads = {"w": jnp.array([1.0, jnp.inf, 3.0])}
-        assert component.check_overflow(inf_grads)
-
-    def test_mixed_precision_dynamic_loss_scaling(self, training_state):
-        """Test dynamic loss scale adjustment."""
-        config = {"dynamic_loss_scaling": True, "loss_scale": 1024.0}
-        component = MixedPrecisionComponent(config=config)
-
-        # Test loss scale increase on successful step
-        component.precision_state.loss_scale = 1024.0
-        component.update_loss_scale(has_overflow=False)
-
-        assert component.precision_state.loss_scale >= 1024.0
-
-        # Test loss scale decrease on overflow
-        component.precision_state.loss_scale = 1024.0
-        component.update_loss_scale(has_overflow=True)
-
-        assert component.precision_state.loss_scale < 1024.0
+        assert policy(jnp.ones(2, dtype=jnp.float32)).dtype == jnp.bfloat16
 
 
 # ===================================================================

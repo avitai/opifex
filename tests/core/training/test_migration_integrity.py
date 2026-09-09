@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 
 
@@ -35,15 +37,15 @@ def test_components_migration():
 def test_strategies_migration():
     """Verify strategies are available in core."""
     try:
-        from opifex.core.training.strategies import (
-            incremental_trainer,
-            mixed_precision,
-        )
+        from opifex.core.training.strategies import incremental_trainer
     except ImportError:
         pytest.fail("Failed to import strategies from core")
 
-    assert hasattr(mixed_precision, "MixedPrecisionTrainer")
     assert hasattr(incremental_trainer, "IncrementalTrainer")
+    # Mixed precision is the components package's MixedPrecisionComponent over
+    # flax's DynamicScale; the strategy module and its loss-scaling ops are gone.
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("opifex.core.training.strategies.mixed_precision")
 
 
 def test_legacy_shims_are_gone():

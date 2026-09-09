@@ -41,6 +41,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-exports substrax's `CheckpointStore`, `ModelLike` and `OrbaxCheckpointStore`
   (the same save/restore/list/best-step surface, TrainState helpers included); the
   store's tests live with it in substrax.
+- `opifex.core.training.strategies.mixed_precision` (`MixedPrecisionTrainer`, whose
+  training step raised `TypeError` and had no caller, `MixedPrecisionConfig`,
+  `MixedPrecisionState`, `scale_gradients`, `update_loss_scale`,
+  `create_mixed_precision_policy`, `create_mixed_precision_optimizer`,
+  `optimize_batch_size_for_hardware`, `align_for_tensorcore`) and
+  `strategies.mixed_precision_ops.check_for_overflow`, together with the second
+  hand-rolled loss scaler inside `MixedPrecisionComponent`. The component now
+  composes `flax.training.dynamic_scale.DynamicScale`: `value_and_grad(loss_fn)`
+  returns unscaled gradients with an `is_finite` flag, the scale backs off on a
+  non-finite step and grows after `growth_interval` finite ones, `loss_scale`,
+  `overflow_count` and `step_count` report the state, and `dynamic_loss_scaling=False`
+  pins the scale.
 - opifex's copies of the best-metric tracker, `EarlyStopping` and `PlateauMode`;
   `opifex.core.training.callbacks` re-exports substrax's and keeps
   `ReduceLROnPlateau` composed on substrax's tracker (it acts once per epoch on

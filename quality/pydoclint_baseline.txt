@@ -134,9 +134,6 @@ src/opifex/core/training/callbacks.py
     DOC304: Class `ReduceLROnPlateau`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
     DOC305: Class `ReduceLROnPlateau`: Class docstring has a "Raises" section; please put it in the __init__() docstring
 --------------------
-src/opifex/core/training/components/__init__.py
-    DOC503: Method `MixedPrecisionComponent.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['TypeError', 'ValueError']. Raised exceptions in the body: ['TypeError'].
---------------------
 src/opifex/core/training/components/recovery.py
     DOC501: Method `ErrorRecoveryManager.recover_from_instability` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `ErrorRecoveryManager.recover_from_instability` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].

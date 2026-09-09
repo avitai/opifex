@@ -70,7 +70,6 @@
       "ANN202": 1
     },
     "src/opifex/core/training/components/__init__.py": {
-      "ANN201": 1,
       "ANN202": 2
     },
     "src/opifex/core/training/optimizers.py": {
@@ -79,10 +78,6 @@
     },
     "src/opifex/core/training/strategies/incremental_trainer.py": {
       "ANN001": 2,
-      "ANN202": 1
-    },
-    "src/opifex/core/training/strategies/mixed_precision.py": {
-      "ANN001": 1,
       "ANN202": 1
     },
     "src/opifex/core/training/trainer.py": {
