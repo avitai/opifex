@@ -34,7 +34,7 @@ jobs:
       # platform used to arrive transitively through avitai-artifex's runtime
       # dependencies; 0.1.4 moved those behind an extra, so it is named here rather
       # than inherited by accident.
-      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry --extra platform
+      run: uv sync --locked --extra dev --extra test --extra neural-dft --extra quantum-chemistry --extra platform
 
     - name: Run pre-commit hooks
       run: |
@@ -84,7 +84,7 @@ jobs:
       # platform used to arrive transitively through avitai-artifex's runtime
       # dependencies; 0.1.4 moved those behind an extra, so it is named here rather
       # than inherited by accident.
-      run: uv sync --locked --extra dev --extra neural-dft --extra quantum-chemistry --extra platform
+      run: uv sync --locked --extra dev --extra test --extra neural-dft --extra quantum-chemistry --extra platform
 
     - name: Generate type safety report
       run: |
