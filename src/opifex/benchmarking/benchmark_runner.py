@@ -25,8 +25,8 @@ from opifex.benchmarking.analysis_engine import (
 )
 from opifex.benchmarking.benchmark_registry import (
     BenchmarkConfig,
-    BenchmarkRegistry,
     DomainConfig,
+    OperatorBenchmarkRegistry,
 )
 from opifex.benchmarking.evaluation_engine import BenchmarkEvaluator
 from opifex.benchmarking.results_manager import ResultsManager
@@ -91,7 +91,7 @@ class BenchmarkRunner:
 
     def __init__(
         self,
-        registry: BenchmarkRegistry | None = None,
+        registry: OperatorBenchmarkRegistry | None = None,
         evaluator: BenchmarkEvaluator | None = None,
         validator: ValidationFramework | None = None,
         analyzer: AnalysisEngine | None = None,
@@ -111,7 +111,7 @@ class BenchmarkRunner:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        self.registry = registry or BenchmarkRegistry()
+        self.registry = registry or OperatorBenchmarkRegistry()
         self.evaluator = evaluator or BenchmarkEvaluator(output_dir=str(self.output_dir))
         self.validator = validator or ValidationFramework()
         self.analyzer = analyzer or AnalysisEngine()

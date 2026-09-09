@@ -1,6 +1,6 @@
 """Tests for Advanced Benchmarking System
 
-Tests for the benchmarking infrastructure including BenchmarkRegistry,
+Tests for the benchmarking infrastructure including OperatorBenchmarkRegistry,
 ValidationFramework, AnalysisEngine, ResultsManager, and BenchmarkRunner
 components, updated for the calibrax BenchmarkResult API.
 """
@@ -17,8 +17,8 @@ from flax import nnx
 from opifex.benchmarking.analysis_engine import AnalysisEngine, ComparisonReport
 from opifex.benchmarking.benchmark_registry import (
     BenchmarkConfig,
-    BenchmarkRegistry,
     DomainConfig,
+    OperatorBenchmarkRegistry,
 )
 from opifex.benchmarking.benchmark_runner import BenchmarkRunner
 from opifex.benchmarking.evaluation_engine import BenchmarkResult
@@ -45,11 +45,11 @@ def _make_result(
 
 
 class TestBenchmarkRegistry:
-    """Test the BenchmarkRegistry component."""
+    """Test the OperatorBenchmarkRegistry component."""
 
     def test_registry_initialization(self):
         """Test registry initializes with default domains."""
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
 
         domains = registry.list_available_domains()
         assert "fluid_dynamics" in domains
@@ -67,7 +67,7 @@ class TestBenchmarkRegistry:
 
     def test_benchmark_registration(self):
         """Test benchmark registration."""
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
 
         benchmark = BenchmarkConfig(
             name="test_darcy",
@@ -88,7 +88,7 @@ class TestBenchmarkRegistry:
 
     def test_domain_specific_suite(self):
         """Test domain-specific benchmark suite retrieval."""
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
 
         # Add multiple benchmarks for fluid dynamics
         for i in range(3):
@@ -111,7 +111,7 @@ class TestBenchmarkRegistry:
             config_path = Path(tmpdir) / "test_registry.json"
 
             # Create registry and add benchmark
-            registry = BenchmarkRegistry(str(config_path))
+            registry = OperatorBenchmarkRegistry(str(config_path))
             benchmark = BenchmarkConfig(
                 name="persist_test",
                 domain="quantum_computing",
@@ -123,7 +123,7 @@ class TestBenchmarkRegistry:
             registry.save_registry()
 
             # Load new registry and verify persistence
-            registry2 = BenchmarkRegistry(str(config_path))
+            registry2 = OperatorBenchmarkRegistry(str(config_path))
             benchmarks = registry2.list_available_benchmarks()
             assert "persist_test" in benchmarks
 
@@ -409,7 +409,7 @@ class TestBenchmarkRunner:
     def test_runner_with_custom_components(self):
         """Test runner with custom component initialization."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            registry = BenchmarkRegistry()
+            registry = OperatorBenchmarkRegistry()
             results_manager = ResultsManager(storage_path=tmpdir)
 
             runner = BenchmarkRunner(

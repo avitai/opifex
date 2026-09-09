@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 from calibrax.core.models import Metric, MetricDef, MetricDirection, MetricPriority, Run
+from calibrax.core.result import BenchmarkResult
 
-from opifex.benchmarking.adapters import default_metric_defs, results_to_run
+from opifex.benchmarking.adapters import default_metric_defs, metric_values, results_to_run
 
 
 @pytest.fixture
@@ -139,3 +140,35 @@ class TestDefaultMetricDefs:
         defs = default_metric_defs()
         assert defs["mse"].priority == MetricPriority.PRIMARY
         assert defs["relative_error"].priority == MetricPriority.PRIMARY
+
+
+class TestMetricValues:
+    """The execution time recorded in metadata is a metric like the others."""
+
+    def test_execution_time_joins_the_metrics(self) -> None:
+        result = BenchmarkResult(
+            name="fno",
+            tags={"dataset": "darcy"},
+            metrics={"mse": Metric(value=0.5)},
+            metadata={"execution_time": 2.5},
+        )
+
+        assert metric_values(result) == {"mse": 0.5, "execution_time": 2.5}
+        run = results_to_run([result])
+        assert set(run.points[0].metrics) == {"mse", "execution_time"}
+        assert run.points[0].metrics["execution_time"].value == 2.5
+
+    def test_a_recorded_execution_time_metric_is_kept(self) -> None:
+        result = BenchmarkResult(
+            name="fno",
+            tags={},
+            metrics={"execution_time": Metric(value=1.0)},
+            metadata={"execution_time": 2.5},
+        )
+
+        assert metric_values(result) == {"execution_time": 1.0}
+
+    def test_no_execution_time_means_the_metrics_only(self) -> None:
+        result = BenchmarkResult(name="fno", tags={}, metrics={"mse": Metric(value=0.5)})
+
+        assert metric_values(result) == {"mse": 0.5}

@@ -206,12 +206,13 @@ class TestCLIModuleExecution:
     def test_module_executable(self):
         """CLI can be run as python -m opifex.benchmarking.cli."""
         import subprocess
+        import sys
         from pathlib import Path
 
         project_root = Path(__file__).resolve().parent.parent.parent
 
         result = subprocess.run(
-            ["python", "-m", "opifex.benchmarking.cli", "--help"],
+            [sys.executable, "-m", "opifex.benchmarking.cli", "--help"],
             capture_output=True,
             text=True,
             cwd=str(project_root),

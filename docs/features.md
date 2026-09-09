@@ -81,7 +81,7 @@ Opifex provides extensive support for modern scientific machine learning paradig
 ### Benchmarking System
 
 - **Domain-Specific Benchmarking**: 8+ specialized components with physics-aware validation
-  - **BenchmarkRegistry**: Configuration management with domain-specific settings
+  - **OperatorBenchmarkRegistry**: Configuration management with domain-specific settings
   - **ValidationFramework**: Reference comparison, convergence rate analysis, and error analysis
   - **ChemicalAccuracyValidator**: <1 kcal/mol energy accuracy for quantum chemistry applications
   - **ConservationValidator**: Energy, momentum, and mass conservation law validation

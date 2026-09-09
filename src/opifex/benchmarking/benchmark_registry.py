@@ -14,6 +14,8 @@ from typing import Any
 
 from calibrax.core.registry import Registry
 
+from opifex._deprecated import warn_deprecated
+
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -98,7 +100,7 @@ class BenchmarkConfig:
             raise ValueError("Input and output shapes are required")
 
 
-class BenchmarkRegistry:
+class OperatorBenchmarkRegistry:
     """Manages available benchmarks and neural operators with domain organization.
 
     This registry provides centralized management of:
@@ -385,3 +387,11 @@ class BenchmarkRegistry:
             report["benchmark_coverage"][benchmark_name] = compatible_count
 
         return report
+
+
+def __getattr__(name: str) -> object:
+    """Serve the pre-0.2.2 name ``BenchmarkRegistry`` with a deprecation warning."""
+    if name == "BenchmarkRegistry":
+        warn_deprecated(f"{__name__}.BenchmarkRegistry", f"{__name__}.OperatorBenchmarkRegistry")
+        return OperatorBenchmarkRegistry
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

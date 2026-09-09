@@ -6,7 +6,7 @@ The Opifex framework includes a benchmarking system designed specifically for sc
 
 The Benchmarking System consists of 8+ specialized components that work together to provide evaluation of scientific machine learning models:
 
-1. **BenchmarkRegistry** - Domain-specific configuration management
+1. **OperatorBenchmarkRegistry** - Domain-specific configuration management
 2. **ValidationFramework** - Reference comparison, convergence analysis, and error analysis
 3. **ChemicalAccuracyValidator** - Chemical accuracy assessment with domain-specific thresholds
 4. **ConservationValidator** - Physics conservation law validation
@@ -53,12 +53,12 @@ Core types (`BenchmarkResult`, `Metric`, `Run`) and statistical analysis (`Stati
 
 ```python
 from opifex.benchmarking import (
-    BenchmarkRegistry, ValidationFramework, AnalysisEngine,
+    OperatorBenchmarkRegistry, ValidationFramework, AnalysisEngine,
     ResultsManager, BenchmarkRunner
 )
 
 # Initialize components
-registry = BenchmarkRegistry()
+registry = OperatorBenchmarkRegistry()
 validator = ValidationFramework()
 analyzer = AnalysisEngine()
 manager = ResultsManager(storage_path="./benchmark_results")
@@ -127,15 +127,15 @@ print(result.metadata["execution_time"])     # 1.23
 print(result.tags["dataset"])                # "darcy_flow"
 ```
 
-### BenchmarkRegistry
+### OperatorBenchmarkRegistry
 
-The BenchmarkRegistry manages domain-specific configurations and operator discovery:
+The OperatorBenchmarkRegistry manages domain-specific configurations and operator discovery:
 
 ```python
-from opifex.benchmarking import BenchmarkRegistry
+from opifex.benchmarking import OperatorBenchmarkRegistry
 from opifex.benchmarking.benchmark_registry import BenchmarkConfig
 
-registry = BenchmarkRegistry()
+registry = OperatorBenchmarkRegistry()
 
 # Register domain-specific benchmark
 config = BenchmarkConfig(
@@ -260,7 +260,7 @@ manager = ResultsManager(storage_path="./benchmark_results")
 result_id = manager.save_benchmark_results(result)
 
 # Load a specific result
-loaded = manager.load_result(result_id)
+loaded = manager.load_results(result_id)
 
 # Query stored results
 matching = manager.query_results(

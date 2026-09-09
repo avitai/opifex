@@ -5,7 +5,7 @@ Following TDD: These tests are written FIRST before the implementation.
 
 import pytest
 
-from opifex.benchmarking.benchmark_registry import BenchmarkConfig, BenchmarkRegistry
+from opifex.benchmarking.benchmark_registry import BenchmarkConfig, OperatorBenchmarkRegistry
 
 
 class TestPDEBenchConfigs:
@@ -16,7 +16,7 @@ class TestPDEBenchConfigs:
         """Create registry with PDEBench configs registered."""
         from opifex.benchmarking.pdebench_configs import register_pdebench_benchmarks
 
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
         register_pdebench_benchmarks(registry)
         return registry
 
@@ -47,7 +47,7 @@ class TestPDEBenchConfigs:
 
     def test_missing_config_raises_valueerror(self):
         """Requesting non-existent config raises ValueError."""
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
         with pytest.raises(ValueError, match="not found"):
             registry.get_benchmark_config("NonExistent_Benchmark")
 
@@ -62,7 +62,7 @@ class TestRealPDEBenchConfigs:
             register_realpdebench_benchmarks,
         )
 
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
         register_realpdebench_benchmarks(registry)
         return registry
 
@@ -120,7 +120,7 @@ class TestBenchmarkRegistryOperatorMetadata:
             TensorizedFourierNeuralOperator,
         )
 
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
         registry.register_operator(
             TensorizedFourierNeuralOperator,
             metadata={"operator_type": "fno", "supports_mixed_precision": True},
@@ -143,7 +143,7 @@ class TestBenchmarkRegistryOperatorMetadata:
             TensorizedFourierNeuralOperator,
         )
 
-        registry = BenchmarkRegistry()
+        registry = OperatorBenchmarkRegistry()
 
         # Register with explicit type
         registry.register_operator(

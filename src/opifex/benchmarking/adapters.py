@@ -7,6 +7,7 @@ with calibrax's Run-based analysis and storage APIs.
 from __future__ import annotations
 
 from calibrax.core.models import (
+    Metric,
     MetricDef,
     MetricDirection,
     MetricPriority,
@@ -29,7 +30,8 @@ def results_to_run(
     - ``BenchmarkResult.name`` -> ``Point.name``
     - ``BenchmarkResult.tags["dataset"]`` -> ``Point.scenario`` (default: "unknown")
     - ``BenchmarkResult.tags`` -> ``Point.tags``
-    - ``BenchmarkResult.metrics`` -> ``Point.metrics`` (same Metric type)
+    - ``metric_values(result)`` -> ``Point.metrics``: the metrics plus the
+      execution time recorded in the metadata
 
     Args:
         results: List of benchmark results to convert.
@@ -45,7 +47,7 @@ def results_to_run(
             name=r.name,
             scenario=r.tags.get("dataset", "unknown"),
             tags=dict(r.tags),
-            metrics=dict(r.metrics),
+            metrics={name: Metric(value=value) for name, value in metric_values(r).items()},
         )
         for r in results
     )
@@ -56,6 +58,24 @@ def results_to_run(
         branch=branch,
         metric_defs=metric_defs or {},
     )
+
+
+def metric_values(result: BenchmarkResult) -> dict[str, float]:
+    """The result's metric values, with the metadata's ``execution_time`` as one of them.
+
+    A metric the result already records under that name is kept as recorded.
+
+    Args:
+        result: The benchmark result.
+
+    Returns:
+        Metric name to value.
+    """
+    values = {name: float(metric.value) for name, metric in result.metrics.items()}
+    execution_time = result.metadata.get("execution_time")
+    if execution_time is not None and "execution_time" not in values:
+        values["execution_time"] = float(execution_time)
+    return values
 
 
 def default_metric_defs() -> dict[str, MetricDef]:

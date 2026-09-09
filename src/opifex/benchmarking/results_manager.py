@@ -1,36 +1,49 @@
-"""Results Manager for Opifex Advanced Benchmarking System.
+"""Results persistence and publication output for the benchmarking system.
 
-Data persistence and publication-ready export capabilities.
-Provides results storage, publication plot generation, comparison tables,
-and benchmark database management. Each saved result is also persisted to a
-calibrax Store for cross-tool interoperability.
+``ResultsManager`` keeps a JSON database of saved results, writes each one
+through to a calibrax ``Store``, answers queries over the database, and renders
+publication plots and tables with calibrax's ``PublicationGenerator``.
 """
+
+from __future__ import annotations
 
 import json
 import logging
+import statistics
+from collections import defaultdict
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
-import numpy as np
 from calibrax.core import BenchmarkResult
+from calibrax.core.models import Metric, Point, Run, TrendPoint, TrendSeries
+from calibrax.exporters.publication import PublicationGenerator
 from calibrax.storage.store import Store
 
-from opifex.benchmarking.adapters import default_metric_defs, results_to_run
+from opifex.benchmarking.adapters import default_metric_defs, metric_values, results_to_run
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 
 logger = logging.getLogger(__name__)
 
+type PlotType = Literal["comparison", "scaling", "convergence"]
+type TableFormat = Literal["latex", "html", "csv"]
+
+_EXECUTION_TIME = "execution_time"
+_LOSS = "loss"
+
 
 class ResultsManager:
-    """Data persistence and publication-ready export capabilities.
+    """Persist benchmark results and render publication output.
 
-    Provides:
-    - Persistent storage of benchmark results with metadata
-    - calibrax Store write-through for cross-tool interoperability
-    - Publication-ready plot and table generation
-    - Benchmark database maintenance and querying
-    - Export formats for different publication venues
+    Args:
+        storage_path: Directory holding the database, the raw results, the calibrax
+            store, and the ``plots`` and ``tables`` output directories.
+        database_path: The database file; ``<storage_path>/benchmark_database.json``
+            by default; a file that exists and is not valid JSON is a ``ValueError``.
     """
 
     def __init__(
@@ -38,123 +51,105 @@ class ResultsManager:
         storage_path: str = "./benchmark_results",
         database_path: str | None = None,
     ) -> None:
-        """Initialize results manager.
-
-        Args:
-            storage_path: Base path for storing benchmark results.
-            database_path: Path to benchmark database file.
-        """
         self.storage_path = Path(storage_path)
-        if database_path is None:
-            self.database_path = self.storage_path / "benchmark_database.json"
-        else:
-            self.database_path = Path(database_path)
-
-        self.storage_path.mkdir(parents=True, exist_ok=True)
+        self.database_path = (
+            self.storage_path / "benchmark_database.json"
+            if database_path is None
+            else Path(database_path)
+        )
         self.plots_path = self.storage_path / "plots"
-        self.plots_path.mkdir(exist_ok=True)
         self.tables_path = self.storage_path / "tables"
-        self.tables_path.mkdir(exist_ok=True)
         self.raw_results_path = self.storage_path / "raw_results"
-        self.raw_results_path.mkdir(exist_ok=True)
+        for directory in (
+            self.storage_path,
+            self.plots_path,
+            self.tables_path,
+            self.raw_results_path,
+        ):
+            directory.mkdir(parents=True, exist_ok=True)
 
         self._store = Store(self.storage_path / "store")
+        self._tables = PublicationGenerator(self.tables_path)
         self.database = self._load_database()
 
     def _load_database(self) -> dict[str, Any]:
-        """Load benchmark database from file."""
-        if self.database_path.exists():
-            try:
-                with open(self.database_path) as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                return {"results": [], "metadata": {}}
-        return {"results": [], "metadata": {}}
+        """Read the database, or start an empty one when the file is absent.
+
+        Returns:
+            The database record.
+
+        Raises:
+            ValueError: If the file is not valid JSON.
+        """
+        if not self.database_path.exists():
+            return {"results": [], "metadata": {}}
+        try:
+            with self.database_path.open() as handle:
+                return json.load(handle)
+        except json.JSONDecodeError as err:
+            raise ValueError(f"{self.database_path} is not a valid benchmark database") from err
 
     def _save_database(self) -> None:
-        """Save benchmark database to file."""
-        with open(self.database_path, "w") as f:
-            json.dump(self.database, f, indent=2)
+        """Write the database."""
+        with self.database_path.open("w") as handle:
+            json.dump(self.database, handle, indent=2)
 
     def save_benchmark_results(
         self,
         result: BenchmarkResult,
         extra_metadata: dict[str, Any] | None = None,
     ) -> str:
-        """Save benchmark results with metadata.
+        """Save a result to the raw results, the database and the calibrax store.
 
         Args:
-            result: Benchmark result to save.
-            extra_metadata: Additional metadata to store alongside.
+            result: The result to save.
+            extra_metadata: Recorded next to the result and in its database entry.
 
         Returns:
-            Unique identifier for saved results.
+            The identifier of the saved result.
         """
         dataset = result.tags.get("dataset", "unknown")
-        timestamp_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        result_id = f"{result.name}_{dataset}_{timestamp_str}"
+        result_id = f"{result.name}_{dataset}_{datetime.now(UTC):%Y%m%d_%H%M%S}"
 
         result_data = result.to_dict()
         if extra_metadata:
             result_data["extra_metadata"] = extra_metadata
-
         result_file = self.raw_results_path / f"{result_id}.json"
-        with open(result_file, "w") as f:
-            json.dump(result_data, f, indent=2)
+        with result_file.open("w") as handle:
+            json.dump(result_data, handle, indent=2)
 
-        exec_time = result.metadata.get("execution_time", 0.0)
-        metrics_summary = {k: v.value for k, v in result.metrics.items()}
-
-        database_entry = {
+        entry: dict[str, Any] = {
             "id": result_id,
             "name": result.name,
             "dataset": dataset,
             "timestamp": result.timestamp,
             "file_path": str(result_file),
-            "metrics_summary": metrics_summary,
-            "execution_time": exec_time,
+            "metrics_summary": metric_values(result),
+            "execution_time": result.metadata.get(_EXECUTION_TIME, 0.0),
         }
-
         if extra_metadata:
-            database_entry["extra_metadata"] = extra_metadata
-
-        self.database["results"].append(database_entry)
+            entry["extra_metadata"] = extra_metadata
+        self.database["results"].append(entry)
         self._save_database()
 
-        # Persist to calibrax Store for cross-tool interop
         try:
-            run = results_to_run([result], metric_defs=default_metric_defs())
-            self._store.save(run)
+            self._store.save(results_to_run([result], metric_defs=default_metric_defs()))
         except (OSError, ValueError, TypeError):
-            logger.warning("Failed to write result to calibrax Store", exc_info=True)
+            logger.warning(
+                "Failed to write result %s to the calibrax store", result_id, exc_info=True
+            )
 
         return result_id
 
     def load_results(self, result_id: str) -> BenchmarkResult | None:
-        """Load benchmark result by ID.
-
-        Args:
-            result_id: Unique identifier for results.
-
-        Returns:
-            Loaded BenchmarkResult or None if not found.
-        """
-        entry = None
-        for result_entry in self.database["results"]:
-            if result_entry["id"] == result_id:
-                entry = result_entry
-                break
-
-        if entry is None:
-            return None
-
-        try:
-            with open(entry["file_path"]) as f:
-                result_data = json.load(f)
-            result_data.pop("extra_metadata", None)
-            return BenchmarkResult.from_dict(result_data)
-        except (OSError, json.JSONDecodeError, KeyError):
-            return None
+        """Load a saved result by identifier; ``None`` when the identifier is unknown."""
+        for entry in self.database["results"]:
+            if entry["id"] == result_id:
+                with Path(entry["file_path"]).open() as handle:
+                    result_data = json.load(handle)
+                result_data.pop("extra_metadata", None)
+                return BenchmarkResult.from_dict(result_data)
+        return None
 
     def query_results(
         self,
@@ -162,491 +157,228 @@ class ResultsManager:
         dataset: str | None = None,
         metric_filter: dict[str, tuple[float, float]] | None = None,
     ) -> list[dict[str, Any]]:
-        """Query benchmark database with filters.
+        """Database entries matching every given filter.
 
         Args:
-            name: Filter by benchmark name.
-            dataset: Filter by dataset tag.
-            metric_filter: Filter by metric ranges {metric: (min, max)}.
+            name: Benchmark name.
+            dataset: Dataset tag.
+            metric_filter: Inclusive ``{metric: (low, high)}`` ranges every entry
+                must satisfy; an entry without the metric does not match.
 
         Returns:
-            List of matching database entries.
+            The matching entries.
         """
-        results = self.database["results"]
-
+        entries: Iterable[dict[str, Any]] = self.database["results"]
         if name:
-            results = [r for r in results if r["name"] == name]
-
+            entries = [entry for entry in entries if entry["name"] == name]
         if dataset:
-            results = [r for r in results if r["dataset"] == dataset]
-
+            entries = [entry for entry in entries if entry["dataset"] == dataset]
         if metric_filter:
-            filtered = []
-            for result in results:
-                matches = True
-                for metric, (min_val, max_val) in metric_filter.items():
-                    metric_val = result["metrics_summary"].get(metric)
-                    if metric_val is None or not (min_val <= metric_val <= max_val):
-                        matches = False
-                        break
-                if matches:
-                    filtered.append(result)
-            results = filtered
-
-        return results
+            entries = [
+                entry for entry in entries if _within(entry["metrics_summary"], metric_filter)
+            ]
+        return list(entries)
 
     def get_database_statistics(self) -> dict[str, Any]:
-        """Get statistics about the benchmark database.
-
-        Returns:
-            Database statistics summary.
-        """
-        results = self.database["results"]
-
-        if not results:
-            return {
-                "total_results": 0,
-                "unique_names": 0,
-                "unique_datasets": 0,
-                "name_counts": {},
-                "dataset_counts": {},
-            }
-
-        name_counts: dict[str, int] = {}
-        dataset_counts: dict[str, int] = {}
-
-        for result in results:
-            n = result["name"]
-            d = result["dataset"]
-            name_counts[n] = name_counts.get(n, 0) + 1
-            dataset_counts[d] = dataset_counts.get(d, 0) + 1
-
-        exec_times = [r["execution_time"] for r in results if r.get("execution_time") is not None]
-
+        """Counts per name and dataset, and execution time statistics."""
+        entries = self.database["results"]
+        name_counts: dict[str, int] = defaultdict(int)
+        dataset_counts: dict[str, int] = defaultdict(int)
+        for entry in entries:
+            name_counts[entry["name"]] += 1
+            dataset_counts[entry["dataset"]] += 1
         stats: dict[str, Any] = {
-            "total_results": len(results),
+            "total_results": len(entries),
             "unique_names": len(name_counts),
             "unique_datasets": len(dataset_counts),
-            "name_counts": name_counts,
-            "dataset_counts": dataset_counts,
+            "name_counts": dict(name_counts),
+            "dataset_counts": dict(dataset_counts),
         }
-
-        if exec_times:
+        times = [
+            entry[_EXECUTION_TIME] for entry in entries if entry.get(_EXECUTION_TIME) is not None
+        ]
+        if times:
             stats["execution_time_stats"] = {
-                "mean": float(np.mean(exec_times)),
-                "std": float(np.std(exec_times)),
-                "min": float(np.min(exec_times)),
-                "max": float(np.max(exec_times)),
+                "mean": statistics.fmean(times),
+                "std": statistics.pstdev(times),
+                "min": min(times),
+                "max": max(times),
             }
-
         return stats
 
-    def create_benchmark_database_entry(self, result: BenchmarkResult) -> dict[str, Any]:
-        """Create standardized database entry for benchmark results.
-
-        Args:
-            result: Benchmark result.
-
-        Returns:
-            Standardized database entry dictionary.
-        """
-        return {
-            "id": (f"{result.name}_{result.tags.get('dataset', 'unknown')}_{result.timestamp}"),
-            "name": result.name,
-            "dataset": result.tags.get("dataset", "unknown"),
-            "timestamp": result.timestamp,
-            "metrics": {k: v.value for k, v in result.metrics.items()},
-            "execution_time": result.metadata.get("execution_time", 0.0),
-            "memory_usage": result.metadata.get("memory_usage"),
-            "config": result.config,
-        }
-
     def export_database(self, export_path: str, output_format: str = "json") -> None:
-        """Export entire benchmark database.
+        """Write the whole database to ``export_path``.
 
         Args:
-            export_path: Path to export file.
-            output_format: Export format (``"json"``).
-        """
-        export_file = Path(export_path)
+            export_path: The file to write.
+            output_format: ``"json"``, the one supported format.
 
-        if output_format == "json":
-            with open(export_file, "w") as f:
-                json.dump(self.database, f, indent=2)
-        else:
-            msg = f"Unsupported export format: {output_format}"
-            raise ValueError(msg)
+        Raises:
+            ValueError: If ``output_format`` is not ``"json"``.
+        """
+        if output_format != "json":
+            raise ValueError(f"Unsupported export format: {output_format}")
+        with Path(export_path).open("w") as handle:
+            json.dump(self.database, handle, indent=2)
 
     def export_publication_plots(
         self,
         results: list[BenchmarkResult],
-        plot_type: Literal["comparison", "scaling", "convergence"] = "comparison",
+        plot_type: PlotType = "comparison",
         output_format: str = "png",
     ) -> list[Path]:
-        """Export publication-ready plots.
+        """Render publication plots under ``plots_path``.
+
+        ``comparison`` draws one figure per dataset with at least two results
+        (``<dataset>/comparison``), ``scaling`` one figure per model and metric over
+        the ``problem_size`` metadata (``<model>/scaling_<metric>``), and
+        ``convergence`` one figure per result carrying a ``loss_history``
+        (``<model>/<dataset>/convergence_loss``).
 
         Args:
-            results: List of benchmark results to plot.
-            plot_type: Type of plot to generate.
-            output_format: Output format (png, pdf, svg).
+            results: The results to plot.
+            plot_type: Which figures to draw.
+            output_format: Image format (``png``, ``pdf``, ``svg``).
 
         Returns:
-            List of paths to generated plot files.
+            The written figures; empty when no result carries the data the plot needs.
         """
-        if plot_type == "comparison":
-            return _generate_comparison_plots(results, self.plots_path, output_format)
-        if plot_type == "scaling":
-            return _generate_scaling_plots(results, self.plots_path, output_format)
-        if plot_type == "convergence":
-            return _generate_convergence_plots(results, self.plots_path, output_format)
-        return []
+        renderers: dict[PlotType, Callable[[list[BenchmarkResult], str], list[Path]]] = {
+            "comparison": self._comparison_plots,
+            "scaling": self._scaling_plots,
+            "convergence": self._convergence_plots,
+        }
+        return renderers[plot_type](results, output_format)
+
+    def _comparison_plots(self, results: list[BenchmarkResult], output_format: str) -> list[Path]:
+        """One bar-chart figure per dataset comparing the models measured on it."""
+        paths: list[Path] = []
+        for dataset, group in _grouped(results, lambda r: r.tags.get("dataset", r.name)).items():
+            if len(group) < 2:
+                continue
+            run = results_to_run(group, metric_defs=default_metric_defs())
+            generator = PublicationGenerator(self.plots_path / dataset)
+            path = generator.generate_comparison_plot(run, output_format=output_format)
+            if path is not None:
+                paths.append(path)
+        return paths
+
+    def _scaling_plots(self, results: list[BenchmarkResult], output_format: str) -> list[Path]:
+        """One figure per model and metric over the problem sizes it was measured at."""
+        paths: list[Path] = []
+        for model, group in _grouped(results, lambda r: r.name).items():
+            sized = sorted(
+                (r for r in group if r.metadata.get("problem_size") is not None),
+                key=lambda r: int(r.metadata["problem_size"]),
+            )
+            sizes = [int(r.metadata["problem_size"]) for r in sized]
+            if len(set(sizes)) < 2:
+                continue
+            generator = PublicationGenerator(self.plots_path / model)
+            for metric_name, values in _shared_metrics(sized).items():
+                path = generator.generate_scaling_plot(
+                    sizes, values, metric_name=metric_name, output_format=output_format
+                )
+                if path is not None:
+                    paths.append(path)
+        return paths
+
+    def _convergence_plots(self, results: list[BenchmarkResult], output_format: str) -> list[Path]:
+        """One loss-curve figure per result that recorded a loss history."""
+        paths: list[Path] = []
+        for result in results:
+            history = result.metadata.get("loss_history")
+            if not history:
+                continue
+            recorded = datetime.fromtimestamp(result.timestamp, UTC)
+            series = TrendSeries(
+                metric=_LOSS,
+                point_name=result.name,
+                tags=dict(result.tags),
+                points=tuple(
+                    TrendPoint(run_id=f"epoch-{epoch}", timestamp=recorded, value=float(value))
+                    for epoch, value in enumerate(history, start=1)
+                ),
+            )
+            dataset = result.tags.get("dataset", "unknown")
+            generator = PublicationGenerator(self.plots_path / result.name / dataset)
+            path = generator.generate_convergence_plot(series, output_format=output_format)
+            if path is not None:
+                paths.append(path)
+        return paths
 
     def generate_comparison_tables(
         self,
         operators: list[str],
         metrics: list[str],
-        output_format: Literal["latex", "html", "csv"] = "latex",
+        output_format: TableFormat = "latex",
     ) -> Path:
-        """Generate publication-ready comparison tables.
+        """Render a table of the latest saved result per operator and dataset.
 
-        Queries the local benchmark database and generates a formatted
-        comparison table in the requested output format.
+        Rows are labelled ``<operator> (<dataset>)``; the best value of each metric
+        is marked in the LaTeX and HTML formats.
 
         Args:
-            operators: List of operator names to include.
-            metrics: List of metrics to include in table.
-            output_format: Output format.
+            operators: The operators to include, in row order.
+            metrics: The metric columns.
+            output_format: ``latex``, ``html`` or ``csv``.
 
         Returns:
-            Path to generated table file.
+            The written table, ``tables_path / table.<ext>``.
         """
-        table_data: list[dict[str, Any]] = []
-
+        points: list[Point] = []
         for operator in operators:
-            operator_results = [
-                entry for entry in self.database["results"] if entry["name"] == operator
-            ]
-
-            if operator_results:
-                datasets: dict[str, dict[str, Any]] = {}
-                for result in operator_results:
-                    ds = result["dataset"]
-                    if ds not in datasets or result["timestamp"] > datasets[ds]["timestamp"]:
-                        datasets[ds] = result
-
-                for ds, result in datasets.items():
-                    row: dict[str, Any] = {
-                        "Operator": operator,
-                        "Dataset": ds,
-                    }
-                    for metric in metrics:
-                        row[metric] = result["metrics_summary"].get(metric, "N/A")
-                    table_data.append(row)
-
-        timestamp_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        table_file = self.tables_path / f"comparison_table_{timestamp_str}.{output_format}"
-
-        _generate_table_fallback(table_data, table_file, metrics, output_format)
-
-        return table_file
+            entries = [entry for entry in self.database["results"] if entry["name"] == operator]
+            for dataset, entry in sorted(_latest_per_dataset(entries).items()):
+                summary = entry["metrics_summary"]
+                points.append(
+                    Point(
+                        name=operator,
+                        scenario=dataset,
+                        tags={"dataset": dataset, "table_row": f"{operator} ({dataset})"},
+                        metrics={
+                            name: Metric(value=float(summary[name]))
+                            for name in metrics
+                            if name in summary
+                        },
+                    )
+                )
+        run = Run(points=tuple(points), metric_defs=default_metric_defs())
+        return self._tables.generate_table(
+            run, metrics, output_format=output_format, group_by_tag="table_row"
+        )
 
 
-# ---------------------------------------------------------------------------
-# Plot generation helpers
-# ---------------------------------------------------------------------------
+def _within(summary: dict[str, float], metric_filter: dict[str, tuple[float, float]]) -> bool:
+    """Whether every filtered metric is present and inside its range."""
+    return all(
+        summary.get(metric) is not None and low <= summary[metric] <= high
+        for metric, (low, high) in metric_filter.items()
+    )
 
 
-def _generate_comparison_plots(
-    results: list[BenchmarkResult],
-    plots_path: Path,
-    output_format: str,
-) -> list[Path]:
-    """Generate comparison plots between different models."""
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        return []
-
-    plot_files: list[Path] = []
-    datasets = list({r.tags.get("dataset", r.name) for r in results})
-
-    for dataset in datasets:
-        dataset_results = [r for r in results if r.tags.get("dataset", r.name) == dataset]
-        if len(dataset_results) < 2:
-            continue
-
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        fig.suptitle(f"Performance Comparison - {dataset}", fontsize=16)
-
-        models = [r.name for r in dataset_results]
-
-        mse_values = [r.metrics["mse"].value for r in dataset_results if "mse" in r.metrics]
-        if len(mse_values) == len(dataset_results):
-            axes[0, 0].bar(models, mse_values)
-            axes[0, 0].set_title("Mean Squared Error")
-            axes[0, 0].set_ylabel("MSE")
-            axes[0, 0].tick_params(axis="x", rotation=45)
-
-        exec_times = [r.metadata.get("execution_time", 0.0) for r in dataset_results]
-        axes[0, 1].bar(models, exec_times)
-        axes[0, 1].set_title("Execution Time")
-        axes[0, 1].set_ylabel("Time (s)")
-        axes[0, 1].tick_params(axis="x", rotation=45)
-
-        mae_values = [r.metrics["mae"].value for r in dataset_results if "mae" in r.metrics]
-        if len(mae_values) == len(dataset_results):
-            axes[1, 0].bar(models, mae_values)
-            axes[1, 0].set_title("Mean Absolute Error")
-            axes[1, 0].set_ylabel("MAE")
-            axes[1, 0].tick_params(axis="x", rotation=45)
-
-        rel_values = [
-            r.metrics["relative_error"].value
-            for r in dataset_results
-            if "relative_error" in r.metrics
-        ]
-        if len(rel_values) == len(dataset_results):
-            axes[1, 1].bar(models, rel_values)
-            axes[1, 1].set_title("Relative Error")
-            axes[1, 1].set_ylabel("Relative Error")
-            axes[1, 1].tick_params(axis="x", rotation=45)
-
-        plt.tight_layout()
-        plot_file = plots_path / f"comparison_{dataset}.{output_format}"
-        plt.savefig(plot_file, dpi=300, bbox_inches="tight")
-        plt.close()
-        plot_files.append(plot_file)
-
-    return plot_files
-
-
-def _generate_scaling_plots(
-    results: list[BenchmarkResult],
-    plots_path: Path,
-    output_format: str,
-) -> list[Path]:
-    """Generate scaling behaviour plots (metric vs. problem size).
-
-    Renders, per model, execution time and MSE against the problem size taken
-    from ``result.metadata["problem_size"]`` (the same convention used by
-    :meth:`AnalysisEngine.analyze_scaling_behavior`). Results without a
-    ``problem_size`` are ignored; a model needs at least two distinct sizes to
-    be plotted.
-
-    Args:
-        results: Benchmark results to plot.
-        plots_path: Directory in which to write the figure.
-        output_format: Image format (e.g. ``"png"``).
-
-    Returns:
-        Paths to the generated figure files (empty if no scaling data exists).
-    """
-    try:
-        import matplotlib as mpl
-
-        mpl.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
-        logger.warning("matplotlib unavailable; skipping scaling plots")
-        return []
-
-    by_model: dict[str, list[tuple[int, float, float]]] = {}
+def _grouped(
+    results: list[BenchmarkResult], key: Callable[[BenchmarkResult], str]
+) -> dict[str, list[BenchmarkResult]]:
+    """Results by ``key``, in first-seen order."""
+    groups: dict[str, list[BenchmarkResult]] = defaultdict(list)
     for result in results:
-        size = result.metadata.get("problem_size")
-        if size is None:
-            continue
-        exec_time = result.metadata.get("execution_time", 0.0)
-        mse_metric = result.metrics.get("mse")
-        mse_value = mse_metric.value if mse_metric is not None else float("nan")
-        by_model.setdefault(result.name, []).append((int(size), exec_time, mse_value))
-
-    plottable = {name: rows for name, rows in by_model.items() if len({r[0] for r in rows}) >= 2}
-    if not plottable:
-        return []
-
-    fig, (ax_time, ax_mse) = plt.subplots(1, 2, figsize=(14, 6))
-    fig.suptitle("Scaling Behaviour", fontsize=16)
-
-    for name, rows in plottable.items():
-        rows.sort(key=lambda row: row[0])
-        sizes = [row[0] for row in rows]
-        times = [row[1] for row in rows]
-        mses = [row[2] for row in rows]
-        ax_time.plot(sizes, times, marker="o", label=name)
-        ax_mse.plot(sizes, mses, marker="o", label=name)
-
-    ax_time.set_title("Execution Time vs Problem Size")
-    ax_time.set_xlabel("Problem size")
-    ax_time.set_ylabel("Time (s)")
-    ax_time.set_xscale("log")
-    ax_time.set_yscale("log")
-    ax_time.legend()
-
-    ax_mse.set_title("MSE vs Problem Size")
-    ax_mse.set_xlabel("Problem size")
-    ax_mse.set_ylabel("MSE")
-    ax_mse.set_xscale("log")
-    ax_mse.set_yscale("log")
-    ax_mse.legend()
-
-    plt.tight_layout()
-    plot_file = plots_path / f"scaling.{output_format}"
-    plt.savefig(plot_file, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-
-    return [plot_file]
+        groups[key(result)].append(result)
+    return dict(groups)
 
 
-def _generate_convergence_plots(
-    results: list[BenchmarkResult],
-    plots_path: Path,
-    output_format: str,
-) -> list[Path]:
-    """Generate convergence plots (training loss vs. epoch).
-
-    Renders the per-epoch loss curve for every model that records a
-    ``loss_history`` (a sequence of per-epoch loss values) in its metadata.
-    Results without a loss history are ignored.
-
-    Args:
-        results: Benchmark results to plot.
-        plots_path: Directory in which to write the figure.
-        output_format: Image format (e.g. ``"png"``).
-
-    Returns:
-        Paths to the generated figure files (empty if no loss histories exist).
-    """
-    try:
-        import matplotlib as mpl
-
-        mpl.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
-        logger.warning("matplotlib unavailable; skipping convergence plots")
-        return []
-
-    curves = [
-        (result.name, [float(v) for v in result.metadata["loss_history"]])
-        for result in results
-        if result.metadata.get("loss_history")
-    ]
-    if not curves:
-        return []
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    fig.suptitle("Training Convergence", fontsize=16)
-
-    for name, history in curves:
-        ax.plot(range(1, len(history) + 1), history, marker=".", label=name)
-
-    ax.set_title("Loss vs Epoch")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss")
-    ax.set_yscale("log")
-    ax.legend()
-
-    plt.tight_layout()
-    plot_file = plots_path / f"convergence.{output_format}"
-    plt.savefig(plot_file, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-
-    return [plot_file]
+def _shared_metrics(results: list[BenchmarkResult]) -> dict[str, list[float]]:
+    """The metrics every result records, each as the list of values in result order."""
+    values = [metric_values(result) for result in results]
+    shared = set.intersection(*(set(v) for v in values)) if values else set()
+    return {name: [v[name] for v in values] for name in sorted(shared)}
 
 
-# ---------------------------------------------------------------------------
-# Table generation helpers
-# ---------------------------------------------------------------------------
-
-
-def _generate_table_fallback(
-    data: list[dict[str, Any]],
-    file_path: Path,
-    metrics: list[str],
-    output_format: str,
-) -> None:
-    """Generate a simple table as fallback."""
-    if output_format == "latex":
-        _generate_latex_table(data, file_path, metrics)
-    elif output_format == "html":
-        _generate_html_table(data, file_path, metrics)
-    elif output_format == "csv":
-        _generate_csv_table(data, file_path, metrics)
-
-
-def _generate_latex_table(data: list[dict[str, Any]], file_path: Path, metrics: list[str]) -> None:
-    """Generate LaTeX table."""
-    with open(file_path, "w") as f:
-        f.write("\\begin{table}[h]\n")
-        f.write("\\centering\n")
-        f.write("\\caption{Performance Comparison}\n")
-        f.write("\\label{tab:performance_comparison}\n")
-
-        n_cols = 2 + len(metrics)
-        f.write(f"\\begin{{tabular}}{{{'|c' * n_cols}|}}\n")
-        f.write("\\hline\n")
-
-        headers = ["Operator", "Dataset", *metrics]
-        f.write(" & ".join(headers) + " \\\\\n")
-        f.write("\\hline\n")
-
-        for row in data:
-            values = [str(row["Operator"]), str(row["Dataset"])]
-            for metric in metrics:
-                val = row.get(metric, "N/A")
-                if isinstance(val, float):
-                    values.append(f"{val:.4e}")
-                else:
-                    values.append(str(val))
-            f.write(" & ".join(values) + " \\\\\n")
-
-        f.write("\\hline\n")
-        f.write("\\end{tabular}\n")
-        f.write("\\end{table}\n")
-
-
-def _generate_html_table(data: list[dict[str, Any]], file_path: Path, metrics: list[str]) -> None:
-    """Generate HTML table."""
-    with open(file_path, "w") as f:
-        f.write("<html><body>\n")
-        f.write("<table border='1'>\n")
-        f.write("<caption>Performance Comparison</caption>\n")
-
-        f.write("<tr>")
-        for header in ["Operator", "Dataset", *metrics]:
-            f.write(f"<th>{header}</th>")
-        f.write("</tr>\n")
-
-        for row in data:
-            f.write("<tr>")
-            f.write(f"<td>{row['Operator']}</td>")
-            f.write(f"<td>{row['Dataset']}</td>")
-            for metric in metrics:
-                val = row.get(metric, "N/A")
-                if isinstance(val, float):
-                    f.write(f"<td>{val:.4e}</td>")
-                else:
-                    f.write(f"<td>{val}</td>")
-            f.write("</tr>\n")
-
-        f.write("</table>\n")
-        f.write("</body></html>\n")
-
-
-def _generate_csv_table(data: list[dict[str, Any]], file_path: Path, metrics: list[str]) -> None:
-    """Generate CSV table."""
-    import csv
-
-    with open(file_path, "w", newline="") as f:
-        if data:
-            headers = ["Operator", "Dataset", *metrics]
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-
-            for row in data:
-                csv_row: dict[str, Any] = {
-                    "Operator": row["Operator"],
-                    "Dataset": row["Dataset"],
-                }
-                for metric in metrics:
-                    csv_row[metric] = row.get(metric, "N/A")
-                writer.writerow(csv_row)
+def _latest_per_dataset(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """The most recently recorded entry for each dataset."""
+    latest: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        dataset = entry["dataset"]
+        if dataset not in latest or entry["timestamp"] > latest[dataset]["timestamp"]:
+            latest[dataset] = entry
+    return latest

@@ -20,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `opifex.benchmarking.ResultsManager` renders its publication output with
+  calibrax's `PublicationGenerator`: `export_publication_plots` writes one
+  comparison figure per dataset (`plots/<dataset>/comparison.<ext>`), one scaling
+  figure per model and metric (`plots/<model>/scaling_<metric>.<ext>`) and one
+  convergence figure per result with a loss history
+  (`plots/<model>/<dataset>/convergence_loss.<ext>`); `generate_comparison_tables`
+  writes `tables/table.<ext>` with rows labelled `<operator> (<dataset>)` and the
+  best value marked. The execution time recorded in a result's metadata is a
+  metric in the database summary, the calibrax store and the figures
+  (`opifex.benchmarking.adapters.metric_values`). A corrupt database file is a
+  `ValueError` instead of a silently emptied database.
+- `opifex.benchmarking.BenchmarkRegistry` is `OperatorBenchmarkRegistry`, since it
+  registers operators and benchmark configurations and is not calibrax's
+  `BenchmarkRegistry`. The old name still resolves with a `DeprecationWarning`
+  and is removed in 0.2.3.
 - `opifex.mlops.MLflowBackend` records through substrax's `MLFlowLogger` (or any
   injected `opifex.mlops.backends.RunLogger`), which it opens on `start` in the
   experiment `opifex_<domain>_<name>` on `backend_config["tracking_uri"]` or
@@ -55,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `ResultsManager.create_benchmark_database_entry`, which had no caller, and the
+  manager's own matplotlib figures and LaTeX, HTML and CSV writers.
 - `opifex.mlops.Framework.PYTORCH` and `TENSORFLOW`, the PyTorch and TensorFlow
   branches of `MLflowBackend.log_model`, the pickle fallback,
   `opifex.mlops.{MLFLOW_AVAILABLE, SUPPORTED_BACKENDS, SUPPORTED_FRAMEWORKS,

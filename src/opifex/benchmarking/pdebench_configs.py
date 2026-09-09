@@ -5,7 +5,7 @@ These follow the DRY principle by using explicit loader_type in
 computational_requirements rather than inferring from name.
 """
 
-from opifex.benchmarking.benchmark_registry import BenchmarkConfig, BenchmarkRegistry
+from opifex.benchmarking.benchmark_registry import BenchmarkConfig, OperatorBenchmarkRegistry
 
 
 PDEBENCH_BENCHMARKS = [
@@ -146,31 +146,31 @@ REALPDEBENCH_BENCHMARKS = [
 ]
 
 
-def register_pdebench_benchmarks(registry: BenchmarkRegistry) -> None:
+def register_pdebench_benchmarks(registry: OperatorBenchmarkRegistry) -> None:
     """Register all PDEBench benchmarks with a registry.
 
     Args:
-        registry: BenchmarkRegistry instance to register benchmarks with
+        registry: OperatorBenchmarkRegistry instance to register benchmarks with
     """
     for benchmark in PDEBENCH_BENCHMARKS:
         registry.register_benchmark(benchmark)
 
 
-def register_realpdebench_benchmarks(registry: BenchmarkRegistry) -> None:
+def register_realpdebench_benchmarks(registry: OperatorBenchmarkRegistry) -> None:
     """Register all RealPDEBench benchmarks with a registry.
 
     Args:
-        registry: BenchmarkRegistry instance to register benchmarks with
+        registry: OperatorBenchmarkRegistry instance to register benchmarks with
     """
     for benchmark in REALPDEBENCH_BENCHMARKS:
         registry.register_benchmark(benchmark)
 
 
-def register_all_benchmarks(registry: BenchmarkRegistry) -> None:
+def register_all_benchmarks(registry: OperatorBenchmarkRegistry) -> None:
     """Register all benchmarks (PDEBench + RealPDEBench) with a registry.
 
     Args:
-        registry: BenchmarkRegistry instance to register benchmarks with
+        registry: OperatorBenchmarkRegistry instance to register benchmarks with
     """
     register_pdebench_benchmarks(registry)
     register_realpdebench_benchmarks(registry)

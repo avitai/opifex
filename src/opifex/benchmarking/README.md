@@ -8,15 +8,15 @@ DeepONet, and custom neural operators, and JAX-JIT / GPU-accelerated execution.
 
 ## Benchmarking Components
 
-### 1. BenchmarkRegistry (`benchmark_registry.py`)
+### 1. OperatorBenchmarkRegistry (`benchmark_registry.py`)
 
 Domain-specific configuration management with physics-aware settings:
 
 ```python
-from opifex.benchmarking import BenchmarkRegistry
+from opifex.benchmarking import OperatorBenchmarkRegistry
 
 # Initialize registry with domain-specific configurations
-registry = BenchmarkRegistry()
+registry = OperatorBenchmarkRegistry()
 
 # Register domain-specific benchmarks
 registry.register_benchmark(
@@ -87,7 +87,7 @@ insights = analyzer.generate_performance_insights(
 
 ### 4. ResultsManager (`results_manager.py`)
 
-Database persistence and publication capabilities:
+Database persistence and publication output through calibrax's `PublicationGenerator`:
 
 ```python
 from opifex.benchmarking import ResultsManager
@@ -95,23 +95,20 @@ from opifex.benchmarking import ResultsManager
 # Initialize results manager with database
 manager = ResultsManager(storage_path="./benchmark_results")
 
-# Store benchmark results with metadata
-manager.store_results(
-    benchmark_name="darcy_flow_comparison",
-    results=benchmark_results,
-    metadata={"domain": "fluid_dynamics", "timestamp": "2025-02-09"}
-)
+# Store each benchmark result (raw JSON, database entry and calibrax store)
+for result in benchmark_results:
+    manager.save_benchmark_results(result, extra_metadata={"domain": "fluid_dynamics"})
 
-# Generate publication-ready plots
+# Publication figures, rendered by calibrax's PublicationGenerator under plots/
 plots = manager.export_publication_plots(
-    results, plot_type="comparison", format="png"
+    benchmark_results, plot_type="comparison", output_format="png"
 )
 
 # Generate LaTeX/HTML tables
 latex_table = manager.generate_comparison_tables(
     operators=["FNO", "DeepONet"],
-    metrics=["accuracy", "speed"],
-    format="latex"
+    metrics=["mse", "execution_time"],
+    output_format="latex",
 )
 ```
 

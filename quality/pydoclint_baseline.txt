@@ -24,10 +24,6 @@ src/opifex/benchmarking/report_generator.py
     DOC501: Method `PDEBenchReportGenerator.save_report` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `PDEBenchReportGenerator.save_report` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
 --------------------
-src/opifex/benchmarking/results_manager.py
-    DOC501: Method `ResultsManager.export_database` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Method `ResultsManager.export_database` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
---------------------
 src/opifex/benchmarking/validators/chemical_accuracy.py
     DOC304: Class `ChemicalAccuracyValidator`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
     DOC502: Method `ChemicalAccuracyValidator.assess` has a "Raises" section in the docstring, but there are not "raise" statements in the body

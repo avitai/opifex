@@ -15,7 +15,7 @@ import json
 import sys
 from typing import TYPE_CHECKING
 
-from opifex.benchmarking.benchmark_registry import BenchmarkRegistry  # noqa: TC001
+from opifex.benchmarking.benchmark_registry import OperatorBenchmarkRegistry  # noqa: TC001
 
 
 if TYPE_CHECKING:
@@ -89,13 +89,13 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
-def _get_registry() -> BenchmarkRegistry:
+def _get_registry() -> OperatorBenchmarkRegistry:
     """Get benchmark registry with PDEBench benchmarks and standard operators."""
-    from opifex.benchmarking.benchmark_registry import BenchmarkRegistry
+    from opifex.benchmarking.benchmark_registry import OperatorBenchmarkRegistry
     from opifex.benchmarking.pdebench_configs import register_pdebench_benchmarks
     from opifex.neural.operators.fno.tensorized import TensorizedFourierNeuralOperator
 
-    registry = BenchmarkRegistry()
+    registry = OperatorBenchmarkRegistry()
 
     # Register standard benchmarks
     register_pdebench_benchmarks(registry)
