@@ -420,9 +420,10 @@ tier; `BlackJAXBackend` with NUTS is the high-budget reference.
 After training a probabilistic model, always check calibration:
 
 1. Compute predictions with uncertainty on a held-out set.
-2. Use the metrics in `opifex.uncertainty.calibration`
-   (`expected_calibration_error`, `regression_calibration_error`, `picp`,
-   `mpiw`, `gaussian_nll`, `pinball_loss`) to assess reliability.
+2. Use calibrax's metrics (`calibrax.metrics.functional.calibration.expected_calibration_error`,
+   `calibrax.metrics.functional.uncertainty.regression_calibration_error`, `picp`,
+   `mpiw`, `gaussian_nll`, `calibrax.metrics.functional.regression.quantile_loss`)
+   to assess reliability.
 3. Apply `TemperatureScaling` or `SplitConformalRegressor` to improve
    calibration.
 4. Verify coverage of confidence intervals matches the nominal level.

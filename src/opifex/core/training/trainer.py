@@ -22,9 +22,9 @@ from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+from calibrax.metrics.functional.regression import relative_l2_error
 from flax import nnx
 
-from opifex.core.metrics import relative_l2_error
 from opifex.core.training.components.checkpoint_store import (
     OrbaxCheckpointStore,
 )

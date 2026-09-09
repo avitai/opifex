@@ -2,8 +2,7 @@
 
 Covers:
 
-* :func:`aggregators._bin_calibration_stats` and the
-  :class:`CalibrationAssessment` methods that call it must trace
+* The :class:`CalibrationAssessment` methods (calibrax's binning) must trace
   under ``jax.jit`` (no Python branches on traced arrays, no boolean
   fancy indexing).
 * :meth:`EpistemicUncertainty.compute_variance_of_expected` returns
@@ -24,7 +23,7 @@ from flax import nnx
 
 
 # ---------------------------------------------------------------------------
-# aggregators._bin_calibration_stats jit-compat (B2)
+# CalibrationAssessment jit-compat (B2)
 # ---------------------------------------------------------------------------
 
 
@@ -39,37 +38,15 @@ def test_calibration_assessment_methods_are_jit_compatible() -> None:
 
     @jax.jit
     def jitted_ece(c: jax.Array, a: jax.Array) -> jax.Array:
-        # `expected_calibration_error` returns a Python float at the boundary.
-        # Inside jit we let the kernel produce its scalar array result.
-        from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
+        # `CalibrationAssessment.expected_calibration_error` returns a Python float
+        # at the boundary; inside jit the calibrax kernel it calls yields the array.
+        from calibrax.metrics.functional.calibration import expected_calibration_error
 
-        boundaries = jnp.linspace(0.0, 1.0, 11)
-        bin_c, bin_a, counts = _bin_calibration_stats(
-            confidences=c, accuracies=a, bin_boundaries=boundaries
-        )
-        total = jnp.maximum(jnp.sum(counts), 1.0)
-        return jnp.sum((counts / total) * jnp.abs(bin_c - bin_a))
+        return expected_calibration_error(c, a, num_bins=10)
 
     ece_jit = float(jitted_ece(confidences, accuracies))
     ece_eager = ca.expected_calibration_error(confidences, accuracies, n_bins=10)
     assert ece_jit == pytest.approx(ece_eager, rel=1e-5, abs=1e-6)
-
-
-def test_bin_stats_zeroes_empty_bins() -> None:
-    """When no samples fall in a bin, the returned stats are zero (not nan)."""
-    from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
-
-    confidences = jnp.array([0.1, 0.1, 0.1])  # all in bin 0
-    accuracies = jnp.array([1.0, 1.0, 1.0])
-    boundaries = jnp.linspace(0.0, 1.0, 6)  # 5 bins
-    bin_c, bin_a, counts = _bin_calibration_stats(
-        confidences=confidences, accuracies=accuracies, bin_boundaries=boundaries
-    )
-    # Bin 0 has all 3 samples; bins 1..4 are empty.
-    assert int(counts[0]) == 3
-    assert int(jnp.sum(counts[1:])) == 0
-    assert bool(jnp.all(jnp.isfinite(bin_c)))
-    assert bool(jnp.all(jnp.isfinite(bin_a)))
 
 
 # ---------------------------------------------------------------------------

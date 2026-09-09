@@ -16,8 +16,6 @@ visible. Coverage focus:
 * ``opifex.uncertainty.layers.bayesian`` — ``nnx.jit`` and
   ``nnx.value_and_grad`` for BayesianLinear and
   BayesianSpectralConvolution with traced rngs.
-* ``opifex.uncertainty.metrics`` — grad for the differentiable kernels.
-* ``opifex.uncertainty.forecasting_metrics`` — vmap for the per-sample
   scoring kernels.
 * ``opifex.uncertainty.scientific.domain_metrics`` — jit / grad / vmap
   for the eight domain reliability kernels.
@@ -33,7 +31,7 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.uncertainty import forecasting_metrics as fm, metrics, selective
+from opifex.uncertainty import selective
 from opifex.uncertainty.kernels.bayesian import (
     diagonal_gaussian_kl,
     sample_diagonal_gaussian,
@@ -129,66 +127,6 @@ def test_bayesian_spectral_convolution_supports_nnx_value_and_grad() -> None:
     grad_fn = nnx.value_and_grad(loss_fn, argnums=0)
     loss, _ = grad_fn(layer, jnp.ones((1, 2, 8, 8)), nnx.Rngs(7))
     assert loss.shape == ()
-
-
-# ---------------------------------------------------------------------------
-# uncertainty.metrics — grad
-# ---------------------------------------------------------------------------
-
-
-def test_predictive_entropy_supports_grad() -> None:
-    def loss(probs: jax.Array) -> jax.Array:
-        return jnp.sum(metrics.predictive_entropy(ensemble_probabilities=probs[None]))
-
-    probs = jnp.array([[0.1, 0.9], [0.5, 0.5]])
-    grad = jax.grad(loss)(probs)
-    assert grad.shape == probs.shape
-
-
-def test_interval_score_supports_grad() -> None:
-    def loss(lower: jax.Array) -> jax.Array:
-        return jnp.sum(
-            metrics.interval_score(
-                lower=lower,
-                upper=lower + 1.0,
-                targets=jnp.zeros_like(lower),
-                alpha=0.1,
-            )
-        )
-
-    lower = jnp.array([0.5, 0.1, -0.2])
-    grad = jax.grad(loss)(lower)
-    assert grad.shape == lower.shape
-
-
-# ---------------------------------------------------------------------------
-# forecasting_metrics — vmap
-# ---------------------------------------------------------------------------
-
-
-def test_crps_is_vmap_compatible_across_batch() -> None:
-    """vmap over a leading batch axis on top of the canonical
-    ``(n_samples, n_members)`` shape — confirms the kernel is fully
-    array-only with no Python branches on input shape."""
-    batched_preds = jax.random.normal(jax.random.key(0), (3, 4, 5))  # batch × samples × members
-    batched_targets = jnp.zeros((3, 4))
-
-    def per_batch(p: jax.Array, t: jax.Array) -> jax.Array:
-        return fm.crps(predictions=p, targets=t)
-
-    out = jax.vmap(per_batch)(batched_preds, batched_targets)
-    assert out.shape == (3,)
-
-
-def test_energy_score_is_vmap_compatible_across_batch() -> None:
-    ensembles = jax.random.normal(jax.random.key(0), (3, 5, 2))
-    targets = jnp.zeros((3, 2))
-
-    def per_sample(e: jax.Array, t: jax.Array) -> jax.Array:
-        return fm.energy_score(ensemble=e[None], targets=t[None])
-
-    out = jax.vmap(per_sample)(ensembles, targets)
-    assert out.shape[0] == 3
 
 
 # ---------------------------------------------------------------------------

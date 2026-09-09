@@ -7,9 +7,13 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import jax.scipy as jsp
+from calibrax.metrics.functional.calibration import (
+    expected_calibration_error,
+    maximum_calibration_error,
+    reliability_diagram_bins,
+)
 from jaxtyping import Array, Float  # noqa: TC002
 
-from opifex.uncertainty.aggregators.calibration import _bin_calibration_stats
 from opifex.uncertainty.aggregators.types import (
     CalibrationMetrics,
     UncertaintyComponents,
@@ -357,23 +361,14 @@ class UncertaintyQuantifier:
         accuracies: Float[Array, "..."],
         n_bins: int,
     ) -> tuple[float, float, dict[str, Array]]:
-        """Compute calibration metrics using reliability binning.
-
-        Pure ``jnp.where``-based masked accumulation — no Python branches on
-        traced arrays, no boolean fancy-indexing; traces under ``jax.jit``.
-        """
-        bin_boundaries = jnp.linspace(0.0, 1.0, n_bins + 1)
-        bin_confidences, bin_accuracies, bin_counts = _bin_calibration_stats(
-            confidences=confidences, accuracies=accuracies, bin_boundaries=bin_boundaries
-        )
-        bin_weights = bin_counts / jnp.maximum(jnp.sum(bin_counts), 1.0)
-        calibration_errors = jnp.abs(bin_confidences - bin_accuracies)
-        ece = float(jnp.sum(bin_weights * calibration_errors))
-        mce = float(jnp.max(calibration_errors))
+        """Compute calibration metrics through calibrax's reliability binning."""
+        bins = reliability_diagram_bins(confidences, accuracies, num_bins=n_bins)
+        ece = float(expected_calibration_error(confidences, accuracies, num_bins=n_bins))
+        mce = float(maximum_calibration_error(confidences, accuracies, num_bins=n_bins))
         reliability_data = {
-            "bin_confidences": bin_confidences,
-            "bin_accuracies": bin_accuracies,
-            "bin_counts": bin_counts,
-            "bin_boundaries": bin_boundaries,
+            "bin_confidences": bins["bin_confidences"],
+            "bin_accuracies": bins["bin_accuracies"],
+            "bin_counts": bins["bin_counts"],
+            "bin_boundaries": bins["bin_edges"],
         }
         return ece, mce, reliability_data

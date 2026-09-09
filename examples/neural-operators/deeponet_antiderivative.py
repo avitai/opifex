@@ -62,8 +62,8 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from calibrax.metrics.functional.regression import per_sample_relative_l2
 
-from opifex.core.metrics import per_sample_relative_l2
 from opifex.neural.operators.deeponet import DeepONet
 
 

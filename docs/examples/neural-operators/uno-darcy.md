@@ -160,7 +160,7 @@ import matplotlib.pyplot as plt
 
 # Opifex framework imports
 from opifex.core.evaluation import predict_in_batches
-from opifex.core.metrics import per_sample_relative_l2
+from calibrax.metrics.functional.regression import per_sample_relative_l2
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader

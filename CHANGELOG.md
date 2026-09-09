@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regression test pins the axis type; the two distributed trainer tests and the
   distributed PDE example pass again.
 
+### Deprecated
+
+- The metric functions of `opifex.uncertainty.forecasting_metrics`,
+  `opifex.uncertainty.metrics`, `opifex.uncertainty.calibration` (the
+  calibrator stays) and `opifex.core.metrics` are calibrax's since calibrax
+  0.1.3 (`calibrax.metrics.functional.{forecasting,uncertainty,calibration,regression}`).
+  The opifex names remain for this release as keyword-argument wrappers that
+  emit a `DeprecationWarning` naming the calibrax function, and are removed in
+  0.2.3. Internal call sites (the trainer's relative L2 loss, the calibration
+  aggregators' ECE, MCE and reliability bins, the examples and the guides) call
+  calibrax directly; opifex's tests of the metric formulas went with the code,
+  calibrax's suite carries them.
+
 ### Changed
 
 - Depends on `substrax>=0.1.4`; `opifex.distributed` composes `substrax.mesh` and

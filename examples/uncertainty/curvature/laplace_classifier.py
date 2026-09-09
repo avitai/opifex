@@ -45,11 +45,11 @@ NNX state path with explicit `nnx.Rngs` is exercised throughout.
 import jax
 import jax.numpy as jnp
 import optax
+from calibrax.metrics.functional.calibration import expected_calibration_error
+from calibrax.metrics.functional.uncertainty import anees
 from flax import nnx
 
-from opifex.uncertainty.calibration import expected_calibration_error
 from opifex.uncertainty.curvature import diagonal_laplace_posterior, DiagonalLaplacePosterior
-from opifex.uncertainty.metrics import anees
 
 
 # %% [markdown]
@@ -167,9 +167,7 @@ def main() -> dict[str, jax.Array | float | int]:
     # Predict with the MAP module and compute calibration metrics.
     final_logits = model(inputs)
     probabilities = jax.nn.softmax(final_logits, axis=-1)
-    ece = expected_calibration_error(
-        probabilities=probabilities[:, 1], targets=targets, num_bins=10
-    )
+    ece = expected_calibration_error(probabilities[:, 1], targets, num_bins=10)
 
     # ANEES on the logit predictions with diagonal predictive covariance
     # derived from the Laplace posterior. We use a coarse per-sample
@@ -183,11 +181,7 @@ def main() -> dict[str, jax.Array | float | int]:
     true_logits = jnp.stack(
         [jnp.where(targets == 0, 1.0, 0.0), jnp.where(targets == 1, 1.0, 0.0)], axis=-1
     )
-    anees_value = anees(
-        predicted_means=final_logits,
-        predicted_covariances=predicted_covariances,
-        references=true_logits,
-    )
+    anees_value = anees(final_logits, predicted_covariances, true_logits)
 
     return {
         "num_parameters": int(flat_params.shape[0]),

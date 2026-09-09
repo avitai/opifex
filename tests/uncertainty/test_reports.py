@@ -189,7 +189,8 @@ def test_uq_reliability_report_can_be_built_from_phase_4_5_outputs() -> None:
     """A report can be assembled from a calibration metric, a conformal
     PredictionInterval's coverage, an OOD AUROC value, and an AURC value —
     proving the aggregation contract end-to-end."""
-    from opifex.uncertainty.calibration import expected_calibration_error
+    from calibrax.metrics.functional.calibration import expected_calibration_error
+
     from opifex.uncertainty.selective import area_under_risk_coverage
 
     reports = _import_reports()
@@ -197,7 +198,7 @@ def test_uq_reliability_report_can_be_built_from_phase_4_5_outputs() -> None:
     # Calibration ECE on toy binary data.
     probs = jnp.array([0.1, 0.4, 0.8, 0.9])
     targets = jnp.array([0.0, 0.0, 1.0, 1.0])
-    ece = expected_calibration_error(probabilities=probs, targets=targets, num_bins=4)
+    ece = expected_calibration_error(probs, targets, num_bins=4)
 
     # AURC on toy confidence/error pairs.
     confidences = jnp.array([0.9, 0.8, 0.4, 0.1])

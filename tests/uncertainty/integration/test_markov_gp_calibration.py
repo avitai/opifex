@@ -39,9 +39,9 @@ from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
+from calibrax.metrics.functional.calibration import brier_score, expected_calibration_error
+from calibrax.metrics.functional.uncertainty import picp
 
-from opifex.uncertainty.calibration.base import brier_score, expected_calibration_error
-from opifex.uncertainty.calibration.regression import picp
 from opifex.uncertainty.statespace import matern32_kernel as state_space_matern32_kernel
 
 
@@ -108,7 +108,7 @@ def test_markov_laplace_gaussian_picp_at_90_percent_is_well_calibrated() -> None
         predictive_mean=predictive.mean,
         predictive_variance=predictive.variance,
     )
-    coverage = picp(target=y_test, lower=lower, upper=upper)
+    coverage = picp(lower, upper, y_test)
     assert _PICP_LOWER <= float(coverage) <= _PICP_UPPER
 
 
@@ -134,7 +134,7 @@ def test_markov_vi_gaussian_picp_at_90_percent_is_well_calibrated() -> None:
         predictive_mean=predictive.mean,
         predictive_variance=predictive.variance,
     )
-    coverage = picp(target=y_test, lower=lower, upper=upper)
+    coverage = picp(lower, upper, y_test)
     assert _PICP_LOWER <= float(coverage) <= _PICP_UPPER
 
 
@@ -162,7 +162,7 @@ def test_markov_pep_gaussian_picp_at_90_percent_is_well_calibrated() -> None:
         predictive_mean=predictive.mean,
         predictive_variance=predictive.variance,
     )
-    coverage = picp(target=y_test, lower=lower, upper=upper)
+    coverage = picp(lower, upper, y_test)
     assert _PICP_LOWER <= float(coverage) <= _PICP_UPPER
 
 
@@ -188,7 +188,7 @@ def test_markov_pl_gaussian_picp_at_90_percent_is_well_calibrated() -> None:
         predictive_mean=predictive.mean,
         predictive_variance=predictive.variance,
     )
-    coverage = picp(target=y_test, lower=lower, upper=upper)
+    coverage = picp(lower, upper, y_test)
     assert _PICP_LOWER <= float(coverage) <= _PICP_UPPER
 
 
@@ -227,13 +227,8 @@ def _bernoulli_calibration_metrics(
 ) -> tuple[float, float]:
     """``(Brier, ECE)`` against {0, 1} targets converted from ±1 labels."""
     targets_binary = (y_test_pm1 > 0.0).astype(jnp.float32)
-    brier = float(brier_score(probabilities=p_test_predicted, targets=targets_binary))
-    ece = float(
-        expected_calibration_error(
-            probabilities=p_test_predicted,
-            targets=targets_binary,
-        )
-    )
+    brier = float(brier_score(p_test_predicted, targets_binary))
+    ece = float(expected_calibration_error(p_test_predicted, targets_binary))
     return brier, ece
 
 

@@ -49,9 +49,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import optax
+from calibrax.metrics.functional.regression import relative_l2_error
 from flax import nnx
 
-from opifex.core.metrics import relative_l2_error
 from opifex.core.training.components.adaptive_sampling import (
     RARDConfig,
     RARDRefiner,

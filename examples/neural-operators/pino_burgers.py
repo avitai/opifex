@@ -91,8 +91,8 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from calibrax.metrics.functional.regression import per_sample_relative_l2, relative_l2_error
 
-from opifex.core.metrics import per_sample_relative_l2, relative_l2_error
 from opifex.data.sources.pde_generation import _burgers_ic
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.physics.spectral.steppers import solve_burgers_spectral

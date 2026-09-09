@@ -82,9 +82,9 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from calibrax.metrics.functional.regression import per_sample_relative_l2, relative_l2_error
 
 from opifex.core.evaluation import predict_in_batches
-from opifex.core.metrics import per_sample_relative_l2, relative_l2_error
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig, OptimizationConfig
 from opifex.data.loaders import create_darcy_loader
