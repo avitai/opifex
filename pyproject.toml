@@ -58,7 +58,7 @@ dependencies = [
   "datarax>=0.1.6",
   "substrax>=0.1.4"
 ]
-description = "Opifex Computational Framework - JAX-native platform for scientific machine learning"
+description = "Scientific machine learning for JAX/Flax NNX: neural operators, physics-informed networks, E(3)-equivariant atomistic potentials, differentiable DFT, SINDy equation discovery and uncertainty quantification, with PDEBench benchmarking"
 license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"

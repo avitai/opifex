@@ -2,7 +2,7 @@
 
 <div align="center">
 
-## A unified scientific machine learning framework built on JAX/Flax NNX
+## Scientific machine learning for JAX/Flax NNX: neural operators, physics-informed networks, equivariant atomistic potentials, differentiable DFT, equation discovery and uncertainty quantification
 
 *From Latin "opifex" - worker, skilled maker*
 
