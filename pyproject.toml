@@ -496,12 +496,12 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 testpaths = ["tests"]
 
-[tool.pytest-env]
+[tool.pytest_env]
 # D: prefix = set as default only (don't override existing env vars from activate.sh/.opifex.env)
-"D:JAX_ENABLE_X64" = "0"
-"D:TF_CPP_MIN_LOG_LEVEL" = "1"
-"D:XLA_PYTHON_CLIENT_MEM_FRACTION" = "0.75"
-"D:XLA_PYTHON_CLIENT_PREALLOCATE" = "false"
+JAX_ENABLE_X64 = {skip_if_set = true, value = "0"}
+TF_CPP_MIN_LOG_LEVEL = {skip_if_set = true, value = "1"}
+XLA_PYTHON_CLIENT_MEM_FRACTION = {skip_if_set = true, value = "0.75"}
+XLA_PYTHON_CLIENT_PREALLOCATE = {skip_if_set = true, value = "false"}
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
