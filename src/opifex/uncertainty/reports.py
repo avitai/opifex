@@ -69,8 +69,8 @@ class UQReliabilityReport:
             raise ValueError(
                 "UQReliabilityReport requires at least one populated metric; "
                 "all metric fields are None. Populate via fit / predict outputs "
-                "from opifex.uncertainty.{calibration, conformal, forecasting_metrics, "
-                "ood, selective}."
+                "from opifex.uncertainty.{calibration, conformal, ood, selective} and "
+                "calibrax.metrics.functional."
             )
 
     def to_dict(self) -> dict[str, Any]:

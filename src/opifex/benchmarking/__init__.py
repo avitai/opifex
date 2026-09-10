@@ -17,7 +17,6 @@ Main Components:
 from calibrax.core import BenchmarkResult
 from calibrax.statistics import StatisticalAnalyzer
 
-from opifex._deprecated import warn_deprecated
 from opifex.benchmarking.adapters import default_metric_defs, results_to_run
 from opifex.benchmarking.analysis_engine import AnalysisEngine
 from opifex.benchmarking.baseline_repository import BaselineRepository
@@ -60,11 +59,3 @@ __all__ = [
     "run_benchmark_cli",
     "run_cli",
 ]
-
-
-def __getattr__(name: str) -> object:
-    """Serve the pre-0.2.2 name ``BenchmarkRegistry`` with a deprecation warning."""
-    if name == "BenchmarkRegistry":
-        warn_deprecated(f"{__name__}.BenchmarkRegistry", f"{__name__}.OperatorBenchmarkRegistry")
-        return OperatorBenchmarkRegistry
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -5,7 +5,7 @@ References (canonical):
   Out-of-Distribution Examples", arXiv:1610.02136) — Maximum Softmax
   Probability (MSP) score; lower → more OOD.
 * Gal & Ghahramani 2016 — predictive entropy / mutual information from
-  ensembles (already in :mod:`opifex.uncertainty.metrics`).
+  ensembles (``calibrax.metrics.functional.uncertainty``).
 
 AUROC / AUPRC use the canonical CalibraX kernels directly
 (``calibrax.metrics.functional.classification.{roc_auc, average_precision}``)
@@ -116,7 +116,7 @@ def test_auprc_via_calibrax_separates_known_labels() -> None:
 
 def test_public_ood_surface_includes_local_kernels_only() -> None:
     """OOD module exposes only the locally-implemented kernels — not
-    re-exports of CalibraX / `opifex.uncertainty.metrics` symbols."""
+    re-exports of CalibraX symbols."""
     ood = _import_ood()
     expected = {
         "max_softmax_probability",
@@ -126,7 +126,7 @@ def test_public_ood_surface_includes_local_kernels_only() -> None:
     assert not missing, f"missing public OOD symbols: {sorted(missing)}"
     # Negative contract: predictive entropy / mutual information are NOT
     # re-exported from `ood` — callers import them from
-    # `opifex.uncertainty.metrics` directly.
+    # `calibrax.metrics.functional.uncertainty` directly.
     for forbidden in ("predictive_entropy", "mutual_information", "roc_auc"):
         assert forbidden not in dir(ood), (
             f"`{forbidden}` should not be re-exported from `opifex.uncertainty.ood`"

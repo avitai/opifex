@@ -10,7 +10,7 @@ Module surface:
 
 AUROC / AUPRC have no shim here — callers import them directly from
 ``calibrax.metrics.functional.classification``. Predictive entropy /
-mutual information OOD scores live in :mod:`opifex.uncertainty.metrics`.
+mutual information OOD scores are ``calibrax.metrics.functional.uncertainty``'s.
 """
 
 from __future__ import annotations

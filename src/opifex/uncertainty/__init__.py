@@ -25,7 +25,7 @@ Core contracts:
   plus :class:`PriorSpec`.
 
 Additional sub-packages cover ``calibration``, ``conformal``, ``ood``,
-``selective``, ``forecasting_metrics``, ``scientific``, ``assimilation``,
+``selective``, ``scientific``, ``assimilation``,
 ``sensitivity``, ``reliability``, ``surrogate``, ``monitoring``, ``pac_bayes``,
 ``sbi``, and ``active``.
 """

@@ -187,32 +187,3 @@ class TestPersistence:
         reg = OperatorBenchmarkRegistry(config_path=str(config_path))
         # Should not crash, just log warning
         assert reg.list_available_benchmarks() == []
-
-
-class TestDeprecatedName:
-    """``BenchmarkRegistry`` is the pre-0.2.2 name of ``OperatorBenchmarkRegistry``."""
-
-    @pytest.mark.parametrize(
-        "module_name", ["opifex.benchmarking", "opifex.benchmarking.benchmark_registry"]
-    )
-    def test_old_name_warns_and_is_the_class(self, module_name: str) -> None:
-        import importlib
-        import warnings
-
-        module = importlib.import_module(module_name)
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            old = module.BenchmarkRegistry
-
-        assert old is OperatorBenchmarkRegistry
-        (warning,) = caught
-        assert issubclass(warning.category, DeprecationWarning)
-        assert "0.2.3" in str(warning.message)
-        assert "OperatorBenchmarkRegistry" in str(warning.message)
-
-    def test_other_missing_names_raise(self) -> None:
-        import opifex.benchmarking
-
-        with pytest.raises(AttributeError, match="NoSuchThing"):
-            _ = opifex.benchmarking.NoSuchThing

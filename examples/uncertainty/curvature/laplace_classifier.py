@@ -31,7 +31,7 @@ We then report two calibration summaries:
 * **ECE** — expected calibration error against the binary class label
   via ``opifex.uncertainty.calibration.expected_calibration_error``.
 * **ANEES** — average normalised estimation error squared on the
-  predicted logits via ``opifex.uncertainty.metrics.anees``.
+  predicted logits via ``calibrax.metrics.functional.uncertainty.anees``.
 
 NNX state path with explicit `nnx.Rngs` is exercised throughout.
 """

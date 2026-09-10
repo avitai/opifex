@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- The one-release deprecation wrappers 0.2.2 introduced, and `opifex._deprecated`
+  with them. `opifex.core.get_device_info`, `get_platform` and `is_gpu_available`:
+  use `substrax.devices.detect_devices()`. `opifex.uncertainty.forecasting_metrics`
+  (the whole package), `opifex.uncertainty.metrics`, `opifex.core.metrics`,
+  `opifex.uncertainty.calibration.base` and `opifex.uncertainty.calibration.regression`:
+  the 26 metric functions are `calibrax.metrics.functional.{forecasting, uncertainty,
+  calibration, regression}` (`crps`, `fair_crps`, `energy_score`, `rank_histogram`,
+  `spread_skill_ratio`, `pit_histogram`, `ranked_probability_score`,
+  `event_reliability`, `ensemble_ranked_probability_score`,
+  `ranked_probability_skill_score`, `predictive_entropy`, `mutual_information` (calibrax:
+  `ensemble_mutual_information`), `interval_score`, `winkler_score`, `anees`,
+  `non_credibility_index`, `chi2_confidence_intervals` (calibrax:
+  `chi2_confidence_interval`), `gaussian_nll`, `brier_score`,
+  `expected_calibration_error`, `pinball_loss` (calibrax: `quantile_loss`), `picp`,
+  `mpiw`, `regression_calibration_error`, `per_sample_relative_l2`,
+  `relative_l2_error`). `opifex.uncertainty.calibration` keeps the temperature-scaling
+  calibrator. `opifex.benchmarking.BenchmarkRegistry` and
+  `opifex.benchmarking.benchmark_registry.BenchmarkRegistry`: the class is
+  `OperatorBenchmarkRegistry`. No sibling or consumer repository imported any of
+  these names (fluctifex moved to calibrax in 0.1.1).
+
 ## [0.2.2] - 2026-09-09
 
 ### Fixed

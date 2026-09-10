@@ -11,12 +11,7 @@ from opifex.core.conditions import (
     NeumannBC,
     RobinBC,
 )
-from opifex.core.device_utils import (
-    configure_jax_precision,
-    get_device_info,
-    get_platform,
-    is_gpu_available,
-)
+from opifex.core.device_utils import configure_jax_precision
 from opifex.core.gpu_acceleration import (
     AsyncMemoryManager,
     CachedProgressiveTester,
@@ -67,7 +62,4 @@ __all__ = [
     "create_ode_problem",
     "create_optimization_problem",
     "create_pde_problem",
-    "get_device_info",
-    "get_platform",
-    "is_gpu_available",
 ]

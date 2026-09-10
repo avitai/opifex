@@ -23,7 +23,7 @@ reports two calibration summaries:
 
 - **ECE** — `opifex.uncertainty.calibration.expected_calibration_error`
   (CalibraX backend) against the binary class label.
-- **ANEES** — `opifex.uncertainty.metrics.anees` on the predicted
+- **ANEES** — `calibrax.metrics.functional.uncertainty.anees` on the predicted
   logits with the Laplace posterior variance as a coarse predictive
   covariance proxy.
 
