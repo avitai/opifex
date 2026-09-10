@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-09
+
 ### Removed
 
 - The one-release deprecation wrappers 0.2.2 introduced, and `opifex._deprecated`

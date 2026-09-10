@@ -63,7 +63,7 @@ license = {file = "LICENSE"}
 name = "opifex"
 readme = "README.md"
 requires-python = ">=3.12"
-version = "0.2.2"
+version = "0.2.3"
 
 [project.optional-dependencies]
 all = ["opifex[cuda12,dev,docs,mlflow,platform,probabilistic,profiling,scientific-data,test]"]
