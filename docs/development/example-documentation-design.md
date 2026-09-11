@@ -738,7 +738,7 @@ If you're familiar with the neuraloperator library, here's how Opifex compares:
 **Key differences:**
 
 1. **Explicit PRNG**: Opifex uses JAX's explicit `rngs=nnx.Rngs(42)` instead of global state
-2. **XLA compilation**: Automatic JIT compilation for 2x training speedup
+2. **XLA compilation**: Automatic JIT compilation of the training step
 3. **Functional transforms**: `jax.grad`, `jax.vmap`, `jax.pmap` for composable transforms
 
 ## Coming from DeepXDE?
@@ -1882,8 +1882,8 @@ optimizer = optax.chain(
 
 ### Experiments to Try
 
-1. **Mixed precision**: Use `jnp.bfloat16` for 40-50% memory reduction, 1.5-2x speedup
-2. **Gradient checkpointing**: Use `TrainingConfig(gradient_checkpointing=True)` for 3-5x memory reduction
+1. **Mixed precision**: Use `jnp.bfloat16` to reduce activation memory, and measure the speed change on your hardware
+2. **Gradient checkpointing**: Use `TrainingConfig(gradient_checkpointing=True)` to trade recomputation for lower activation memory
 3. **Multi-device training**: Scale with `@jax.pmap` and `pmean` gradient sync
 
 ### Related Examples
@@ -2001,7 +2001,7 @@ Data is processed in Fourier space by the spectral layers.
 | L2RE | L2 Relative Error (PDEBench primary) | "Evaluate with relative L2 error" |
 | PDEBench | Standard PDE benchmark suite (7 datasets) | "Compare against PDEBench baselines" |
 | GradNorm | Gradient-based loss balancing | "Balance multi-task losses with GradNorm" |
-| XLA | Accelerated Linear Algebra (JAX compiler) | "XLA JIT compilation for 2x speedup" |
+| XLA | Accelerated Linear Algebra (JAX compiler) | "XLA JIT-compiles the training step" |
 | Flax NNX | Neural network library for JAX | "Define models with `nnx.Module`" |
 
 #### Code Comment Standards
@@ -2228,7 +2228,7 @@ Before writing any code, answer these questions:
 2. **Structure the code with markdown cells**
     - Title and overview in first markdown cell
     - Use `# %%` for code cells, `# %% [markdown]` for markdown cells
-    - Avoid `print("\n" + ...)` — jupytext splits escape sequences
+    - Avoid `print("\n" + ...)`: jupytext splits escape sequences
 
 3. **Save visual artifacts to the correct location**
     - Directory: `docs/assets/examples/<example_name>/` (NOT `*_files/`)
@@ -2241,7 +2241,7 @@ Before writing any code, answer these questions:
     ```
 
     - **CRITICAL**: All "Terminal Output" in documentation MUST be from actual execution
-    - Do NOT invent or guess output — run the code and capture what it produces
+    - Do NOT invent or guess output: run the code and capture what it produces
     - If the example fails, fix the code or underlying APIs before proceeding
 
 5. **Verify results are sensible**
@@ -2290,7 +2290,7 @@ Before writing any code, answer these questions:
     python scripts/jupytext_converter.py py-to-nb examples/<path>/<example>.py
     ```
 
-    - Do NOT use raw jupytext — use the converter script
+    - Do NOT use raw jupytext; use the converter script
 
 3. **Verify documentation links**
 
@@ -2658,8 +2658,8 @@ Reference these in per-example Next Steps where relevant:
 
 | Feature | Description | Benefit |
 |---------|-------------|---------|
-| Mixed Precision | `jnp.bfloat16` native support | 40-50% memory reduction, 1.5-2x speedup |
-| Gradient Checkpointing | `TrainingConfig(gradient_checkpointing=True)` | 3-5x memory reduction, 20-30% slowdown |
-| Multi-Device Training | `@jax.pmap` with `pmean` gradient sync | Linear scaling, 93-96% efficiency |
+| Mixed Precision | `jnp.bfloat16` native support | Lower activation memory |
+| Gradient Checkpointing | `TrainingConfig(gradient_checkpointing=True)` | Lower activation memory, at the cost of recomputation |
+| Multi-Device Training | `@jax.pmap` with `pmean` gradient sync | Data-parallel scaling across devices |
 | Adaptive Loss Weighting | GradNorm, uncertainty weighting, ReLoBRaLo | Better multi-task convergence |
 | PINO | Hybrid data + physics loss | Improved generalization |

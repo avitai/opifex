@@ -51,14 +51,14 @@ If you're familiar with DeepXDE, here's how Opifex compares:
 | Manual loss weight tuning                | `PINNConfig(loss_config=PhysicsLossConfig(...))`         |
 | `model.train(iterations=2000)`           | `PINNSolver(pinn).solve(geometry, residual_fn, bc_fn)`   |
 | `model.compile("adam", lr=1e-3)`         | `PINNConfig(learning_rate=1e-3)`                         |
-| String-based PDE selection               | `poisson_residual(source_fn)` — explicit factory         |
+| String-based PDE selection               | `poisson_residual(source_fn)`, an explicit factory         |
 
 **Key differences:**
 
-1. **Factory Functions for PDEs**: `poisson_residual()`, `heat_residual()`, etc. — explicit, type-safe, infinitely extensible
+1. **Factory Functions for PDEs**: `poisson_residual()`, `heat_residual()`, etc.: explicit, type-safe, infinitely extensible
 2. **Composition Pattern**: `PINNConfig` composes with `PhysicsLossConfig` for loss weights
-3. **Generic Solve API**: `solve(geometry, residual_fn, bc_fn)` — same method for any PDE
-4. **XLA JIT compilation**: 2-3x faster training via automatic compilation
+3. **Generic Solve API**: `solve(geometry, residual_fn, bc_fn)`: the same method for any PDE
+4. **XLA JIT compilation**: the training step is compiled with XLA through `jax.jit`
 
 ## Files
 
@@ -114,9 +114,9 @@ the exact solution is u(x) = sin(πx).
 
 This is the perfect first PINN example because:
 
-1. **Known exact solution** — we can measure error precisely
-2. **Simple 1D domain** — easy to visualize
-3. **Linear PDE** — stable training dynamics
+1. **Known exact solution**: we can measure error precisely
+2. **Simple 1D domain**: easy to visualize
+3. **Linear PDE**: stable training dynamics
 
 ### Opifex PINN Architecture
 
@@ -376,11 +376,11 @@ The plot shows:
 
 ### API Reference
 
-- [`Interval`](../../api/geometry.md) — 1D geometry class
-- [`create_poisson_pinn`](../../api/neural.md) — PINN factory function
-- [`PINNSolver`](../../api/physics.md) — High-level PINN solver
-- [`PINNConfig`](../../api/physics.md) — Solver configuration
-- [`poisson_residual`](../../api/physics.md) — Poisson residual factory
+- [`Interval`](../../api/geometry.md): 1D geometry class
+- [`create_poisson_pinn`](../../api/neural.md): PINN factory function
+- [`PINNSolver`](../../api/physics.md): High-level PINN solver
+- [`PINNConfig`](../../api/physics.md): Solver configuration
+- [`poisson_residual`](../../api/physics.md): Poisson residual factory
 
 ### Troubleshooting
 
