@@ -38,14 +38,6 @@ python scripts/jupytext_converter.py nb-to-py examples/pinns/poisson.ipynb
 python scripts/jupytext_converter.py batch-py-to-nb examples/
 ```
 
-### run_ci_benchmark.py
-
-Benchmark regression guard used in CI (`.github/workflows/benchmark-regression.yml`). Runs a small FNO/Burgers benchmark and checks for regressions against stored baselines.
-
-```bash
-uv run python scripts/run_ci_benchmark.py
-```
-
 ### run_pdebench_comparison.py
 
 Standalone research script that benchmarks Opifex neural operators against PDEBench published baselines. Downloads HDF5 datasets from PDEBench.
