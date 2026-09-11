@@ -6,6 +6,8 @@ Following datarax test patterns from:
 - tests/sources/test_hf_source.py (config-based source tests)
 """
 
+import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,23 @@ def _pipeline_batch(loader: Pipeline) -> dict[str, Any]:
     (``reportCallIssue``); the call is correct at runtime, so the suppression is localised here.
     """
     return loader.step()  # pyright: ignore[reportCallIssue]
+
+
+def _assert_epoch_matches_step(make_loader: Callable[[], Pipeline]) -> None:
+    """``for batch in loader`` serves one epoch, batch for batch what ``step()`` returns.
+
+    datarax iterates a source that implements ``get_batch_at`` inside a compiled session. The
+    epoch holds ``ceil(len(source) / batch_size)`` batches, the last one wrapping around.
+    """
+    batches = list(make_loader())
+    reference = make_loader()
+
+    assert len(batches) == math.ceil(len(reference.source) / reference.batch_size)
+    for batch in batches:
+        expected = _pipeline_batch(reference)
+        assert batch.keys() == expected.keys()
+        for name, value in batch.items():
+            np.testing.assert_array_equal(np.asarray(value), np.asarray(expected[name]))
 
 
 # =============================================================================
@@ -715,6 +734,15 @@ class TestPDEBenchLoader:
         b1 = _pipeline_batch(loader)
         assert b0["input"].shape == b1["input"].shape
 
+    def test_iterating_the_loader_matches_step(self, pdebench_hdf5_file: Path) -> None:
+        """A normalizing loader iterates one epoch equal to successive step() calls."""
+        from opifex.data.sources.scientific import PDEBenchConfig
+
+        config = PDEBenchConfig(
+            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
+        )
+        _assert_epoch_matches_step(lambda: create_pdebench_loader(config, batch_size=4))
+
     def test_loader_shuffle_uses_key(self, pdebench_hdf5_file: Path) -> None:
         """With shuffle=True the source draws shuffled indices from the pipeline key."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
@@ -995,3 +1023,10 @@ class TestVTKMeshSource:
         assert isinstance(loader, Pipeline)
         batch = _pipeline_batch(loader)
         assert batch["node_positions"].shape[0] == 2
+
+    def test_iterating_the_loader_matches_step(self, vtu_directory: Path) -> None:
+        """A mesh loader iterates one epoch equal to successive step() calls."""
+        from opifex.data.sources.scientific import create_vtk_mesh_loader, VTKMeshConfig
+
+        config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
+        _assert_epoch_matches_step(lambda: create_vtk_mesh_loader(config, batch_size=2))

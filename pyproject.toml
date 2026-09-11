@@ -55,7 +55,7 @@ dependencies = [
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.5",
   "calibrax>=0.1.5",
-  "datarax>=0.1.6",
+  "datarax>=0.1.9",
   "substrax>=0.1.4"
 ]
 description = "Scientific machine learning for JAX/Flax NNX: neural operators, physics-informed networks, E(3)-equivariant atomistic potentials, differentiable DFT, SINDy equation discovery and uncertainty quantification, with PDEBench benchmarking"

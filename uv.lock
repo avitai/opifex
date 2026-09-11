@@ -1233,7 +1233,7 @@ wheels = [
 
 [[package]]
 name = "datarax"
-version = "0.1.6"
+version = "0.1.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-record" },
@@ -1251,9 +1251,9 @@ dependencies = [
     { name = "substrax" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4b/e7/9b8cd0380b03d5b04940bfedc97ca4d8c51e8148346a98d5ea21cc6db450/datarax-0.1.6.tar.gz", hash = "sha256:f6671221e98aa6c03f727dc998133dad4c7fceab0f5d9aef8158f421315098d2", size = 231676, upload-time = "2026-09-09T04:17:32.011Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/76/21cdb49ce799c2d96344b8c31b3a0b3da02874eb5f2bea7fead911309583/datarax-0.1.9.tar.gz", hash = "sha256:0da02b99f6753761204d41f5b2636e98303b117d7418d00c1ac75e84a06961e9", size = 240312, upload-time = "2026-09-11T04:25:38.998Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c6/4a/a7b5f71cd254b28f9da24fc8d60c4546aaa1bd601cae7da1e72a61bdc7ae/datarax-0.1.6-py3-none-any.whl", hash = "sha256:ec6904a1b36b1c24a0a4efe49a0b6a490787f86d7f164c00169f2fe680d4b2ca", size = 279624, upload-time = "2026-09-09T04:17:29.776Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/77/078a260a44e9e5f4136045cbe77dddf3d8ed947b1c9db1525e5792acd2cb/datarax-0.1.9-py3-none-any.whl", hash = "sha256:c4ddc461dd02e7868a8f9dd3ecd72111aa1b6ca59b50dffe4172e174485b1847", size = 289055, upload-time = "2026-09-11T04:25:36.594Z" },
 ]
 
 [[package]]
@@ -4840,7 +4840,7 @@ requires-dist = [
     { name = "calibrax", specifier = ">=0.1.5" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
-    { name = "datarax", specifier = ">=0.1.6" },
+    { name = "datarax", specifier = ">=0.1.9" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
     { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },

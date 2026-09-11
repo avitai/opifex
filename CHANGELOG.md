@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the host from a concrete position, while datarax treats a source implementing
   `get_batch_at` as JAX-traceable indexed access that `Pipeline` drives inside a compiled
   step. The unused `key` argument is gone, and `iterate_padded_batches` calls `read_batch`.
+- Requires `datarax>=0.1.9`. `PDEBenchSource` and `VTKMeshSource` implement `get_batch_at`, and
+  from datarax 0.1.9 that alone gives them indexed access, so `for batch in` the loaders from
+  `create_pdebench_loader` and `create_vtk_mesh_loader` serves one epoch, batch for batch what
+  `step()` returns; on earlier datarax it failed with `AttributeError: get_batch`.
 
 ## [0.2.3] - 2026-09-09
 

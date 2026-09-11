@@ -417,7 +417,8 @@ def create_pdebench_loader(
         seed: Seed for the source's shuffle stream and the pipeline rngs.
 
     Returns:
-        A configured datarax ``Pipeline`` (drive it with ``.step()`` or ``.scan()``).
+        A configured datarax ``Pipeline``: iterate it (``for batch in loader``), or drive it
+        with ``.step()`` or ``.scan()``.
     """
     source = PDEBenchSource(config, rngs=nnx.Rngs(seed))
     normalize_op = source.normalize_operator(rngs=nnx.Rngs(seed))
@@ -722,8 +723,8 @@ def create_vtk_mesh_loader(
     """Build a datarax ``Pipeline`` over a :class:`VTKMeshSource` (canonical loader pattern).
 
     The source supplies padded, masked mesh records via its ``get_batch_at`` contract and the
-    pipeline drives batched iteration; no transform stages are attached by default. Drive it with
-    ``.step()`` or ``.scan()``.
+    pipeline drives batched iteration; no transform stages are attached by default. Iterate it
+    (``for batch in loader``), or drive it with ``.step()`` or ``.scan()``.
 
     Args:
         config: VTK mesh source configuration.
