@@ -156,7 +156,7 @@ Individual neural operator building blocks demonstrated in isolation.
 
 | Example | Component | Description |
 |---------|-----------|-------------|
-| [DISCO Convolutions](layers/disco-convolutions.md) | `DiscoConv2D` | Discrete-continuous convolutions with 6x+ speedup |
+| [DISCO Convolutions](layers/disco-convolutions.md) | `DiscoConv2D` | Discrete-continuous (DISCO) convolutions |
 | [Grid Embeddings](layers/grid-embeddings.md) | `GridEmbedding2D` | Coordinate injection and positional encoding |
 | [Fourier Continuation](layers/fourier-continuation.md) | `FourierContinuation` | Boundary handling for non-periodic domains |
 | [Spectral Normalization](layers/spectral-normalization.md) | `SpectralNormalization` | Training stability for deep operators |

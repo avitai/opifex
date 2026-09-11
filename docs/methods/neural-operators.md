@@ -306,7 +306,7 @@ Guidelines for choosing the right neural operator:
 
 ### 1. Emerging Architectures
 
-- **Quantum Neural Operators**: Leverage quantum computing for exponential speedups
+- **Quantum Neural Operators**: Evaluate operator layers on quantum hardware
 - **Neuromorphic Operators**: Deploy on neuromorphic hardware for energy efficiency
 - **Hybrid Symbolic-Neural**: Combine symbolic reasoning with neural learning
 - **Causal Neural Operators**: Enforce causality for time-dependent problems

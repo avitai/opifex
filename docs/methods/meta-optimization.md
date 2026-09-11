@@ -198,14 +198,6 @@ Meta-optimization algorithms provide different convergence guarantees:
 - **Optimization Phase**: $O(S \cdot M)$ where $M$ is meta-network parameters
 - **Memory**: $O(N + M)$ for storing both base and meta-parameters
 
-### Speedup Analysis
-
-Typical speedups achieved by meta-optimization:
-
-- **Similar Problems**: 10-100x faster convergence
-- **Related Domains**: 5-20x speedup
-- **Novel Problems**: 1-5x improvement (with good generalization)
-
 ## Integration with Physics-Informed Learning
 
 Meta-optimization can be enhanced with physics-informed constraints:
