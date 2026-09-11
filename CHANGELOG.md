@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `QH9PaddedSource.get_batch_at` is renamed `read_batch(start, size)`. It reads molecules on
+  the host from a concrete position, while datarax treats a source implementing
+  `get_batch_at` as JAX-traceable indexed access that `Pipeline` drives inside a compiled
+  step. The unused `key` argument is gone, and `iterate_padded_batches` calls `read_batch`.
+
 ## [0.2.3] - 2026-09-09
 
 ### Removed

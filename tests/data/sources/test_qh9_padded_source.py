@@ -3,7 +3,7 @@ r"""Tests for the out-of-core per-molecule padded QH9 source.
 :class:`~opifex.data.sources.qh9_padded_source.QH9PaddedSource` is a lazy
 :class:`datarax.core.data_source.DataSourceModule`: it holds only its split's
 ``id`` list and reads + pads each molecule from SQLite on demand, stacking
-``size`` molecules into a leading batch axis with ``get_batch_at`` (memory = one
+``size`` molecules into a leading batch axis with ``read_batch`` (memory = one
 batch). These tests build a tiny synthetic QH9 sqlite fixture (random *symmetric*
 native Fock blobs of the correct QH9-native def2-SVP size, mirroring the real
 ``(id, N, Z, pos, Ham)`` schema) and assert the padded shapes, masks, edge set,
@@ -124,20 +124,20 @@ def test_pad_masks_and_padding_atoms(synthetic_qh9_db: Path) -> None:
     assert int(edge_mask.sum()) == 3 * 2  # complete directed graph
 
 
-def test_get_batch_at_stacks_leading_axis(synthetic_qh9_db: Path) -> None:
-    """``get_batch_at(start, size)`` stacks ``size`` molecules on a leading axis."""
+def test_read_batch_stacks_leading_axis(synthetic_qh9_db: Path) -> None:
+    """``read_batch(start, size)`` stacks ``size`` molecules on a leading axis."""
     source = _source(synthetic_qh9_db)
     config = source.config
-    batch = source.get_batch_at(0, 3)
+    batch = source.read_batch(0, 3)
     assert batch["native_fock"].shape == (3, config.max_ao, config.max_ao)
     assert batch["atomic_numbers"].shape == (3, config.max_atoms)
     assert batch["edge_index"].shape == (3, 2, config.max_edges)
 
 
-def test_get_batch_at_matches_getitem(synthetic_qh9_db: Path) -> None:
+def test_read_batch_matches_getitem(synthetic_qh9_db: Path) -> None:
     """Stacked batch rows equal the individual padded elements (sequential order)."""
     source = _source(synthetic_qh9_db)
-    batch = source.get_batch_at(1, 2)
+    batch = source.read_batch(1, 2)
     for offset in range(2):
         element = source[1 + offset]
         np.testing.assert_array_equal(
@@ -149,11 +149,11 @@ def test_get_batch_at_matches_getitem(synthetic_qh9_db: Path) -> None:
         )
 
 
-def test_get_batch_at_wraps_partial_batch(synthetic_qh9_db: Path) -> None:
+def test_read_batch_wraps_partial_batch(synthetic_qh9_db: Path) -> None:
     """A batch past the end wraps around to fill ``size`` (masked downstream)."""
     source = _source(synthetic_qh9_db)
     n = len(source)
-    batch = source.get_batch_at(n - 1, 3)
+    batch = source.read_batch(n - 1, 3)
     # Last real molecule then wraps to molecules 0, 1.
     np.testing.assert_array_equal(
         np.asarray(batch["native_fock"][0]), np.asarray(source[n - 1]["native_fock"])
@@ -213,4 +213,19 @@ def test_oversized_molecule_fails_fast(tmp_path: Path) -> None:
     config = QH9PaddedConfig(max_atoms=2, max_edges=2)
     source = QH9PaddedSource(config, db_path=db_path, split_ids=(0,))
     with pytest.raises(ValueError, match="atoms > max_atoms"):
-        source.get_batch_at(0, 1)
+        source.read_batch(0, 1)
+
+
+def test_the_host_reader_is_not_datarax_indexed_access(synthetic_qh9_db: Path) -> None:
+    """``read_batch`` needs a concrete position, so the source leaves ``get_batch_at`` alone.
+
+    datarax treats a source that implements ``get_batch_at`` as JAX-traceable
+    indexed access and drives it inside a compiled step, which this host reader
+    cannot serve.
+    """
+    from datarax.core.data_source import DataSourceModule
+
+    source = _source(synthetic_qh9_db)
+
+    assert type(source).get_batch_at is DataSourceModule.get_batch_at
+    assert source.supports_indexed_access() is False

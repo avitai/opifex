@@ -14,7 +14,7 @@ Out-of-core (memory = one batch, not the whole dataset)
 -------------------------------------------------------
 The source holds only its split's ``id`` list (the QH9-Stable primary key; ~1 MB
 for 130k ints) and the database path -- never the decoded Focks. Each
-:meth:`get_batch_at` reads ``size`` molecules *by id* with an indexed
+:meth:`read_batch` reads ``size`` molecules *by id* with an indexed
 ``SELECT * FROM data WHERE id = ?`` over a read-only connection, decodes them with
 the reused :func:`~opifex.data.sources.qh9_source._decode_row` and pads each into
 the fixed-shape element with :func:`_pad_molecule`, so resident memory is one
@@ -40,7 +40,7 @@ max_atoms``)
   atom ``0``), ``node_pad_mask`` ``(max_atoms,)`` and ``edge_pad_mask``
   ``(max_edges,)``.
 
-The fixed per-molecule shape lets :meth:`get_batch_at` stack ``size`` molecules
+The fixed per-molecule shape lets :meth:`read_batch` stack ``size`` molecules
 into a leading batch axis with no ragged collation, and the operators then vmap
 over that axis Batch-free.
 
@@ -320,7 +320,7 @@ class QH9PaddedSource(DataSourceModule):
     A concrete :class:`datarax.core.data_source.DataSourceModule` that holds only
     its split's ``id`` list and the database path -- never the decoded Focks.
     :meth:`__len__` is the molecule count; :meth:`__getitem__` reads + pads one
-    molecule by id; :meth:`get_batch_at` reads + pads ``size`` molecules and stacks
+    molecule by id; :meth:`read_batch` reads + pads ``size`` molecules and stacks
     them into a leading batch axis. With ``shuffle`` the source maps logical
     positions through a per-epoch seeded permutation of its id list (advance the
     epoch with :meth:`next_epoch`), giving perfect per-epoch coverage at ~1 MB
@@ -409,30 +409,24 @@ class QH9PaddedSource(DataSourceModule):
         padded = self._read_padded(np.asarray([molecule_id], dtype=np.int64))[0]
         return {key: jnp.asarray(value) for key, value in padded.items()}
 
-    def get_batch_at(
-        self,
-        start: int | jax.Array,
-        size: int,
-        key: jax.Array | None = None,
-    ) -> dict[str, Array]:
-        """Lazily read ``size`` molecules from ``start`` and stack them.
+    def read_batch(self, start: int, size: int) -> dict[str, Array]:
+        """Read ``size`` molecules from logical position ``start`` and stack them.
 
         Reads ``size`` molecules *by id* (one indexed row each) under the current
         epoch's order, pads each into the fixed-shape element and stacks them into
         a leading batch axis. Resident memory is one batch's Focks. ``start`` is a
-        concrete Python position (the host-side reader is not JAX-traced); the
-        wrap-around (``% length``) fills the final partial batch.
+        concrete Python position: the reader runs on the host and cannot be traced,
+        so the source does not implement datarax's traceable ``get_batch_at``. The
+        wrap-around (``% length``) fills the final partial batch; the per-epoch
+        shuffle is seeded by ``config.seed`` and advanced via :meth:`next_epoch`.
 
         Args:
-            start: Starting logical position (concrete int).
+            start: Starting logical position.
             size: Number of molecules to read and stack.
-            key: Unused; the per-epoch shuffle is seeded by ``config.seed`` and
-                advanced via :meth:`next_epoch`.
 
         Returns:
             A padded batch dict with a leading axis of ``size``.
         """
-        del key
         positions = int(start) + np.arange(size, dtype=np.int64)
         molecule_ids = self._ids_for_positions(positions)
         return _stack_padded(self._read_padded(molecule_ids))
@@ -647,7 +641,7 @@ def iterate_padded_batches(source: QH9PaddedSource, size: int) -> Iterator[dict[
     """Yield consecutive ``size``-molecule padded batches over one epoch.
 
     Advances the source's epoch counter once (so a shuffled source re-permutes its
-    id order each pass), then drives :meth:`QH9PaddedSource.get_batch_at` with a
+    id order each pass), then drives :meth:`QH9PaddedSource.read_batch` with a
     Python position counter covering every molecule once (the final partial batch
     wraps to fill ``size`` -- the wrapped molecules carry valid masks, so a
     downstream masked loss ignores them by tracking the real count).
@@ -661,7 +655,7 @@ def iterate_padded_batches(source: QH9PaddedSource, size: int) -> Iterator[dict[
     """
     source.next_epoch()
     for start in range(0, len(source), size):
-        yield source.get_batch_at(start, size)
+        yield source.read_batch(start, size)
 
 
 def read_padded_source_rss(
