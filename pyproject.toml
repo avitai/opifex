@@ -844,7 +844,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/core/physics/boundaries.py" = ["ANN003"]
 "src/opifex/core/physics/gradnorm.py" = ["ANN001", "ANN202"]
 "src/opifex/core/physics/losses.py" = ["ANN001", "ANN003"]
-"src/opifex/core/physics/ntk/wrapper.py" = ["ANN001", "ANN202"]
 "src/opifex/core/problems.py" = ["ANN003"]
 "src/opifex/core/quantum/_eager_reference.py" = ["ANN001", "ANN202"]
 "src/opifex/core/quantum/_flat_harness.py" = ["ANN001", "ANN202"]

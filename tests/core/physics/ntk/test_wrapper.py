@@ -3,6 +3,9 @@
 TDD: These tests define the expected behavior for NTK computation with NNX models.
 """
 
+import warnings
+
+import jax
 import jax.numpy as jnp
 from flax import nnx
 
@@ -277,4 +280,116 @@ class TestNTKMultiOutput:
         # For multi-output, NTK is (batch * out, batch * out)
         # or (batch, batch) if we sum over outputs
         assert ntk.shape[0] == ntk.shape[1]
+        assert jnp.all(jnp.isfinite(ntk))
+
+
+class _BatchNormModel(nnx.Module):
+    """Linear, BatchNorm, tanh, Linear: parameters plus running statistics."""
+
+    def __init__(self, rngs: nnx.Rngs) -> None:
+        self.hidden = nnx.Linear(3, 8, rngs=rngs)
+        self.norm = nnx.BatchNorm(8, rngs=rngs)
+        self.out = nnx.Linear(8, 1, rngs=rngs)
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        return self.out(nnx.tanh(self.norm(self.hidden(x))))
+
+
+class _DropoutModel(nnx.Module):
+    """Linear, tanh, Dropout, Linear: parameters plus RNG state."""
+
+    def __init__(self, rngs: nnx.Rngs) -> None:
+        self.hidden = nnx.Linear(3, 8, rngs=rngs)
+        self.dropout = nnx.Dropout(0.5, rngs=rngs)
+        self.out = nnx.Linear(8, 1, rngs=rngs)
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        return self.out(self.dropout(nnx.tanh(self.hidden(x))))
+
+
+class TestJacobianParametersOnly:
+    """compute_jacobian differentiates the model's nnx.Param state and nothing else."""
+
+    def test_no_deprecation_warning(self) -> None:
+        """No deprecated flax.nnx.State API is used."""
+        from opifex.core.physics.ntk.wrapper import compute_jacobian
+
+        model = _BatchNormModel(rngs=nnx.Rngs(0))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            compute_jacobian(model, jnp.ones((2, 3)))
+        deprecations = [
+            str(warning.message)
+            for warning in caught
+            if issubclass(warning.category, DeprecationWarning)
+        ]
+        assert deprecations == []
+
+    def test_jacobian_leaves_are_the_parameters(self) -> None:
+        """The Jacobian has one entry per nnx.Param and none for running statistics."""
+        from opifex.core.physics.ntk.wrapper import compute_jacobian
+
+        model = _BatchNormModel(rngs=nnx.Rngs(0))
+        jacobian = compute_jacobian(model, jnp.ones((2, 3)))
+        jacobian_paths = {path for path, _ in nnx.to_flat_state(jacobian)}
+        param_paths = {path for path, _ in nnx.to_flat_state(nnx.state(model, nnx.Param))}
+        assert jacobian_paths == param_paths
+
+    def test_batchnorm_eval_ntk_holds_running_statistics_fixed(self) -> None:
+        """In eval mode the running statistics are inputs to the network, not parameters.
+
+        The reference differentiates a hand-written forward pass with respect to the two
+        Linear layers and the BatchNorm scale and shift only. Over seeds 0 to 3 the two
+        agree within 1.9e-06 absolute on entries up to 9.3; the tolerance sits above that.
+        """
+        from opifex.core.physics.ntk.wrapper import compute_empirical_ntk
+
+        model = _BatchNormModel(rngs=nnx.Rngs(0))
+        x = jax.random.normal(jax.random.key(10), (6, 3))
+        model(3.0 * x + 1.0)  # train mode moves the running statistics off their initial values
+        model.eval()
+        mean, var, epsilon = model.norm.mean[...], model.norm.var[...], model.norm.epsilon
+        hidden_bias, scale, shift, out_bias = (
+            model.hidden.bias,
+            model.norm.scale,
+            model.norm.bias,
+            model.out.bias,
+        )
+        assert hidden_bias is not None
+        assert scale is not None
+        assert shift is not None
+        assert out_bias is not None
+        params = {
+            "hidden_kernel": model.hidden.kernel[...],
+            "hidden_bias": hidden_bias[...],
+            "scale": scale[...],
+            "shift": shift[...],
+            "out_kernel": model.out.kernel[...],
+            "out_bias": out_bias[...],
+        }
+
+        def forward(p: dict[str, jax.Array], inputs: jax.Array) -> jax.Array:
+            hidden = inputs @ p["hidden_kernel"] + p["hidden_bias"]
+            normed = (hidden - mean) / jnp.sqrt(var + epsilon) * p["scale"] + p["shift"]
+            return jnp.tanh(normed) @ p["out_kernel"] + p["out_bias"]
+
+        rows = jnp.concatenate(
+            [
+                leaf.reshape(x.shape[0], -1)
+                for leaf in jax.tree.leaves(jax.jacrev(forward)(params, x))
+            ],
+            axis=1,
+        )
+        reference = rows @ rows.T
+
+        ntk = compute_empirical_ntk(model, x)
+        assert float(jnp.max(jnp.abs(ntk - reference))) < 1e-5
+
+    def test_dropout_model_has_an_ntk(self) -> None:
+        """RNG state is carried through the forward pass rather than differentiated."""
+        from opifex.core.physics.ntk.wrapper import compute_empirical_ntk
+
+        model = _DropoutModel(rngs=nnx.Rngs(0))
+        ntk = compute_empirical_ntk(model, jax.random.normal(jax.random.key(1), (4, 3)))
+        assert ntk.shape == (4, 4)
         assert jnp.all(jnp.isfinite(ntk))

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `compute_jacobian`, and with it `compute_empirical_ntk` and `NTKWrapper`, differentiated
+  all of a model's state rather than its parameters. BatchNorm running statistics entered
+  the kernel as if they were parameters, putting the eval-mode NTK of a small BatchNorm
+  network 14% off, and models carrying RNG state, such as those using `nnx.Dropout`,
+  raised `TypeError`. Only `nnx.Param` state is differentiated now, the Jacobian is an
+  `nnx.State` of the parameters, and the calls to the deprecated `flax.nnx.State` API are
+  gone. Models whose state is all parameters get the same kernel as before.
+
 ## [0.2.4] - 2026-09-11
 
 ### Changed

@@ -130,27 +130,30 @@ def compute_jacobian(
 ) -> PyTree:
     """Compute Jacobian of model output w.r.t. parameters.
 
+    Only ``nnx.Param`` state is differentiated. Other state, such as BatchNorm running
+    statistics or the keys and counts of ``nnx.Rngs``, is an input to the forward pass
+    and is held fixed.
+
     Args:
         model: FLAX NNX model
         x: Input points
 
     Returns:
-        Jacobian as a pytree with same structure as model parameters
+        Jacobian as an ``nnx.State`` with the structure of the model's ``nnx.Param`` state
     """
-    graphdef, state = nnx.split(model)
+    graphdef, params, rest = nnx.split(model, nnx.Param, ...)
+    # The other state crosses into jax.jacrev as leaves: Variables rebuilt inside the traced
+    # function may be updated there (BatchNorm in train mode), Variables captured from
+    # outside the trace may not.
+    rest_leaves, rest_treedef = jax.tree.flatten(rest)
 
-    def forward_fn(state_dict):
-        """Forward pass that takes state as input."""
-        # Merge state back with graphdef
-        full_state = nnx.State(state_dict)
-        reconstructed = nnx.merge(graphdef, full_state)
+    def forward_fn(param_state: nnx.State, state_leaves: list[Array]) -> Array:
+        """Forward pass as a function of the parameters, with the other state held fixed."""
+        rest_state = jax.tree.unflatten(rest_treedef, state_leaves)
+        reconstructed = nnx.merge(graphdef, param_state, rest_state)
         return reconstructed(x)  # pyright: ignore[reportCallIssue]
 
-    # Get the state as a dict for differentiation
-    state_dict = dict(state.flat_state())
-
-    # Compute Jacobian using jax.jacrev
-    return jax.jacrev(forward_fn)(state_dict)
+    return jax.jacrev(forward_fn)(params, rest_leaves)
 
 
 def flatten_jacobian(

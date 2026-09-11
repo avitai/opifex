@@ -40,10 +40,6 @@
       "ANN001": 1,
       "ANN003": 6
     },
-    "src/opifex/core/physics/ntk/wrapper.py": {
-      "ANN001": 1,
-      "ANN202": 1
-    },
     "src/opifex/core/problems.py": {
       "ANN003": 7
     },
