@@ -250,3 +250,38 @@ def test_import_testing_infrastructure_does_not_call_basic_config() -> None:
         print("ok")
     """
     assert _run_fresh(snippet) == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 6. ``opifex.optimization.l2o`` — registration is explicit, not at import.
+# ---------------------------------------------------------------------------
+
+
+def test_importing_l2o_does_not_populate_registry() -> None:
+    """Importing the learn-to-optimize package must not register its capabilities."""
+    snippet = """
+        from opifex.uncertainty.registry import UQRegistry
+        UQRegistry.reset()
+        import opifex.optimization.l2o  # noqa: F401
+        registry = UQRegistry()
+        assert "l2o:L2OEngine" not in registry
+        assert "l2o:LearnedOptimizer" not in registry
+        print("ok")
+    """
+    assert _run_fresh(snippet) == "ok"
+
+
+def test_register_l2o_capabilities_populates_registry_idempotently() -> None:
+    """Explicit registration populates the registry and tolerates a repeat call."""
+    snippet = """
+        from opifex.uncertainty.registry import UQRegistry
+        from opifex.optimization.l2o import register_l2o_capabilities
+        UQRegistry.reset()
+        registry = UQRegistry()
+        register_l2o_capabilities(registry)
+        register_l2o_capabilities(registry)
+        assert "l2o:L2OEngine" in registry
+        assert "l2o:LearnedOptimizer" in registry
+        print("ok")
+    """
+    assert _run_fresh(snippet) == "ok"

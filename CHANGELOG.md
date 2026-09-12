@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The learn-to-optimize surfaces declare their uncertainty capability again. Rebuilding the
+  subsystem removed `BayesianSchedulerOptimizer` together with the only `l2o:` entry in the
+  capability registry, so no L2O surface declared a UQ strategy. `L2OEngine` and
+  `LearnedOptimizer` now register as unsupported. The engine's benchmark reports measured
+  point summaries (mean learning curves, per-task and median speedup) and produces no
+  predictive distribution. Registration is explicit through
+  `opifex.optimization.l2o.register_l2o_capabilities`, and importing the package registers
+  nothing.
+
 ## [0.2.5] - 2026-09-11
 
 ### Fixed

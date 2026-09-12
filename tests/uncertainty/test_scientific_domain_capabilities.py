@@ -3,7 +3,7 @@
 Plan exit criteria (``07-phase-registry-docs-examples.md`` lines 572-680):
 
 1. Every expected scientific-domain name (equation discovery, quantum
-   chemistry, training trainers, data assimilation, mlops,
+   chemistry, L2O, training trainers, data assimilation, mlops,
    monitoring/reporting) is registered in the singleton
    :class:`UQRegistry`.
 3. ``trainer:UncertaintyGuidedTrainer`` and
@@ -35,6 +35,7 @@ from opifex.discovery._uq_capabilities import DISCOVERY_CAPABILITIES
 from opifex.discovery.sindy._uq_capabilities import SINDY_CAPABILITIES
 from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES, register_mlops_capabilities
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
+from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES, register_l2o_capabilities
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.assimilation._uq_capabilities import ASSIMILATION_CAPABILITIES
 from opifex.uncertainty.monitoring._uq_capabilities import MONITORING_CAPABILITIES
@@ -45,6 +46,7 @@ _ALL_TASK_7_5_CAPABILITIES: dict[str, UQCapability] = {
     **DISCOVERY_CAPABILITIES,
     **SINDY_CAPABILITIES,
     **QUANTUM_CAPABILITIES,
+    **L2O_CAPABILITIES,
     **TRAINING_CAPABILITIES,
     **ASSIMILATION_CAPABILITIES,
     **MLOPS_CAPABILITIES,
@@ -64,6 +66,7 @@ def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
     """
     registry = UQRegistry()
     register_mlops_capabilities(registry)
+    register_l2o_capabilities(registry)
     for name, capability in _ALL_TASK_7_5_CAPABILITIES.items():
         if name not in registry:
             registry.register(name, capability)
@@ -88,6 +91,14 @@ _TASK_7_5_DISCOVERY_NAMES: frozenset[str] = frozenset(
 _TASK_7_5_QUANTUM_NAMES: frozenset[str] = frozenset(
     {
         "quantum:NeuralXCFunctional",
+    }
+)
+
+
+_L2O_NAMES: frozenset[str] = frozenset(
+    {
+        "l2o:L2OEngine",
+        "l2o:LearnedOptimizer",
     }
 )
 
@@ -132,6 +143,7 @@ _TASK_7_5_MONITORING_NAMES: frozenset[str] = frozenset(
 _TASK_7_5_EXPECTED: frozenset[str] = (
     _TASK_7_5_DISCOVERY_NAMES
     | _TASK_7_5_QUANTUM_NAMES
+    | _L2O_NAMES
     | _TASK_7_5_TRAINER_NAMES
     | _TASK_7_5_ASSIMILATION_NAMES
     | _TASK_7_5_MLOPS_NAMES
@@ -211,6 +223,22 @@ def test_quantum_surface_declares_three_adapter_strategies(
     assert cap.supports_ensemble is True
     assert cap.supports_conformal is True
     assert cap.supports_calibration is True
+
+
+# ---------------------------------------------------------------------------
+# Learn-to-optimize declarations.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(_L2O_NAMES))
+def test_l2o_surface_declares_no_uncertainty_strategy(name: str, uq_registry: UQRegistry) -> None:
+    """Learned optimisers report measured point summaries, not predictive distributions."""
+    cap = uq_registry.require(name)
+    assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
+    assert cap.native_bayesian is False
+    assert cap.native_distributional is False
+    assert cap.source_package == "opifex"
+    assert cap.notes
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +378,7 @@ def test_monitoring_inputs_metadata_only(uq_registry: UQRegistry) -> None:
     [
         ("discovery:", _TASK_7_5_DISCOVERY_NAMES),
         ("quantum:", _TASK_7_5_QUANTUM_NAMES),
+        ("l2o:", _L2O_NAMES),
         ("trainer:", _TASK_7_5_TRAINER_NAMES),
         ("assimilation:", _TASK_7_5_ASSIMILATION_NAMES),
         ("mlops:", _TASK_7_5_MLOPS_NAMES),
