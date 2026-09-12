@@ -52,7 +52,11 @@ import numpy as np
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.laplace import LikelihoodComponentsFn  # noqa: TC001
-from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
+from opifex.uncertainty.markov._likelihood_support import (
+    gaussian_expected_log_density,
+    interpolate_smoothed_state,
+    pseudo_model_log_normaliser,
+)
 from opifex.uncertainty.markov.markov_laplace import _build_state_space_sequence
 from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import (
@@ -162,11 +166,11 @@ def fit_markov_vi_gp(
     initial_cov = state_space_kernel.stationary_cov
 
     def vi_step(
-        carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
+        carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
         _: jax.Array,
-    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], None]:
-        """Run one conjugate-computation VI update of the natural parameters."""
-        latent_mean, latent_variance, _state_means, _state_covs = carry
+    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array], None]:
+        """Run one conjugate-computation VI update and keep the sites that produced it."""
+        latent_mean, latent_variance, _state_means, _state_covs, _sites, _site_variances = carry
         _, expected_grad, expected_w = _expected_components(
             log_likelihood_components_fn=log_likelihood_components_fn,
             latent_mean=latent_mean,
@@ -175,14 +179,14 @@ def fit_markov_vi_gp(
             num_quadrature_points=num_quadrature_points,
         )
         safe_w = jnp.maximum(expected_w, _PSEUDO_NOISE_FLOOR)
-        pseudo_observations = (latent_mean + expected_grad / safe_w).reshape(-1, 1)
-        pseudo_obs_covs = (1.0 / safe_w).reshape(-1, 1, 1)
+        site_observations = latent_mean + expected_grad / safe_w
+        site_variances = 1.0 / safe_w
         filter_means, filter_covs = kalman_filter(
             transitions=transitions,
             process_noises=process_noises,
-            observations=pseudo_observations,
+            observations=site_observations.reshape(-1, 1),
             observation_matrix=observation_matrix,
-            observation_covs=pseudo_obs_covs,
+            observation_covs=site_variances.reshape(-1, 1, 1),
             initial_mean=initial_mean,
             initial_cov=initial_cov,
         )
@@ -205,6 +209,8 @@ def fit_markov_vi_gp(
             new_latent_variance,
             smoothed_state_means,
             smoothed_state_covs,
+            site_observations,
+            site_variances,
         ), None
 
     initial_latent_mean = jnp.zeros(times.shape[0])
@@ -217,12 +223,18 @@ def fit_markov_vi_gp(
         initial_cov,
         (times.shape[0], state_space_kernel.state_dim, state_space_kernel.state_dim),
     )
+    # Placeholders for the sites carried out of the scan; every iteration overwrites them. Their
+    # precision is the floor, so they are flat like the prior marginals the carry starts from.
+    initial_site_observations = jnp.zeros(times.shape[0])
+    initial_site_variances = jnp.full((times.shape[0],), 1.0 / _PSEUDO_NOISE_FLOOR)
     (
         (
             final_latent_mean,
             final_latent_variance,
             final_state_means,
             final_state_covs,
+            final_site_observations,
+            final_site_variances,
         ),
         _,
     ) = jax.lax.scan(
@@ -232,25 +244,41 @@ def fit_markov_vi_gp(
             initial_latent_variance,
             initial_state_means,
             initial_state_covs,
+            initial_site_observations,
+            initial_site_variances,
         ),
         jnp.arange(num_iterations),
     )
 
-    # ELBO = expected log-likelihood at the converged posterior - KL.
-    # The conjugate-computation VI free energy collapses to the
-    # equivalent linear-Gaussian-system log marginal under the
-    # pseudo-observations; the simpler stable estimator below uses
-    # the converged expected log-likelihood plus the analogous
-    # half-log-det penalty from Markov-Laplace eq. 3.32.
-    final_expected_log_lik, _, final_expected_w = _expected_components(
+    # ELBO of Chang, Wilkinson, Khan & Solin (2020) eq. 11, as bayesnewton computes it
+    # (inference.py:197-222, basemodels.py:708-724 at f72ae9a): the expected log likelihood minus
+    # KL[q || p], where KL = sum E_q log N(site | f, R) - log Z(pseudo model). The sites are those
+    # that produced the final marginals.
+    final_expected_log_lik, _, _ = _expected_components(
         log_likelihood_components_fn=log_likelihood_components_fn,
         latent_mean=final_latent_mean,
         latent_variance=final_latent_variance,
         observations=observations,
         num_quadrature_points=num_quadrature_points,
     )
-    safe_final_w = jnp.maximum(final_expected_w, _PSEUDO_NOISE_FLOOR)
-    elbo = final_expected_log_lik - 0.5 * jnp.sum(jnp.log1p(safe_final_w * final_latent_variance))
+    expected_site_log_density = jnp.sum(
+        gaussian_expected_log_density(
+            final_site_observations,
+            final_latent_mean,
+            final_latent_variance,
+            final_site_variances,
+        )
+    )
+    log_normaliser = pseudo_model_log_normaliser(
+        transitions=transitions,
+        process_noises=process_noises,
+        observation_matrix=observation_matrix,
+        initial_mean=initial_mean,
+        initial_cov=initial_cov,
+        site_observations=final_site_observations,
+        site_variances=final_site_variances,
+    )
+    elbo = final_expected_log_lik - (expected_site_log_density - log_normaliser)
 
     return MarkovVIGPState(
         times=times,

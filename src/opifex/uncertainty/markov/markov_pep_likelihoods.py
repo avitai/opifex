@@ -33,7 +33,11 @@ from opifex.uncertainty.gp.svgp_stochastic import (
     bernoulli_log_likelihood,
     poisson_log_likelihood,
 )
-from opifex.uncertainty.markov._likelihood_support import latent_variance
+from opifex.uncertainty.markov._likelihood_support import (
+    gaussian_expected_log_density,
+    latent_variance,
+    power_ep_constant,
+)
 from opifex.uncertainty.markov.markov_pep import (
     fit_markov_pep_gp,
     LogZAndDerivativesFn,
@@ -177,13 +181,11 @@ def _gaussian_log_partition_factory(*, noise_std: float) -> LogZAndDerivativesFn
         dlogZ/dm = α (y - m) / (v α + σ²),
         d²logZ/dm² = -α / (v α + σ²).
 
-    Bypasses Gauss-Hermite cubature entirely — numerically stable for
-    any ``σ²``, including the ``σ² = 0.0025`` regression regime that
-    breaks naive cavity-centered cubature. See the SOTA discussion in
-    [[feedback_no_impulsive_technical_fixes]].
+    The value follows bayesnewton ``Gaussian.moment_match`` (likelihoods.py:771-782 at f72ae9a):
+    ``log Z = log N(y | m, σ²/α + v) + pep_constant(σ², α)``. Bypassing Gauss-Hermite cubature keeps
+    it stable for any ``σ²``.
     """
     noise_var = noise_std * noise_std
-    log_2pi = float(jnp.log(2.0 * jnp.pi))
 
     def _log_partition_fn(
         cavity_means: jax.Array,
@@ -193,12 +195,9 @@ def _gaussian_log_partition_factory(*, noise_std: float) -> LogZAndDerivativesFn
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
         """Return the power-EP Gaussian log-partition and its first two derivatives."""
         denom = cavity_variances * power + noise_var
-        log_Z = (
-            -0.5 * power * (log_2pi + jnp.log(noise_var))
-            + 0.5 * jnp.log(noise_var / power)
-            - 0.5 * jnp.log(denom)
-            - 0.5 * power * (observations - cavity_means) ** 2 / denom
-        )
+        log_Z = gaussian_expected_log_density(
+            observations, cavity_means, 0.0, noise_var / power + cavity_variances
+        ) + power_ep_constant(noise_var, power)
         dlogZ_dm = power * (observations - cavity_means) / denom
         d2logZ_dm2 = -power / denom * jnp.ones_like(cavity_means)
         return log_Z, dlogZ_dm, d2logZ_dm2

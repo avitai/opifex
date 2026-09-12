@@ -68,6 +68,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before for a two-state SDE and makes a four-state SDE about ten times slower (33 ms instead of
   3.5 ms per 1000 steps). The Markov and spatio-temporal GPs use `StateSpaceKernel.discretize` and
   are unaffected.
+- The Markov GP evidence values are the published energies. `fit_markov_vi_gp` returned the
+  expected log likelihood minus a log-determinant penalty, `fit_markov_laplace_gp` the log
+  likelihood at the mode minus the same penalty, and `fit_markov_pep_gp` the sum of the cavity log
+  normalisers divided by the power. For a Gaussian likelihood, where each method recovers the exact
+  posterior, they missed the exact log marginal likelihood by up to 42.6 nats (VI), 70.7 (Laplace)
+  and 376 (power EP at power 0.1) on bayesnewton's comparison grid. A Bernoulli Laplace evidence
+  missed the dense Laplace approximation by 5.6. The ELBO is now eq. (11) of Chang, Wilkinson, Khan
+  and Solin (2020), and the Laplace and power-EP evidences are eqs. (17) and (27) of Wilkinson,
+  Särkkä and Solin (JMLR 2023). Each is computed as bayesnewton computes it, from the Kalman log
+  likelihood of the pseudo-observation model, and matches the exact value, or the dense Laplace
+  approximation, to four decimals. The Gaussian power-EP log normaliser was also `½ log(1/power)`
+  too high per observation and now includes the power-EP constant.
 
 ## [0.2.5] - 2026-09-11
 

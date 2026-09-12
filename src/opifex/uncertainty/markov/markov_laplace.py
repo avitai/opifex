@@ -54,7 +54,11 @@ import jax.numpy as jnp
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.laplace import LikelihoodComponentsFn  # noqa: TC001 — runtime use
-from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
+from opifex.uncertainty.markov._likelihood_support import (
+    gaussian_expected_log_density,
+    interpolate_smoothed_state,
+    pseudo_model_log_normaliser,
+)
 from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import (
     kalman_filter,
@@ -167,23 +171,23 @@ def fit_markov_laplace_gp(
     initial_cov = state_space_kernel.stationary_cov
 
     def newton_step(
-        carry: tuple[jax.Array, jax.Array, jax.Array],
+        carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
         _: jax.Array,
-    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array], None]:
+    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array], None]:
         """Run one Newton step via a pseudo-Gaussian Kalman smoother pass."""
-        latent_mean, _smoothed_state_means, _smoothed_state_covs = carry
+        latent_mean, _state_means, _state_covs, _sites, _site_variances = carry
         _, grad, w_diag, _sqrt_w = log_likelihood_components_fn(latent_mean, observations)
         # Pseudo-Gaussian observation: y_pseudo_i = f_i + grad_i / W_i.
         # Pseudo-noise variance: R_i = 1 / W_i, clipped from below for PSD safety.
         safe_w = jnp.maximum(w_diag, _PSEUDO_NOISE_FLOOR)
-        pseudo_observations = (latent_mean + grad / safe_w).reshape(-1, 1)
-        pseudo_obs_covs = (1.0 / safe_w).reshape(-1, 1, 1)
+        site_observations = latent_mean + grad / safe_w
+        site_variances = 1.0 / safe_w
         filter_means, filter_covs = kalman_filter(
             transitions=transitions,
             process_noises=process_noises,
-            observations=pseudo_observations,
+            observations=site_observations.reshape(-1, 1),
             observation_matrix=observation_matrix,
-            observation_covs=pseudo_obs_covs,
+            observation_covs=site_variances.reshape(-1, 1, 1),
             initial_mean=initial_mean,
             initial_cov=initial_cov,
         )
@@ -194,16 +198,35 @@ def fit_markov_laplace_gp(
             process_noises=process_noises,
         )
         new_latent_mean = (smoothed_state_means @ observation_matrix.T).squeeze(-1)
-        return (new_latent_mean, smoothed_state_means, smoothed_state_covs), None
+        return (
+            new_latent_mean,
+            smoothed_state_means,
+            smoothed_state_covs,
+            site_observations,
+            site_variances,
+        ), None
 
     initial_latent = jnp.zeros(times.shape[0])
     initial_state_means = jnp.zeros((times.shape[0], state_space_kernel.state_dim))
     initial_state_covs = jnp.broadcast_to(
         initial_cov, (times.shape[0], state_space_kernel.state_dim, state_space_kernel.state_dim)
     )
-    (final_latent, final_state_means, final_state_covs), _ = jax.lax.scan(
+    # Placeholders for the sites carried out of the scan; every iteration overwrites them. Their
+    # precision is the floor, so they are flat like the prior marginals the carry starts from.
+    initial_site_observations = jnp.zeros(times.shape[0])
+    initial_site_variances = jnp.full((times.shape[0],), 1.0 / _PSEUDO_NOISE_FLOOR)
+    (
+        (final_latent, final_state_means, final_state_covs, final_sites, final_site_variances),
+        _,
+    ) = jax.lax.scan(
         newton_step,
-        (initial_latent, initial_state_means, initial_state_covs),
+        (
+            initial_latent,
+            initial_state_means,
+            initial_state_covs,
+            initial_site_observations,
+            initial_site_variances,
+        ),
         jnp.arange(num_iterations),
     )
     # Marginal latent variance = H @ P @ H^T per smoothed step.
@@ -214,14 +237,26 @@ def fit_markov_laplace_gp(
         observation_matrix,
     ).reshape(times.shape[0])
     latent_variances = jnp.clip(latent_variances, min=_PSEUDO_NOISE_FLOOR)
-    # Laplace-approximated log marginal (RW06 eq. 3.32 in state-space form):
-    # log Z ≈ log p(y | f̂) - ½ Σ_i log(1 + W_i V_i) where V_i is the
-    # prior marginal variance at i (≈ kernel.measurement P_∞ ...). Use a
-    # simpler stable approximation: data log-lik at the mode minus
-    # half the trace of W·V_post (the Newton residual penalty).
-    log_lik_final, _, w_final, _ = log_likelihood_components_fn(final_latent, observations)
-    safe_w_final = jnp.maximum(w_final, _PSEUDO_NOISE_FLOOR)
-    log_marginal = log_lik_final - 0.5 * jnp.sum(jnp.log1p(safe_w_final * latent_variances))
+    # Laplace evidence of Wilkinson, Sarkka & Solin (JMLR 2023) eq. 17: the log likelihood at the
+    # mean, minus the site log densities at the mean, plus the pseudo-model log normaliser. At the
+    # Newton fixed point this equals Rasmussen & Williams (2006) eq. 3.32.
+    log_lik_final, _, _, _ = log_likelihood_components_fn(final_latent, observations)
+    site_log_density = jnp.sum(
+        gaussian_expected_log_density(final_sites, final_latent, 0.0, final_site_variances)
+    )
+    log_marginal = (
+        log_lik_final
+        - site_log_density
+        + pseudo_model_log_normaliser(
+            transitions=transitions,
+            process_noises=process_noises,
+            observation_matrix=observation_matrix,
+            initial_mean=initial_mean,
+            initial_cov=initial_cov,
+            site_observations=final_sites,
+            site_variances=final_site_variances,
+        )
+    )
     return MarkovLaplaceGPState(
         times=times,
         observations=observations,

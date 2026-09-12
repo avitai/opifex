@@ -58,7 +58,12 @@ import numpy as np
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
+from opifex.uncertainty.markov._likelihood_support import (
+    gaussian_expected_log_density,
+    interpolate_smoothed_state,
+    power_ep_constant,
+    pseudo_model_log_normaliser,
+)
 from opifex.uncertainty.markov.markov_laplace import _build_state_space_sequence
 from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import (
@@ -241,6 +246,14 @@ def _site_update_from_log_partition_derivatives(
     return site_eta_1_new, site_eta_2_new
 
 
+def _sites_as_pseudo_observations(
+    site_eta_1: jax.Array, site_eta_2: jax.Array
+) -> tuple[jax.Array, jax.Array]:
+    """Return the site means and variances ``(ỹ, R)`` of natural parameters ``(eta_1, eta_2)``."""
+    site_variance = -1.0 / (2.0 * jnp.minimum(site_eta_2, _NATURAL_PARAM_CLIP))
+    return site_eta_1 * site_variance, site_variance
+
+
 def _kalman_with_sites(
     *,
     site_eta_1: jax.Array,
@@ -259,9 +272,7 @@ def _kalman_with_sites(
     ``H @ smoothed_state @ H.T`` used in EP cavity computation.
     """
     n = site_eta_1.shape[0]
-    safe_eta_2 = jnp.minimum(site_eta_2, _NATURAL_PARAM_CLIP)
-    site_variance = -1.0 / (2.0 * safe_eta_2)
-    site_mean = site_eta_1 * site_variance
+    site_mean, site_variance = _sites_as_pseudo_observations(site_eta_1, site_eta_2)
     filter_means, filter_covs = kalman_filter(
         transitions=transitions,
         process_noises=process_noises,
@@ -412,7 +423,23 @@ def fit_markov_pep_gp(
     cavity_variances_final = -0.5 / safe_cavity_eta_2
     cavity_means_final = cavity_eta_1 * cavity_variances_final
     log_Z_final, _, _ = compute_log_partition_pack(cavity_means_final, cavity_variances_final)
-    log_marginal = jnp.sum(log_Z_final) / power
+    # Power-EP evidence of Wilkinson, Sarkka & Solin (JMLR 2023) eq. 27, as bayesnewton computes it
+    # (inference.py:286-325, basemodels.py:247-262 at f72ae9a): log Z of the pseudo model plus
+    # (1 / power) (sum log E_cav[p^power] - sum log E_cav[N^power(site | f, R)]).
+    site_observations, site_variances = _sites_as_pseudo_observations(final_eta_1, final_eta_2)
+    site_log_partition = gaussian_expected_log_density(
+        site_observations, cavity_means_final, 0.0, site_variances / power + cavity_variances_final
+    ) + power_ep_constant(site_variances, power)
+    log_normaliser = pseudo_model_log_normaliser(
+        transitions=transitions,
+        process_noises=process_noises,
+        observation_matrix=observation_matrix,
+        initial_mean=initial_mean,
+        initial_cov=initial_cov,
+        site_observations=site_observations,
+        site_variances=site_variances,
+    )
+    log_marginal = log_normaliser + (jnp.sum(log_Z_final) - jnp.sum(site_log_partition)) / power
 
     return MarkovPEPGPState(
         times=times,
