@@ -28,11 +28,21 @@ References
 
 from __future__ import annotations
 
+import math
+
 import jax
 import jax.numpy as jnp
+import numpy as np
+import pytest
 from jax.scipy.linalg import expm
 
-from opifex.uncertainty.statespace import discretize_lti_sde
+from opifex.uncertainty.statespace import (
+    discretize_lti_sde,
+    matern12_kernel,
+    matern32_kernel,
+    matern52_kernel,
+    matern72_kernel,
+)
 
 
 def test_zero_drift_recovers_identity_transition_and_qc_dt() -> None:
@@ -212,3 +222,136 @@ def test_discretize_lti_sde_differentiable_through_drift() -> None:
 
     grad_value = jax.grad(transition_trace)(jnp.asarray([[-0.5, 0.0], [0.0, -0.7]]))
     assert jnp.all(jnp.isfinite(grad_value))
+
+
+# ---------------------------------------------------------------------------
+# Coarse steps: the block exponential must not overflow.
+# ---------------------------------------------------------------------------
+
+# (factory, variance, lengthscale) for stationary Matern SDEs, whose closed-form discretisation
+# (``StateSpaceKernel.discretize``) is the float32 reference.
+_MATERN_SDES = {
+    "matern12": (matern12_kernel, 1.7, 0.6),
+    "matern32": (matern32_kernel, 1.2, 0.9),
+    "matern52": (matern52_kernel, 0.8, 1.1),
+    "matern72": (matern72_kernel, 1.4, 0.7),
+}
+# Steps in lengthscales, from far below to far above the correlation time.
+_COARSE_STEP_RATIOS = (1e-4, 1e-2, 1.0, 10.0, 100.0, 1e3)
+# Float32 errors of the doubled block exponential, measured over these kernels and steps: process
+# noise at most 3.6e-6 relative, transition at most 2.0e-6 of max(1, |A|). The single-step block
+# exponential is non-finite at 100 lengthscales and off by 0.89 for Matern-5/2 at 10.
+_MATERN_TOLERANCE = 5e-5
+# Measured for integrated Wiener processes of order 1 to 3 at steps 1e-3 to 100: at most 1.0e-7 for
+# the process noise and 6.1e-8 for the transition. The single-step block reaches 5.0e-4 at order 3.
+_INTEGRATED_WIENER_TOLERANCE = 1e-5
+
+
+def _integrated_wiener_process(
+    order: int, dt: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return ``(F, L L^T, A, Q)`` for the order-``q`` integrated Wiener process in closed form.
+
+    ``A_ij = dt^(j-i) / (j-i)!`` and ``Q_ij = dt^(2q+1-i-j) / ((2q+1-i-j) (q-i)! (q-j)!)``.
+    """
+    size = order + 1
+    drift = np.diag(np.ones(size - 1), k=1)
+    dispersion = np.zeros((size, 1))
+    dispersion[-1, 0] = 1.0
+    transition = np.zeros((size, size))
+    process_noise = np.zeros((size, size))
+    for row in range(size):
+        for column in range(size):
+            if column >= row:
+                transition[row, column] = dt ** (column - row) / math.factorial(column - row)
+            power = 2 * order + 1 - row - column
+            process_noise[row, column] = dt**power / (
+                power * math.factorial(order - row) * math.factorial(order - column)
+            )
+    return drift, dispersion @ dispersion.T, transition, process_noise
+
+
+@pytest.mark.parametrize("name", list(_MATERN_SDES))
+def test_matern_discretisation_is_accurate_from_fine_to_coarse_steps(name: str) -> None:
+    """Transition and process noise match the closed-form Matern discretisation at every step."""
+    factory, variance, lengthscale = _MATERN_SDES[name]
+    kernel = factory(variance=variance, lengthscale=lengthscale)
+    for ratio in _COARSE_STEP_RATIOS:
+        dt = jnp.asarray(ratio * lengthscale)
+        transition, process_noise = discretize_lti_sde(
+            drift_matrix=kernel.feedback,
+            dispersion_matrix=kernel.noise_effect,
+            dt=dt,
+            diffusion=kernel.diffusion,
+        )
+        reference_transition, reference_noise = kernel.discretize(dt)
+        assert bool(jnp.all(jnp.isfinite(transition))), (name, ratio)
+        assert bool(jnp.all(jnp.isfinite(process_noise))), (name, ratio)
+        transition_scale = max(1.0, float(jnp.max(jnp.abs(reference_transition))))
+        transition_error = (
+            float(jnp.max(jnp.abs(transition - reference_transition))) / transition_scale
+        )
+        noise_error = float(
+            jnp.linalg.norm(process_noise - reference_noise) / jnp.linalg.norm(reference_noise)
+        )
+        assert transition_error <= _MATERN_TOLERANCE, (name, ratio, transition_error)
+        assert noise_error <= _MATERN_TOLERANCE, (name, ratio, noise_error)
+
+
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_integrated_wiener_process_matches_its_closed_form(order: int) -> None:
+    """A non-stationary SDE, with no stationary covariance to fall back on, stays exact."""
+    for step in (1e-3, 1.0, 10.0, 100.0):
+        drift, noise, reference_transition, reference_noise = _integrated_wiener_process(
+            order, step
+        )
+        transition, process_noise = discretize_lti_sde(
+            drift_matrix=jnp.asarray(drift, dtype=jnp.float32),
+            dispersion_matrix=jnp.eye(order + 1),
+            dt=jnp.asarray(step),
+            diffusion=jnp.asarray(noise, dtype=jnp.float32),
+        )
+        transition_error = float(
+            np.abs(np.asarray(transition, np.float64) - reference_transition).max()
+            / np.abs(reference_transition).max()
+        )
+        noise_error = float(
+            np.linalg.norm(np.asarray(process_noise, np.float64) - reference_noise)
+            / np.linalg.norm(reference_noise)
+        )
+        assert transition_error <= _INTEGRATED_WIENER_TOLERANCE, (order, step, transition_error)
+        assert noise_error <= _INTEGRATED_WIENER_TOLERANCE, (order, step, noise_error)
+
+
+def test_discretisation_is_differentiable_at_coarse_steps() -> None:
+    """Gradients with respect to the step and the drift stay finite far beyond the lengthscale."""
+    kernel = matern52_kernel(variance=0.8, lengthscale=1.1)
+
+    def total_noise(dt: jax.Array, drift: jax.Array) -> jax.Array:
+        _, process_noise = discretize_lti_sde(
+            drift_matrix=drift,
+            dispersion_matrix=kernel.noise_effect,
+            dt=dt,
+            diffusion=kernel.diffusion,
+        )
+        return jnp.sum(process_noise)
+
+    for step in (1e-4, 110.0, 1100.0):
+        gradient_dt, gradient_drift = jax.grad(total_noise, argnums=(0, 1))(
+            jnp.asarray(step), kernel.feedback
+        )
+        assert bool(jnp.isfinite(gradient_dt)), step
+        assert bool(jnp.all(jnp.isfinite(gradient_drift))), step
+
+
+def test_steps_beyond_the_doubling_limit_return_nan() -> None:
+    """A step needing more than the supported number of doublings is reported as NaN."""
+    kernel = matern52_kernel(variance=0.8, lengthscale=1.1)
+    transition, process_noise = discretize_lti_sde(
+        drift_matrix=kernel.feedback,
+        dispersion_matrix=kernel.noise_effect,
+        dt=jnp.asarray(1e12),
+        diffusion=kernel.diffusion,
+    )
+    assert bool(jnp.all(jnp.isnan(transition)))
+    assert bool(jnp.all(jnp.isnan(process_noise)))

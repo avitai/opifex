@@ -55,6 +55,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is evaluated as `expm1(-x) I + exp(-x) dt M`, so it cancels neither at short steps nor at coarse
   ones. For every kernel, the float32 relative error of the process noise against float64 is at
   most 2.8e-7 for steps from 1e-4 to 1e4 lengthscales, at the same cost.
+- `discretize_lti_sde` stays finite and accurate at coarse steps. It exponentiated Van Loan's block
+  `[[F, L Q_c L^T], [0, -F^T]] dt` in one go, which overflows float32 and exceeds the squaring limit
+  of `jax.scipy.linalg.expm`: Matern SDEs came back NaN at 100 lengthscales, Matern-5/2 was off by
+  0.89 at 10, a third-order integrated Wiener process was off by 5.0e-4 at dt = 100, and gradients
+  were NaN at coarse steps. It now splits the step so the block's 1-norm is at most 3.5 and doubles
+  back with Van Loan's eq. (3.5), after normalising `L Q_c L^T`. In float32 the process noise is
+  within 3.6e-6 and the transition within 2.0e-6 of the closed forms from 1e-4 to 1e3 lengthscales.
+  Steps needing more than 32 doublings return NaN. The fixed doubling loop costs about the same as
+  before for a two-state SDE and makes a four-state SDE about ten times slower (33 ms instead of
+  3.5 ms per 1000 steps). The Markov and spatio-temporal GPs use `StateSpaceKernel.discretize` and
+  are unaffected.
 
 ## [0.2.5] - 2026-09-11
 
