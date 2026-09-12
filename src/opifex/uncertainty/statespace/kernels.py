@@ -156,14 +156,17 @@ def _increment_from_state_transition(
 def _matern_transition_increment(
     decay_rate: jax.Array, dt: jax.Array, generator: jax.Array
 ) -> jax.Array:
-    r"""Return ``exp(-decay_rate dt) (I + dt M) - I`` without cancelling at small ``dt``.
+    r"""Return ``exp(-decay_rate dt) (I + dt M) - I`` without cancelling at any step size.
 
     Every Matern transition has the form ``A(dt) = exp(-decay_rate dt) (I + dt M)``, so
-    ``A - I = expm1(-decay_rate dt) (I + dt M) + dt M``.
+    ``A - I = expm1(-decay_rate dt) I + exp(-decay_rate dt) dt M``. At small steps ``expm1``
+    keeps its digits; at large steps ``exp`` underflows to zero while ``dt M`` is still finite.
+    Grouping the terms as ``expm1(-decay_rate dt) (I + dt M) + dt M`` instead cancels once
+    ``dt M`` is large.
     """
     identity = jnp.eye(generator.shape[0], dtype=generator.dtype)
-    scaled = dt * generator
-    return jnp.expm1(-decay_rate * dt) * (identity + scaled) + scaled
+    decay = -decay_rate * dt
+    return jnp.expm1(decay) * identity + jnp.exp(decay) * (dt * generator)
 
 
 def _rotation_increment(angle: jax.Array) -> jax.Array:

@@ -51,8 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Markov GP process noise keeps its float32 accuracy at small steps. `P_inf - A P_inf A^T`
   subtracts nearly equal matrices when the step is short, which gave relative errors up to 4.4e-4
   at 1e-4 lengthscales. `StateSpaceKernel.discretize` computes
-  `-(E P_inf + P_inf E^T + E P_inf E^T)` from the closed-form increment instead: its relative error
-  is at most 2.8e-7 against float64 for steps from 1e-4 to 100 lengthscales, at the same cost.
+  `-(E P_inf + P_inf E^T + E P_inf E^T)` from the closed-form increment instead. The Matern increment
+  is evaluated as `expm1(-x) I + exp(-x) dt M`, so it cancels neither at short steps nor at coarse
+  ones. For every kernel, the float32 relative error of the process noise against float64 is at
+  most 2.8e-7 for steps from 1e-4 to 1e4 lengthscales, at the same cost.
 
 ## [0.2.5] - 2026-09-11
 

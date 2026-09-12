@@ -102,13 +102,18 @@ def _time_scale(kernel: StateSpaceKernel) -> float:
     return float(1.0 / jnp.max(jnp.abs(jnp.linalg.eigvals(kernel.feedback))))
 
 
+def _decay_time_scale(kernel: StateSpaceKernel) -> float:
+    """Return the slowest decay time ``1 / min(-Re eig F)`` of a dissipative drift."""
+    return float(1.0 / jnp.min(-jnp.real(jnp.linalg.eigvals(kernel.feedback))))
+
+
 _KERNEL_FACTORIES = dict(ALL_KERNELS)
 # Kernels whose SDE dissipates and therefore adds process noise, and kernels whose SDE only
 # rotates the state and adds none.
 DISSIPATIVE_KERNEL_IDS = ["matern12", "matern32", "matern52", "matern72", "quasi_periodic_matern12"]
 CONSERVATIVE_KERNEL_IDS = ["cosine", "periodic"]
 # Step sizes as multiples of each kernel's own time scale, from far below it to far above it.
-_STEP_RATIOS = (1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 50.0)
+_STEP_RATIOS = (1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 50.0, 300.0, 1e3, 1e4)
 # Relative residual of the exact identity Q(2h) = A(h) Q(h) A(h)^T + Q(h) in float32. Measured
 # over these kernels for step ratios 1e-4 to 50: at most 2.4e-7 for the cancellation-free
 # process noise, and 1.4e-5 to 4.6e-4 for P_inf - A P_inf A^T, whose subtraction cancels at
@@ -658,6 +663,27 @@ def test_process_noise_is_positive_semidefinite(name: str) -> None:
         _, process_noise = kernel.discretize(jnp.asarray(ratio * _time_scale(kernel)))
         smallest = float(jnp.linalg.eigvalsh(process_noise).min())
         assert smallest >= -1e-6 * float(jnp.linalg.norm(process_noise)), (name, ratio, smallest)
+
+
+@pytest.mark.parametrize("name", DISSIPATIVE_KERNEL_IDS)
+def test_coarse_steps_reach_the_stationary_distribution(name: str) -> None:
+    """Far beyond the slowest decay time, ``A(dt)`` vanishes and ``Q(dt)`` equals ``P_inf``.
+
+    ``exp(-lambda dt)`` underflows there in float32, so both limits are exact up to rounding;
+    measured relative errors are 2e-8 to 6e-8. The decay time, not the spectral radius, sets the
+    scale: a quasi-periodic kernel rotates much faster than it decays.
+    """
+    kernel = _KERNEL_FACTORIES[name]()
+    stationary_norm = float(jnp.linalg.norm(kernel.stationary_cov))
+    for ratio in (300.0, 1e3, 1e4):
+        dt = jnp.asarray(ratio * _decay_time_scale(kernel))
+        transition, process_noise = kernel.discretize(dt)
+        largest_transition = float(jnp.max(jnp.abs(transition)))
+        noise_error = (
+            float(jnp.linalg.norm(process_noise - kernel.stationary_cov)) / stationary_norm
+        )
+        assert largest_transition <= 1e-6, (name, ratio, largest_transition)
+        assert noise_error <= 1e-6, (name, ratio, noise_error)
 
 
 @pytest.mark.parametrize("name", CONSERVATIVE_KERNEL_IDS)
