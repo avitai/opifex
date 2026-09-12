@@ -103,8 +103,7 @@ def interpolate_smoothed_state(
         anchor_cov = jnp.where(is_before_first, stationary_cov, smoothed_state_covs[clipped_index])
         anchor_time = jnp.where(is_before_first, test_time, times_train[clipped_index])
         delta = test_time - anchor_time
-        transition_matrix = state_space_kernel.state_transition(delta)
-        process_noise = stationary_cov - transition_matrix @ stationary_cov @ transition_matrix.T
+        transition_matrix, process_noise = state_space_kernel.discretize(delta)
         predicted_state_mean = transition_matrix @ anchor_mean
         predicted_state_cov = transition_matrix @ anchor_cov @ transition_matrix.T + process_noise
         latent_mean = (observation_matrix @ predicted_state_mean).squeeze(-1)

@@ -1,4 +1,4 @@
-"""Fixtures for the curvature tests."""
+"""Fixtures shared by the uncertainty tests."""
 
 from __future__ import annotations
 

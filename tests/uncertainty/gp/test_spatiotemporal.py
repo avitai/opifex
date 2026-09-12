@@ -208,9 +208,19 @@ def test_predictions_are_calibrated() -> None:
 # -----------------------------------------------------------------------------
 
 
-def test_single_space_point_recovers_temporal_exact_gp() -> None:
-    """One spatial location ⇒ marginal matches a 1-D temporal exact GP."""
-    times = jnp.linspace(0.0, 4.0 * jnp.pi, 15).reshape(-1, 1)
+# Temporal grids for the exact-GP reduction. The coarse grid mixes gaps from 0.25 to about 95
+# temporal lengthscales (lengthscale 1.2), the range where a discretisation that exponentiates
+# ``-F^T dt`` overflows.
+_REDUCTION_TIME_GRIDS = {
+    "fine": jnp.linspace(0.0, 4.0 * jnp.pi, 15),
+    "coarse_gaps": jnp.asarray([0.0, 0.3, 1.5, 13.5, 14.0, 128.0, 129.2, 141.0]),
+}
+
+
+@pytest.mark.parametrize("grid_name", list(_REDUCTION_TIME_GRIDS))
+def test_single_space_point_recovers_temporal_exact_gp(grid_name: str) -> None:
+    """One spatial location ⇒ marginal matches a 1-D temporal exact GP on every time grid."""
+    times = _REDUCTION_TIME_GRIDS[grid_name].reshape(-1, 1)
     space = jnp.zeros((1, 1))
     y_temporal = jnp.sin(times[:, 0]) * jnp.exp(-0.1 * times[:, 0])
     observations = y_temporal.reshape(-1, 1)

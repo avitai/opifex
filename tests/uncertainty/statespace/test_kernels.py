@@ -46,10 +46,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from jax.scipy.linalg import expm
+from scipy.linalg import expm as scipy_expm
 from scipy.special import ive
 
 from opifex.uncertainty.statespace import (
     cosine_kernel,
+    discretize_lti_sde,
     matern12_kernel,
     matern32_kernel,
     matern52_kernel,
@@ -93,6 +95,25 @@ ALL_KERNELS: list[tuple[str, Callable[[], StateSpaceKernel]]] = [
     ),
 ]
 ALL_KERNEL_IDS = [name for name, _ in ALL_KERNELS]
+
+
+def _time_scale(kernel: StateSpaceKernel) -> float:
+    """Return the reciprocal spectral radius of the drift, the kernel's own time scale."""
+    return float(1.0 / jnp.max(jnp.abs(jnp.linalg.eigvals(kernel.feedback))))
+
+
+_KERNEL_FACTORIES = dict(ALL_KERNELS)
+# Kernels whose SDE dissipates and therefore adds process noise, and kernels whose SDE only
+# rotates the state and adds none.
+DISSIPATIVE_KERNEL_IDS = ["matern12", "matern32", "matern52", "matern72", "quasi_periodic_matern12"]
+CONSERVATIVE_KERNEL_IDS = ["cosine", "periodic"]
+# Step sizes as multiples of each kernel's own time scale, from far below it to far above it.
+_STEP_RATIOS = (1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 50.0)
+# Relative residual of the exact identity Q(2h) = A(h) Q(h) A(h)^T + Q(h) in float32. Measured
+# over these kernels for step ratios 1e-4 to 50: at most 2.4e-7 for the cancellation-free
+# process noise, and 1.4e-5 to 4.6e-4 for P_inf - A P_inf A^T, whose subtraction cancels at
+# small steps.
+_DOUBLING_RESIDUAL_TOLERANCE = 5e-6
 
 
 def _is_psd(matrix: jax.Array, atol: float) -> bool:
@@ -566,6 +587,142 @@ def test_quasi_periodic_kernel_covariance_matches_closed_form(lengthscale_period
 # ---------------------------------------------------------------------------
 # StateSpaceKernel dataclass — invariants.
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Discretisation: transition increment and process noise.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("float64")
+@pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
+def test_transition_increment_matches_matrix_exponential(
+    name: str, factory: Callable[[], StateSpaceKernel]
+) -> None:
+    """``transition_increment(dt)`` equals ``expm(F dt) - I`` at every step size.
+
+    The reference is ``scipy.linalg.expm``. ``jax.scipy.linalg.expm`` in float64 is off by 2.9e-9
+    for a rotation by 10 rad, where scipy and extended precision agree to 1e-14.
+    """
+    kernel = factory()
+    identity = np.eye(kernel.state_dim)
+    for ratio in _STEP_RATIOS:
+        dt = ratio * _time_scale(kernel)
+        expected = jnp.asarray(scipy_expm(np.asarray(kernel.feedback) * dt) - identity)
+        dt = jnp.asarray(dt)
+        error = float(jnp.max(jnp.abs(kernel.transition_increment(dt) - expected)))
+        assert error <= 1e-9 * max(float(jnp.max(jnp.abs(expected))), 1e-6), (name, ratio, error)
+
+
+@pytest.mark.usefixtures("float64")
+@pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
+def test_discretize_matches_van_loan_in_float64(
+    name: str, factory: Callable[[], StateSpaceKernel]
+) -> None:
+    """``discretize(dt)`` reproduces the Van Loan transition and process noise of ``(F, L, Q_c)``."""
+    kernel = factory()
+    noise_scale = float(jnp.max(jnp.abs(kernel.stationary_cov)))
+    for ratio in (1e-3, 0.1, 1.0):
+        dt = jnp.asarray(ratio * _time_scale(kernel))
+        transition, process_noise = kernel.discretize(dt)
+        reference_transition, reference_noise = discretize_lti_sde(
+            drift_matrix=kernel.feedback,
+            dispersion_matrix=kernel.noise_effect,
+            dt=dt,
+            diffusion=kernel.diffusion,
+        )
+        transition_error = float(jnp.max(jnp.abs(transition - reference_transition)))
+        noise_error = float(jnp.max(jnp.abs(process_noise - reference_noise)))
+        assert transition_error <= 1e-10, (name, ratio, transition_error)
+        assert noise_error <= 1e-9 * noise_scale, (name, ratio, noise_error)
+
+
+@pytest.mark.parametrize("name", DISSIPATIVE_KERNEL_IDS)
+def test_process_noise_satisfies_the_doubling_identity(name: str) -> None:
+    """In float32, ``Q(2h) = A(h) Q(h) A(h)^T + Q(h)`` holds from tiny to very large steps."""
+    kernel = _KERNEL_FACTORIES[name]()
+    for ratio in _STEP_RATIOS:
+        step = jnp.asarray(ratio * _time_scale(kernel))
+        transition, process_noise = kernel.discretize(step)
+        _, doubled_noise = kernel.discretize(2.0 * step)
+        composed = transition @ process_noise @ transition.T + process_noise
+        residual = float(jnp.linalg.norm(doubled_noise - composed) / jnp.linalg.norm(doubled_noise))
+        assert residual <= _DOUBLING_RESIDUAL_TOLERANCE, (name, ratio, residual)
+
+
+@pytest.mark.parametrize("name", DISSIPATIVE_KERNEL_IDS)
+def test_process_noise_is_positive_semidefinite(name: str) -> None:
+    """Every eigenvalue of ``Q(dt)`` is non-negative up to float32 rounding (~1.2e-7 |Q|)."""
+    kernel = _KERNEL_FACTORIES[name]()
+    for ratio in _STEP_RATIOS:
+        _, process_noise = kernel.discretize(jnp.asarray(ratio * _time_scale(kernel)))
+        smallest = float(jnp.linalg.eigvalsh(process_noise).min())
+        assert smallest >= -1e-6 * float(jnp.linalg.norm(process_noise)), (name, ratio, smallest)
+
+
+@pytest.mark.parametrize("name", CONSERVATIVE_KERNEL_IDS)
+def test_conservative_kernels_add_no_process_noise(name: str) -> None:
+    """A rotation SDE keeps its stationary covariance, so ``Q(dt)`` vanishes at every step."""
+    kernel = _KERNEL_FACTORIES[name]()
+    stationary_scale = float(jnp.max(jnp.abs(kernel.stationary_cov)))
+    for ratio in _STEP_RATIOS:
+        _, process_noise = kernel.discretize(jnp.asarray(ratio * _time_scale(kernel)))
+        largest = float(jnp.max(jnp.abs(process_noise)))
+        assert largest <= 1e-6 * stationary_scale, (name, ratio, largest)
+
+
+@pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
+def test_discretize_transition_is_the_state_transition(
+    name: str, factory: Callable[[], StateSpaceKernel]
+) -> None:
+    """``discretize(dt)[0]`` is ``state_transition(dt)``."""
+    kernel = factory()
+    dt = jnp.asarray(0.3 * _time_scale(kernel))
+    assert bool(jnp.array_equal(kernel.discretize(dt)[0], kernel.state_transition(dt))), name
+
+
+def test_state_space_kernel_built_from_a_state_transition_is_deprecated() -> None:
+    """The ``state_transition=`` constructor argument warns and still describes the same SDE."""
+    reference = matern32_kernel(variance=1.2, lengthscale=0.9)
+    with pytest.warns(DeprecationWarning, match="transition_increment"):
+        legacy = StateSpaceKernel(
+            feedback=reference.feedback,
+            noise_effect=reference.noise_effect,
+            diffusion=reference.diffusion,
+            measurement=reference.measurement,
+            stationary_cov=reference.stationary_cov,
+            state_transition=reference.state_transition,
+        )
+    dt = jnp.asarray(0.3)
+    legacy_transition, legacy_noise = legacy.discretize(dt)
+    reference_transition, reference_noise = reference.discretize(dt)
+    # I + (A - I) rounds within two float32 ULPs of A.
+    assert float(jnp.max(jnp.abs(legacy_transition - reference_transition))) <= 1e-6
+    noise_scale = float(jnp.max(jnp.abs(reference.stationary_cov)))
+    assert float(jnp.max(jnp.abs(legacy_noise - reference_noise))) <= 1e-5 * noise_scale
+
+
+@pytest.mark.parametrize("supplied", ["both", "neither"])
+def test_state_space_kernel_requires_exactly_one_transition_description(supplied: str) -> None:
+    """Passing both or neither of ``transition_increment`` and ``state_transition`` raises."""
+    reference = matern12_kernel(variance=1.0, lengthscale=1.0)
+    transitions = (
+        {
+            "transition_increment": reference.transition_increment,
+            "state_transition": reference.state_transition,
+        }
+        if supplied == "both"
+        else {}
+    )
+    with pytest.raises(ValueError, match="transition_increment"):
+        StateSpaceKernel(
+            feedback=reference.feedback,
+            noise_effect=reference.noise_effect,
+            diffusion=reference.diffusion,
+            measurement=reference.measurement,
+            stationary_cov=reference.stationary_cov,
+            **transitions,
+        )
 
 
 def test_state_space_kernel_is_immutable() -> None:

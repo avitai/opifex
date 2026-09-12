@@ -117,18 +117,11 @@ def _build_state_space_sequence(
     r"""Discretise the kernel SDE at the training time grid.
 
     Returns ``(transitions, process_noises)`` arrays of shape
-    ``(n, d, d)`` where ``d`` is the kernel's state dimension. The
-    process noise uses the stationary-covariance identity
-    ``Q_k(\Delta t) = P_\infty - A(\Delta t)\,P_\infty\,A(\Delta t)^T``
-    (Sarkka 2013 §6.3 — valid because the prior is stationary).
+    ``(n, d, d)`` where ``d`` is the kernel's state dimension, one
+    :meth:`StateSpaceKernel.discretize` step per time gap.
     """
     deltas = jnp.concatenate([jnp.zeros((1,), dtype=times.dtype), jnp.diff(times)])
-    transitions = jax.vmap(state_space_kernel.state_transition)(deltas)
-    stationary_cov = state_space_kernel.stationary_cov
-    process_noises = stationary_cov[None] - jnp.einsum(
-        "kij,jl,kml->kim", transitions, stationary_cov, transitions
-    )
-    return transitions, process_noises
+    return jax.vmap(state_space_kernel.discretize)(deltas)
 
 
 def fit_markov_laplace_gp(

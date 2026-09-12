@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `StateSpaceKernel` is built from `transition_increment`, the closed form of `exp(F dt) - I`.
+  `state_transition(dt)` is now a method returning `I + transition_increment(dt)`, and the new
+  `discretize(dt)` returns the transition and the process noise of one step. The Markov GP paths
+  and the spatio-temporal GP take both from `discretize`.
+
+### Deprecated
+
+- `opifex.uncertainty.statespace.kernels.i0e_vector` is deprecated in favour of
+  `scaled_modified_bessel_i(max_order, argument)`, which returns orders `0..max_order`. The
+  old name now delegates to the corrected evaluation and emits a `DeprecationWarning`.
+- Constructing `StateSpaceKernel` with `state_transition=` is deprecated in favour of
+  `transition_increment=`. The increment is then derived by subtracting the identity, which
+  cancels at small steps, and a `DeprecationWarning` is emitted.
+
 ### Fixed
 
 - The learn-to-optimize surfaces declare their uncertainty capability again. Rebuilding the
@@ -29,12 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and any consumer that discretises `(F, L, Q_c)` received zero process noise. The spatio-temporal
   GP is one such consumer. The diffusion is now the Matérn-1/2 diffusion scaled by the periodic
   stationary covariance.
-
-### Deprecated
-
-- `opifex.uncertainty.statespace.kernels.i0e_vector` is deprecated in favour of
-  `scaled_modified_bessel_i(max_order, argument)`, which returns orders `0..max_order`. The
-  old name now delegates to the corrected evaluation and emits a `DeprecationWarning`.
+- The spatio-temporal GP returns finite predictions on time grids with long gaps. It built each
+  step's process noise with the Van Loan block exponential, whose `exp(-F^T dt)` block overflows
+  float32. On a grid with gaps of about 95 temporal lengthscales every prediction was NaN.
+- Markov GP process noise keeps its float32 accuracy at small steps. `P_inf - A P_inf A^T`
+  subtracts nearly equal matrices when the step is short, which gave relative errors up to 4.4e-4
+  at 1e-4 lengthscales. `StateSpaceKernel.discretize` computes
+  `-(E P_inf + P_inf E^T + E P_inf E^T)` from the closed-form increment instead: its relative error
+  is at most 2.8e-7 against float64 for steps from 1e-4 to 100 lengthscales, at the same cost.
 
 ## [0.2.5] - 2026-09-11
 

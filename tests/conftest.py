@@ -303,7 +303,7 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     ``jax.config.update("jax_enable_x64", True)`` makes every module collected
     after it build float64 constants, which then meet the per-test x64-off
     bookend (``jnp.log10`` on such an array raises ``TypeError``). Enable x64
-    inside a fixture instead (``tests/uncertainty/curvature/conftest.py``).
+    inside a fixture instead (``tests/uncertainty/conftest.py``).
     """
     if jax.config.jax_enable_x64:
         session.shouldfail = (

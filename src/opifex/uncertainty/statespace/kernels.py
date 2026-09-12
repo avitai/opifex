@@ -1,10 +1,11 @@
 """State-space kernel constructors for temporal Gaussian processes.
 
 Each constructor returns a :class:`StateSpaceKernel` carrying the
-continuous-time SDE parameters ``(F, L, Q_c, H, P_inf)`` and a closed-form
-discrete-time state-transition matrix ``A(dt) = exp(F dt)``. The closed
-forms avoid the runtime cost of a per-step ``expm`` and remain
-differentiable w.r.t. ``dt`` and the kernel hyperparameters.
+continuous-time SDE parameters ``(F, L, Q_c, H, P_inf)`` and the closed-form
+transition increment ``E(dt) = exp(F dt) - I``. The transition ``A(dt)`` and
+the process noise ``Q(dt)`` of one step follow from ``E`` without a per-step
+``expm`` and without cancellation at small steps, and remain differentiable
+w.r.t. ``dt`` and the kernel hyperparameters.
 
 Canonical reference (line-by-line port):
 * ``../bayesnewton/bayesnewton/kernels.py`` — ``Matern12`` (line 141),
@@ -40,7 +41,7 @@ _BESSEL_FORWARD_RECURRENCE_THRESHOLD = 3000.0
 _BESSEL_BACKWARD_EXTRA_DEPTH = 512
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclass(frozen=True, slots=True, init=False)
 class StateSpaceKernel:
     """Continuous-time SDE representation of a stationary temporal GP kernel.
 
@@ -51,7 +52,7 @@ class StateSpaceKernel:
         measurement: Observation matrix ``H`` (shape ``(1, n)``).
         stationary_cov: Stationary covariance ``P_inf`` (shape ``(n, n)``),
             satisfying ``F P_inf + P_inf F^T + L Q_c L^T = 0``.
-        state_transition: Closed-form ``A(dt) = exp(F dt)``.
+        transition_increment: Closed-form ``E(dt) = exp(F dt) - I`` for a scalar step.
     """
 
     feedback: jax.Array
@@ -59,12 +60,117 @@ class StateSpaceKernel:
     diffusion: jax.Array
     measurement: jax.Array
     stationary_cov: jax.Array
-    state_transition: Callable[[jax.Array], jax.Array]
+    transition_increment: Callable[[jax.Array], jax.Array]
+
+    def __init__(
+        self,
+        *,
+        feedback: jax.Array,
+        noise_effect: jax.Array,
+        diffusion: jax.Array,
+        measurement: jax.Array,
+        stationary_cov: jax.Array,
+        transition_increment: Callable[[jax.Array], jax.Array] | None = None,
+        state_transition: Callable[[jax.Array], jax.Array] | None = None,
+    ) -> None:
+        """Build the kernel from its SDE matrices and one description of the transition.
+
+        Args:
+            feedback: Drift matrix ``F``.
+            noise_effect: Dispersion matrix ``L``.
+            diffusion: Wiener diffusion ``Q_c``.
+            measurement: Observation matrix ``H``.
+            stationary_cov: Stationary covariance ``P_inf``.
+            transition_increment: Closed-form ``exp(F dt) - I``.
+            state_transition: Deprecated closed-form ``exp(F dt)``. The increment is then
+                derived by subtracting the identity, which cancels at small steps.
+
+        Raises:
+            ValueError: If both or neither of ``transition_increment`` and
+                ``state_transition`` are given.
+        """
+        if (transition_increment is None) == (state_transition is None):
+            raise ValueError(
+                "Pass exactly one of transition_increment and the deprecated state_transition."
+            )
+        if state_transition is not None:
+            warnings.warn(
+                "StateSpaceKernel(state_transition=...) is deprecated; pass "
+                "transition_increment, the closed form of exp(F dt) - I.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            transition_increment = _increment_from_state_transition(
+                state_transition, int(feedback.shape[0])
+            )
+        object.__setattr__(self, "feedback", feedback)
+        object.__setattr__(self, "noise_effect", noise_effect)
+        object.__setattr__(self, "diffusion", diffusion)
+        object.__setattr__(self, "measurement", measurement)
+        object.__setattr__(self, "stationary_cov", stationary_cov)
+        object.__setattr__(self, "transition_increment", transition_increment)
 
     @property
     def state_dim(self) -> int:
         """Dimension of the state-space representation."""
         return int(self.feedback.shape[0])
+
+    def state_transition(self, dt: jax.Array) -> jax.Array:
+        """Return the discrete-time state-transition matrix ``A(dt) = exp(F dt)``."""
+        return jnp.eye(self.state_dim) + self.transition_increment(dt)
+
+    def discretize(self, dt: jax.Array) -> tuple[jax.Array, jax.Array]:
+        r"""Return the transition ``A(dt)`` and process noise ``Q(dt)`` of one step.
+
+        The prior is stationary, so ``Q(dt) = P_inf - A P_inf A^T``. With ``A = I + E``
+        this is ``Q = -(E P_inf + P_inf E^T + E P_inf E^T)``. That form does not subtract
+        nearly equal matrices at small steps, and unlike the Van Loan block exponential it
+        never forms the growing ``exp(-F^T dt)``.
+
+        Args:
+            dt: Scalar step length.
+
+        Returns:
+            ``(A(dt), Q(dt))``, each of shape ``(n, n)``.
+        """
+        increment = self.transition_increment(dt)
+        spread = increment @ self.stationary_cov
+        process_noise = -(spread + spread.T + spread @ increment.T)
+        transition = jnp.eye(self.state_dim) + increment
+        return transition, 0.5 * (process_noise + process_noise.T)
+
+
+def _increment_from_state_transition(
+    state_transition: Callable[[jax.Array], jax.Array], state_dim: int
+) -> Callable[[jax.Array], jax.Array]:
+    """Return ``dt -> state_transition(dt) - I`` for a kernel described by its transition."""
+    identity = jnp.eye(state_dim)
+
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I`` by subtracting the identity from the transition."""
+        return state_transition(dt) - identity
+
+    return transition_increment
+
+
+def _matern_transition_increment(
+    decay_rate: jax.Array, dt: jax.Array, generator: jax.Array
+) -> jax.Array:
+    r"""Return ``exp(-decay_rate dt) (I + dt M) - I`` without cancelling at small ``dt``.
+
+    Every Matern transition has the form ``A(dt) = exp(-decay_rate dt) (I + dt M)``, so
+    ``A - I = expm1(-decay_rate dt) (I + dt M) + dt M``.
+    """
+    identity = jnp.eye(generator.shape[0], dtype=generator.dtype)
+    scaled = dt * generator
+    return jnp.expm1(-decay_rate * dt) * (identity + scaled) + scaled
+
+
+def _rotation_increment(angle: jax.Array) -> jax.Array:
+    """Return ``R(angle) - I`` for a 2-D rotation, using ``cos - 1 = -2 sin^2(angle / 2)``."""
+    cos_minus_one = -2.0 * jnp.sin(0.5 * angle) ** 2
+    sin = jnp.sin(angle)
+    return jnp.asarray([[cos_minus_one, -sin], [sin, cos_minus_one]])
 
 
 def matern12_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
@@ -79,9 +185,9 @@ def matern12_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     measurement = jnp.asarray([[1.0]])
     stationary_cov = jnp.asarray([[variance]])
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
-        return jnp.broadcast_to(jnp.exp(-dt / lengthscale)[..., None, None], (1, 1))
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I = expm1(-dt / lengthscale)`` as a ``(1, 1)`` matrix."""
+        return jnp.reshape(jnp.expm1(-dt / lengthscale), (1, 1))
 
     return StateSpaceKernel(
         feedback=feedback,
@@ -89,7 +195,7 @@ def matern12_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )
 
 
@@ -102,10 +208,11 @@ def matern32_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     measurement = jnp.asarray([[1.0, 0.0]])
     stationary_cov = jnp.asarray([[variance, 0.0], [0.0, 3.0 * variance / lengthscale**2]])
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
-        inner = dt * jnp.asarray([[lam, 1.0], [-(lam**2), -lam]]) + jnp.eye(2)
-        return jnp.exp(-dt * lam) * inner
+    generator = jnp.asarray([[lam, 1.0], [-(lam**2), -lam]])
+
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I`` for one step ``dt``."""
+        return _matern_transition_increment(lam, dt, generator)
 
     return StateSpaceKernel(
         feedback=feedback,
@@ -113,7 +220,7 @@ def matern32_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )
 
 
@@ -135,8 +242,8 @@ def matern52_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
         ]
     )
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I`` for one step ``dt``."""
         dtlam = dt * lam
         matrix = jnp.asarray(
             [
@@ -149,7 +256,7 @@ def matern52_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
                 ],
             ]
         )
-        return jnp.exp(-dtlam) * (dt * matrix + jnp.eye(3))
+        return _matern_transition_increment(lam, dt, matrix)
 
     return StateSpaceKernel(
         feedback=feedback,
@@ -157,7 +264,7 @@ def matern52_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )
 
 
@@ -186,8 +293,8 @@ def matern72_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
         ]
     )
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I`` for one step ``dt``."""
         lam2 = lam * lam
         lam3 = lam2 * lam
         dtlam = dt * lam
@@ -220,7 +327,7 @@ def matern72_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
                 ],
             ]
         )
-        return jnp.exp(-dtlam) * (dt * matrix + jnp.eye(4))
+        return _matern_transition_increment(lam, dt, matrix)
 
     return StateSpaceKernel(
         feedback=feedback,
@@ -228,7 +335,7 @@ def matern72_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )
 
 
@@ -243,12 +350,9 @@ def cosine_kernel(*, frequency: float) -> StateSpaceKernel:
     measurement = jnp.asarray([[1.0, 0.0]])
     stationary_cov = jnp.eye(2)
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
-        angle = frequency * dt
-        cos = jnp.cos(angle)
-        sin = jnp.sin(angle)
-        return jnp.asarray([[cos, -sin], [sin, cos]])
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I``, the rotation by ``frequency dt`` minus the identity."""
+        return _rotation_increment(frequency * dt)
 
     return StateSpaceKernel(
         feedback=feedback,
@@ -256,7 +360,7 @@ def cosine_kernel(*, frequency: float) -> StateSpaceKernel:
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )
 
 
@@ -290,16 +394,9 @@ def periodic_kernel(
     q2 = jnp.concatenate([jnp.asarray([1.0]), 2.0 * jnp.ones(order)]) * variance * bessel_factors
     stationary_cov = jnp.kron(jnp.diag(q2), jnp.eye(2))
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
-
-        def single_rotation(angle: jax.Array) -> jax.Array:
-            """Return the 2x2 rotation block for one harmonic at the given angle."""
-            cos = jnp.cos(angle)
-            sin = jnp.sin(angle)
-            return jnp.asarray([[cos, -sin], [sin, cos]])
-
-        blocks = jax.vmap(single_rotation)(angular_frequencies * dt)
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``exp(F dt) - I``, block-diagonal over the harmonic rotations."""
+        blocks = jax.vmap(_rotation_increment)(angular_frequencies * dt)
         return jax.scipy.linalg.block_diag(*blocks)
 
     return StateSpaceKernel(
@@ -308,7 +405,7 @@ def periodic_kernel(
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )
 
 
@@ -432,9 +529,13 @@ def quasi_periodic_matern12_kernel(
     measurement = jnp.kron(matern.measurement, periodic.measurement)
     stationary_cov = jnp.kron(matern.stationary_cov, periodic.stationary_cov)
 
-    def state_transition(dt: jax.Array) -> jax.Array:
-        """Return the discrete-time state-transition matrix over a step ``dt``."""
-        return jnp.kron(matern.state_transition(dt), periodic.state_transition(dt))
+    def transition_increment(dt: jax.Array) -> jax.Array:
+        """Return ``A_m (x) A_p - I = E_m (x) A_p + I (x) E_p`` for one step ``dt``."""
+        periodic_increment = periodic.transition_increment(dt)
+        periodic_transition = jnp.eye(periodic.state_dim) + periodic_increment
+        return jnp.kron(matern.transition_increment(dt), periodic_transition) + jnp.kron(
+            jnp.eye(matern.state_dim), periodic_increment
+        )
 
     return StateSpaceKernel(
         feedback=feedback,
@@ -442,5 +543,5 @@ def quasi_periodic_matern12_kernel(
         diffusion=diffusion,
         measurement=measurement,
         stationary_cov=stationary_cov,
-        state_transition=state_transition,
+        transition_increment=transition_increment,
     )

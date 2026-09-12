@@ -82,7 +82,6 @@ from opifex.uncertainty.statespace.kalman import (
     kalman_smoother,
 )
 from opifex.uncertainty.statespace.kernels import StateSpaceKernel  # noqa: TC001 — eager
-from opifex.uncertainty.statespace.lti_sde import discretize_lti_sde
 from opifex.uncertainty.types import PredictiveDistribution
 
 
@@ -217,13 +216,7 @@ def _build_kronecker_state_space(
 
     def per_step(delta: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Return the temporal transition and process-noise blocks for one time step."""
-        transition_time = temporal_kernel.state_transition(delta)
-        _, process_noise_time = discretize_lti_sde(
-            drift_matrix=temporal_kernel.feedback,
-            dispersion_matrix=temporal_kernel.noise_effect,
-            dt=delta,
-            diffusion=temporal_kernel.diffusion,
-        )
+        transition_time, process_noise_time = temporal_kernel.discretize(delta)
         transition = jnp.kron(identity_space, transition_time)
         process_noise = jnp.kron(spatial_gram, process_noise_time)
         return transition, process_noise
