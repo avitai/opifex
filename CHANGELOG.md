@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   predictive distribution. Registration is explicit through
   `opifex.optimization.l2o.register_l2o_capabilities`, and importing the package registers
   nothing.
+- `periodic_kernel` weights its harmonics with correct Bessel values. The weights
+  `I_n(x) e^{-x}` at `x = lengthscale**-2` came from forward recurrence, which amplifies
+  rounding by roughly `(2n/x)^n` whenever the order exceeds `x`. In float32 with `order=12`
+  the state-space covariance missed the closed-form periodic kernel by 2.4e3 at lengthscale 1
+  and 2.1e9 at lengthscale 2. The values now come from backward recurrence below `x = 3000`
+  and forward recurrence at and above it. They agree with `scipy.special.ive` in value and
+  derivative, and `quasi_periodic_matern12_kernel` inherits the correction.
+- `quasi_periodic_matern12_kernel` declares the diffusion that balances its stationary
+  covariance. It declared zero diffusion, so its SDE did not satisfy the Lyapunov equation,
+  and any consumer that discretises `(F, L, Q_c)` received zero process noise. The spatio-temporal
+  GP is one such consumer. The diffusion is now the Matérn-1/2 diffusion scaled by the periodic
+  stationary covariance.
+
+### Deprecated
+
+- `opifex.uncertainty.statespace.kernels.i0e_vector` is deprecated in favour of
+  `scaled_modified_bessel_i(max_order, argument)`, which returns orders `0..max_order`. The
+  old name now delegates to the corrected evaluation and emits a `DeprecationWarning`.
 
 ## [0.2.5] - 2026-09-11
 

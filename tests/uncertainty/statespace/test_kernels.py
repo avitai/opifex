@@ -19,6 +19,11 @@ For ``Cosine`` and ``Periodic`` we additionally exercise orthogonality of
 the closed-form transition and its periodicity. ``QuasiPeriodicMatern12``
 exercises the Kronecker-product structure.
 
+Every constructor satisfies the Lyapunov equation. The periodic and quasi-periodic
+covariances ``H A(tau) P_inf H^T`` match their closed forms up to the dropped harmonics, and
+the exponentially scaled modified Bessel functions behind the harmonic weights match
+``scipy.special.ive`` in value and derivative.
+
 Canonical reference (line-by-line port):
 * ``../bayesnewton/bayesnewton/kernels.py`` — ``Matern12`` (line 141),
   ``Matern32`` (line 200), ``Matern52`` (line 253), ``Matern72`` (line
@@ -34,10 +39,14 @@ References
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax.scipy.linalg import expm
+from scipy.special import ive
 
 from opifex.uncertainty.statespace import (
     cosine_kernel,
@@ -49,6 +58,11 @@ from opifex.uncertainty.statespace import (
     quasi_periodic_matern12_kernel,
     StateSpaceKernel,
 )
+from opifex.uncertainty.statespace.kernels import i0e_vector, scaled_modified_bessel_i
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 # Each entry: (factory, expected_state_dim, kwargs).
@@ -58,6 +72,27 @@ MATERN_KERNELS: list[tuple[str, object, int, dict[str, float]]] = [
     ("matern52", matern52_kernel, 3, {"variance": 0.8, "lengthscale": 1.1}),
     ("matern72", matern72_kernel, 4, {"variance": 1.4, "lengthscale": 0.7}),
 ]
+
+# Every state-space kernel constructor.
+ALL_KERNELS: list[tuple[str, Callable[[], StateSpaceKernel]]] = [
+    ("matern12", lambda: matern12_kernel(variance=1.7, lengthscale=0.6)),
+    ("matern32", lambda: matern32_kernel(variance=1.2, lengthscale=0.9)),
+    ("matern52", lambda: matern52_kernel(variance=0.8, lengthscale=1.1)),
+    ("matern72", lambda: matern72_kernel(variance=1.4, lengthscale=0.7)),
+    ("cosine", lambda: cosine_kernel(frequency=1.3)),
+    ("periodic", lambda: periodic_kernel(variance=1.3, lengthscale=1.5, period=1.1, order=8)),
+    (
+        "quasi_periodic_matern12",
+        lambda: quasi_periodic_matern12_kernel(
+            variance=0.9,
+            lengthscale_periodic=1.2,
+            period=0.8,
+            lengthscale_matern=1.6,
+            order=8,
+        ),
+    ),
+]
+ALL_KERNEL_IDS = [name for name, _ in ALL_KERNELS]
 
 
 def _is_psd(matrix: jax.Array, atol: float) -> bool:
@@ -134,13 +169,16 @@ def test_matern_state_transition_decays_for_large_dt(name, factory, expected_dim
     assert jnp.max(jnp.abs(far_future)) < 1e-3, name
 
 
-@pytest.mark.parametrize(("name", "factory", "expected_dim", "params"), MATERN_KERNELS)
-def test_matern_stationary_covariance_solves_lyapunov(name, factory, expected_dim, params) -> None:
-    """``F P_inf + P_inf F^T + L Q_c L^T = 0`` — Lyapunov equation residual scales
-    inversely with ``lengthscale**(2 m + 1)`` for Matern-(m+1/2), so test the
-    relative residual rather than an absolute tolerance.
+@pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
+def test_stationary_covariance_solves_lyapunov(
+    name: str, factory: Callable[[], StateSpaceKernel]
+) -> None:
+    """``F P_inf + P_inf F^T + L Q_c L^T = 0`` for every kernel constructor.
+
+    The residual scales inversely with ``lengthscale**(2 m + 1)`` for Matern-(m+1/2), so
+    the test bounds the residual relative to ``|F| |P_inf|``.
     """
-    kernel = factory(**params)
+    kernel = factory()
     residual = _lyapunov_residual(kernel)
     scale = jnp.linalg.norm(kernel.feedback) * jnp.linalg.norm(kernel.stationary_cov)
     relative = jnp.linalg.norm(residual) / (scale + 1e-12)
@@ -391,6 +429,138 @@ def test_quasi_periodic_state_transition_jit_compatible() -> None:
     )
     transition = jax.jit(kernel.state_transition)(jnp.asarray(0.2))
     assert jnp.all(jnp.isfinite(transition))
+
+
+# ---------------------------------------------------------------------------
+# Exponentially scaled modified Bessel functions of the first kind.
+# ---------------------------------------------------------------------------
+
+# Arguments ``x = lengthscale**-2`` spanning lengthscales from 0.006 to 100, plus a dense
+# window where the evaluation changes method.
+_BESSEL_ARGUMENTS = np.concatenate([np.logspace(-4.0, 4.5, 48), [2990.0, 3000.0, 3010.0]])
+# float32 cannot represent smaller values usefully; compare those entries absolutely.
+_REPRESENTABLE_FLOOR = 1e-30
+
+
+@pytest.mark.parametrize("max_order", [0, 6, 30, 100])
+def test_scaled_modified_bessel_i_matches_reference(max_order: int) -> None:
+    """``I_n(x) e^{-x}`` for ``n = 0..max_order`` agrees with ``scipy.special.ive``.
+
+    The reference is evaluated at the float32-rounded argument so the comparison measures the
+    evaluation rather than the argument's rounding.
+    """
+    orders = np.arange(max_order + 1)
+    for argument in _BESSEL_ARGUMENTS:
+        x32 = float(np.float32(argument))
+        values = np.asarray(scaled_modified_bessel_i(max_order, jnp.asarray(x32)), dtype=np.float64)
+        reference = ive(orders, x32)
+        representable = reference > _REPRESENTABLE_FLOOR
+        relative = np.abs(values - reference)[representable] / reference[representable]
+        assert relative.max() < 1e-5, (max_order, x32, float(relative.max()))
+        tiny_error = np.abs(values - reference)[~representable]
+        assert np.all(tiny_error < _REPRESENTABLE_FLOOR), (max_order, x32)
+
+
+@pytest.mark.parametrize("max_order", [6, 100])
+def test_scaled_modified_bessel_i_is_nonnegative(max_order: int) -> None:
+    """Every value is non-negative, so Bessel-weighted stationary covariances stay PSD."""
+    values = jax.vmap(lambda x: scaled_modified_bessel_i(max_order, x))(
+        jnp.asarray(_BESSEL_ARGUMENTS, dtype=jnp.float32)
+    )
+    assert bool(jnp.all(values >= 0.0))
+
+
+def test_scaled_modified_bessel_i_gradient_matches_derivative_identity() -> None:
+    r"""``d/dx [I_n(x) e^{-x}] = (I_{n-1}(x) + I_{n+1}(x)) e^{-x} / 2 - I_n(x) e^{-x}``."""
+    max_order = 30
+    orders = np.arange(max_order + 1)
+    for argument in (1e-3, 0.04, 0.25, 1.0, 4.0, 25.0, 400.0, 2990.0, 3010.0, 2.0e4):
+        x32 = float(np.float32(argument))
+        jacobian = jax.jacfwd(lambda x: scaled_modified_bessel_i(max_order, x))(jnp.asarray(x32))
+        jacobian = np.asarray(jacobian, dtype=np.float64)
+        exact = 0.5 * (ive(np.abs(orders - 1), x32) + ive(orders + 1, x32)) - ive(orders, x32)
+        scale = np.maximum(np.abs(exact), ive(orders, x32))
+        representable = ive(orders, x32) > 1e-24
+        relative = (np.abs(jacobian - exact) / scale)[representable]
+        assert relative.max() < 1e-5, (x32, float(relative.max()))
+
+
+def test_i0e_vector_is_deprecated_and_delegates() -> None:
+    """``i0e_vector`` warns and returns the corrected values at the requested orders."""
+    orders = jnp.asarray([0, 3, 5])
+    with pytest.warns(DeprecationWarning, match="scaled_modified_bessel_i"):
+        values = i0e_vector(orders, 2.0)
+    expected = scaled_modified_bessel_i(5, jnp.asarray(2.0))[orders]
+    assert bool(jnp.array_equal(values, expected))
+
+
+@pytest.mark.parametrize("max_order", [-1, 3000])
+def test_scaled_modified_bessel_i_rejects_orders_outside_the_stable_range(max_order: int) -> None:
+    """Negative orders are undefined here, and forward recurrence needs every order below ``x``."""
+    with pytest.raises(ValueError, match="max_order"):
+        scaled_modified_bessel_i(max_order, jnp.asarray(1.0))
+
+
+def test_scaled_modified_bessel_i_is_jit_compatible() -> None:
+    """The evaluation compiles with the order as a static argument."""
+    compiled = jax.jit(scaled_modified_bessel_i, static_argnums=0)
+    values = compiled(12, jnp.asarray(1.5))
+    assert values.shape == (13,)
+    assert bool(jnp.all(jnp.isfinite(values)))
+
+
+def _truncation_tail(lengthscale: float, order: int) -> float:
+    """Return ``2 sum_{n > order} I_n(x) e^{-x}`` with ``x = lengthscale**-2``.
+
+    The periodic kernel expands ``exp(x (cos(theta) - 1)) = e^{-x} (I_0(x) + 2 sum_n I_n(x)
+    cos(n theta))``, so dropping the harmonics above ``order`` changes the covariance by at most
+    this amount.
+    """
+    x = lengthscale**-2
+    return float(2.0 * ive(np.arange(order + 1, order + 400), x).sum())
+
+
+def _state_space_covariance(kernel: StateSpaceKernel, lags: jax.Array) -> jax.Array:
+    """Return ``H A(tau) P_inf H^T`` at each lag."""
+    return jax.vmap(
+        lambda lag: (
+            kernel.measurement
+            @ kernel.state_transition(lag)
+            @ kernel.stationary_cov
+            @ kernel.measurement.T
+        ).squeeze()
+    )(lags)
+
+
+@pytest.mark.parametrize("lengthscale", [0.5, 1.0, 2.0, 5.0])
+def test_periodic_kernel_covariance_matches_closed_form(lengthscale: float) -> None:
+    """``H A(tau) P_inf H^T = sigma^2 exp(-2 sin^2(pi tau / p) / l^2)`` up to dropped harmonics."""
+    variance, period, order = 1.3, 1.1, 12
+    kernel = periodic_kernel(variance=variance, lengthscale=lengthscale, period=period, order=order)
+    lags = jnp.linspace(0.0, 2.0 * period, 23)
+    closed_form = variance * jnp.exp(-2.0 * jnp.sin(jnp.pi * lags / period) ** 2 / lengthscale**2)
+    bound = variance * _truncation_tail(lengthscale, order) + 1e-5 * variance
+    worst = float(jnp.max(jnp.abs(_state_space_covariance(kernel, lags) - closed_form)))
+    assert worst <= bound, (lengthscale, worst, bound)
+
+
+@pytest.mark.parametrize("lengthscale_periodic", [0.8, 2.0])
+def test_quasi_periodic_kernel_covariance_matches_closed_form(lengthscale_periodic: float) -> None:
+    """``H A(tau) P_inf H^T`` equals the Matern-1/2 times periodic product up to dropped harmonics."""
+    variance, period, lengthscale_matern, order = 0.9, 0.8, 1.6, 12
+    kernel = quasi_periodic_matern12_kernel(
+        variance=variance,
+        lengthscale_periodic=lengthscale_periodic,
+        period=period,
+        lengthscale_matern=lengthscale_matern,
+        order=order,
+    )
+    lags = jnp.linspace(0.0, 3.0, 25)
+    periodic_part = jnp.exp(-2.0 * jnp.sin(jnp.pi * lags / period) ** 2 / lengthscale_periodic**2)
+    closed_form = variance * jnp.exp(-lags / lengthscale_matern) * periodic_part
+    bound = variance * _truncation_tail(lengthscale_periodic, order) + 1e-5 * variance
+    worst = float(jnp.max(jnp.abs(_state_space_covariance(kernel, lags) - closed_form)))
+    assert worst <= bound, (lengthscale_periodic, worst, bound)
 
 
 # ---------------------------------------------------------------------------
