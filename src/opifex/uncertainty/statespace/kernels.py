@@ -29,16 +29,7 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import i0e, i1e
-
-
-# Arguments at or above this value take forward recurrence from ``i0e`` and ``i1e``, which is
-# stable while every order stays below the argument. Below it, backward recurrence is used.
-_BESSEL_FORWARD_RECURRENCE_THRESHOLD = 3000.0
-# Orders added above the highest requested order before backward recurrence starts from a zero
-# ratio. Measured in float32 against ``scipy.special.ive`` for arguments below the threshold:
-# relative error at most 6.4e-7 for 6 orders, 1.3e-6 for 30 and 2.6e-6 for 100.
-_BESSEL_BACKWARD_EXTRA_DEPTH = 512
+from tensorflow_probability.substrates.jax.math import bessel_ive
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -176,7 +167,9 @@ def _rotation_increment(angle: jax.Array) -> jax.Array:
     return jnp.asarray([[cos_minus_one, -sin], [sin, cos_minus_one]])
 
 
-def matern12_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
+def matern12_kernel(
+    *, variance: float | jax.Array, lengthscale: float | jax.Array
+) -> StateSpaceKernel:
     r"""Matern-1/2 (exponential) kernel in SDE form.
 
     State dimension 1. ``F = [[-1/ell]]``, ``Q_c = 2 sigma^2 / ell``,
@@ -202,7 +195,9 @@ def matern12_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     )
 
 
-def matern32_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
+def matern32_kernel(
+    *, variance: float | jax.Array, lengthscale: float | jax.Array
+) -> StateSpaceKernel:
     r"""Matern-3/2 kernel in SDE form. Ports bayesnewton ``Matern32`` (line 200)."""
     lam = jnp.sqrt(3.0) / lengthscale
     feedback = jnp.asarray([[0.0, 1.0], [-(lam**2), -2.0 * lam]])
@@ -227,7 +222,9 @@ def matern32_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     )
 
 
-def matern52_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
+def matern52_kernel(
+    *, variance: float | jax.Array, lengthscale: float | jax.Array
+) -> StateSpaceKernel:
     r"""Matern-5/2 kernel in SDE form. Ports bayesnewton ``Matern52`` (line 253)."""
     lam = jnp.sqrt(5.0) / lengthscale
     feedback = jnp.asarray(
@@ -271,7 +268,9 @@ def matern52_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     )
 
 
-def matern72_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
+def matern72_kernel(
+    *, variance: float | jax.Array, lengthscale: float | jax.Array
+) -> StateSpaceKernel:
     r"""Matern-7/2 kernel in SDE form. Ports bayesnewton ``Matern72`` (line 321)."""
     lam = jnp.sqrt(7.0) / lengthscale
     feedback = jnp.asarray(
@@ -342,7 +341,7 @@ def matern72_kernel(*, variance: float, lengthscale: float) -> StateSpaceKernel:
     )
 
 
-def cosine_kernel(*, frequency: float) -> StateSpaceKernel:
+def cosine_kernel(*, frequency: float | jax.Array) -> StateSpaceKernel:
     r"""Cosine kernel as SDE. Ports bayesnewton ``Cosine`` (line 770).
 
     State dim 2; transition is the 2-D rotation by angle ``frequency dt``.
@@ -368,7 +367,11 @@ def cosine_kernel(*, frequency: float) -> StateSpaceKernel:
 
 
 def periodic_kernel(
-    *, variance: float, lengthscale: float, period: float, order: int = 6
+    *,
+    variance: float | jax.Array,
+    lengthscale: float | jax.Array,
+    period: float | jax.Array,
+    order: int = 6,
 ) -> StateSpaceKernel:
     r"""Periodic kernel via Bessel-weighted sum of harmonic rotations.
 
@@ -378,7 +381,8 @@ def periodic_kernel(
     and ``2 sigma^2 I_n(x) e^{-x}``, the cosine-series coefficients of
     ``sigma^2 exp(x (cos(omega tau) - 1))`` (DLMF 10.35.1). Truncating at
     ``order`` changes the covariance by at most ``2 sigma^2 sum_{n > order}
-    I_n(x) e^{-x}``.
+    I_n(x) e^{-x}``. As in bayesnewton's ``Periodic.kernel_to_state_space``,
+    ``I_n(x) e^{-x}`` comes from TensorFlow Probability's ``bessel_ive``.
     """
     omega = 2.0 * jnp.pi / period
     harmonic_indices = jnp.arange(order + 1)
@@ -393,7 +397,10 @@ def periodic_kernel(
     diffusion = jnp.zeros((state_size, state_size))
     measurement = jnp.kron(jnp.ones((1, order + 1)), jnp.asarray([[1.0, 0.0]]))
 
-    bessel_factors = scaled_modified_bessel_i(order, 1.0 / lengthscale**2)
+    bessel_factors = bessel_ive(
+        jnp.asarray(harmonic_indices, dtype=jnp.result_type(float)),
+        jnp.asarray(1.0 / lengthscale**2, dtype=jnp.result_type(float)),
+    )
     q2 = jnp.concatenate([jnp.asarray([1.0]), 2.0 * jnp.ones(order)]) * variance * bessel_factors
     stationary_cov = jnp.kron(jnp.diag(q2), jnp.eye(2))
 
@@ -412,79 +419,11 @@ def periodic_kernel(
     )
 
 
-def scaled_modified_bessel_i(max_order: int, argument: jax.Array | float) -> jax.Array:
-    r"""Return the exponentially scaled modified Bessel functions ``I_n(x) e^{-x}``.
-
-    Orders run from ``0`` to ``max_order``. Both branches rest on
-    ``I_{n-1}(x) - I_{n+1}(x) = (2 n / x) I_n(x)`` (DLMF 10.29.1). Below
-    ``x = 3000`` the ratios ``r_n = I_n(x) / I_{n-1}(x)`` come from the backward
-    recurrence ``r_n = 1 / (2 n / x + r_{n+1})``, started a fixed number of orders
-    above ``max_order`` with a zero ratio, and the values are ``i0e(x)`` times the
-    running product of ratios. Forward recurrence amplifies rounding by roughly
-    ``(2 n / x)^n`` once the order exceeds ``x``, so it runs only at and above
-    ``x = 3000``, where every accepted order is below ``x``. Each branch is evaluated on
-    an argument valid for it, which keeps values and gradients finite across the switch.
-
-    Args:
-        max_order: Highest order. Static under ``jax.jit``.
-        argument: Positive scalar ``x``.
-
-    Returns:
-        Array of shape ``(max_order + 1,)``.
-
-    Raises:
-        ValueError: If ``max_order`` is negative, or not below the forward-recurrence
-            threshold.
-    """
-    if not 0 <= max_order < _BESSEL_FORWARD_RECURRENCE_THRESHOLD:
-        upper = int(_BESSEL_FORWARD_RECURRENCE_THRESHOLD)
-        raise ValueError(f"max_order must lie in [0, {upper}), got {max_order}")
-    x = jnp.asarray(argument)
-    use_forward = x >= _BESSEL_FORWARD_RECURRENCE_THRESHOLD
-    backward_values = _bessel_backward_recurrence(max_order, jnp.where(use_forward, 1.0, x))
-    forward_values = _bessel_forward_recurrence(
-        max_order, jnp.where(use_forward, x, _BESSEL_FORWARD_RECURRENCE_THRESHOLD)
-    )
-    return jnp.where(use_forward, forward_values, backward_values)
-
-
-def _bessel_backward_recurrence(max_order: int, x: jax.Array) -> jax.Array:
-    """Return ``I_n(x) e^{-x}`` for ``n = 0..max_order`` by backward ratio recurrence."""
-    depth = max_order + _BESSEL_BACKWARD_EXTRA_DEPTH
-
-    def step(next_ratio: jax.Array, order: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Return ``r_n = I_n / I_{n-1}`` from ``r_{n+1}``, as carry and output."""
-        ratio = 1.0 / (2.0 * order / x + next_ratio)
-        return ratio, ratio
-
-    orders = jnp.arange(depth, 0, -1, dtype=x.dtype)
-    _, descending_ratios = jax.lax.scan(step, jnp.zeros_like(x), orders)
-    ratios = descending_ratios[::-1][:max_order]
-    running_product = jnp.concatenate([jnp.ones((1,), dtype=x.dtype), jnp.cumprod(ratios)])
-    return i0e(x) * running_product
-
-
-def _bessel_forward_recurrence(max_order: int, x: jax.Array) -> jax.Array:
-    """Return ``I_n(x) e^{-x}`` for ``n = 0..max_order`` by forward recurrence."""
-
-    def step(
-        carry: tuple[jax.Array, jax.Array], order: jax.Array
-    ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
-        """Return ``I_{n+1} e^{-x}`` from the values at orders ``n - 1`` and ``n``."""
-        previous, current = carry
-        following = previous - 2.0 * order / x * current
-        return (current, following), following
-
-    first, second = i0e(x), i1e(x)
-    _, higher = jax.lax.scan(step, (first, second), jnp.arange(1, max_order, dtype=x.dtype))
-    return jnp.concatenate([jnp.stack([first, second]), higher])[: max_order + 1]
-
-
 def i0e_vector(orders: jax.Array, argument: float) -> jax.Array:
     """Return ``I_n(x) e^{-x}`` at the requested orders.
 
-    Deprecated: use :func:`scaled_modified_bessel_i`, which returns every order up to
-    ``max_order``. This name now delegates to that evaluation.
+    Deprecated: use ``tensorflow_probability.substrates.jax.math.bessel_ive``, which this
+    name now delegates to.
 
     Args:
         orders: Non-negative integer orders.
@@ -494,19 +433,21 @@ def i0e_vector(orders: jax.Array, argument: float) -> jax.Array:
         The values at ``orders``.
     """
     warnings.warn(
-        "i0e_vector is deprecated; use scaled_modified_bessel_i(max_order, argument).",
+        "i0e_vector is deprecated; use "
+        "tensorflow_probability.substrates.jax.math.bessel_ive(orders, argument).",
         DeprecationWarning,
         stacklevel=2,
     )
-    return scaled_modified_bessel_i(int(orders.max()), argument)[orders]
+    dtype = jnp.result_type(float)
+    return bessel_ive(jnp.asarray(orders, dtype=dtype), jnp.asarray(argument, dtype=dtype))
 
 
 def quasi_periodic_matern12_kernel(
     *,
-    variance: float,
-    lengthscale_periodic: float,
-    period: float,
-    lengthscale_matern: float,
+    variance: float | jax.Array,
+    lengthscale_periodic: float | jax.Array,
+    period: float | jax.Array,
+    lengthscale_matern: float | jax.Array,
     order: int = 6,
 ) -> StateSpaceKernel:
     r"""Quasi-periodic Matern-1/2 kernel: product of Periodic and Matern-1/2.
@@ -526,8 +467,9 @@ def quasi_periodic_matern12_kernel(
     )
     state_size = matern.state_dim * periodic.state_dim
     noise_effect = jnp.eye(state_size)
-    # The periodic SDE conserves its stationary covariance (F_p P_p + P_p F_p^T = 0), so the
-    # Lyapunov residual of the product is the Matern term alone: (L_m Q_m L_m^T) (x) P_p.
+    # bayesnewton QuasiPeriodicMatern12 builds the same product diffusion,
+    # ``Qc = np.kron(Qc_m, Pinf_p)`` (kernels.py:935 at f72ae9a); its Matern-3/2 sibling cites
+    # Solin & Sarkka (2014), eq. (32).
     diffusion = jnp.kron(matern.diffusion, periodic.stationary_cov)
     measurement = jnp.kron(matern.measurement, periodic.measurement)
     stationary_cov = jnp.kron(matern.stationary_cov, periodic.stationary_cov)

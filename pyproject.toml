@@ -56,7 +56,10 @@ dependencies = [
   "avitai-artifex>=0.1.5",
   "calibrax>=0.1.5",
   "datarax>=0.1.9",
-  "substrax>=0.1.4"
+  "substrax>=0.1.4",
+  # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
+  # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
+  "tfp-nightly>=0.26.0.dev20251024"
 ]
 description = "Scientific machine learning for JAX/Flax NNX: neural operators, physics-informed networks, E(3)-equivariant atomistic potentials, differentiable DFT, SINDy equation discovery and uncertainty quantification, with PDEBench benchmarking"
 license = {file = "LICENSE"}
@@ -219,8 +222,7 @@ platform = [
 # The exact nightly pin is dropped: nightlies get pruned from PyPI.
 probabilistic = [
   "distrax>=0.1.0,<0.2.0",
-  "tf-keras>=2.19.0",
-  "tfp-nightly>=0.26.0.dev20251024"
+  "tf-keras>=2.19.0"
 ]
 profiling = [
   # Performance profiling and analysis dependencies

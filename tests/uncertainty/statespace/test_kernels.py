@@ -21,8 +21,8 @@ exercises the Kronecker-product structure.
 
 Every constructor satisfies the Lyapunov equation. The periodic and quasi-periodic
 covariances ``H A(tau) P_inf H^T`` match their closed forms up to the dropped harmonics, and
-the exponentially scaled modified Bessel functions behind the harmonic weights match
-``scipy.special.ive`` in value and derivative.
+the periodic harmonic weights match ``scipy.special.ive`` in value and in their derivative with
+respect to the lengthscale.
 
 Canonical reference (line-by-line port):
 * ``../bayesnewton/bayesnewton/kernels.py`` — ``Matern12`` (line 141),
@@ -48,6 +48,7 @@ import pytest
 from jax.scipy.linalg import expm
 from scipy.linalg import expm as scipy_expm
 from scipy.special import ive
+from tensorflow_probability.substrates.jax.math import bessel_ive
 
 from opifex.uncertainty.statespace import (
     cosine_kernel,
@@ -60,7 +61,7 @@ from opifex.uncertainty.statespace import (
     quasi_periodic_matern12_kernel,
     StateSpaceKernel,
 )
-from opifex.uncertainty.statespace.kernels import i0e_vector, scaled_modified_bessel_i
+from opifex.uncertainty.statespace.kernels import i0e_vector
 
 
 if TYPE_CHECKING:
@@ -458,81 +459,77 @@ def test_quasi_periodic_state_transition_jit_compatible() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Exponentially scaled modified Bessel functions of the first kind.
+# Periodic harmonic weights: exponentially scaled modified Bessel functions.
 # ---------------------------------------------------------------------------
 
-# Arguments ``x = lengthscale**-2`` spanning lengthscales from 0.006 to 100, plus a dense
-# window where the evaluation changes method.
-_BESSEL_ARGUMENTS = np.concatenate([np.logspace(-4.0, 4.5, 48), [2990.0, 3000.0, 3010.0]])
 # float32 cannot represent smaller values usefully; compare those entries absolutely.
 _REPRESENTABLE_FLOOR = 1e-30
+# The weights come from TensorFlow Probability's ``bessel_ive``, as in bayesnewton's periodic
+# kernels. TFP's own float32 accuracy contract (tensorflow/probability c97a7cd,
+# ``math/bessel_test.py``) is rtol 7e-6 for orders and arguments in [1, 10], 1e-6 for [10, 100],
+# and a gradient error below 2e-4.
+_BESSEL_WEIGHT_TOLERANCE = 1e-5
+_BESSEL_GRADIENT_TOLERANCE = 2e-4
 
 
-@pytest.mark.parametrize("max_order", [0, 6, 30, 100])
-def test_scaled_modified_bessel_i_matches_reference(max_order: int) -> None:
-    """``I_n(x) e^{-x}`` for ``n = 0..max_order`` agrees with ``scipy.special.ive``.
+def _harmonic_multiplicity(order: int) -> np.ndarray:
+    """Return ``[1, 2, ..., 2]``, the cosine-series multiplicity of each harmonic."""
+    return np.concatenate([[1.0], np.full(order, 2.0)])
 
-    The reference is evaluated at the float32-rounded argument so the comparison measures the
-    evaluation rather than the argument's rounding.
-    """
-    orders = np.arange(max_order + 1)
-    for argument in _BESSEL_ARGUMENTS:
-        x32 = float(np.float32(argument))
-        values = np.asarray(scaled_modified_bessel_i(max_order, jnp.asarray(x32)), dtype=np.float64)
-        reference = ive(orders, x32)
+
+@pytest.mark.parametrize("order", [6, 30])
+def test_periodic_harmonic_weights_are_scaled_bessel_functions(order: int) -> None:
+    """Stationary variances are ``sigma^2 [1, 2, ..., 2] I_n(x) e^{-x}`` at ``x = lengthscale**-2``."""
+    variance = 1.3
+    orders = np.arange(order + 1)
+    for lengthscale in (0.1, 0.3, 1.0, 3.0, 30.0, 100.0):
+        kernel = periodic_kernel(
+            variance=variance, lengthscale=lengthscale, period=1.1, order=order
+        )
+        weights = np.asarray(jnp.diag(kernel.stationary_cov)[::2], dtype=np.float64)
+        argument = float(np.float32(1.0 / lengthscale**2))
+        reference = variance * _harmonic_multiplicity(order) * ive(orders, argument)
         representable = reference > _REPRESENTABLE_FLOOR
-        relative = np.abs(values - reference)[representable] / reference[representable]
-        assert relative.max() < 1e-5, (max_order, x32, float(relative.max()))
-        tiny_error = np.abs(values - reference)[~representable]
-        assert np.all(tiny_error < _REPRESENTABLE_FLOOR), (max_order, x32)
+        relative = np.abs(weights - reference)[representable] / reference[representable]
+        assert relative.max() <= _BESSEL_WEIGHT_TOLERANCE, (
+            order,
+            lengthscale,
+            float(relative.max()),
+        )
+        assert np.all(np.abs(weights - reference)[~representable] < _REPRESENTABLE_FLOOR)
 
 
-@pytest.mark.parametrize("max_order", [6, 100])
-def test_scaled_modified_bessel_i_is_nonnegative(max_order: int) -> None:
-    """Every value is non-negative, so Bessel-weighted stationary covariances stay PSD."""
-    values = jax.vmap(lambda x: scaled_modified_bessel_i(max_order, x))(
-        jnp.asarray(_BESSEL_ARGUMENTS, dtype=jnp.float32)
-    )
-    assert bool(jnp.all(values >= 0.0))
+def test_periodic_harmonic_weights_are_differentiable_in_the_lengthscale() -> None:
+    r"""``d/dl`` of the weights follows ``d/dx [I_n e^{-x}] = (I_{n-1} + I_{n+1}) e^{-x} / 2 - I_n e^{-x}``."""
+    variance, order = 1.3, 12
+    orders = np.arange(order + 1)
+    multiplicity = _harmonic_multiplicity(order)
+    for lengthscale in (0.3, 1.0, 3.0):
 
+        def weights(ell: jax.Array) -> jax.Array:
+            kernel = periodic_kernel(variance=variance, lengthscale=ell, period=1.1, order=order)
+            return jnp.diag(kernel.stationary_cov)[::2]
 
-def test_scaled_modified_bessel_i_gradient_matches_derivative_identity() -> None:
-    r"""``d/dx [I_n(x) e^{-x}] = (I_{n-1}(x) + I_{n+1}(x)) e^{-x} / 2 - I_n(x) e^{-x}``."""
-    max_order = 30
-    orders = np.arange(max_order + 1)
-    for argument in (1e-3, 0.04, 0.25, 1.0, 4.0, 25.0, 400.0, 2990.0, 3010.0, 2.0e4):
-        x32 = float(np.float32(argument))
-        jacobian = jax.jacfwd(lambda x: scaled_modified_bessel_i(max_order, x))(jnp.asarray(x32))
-        jacobian = np.asarray(jacobian, dtype=np.float64)
-        exact = 0.5 * (ive(np.abs(orders - 1), x32) + ive(orders + 1, x32)) - ive(orders, x32)
-        scale = np.maximum(np.abs(exact), ive(orders, x32))
-        representable = ive(orders, x32) > 1e-24
-        relative = (np.abs(jacobian - exact) / scale)[representable]
-        assert relative.max() < 1e-5, (x32, float(relative.max()))
+        jacobian = np.asarray(jax.jacfwd(weights)(jnp.asarray(lengthscale)), dtype=np.float64)
+        argument = float(np.float32(1.0 / lengthscale**2))
+        value = variance * multiplicity * ive(orders, argument)
+        slope = 0.5 * (ive(np.abs(orders - 1), argument) + ive(orders + 1, argument)) - ive(
+            orders, argument
+        )
+        expected = variance * multiplicity * slope * (-2.0 / lengthscale**3)
+        representable = value > 1e-24
+        scale = np.maximum(np.abs(expected), value)
+        relative = (np.abs(jacobian - expected) / scale)[representable]
+        assert relative.max() <= _BESSEL_GRADIENT_TOLERANCE, (lengthscale, float(relative.max()))
 
 
 def test_i0e_vector_is_deprecated_and_delegates() -> None:
-    """``i0e_vector`` warns and returns the corrected values at the requested orders."""
+    """``i0e_vector`` warns and returns TensorFlow Probability's ``bessel_ive`` values."""
     orders = jnp.asarray([0, 3, 5])
-    with pytest.warns(DeprecationWarning, match="scaled_modified_bessel_i"):
+    with pytest.warns(DeprecationWarning, match="bessel_ive"):
         values = i0e_vector(orders, 2.0)
-    expected = scaled_modified_bessel_i(5, jnp.asarray(2.0))[orders]
+    expected = bessel_ive(jnp.asarray([0.0, 3.0, 5.0]), jnp.asarray(2.0))
     assert bool(jnp.array_equal(values, expected))
-
-
-@pytest.mark.parametrize("max_order", [-1, 3000])
-def test_scaled_modified_bessel_i_rejects_orders_outside_the_stable_range(max_order: int) -> None:
-    """Negative orders are undefined here, and forward recurrence needs every order below ``x``."""
-    with pytest.raises(ValueError, match="max_order"):
-        scaled_modified_bessel_i(max_order, jnp.asarray(1.0))
-
-
-def test_scaled_modified_bessel_i_is_jit_compatible() -> None:
-    """The evaluation compiles with the order as a static argument."""
-    compiled = jax.jit(scaled_modified_bessel_i, static_argnums=0)
-    values = compiled(12, jnp.asarray(1.5))
-    assert values.shape == (13,)
-    assert bool(jnp.all(jnp.isfinite(values)))
 
 
 def _truncation_tail(lengthscale: float, order: int) -> float:

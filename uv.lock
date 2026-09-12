@@ -4384,6 +4384,7 @@ dependencies = [
     { name = "scipy" },
     { name = "substrax" },
     { name = "tensorly" },
+    { name = "tfp-nightly" },
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
@@ -4461,7 +4462,6 @@ all = [
     { name = "tensorboard-plugin-profile" },
     { name = "tensorflow" },
     { name = "tf-keras" },
-    { name = "tfp-nightly" },
     { name = "twine" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -4523,7 +4523,6 @@ all-cpu = [
     { name = "tensorboard-plugin-profile" },
     { name = "tensorflow" },
     { name = "tf-keras" },
-    { name = "tfp-nightly" },
     { name = "twine" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -4584,7 +4583,6 @@ all-macos = [
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "substrax", extra = ["mlflow"] },
     { name = "tf-keras" },
-    { name = "tfp-nightly" },
     { name = "twine" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -4775,7 +4773,6 @@ platform = [
 probabilistic = [
     { name = "distrax" },
     { name = "tf-keras" },
-    { name = "tfp-nightly" },
 ]
 profiling = [
     { name = "tensorboard-plugin-profile" },
@@ -4949,7 +4946,7 @@ requires-dist = [
     { name = "tensorflow", marker = "extra == 'profiling'", specifier = ">=2.20.0" },
     { name = "tensorly", specifier = ">=0.9.0" },
     { name = "tf-keras", marker = "extra == 'probabilistic'", specifier = ">=2.19.0" },
-    { name = "tfp-nightly", marker = "extra == 'probabilistic'", specifier = ">=0.26.0.dev20251024" },
+    { name = "tfp-nightly", specifier = ">=0.26.0.dev20251024" },
     { name = "torch", marker = "extra == 'pdebench'", specifier = ">=2.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=4.0.2" },
