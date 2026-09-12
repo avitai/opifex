@@ -37,6 +37,7 @@ from opifex.uncertainty.gp.laplace_classification import (
 )
 from opifex.uncertainty.statespace import matern32_kernel as state_space_matern32_kernel
 from opifex.uncertainty.types import PredictiveDistribution
+from tests.uncertainty.markov._helpers import binary_labels
 
 
 # -----------------------------------------------------------------------------
@@ -51,7 +52,7 @@ def test_fit_markov_vi_gp_returns_finite_smoothed_state() -> None:
     times = jnp.sort(
         jax.random.uniform(jax.random.PRNGKey(0), (20,), minval=0.0, maxval=2.0 * jnp.pi)
     )
-    targets = jnp.sign(jnp.sin(2.0 * times))
+    targets = binary_labels(times)
     kernel = state_space_matern32_kernel(variance=1.0, lengthscale=0.6)
     fitted = fit_markov_vi_gp(
         times=times,
@@ -73,7 +74,7 @@ def test_predict_markov_vi_gp_returns_predictive_distribution() -> None:
     from opifex.uncertainty.markov import fit_markov_vi_gp, predict_markov_vi_gp
 
     times = jnp.linspace(0.0, 4.0, 18)
-    targets = jnp.sign(jnp.sin(2.0 * times))
+    targets = binary_labels(times)
     kernel = state_space_matern32_kernel(variance=1.0, lengthscale=0.5)
     state = fit_markov_vi_gp(
         times=times,
@@ -96,7 +97,7 @@ def test_markov_vi_full_pipeline_is_jit_compatible() -> None:
     from opifex.uncertainty.markov import fit_markov_vi_gp, predict_markov_vi_gp
 
     times = jnp.linspace(0.0, 4.0, 15)
-    targets = jnp.sign(jnp.sin(2.0 * times))
+    targets = binary_labels(times)
     kernel = state_space_matern32_kernel(variance=1.0, lengthscale=0.5)
 
     @jax.jit
@@ -170,7 +171,7 @@ def test_fit_bernoulli_markov_vi_gp_returns_class_probabilities_in_unit_interval
     )
 
     times = jnp.linspace(0.0, 4.0, 16)
-    targets = jnp.sign(jnp.sin(2.0 * times))
+    targets = binary_labels(times)
     kernel = state_space_matern32_kernel(variance=1.0, lengthscale=0.5)
     state = fit_bernoulli_markov_vi_gp(
         times=times,
@@ -263,7 +264,7 @@ def test_markov_vi_elbo_is_finite_scalar() -> None:
     from opifex.uncertainty.markov import fit_markov_vi_gp
 
     times = jnp.linspace(0.0, 4.0, 14)
-    targets = jnp.sign(jnp.sin(2.0 * times))
+    targets = binary_labels(times)
     kernel = state_space_matern32_kernel(variance=1.0, lengthscale=0.5)
     state = fit_markov_vi_gp(
         times=times,

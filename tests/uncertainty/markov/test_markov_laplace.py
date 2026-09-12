@@ -57,13 +57,14 @@ from opifex.uncertainty.gp.laplace_classification import (
 )
 from opifex.uncertainty.statespace import matern32_kernel as state_space_matern32_kernel
 from opifex.uncertainty.types import PredictiveDistribution
+from tests.uncertainty.markov._helpers import binary_labels
 
 
 def _toy_binary_time_series(seed: int = 0, num_train: int = 20) -> tuple[jax.Array, jax.Array]:
     """1-D Bernoulli classification on a sorted time grid: ``y = sign(sin(2 t))``."""
     key = jax.random.PRNGKey(seed)
     times = jnp.sort(jax.random.uniform(key, (num_train,), minval=0.0, maxval=2.0 * jnp.pi))
-    targets = jnp.sign(jnp.sin(2.0 * times))
+    targets = binary_labels(times)
     return times, targets
 
 
