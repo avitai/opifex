@@ -47,13 +47,12 @@ References:
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
+from opifex.uncertainty._gauss_hermite import ConditionalMomentsFn, gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
@@ -72,15 +71,6 @@ _PSEUDO_NOISE_FLOOR: float = 1e-6
 _SLR_SLOPE_FLOOR: float = 1e-6
 """Floor on ``|A|`` to keep the pseudo-observation ``(y - b) / A`` finite
 when the SLR slope vanishes near a saturated likelihood."""
-
-
-ConditionalMomentsFn = Callable[[jax.Array], tuple[jax.Array, jax.Array]]
-"""``f -> (E[y|f], Var[y|f])`` per-observation conditional moments.
-
-Both ``f`` and the returned arrays share the same shape — typically
-``()`` for scalar evaluation under :func:`jax.grad`, or ``(Q,)`` for
-batched cubature evaluation across ``Q`` sigma points.
-"""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -17,10 +17,12 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._gauss_hermite import predictive_moments
 from opifex.uncertainty._predictive import (
     gaussian_process_predictive,
     replace_predictive_metadata,
 )
+from opifex.uncertainty.gp.laplace_likelihoods import _beta_conditional_moments_factory
 from opifex.uncertainty.markov._likelihood_support import latent_variance
 from opifex.uncertainty.markov.markov_pl import (
     fit_markov_pl_gp,
@@ -284,19 +286,6 @@ def predict_studentst_markov_pl_gp(
 # -----------------------------------------------------------------------------
 
 
-def _beta_conditional_moments_factory(*, scale: float):
-    r"""``f -> (sigmoid(f), sigmoid(f) (1 - sigmoid(f)) / (scale + 1))``."""
-    scale_arr = jnp.asarray(scale)
-
-    def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Return the Beta conditional mean and variance via the logit link."""
-        mean = jax.nn.sigmoid(f)
-        variance = mean * (1.0 - mean) / (scale_arr + 1.0)
-        return mean, variance
-
-    return _moments
-
-
 def fit_beta_markov_pl_gp(
     *,
     times: jax.Array,
@@ -323,11 +312,17 @@ def predict_beta_markov_pl_gp(
     times_test: jax.Array,
     scale: float = 10.0,
 ) -> PredictiveDistribution:
-    r"""Predict Beta response mean ``sigmoid(latent_mean)`` + Beta marginal variance."""
+    r"""Predict the Beta response (logit link) under the posterior-linearisation posterior.
+
+    ``E[y*]`` and ``Var[y*]`` integrate the Beta conditional moments ``sigmoid(f)`` and
+    ``sigmoid(f) (1 - sigmoid(f)) / (scale + 1)`` over the latent Gaussian by Gauss-Hermite
+    quadrature. ``epistemic`` carries the latent variance.
+    """
     latent = predict_markov_pl_gp(state=state, times_test=times_test)
     variance = latent_variance(latent)
-    response_mean = jax.nn.sigmoid(latent.mean)
-    response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
+    response_mean, response_variance = predictive_moments(
+        _beta_conditional_moments_factory(scale=scale), latent.mean, variance
+    )
     return replace_predictive_metadata(
         gaussian_process_predictive(
             response_mean,

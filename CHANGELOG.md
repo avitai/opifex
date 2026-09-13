@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Beta response predictors `predict_beta_laplace_gp`, `predict_beta_markov_laplace_gp`,
+  `predict_beta_markov_vi_gp`, `predict_beta_markov_pep_gp` and `predict_beta_markov_pl_gp` return
+  the predictive mean and variance of the response. They returned the Beta variance
+  `m (1 - m) / (s + 1)` at a single mean and left out the latent uncertainty. Over latent means in
+  [-4, 4], latent variances from 0.1 to 4 and precisions from 10 to 50, that variance was as little
+  as a twentieth of the predictive variance. The power-EP and posterior-linearisation predictors
+  also took the mean at the latent mean, off by up to 0.11. Each predictor now integrates the Beta
+  conditional moments over the latent Gaussian with 20-point Gauss-Hermite quadrature,
+  `Var[y] = E[Var[y | f]] + Var[E[y | f]]`. `epistemic` still carries the latent variance.
 - The learn-to-optimize surfaces declare their uncertainty capability again. Rebuilding the
   subsystem removed `BayesianSchedulerOptimizer` together with the only `l2o:` entry in the
   capability registry, so no L2O surface declared a UQ strategy. `L2OEngine` and

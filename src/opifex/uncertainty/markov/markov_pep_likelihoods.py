@@ -25,10 +25,12 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._gauss_hermite import predictive_moments
 from opifex.uncertainty._predictive import (
     gaussian_process_predictive,
     replace_predictive_metadata,
 )
+from opifex.uncertainty.gp.laplace_likelihoods import _beta_conditional_moments_factory
 from opifex.uncertainty.gp.svgp_stochastic import (
     bernoulli_log_likelihood,
     poisson_log_likelihood,
@@ -410,16 +412,17 @@ def predict_beta_markov_pep_gp(
     times_test: jax.Array,
     scale: float = 10.0,
 ) -> PredictiveDistribution:
-    r"""Predict Beta response mean ``E[y*] = sigmoid(latent_mean)``.
+    r"""Predict the Beta response (logit link) under the power-EP posterior.
 
-    Predictive variance under the unit-interval link uses the standard
-    Beta(α, β) marginal variance ``mean (1 - mean) / (scale + 1)`` at
-    ``mean = sigmoid(latent_mean)``.
+    ``E[y*]`` and ``Var[y*]`` integrate the Beta conditional moments ``sigmoid(f)`` and
+    ``sigmoid(f) (1 - sigmoid(f)) / (scale + 1)`` over the latent Gaussian by Gauss-Hermite
+    quadrature. ``epistemic`` carries the latent variance.
     """
     latent = predict_markov_pep_gp(state=state, times_test=times_test)
     variance = latent_variance(latent)
-    response_mean = jax.nn.sigmoid(latent.mean)
-    response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
+    response_mean, response_variance = predictive_moments(
+        _beta_conditional_moments_factory(scale=scale), latent.mean, variance
+    )
     return replace_predictive_metadata(
         gaussian_process_predictive(
             response_mean,

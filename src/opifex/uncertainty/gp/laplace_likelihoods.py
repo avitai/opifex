@@ -45,6 +45,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._gauss_hermite import ConditionalMomentsFn, predictive_moments
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
@@ -380,6 +381,18 @@ def _beta_components_factory(*, scale: float) -> LikelihoodComponentsFn:
     return _components
 
 
+def _beta_conditional_moments_factory(*, scale: float) -> ConditionalMomentsFn:
+    r"""Build ``f -> (σ(f), σ(f) (1 - σ(f)) / (s + 1))``, the Beta response moments (logit link)."""
+    scale_arr = jnp.asarray(scale)
+
+    def _moments(f: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return the Beta conditional mean and variance for latent ``f``."""
+        mean = jax.nn.sigmoid(f)
+        return mean, mean * (1.0 - mean) / (scale_arr + 1.0)
+
+    return _moments
+
+
 def fit_beta_laplace_gp(
     *,
     x_train: jax.Array,
@@ -427,17 +440,18 @@ def predict_beta_laplace_gp(
 ) -> PredictiveDistribution:
     r"""Predict Beta response moments at ``x_test`` (logit link).
 
-    Approximates ``E[σ(f*)]`` by **MacKay's probit-style sigmoid
-    approximation**:
+    The Beta response has conditional moments ``E[y | f] = σ(f)`` and
+    ``Var[y | f] = σ(f) (1 - σ(f)) / (s + 1)``. Under the latent Laplace posterior
+    ``f_* ~ N(μ_*, V_*)``,
 
     .. math::
 
-        \mathbb{E}[σ(f_*)] \approx σ\!\left(
-            \frac{\mu}{\sqrt{1 + π\,V / 8}}
-        \right),
+        \mathbb{E}[y_*] = \mathbb{E}[σ(f_*)], \qquad
+        \operatorname{Var}[y_*] = \mathbb{E}\!\left[\frac{σ(f_*)\,(1 - σ(f_*))}{s + 1}\right]
+            + \operatorname{Var}[σ(f_*)],
 
-    then returns the implied Beta variance
-    ``Var[y*] = m̂ (1 - m̂) / (s + 1)`` at that mean.
+    each expectation by Gauss-Hermite quadrature
+    (:func:`opifex.uncertainty._gauss_hermite.predictive_moments`).
 
     Args:
         state: Fitted :class:`LaplaceGPState`.
@@ -445,14 +459,13 @@ def predict_beta_laplace_gp(
         scale: Beta precision used at fit time. Defaults to ``10.0``.
 
     Returns:
-        :class:`PredictiveDistribution` whose ``mean`` is
-        ``E[y* | x*] ∈ (0, 1)`` and whose ``variance`` is the implied
-        Beta variance. ``epistemic`` carries the latent ``Var f_*``.
+        :class:`PredictiveDistribution` whose ``mean`` is ``E[y* | x*] ∈ (0, 1)`` and whose
+        ``variance`` is ``Var[y* | x*]``. ``epistemic`` carries the latent ``Var f_*``.
     """
     latent_mean, latent_variance = predict_laplace_latent_moments(state=state, x_test=x_test)
-    kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * latent_variance / 8.0)
-    response_mean = jax.nn.sigmoid(kappa * latent_mean)
-    response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
+    response_mean, response_variance = predictive_moments(
+        _beta_conditional_moments_factory(scale=scale), latent_mean, latent_variance
+    )
     return gaussian_process_predictive(
         response_mean,
         response_variance,

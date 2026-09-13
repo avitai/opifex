@@ -9,7 +9,7 @@ D5 ``LikelihoodComponentsFn`` factories shipped in
 * calls :func:`fit_markov_laplace_gp` to run the Newton-Kalman loop,
 * exposes a ``predict_*_markov_laplace_gp`` companion that maps the
   latent posterior through the per-likelihood response link
-  (MacKay-probit for Bernoulli/Beta, log-normal for Poisson,
+  (MacKay-probit for Bernoulli, Gauss-Hermite moments for Beta, log-normal for Poisson,
   identity-plus-noise for Student-t / Gaussian).
 
 The exit criterion for Task 11.2 — *"at least 5 non-Gaussian
@@ -32,6 +32,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty._gauss_hermite import predictive_moments
 from opifex.uncertainty._predictive import (
     gaussian_process_predictive,
     replace_predictive_metadata,
@@ -41,6 +42,7 @@ from opifex.uncertainty.gp.laplace_classification import (
 )
 from opifex.uncertainty.gp.laplace_likelihoods import (
     _beta_components_factory,
+    _beta_conditional_moments_factory,
     _poisson_log_likelihood_components,
     _studentst_components_factory,
 )
@@ -234,12 +236,17 @@ def predict_beta_markov_laplace_gp(
     times_test: jax.Array,
     scale: float = 10.0,
 ) -> PredictiveDistribution:
-    r"""Predict Beta response: mean ``σ(κ μ)``, variance ``m̂(1-m̂)/(s+1)``."""
+    r"""Predict the Beta response (logit link) under the latent posterior.
+
+    ``E[y*]`` and ``Var[y*]`` integrate the Beta conditional moments ``sigmoid(f)`` and
+    ``sigmoid(f) (1 - sigmoid(f)) / (scale + 1)`` over the latent Gaussian by Gauss-Hermite
+    quadrature. ``epistemic`` carries the latent variance.
+    """
     latent = predict_markov_laplace_gp(state=state, times_test=times_test)
     variance = latent_variance(latent)
-    kappa = 1.0 / jnp.sqrt(1.0 + jnp.pi * variance / 8.0)
-    response_mean = jax.nn.sigmoid(kappa * latent.mean)
-    response_variance = response_mean * (1.0 - response_mean) / (scale + 1.0)
+    response_mean, response_variance = predictive_moments(
+        _beta_conditional_moments_factory(scale=scale), latent.mean, variance
+    )
     response = gaussian_process_predictive(
         response_mean,
         response_variance,
