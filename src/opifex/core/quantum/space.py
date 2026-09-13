@@ -1,7 +1,7 @@
 r"""Boundary-condition spaces: free and periodic ``(displacement, shift)`` pairs.
 
-A native, ``jax``/``vmap``-clean reimplementation of the space abstraction in
-``../jax-md/jax_md/space.py`` (Schoenholz & Cubuk 2020, "JAX-MD"). A *space* injects
+A native, ``jax``/``vmap``-clean implementation of the space abstraction of JAX MD
+(Schoenholz & Cubuk 2020, NeurIPS). A *space* injects
 boundary conditions into geometry calculations through two functions:
 
 * ``displacement(ra, rb)`` -- the separation between two points (the

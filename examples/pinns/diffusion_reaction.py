@@ -18,7 +18,7 @@
 # This example demonstrates solving a diffusion-reaction equation using a PINN.
 # The problem features multiple frequency components that the network must learn.
 #
-# **Reference**: DeepXDE `examples/pinn_forward/diffusion_reaction.py`
+# **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

@@ -2,7 +2,7 @@
 
 The decisive test is unbiasedness: the antithetic-ES meta-gradient (the core of PES over a full
 unroll) must match the exact meta-gradient from autodiff through the unroll. Reference:
-``learned_optimization/outer_trainers/truncated_pes.py``; Vicol et al. 2021 (``arXiv:2112.13835``).
+Vicol et al. 2021 (``arXiv:2112.13835``).
 """
 
 from __future__ import annotations

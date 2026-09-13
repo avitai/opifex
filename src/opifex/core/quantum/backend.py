@@ -24,12 +24,13 @@ The implementation follows the standard McMurchie-Davidson scheme:
 * The Boys function :math:`F_n(x)=\int_0^1 t^{2n} e^{-x t^2}\,dt` is evaluated in
   :mod:`opifex.core.quantum._boys` with a three-branch ``jnp.select`` (analytic
   ``x=0`` limit, ascending series, large-``x`` asymptotic; the MESS
-  ``gammanu_select`` strategy) so it is accurate and AD-safe in both limits.
+  strategy of Helal & Fitzgibbon 2024) so it is accurate and AD-safe in both limits.
 
 The full AO integral tensors are assembled by the batched flat-primitive harness
 (:mod:`opifex.core.quantum._flat_harness` over
-:class:`opifex.core.quantum.basis.FlatPrimitives`, the ``graphcore-research/mess``
-batching pattern -- one ``vmap`` + ``segment_sum`` pass, ``jit``-compilable). The
+:class:`opifex.core.quantum.basis.FlatPrimitives`, the MESS batching strategy of
+Helal & Fitzgibbon 2024, arXiv:2406.03121 -- one ``vmap`` + ``segment_sum``
+pass, ``jit``-compilable). The
 recurrence indexing is cross-checked against the Joshua Goings "Integrals"
 write-up of McMurchie-Davidson (which follows Helgaker); every integral is
 validated against an eager per-primitive reference to ~1e-10 and against PySCF to
@@ -237,7 +238,7 @@ class JaxGaussianBackend:
     def _assemble_one_electron(self) -> tuple[Array, Array, Array]:
         """Assemble ``(S, T, V)`` with one batched ``vmap`` over primitive pairs.
 
-        Uses the flat-primitive harness (MESS ``integrate_dense`` pattern): a
+        Uses the flat-primitive harness: a
         single ``vmap`` over the upper-triangular primitive pairs followed by a
         double ``segment_sum`` contraction to AOs -- no Python shell loop, so the
         whole build traces once and ``jit``-compiles.
@@ -267,7 +268,7 @@ class JaxGaussianBackend:
     def electron_repulsion(self) -> Array:
         """Return the ERI tensor ``(ij|kl)`` in chemist notation.
 
-        Built with the flat-primitive harness (MESS ``eri_basis`` pattern): the
+        Built with the flat-primitive harness: the
         8-fold-unique AO quartets are evaluated in chunked ``vmap`` traces over
         primitive quartets, contracted with ``segment_sum``, then scattered into
         the eight permutation-equivalent dense positions. One trace per chunk --

@@ -22,8 +22,7 @@ beats a *properly tuned* classical optimiser.
 
 **The idea.** A hand-designed optimiser (SGD, Adam) applies the same fixed update rule to every
 problem. A *learned* optimiser is trained so that its update rule is itself good across a whole
-*distribution* of objectives. Opifex follows the design of Google's `learned_optimization`
-library and the L2O literature:
+*distribution* of objectives. Opifex follows the L2O literature:
 
 - **Tasks carry their objective.** A `Task` exposes `init` (sample optimisee parameters) and
   `loss`; a `TaskFamily` samples tasks, giving a meta-training distribution and a held-out
@@ -31,8 +30,7 @@ library and the L2O literature:
   descent*, arXiv:1606.04474).
 - **The showcase task is neural-network training.** `MLPTaskFamily` is a teacher-student MLP
   regression — a *non-convex* training objective, the regime where learned optimisers genuinely
-  beat fixed-hyperparameter baselines (it mirrors the `MLPTask` in the `learned_optimization`
-  tutorials; here it is self-contained with synthetic data, no dataset dependency).
+  beat fixed-hyperparameter baselines (self-contained with synthetic data, no dataset dependency).
 - **Per-parameter MLP optimiser.** `MLPLearnedOptimizer` maps a per-parameter feature vector
   (gradient, parameter, multi-timescale momentum, a tanh embedding of the step index) to a
   `(direction, magnitude)` update, shared across all coordinates (Metz et al. 2020,

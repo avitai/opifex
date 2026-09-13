@@ -14,7 +14,7 @@ Key features:
 - **Real Kohn-Sham SCF**: LDA (Slater + VWN5) and PBE GGA functionals with DIIS
   acceleration and a direct-minimisation mode.
 - **Analytic forces**: Implicit differentiation of the converged SCF fixed point
-  (the PySCFAD rationale) gives exact, memory-cheap `F = -dE/dR`.
+  (as in Zhang & Chan 2022, arXiv:2207.13836) gives exact, memory-cheap `F = -dE/dR`.
 - **Trainable XC**: A constrained `NeuralXCFunctional` can replace the analytic
   XC inside the same SCF, with exact `dE/dtheta` for end-to-end learning.
 - **Flax NNX / JAX**: Fully compatible with `jit`, `grad`, and `vmap`.

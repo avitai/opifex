@@ -24,7 +24,7 @@
 # approach for solving differential equations" (2023)
 # https://github.com/benmoseley/FBPINNs
 #
-# **Problem:** HarmonicOscillator1DHardBC from `fbpinns/problems.py`
+# **Problem:** damped harmonic oscillator with a hard initial-condition constraint
 
 # %% [markdown]
 # ## Setup and Imports
@@ -46,7 +46,7 @@ from opifex.neural.pinns.domain_decomposition import (
 # %% [markdown]
 # ## Configuration
 #
-# Following the FBPINNs reference implementation (HarmonicOscillator1DHardBC):
+# Following the FBPINN setup of Moseley, Markham & Nissen-Meyer (2023):
 # - Domain: t in [0, 1]
 # - Damped harmonic oscillator: m*u'' + mu*u' + k*u = 0
 # - Parameters: d=2, w0=20 (gives mu=4, k=400)
@@ -54,7 +54,7 @@ from opifex.neural.pinns.domain_decomposition import (
 # - sd=0.1 for the hard constraint smoothness
 
 # %%
-# Problem configuration (from FBPINNs reference). These physics constants are
+# Problem configuration (Moseley et al. 2023). These physics constants are
 # referenced as default arguments by the module-level helpers below, so they
 # must remain at module scope.
 T_MIN, T_MAX = 0.0, 1.0
@@ -90,7 +90,7 @@ HIDDEN_DIMS = [32, 32]
 def exact_solution(t, d=D, w0=W0):
     """Exact solution for damped harmonic oscillator.
 
-    Reference: FBPINNs/fbpinns/problems.py HarmonicOscillator1D
+    Reference: Moseley, Markham & Nissen-Meyer (2023).
     """
     w = jnp.sqrt(w0**2 - d**2)
     phi = jnp.arctan(-d / w)

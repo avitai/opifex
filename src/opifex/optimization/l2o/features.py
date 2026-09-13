@@ -1,11 +1,12 @@
 """Per-parameter input features for learned optimisers.
 
-Faithful re-implementation of the feature primitives in Google's
-``learned_optimization`` (``learned_optimizers/common.py`` and
-``learned_optimizers/mlp_lopt.py``). A coordinatewise learned optimiser consumes, per scalar
+Feature primitives for coordinatewise learned optimisers. A coordinatewise learned optimiser
+consumes, per scalar
 parameter: multi-timescale momentum and RMS EMAs of the gradient, the gradient and parameter
 themselves (second-moment-normalised across the tensor), and a tanh embedding of the iteration
-(training-fraction awareness). Feature design follows Metz et al. 2020 (``arXiv:2009.11243``).
+(training-fraction awareness). Feature design follows Metz et al. 2020 (``arXiv:2009.11243``);
+the factored accumulators follow
+Adafactor (Shazeer & Stern 2018, ``arXiv:1804.04235``).
 
 These are pure functions on arrays; ``learned.py`` composes them into the per-parameter feature
 vector fed to the optimiser MLP. Multi-decay EMAs carry the decay along a trailing axis.
@@ -18,13 +19,13 @@ import jax.numpy as jnp
 import numpy as np
 
 
-# Momentum/RMS EMA decay rates (``learned_optimizers/mlp_lopt.py`` default ``decays``).
+# Momentum/RMS EMA decay rates.
 MOMENTUM_DECAYS: jax.Array = jnp.asarray([0.1, 0.5, 0.9, 0.99, 0.999, 0.9999])
-# Adafactor-MLP decay sets (``adafac_mlp_lopt.AdafacMLPLOpt`` defaults).
+# Adafactor-MLP decay sets.
 ADAFAC_MOMENTUM_DECAYS: jax.Array = jnp.asarray([0.9, 0.99, 0.999])
 ADAFAC_RMS_DECAYS: jax.Array = jnp.asarray([0.999])
 ADAFAC_DECAYS: jax.Array = jnp.asarray([0.9, 0.99, 0.999])
-# Iteration tanh-embedding timescales (``mlp_lopt._tanh_embedding``).
+# Iteration tanh-embedding timescales.
 TANH_TIMESCALES: jax.Array = jnp.asarray(
     [1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 30000, 100000], dtype=jnp.float32
 )
@@ -91,7 +92,7 @@ def init_adafactor_accum(
 
     Decay is the leading axis. Rank-``>=2`` tensors use ``(v_row, v_col)`` (the unused ``v_diag``
     is an empty placeholder); rank-``<2`` tensors use a diagonal ``v_diag`` (RMSProp-style),
-    mirroring ``common.factored_rolling``.
+    as in Adafactor (Shazeer & Stern 2018).
     """
     factored = factored_dims(param.shape)
     if factored is not None:
@@ -112,7 +113,7 @@ def update_adafactor_accum(
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
     """Update the factored accumulators and return Adafactor features for one tensor.
 
-    Faithful to ``common.factored_rolling`` / ``adafac_mlp_lopt._mod``. Returns
+    Factored second-moment estimates as in Adafactor (Shazeer & Stern 2018). Returns
     ``(new_v_row, new_v_col, new_v_diag, fac_g, row_feat, col_feat, factor)`` where the four
     feature arrays carry a trailing decay axis (``grad.shape + (num_decays,)``):
     ``fac_g`` is the Adafactor-preconditioned gradient, ``row_feat``/``col_feat`` the raw row/column

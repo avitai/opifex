@@ -2,7 +2,7 @@
 
 The batched McMurchie-Davidson backend assembles every AO integral tensor with a
 single ``vmap`` over a flat primitive pytree followed by ``segment_sum``
-contraction (the MESS batching pattern). These tests check that
+contraction (the MESS batching strategy; Helal & Fitzgibbon 2024). These tests check that
 
 * the flat-primitive representation is internally consistent,
 * the batched ``S/T/V/ERI`` reproduce the per-primitive MMD math (the validated

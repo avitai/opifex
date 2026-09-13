@@ -1,7 +1,7 @@
 """TDD contracts for the Adafactor-MLP learned optimiser and its factored features (P2c).
 
-References: ``learned_optimization/learned_optimizers/adafac_mlp_lopt.py`` and ``common.py``
-(``factored_dims`` / ``factored_rolling``); Metz et al. 2020 (``arXiv:2009.11243``).
+References: Metz et al. 2020 (``arXiv:2009.11243``); Adafactor factored second moments, Shazeer &
+Stern 2018 (``arXiv:1804.04235``).
 """
 
 from __future__ import annotations

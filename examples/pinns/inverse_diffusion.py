@@ -18,7 +18,7 @@
 # This example demonstrates solving an inverse problem: discovering the unknown
 # diffusion coefficient in the heat/diffusion equation from sparse observations.
 #
-# **Reference**: DeepXDE `examples/pinn_inverse/diffusion_1d_inverse.py`
+# **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 #
 # This is a fundamental inverse problem in PDE parameter identification.
 

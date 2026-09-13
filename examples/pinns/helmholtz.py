@@ -20,7 +20,7 @@
 # in acoustics, electromagnetics, and quantum mechanics (time-independent
 # Schrodinger equation).
 #
-# Reference: DeepXDE's Helmholtz_Dirichlet_2d.py example
+# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

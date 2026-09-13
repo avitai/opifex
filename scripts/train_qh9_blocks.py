@@ -3,7 +3,7 @@ r"""Heterogeneous-batch training driver for QH9 block-form Hamiltonian predictio
 
 Trains a single
 :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianPredictor`
-on QH9-Stable (Yu et al. 2023, arXiv:2306.04922) using the QHNet block criterion
+on QH9-Stable (Yu et al. 2023, arXiv:2306.09549) using the QHNet block criterion
 (:func:`~opifex.neural.quantum.hamiltonian.block_training.per_molecule_block_loss`).
 Each molecule is read by
 :class:`~opifex.data.sources.qh9_padded_source.QH9PaddedSource` padded to a fixed

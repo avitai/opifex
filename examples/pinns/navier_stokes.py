@@ -20,7 +20,7 @@
 # exact solution that serves as an important benchmark for incompressible
 # flow solvers.
 #
-# Reference: DeepXDE's Kovasznay_flow.py example
+# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

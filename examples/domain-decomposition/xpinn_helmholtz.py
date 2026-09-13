@@ -25,7 +25,8 @@
 # for Nonlinear Partial Differential Equations" (2020)
 # https://github.com/AmeyaJagtap/XPINNs
 #
-# **Problem Reference:** FBPINNs/fbpinns/problems.py BurgersEquation2D
+# **Problem Reference:** the viscous Burgers benchmark of Raissi, Perdikaris & Karniadakis
+# (2019), J. Comput. Phys. 378, 686
 
 # %% [markdown]
 # ## Setup and Imports
@@ -48,14 +49,14 @@ from opifex.neural.pinns.domain_decomposition import (
 # %% [markdown]
 # ## Configuration
 #
-# Following the FBPINNs/DeepXDE Burgers equation setup:
+# Following the standard Burgers setup (Raissi et al. 2019; Lu et al. 2021, DeepXDE):
 # - Domain: x in [-1, 1], t in [0, 1]
 # - Viscosity: nu = 0.01/pi
 # - IC: u(x, 0) = -sin(pi*x)
 # - BC: u(-1, t) = u(1, t) = 0
 
 # %%
-# Problem configuration (from FBPINNs reference)
+# Problem configuration (Raissi et al. 2019)
 X_MIN, X_MAX = -1.0, 1.0
 T_MIN, T_MAX = 0.0, 1.0
 NU = 0.01 / jnp.pi  # Viscosity coefficient

@@ -1,14 +1,13 @@
 """Concrete optimisation tasks and task families for L2O meta-training/meta-test.
 
 ``QuadraticTask`` is the canonical L2O smoke task (a strictly convex quadratic with a known
-optimum; cf. ``learned_optimization/tasks/quadratics.py``). ``QuadraticTaskFamily`` samples
+optimum). ``QuadraticTaskFamily`` samples
 quadratics with **varied conditioning** so a meta-trained optimiser must generalise across
 loss landscapes of different curvature/scale — the diversity that makes a meta-test on
 held-out tasks meaningful (Wichrowska et al. 2017, ``arXiv:1703.04813``).
 
 ``MLPTask`` is the canonical L2O *showcase* task: a small multilayer perceptron trained by the
-inner optimiser. It mirrors the ``MLPTask`` used throughout Google's ``learned_optimization``
-tutorials (``docs/notebooks/no_dependency_learned_optimizer``) — a genuinely non-convex
+inner optimiser. It is a genuinely non-convex
 neural-network training objective, which is the regime where learned optimisers demonstrably
 beat fixed-hyperparameter baselines (Metz et al. 2020, ``arXiv:2009.11243``). To stay
 self-contained (no dataset dependency) the data is a synthetic teacher-student regression: a
@@ -33,8 +32,7 @@ type MLPParams = list[tuple[jax.Array, jax.Array]]
 def _init_mlp_params(key: jax.Array, layer_sizes: tuple[int, ...], scale: float) -> MLPParams:
     """Sample per-layer ``(weight, bias)`` pairs; weights ``~ scale * N(0, 1)``, biases zero.
 
-    Mirrors the small-init convention of the reference ``MLPTask`` (weights scaled by a small
-    constant; biases initialised to zero).
+    Small-init convention: weights scaled by a small constant; biases initialised to zero.
     """
     keys = jax.random.split(key, len(layer_sizes) - 1)
     params: MLPParams = []
@@ -128,8 +126,8 @@ class MLPTask(Task):
 
     The student MLP (architecture ``layer_sizes``) is fit by MSE to ``targets`` produced by a
     random teacher MLP on ``inputs``. Each :meth:`loss` call draws a fresh ``batch_size``
-    minibatch using the supplied ``key`` (mirroring the reference ``MLPTask``, which consumes a
-    new minibatch per step), so the gradients are *stochastic* — the regime where a learned
+    minibatch using the supplied ``key`` (a new minibatch per step), so the gradients are
+    *stochastic* — the regime where a learned
     optimiser's implicit learning-rate schedule beats a fixed-step baseline. The objective is
     non-convex in the student weights; the optimum (loss 0) is realised at ``teacher_params``.
     """

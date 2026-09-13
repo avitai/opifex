@@ -1,7 +1,7 @@
 r"""Real-basis SO(3) Clebsch-Gordan tensors and Wigner-D matrices.
 
-A native, dependency-free port of the angular algebra used by ``e3nn-jax``
-(Geiger & Smidt 2022, arXiv:2207.09453).  Two objects are exposed:
+A native, dependency-free implementation of the real-basis angular algebra of
+e3nn (Geiger & Smidt 2022, arXiv:2207.09453).  Two objects are exposed:
 
 * :func:`clebsch_gordan` -- the real-basis SO(3) Clebsch-Gordan / Wigner-3j
   coupling tensor ``C[l1, l2, l3]`` of shape ``(2l1+1, 2l2+1, 2l3+1)``.  It is
@@ -20,13 +20,8 @@ NumPy and cached with :func:`functools.cache`, then converted to ``jax`` arrays
 on demand so the public functions are ``jit``/``grad``/``vmap`` clean.
 
 References:
-    * ``../e3nn-jax/e3nn_jax/_src/su2.py`` -- :func:`su2_clebsch_gordan`,
-      :func:`_su2_cg` (Racah formula), :func:`su2_generators`.
-    * ``../e3nn-jax/e3nn_jax/_src/so3.py`` -- :func:`clebsch_gordan`,
-      :func:`change_basis_real_to_complex`, :func:`generators`.
-    * ``../e3nn-jax/e3nn_jax/_src/irreps.py`` --
-      :func:`_wigner_D_from_log_coordinates` (the matrix-exponential path,
-      ``D = expm(sum_a w_a X_a)``).
+    * M. Geiger, T. Smidt, "e3nn: Euclidean Neural Networks", arXiv:2207.09453
+      (2022) -- the e3nn real-basis conventions followed here.
 """
 
 from __future__ import annotations
@@ -48,9 +43,8 @@ def _su2_clebsch_gordan_coefficient(
 ) -> Fraction | float:
     r"""Single SU(2) Clebsch-Gordan coefficient via the exact Racah formula.
 
-    Ported from ``../e3nn-jax/e3nn_jax/_src/su2.py::_su2_cg`` (itself copied from
-    QuTiP's ``clebsch``).  Exact :class:`~fractions.Fraction` arithmetic is used
-    throughout the sum so the resulting real-basis tensor is numerically clean.
+    Exact :class:`~fractions.Fraction` arithmetic is used throughout the sum so
+    the resulting real-basis tensor is numerically clean.
 
     Args:
         j1: Angular momentum of the first irrep.
@@ -104,8 +98,6 @@ def _su2_clebsch_gordan_coefficient(
 def _su2_clebsch_gordan(j1: float, j2: float, j3: float) -> np.ndarray:
     r"""SU(2) Clebsch-Gordan matrix of shape ``(2j1+1, 2j2+1, 2j3+1)``.
 
-    Ported from ``../e3nn-jax/e3nn_jax/_src/su2.py::su2_clebsch_gordan``.
-
     Args:
         j1: Angular momentum of the first irrep.
         j2: Angular momentum of the second irrep.
@@ -127,8 +119,6 @@ def _su2_clebsch_gordan(j1: float, j2: float, j3: float) -> np.ndarray:
 
 def _su2_generators(j: float) -> np.ndarray:
     r"""Generators of the ``2j+1``-dimensional SU(2) representation.
-
-    Ported from ``../e3nn-jax/e3nn_jax/_src/su2.py::su2_generators``.
 
     Args:
         j: Angular momentum of the irrep.
@@ -156,8 +146,7 @@ def _su2_generators(j: float) -> np.ndarray:
 def _change_basis_real_to_complex(degree: int) -> np.ndarray:
     r"""Change of basis ``Q_l`` from real to complex spherical harmonics.
 
-    Ported from ``../e3nn-jax/e3nn_jax/_src/so3.py::change_basis_real_to_complex``
-    (Wikipedia, "Spherical harmonics, Real form").  The extra ``(-i)^l`` factor
+    Real-form convention (Wikipedia, "Spherical harmonics, Real form").  The extra ``(-i)^l`` factor
     makes the resulting real Clebsch-Gordan coefficients real-valued.
 
     Args:
@@ -181,8 +170,7 @@ def _change_basis_real_to_complex(degree: int) -> np.ndarray:
 def clebsch_gordan_numpy(l1: int, l2: int, l3: int) -> np.ndarray:
     r"""Cached real-basis SO(3) Clebsch-Gordan tensor as a concrete NumPy array.
 
-    Ported from ``../e3nn-jax/e3nn_jax/_src/so3.py::_clebsch_gordan``: rotate the
-    SU(2) coupling into the real basis via the ``Q_l`` change of basis.
+    Rotates the SU(2) coupling into the real basis via the ``Q_l`` change of basis.
 
     Use this (rather than :func:`clebsch_gordan`) for *static* / compile-time
     computations -- e.g. spherical-harmonic normalization constants -- because it
@@ -217,8 +205,7 @@ def clebsch_gordan_numpy(l1: int, l2: int, l3: int) -> np.ndarray:
 def _generators_numpy(degree: int) -> np.ndarray:
     r"""Cached real so(3) generators of degree ``l`` as a NumPy array.
 
-    Ported from ``../e3nn-jax/e3nn_jax/_src/so3.py::generators``: conjugate the
-    SU(2) generators by the real-to-complex change of basis.  For ``l = 1`` these
+    Conjugates the SU(2) generators by the real-to-complex change of basis.  For ``l = 1`` these
     are exactly the standard so(3) generators ``(L_x, L_y, L_z)``, so the Wigner-D
     of degree ``1`` of a rotation matrix is the rotation matrix itself.
 
@@ -251,8 +238,6 @@ def clebsch_gordan(l1: int, l2: int, l3: int) -> Float[Array, "d1 d2 d3"]:
 
     It is identically zero unless the triangle rule ``|l1-l2| <= l3 <= l1+l2``
     holds.
-
-    Ported from ``../e3nn-jax/e3nn_jax/_src/so3.py::clebsch_gordan``.
 
     Args:
         l1: Degree of the first irrep (non-negative integer).
@@ -309,8 +294,7 @@ def wigner_d(degree: int, rotation: Float[Array, "3 3"]) -> Float[Array, "d d"]:
 
     Computed via the matrix exponential of the real so(3) generators,
     ``D = expm(sum_a w_a X_a)`` where ``w`` are the standard log coordinates of
-    ``R`` (``angle * axis``) and ``X_a = generators(l)`` (Ported from
-    ``../e3nn-jax/e3nn_jax/_src/irreps.py::_wigner_D_from_log_coordinates``).
+    ``R`` (``angle * axis``) and ``X_a = generators(l)``.
     This path is fully ``jit``/``grad``/``vmap`` compatible.
 
     For ``l = 0`` the result is ``[[1]]``; for ``l = 1`` it equals ``R`` in the
@@ -346,8 +330,7 @@ def _safe_arccos(value: Float[Array, ""]) -> Float[Array, ""]:
     The forward pass is the plain ``arccos`` (so ``beta = 0`` is recovered exactly
     on the quantisation pole, unlike a clipped argument); only the derivative
     ``-1 / sqrt(1 - x^2)`` is evaluated at a clamped argument so it stays finite at
-    ``x = +-1``. This is fairchem's ``Safeacos``
-    (``../fairchem/src/fairchem/core/models/uma/common/rotation.py``).
+    ``x = +-1``.
     """
     return jnp.arccos(value)
 
@@ -371,8 +354,7 @@ def _y_rotation(degree: int, angle: Float[Array, ""]) -> Float[Array, "d d"]:
     :func:`spherical_harmonics`) a rotation about the ``+y`` quantisation axis acts
     on each order ``m`` as a 2D rotation by ``m * angle``, giving the sparse
     structure ``cos(m theta)`` on the diagonal and ``sin(m theta)`` on the
-    anti-diagonal (e3nn 0.4.0 ``o3/_wigner.py::_z_rot_mat``;
-    ``../fairchem/src/fairchem/core/models/uma/common/rotation.py``). It equals
+    anti-diagonal (Geiger & Smidt 2022, arXiv:2207.09453). It equals
     :func:`wigner_d` of the corresponding ``3x3`` ``y``-rotation matrix exactly.
 
     Args:
@@ -398,14 +380,13 @@ def _matrix_to_euler(
 
     Returns ``(alpha, beta, gamma)`` with
     ``R = matrix_y(alpha) @ matrix_x(beta) @ matrix_y(gamma)``, the e3nn
-    convention (``../e3nn-jax/e3nn_jax/_src/rotation.py::matrix_to_angles`` /
-    ``xyz_to_angles``). ``beta = arccos(R[:, 1]_y)`` and ``alpha = atan2(x, z)``
+    convention (Geiger & Smidt 2022). ``beta = arccos(R[:, 1]_y)`` and ``alpha = atan2(x, z)``
     of the rotated ``+y`` axis; ``gamma`` is recovered from the residual rotation.
 
     The ``arccos`` argument is clipped strictly inside ``(-1, 1)`` and the two
     ``atan2`` calls use double-``where`` guards so both the forward value and the
     backward gradient stay finite at the ``beta = 0 / pi`` pole (an edge along the
-    quantisation axis), mirroring fairchem's ``Safeacos`` / ``Safeatan2`` and the
+    quantisation axis), as in :func:`_safe_arccos` and the
     guard in :func:`_log_coordinates_from_matrix`.
 
     Args:
@@ -469,9 +450,9 @@ def _wigner_d_from_euler(
 ) -> Float[Array, "d d"]:
     r"""Assemble the real Wigner-D from Euler angles via the constant ``J_l``.
 
-    ``D^l = Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` (e3nn 0.4.0
-    ``o3/_wigner.py``; fairchem ``wigner_D``). For degrees beyond the ported
-    ``J_l`` table the result falls back to the exponential path via
+    ``D^l = Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` (Geiger & Smidt
+    2022, arXiv:2207.09453). For degrees beyond the tabulated
+    ``J_l`` the result falls back to the exponential path via
     :func:`wigner_d` of the reconstructed rotation matrix.
 
     Args:
@@ -498,8 +479,8 @@ def wigner_d_fast(degree: int, rotation: Float[Array, "3 3"]) -> Float[Array, "d
 
     Numerically identical to :func:`wigner_d` (the trusted matrix-exponential
     reference) but replaces the per-call ``jax.scipy.linalg.expm`` with the cheap
-    ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product (e3nn 0.4.0
-    ``o3/_wigner.py``; fairchem ``wigner_D``; QHNetV2 eSCN, arXiv:2506.09398).
+    ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product (Geiger & Smidt
+    2022, arXiv:2207.09453; QHNetV2 eSCN, arXiv:2506.09398).
     This is the rotation primitive of the SO(2)-frame edge convolution; the
     parity with :func:`wigner_d` is asserted in
     ``tests/geometry/algebra/test_wigner.py``.

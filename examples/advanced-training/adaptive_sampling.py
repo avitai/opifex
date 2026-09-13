@@ -30,8 +30,9 @@ PINNs with uniform collocation point distributions often struggle with
 solutions that have localized features (sharp gradients, boundary layers).
 Adaptive sampling focuses computational effort where it's needed most.
 
-**Reference Implementation:**
-Based on DeepXDE's Residual-based Adaptive Refinement (RAR) algorithm.
+**Reference:**
+Residual-based adaptive refinement (RAR), Lu, Meng, Mao & Karniadakis (2021), DeepXDE,
+SIAM Rev. 63, 208.
 """
 
 # %% [markdown]

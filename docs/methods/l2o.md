@@ -7,9 +7,7 @@ neural network that is meta-trained to optimise well across a *distribution* of 
 Instead of applying the same fixed rule to every problem, a learned optimiser adapts its update
 per-coordinate and per-step, having been trained on a family of related problems.
 
-Opifex's L2O subsystem (`opifex.optimization.l2o`) follows the design of Google's
-[`learned_optimization`](https://github.com/google/learned_optimization) library and the L2O
-literature:
+Opifex's L2O subsystem (`opifex.optimization.l2o`) follows the L2O literature:
 
 - **Andrychowicz et al. 2016** — *Learning to learn by gradient descent by gradient descent*
   ([arXiv:1606.04474](https://arxiv.org/abs/1606.04474)): the original learned-optimiser
@@ -110,13 +108,13 @@ Adam.
 
 [`meta_train`][opifex.optimization.l2o.meta_train.meta_train] runs `num_tasks` inner problems in
 parallel (`jax.vmap`) and is fully JIT-compiled (the outer step is `jax.jit` over a `lax.scan`).
-Faithful to `learned_optimization`'s `truncated_pes`, it:
+Following the PES estimator of Vicol, Metz & Sohl-Dickstein (2021), it:
 
 - splits each truncation's per-step delta-losses at the per-step horizon reset
   (`has_finished = cumsum(is_done) > 0`): losses before the reset attribute to the full
   accumulator, losses after attribute only to the current perturbation;
 - starts each parallel trajectory at a **random clock offset** in `[0, total_horizon)`
-  (`random_initial_iteration_offset` in the reference) and resets each trajectory *per inner
+  and resets each trajectory *per inner
   step* when its clock reaches the horizon. Staggering the truncations so the tasks are not
   phase-aligned is load-bearing: it removes the sawtooth a synchronous reset would imprint on the
   meta-loss and lowers the PES variance.

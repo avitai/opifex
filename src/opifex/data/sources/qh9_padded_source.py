@@ -47,7 +47,7 @@ over that axis Batch-free.
 Bounded scope
 -------------
 Edges are the complete *directed* graph (no radius cutoff), matching the QHNet
-reference cut and the existing :mod:`opifex.data.sources.qh9_blocks` path. The
+block decomposition and the existing :mod:`opifex.data.sources.qh9_blocks` path. The
 spherical AO count per atom equals the native AO count (both ``5`` for H/He and
 ``14`` for C/N/O/F -- the decode only reorders within an atom), so a single
 ``max_ao = 14 * max_atoms`` bound covers both layouts. No download happens at

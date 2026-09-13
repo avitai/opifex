@@ -1,8 +1,7 @@
 """Tests for the real-basis SO(3) Clebsch-Gordan tensor and Wigner-D matrices.
 
-Behaviour is specified against the e3nn / e3nn-jax conventions (Geiger & Smidt
-2022, arXiv:2207.09453; reference files ``../e3nn-jax/e3nn_jax/_src/su2.py`` and
-``../e3nn-jax/e3nn_jax/_src/so3.py``).
+Behaviour is specified against the e3nn real-basis conventions (Geiger & Smidt
+2022, arXiv:2207.09453).
 
 The load-bearing correctness check needs no e3nn at test time: the real
 Clebsch-Gordan tensor ``C`` must be an *intertwiner*, i.e. an equivariant map
@@ -83,7 +82,7 @@ class TestWignerD:
 
         The (y, z, x) ordering quirk is internal: ``wigner_d`` and
         ``spherical_harmonics`` share it, so for a plain 3x3 rotation matrix the
-        ``l = 1`` matrix is ``R`` (verified against the e3nn angle-based path).
+        ``l = 1`` matrix is ``R``.
         """
         rotation = _random_rotation(4)
         assert jnp.allclose(wigner_d(1, rotation), rotation, atol=1e-5)
@@ -141,7 +140,7 @@ class TestWignerDFast:
     :func:`wigner_d` (matrix exponential of the so(3) generators) is the
     ground-truth reference; :func:`wigner_d_fast` replaces the per-call ``expm``
     with the cheap ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product
-    (e3nn 0.4.0 / QHNetV2 eSCN). The two must agree to machine precision in the
+    (Geiger & Smidt 2022; QHNetV2 eSCN). The two must agree to machine precision in the
     same real basis (the load-bearing parity check), and the fast path must stay
     jit/grad/vmap clean, including at the ``beta = 0`` quantisation pole.
     """

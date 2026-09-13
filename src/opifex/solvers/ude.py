@@ -12,9 +12,6 @@ References:
     - UDE concept: Rackauckas et al. (2020)
     - ODE integration: diffrax library (Kidger, 2022)
     - Neural ODE: Chen et al. (2018, NeurIPS)
-
-Implementation follows the diffrax API patterns from:
-    ../diffrax/benchmarks/small_neural_ode.py
 """
 
 # ruff: noqa: F821  # jaxtyping dimension names (dim, n_times, etc.)

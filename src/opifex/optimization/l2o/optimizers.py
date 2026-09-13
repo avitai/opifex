@@ -1,6 +1,6 @@
 """The optimiser interface shared by hand-designed and learned optimisers.
 
-Mirrors ``learned_optimization/optimizers/base.py``: an :class:`Optimizer` threads an opaque
+An :class:`Optimizer` threads an opaque
 state through ``init`` / ``update`` / ``get_params``. Both an optax-wrapped hand-designed
 optimiser (:class:`OptaxOptimizer`) and a meta-learned optimiser fit this interface, so they
 are interchangeable at every call site. ``init`` accepts ``num_steps`` so horizon-aware

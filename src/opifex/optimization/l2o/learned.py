@@ -6,11 +6,11 @@ plain pytree (the optimiser MLP's :class:`flax.nnx` state, obtained via ``nnx.sp
 is directly perturbable/vmappable for evolution-strategies meta-training (PES).
 
 :class:`MLPLearnedOptimizer` is the per-parameter MLP design of Metz et al. 2020
-(``arXiv:2009.11243``; "LOLv2", ``learned_optimization/learned_optimizers/mlp_lopt.py``): a tiny
+(``arXiv:2009.11243``; "LOLv2"): a tiny
 MLP, shared across all scalar parameters, maps a 19-feature per-parameter vector to a
 ``(direction, magnitude)`` pair, and the update is
 ``step = direction * exp(magnitude * exp_mult) * step_mult``. The richer Adafactor-feature
-variant (``adafac_mlp_lopt.py``) extends the same scaffolding and is added on top of this base.
+variant extends the same scaffolding and is added on top of this base.
 """
 
 from __future__ import annotations
@@ -170,7 +170,7 @@ def _per_param_step(
     ``raw_features`` is ``(num_elements, num_raw_features)`` for one parameter tensor. The features
     are second-moment-normalised across the tensor (the un-normalised time embedding is appended
     afterwards), passed through the per-parameter ``mlp``, and mapped to a per-element step via
-    ``direction * exp(magnitude * exp_mult) * step_mult`` (``mlp_lopt.py:176``). Returns the flat
+    ``direction * exp(magnitude * exp_mult) * step_mult``. Returns the flat
     per-element step (the caller reshapes it to the parameter shape).
     """
     normalized = second_moment_normalize(raw_features, axis=0)
@@ -277,7 +277,7 @@ class MLPLearnedOptimizer(LearnedOptimizer):
 
 # Adafactor per-element feature count: grad + param (2), momentum + m*rsqrt(rms) (2 * n_mom),
 # rms + rsqrt(rms) (2 * n_rms), and 6 factored blocks (fac_g, row, col, rsqrt_row, rsqrt_col,
-# fac_mom_mult) of n_adafactor each — see ``adafac_mlp_lopt._mod``.
+# fac_mom_mult) of n_adafactor each.
 _NUM_ADAFAC_FEATURES = (
     2 + 2 * ADAFAC_MOMENTUM_DECAYS.size + 2 * ADAFAC_RMS_DECAYS.size + 6 * ADAFAC_DECAYS.size
 )
@@ -415,7 +415,7 @@ class _AdafacMLPInstance(Optimizer[AdafacMLPLOptState]):
 
 
 class AdafacMLPLearnedOptimizer(LearnedOptimizer):
-    """Adafactor-feature per-parameter MLP learned optimiser (``adafac_mlp_lopt.py``).
+    """Adafactor-feature per-parameter MLP learned optimiser.
 
     Extends :class:`MLPLearnedOptimizer` with Adafactor-style inputs — multi-decay RMS,
     ``m * rsqrt(rms)``, ``rsqrt(rms)``, and factored row/column second-moment features (Metz et al.

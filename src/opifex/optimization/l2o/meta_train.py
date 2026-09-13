@@ -7,17 +7,15 @@ truncations) — Metz et al. 2019 (``arXiv:1810.10180``). PES (Vicol, Metz & Soh
 ``arXiv:2112.13835``) instead estimates the meta-gradient with antithetic Gaussian perturbations
 of ``theta`` over short truncations, while keeping a **persistent accumulator** of the
 perturbations across truncation boundaries so the estimate is unbiased w.r.t. the full-horizon
-objective. Faithful to ``learned_optimization/outer_trainers/truncated_pes.py``
-(``compute_pes_grad``): ``es_grad = (1 / (2 std**2)) * delta_loss * accumulator``.
+objective. The PES estimate is ``es_grad = (1 / (2 std**2)) * delta_loss * accumulator``.
 
 This implementation runs ``num_tasks`` inner problems in parallel (``jax.vmap``). Each trajectory
-is started at a random clock offset in ``[0, total_horizon)``
-(``random_initial_iteration_offset`` in ``learned_optimization``'s ``lopt_truncated_step``) and is
+is started at a random clock offset in ``[0, total_horizon)`` and is
 reset **per inner step** when its clock reaches ``total_horizon``; the truncation's meta-gradient
 is split at that reset (``has_finished = cumsum(is_done) > 0``) so the pre-reset losses attribute
 to the full accumulator and the post-reset losses only to the new perturbation. Staggering the
-truncations so the parallel tasks are not phase-aligned is load-bearing
-(``learned_optimization/outer_trainers/truncation_schedule.py``): it removes the sawtooth that a
+truncations so the parallel tasks are not phase-aligned is load-bearing: it removes the sawtooth
+that a
 synchronous reset would imprint on the meta-loss and lowers the PES gradient variance.
 """
 
@@ -81,7 +79,7 @@ def _truncated_unroll(
 ) -> tuple[PyTree, jax.Array, jax.Array, jax.Array]:
     """Run ``length`` inner steps with a per-step horizon reset (one task).
 
-    Faithful to ``learned_optimization`` truncated unrolls: ``inner_step`` is the per-task clock;
+    Truncated unroll: ``inner_step`` is the per-task clock;
     at each step the (pre-update) normalised loss is recorded, the optimiser steps, and when the
     clock reaches ``total_horizon`` the trajectory re-initialises (and the clock zeroes) *mid
     truncation*. Returns ``(final_state, final_inner_step, per_step_losses, per_step_is_done)``.
@@ -126,7 +124,7 @@ def pes_gradient_step(
 ) -> tuple[jax.Array, PyTree, PESState]:
     """One PES truncation: return ``(mean_loss, meta_gradient, new_pes_state)``.
 
-    Faithful to ``truncated_pes.compute_pes_grad``. Antithetic perturbations ``theta +/- pos`` are
+    PES estimator (Vicol et al. 2021). Antithetic perturbations ``theta +/- pos`` are
     unrolled ``trunc_length`` steps from the persistent inner state; the per-step delta-losses are
     split at the (per-step) horizon reset by ``has_finished = cumsum(is_done) > 0``: losses *before*
     the reset attribute to the running ``accumulator`` (all perturbations since the last reset),

@@ -4,9 +4,9 @@ The :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianP
 emits a fixed ``(14, 14)`` diagonal Fock block per atom and a ``(14, 14)``
 off-diagonal block per directed within-molecule edge. This module produces the
 matching *targets* on the host in NumPy: it cuts each molecule's spherical
-def2-SVP Fock matrix into those blocks (QHNet ``cut_matrix``; Yu et al. 2023,
-"QHNet"/"QH9", arXiv:2306.04922; reference ``divelab/AIRS``
-``OpenDFT/QHBench/QH9/datasets.py``). :func:`cut_fock_to_blocks` and its inverse
+def2-SVP Fock matrix into those blocks (the QHNet per-atom/per-pair block
+decomposition, Yu et al. 2023, arXiv:2306.04922, on the QH9 benchmark, Yu et al.
+2023, arXiv:2306.09549). :func:`cut_fock_to_blocks` and its inverse
 :func:`reconstruct_fock_from_blocks` are the *record of equivalence* the device
 block-cut operator (:mod:`opifex.data.sources.qh9_fock_operators`) is tested
 against -- the live training path runs the cut on the GPU; this NumPy cut is the
@@ -35,8 +35,7 @@ For a complete *directed* molecular graph (every ordered pair ``(i, j)`` with
   ``ORBITAL_MASK[Z_row] x ORBITAL_MASK[Z_col]``; ``off_diagonal_mask[e] =
   block_validity_mask(Z_row, Z_col)``.
 
-Edge indexing matches QHNet ``cut_matrix`` (``edge_index_full.append([idx_j,
-idx_i])`` = ``[dst, src]``) and the predictor's
+Edge indexing uses the ``[dst, src]`` convention of the predictor's
 :meth:`~...block_predictor.BlockHamiltonianPredictor.assemble_matrix`: row 0 is
 the *receiver* (block row), row 1 the *sender* (block column). The complete graph
 carries both ``(i, j)`` and ``(j, i)``, so the predictor's assembly
@@ -45,7 +44,7 @@ symmetrisation ``H = H~ + H~^T`` reproduces QHNet's off-diagonal law.
 Bounded scope
 -------------
 Edges are the *complete directed graph* (no radius cutoff): QH9 molecules are
-small (``n_atoms`` 3..29) and QHNet's reference ``cut_matrix`` itself uses the
+small (``n_atoms`` 3..29) and the QHNet block decomposition itself uses the
 complete graph, so a cutoff would drop real off-diagonal Fock blocks the loss
 must supervise.
 """
@@ -71,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Per-molecule block cut (QHNet cut_matrix, NumPy host-side)
+# Per-molecule block cut (QHNet block decomposition, NumPy host-side)
 # =============================================================================
 
 
@@ -94,9 +93,8 @@ def _complete_directed_edges(n_atoms: int) -> NDArray[np.int64]:
     """Return the complete directed ``(2, n_atoms*(n_atoms-1))`` edge index.
 
     Row 0 is the *receiver* (block row), row 1 the *sender* (block column),
-    matching QHNet ``cut_matrix``'s ``edge_index_full.append([idx_j, idx_i])``
-    (``[dst, src]``) and the predictor's ``assemble_matrix`` convention. Ordering
-    is sender-major over ``idx_i`` then ``idx_j`` (the reference loop order).
+    matching the ``[dst, src]`` convention of the predictor's ``assemble_matrix``.
+    Ordering is sender-major over ``idx_i`` then ``idx_j``.
     """
     edges: list[tuple[int, int]] = []
     for idx_i in range(n_atoms):  # sender / column (outer loop, QHNet src)
@@ -117,8 +115,7 @@ def _scatter_block(
     """Scatter ``sub_matrix`` into ``full_block`` at ``row_indices x col_indices``.
 
     Mutates ``full_block`` in place (it is a freshly allocated zero block owned by
-    the caller), mirroring the QHNet ``cut_matrix`` masked assignment
-    ``matrix_block[mask_j][:, mask_i] = extracted_matrix``.
+    the caller).
     """
     full_block[np.ix_(list(row_indices), list(col_indices))] = sub_matrix
 
@@ -135,8 +132,8 @@ def cut_fock_to_blocks(
 ]:
     r"""Cut a spherical def2-SVP Fock matrix into QHNet per-atom/per-edge blocks.
 
-    Faithful NumPy reimplementation of QHNet's ``cut_matrix`` (reference
-    ``OpenDFT/QHBench/QH9/datasets.py``): atom ``a``'s contiguous AO range of the
+    NumPy block cut of the QHNet Hamiltonian decomposition (Yu et al. 2023,
+    arXiv:2306.04922): atom ``a``'s contiguous AO range of the
     spherical Fock is scattered into a ``(14, 14)`` block at its element's
     :data:`~...ORBITAL_MASK` slot indices, with the validity mask from
     :func:`~...block_validity_mask`. The off-diagonal edge set is the complete

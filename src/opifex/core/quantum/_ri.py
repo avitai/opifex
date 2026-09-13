@@ -86,8 +86,8 @@ logger = logging.getLogger(__name__)
 # auxiliary sets push the smallest eigenvalue toward zero; the floor keeps the
 # factorisation well-conditioned without perceptibly changing the fit (it is far
 # below the intrinsic RI error and the smallest metric eigenvalue of any
-# sensible auxiliary basis, O(0.1-1) Hartree). Matches the spirit of PySCF's
-# ``lindep`` guard while leaving the fit/PySCF agreement at the ~1e-12 level.
+# sensible auxiliary basis, O(0.1-1) Hartree), leaving the fit/PySCF agreement
+# at the ~1e-12 level.
 _METRIC_REGULARISATION = 1e-12
 
 
@@ -277,7 +277,8 @@ def three_center_eri(flat: FlatPrimitives, aux: AuxiliaryBasis) -> Array:
     Builds the dense :math:`(n_\text{ao}, n_\text{ao}, n_\text{aux})` tensor by a
     single :func:`jax.vmap` over every (main, main, aux) primitive triple,
     followed by three :func:`jax.ops.segment_sum` contractions to the contracted
-    main AOs and auxiliary functions (the MESS harness pattern).
+    main AOs and auxiliary functions (the :mod:`opifex.core.quantum._flat_harness`
+    pattern).
 
     Args:
         flat: Flat primitive view of the main AO basis.

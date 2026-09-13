@@ -2,16 +2,14 @@
 
 A learned optimizer is meta-trained to minimise a *distribution* of objectives. The
 objective is carried by a :class:`Task` (an ``init`` for the optimisee parameters plus a
-``loss``), and a :class:`TaskFamily` samples tasks for meta-generalisation. This mirrors the
-canonical design in Google's ``learned_optimization`` library
-(``learned_optimization/tasks/base.py``); see Andrychowicz et al. 2016
+``loss``), and a :class:`TaskFamily` samples tasks for meta-generalisation (meta-training over
+task distributions: Metz et al. 2020, ``arXiv:2009.11243``); see Andrychowicz et al. 2016
 (``arXiv:1606.04474``) for the original learning-to-learn formulation.
 
 The key contrast with the previous opifex L2O code is that the objective lives *on the
 task*: optimisers and meta-trainers close over ``task.loss`` rather than guessing a
 placeholder. ``Task.normalizer`` maps a raw loss onto a comparable scale so a meta-loss
-aggregated across differently-conditioned tasks is not dominated by the worst-scaled task
-(``learned_optimization/tasks/base.py`` ``normalizer``).
+aggregated across differently-conditioned tasks is not dominated by the worst-scaled task.
 """
 
 from __future__ import annotations
@@ -72,7 +70,7 @@ class _SingleTaskFamily(TaskFamily):
 
 
 def single_task_to_family(task: Task) -> TaskFamily:
-    """Lift a fixed :class:`Task` into a :class:`TaskFamily` (mirrors the reference).
+    """Lift a fixed :class:`Task` into a :class:`TaskFamily`.
 
     Meta-training always consumes a family; this adapts a single task for the case where
     no task distribution is needed (e.g. overfitting a learned optimiser to one problem).

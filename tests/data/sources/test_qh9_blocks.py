@@ -5,8 +5,8 @@ molecule's spherical def2-SVP Fock matrix into the fixed ``(14, 14)`` per-atom
 diagonal blocks and per-directed-edge off-diagonal blocks consumed by the
 heterogeneous-batch
 :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianPredictor`,
-(QHNet ``cut_matrix`` reference ``OpenDFT/QHBench/QH9/datasets.py``; Yu et al.
-2023, arXiv:2306.04922). The cut + its inverse
+(QHNet block decomposition, Yu et al. 2023, arXiv:2306.04922; QH9 benchmark, Yu
+et al. 2023, arXiv:2306.09549). The cut + its inverse
 :func:`~opifex.data.sources.qh9_blocks.reconstruct_fock_from_blocks` are the
 record of equivalence the device block-cut operator is checked against.
 
@@ -77,7 +77,7 @@ def synthetic_qh9_db(tmp_path: Path) -> Path:
     """Write a tiny SYNTHETIC QH9-Stable sqlite db (H2O, HCNO, H2) to tmp_path.
 
     NOT real QH9 data -- random symmetric Fock blobs of the correct QH9-native
-    def2-SVP size, mirroring the reference ``(id, N, Z, pos, Ham)`` row schema.
+    def2-SVP size, mirroring the QH9-Stable ``(id, N, Z, pos, Ham)`` row schema.
     """
     db_path = tmp_path / "QH9Stable.db"
     specs = [

@@ -2,7 +2,7 @@
 
 The learned optimiser must: produce ``theta`` as a clean pytree, run a coordinatewise inner
 loop on a task, be jit-safe, and be vmap-safe over a batch of ``theta`` (the prerequisite for
-PES meta-training). Reference: ``learned_optimization/learned_optimizers/mlp_lopt.py``.
+PES meta-training). Reference: Metz et al. 2020 (``arXiv:2009.11243``).
 """
 
 from __future__ import annotations

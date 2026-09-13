@@ -19,7 +19,7 @@
 # Neural Network (PINN). The wave equation describes propagation of waves in
 # strings, acoustics, and electromagnetic fields.
 #
-# Reference: DeepXDE's wave_1d.py example
+# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

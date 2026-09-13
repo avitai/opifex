@@ -18,7 +18,7 @@ References:
         Systems", J. Comput. Phys. 176, 430-455 (2002).
     A.-K. Kassam, L. N. Trefethen, "Fourth-Order Time-Stepping for Stiff
         PDEs", SIAM J. Sci. Comput. 26, 1214-1233 (2005).
-    Reference JAX implementation: github.com/Ceyron/exponax (``exponax.etdrk``).
+    Cross-checked against exponax (github.com/Ceyron/exponax) in the test suite.
 """
 
 from collections.abc import Callable

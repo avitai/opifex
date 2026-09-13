@@ -20,7 +20,7 @@
 # reaction-diffusion PDE that models phase separation and interface dynamics
 # in materials science.
 #
-# Reference: DeepXDE's Allen_Cahn.py example
+# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

@@ -18,7 +18,7 @@
 # This example demonstrates solving the Euler-Bernoulli beam equation using a PINN.
 # This is a fourth-order ODE from structural mechanics describing beam deflection.
 #
-# **Reference**: DeepXDE `examples/pinn_forward/Euler_beam.py`
+# **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

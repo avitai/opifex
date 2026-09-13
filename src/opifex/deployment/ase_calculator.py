@@ -5,8 +5,9 @@ an opifex interatomic potential drive Atomic Simulation Environment (ASE)
 workflows -- molecular dynamics, geometry relaxation, phonons -- by exposing the
 model through the ``ase.calculators.calculator.Calculator`` contract.
 
-It follows the structure of the reference ``../mace`` calculator
-(``mace/calculators/mace.py``, :class:`mace.calculators.MACECalculator`): subclass
+It follows the standard ASE calculator pattern (Hjorth Larsen et al., "The atomic
+simulation environment -- a Python library for working with atoms", *J. Phys.:
+Condens. Matter* **29**, 273002 (2017)): subclass
 :class:`ase.calculators.calculator.Calculator`, derive
 :attr:`implemented_properties` from the wrapped model, and fill ``self.results``
 inside :meth:`calculate` with host (NumPy) arrays in ASE's unit convention --

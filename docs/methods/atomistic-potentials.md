@@ -108,7 +108,7 @@ aleatoric uncertainty in one forward pass** — no ensemble or dropout sampling.
 `remap_element_table` remaps a pretrained checkpoint's per-element parameters onto a new element
 set, `freeze_backbone` / `trainable_filter` keep the backbone fixed while training new heads, and
 `LoRALinear` / `apply_lora` add low-rank equivariant adapters (`W_eff = W + (α/r)·B·A`, after
-MACE's `lora.py`) for parameter-efficient fine-tuning.
+LoRA, Hu et al. 2021, arXiv:2106.09685) for parameter-efficient fine-tuning.
 
 ## ASE calculator / MD
 

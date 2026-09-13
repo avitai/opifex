@@ -1,15 +1,14 @@
 r"""Extension-seam protocols for the atomistic-model subsystem.
 
 These ``@runtime_checkable`` protocols are the swappable seams of the
-backbone-to-named-heads architecture shared by SchNetPack-2, fairchem and MACE
-(see ``00-research-landscape.md`` "library architecture"). Domain code depends on
-these abstractions, never on concrete implementations or infrastructure
+backbone-to-named-heads architecture shared by SchNetPack-2, fairchem and MACE.
+Domain code depends on these abstractions, never on concrete implementations or infrastructure
 (dependency inversion / Open-Closed).
 
 The seams:
 
 * :class:`Space` -- injects boundary conditions as a ``displacement``/``shift``
-  pair (the ``../jax-md/jax_md/space.py`` pattern; Schoenholz & Cubuk 2020).
+  pair (the JAX MD space abstraction; Schoenholz & Cubuk 2020).
 * :class:`NeighborList` -- turns a :class:`MolecularSystem` into the
   ``(senders, receivers)`` edge index within a cutoff. The default
   :class:`RadiusNeighborList` adapter delegates to
@@ -39,8 +38,8 @@ from opifex.neural.equivariant import radius_graph
 class Space(Protocol):
     """Boundary-condition seam: a ``displacement``/``shift`` function pair.
 
-    Mirrors the ``(displacement_fn, shift_fn)`` contract of
-    ``../jax-md/jax_md/space.py``: :meth:`displacement` computes the (possibly
+    Follows the ``(displacement_fn, shift_fn)`` space abstraction of JAX MD
+    (Schoenholz & Cubuk 2020): :meth:`displacement` computes the (possibly
     minimum-image) separation between two points and :meth:`shift` advances a
     position by a displacement (wrapping back into the cell when periodic).
     """

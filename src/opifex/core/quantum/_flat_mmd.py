@@ -17,8 +17,8 @@ the results are bit-compatible (validated to ~1e-10 against the eager backend).
 
 References mirror the eager backend: Helgaker, Jorgensen & Olsen, *Molecular
 Electronic-Structure Theory* (2000), Ch. 9; McMurchie & Davidson, *J. Comput.
-Phys.* **26**, 218 (1978). The batching layout follows
-``graphcore-research/mess`` (Helal et al., arXiv:2406.03121).
+Phys.* **26**, 218 (1978). The batching layout follows MESS (Helal &
+Fitzgibbon 2024, arXiv:2406.03121).
 """
 
 from __future__ import annotations

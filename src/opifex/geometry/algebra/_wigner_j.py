@@ -1,8 +1,7 @@
 r"""Constant ``J_l`` matrices for the fast Euler-angle Wigner-D path.
 
-Direct port of the precomputed ``J`` tables from
-``../e3nn-jax/e3nn_jax/_src/J.py`` (Geiger & Smidt 2022, arXiv:2207.09453;
-e3nn 0.4.0 ``o3/_wigner.py``). Each ``J_l`` is the symmetric orthogonal
+Precomputed ``J`` tables of the e3nn real Wigner-D factorisation (Geiger & Smidt
+2022, arXiv:2207.09453). Each ``J_l`` is the symmetric orthogonal
 involution (``J = J^T``, ``J^2 = I``) that converts a rotation about the eSCN
 quantisation (``y``) axis into one about the ``x`` axis by conjugation, so the
 real Wigner-D matrix factorises as the cheap product
@@ -16,7 +15,7 @@ constant matmuls, the key cost reduction behind the QHNetV2 SO(2) edge
 convolution (arXiv:2506.09398).
 
 The constants are basis-exact for opifex's real spherical-harmonic basis: it
-shares e3nn's ``change_basis_real_to_complex`` and so(3) generators (see
+uses the e3nn real-to-complex change of basis and so(3) generators (see
 :mod:`opifex.geometry.algebra.wigner`), so the stored ``J_l`` reproduce
 :func:`opifex.geometry.algebra.wigner.wigner_d`'s matrix-exponential path to
 machine precision (verified in ``tests/geometry/algebra/test_wigner.py``).
@@ -31,10 +30,10 @@ from numpy import sqrt
 
 
 # fmt: off
-# DO NOT reformat or edit the matrices below: they are the exact ``J_l`` reference
-# constants ported verbatim from ``../e3nn-jax/e3nn_jax/_src/J.py`` and are bit-exact
-# (verified in tests/geometry/algebra/test_wigner.py against the matrix-exponential
-# Wigner-D). A formatter reflow that altered a literal would silently break every
+# DO NOT reformat or edit the matrices below: they are the exact ``J_l`` constants
+# (Geiger & Smidt 2022, arXiv:2207.09453) and reproduce the matrix-exponential
+# Wigner-D to machine precision (verified in tests/geometry/algebra/test_wigner.py).
+# A formatter reflow that altered a literal would silently break every
 # SO(2)-frame rotation. The ``# fmt: off`` guard keeps ruff-format off the block.
 J0 = np.array(
     [

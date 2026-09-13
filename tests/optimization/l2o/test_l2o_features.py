@@ -1,6 +1,6 @@
 """Contracts for the learned-optimiser per-parameter feature primitives.
 
-Verifies the formulas match the reference (``learned_optimization`` common/mlp_lopt).
+Verifies the feature formulas of Metz et al. 2020 (``arXiv:2009.11243``).
 """
 
 from __future__ import annotations

@@ -19,7 +19,7 @@
 # Physics-Informed Neural Network (PINN). The Burgers equation is a
 # fundamental nonlinear PDE used in fluid mechanics and shock wave theory.
 #
-# Reference: DeepXDE's Burgers example (pinn_forward/Burgers.py)
+# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
 from pathlib import Path

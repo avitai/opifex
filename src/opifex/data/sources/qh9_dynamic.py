@@ -1,7 +1,7 @@
 r"""QH9-Dynamic quantum-Hamiltonian dataset loader (native opifex, no torch).
 
 QH9-Dynamic (Yu et al. 2023, "QH9: A Quantum Hamiltonian Prediction Benchmark for
-QM9 Molecules", arXiv:2306.04922) stores ~100 molecular-dynamics geometries per
+QM9 Molecules", arXiv:2306.09549) stores ~100 molecular-dynamics geometries per
 molecule. The single ``data`` table has eleven positional columns
 ``(id, geo_id, N, Z, pos, ekin, epot, etot, time, Ham, converged)`` -- the ``id``
 is an ``int64`` blob holding the *molecule* id (shared across that molecule's
@@ -11,7 +11,7 @@ into a :class:`~opifex.data.sources.qh9_source.QH9Example` is otherwise identica
 so the shared :func:`~opifex.data.sources.qh9_source._decode_row` is reused.
 
 Two canonical splits accompany the benchmark, both 80/10/10 and reproduced here
-exactly from the reference ``QH9Dynamic.process``:
+exactly from the benchmark definition (Yu et al. 2023):
 
 * ``geometry`` -- within each molecule, the ~100 geometries are split with a
   per-molecule ``numpy`` permutation seeded by the molecule's last row index, so
@@ -20,7 +20,7 @@ exactly from the reference ``QH9Dynamic.process``:
   molecule's geometries never straddle splits (the harder generalisation test).
 
 Both return *row-index* masks over the table read in ascending ``rowid`` order
-(the reference's enumeration order), since the molecule ``id`` is not unique.
+(the benchmark's enumeration order), since the molecule ``id`` is not unique.
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def qh9_dynamic_mol_split(
     Args:
         num_molecules: Number of distinct molecules.
         geometries_per_mol: Geometries stored per molecule (100 in the benchmark).
-        seed: Shuffle seed (fixed at 43 in the reference).
+        seed: Shuffle seed (fixed at 43 in the benchmark).
 
     Returns:
         Row-index arrays ``(train, val, test)`` over the ascending-``rowid`` rows.
@@ -178,7 +178,7 @@ def read_qh9_dynamic_sqlite(
 ) -> tuple[QH9Example, ...]:
     """Decode the QH9-Dynamic ``data`` table into :class:`QH9Example` records.
 
-    Reads rows in ascending ``rowid`` order (the reference enumeration order the
+    Reads rows in ascending ``rowid`` order (the benchmark enumeration order the
     splits index over) with the standard-library :mod:`sqlite3` driver under a
     read-only connection. This is the eager path (for validation and small
     evaluations); large-scale training uses the out-of-core padded source.

@@ -7,7 +7,7 @@ The Boys function
 appears in every Coulomb-type Gaussian integral. A single
 :func:`jax.scipy.special.gammainc` evaluation loses accuracy and leaks NaN
 gradients in both limits (``x -> 0`` and large ``x``), so this leaf module
-follows the ``graphcore-research/mess`` ``gammanu_select`` strategy: a
+follows the strategy of MESS (Helal & Fitzgibbon 2024, arXiv:2406.03121): a
 three-branch :func:`jax.numpy.select` over
 
 * the analytic limit :math:`F_n(0) = 1/(2n+1)` at ``x = 0``,
@@ -34,8 +34,7 @@ from jax import Array
 # leading-order asymptotic is machine-accurate (~2e-16) for x >= 50, and the
 # 128-term ascending series is accurate to ~8e-15 for 0 < x < 50, so the two
 # branches meet at full float64 precision (verified against the regularised
-# lower-incomplete-gamma reference across n = 0..12). This mirrors MESS's
-# ``gammanu_select`` threshold of 50.
+# lower-incomplete-gamma reference across n = 0..12).
 _SERIES_THRESHOLD = 50.0
 # Ascending-series terms needed to reach ~1e-14 at the threshold x = 50.
 _SERIES_TERMS = 128

@@ -1,8 +1,7 @@
 """TDD contracts for the small-MLP task family (the canonical L2O showcase task).
 
-Mirrors the ``MLPTask`` used throughout Google's ``learned_optimization`` tutorials
-(``docs/notebooks/no_dependency_learned_optimizer``): a small multilayer perceptron trained by
-the inner optimiser. Unlike the convex ``QuadraticTask``, this is a genuinely non-convex
+A small multilayer perceptron trained by the inner optimiser. Unlike the convex ``QuadraticTask``,
+this is a genuinely non-convex
 neural-network training objective — the setting where learned optimisers demonstrably beat
 fixed-hyperparameter baselines (Metz et al. 2020, arXiv:2009.11243). The family is self-contained
 (teacher-student regression on synthetic Gaussian data; no dataset dependency).

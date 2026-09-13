@@ -9,18 +9,20 @@ engine in :mod:`opifex.core.quantum.backend`.
 Two basis sets are provided, both with hardcoded contracted-GTO exponents and
 contraction coefficients for H, C, N and O:
 
-* **STO-3G** -- the minimal basis (s, p only). The numbers are the standard EMSL
-  Basis Set Exchange / PySCF STO-3G values (Hehre, Stewart & Pople, *J. Chem.
-  Phys.* **51**, 2657 (1969)).
+* **STO-3G** -- the minimal basis (s, p only). The numbers are the standard
+  Basis Set Exchange STO-3G values (Hehre, Stewart & Pople, *J. Chem. Phys.*
+  **51**, 2657 (1969)).
 * **def2-SVP** -- the split-valence polarised basis of Weigend & Ahlrichs
   (*Phys. Chem. Chem. Phys.* **7**, 3297 (2005)). This adds polarisation
   ``d``-shells (``l = 2``) on the heavy atoms (and a ``p``-shell on H), so the
   Cartesian->spherical transform in :mod:`opifex.core.quantum._spherical` is
   required to recover the standard 5-component spherical ``d`` AOs.
 
-Both sets are validated indirectly by the integral tests against
-``pyscf.gto.M(...).intor(...)``; the def2-SVP primitives are sourced verbatim
-from ``pyscf.gto.basis.load('def2-svp', ...)`` so they match the oracle exactly.
+Both sets are validated indirectly by the integral tests against PySCF (Sun et
+al., *J. Chem. Phys.* **153**, 024109 (2020)); the def2-SVP primitives are the
+published Weigend-Ahlrichs values as distributed by the Basis Set Exchange
+(Pritchard et al., *J. Chem. Inf. Model.* **59**, 4814 (2019)), so they match
+the oracle exactly.
 
 Primitive normalisation convention
 ----------------------------------
@@ -50,7 +52,7 @@ from opifex.core.quantum.molecular_system import ATOMIC_SYMBOLS, MolecularSystem
 
 
 # ---------------------------------------------------------------------------
-# STO-3G primitive data (EMSL / PySCF values).
+# STO-3G primitive data (Hehre, Stewart & Pople, J. Chem. Phys. 51, 2657 (1969)).
 #
 # Each entry is a list of shells; each shell is ``(l, [(exponent, coeff), ...])``
 # where ``coeff`` is the *contraction* coefficient against the individually
@@ -151,9 +153,10 @@ _STO3G: dict[str, list[tuple[int, list[tuple[float, float]]]]] = {
 # ---------------------------------------------------------------------------
 # def2-SVP primitive data (Weigend & Ahlrichs, PCCP 7, 3297 (2005)).
 #
-# Sourced verbatim from ``pyscf.gto.basis.load('def2-svp', element)`` (PySCF
-# 2.13.0) so the exponents and contraction coefficients match the oracle
-# exactly. Same ``(l, [(exponent, coeff), ...])`` layout as ``_STO3G``; the
+# The published values as distributed by the Basis Set Exchange (Pritchard et
+# al., J. Chem. Inf. Model. 59, 4814 (2019)), so the exponents and contraction
+# coefficients match the PySCF oracle exactly. Same
+# ``(l, [(exponent, coeff), ...])`` layout as ``_STO3G``; the
 # coefficients are contraction coefficients against individually normalised
 # primitives, renormalised to unit contracted self-overlap by
 # :func:`_build_shell_coefficients`.
@@ -394,7 +397,8 @@ class FlatPrimitives:
     primitive into 1-D arrays lets the McMurchie-Davidson integral kernels be
     evaluated with a single :func:`jax.vmap` over primitive pairs/quartets and
     contracted to AOs with :func:`jax.ops.segment_sum` (the
-    ``graphcore-research/mess`` pattern), replacing the eager shell loops.
+    MESS batching strategy; Helal & Fitzgibbon 2024, arXiv:2406.03121),
+    replacing the eager shell loops.
 
     The split between *traced* and *static* fields is deliberate: the geometry
     and Gaussian parameters (``center``, ``alpha``, ``coeff``) are JAX arrays so

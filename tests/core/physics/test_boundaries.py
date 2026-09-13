@@ -497,7 +497,8 @@ class TestEdgeCases:
 class TestNeumannNonzeroDerivative:
     """Test Neumann BC with a non-zero prescribed outward normal derivative.
 
-    Reference: deepxde NeumannBC residual ``du/dn - g`` with the outward normal
+    Reference: the Neumann residual ``du/dn - g`` of DeepXDE (Lu et al. 2021,
+    SIAM Rev. 63, 208) with the outward normal
     convention (left normal points in -x, right normal points in +x).
     """
 
@@ -573,8 +574,9 @@ class TestRobinNeumannLimitNonzeroFlux:
 class TestApplyMixed:
     """Test genuine per-boundary mixed boundary conditions.
 
-    Reference: deepxde dispatches each boundary segment by its declared BC type
-    (DirichletBC / NeumannBC / RobinBC ``error`` methods). The mixed handler must
+    Reference: DeepXDE (Lu et al. 2021, SIAM Rev. 63, 208) applies to each boundary
+    segment the residual of its declared BC type (Dirichlet / Neumann / Robin). The
+    mixed handler must
     apply the proper per-side constraint, never silently substitute Dirichlet.
     """
 

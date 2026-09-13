@@ -1,7 +1,6 @@
 r"""Tests for the native QH9-Stable dataset loader.
 
-QH9 (Yu et al. 2023, "QH9", arXiv:2306.04922; reference
-``/mnt/ssd2/Works/AIRS/OpenDFT/QHBench/QH9/datasets.py``) ships converged
+QH9 (Yu et al. 2023, "QH9", arXiv:2306.09549) ships converged
 def2-SVP Fock matrices in a SQLite ``.db`` with a single ``data`` table whose
 rows are ``(id, N, Z:int32, pos:float64 Angstrom, Ham:float64)`` (verified
 against the real 130,831-row QH9Stable.db: columns ``id, N, Z, pos, Ham``).
@@ -72,7 +71,7 @@ def synthetic_qh9_db(tmp_path: Path) -> Path:
 
     NOT real QH9 data -- random symmetric Fock blobs of the correct
     QH9-native def2-SVP size, purely to exercise the production decode path
-    without any download. Mirrors the reference row schema
+    without any download. Mirrors the QH9-Stable row schema
     ``(id, N, Z, pos, Ham)`` with the exact dtypes
     (``atoms`` int32, ``pos``/``Ham`` float64).
     """
@@ -185,7 +184,7 @@ def test_matrix_transform_h_p_block_permutation() -> None:
     For a single H atom (def2-SVP ``ssp``: AO indices ``[s0, s1, p0, p1, p2]``)
     the convention permutes the p-block by ``[1, 2, 0]`` and leaves the s-block,
     giving the overall AO permutation ``[0, 1, 3, 4, 2]``. Asserting on a marker
-    matrix pins the exact ordering replicated from the reference.
+    matrix pins the exact QH9 convention ordering.
     """
     atoms = np.array([1], dtype=np.int32)
     marker = np.diag(np.arange(5, dtype=np.float64))  # 5 = H def2-SVP AOs

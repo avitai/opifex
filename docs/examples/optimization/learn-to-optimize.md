@@ -12,8 +12,7 @@ beats a *properly tuned* classical optimiser.
 
 A hand-designed optimiser (SGD, Adam) applies the same fixed update rule to every problem. A
 *learned* optimiser is trained so that its update rule is itself good across a whole
-*distribution* of objectives. Opifex follows the design of Google's `learned_optimization`
-library and the L2O literature.
+*distribution* of objectives. Opifex follows the L2O literature.
 
 **Key insight:** L2O's genuine advantage shows on *non-convex, stochastic* training — where a
 single fixed learning rate is most compromised and the learned optimiser's implicit learning-rate

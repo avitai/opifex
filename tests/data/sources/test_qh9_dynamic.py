@@ -29,7 +29,7 @@ from opifex.data.sources.qh9_dynamic import (
 _GEO_PER_MOL = QH9_DYNAMIC_GEOMETRIES_PER_MOL
 
 
-# --- Independent oracles mirroring AIRS/OpenDFT/QHBench/QH9/datasets.py --------
+# --- Independent oracles for the QH9-Dynamic benchmark splits (Yu et al. 2023) ---
 def _reference_geometry_split(
     num_mol: int, geo: int = _GEO_PER_MOL, n_train: int = 80, n_val: int = 10
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

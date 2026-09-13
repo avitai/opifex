@@ -57,7 +57,9 @@ References:
 ----------
 * H. B. Schlegel, M. J. Frisch, *Int. J. Quantum Chem.* **54**, 83 (1995)
   (transformation between Cartesian and pure spherical harmonic Gaussians).
-* PySCF, ``pyscf.gto.cart2sph`` (oracle for the transform and AO ordering).
+* Q. Sun et al., "Recent developments in the PySCF program package", *J. Chem.
+  Phys.* **153**, 024109 (2020) (PySCF, the test oracle for the transform and AO
+  ordering).
 """
 
 from __future__ import annotations

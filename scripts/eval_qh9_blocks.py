@@ -9,8 +9,8 @@ checkpoint, and aggregates the QH9 benchmark metrics over the deterministic
 ``0.8/0.1/0.1`` test split (the same split the training driver held out, computed
 from the id count without decoding the full 130k-row table).
 
-The reported metrics mirror the QH9 / QHNet benchmark (Yu et al. 2023,
-arXiv:2306.04922) so a run is directly comparable to the literature (QHNet
+The reported metrics mirror the QH9 benchmark (Yu et al. 2023,
+arXiv:2306.09549) so a run is directly comparable to the literature (QHNet
 Hamiltonian-MAE ~76 µHa, QHNetV2 ~31.5 µHa on QH9-Stable):
 
 * ``hamiltonian_mae`` -- Fock-matrix MAE (reported in µHa),

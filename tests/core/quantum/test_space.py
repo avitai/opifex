@@ -1,8 +1,8 @@
 r"""Tests for boundary-condition spaces (free / periodic).
 
 The ``Space`` abstraction returns a ``(displacement_fn, shift_fn)`` pair that
-injects boundary conditions into geometry calculations, mirroring
-``../jax-md/jax_md/space.py`` (Schoenholz & Cubuk 2020, JAX-MD). The load-bearing
+injects boundary conditions into geometry calculations, following the space
+abstraction of JAX MD (Schoenholz & Cubuk 2020). The load-bearing
 checks are: free displacement is the raw difference, periodic displacement obeys
 the minimum-image convention for an arbitrary (possibly triclinic) cell, ``shift``
 wraps positions back into the cell, and both are ``jit``/``vmap`` clean.

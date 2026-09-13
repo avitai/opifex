@@ -2,7 +2,7 @@
 
 A learned optimiser is meta-trained to minimise a *distribution* of objectives, each carried by
 a :class:`~opifex.optimization.l2o.core.Task`, and applied to held-out tasks where it can beat a
-*tuned* classical baseline. The design follows Google's ``learned_optimization`` library and the
+*tuned* classical baseline. The design follows the
 L2O literature (Andrychowicz et al. 2016, ``arXiv:1606.04474``; Metz et al. 2020,
 ``arXiv:2009.11243``; Vicol et al. 2021 PES, ``arXiv:2112.13835``); classical baselines use
 ``optimistix``. Every reported number is measured — there are no fabricated objectives or

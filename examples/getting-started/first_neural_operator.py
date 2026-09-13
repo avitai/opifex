@@ -230,7 +230,7 @@ def main() -> dict[str, float | int]:
     print("=" * 70)
     print(f"JAX backend: {jax.default_backend()}")
 
-    # Configuration - based on NeuralOperator reference implementation
+    # Configuration - zero-shot super-resolution (Li et al. 2021, arXiv:2010.08895)
     TRAIN_RESOLUTION = 32  # Train at this resolution
     TEST_RESOLUTION_1 = 32  # Same as training
     TEST_RESOLUTION_2 = 64  # 2x higher - zero-shot!

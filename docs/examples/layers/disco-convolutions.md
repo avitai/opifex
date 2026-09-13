@@ -23,9 +23,8 @@ Because the kernel lives in physical coordinates (not pixels) and the sum is a q
 operator is **discretisation-aware**: the same learned kernel transfers across grid resolutions, and
 it works on **irregular** point sets. This example demonstrates both with measurements.
 
-The radial basis reuses opifex's [`PiecewiseLinearBasis`](../../api/neural.md) (the `torch_harmonics`
-filter basis), and the filter is normalised per output point (a partition of unity) as in the
-reference.
+The radial basis reuses opifex's [`PiecewiseLinearBasis`](../../api/neural.md) (a piecewise-linear
+radial filter basis), and the filter is normalised per output point (a partition of unity).
 
 ## What You'll Learn
 
@@ -68,7 +67,7 @@ psi[o, i, k] = q_i · φ_k(|x_o − x_i|),  normalised so  Σ_i psi[o, i, k] = 1
 ```
 
 `φ_k` are the piecewise-linear radial hats; `q_i` are quadrature weights (the measure each sample
-represents). The per-output normalisation (`torch_harmonics`'s `_normalize_convolution_filter_matrix`)
+represents). The per-output normalisation
 is the partition of unity that gives consistent magnitude across discretisations.
 
 ## Results

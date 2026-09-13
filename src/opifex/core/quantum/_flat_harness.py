@@ -4,7 +4,7 @@ This module turns the per-primitive McMurchie-Davidson kernels in
 :mod:`opifex.core.quantum._flat_mmd` into the full AO integral tensors using a
 single ``jax.vmap`` over a flat :class:`~opifex.core.quantum.basis.FlatPrimitives`
 representation followed by :func:`jax.ops.segment_sum` contraction -- the
-batching strategy from ``graphcore-research/mess`` (Helal et al.,
+batching strategy of MESS (Helal & Fitzgibbon 2024,
 arXiv:2406.03121), which replaces the eager ``n_shells**4`` Python quartet loop
 with one XLA-fused, ``jit``-compilable trace.
 
@@ -68,8 +68,8 @@ def _contract_pairs_to_aos(
 ) -> Array:
     """Scatter symmetric primitive-pair values and contract to an AO matrix.
 
-    Mirrors MESS ``integrate_dense``: build the symmetric ``n_prim x n_prim``
-    matrix from the upper triangle, then double ``segment_sum`` over
+    Builds the symmetric ``n_prim x n_prim`` matrix from the upper triangle,
+    then double ``segment_sum`` over
     ``orbital_index``.
     """
     matrix = jnp.zeros((num_primitives, num_primitives), dtype=pair_values.dtype)
@@ -130,9 +130,9 @@ def one_electron_matrices(
 
 
 def gen_ijkl(n: int) -> Iterator[tuple[int, int, int, int]]:
-    """Yield the 8-fold-unique AO quartet indices (MESS ``gen_ijkl``).
+    """Yield the 8-fold-unique AO quartet indices.
 
-    Adapted from four-index transformations (S. Wilson): enumerates
+    Uses the four-index transformation ordering (S. Wilson): it enumerates
     ``i >= j``, ``i >= k`` and the constrained ``l`` so that each of the eight
     permutation-equivalent quartets is generated exactly once.
     """

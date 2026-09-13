@@ -40,8 +40,8 @@ operator is **discretisation-aware**: the same learned kernel transfers across g
 and it works on **irregular** point sets. This example demonstrates both properties with
 measurements.
 
-The radial basis reuses opifex's `PiecewiseLinearBasis` (the `torch_harmonics` filter basis), and
-the filter is normalised per output point (a partition of unity) as in the reference.
+The radial basis reuses opifex's `PiecewiseLinearBasis` (a piecewise-linear radial filter basis),
+and the filter is normalised per output point (a partition of unity).
 
 ## What You'll Learn
 

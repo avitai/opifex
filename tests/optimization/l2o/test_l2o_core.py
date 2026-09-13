@@ -1,7 +1,7 @@
 """TDD contracts for the rebuilt L2O core abstractions (tasks + optimiser interface).
 
-References: ``learned_optimization/tasks/base.py`` (Task/TaskFamily),
-``learned_optimization/optimizers/base.py`` (Optimizer ABC).
+References: Andrychowicz et al. 2016 (``arXiv:1606.04474``); Metz et al. 2020
+(``arXiv:2009.11243``).
 """
 
 from __future__ import annotations

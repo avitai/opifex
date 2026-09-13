@@ -8,15 +8,15 @@ JIT-compiled training loops.
 
 Reference
 ---------
-The per-boundary-type residual conventions follow DeepXDE's ``icbc`` module
-(``deepxde/icbc/boundary_conditions.py``):
+The per-boundary-type residual conventions follow DeepXDE (Lu, Meng, Mao &
+Karniadakis, "DeepXDE: A deep learning library for solving differential
+equations", *SIAM Rev.* **63**, 208 (2021)):
 
-- ``DirichletBC``: residual ``u - g`` (value mismatch).
-- ``NeumannBC``: residual ``du/dn - g`` (outward normal-derivative mismatch).
-- ``RobinBC``: residual ``du/dn - func(x, u)``, i.e. the general linear form
+- Dirichlet: residual ``u - g`` (value mismatch).
+- Neumann: residual ``du/dn - g`` (outward normal-derivative mismatch).
+- Robin: residual ``du/dn - func(x, u)``, i.e. the general linear form
   ``alpha*u + beta*du/dn - gamma``.
-- Mixed boundaries dispatch each boundary segment by its declared type
-  (see ``PointSetOperatorBC`` / per-segment ``error`` handling).
+- Mixed boundaries dispatch each boundary segment by its declared type.
 
 The outward-normal convention is: the left edge normal points in ``-x`` and the
 right edge normal points in ``+x``.  These projection helpers set boundary
@@ -116,8 +116,8 @@ def apply_neumann(
     """Apply Neumann boundary condition to parameters.
 
     Neumann boundary condition fixes the *outward normal derivative* at the
-    boundaries to a prescribed value ``g`` (DeepXDE ``NeumannBC`` residual
-    ``du/dn - g``)::
+    boundaries to a prescribed value ``g`` (residual ``du/dn - g``; Lu et al.
+    2021)::
 
         du/dn(boundary) = normal_derivative
 
@@ -319,10 +319,9 @@ def apply_mixed(
 ) -> jnp.ndarray:
     """Apply mixed boundary conditions with per-edge type dispatch.
 
-    Each edge is constrained by its own declared boundary type, mirroring
-    DeepXDE's per-segment ``error`` dispatch where every boundary segment uses
-    its declared BC residual.  Unknown types raise (fail-fast); a non-Dirichlet
-    edge is never silently treated as Dirichlet.
+    Each edge is constrained by its own declared boundary type, so every
+    boundary segment uses its declared BC residual.  Unknown types raise
+    (fail-fast); a non-Dirichlet edge is never silently treated as Dirichlet.
 
     Args:
         params: Parameter array (shape: [..., n] where n >= 1).

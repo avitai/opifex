@@ -15,8 +15,7 @@ This package provides advanced optimization algorithms for scientific machine le
   - `meta_optimizer.py`: Integrated meta-optimization system
 
 - **`l2o/`**: Learn-to-Optimize — per-parameter learned optimisers meta-trained with Persistent
-  Evolution Strategies (after Google's `learned_optimization`; Andrychowicz 2016, Metz 2020,
-  Vicol 2021)
+  Evolution Strategies (Andrychowicz 2016, Metz 2020, Vicol 2021)
   - `core.py`: objective-carrying `Task` / `TaskFamily` and the `Optimizer` interface
   - `optimizers.py`: `Optimizer` ABC + `OptaxOptimizer` (hand-designed baseline family)
   - `tasks.py`: `QuadraticTaskFamily` and the `MLPTaskFamily` showcase task

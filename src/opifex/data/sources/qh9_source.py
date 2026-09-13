@@ -1,7 +1,7 @@
 r"""QH9-Stable quantum Hamiltonian dataset loader (native opifex, no torch).
 
 QH9 (Yu et al. 2023, "QH9: A Quantum Hamiltonian Prediction Benchmark for
-QM9 Molecules", arXiv:2306.04922) ships converged DFT (B3LYP/def2-SVP) Fock
+QM9 Molecules", arXiv:2306.09549) ships converged DFT (B3LYP/def2-SVP) Fock
 matrices for 130 831 small organic molecules (elements H, C, N, O, F). This
 module reads the **QH9-Stable** SQLite database directly with the standard
 library :mod:`sqlite3` and :mod:`numpy` -- no ``torch``, ``torch_geometric``,
@@ -9,14 +9,14 @@ library :mod:`sqlite3` and :mod:`numpy` -- no ``torch``, ``torch_geometric``,
 :class:`~opifex.core.quantum.molecular_system.MolecularSystem` paired with the
 def2-SVP Fock matrix in opifex's spherical shell/AO ordering.
 
-Reference schema (the authority this loader matches byte-for-byte):
-    ``/mnt/ssd2/Works/AIRS/OpenDFT/QHBench/QH9/datasets.py`` (``QH9Stable``).
+Reference schema: the QH9-Stable database released with the benchmark (Yu et al.
+2023, arXiv:2306.09549).
 
 Raw schema
 ----------
 The database has a single table ``data``; each row is positionally
 ``(id: int, N: int, Z: bytes, pos: bytes, Ham: bytes)`` (the real QH9-Stable
-column names are ``id, N, Z, pos, Ham``; the reference reads them positionally
+column names are ``id, N, Z, pos, Ham``; they are read positionally
 via ``SELECT *``, never by name) with
 
 * ``Z``      -- ``int32`` atomic numbers, length ``N``;
@@ -27,9 +27,9 @@ via ``SELECT *``, never by name) with
 
 AO-ordering convention
 ----------------------
-QH9 stores the Fock matrix in its own native AO layout. The reference
-``matrix_transform(Ham, atoms, convention='pyscf_def2svp')`` reorders and
-sign-flips it into the **PySCF def2-SVP spherical** convention: atom-major,
+QH9 stores the Fock matrix in its own native AO layout. The convention transform
+reorders and sign-flips it into the **PySCF def2-SVP spherical** convention (Sun
+et al., *J. Chem. Phys.* **153**, 024109 (2020)): atom-major,
 shell-major, with ``p`` components ordered ``(x, y, z)`` and ``d`` components
 ordered ``(xy, yz, z^2, xz, x2-y2)``. That convention is *exactly* opifex's
 spherical def2-SVP AO ordering (the columns of
@@ -37,8 +37,8 @@ spherical def2-SVP AO ordering (the columns of
 ``mol.spheric_labels()`` order, and the basis enumerates shells atom-major /
 shell-major), so the transformed matrix lands directly in the predictor's
 target ordering with no further permutation. The convention permutation/sign
-tables (the ``_DEF2SVP_*`` module constants) are replicated verbatim from the
-reference ``convention_dict['pyscf_def2svp']``.
+tables (the ``_DEF2SVP_*`` module constants) map the QH9 native AO layout into
+this convention.
 
 Splitting
 ---------
@@ -51,7 +51,7 @@ Batching
 QH9 molecules are heterogeneous (``n_atoms`` 3..29; AO count varies with
 composition), so they cannot be collated into one dense tensor without padding.
 This module owns only the SQLite decode, the def2-SVP convention transform and
-the reference split; the out-of-core per-molecule padded batching that consumes
+the benchmark split; the out-of-core per-molecule padded batching that consumes
 them lives in :mod:`opifex.data.sources.qh9_padded_source` (fixed-shape padded
 elements whose Fock decode + block cut are deferred to the GPU operators in
 :mod:`opifex.data.sources.qh9_fock_operators`).
@@ -77,7 +77,7 @@ from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR, MolecularSyst
 
 logger = logging.getLogger(__name__)
 
-# QH9-Stable random-split seed and ratios (reference ``QH9Stable.process``).
+# QH9-Stable random-split seed and ratios (the QH9 benchmark split).
 _SPLIT_SEED: int = 43
 _TRAIN_RATIO: float = 0.8
 _VAL_RATIO: float = 0.1
@@ -89,9 +89,9 @@ _LIGHT_ELEMENT_MAX_Z: int = 2
 
 
 # ---------------------------------------------------------------------------
-# PySCF def2-SVP convention tables (replicated verbatim from the reference
-# ``convention_dict['pyscf_def2svp']`` in QHBench/QH9/datasets.py). These map
-# QH9's native per-shell AO layout into PySCF's spherical AO ordering.
+# PySCF def2-SVP convention tables for the QH9 dataset (Yu et al. 2023,
+# arXiv:2306.09549). These map QH9's native per-shell AO layout into PySCF's
+# spherical AO ordering.
 #
 #   atom_to_orbitals_map: per-element shell string (s/p/d letters in order).
 #   orbital_idx_map:      within-shell component permutation per shell type.
@@ -191,7 +191,7 @@ def def2svp_decode_indices(
 ) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
     r"""Return the QH9-native -> spherical def2-SVP AO permutation and signs.
 
-    Decomposes the reference ``matrix_transform(convention='pyscf_def2svp')``
+    Decomposes the QH9-native to PySCF def2-SVP convention transform
     into its two per-AO ingredients: the permutation ``indices`` (whole-shell
     reordering composed with within-shell component reordering) and the per-AO
     sign vector ``signs``. They define the symmetric congruence
@@ -240,9 +240,8 @@ def matrix_transform_def2svp(
 ) -> Float[NDArray[np.float64], "n_ao n_ao"]:
     r"""Reorder a QH9-native Fock matrix into PySCF def2-SVP spherical ordering.
 
-    Faithful NumPy reimplementation of the reference
-    ``matrix_transform(matrices, atoms, convention='pyscf_def2svp')`` from
-    ``QHBench/QH9/datasets.py``: it applies the per-AO permutation and sign vector
+    NumPy convention transform for QH9 Fock matrices (Yu et al. 2023,
+    arXiv:2306.09549): it applies the per-AO permutation and sign vector
     from :func:`def2svp_decode_indices` symmetrically to both matrix axes
     (``M' = S M[I][:, I] S^T`` with ``S = diag(signs)``).
 
@@ -286,7 +285,7 @@ def _decode_row(
 ) -> QH9Example:
     """Decode one raw QH9-Stable ``data`` row into a :class:`QH9Example`.
 
-    Mirrors the reference ``QH9Stable.get`` decoding: ``atoms`` as ``int32``,
+    Decodes the QH9-Stable row layout: ``atoms`` as ``int32``,
     ``pos`` as ``float64`` ``(num_nodes, 3)`` in Angstrom, ``Ham`` as
     ``float64`` ``(n_ao, n_ao)`` in QH9-native ordering. The Fock matrix is then
     mapped into def2-SVP spherical ordering and the positions converted to Bohr
@@ -335,7 +334,7 @@ def read_qh9_sqlite(
 
     Uses the standard-library :mod:`sqlite3` driver under a ``with`` connection
     (no ``torch``/``apsw``/``lmdb``). Rows are read in ascending ``id`` order so
-    the returned ordering is deterministic and matches the order the reference
+    the returned ordering is deterministic and matches the order the benchmark
     split permutation is applied over.
 
     Args:
@@ -353,7 +352,7 @@ def read_qh9_sqlite(
         raise FileNotFoundError(f"QH9-Stable database not found: {db_path}")
 
     # Real QH9-Stable columns are (id, N, Z, pos, Ham); read positionally via
-    # ``SELECT *`` (as the reference does) so we are agnostic to column names.
+    # ``SELECT *`` so we are agnostic to column names.
     query = "SELECT * FROM data ORDER BY id"
     if limit is not None:
         query += f" LIMIT {int(limit)}"
@@ -384,14 +383,14 @@ def qh9_random_split(
 ]:
     """Reproduce the QH9-Stable random ``0.8 / 0.1 / 0.1`` split.
 
-    Matches ``QH9Stable.process`` exactly: a single
+    Matches the QH9 benchmark split exactly: a single
     ``np.random.RandomState(seed).permutation(n)`` is split with integer
     truncation of the train and validation sizes; the test split takes the
     remainder.
 
     Args:
         n_examples: Total number of molecules.
-        seed: Permutation seed (fixed at 43 in the reference).
+        seed: Permutation seed (fixed at 43 in the benchmark).
 
     Returns:
         Tuple of ``(train_indices, val_indices, test_indices)``.
@@ -422,13 +421,13 @@ def read_qh9_test_split(
     selected test molecules by id over a read-only connection. This avoids
     materialising all ~130k Focks (tens of GB) just to evaluate a test subset --
     the split is still computed over the full database, so the molecules returned
-    are exactly those of the reference test split.
+    are exactly those of the benchmark test split.
 
     Args:
         db_path: Path to ``QH9Stable.db``.
         limit: Optional cap on the number of test molecules decoded (the first of
             the test split); ``None`` decodes the whole test split.
-        seed: Split permutation seed (fixed at 43 in the reference).
+        seed: Split permutation seed (fixed at 43 in the benchmark).
 
     Returns:
         The decoded test-split examples, in test-split order.
@@ -464,7 +463,7 @@ def load_qh9_data(
 
     Args:
         db_path: Path to ``QH9Stable.db``.
-        seed: Split permutation seed (fixed at 43 in the reference).
+        seed: Split permutation seed (fixed at 43 in the benchmark).
         limit: Optional cap on decoded rows.
 
     Returns:

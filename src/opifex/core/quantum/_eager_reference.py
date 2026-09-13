@@ -2,7 +2,8 @@ r"""Eager per-primitive MMD reference assembly (test cross-check oracle).
 
 The production integral engine in :mod:`opifex.core.quantum.backend` assembles
 every AO integral with a single batched ``vmap`` + ``segment_sum`` pass (the
-MESS pattern). This module keeps a small, deliberately straightforward *eager*
+MESS batching strategy; Helal & Fitzgibbon 2024, arXiv:2406.03121). This module
+keeps a small, deliberately straightforward *eager*
 assembly built directly from the validated per-primitive McMurchie-Davidson
 kernels (the ``_primitive_*`` functions in ``backend``): it loops over AO
 pairs/quartets explicitly and only ``vmap``-s the inner primitive contraction.
