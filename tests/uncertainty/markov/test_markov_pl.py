@@ -25,8 +25,9 @@ References
   classification using posterior linearisation*, IEEE SPL.
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP, §6
   (Iterated Extended Kalman Smoother).
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  ``PosteriorLinearisation`` (PRIMARY reference).
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY reference).
 """
 
 from __future__ import annotations

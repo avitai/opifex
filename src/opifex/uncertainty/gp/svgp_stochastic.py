@@ -61,25 +61,14 @@ The minibatched ELBO is
               \mathbb{E}_{q}[\log p(y_i | f_i)]
           - \operatorname{KL}.
 
-opifex efficiency wins over GPJax
----------------------------------
+Efficiency
+----------
 
-GPJax's ``VariationalGaussian.prior_kl`` + ``predict`` each perform
-their own ``chol(K_zz)``; the per-point predictive ``vmap`` in
-``objectives.variational_expectation`` re-references ``K_zz`` and
-``L_z`` inside every traced inner call (relying on XLA CSE for
-deduplication). opifex computes ``L_z`` **once** per ELBO call and
+opifex computes ``L_z`` **once** per ELBO call and
 threads it through both KL and per-batch predictive moments via
 closed-form triangular solves; the whitened parametrisation removes
-``K_zz`` from the KL entirely.
-
-Reference implementations consulted (READ-ONLY)
------------------------------------------------
-
-* ``../GPJax/gpjax/variational_families.py:155-308`` (unwhitened
-  ``VariationalGaussian``) — verified the unwhitened predictive
-  formula matched by the whitened ↔ unwhitened equivalence test.
-* ``../GPJax/gpjax/objectives.py:280-405`` (uncollapsed ELBO).
+``K_zz`` from the KL entirely. A whitened ↔ unwhitened equivalence test
+checks the predictive against the unwhitened closed form.
 
 References:
 ----------

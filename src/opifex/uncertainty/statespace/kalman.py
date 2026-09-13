@@ -16,9 +16,6 @@ Public API
 * ``kalman_log_likelihood`` — marginal log-likelihood of the observation
   sequence under the linear-Gaussian state-space model.
 
-Sibling reference (line-by-line port): ``bayesnewton/bayesnewton/ops.py``
-``_sequential_kf`` (line 154) and ``_sequential_rts`` (line 288).
-
 References:
 ----------
 * Kalman 1960; Rauch, Tung, Striebel 1965; Särkkä 2013.
@@ -100,7 +97,7 @@ def kalman_filter(
 ) -> tuple[jax.Array, jax.Array]:
     """Run a sequential Kalman filter over a fixed-length sequence.
 
-    Sibling reference: ``bayesnewton/bayesnewton/ops.py:154 _sequential_kf``.
+    Reference: Kalman 1960; Särkkä 2013.
 
     Args:
         transitions: shape ``(num_steps, state_dim, state_dim)``.
@@ -153,7 +150,7 @@ def kalman_smoother(
 ) -> tuple[jax.Array, jax.Array]:
     """Rauch-Tung-Striebel backward smoother.
 
-    Sibling reference: ``bayesnewton/bayesnewton/ops.py:288 _sequential_rts``.
+    Reference: Rauch, Tung, Striebel 1965; Särkkä 2013.
 
     Args:
         filter_means: forward-pass posterior means ``(num_steps, state_dim)``.
@@ -228,8 +225,7 @@ def kalman_log_likelihood(
     the innovation Gaussian whose covariance is ``H P_- H^T + R``. Used
     for hyperparameter learning via ``jax.grad``.
 
-    Sibling reference: ``bayesnewton/bayesnewton/ops.py:170-180`` (the
-    ``mvn_logpdf`` accumulator inside ``_sequential_kf``).
+    Reference: Särkkä 2013.
     """
 
     def body(

@@ -7,18 +7,14 @@ operator encodes the affine pencil ``(A, b, C, J, η)`` for filtering and
 ``(E, g, L)`` for smoothing — both of which compose associatively under
 the standard Kalman fusion identities.
 
-Canonical reference (line-by-line port):
-* ``../bayesnewton/bayesnewton/ops.py`` ``parallel_filtering_element_``
-  (line 183), ``parallel_filtering_operator`` (line 204),
-  ``make_associative_filtering_elements`` (line 222),
-  ``parallel_smoothing_element`` (line 319),
-  ``parallel_smoothing_operator`` (line 329),
-  ``_parallel_rts`` (line 338).
+The filtering elements, their operator, the smoothing elements and their operator follow Lemmas 7
+to 10 (eqs. 10 to 14) of Särkkä & García-Fernández (2021).
 
 References:
 ----------
-* Särkkä & García-Fernández 2021 — *Temporal parallelization of Bayesian
-  smoothers*, IEEE TAC arXiv:1905.13002.
+* Särkkä, S., García-Fernández, Á. F. 2021 — *Temporal Parallelization of
+  Bayesian Smoothers*, IEEE Transactions on Automatic Control 66(1), 299-306,
+  arXiv:1905.13002.
 """
 
 from __future__ import annotations
@@ -34,10 +30,7 @@ def _make_filtering_element(
     observation_cov: jax.Array,
     observation: jax.Array,
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
-    """Build a single filtering element ``(A, b, C, J, η)``.
-
-    Ports bayesnewton ``parallel_filtering_element_`` (line 183).
-    """
+    """Build a single filtering element ``(A, b, C, J, η)`` (Lemma 7, eqs. 10 and 12)."""
     h_q = observation_matrix @ process_noise
     h_a = observation_matrix @ transition
     innovation_cov = h_q @ observation_matrix.T + observation_cov
@@ -62,7 +55,7 @@ def _filtering_operator(
     elem1: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
     elem2: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array],
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
-    """Associative filtering operator. Ports bayesnewton line 204."""
+    """Associative filtering operator (Lemma 8, eqs. 13 and 14)."""
     a1, b1, c1, j1, eta1 = elem1
     a2, b2, c2, j2, eta2 = elem2
     identity = jnp.eye(c1.shape[-1], dtype=c1.dtype)
@@ -92,13 +85,11 @@ def kalman_filter_parallel(
     Identical output to :func:`kalman_filter` but runs in :math:`O(\log N)`
     parallel depth via :func:`jax.lax.associative_scan`.
 
-    The bayesnewton reference uses an "observe at step ``t`` then transition
-    to step ``t+1``" indexing, whereas opifex uses "predict via ``A_t`` then
-    update with ``y_t``" (i.e., observation ``y_t`` is observed at time
-    ``t+1`` relative to the initial prior). To bridge the two, the first
-    transition is folded into an effective prior
-    ``N(A_0 m_0, A_0 P_0 A_0^T + Q_0)`` and the first transition slot in
-    the parallel pipeline is replaced with the identity.
+    As in :func:`kalman_filter`, observation ``y_t`` follows the transition
+    ``A_t`` out of step ``t - 1``. The first element conditions on the prior
+    ``N(A_0 m_0, A_0 P_0 A_0^T + Q_0)``: its transition slot is the identity,
+    its process noise is that prior covariance, and its offset is shifted by
+    the prior mean.
 
     Args:
         transitions: Per-step transition matrices, shape ``(N, n, n)``.
@@ -121,8 +112,7 @@ def kalman_filter_parallel(
 
     identity = jnp.eye(state_dim, dtype=transitions.dtype)
     transitions_eff = transitions.at[0].set(identity)
-    # bayesnewton's substitution (line 223): set process_noises[0] = prior cov
-    # — here the effective prior cov is what we just computed.
+    # The first element takes the effective prior covariance as its process noise.
     process_noises_eff = process_noises.at[0].set(effective_cov)
 
     elements = jax.vmap(_make_filtering_element, in_axes=(0, 0, None, 0, 0))(
@@ -133,7 +123,7 @@ def kalman_filter_parallel(
         observations,
     )
 
-    # Adjust b[0] for non-zero effective_mean (ports line 228).
+    # Shift b[0] by the effective prior mean, which the element built above omits.
     init_innovation_cov = (
         observation_matrix @ effective_cov @ observation_matrix.T + observation_covs[0]
     )
@@ -154,7 +144,7 @@ def _smoothing_element(
     filter_mean: jax.Array,
     filter_cov: jax.Array,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """Build a single smoothing element ``(E, g, L)``. Ports bayesnewton line 319."""
+    """Build a single smoothing element ``(E, g, L)`` (Lemma 9, eq. 11)."""
     predicted_cov = transition @ filter_cov @ transition.T + process_noise
     smoothing_gain = jnp.linalg.solve(predicted_cov, transition @ filter_cov).T
     g = filter_mean - smoothing_gain @ transition @ filter_mean
@@ -166,7 +156,7 @@ def _smoothing_operator(
     elem1: tuple[jax.Array, jax.Array, jax.Array],
     elem2: tuple[jax.Array, jax.Array, jax.Array],
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """Associative smoothing operator. Ports bayesnewton line 329."""
+    """Associative smoothing operator (Lemma 10)."""
     e1, g1, l1 = elem1
     e2, g2, l2 = elem2
     new_e = e2 @ e1

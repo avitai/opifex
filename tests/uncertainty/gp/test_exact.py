@@ -10,13 +10,7 @@ and observation noise ``σ²`` is closed-form (Rasmussen & Williams 2006
 
 Algorithm 2.1 implements the same identities via a single Cholesky
 factor ``L = chol(K + σ² I)`` (the canonical numerically-stable form
-that the opifex implementation ports).
-
-Canonical reference:
-* ``../tinygp/src/tinygp/gp.py:condition`` / ``predict`` — the same
-  Algorithm-2.1 Cholesky pattern that opifex implements directly in
-  JAX without the tinygp ``eqx.Module`` overhead (tinygp is an
-  adapter-only optional backend, not a runtime dependency).
+that the opifex implementation uses).
 
 References
 ----------

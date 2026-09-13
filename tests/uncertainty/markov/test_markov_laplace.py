@@ -12,7 +12,7 @@ Markov-GP form. Reuses:
   (matern12/32/52/72, cosine, periodic, quasi-periodic) for the
   Markov-GP prior.
 
-Algorithm (bayesnewton ``inference.py:Laplace`` reference; Sarkka 2013
+Algorithm (Wilkinson, Sarkka & Solin 2023; Sarkka 2013
 §9 *Bayesian Filtering and Smoothing* for the Iterated-EKS analogue):
 
 For iteration ``t``:
@@ -35,8 +35,9 @@ References
 ----------
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP §9 (Iterated
   Extended Kalman Smoother).
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton`` (PRIMARY for the
-  inference-on-Markov-GPs design).
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY for the inference-on-Markov-GPs design).
 * Rasmussen & Williams 2006 §3.4 (the Laplace algorithm being
   bridged into state-space form).
 """

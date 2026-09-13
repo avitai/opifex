@@ -11,8 +11,8 @@ discrete-time transition over an interval :math:`\Delta t` is
     Q = \int_0^{\Delta t} e^{F\tau} L Q_c L^\top e^{F^\top\tau}\, d\tau.
 
 Both come from the exponential-and-Gramian doubling of Stillfjord & Tronarp (2023,
-arXiv:2310.13462) in :mod:`opifex.uncertainty.statespace._gramian`, ported from probdiffeq. It
-keeps every component of ``Q`` accurate from steps far below to far above the SDE's time scale,
+arXiv:2310.13462) in :mod:`opifex.uncertainty.statespace._gramian`. It keeps every component
+of ``Q`` accurate from steps far below to far above the SDE's time scale,
 in float32 and float64, and it is differentiable in reverse mode. Steps needing more than 32
 doublings return NaN.
 

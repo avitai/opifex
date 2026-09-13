@@ -20,8 +20,6 @@ References
 * Rasmussen, C. E., Williams, C. K. I. 2006 — *Gaussian Processes for
   Machine Learning*, MIT Press; §2.2 (homoscedastic baseline that
   this heteroscedastic variant generalises).
-* GPJax ``likelihoods.py:HeteroscedasticGaussian`` — reference
-  implementation (adapter-only; not imported).
 """
 
 from __future__ import annotations

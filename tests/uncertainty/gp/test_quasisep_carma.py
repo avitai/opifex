@@ -1,7 +1,7 @@
 r"""Tests for the scalable CARMA state-space Gaussian process.
 
 The direct-evaluation CARMA(p, q) covariance (:func:`carma_kernel`)
-evaluates a dense ``O(n²)`` Gram matrix. The scalable port here maps
+evaluates a dense ``O(n²)`` Gram matrix. The scalable form here maps
 the same covariance into a real, block-structured linear-Gaussian SDE
 (the celerite quasiseparable realization of Foreman-Mackey+ 2017) and
 runs the forward Kalman filter + backward RTS smoother, giving exact
@@ -24,11 +24,6 @@ on :func:`carma_kernel`:
 
 A CARMA(1, 0) process is an Ornstein-Uhlenbeck / Matern-1/2 process,
 so that special case is checked against the Matern-1/2 exact GP.
-
-Reference implementation consulted (READ-ONLY):
-``../tinygp/src/tinygp/kernels/quasisep.py:CARMA``
-(``design_matrix`` + ``stationary_covariance`` + ``observation_model``
- + ``transition_matrix``).
 
 References
 ----------

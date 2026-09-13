@@ -24,12 +24,6 @@ Coverage:
   (the no-op transition);
 * the gain in the update equals the dense gain ``P H^T (H P H^T + R)^-1``.
 
-Canonical reference (line-by-line port):
-* QR-based revert step — ``../probdiffeq/probdiffeq/util/cholesky_util.py``
-  ``revert_conditional`` (line 51) and ``triu_via_qr`` (line 138).
-* Closed-form Kalman comparison — ``../bayesnewton/bayesnewton/ops.py``
-  ``_sequential_kf`` (line 154).
-
 References
 ----------
 * Kaminski, Bryson, Schmidt 1971 — *Discrete square root filtering: a

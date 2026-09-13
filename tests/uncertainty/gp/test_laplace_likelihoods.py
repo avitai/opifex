@@ -12,9 +12,8 @@ Each per-likelihood ``(log_lik, grad, W)`` block is verified against the
 canonical formulas in:
 
 * Rasmussen & Williams 2006 §3.4 (Bernoulli + generic algorithm).
-* bayesnewton/bayesnewton/likelihoods.py:Poisson (line 891).
-* bayesnewton/bayesnewton/likelihoods.py:StudentsT (line 1011).
-* bayesnewton/bayesnewton/likelihoods.py:Beta (line 1047).
+* The Poisson, Student-t and Beta closed forms stated in
+  :mod:`opifex.uncertainty.gp.laplace_likelihoods`.
 """
 
 from __future__ import annotations

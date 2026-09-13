@@ -70,9 +70,8 @@ def test_gradients_are_finite_through_a_zero_step() -> None:
 def test_gradients_with_respect_to_the_steps_are_finite_at_a_zero_step() -> None:
     """A zero step, such as a test time equal to a training time, keeps a finite step gradient.
 
-    The Gramian factor scales with ``sqrt(dt)``, whose derivative is infinite at zero. As in GPJax's
-    ``Matern12SDE.discretise``, which branches on ``dt == 0``, the process-noise part of the step
-    derivative is zero at a zero step.
+    The Gramian factor scales with ``sqrt(dt)``, whose derivative is infinite at zero; the
+    process-noise part of the step derivative is zero at a zero step.
     """
     drift, factor, _ = _matern72_inputs()
 

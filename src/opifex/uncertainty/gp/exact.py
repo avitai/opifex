@@ -22,18 +22,12 @@ quantities through a single Cholesky factorisation
     mean = K(X*, X) α            # one matvec
     var  = K(X*, X*) - v^T v     # per-point reduction
 
-The opifex implementation ports the algorithm directly to pure JAX so
+The opifex implementation writes the algorithm directly in pure JAX so
 the full pipeline (kernel + fit + predict) compiles under
 ``jax.jit``. The RBF / squared-exponential kernel is included as the
 default; the same surface accepts any callable ``kernel_fn(x1, x2,
 lengthscale, output_scale) -> jax.Array`` via the
 ``kernel_fn`` parameter.
-
-Reference implementations consulted (READ-ONLY — never imported):
-
-* ``../tinygp/src/tinygp/gp.py:GaussianProcess.{condition,predict}`` —
-  identical Algorithm-2.1 Cholesky pattern, wrapped in ``eqx.Module``.
-* GPJax ``gpjax/gps.py:ConjugatePosterior`` — same algebra.
 
 References:
 ----------

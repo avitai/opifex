@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Laplace and variational predictors already use. They recorded `"studentst"`.
 - `StateSpaceKernel` is a pytree. Its leaves are its matrices and the rates or angular frequencies
   of its closed-form transition, so a kernel passed to a jitted function reuses the compiled
-  program for new hyperparameter values. `state_transition(dt)` is a method following bayesnewton's
-  closed forms, `discretize(dt)` returns the transition and the process noise of one step, and
+  program for new hyperparameter values. `state_transition(dt)` returns the closed-form transition
+  of the kernel's SDE, `discretize(dt)` returns the transition and the process noise of one step,
+  and
   `discretize_steps(steps)` returns them for a sequence of steps. The Markov GP paths and the
   spatio-temporal GP discretise each time grid with one `discretize_steps` call. A kernel built from
   `feedback`, `noise_effect`, `diffusion`, `measurement` and `stationary_cov` alone discretises
@@ -66,13 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounding by roughly `(2n/x)^n` whenever the order exceeds `x`. In float32 with `order=12`
   the state-space covariance missed the closed-form periodic kernel by 2.4e3 at lengthscale 1
   and 2.1e9 at lengthscale 2. The values now come from TensorFlow Probability's `bessel_ive`
-  (Temme's series below order 50, Olver's uniform asymptotic expansion above), the evaluation
-  bayesnewton's periodic kernels use, and `quasi_periodic_matern12_kernel` inherits the correction.
+  (Temme's series below order 50, Olver's uniform asymptotic expansion above), and
+  `quasi_periodic_matern12_kernel` inherits the correction.
 - `quasi_periodic_matern12_kernel` declares the diffusion that balances its stationary
   covariance. It declared zero diffusion, so its SDE did not satisfy the Lyapunov equation,
   and any consumer that discretises `(F, L, Q_c)` received zero process noise. The spatio-temporal
   GP is one such consumer. The diffusion is now the Matérn-1/2 diffusion scaled by the periodic
-  stationary covariance, as bayesnewton's `QuasiPeriodicMatern12` builds it.
+  stationary covariance.
 - The spatio-temporal GP returns finite predictions on time grids with long gaps. It built each
   step's process noise with the Van Loan block exponential, whose `exp(-F^T dt)` block overflows
   float32. On a grid with gaps of about 95 temporal lengthscales every prediction was NaN.
@@ -93,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and exceeds the squaring limit of `jax.scipy.linalg.expm`: Matern SDEs came back NaN at 100
   lengthscales, Matern-5/2 was off by 0.89 at 10, a third-order integrated Wiener process was off by
   5.0e-4 at dt = 100, and gradients were NaN at coarse steps. It now uses the exponential-and-Gramian
-  doubling of Stillfjord and Tronarp (arXiv:2310.13462), ported from probdiffeq (MIT), with a
+  doubling of Stillfjord and Tronarp (arXiv:2310.13462), with a
   fixed-length doubling loop so that reverse-mode gradients work. Against extended-precision
   references for Matern-1/2 to Matern-7/2, integrated Wiener processes of order 1 to 4 and
   integrated Ornstein-Uhlenbeck processes, at steps from 1e-4 to 1e4, every process-noise entry
@@ -107,11 +108,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   likelihood at the mode minus the same penalty, and `fit_markov_pep_gp` the sum of the cavity log
   normalisers divided by the power. For a Gaussian likelihood, where each method recovers the exact
   posterior, they missed the exact log marginal likelihood by up to 42.6 nats (VI), 70.7 (Laplace)
-  and 376 (power EP at power 0.1) on bayesnewton's comparison grid. A Bernoulli Laplace evidence
+  and 376 (power EP at power 0.1) on a grid of kernel hyperparameters. A Bernoulli Laplace evidence
   missed the dense Laplace approximation by 5.6. The ELBO is now eq. (11) of Chang, Wilkinson, Khan
   and Solin (2020), and the Laplace and power-EP evidences are eqs. (17) and (27) of Wilkinson,
-  Särkkä and Solin (JMLR 2023). Each is computed as bayesnewton computes it, from the Kalman log
-  likelihood of the pseudo-observation model, and matches the exact value, or the dense Laplace
+  Särkkä and Solin (JMLR 2023). Each is computed from the Kalman log likelihood of the
+  pseudo-observation model, and matches the exact value, or the dense Laplace
   approximation, to four decimals. The Gaussian power-EP log normaliser was also `½ log(1/power)`
   too high per observation and now includes the power-EP constant.
 - `fit_laplace_gp` runs with float64 inputs. It started the Newton iteration from a float32 latent

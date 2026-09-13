@@ -1,8 +1,5 @@
 """Tests for the standard Kalman primitives.
 
-Sibling reference (line-by-line port): ``bayesnewton/bayesnewton/ops.py``
-``_sequential_kf`` (line 154) and ``_sequential_rts`` (line 288).
-
 References
 ----------
 * Kalman 1960 — *A New Approach to Linear Filtering and Prediction Problems*.

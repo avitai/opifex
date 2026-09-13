@@ -5,11 +5,10 @@ Each constructor returns a :class:`StateSpaceKernel` carrying the continuous-tim
 form, and the process noise ``Q(dt)`` of a step comes from the method that stays accurate for that
 kernel in that precision:
 
-* Matern-1/2: ``Q = sigma^2 (-expm1(-2 dt / ell))`` (Särkkä & Solin 2019, eq. 6.30; GPJax
-  ``gpjax/state_space/sde.py`` ``Matern12SDE.discretise`` at 4f24c59).
+* Matern-1/2: ``Q = sigma^2 (-expm1(-2 dt / ell))`` (Särkkä & Solin 2019, eq. 6.30).
 * Cosine and periodic: ``Q = 0``, because the SDE only rotates the state.
 * Matern-3/2 to Matern-7/2, quasi-periodic, and a kernel built from its matrices alone: the
-  stationary identity ``Q = P_inf - A P_inf A^T`` in float64 (bayesnewton ``ops.py:149-150``),
+  stationary identity ``Q = P_inf - A P_inf A^T`` in float64 (Särkkä & Solin 2019),
   and the Stillfjord & Tronarp Gramian of :mod:`opifex.uncertainty.statespace._gramian` in
   float32, where the identity loses the small components of ``Q``.
 
@@ -17,17 +16,14 @@ The precision is read from the arrays while tracing, so float32 and float64 each
 program. A kernel is a pytree whose leaves are its matrices, so new hyperparameter values reuse a
 compiled program.
 
-Canonical reference (line-by-line port of the closed-form transitions):
-* ``../bayesnewton/bayesnewton/kernels.py`` at f72ae9a — ``Matern12.state_transition`` (line 158),
-  ``Matern32`` (216), ``Matern52`` (273), ``Matern72`` (344), ``Cosine`` (788), ``Periodic``
-  (858), ``QuasiPeriodicMatern12`` (953).
-
 References:
 ----------
 * Särkkä & Solin 2019 — *Applied Stochastic Differential Equations* §12.3
   and Table 12.2.
 * Hartikainen & Särkkä 2010 — *Kalman filtering and smoothing solutions to
   temporal Gaussian process regression models*, MLSP.
+* Solin & Särkkä 2014 — *Explicit Link Between Periodic Covariance Functions
+  and State Space Models*, AISTATS (PMLR 33).
 """
 
 from __future__ import annotations
@@ -289,26 +285,26 @@ def _assign_fields(kernel: StateSpaceKernel, **fields: object) -> None:
 
 
 def _stationary_identity(transitions: jax.Array, stationary_cov: jax.Array) -> jax.Array:
-    """Return ``P_inf - A P_inf A^T`` for every transition (bayesnewton ``ops.py:149-150``)."""
+    """Return ``P_inf - A P_inf A^T`` for every transition (Särkkä & Solin 2019)."""
     return stationary_cov[None] - jnp.einsum(
         "kij,jl,kml->kim", transitions, stationary_cov, transitions
     )
 
 
 def _matern12_transition(dt: jax.Array, rate: jax.Array) -> jax.Array:
-    """Bayesnewton ``Matern12.state_transition``: ``A = exp(-dt / lengthscale)``."""
+    """Matern-1/2 transition ``A = exp(-dt / lengthscale)`` (Särkkä & Solin 2019)."""
     return jnp.reshape(jnp.exp(-dt * rate), (1, 1))
 
 
 def _matern32_transition(dt: jax.Array, lam: jax.Array) -> jax.Array:
-    """Bayesnewton ``Matern32.state_transition``."""
+    """Closed-form Matern-3/2 transition ``exp(F dt)`` (Särkkä & Solin 2019)."""
     return jnp.exp(-dt * lam) * (
         dt * jnp.asarray([[lam, 1.0], [-(lam**2.0), -lam]]) + jnp.eye(2, dtype=jnp.result_type(lam))
     )
 
 
 def _matern52_transition(dt: jax.Array, lam: jax.Array) -> jax.Array:
-    """Bayesnewton ``Matern52.state_transition``."""
+    """Closed-form Matern-5/2 transition ``exp(F dt)`` (Särkkä & Solin 2019)."""
     dtlam = dt * lam
     return jnp.exp(-dtlam) * (
         dt
@@ -324,7 +320,7 @@ def _matern52_transition(dt: jax.Array, lam: jax.Array) -> jax.Array:
 
 
 def _matern72_transition(dt: jax.Array, lam: jax.Array) -> jax.Array:
-    """Bayesnewton ``Matern72.state_transition``."""
+    """Closed-form Matern-7/2 transition ``exp(F dt)`` (Särkkä & Solin 2019)."""
     lam2 = lam * lam
     lam3 = lam2 * lam
     dtlam = dt * lam
@@ -372,7 +368,7 @@ _MATERN_TRANSITIONS: dict[_TransitionFamily, Callable[[jax.Array, jax.Array], ja
 
 
 def _rotations(dt: jax.Array, angular_frequencies: jax.Array) -> jax.Array:
-    """Return the block-diagonal rotations by ``angular_frequencies * dt`` (bayesnewton)."""
+    """Return the block-diagonal rotations by ``angular_frequencies * dt`` (Solin & Särkkä 2014)."""
     angles = angular_frequencies * dt
     cos = jnp.cos(angles)
     sin = jnp.sin(angles)
@@ -386,7 +382,7 @@ def matern12_kernel(
     r"""Matern-1/2 (exponential) kernel in SDE form.
 
     State dimension 1. ``F = [[-1/ell]]``, ``Q_c = 2 sigma^2 / ell``,
-    ``A(dt) = exp(-dt/ell)``. Ports bayesnewton ``Matern12`` (line 141).
+    ``A(dt) = exp(-dt/ell)`` (Hartikainen & Särkkä 2010).
     """
     return StateSpaceKernel._with_closed_form(
         feedback=jnp.asarray([[-1.0 / lengthscale]]),
@@ -402,7 +398,7 @@ def matern12_kernel(
 def matern32_kernel(
     *, variance: float | jax.Array, lengthscale: float | jax.Array
 ) -> StateSpaceKernel:
-    r"""Matern-3/2 kernel in SDE form. Ports bayesnewton ``Matern32`` (line 200)."""
+    r"""Matern-3/2 kernel in SDE form (Hartikainen & Särkkä 2010)."""
     lam = jnp.sqrt(3.0) / lengthscale
     return StateSpaceKernel._with_closed_form(
         feedback=jnp.asarray([[0.0, 1.0], [-(lam**2), -2.0 * lam]]),
@@ -418,7 +414,7 @@ def matern32_kernel(
 def matern52_kernel(
     *, variance: float | jax.Array, lengthscale: float | jax.Array
 ) -> StateSpaceKernel:
-    r"""Matern-5/2 kernel in SDE form. Ports bayesnewton ``Matern52`` (line 253)."""
+    r"""Matern-5/2 kernel in SDE form (Hartikainen & Särkkä 2010)."""
     lam = jnp.sqrt(5.0) / lengthscale
     kappa = 5.0 / 3.0 * variance / lengthscale**2
     return StateSpaceKernel._with_closed_form(
@@ -443,7 +439,7 @@ def matern52_kernel(
 def matern72_kernel(
     *, variance: float | jax.Array, lengthscale: float | jax.Array
 ) -> StateSpaceKernel:
-    r"""Matern-7/2 kernel in SDE form. Ports bayesnewton ``Matern72`` (line 321)."""
+    r"""Matern-7/2 kernel in SDE form (Hartikainen & Särkkä 2010)."""
     lam = jnp.sqrt(7.0) / lengthscale
     kappa = 7.0 / 5.0 * variance / lengthscale**2
     kappa2 = 9.8 * variance / lengthscale**4
@@ -473,7 +469,7 @@ def matern72_kernel(
 
 
 def cosine_kernel(*, frequency: float | jax.Array) -> StateSpaceKernel:
-    r"""Cosine kernel as SDE. Ports bayesnewton ``Cosine`` (line 770).
+    r"""Cosine kernel as SDE (Solin & Särkkä 2014).
 
     State dim 2; transition is the 2-D rotation by angle ``frequency dt``.
     """
@@ -497,14 +493,13 @@ def periodic_kernel(
 ) -> StateSpaceKernel:
     r"""Periodic kernel via Bessel-weighted sum of harmonic rotations.
 
-    Ports bayesnewton ``Periodic`` (line 802). State dim ``2(order + 1)``;
+    Solin & Särkkä 2014. State dim ``2(order + 1)``;
     transition is block-diagonal of harmonic rotation matrices. With
     ``x = lengthscale**-2`` the harmonic variances are ``sigma^2 I_0(x) e^{-x}``
     and ``2 sigma^2 I_n(x) e^{-x}``, the cosine-series coefficients of
     ``sigma^2 exp(x (cos(omega tau) - 1))`` (DLMF 10.35.1). Truncating at
     ``order`` changes the covariance by at most ``2 sigma^2 sum_{n > order}
-    I_n(x) e^{-x}``. As in bayesnewton's ``Periodic.kernel_to_state_space``,
-    ``I_n(x) e^{-x}`` comes from TensorFlow Probability's ``bessel_ive``.
+    I_n(x) e^{-x}``. ``I_n(x) e^{-x}`` comes from TensorFlow Probability's ``bessel_ive``.
     """
     omega = 2.0 * jnp.pi / period
     harmonic_indices = jnp.arange(order + 1)
@@ -561,7 +556,7 @@ def quasi_periodic_matern12_kernel(
 ) -> StateSpaceKernel:
     r"""Quasi-periodic Matern-1/2 kernel: product of Periodic and Matern-1/2.
 
-    Ports bayesnewton ``QuasiPeriodicMatern12`` (line 882). Constructed as
+    Solin & Särkkä 2014. Constructed as
     the Kronecker product of the Matern-1/2 SDE with the Periodic SDE; the
     diffusion is the Matern-1/2 diffusion scaled by the periodic stationary
     covariance, which balances ``P_inf = P_matern (x) P_periodic``.
@@ -575,8 +570,7 @@ def quasi_periodic_matern12_kernel(
         feedback=jnp.kron(matern.feedback, jnp.eye(periodic.state_dim))
         + jnp.kron(jnp.eye(matern.state_dim), periodic.feedback),
         noise_effect=jnp.eye(state_size),
-        # bayesnewton QuasiPeriodicMatern12 builds the same product diffusion,
-        # ``Qc = np.kron(Qc_m, Pinf_p)`` (kernels.py:935 at f72ae9a); its Matern-3/2 sibling cites
+        # The product diffusion ``Q_c = Q_c^matern (x) P_inf^periodic`` follows
         # Solin & Sarkka (2014), eq. (32).
         diffusion=jnp.kron(matern.diffusion, periodic.stationary_cov),
         measurement=jnp.kron(matern.measurement, periodic.measurement),

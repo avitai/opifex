@@ -11,16 +11,10 @@ estimates the local error and a per-dimension scale ``sigma``, and
 applies a Kalman correction with the linearisation
 ``H = e_1^T - diag(df/dx) e_0^T`` per dimension.
 
-Canonical reference (line-by-line port):
-* ``../tornadox/tornadox/ek1.py`` — ``DiagonalEK1.attempt_unit_step``
-  (line 274), ``evaluate_ode`` (line 304), ``estimate_error`` (line 316),
-  ``observe_cov_sqrtm`` (line 335), ``correct_cov_sqrtm`` (line 353),
-  ``correct_mean`` (line 366).
-
 References:
 ----------
-* Krämer, Schmidt, Hennig 2022 — *Probabilistic ODE Solutions in Millions
-  of Dimensions*, arXiv:2110.11812.
+* Krämer, Bosch, Schmidt, Hennig 2022 — *Probabilistic ODE Solutions in
+  Millions of Dimensions*, arXiv:2110.11812.
 * Bosch, Tronarp, Hennig 2021 — *Pick-and-Mix Information Operators for
   Probabilistic ODE Solvers*, arXiv:2110.10770.
 """
@@ -39,8 +33,7 @@ def _propagate_cholesky_factor(
     r"""Square-root propagate per-dimension Cholesky factors.
 
     Stacks ``[(transition L)^T; Q_sqrt^T]`` and reads off the upper
-    triangle of a thin QR factorisation — the canonical
-    ``batched_propagate_cholesky_factor`` from tornadox.
+    triangle of a thin QR factorisation (Krämer et al. 2022).
     """
     stacked = jnp.concatenate(
         [transition_times_factor.swapaxes(-1, -2), process_sqrt.swapaxes(-1, -2)], axis=-2

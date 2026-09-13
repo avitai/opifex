@@ -16,26 +16,19 @@ observed Hessian can be negative in the tails (``|y - f| > σ √ν``);
 following the standard Laplace safeguard we clip ``W`` to be
 non-negative so the ``B``-Cholesky stays PSD.
 
-**Beta** (proportion regression, logit link, scale ``s``) — gpflow-
-style reparameterisation ``α = s m``, ``β = s (1 - m)`` with
+**Beta** (proportion regression, logit link, scale ``s``) — mean-
+precision reparameterisation ``α = s m``, ``β = s (1 - m)`` with
 ``m = σ(f)``. Newton uses the **Fisher information** ``W`` (always
 non-negative) rather than the observed Hessian (which can be
-indefinite). This matches bayesnewton's
-``Beta(GeneralisedGaussNewtonMixin)`` convention.
-
-Reference implementations consulted (READ-ONLY)
------------------------------------------------
-
-* ``../bayesnewton/bayesnewton/likelihoods.py:Poisson`` (line 891).
-* ``../bayesnewton/bayesnewton/likelihoods.py:StudentsT`` (line 1011).
-* ``../bayesnewton/bayesnewton/likelihoods.py:Beta`` (line 1047).
+indefinite).
 
 References:
 ----------
 * Rasmussen, C. E., Williams, C. K. I. 2006 — *Gaussian Processes for
   Machine Learning*, MIT Press; §3.4 Algorithm 3.1 (PRIMARY).
-* Wilkinson, W., Solin, A., Adam, V. 2020+ — *bayesnewton*; per-
-  likelihood closed forms (cross-checked).
+* Wilkinson, W. J., Särkkä, S., Solin, A. 2023 — *Bayes-Newton Methods for
+  Approximate Bayesian Inference with PSD Guarantees*, JMLR 24(83),
+  arXiv:2111.01721 (Newton-type updates for non-conjugate likelihoods).
 """
 
 from __future__ import annotations
@@ -191,8 +184,7 @@ def _studentst_components_factory(*, df: float, scale: float) -> LikelihoodCompo
 
     The observed Hessian
     ``-∇² log p = (ν+1)(νσ² - r²)/(νσ² + r²)²`` can go negative when
-    ``|r| > σ√ν``, breaking Newton stability. Following bayesnewton's
-    ``StudentsT(GeneralisedGaussNewtonMixin)`` we use the **Fisher
+    ``|r| > σ√ν``, breaking Newton stability. We use the **Fisher
     information** ``W = (ν+1) / ((ν+3) σ²)`` (a positive constant)
     instead — this gives a Gauss-Newton update that is stable for
     arbitrary residuals and matches the canonical scaled-F-distribution
@@ -343,9 +335,7 @@ def _beta_components_factory(*, scale: float) -> LikelihoodComponentsFn:
         \bigr]   \quad \text{(Fisher info, always } \geq 0\text{).}
 
     The Fisher information (used here in place of the observed
-    Hessian) matches bayesnewton's
-    ``Beta(GeneralisedGaussNewtonMixin)`` convention and keeps the
-    ``B``-Cholesky in the Newton step strictly PSD.
+    Hessian) keeps the ``B``-Cholesky in the Newton step strictly PSD.
     """
     scale_arr = jnp.asarray(scale)
 
@@ -410,8 +400,8 @@ def fit_beta_laplace_gp(
         y_train: ``(n,)`` observations in ``(0, 1)``.
         lengthscale: Kernel length-scale.
         output_scale: Kernel output-scale.
-        scale: Beta precision ``s = α + β > 0`` (gpflow / bayesnewton
-            convention). Larger ``s`` ⇒ narrower per-point Beta.
+        scale: Beta precision ``s = α + β > 0`` (mean-precision
+            parameterisation). Larger ``s`` ⇒ narrower per-point Beta.
             Defaults to ``10.0``.
         num_newton_iterations: Fixed Newton-loop count. Defaults to
             ``50``. Static under ``jax.jit``.

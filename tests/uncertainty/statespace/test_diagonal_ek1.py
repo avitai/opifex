@@ -5,16 +5,10 @@ Jacobian diagonal, exploiting the structure of separable or
 diagonal-Jacobian ODEs. Each output dimension carries an independent
 Cholesky factor of the marginal covariance.
 
-Canonical reference (line-by-line port):
-* ``../tornadox/tornadox/ek1.py`` — ``DiagonalEK1.attempt_unit_step``
-  (line 274), ``evaluate_ode`` (line 304), ``estimate_error`` (line 316),
-  ``observe_cov_sqrtm`` (line 335), ``correct_cov_sqrtm`` (line 353),
-  ``correct_mean`` (line 366).
-
 References
 ----------
-* Krämer, Schmidt, Hennig 2022 — *Probabilistic ODE Solutions in Millions
-  of Dimensions*, arXiv:2110.11812.
+* Krämer, Bosch, Schmidt, Hennig 2022 — *Probabilistic ODE Solutions in
+  Millions of Dimensions*, arXiv:2110.11812.
 * Bosch, Tronarp, Hennig 2021 — *Pick-and-Mix Information Operators for
   Probabilistic ODE Solvers*, arXiv:2110.10770.
 """

@@ -12,8 +12,7 @@ earlier audit found absent:
   Loan process-noise covariance :math:`Q`.
 * ``cakf_step`` — fused CAKF predict+update step.
 * ``cakf_smooth`` — Pförtner+2024 CAKS Rauch-Tung-Striebel backward
-  smoother (port of
-  ``../ComputationAwareKalman.jl/src/smoother/loop.jl``).
+  smoother.
 
 The CAKS smoother is exercised via two equivalences:
 

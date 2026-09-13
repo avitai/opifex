@@ -32,12 +32,6 @@ pytree, so new hyperparameters reuse a compiled program, and the float32 and flo
 chosen while tracing. A kernel built from its matrices alone discretises from ``F``; the deprecated
 ``state_transition=`` argument keeps the 0.2.5 discretisation.
 
-Canonical reference (line-by-line port):
-* ``../bayesnewton/bayesnewton/kernels.py`` — ``Matern12`` (line 141),
-  ``Matern32`` (line 200), ``Matern52`` (line 253), ``Matern72`` (line
-  321), ``Cosine`` (line 770), ``Periodic`` (line 802),
-  ``QuasiPeriodicMatern12`` (line 882).
-
 References
 ----------
 * Särkkä & Solin 2019 — *Applied Stochastic Differential Equations* §12.3.
@@ -479,10 +473,9 @@ def test_quasi_periodic_state_transition_jit_compatible() -> None:
 
 # float32 cannot represent smaller values usefully; compare those entries absolutely.
 _REPRESENTABLE_FLOOR = 1e-30
-# The weights come from TensorFlow Probability's ``bessel_ive``, as in bayesnewton's periodic
-# kernels. TFP's own float32 accuracy contract (tensorflow/probability c97a7cd,
-# ``math/bessel_test.py``) is rtol 7e-6 for orders and arguments in [1, 10], 1e-6 for [10, 100],
-# and a gradient error below 2e-4.
+# The weights come from TensorFlow Probability's ``bessel_ive``, whose float32 accuracy contract is
+# rtol 7e-6 for orders and arguments in [1, 10], 1e-6 for [10, 100], and a gradient error below
+# 2e-4.
 _BESSEL_WEIGHT_TOLERANCE = 1e-5
 _BESSEL_GRADIENT_TOLERANCE = 2e-4
 

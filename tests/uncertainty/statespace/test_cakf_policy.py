@@ -2,9 +2,7 @@ r"""CAKF pluggable policy callable — Slice 24 (audit finding #6).
 
 Task 6.3 design notes (``notes/04-task-6.3-expansion-design.md
 :392-394``) require the CAKF update to ship pluggable policy
-callables — CG (default; current behaviour), coordinate, and random
-— ported from
-``../ComputationAwareKalman.jl/src/filter/policy.jl:1-46``.
+callables — CG (default; current behaviour), coordinate, and random.
 
 The opifex update step exposes a ``policy`` argument selecting one
 of three strategies:

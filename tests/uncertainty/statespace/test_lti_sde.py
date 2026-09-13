@@ -15,7 +15,7 @@ Coverage:
 * steps beyond the supported number of doublings return NaN.
 
 The discretisation is the exponential-and-Gramian doubling of Stillfjord & Tronarp
-(arXiv:2310.13462), as implemented by probdiffeq.
+(arXiv:2310.13462).
 """
 
 from __future__ import annotations

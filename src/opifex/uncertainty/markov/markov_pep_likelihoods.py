@@ -183,9 +183,8 @@ def _gaussian_log_partition_factory(*, noise_std: float) -> LogZAndDerivativesFn
         dlogZ/dm = α (y - m) / (v α + σ²),
         d²logZ/dm² = -α / (v α + σ²).
 
-    The value follows bayesnewton ``Gaussian.moment_match`` (likelihoods.py:771-782 at f72ae9a):
-    ``log Z = log N(y | m, σ²/α + v) + pep_constant(σ², α)``. Bypassing Gauss-Hermite cubature keeps
-    it stable for any ``σ²``.
+    The value is ``log Z = log N(y | m, σ²/α + v) + power_ep_constant(σ², α)``.
+    Bypassing Gauss-Hermite cubature keeps it stable for any ``σ²``.
     """
     noise_var = noise_std * noise_std
 

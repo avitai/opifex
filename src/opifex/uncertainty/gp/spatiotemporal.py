@@ -51,16 +51,6 @@ Reference (binding)
   covariance functions and state space models* / Kronecker space-time
   state-space construction.
 
-Sibling reference implementations consulted (READ-ONLY — never imported):
-* ``../bayesnewton/bayesnewton/kernels.py:SpatioTemporalKernel`` (line
-  385) — ``K`` (separable product, line 462), ``stationary_covariance``
-  (``Kzz ⊗ Pinf_t``), ``state_transition`` (``I_M ⊗ A_t``),
-  ``measurement_model`` (``I_M ⊗ H_t``), ``spatial_conditional`` (line
-  486).
-* ``../bayesnewton/bayesnewton/basemodels.py:MarkovGaussianProcess``
-  (line 626) — ``predict`` (line 766) and
-  ``conditional_posterior_to_data`` (line 745).
-
 References:
 ----------
 * Sarkka, S. 2013 — *Bayesian Filtering and Smoothing*, CUP.
@@ -103,13 +93,12 @@ def separable_spatiotemporal_kernel(
     ``k((t, R), (t', R')) = k_t(t, t') k_s(R, R')`` evaluated on the
     Cartesian product of ``times`` and ``space``, ordered with the
     spatial index varying fastest (``time``-major flattening). On a
-    regular grid this equals the Kronecker product ``K_t \otimes K_s``
-    (bayesnewton ``SpatioTemporalKernel.K`` line 462).
+    regular grid this equals the Kronecker product ``K_t \otimes K_s``.
 
     The temporal Gram matrix is reconstructed from the state-space kernel
     via its stationary covariance and closed-form state transition:
     ``k_t(t, t') = H P_\infty A(|t - t'|)^\top H^\top``
-    (Sarkka 2013 §6; bayesnewton ``Kernel.K`` for SDE kernels).
+    (Sarkka 2013 §6).
 
     Args:
         times: Time stamps of shape ``(T, 1)`` (or ``(T,)``).
@@ -199,8 +188,7 @@ def _build_kronecker_state_space(
     transition is ``A_k = I_M \otimes A_t(\Delta t_k)`` and the process
     noise is ``Q_k = K_{zz} \otimes Q_t(\Delta t_k)``. The initial state
     is the stationary distribution ``\mathcal{N}(0, K_{zz} \otimes
-    P_\infty^t)`` (bayesnewton ``stationary_covariance`` /
-    ``state_transition`` / ``measurement_model``).
+    P_\infty^t)`` (Hamelijnck et al. 2021).
     """
     time_column = times.reshape(-1, 1)
     flat_times = time_column.reshape(-1)
@@ -242,8 +230,7 @@ def fit_spatiotemporal_vgp(
     Runs the Kronecker-lifted Kalman filter and RTS smoother over the
     ``T`` time steps; the observation at each step is the ``M``-vector of
     spatial measurements with diagonal Gaussian noise ``σ^2 I_M``
-    (bayesnewton ``MarkovGaussianProcess.update_posterior`` line 692,
-    specialised to the conjugate Gaussian case where the pseudo
+    (Hamelijnck et al. 2021, specialised to the conjugate Gaussian case where the pseudo
     likelihood equals the true likelihood).
 
     Args:
@@ -327,9 +314,9 @@ def predict_spatiotemporal_vgp(
 
     Projects the smoothed latent state to function space at every time
     via the measurement model ``f(t) = H x(t)`` and extracts the per-point
-    marginal variance ``\mathrm{diag}(H P(t) H^\top)`` (bayesnewton
-    ``MarkovGaussianProcess.predict`` line 800, spatio-temporal branch:
-    ``test_var = diag(W P W^\top)`` with ``W = H`` for inducing-at-data).
+    marginal variance ``\mathrm{diag}(H P(t) H^\top)`` (the spatial
+    inducing points coincide with the data locations, so the projection
+    is ``H``).
 
     Args:
         state: A fitted :class:`SpatioTemporalGPState`.
@@ -384,8 +371,8 @@ def spatiotemporal_vgp_log_marginal(
     r"""Marginal log-likelihood of the gridded observations under the ST-VGP.
 
     Equals the Kalman innovation log-likelihood of the Kronecker-lifted
-    state-space model (bayesnewton ``compute_log_lik`` line 729 — the
-    conjugate-Gaussian case where the pseudo likelihood is exact). Used
+    state-space model (the conjugate-Gaussian case, where the pseudo
+    likelihood is exact). Used
     for hyperparameter learning via ``jax.grad``.
 
     Args:

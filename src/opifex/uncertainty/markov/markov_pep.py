@@ -1,9 +1,7 @@
 r"""Power Expectation Propagation on Markov GPs — Task 11.2 slice 28.
 
-Implements EP / Power-EP (Minka 2001, 2004) on a Markov-GP prior via the
-canonical bayesnewton recipe (Wilkinson, Solin, Adam 2020+,
-``bayesnewton/cubature.py::log_density_power_cubature`` +
-``bayesnewton/likelihoods.py::moment_match``):
+Implements EP / Power-EP (Minka 2001, 2004) on a Markov-GP prior following
+Wilkinson, Sarkka & Solin (JMLR 2023):
 
 1. Maintain per-site natural parameters ``(site_eta_1_i, site_eta_2_i)``
    representing each observation's Gaussian site approximation.
@@ -17,8 +15,7 @@ canonical bayesnewton recipe (Wilkinson, Solin, Adam 2020+,
    via Gauss-Hermite cubature on the partition function
    ``log Z_i(m, v) = log ∫ p(y_i | f)^power N(f; m, v) df`` (the
    ``log_density_power_cubature`` term). Derivatives ``∂log Z / ∂m`` and
-   ``∂² log Z / ∂m²`` are obtained by ``jax.grad`` — this is the
-   numerically stable bayesnewton trick that sidesteps direct
+   ``∂² log Z / ∂m²`` are obtained by ``jax.grad``, which sidesteps direct
    moment-extraction errors.
 5. **Bonnet/Price formulas** convert log-Z derivatives to tilted moments:
 
@@ -43,8 +40,9 @@ References:
 * Minka 2001 — *Expectation Propagation for Approximate Bayesian
   Inference*, UAI.
 * Minka 2004 — *Power EP*, Microsoft Research TR-2004-149.
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  ``ExpectationPropagation`` (PRIMARY).
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY).
 """
 
 from __future__ import annotations
@@ -133,8 +131,7 @@ def _log_partition_per_observation(
 ) -> jax.Array:
     r"""Scalar log-partition ``log Z_i(m, v) = log ∫ p(y_i|f)^α N(f;m,v) df``.
 
-    Cubature on the cavity ``N(m, v)`` with normalised GH weights
-    (``log_density_power_cubature`` in bayesnewton). The likelihood
+    Cubature on the cavity ``N(m, v)`` with normalised GH weights. The likelihood
     accepts batched ``(f, y)`` arrays and returns per-observation
     log-likelihoods, so we broadcast a single ``observation_scalar``
     against the ``Q``-length sigma-point vector.
@@ -162,10 +159,9 @@ def _gauss_hermite_log_partition_and_derivatives(
 
     Per-observation Hessian and gradient w.r.t. the cavity mean are
     obtained by ``jax.grad`` on the scalar ``_log_partition_per_observation``;
-    this is the bayesnewton-canonical numerically-stable form (the
+    this is a numerically-stable form (the
     derivative of ``log Z`` is smooth even when the cubature samples
-    don't densely cover the high-likelihood region — see
-    ``bayesnewton.likelihoods.Likelihood.moment_match``).
+    don't densely cover the high-likelihood region).
     """
     nodes, weights = gauss_hermite_rule(num_quadrature_points)
 
@@ -406,9 +402,8 @@ def fit_markov_pep_gp(
     cavity_variances_final = -0.5 / safe_cavity_eta_2
     cavity_means_final = cavity_eta_1 * cavity_variances_final
     log_Z_final, _, _ = compute_log_partition_pack(cavity_means_final, cavity_variances_final)
-    # Power-EP evidence of Wilkinson, Sarkka & Solin (JMLR 2023) eq. 27, as bayesnewton computes it
-    # (inference.py:286-325, basemodels.py:247-262 at f72ae9a): log Z of the pseudo model plus
-    # (1 / power) (sum log E_cav[p^power] - sum log E_cav[N^power(site | f, R)]).
+    # Power-EP evidence of Wilkinson, Sarkka & Solin (JMLR 2023) eq. 27: log Z of the pseudo
+    # model plus (1 / power) (sum log E_cav[p^power] - sum log E_cav[N^power(site | f, R)]).
     site_observations, site_variances = _sites_as_pseudo_observations(final_eta_1, final_eta_2)
     site_log_partition = gaussian_expected_log_density(
         site_observations, cavity_means_final, 0.0, site_variances / power + cavity_variances_final

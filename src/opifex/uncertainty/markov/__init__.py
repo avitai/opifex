@@ -9,8 +9,9 @@ References:
 ----------
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP (state-space
   GPs + iterated extended Kalman smoothing).
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton`` (primary reference
-  for the inference algorithm catalogue: PEP / VI / Laplace /
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (primary reference for the inference algorithm catalogue: PEP / VI / Laplace /
   Posterior Linearisation / Newton).
 * Solin, Hensman, Turner 2018 — *Infinite-horizon Gaussian
   processes*, NeurIPS (steady-state Kalman variants — deferred).

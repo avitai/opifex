@@ -30,8 +30,9 @@ References
 * Minka 2001 — *Expectation Propagation for Approximate Bayesian
   Inference*, UAI.
 * Minka 2004 — *Power EP*, Microsoft Research TR.
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  ``ExpectationPropagation`` (PRIMARY reference).
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY reference).
 """
 
 from __future__ import annotations

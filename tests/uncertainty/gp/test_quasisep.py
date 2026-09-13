@@ -29,10 +29,6 @@ and the closed-form discrete transition matrix matches the direct
 * the log marginal likelihood coincides with
   ``-½ y^T (K + σ² I)^{-1} y - ½ log|K + σ² I| - ½ n log 2π``.
 
-Reference implementation consulted (READ-ONLY):
-``../tinygp/src/tinygp/kernels/quasisep.py:SHO``
-(``design_matrix`` + ``stationary_covariance`` + ``transition_matrix``).
-
 References
 ----------
 * Foreman-Mackey, D., Agol, E., Ambikasaran, S., Angus, R. 2017 —

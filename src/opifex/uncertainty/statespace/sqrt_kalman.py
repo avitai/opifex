@@ -4,11 +4,6 @@ Propagates a lower-triangular factor ``L`` with ``P = L @ L.T`` instead of
 the symmetric covariance ``P``. Avoids the squared condition number of the
 covariance form and preserves positive semi-definiteness by construction.
 
-Canonical reference (line-by-line port):
-* ``../probdiffeq/probdiffeq/util/cholesky_util.py`` — ``revert_conditional``
-  (line 51) for the update step and ``triu_via_qr`` (line 138) for the
-  predict step.
-
 References:
 ----------
 * Kaminski, Bryson, Schmidt 1971 — *Discrete square root filtering: a
@@ -31,7 +26,7 @@ import jax.numpy as jnp
 
 
 def _triu_via_qr(matrix: jax.Array) -> jax.Array:
-    """Upper-triangularise via QR — ports probdiffeq triu_via_qr (line 138)."""
+    """Upper-triangularise via QR (Kaminski, Bryson, Schmidt 1971)."""
     _, upper = jnp.linalg.qr(matrix, mode="reduced")
     return upper
 
@@ -83,7 +78,7 @@ def sqrt_kalman_update(
     Given prior ``N(m, L L^T)`` and observation model
     ``y | x ~ N(H x, R_sqrt R_sqrt^T)``, computes the posterior
     ``N(m', L'_post L'_post^T)`` using the QR-revert identity
-    (probdiffeq ``revert_conditional`` line 51):
+    (Kaminski, Bryson, Schmidt 1971):
 
     Stack
     ::

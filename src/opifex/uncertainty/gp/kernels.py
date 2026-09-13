@@ -282,9 +282,7 @@ def damped_oscillator_kernel(
     -----
     Only the underdamped regime (``Q > 1/2``) is implemented here.
     The critically-damped (``Q = 1/2``) and overdamped (``Q < 1/2``)
-    forms are documented in the docstring of the tinygp reference
-    ``../tinygp/src/tinygp/kernels/quasisep.py:SHO`` but are deferred
-    to a follow-up slice. The direct-evaluation form here is
+    forms are deferred to a follow-up slice. The direct-evaluation form here is
     ``O(n²)`` per Gram; the celerite *scalable* state-space form
     (``O(n)`` Kalman-style) is a separate Phase-11 deliverable.
     """
@@ -344,9 +342,6 @@ def celerite_complex_kernel(
     (Foreman-Mackey 2018 §2); the underdamped SHO
     (:func:`damped_oscillator_kernel`) is one specific Complex-term
     reparametrisation.
-
-    Reference implementation consulted (READ-ONLY):
-    ``../tinygp/src/tinygp/kernels/quasisep.py:Celerite``.
 
     Args:
         sine_amplitude: ``b`` — sine-component amplitude. Constraint:
@@ -644,8 +639,6 @@ def constrained_rbf_kernel(
 
     This is the canonical Gaussian-measure-orthogonal base kernel for
     the Orthogonal Additive Kernel (:func:`orthogonal_additive_kernel`).
-    For ``μ = 0``, ``ζ = 1`` the formula matches GPJax's
-    ``additive/oak.py:_constrained_se_kernel`` line-for-line.
 
     Args:
         input_mean: Gaussian input-measure mean ``μ``. Defaults to ``0``.
@@ -845,9 +838,7 @@ def _carma_acvf(
         \right]
 
     where ``ρ_j`` are the AR roots (all with negative real parts for
-    a stationary process). Direct port of
-    ``../tinygp/src/tinygp/kernels/quasisep.py:carma_acvf`` lines
-    973-1012.
+    a stationary process).
 
     Args:
         ar_roots: ``(p,)`` complex array of AR-polynomial roots.
@@ -907,7 +898,7 @@ def carma_kernel(
     * CARMA(2, 1) ≡ Celerite Complex term (Foreman-Mackey+ 2017).
 
     The opifex implementation ships the direct ``O(n²)`` Gram. The
-    scalable ``O(n)`` state-space quasiseparable port is a deferred
+    scalable ``O(n)`` state-space quasiseparable form is a deferred
     follow-up.
 
     Args:
@@ -929,10 +920,6 @@ def carma_kernel(
     Raises:
         ValueError: If ``len(beta) > len(alpha)`` (MA order exceeds
             AR order, violating Kelly+ 2014 Eq. 1).
-
-    Reference implementation consulted (READ-ONLY):
-    ``../tinygp/src/tinygp/kernels/quasisep.py:CARMA`` (lines
-    672-885) + the ``carma_roots`` / ``carma_acvf`` helpers.
     """
     if beta.shape[0] > alpha.shape[0]:
         raise ValueError(

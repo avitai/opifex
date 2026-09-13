@@ -22,16 +22,10 @@ Coverage:
 * the parallel filter is ``vmap``-compatible across a batch of
   problems.
 
-Canonical reference (line-by-line port):
-* ``../bayesnewton/bayesnewton/ops.py`` — ``parallel_filtering_element_``
-  (line 183), ``parallel_filtering_operator`` (line 204),
-  ``_parallel_kf`` (line 237), ``parallel_smoothing_element`` (line 319),
-  ``parallel_smoothing_operator`` (line 329), ``_parallel_rts`` (line 338).
-
 References
 ----------
 * Särkkä & García-Fernández 2021 — *Temporal parallelization of Bayesian
-  smoothers*, IEEE TAC arXiv:1905.13002.
+  smoothers*, IEEE TAC arXiv:1905.13002 (Lemmas 7 to 10).
 """
 
 from __future__ import annotations

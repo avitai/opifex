@@ -5,21 +5,13 @@ marginal covariance :math:`\Sigma_k` so that the posterior covariance is
 the implicit ``LowRankDowndatedMatrix`` :math:`\Sigma_k - M\,M^\top`. The
 update step iteratively expands :math:`M` by one column per CG iteration
 until either ``max_iter`` is reached or the residual norm falls below a
-tolerance.
-
-Canonical reference (line-by-line port):
-* ``../ComputationAwareKalman.jl/src/low_rank.jl`` —
-  ``LowRankDowndatedMatrix``.
-* ``../ComputationAwareKalman.jl/src/filter/predict.jl`` — ``predict``.
-* ``../ComputationAwareKalman.jl/src/filter/update.jl`` — ``update``.
-* ``../ComputationAwareKalman.jl/src/filter/policy.jl`` — ``CGPolicy``
-  (default search direction is the residual vector).
+tolerance. The default search direction is the residual vector.
 
 References:
 ----------
 * Pförtner, Wenger, Cockayne, Hennig 2024 — *Computation-Aware Kalman
   Filtering and Smoothing*, arXiv:2405.08971 (PRIMARY — the CAKF /
-  CAKS algorithm vendored here).
+  CAKS algorithm).
 * Wenger, Pleiss, Pförtner, Hennig, Cunningham 2023 — *Posterior and
   Computational Uncertainty in Gaussian Processes*, arXiv:2306.07879
   (computation-aware GP / CAGP precursor that the Kalman variant of
@@ -40,8 +32,7 @@ from opifex.uncertainty.statespace.kalman import kalman_smoother
 class CAKFPolicy(StrEnum):
     """Search-direction policy for the CAKF update step.
 
-    Ports ``../ComputationAwareKalman.jl/src/filter/policy.jl:1-46``
-    (the three named search-direction strategies). Pluggable per the
+    Selects one of three named search-direction strategies. Pluggable per the
     Task 6.3 design notes (``notes/04-task-6.3-expansion-design.md
     :392-394``).
     """
@@ -79,8 +70,7 @@ def cakf_predict(
 ) -> tuple[jax.Array, jax.Array]:
     """Propagate the CAKF state through a transition matrix.
 
-    Ports ``ComputationAwareKalman.jl/src/filter/predict.jl``. The prior
-    marginal covariance ``Σ_{k+1}`` is determined by the Gauss-Markov
+    The prior marginal covariance ``Σ_{k+1}`` is determined by the Gauss-Markov
     chain externally — only the mean and the low-rank correction factor
     flow through the transition.
 
@@ -233,8 +223,8 @@ def cakf_step(
 ) -> tuple[jax.Array, jax.Array]:
     """Fused CAKF predict + update step (one full filter iteration).
 
-    Composes :func:`cakf_predict` and :func:`cakf_update` in the order
-    used by ``../ComputationAwareKalman.jl/src/filter/loop.jl``. Useful
+    Composes :func:`cakf_predict` and :func:`cakf_update` in filter order
+    (predict, then update; Pförtner et al. 2024). Useful
     in :func:`jax.lax.scan`-driven filter loops where the per-step
     operation is a single ``(mean, factor) -> (mean, factor)`` map.
 
@@ -277,8 +267,7 @@ def cakf_smooth(
 ) -> tuple[jax.Array, jax.Array]:
     r"""CAKS Rauch-Tung-Striebel backward smoother (Pförtner+ 2024).
 
-    Ports ``../ComputationAwareKalman.jl/src/smoother/loop.jl``. Runs
-    the standard RTS recursion
+    Runs the standard RTS recursion
 
     .. math::
 

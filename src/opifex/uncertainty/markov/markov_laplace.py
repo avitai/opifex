@@ -18,7 +18,7 @@ state-space / Markov-GP form. At every Newton iteration:
    ``(W + K^{-1}) f^{(t+1)} = W f^{(t)} + ∇log p`` as a
    pseudo-Gaussian observation with mean ``f^{(t)} + grad/W`` and
    noise covariance ``1/W`` (RW06 §3.4 derivation re-cast in
-   state-space form per bayesnewton's ``Laplace`` inference module).
+   state-space form per Wilkinson, Sarkka & Solin 2023).
 3. Run :func:`opifex.uncertainty.statespace.kalman_filter` +
    :func:`kalman_smoother` on the linearised model.
 4. Replace ``f̂^{(t+1)}`` with the smoothed posterior mean.
@@ -36,9 +36,9 @@ modification on Markov-GP priors.
 
 References:
 ----------
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  Laplace family (PRIMARY reference for the state-space-Newton
-  bridge).
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY reference for the state-space-Newton bridge).
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP §9
   (Iterated Extended Kalman Smoother).
 * Rasmussen & Williams 2006 §3.4 (Newton-Laplace on conjugate GPs).
@@ -313,7 +313,7 @@ def predict_markov_laplace_gp(
                 ("estimator", "markov_laplace_gp"),
                 (
                     "paper",
-                    "bayesnewton / Sarkka 2013 §9 (Iterated-EKS Laplace on Markov GPs)",
+                    "Wilkinson+ 2023 JMLR / Sarkka 2013 §9 (Iterated-EKS Laplace on Markov GPs)",
                 ),
             ),
         ),

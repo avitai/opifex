@@ -19,13 +19,16 @@ Three evidence building blocks are shared by the VI, Laplace and power-EP eviden
   pseudo-observation model, ``log Z = log ∫ p(f) Π N(ỹ_n | f_n, R_n) df``.
 * :func:`power_ep_constant` — the power-EP normalising constant of a Gaussian site.
 
-They port bayesnewton (AaltoML/BayesNewton f72ae9a, Apache-2.0) ``utils.py:431-487`` and
-``basemodels.py:726-741``.
+They follow Chang, Wilkinson, Khan & Solin (2020) and Wilkinson, Sarkka & Solin (JMLR 2023).
 
 References:
 ----------
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP §9 (state-space GP
   interpolation via the SDE transition matrix).
+* Chang, Wilkinson, Khan, Solin 2020 — *Fast Variational Learning in State-Space Gaussian
+  Process Models*, MLSP, arXiv:2007.04731.
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate Bayesian Inference
+  with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721.
 """
 
 from __future__ import annotations
@@ -56,7 +59,7 @@ def gaussian_expected_log_density(
 ) -> jax.Array:
     r"""Return ``E_{N(f | m, v)} log N(y | f, R)`` element-wise.
 
-    Ports bayesnewton ``utils._gaussian_expected_log_lik`` (utils.py:470-487 at f72ae9a). With
+    Expected Gaussian log density (Chang et al. 2020). With
     ``variances = 0`` this is the Gaussian log density ``log N(y | m, R)``.
 
     Args:
@@ -87,8 +90,8 @@ def pseudo_model_log_normaliser(
 ) -> jax.Array:
     r"""Return ``log Z = log ∫ p(f) Π_n N(ỹ_n | f_n, R_n) df`` for scalar Gaussian sites.
 
-    Ports bayesnewton ``MarkovGaussianProcess.compute_log_lik`` (basemodels.py:726-741 at f72ae9a),
-    which runs the Kalman filter on the pseudo-observations and returns its log likelihood.
+    Runs the Kalman filter on the pseudo-observations and returns its log likelihood
+    (Wilkinson, Sarkka & Solin 2023).
 
     Args:
         transitions: ``(n, d, d)`` per-step transitions.
@@ -116,7 +119,7 @@ def pseudo_model_log_normaliser(
 def power_ep_constant(variances: jax.Array | float, power: float) -> jax.Array:
     r"""Return the power-EP constant ``½ ((1 - α) log 2π - log α) + ½ (1 - α) log R``.
 
-    Ports bayesnewton ``utils.pep_constant`` (utils.py:431-445 at f72ae9a) for scalar sites. It is
+    For scalar sites (Wilkinson, Sarkka & Solin 2023). It is
     the log normaliser of ``N(y | f, R)^α`` relative to ``N(y | f, R / α)``.
 
     Args:

@@ -7,13 +7,6 @@ update step iteratively expands ``M`` using a chosen search-direction
 policy (CG / coordinate / random) and terminates at a residual tolerance
 or maximum iteration count.
 
-Canonical reference (line-by-line port):
-* ``../ComputationAwareKalman.jl/src/low_rank.jl`` —
-  ``LowRankDowndatedMatrix`` constructor and matvec.
-* ``../ComputationAwareKalman.jl/src/filter/predict.jl`` — ``predict``.
-* ``../ComputationAwareKalman.jl/src/filter/update.jl`` — ``update``.
-* ``../ComputationAwareKalman.jl/src/filter/policy.jl`` — ``CGPolicy``.
-
 References
 ----------
 * Pförtner, Wenger, Cockayne, Hennig 2024 — *Computation-Aware Kalman

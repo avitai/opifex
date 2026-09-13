@@ -1,8 +1,7 @@
 r"""CARMA(p, q) direct-evaluation kernel — Slice 29 (Task 11.1 carryover).
 
 Phase 11 Task 11.1 body line 47-49 mandates ``CARMA / Celerite / SHO
-state-space kernels (1D scalable) — cite tinygp.kernels.quasisep.
-{CARMA, Celerite, SHO}``. Celerite (slice 14 D4) and SHO state-space
+state-space kernels (1D scalable)``. Celerite (slice 14 D4) and SHO state-space
 (slice 15 D1) shipped; this slice closes the **CARMA** half by
 shipping the direct-evaluation form. The scalable state-space CARMA
 variant is filed as a documented deferral in
@@ -24,10 +23,6 @@ The kernel reduces to known cases at low orders:
   Matern-1/2 with ``lengthscale = 1/a``.
 * CARMA(2, 1) is the canonical Celerite Complex term (Foreman-
   Mackey+ 2017).
-
-Reference implementation consulted (READ-ONLY):
-``../tinygp/src/tinygp/kernels/quasisep.py:CARMA`` (lines 672-885)
-plus the ``carma_roots`` / ``carma_acvf`` helpers.
 
 References
 ----------

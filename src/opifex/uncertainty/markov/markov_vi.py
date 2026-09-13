@@ -36,9 +36,10 @@ References:
 * Khan, Lin 2017 — *Conjugate-Computation Variational Inference*,
   ICML.
 * Chang, Wilkinson, Khan, Solin 2020 — *Fast variational learning
-  in state-space Gaussian process models*, ICML.
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  ``VariationalInference`` (PRIMARY).
+  in state-space Gaussian process models*, MLSP, arXiv:2007.04731.
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY).
 """
 
 from __future__ import annotations
@@ -241,8 +242,7 @@ def fit_markov_vi_gp(
         jnp.arange(num_iterations),
     )
 
-    # ELBO of Chang, Wilkinson, Khan & Solin (2020) eq. 11, as bayesnewton computes it
-    # (inference.py:197-222, basemodels.py:708-724 at f72ae9a): the expected log likelihood minus
+    # ELBO of Chang, Wilkinson, Khan & Solin (2020) eq. 11: the expected log likelihood minus
     # KL[q || p], where KL = sum E_q log N(site | f, R) - log Z(pseudo model). The sites are those
     # that produced the final marginals.
     final_expected_log_lik, _, _ = _expected_components(

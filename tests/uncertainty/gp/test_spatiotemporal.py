@@ -7,10 +7,7 @@ Loka, Solin, Damoulas 2021 (NeurIPS, arXiv:2111.01732): a separable
 covariance ``k((t, R), (t', R')) = k_t(t, t') k_s(R, R')`` whose temporal
 factor is a Markovian (state-space) GP solved in ``O(T)`` by Kalman
 filtering/smoothing, while the spatial factor is a standard GP over the
-spatial inputs. The canonical reference is
-``../bayesnewton/bayesnewton/kernels.py:SpatioTemporalKernel`` (line 385)
-and ``../bayesnewton/bayesnewton/basemodels.py:MarkovGaussianProcess``
-(``predict`` line 766, ``conditional_posterior_to_data`` line 745).
+spatial inputs.
 
 Test contract
 -------------

@@ -6,9 +6,7 @@ Processes*, AISTATS) derives a **closed-form** optimal variational
 posterior ``q*(u) = N(μ*, S*)`` over the inducing values
 ``u = f(Z)`` at ``M ≪ N`` inducing inputs ``Z``. The opifex
 implementation fits this in ``O(n m² + m³)`` time through the standard
-``A / B / L_B`` Cholesky factorisation (GPJax
-``CollapsedVariationalGaussian`` /
-``objectives.collapsed_elbo`` reference).
+``A / B / L_B`` Cholesky factorisation (Titsias 2009).
 
 Key identities (Titsias 2009 / RW06 §8.4):
 
@@ -37,11 +35,10 @@ Implementation notes
   end-to-end under ``jax.jit``.
 * **No equinox dependency**: the fitted state is a plain
   ``@dataclass(frozen=True, slots=True, kw_only=True)`` carrying
-  ``jax.Array`` leaves. No tinygp / gpjax import.
-* **Reference-checked correctness**: the algebra mirrors GPJax's
-  ``collapsed_elbo`` and ``CollapsedVariationalGaussian.predict``
-  exactly (zero-mean prior; same ``A / B / L_B`` factorisation).
-  GPJax is the reference implementation, not a runtime dependency.
+  ``jax.Array`` leaves.
+* **Closed-form correctness**: the collapsed ELBO and predictive follow
+  Titsias 2009 with a zero-mean prior and the ``A / B / L_B``
+  factorisation.
 
 References:
 ----------
@@ -293,7 +290,7 @@ def predict_svgp(*, state: SVGPState, x_test: jax.Array) -> PredictiveDistributi
 def svgp_collapsed_elbo(*, state: SVGPState) -> jax.Array:
     r"""Collapsed ELBO for a fitted :class:`SVGPState` (scalar, ``jit``-safe).
 
-    Computes Titsias 2009 eq. 9 / GPJax ``collapsed_elbo`` exactly via
+    Computes Titsias 2009 eq. 9 exactly via
     the cached ``A``-Cholesky factorisation. Useful as the objective
     for hyperparameter optimisation when wrapped under ``jax.grad``.
     """

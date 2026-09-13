@@ -6,8 +6,7 @@ Processes*, AISTATS) derives the closed-form optimal variational
 posterior ``q*(u) = N(μ*, S*)`` over the inducing values
 ``u = f(Z)``. The opifex implementation fits this in
 ``O(n m² + m³)`` time (where ``m << n`` is the inducing count) via
-the GPJax ``CollapsedVariationalGaussian`` /
-``collapsed_elbo`` recipe.
+the collapsed-bound factorisation below.
 
 Key identities (RW06 §8.4 / Titsias 2009):
 

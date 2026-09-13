@@ -3,10 +3,8 @@
 Provides the math layer for ``opifex.uncertainty.assimilation`` (Task 6.7
 applied data-assimilation layer). Pure JAX; no NNX imports.
 
-The sibling repositories ``/mnt/ssd2/Works/{bayesnewton,kalman-jax,markovflow,
-ComputationAwareKalman.jl}`` serve as reference implementations only —
-opifex never carries them as runtime dependencies. Algorithms here are
-JAX-native and cite the sibling repo line-by-line.
+Algorithms here are JAX-native and cite the published papers listed
+below.
 
 References:
 ----------

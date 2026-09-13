@@ -22,9 +22,10 @@ References
 * Khan, Lin 2017 — *Conjugate-Computation Variational Inference*,
   ICML.
 * Chang, Wilkinson, Khan, Solin 2020 — *Fast variational learning
-  in state-space Gaussian process models*, ICML.
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  ``VariationalInference`` (PRIMARY reference).
+  in state-space Gaussian process models*, MLSP, arXiv:2007.04731.
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY reference).
 """
 
 from __future__ import annotations

@@ -2,9 +2,8 @@
 
 For a Gaussian likelihood, variational inference, the Laplace approximation and power expectation
 propagation all recover the exact posterior, so each method's evidence must equal the exact log
-marginal likelihood. The conjugate tests port bayesnewton's ``tests/test_vs_exact_marg_lik.py``
-(AaltoML/BayesNewton f72ae9a, Apache-2.0): the same wiggly series on an uneven grid, the same
-Matern-5/2 hyperparameter grid, and the same four-decimal comparison. The series uses a fixed seed.
+marginal likelihood. The conjugate tests use a wiggly series on an uneven grid, a Matern-5/2
+hyperparameter grid and a four-decimal comparison. The series uses a fixed seed.
 
 The formulas are those of Chang, Wilkinson, Khan and Solin (2020, eq. 11) for the ELBO and of
 Wilkinson, Sarkka and Solin (JMLR 2023, eqs. 16, 17 and 27) for VI, Laplace and power EP. For a
@@ -37,7 +36,7 @@ from tests.uncertainty.markov._helpers import binary_labels
 pytestmark = pytest.mark.usefixtures("float64")
 
 _LOG_2PI = float(np.log(2.0 * np.pi))
-# Hyperparameter grid of bayesnewton tests/test_vs_exact_marg_lik.py.
+# Hyperparameter grid of the conjugate evidence tests.
 _VARIANCES = [0.5, 1.5]
 _LENGTHSCALES = [0.75, 2.5]
 _NOISE_VARIANCES = [0.1, 0.5]
@@ -45,7 +44,7 @@ _NUM_POINTS = [30, 60]
 
 
 def _wiggly_time_series(num_points: int) -> tuple[np.ndarray, np.ndarray]:
-    """Return bayesnewton's uneven-grid test series ``(times, observations)``."""
+    """Return the uneven-grid test series ``(times, observations)``."""
     rng = np.random.default_rng(12345)
     times = np.sort(
         np.linspace(-25.0, 150.0, num=num_points) + 0.5 * rng.standard_normal(num_points)

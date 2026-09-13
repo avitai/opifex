@@ -6,12 +6,9 @@ uncollapsed** SVGP that handles **any** factorising likelihood
 ``p(y_i | f_i)`` via Hensman+ 2013/2015's variational lower bound,
 minibatched ELBO, and Gauss-Hermite quadrature.
 
-opifex's efficiency wins over GPJax (verified by inspection of
-``../GPJax/gpjax/variational_families.py:155-308`` +
-``../GPJax/gpjax/objectives.py:280-330``):
+Efficiency properties of the opifex implementation:
 
-* **One** ``K_zz`` Cholesky per ELBO call (GPJax does ≥ 2 — one in
-  ``prior_kl``, one in ``predict``).
+* **One** ``K_zz`` Cholesky per ELBO call.
 * **Whitened variational parametrisation** ``(μ_w, L_w)`` so the KL
   closes to ``0.5(‖μ_w‖² + ‖L_w‖_F² − m − 2 Σ log diag L_w)`` — zero
   K_zz operations in the KL term.
@@ -220,11 +217,11 @@ def test_predict_stochastic_svgp_returns_predictive_distribution_with_finite_mom
 
 
 def test_whitened_predict_equals_unwhitened_predict_formula() -> None:
-    r"""``predict_stochastic_svgp`` agrees with the unwhitened GPJax formula.
+    r"""``predict_stochastic_svgp`` agrees with the unwhitened formula.
 
     Construct a state with non-trivial ``(μ_w, L_w)``; let the effective
     unwhitened posterior be ``μ = L_z μ_w``, ``S = L_z L_w L_w^T L_z^T``.
-    The closed-form GPJax-style predictive at ``x_test`` is
+    The closed-form unwhitened predictive at ``x_test`` is
 
     .. math::
 
@@ -255,7 +252,7 @@ def test_whitened_predict_equals_unwhitened_predict_formula() -> None:
     x_test = jnp.linspace(-1.5, 1.5, 5).reshape(-1, 1)
     predictive = predict_stochastic_svgp(state=state, x_test=x_test)
 
-    # Reference: unwhitened GPJax-style closed form.
+    # Reference: unwhitened closed form.
     k_zz = rbf_kernel(
         x_inducing, x_inducing, lengthscale=lengthscale, output_scale=output_scale
     ) + 1e-6 * jnp.eye(m)

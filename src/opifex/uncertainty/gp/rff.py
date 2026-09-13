@@ -38,7 +38,7 @@ collapses to **ridge regression on the lifted features**
 
 Compared with exact GP the cost reduces from ``O(n³)`` to
 ``O(n D² + D³)``; for ``D ≪ n`` this is the canonical large-N
-work-around (Rahimi & Recht 2007, GPJax ``rff.py``).
+work-around (Rahimi & Recht 2007).
 
 References:
 ----------

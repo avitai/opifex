@@ -21,8 +21,9 @@ land here).
 
 References:
 ----------
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton`` likelihood +
-  inference catalogue.
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (likelihood + inference catalogue).
 * Rasmussen & Williams 2006 §3.4-3.5 (Laplace + per-likelihood
   response links).
 """
@@ -56,7 +57,7 @@ from opifex.uncertainty.statespace import StateSpaceKernel  # noqa: TC001 — ru
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
-_MARKOV_LAPLACE_PAPER = "bayesnewton / Sarkka 2013 §9 (Iterated-EKS Laplace on Markov GPs)"
+_MARKOV_LAPLACE_PAPER = "Wilkinson+ 2023 JMLR / Sarkka 2013 §9 (Iterated-EKS Laplace on Markov GPs)"
 
 
 # -----------------------------------------------------------------------------

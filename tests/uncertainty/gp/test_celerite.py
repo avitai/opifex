@@ -16,10 +16,7 @@ parametrisations:
   predictive surface is a sum of Real / Complex terms.
 
 The direct-evaluation forms below run in ``O(n²)`` per Gram; the
-scalable quasiseparable Kalman ports (``O(n)``) are deferred to D1.
-
-Reference implementation consulted (READ-ONLY):
-``../tinygp/src/tinygp/kernels/quasisep.py:Celerite``.
+scalable quasiseparable Kalman forms (``O(n)``) are deferred to D1.
 
 References
 ----------

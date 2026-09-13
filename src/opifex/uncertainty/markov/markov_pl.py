@@ -1,9 +1,8 @@
 r"""Posterior Linearisation on Markov GPs — Task 11.2 slice 30.
 
 Implements iterated posterior linearisation (Garcia-Fernandez, Tronarp,
-Sarkka 2018) on a Markov-GP prior via the canonical bayesnewton recipe
-(``bayesnewton/inference.py::PosteriorLinearisation`` +
-``bayesnewton/cubature.py::statistical_linear_regression_cubature``):
+Sarkka 2018) on a Markov-GP prior following Wilkinson, Sarkka & Solin
+(JMLR 2023):
 
 1. **Statistical Linear Regression (SLR)** linearises the likelihood
    ``p(y | f)`` against the current posterior moments
@@ -41,8 +40,9 @@ References:
 * Garcia-Fernandez, Tronarp, Sarkka 2018 — *Gaussian process
   classification using posterior linearisation*, IEEE SPL.
 * Sarkka 2013 — *Bayesian Filtering and Smoothing*, CUP, §6.
-* Wilkinson, Solin, Adam 2020+ — ``bayesnewton/inference.py``
-  ``PosteriorLinearisation`` (PRIMARY).
+* Wilkinson, Sarkka, Solin 2023 — *Bayes-Newton Methods for Approximate
+  Bayesian Inference with PSD Guarantees*, JMLR 24(83), arXiv:2111.01721
+  (PRIMARY).
 """
 
 from __future__ import annotations

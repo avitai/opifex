@@ -58,20 +58,10 @@ Restrictions
 
 * **Celerite-representable processes** — each ACVF term must admit a
   positive-semidefinite per-block celerite factorization (the standard
-  CARMA realization; NaN propagates otherwise, exactly as in the
-  reference). CARMA(1, 0)/(2, 0)/(2, 1) and most higher orders are
+  CARMA realization; NaN propagates otherwise). CARMA(1, 0)/(2, 0)/(2, 1) and most higher orders are
   representable.
 * **One-dimensional time-like inputs** — ``x_train`` must be shape
   ``(n,)`` or ``(n, 1)`` with strictly increasing entries.
-
-Reference implementations consulted (READ-ONLY)
------------------------------------------------
-
-* ``../tinygp/src/tinygp/kernels/quasisep.py:CARMA`` (``design_matrix``,
-  ``stationary_covariance``, ``observation_model``,
-  ``transition_matrix``).
-* ``../bayesnewton/bayesnewton/kernels.py`` — analogous state-space
-  layer for celerite/CARMA covariances.
 
 References:
 ----------
@@ -170,9 +160,9 @@ def _build_carma_realization(
 ) -> _CarmaRealization:
     """Build the celerite real state-space realization from AR/MA coefficients.
 
-    Ports ``../tinygp/src/tinygp/kernels/quasisep.py:CARMA``
-    (``__init__`` observation model + ``stationary_covariance``),
-    reusing opifex's :func:`_carma_roots` / :func:`_carma_acvf`.
+    Follows the celerite factorization of Foreman-Mackey et al. 2017
+    (observation model + stationary covariance), reusing opifex's
+    :func:`_carma_roots` / :func:`_carma_acvf`.
     """
     ar_roots = _carma_roots(jnp.append(ar_coefficients, 1.0))
     acf = _carma_acvf(ar_roots=ar_roots, alpha=ar_coefficients, beta=ma_coefficients)
@@ -237,8 +227,7 @@ def _carma_stationary_covariance(
 ) -> jax.Array:
     r"""Stationary covariance ``P_∞`` for the CARMA realization.
 
-    Ports ``tinygp.kernels.quasisep.CARMA.stationary_covariance``: a
-    signed-identity diagonal for real roots plus the celerite
+    A signed-identity diagonal for real roots plus the celerite
     :math:`2\times2` block per complex-conjugate pair.
     """
     sign_diag = jnp.diag(jnp.where(acf.real > 0, jnp.ones(order), -jnp.ones(order)))
@@ -255,12 +244,10 @@ def _carma_stationary_covariance(
 def _carma_transitions(*, realization: _CarmaRealization, scaled_steps: jax.Array) -> jax.Array:
     r"""Per-step transition matrices ``A(Δt) = exp(F Δt)`` for each lag.
 
-    Ports ``tinygp.kernels.quasisep.CARMA.transition_matrix``: a decay
-    on each real root and a damped rotation per complex-conjugate pair.
-    The reference returns the transition in the row-vector convention;
-    the opifex Kalman primitives use the column-vector convention
-    ``state_next = A @ state_prev``, so the rotation block off-diagonals
-    are transposed here (matching the joint covariance
+    A decay on each real root and a damped rotation per complex-conjugate
+    pair, in the column-vector convention ``state_next = A @ state_prev``
+    of the opifex Kalman primitives; the rotation block off-diagonals are
+    transposed relative to the row-vector convention (matching the joint covariance
     ``Cov(s_i, s_j) = A(|t_i - t_j|)\,P_\infty``).
     """
     decay_rate = -realization.ar_roots.real

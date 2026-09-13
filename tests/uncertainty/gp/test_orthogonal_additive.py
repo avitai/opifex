@@ -29,9 +29,6 @@ the closed-form projection (eq. 10):
         \exp\!\left(-\frac{(x - \mu)^{2} + (x' - \mu)^{2}}
                           {2(\ell^{2} + \zeta^{2})}\right).
 
-Reference implementation consulted (READ-ONLY):
-``../GPJax/gpjax/kernels/additive/oak.py``.
-
 References
 ----------
 * Lu, X., Boukouvalas, A., Hensman, J. 2022 — *Additive Gaussian

@@ -49,19 +49,9 @@ Restrictions for this slice:
 
 * **Underdamped regime only** — ``quality_factor > 1/2``. The
   critically-damped (``Q = 1/2``) and overdamped (``Q < 1/2``)
-  branches are present in the tinygp reference but are deferred to a
-  follow-up slice; they require their own ``A(Δt)`` parametrisations.
+  branches are deferred to a follow-up slice; they require their own ``A(Δt)`` parametrisations.
 * **One-dimensional time-like inputs** — ``x_train`` must be shape
   ``(n,)`` or ``(n, 1)`` with strictly increasing entries.
-
-Reference implementations consulted (READ-ONLY)
------------------------------------------------
-
-* ``../tinygp/src/tinygp/kernels/quasisep.py:SHO``
-  (``design_matrix``, ``stationary_covariance``,
-  ``transition_matrix``).
-* ``../bayesnewton/bayesnewton/kernels.py`` — analogous celerite
-  state-space layer.
 
 References:
 ----------
@@ -128,10 +118,9 @@ def _underdamped_sho_transition(
 ) -> jax.Array:
     r"""Closed-form ``A(dt) = exp(F dt)`` for the underdamped 2-state SHO SDE.
 
-    The tinygp ``SHO.transition_matrix`` reference returns ``A^T``
-    (row-vector state convention); the opifex Kalman primitives use
-    the column-vector convention ``state_next = A @ state_prev``, so
-    the off-diagonal entries are transposed relative to tinygp.
+    Uses the column-vector convention ``state_next = A @ state_prev``
+    of the opifex Kalman primitives; the row-vector state convention
+    gives ``A^T``, with the off-diagonal entries transposed.
     """
     f_root = jnp.sqrt(4.0 * quality_factor**2 - 1.0)
     theta = 0.5 * f_root * omega * dt / quality_factor
