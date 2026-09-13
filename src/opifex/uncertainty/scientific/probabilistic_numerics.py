@@ -63,8 +63,8 @@ References:
   probabilistic ODE solvers*.
 * Bosch+ 2023 arXiv:2305.14978 — *Probabilistic Exponential Integrators*.
 * Tronarp+ 2022 arXiv:2202.01287 — *Fenrir: physics-enhanced regression*.
-* Wu+Lysy 2024 arXiv:2306.05566 — *DALTON: Data-Adaptive Latent Solver
-  for Stiff Probabilistic ODEs*.
+* Wu+Lysy 2024 arXiv:2306.05566 — *Data-Adaptive Probabilistic Likelihood
+  Approximation for Ordinary Differential Equations* (DALTON), AISTATS.
 """
 
 from __future__ import annotations
@@ -545,17 +545,13 @@ class PerturbedStepSolverSpec(_PNAdapterSpecBase):
 class DenseOutputSamplingSpec(_PNAdapterSpecBase):
     """Joint posterior sampling at arbitrary density via interpolate-then-sample.
 
-    Covers the interpolate-then-sample pattern from Tronarp+ 2019
-    arXiv:1810.03440 §5, which draws joint posterior samples off the
-    solver grid.
+    Covers the interpolate-then-sample pattern, which draws joint posterior
+    samples off the solver grid.
     """
 
     source_package: str = "opifex"
     family_tags: tuple[str, ...] = ("dense_output", "interpolate_sample")
-    notes: str = (
-        "Interpolate-then-sample for joint posterior samples "
-        "at arbitrary density. Cite Tronarp+ 2019 arXiv:1810.03440 §5."
-    )
+    notes: str = "Interpolate-then-sample for joint posterior samples at arbitrary density."
 
     def wrap(self, model: Any, capability: UQCapability) -> Any:
         """Return the Cholesky-based dense-output Gaussian sampler."""
@@ -626,7 +622,7 @@ class FixedMVDiffusionSpec(_PNAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ExpEKSpec(_PNAdapterSpecBase):
-    """Exponential extended Kalman correction (Tronarp+ 2019 §5).
+    """Exponential extended Kalman correction.
 
     Replaces the linearisation in the standard EK0/EK1 correction with
     an exponential integrator step for the residual Jacobian — yields
@@ -643,7 +639,7 @@ class ExpEKSpec(_PNAdapterSpecBase):
         "stiff_ivp",
     )
     notes: str = (
-        "Exponential extended Kalman correction (Tronarp+ 2019 §5). "
+        "Exponential extended Kalman correction. "
         "Higher-order convergence on stiff IVPs; preferred over EK1 "
         "for moderately stiff dynamics."
     )

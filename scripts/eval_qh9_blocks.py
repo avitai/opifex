@@ -19,8 +19,8 @@ Hamiltonian-MAE ~76 µHa, QHNetV2 ~31.5 µHa on QH9-Stable):
 * ``coefficient_similarity`` -- occupied-orbital ψ-cosine similarity,
 * ``homo_lumo_gap_mae`` -- HOMO-LUMO-gap MAE (µHa).
 
-Runs under ``jax_enable_x64`` (the QH9 Fock targets are float64 and the Löwdin
-eigensolve needs the precision). Example::
+Runs under ``jax_enable_x64`` (the QH9 Fock targets are float64 and the eigensolve after
+canonical orthogonalization needs the precision). Example::
 
     JAX_ENABLE_X64=1 python scripts/eval_qh9_blocks.py \
         --dataset stable --run-dir /root/results/qh9_run \

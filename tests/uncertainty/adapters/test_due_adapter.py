@@ -1,6 +1,6 @@
 """DUE (Deterministic Uncertainty Estimation) adapter contracts.
 
-DUE (van Amersfoort, van der Wilk, Hensman 2021, arXiv:2102.11409) pairs a
+DUE (van Amersfoort, Smith, Jesson, Key & Gal 2021, arXiv:2102.11409) pairs a
 spectral-normalized / bi-Lipschitz deep feature extractor ``f(x)`` with an
 inducing-point sparse variational GP (SVGP) over the features; a single
 forward pass yields the GP predictive mean + variance.

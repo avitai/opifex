@@ -1,7 +1,8 @@
 r"""Constant ``J_l`` matrices for the fast Euler-angle Wigner-D path.
 
-Precomputed ``J`` tables of the e3nn real Wigner-D factorisation (Geiger & Smidt
-2022, arXiv:2207.09453). Each ``J_l`` is the symmetric orthogonal
+Precomputed ``J`` tables of the real Wigner-D Euler-angle factorisation used by e3nn-jax,
+whose ``J0`` to ``J9`` tables these equal, in the real spherical-harmonic basis of e3nn
+(Geiger & Smidt 2022, arXiv:2207.09453). Each ``J_l`` is the symmetric orthogonal
 involution (``J = J^T``, ``J^2 = I``) that converts a rotation about the eSCN
 quantisation (``y``) axis into one about the ``x`` axis by conjugation, so the
 real Wigner-D matrix factorises as the cheap product
@@ -31,7 +32,7 @@ from numpy import sqrt
 
 # fmt: off
 # DO NOT reformat or edit the matrices below: they are the exact ``J_l`` constants
-# (Geiger & Smidt 2022, arXiv:2207.09453) and reproduce the matrix-exponential
+# (equal to e3nn-jax's ``J0`` to ``J9``) and reproduce the matrix-exponential
 # Wigner-D to machine precision (verified in tests/geometry/algebra/test_wigner.py).
 # A formatter reflow that altered a literal would silently break every
 # SO(2)-frame rotation. The ``# fmt: off`` guard keeps ruff-format off the block.

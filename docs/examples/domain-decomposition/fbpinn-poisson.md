@@ -19,7 +19,9 @@ This example demonstrates solving the damped harmonic oscillator ODE using FBPIN
 overlapping subdomains, with each subdomain having its own neural network. Smooth
 window functions create a partition of unity that blends the subdomain solutions.
 
-This is the canonical FBPINN benchmark problem from Moseley et al. (2023). The
+The problem is `HarmonicOscillator1DHardBC` of the
+[FBPINNs code](https://github.com/benmoseley/FBPINNs); the FBPINN method is from
+Moseley et al. (2023). The
 hard boundary constraint approach ensures the initial conditions are exactly
 satisfied.
 

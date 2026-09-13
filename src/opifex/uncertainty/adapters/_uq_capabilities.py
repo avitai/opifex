@@ -245,7 +245,7 @@ _DUE_ADAPTER_CAPABILITY = UQCapability(
     source_package="opifex",
     notes=(
         "DUEAdapter — Deterministic Uncertainty Estimation (van "
-        "Amersfoort et al. ICML 2021). Wraps a fitted spectral-normalized "
+        "Amersfoort et al. 2021, arXiv:2102.11409). Wraps a fitted spectral-normalized "
         "deep-kernel feature extractor + inducing-point SVGP; reuses "
         "opifex.uncertainty.gp.predict_svgp for the single-forward-pass "
         "distance-aware predictive."

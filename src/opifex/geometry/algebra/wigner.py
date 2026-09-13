@@ -354,7 +354,7 @@ def _y_rotation(degree: int, angle: Float[Array, ""]) -> Float[Array, "d d"]:
     :func:`spherical_harmonics`) a rotation about the ``+y`` quantisation axis acts
     on each order ``m`` as a 2D rotation by ``m * angle``, giving the sparse
     structure ``cos(m theta)`` on the diagonal and ``sin(m theta)`` on the
-    anti-diagonal (Geiger & Smidt 2022, arXiv:2207.09453). It equals
+    anti-diagonal, as in the ``rot_y`` of e3nn-jax's Euler-angle Wigner-D. It equals
     :func:`wigner_d` of the corresponding ``3x3`` ``y``-rotation matrix exactly.
 
     Args:
@@ -379,8 +379,8 @@ def _matrix_to_euler(
     r"""Grad-safe ZYZ-about-``y`` Euler angles of a rotation matrix.
 
     Returns ``(alpha, beta, gamma)`` with
-    ``R = matrix_y(alpha) @ matrix_x(beta) @ matrix_y(gamma)``, the e3nn
-    convention (Geiger & Smidt 2022). ``beta = arccos(R[:, 1]_y)`` and ``alpha = atan2(x, z)``
+    ``R = matrix_y(alpha) @ matrix_x(beta) @ matrix_y(gamma)``, the Euler-angle
+    convention of e3nn-jax. ``beta = arccos(R[:, 1]_y)`` and ``alpha = atan2(x, z)``
     of the rotated ``+y`` axis; ``gamma`` is recovered from the residual rotation.
 
     The ``arccos`` argument is clipped strictly inside ``(-1, 1)`` and the two
@@ -450,8 +450,8 @@ def _wigner_d_from_euler(
 ) -> Float[Array, "d d"]:
     r"""Assemble the real Wigner-D from Euler angles via the constant ``J_l``.
 
-    ``D^l = Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` (Geiger & Smidt
-    2022, arXiv:2207.09453). For degrees beyond the tabulated
+    ``D^l = Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)``, the factorisation of
+    e3nn-jax's Euler-angle Wigner-D. For degrees beyond the tabulated
     ``J_l`` the result falls back to the exponential path via
     :func:`wigner_d` of the reconstructed rotation matrix.
 
@@ -479,8 +479,8 @@ def wigner_d_fast(degree: int, rotation: Float[Array, "3 3"]) -> Float[Array, "d
 
     Numerically identical to :func:`wigner_d` (the trusted matrix-exponential
     reference) but replaces the per-call ``jax.scipy.linalg.expm`` with the cheap
-    ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product (Geiger & Smidt
-    2022, arXiv:2207.09453; QHNetV2 eSCN, arXiv:2506.09398).
+    ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product of e3nn-jax's
+    Euler-angle Wigner-D.
     This is the rotation primitive of the SO(2)-frame edge convolution; the
     parity with :func:`wigner_d` is asserted in
     ``tests/geometry/algebra/test_wigner.py``.

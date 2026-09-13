@@ -16,8 +16,8 @@
 # # FBPINN: Finite Basis PINN on Damped Harmonic Oscillator
 #
 # This example demonstrates solving the damped harmonic oscillator ODE using FBPINN
-# (Finite Basis Physics-Informed Neural Network). This is the canonical FBPINN
-# benchmark problem from Moseley et al. (2023).
+# (Finite Basis Physics-Informed Neural Network). The problem is
+# `HarmonicOscillator1DHardBC` of the FBPINNs code linked below.
 #
 # **Reference:** Ben Moseley, Andrew Markham, Tarje Nissen-Meyer.
 # "Finite Basis Physics-Informed Neural Networks (FBPINNs): a scalable domain decomposition
@@ -46,7 +46,7 @@ from opifex.neural.pinns.domain_decomposition import (
 # %% [markdown]
 # ## Configuration
 #
-# Following the FBPINN setup of Moseley, Markham & Nissen-Meyer (2023):
+# Following `HarmonicOscillator1DHardBC` of the FBPINNs code:
 # - Domain: t in [0, 1]
 # - Damped harmonic oscillator: m*u'' + mu*u' + k*u = 0
 # - Parameters: d=2, w0=20 (gives mu=4, k=400)
@@ -54,7 +54,7 @@ from opifex.neural.pinns.domain_decomposition import (
 # - sd=0.1 for the hard constraint smoothness
 
 # %%
-# Problem configuration (Moseley et al. 2023). These physics constants are
+# Problem configuration (the FBPINNs code defaults). These physics constants are
 # referenced as default arguments by the module-level helpers below, so they
 # must remain at module scope.
 T_MIN, T_MAX = 0.0, 1.0
@@ -90,7 +90,7 @@ HIDDEN_DIMS = [32, 32]
 def exact_solution(t, d=D, w0=W0):
     """Exact solution for damped harmonic oscillator.
 
-    Reference: Moseley, Markham & Nissen-Meyer (2023).
+    Matches ``HarmonicOscillator1D.exact_solution`` of the FBPINNs code.
     """
     w = jnp.sqrt(w0**2 - d**2)
     phi = jnp.arctan(-d / w)

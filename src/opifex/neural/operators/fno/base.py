@@ -404,7 +404,7 @@ def spectral_resample(
     amplitude of the input. ``output_size`` is a static Python tuple so the
     function traces cleanly under ``jax.jit``.
 
-    Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2022,
+    Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2023,
     https://arxiv.org/abs/2204.11127.
 
     Args:
@@ -478,7 +478,7 @@ class SpectralConvResize(nnx.Module):
     real/imaginary :class:`nnx.Param` arrays to avoid the JAX complex-gradient
     convention issue (optax issue #196).
 
-    Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2022,
+    Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2023,
     https://arxiv.org/abs/2204.11127; Li et al. 2021, "Fourier Neural Operator
     for Parametric Partial Differential Equations", arXiv:2010.08895.
     """

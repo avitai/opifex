@@ -19,7 +19,7 @@ Two complementary data-likelihood combinators are implemented in
 - **Fenrir** (Tronarp et al. 2022, arXiv:2202.01287) — backward
   smoothing of an *unconditioned* forward solver pass that conditions
   on the data only during the backward sweep.
-- **DALTON** (Wu et al. 2023, arXiv:2306.05566) — three-term
+- **DALTON** (Wu & Lysy 2024, arXiv:2306.05566) — three-term
   combinator `data_ll + with_pn_ll - without_pn_ll` that explicitly
   accounts for the differential in the solver's probabilistic-numerics
   log-likelihood between data-conditioned and unconditioned passes.
@@ -73,8 +73,8 @@ unconditioned passes:
 ℓ_DALTON = ℓ_data + ℓ_PN_with_data - ℓ_PN_without_data
 ```
 
-Reference: Wu+ 2023, *Data-Adaptive Probabilistic Likelihood
-Approximation for ODEs*.
+Reference: Wu & Lysy 2024, *Data-Adaptive Probabilistic Likelihood
+Approximation for Ordinary Differential Equations*, AISTATS.
 
 ## Why This Matters
 

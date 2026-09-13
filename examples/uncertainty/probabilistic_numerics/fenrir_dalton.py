@@ -24,8 +24,8 @@ Reference paper:
 
 * Tronarp, Bosch, Hennig 2022 — *Fenrir: Physics-Enhanced Regression
   for Initial Value Problems*, ICML, arXiv:2202.01287.
-* Wu, Lange, Saumier, Cockayne 2023 — *Data-Adaptive Probabilistic
-  Likelihood Approximation for ODEs*, arXiv:2306.05566.
+* Wu & Lysy 2024 — *Data-Adaptive Probabilistic Likelihood Approximation
+  for Ordinary Differential Equations*, AISTATS, arXiv:2306.05566.
 
 We pose a small ODE inverse problem: estimate the decay rate ``θ`` in
 ``dy/dt = -θ y`` given noisy data. The closed-form solution is

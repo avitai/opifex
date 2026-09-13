@@ -16,8 +16,9 @@ but that the audit confirmed absent:
 
 References
 ----------
-* Tronarp+ 2019 — *Bayesian ODE solvers: the maximum a posteriori
-  estimate*, arXiv:1810.03440 (ExpEK).
+* Tronarp, Kersting, Särkkä & Hennig 2019 — *Probabilistic Solutions To
+  Ordinary Differential Equations As Non-Linear Bayesian Filtering: A New
+  Perspective*, arXiv:1810.03440.
 * Krämer+ 2022 — *Probabilistic ODE solutions in millions of
   dimensions*, ICML (DiagonalEK1).
 * Bosch+ 2021 — *Calibrated adaptive probabilistic ODE solvers*,

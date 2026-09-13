@@ -140,7 +140,7 @@ class TestWignerDFast:
     :func:`wigner_d` (matrix exponential of the so(3) generators) is the
     ground-truth reference; :func:`wigner_d_fast` replaces the per-call ``expm``
     with the cheap ``Z_l(alpha) @ J_l @ Z_l(beta) @ J_l @ Z_l(gamma)`` product
-    (Geiger & Smidt 2022; QHNetV2 eSCN). The two must agree to machine precision in the
+    (the factorisation of e3nn-jax). The two must agree to machine precision in the
     same real basis (the load-bearing parity check), and the fast path must stay
     jit/grad/vmap clean, including at the ``beta = 0`` quantisation pole.
     """

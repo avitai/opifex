@@ -1,7 +1,7 @@
 """U-shaped Neural Operator (U-NO).
 
 A Flax-NNX implementation of the U-shaped Neural Operator of
-Rahman, Ross & Azizzadenesheli, "U-NO: U-shaped Neural Operators", TMLR 2022
+Rahman, Ross & Azizzadenesheli, "U-NO: U-shaped Neural Operators", TMLR 2023
 (https://arxiv.org/abs/2204.11127).
 
 Unlike a conv U-Net, U-NO changes spatial resolution ONLY in the Fourier domain
@@ -181,7 +181,7 @@ class UNeuralOperator(nnx.Module):
 
     Discretisation-invariant operator that performs all resolution changes in
     the Fourier domain. See the module docstring for the architecture and the
-    reference (Rahman et al., TMLR 2022).
+    reference (Rahman et al., TMLR 2023).
     """
 
     def __init__(

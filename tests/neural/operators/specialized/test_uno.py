@@ -12,7 +12,7 @@ from a conv U-Net:
 - jit / grad / vmap safety.
 
 Reference: Rahman, Ross, Azizzadenesheli, "U-NO: U-shaped Neural Operators",
-TMLR 2022, https://arxiv.org/abs/2204.11127.
+TMLR 2023, https://arxiv.org/abs/2204.11127.
 """
 
 import jax
