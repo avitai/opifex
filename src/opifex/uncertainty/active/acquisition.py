@@ -40,6 +40,7 @@ import jax.numpy as jnp
 from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 from jax.scipy.stats import norm as jnorm
+from tensorflow_probability.substrates.jax.math import erfcx
 
 from opifex.uncertainty.types import metadata_to_dict, MetadataItems, PredictiveDistribution
 
@@ -144,38 +145,62 @@ def expected_improvement(
     return (best_value - predictive_dist.mean) * jnorm.cdf(u) + std * jnorm.pdf(u)
 
 
-def _log_ei_helper(u: jax.Array) -> jax.Array:
-    r"""Numerically stable ``log(phi(u) + u * Phi(u))``.
+def _log1mexp(x: jax.Array) -> jax.Array:
+    r"""``log(1 - exp(x))`` for ``x < 0``, accurate near zero and far from it.
 
-    For the safe regime ``u >= -1`` the direct expression
-    ``log(phi(u) + u * Phi(u))`` is well-conditioned, as in the piecewise
-    ``log_h`` of Ament et al. (2023, arXiv:2310.20708). For ``u << -1``
-    the direct expression suffers catastrophic cancellation; opifex uses
-    the closed form
+    Eq. (13) of Ament et al. (2023): ``log(-expm1(x))`` for ``x > -log 2`` and
+    ``log1p(-exp(x))`` otherwise. Each branch evaluates on a masked copy of ``x``, so the branch
+    that is not selected never produces a non-finite value or gradient.
+    """
+    log_two = jnp.log(jnp.asarray(2.0, dtype=x.dtype))
+    is_near_zero = x > -log_two
+    near_zero = jnp.where(is_near_zero, x, -log_two)
+    far_from_zero = jnp.where(is_near_zero, -log_two, x)
+    return jnp.where(
+        is_near_zero, jnp.log(-jnp.expm1(near_zero)), jnp.log1p(-jnp.exp(far_from_zero))
+    )
+
+
+def _log_ei_helper(u: jax.Array) -> jax.Array:
+    r"""Numerically stable ``log h(u) = log(phi(u) + u * Phi(u))``.
+
+    Eq. (9) of Ament et al. (2023, *Unexpected Improvements to Expected Improvement for Bayesian
+    Optimization*, NeurIPS, arXiv:2310.20708):
 
     .. math::
-        \log(\phi(u) + u \Phi(u)) = \log \phi(u) + \log(1 + u \cdot R(u))
+        \log h(u) =
+        \begin{cases}
+            \log(\phi(u) + u\,\Phi(u)) & u > -1, \\
+            -u^2/2 - c_1 + \operatorname{log1mexp}(w(u)) & u_a < u \le -1, \\
+            -u^2/2 - c_1 - 2 \log|u| & u \le u_a,
+        \end{cases}
 
-    where ``R(u) = Phi(u) / phi(u)`` is the Mill's ratio reciprocal,
-    computed via the standard asymptotic expansion
-    ``R(u) \approx -1/u + 1/u^3`` for very negative ``u``. The branch
-    boundary ``u = -1`` matches Ament et al. (2023).
+    with ``w(u) = log(erfcx(-u / sqrt(2)) |u|) + c_2``, ``c_1 = log(2 pi) / 2`` and
+    ``c_2 = log(pi / 2) / 2``. The asymptotic branch starts at ``u_a = -1e3`` in float32 and
+    ``u_a = -1e6`` in float64, the thresholds of the paper authors' implementation. ``erfcx``
+    comes from TensorFlow Probability's JAX substrate. In float32 the gradient of the middle
+    branch loses accuracy roughly as ``eps u^2``, because ``1 - exp(w)`` is close to ``1/u^2``.
+    Each branch evaluates on a masked copy of ``u``, so values and gradients stay finite.
     """
-    bound = jnp.asarray(-1.0, dtype=u.dtype)
-    u_safe = jnp.where(u < bound, bound, u)
-    log_ei_upper = jnp.log(jnp.maximum(jnorm.pdf(u_safe) + u_safe * jnorm.cdf(u_safe), _LOG_FLOOR))
+    dtype = u.dtype
+    bound = jnp.asarray(-1.0, dtype=dtype)
+    asymptotic_bound = jnp.asarray(-1e6 if dtype == jnp.float64 else -1e3, dtype=dtype)
 
-    # Asymptotic for u << -1: phi(u) + u * Phi(u) ≈ phi(u) * (1 + u * R(u))
-    # where R(u) = Phi(u)/phi(u) ≈ -1/u * (1 - 1/u^2 + 3/u^4 - ...).
-    # So 1 + u * R(u) ≈ 1 + (-1 + 1/u^2 - 3/u^4) = 1/u^2 - 3/u^4 + ...
-    # For numerical safety we clip u away from zero in the lower branch.
-    u_neg = jnp.where(u >= bound, bound, u)
-    inv_u_sq = 1.0 / (u_neg**2)
-    correction = inv_u_sq - 3.0 * inv_u_sq**2 + 15.0 * inv_u_sq**3
-    log_correction = jnp.log(jnp.maximum(correction, _LOG_FLOOR))
-    log_ei_lower = jnorm.logpdf(u_neg) + log_correction
+    is_direct = u > bound
+    u_direct = jnp.where(is_direct, u, bound)
+    log_h_direct = jnp.log(jnorm.pdf(u_direct) + u_direct * jnorm.cdf(u_direct))
 
-    return jnp.where(u < bound, log_ei_lower, log_ei_upper)
+    u_lower = jnp.where(is_direct, bound, u)
+    is_erfcx = u_lower > asymptotic_bound
+    u_erfcx = jnp.where(is_erfcx, u_lower, asymptotic_bound)
+    scaled = -u_erfcx / jnp.sqrt(jnp.asarray(2.0, dtype=dtype))
+    log_mills = jnp.log(erfcx(scaled) * jnp.abs(u_erfcx))
+    log_mills = log_mills + 0.5 * jnp.log(jnp.asarray(0.5 * jnp.pi, dtype=dtype))
+    log_phi = -0.5 * u_lower**2 - 0.5 * jnp.log(2.0 * jnp.pi)
+    log_h_lower = log_phi + jnp.where(
+        is_erfcx, _log1mexp(log_mills), -2.0 * jnp.log(jnp.abs(u_lower))
+    )
+    return jnp.where(is_direct, log_h_direct, log_h_lower)
 
 
 def log_expected_improvement(

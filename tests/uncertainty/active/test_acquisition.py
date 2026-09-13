@@ -17,10 +17,15 @@ The tests pin the published acquisition-function formulas exactly:
 
 from __future__ import annotations
 
+import math
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from flax import nnx
+from scipy import special
+from scipy.stats import norm
 
 from opifex.uncertainty.active.acquisition import (
     acquire,
@@ -147,6 +152,94 @@ class TestExpectedImprovement:
         ei = expected_improvement(pd, best_value=1.0)
         log_ei = log_expected_improvement(pd, best_value=1.0)
         assert jnp.allclose(log_ei, jnp.log(ei), atol=1e-5)
+
+
+_EPS32 = float(np.finfo(np.float32).eps)
+
+
+def _reference_log_h(z: float) -> float:
+    """Float64 ``log(phi(z) + z Phi(z))`` by Ament et al. (2023), eq. 9, with scipy's ``erfcx``."""
+    if z > -1.0:
+        return math.log(norm.pdf(z) + z * norm.cdf(z))
+    w = math.log(special.erfcx(-z / math.sqrt(2.0)) * abs(z)) + 0.5 * math.log(0.5 * math.pi)
+    return -0.5 * z * z - 0.5 * math.log(2.0 * math.pi) + math.log(-math.expm1(w))
+
+
+class TestLogExpectedImprovementBranches:
+    """Log-EI across the three branches of Ament et al. (2023), eq. 9.
+
+    With unit standard deviation and ``best_value = 0``, the log-EI at mean ``-z`` is
+    ``log h(z) = log(phi(z) + z Phi(z))``. Float32 values are compared with a float64 evaluation of
+    eq. 9 on ``z`` from 3 down to ``-1e6``: the direct branch (``z > -1``), the ``erfcx`` branch,
+    and the asymptotic branch below ``-1e3``. The grid includes ``z`` in ``[-13.4, -12.9]``, where
+    ``jax.scipy.special.erfcx`` returns 0 in float32 for arguments in ``[9.195, 9.419]``.
+
+    Values are compared within 1e-6 relative (measured 3.6e-7). In the ``erfcx`` branch the
+    gradient loses accuracy as float32 cancels ``1 - exp(w)``, which is close to ``1/z^2``, so the
+    gradient is compared within ``2 eps32 z^2 + 1e-5`` relative (measured at most 0.72 of that
+    bound, with a largest error of 9.9e-2 at ``z = -928``). Outside that branch the gradient is
+    compared within 1e-5 relative (measured 2.5e-7 above ``z = -1``). Every gradient tolerance also
+    carries ``2 eps64 z^2``, the error of the float64 reference itself, which subtracts two numbers
+    near ``-z^2/2``; below ``z = -1e3`` that term dominates (measured 1.65e-4 near ``|z| = 1e6``,
+    0.65 of the tolerance).
+    """
+
+    _GRID = np.concatenate(
+        [
+            np.linspace(3.0, -3.0, 61),
+            -np.logspace(0.5, 6.0, 400),
+            -np.linspace(12.9, 13.4, 51),
+        ]
+    ).astype(np.float32)
+
+    @staticmethod
+    def _log_h(z: jax.Array) -> jax.Array:
+        """Return log-EI at mean ``-z`` with unit variance and ``best_value = 0``."""
+        predictive = PredictiveDistribution(mean=-z, variance=jnp.ones_like(z))
+        return log_expected_improvement(predictive, best_value=0.0)
+
+    def test_matches_the_eq9_reference(self) -> None:
+        values = np.asarray(self._log_h(jnp.asarray(self._GRID)), dtype=np.float64)
+        reference = np.asarray([_reference_log_h(float(z)) for z in self._GRID])
+        relative = np.abs(values - reference) / np.maximum(1.0, np.abs(reference))
+        assert np.all(np.isfinite(values))
+        assert float(np.max(relative)) <= 1e-6, float(np.max(relative))
+
+    def test_gradient_matches_the_mills_ratio(self) -> None:
+        """``d/dz log h(z) = Phi(z) / h(z)``, compared in log space for very negative ``z``."""
+        gradients = np.asarray(
+            jax.vmap(jax.grad(lambda z: self._log_h(z[None])[0]))(jnp.asarray(self._GRID)),
+            dtype=np.float64,
+        )
+        reference = np.asarray(
+            [math.exp(norm.logcdf(float(z)) - _reference_log_h(float(z))) for z in self._GRID]
+        )
+        assert np.all(np.isfinite(gradients))
+        relative = np.abs(gradients - reference) / np.abs(reference)
+        z = self._GRID.astype(np.float64)
+        in_erfcx_branch = (z <= -1.0) & (z > -1e3)
+        # The float64 reference subtracts log h from log Phi, two numbers near -z^2/2, so its own
+        # relative error grows as eps64 z^2 (2e-4 at |z| = 1e6, measured 1.6e-4 there).
+        reference_error = 2.0 * float(np.finfo(np.float64).eps) * z * z
+        tolerance = np.where(in_erfcx_branch, 2.0 * _EPS32 * z * z, 0.0) + 1e-5 + reference_error
+        assert np.all(relative <= tolerance), float(np.max(relative / tolerance))
+
+    @pytest.mark.parametrize("boundary", [-1.0, -1e3])
+    def test_is_continuous_across_branch_boundaries(self, boundary: float) -> None:
+        """Adjacent float32 inputs on either side of a branch boundary give adjacent values."""
+        below = np.nextafter(np.float32(boundary), np.float32(-np.inf))
+        above = np.nextafter(np.float32(boundary), np.float32(np.inf))
+        values = np.asarray(self._log_h(jnp.asarray([below, above])), dtype=np.float64)
+        slope_bound = abs(boundary) + 2.0
+        tolerance = slope_bound * float(above - below) + 8.0 * _EPS32 * max(1.0, abs(values[0]))
+        assert abs(values[1] - values[0]) <= tolerance, (values, tolerance)
+
+    def test_jit_and_vmap_match_eager(self) -> None:
+        grid = jnp.asarray(self._GRID)
+        eager = self._log_h(grid)
+        compiled = jax.jit(jax.vmap(lambda z: self._log_h(z[None])[0]))(grid)
+        scale = jnp.maximum(1.0, jnp.abs(eager))
+        assert bool(jnp.all(jnp.abs(compiled - eager) <= 4.0 * _EPS32 * scale))
 
 
 # ---------------------------------------------------------------------------

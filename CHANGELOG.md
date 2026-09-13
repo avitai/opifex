@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `log_expected_improvement` is accurate when the mean lies well above the incumbent. For
+  `u < -1` it approximated `1 + u Phi(u) / phi(u)` by the series `1/u^2 - 3/u^4 + 15/u^6`, which
+  is 13 at `u = -1` where the exact value is 0.344, so log-EI jumped by 3.63 nats at the branch
+  boundary and was still off by 1.6 at `u = -1.5`. It now evaluates eq. 9 of Ament et al. (2023)
+  with `erfcx` from TensorFlow Probability's JAX substrate, switching to the asymptotic branch
+  below `-1e3` in float32 and `-1e6` in float64. `jax.scipy.special.erfcx` is not used: it
+  returns 0 for arguments in [9.195, 9.419] in float32 and [26.544, 26.641] in float64.
 - `kalman_smoother_parallel` smooths each step with the transition out of that step, as
   `kalman_smoother` does. It used the transition into the step, so on unevenly spaced times its
   means differed from the sequential smoother, by up to 0.73 on a 60-point Matérn-3/2 example.
