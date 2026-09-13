@@ -54,9 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Differential Equations* (AISTATS 2024); DUE (arXiv:2102.11409) is by van Amersfoort, Smith,
   Jesson, Key and Gal and did not appear at ICML 2021; U-NO appeared in TMLR in 2023; and
   arXiv:1810.03440 is Tronarp et al., *Probabilistic Solutions To Ordinary Differential Equations As
-  Non-Linear Bayesian Filtering*. The `J_l` tables and the Euler-angle Wigner-D factorisation are
-  credited to e3nn-jax, whose tables they equal, instead of Geiger & Smidt (2022), and the FBPINN
-  oscillator example to the FBPINNs code instead of the FBPINN paper; neither paper contains them.
+  Non-Linear Bayesian Filtering*. The Euler-angle Wigner-D factorisation and its `J_l` tables no
+  longer cite Geiger & Smidt (2022), and the FBPINN oscillator example no longer attributes its
+  problem to the FBPINN paper; neither paper contains them.
   `DenseOutputSamplingSpec` and `ExpEKSpec` no longer cite §5 of Tronarp et al. (2019), which
   describes neither method, and `scripts/eval_qh9_blocks.py` names canonical orthogonalization
   instead of Löwdin's.

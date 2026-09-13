@@ -32,8 +32,7 @@ choice for the VMC driver. The wiring follows the K-FAC training of FermiNet
   ``jit`` internally.
 
 References:
-    Martens & Grosse, ICML 2015 (arXiv:1503.05671); ``kfac_jax`` 0.0.8
-    (https://github.com/google-deepmind/kfac-jax); Pfau et al., FermiNet,
+    Martens & Grosse, ICML 2015 (arXiv:1503.05671); ``kfac_jax`` 0.0.8; Pfau et al., FermiNet,
     *Phys. Rev. Research* 2, 033429 (2020), arXiv:1909.02487.
 """
 

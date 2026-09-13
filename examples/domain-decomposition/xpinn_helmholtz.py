@@ -23,7 +23,6 @@
 # "Extended Physics-Informed Neural Networks (XPINNs):
 # A Generalized Space-Time Domain Decomposition Based Deep Learning Framework
 # for Nonlinear Partial Differential Equations" (2020)
-# https://github.com/AmeyaJagtap/XPINNs
 #
 # **Problem Reference:** the viscous Burgers benchmark of Raissi, Perdikaris & Karniadakis
 # (2019), J. Comput. Phys. 378, 686
