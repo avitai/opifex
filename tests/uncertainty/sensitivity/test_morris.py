@@ -11,9 +11,15 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from opifex.uncertainty.sensitivity import morris_screening, MorrisResult
+from opifex.uncertainty.sensitivity.morris import _build_trajectory
+
+
+# One float32 addition of a base value and delta, e.g. float32(1/3) + float32(2/3) = 1.0000001.
+_ROUNDING = 4.0 * float(np.finfo(np.float32).eps)
 
 
 def _influential_vs_constant_model(x: jax.Array) -> jax.Array:
@@ -109,3 +115,62 @@ def test_morris_jit_compatible() -> None:
     jit_result = jax.jit(mu_star_only)(rng_key)
     eager_result = mu_star_only(rng_key)
     assert jnp.allclose(jit_result, eager_result)
+
+
+def _trajectories(num_levels: int, dim: int = 5, count: int = 256) -> np.ndarray:
+    """Unit-cube points of ``count`` trajectories, shape ``(count, dim + 1, dim)``."""
+    keys = jax.random.split(jax.random.PRNGKey(num_levels), count)
+    points, _ = jax.vmap(lambda key: _build_trajectory(key, dim, num_levels))(keys)
+    return np.asarray(points, dtype=np.float64)
+
+
+@pytest.mark.parametrize("num_levels", [2, 4, 5, 6, 8])
+def test_morris_trajectories_stay_in_the_unit_box(num_levels: int) -> None:
+    """Every trajectory point lies in ``[0, 1]^d``.
+
+    Morris (1991), p. 164: the base value ``x*`` takes values in ``{0, 1/(p-1), ..., 1 - Delta}``
+    and each coordinate of the orientation ``B*`` is ``x*_i`` or ``x*_i + Delta``, so no point
+    leaves the region of interest.
+    """
+    points = _trajectories(num_levels)
+    assert points.min() >= -_ROUNDING, points.min()
+    assert points.max() <= 1.0 + _ROUNDING, points.max()
+
+
+@pytest.mark.parametrize("num_levels", [2, 4, 5, 6, 8])
+def test_morris_coordinates_take_the_base_value_or_the_base_value_plus_delta(
+    num_levels: int,
+) -> None:
+    """Along a trajectory each coordinate takes exactly ``x*_i`` and ``x*_i + Delta``.
+
+    In ``B* = (J x* + (Delta/2)[(2B - J) D* + J]) P*`` (Morris 1991, p. 164) a coordinate whose sign
+    in ``D*`` is ``-1`` starts at ``x*_i + Delta`` and steps down to ``x*_i``; one with ``+1``
+    starts at ``x*_i`` and steps up. The lower value is a base value, at most ``1 - Delta``.
+    """
+    delta = num_levels / (2.0 * (num_levels - 1))
+    points = _trajectories(num_levels)
+    lows = points.min(axis=1)
+    highs = points.max(axis=1)
+    np.testing.assert_allclose(highs - lows, delta, rtol=0.0, atol=_ROUNDING)
+    assert lows.min() >= -_ROUNDING, lows.min()
+    assert lows.max() <= 1.0 - delta + _ROUNDING, lows.max()
+
+
+def test_morris_screening_is_finite_for_a_model_defined_only_on_the_box() -> None:
+    """A model undefined below zero screens to finite statistics.
+
+    ``f(x) = sum_i sqrt(x_i)`` is increasing in every input, so every elementary effect is positive
+    and ``mu_star`` equals ``mu``.
+    """
+    result = morris_screening(
+        lambda x: jnp.sum(jnp.sqrt(x), axis=-1),
+        num_trajectories=64,
+        num_levels=4,
+        lower=jnp.zeros(5),
+        upper=jnp.ones(5),
+        rng_key=jax.random.PRNGKey(7),
+    )
+    assert bool(jnp.all(jnp.isfinite(result.mu_star)))
+    assert bool(jnp.all(jnp.isfinite(result.sigma)))
+    assert bool(jnp.all(result.mu > 0.0))
+    assert bool(jnp.allclose(result.mu_star, result.mu))

@@ -68,17 +68,21 @@ def _build_trajectory(rng_key: jax.Array, dim: int, num_levels: int) -> tuple[ja
     delta = num_levels / (2.0 * (num_levels - 1))
 
     base_key, perm_key, sign_key = jax.random.split(rng_key, 3)
-    # Random starting point on the lower half of the grid so that the
-    # +delta perturbation stays inside [0, 1].
+    # Base value x* on {0, 1/(p-1), ..., 1 - delta} (Morris 1991, p. 164), so x* + delta stays
+    # inside [0, 1].
     base = jax.random.randint(
         base_key,
         shape=(dim,),
         minval=0,
         maxval=num_levels // 2,
     ).astype(jnp.float32) / (num_levels - 1)
-    # Random perturbation order + sign per dimension.
+    # Random perturbation order + sign per step; ``signs[k]`` moves dimension ``order[k]``.
     order = jax.random.permutation(perm_key, dim)
     signs = jax.random.choice(sign_key, jnp.array([+1.0, -1.0]), shape=(dim,))
+    # In the orientation B* = (J x* + (delta/2)[(2B - J) D* + J]) P* a dimension whose sign is -1
+    # starts at x* + delta and steps down to x*, so every coordinate is x* or x* + delta.
+    signs_by_dimension = jnp.zeros(dim).at[order].set(signs)
+    start = base + jnp.where(signs_by_dimension < 0.0, delta, 0.0)
 
     def step(point: jax.Array, perturb_idx: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Perturb one input dimension to advance the Morris trajectory."""
@@ -86,8 +90,8 @@ def _build_trajectory(rng_key: jax.Array, dim: int, num_levels: int) -> tuple[ja
         new_point = point.at[i].add(signs[perturb_idx] * delta)
         return new_point, new_point
 
-    _, perturbed = jax.lax.scan(step, base, jnp.arange(dim))
-    points = jnp.concatenate([base[None, :], perturbed], axis=0)
+    _, perturbed = jax.lax.scan(step, start, jnp.arange(dim))
+    points = jnp.concatenate([start[None, :], perturbed], axis=0)
     return points, order
 
 

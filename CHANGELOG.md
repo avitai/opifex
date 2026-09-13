@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a lower bound on that information gain instead. In float32 the score loses accuracy once a
   sampled minimum lies more than a few standard deviations above the mean without observation
   noise, and is not finite at `gamma = -40`.
+- `morris_screening` keeps every trajectory inside `[lower, upper]`. A dimension that stepped down
+  started at the base value and moved to `x* - Delta`, below the box: with 5 inputs, about 1450 of
+  1500 trajectories left the unit cube for 2 to 8 levels, and a model defined only on the box, such
+  as `sqrt`, returned NaN statistics. It now starts at `x* + Delta` and steps down to `x*`, as in
+  the random orientation `B*` of Morris (1991), p. 164, so each coordinate takes `x*` or
+  `x* + Delta`.
 - Pathfinder centres each local Gaussian on `theta + Sigma grad log p(theta)`, as in Algorithm 4,
   line 8 of Zhang et al. (2022). `bfgs_sample` added `Sigma` times the gradient of `-log p` that
   `pathfinder_approximate` passes, which reflected every mean away from the mode. At converged
