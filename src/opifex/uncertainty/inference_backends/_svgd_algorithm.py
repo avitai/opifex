@@ -1,7 +1,6 @@
 r"""Stein Variational Gradient Descent (Liu+Wang 2016) JAX-native primitives.
 
-Line-by-line port of the SVGD reference at
-``../blackjax/blackjax/vi/svgd.py``. The algorithm evolves a finite
+The algorithm (Liu & Wang 2016, Algorithm 1) evolves a finite
 set of particles ``{x_i}`` according to the kernelised Stein gradient
 
 .. math::
@@ -12,20 +11,14 @@ set of particles ``{x_i}`` according to the kernelised Stein gradient
 
 so that the empirical distribution of the particles converges to the
 target ``p`` in MMD. The default RBF kernel uses the median heuristic
-for its bandwidth, as in Liu+Wang 2016 §4.2 and the blackjax reference
-(``update_median_heuristic`` at ``blackjax/vi/svgd.py:163``).
-
-Sibling reference (READ-ONLY port — never imported at runtime):
-
-* ``../blackjax/blackjax/vi/svgd.py`` — ``init`` (line 25),
-  ``build_kernel`` (line 49), ``rbf_kernel`` (line 117),
-  ``median_heuristic`` (line 138), ``update_median_heuristic``
-  (line 163).
+for its bandwidth, recomputed from the current particles at every
+iteration, as in the experiments of Liu+Wang 2016 (Section 5).
 
 References:
 ----------
 * Liu, Q. & Wang, D. 2016 — *Stein Variational Gradient Descent: A
   General Purpose Bayesian Inference Algorithm*, NeurIPS 29.
+  arXiv:1608.04471.
 """
 
 from __future__ import annotations
@@ -40,12 +33,10 @@ import optax
 def rbf_kernel(x: jax.Array, y: jax.Array, length_scale: jax.Array | float) -> jax.Array:
     r"""RBF kernel ``k(x, y) = exp(-||x - y||² / ℓ)`` for two particles.
 
-    Sibling reference: ``blackjax/vi/svgd.py:rbf_kernel`` (line 117).
-
     Args:
         x: First particle, shape ``(d,)``.
         y: Second particle, shape ``(d,)``.
-        length_scale: Bandwidth ``ℓ``. Note the blackjax convention
+        length_scale: Bandwidth ``ℓ``. Note the Liu+Wang 2016 convention
             ``1/ℓ`` not ``1/(2ℓ²)`` — the heuristic returns
             ``median² / log(n)``, which already includes the factor.
 
@@ -59,8 +50,8 @@ def rbf_kernel(x: jax.Array, y: jax.Array, length_scale: jax.Array | float) -> j
 def median_heuristic_bandwidth(particles: jax.Array) -> jax.Array:
     r"""Median-heuristic RBF bandwidth.
 
-    ``length_scale = median(pairwise distances)² / log(n_particles)``,
-    matching ``blackjax/vi/svgd.py:median_heuristic`` (line 138).
+    ``length_scale = median(pairwise distances)² / log(n_particles)``
+    (Liu+Wang 2016, Section 5).
 
     Args:
         particles: Particle array of shape ``(n_particles, d)``.
@@ -86,10 +77,8 @@ def _phi_star(
 ) -> jax.Array:
     r"""Compute the Stein-gradient particle update.
 
-    ``φ*(x_j) = (1/n) Σ_i [k(x_i, x_j) ∇log p(x_i) + ∇_{x_i} k(x_i, x_j)]``.
-
-    Sibling reference: ``blackjax/vi/svgd.py:build_kernel`` inner
-    ``phi_star_summand`` (line 96).
+    ``φ*(x_j) = (1/n) Σ_i [k(x_i, x_j) ∇log p(x_i) + ∇_{x_i} k(x_i, x_j)]``
+    (Liu+Wang 2016, Eq. 8), negated for a minimising optax optimizer.
     """
     grad_log_prob_fn = jax.grad(target_log_prob_fn)
 
@@ -120,12 +109,8 @@ def svgd_fit(
 
     If ``length_scale`` is ``None`` the median heuristic computes the
     RBF bandwidth from the current particle cloud (recomputed at each
-    iteration, matching the blackjax ``update_median_heuristic``
-    pattern). Pass a fixed scalar to skip the heuristic.
-
-    Sibling reference: ``blackjax/vi/svgd.py:build_kernel`` (line 49)
-    composed with ``update_median_heuristic`` (line 163) inside a
-    fixed-step Adam optimisation.
+    iteration). Pass a fixed scalar to skip the heuristic. Each Stein
+    update is applied as one Adam step.
 
     Args:
         initial_particles: Starting particle cloud, shape

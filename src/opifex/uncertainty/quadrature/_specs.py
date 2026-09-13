@@ -12,9 +12,9 @@ algorithms enumerated in the design notes:
   quadrature (point-set quadrature). Split into a separate file per
   design (the SOBER ↔ FFBQ separation).
 * :class:`FFBQAdapterSpec` — Frequency-domain Bayesian quadrature.
-* :class:`EmukitQuadratureAdapterSpec` — read-only adapter pointing at
-  the emukit (NumPy) baselines for benchmarking — emukit is vendored,
-  not user-installed, per the design unification (fix #231).
+* :class:`EmukitQuadratureAdapterSpec` — metadata-only adapter naming
+  the emukit (NumPy) library as a benchmarking baseline — emukit is
+  not a runtime dependency, per the design unification (fix #231).
 
 References:
 ----------
@@ -112,7 +112,7 @@ class SOBERAdapterSpec(_BQAdapterSpecBase):
         "SOBER (Adachi+ 2022 NeurIPS arXiv:2206.04734 + 2023 TMLR "
         "arXiv:2301.11832). Kernel-recombination via "
         "Tchernychova-Lyons CAR + Nyström low-rank approximation; "
-        "vendored in sober.py per the SOBER ↔ FFBQ design split."
+        "implemented in sober.py per the SOBER ↔ FFBQ design split."
     )
 
     def wrap(self, model: Any, capability: UQCapability) -> Any:
@@ -137,7 +137,7 @@ class FFBQAdapterSpec(_BQAdapterSpecBase):
     notes: str = (
         "FFBQ — Frank-Wolfe Bayesian Quadrature (Briol+ NeurIPS 2015, "
         "arXiv:1506.02681). FW-Vanilla iterate with mass-redistribution "
-        "step alpha_n = 1/(n+1); MMD = O(1/n). Vendored in "
+        "step alpha_n = 1/(n+1); MMD = O(1/n). Implemented in "
         "frank_wolfe_bq.py per the SOBER <-> FFBQ design split (fix #190)."
     )
 
@@ -151,20 +151,20 @@ class FFBQAdapterSpec(_BQAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class EmukitQuadratureAdapterSpec(_BQAdapterSpecBase):
-    """Read-only adapter pointing at the emukit (NumPy) BQ baselines.
+    """Metadata-only adapter naming the emukit (NumPy) BQ baselines.
 
-    emukit is vendored as a reference implementation, not installed as
-    a runtime dependency. Use this spec for benchmarking; concrete
-    integration drives through opifex's vanilla / WSABI-L
-    JAX-native implementations.
+    emukit is not installed as a runtime dependency. Use this spec for
+    benchmarking; concrete integration drives through opifex's
+    vanilla / WSABI-L JAX-native implementations.
     """
 
     source_package: str = "emukit"
     family_tags: tuple[str, ...] = ("reference_baseline", "numpy_only")
     notes: str = (
-        "Metadata-only — emukit is the NumPy reference implementation. "
-        "Vendored under opifex.uncertainty.quadrature; not a runtime "
-        "dependency. See ../emukit/emukit/quadrature/* for the source."
+        "Metadata-only — emukit is an external NumPy Bayesian-quadrature "
+        "library usable as a benchmarking baseline; not a runtime "
+        "dependency. The JAX-native methods live in "
+        "opifex.uncertainty.quadrature."
     )
 
 

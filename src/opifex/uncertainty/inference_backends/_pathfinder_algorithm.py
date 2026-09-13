@@ -1,27 +1,23 @@
 r"""Pathfinder variational inference (Zhang+ 2022) JAX-native primitives.
 
-Line-by-line port of the Pathfinder reference at
-``../blackjax/blackjax/vi/pathfinder.py`` plus its L-BFGS helpers at
-``../blackjax/blackjax/optimizers/lbfgs.py``. The algorithm
-(Zhang et al, "Pathfinder: Parallel quasi-Newton variational
-inference", JMLR 23(306), arXiv:2108.03782) locates normal
+The algorithm (Zhang et al, "Pathfinder: Parallel quasi-Newton
+variational inference", JMLR 23(306), arXiv:2108.03782) locates normal
 approximations to the target density along a quasi-Newton optimization
 path, with local covariance estimated by the inverse-Hessian factors
 produced by L-BFGS, and returns the iteration with the highest ELBO.
 
-The vendored primitives:
+The primitives:
 
 * :func:`lbfgs_recover_alpha` — diagonal inverse-Hessian update,
-  Algorithm 3 inner loop (blackjax ``lbfgs_recover_alpha`` line 278).
+  Algorithm 3 inner loop.
 * :func:`lbfgs_inverse_hessian_factors` — formula II.2 ``(beta, gamma)``
-  factors (blackjax ``lbfgs_inverse_hessian_factors`` line 327).
+  factors.
 * :func:`bfgs_sample` — Algorithm 4 sampler given factored inverse
-  Hessian (blackjax ``bfgs_sample`` line 379).
+  Hessian.
 * :func:`pathfinder_approximate` — top-level entry that runs L-BFGS
   via optax, builds the per-step Gaussians, picks the argmax-ELBO
-  state (blackjax ``approximate`` line 70).
-* :func:`pathfinder_sample` — draws from the selected Gaussian
-  (blackjax ``sample`` line 200).
+  state.
+* :func:`pathfinder_sample` — draws from the selected Gaussian.
 
 References:
 ----------
@@ -42,11 +38,7 @@ from jax import lax
 
 
 class PathfinderState(NamedTuple):
-    """Selected (highest-ELBO) Pathfinder iteration.
-
-    Sibling reference: ``blackjax/vi/pathfinder.py:PathfinderState``
-    (line 36).
-    """
+    """Selected (highest-ELBO) Pathfinder iteration."""
 
     elbo: jax.Array
     position: jax.Array
@@ -57,10 +49,7 @@ class PathfinderState(NamedTuple):
 
 
 class _LBFGSHistory(NamedTuple):
-    """Per-iteration L-BFGS history slice.
-
-    Mirrors ``blackjax/optimizers/lbfgs.py:LBFGSHistory`` (line 37).
-    """
+    """Per-iteration L-BFGS history slice."""
 
     x: jax.Array
     f: jax.Array
@@ -80,9 +69,6 @@ def lbfgs_recover_alpha(
     Implements the Algorithm 3 inner loop of Zhang+ 2022. The update
     only fires when the curvature predicate ``s·z > eps · ||z||``
     holds; otherwise ``alpha`` is kept unchanged.
-
-    Sibling reference: ``blackjax/optimizers/lbfgs.py:lbfgs_recover_alpha``
-    (line 278).
 
     Args:
         alpha_previous: Diagonal inverse-Hessian ``alpha_{l-1}``.
@@ -136,9 +122,6 @@ def lbfgs_inverse_hessian_factors(
     ``(beta, gamma)`` returned here. ``S``, ``Z`` are matrices of
     column-stacked position / gradient increments of shape
     ``(d, maxcor)``.
-
-    Sibling reference: ``blackjax/optimizers/lbfgs.py:
-    lbfgs_inverse_hessian_factors`` (line 327).
     """
     param_dim = history_S.shape[-1]
     StZ = history_S.T @ history_Z
@@ -171,9 +154,6 @@ def bfgs_sample(
 
     Returns ``(samples, log_q)`` where ``log_q`` is the per-sample log
     density of the variational approximation.
-
-    Sibling reference: ``blackjax/optimizers/lbfgs.py:bfgs_sample``
-    (line 379).
     """
     Q_matrix, R_matrix = jnp.linalg.qr(jnp.diag(jnp.sqrt(1.0 / alpha)) @ beta)
     param_dim = beta.shape[0]
@@ -205,9 +185,9 @@ def _run_lbfgs_with_history(
 ) -> _LBFGSHistory:
     """Run optax L-BFGS and record per-step history (positions, gradients, alpha).
 
-    Compresses the relevant pieces of
-    ``blackjax/optimizers/lbfgs.py:_minimize_lbfgs`` (line 165) into
-    the history that Pathfinder needs.
+    Each step stores the position, value, gradient and diagonal
+    inverse-Hessian factor that Pathfinder needs to build that step's
+    Gaussian approximation.
     """
     linesearch = optax.scale_by_zoom_linesearch(max_linesearch_steps=maxls)
     solver = optax.lbfgs(memory_size=maxcor, linesearch=linesearch)
@@ -296,9 +276,8 @@ def pathfinder_approximate(
 ) -> PathfinderState:
     r"""Run Pathfinder and return the highest-ELBO Gaussian approximation.
 
-    Sibling reference: ``blackjax/vi/pathfinder.py:approximate``
-    (line 70). Operates on flat arrays — the caller is responsible
-    for raveling / unraveling pytrees.
+    Operates on flat arrays — the caller is responsible for
+    raveling / unraveling pytrees.
 
     Args:
         rng_key: PRNG key for ELBO-estimation samples.
@@ -385,10 +364,7 @@ def pathfinder_sample(
     state: PathfinderState,
     num_samples: int,
 ) -> tuple[jax.Array, jax.Array]:
-    r"""Draw ``num_samples`` samples from the selected Pathfinder Gaussian.
-
-    Sibling reference: ``blackjax/vi/pathfinder.py:sample`` (line 200).
-    """
+    r"""Draw ``num_samples`` samples from the selected Pathfinder Gaussian."""
     return bfgs_sample(
         rng_key=rng_key,
         num_samples=num_samples,

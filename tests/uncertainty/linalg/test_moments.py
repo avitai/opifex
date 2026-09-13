@@ -1,8 +1,7 @@
 """Tests for higher-moment stochastic trace UQ.
 
-Sibling reference: ``matfree/matfree/stochtrace.py::integrand_wrap_moments``
-wraps any Hutchinson-style integrand to compute multiple raw moments of
-the per-probe quadratic-form distribution.
+``trace_moments`` computes several raw moments of the per-probe
+quadratic-form distribution of the Hutchinson estimator (Hutchinson 1990).
 """
 
 from __future__ import annotations

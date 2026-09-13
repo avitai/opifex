@@ -5,12 +5,6 @@ the uniform Lebesgue measure over a hyperrectangular domain. Both
 expose a ``sample(num_samples, key)`` method so callers can plug them
 into :func:`bayesian_monte_carlo`.
 
-Canonical reference:
-* ``../emukit/emukit/quadrature/measures/gaussian_measure.py``
-  ``GaussianMeasure``.
-* ``../emukit/emukit/quadrature/measures/lebesgue_measure.py``
-  ``LebesgueMeasure``.
-
 References:
 ----------
 * Briol, F.-X. et al. 2019 — *Probabilistic Integration*,

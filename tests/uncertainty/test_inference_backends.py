@@ -1,12 +1,12 @@
 """Inference backend protocol and base result type tests.
 
-Sibling-package reuse:
+Reuse of runtime dependencies:
 
-* Artifex ``SamplingAlgorithm`` (``../artifex/src/artifex/generative_models/
-  core/sampling/base.py``) and ``BlackJAXSamplerState``
-  (``blackjax_samplers.py:64``) are reused directly — the protocol must accept
-  them without modification so concrete BlackJAX backends can implement over
-  them.
+* Artifex ``SamplingAlgorithm`` (``artifex.generative_models.core.sampling.base``)
+  and ``BlackJAXSamplerState``
+  (``artifex.generative_models.core.sampling.blackjax_samplers``) are reused
+  directly — the protocol must accept them without modification so concrete
+  BlackJAX backends can implement over them.
 * CalibraX ``StatisticalResult``/``BenchmarkResult`` are reused for typed
   diagnostics; the backend result container only adds UQ-specific provenance.
 

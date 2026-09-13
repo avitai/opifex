@@ -6,11 +6,8 @@ under independent uniform inputs over the box ``[lower, upper]``.
 
 Reference: Saltelli, A. (2002), "Making best use of model evaluations
 to compute sensitivity indices", Computer Physics Communications
-145, pp. 280–297. The two-matrix design with ``AB_i`` (column ``i``
-of ``A`` replaced by column ``i`` of ``B``) matches the
-``saltelli.sample`` layout used in SALib's reference NumPy
-implementation (not imported here — Task 6.4 forbids it as a
-dependency).
+145, pp. 280–297. The two-matrix design uses ``AB_i`` (column ``i``
+of ``A`` replaced by column ``i`` of ``B``).
 """
 
 from __future__ import annotations

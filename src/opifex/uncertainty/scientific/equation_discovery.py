@@ -3,24 +3,23 @@
 Recovers governing equations from data with calibrated uncertainty: a
 regularized-horseshoe prior over the SINDy candidate-library coefficients
 yields per-term inclusion probabilities and per-coefficient credible
-intervals. The model is a faithful port of pysindy's ``SBR`` optimizer
-(``/mnt/ssd2/Works/pysindy/pysindy/optimizers/sbr.py``) onto a BlackJAX
-NUTS sampler -- opifex's MCMC dependency is ``blackjax`` (numpyro is not a
-dependency), so the numpyro probabilistic model is re-expressed as an
-explicit JAX log-density sampled in unconstrained space.
+intervals. The model is the sparsifying regularized-horseshoe regression of
+Hirsh, Barajas-Solano & Kutz (2021), with the regularized horseshoe of
+Piironen & Vehtari (2017). opifex's MCMC dependency is ``blackjax``, so the
+model is expressed as an explicit JAX log-density sampled in unconstrained
+space with the No-U-Turn Sampler (Hoffman & Gelman, 2014).
 
-Probabilistic model (mirrors ``SBR._numpyro_model`` /
-``_sample_reg_horseshoe`` at ``sbr.py:151`` and ``sbr.py:192``). For library
-matrix ``Theta`` of shape ``(n_samples, n_terms)`` and targets
-``y = x_dot`` of shape ``(n_samples, n_targets)``::
+Probabilistic model. For library matrix ``Theta`` of shape
+``(n_samples, n_terms)`` and targets ``y = x_dot`` of shape
+``(n_samples, n_targets)``::
 
-    tau          ~ HalfCauchy(tau0)                                  # sbr.py:157
-    c_sq         ~ InverseGamma(slab_nu / 2, slab_nu / 2 * slab_s**2)  # sbr.py:158
-    lambda       ~ HalfCauchy(1.0)            shape (n_targets, n_terms)  # sbr.py:206
-    lambda_tilde =  sqrt(c_sq) * lambda / sqrt(c_sq + tau**2 * lambda**2)  # sbr.py:207
-    beta         ~ Normal(0, lambda_tilde * tau)  shape (n_targets, n_terms)  # sbr.py:208
-    sigma        ~ Exponential(noise_lambda)                         # sbr.py:170
-    y            ~ Normal(Theta @ beta.T, sigma)                     # sbr.py:171
+    tau          ~ HalfCauchy(tau0)
+    c_sq         ~ InverseGamma(slab_nu / 2, slab_nu / 2 * slab_s**2)
+    lambda       ~ HalfCauchy(1.0)            shape (n_targets, n_terms)
+    lambda_tilde =  sqrt(c_sq) * lambda / sqrt(c_sq + tau**2 * lambda**2)
+    beta         ~ Normal(0, lambda_tilde * tau)  shape (n_targets, n_terms)
+    sigma        ~ Exponential(noise_lambda)
+    y            ~ Normal(Theta @ beta.T, sigma)
 
 BlackJAX samples the positive parameters (``tau``, ``c_sq``, ``lambda``,
 ``sigma``) in unconstrained space via a log transform (``exp`` to constrain)
@@ -32,9 +31,9 @@ jittable. Warmup uses :func:`blackjax.window_adaptation` (Stan-style dual
 averaging + diagonal mass-matrix estimation); sampling uses a
 ``jax.lax.scan`` over :func:`blackjax.nuts`.
 
-**Honest scope.** Like pysindy's ``SBR`` (``sbr.py:32``), the error model is
-imposed directly on the derivatives ``x_dot`` rather than on the integrated
-states: there is no ODE integration, so ``sigma`` is the noise scale of the
+**Honest scope.** The error model is imposed directly on the derivatives
+``x_dot`` rather than on the integrated states: there is no ODE
+integration, so ``sigma`` is the noise scale of the
 derivatives and should not be interpreted as a state-noise level. The full
 data-generating model of Hirsh et al. (2021) eq. 2.4 -- which integrates the
 discovered equation -- is a known upstream TODO in pysindy
@@ -49,6 +48,10 @@ References:
     Piironen, J., & Vehtari, A. (2017). Sparsity Information and
     Regularization in the Horseshoe and Other Shrinkage Priors. Electronic
     Journal of Statistics, 11, 5018-5051. https://doi.org/10.1214/17-EJS1337SI
+
+    Hoffman, M. D., & Gelman, A. (2014). The No-U-Turn Sampler: Adaptively
+    Setting Path Lengths in Hamiltonian Monte Carlo. Journal of Machine
+    Learning Research, 15(47), 1593-1623.
 """
 
 from __future__ import annotations
@@ -115,10 +118,9 @@ class PosteriorOverTerms:
 class BayesianSINDy:
     """Bayesian SINDy with a regularized-horseshoe posterior over terms.
 
-    Ports pysindy's ``SBR`` regularized-horseshoe model
-    (``/mnt/ssd2/Works/pysindy/pysindy/optimizers/sbr.py``) onto BlackJAX
-    NUTS. After :meth:`fit`, exposes posterior-mean coefficients, per-term
-    inclusion probabilities, and per-coefficient credible intervals.
+    Samples the regularized-horseshoe model of Hirsh et al. (2021) with
+    BlackJAX NUTS. After :meth:`fit`, exposes posterior-mean coefficients,
+    per-term inclusion probabilities, and per-coefficient credible intervals.
 
     Args:
         library: Candidate function library producing the SINDy design
@@ -127,14 +129,12 @@ class BayesianSINDy:
             ``get_feature_names() -> list[str]`` (see
             :class:`opifex.discovery.sindy.library.CandidateLibrary`).
         tau0: Global-scale hyper-prior for ``tau ~ HalfCauchy(tau0)``. Lower
-            values increase sparsity. (``SBR.sparsity_coef_tau0``.)
+            values increase sparsity.
         slab_nu: Degrees of freedom of the Student-t slab,
             ``c_sq ~ InverseGamma(slab_nu / 2, slab_nu / 2 * slab_s**2)``.
-            (``SBR.slab_shape_nu``.)
-        slab_s: Scale of the Student-t slab. (``SBR.slab_shape_s``.)
+        slab_s: Scale of the Student-t slab.
         noise_lambda: Rate of the exponential prior on the derivative-noise
             scale ``sigma ~ Exponential(noise_lambda)``.
-            (``SBR.noise_hyper_lambda``.)
         num_warmup: BlackJAX window-adaptation warmup steps (discarded).
         num_samples: Retained NUTS posterior draws.
 
@@ -228,7 +228,7 @@ class BayesianSINDy:
 
             lp_sigma = _exponential_logpdf(sigma, self.noise_lambda)
 
-            # Likelihood: y ~ Normal(Theta @ beta.T, sigma) (sbr.py:167,171).
+            # Likelihood: y ~ Normal(Theta @ beta.T, sigma).
             mu = theta @ beta.T
             log_likelihood = jnp.sum(_norm.logpdf(x_dot, mu, sigma))
 
@@ -379,9 +379,8 @@ def _nuts_inference_loop(
 ) -> HMCState:
     """Run a single-chain NUTS ``lax.scan`` and return the stacked states.
 
-    Mirrors the canonical BlackJAX inference loop (``blackjax`` quickstart):
-    build the kernel from the window-adaptation-tuned step size / inverse mass
-    matrix and scan it over per-step keys. NUTS shares HMC's ``HMCState``
+    Builds the kernel from the window-adaptation-tuned step size / inverse
+    mass matrix and scans it over per-step keys. NUTS shares HMC's ``HMCState``
     container (``blackjax.nuts(...).init`` returns an ``HMCState``).
     """
     kernel = blackjax.nuts(log_density, **tuned_parameters).step
@@ -414,8 +413,7 @@ def _inverse_gamma_logpdf(x: jax.Array, concentration: float, rate: float) -> ja
     """Log-pdf of ``InverseGamma(concentration, rate)`` (shape-rate form).
 
     ``a log b - lgamma(a) - (a + 1) log x - b / x`` for ``a = concentration``,
-    ``b = rate`` -- matching ``numpyro.distributions.InverseGamma`` used by
-    ``SBR`` (``sbr.py:158``).
+    ``b = rate``.
     """
     return (
         concentration * jnp.log(rate)

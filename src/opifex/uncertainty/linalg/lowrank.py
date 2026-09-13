@@ -11,11 +11,6 @@ such that ``L @ L.T`` approximates a PSD operator ``A``:
   residual diagonal. Provides theoretical guarantees on the spectral and
   trace approximation error in expectation.
 
-Sibling references (line-by-line ports):
-* ``matfree/matfree/low_rank.py`` (greedy variant, matrix-element API).
-* ``eepperly/Randomly-Pivoted-Cholesky/rpcholesky.py::cholesky_helper``
-  with ``alg='rp'``.
-
 References:
 ----------
 * Harbrecht, Peters, Schneider — *On the low-rank approximation by the

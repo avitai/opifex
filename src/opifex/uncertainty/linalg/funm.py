@@ -17,12 +17,11 @@ Algorithms
   contained in ``(-1, 1)``. Cheaper than Lanczos / Arnoldi when ``matfun``
   is analytic on a bounded interval and the spectrum is known a priori.
 
-Sibling reference (line-by-line port): ``matfree/matfree/funm.py``.
-
 References:
 ----------
 * Higham — *Functions of Matrices: Theory and Computation* (2008).
-* Krämer arXiv:2405.17277.
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices*.
 """
 
 from __future__ import annotations
@@ -49,8 +48,6 @@ def dense_funm_sym_eigh(
     Computes ``U @ diag(matfun(eigvals)) @ U.T`` where ``eigvals, U`` are
     the eigenvalues and orthonormal eigenvectors of ``matrix``. ``matfun``
     must be jittable and broadcast over the eigenvalue array.
-
-    Sibling reference: ``matfree/matfree/funm.py:300 dense_funm_sym_eigh``.
     """
     eigvals, eigvecs = jnp.linalg.eigh(matrix)
     transformed = matfun(eigvals)
@@ -77,8 +74,6 @@ def funm_lanczos_sym(
 
     Returns:
         The approximation of ``matfun(A) @ init_vec`` as a ``(dim,)`` array.
-
-    Sibling reference: ``matfree/matfree/funm.py:116 funm_lanczos_sym``.
     """
     length = jnp.linalg.norm(init_vec)
     basis, diag, off_diag = lanczos_tridiag(
@@ -103,8 +98,6 @@ def funm_arnoldi(
     eigendecomposition → lift. Eigenvalues of ``H`` may be complex; the
     dense ``f`` is taken via ``jnp.linalg.eig`` and reconstruction uses
     the right-eigenvector matrix.
-
-    Sibling reference: ``matfree/matfree/funm.py:147 funm_arnoldi``.
     """
     length = jnp.linalg.norm(init_vec)
     basis, hessenberg = arnoldi_hessenberg(
@@ -129,9 +122,6 @@ def funm_chebyshev(
     Assumes the spectrum of ``A`` is contained in ``(-1, 1)`` and
     ``matfun`` is analytic on that interval. Faster than Lanczos / Arnoldi
     when both conditions hold because no Krylov basis is built.
-
-    Sibling reference (port of the Clenshaw-style recurrence):
-    ``matfree/matfree/funm.py:44 funm_chebyshev``.
 
     Args:
         matvec: callable mapping ``(dim,)`` to ``(dim,)``.

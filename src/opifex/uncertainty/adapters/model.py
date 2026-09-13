@@ -29,8 +29,8 @@ epistemic term is parameterised:
   last-layer predictive.
 * :class:`VBLLAdapter` carries the lower-triangular Cholesky factor
   ``L`` of ``Sigma = L L^T`` and computes the per-sample epistemic
-  scalar as ``sum((phi @ L)**2)`` — the numerically stabler L-form used
-  by the JAX reference's ``DenseNormal.covariance_weighted_inner_prod``.
+  scalar as ``sum((phi @ L)**2)`` — the numerically stabler L-form of the
+  quadratic ``phi Sigma phi^T``.
 
 References for the Bayesian-last-layer predictive:
 
@@ -40,23 +40,22 @@ References for the Bayesian-last-layer predictive:
   Neural Networks*, ICML 2015.
 * Daxberger, E. et al. 2021 — *Laplace Redux — Effortless Bayesian Deep
   Learning* (last-layer Laplace), arXiv:2106.14806.
-* GLM / linearised pushforward output covariance ``J Sigma J^T``:
-  ``../laplax/laplax/eval/pushforward.py``.
+* Immer, A., Korzepa, M. & Bauer, M. 2021 — *Improving predictions of
+  Bayesian neural nets via local linearization* (GLM predictive covariance
+  ``J Sigma J^T``), AISTATS 2021, arXiv:2008.08400.
 
 References for the VBLL predictive:
 
 * Harrison, J., Willes, J. & Snoek, J. 2024 — *Variational Bayesian Last
   Layers*, arXiv:2404.11599.
-* JAX reference (regression only): ``../vbll/vbll/jax/layers/regression.py``
-  and ``../vbll/vbll/jax/utils/distributions.py`` (``DenseNormal``).
 
 The :class:`DUEAdapter` wraps an ALREADY-FITTED deep-kernel feature
 extractor + inducing-point sparse variational GP (SVGP). DUE (van Amersfoort
 et al. 2021) feeds a spectral-normalized / bi-Lipschitz feature map ``f(x)``
 into an SVGP and reads off the GP predictive mean + variance in a single
 forward pass. This adapter REUSES opifex's
-:func:`opifex.uncertainty.gp.predict_svgp` (the Titsias-collapsed SVGP
-predictive, grounded in GPJax's ``VariationalGaussian.predict``) over the
+:func:`opifex.uncertainty.gp.predict_svgp` (the collapsed SVGP
+predictive of Titsias 2009) over the
 features — it does NOT reimplement GP math. The adapter does NOT train the
 feature extractor either: the spectral-normalization / bi-Lipschitz feature
 training is upstream
@@ -72,7 +71,7 @@ References for the DUE predictive:
   *On Feature Collapse and Deep Kernel Learning for Single Forward Pass
   Uncertainty* (DUE), arXiv:2102.11409.
 * SVGP predictive reused as-is: :func:`opifex.uncertainty.gp.predict_svgp`
-  (Titsias 2009 collapsed SVGP, GPJax-grounded).
+  (Titsias 2009 collapsed SVGP).
 * Spectral-normalization / bi-Lipschitz feature primitives (upstream, used
   at TRAIN time):
   :mod:`opifex.neural.operators.specialized.spectral_normalization`.
@@ -85,15 +84,15 @@ uncertainty signal. The wrapped state carries the frozen ``feature_fn``,
 the last-layer weights ``beta`` (``output_weights``), and the Laplace
 precision matrix ``Sigma^{-1}`` (``precision_matrix``). The predictive mean
 is ``phi @ beta`` and the per-sample epistemic variance is computed by the
-edward2 Cholesky-solve formula ``ridge * sum((L^{-1} phi^T)**2)`` for
+Cholesky-solve formula ``ridge * sum((L^{-1} phi^T)**2)`` for
 ``L = cholesky(Sigma^{-1})`` — then delegated to the SHARED
 :func:`_gaussian_linear_head_predictive` assembly (Rule 1: DRY), exactly as
 the Bayesian-last-layer and VBLL adapters do. The Laplace precision is built
-faithfully by :func:`fit_sngp_precision` (a direct port of edward2's
-``LaplaceRandomFeatureCovariance`` initial + exact-update logic), NOT from
-scratch. SNGP emits a regression mean + variance predictive (consistent with
+by :func:`fit_sngp_precision` (a ridge prior plus an exact Laplace update over
+the training features, following Liu et al. 2020). SNGP emits a regression
+mean + variance predictive (consistent with
 the other model adapters); the classification mean-field-logit adjustment is
-exposed honestly as :func:`sngp_mean_field_logits` (an edward2 port) but is
+exposed honestly as :func:`sngp_mean_field_logits` but is
 NOT fabricated into the regression predict path.
 
 References for the SNGP predictive:
@@ -101,11 +100,6 @@ References for the SNGP predictive:
 * Liu, J., Lin, Z., Padhy, S., Tran, D., Bedrax-Weiss, T. & Lakshminarayanan,
   B. 2020 — *Simple and Principled Uncertainty Estimation with Deterministic
   Deep Learning via Distance Awareness* (SNGP), arXiv:2006.10108.
-* JAX reference (ported, not invented): ``LaplaceRandomFeatureCovariance``
-  (``../edward2/edward2/jax/nn/random_feature.py``:217-405 —
-  ``update_precision_matrix``:311-362 and
-  ``compute_predictive_covariance``:364-405) and ``mean_field_logits``
-  (``../edward2/edward2/jax/nn/utils.py``:54-101).
 """
 
 from __future__ import annotations
@@ -288,14 +282,10 @@ def fit_sngp_precision(
 ) -> jax.Array:
     """Build the SNGP Laplace precision matrix from training random features.
 
-    Faithful port of edward2's ``LaplaceRandomFeatureCovariance`` initial +
-    exact (momentum-free) update path
-    (``../edward2/edward2/jax/nn/random_feature.py``:
-    ``initial_precision_matrix``:307-309 and
-    ``update_precision_matrix``:311-362). With training random features
-    ``phi_tr`` of shape ``(n, D)`` the precision is built as a single
-    exact pass over the data (the edward2 ``momentum is None`` branch,
-    :354-356)::
+    Builds the Laplace posterior precision of the SNGP random-feature GP
+    head (Liu et al. 2020): a ridge prior plus an exact (momentum-free)
+    update. With training random features ``phi_tr`` of shape ``(n, D)``
+    the precision is built as a single exact pass over the data::
 
         initial    = ridge_penalty * I_D
         phi_adj    = sqrt(prob_multiplier) * phi_tr
@@ -303,7 +293,7 @@ def fit_sngp_precision(
         precision  = initial + batch_prec
 
     where ``prob_multiplier`` is the Laplace-approximation weight per the
-    likelihood (edward2 :342-348):
+    likelihood:
 
     * ``gaussian`` -> ``1``;
     * ``binary_logistic`` -> ``p * (1 - p)`` with ``p = sigmoid(logits)``;
@@ -331,7 +321,7 @@ def fit_sngp_precision(
         )
     hidden_features = features.shape[-1]
     initial = ridge_penalty * jnp.eye(hidden_features, dtype=features.dtype)
-    # prob_multiplier — the Laplace-approximation weight (edward2 :342-348).
+    # prob_multiplier — the Laplace-approximation weight for the likelihood.
     if likelihood == "gaussian":
         prob_multiplier: jax.Array | float = 1.0
     else:
@@ -357,17 +347,15 @@ def sngp_mean_field_logits(
 ) -> jax.Array:
     """Adjust classification logits by the SNGP mean-field approximation.
 
-    Faithful port of edward2's ``mean_field_logits``
-    (``../edward2/edward2/jax/nn/utils.py``:54-101). Scales the logits down
-    by a per-sample factor so the softmax approximates the posterior mean of
-    the Gaussian-approximated latent posterior (Liu et al. 2020). For a
-    negative ``mean_field_factor`` the logits are returned unchanged (edward2
-    :85-86). The scaling coefficient is (edward2 :92-95)::
+    Scales the logits down by a per-sample factor so the softmax
+    approximates the posterior mean of the Gaussian-approximated latent
+    posterior (Liu et al. 2020). For a negative ``mean_field_factor`` the
+    logits are returned unchanged. The scaling coefficient is::
 
         logistic / binary_logistic -> sqrt(1 + variances * mean_field_factor)
         poisson                    -> exp(-variances * mean_field_factor / 2)
 
-    and is broadcast over the trailing logit-class axis (edward2 :97-99).
+    and is broadcast over the trailing logit-class axis.
 
     This helper is the honest classification counterpart to the SNGP
     regression predictive; the regression predict path
@@ -507,10 +495,8 @@ class VBLLState:
     posterior ``q(W) = N(weight_mean, Sigma_W)`` over the final linear
     layer's input weights, where ``Sigma_W = L L^T`` and ``L`` is the
     lower-triangular Cholesky factor ``weight_covariance_cholesky``.
-    Carrying ``L`` (rather than the dense ``Sigma``) matches the JAX
-    reference's ``DenseNormal`` parameterisation
-    (``../vbll/vbll/jax/utils/distributions.py:128-130``) and keeps the
-    epistemic computation numerically stable.
+    Carrying ``L`` (rather than the dense ``Sigma``) keeps the epistemic
+    computation numerically stable.
 
     Attributes:
         feature_fn: Frozen deterministic backbone ``x -> phi(x)`` with
@@ -566,9 +552,9 @@ class _WrappedVBLLModel:
     """Bookkeeping wrapper around a fitted VBLL variational posterior.
 
     Evaluates the CLOSED-FORM (analytic) regression predictive of the
-    Variational Bayesian Last Layer over frozen backbone features. This
-    matches the JAX reference's regression predictive; classification
-    (MC-softmax marginalization) is out of scope — see :class:`VBLLAdapter`.
+    Variational Bayesian Last Layer (Harrison, Willes & Snoek 2024) over
+    frozen backbone features. Classification (MC-softmax marginalization) is
+    out of scope — see :class:`VBLLAdapter`.
     """
 
     def __init__(self, state: VBLLState, capability: UQCapability) -> None:
@@ -586,15 +572,12 @@ class _WrappedVBLLModel:
         * ``mean = phi @ weight_mean`` — shape ``(batch, n_outputs)``.
         * epistemic: per-sample scalar ``q[b] = sum_k ((L^T phi[b])_k)**2``
           computed as ``Lt_phi = phi @ L``;
-          ``epistemic_scalar = sum(Lt_phi**2, axis=-1)`` — the
-          ``DenseNormal.covariance_weighted_inner_prod`` form
-          (``../vbll/vbll/jax/utils/distributions.py:157-160``), equal to
+          ``epistemic_scalar = sum(Lt_phi**2, axis=-1)``, equal to
           ``phi Sigma_W phi^T`` but numerically stabler. Broadcast over
           outputs.
         * aleatoric: ``observation_noise_variance`` broadcast to
-          ``(batch, n_outputs)`` — the additive Gaussian ``noise()`` term
-          of the reference predictive
-          (``../vbll/vbll/jax/layers/regression.py:61-62``).
+          ``(batch, n_outputs)`` — the additive Gaussian observation-noise
+          term of the regression predictive.
         * ``total_uncertainty = epistemic + aleatoric`` (also ``variance``).
         * ``samples = mean[None, ...]`` — one representative draw.
 
@@ -603,7 +586,7 @@ class _WrappedVBLLModel:
         """
         phi = self._state.feature_fn(x)
         mean = phi @ self._state.weight_mean
-        # L-form epistemic: covariance_weighted_inner_prod via L^T phi.
+        # L-form epistemic: phi Sigma_W phi^T via L^T phi.
         lt_phi = phi @ self._state.weight_covariance_cholesky
         epistemic_scalar = jnp.sum(lt_phi**2, axis=-1)
         return _gaussian_linear_head_predictive(
@@ -701,10 +684,9 @@ class SNGPState:
     signal.
 
     The RFF map is FIXED (not trained at predict time); the precision matrix is
-    built once over the training features via :func:`fit_sngp_precision` (a
-    faithful port of edward2's ``LaplaceRandomFeatureCovariance``). At predict
-    time the mean is ``phi @ output_weights`` and the per-sample epistemic
-    variance is the edward2 Cholesky-solve diagonal ``ridge * sum((L^{-1}
+    built once over the training features via :func:`fit_sngp_precision`. At
+    predict time the mean is ``phi @ output_weights`` and the per-sample
+    epistemic variance is the Cholesky-solve diagonal ``ridge * sum((L^{-1}
     phi^T)**2)`` for ``L = cholesky(precision_matrix, lower=True)``.
 
     Attributes:
@@ -758,9 +740,8 @@ class _WrappedSNGPModel:
     """Bookkeeping wrapper around a fitted SNGP RFF + Laplace-GP head.
 
     Evaluates the CLOSED-FORM SNGP regression predictive over the frozen RFF
-    features. The per-sample epistemic variance is the edward2
-    ``compute_predictive_covariance`` Cholesky-solve diagonal
-    (``../edward2/edward2/jax/nn/random_feature.py``:393-404); the
+    features. The per-sample epistemic variance is the Cholesky-solve
+    diagonal of the SNGP Laplace predictive covariance (Liu et al. 2020); the
     mean/epistemic/aleatoric/total assembly is delegated to the shared
     :func:`_gaussian_linear_head_predictive` helper (Rule 1: DRY).
     """
@@ -777,8 +758,7 @@ class _WrappedSNGPModel:
         For ``phi = feature_fn(x)`` (shape ``(batch, D)``):
 
         * ``mean = phi @ output_weights`` — shape ``(batch, n_outputs)``.
-        * epistemic: per-sample scalar from the edward2 chol-solve formula
-          (``compute_predictive_covariance``:393-404)::
+        * epistemic: per-sample scalar from the Cholesky-solve formula::
 
               chol = cholesky(precision_matrix, lower=True)
               y    = solve_triangular(chol, phi.T, lower=True)
@@ -799,7 +779,7 @@ class _WrappedSNGPModel:
         """
         phi = self._state.feature_fn(x)
         mean = phi @ self._state.output_weights
-        # edward2 compute_predictive_covariance: chol-solve diagonal.
+        # Laplace predictive covariance: Cholesky-solve diagonal.
         chol = jax.scipy.linalg.cholesky(self._state.precision_matrix, lower=True)
         y = jax.scipy.linalg.solve_triangular(chol, phi.T, lower=True)
         epistemic_scalar = self._state.ridge_penalty * jnp.sum(y**2, axis=0)
@@ -930,23 +910,16 @@ class VBLLAdapter:
     variational posterior ``q(W) = N(weight_mean, L L^T)`` over the
     last-layer weights yields a CLOSED-FORM (analytic) regression
     predictive — no Monte-Carlo sampling. The epistemic term uses the
-    Cholesky L-form ``sum((phi @ L)**2)`` of
-    ``DenseNormal.covariance_weighted_inner_prod``.
+    Cholesky L-form ``sum((phi @ L)**2)`` of ``phi L L^T phi^T``.
 
     **Scope (bounded honestly).** This is the regression closed-form
-    predictive matching the JAX reference. Classification (MC-softmax
-    marginalization) is OUT OF SCOPE for this adapter — the JAX reference
-    (``../vbll/vbll/jax/layers/regression.py``) implements regression
-    only. There is intentionally no classification path here.
+    predictive. Classification (MC-softmax marginalization) is OUT OF SCOPE
+    for this adapter. There is intentionally no classification path here.
 
     References:
     ----------
     * Harrison, J., Willes, J. & Snoek, J. 2024 — *Variational Bayesian
       Last Layers*, arXiv:2404.11599.
-    * ``DenseNormal.covariance_weighted_inner_prod``:
-      ``../vbll/vbll/jax/utils/distributions.py:157-160``.
-    * Closed-form predictive ``(W() @ x).squeeze + noise()``:
-      ``../vbll/vbll/jax/layers/regression.py:61-62``.
     """
 
     def wrap(self, model: VBLLState, capability: UQCapability) -> _WrappedVBLLModel:
@@ -968,8 +941,8 @@ class DUEAdapter:
     inducing-point sparse variational GP posterior over the features. A single
     forward pass yields the GP predictive mean + variance (van Amersfoort et
     al. 2021). The GP predictive is REUSED from
-    :func:`opifex.uncertainty.gp.predict_svgp` (Titsias-collapsed SVGP,
-    GPJax-grounded) — no GP math is reimplemented.
+    :func:`opifex.uncertainty.gp.predict_svgp` (Titsias-collapsed SVGP) — no
+    GP math is reimplemented.
 
     **Scope (bounded honestly).** This adapter does NOT train the feature
     extractor. The spectral-normalization / bi-Lipschitz feature training that
@@ -1006,14 +979,14 @@ class SNGPAdapter:
     feeds a Laplace-approximated GP head whose predictive variance is a
     distance-aware uncertainty signal. A single forward pass yields the
     predictive mean ``phi @ output_weights`` and the per-sample epistemic
-    variance via the edward2 Cholesky-solve diagonal; the
+    variance via the Cholesky-solve diagonal; the
     mean/epistemic/aleatoric/total assembly is delegated to the SHARED
     :func:`_gaussian_linear_head_predictive` helper (Rule 1: DRY), exactly as
     :class:`BayesianLastLayerAdapter` and :class:`VBLLAdapter` do.
 
     **Scope (bounded honestly).** This adapter does NOT train the feature map
     or fit the precision matrix. The RFF map is fixed; the Laplace precision is
-    built once via :func:`fit_sngp_precision` (a faithful edward2 port) and
+    built once via :func:`fit_sngp_precision` and
     passed through :class:`SNGPState`. The adapter emits a regression mean +
     variance predictive (consistent with the other model adapters); the
     classification mean-field-logit adjustment is exposed honestly as
@@ -1024,9 +997,6 @@ class SNGPAdapter:
     * Liu, J. et al. 2020 — *Simple and Principled Uncertainty Estimation with
       Deterministic Deep Learning via Distance Awareness* (SNGP),
       arXiv:2006.10108.
-    * JAX reference (ported, not invented): ``LaplaceRandomFeatureCovariance``
-      (``../edward2/edward2/jax/nn/random_feature.py``:217-405) and
-      ``mean_field_logits`` (``../edward2/edward2/jax/nn/utils.py``:54-101).
     """
 
     def wrap(self, model: SNGPState, capability: UQCapability) -> _WrappedSNGPModel:

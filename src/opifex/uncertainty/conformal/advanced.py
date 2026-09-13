@@ -8,9 +8,8 @@ References (canonical):
   Under Covariate Shift" (arXiv:1904.06019). Weighted quantile of
   calibration scores against likelihood-ratio weights.
 
-Numerical core mirrors ``fortuna.conformal.regression.jackknifeplus`` and
-``fortuna.conformal.regression.cvplus`` (Apache-2.0). Returned intervals
-are :class:`opifex.uncertainty.types.PredictionInterval` value objects.
+Returned intervals are :class:`opifex.uncertainty.types.PredictionInterval`
+value objects.
 """
 
 from __future__ import annotations

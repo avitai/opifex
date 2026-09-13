@@ -18,9 +18,8 @@ Algorithm
 7. Lift left singular vectors: ``U = Q @ U_b``.
 8. Truncate to top ``rank`` triplets.
 
-cola's ``cola/linalg/tbd/randomized_svd.py`` lacks the subspace iteration
-and does not call ``qr`` on the sketch image; this implementation follows
-the canonical HMT recipe directly from the paper.
+This implementation follows the canonical HMT recipe directly from the
+paper, including the subspace iteration and the ``qr`` of the sketch image.
 
 References:
 ----------

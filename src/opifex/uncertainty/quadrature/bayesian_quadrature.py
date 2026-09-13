@@ -10,23 +10,14 @@ notes' fix #189 (Vanilla BQ ↔ WSABI-L coexistence):
   Integration*, Statistical Science 34(1), 2019, §2.4). The posterior
   integral mean and variance follow from the standard BQ identities.
 
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``emukit/quadrature/methods/vanilla_bq.py`` (``integrate``) and
-  ``emukit/quadrature/kernels/quadrature_rbf.py`` (``qK`` / ``qKq``
-  in :class:`QuadratureRBFGaussianMeasure`).
-
 * :func:`wsabi_l_bayesian_quadrature` — Warped Sequential Active
   Bayesian Integration with linear approximation (Gunter et al.,
   NeurIPS 2014). Models a non-negative integrand ``f(x) = α + 0.5
   g(x)²`` where ``g`` is a GP, and computes the closed-form integral
   via the pairwise double-kernel integral. The variance term is
   intentionally not returned — WSABI-L is paired with uncertainty
-  sampling in the canonical loop and does not require integral
-  variance for acquisition.
-
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``emukit/quadrature/methods/bounded_bq_model.py`` (``integrate``),
-  ``emukit/quadrature/methods/wsabi.py`` (warping + ``alpha`` offset).
+  sampling in the active-sampling loop of Gunter et al. 2014 and does
+  not require integral variance for acquisition.
 
 Both routines take diagonal-Gaussian measure parameters as direct
 arrays (rather than a measure object) so they compose cleanly with
@@ -78,9 +69,6 @@ def _rbf_gaussian_measure_kernel_mean(
 
     ``qK(x') = amplitude · ∏_i sqrt(ℓ_i² / (ℓ_i² + s²_i)) ·
               exp(-Σ_i (x'_i - b_i)² / (2(ℓ_i² + s²_i)))``.
-
-    Sibling reference: ``emukit/quadrature/kernels/quadrature_rbf.py``
-    ``QuadratureRBFGaussianMeasure.qK`` (line 150).
     """
     combined_variance = lengthscales**2 + measure_variance
     determinant_factor = jnp.prod(jnp.sqrt(lengthscales**2 / combined_variance))
@@ -96,9 +84,6 @@ def _rbf_gaussian_measure_kernel_double_mean(
     r"""Closed-form ``∫∫ k(x, x') p(x) p(x') dx dx'`` for RBF + diagonal Gaussian.
 
     ``qKq = amplitude · ∏_i sqrt(ℓ_i² / (ℓ_i² + 2 s²_i))``.
-
-    Sibling reference: ``emukit/quadrature/kernels/quadrature_rbf.py``
-    ``QuadratureRBFGaussianMeasure.qKq`` (line 158).
     """
     return amplitude * jnp.prod(
         jnp.sqrt(lengthscales**2 / (lengthscales**2 + 2.0 * measure_variance))
@@ -126,9 +111,6 @@ def vanilla_bayesian_quadrature(
 
         \mathrm{mean} &= q_K^T (K_{XX} + \sigma_n^2 I)^{-1} y \\
         \mathrm{var}  &= q_{Kq} - q_K^T (K_{XX} + \sigma_n^2 I)^{-1} q_K
-
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``emukit/quadrature/methods/vanilla_bq.py:integrate``.
 
     Args:
         points: Integrand evaluation locations, shape ``(n, d)``.
@@ -189,9 +171,6 @@ def wsabi_l_bayesian_quadrature(
         \cdot q_K\bigl(\tfrac{x_i + x_j}{2};\, \ell/\sqrt{2}\bigr).
 
     The final mean is ``α + 0.5 Σ_{ij} w_i w_j (qK_ij)``.
-
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``emukit/quadrature/methods/bounded_bq_model.py:integrate``.
 
     Args:
         points: Integrand evaluation locations, shape ``(n, d)``.

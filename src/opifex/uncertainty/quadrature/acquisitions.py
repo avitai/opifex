@@ -1,25 +1,20 @@
 r"""Bayesian-quadrature acquisitions + experimental-design loop driver.
 
-Five acquisition functions and a greedy loop driver — JAX-native ports
-of the emukit reference implementations. The acquisitions are pure
-functions that score candidate points; the loop iteratively appends
-the arg-max candidate to the training set and evaluates the target
-function.
+Five acquisition functions and a greedy loop driver in JAX. The
+acquisitions are pure functions that score candidate points; the loop
+iteratively appends the arg-max candidate to the training set and
+evaluates the target function.
 
-Sibling references (READ-ONLY ports — never imported at runtime):
+* :func:`uncertainty_sampling` — WSABI-L-style uncertainty sampling
+  (Gunter et al. 2014). Posterior variance weighted by the measure
+  density: ``a(x) = var(f(x)) · p(x)^q``.
 
-* :func:`uncertainty_sampling` — ``emukit/quadrature/acquisitions/
-  uncertainty_sampling.py:UncertaintySampling``. Posterior variance
-  weighted by the measure density: ``a(x) = var(f(x)) · p(x)^q``.
+* :func:`model_variance` — pure posterior variance with no measure
+  weighting.
 
-* :func:`model_variance` — ``emukit/experimental_design/acquisitions/
-  model_variance.py:ModelVariance``. Pure posterior variance with no
-  measure weighting.
-
-* :func:`integral_variance_reduction` —
-  ``emukit/quadrature/acquisitions/squared_correlation.py:
-  SquaredCorrelation``. Squared correlation between the integral
-  value and the integrand evaluation:
+* :func:`integral_variance_reduction` — squared correlation between
+  the integral value and the integrand evaluation (Gessner et al.,
+  Eq. 8):
   ``a(x) = (qKx - qKX · K_XX⁻¹ · K_Xx)² / (integral_var · y_var)``
   where ``integral_var`` is the current posterior integral variance
   ``qKq - qKX · K_XX⁻¹ · qKX`` and ``y_var`` is the GP predictive
@@ -27,20 +22,16 @@ Sibling references (READ-ONLY ports — never imported at runtime):
   global normalising constant) to the integral-variance-reduction
   acquisition under a Gaussian-process model.
 
-* :func:`mutual_information` — ``emukit/quadrature/acquisitions/
-  mutual_information.py:MutualInformation``. Monotonic transform of
-  the squared correlation: ``a(x) = -½ log(1 - ρ²(x))``.
+* :func:`mutual_information` — monotonic transform of the squared
+  correlation: ``a(x) = -½ log(1 - ρ²(x))`` (Gessner et al., Eq. 5).
 
-* :func:`integrated_variance_reduction` — ``emukit/
-  experimental_design/acquisitions/integrated_variance.py:
-  IntegratedVarianceReduction``. Monte-Carlo estimator of the
+* :func:`integrated_variance_reduction` — Monte-Carlo estimator of the
   expected variance reduction at a held-out reference set if the
   candidate point were added to the training set.
 
-* :func:`experimental_design_loop` — ``emukit/experimental_design/
-  experimental_design_loop.py:ExperimentalDesignLoop``. Greedy
-  loop that adds the acquisition-maximising candidate at each
-  iteration and evaluates the target function there.
+* :func:`experimental_design_loop` — greedy loop that adds the
+  acquisition-maximising candidate at each iteration and evaluates
+  the target function there.
 
 This module is the Phase 8.3 active-learning prerequisite per the
 design notes.
@@ -51,6 +42,10 @@ References:
   Using Bayesian Quadrature*, NeurIPS 25.
 * Briol, F.-X. et al. 2019 — *Probabilistic Integration*, Statistical
   Science 34(1).
+* Gunter, T. et al. 2014 — *Sampling for Inference in Probabilistic
+  Models with Fast Bayesian Quadrature*, NeurIPS. arXiv:1411.0439.
+* Gessner, Gonzalez & Mahsereci 2020 — *Active Multi-Information Source Bayesian
+  Quadrature*, UAI 2019, PMLR 115. arXiv:1903.11331.
 """
 
 from __future__ import annotations
@@ -89,9 +84,6 @@ def uncertainty_sampling(
 ) -> jax.Array:
     r"""WSABI-L-style uncertainty sampling: ``a(x) = var(f(x)) · p(x)^q``.
 
-    Sibling reference: ``emukit/quadrature/acquisitions/
-    uncertainty_sampling.py:UncertaintySampling``.
-
     Args:
         points: Candidate points ``(n, d)``.
         train_points: Current observation inputs ``(N, d)``.
@@ -118,9 +110,6 @@ def model_variance(
     noise_variance: jax.Array,
 ) -> jax.Array:
     r"""Raw GP posterior variance at each candidate point.
-
-    Sibling reference: ``emukit/experimental_design/acquisitions/
-    model_variance.py:ModelVariance``.
 
     Args:
         points: Candidate points ``(n, d)``.
@@ -176,8 +165,7 @@ def integral_variance_reduction(
 
     ``a(x) = (qKx - qKX · K_XX⁻¹ · K_Xx)² / (integral_var · y_var)``.
 
-    Sibling reference: ``emukit/quadrature/acquisitions/
-    squared_correlation.py:SquaredCorrelation``.
+    Reference: Gessner, Gonzalez & Mahsereci 2020, Eq. 8.
 
     Args:
         points: Candidate points ``(n, d)``.
@@ -220,8 +208,7 @@ def mutual_information(
     :func:`integral_variance_reduction` so it yields the same
     acquisition argmax.
 
-    Sibling reference: ``emukit/quadrature/acquisitions/
-    mutual_information.py:MutualInformation``.
+    Reference: Gessner, Gonzalez & Mahsereci 2020, Eq. 5.
     """
     squared_correlation = integral_variance_reduction(
         points=points,
@@ -253,9 +240,6 @@ def integrated_variance_reduction(
 
     where ``k_N`` is the posterior kernel given the current training
     set. This avoids re-solving the gram matrix for each candidate.
-
-    Sibling reference: ``emukit/experimental_design/acquisitions/
-    integrated_variance.py:IntegratedVarianceReduction``.
     """
     num_train = train_points.shape[0]
     gram_matrix = kernel_fn(train_points, train_points)
@@ -287,9 +271,6 @@ def experimental_design_loop(
     num_iterations: int,
 ) -> tuple[jax.Array, jax.Array]:
     r"""Greedy experimental design — append acquisition-max candidate each step.
-
-    Sibling reference: ``emukit/experimental_design/
-    experimental_design_loop.py:ExperimentalDesignLoop``.
 
     Args:
         initial_points: Starting training inputs ``(N0, d)``.

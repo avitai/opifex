@@ -1,6 +1,7 @@
 """PINN-residual acquisition tests for Task 8.3.
 
-Reference: ``../al4pde`` residual-based pool selection. We require:
+Reference: residual-based adaptive refinement (Lu et al., arXiv:1907.04502).
+We require:
 
 * High-residual candidates outrank low-residual candidates.
 * The returned :class:`AcquiredBatch` exposes residual + uncertainty

@@ -6,11 +6,8 @@ where ``observation_precision`` is the empirical Fisher diagonal at
 ``θ*``. This is the canonical post-hoc UQ wrapper for a deterministic
 model (Daxberger 2021).
 
-Canonical reference:
-* ``../bayesian-torch`` and Daxberger's Laplace package use the same
-  diagonal-precision formula; opifex computes
-  ``observation_precision`` via :func:`empirical_fisher_diagonal` and
-  adds a scalar prior precision.
+opifex computes ``observation_precision`` via
+:func:`empirical_fisher_diagonal` and adds a scalar prior precision.
 
 References
 ----------

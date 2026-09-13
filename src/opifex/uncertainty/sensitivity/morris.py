@@ -13,9 +13,6 @@ preliminary computational experiments", Technometrics 33(2), pp.
 161–174; Campolongo, F., Cariboni, J., Saltelli, A. (2007),
 "An effective screening design for sensitivity analysis of large
 models", Environmental Modelling & Software 22, pp. 1509–1518.
-
-We port the trajectory-builder layout used by SALib's reference NumPy
-implementation (not imported — Task 6.4 forbids it as a dependency).
 """
 
 from __future__ import annotations

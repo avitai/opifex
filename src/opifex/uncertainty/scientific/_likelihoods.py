@@ -13,21 +13,13 @@ adapter catalogue:
   equals the data marginal log-likelihood under the smoothed
   state-space model.
 
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``ProbNumDiffEq.jl/src/data_likelihoods/fenrir.jl:30-128`` —
-  specifically ``fenrir_data_loglik`` (lines 30-64) and the
-  ``fit_pnsolution_to_data!`` helper (lines 67-128).
-
 * :func:`dalton_data_loglik` — DALTON three-term combinator
-  ``data_ll + with_pn_ll - without_pn_ll`` (Wu et al, "Data-Adaptive
+  ``data_ll + with_pn_ll - without_pn_ll`` (Wu & Lysy, "Data-Adaptive
   Probabilistic Likelihood Approximation for Ordinary Differential
-  Equations", arXiv 2306.05566). The data log-likelihood from a
-  data-conditioned solver pass is combined with the differential in
-  the solver's probabilistic-numerics likelihood between the
+  Equations", AISTATS 2024, arXiv:2306.05566). The data log-likelihood
+  from a data-conditioned solver pass is combined with the differential
+  in the solver's probabilistic-numerics likelihood between the
   data-conditioned and unconditioned passes.
-
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``ProbNumDiffEq.jl/src/data_likelihoods/dalton.jl:69-75``.
 """
 
 from __future__ import annotations
@@ -46,10 +38,9 @@ def _measure_and_update_with_loglik(
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Single Kalman measurement update returning the innovation log-density.
 
-    Mirrors ``measure_and_update!`` from the Julia reference (line 130 of
-    ``fenrir.jl``): the innovation Gaussian
-    ``N(0, H P H^T + R)`` evaluated at ``observation - H mean`` is the
-    Fenrir per-step likelihood contribution.
+    The innovation Gaussian ``N(0, H P H^T + R)`` evaluated at
+    ``observation - H mean`` is the Fenrir per-step likelihood
+    contribution (Tronarp et al, 2022).
     """
     innovation = observation - observation_matrix @ mean
     cov_obs = observation_matrix @ cov
@@ -114,9 +105,6 @@ def fenrir_data_loglik(
     posterior. For a pure linear-Gaussian model with data at every
     step, the result equals the standard forward Kalman marginal
     log-likelihood (Bayes' chain rule applied in reverse).
-
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``ProbNumDiffEq.jl/src/data_likelihoods/fenrir.jl:30-128``.
 
     Args:
         filter_means: Forward-pass filter means, shape
@@ -196,7 +184,7 @@ def dalton_data_loglik(
     with_pn_ll: jax.Array,
     without_pn_ll: jax.Array,
 ) -> jax.Array:
-    r"""DALTON two-solve data log-likelihood combinator (Wu et al, 2023).
+    r"""DALTON two-solve data log-likelihood combinator (Wu & Lysy, 2024).
 
     The DALTON likelihood is the sum of (i) the per-observation
     log-likelihood accumulated by a data-conditioned solver pass and
@@ -209,9 +197,6 @@ def dalton_data_loglik(
         \ell_{\mathrm{DALTON}} = \ell_{\mathrm{data}}
             + \ell_{\mathrm{PN, with\ data}}
             - \ell_{\mathrm{PN, without\ data}}.
-
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``ProbNumDiffEq.jl/src/data_likelihoods/dalton.jl:69-75``.
 
     Args:
         data_ll: Log-likelihood of observations under the

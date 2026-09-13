@@ -3,10 +3,9 @@ r"""Deep-model backends for active learning — Slice 23 (audit finding #4b).
 Phase 8 Task 8.3 (``08-...:586-601``) requires
 ``active/deep_model_backends.py`` wiring deep-GP / deep-ensemble
 model surfaces from :mod:`opifex.neural.bayesian` into the active-
-learning acquisition loop. Reference: ``../trieste/models/gpflow``,
-``../trieste/models/gpflux``, ``../trieste/models/keras``.
+learning acquisition loop.
 
-The opifex port is intentionally lightweight: the AL loop only needs
+The implementation is intentionally lightweight: the AL loop only needs
 a ``predict(x) -> PredictiveDistribution`` callable. The two backend
 classes here adapt user-supplied prediction functions (one per
 ensemble member, or one for the whole deep model) into that shape.

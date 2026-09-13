@@ -6,10 +6,8 @@ the directional derivative of ``grad f`` along ``v``:
 ``jax.jvp(jax.grad(f), (x,), (v,))[1]`` — a single-pass forward-over-
 reverse mode pipeline that avoids materialising the dense Hessian.
 
-Canonical reference (line-by-line port):
-* ``../jax/jax/_src/api.py`` — ``jax.jvp`` / ``jax.grad`` building
-  blocks; the HVP recipe is the standard pattern from
-  Pearlmutter (1994) *Fast Exact Multiplication by the Hessian*.
+The product composes ``jax.jvp`` with ``jax.grad``; this forward-over-reverse
+recipe is the Hessian-vector product of Pearlmutter (1994).
 
 References
 ----------

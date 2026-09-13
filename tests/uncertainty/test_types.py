@@ -196,7 +196,8 @@ def test_predictive_distribution_is_a_pytree() -> None:
 def test_predictive_distribution_unflatten_does_not_validate() -> None:
     """Tree unflatten must not raise even with placeholder leaves.
 
-    Per ``/mnt/ssd2/Works/jax/docs/custom_pytrees.md``: transformations may
+    Per the JAX pytree documentation
+    (https://docs.jax.dev/en/latest/101/pytrees.html): transformations may
     reconstruct containers with placeholder/abstract values during tracing.
     """
     from opifex.uncertainty.types import PredictiveDistribution

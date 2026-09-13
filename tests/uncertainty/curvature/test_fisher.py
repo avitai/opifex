@@ -9,11 +9,9 @@ i.e., the outer product of per-sample gradients. The diagonal is the
 standard cheap curvature proxy used in optimisers (Adam-like) and
 post-hoc Laplace approximations (Kunstner+ 2019 critique notwithstanding).
 
-Canonical reference:
-* ``../bayesian-torch`` and Daxberger Laplace package — empirical-Fisher
-  formulation as a positive-semidefinite curvature estimate.
-* The diagonal estimator follows from the standard ``jax.vmap`` /
-  ``jax.grad`` per-sample-gradient recipe.
+The empirical Fisher is a positive-semidefinite curvature estimate
+(Daxberger et al. 2021). The diagonal estimator follows from the standard
+``jax.vmap`` / ``jax.grad`` per-sample-gradient recipe.
 
 References
 ----------

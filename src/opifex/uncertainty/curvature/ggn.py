@@ -12,11 +12,8 @@ output-space Hessian of the loss. The GGN is positive-semidefinite by
 construction and forms the canonical preconditioner for natural-gradient
 descent and the linearised Laplace posterior.
 
-Canonical reference:
-* ``../kfac-jax/kfac_jax/_src/loss_functions.py`` ``multiply_ggn``
-  (line 206) for the GGN-vp signature; opifex uses the functional
-  forward-over-reverse recipe ``vjp ∘ (H_y L) ∘ jvp`` from
-  Martens 2014.
+The product is computed with the forward-over-reverse recipe
+``vjp ∘ (H_y L) ∘ jvp`` (Schraudolph 2002; Martens 2014).
 
 References:
 ----------

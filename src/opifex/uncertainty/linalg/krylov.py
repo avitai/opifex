@@ -6,16 +6,13 @@ Algorithms
   the Krylov subspace ``span{v, A v, A^2 v, ...}`` for a symmetric operator
   ``A`` together with a tridiagonal matrix ``T`` such that ``A V ≈ V T``.
   Forward pass uses ``jax.lax.fori_loop`` so the iteration count is static
-  but the loop runs in a single XLA kernel. Sibling reference:
-  ``matfree/matfree/decomp.py:30 tridiag_sym``.
+  but the loop runs in a single XLA kernel.
 * ``arnoldi_hessenberg`` — Arnoldi 1951. The non-symmetric analogue:
-  ``V`` is orthonormal, ``H`` is upper Hessenberg, ``A V ≈ V H``. Sibling
-  reference: ``matfree/matfree/decomp.py:348 hessenberg``.
+  ``V`` is orthonormal, ``H`` is upper Hessenberg, ``A V ≈ V H``.
 * ``golub_kahan_bidiag`` — Golub & Kahan 1965. Bidiagonalises a general
   rectangular operator with both ``matvec`` and ``matvec_transpose``,
   yielding left/right orthonormal bases and a bidiagonal matrix whose
-  singular values match those of ``A``. Sibling reference:
-  ``matfree/matfree/decomp.py:600 bidiag``.
+  singular values match those of ``A``.
 
 Degenerate / lucky-breakdown handling
 -------------------------------------
@@ -43,8 +40,8 @@ References:
 * Saad — *Iterative Methods for Sparse Linear Systems*, §6.5 (lucky
   breakdown).
 * Golub & Van Loan — *Matrix Computations*, §10.1.4.
-* Krämer arXiv:2405.17277 — *Gradients of matrix functions in JAX*
-  (differentiable Lanczos / Arnoldi).
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices* (differentiable Lanczos / Arnoldi).
 """
 
 from __future__ import annotations

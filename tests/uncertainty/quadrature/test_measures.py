@@ -5,12 +5,6 @@ which a function is integrated: ``∫ f(x) π(dx)``. The two canonical
 measures are the (possibly diagonal-covariance) Gaussian and the
 Lebesgue measure over a hyperrectangular domain.
 
-Canonical reference (line-by-line port):
-* ``../emukit/emukit/quadrature/measures/gaussian_measure.py`` —
-  :class:`GaussianMeasure` field semantics.
-* ``../emukit/emukit/quadrature/measures/lebesgue_measure.py`` —
-  :class:`LebesgueMeasure` field semantics.
-
 References
 ----------
 * Briol, F.-X. et al. 2019 — *Probabilistic Integration*,

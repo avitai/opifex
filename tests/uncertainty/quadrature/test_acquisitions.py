@@ -1,24 +1,19 @@
 r"""BQ acquisition functions + experimental design loop driver.
 
-Tests for :mod:`opifex.uncertainty.quadrature.acquisitions`. The five
-acquisitions and the driver loop are line-by-line ports of the emukit
-references at ``../emukit/emukit/quadrature/acquisitions/`` and
-``../emukit/emukit/experimental_design/``:
+Tests for :mod:`opifex.uncertainty.quadrature.acquisitions`, covering
+the five acquisitions and the driver loop:
 
-* :func:`uncertainty_sampling` —
-  ``emukit/quadrature/acquisitions/uncertainty_sampling.py``.
-  ``a(x) = var(f(x)) · p(x)^q``.
-* :func:`model_variance` —
-  ``emukit/experimental_design/acquisitions/model_variance.py``.
-  ``a(x) = var(f(x))`` (the raw GP posterior variance).
+* :func:`uncertainty_sampling` — ``a(x) = var(f(x)) · p(x)^q``
+  (Gunter et al. 2014).
+* :func:`model_variance` — ``a(x) = var(f(x))`` (the raw GP posterior
+  variance).
 * :func:`integral_variance_reduction` —
-  ``emukit/quadrature/acquisitions/squared_correlation.py``.
-  ``a(x) = predictive_cov² / (integral_var · y_predictive_var)`` ∈ [0, 1].
+  ``a(x) = predictive_cov² / (integral_var · y_predictive_var)`` ∈ [0, 1]
+  (Gessner, Gonzalez & Mahsereci 2020, Eq. 8).
 * :func:`mutual_information` —
-  ``emukit/quadrature/acquisitions/mutual_information.py``.
-  ``a(x) = -0.5 log(1 - ρ²)`` where ``ρ²`` is the squared correlation.
+  ``a(x) = -0.5 log(1 - ρ²)`` where ``ρ²`` is the squared correlation
+  (Gessner, Gonzalez & Mahsereci 2020, Eq. 5).
 * :func:`integrated_variance_reduction` —
-  ``emukit/experimental_design/acquisitions/integrated_variance.py``.
   Monte-Carlo estimate of expected variance reduction over the
   integration measure.
 * :func:`experimental_design_loop` — driver loop adding the

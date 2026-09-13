@@ -17,10 +17,6 @@ with standard-error variance
 This baseline is the simplest no-GP integrator against which Bayesian
 quadrature methods (WSABI-L, vanilla BQ, SOBER, FFBQ) are benchmarked.
 
-Canonical reference:
-* ``../emukit/emukit/quadrature/loop/bayesian_monte_carlo_loop.py``
-  ``BayesianMonteCarlo`` (line 18).
-
 References:
 ----------
 * Rasmussen, C. E. & Ghahramani, Z. 2003 — *Bayesian Monte Carlo*,

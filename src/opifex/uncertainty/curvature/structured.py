@@ -30,10 +30,8 @@ References:
 ----------
 * Potapczynski, A. et al. 2023 — *CoLA: Exploiting Compositional
   Structure for Automatic and Efficient Numerical Linear Algebra*,
-  arXiv:2309.03060. The matvec / trace / logdet / solve identities mirror
-  ``cola.ops.operators`` (Kronecker, BlockDiag, Diagonal, LowRank) and
-  ``cola.linalg`` (logdet, trace, inverse), reimplemented natively in
-  JAX.
+  arXiv:2309.03060. The matvec / trace / logdet / solve identities are
+  implemented natively in JAX.
 * Henderson, H. V. & Searle, S. R. 1981 — *On deriving the inverse of a
   sum of matrices*, SIAM Review 23(1) (Woodbury / matrix-determinant
   lemma).

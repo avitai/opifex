@@ -22,12 +22,12 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 
 _CONCRETIZED_BQ_SPECS: tuple[type, ...] = (
-    # Task 6.3.13: Vanilla BQ + WSABI-L vendored in bayesian_quadrature.py.
+    # Task 6.3.13: Vanilla BQ + WSABI-L implemented in bayesian_quadrature.py.
     VanillaBayesianQuadratureAdapterSpec,
     WSABILAdapterSpec,
-    # Task 6.3.14a: SOBER kernel-recombination vendored in sober.py.
+    # Task 6.3.14a: SOBER kernel-recombination implemented in sober.py.
     SOBERAdapterSpec,
-    # Task 6.3.14b: Frank-Wolfe BQ vendored in frank_wolfe_bq.py.
+    # Task 6.3.14b: Frank-Wolfe BQ implemented in frank_wolfe_bq.py.
     FFBQAdapterSpec,
 )
 
@@ -89,7 +89,7 @@ def test_sober_and_ffbq_advertise_separate_modules() -> None:
 
 
 def test_emukit_quadrature_spec_is_metadata_only_reference() -> None:
-    """``EmukitQuadratureAdapterSpec`` advertises its vendored-reference role."""
+    """``EmukitQuadratureAdapterSpec`` advertises its metadata-only baseline role."""
     spec = EmukitQuadratureAdapterSpec()
     assert "Metadata-only" in spec.notes or "metadata-only" in spec.notes.lower()
     assert spec.source_package == "emukit"

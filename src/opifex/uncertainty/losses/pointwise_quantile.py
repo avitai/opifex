@@ -1,13 +1,11 @@
 """JAX-native :class:`PointwiseQuantileLoss` for conformal-residual training.
 
-Mirrors the canonical PyTorch reference at
-``../neuraloperator/neuralop/losses/data_losses.py::PointwiseQuantileLoss``
-(Ma, Pitt, Azizzadenesheli, Anandkumar — TMLR 2024,
-`arXiv:2402.01960 <https://arxiv.org/abs/2402.01960>`_). The loss is the
-self-scaling pinball loss used to train a UQNO residual operator to
-predict per-grid-point quantile widths.
+The loss is the self-scaling pinball loss used to train a UQNO residual
+operator to predict per-grid-point quantile widths (Ma, Pitt,
+Azizzadenesheli, Anandkumar — TMLR 2024,
+`arXiv:2402.01960 <https://arxiv.org/abs/2402.01960>`_).
 
-Formula (matches the reference numerically; cross-checked in
+Formula (checked numerically in
 ``tests/uncertainty/losses/test_pointwise_quantile.py``):
 
 .. code-block:: text
@@ -56,7 +54,7 @@ class PointwiseQuantileLoss:
             controls the target coverage proportion ``1 - alpha`` of
             the predicted quantile interval.
         reduction: Reduction across batch + channel dimensions —
-            ``"sum"`` (default, matches reference) or ``"mean"``.
+            ``"sum"`` (default) or ``"mean"``.
             Spatial dimensions are always averaged before reduction.
 
     """
@@ -87,8 +85,7 @@ class PointwiseQuantileLoss:
             y: True pointwise residuals (``base_model(x) - y_true``).
             eps: Floor added to the per-batch max before division to
                 stop the scaling factor from blowing up on
-                near-zero rows. Matches the PyTorch reference's
-                ``eps=1e-7``.
+                near-zero rows.
 
         Returns:
             Scalar loss (after the configured reduction).

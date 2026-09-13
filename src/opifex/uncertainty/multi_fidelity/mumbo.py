@@ -40,8 +40,6 @@ References:
   Optimisation*, ECML-PKDD.
 * Wang, Jegelka 2017 — *Max-value Entropy Search for Efficient
   Bayesian Optimization*, ICML (single-fidelity MES baseline).
-* ``emukit.bayesian_optimization.acquisitions.max_value_entropy_search.MUMBO``
-  (PRIMARY).
 """
 
 from __future__ import annotations
@@ -70,7 +68,7 @@ def _gumbel_fit_and_sample(
     r"""Fit a Gumbel approximation to the target-level GP marginal and sample.
 
     Uses the canonical ``binary-search-on-the-CDF`` recipe from
-    Wang & Jegelka 2017 (and emukit's ``_fit_gumbel``):
+    Wang & Jegelka 2017:
 
         cdf_F(y) = prod_i Phi((y - mu_i) / sigma_i),
         a       = y at cdf = 0.25,

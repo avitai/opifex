@@ -16,8 +16,6 @@ Algorithms
   bidiagonal ``B`` → ``jnp.linalg.svd(B)`` → lift left / right vectors via
   ``left_basis @ U`` and ``right_basis @ V``.
 
-Sibling reference (line-by-line port): ``matfree/matfree/eig.py``.
-
 References:
 ----------
 * Lanczos 1950, Arnoldi 1951, Golub & Kahan 1965 (see :mod:`.krylov`).

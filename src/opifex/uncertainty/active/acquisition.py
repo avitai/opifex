@@ -6,16 +6,14 @@ are JAX-traceable (``jit`` / ``grad`` / ``vmap`` safe) and never call into
 ``flax.nnx``; that boundary is enforced by the duplicate-code gate at
 ``uncertainty_trainers.py``.
 
-Reference (read-only): ``trieste``. Each acquisition function cites the
-exact trieste source line it ports from. The opifex port substitutes
-``jax.scipy.stats.norm`` for ``tensorflow_probability.distributions.Normal``
-and drops the trieste search-space / dataset plumbing — opifex's
-:class:`PredictiveDistribution` already carries posterior moments and
-samples.
+Each acquisition function cites the paper that defines it. Gaussian
+densities come from ``jax.scipy.stats.norm``; :class:`PredictiveDistribution`
+already carries posterior moments and samples, so the kernels need no
+search-space or dataset plumbing.
 
 Acquisition conventions:
 
-* EI / Log-EI / PI follow the **minimisation** convention used by trieste
+* EI / Log-EI / PI follow the **minimisation** convention
   (``best_value`` is the best (smallest) observed value; positive scores
   reflect improvement towards lower values).
 * UCB returns ``mean + beta * std`` (the "upper" confidence bound; maximise
@@ -27,9 +25,7 @@ Acquisition conventions:
   :class:`PredictiveDistribution`, the per-sample distributions are
   Gaussians with shared aleatoric variance, and the predictive marginal is
   approximated by a moment-matched Gaussian (an upper bound on the true
-  mixture entropy by Jensen's inequality — same approximation as
-  ``trieste/acquisition/function/active_learning.py:418`` for the GP-
-  classification BALD).
+  mixture entropy by Jensen's inequality).
 """
 
 from __future__ import annotations
@@ -135,14 +131,12 @@ def expected_improvement(
 ) -> jax.Array:
     r"""Single-point Expected Improvement (minimisation convention).
 
-    Ported from ``trieste/acquisition/function/function.py:226``
-    (``expected_improvement.__call__``):
+    Jones, Schonlau & Welch (1998), *Efficient Global Optimization of
+    Expensive Black-Box Functions*, J. Global Optim. 13(4):455-492:
 
     .. math::
         \mathrm{EI}(x) = (\eta - \mu(x)) \Phi\!\left(\tfrac{\eta - \mu(x)}{\sigma(x)}\right)
         + \sigma(x) \, \phi\!\left(\tfrac{\eta - \mu(x)}{\sigma(x)}\right)
-
-    Substitutions vs. trieste: ``tfp.distributions.Normal`` → ``jax.scipy.stats.norm``.
     """
     variance = _require_variance(predictive_dist)
     std = jnp.sqrt(variance)
@@ -153,11 +147,11 @@ def expected_improvement(
 def _log_ei_helper(u: jax.Array) -> jax.Array:
     r"""Numerically stable ``log(phi(u) + u * Phi(u))``.
 
-    Ported from ``trieste/acquisition/function/function.py:281``
-    (``log_ei_helper``). For the safe regime ``u >= -1`` the direct
-    expression ``log(phi(u) + u * Phi(u))`` is well-conditioned. For
-    ``u << -1`` the trieste implementation uses ``tfp.math.erfcx`` to
-    avoid catastrophic cancellation. opifex substitutes the closed form
+    For the safe regime ``u >= -1`` the direct expression
+    ``log(phi(u) + u * Phi(u))`` is well-conditioned, as in the piecewise
+    ``log_h`` of Ament et al. (2023, arXiv:2310.20708). For ``u << -1``
+    the direct expression suffers catastrophic cancellation; opifex uses
+    the closed form
 
     .. math::
         \log(\phi(u) + u \Phi(u)) = \log \phi(u) + \log(1 + u \cdot R(u))
@@ -165,7 +159,7 @@ def _log_ei_helper(u: jax.Array) -> jax.Array:
     where ``R(u) = Phi(u) / phi(u)`` is the Mill's ratio reciprocal,
     computed via the standard asymptotic expansion
     ``R(u) \approx -1/u + 1/u^3`` for very negative ``u``. The branch
-    boundary is the same ``u = -1`` used by trieste.
+    boundary ``u = -1`` matches Ament et al. (2023).
     """
     bound = jnp.asarray(-1.0, dtype=u.dtype)
     u_safe = jnp.where(u < bound, bound, u)
@@ -191,10 +185,10 @@ def log_expected_improvement(
 ) -> jax.Array:
     r"""Numerically stable log-EI.
 
-    Ported from ``trieste/acquisition/function/function.py:269``
-    (``log_expected_improvement.__call__``). Mitigates the
-    vanishing-gradient issue of standard EI in regions where EI is tiny
-    (Ament et al. 2023, *Unexpected EI*).
+    Mitigates the vanishing-gradient issue of standard EI in regions
+    where EI is tiny (Ament, Daulton, Eriksson, Balandat & Bakshy 2023,
+    *Unexpected Improvements to Expected Improvement for Bayesian
+    Optimization*, NeurIPS, arXiv:2310.20708).
     """
     variance = _require_variance(predictive_dist)
     std = jnp.sqrt(variance)
@@ -209,8 +203,8 @@ def lower_confidence_bound(
 ) -> jax.Array:
     r"""LCB ``mu - beta * sigma`` (minimise for exploration).
 
-    Ported from ``trieste/acquisition/function/function.py:571``
-    (``lower_confidence_bound``).
+    Srinivas, Krause, Kakade & Seeger, *Gaussian Process Optimization in
+    the Bandit Setting: No Regret and Experimental Design*, arXiv:0912.3995.
     """
     if beta < 0:
         raise ValueError(f"beta must be non-negative; got {beta!r}")
@@ -225,9 +219,8 @@ def upper_confidence_bound(
 ) -> jax.Array:
     r"""UCB ``mu + beta * sigma`` (maximise for exploration).
 
-    Mirror of LCB; same trieste reference at
-    ``trieste/acquisition/function/function.py:571``
-    (``NegativeLowerConfidenceBound`` simply negates ``lower_confidence_bound``).
+    The sign-flipped counterpart of :func:`lower_confidence_bound`
+    (Srinivas et al., arXiv:0912.3995).
     """
     if beta < 0:
         raise ValueError(f"beta must be non-negative; got {beta!r}")
@@ -242,8 +235,9 @@ def probability_of_improvement(
 ) -> jax.Array:
     r"""Probability that ``f(x) < best_value`` under the posterior.
 
-    Ported from ``trieste/acquisition/function/function.py:684``
-    (``probability_below_threshold.__call__``). For a Gaussian posterior
+    Kushner (1964), *A New Method of Locating the Maximum Point of an
+    Arbitrary Multipeak Curve in the Presence of Noise*, J. Basic Eng.
+    86(1):97-106. For a Gaussian posterior
     ``f(x) ~ N(mu, sigma^2)`` the closed form is
     ``Phi((best_value - mu) / sigma)``.
     """
@@ -259,9 +253,8 @@ def _moment_matched_gaussian_entropy(
     """Entropy of the moment-matched Gaussian for an ensemble predictive.
 
     Returns ``H[N(mu_bar, sigma_total^2)]`` where ``sigma_total^2 =
-    epistemic + aleatoric`` per candidate. This is the upper-bound
-    approximation used by trieste's classification BALD (see
-    ``active_learning.py:418``).
+    epistemic + aleatoric`` per candidate, an upper-bound approximation
+    of the mixture entropy.
     """
     epistemic = jnp.var(samples, axis=0)
     total = epistemic + aleatoric_variance
@@ -275,10 +268,9 @@ def bald(
 ) -> jax.Array:
     r"""Bayesian Active Learning by Disagreement (regression-ensemble form).
 
-    Ported from ``trieste/acquisition/function/active_learning.py:418``
-    (``bayesian_active_learning_by_disagreement``). The trieste original
-    targets binary GP-classification with a Bernoulli likelihood; opifex
-    generalises to the regression ensemble carried by
+    BALD scores the mutual information between the prediction and the
+    model parameters (Houlsby, Hernandez-Lobato & Ghahramani 2014, ICML).
+    This implementation targets the regression ensemble carried by
     :class:`PredictiveDistribution.samples` because that's the shape every
     Phase-7 Bayesian backend already produces. The mutual information is
 
@@ -286,8 +278,8 @@ def bald(
         \mathrm{BALD}(x) = H[\hat p(y \mid x)] - \mathbb{E}_{\theta} [H[p(y \mid x, \theta)]]
 
     where the predictive marginal entropy uses the moment-matched
-    Gaussian approximation (same approximation as the trieste original)
-    and the per-sample entropies are exact Gaussians with the carried
+    Gaussian approximation and the per-sample entropies are exact
+    Gaussians with the carried
     aleatoric variance. The ``rngs`` argument is unused in the
     closed-form regression branch but is retained for API parity with
     sampling-based variants (it is consumed eagerly so callers see no
@@ -305,7 +297,7 @@ def bald(
     if predictive_dist.aleatoric is not None:
         aleatoric = jnp.maximum(predictive_dist.aleatoric, _VARIANCE_FLOOR)
     else:
-        # Match trieste's safe fallback: treat aleatoric as the global
+        # Safe fallback: treat aleatoric as the global
         # min-variance floor (degenerate ensembles still produce a finite
         # entropy and BALD reduces to zero when the samples agree).
         aleatoric = jnp.full(samples.shape[1:], _VARIANCE_FLOOR)
@@ -327,7 +319,7 @@ _StrategyFn = Callable[..., jax.Array]
 
 
 def _max_variance_scores(predictive_dist: PredictiveDistribution) -> jax.Array:
-    """Fallback "max-variance" acquisition (no trieste analogue; used by L2O)."""
+    """Fallback "max-variance" acquisition (used by L2O)."""
     return _require_variance(predictive_dist)
 
 
@@ -421,7 +413,7 @@ def min_value_entropy_search(
     variances: jax.Array,
     sampled_min_values: jax.Array,
 ) -> jax.Array:
-    r"""Min-Value Entropy Search (Wang+ 2017; trieste ``function/entropy.py:50``).
+    r"""Min-Value Entropy Search (Wang & Jegelka 2017, ICML, arXiv:1703.01968).
 
     Approximates the per-candidate information gain about the global
     minimum using Monte-Carlo samples of the minimum value:
@@ -461,7 +453,7 @@ def gibbon(
     variances: jax.Array,
     sampled_min_values: jax.Array,
 ) -> jax.Array:
-    r"""GIBBON acquisition (Moss+ 2021; trieste ``function/entropy.py:236``).
+    r"""GIBBON acquisition (Moss+ 2021, JMLR, arXiv:2102.03324).
 
     At batch size 1, GIBBON reduces exactly to MES (Moss+ 2021 §3),
     so this single-point form delegates to
@@ -478,7 +470,7 @@ def integrated_variance_reduction_score(
     candidate_variances: jax.Array,
     cross_variances: jax.Array,
 ) -> jax.Array:
-    r"""Integrated variance reduction (trieste ``function/active_learning.py:250``).
+    r"""Integrated variance reduction (Cohn, Ghahramani & Jordan 1996, JAIR 4).
 
     Ranks candidates by how much they reduce the posterior variance
     when conditioned on. For each candidate ``i`` with posterior

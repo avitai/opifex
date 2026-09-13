@@ -5,11 +5,6 @@ References
 * Harbrecht, Peters, Schneider 2012 — *On the low-rank approximation by the
   pivoted Cholesky decomposition*.
 * Chen, Epperly, Tropp, Webber arXiv:2207.06503 — *Randomly Pivoted Cholesky*.
-
-Sibling references (line-by-line port):
-* ``matfree/matfree/low_rank.py`` — greedy partial Cholesky.
-* ``eepperly/Randomly-Pivoted-Cholesky/rpcholesky.py::cholesky_helper`` —
-  canonical NumPy implementation of randomly-pivoted Cholesky.
 """
 
 from __future__ import annotations

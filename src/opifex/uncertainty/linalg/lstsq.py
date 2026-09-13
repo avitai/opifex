@@ -24,18 +24,17 @@ Algorithm
 Compared to the canonical LSMR recurrence (Fong, Saunders 2011) this
 formulation lacks the Givens-rotation update that delivers the iterative
 residual norms, but produces the same minimum-residual solution at the
-``num_matvecs`` truncation step. matfree's ``lsmr`` exposes an
-equivalent solution via a ``custom_vjp``-decorated Clenshaw-style
-recursion; a JIT-compatible version of that recursion is deferred to a
-follow-up commit when reverse-mode gradient support is needed.
-
-Sibling reference: ``matfree/matfree/lstsq.py:18 lsmr``.
+``num_matvecs`` truncation step. Roy, Hauberg, Krämer arXiv:2510.19634
+derive custom gradients for matrix-free least-squares solvers; a
+JIT-compatible gradient rule is deferred to a follow-up commit when
+reverse-mode gradient support is needed.
 
 References:
 ----------
 * Fong, Saunders 2011 — *LSMR: An iterative algorithm for sparse
   least-squares problems*, SIAM J. Sci. Comput.
-* Roy, Krämer et al. arXiv:2510.19634 — *Gradients of LSMR in JAX*.
+* Roy, Hauberg, Krämer arXiv:2510.19634 — *Matrix-free least squares
+  solvers: values, gradients, and what to do with them*.
 """
 
 from __future__ import annotations

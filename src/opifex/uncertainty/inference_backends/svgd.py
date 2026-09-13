@@ -5,14 +5,13 @@ Stein-gradient flow that minimises the KL divergence to the target
 posterior. It produces deterministic non-IID samples that approximate
 the posterior in expectation.
 
-Canonical reference:
-
+References:
 * Liu, Q. & Wang, D. 2016 — *Stein Variational Gradient Descent: A
   General Purpose Bayesian Inference Algorithm*, NeurIPS 29.
+  arXiv:1608.04471.
 
-The algorithm itself is vendored in
-:mod:`opifex.uncertainty.inference_backends._svgd_algorithm` as a
-line-by-line port of ``../blackjax/blackjax/vi/svgd.py``. This module
+The algorithm itself lives in
+:mod:`opifex.uncertainty.inference_backends._svgd_algorithm`. This module
 wires the algorithm into the :class:`InferenceBackendProtocol` surface.
 
 The ``predict_distribution`` and ``posterior_predictive`` hooks re-fit the
@@ -76,8 +75,7 @@ class SVGDBackend:
     method_names: tuple[str, ...] = ("svgd",)
     notes: str = (
         "SVGD (Liu+Wang 2016) — kernelised Stein-gradient particle flow "
-        "minimising KL to the target posterior. Algorithm ported from "
-        "blackjax/vi/svgd.py."
+        "minimising KL to the target posterior."
     )
     init_state: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(1))
     target_log_prob: Callable[[jax.Array], jax.Array] | None = None

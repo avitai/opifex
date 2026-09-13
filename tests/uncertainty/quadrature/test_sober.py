@@ -1,10 +1,9 @@
 r"""SOBER kernel-recombination point-set Bayesian quadrature.
 
-Tests for :mod:`opifex.uncertainty.quadrature.sober` — a JAX-native
-port of Adachi et al.'s kernel-recombination algorithm
+Tests for :mod:`opifex.uncertainty.quadrature.sober` — a JAX
+implementation of Adachi et al.'s kernel-recombination algorithm
 (arXiv:2206.04734 + arXiv:2301.11832), with the inner
-Tchernychova-Lyons CAR algorithm following the SOBER PyTorch
-reference at ``../SOBER/SOBER/_rchq.py``.
+Tchernychova-Lyons CAR (Caratheodory recombination) algorithm.
 
 Algorithm invariants verified here:
 

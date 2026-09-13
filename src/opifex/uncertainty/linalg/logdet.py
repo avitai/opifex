@@ -14,14 +14,12 @@ Algorithm
    ``length^2 * e_1.T @ log(T) @ e_1`` using ``dense_funm_sym_eigh(log)``.
 3. Return the mean of the per-probe estimates.
 
-Sibling reference (line-by-line port): ``matfree/matfree/funm.py:178
-integrand_funm_sym_logdet``.
-
 References:
 ----------
 * Ubaru, Chen, Saad 2017 — *Fast estimation of tr(f(A)) via stochastic
   Lanczos quadrature*, SIAM J. Matrix Anal. Appl.
-* Krämer arXiv:2405.17277.
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices*.
 """
 
 from __future__ import annotations

@@ -6,10 +6,9 @@ estimate, posterior precision, model function) into a
 diagonal Gaussian posterior ``N(θ*, diag(1/precision))`` and computes
 the predictive ensemble via ``vmap`` over the model function.
 
-Canonical reference:
-* Daxberger Laplace package and bayesian-torch use this same recipe;
-  opifex builds it on top of ``diagonal_laplace_posterior`` from
-  ``opifex.uncertainty.curvature``.
+The recipe is the diagonal Laplace approximation of Daxberger et al. 2021
+(arXiv:2106.14806); opifex builds it on top of ``diagonal_laplace_posterior``
+from ``opifex.uncertainty.curvature``.
 """
 
 from __future__ import annotations

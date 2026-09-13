@@ -9,7 +9,7 @@ The tests pin the published acquisition-function formulas exactly:
   entropy of the predictive Gaussian mixture under a moment-matching
   Gaussian approximation. The closed-form ground truth is computed inside
   the test so the formula isn't trusted to the implementation under test.
-* EI / Log-EI / UCB / LCB / PI follow the trieste reference (citations in
+* EI / Log-EI / UCB / LCB / PI follow the published formulas (citations in
   :mod:`opifex.uncertainty.active.acquisition`).
 * ``acquire(...)`` is the named-strategy dispatcher referenced by the
   rewritten :class:`ActiveUncertaintyLearner`.
@@ -115,7 +115,7 @@ class TestBALD:
 
 
 class TestExpectedImprovement:
-    """Analytic EI (trieste expected_improvement port)."""
+    """Analytic EI (Jones, Schonlau & Welch 1998)."""
 
     def test_ei_matches_closed_form(self) -> None:
         mean = jnp.array([0.5, 1.2])
@@ -123,7 +123,7 @@ class TestExpectedImprovement:
         eta = 1.0
         std = jnp.sqrt(variance)
         u = (eta - mean) / std
-        # trieste form: (eta - mean) * Phi((eta-mean)/sigma) + sigma * phi(...)
+        # closed form: (eta - mean) * Phi((eta-mean)/sigma) + sigma * phi(...)
         from jax.scipy.stats import norm as jnorm
 
         expected = (eta - mean) * jnorm.cdf(u) + std * jnorm.pdf(u)

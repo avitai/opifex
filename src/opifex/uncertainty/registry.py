@@ -250,8 +250,8 @@ class UQRegistry(SingletonRegistry["UQCapability"]):
 def register_uq_capability(name: str, capability: UQCapability) -> Callable[[_C], _C]:
     """Class decorator that registers ``capability`` under ``name`` in :class:`UQRegistry`.
 
-    Mirrors CalibraX's ``register_benchmark`` decorator pattern so capability
-    declaration tests can reuse the same decorator surface.
+    Lets capability declaration tests register a capability through a class
+    decorator at class-definition time.
     """
 
     def decorator(cls: _C) -> _C:

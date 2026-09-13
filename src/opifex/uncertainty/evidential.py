@@ -33,9 +33,6 @@ References:
 * Tan, A. R.; et al. "Evidential deep learning for interatomic potentials" (eIP).
   *Nat. Commun.* 2025 (arXiv:2407.13994) — the per-atom NIG prediction /
   aleatoric / epistemic decomposition reused below.
-* Code reference: ``../chemprop/chemprop/nn/predictors.py`` (``EvidentialFFN``
-  softplus parameterisation, ``+1`` on ``alpha``) and
-  ``../chemprop/chemprop/nn/metrics.py`` (``EvidentialLoss`` closed form).
 """
 
 from __future__ import annotations
@@ -48,21 +45,21 @@ from jaxtyping import Array, Float  # noqa: TC002
 from opifex.uncertainty.types import PredictiveDistribution
 
 
-# Default error-evidence regularisation weight ``lambda`` (Amini 2020 Eq. 10;
-# chemprop ``EvidentialLoss.v_kl`` default). Penalises evidence placed on
-# wrong predictions, scaling total evidence ``2 nu + alpha`` by the residual.
+# Default error-evidence regularisation weight ``lambda`` (Amini 2020 Eq. 10).
+# Penalises evidence placed on wrong predictions, scaling total evidence
+# ``2 nu + alpha`` by the residual.
 _DEFAULT_REGULARIZER_COEFFICIENT: float = 0.2
 
-# Numerical floor matching the chemprop ``EvidentialLoss.eps`` default; the
-# regulariser term is offset by this so a perfect fit contributes exactly zero.
+# Numerical floor for the regulariser; the regulariser term is offset by this
+# so a perfect fit contributes exactly zero.
 _REGULARIZER_EPSILON: float = 1e-8
 
 # Strictly-positive floor for ``nu``, ``beta`` and the ``alpha - 1`` evidence.
 # ``softplus`` underflows to exactly ``0`` for very negative float32 logits
 # (e.g. ``softplus(-50) == 0``), which would make ``alpha == 1`` and divide the
 # closed-form moments ``beta/(alpha-1)`` by zero. Clamping keeps the NIG moments
-# finite and the ``alpha > 1`` contract strict without changing the chemprop
-# softplus parameterisation in the well-conditioned regime.
+# finite and the ``alpha > 1`` contract strict without changing the softplus
+# parameterisation in the well-conditioned regime.
 _POSITIVITY_FLOOR: float = 1e-6
 
 
@@ -89,8 +86,7 @@ class NIGParams:
 def positive_evidential_params(raw: Float[Array, "*batch 4"]) -> NIGParams:
     r"""Map 4 raw logits to valid NIG parameters via the softplus parameterisation.
 
-    Transcribes the chemprop ``EvidentialFFN.forward`` reference
-    (``../chemprop/chemprop/nn/predictors.py:197-200``):
+    The parameterisation is:
 
     .. math::
        \gamma = z_0,\quad
@@ -145,9 +141,7 @@ def evidential_nll(
 ) -> Array:
     r"""Deep-Evidential-Regression loss for one (or a batch of) NIG prediction(s).
 
-    Transcribes the chemprop ``EvidentialLoss._calc_unreduced_loss`` reference
-    (``../chemprop/chemprop/nn/metrics.py:241-257``), itself Eqs. 8-10 of
-    Amini 2020. With :math:`r = y - \gamma` and
+    Implements Eqs. 8-10 of Amini 2020. With :math:`r = y - \gamma` and
     :math:`\Omega = 2\beta(1+\nu)`:
 
     .. math::
@@ -171,8 +165,8 @@ def evidential_nll(
         target: Ground-truth value(s) broadcasting against ``params.gamma``.
         coefficient: Regulariser weight :math:`\lambda` (Amini 2020 Eq. 10).
             ``0.0`` disables the regulariser.
-        epsilon: Numerical offset matching the chemprop ``eps`` default so a
-            zero-residual fit contributes exactly zero regulariser.
+        epsilon: Numerical offset so a zero-residual fit contributes exactly
+            zero regulariser.
 
     Returns:
         The per-element evidential loss, the same shape as the broadcast of

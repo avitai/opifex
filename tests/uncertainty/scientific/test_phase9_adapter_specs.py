@@ -11,8 +11,8 @@ but that the audit confirmed absent:
 * ``DiagonalEK1Spec`` — diagonal-Jacobian EK1 correction.
 * ``DataUpdateCallbackSpec`` — online assimilation callback.
 * ``DynamicMVDiffusionSpec`` + ``FixedMVDiffusionSpec`` — split of
-  the old single-class ``ApplyDiffusionSpec`` per the Julia
-  ``diffusions/typedefs.jl:39-103`` separation.
+  the old single-class ``ApplyDiffusionSpec`` into time-dependent and
+  time-invariant variants.
 
 References
 ----------

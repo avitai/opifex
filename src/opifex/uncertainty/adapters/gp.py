@@ -5,13 +5,13 @@ Five Pattern-A frozen dataclasses declaring metadata for GP backends:
 * :class:`GPJaxAdapterSpec` — user-installed; 9 family tags.
 * :class:`TinygpAdapterSpec` — user-installed; recommended substrate for
   the future LUNO implementation.
-* :class:`MarkovflowAdapterSpec` — metadata-only; algorithms vendored
-  into :mod:`opifex.uncertainty.statespace`.
+* :class:`MarkovflowAdapterSpec` — metadata-only; algorithms implemented
+  in :mod:`opifex.uncertainty.statespace`.
 * :class:`BayesnewtonAdapterSpec` — metadata-only; Kalman / kernel
-  algorithms vendored into :mod:`opifex.uncertainty.statespace`.
+  algorithms implemented in :mod:`opifex.uncertainty.statespace`.
 * :class:`KalmanJaxAdapterSpec` — metadata-only with
   ``DeprecationWarning`` pointing at :class:`BayesnewtonAdapterSpec`
-  (per kalman-jax's own README:1).
+  (the kalman-jax project names BayesNewton as its successor).
 
 References:
 ----------
@@ -62,8 +62,8 @@ class _GPAdapterSpecBase:
 class GPJaxAdapterSpec(_GPAdapterSpecBase):
     """User-installed GPJax backend.
 
-    GPJax 0.14 dropped ``flax.nnx`` in favour of ``equinox.Module``
-    (`gpjax/docs/migration.md:5-9,35-41`). Users who want to wire GPJax
+    GPJax 0.14 dropped ``flax.nnx`` in favour of ``equinox.Module``.
+    Users who want to wire GPJax
     into NNX-native Bayesian-PINN / UQ-NO surfaces must cross an
     ``eqx.Module ↔ nnx.Module`` PyTree boundary — opifex does not
     provide this bridge.
@@ -116,7 +116,7 @@ class MarkovflowAdapterSpec(_GPAdapterSpecBase):
     """Metadata-only adapter for the TensorFlow-based markovflow library.
 
     Specific algorithms (banded-precision Cholesky, SDE→linearize) are
-    vendored under :mod:`opifex.uncertainty.statespace` (or Task 6.7
+    implemented under :mod:`opifex.uncertainty.statespace` (or Task 6.7
     assimilation) when they prove useful — markovflow itself is
     TF-based and not directly importable from opifex.
     """
@@ -130,7 +130,7 @@ class MarkovflowAdapterSpec(_GPAdapterSpecBase):
         "sde_linearize",
     )
     notes: str = (
-        "Metadata-only — algorithms are vendored into "
+        "Metadata-only — algorithms are implemented in "
         "opifex.uncertainty.statespace. markovflow is TF-based and "
         "not directly importable here."
     )
@@ -142,7 +142,7 @@ class BayesnewtonAdapterSpec(_GPAdapterSpecBase):
 
     Specific algorithms (sequential and parallel Kalman filter /
     smoother, kernel ``state_transition`` closed forms for Matern /
-    Periodic / Cosine / QuasiPeriodicMatern12) are vendored into
+    Periodic / Cosine / QuasiPeriodicMatern12) are implemented in
     :mod:`opifex.uncertainty.statespace`. The bayesnewton package
     itself is not importable because its pinned ``jax==0.4.14`` +
     ``objax`` stack conflicts with the opifex JAX baseline.
@@ -159,8 +159,7 @@ class BayesnewtonAdapterSpec(_GPAdapterSpecBase):
     notes: str = (
         "Metadata-only — sequential and parallel-scan Kalman primitives "
         "plus Matern / Cosine / Periodic state-space kernels are "
-        "vendored into opifex.uncertainty.statespace citing "
-        "bayesnewton/bayesnewton/ops.py and kernels.py."
+        "implemented in opifex.uncertainty.statespace."
     )
 
 
@@ -168,9 +167,8 @@ class BayesnewtonAdapterSpec(_GPAdapterSpecBase):
 class KalmanJaxAdapterSpec(_GPAdapterSpecBase):
     """Deprecated metadata-only adapter for the kalman-jax package.
 
-    kalman-jax's own ``README.md`` (line 1) states that bayesnewton is
-    the official successor. The generic LTI-SDE discretization that
-    kalman-jax provides (``priors.py:46``) is covered by
+    The kalman-jax project names BayesNewton as its successor. The
+    generic LTI-SDE discretization that kalman-jax provides is covered by
     :func:`opifex.uncertainty.statespace.discretize_lti_sde`.
 
     Emits a :class:`DeprecationWarning` at construction pointing users
@@ -191,7 +189,7 @@ class KalmanJaxAdapterSpec(_GPAdapterSpecBase):
         """Emit a ``DeprecationWarning`` pointing at the bayesnewton successor."""
         warnings.warn(
             "KalmanJaxAdapterSpec is deprecated; use BayesnewtonAdapterSpec. "
-            "kalman-jax is officially obsolete (see kalman-jax/README.md:1).",
+            "The kalman-jax project names BayesNewton as its successor.",
             DeprecationWarning,
             stacklevel=2,
         )

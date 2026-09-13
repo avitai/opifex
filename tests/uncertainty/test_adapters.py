@@ -1,11 +1,10 @@
 """Tests for distribution adapter / model adapter protocols.
 
-Sibling-package targets:
+Adapter targets:
 
-* Artifex ``Distribution`` (``../artifex/src/artifex/generative_models/core/
-  distributions/base.py``) is the primary adapter target. Distrax-like is
-  secondary. TFP / FlowJAX / bijx / GPJax / NumPyro are exposed through
-  unsupported-backend metadata.
+* Artifex ``Distribution`` (``artifex.generative_models.core.distributions.base``)
+  is the primary adapter target. Distrax-like is secondary. TFP / FlowJAX / bijx /
+  GPJax / NumPyro are exposed through unsupported-backend metadata.
 """
 
 from __future__ import annotations

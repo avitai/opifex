@@ -20,10 +20,8 @@ precision + model function) into a
 :class:`~opifex.uncertainty.types.PredictiveDistribution` provider via
 Monte-Carlo sampling from ``N(θ*, diag(1/precision))``.
 
-Canonical reference:
-* Daxberger Laplace package and bayesian-torch use this same diagonal
-  precision formula. opifex computes the empirical-Fisher term via
-  :func:`empirical_fisher_diagonal` and adds ``τ * 1`` for the prior.
+The diagonal precision (Daxberger et al. 2021) is the empirical-Fisher term
+from :func:`empirical_fisher_diagonal` plus ``τ * 1`` for the prior.
 
 References:
 ----------

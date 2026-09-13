@@ -29,9 +29,7 @@ Container patterns (GUIDE_ALIGNMENT §5a):
 * :class:`AcquiredBatch` — pattern (B): ``flax.struct.dataclass`` that
   carries ``jax.Array`` indices + scores through the batch loop.
 
-Primary acquisition-function reference: ``trieste`` (TensorFlow original
-ported to JAX). Each kernel docstring cites the trieste source line it
-was ported from.
+Each acquisition kernel docstring cites the paper that defines it.
 """
 
 from __future__ import annotations

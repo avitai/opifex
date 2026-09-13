@@ -13,10 +13,7 @@ fidelity levels ``i`` and ``j`` at inputs ``x``, ``x'`` is
                                           [prod_{l=k+1}^{j} rho_l]
                                           k_k(x, x')
 
-(Kennedy & O'Hagan §2.5; see also
-``emukit.multi_fidelity.kernels.linear_multi_fidelity_kernel`` — the
-**PRIMARY** reference implementation, which this module mirrors as a
-JAX-native pytree-free port).
+(Kennedy & O'Hagan §2.5).
 
 Training data per fidelity level is supplied as the parallel tuples
 ``x_train_per_level`` and ``y_train_per_level``; the fit assembles the
@@ -31,8 +28,6 @@ References:
 * Le Gratiet, Garnier 2014 — *Recursive co-kriging model for design
   of computer experiments with multiple levels of fidelity*,
   Int. J. Uncertainty Quantification.
-* ``emukit.multi_fidelity.kernels.linear_multi_fidelity_kernel``
-  (PRIMARY).
 """
 
 from __future__ import annotations
@@ -290,8 +285,7 @@ def predict_linear_multi_fidelity_gp(
                 ("estimator", "linear_multi_fidelity_gp"),
                 (
                     "paper",
-                    "Kennedy & O'Hagan 2000 AR(1) multi-fidelity GP "
-                    "(emukit linear_multi_fidelity_kernel mirror)",
+                    "Kennedy & O'Hagan 2000 AR(1) multi-fidelity GP",
                 ),
                 ("target_level", str(target_level)),
             ),

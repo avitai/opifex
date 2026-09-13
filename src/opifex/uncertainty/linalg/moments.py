@@ -7,14 +7,13 @@ average of ``(v.T A v)**p_m`` over Rademacher probes for each ``p_m``.
 The first moment (``p_m = 1``) is the standard Hutchinson trace
 estimate; higher moments enable variance, skewness, and confidence-
 interval reconstruction in a single multi-output pass without re-running
-matvecs. Sibling reference (line-by-line port):
-``matfree/matfree/stochtrace.py::integrand_wrap_moments`` plus the outer
-Hutchinson aggregator.
+matvecs.
 
 References:
 ----------
 * Hutchinson 1990 — stochastic trace estimator with Rademacher probes.
-* matfree — Krämer arXiv:2405.17277, ``stochtrace.py``.
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices*.
 """
 
 from __future__ import annotations

@@ -17,10 +17,10 @@ materialise — opifex exposes matrix-free estimators in
 This example shows the two most commonly used estimators in action on a
 tiny Bayesian classifier head:
 
-- `slq_logdet` — stochastic Lanczos quadrature `log det` (matfree
-  reference: Krämer 2024 arXiv:2405.17277).
-- `xnys_trace` — XNysTrace exact-on-low-rank trace estimator (traceax
-  reference: Nahid et al.).
+- `slq_logdet` — stochastic Lanczos quadrature `log det` (Krämer 2024,
+  arXiv:2405.17277).
+- `xnys_trace` — XNysTrace exact-on-low-rank trace estimator (Epperly,
+  Tropp & Webber 2024, SIAM J. Matrix Anal. Appl., arXiv:2301.07825).
 
 ## What You Will Learn
 

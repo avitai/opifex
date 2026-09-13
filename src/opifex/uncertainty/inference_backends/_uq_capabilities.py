@@ -7,10 +7,10 @@ declaration into the singleton :class:`UQRegistry`.
 
 Three peer posterior-sampler backends shipped under Task 6.3.9a/b/c:
 
-* ``PathfinderBackend`` — variational + L-BFGS path (BlackJAX primitives).
-* ``SVGDBackend`` — Stein Variational Gradient Descent (BlackJAX primitives).
-* ``ADVIBackend`` — Automatic Differentiation Variational Inference
-  (BlackJAX ``meanfield_vi`` primitives).
+* ``PathfinderBackend`` — variational + L-BFGS path (Zhang et al. 2022).
+* ``SVGDBackend`` — Stein Variational Gradient Descent (Liu & Wang 2016).
+* ``ADVIBackend`` — Automatic Differentiation Variational Inference,
+  mean-field family (Kucukelbir et al. 2017).
 """
 
 from __future__ import annotations
@@ -24,8 +24,7 @@ _PATHFINDER_BACKEND_CAPABILITY = UQCapability(
     source_package="blackjax",
     notes=(
         "PathfinderBackend — Pathfinder variational + L-BFGS posterior "
-        "sampler. Backend primitives vendored from BlackJAX "
-        "(Zhang et al. arXiv:2108.03782); peer to the BlackJAX MCMC "
+        "sampler (Zhang et al. arXiv:2108.03782); peer to the BlackJAX MCMC "
         "backend at the inference-backend protocol layer."
     ),
 )
@@ -37,8 +36,7 @@ _SVGD_BACKEND_CAPABILITY = UQCapability(
     source_package="blackjax",
     notes=(
         "SVGDBackend — Stein Variational Gradient Descent posterior "
-        "sampler. Backend primitives vendored from BlackJAX "
-        "(Liu & Wang NIPS 2016); peer to the Pathfinder / ADVI "
+        "sampler (Liu & Wang NIPS 2016, arXiv:1608.04471); peer to the Pathfinder / ADVI "
         "backends at the inference-backend protocol layer."
     ),
 )
@@ -50,8 +48,7 @@ _ADVI_BACKEND_CAPABILITY = UQCapability(
     source_package="blackjax",
     notes=(
         "ADVIBackend — Automatic Differentiation Variational Inference "
-        "(mean-field Gaussian). Backend primitives vendored from "
-        "BlackJAX ``meanfield_vi`` (Kucukelbir et al. JMLR 18(14)); "
+        "(mean-field Gaussian; Kucukelbir et al. JMLR 18(14)); "
         "peer to the Pathfinder / SVGD backends at the "
         "inference-backend protocol layer."
     ),

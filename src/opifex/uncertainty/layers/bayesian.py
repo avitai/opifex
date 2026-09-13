@@ -39,9 +39,7 @@ class BayesianLinear(nnx.Module):
     Reference: Blundell et al. 2015, "Weight Uncertainty in Neural Networks"
     (``arXiv:1505.05424``). Per-parameter diagonal-Gaussian posterior with
     reparameterization-trick sampling and analytic KL against an isotropic
-    Gaussian prior. ``../bayesian-torch`` and ``../blitz-bayesian-deep-learning``
-    serve as PyTorch reference implementations of the same variational layer
-    family.
+    Gaussian prior.
 
     Weight and bias each carry a ``(mean, log-variance)`` posterior; sampling
     uses the reparameterization trick.
@@ -151,9 +149,8 @@ class BayesianSpectralConvolution(nnx.Module):
     """Variational Fourier-spectral convolution with complex Gaussian weights.
 
     Implements the canonical Zongyi Li Fourier Neural Operator spectral block
-    (Li et al. 2021, ``arXiv:2010.08895``; reference implementation:
-    ``../deeponet-fno/src/darcy_rectangular_pwc/fourier_2d.py:SpectralConv2d``)
-    with a variational diagonal-Gaussian posterior over each complex weight.
+    (Li et al. 2021, ``arXiv:2010.08895``) with a variational diagonal-Gaussian
+    posterior over each complex weight.
 
     The trainable Fourier weights split into real and imaginary parts; each
     part carries a diagonal-Gaussian posterior ``(mean, log-variance)``.

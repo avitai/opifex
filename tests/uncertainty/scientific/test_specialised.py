@@ -1,18 +1,16 @@
-"""JAX-native ports of specialised probabilistic-numerics algorithms.
+"""JAX-native specialised probabilistic-numerics algorithms.
 
 Tests for :mod:`opifex.uncertainty.scientific._specialised`. The module
 implements three algorithmic primitives referenced by the
 probabilistic-numerics catalogue:
 
 * :func:`manifold_update` — IEKF update enforcing ``g(x) = 0`` via
-  ``jax.jacrev``. Sibling reference
-  ``ProbNumDiffEq.jl/src/callbacks/manifoldupdate.jl``.
+  ``jax.jacrev`` (Bosch, Tronarp & Hennig 2022, AISTATS).
 * :func:`dense_output_sample` — Single-draw Gaussian sampler used for
-  joint posterior sampling at arbitrary density. Sibling reference
-  ``ProbNumDiffEq.jl/src/solution_sampling.jl`` (``_rand``).
+  joint posterior sampling at arbitrary density.
 * :func:`apply_diffusion` — Scalar / vector diffusion scaling applied
-  to a PSD process-noise covariance. Sibling reference
-  ``ProbNumDiffEq.jl/src/diffusions/apply_diffusion.jl``.
+  to a PSD process-noise covariance (Bosch, Hennig & Tronarp 2021,
+  arXiv:2012.08202).
 """
 
 from __future__ import annotations

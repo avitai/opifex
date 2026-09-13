@@ -24,11 +24,10 @@ For the linear toy model ``f(θ, x) = x · θ`` the Jacobian wrt ``θ`` is
 ``tests/uncertainty/curvature/test_luno.py`` verify this closed-form
 identity end-to-end.
 
-Implementation note: opifex implements LUNO *natively in JAX*. The
-recommended reference substrate ``tinygp`` (Magnani+ 2024 also points to
-it for its ``Transform(Kernel)`` pattern) is an optional adapter-only
-dependency in opifex — :class:`TinygpAdapterSpec` exposes it without
-making it a runtime import. The local implementation uses
+Implementation note: opifex implements LUNO *natively in JAX*. The optional
+``tinygp`` package is an adapter-only dependency in opifex —
+:class:`TinygpAdapterSpec` exposes it without making it a runtime import.
+The local implementation uses
 :func:`jax.jacrev` over the parameter axis and contracts with the
 diagonal posterior covariance ``1 / precision_diagonal`` to compute the
 marginal variance in pure JAX.

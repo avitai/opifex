@@ -5,14 +5,13 @@ of a state-space prior on the unknown ODE solution. The drift matrix
 encodes the order-``q+1`` integrator dynamics (companion-matrix
 structure) and the dispersion matrix selects the noise channel.
 
-Canonical references (PORTED, not imported):
-* ``../probnum/src/probnum/randprocs/markov/integrator/_iwp.py`` — IWP.
-* ``../probnum/src/probnum/randprocs/markov/integrator/_ioup.py`` — IOUP
-  (scalar driftspeed).
-* ``../probnum/src/probnum/randprocs/markov/integrator/_matern.py`` —
-  Matérn-(q+1/2) prior.
-* ``../ProbNumDiffEq.jl/src/priors/ioup.jl:103-117`` — IOUP three
-  rate-parameter modes (scalar / vector / matrix).
+References:
+* IWP — Tronarp, Kersting, Särkkä & Hennig 2019, arXiv:1810.03440.
+* IOUP, three rate-parameter modes (scalar / vector / matrix) — Bosch,
+  Hennig & Tronarp 2023, *Probabilistic Exponential Integrators*,
+  arXiv:2305.14978.
+* Matérn-(q+1/2) prior — Särkkä & Solin 2019, *Applied Stochastic
+  Differential Equations*.
 """
 
 from __future__ import annotations
@@ -50,10 +49,10 @@ def test_iwp_spec_with_multidimensional_state_uses_kronecker() -> None:
 def test_ioup_spec_scalar_rate_sets_bottom_diagonal_to_rate_verbatim() -> None:
     """IOUP with scalar rate: ``drift[-1, -1] = rate`` per dim.
 
-    Follows the Julia ``priors/ioup.jl:103-117`` convention where the
-    user passes the drift block entry directly (already signed) rather
-    than passing a positive ``driftspeed`` that the implementation then
-    negates. This generalises uniformly to vector / matrix rates where
+    Follows the convention where the user passes the drift block entry
+    directly (already signed) rather than passing a positive
+    ``driftspeed`` that the implementation then negates. This generalises
+    uniformly to vector / matrix rates where
     the user supplies arbitrary drift blocks.
     """
     spec = IOUPPriorSpec(num_derivatives=1, wiener_process_dimension=1, rate_parameter=-2.0)

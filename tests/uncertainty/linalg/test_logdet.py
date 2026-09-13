@@ -4,10 +4,8 @@ References
 ----------
 * Ubaru, Chen, Saad 2017 — *Fast estimation of tr(f(A)) via stochastic
   Lanczos quadrature*.
-* Krämer arXiv:2405.17277 — *Gradients of matrix functions in JAX*.
-
-Sibling reference (line-by-line port): ``matfree/matfree/funm.py:178
-integrand_funm_sym_logdet`` plus the Hutchinson-style outer averaging.
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices*.
 """
 
 from __future__ import annotations

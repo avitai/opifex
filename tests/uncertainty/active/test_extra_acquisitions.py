@@ -1,14 +1,13 @@
 r"""Tests for extra acquisition kernels — Slice 23 (audit finding #4b).
 
-Phase 8 Task 8.3 trieste source map (``08-...:557-584``) lists three
+Phase 8 Task 8.3 source map (``08-...:557-584``) lists three
 acquisitions that ship in the **base** ``acquisition.py``:
 
-* MES — Min-Value Entropy Search (Wang+ 2017; trieste
-  ``function/entropy.py:50``).
+* MES — Min-Value Entropy Search (Wang & Jegelka 2017).
 * GIBBON — General-purpose Information-Based Bayesian OptimisatioN
-  (Moss+ 2021; trieste ``function/entropy.py:236``).
+  (Moss+ 2021).
 * IntegratedVarianceReduction — active-learning acquisition for GP
-  models (trieste ``function/active_learning.py:250``).
+  models (Cohn, Ghahramani & Jordan 1996).
 
 Plus three additions to ``batch_active.py``:
 

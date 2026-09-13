@@ -76,9 +76,7 @@ jupyter lab examples/uncertainty/uqno_darcy.ipynb
 
 ### Three-Stage Conformal UQNO
 
-The canonical UQNO (the PyTorch reference at
-[`neuraloperator/neuralop/models/uqno.py`](https://github.com/neuraloperator/neuraloperator/blob/main/neuralop/models/uqno.py))
-is **not** Bayesian — neither at the layer level nor
+The UQNO of Ma et al. (2024) is **not** Bayesian — neither at the layer level nor
 at the predictive-distribution level. It is a conformal-prediction
 wrapper around a pair of deterministic FNOs:
 

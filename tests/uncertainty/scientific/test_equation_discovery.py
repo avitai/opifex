@@ -1,9 +1,8 @@
 """Tests for the Bayesian-SINDy equation-discovery UQ surface (Phase-13 F4).
 
 The Step-10 stubs are replaced by a real regularized-horseshoe Bayesian
-SINDy ported from pysindy's ``SBR`` optimizer
-(``/mnt/ssd2/Works/pysindy/pysindy/optimizers/sbr.py``) onto a BlackJAX
-NUTS sampler. These tests pin the recovery behaviour, the inclusion-probability
+SINDy (Hirsh, Barajas-Solano & Kutz 2021, arXiv:2107.02107) sampled with
+BlackJAX NUTS. These tests pin the recovery behaviour, the inclusion-probability
 contract, log-density jittability, and reproducibility.
 """
 

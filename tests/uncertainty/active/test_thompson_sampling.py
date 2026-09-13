@@ -7,7 +7,7 @@ Continuous Thompson sampling for Bayesian optimisation (Russo+ 2018
 2. Return ``argmin_x f̃(x)`` over the candidate set (or, equivalently,
    ``argmax`` under a maximisation convention).
 
-The opifex port consumes the existing
+The implementation consumes the existing
 :class:`opifex.uncertainty.types.PredictiveDistribution`'s
 ``samples`` field (one Monte-Carlo draw per candidate) and returns
 the argmin index.
@@ -15,7 +15,6 @@ the argmin index.
 References
 ----------
 * Russo+ 2018 — *A Tutorial on Thompson Sampling*, FnT.
-* trieste ``acquisition/function/continuous_thompson_sampling.py``.
 """
 
 from __future__ import annotations

@@ -5,13 +5,9 @@ Gaussian-process backend. Two specs (``GPJaxAdapterSpec``,
 ``TinygpAdapterSpec``) are user-installed (``OPTIONAL``); three
 (``MarkovflowAdapterSpec``, ``BayesnewtonAdapterSpec``,
 ``KalmanJaxAdapterSpec``) are metadata-only because their algorithms
-are vendored elsewhere or live in non-JAX frameworks.
+are implemented elsewhere in opifex or live in non-JAX frameworks.
 
-Canonical reference:
-* ``../gpjax/gpjax/*`` for GPJax family enumeration.
-* ``../tinygp/tinygp/*`` for tinygp family enumeration.
-* ``../markovflow``, ``../bayesnewton``, ``../kalman-jax`` for the
-  state-space lineage.
+References: the papers cited in :mod:`opifex.uncertainty.adapters.gp`.
 """
 
 from __future__ import annotations
@@ -104,7 +100,7 @@ def test_gp_adapter_spec_wrap_raises_actionable_error(spec_cls: type) -> None:
     "spec_cls", [MarkovflowAdapterSpec, BayesnewtonAdapterSpec, KalmanJaxAdapterSpec]
 )
 def test_state_space_adapter_specs_advertise_vendored_algorithms(spec_cls: type) -> None:
-    """Metadata-only specs point users at the vendored statespace module."""
+    """Metadata-only specs point users at the statespace module."""
     spec: Any = spec_cls()
     notes_text = spec.notes.lower()
     assert "vendored" in notes_text or "statespace" in notes_text
@@ -112,7 +108,7 @@ def test_state_space_adapter_specs_advertise_vendored_algorithms(spec_cls: type)
 
 def test_kalman_jax_adapter_spec_emits_deprecation_warning() -> None:
     """``KalmanJaxAdapterSpec`` emits a ``DeprecationWarning`` pointing at
-    the bayesnewton successor (per kalman-jax's own README:1)."""
+    the bayesnewton successor."""
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
         KalmanJaxAdapterSpec()

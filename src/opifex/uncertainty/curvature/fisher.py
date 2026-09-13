@@ -10,10 +10,8 @@ The empirical Fisher matrix at parameters ``θ`` for a per-sample loss
 The diagonal of this matrix is the most popular cheap curvature proxy
 for Laplace approximations and Adam-style optimisers.
 
-Canonical reference:
-* Daxberger Laplace and bayesian-torch use this same per-sample outer
-  product. opifex computes it via the canonical
-  ``jax.vmap(jax.grad(per_sample_loss))`` recipe.
+The diagonal is computed with the per-sample-gradient recipe
+``jax.vmap(jax.grad(per_sample_loss))``.
 
 References:
 ----------

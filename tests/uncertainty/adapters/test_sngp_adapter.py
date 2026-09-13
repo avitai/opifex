@@ -12,29 +12,25 @@ The opifex :class:`SNGPAdapter` wraps an ALREADY-FITTED state carrying
 * the last-layer weight matrix ``beta`` (``output_weights``), and
 * the Laplace precision matrix ``Sigma^{-1}`` (``precision_matrix``).
 
-These tests build the precision matrix via :func:`fit_sngp_precision` (a faithful
-port of edward2's ``LaplaceRandomFeatureCovariance`` initial + update logic) and
-assert the adapter reproduces the edward2 predictive *exactly*:
+These tests build the precision matrix via :func:`fit_sngp_precision` (ridge prior
+plus exact Laplace update) and assert the adapter reproduces the SNGP closed-form
+predictive *exactly*:
 
 * the adapter satisfies :class:`ModelUncertaintyAdapterProtocol`;
 * ``mean == phi @ output_weights`` and the per-sample epistemic variance equals
   ``ridge * sum((solve_triangular(chol, phi.T))**2, axis=0)`` cross-checked
-  against ``ridge * diag(phi @ inv(precision) @ phi.T)`` — the edward2
-  ``compute_predictive_covariance`` chol-solve formula;
+  against ``ridge * diag(phi @ inv(precision) @ phi.T)`` — the Cholesky-solve
+  form of the Laplace predictive covariance;
 * ``fit_sngp_precision`` (gaussian) equals ``ridge*I + phi.T @ phi`` and is SPD;
 * ``wrap`` rejects a non-SNGP capability;
 * the predictive is ``jit`` / ``vmap`` / ``grad`` safe;
 * :class:`SNGPState` is a pytree whose precision / output-weights arrays travel
   through flatten/unflatten while ``feature_fn`` stays static;
-* :func:`sngp_mean_field_logits` reproduces edward2 ``mean_field_logits``.
+* :func:`sngp_mean_field_logits` reproduces the mean-field logit scaling.
 
-Reference (ported, not invented):
+Reference:
 * Liu, J. et al. 2020 — *Simple and Principled Uncertainty Estimation with
   Deterministic Deep Learning via Distance Awareness* (SNGP), arXiv:2006.10108.
-* ``../edward2/edward2/jax/nn/random_feature.py``
-  (``LaplaceRandomFeatureCovariance.update_precision_matrix``:311-362 and
-  ``.compute_predictive_covariance``:364-405).
-* ``../edward2/edward2/jax/nn/utils.py`` (``mean_field_logits``:54-101).
 """
 
 from __future__ import annotations
@@ -132,12 +128,12 @@ def test_sngp_adapter_satisfies_protocol() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Predictive correctness — edward2 chol-solve formula
+# 2. Predictive correctness — Cholesky-solve formula
 # ---------------------------------------------------------------------------
 
 
 def test_sngp_predict_distribution_matches_edward2_chol_solve() -> None:
-    """Mean / epistemic / aleatoric / total match the edward2 predictive formulas."""
+    """Mean / epistemic / aleatoric / total match the SNGP predictive formulas."""
     sigma_squared = 0.05
     state = _make_state(observation_noise_variance=sigma_squared)
     wrapped = SNGPAdapter().wrap(state, _make_capability())
@@ -149,7 +145,7 @@ def test_sngp_predict_distribution_matches_edward2_chol_solve() -> None:
     phi = _feature_fn(x)
     expected_mean = phi @ state.output_weights
 
-    # edward2 compute_predictive_covariance (random_feature.py:393-404):
+    # Laplace predictive covariance via a Cholesky solve:
     # chol = cholesky(precision, lower); y = solve_triangular(chol, phi.T);
     # var_diag = ridge * sum(y**2, axis=0).
     chol = jax.scipy.linalg.cholesky(state.precision_matrix, lower=True)
@@ -231,7 +227,7 @@ def test_sngp_metadata_advertises_method() -> None:
 
 
 def test_fit_sngp_precision_gaussian_equals_ridge_identity_plus_gram() -> None:
-    """Gaussian precision equals ``ridge*I + phi.T @ phi`` (edward2 exact update)."""
+    """Gaussian precision equals ``ridge*I + phi.T @ phi`` (exact update)."""
     train_features = _train_features()
     precision = fit_sngp_precision(
         train_features, ridge_penalty=_RIDGE_PENALTY, likelihood="gaussian"
@@ -420,12 +416,12 @@ def test_sngp_state_validate_rejects_negative_noise() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. mean_field_logits — edward2 utils.py port (classification helper)
+# 7. mean_field_logits — mean-field logit scaling (classification helper)
 # ---------------------------------------------------------------------------
 
 
 def test_sngp_mean_field_logits_logistic_scales_by_sqrt_factor() -> None:
-    """Logistic mean-field scaling: ``logits / sqrt(1 + var*factor)`` (edward2 utils:95)."""
+    """Logistic mean-field scaling: ``logits / sqrt(1 + var*factor)``."""
     logits = jnp.array([[1.0, -2.0, 0.5], [0.0, 3.0, -1.0]])
     variances = jnp.array([0.4, 1.2])
     factor = 0.5
@@ -439,7 +435,7 @@ def test_sngp_mean_field_logits_logistic_scales_by_sqrt_factor() -> None:
 
 
 def test_sngp_mean_field_logits_poisson_scales_by_exp() -> None:
-    """Poisson mean-field scaling: ``logits / exp(-var*factor/2)`` (edward2 utils:93)."""
+    """Poisson mean-field scaling: ``logits / exp(-var*factor/2)``."""
     logits = jnp.array([[1.0, -2.0], [0.0, 3.0]])
     variances = jnp.array([0.4, 1.2])
     factor = 0.5
@@ -452,7 +448,7 @@ def test_sngp_mean_field_logits_poisson_scales_by_exp() -> None:
 
 
 def test_sngp_mean_field_logits_negative_factor_is_identity() -> None:
-    """A negative ``mean_field_factor`` returns the logits unchanged (edward2 utils:85-86)."""
+    """A negative ``mean_field_factor`` returns the logits unchanged."""
     logits = jnp.array([[1.0, -2.0, 0.5]])
     variances = jnp.array([0.4])
     adjusted = sngp_mean_field_logits(

@@ -6,8 +6,7 @@ Tests the canonical linear autoregressive multi-fidelity model
 
 where each ``delta_i`` is an independent GP, parametrised by per-level
 length-scales and output-scales plus the inter-level scaling factor
-``rho_i`` (Kennedy & O'Hagan 2000 §2.5; bayesnewton mirror —
-``emukit.multi_fidelity.kernels.linear_multi_fidelity_kernel``).
+``rho_i`` (Kennedy & O'Hagan 2000 §2.5).
 """
 
 from __future__ import annotations

@@ -15,15 +15,10 @@ References:
 * SWAG — Maddox, Garipov, Izmailov, Vetrov, Wilson, "A Simple Baseline for
   Bayesian Uncertainty in Deep Learning", NeurIPS 2019 (arXiv:1902.02476):
   sample weights ``θ ~ N(θ_SWA, ½(Σ_diag + Σ_lowrank))``, forward each draw,
-  aggregate the predictive mean/variance. Sampling formula cross-checked
-  against ``../torch-uncertainty/src/torch_uncertainty/methods/swag.py``
-  (``_fullrank_sample``).
+  aggregate the predictive mean/variance.
 * BatchEnsemble — Wen, Tran, Ba, "BatchEnsemble: An Alternative Approach to
   Efficient Ensemble and Lifelong Learning", ICLR 2020 (arXiv:2002.06715):
-  rank-1 per-member fast weights ``y_m = ((x ∘ r_m) W) ∘ s_m``. Layer
-  formula cross-checked against
-  ``../torch-uncertainty/src/torch_uncertainty/layers/batch_ensemble.py``
-  (``BatchLinear``).
+  rank-1 per-member fast weights ``y_m = ((x ∘ r_m) W) ∘ s_m``.
 """
 
 from __future__ import annotations

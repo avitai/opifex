@@ -1,15 +1,14 @@
 """Mean-field Automatic Differentiation Variational Inference (ADVI).
 
-Line-by-line port of the mean-field VI primitives from
-``../blackjax/blackjax/vi/meanfield_vi.py`` and the shared Gaussian-VI
-ELBO step from ``../blackjax/blackjax/vi/_gaussian_vi.py``. The only
-adaptations are typing-modernisation (PEP 604 unions, ``frozen``
-dataclasses with ``slots`` + ``kw_only``) and the addition of an
-``approximate`` driver that runs ``num_iterations`` Adam steps so the
-``ADVIBackend.fit`` wrapper can call a single function — mirroring the
-shape of :mod:`_pathfinder_algorithm` and :mod:`_svgd_algorithm`.
+Mean-field Gaussian variational primitives (initialisation,
+reparametrised sampling, variational log-density) and the Monte Carlo
+ELBO step of ADVI (Kucukelbir et al. 2017), with the stick-the-landing
+gradient estimator (Roeder et al. 2017) as an option. An
+``approximate`` driver runs ``num_iterations`` Adam steps so the
+``ADVIBackend.fit`` wrapper can call a single function, with the same
+shape as :mod:`_pathfinder_algorithm` and :mod:`_svgd_algorithm`.
 
-Canonical reference:
+References:
 * Kucukelbir, A., Tran, D., Ranganath, R., Gelman, A., Blei, D. M. 2017
   — *Automatic Differentiation Variational Inference*, JMLR 18(14).
 * Roeder, G., Wu, Y., Duvenaud, D. 2017 — *Sticking the landing:

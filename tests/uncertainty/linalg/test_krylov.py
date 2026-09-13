@@ -8,11 +8,8 @@ References
   matrix eigenvalue problem*.
 * Golub & Kahan 1965 — *Calculating the singular values and pseudo-inverse of a
   matrix*.
-* Krämer arXiv:2405.17277 — *Gradients of matrix functions in JAX*
-  (differentiable Lanczos / Arnoldi).
-
-Sibling reference (line-by-line port): ``matfree/matfree/decomp.py`` —
-``tridiag_sym``, ``hessenberg``, ``bidiag``.
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices* (differentiable Lanczos / Arnoldi).
 """
 
 from __future__ import annotations

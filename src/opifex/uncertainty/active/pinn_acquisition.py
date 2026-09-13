@@ -1,8 +1,10 @@
 """PDE-residual acquisition for PINN-style active learning.
 
-Reference: ``../al4pde`` (pool-based PDE active learning). The Pool-Based
-class drives candidate selection via the PDE residual evaluated at each
-pool element. The opifex JAX-native rewrite:
+Reference: residual-based adaptive refinement (RAR) of Lu, Meng, Mao &
+Karniadakis (2021), *DeepXDE: A Deep Learning Library for Solving
+Differential Equations*, SIAM Review 63(1):208-228, arXiv:1907.04502,
+which adds training points where the PDE residual is large. The opifex
+JAX-native implementation:
 
 * Accepts either an ``nnx.Module`` or a plain callable as the surrogate.
 * Delegates the residual computation to a caller-supplied
@@ -81,8 +83,8 @@ def pinn_residual_acquisition(
         uncertainty_fn(predictions) if uncertainty_fn is not None else jnp.zeros_like(residual_norm)
     )
 
-    # Combine: rank primarily by residual norm. The convention follows
-    # al4pde's PoolBased — high-residual points are most informative.
+    # Combine: rank primarily by residual norm. As in residual-based
+    # adaptive refinement, high-residual points are most informative.
     scores = residual_norm
     k = min(int(batch_size), int(scores.shape[0]))
     top_indices = jnp.argsort(scores)[-k:][::-1]

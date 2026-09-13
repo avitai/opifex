@@ -11,11 +11,12 @@ full-network diagonal-Laplace adapter in
 ``opifex.uncertainty.curvature.laplace`` — that one Monte-Carlo-samples
 parameters; this one evaluates the analytic last-layer predictive.
 
-Canonical references:
+References:
 * Ober & Rasmussen 2019 — *Benchmarking the Neural Linear Model*.
 * Snoek et al. 2015 — *Scalable Bayesian Optimization Using DNNs*.
 * Daxberger et al. 2021 — *Laplace Redux* (last-layer Laplace).
-* ``../laplax/laplax/eval/pushforward.py`` (GLM ``J @ Sigma @ J^T`` cov).
+* Immer, Korzepa & Bauer 2021 — *Improving predictions of Bayesian neural nets
+  via local linearization* (GLM ``J @ Sigma @ J^T`` cov), arXiv:2008.08400.
 """
 
 from __future__ import annotations

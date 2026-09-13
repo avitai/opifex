@@ -1,8 +1,7 @@
 r"""Tests for ``active/async_bo.py`` — Slice 23 (audit finding #4b).
 
 Phase 8 Task 8.3 (``08-...:586-601``) requires ``active/async_bo.py``
-shipping AsynchronousOptimization + AsynchronousGreedy rules (port of
-``../trieste/acquisition/rule.py:492,680``).
+shipping AsynchronousOptimization + AsynchronousGreedy rules.
 
 The asynchronous BO regime maintains a set of "pending" candidates
 (workers currently evaluating but not yet returned) and combines them

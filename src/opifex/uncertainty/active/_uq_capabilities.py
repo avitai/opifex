@@ -35,8 +35,9 @@ _BALD_ACQUISITION_CAPABILITY = UQCapability(
     notes=(
         "Single-point acquisition kernels (BALD / EI / Log-EI / UCB / "
         "LCB / PI) and the :func:`acquire` named-strategy dispatcher. "
-        "Ported from trieste's TensorFlow originals into pure JAX; see "
-        "per-kernel docstring cites in acquisition.py."
+        "References: Houlsby et al. 2014 (BALD); Jones et al. 1998 (EI); "
+        "Ament et al. arXiv:2310.20708 (Log-EI); Srinivas et al. "
+        "arXiv:0912.3995 (UCB / LCB); Kushner 1964 (PI)."
     ),
 )
 

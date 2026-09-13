@@ -1,9 +1,8 @@
 """`PointwiseQuantileLoss` numerical contract.
 
-The opifex implementation must match the canonical PyTorch reference
-at ``../neuraloperator/neuralop/losses/data_losses.py::PointwiseQuantileLoss``
-numerically (within float tolerance) on identical inputs. The reference
-formula:
+The opifex implementation must match an independent numpy evaluation of the
+UQNO residual-quantile loss (Ma et al. 2024, arXiv:2402.01960) numerically
+(within float tolerance) on identical inputs. The reference formula:
 
     quantile = 1 - alpha
     y_abs    = abs(y)
@@ -29,7 +28,7 @@ from opifex.uncertainty.losses import PointwiseQuantileLoss
 
 
 def _reference_loss_numpy(y_pred: jax.Array, y: jax.Array, alpha: float, reduction: str) -> float:
-    """Re-implement the PyTorch reference formula in numpy for cross-check."""
+    """Re-implement the reference loss formula in numpy for cross-check."""
     import numpy as np
 
     yp = np.asarray(y_pred)
@@ -81,7 +80,7 @@ def test_pointwise_quantile_loss_rejects_out_of_range_alpha(alpha: float) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Numerical match with PyTorch reference
+# Numerical match with the numpy reference formula
 # ---------------------------------------------------------------------------
 
 

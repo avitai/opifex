@@ -7,19 +7,13 @@ with ``Sigma_W = L @ L.T`` for a lower-triangular Cholesky factor ``L``,
 yields a CLOSED-FORM (analytic) regression predictive — no Monte-Carlo
 sampling required.
 
-This is the regression closed-form predictive matching the JAX
-reference (``../vbll/vbll/jax/layers/regression.py`` +
-``../vbll/vbll/jax/utils/distributions.py``). Classification
-(MC-softmax marginalization) is out of scope for this adapter — the JAX
-reference implements regression only.
+This is the regression closed-form predictive of the VBLL model.
+Classification (MC-softmax marginalization) is out of scope for this
+adapter.
 
-Canonical reference:
+Reference:
 * Harrison, Willes & Snoek 2024 — *Variational Bayesian Last Layers*,
   arXiv:2404.11599.
-* ``DenseNormal.covariance_weighted_inner_prod``:
-  ``../vbll/vbll/jax/utils/distributions.py:157-160``.
-* Closed-form predictive ``(W() @ x).squeeze + noise()``:
-  ``../vbll/vbll/jax/layers/regression.py:61-62``.
 """
 
 from __future__ import annotations
@@ -124,7 +118,7 @@ def test_vbll_predict_distribution_matches_closed_form() -> None:
     cholesky = state.weight_covariance_cholesky
     expected_mean = phi @ state.weight_mean
 
-    # L-form (the reference form): epistemic_scalar = sum((phi @ L)**2).
+    # L-form: epistemic_scalar = sum((phi @ L)**2).
     lt_phi = phi @ cholesky
     epistemic_scalar = jnp.sum(lt_phi**2, axis=-1)
     expected_epistemic = epistemic_scalar[:, None] * jnp.ones((1, _N_OUTPUTS))

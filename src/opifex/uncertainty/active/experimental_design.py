@@ -9,9 +9,8 @@ Implements:
   the estimator collapses to the closed-form
   ``0.5 * log(1 + Var[d^T theta] / sigma_noise^2)``.
 * :func:`bayesian_experimental_design_loop` — generic ask-tell BO loop
-  driver. Mirrors the structure of ``trieste/ask_tell_optimization.py:742``
-  (``AskTellOptimizer``) but stripped to the opifex active-learning
-  surface: given a surrogate that supports ``predict(candidates)`` and
+  driver on the opifex active-learning surface: given a surrogate that
+  supports ``predict(candidates)`` and
   ``update(x, y)``, the loop repeatedly:
 
   1. queries the surrogate's predictive distribution;
@@ -173,8 +172,7 @@ def bayesian_experimental_design_loop(
 ) -> BayesianExperimentalDesignResult:
     r"""Ask-tell Bayesian-experimental-design / BO loop.
 
-    Mirrors the structure of ``trieste/ask_tell_optimization.py:742``
-    (``AskTellOptimizer``). The opifex variant exposes a tiny surface:
+    The loop exposes a tiny surface:
 
     1. Predict the surrogate's :class:`PredictiveDistribution` over
        ``candidates``.

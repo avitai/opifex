@@ -6,8 +6,7 @@ Every function takes scalar ``jax.Array`` inputs and returns a scalar
 ``jax.Array``; integer ``dataset_size`` arguments are accepted as Python ``int``
 or ``jax.Array``.
 
-Canonical references (read-only):
-
+References:
 * McAllester (1999), formulated as in **Alquier (2024)** survey
   (``arXiv:2110.11216``) and **Dziugaite & Roy (2017)** training-by-PAC-Bayes
   (``arXiv:1703.11008``):

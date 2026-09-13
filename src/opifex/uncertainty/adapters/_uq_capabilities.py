@@ -7,7 +7,7 @@ declaration into the singleton :class:`UQRegistry`.
 
 The GP entries (Task 6.3.4 spec inventory) live here rather than in a
 dedicated ``opifex.uncertainty.gp/`` subpackage because Phase 6 Task
-6.3.4 shipped specs only — the algorithms themselves are vendored into
+6.3.4 shipped specs only — the algorithms themselves are implemented in
 :mod:`opifex.uncertainty.statespace` (state-space GPs) or live in
 user-installed backends (GPJax / tinygp).
 
@@ -26,7 +26,7 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 # Gaussian-process adapter specs (Task 6.3.4 inventory).
 #
 # Each adapter is metadata-only (the algorithms are either in a
-# user-installed backend or vendored under
+# user-installed backend or implemented under
 # :mod:`opifex.uncertainty.statespace`); ``default_strategy`` is
 # ``DefaultStrategy.UNSUPPORTED`` until a backend lands or the user
 # installs the upstream package (plan §7.2).
@@ -63,7 +63,7 @@ _MARKOVFLOW_ADAPTER_CAPABILITY = UQCapability(
     source_package="markovflow",
     notes=(
         "MarkovflowAdapterSpec — metadata-only. Specific algorithms "
-        "(banded-precision Cholesky, SDE-linearize) are vendored into "
+        "(banded-precision Cholesky, SDE-linearize) are implemented in "
         "opifex.uncertainty.statespace. markovflow is TF-based and not "
         "directly importable from opifex."
     ),
@@ -76,7 +76,7 @@ _BAYESNEWTON_ADAPTER_CAPABILITY = UQCapability(
     notes=(
         "BayesnewtonAdapterSpec — metadata-only. Sequential and "
         "parallel-scan Kalman primitives plus Matern / Cosine / "
-        "Periodic state-space kernels are vendored into "
+        "Periodic state-space kernels are implemented in "
         "opifex.uncertainty.statespace. bayesnewton's pinned "
         "jax==0.4.14 + objax stack conflicts with the opifex JAX "
         "baseline."
@@ -88,8 +88,8 @@ _KALMAN_JAX_ADAPTER_CAPABILITY = UQCapability(
     default_strategy=DefaultStrategy.UNSUPPORTED,
     source_package="kalman-jax",
     notes=(
-        "KalmanJaxAdapterSpec — deprecated. kalman-jax/README.md:1 "
-        "states bayesnewton is the official successor; the generic "
+        "KalmanJaxAdapterSpec — deprecated. The kalman-jax project "
+        "names bayesnewton as its successor; the generic "
         "LTI-SDE discretization is covered by "
         "opifex.uncertainty.statespace.discretize_lti_sde. Constructing "
         "the spec emits a DeprecationWarning."
@@ -114,7 +114,7 @@ _LAPLACE_ADAPTER_CAPABILITY = UQCapability(
     notes=(
         "LaplaceAdapterSpec — diagonal Laplace posterior approximation "
         "around a MAP point (MacKay 1992; Daxberger et al. "
-        "arXiv:2106.14806). Curvature kernels vendored in "
+        "arXiv:2106.14806). Curvature kernels live in "
         "opifex.uncertainty.curvature."
     ),
 )
@@ -157,9 +157,9 @@ _SNGP_ADAPTER_CAPABILITY = UQCapability(
         "layer (Liu et al. NeurIPS 2020) for distance-aware uncertainty "
         "and OOD detection. Wraps a fitted fixed-RFF feature map + "
         "last-layer weights + Laplace precision matrix (built via "
-        "fit_sngp_precision, a faithful edward2 port); the regression "
+        "fit_sngp_precision); the regression "
         "predictive reuses the shared Gaussian-linear-head assembly with "
-        "epistemic variance from the edward2 chol-solve diagonal."
+        "epistemic variance from the Cholesky-solve diagonal."
     ),
 )
 

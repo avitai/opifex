@@ -1,36 +1,22 @@
 r"""Six closed-form kernel-measure crosses for Bayesian quadrature.
 
 Tests for :mod:`opifex.uncertainty.quadrature.kernels`. Hand-derived
-closed-form ground truths for each cross verify the line-by-line port
-of the emukit reference at ``../emukit/emukit/quadrature/kernels/``.
+closed-form ground truths check each cross.
 
 The six crosses (per design fix #190's catalogue):
 
 * ``qk_rbf_gaussian`` / ``qkq_rbf_gaussian`` — RBF kernel × diagonal
-  Gaussian measure. Reference: emukit
-  ``quadrature_rbf.py:QuadratureRBFGaussianMeasure`` (lines 150, 158).
+  Gaussian measure.
 * ``qk_rbf_lebesgue`` / ``qkq_rbf_lebesgue`` — RBF kernel × product
-  Lebesgue measure. Reference: emukit
-  ``quadrature_rbf.py:QuadratureRBFLebesgueMeasure`` (lines 105, 113).
+  Lebesgue measure.
 * ``qk_matern12_product_lebesgue`` / ``qkq_matern12_product_lebesgue``
   — product Matern-1/2 (exponential) kernel × product Lebesgue.
-  Reference: emukit
-  ``quadrature_matern12.py:QuadratureProductMatern12LebesgueMeasure``
-  (lines 93, 103).
 * ``qk_matern32_product_lebesgue`` / ``qkq_matern32_product_lebesgue``
   — product Matern-3/2 kernel × product Lebesgue.
-  Reference: emukit
-  ``quadrature_matern32.py:QuadratureProductMatern32LebesgueMeasure``
-  (lines 93, 103).
 * ``qk_matern52_product_lebesgue`` / ``qkq_matern52_product_lebesgue``
   — product Matern-5/2 kernel × product Lebesgue.
-  Reference: emukit
-  ``quadrature_matern52.py:QuadratureProductMatern52LebesgueMeasure``
-  (lines 93, 111).
 * ``qk_brownian_lebesgue`` / ``qkq_brownian_lebesgue`` — Brownian
-  motion kernel × 1-D Lebesgue. Reference: emukit
-  ``quadrature_brownian.py:QuadratureBrownianLebesgueMeasure``
-  (lines 89, 95).
+  motion kernel × 1-D Lebesgue.
 """
 
 from __future__ import annotations

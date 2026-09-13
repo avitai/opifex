@@ -16,8 +16,7 @@ Single registered surface:
   Advertises :attr:`supports_pac_bayes_certificate=True` and
   :attr:`default_strategy=DefaultStrategy.PAC_BAYES`.
 
-Canonical references (read-only):
-
+References:
 * Dziugaite & Roy (2017) — ``arXiv:1703.11008``.
 * Pérez-Ortiz et al. (JMLR v22) — empirical PAC-Bayes for deep networks.
 * Alquier (2024) — ``arXiv:2110.11216`` (survey).

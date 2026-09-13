@@ -4,11 +4,10 @@ References
 ----------
 * Fong, Saunders 2011 — *LSMR: An iterative algorithm for sparse least-squares
   problems*, SIAM J. Sci. Comput.
-* Roy et al. arXiv:2510.19634 — differentiable LSMR via custom VJP.
+* Roy, Hauberg, Krämer arXiv:2510.19634 — custom gradients for matrix-free
+  least-squares solvers.
 
-Sibling reference: ``matfree/matfree/lstsq.py`` (full LSMR with
-``custom_vjp`` for low-memory exact reverse-mode gradients). opifex's
-implementation provides the forward pass via Golub-Kahan
+opifex's implementation provides the forward pass via Golub-Kahan
 bidiagonalisation + small least-squares solve; differentiable VJP
 support is a separate task (custom_vjp is non-trivial here).
 """

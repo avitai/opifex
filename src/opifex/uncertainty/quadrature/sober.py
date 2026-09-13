@@ -1,6 +1,6 @@
 r"""SOBER kernel-recombination point-set Bayesian quadrature.
 
-A JAX-native port of the SOBER algorithm (Adachi et al,
+A JAX implementation of the SOBER algorithm (Adachi et al,
 arXiv:2206.04734 + arXiv:2301.11832) — kernel recombination via the
 Tchernychova-Lyons CAR (Caratheodory recombination) algorithm with a
 Nyström low-rank kernel approximation.
@@ -12,14 +12,6 @@ features given by the leading singular vectors of a Nyström subsample
 ``K(nys, nys)``, this produces a point set whose kernel mean
 embedding matches the candidate distribution's — i.e. an optimal
 point set for kernel-based quadrature on the Nyström subspace.
-
-Sibling reference (READ-ONLY port — never imported at runtime):
-``../SOBER/SOBER/_rchq.py`` — specifically ``recombination``
-(line 5), ``rc_kernel_svd`` (line 42), ``ker_svd_sparsify`` (line
-34), ``Mod_Tchernychova_Lyons`` (line 51), and ``Tchernychova_Lyons_CAR``
-(line 224). The original lives at github.com/ma921/SOBER, derived
-from the Caratheodory-Tchernychova-Lyons recombination of
-github.com/FraCose/Recombination_Random_Algos.
 
 References:
 ----------
@@ -59,8 +51,8 @@ def caratheodory_recombination(
     rank-one updates that zero out one weight per iteration while
     holding the moment invariant.
 
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``../SOBER/SOBER/_rchq.py:Tchernychova_Lyons_CAR`` (line 224).
+    Reference: Tchernychova & Lyons 2016 (Caratheodory cubature
+    measures).
 
     Args:
         features: ``(N, n)`` feature matrix in the kernel-eigenfunction
@@ -120,9 +112,6 @@ def _kernel_svd_sparsify(
     Returns ``U^T`` (shape ``(num_features, M)``) — the leading
     eigenfunctions of ``K(nystrom_points, nystrom_points)`` used as
     the feature basis for SOBER's moment-matching.
-
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``../SOBER/SOBER/_rchq.py:ker_svd_sparsify`` (line 34).
     """
     gram_matrix = kernel_fn(nystrom_points, nystrom_points)
     symmetrised = 0.5 * (gram_matrix + gram_matrix.T)
@@ -146,9 +135,8 @@ def sober_kernel_recombination(
     Nyström subspace spanned by the leading singular vectors of
     ``K(nystrom_points, nystrom_points)``.
 
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``../SOBER/SOBER/_rchq.py:recombination`` (line 5) and
-    ``rc_kernel_svd`` (line 42).
+    Reference: Adachi et al. 2022 (arXiv:2206.04734) and 2023
+    (arXiv:2301.11832).
 
     Args:
         candidate_points: ``(N, d)`` empirical-measure samples.

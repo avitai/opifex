@@ -9,10 +9,6 @@ References:
 * Angelopoulos, Bates, Jordan, Malik 2021, "Uncertainty Sets for Image
   Classifiers Using Conformal Prediction", ICLR (arXiv:2009.14193) — RAPS
   regularised APS.
-
-Cross-checked against Fortuna's
-``fortuna.conformal.classification.simple_prediction`` and
-``adaptive_prediction`` for LAC and APS respectively.
 """
 
 from __future__ import annotations

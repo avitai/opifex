@@ -1,8 +1,7 @@
 r"""Stein Variational Gradient Descent (Liu+Wang 2016) algorithm tests.
 
 Tests for :mod:`opifex.uncertainty.inference_backends._svgd_algorithm`,
-a JAX-native port of the SVGD reference at
-``../blackjax/blackjax/vi/svgd.py``. The algorithm uses a kernelised
+the JAX-native SVGD primitives. The algorithm uses a kernelised
 gradient flow that minimises KL to the target posterior:
 
 * Particle update

@@ -1,15 +1,13 @@
-"""JAX-native data-likelihood ports: Fenrir + DALTON.
+"""JAX-native data likelihoods: Fenrir + DALTON.
 
 Tests for :mod:`opifex.uncertainty.scientific._likelihoods`. The module
 implements two log-likelihood combinators referenced by the
 probabilistic-numerics catalogue:
 
 * :func:`fenrir_data_loglik` — Tronarp et al, ICML 2022 (arXiv:2202.01287).
-  Post-solve smoothing data likelihood. Sibling reference
-  ``ProbNumDiffEq.jl/src/data_likelihoods/fenrir.jl:30-128``.
-* :func:`dalton_data_loglik` — Wu et al, 2023 (arXiv:2306.05566). Three-
-  term combinator ``data_ll + with_pn_ll - without_pn_ll``. Sibling
-  reference ``ProbNumDiffEq.jl/src/data_likelihoods/dalton.jl:23-76``.
+  Post-solve smoothing data likelihood.
+* :func:`dalton_data_loglik` — Wu & Lysy, AISTATS 2024 (arXiv:2306.05566).
+  Three-term combinator ``data_ll + with_pn_ll - without_pn_ll``.
 """
 
 from __future__ import annotations

@@ -7,8 +7,8 @@ forward pass yields the GP predictive mean + variance.
 
 The opifex :class:`DUEAdapter` wraps an ALREADY-FITTED deep-kernel feature
 extractor + :class:`SVGPState` (the GP posterior over the FEATURES) and reuses
-opifex's :func:`opifex.uncertainty.gp.predict_svgp` (Titsias-collapsed SVGP,
-GPJax-grounded) for the predictive. The spectral-normalization / bi-Lipschitz
+opifex's :func:`opifex.uncertainty.gp.predict_svgp` (Titsias-collapsed SVGP)
+for the predictive. The spectral-normalization / bi-Lipschitz
 feature training is upstream
 (``opifex.neural.operators.specialized.spectral_normalization``); this adapter
 does not train features — it evaluates the fitted deep-kernel + SVGP at

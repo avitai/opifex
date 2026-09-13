@@ -2,8 +2,7 @@ r"""Tests for ``active/trust_region.py`` — Slice 22 (audit finding #4a).
 
 Phase 8 Task 8.3 (``08-...:586-601``) requires
 ``active/trust_region.py`` shipping TREGOBox, TURBOBox, and
-BatchTrustRegionBox. Reference: trieste ``acquisition/rule.py:1863,
-1923, 2038``. The opifex port is pure-JAX, no equinox dependency,
+BatchTrustRegionBox. The implementation is pure-JAX, no equinox dependency,
 follows the Pattern-A frozen-slotted-kw-only dataclass shape.
 
 The trust region maintains an axis-aligned bounding box around the

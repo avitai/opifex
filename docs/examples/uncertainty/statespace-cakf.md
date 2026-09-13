@@ -42,9 +42,8 @@ The current public surface of `opifex.uncertainty.statespace.cakf` is
 the low-level pair `cakf_predict` / `cakf_update`. A higher-level
 `cakf_smooth` wrapper is **not** part of this slice — the example
 demonstrates a sequential filter via `jax.lax.scan` over the low-level
-primitives. The reference implementation in
-`../ComputationAwareKalman.jl` provides full smoothing; opifex will
-land an analogous wrapper in a future slice.
+primitives. Pförtner et al. (2024) also describe computation-aware
+smoothing; opifex will land an analogous wrapper in a future slice.
 
 ## Core Concepts
 
@@ -59,7 +58,7 @@ growing low-rank factor. After `k` CG iterations per update step,
 ### CG search-direction policy
 
 Each iteration uses the current residual as the CG search direction
-(`CGPolicy` in the Julia reference) and conjugates it against
+and conjugates it against
 previously selected directions via Gram-Schmidt. The result is a
 truncated Lanczos-style basis for the observation-space residual.
 

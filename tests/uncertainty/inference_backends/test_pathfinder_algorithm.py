@@ -1,9 +1,8 @@
 r"""Pathfinder (Zhang+ 2022) algorithm tests.
 
 Tests for :mod:`opifex.uncertainty.inference_backends._pathfinder_algorithm`,
-a JAX-native port of the Pathfinder reference at
-``../blackjax/blackjax/vi/pathfinder.py`` plus its L-BFGS factor
-helpers at ``../blackjax/blackjax/optimizers/lbfgs.py``.
+the JAX-native Pathfinder primitives and their L-BFGS inverse-Hessian
+factor helpers.
 
 Algorithm summary (Zhang et al, 2022 arXiv:2108.03782):
 

@@ -15,10 +15,6 @@ The :class:`LACConformalClassifier` follows the standard
 ``with_state``/``fit``/``predict`` ergonomics shared with the regression
 calibrators and returns :class:`opifex.uncertainty.types.PredictionSet` so
 downstream code consumes a single typed boolean-set value object.
-
-Reference: ``fortuna.conformal.classification.simple_prediction`` and
-``adaptive_prediction`` are the canonical JAX-native implementations the
-scoring kernels here mirror.
 """
 
 from __future__ import annotations
@@ -104,17 +100,9 @@ def aps_score(
 def aps_prediction_set(*, probabilities: jax.Array, threshold: jax.Array) -> jax.Array:
     """Boolean APS prediction set at the given cumulative-probability threshold.
 
-    Matches the canonical Angelopoulos reference
-    (``aangelopoulos/conformal-prediction/notebooks/imagenet-aps.ipynb``)::
-
-        val_pi = val_smx.argsort(1)[:, ::-1]
-        val_srt = np.take_along_axis(val_smx, val_pi, axis=1).cumsum(axis=1)
-        prediction_sets = np.take_along_axis(
-            val_srt <= qhat, val_pi.argsort(axis=1), axis=1
-        )
-
-    A class is included when its cumulative sorted-descending probability
-    (up to and including itself) is ``<= threshold``. Returns
+    Prediction set for the APS score (Romano, Sesia, Candes 2020). A class
+    is included when its cumulative sorted-descending probability (up to
+    and including itself) is ``<= threshold``. Returns
     ``(batch, num_classes)`` boolean array in the original class order.
     """
     argsorted = jnp.argsort(-probabilities, axis=-1)

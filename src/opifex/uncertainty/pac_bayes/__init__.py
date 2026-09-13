@@ -15,8 +15,7 @@ All bound formulas delegate KL computation to
 delegates to Artifex ``gaussian_kl_divergence`` for the standard-normal prior),
 so the KL formula lives in exactly one place across the stack.
 
-Canonical references (read-only):
-
+References:
 * Dziugaite & Roy (2017) — ``arXiv:1703.11008``.
 * Pérez-Ortiz et al. (JMLR v22) — empirical PAC-Bayes for deep networks.
 * Alquier (2024) — ``arXiv:2110.11216`` (survey).

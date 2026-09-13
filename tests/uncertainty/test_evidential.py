@@ -3,13 +3,9 @@ r"""Tests for the Normal-Inverse-Gamma (NIG) evidential-regression primitive.
 Covers, against hand-computed reference values:
 
 * :func:`positive_evidential_params` — softplus parameterisation
-  (``nu, beta > 0``; ``alpha > 1`` via ``softplus + 1``), matching the
-  chemprop ``EvidentialFFN.forward`` reference
-  (``../chemprop/chemprop/nn/predictors.py:197-200``).
+  (``nu, beta > 0``; ``alpha > 1`` via ``softplus + 1``).
 * :func:`evidential_nll` — the Amini et al. 2020 NIG loss
-  ``NLL_NIG + lambda * |y - gamma| * (2 nu + alpha)`` transcribed from the
-  chemprop ``EvidentialLoss`` reference
-  (``../chemprop/chemprop/nn/metrics.py:222-257``).
+  ``NLL_NIG + lambda * |y - gamma| * (2 nu + alpha)``.
 * :func:`nig_to_predictive_distribution` — the eIP variance decomposition
   ``mean = gamma``, ``aleatoric = beta/(alpha-1)``,
   ``epistemic = beta/(nu*(alpha-1))`` (arXiv:2407.13994, Nat. Commun. 2025).
@@ -47,7 +43,7 @@ def _require(array: jax.Array | None) -> jax.Array:
 
 
 def test_positive_params_apply_softplus_with_alpha_offset() -> None:
-    """nu/beta = softplus(raw); alpha = softplus(raw) + 1 per chemprop.
+    """nu/beta = softplus(raw); alpha = softplus(raw) + 1.
 
     A tiny documented positivity floor (1e-6) is added to nu/alpha/beta to keep
     the closed-form NIG moments finite, so a 1e-5 absolute tolerance is used.
@@ -122,7 +118,7 @@ def test_aleatoric_strictly_below_total() -> None:
 
 
 def test_evidential_nll_matches_reference_formula() -> None:
-    """Loss equals the chemprop ``EvidentialLoss`` closed form (lambda=0)."""
+    """Loss equals the Amini 2020 closed-form NIG loss (lambda=0)."""
     gamma, nu, alpha, beta = 1.0, 0.5, 2.0, 1.5
     target = 1.5
     params = NIGParams(

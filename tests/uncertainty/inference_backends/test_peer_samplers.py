@@ -7,7 +7,7 @@ themselves are deferred to a follow-up slice; the metadata + protocol
 implementations land in this slice so the registry router can resolve
 them by name.
 
-Canonical references:
+References:
 * Zhang, L. et al. 2022 — *Pathfinder: Parallel quasi-Newton variational
   inference*, JMLR 23(306).
 * Liu, Q. & Wang, D. 2016 — *Stein Variational Gradient Descent*,

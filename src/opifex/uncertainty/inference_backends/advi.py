@@ -5,15 +5,12 @@ unconstrained reparametrisation of the model parameters. The ELBO is
 optimised via stochastic gradient ascent over Monte-Carlo estimates of
 the expectation.
 
-Canonical reference:
+References:
 * Kucukelbir, A., Tran, D., Ranganath, R., Gelman, A., Blei, D. M. 2017
   — *Automatic Differentiation Variational Inference*, JMLR 18(14).
 
-The algorithm itself is vendored in
-:mod:`opifex.uncertainty.inference_backends._advi_algorithm` as a
-line-by-line port of ``../blackjax/blackjax/vi/meanfield_vi.py`` plus
-its shared Gaussian-VI helpers at
-``../blackjax/blackjax/vi/_gaussian_vi.py``.
+The algorithm itself lives in
+:mod:`opifex.uncertainty.inference_backends._advi_algorithm`.
 
 The ``predict_distribution`` and ``posterior_predictive`` hooks re-fit the
 backend from the stored ``target_log_prob`` and route the parameter-space
@@ -83,8 +80,7 @@ class ADVIBackend:
     notes: str = (
         "ADVI (Kucukelbir+ 2017) — mean-field Gaussian variational "
         "posterior optimised over the ELBO via automatic-differentiation "
-        "reparametrisation. Algorithm ported from "
-        "blackjax/vi/meanfield_vi.py."
+        "reparametrisation."
     )
     init_state: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(1))
     target_log_prob: Callable[[jax.Array], jax.Array] | None = None

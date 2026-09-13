@@ -1,20 +1,18 @@
 r"""SDE matrix builders for probabilistic-ODE state-space priors.
 
-JAX-native ports (NOT runtime imports) of the IWP / IOUP / Matern prior
-state-space matrices from probnum and ProbNumDiffEq.jl references. Each
-function returns the continuous-time linear SDE pair ``(drift,
-dispersion)`` for use with
+JAX-native builders of the IWP / IOUP / Matern prior state-space
+matrices. Each function returns the continuous-time linear SDE pair
+``(drift, dispersion)`` for use with
 :func:`opifex.uncertainty.statespace.discretize_lti_sde`.
 
-Canonical references (PORTED, never imported):
-* IWP — ``../probnum/src/probnum/randprocs/markov/integrator/_iwp.py``
-  ``_drift_matrix_iwp`` (line 142) and ``_dispersion_matrix_iwp`` (line 154).
-* IOUP scalar driftspeed — ``../probnum/src/probnum/randprocs/markov/
-  integrator/_ioup.py`` ``_drift_matrix_ioup`` (line 146).
-* IOUP vector / matrix rate — ``../ProbNumDiffEq.jl/src/priors/ioup.jl``
-  ``update_sde_drift!`` (line 103-117).
-* Matérn — ``../probnum/src/probnum/randprocs/markov/integrator/
-  _matern.py`` ``_drift_matrix_matern`` (line 145).
+References:
+* IWP — Tronarp, Kersting, Särkkä & Hennig 2019, *Probabilistic Solutions
+  To Ordinary Differential Equations As Non-Linear Bayesian Filtering: A
+  New Perspective*, arXiv:1810.03440.
+* IOUP — Bosch, Hennig & Tronarp 2023, *Probabilistic Exponential
+  Integrators*, arXiv:2305.14978.
+* Matérn — Särkkä & Solin 2019, *Applied Stochastic Differential
+  Equations*, Cambridge University Press.
 """
 
 from __future__ import annotations
@@ -60,7 +58,7 @@ def ioup_sde(
 ) -> tuple[jax.Array, jax.Array]:
     r"""Integrated Ornstein-Uhlenbeck process prior SDE.
 
-    Three rate-parameter modes (Julia ``priors/ioup.jl:103-117``):
+    Three rate-parameter modes:
 
     * ``scalar``: ``rate_parameter`` is a Python float; the bottom-right
       ``d x d`` block of the drift becomes ``rate_parameter * I_d``.
@@ -110,7 +108,7 @@ def matern_sde(
 
         \mathrm{row} = \bigl[ -\binom{q+1}{i} \lambda^{q+1-i} \bigr]_{i=0}^{q+1-1}.
 
-    Cite ``../probnum/src/probnum/randprocs/markov/integrator/_matern.py:145``.
+    Reference: Särkkä & Solin 2019, *Applied Stochastic Differential Equations*.
     """
     dimension = num_derivatives + 1
     nu = num_derivatives + 0.5

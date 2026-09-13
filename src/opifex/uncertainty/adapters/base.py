@@ -41,8 +41,7 @@ def compose_method_metadata(
 class DistributionAdapterProtocol(Protocol):
     """Wrap a backend distribution into an Opifex :class:`PredictiveDistribution`.
 
-    Primary adapter target: ``artifex.generative_models.core.distributions.base.Distribution``
-    (verified at ``../artifex/src/artifex/generative_models/core/distributions/base.py``).
+    Primary adapter target: ``artifex.generative_models.core.distributions.base.Distribution``.
     Secondary target: Distrax-like objects exposing ``sample``, ``log_prob``,
     ``mean``, ``variance``.
     """

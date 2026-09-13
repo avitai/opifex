@@ -1,6 +1,6 @@
 r"""Frank-Wolfe Bayesian Quadrature (Briol et al, NeurIPS 2015).
 
-A JAX-native port of Algorithm 1 (FW-Vanilla) from Briol et al,
+A JAX implementation of Algorithm 1 (FW-Vanilla) from Briol et al,
 *Frank-Wolfe Bayesian Quadrature: Probabilistic Integration with
 Theoretical Guarantees* (arXiv:1506.02681). The algorithm constructs
 a sparse empirical measure ``π_n = Σ_i w_i δ_{x_i}`` that minimises
@@ -63,10 +63,8 @@ def frank_wolfe_bq(
     Initialised with ``x_1 = \mathrm{argmax}\, \mu_\pi`` (the FW
     gradient at ``n = 0`` is just the kernel mean).
 
-    Sibling reference: Briol+ 2015 arXiv:1506.02681 Algorithm 1
-    (FW-Vanilla). The original paper has no open-source reference
-    implementation; the iteration here follows the published formulae
-    verbatim.
+    Reference: Briol+ 2015 arXiv:1506.02681. The iteration follows
+    Algorithm 1 (FW-Vanilla).
 
     Args:
         candidate_points: ``(N_candidates, d)`` finite candidate set

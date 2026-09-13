@@ -5,10 +5,8 @@ References
 * Halko, Martinsson, Tropp arXiv:0909.4061 — *Finding structure with
   randomness*. Algorithm 5.1 is the canonical randomised SVD.
 
-Sibling reference: ``matfree`` provides Lanczos-bidiag-based partial SVD
-in ``matfree/matfree/eig.py:svd_partial``; HMT-style randomised SVD with
-subspace iteration is NOT in matfree (cola has a stub in ``tbd/``).
-opifex implements it directly from the paper.
+opifex implements HMT randomised SVD with subspace iteration directly from
+the paper.
 """
 
 from __future__ import annotations

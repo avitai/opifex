@@ -1,7 +1,6 @@
 r"""Continuous Thompson sampling for Bayesian optimisation — Slice 22.
 
-Ports the continuous Thompson-sampling acquisition from
-``../trieste/acquisition/function/continuous_thompson_sampling.py``.
+Continuous Thompson-sampling acquisition (Russo et al. 2018).
 
 The acquisition consumes one posterior-function realisation per
 candidate (the ``samples`` field of

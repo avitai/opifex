@@ -1,9 +1,8 @@
 r"""Tests for ``active/constrained.py`` — Slice 23 (audit finding #4b).
 
 Phase 8 Task 8.3 mandates Expected Constrained Improvement +
-Expected Constrained Hypervolume Improvement (Gardner+ 2014; port of
-``../trieste/acquisition/function/function.py:790`` and
-``multi_objective.py:415``).
+Expected Constrained Hypervolume Improvement (Gardner+ 2014;
+Letham+ 2018).
 
 The constrained variants multiply the unconstrained acquisition (EI
 or EHVI) by the probability that all constraints are satisfied at
@@ -71,7 +70,7 @@ def test_expected_constrained_improvement_equals_ei_times_pof() -> None:
 
 
 def test_expected_constrained_hypervolume_improvement_equals_ehvi_times_pof() -> None:
-    """ECHVI = EHVI · P(feasible) (Letham+ 2018; trieste multi_objective.py:415)."""
+    """ECHVI = EHVI · P(feasible) (Letham+ 2018)."""
     from opifex.uncertainty.active.constrained import (
         expected_constrained_hypervolume_improvement,
     )

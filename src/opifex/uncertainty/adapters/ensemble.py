@@ -33,6 +33,10 @@ References:
     * Test-time augmentation — Wang, Aitchison, Rutherford, …, "Aleatoric
       uncertainty estimation with test-time augmentation for medical image
       segmentation with convolutional neural networks", Neurocomputing 2019.
+    * Mutual-information decomposition — Depeweg, Hernández-Lobato,
+      Doshi-Velez, Udluft, "Decomposition of Uncertainty in Bayesian Deep
+      Learning for Efficient and Risk-sensitive Learning", ICML 2018
+      (arXiv:1710.07283).
 """
 
 from __future__ import annotations
@@ -293,17 +297,13 @@ class _WrappedSWAGModel:
     """Predict by sampling weights from the SWAG Gaussian and forwarding each.
 
     Implements the SWAG predictive draw (Maddox et al. NeurIPS 2019,
-    arXiv:1902.02476, eq. 1), cross-checked against
-    ``../torch-uncertainty/src/torch_uncertainty/methods/swag.py``
-    (``SWAG._fullrank_sample``):
+    arXiv:1902.02476, eq. 1):
 
     ``θ̃ = θ_SWA + (1/√2)·√Σ_diag·z₁ + (1/√(2(K-1)))·D·z₂``,
     ``z₁ ~ N(0, I_P)``, ``z₂ ~ N(0, I_K)``.
 
-    The ``½`` scaling on both covariance terms is the published default
-    (``swa_gaussian`` repo). torch-uncertainty folds the diagonal ``1/√2``
-    into a tunable ``scale`` defaulting to ``1.0``; we keep the canonical
-    ``1/√2`` to match the paper's ``½(Σ_diag + Σ_lowrank)`` posterior.
+    The ``½`` scaling on both covariance terms matches the paper's
+    ``½(Σ_diag + Σ_lowrank)`` posterior.
     """
 
     def __init__(self, state: SWAGState, capability: UQCapability) -> None:
@@ -354,10 +354,8 @@ class _WrappedBatchEnsembleModel:
 
     Each member applies the shared kernel ``W`` with per-member rank-1 fast
     weights ``r_m`` (``alpha``) and ``s_m`` (``gamma``):
-    ``y_m = ((x ∘ r_m) W) ∘ s_m`` (arXiv:2002.06715, eq. 1), cross-checked
-    against ``../torch-uncertainty/src/torch_uncertainty/layers/batch_ensemble.py``
-    (``BatchLinear.forward``). The predictive mean/variance aggregate over
-    the member axis exactly like a deep ensemble.
+    ``y_m = ((x ∘ r_m) W) ∘ s_m`` (arXiv:2002.06715, eq. 1). The predictive
+    mean/variance aggregate over the member axis exactly like a deep ensemble.
     """
 
     def __init__(self, state: BatchEnsembleState, capability: UQCapability) -> None:
@@ -387,18 +385,15 @@ class _WrappedTestTimeAugmentationModel:
     Forwards the deterministic ``model_fn`` over every augmented copy of the
     input and aggregates the predictive mean / variance across the
     augmentation axis — the same member-aggregation as a deep ensemble
-    (torch-uncertainty
-    ``routines/classification.py`` lines 439/446: ``rearrange(logits,
-    "(m b) c -> b m c")`` then ``probs_per_est.mean(dim=1)``).
+    (Wang et al., Neurocomputing 2019).
 
     This is the **regression** mean+across-augmentation-variance form,
     consistent with the other model adapters in this module; ``aleatoric``
     is identically zero (the deterministic model contributes no
     observation-noise term) so ``total_uncertainty == epistemic``. The
     **classification** analogue is the predictive-entropy / mutual-information
-    decomposition ``MI = H(mean_m p_m) − mean_m H(p_m)`` (torch-uncertainty
-    ``metrics/classification/mutual_information.py`` lines 89-93); no
-    classification path is fabricated here.
+    decomposition ``MI = H(mean_m p_m) − mean_m H(p_m)`` (Depeweg et al.,
+    ICML 2018); no classification path is fabricated here.
     """
 
     def __init__(self, state: TestTimeAugmentationState, capability: UQCapability) -> None:

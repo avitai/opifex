@@ -5,10 +5,9 @@ Tests the Perdikaris autoregressive non-linear multi-fidelity model
     f_0(x) ~ GP(0, k_0(x, x')),
     f_i(x) = g_i(x, f_{i-1}(x))    with g_i ~ GP composing the
                                    previous-fidelity output as an
-                                   extra input dimension,
+                                   extra input dimension.
 
-mirroring ``emukit.multi_fidelity.models.non_linear_multi_fidelity_model``
-(PRIMARY reference). Prediction uncertainty propagates through the
+Prediction uncertainty propagates through the
 fidelity chain via Monte-Carlo sampling on the previous-level
 predictive distribution.
 """

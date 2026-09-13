@@ -1,24 +1,21 @@
 """Matrix-free linear algebra primitives for uncertainty quantification.
 
-Vendored JAX-native implementations of Krylov decompositions, stochastic
+JAX-native implementations of Krylov decompositions, stochastic
 trace and diagonal estimators, low-rank approximations, randomized SVD,
 matrix functions, log-determinant integrands, differentiable least-squares,
 and higher-moment trace UQ.
 
 Pure JAX; no NNX imports anywhere in this subpackage. Each algorithm cites
-its canonical reference (paper + sibling-repo path) in the module docstring.
-
-The sibling repositories ``/mnt/ssd2/Works/{matfree,traceax,cola}`` are
-reference implementations only — opifex never carries them as runtime
-dependencies. Algorithms are implemented natively in JAX and cite the
-sibling source line-by-line.
+its defining paper in the module docstring.
 
 References:
 ----------
-* matfree — Krämer arXiv:2405.17277 (differentiable Lanczos/Arnoldi).
-* traceax — Nahid et al. (XTrace, XNysTrace, Hutch++).
-* cola — Potapczynski et al. arXiv:2309.03060 (structured operators;
-  vendored under :mod:`opifex.uncertainty.curvature.structured`).
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices* (differentiable Lanczos/Arnoldi).
+* Epperly, Tropp, Webber arXiv:2301.07825 — *XTrace* (XTrace, XNysTrace);
+  Meyer, Musco, Musco, Woodruff arXiv:2010.09649 — *Hutch++*.
+* Potapczynski, Finzi, Pleiss, Wilson arXiv:2309.03060 — *CoLA* (structured
+  operators; used by :mod:`opifex.uncertainty.curvature.structured`).
 """
 
 from __future__ import annotations

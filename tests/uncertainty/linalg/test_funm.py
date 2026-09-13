@@ -3,9 +3,8 @@
 References
 ----------
 * Higham — *Functions of Matrices: Theory and Computation* (2008).
-* Krämer arXiv:2405.17277 — *Gradients of matrix functions in JAX*.
-
-Sibling reference (line-by-line port): ``matfree/matfree/funm.py``.
+* Krämer, Moreno-Muñoz, Roy, Hauberg arXiv:2405.17277 — *Gradients of
+  functions of large matrices*.
 """
 
 from __future__ import annotations
@@ -130,9 +129,8 @@ def test_funm_arnoldi_is_jit_compatible() -> None:
 def test_funm_chebyshev_recovers_linear_polynomial_exactly() -> None:
     """``funm_chebyshev`` with ``f(x) = x`` on spectrum ⊂ (-1, 1) gives ``A @ v``.
 
-    Cite: matfree ``funm_chebyshev``. The Chebyshev expansion truncated to
-    ``num_matvecs`` terms is exact when ``f`` is a polynomial of degree at
-    most ``num_matvecs - 1``.
+    The Chebyshev expansion truncated to ``num_matvecs`` terms is exact
+    when ``f`` is a polynomial of degree at most ``num_matvecs - 1``.
     """
     matrix = jnp.diag(jnp.asarray([0.5, -0.3, 0.1]))  # spectrum in (-1, 1)
 

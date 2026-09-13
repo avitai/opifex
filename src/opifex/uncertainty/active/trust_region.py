@@ -1,7 +1,6 @@
 r"""Trust-region Bayesian optimisation rules — Slice 22 (audit finding #4a).
 
-Ports the trust-region BO family from
-``../trieste/acquisition/rule.py:1863,1923,2038``:
+Trust-region BO family (Eriksson et al. 2019; Wan et al. 2021):
 
 * :class:`TrustRegionBox` — axis-aligned bounding box clipped to the
   global search space; pure geometry container.

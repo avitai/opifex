@@ -10,15 +10,13 @@ TTA is conceptually an ensemble over a fixed tuple of deterministic input
 augmentations: forward each augmented copy of the input through the same
 deterministic model and aggregate the cross-augmentation mean / variance.
 
-Reference (PyTorch torch-uncertainty):
+References:
 
-* Aggregation —
-  ``../torch-uncertainty/src/torch_uncertainty/routines/classification.py``
-  (lines 439/446: ``rearrange(logits, "(m b) c -> b m c")`` then
-  ``probs_per_est.mean(dim=1)`` — average over the augmentation axis).
-* Epistemic via mutual information —
-  ``../torch-uncertainty/src/torch_uncertainty/metrics/classification/mutual_information.py``
-  (lines 89-93: ``MI = H(mean_m p_m) − mean_m H(p_m)``). This adapter uses
+* Aggregation — Wang et al., Neurocomputing 2019 (test-time augmentation):
+  average over the augmentation axis.
+* Epistemic via mutual information — Depeweg, Hernández-Lobato, Doshi-Velez,
+  Udluft, ICML 2018 (arXiv:1710.07283):
+  ``MI = H(mean_m p_m) − mean_m H(p_m)``. This adapter uses
   the regression mean+across-augmentation-variance form (consistent with
   the other model adapters); the classification analogue is the MI form.
 """

@@ -24,14 +24,11 @@
 Train an Uncertainty Quantification Neural Operator (UQNO) on the Darcy
 flow equation, then *conformally calibrate* it to produce prediction
 intervals with finite-sample coverage guarantees. The opifex
-implementation is a JAX-native port of the conformal three-stage UQNO
-recipe from Ma, Pitt, Azizzadenesheli, Anandkumar (TMLR 2024,
-[arXiv:2402.01960](https://arxiv.org/abs/2402.01960)); the canonical
-PyTorch reference lives at
-[``neuraloperator/neuralop/models/uqno.py``](https://github.com/neuraloperator/neuraloperator).
-The numerical core — ``PointwiseQuantileLoss``,
-``get_coeff_quantile_idx``, the scaling-factor derivation — is
-cross-checked test-by-test against that reference; opifex-side
+implementation follows the conformal three-stage UQNO recipe from Ma,
+Pitt, Azizzadenesheli, Anandkumar (TMLR 2024,
+[arXiv:2402.01960](https://arxiv.org/abs/2402.01960)) in JAX. The
+numerical core — ``PointwiseQuantileLoss``, ``get_coeff_quantile_idx``,
+the scaling-factor derivation — follows that paper; opifex-side
 ergonomics layer on top (typed `PredictiveDistribution` /
 `PredictionInterval` returns, explicit `base=` / `residual=`
 constructor, in-class `.calibrate(...)`).
@@ -248,8 +245,7 @@ def residual_train_step(
     """Quantile-loss training step for the residual operator.
 
     The base operator's output is wrapped in ``jax.lax.stop_gradient``
-    so its weights stay frozen for the residual stage (matches the
-    canonical reference's ``no_grad`` + ``eval`` pattern).
+    so its weights stay frozen for the residual stage.
     """
 
     def loss_fn(r: FourierNeuralOperator) -> jax.Array:

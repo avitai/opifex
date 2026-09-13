@@ -30,8 +30,6 @@ References:
 * Perdikaris, Raissi, Damianou, Lawrence, Karniadakis 2017 — *Nonlinear
   information fusion algorithms for data-efficient multi-fidelity
   modelling*, Proc. R. Soc. A.
-* ``emukit.multi_fidelity.models.non_linear_multi_fidelity_model``
-  (PRIMARY).
 """
 
 from __future__ import annotations

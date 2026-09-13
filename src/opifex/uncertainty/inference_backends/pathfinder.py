@@ -6,10 +6,8 @@ Gaussian variational approximation at each step using the inverse
 Hessian factors produced by L-BFGS, scores each by an ELBO, and
 returns draws from the best one.
 
-The algorithm itself is vendored in
-:mod:`opifex.uncertainty.inference_backends._pathfinder_algorithm`
-as a line-by-line port of ``../blackjax/blackjax/vi/pathfinder.py``
-plus its L-BFGS helpers at ``../blackjax/blackjax/optimizers/lbfgs.py``.
+The algorithm itself lives in
+:mod:`opifex.uncertainty.inference_backends._pathfinder_algorithm`.
 
 The ``predict_distribution`` and ``posterior_predictive`` hooks re-fit the
 backend from the stored ``target_log_prob`` and route the parameter-space
@@ -74,8 +72,7 @@ class PathfinderBackend:
     method_names: tuple[str, ...] = ("pathfinder",)
     notes: str = (
         "Pathfinder (Zhang+ 2022, arXiv:2108.03782) — quasi-Newton "
-        "variational inference along an L-BFGS trajectory. Algorithm "
-        "ported from blackjax/vi/pathfinder.py."
+        "variational inference along an L-BFGS trajectory."
     )
     init_state: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(1))
     target_log_prob: Callable[[jax.Array], jax.Array] | None = None

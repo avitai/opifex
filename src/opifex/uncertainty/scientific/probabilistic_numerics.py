@@ -4,8 +4,8 @@ Pattern-A frozen dataclasses declaring metadata for the probnum
 ecosystem of probabilistic ODE / SDE / finite-difference solvers and
 auxiliary axes. Concrete algorithms either:
 
-* are vendored into other opifex subpackages (statespace, linalg) and
-  cited per the design notes; or
+* are implemented in other opifex subpackages (statespace, linalg),
+  each citing its defining paper; or
 * point at a user-installed backend via ``required_capabilities``; or
 * are pure metadata for ecosystem awareness (e.g. deprecated repos).
 
@@ -16,15 +16,15 @@ Solver / ecosystem adapters:
   9-axis configuration (extended with 4 new spec axes plus
   ``pn_observation_noise``).
 * :class:`ProbnumAdapterSpec` — reference NumPy implementation;
-  individual algorithms vendored into ``opifex.uncertainty.statespace``.
+  individual algorithms implemented in ``opifex.uncertainty.statespace``.
 * :class:`TornadoxAdapterSpec` — emits a ``DeprecationWarning`` pointing
   at :class:`ProbdiffeqAdapterSpec` (per tornadox's own README).
-  ``DiagonalEK1`` itself is vendored into
+  ``DiagonalEK1`` itself is implemented in
   ``opifex.uncertainty.statespace.diagonal_ek1``.
 * :class:`ProbfindiffAdapterSpec` — JAX-native scattered-grid finite
   differences.
 * :class:`DiffeqzooAdapterSpec` — canonical ODE problem catalogue;
-  problems vendored into the test-fixtures module.
+  a small problem set lives in the test-fixtures module.
 
 Likelihood adapters:
 * :class:`FenrirAdapterSpec` — Tronarp+ ICML 2022 post-solve smoothing
@@ -88,11 +88,10 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 class SsmFactSpec:
     """State-space-model covariance factorisation axis.
 
-    Trinity per ``probdiffeq/impl/impl.py:30-41`` and Julia
-    ``covariance_structure.jl:1-13``:
-    ``isotropic`` ↔ ``IsometricKroneckerCovariance``,
-    ``blockdiag`` ↔ ``BlockDiagonalCovariance``,
-    ``dense`` ↔ ``DenseCovariance``.
+    Three factorisations: ``isotropic`` (Kronecker covariance shared
+    across state dimensions), ``blockdiag`` (block-diagonal across state
+    dimensions), ``dense`` (full covariance). Cite Krämer+ 2022
+    arXiv:2110.11812.
     """
 
     choice: Literal["dense", "isotropic", "blockdiag"] = "dense"
@@ -102,7 +101,7 @@ class SsmFactSpec:
 class InitSchemeSpec:
     """Initialisation scheme for the solver state.
 
-    Choices follow probdiffeq's ``taylor`` family (Krämer+Hennig 2020,
+    Choices follow the Taylor-mode initialisation family (Krämer+Hennig 2020,
     arXiv:2012.10106): Taylor coefficients via automatic differentiation,
     forward-mode, classical interpolation, or a simple zero-derivative
     initialiser for fast prototyping.
@@ -115,8 +114,9 @@ class InitSchemeSpec:
 class CorrectionSpec:
     """ODE-residual correction rule.
 
-    probdiffeq exposes ``correction_ts0/ts1/slr0/slr1`` at
-    ``ivpsolvers.py:487,500,527,542``. Cite Tronarp+ 2019 arXiv:1810.03440.
+    Zeroth- and first-order Taylor linearisation (``ts0`` / ``ts1``) or
+    statistical linear regression (``slr0`` / ``slr1``). Cite Tronarp+ 2019
+    arXiv:1810.03440.
     """
 
     choice: Literal["ts0", "ts1", "slr0", "slr1"] = "ts0"
@@ -126,9 +126,8 @@ class CorrectionSpec:
 class CubatureRuleSpec:
     """Cubature rule used by SLR corrections.
 
-    probdiffeq exposes
-    ``cubature_third_order_spherical / cubature_unscented_transform /
-    cubature_gauss_hermite`` at ``ivpsolvers.py:94,117,144``.
+    Third-order spherical cubature, the unscented transform, or
+    Gauss-Hermite quadrature.
     """
 
     choice: Literal["spherical", "unscented", "gauss_hermite"] = "spherical"
@@ -153,8 +152,8 @@ class DiffusionSpec:
     """Diffusion-parameter parametrisation (scalar / dynamic MV / fixed MV).
 
     MV (multivariate) diffusion is only valid in combination with EK0
-    or DiagonalEK1 plus the ``blockdiag`` covariance factorisation per
-    Julia ``algorithms.jl:108-129``.
+    or DiagonalEK1 plus the ``blockdiag`` covariance factorisation
+    (Bosch+ 2021 arXiv:2012.08202).
     """
 
     choice: Literal["scalar", "dynamic_mv", "fixed_mv"] = "scalar"
@@ -197,7 +196,7 @@ class ProbdiffeqAdapterSpec(_PNAdapterSpecBase):
     Extended with the four solver-axis fields (``ssm_fact``,
     ``init_scheme``, ``correction``, ``cubature``) plus
     ``pn_observation_noise`` for residual regularisation on stiff
-    problems (Julia ``algorithms.jl:108-129``).
+    problems.
     """
 
     source_package: str = "probdiffeq"
@@ -227,35 +226,33 @@ class ProbdiffeqAdapterSpec(_PNAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ProbnumAdapterSpec(_PNAdapterSpecBase):
-    """Reference NumPy ecosystem; algorithms vendored module-by-module."""
+    """Reference NumPy ecosystem; opifex implements the algorithms module-by-module."""
 
     source_package: str = "probnum"
     family_tags: tuple[str, ...] = ("ek0", "ek1", "ioup", "matern", "iwp")
     notes: str = (
         "Metadata-only — IOUP / Matérn / IWP priors and EK0 / EK1 "
-        "correction references are vendored into "
-        "opifex.uncertainty.statespace, citing probnum/randprocs/markov/"
-        "integrator/* and probnum/diffeq/odefilter/approx_strategies/"
-        "_ek.py module-by-module."
+        "corrections are vendored into "
+        "opifex.uncertainty.statespace, each citing its defining paper."
     )
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class TornadoxAdapterSpec(_PNAdapterSpecBase):
-    """Deprecated metadata-only adapter; DiagonalEK1 vendored separately.
+    """Deprecated metadata-only adapter; DiagonalEK1 implemented separately.
 
     Emits a :class:`DeprecationWarning` at construction pointing users
     at :class:`ProbdiffeqAdapterSpec`. The DiagonalEK1 implementation
-    is vendored under
+    lives under
     :func:`opifex.uncertainty.statespace.diagonal_ek1_step`.
     """
 
     source_package: str = "tornadox"
     family_tags: tuple[str, ...] = ("diagonal_ek1",)
     notes: str = (
-        "Deprecated — use ProbdiffeqAdapterSpec. DiagonalEK1 vendored "
-        "into opifex.uncertainty.statespace.diagonal_ek1_step citing "
-        "tornadox/ek1.py:273-332."
+        "Deprecated — use ProbdiffeqAdapterSpec. DiagonalEK1 is implemented "
+        "in opifex.uncertainty.statespace.diagonal_ek1_step "
+        "(Krämer+ 2022, arXiv:2110.11812)."
     )
 
     def __post_init__(self) -> None:
@@ -291,8 +288,8 @@ class DiffeqzooAdapterSpec(_PNAdapterSpecBase):
     source_package: str = "diffeqzoo"
     family_tags: tuple[str, ...] = ("problem_catalogue",)
     notes: str = (
-        "Metadata-only — a small canonical ODE problem catalogue is "
-        "vendored into tests/uncertainty/fixtures/canonical_odes.py "
+        "Metadata-only — a small canonical ODE problem catalogue "
+        "lives in tests/uncertainty/fixtures/canonical_odes.py "
         "with BibTeX annotations per problem."
     )
 
@@ -306,8 +303,8 @@ class DiffeqzooAdapterSpec(_PNAdapterSpecBase):
 class FenrirAdapterSpec(_PNAdapterSpecBase):
     """Fenrir post-solve smoothing data-likelihood (Tronarp+ 2022).
 
-    arXiv:2202.01287. The likelihood is vendored adjacent to this spec;
-    cite ``ProbNumDiffEq.jl/src/data_likelihoods/fenrir.jl:30-128``.
+    arXiv:2202.01287. The likelihood is implemented in
+    :mod:`opifex.uncertainty.scientific._likelihoods`.
     """
 
     source_package: str = "opifex"
@@ -330,9 +327,8 @@ class DaltonAdapterSpec(_PNAdapterSpecBase):
     """DALTON data-adaptive latent two-solve likelihood (Wu+Lysy 2024).
 
     arXiv:2306.05566. Computes ``data_ll + with_pn_ll − without_pn_ll``
-    from two solver passes (one with and one without
-    ``DataUpdateCallback``). Cite
-    ``ProbNumDiffEq.jl/src/data_likelihoods/dalton.jl:23-76``.
+    from two solver passes (one with and one without data
+    conditioning).
     """
 
     source_package: str = "opifex"
@@ -359,8 +355,8 @@ class DaltonAdapterSpec(_PNAdapterSpecBase):
 class IOUPPriorSpec(_PNAdapterSpecBase):
     """Integrated Ornstein-Uhlenbeck prior.
 
-    Three rate-parameter modes (scalar, vector, matrix) per Julia
-    ``priors/ioup.jl:103-117``. Cite arXiv:2305.14978 (Bosch+ NeurIPS
+    Three rate-parameter modes (scalar, vector, matrix). Cite
+    arXiv:2305.14978 (Bosch+ NeurIPS
     2023 "Probabilistic Exponential Integrators").
     """
 
@@ -472,8 +468,7 @@ class IWPPriorSpec(_PNAdapterSpecBase):
     family_tags: tuple[str, ...] = ("iwp",)
     notes: str = (
         "Integrated Wiener Process prior — the canonical default for "
-        "probabilistic ODE solvers. Cite probnum/randprocs/markov/"
-        "integrator/_iwp.py."
+        "probabilistic ODE solvers. Cite Tronarp+ 2019 arXiv:1810.03440."
     )
 
     def build_sde(self) -> tuple[jax.Array, jax.Array]:
@@ -550,15 +545,15 @@ class PerturbedStepSolverSpec(_PNAdapterSpecBase):
 class DenseOutputSamplingSpec(_PNAdapterSpecBase):
     """Joint posterior sampling at arbitrary density via interpolate-then-sample.
 
-    probdiffeq's ``markov_sample`` is grid-locked to solver steps; this
-    spec covers the interpolate-then-sample pattern from Tronarp+ 2019
-    arXiv:1810.03440 §5 and Julia ``solution_sampling.jl:64-87``.
+    Covers the interpolate-then-sample pattern from Tronarp+ 2019
+    arXiv:1810.03440 §5, which draws joint posterior samples off the
+    solver grid.
     """
 
     source_package: str = "opifex"
     family_tags: tuple[str, ...] = ("dense_output", "interpolate_sample")
     notes: str = (
-        "Vendored interpolate-then-sample for joint posterior samples "
+        "Interpolate-then-sample for joint posterior samples "
         "at arbitrary density. Cite Tronarp+ 2019 arXiv:1810.03440 §5."
     )
 
@@ -572,7 +567,7 @@ class DenseOutputSamplingSpec(_PNAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class DynamicMVDiffusionSpec(_PNAdapterSpecBase):
-    """Time-dependent multivariate diffusion (Julia ``diffusions/typedefs.jl:39-67``).
+    """Time-dependent multivariate diffusion (Bosch+ 2021, arXiv:2012.08202).
 
     The diffusion matrix ``D(t)`` varies with the solver's grid time.
     Sibling spec :class:`FixedMVDiffusionSpec` covers the time-
@@ -603,7 +598,7 @@ class DynamicMVDiffusionSpec(_PNAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class FixedMVDiffusionSpec(_PNAdapterSpecBase):
-    """Time-independent multivariate diffusion (Julia ``diffusions/typedefs.jl:68-103``).
+    """Time-independent multivariate diffusion (Bosch+ 2021, arXiv:2012.08202).
 
     The diffusion matrix ``D`` is held constant across the solver's
     grid. Companion to :class:`DynamicMVDiffusionSpec`; preferred when
@@ -709,7 +704,7 @@ class DiagonalEK1Spec(_PNAdapterSpecBase):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class DataUpdateCallbackSpec(_PNAdapterSpecBase):
-    """Solver-step callback for online data assimilation (probdiffeq pattern).
+    """Solver-step callback for online data assimilation.
 
     Advertises the capability for adapters to register a callback that
     fires inside the solver loop and conditions the running posterior

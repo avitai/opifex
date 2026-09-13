@@ -57,9 +57,8 @@ def enbpi_predict(*, state: EnbPIState, predictions: jax.Array) -> PredictionInt
 
     Matches Xu, Xie 2021 (EnbPI, arXiv:2010.09107, Algorithm 1, line 8):
     ``β̂ = ⌈(1-α)(T+1)⌉/T``-th smallest ``|ε̂_t|``. The ``'higher'`` rule
-    on ``jnp.quantile`` matches the canonical Angelopoulos conformal
-    interpolation choice used in
-    ``aangelopoulos/conformal-prediction``.
+    on ``jnp.quantile`` follows the conformal interpolation convention of
+    Angelopoulos & Bates 2021 (arXiv:2107.07511).
     """
     threshold = jnp.quantile(jnp.abs(state.residual_window), 1.0 - state.alpha, method="higher")
     metadata: MetadataItems = (
@@ -106,9 +105,7 @@ def aci_update(
 
         alpha_{t+1} = alpha_t + lr * (target_alpha - 1{y_t not in C_t})
 
-    where the indicator is 1 when *uncovered*. Equivalent to Fortuna's
-    ``fortuna.conformal.regression.adaptive_conformal_regressor.update_error``
-    formula ``error += gamma * (target_error - 1 + is_in)``.
+    where the indicator is 1 when *uncovered*.
 
     Args:
         state: Current ACI state.

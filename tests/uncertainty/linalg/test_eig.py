@@ -4,8 +4,8 @@ The ``eig`` module wraps the Krylov decompositions in :mod:`opifex.uncertainty.l
 to produce partial eigen / singular value decompositions of matrix-free
 operators.
 
-Sibling reference (line-by-line port): ``matfree/matfree/eig.py`` —
-``eigh_partial``, ``eig_partial``, ``svd_partial``.
+References: Lanczos 1950, Arnoldi 1951, Golub & Kahan 1965 (see
+:mod:`opifex.uncertainty.linalg.krylov`).
 """
 
 from __future__ import annotations

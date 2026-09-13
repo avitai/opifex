@@ -4,8 +4,8 @@
   BALD on a controlled synthetic example where two pool points have the
   same per-point BALD but identical samples (so picking both is
   redundant). batch-BALD must pick a more diverse alternative.
-* ``batch_mc_expected_improvement`` matches the Monte Carlo formula from
-  ``trieste.acquisition.function.function:1364``.
+* ``batch_mc_expected_improvement`` matches the reparameterised Monte Carlo q-EI
+  formula (Wilson et al. 2017, arXiv:1712.00424).
 * ``q_expected_hypervolume_improvement`` returns non-negative contributions
   whose sum equals the closed-form box-volume contributions for a known
   Pareto front.
@@ -102,13 +102,12 @@ class TestBatchBALD:
 
 class TestBatchMCExpectedImprovement:
     def test_matches_mc_formula(self) -> None:
-        """Trieste batch_monte_carlo_expected_improvement:1364 ported."""
+        """Matches the reparameterised Monte Carlo batch-EI estimator."""
         rngs = nnx.Rngs(active_acquire=0)
         # candidate batch: shape (q, d) — here q=3, d=1 trivial domain.
         # The predictive over the joint batch is N(mean, cov).
         mean = jnp.array([0.5, 0.7, 0.9])
-        # diagonal covariance for simplicity (trieste path handles
-        # arbitrary cov via reparam sampler).
+        # diagonal covariance for simplicity.
         std = jnp.array([0.3, 0.2, 0.4])
         eta = 1.0
         num_samples = 8192

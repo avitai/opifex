@@ -1,6 +1,6 @@
 r"""Asynchronous Bayesian-optimisation rules — Slice 23 (audit finding #4b).
 
-Ports ``../trieste/acquisition/rule.py:492,680``:
+Two rules for asynchronous parallel BO:
 
 * :func:`asynchronous_greedy` — selects the highest-scoring candidate
   that is not currently pending. Returns a scalar index.
@@ -9,7 +9,7 @@ Ports ``../trieste/acquisition/rule.py:492,680``:
   the caller takes ``argmax`` over the penalised scores.
 
 These two together cover both the "hard skip" (Greedy) and "soft
-skip" (Optimization) regimes for asynchronous BO in trieste.
+skip" (Optimization) regimes for asynchronous BO.
 
 References:
 ----------

@@ -15,11 +15,8 @@ parameter vector. For a linear model ``f(θ, x) = x · θ`` this collapses
 to the closed-form ``Var(x) = Σ_i x_i² / precision_i``, which makes
 calibration testing trivial against a known analytic posterior.
 
-Canonical reference:
-* tinygp ``Transform(Kernel)`` pattern at
-  ``../tinygp/src/tinygp/transforms.py:23`` shows the linearised-kernel
-  shape; opifex implements the JAX-native version because tinygp is an
-  adapter-only optional backend, not a runtime dependency.
+opifex implements the linearised predictive natively in JAX; tinygp is an
+adapter-only optional backend, not a runtime dependency.
 
 References
 ----------

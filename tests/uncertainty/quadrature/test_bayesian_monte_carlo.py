@@ -6,11 +6,6 @@ sample mean (point estimate) and the standard-error variance (epistemic
 uncertainty in the integral). It is the simplest, no-GP baseline against
 which Bayesian quadrature methods (WSABI-L, vanilla BQ) are compared.
 
-Canonical reference:
-* ``../emukit/emukit/quadrature/loop/bayesian_monte_carlo_loop.py``
-  (line 18) — ``BayesianMonteCarlo``.
-* Rasmussen & Ghahramani 2003 — *Bayesian Monte Carlo*, NeurIPS.
-
 References
 ----------
 * Rasmussen, C. E. & Ghahramani, Z. 2003 — *Bayesian Monte Carlo*,

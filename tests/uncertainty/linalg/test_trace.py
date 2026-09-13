@@ -5,10 +5,6 @@ References
 * Hutchinson 1990 — A stochastic estimator of the trace of the influence matrix.
 * Meyer et al. arXiv:2010.09649 — Hutch++.
 * Epperly et al. arXiv:2301.07825 — XTrace + XNysTrace.
-
-Sibling reference implementations under ``/mnt/ssd2/Works/`` (not opifex deps):
-``matfree/stochtrace.py`` (Hutchinson + Rademacher sampler),
-``traceax/src/traceax/_estimators.py`` (Hutch++, XTrace, XNysTrace).
 """
 
 from __future__ import annotations

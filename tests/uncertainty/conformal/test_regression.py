@@ -7,8 +7,6 @@ References:
   ``(n + 1) / n * (1 - alpha)`` rank correction.
 * Romano, Patterson, Candes 2019, "Conformalized Quantile Regression",
   arXiv:1905.03222 — CQR score ``max(lo - y, y - hi)``.
-* Fortuna's ``fortuna.conformal.regression`` is the canonical JAX-native
-  reference implementation cross-checked here.
 
 Tests pin:
 

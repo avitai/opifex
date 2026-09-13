@@ -1,9 +1,7 @@
 r"""Constrained Bayesian optimisation — Slice 23 (audit finding #4b).
 
-Ports ``../trieste/acquisition/function/function.py:790`` (Expected
-Constrained Improvement) and
-``../trieste/acquisition/function/multi_objective.py:415`` (Expected
-Constrained Hypervolume Improvement).
+Expected Constrained Improvement (Gardner et al. 2014) and Expected
+Constrained Hypervolume Improvement (Letham et al. 2018).
 
 Both variants multiply the unconstrained acquisition (EI or EHVI) by
 the probability that all inequality constraints

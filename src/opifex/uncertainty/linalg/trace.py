@@ -8,31 +8,28 @@ Algorithms
 ----------
 * ``hutchinson_trace`` — Hutchinson 1990. Rademacher probes; unbiased with
   variance ``2 * (||A||_F^2 - ||diag(A)||^2) / num_samples`` for symmetric
-  ``A``. Sibling reference: ``matfree/stochtrace.py`` (``estimator`` +
-  ``sampler_rademacher`` + ``integrand_trace``).
+  ``A``.
 * ``hutch_plus_plus_trace`` — Meyer et al. arXiv:2010.09649. Extracts the
   leading subspace via a random sketch and applies Hutchinson on the
   residual. Matches the matrix trace exactly when the spectrum is supported
-  on a subspace of dimension at most ``num_samples // 3``. Sibling
-  reference: ``traceax/src/traceax/_estimators.py`` (``HutchPlusPlusEstimator``).
+  on a subspace of dimension at most ``num_samples // 3``.
 * ``xtrace`` — Epperly, Tropp, Webber arXiv:2301.07825. Exchangeable
   estimator that reuses each random vector in both the sketch and the
-  residual stages via leave-one-out structure. Sibling reference:
-  ``traceax/src/traceax/_estimators.py:170 XTraceEstimator``.
+  residual stages via leave-one-out structure.
 * ``xnys_trace`` — Epperly+ arXiv:2301.07825 §5. PSD-specialised variant
   using Nyström approximation instead of randomized SVD. Lower variance
   than XTrace for symmetric positive-definite operators (curvature /
-  Fisher information matrices). Sibling reference:
-  ``traceax/src/traceax/_estimators.py:241 XNysTraceEstimator``.
+  Fisher information matrices).
 
 References:
 ----------
 * Hutchinson 1990 — *A stochastic estimator of the trace of the influence
   matrix*.
 * Meyer, Musco, Musco, Woodruff arXiv:2010.09649 — *Hutch++: Optimal
-  stochastic trace estimation*.
+  stochastic trace estimation*, SOSA 2021.
 * Epperly, Tropp, Webber arXiv:2301.07825 — *XTrace: Making the most of
-  every sample in stochastic trace estimation*.
+  every sample in stochastic trace estimation*, SIAM J. Matrix Anal. Appl.
+  45(1), 2024.
 """
 
 from __future__ import annotations
@@ -125,7 +122,6 @@ def hutch_plus_plus_trace(
 def _sphere_sample(key: jax.Array, dim: int, num_samples: int) -> jax.Array:
     """Sample ``num_samples`` vectors uniformly on the sphere of radius ``sqrt(dim)``.
 
-    Sibling reference: ``traceax/src/traceax/_samplers.py:93 SphereSampler``.
     Used by XTrace / XNysTrace for the theoretical-analysis isotropy property.
     """
     raw = jax.random.normal(key, (dim, num_samples))
@@ -147,11 +143,8 @@ def xtrace(
     residual stages — implemented efficiently through leave-one-out
     algebra so the total cost is ``num_samples`` matvecs (``m`` for the
     sketch, ``m`` for the basis image ``Z = A Q``). The improved scaling
-    uses ``traceax``'s ``_get_scale`` factor that orthogonalises probes
-    against the low-rank approximation.
-
-    Sibling reference (line-by-line port):
-    ``traceax/src/traceax/_estimators.py:170 XTraceEstimator``.
+    uses a normalisation factor that orthogonalises probes against the
+    low-rank approximation.
 
     Args:
         matvec: callable mapping ``(dim,)`` to ``(dim,)``.
@@ -211,8 +204,7 @@ def xnys_trace(
     most ``num_samples``, XNysTrace recovers the trace exactly up to
     numerical roundoff.
 
-    Sibling reference (line-by-line port):
-    ``traceax/src/traceax/_estimators.py:241 XNysTraceEstimator``.
+    Reference: Epperly, Tropp, Webber arXiv:2301.07825.
 
     Args:
         matvec: callable mapping ``(dim,)`` to ``(dim,)``. Must be a

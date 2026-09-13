@@ -34,8 +34,9 @@ Variance fields (``variance``, ``epistemic``, ``aleatoric``,
 reused by :class:`opifex.uncertainty.scientific.solutions.SolutionDistribution`.
 
 ``validate()`` is a public method and is **never** called from
-``__post_init__`` or the pytree unflatten path. Per
-``../jax/docs/custom_pytrees.md``, transformations may reconstruct containers
+``__post_init__`` or the pytree unflatten path. Per the JAX pytree
+documentation (https://docs.jax.dev/en/latest/101/pytrees.html, initialization
+with unexpected values), transformations may reconstruct containers
 with placeholder values during tracing, so eager validation on every rebuild
 would spuriously fail. Callers explicitly invoke :meth:`validate` after
 construction when they want pre-jit safety checks.

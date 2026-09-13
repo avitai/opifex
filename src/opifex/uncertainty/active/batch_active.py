@@ -9,19 +9,15 @@ Implements:
   per-candidate score, then computes the redundancy correction in
   closed form under the moment-matched Gaussian approximation.
 * :func:`batch_mc_expected_improvement` — Monte-Carlo batch EI with the
-  reparameterisation trick. Ported from
-  ``trieste/acquisition/function/function.py:1364``
-  (``batch_monte_carlo_expected_improvement.__call__``); see the function
-  docstring.
+  reparameterisation trick (Wilson, Moriconi, Hutter & Deisenroth 2017,
+  arXiv:1712.00424); see the function docstring.
 * :func:`q_expected_hypervolume_improvement` — general-``M`` q-EHVI
   multi-objective acquisition (Daulton, Balandat & Bakshy 2020,
   *Differentiable Expected Hypervolume Improvement for Parallel
   Multi-Objective Bayesian Optimization*, NeurIPS, arXiv:2006.05078).
-  Ported from ``trieste/acquisition/function/multi_objective.py:211``
-  (``batch_ehvi``); see the function docstring. A JAX-native grid box
-  decomposition of the non-dominated region (replacing trieste's
-  ``prepare_default_non_dominated_partition_bounds``) feeds the
-  inclusion-exclusion per-box improvement formula, Monte-Carlo averaged
+  See the function docstring. A JAX-native grid box decomposition of the
+  non-dominated region feeds the inclusion-exclusion per-box improvement
+  formula, Monte-Carlo averaged
   over the diagonal-Gaussian posterior. The exact 2-D staircase formula
   is retained as a fast special case and the general path is verified to
   agree with it at ``M = 2``.
@@ -131,9 +127,6 @@ def batch_bald(
     marginal entropy of either point, so the MI gain for the second
     redundant point collapses to zero and the greedy step picks a
     diverse alternative.
-
-    The greedy outer structure mirrors
-    ``trieste/acquisition/function/greedy_batch.py``.
     """
     if batch_size <= 0:
         raise ValueError(f"batch_size must be positive; got {batch_size!r}")
@@ -225,18 +218,17 @@ def batch_mc_expected_improvement(
 ) -> jax.Array:
     r"""Reparameterised Monte-Carlo batch Expected Improvement.
 
-    Ported from ``trieste/acquisition/function/function.py:1364``
-    (``batch_monte_carlo_expected_improvement.__call__``):
+    Monte-Carlo q-EI with the reparameterisation trick (Wilson et al.
+    2017, arXiv:1712.00424):
 
     .. code-block:: text
 
-        samples = sampler.sample(x, jitter=jitter)            # [S, B]
-        min_per_sample = reduce_min(samples, axis=-1)         # [S]
+        samples = mean + std * eps                            # [S, B]
+        min_per_sample = min(samples, axis=-1)                # [S]
         improvement = maximum(eta - min_per_sample, 0.0)      # [S]
-        return reduce_mean(improvement, axis=-1)              # scalar
+        return mean(improvement)                              # scalar
 
-    Substitutions vs. trieste: the model's reparam sampler is replaced
-    by an explicit diagonal-Gaussian reparameterisation
+    The posterior draws use an explicit diagonal-Gaussian reparameterisation
     ``y = mean + std * eps`` with ``eps ~ N(0, I)`` because the active
     subsystem operates on :class:`PredictiveDistribution` moments rather
     than a model object.
@@ -352,10 +344,8 @@ def dominated_hypervolume(front: jax.Array, reference_point: jax.Array) -> jax.A
     coordinates plus the reference point; a cell is summed when its
     centre is dominated by some front point.
 
-    This is the JAX-native analogue of trieste's
-    ``Pareto.hypervolume_indicator`` box decomposition
-    (``trieste/acquisition/multi_objective/pareto.py``) and the grid
-    decomposition described by Daulton, Balandat & Bakshy (2020,
+    This follows the grid decomposition described by Daulton, Balandat
+    & Bakshy (2020,
     arXiv:2006.05078). The ``M = 2`` case is routed to the exact
     staircase :func:`_pareto_volume_2d` (the fast special-case path);
     higher ``M`` generalises that staircase to a hyper-rectangle grid and
@@ -402,10 +392,8 @@ def _non_dominated_partition_bounds(
     by any front point). The ``anti_ideal`` point fixes the lower extent
     of the partition; it must be at or below every candidate sample so
     that improvements pushing past the front's best on any objective are
-    captured. This is the JAX-native replacement for trieste's
-    ``prepare_default_non_dominated_partition_bounds``
-    (``trieste/acquisition/multi_objective/partition.py``) and feeds the
-    inclusion-exclusion q-EHVI formula of Daulton et al. (2020).
+    captured. The cells feed the inclusion-exclusion q-EHVI formula of
+    Daulton et al. (2020).
     """
     lower, upper = _grid_cell_bounds(front, reference_point, anti_ideal=anti_ideal)
     non_degenerate = jnp.all((upper - lower) > 0.0, axis=-1)
@@ -428,7 +416,7 @@ def _qehvi_inclusion_exclusion(
     over cells with the alternating inclusion-exclusion sign
     ``(-1)^{|J| + 1}`` yields the hypervolume jointly dominated by the
     batch beyond the current front (Daulton, Balandat & Bakshy 2020,
-    arXiv:2006.05078, Eq. 1; trieste ``batch_ehvi``).
+    arXiv:2006.05078, Eq. 1).
 
     Args:
         samples: ``(S, q, M)`` posterior draws for the candidate batch.
@@ -479,9 +467,7 @@ def q_expected_hypervolume_improvement(
     Implements the parallel Expected Hypervolume Improvement of Daulton,
     Balandat & Bakshy (2020), *Differentiable Expected Hypervolume
     Improvement for Parallel Multi-Objective Bayesian Optimization*
-    (NeurIPS, arXiv:2006.05078). Ported from trieste's ``batch_ehvi``
-    (``trieste/acquisition/function/multi_objective.py:211``). The
-    acquisition value is
+    (NeurIPS, arXiv:2006.05078). The acquisition value is
 
     .. math::
         \alpha_{\text{qEHVI}}(\mathcal{X})
@@ -496,14 +482,13 @@ def q_expected_hypervolume_improvement(
     non-dominated region below the reference point and the expectation is
     over the posterior of the batch.
 
-    The opifex port:
+    Implementation choices:
 
-    * Replaces trieste's model reparam sampler with an explicit
-      diagonal-Gaussian reparameterisation ``y = mean + std * eps``,
+    * Draws posterior samples with an explicit diagonal-Gaussian
+      reparameterisation ``y = mean + std * eps``,
       ``eps ~ N(0, I)`` (the active subsystem operates on
       :class:`PredictiveDistribution` moments, not a model object).
-    * Replaces trieste's ``prepare_default_non_dominated_partition_bounds``
-      with a JAX-native grid box decomposition
+    * Uses a JAX-native grid box decomposition
       (:func:`_non_dominated_partition_bounds`) so the whole acquisition
       stays ``jit``/``grad``/``vmap`` compatible for any ``M``.
 
@@ -595,8 +580,8 @@ def fantasizer(
     r"""Sequential greedy batch via fantasised observations (Snoek+ 2012).
 
     The full fantasised-posterior update requires the GP model itself;
-    this opifex port implements the simplified greedy variant used by
-    trieste's ``Fantasizer``: pick the top-``batch_size`` initial
+    this implementation is a simplified greedy variant: pick the
+    top-``batch_size`` initial
     scores while iteratively dampening previously-picked candidates
     via setting their score to ``-inf``. A tiny ``key``-derived
     random tiebreak breaks ties deterministically.
@@ -651,7 +636,7 @@ def local_penalization(
 
     with the simplification that the pending-point posterior std and
     function value are absorbed into the global ``max_value`` ``M``
-    estimate (the default trieste configuration). The factor is in
+    estimate. The factor is in
     ``(0, 1)`` and approaches ``1`` far from pending points.
 
     Args:

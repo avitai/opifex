@@ -20,8 +20,9 @@ _LINALG_CAPABILITY = UQCapability(
         "stochastic trace / diagonal estimators (Hutchinson, Hutch++, "
         "XTrace, XNysTrace), low-rank approximations, randomized SVD, "
         "matrix-function evaluation, log-determinant integrands, "
-        "differentiable LSMR. Pure JAX kernels citing matfree "
-        "(Krämer arXiv:2405.17277) and traceax (Nahid et al.)."
+        "differentiable LSMR. Pure JAX kernels citing Krämer et al. "
+        "(arXiv:2405.17277), Meyer et al. (arXiv:2010.09649) and "
+        "Epperly, Tropp & Webber (arXiv:2301.07825)."
     ),
 )
 

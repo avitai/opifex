@@ -21,8 +21,7 @@ Default density-estimator backend wraps Artifex's NNX-native flows
 when not present. MCMC sampling for NLE / NRE routes through
 :class:`opifex.uncertainty.inference_backends.BlackJAXBackend`.
 
-References (read-only):
-
+References:
 * Greenberg, Nonnenmacher, Macke (2019) — APT/NPE, ``arXiv:1905.07488``.
 * Papamakarios, Sterratt, Murray (2019) — NLE, ``arXiv:1805.07226``.
 * Hermans, Begy, Louppe (2020) — NRE, ``arXiv:1903.04057``.

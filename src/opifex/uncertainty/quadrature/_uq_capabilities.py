@@ -17,7 +17,7 @@ _QUADRATURE_CAPABILITY = UQCapability(
         "Bayesian-quadrature primitives — Bayesian Monte Carlo, vanilla "
         "BQ, WSABI-L, SOBER, Frank-Wolfe BQ — plus typed integral "
         "estimates and Gaussian / Lebesgue measure containers. Pure JAX "
-        "kernels citing emukit (Rasmussen & Ghahramani NeurIPS 2003; "
+        "kernels (Rasmussen & Ghahramani NeurIPS 2003; "
         "Briol et al. Statistical Science 2019)."
     ),
 )

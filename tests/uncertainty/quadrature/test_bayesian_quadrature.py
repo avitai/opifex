@@ -15,8 +15,7 @@ measure for verifiability):
     /(2(ℓ² + s²_i)))``
   * ``qKq = σ² · ∏_i sqrt(ℓ²/(ℓ² + 2 s²_i))``
 
-* WSABI-L (Gunter+ 2014 / emukit
-  ``quadrature/methods/bounded_bq_model.py:integrate``): with offset
+* WSABI-L (Gunter+ 2014): with offset
   ``α`` and warped observations ``g = sqrt(2(Y - α))``,
   ``integral_mean = α + 0.5 Σ_ij w_i w_j (qK_ij)_true`` where the
   pairwise double-kernel integral ``(qK_ij)_true = ∫ k(x, x_i)

@@ -1,4 +1,4 @@
-r"""JAX-native ports of specialised probabilistic-numerics algorithms.
+r"""JAX-native specialised probabilistic-numerics algorithms.
 
 Four primitives referenced by the probabilistic-numerics adapter
 catalogue:
@@ -7,8 +7,8 @@ catalogue:
   update enforcing the manifold constraint :math:`g(x) = 0`. The
   residual Jacobian is computed on-the-fly with :func:`jax.jacrev`.
 
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``ProbNumDiffEq.jl/src/callbacks/manifoldupdate.jl``.
+  Reference: Bosch, Tronarp & Hennig 2022 — *Pick-and-Mix Information
+  Operators for Probabilistic ODE Solvers*, AISTATS 2022 (PMLR 151).
 
 * :func:`dense_output_sample` — single-draw multivariate Gaussian
   sampler used for joint posterior samples at arbitrary density.
@@ -17,20 +17,16 @@ catalogue:
   (possibly off-grid) time; use :func:`jax.vmap` over the ``key``
   argument for a batch of samples.
 
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``ProbNumDiffEq.jl/src/solution_sampling.jl`` (``_rand`` plus
-  ``sample_states`` / ``dense_sample_states`` lines 64-100).
-
 * :func:`apply_diffusion` — scalar or per-dimension diffusion scaling
   applied to a positive-semidefinite process-noise covariance.
   Equivalent to :math:`Q' = (I_{q+1} \otimes \sqrt{\mathrm{diag}(d)})
   Q (I_{q+1} \otimes \sqrt{\mathrm{diag}(d)})` for the vector branch,
   and :math:`Q' = d \, Q` for the scalar branch. Valid only in
-  combination with EK0 / blockdiag DiagonalEK1 priors per the Julia
-  algorithm-validation routine (``algorithms.jl:108-129``).
+  combination with EK0 / blockdiag DiagonalEK1 priors.
 
-  Sibling reference (READ-ONLY port — never imported at runtime):
-  ``ProbNumDiffEq.jl/src/diffusions/apply_diffusion.jl``.
+  Reference: Bosch, Hennig & Tronarp 2021 — *Calibrated Adaptive
+  Probabilistic ODE Solvers*, arXiv:2012.08202 (scalar and multivariate
+  diffusion models).
 
 * :func:`perturbed_step_solve` — Conrad+ 2017 perturbed-step
   probabilistic ODE solver. A deterministic one-step integrator
@@ -43,7 +39,7 @@ catalogue:
   the randomised method at the base integrator's order :math:`p` in the
   mean while the ensemble spread quantifies discretisation uncertainty.
 
-  Reference (paper, not a code port): Conrad, Girolami, Särkkä,
+  Reference: Conrad, Girolami, Särkkä,
   Stuart, Zygalakis 2017 — *Statistical analysis of differential
   equations: introducing probability measures on numerical solutions*,
   Statistics and Computing 27, 1065-1082 (arXiv:1506.04592),
@@ -89,12 +85,10 @@ def manifold_update(
     early termination on a convergence tolerance would require dynamic
     control flow incompatible with tracing.
 
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``ProbNumDiffEq.jl/src/callbacks/manifoldupdate.jl``. The Julia
-    reference uses the Joseph-form covariance update
-    ``(I - K H) C (I - K H)^T`` for numerical stability with the
-    implicit ``R = 0`` observation noise; here we use the standard
-    form ``C - K H C`` to stay consistent with
+    Reference: Bosch, Tronarp & Hennig 2022 (AISTATS). The Joseph-form
+    covariance update ``(I - K H) C (I - K H)^T`` is the numerically
+    stabler choice with the implicit ``R = 0`` observation noise; the
+    standard form ``C - K H C`` is used here to stay consistent with
     :func:`opifex.uncertainty.statespace.kalman.kalman_update`. Both
     forms are mathematically equivalent under the optimal gain.
 
@@ -151,12 +145,7 @@ def dense_output_sample(
 
     The square-root factor is computed via symmetric eigendecomposition
     so the routine is robust to singular covariances (zero variance
-    collapses to a Dirac at ``mean``), mirroring the PSD-square-root
-    convention of the Julia ``_rand`` helper.
-
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``ProbNumDiffEq.jl/src/solution_sampling.jl`` (the ``_rand``
-    helper and the ``dense_sample_states`` driver at lines 64-100).
+    collapses to a Dirac at ``mean``).
 
     Args:
         mean: Posterior mean, shape ``(state_dim,)``.
@@ -189,7 +178,7 @@ def apply_diffusion(
     _priors_sde.iwp_sde` etc. using ``kron(I_d, M_per_dim)``
     state-major ordering, the per-dimension scaling kronecker factor
     has the diagonal on the **outer** index and the identity on the
-    inner derivative index — opposite to Julia's derivative-major
+    inner derivative index — opposite to the derivative-major
     convention.
 
     Equivalent reformulation: each ``(q+1) x (q+1)`` per-state-dim
@@ -198,12 +187,10 @@ def apply_diffusion(
     ``sqrt(d_i d_j)``.
 
     The vector branch is valid only with the EK0 or DiagonalEK1
-    correction together with a blockdiag covariance factorisation per
-    Julia ``algorithms.jl:108-129`` — EK1 with multivariate diffusion
-    requires manual calibration.
+    correction together with a blockdiag covariance factorisation — EK1
+    with multivariate diffusion requires manual calibration.
 
-    Sibling reference (READ-ONLY port — no runtime import):
-    ``ProbNumDiffEq.jl/src/diffusions/apply_diffusion.jl``.
+    Reference: Bosch, Hennig & Tronarp 2021 (arXiv:2012.08202).
 
     Args:
         process_noise_cov: Symmetric PSD ``Q`` of shape
@@ -297,7 +284,7 @@ def perturbed_step_solve(
     with :func:`jax.jit`, :func:`jax.grad`, and an outer
     :func:`jax.vmap` over the seed argument.
 
-    Reference (paper, not a code port): Conrad, Girolami, Särkkä,
+    Reference: Conrad, Girolami, Särkkä,
     Stuart, Zygalakis 2017 — *Statistical analysis of differential
     equations: introducing probability measures on numerical
     solutions*, Statistics and Computing 27, 1065-1082
