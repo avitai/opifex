@@ -19,8 +19,18 @@ Plus three additions to ``batch_active.py``:
 
 from __future__ import annotations
 
+import math
+
 import jax
 import jax.numpy as jnp
+import numpy as np
+from scipy import integrate
+from scipy.stats import norm
+
+
+# MES scores are means of O(1) float32 terms; four float32 ULPs at magnitude 1 bound their
+# rounding. Measured against the quadrature reference: 6.9e-8 on scores up to 0.875.
+_MES_TOLERANCE = 4.0 * float(np.finfo(np.float32).eps)
 
 
 # -----------------------------------------------------------------------------
@@ -42,6 +52,81 @@ def test_mes_returns_finite_score_per_candidate() -> None:
     assert jnp.all(jnp.isfinite(scores))
     # MES scores are non-negative (information gain).
     assert jnp.all(scores >= -1e-6)
+
+
+def _minimum_entropy_reduction(mean: float, std: float, minima: np.ndarray) -> float:
+    """Mean entropy reduction of ``N(mean, std^2)`` from learning ``f >= y*``, by quadrature."""
+    reductions = []
+    for minimum in minima:
+        log_mass = float(norm.logsf(minimum, loc=mean, scale=std))
+
+        def integrand(value: float, log_mass: float = log_mass) -> float:
+            log_density = float(norm.logpdf(value, loc=mean, scale=std)) - log_mass
+            return math.exp(log_density) * log_density
+
+        upper = max(minimum, mean) + 40.0 * std
+        breakpoints = [mean] if minimum < mean < upper else None
+        truncated_entropy = -integrate.quad(
+            integrand, minimum, upper, limit=400, points=breakpoints
+        )[0]
+        reductions.append(0.5 * math.log(2.0 * math.pi * math.e * std * std) - truncated_entropy)
+    return float(np.mean(reductions))
+
+
+def test_mes_matches_the_entropy_reduction_about_the_minimum() -> None:
+    """MES is the expected entropy reduction of ``f(x)`` from learning that ``f >= y*``.
+
+    Wang & Jegelka (2017), eq. 6, applied to ``-f`` for a minimum: ``gamma = (mu - y*) / sigma``.
+    The reference integrates the truncated Gaussian entropy with scipy in float64.
+    """
+    from opifex.uncertainty.active.acquisition import min_value_entropy_search
+
+    grid_means, grid_stds = (
+        axis.ravel() for axis in np.meshgrid([-2.5, -1.0, 0.0, 1.0, 3.0, 8.0], [0.3, 1.0, 2.0])
+    )
+    minima = np.asarray([-3.0, -2.2, -1.9])
+    scores = min_value_entropy_search(
+        means=jnp.asarray(grid_means),
+        variances=jnp.asarray(grid_stds**2),
+        sampled_min_values=jnp.asarray(minima),
+    )
+    reference = np.asarray(
+        [
+            _minimum_entropy_reduction(m, s, minima)
+            for m, s in zip(grid_means, grid_stds, strict=True)
+        ]
+    )
+    error = np.abs(np.asarray(scores, dtype=np.float64) - reference)
+    assert float(np.max(error)) <= _MES_TOLERANCE, float(np.max(error))
+
+
+def test_mes_ranks_the_candidate_nearest_the_minimum_first() -> None:
+    """A candidate whose mean is far above every sampled minimum carries almost no information."""
+    from opifex.uncertainty.active.acquisition import min_value_entropy_search
+
+    scores = min_value_entropy_search(
+        means=jnp.asarray([0.0, 2.0, 5.0]),
+        variances=jnp.ones(3),
+        sampled_min_values=jnp.asarray([-3.0, -2.5]),
+    )
+    assert float(scores[0]) > float(scores[1]) > float(scores[2])
+
+
+def test_mes_is_finite_and_differentiable_far_from_the_minimum() -> None:
+    """Values and mean-gradients stay finite at ``|gamma| = 40``, and jit agrees with eager."""
+    from opifex.uncertainty.active.acquisition import min_value_entropy_search
+
+    def total(means: jax.Array) -> jax.Array:
+        return jnp.sum(
+            min_value_entropy_search(
+                means=means, variances=jnp.ones(2), sampled_min_values=jnp.asarray([0.0])
+            )
+        )
+
+    means = jnp.asarray([-40.0, 40.0])
+    assert bool(jnp.isfinite(total(means)))
+    assert bool(jnp.all(jnp.isfinite(jax.grad(total)(means))))
+    assert bool(jnp.allclose(jax.jit(total)(means), total(means)))
 
 
 # -----------------------------------------------------------------------------

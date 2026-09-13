@@ -47,7 +47,6 @@ from opifex.uncertainty.types import metadata_to_dict, MetadataItems, Predictive
 
 # Numerical floors used in entropy / log-prob computations.
 _VARIANCE_FLOOR: float = 1e-12
-_LOG_FLOOR: float = 1e-12
 
 
 class AcquisitionStrategy(StrEnum):
@@ -440,19 +439,19 @@ def min_value_entropy_search(
 ) -> jax.Array:
     r"""Min-Value Entropy Search (Wang & Jegelka 2017, ICML, arXiv:1703.01968).
 
-    Approximates the per-candidate information gain about the global
-    minimum using Monte-Carlo samples of the minimum value:
+    Approximates the per-candidate information gain about the global minimum from Monte Carlo
+    samples ``y*_s`` of the minimum value. Learning the minimum tells ``f(x) >= y*_s``, so
+    eq. (6) of Wang & Jegelka, stated for a maximum, is applied to ``-f``:
 
     .. math::
 
         \alpha_{\text{MES}}(x)
             \approx \frac{1}{S}\,\sum_{s=1}^{S}
-                \frac{\phi(\gamma_s) \, \gamma_s}{2\,\Phi(\gamma_s)}
-                - \log \Phi(\gamma_s),
+                \frac{\gamma_s\,\phi(\gamma_s)}{2\,\Phi(\gamma_s)} - \log \Phi(\gamma_s),
+        \qquad \gamma_s = \frac{\mu(x) - y^*_s}{\sigma(x)}.
 
-    with ``γ_s = (y*_s − μ(x)) / σ(x)``. The score is a Monte-Carlo
-    estimate of information gain about the minimum value and is
-    non-negative in expectation.
+    Each term is the entropy reduction of the Gaussian predictive truncated to ``f >= y*_s``
+    and is non-negative. ``phi / Phi`` is evaluated as ``exp(log phi - log Phi)``.
 
     Args:
         means: ``(N,)`` posterior means.
@@ -464,11 +463,10 @@ def min_value_entropy_search(
         ``(N,)`` per-candidate MES scores.
     """
     stds = jnp.sqrt(jnp.maximum(variances, _VARIANCE_FLOOR))
-    gamma = (sampled_min_values[None, :] - means[:, None]) / stds[:, None]
+    gamma = (means[:, None] - sampled_min_values[None, :]) / stds[:, None]
     log_cdf = jnorm.logcdf(gamma)
-    pdf = jnorm.pdf(gamma)
-    cdf = jnorm.cdf(gamma)
-    contribution = (pdf * gamma) / (2.0 * jnp.maximum(cdf, _LOG_FLOOR)) - log_cdf
+    ratio = jnp.exp(jnorm.logpdf(gamma) - log_cdf)
+    contribution = 0.5 * gamma * ratio - log_cdf
     return jnp.mean(contribution, axis=-1)
 
 

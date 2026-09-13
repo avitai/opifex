@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `min_value_entropy_search` scores information about the minimum. It applied the maximum-value
+  form of Wang & Jegelka (2017), eq. 6, `gamma = (y* - mu) / sigma` with `Phi(gamma)`, to samples
+  of the minimum, which ranks candidates in reverse: with sampled minima -3 and -2.5 and unit
+  variance, means 0, 2 and 5 scored 1.62, 2.05 and 32.6, where the entropy reductions are 0.018,
+  2e-5 and 0. It now uses `gamma = (mu - y*) / sigma`, eq. 6 applied to `-f`.
 - `log_expected_improvement` is accurate when the mean lies well above the incumbent. For
   `u < -1` it approximated `1 + u Phi(u) / phi(u)` by the series `1/u^2 - 3/u^4 + 15/u^6`, which
   is 13 at `u = -1` where the exact value is 0.344, so log-EI jumped by 3.63 nats at the branch
