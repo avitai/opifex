@@ -65,8 +65,8 @@ def _filtering_operator(
     """Associative filtering operator. Ports bayesnewton line 204."""
     a1, b1, c1, j1, eta1 = elem1
     a2, b2, c2, j2, eta2 = elem2
-    c1_inv = jnp.linalg.inv(c1)
-    temp = jnp.linalg.solve(c1_inv + j2, c1_inv)
+    identity = jnp.eye(c1.shape[-1], dtype=c1.dtype)
+    temp = jnp.linalg.solve(identity + c1 @ j2, identity)
     a2_temp = a2 @ temp
     new_transition = a2_temp @ a1
     new_b = a2_temp @ (b1 + c1 @ eta2) + b2
@@ -191,24 +191,26 @@ def kalman_smoother_parallel(
     Args:
         filter_means: Sequential filter means, ``(N, n)``.
         filter_covs: Sequential filter covariances, ``(N, n, n)``.
-        transitions: Per-step transition matrices, ``(N, n, n)``. The
-            element at index ``t`` is the transition from ``t`` to ``t+1``.
-        process_noises: Per-step process noise covariances, ``(N, n, n)``.
+        transitions: Per-step transition matrices, ``(N, n, n)``, as in
+            :func:`kalman_filter`: the element at index ``t`` carries the state from step
+            ``t - 1`` to step ``t``, so smoothing step ``t`` uses ``transitions[t + 1]``.
+        process_noises: Per-step process noise covariances, ``(N, n, n)``, indexed like
+            ``transitions``.
 
     Returns:
         Smoothed means ``(N, n)`` and smoothed covariances ``(N, n, n)``.
     """
     smoothing_elements = jax.vmap(_smoothing_element)(
-        transitions, process_noises, filter_means, filter_covs
+        transitions[1:], process_noises[1:], filter_means[:-1], filter_covs[:-1]
     )
     state_dim = filter_means.shape[-1]
     last_gain = jnp.zeros((state_dim, state_dim), dtype=filter_means.dtype)
     last_g = filter_means[-1]
     last_l = filter_covs[-1]
     initial_elements = (
-        jnp.concatenate([smoothing_elements[0][:-1], last_gain[None]], axis=0),
-        jnp.concatenate([smoothing_elements[1][:-1], last_g[None]], axis=0),
-        jnp.concatenate([smoothing_elements[2][:-1], last_l[None]], axis=0),
+        jnp.concatenate([smoothing_elements[0], last_gain[None]], axis=0),
+        jnp.concatenate([smoothing_elements[1], last_g[None]], axis=0),
+        jnp.concatenate([smoothing_elements[2], last_l[None]], axis=0),
     )
     final_elements = jax.lax.associative_scan(
         jax.vmap(_smoothing_operator), initial_elements, reverse=True

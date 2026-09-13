@@ -41,10 +41,14 @@ import jax.numpy as jnp
 import pytest
 
 from opifex.uncertainty.statespace import (
+    cosine_kernel,
     kalman_filter,
     kalman_filter_parallel,
     kalman_smoother,
     kalman_smoother_parallel,
+    matern32_kernel,
+    periodic_kernel,
+    StateSpaceKernel,
 )
 
 
@@ -227,3 +231,61 @@ def test_kalman_filter_parallel_vmap_over_batch_of_problems() -> None:
     batched = jax.vmap(run)(batch_observations, batch_initial_means)
     assert batched.shape == (2, 4, 2)
     assert jnp.all(jnp.isfinite(batched))
+
+
+def _kernel_problem(kernel: StateSpaceKernel, times: jax.Array) -> dict[str, jax.Array]:
+    """Discretise ``kernel`` on ``times`` and observe its first state with noise variance 0.1."""
+    transitions, process_noises = kernel.discretize_steps(jnp.diff(times, prepend=times[:1]))
+    num_steps = times.shape[0]
+    return {
+        "transitions": transitions,
+        "process_noises": process_noises,
+        "observations": jnp.sin(times)[:, None],
+        "observation_matrix": kernel.measurement,
+        "observation_covs": jnp.full((num_steps, 1, 1), 0.1),
+        "initial_mean": jnp.zeros(kernel.stationary_cov.shape[0]),
+        "initial_cov": kernel.stationary_cov,
+    }
+
+
+def test_kalman_smoother_parallel_matches_sequential_on_an_uneven_grid() -> None:
+    """On an uneven time grid every step has its own transition, and both smoothers agree.
+
+    ``transitions[k]`` carries the state from step ``k - 1`` to step ``k``, so smoothing step ``k``
+    needs ``transitions[k + 1]``. Constant transitions cannot tell the two indices apart.
+    """
+    key = jax.random.PRNGKey(9)
+    times = jnp.sort(jax.random.uniform(key, (60,), maxval=10.0))
+    problem = _kernel_problem(matern32_kernel(variance=1.0, lengthscale=1.0), times)
+    filter_means, filter_covs = kalman_filter(**problem)
+    smoother_inputs = {
+        "filter_means": filter_means,
+        "filter_covs": filter_covs,
+        "transitions": problem["transitions"],
+        "process_noises": problem["process_noises"],
+    }
+    seq_means, seq_covs = kalman_smoother(**smoother_inputs)
+    par_means, par_covs = kalman_smoother_parallel(**smoother_inputs)
+    assert jnp.allclose(seq_means, par_means, atol=1e-4)
+    assert jnp.allclose(seq_covs, par_covs, atol=1e-4)
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [
+        cosine_kernel(frequency=0.5),
+        periodic_kernel(variance=1.0, lengthscale=1.0, period=3.0, order=3),
+    ],
+    ids=["cosine", "periodic"],
+)
+def test_kalman_filter_parallel_matches_sequential_without_process_noise(
+    kernel: StateSpaceKernel,
+) -> None:
+    """Rotation kernels add no process noise; the parallel filter stays finite and agrees."""
+    problem = _kernel_problem(kernel, jnp.linspace(0.0, 10.0, 60))
+    seq_means, seq_covs = kalman_filter(**problem)
+    par_means, par_covs = kalman_filter_parallel(**problem)
+    assert jnp.all(jnp.isfinite(par_means))
+    assert jnp.all(jnp.isfinite(par_covs))
+    assert jnp.allclose(seq_means, par_means, atol=1e-4)
+    assert jnp.allclose(seq_covs, par_covs, atol=1e-4)

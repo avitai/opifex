@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `kalman_smoother_parallel` smooths each step with the transition out of that step, as
+  `kalman_smoother` does. It used the transition into the step, so on unevenly spaced times its
+  means differed from the sequential smoother, by up to 0.73 on a 60-point Matérn-3/2 example.
+  Evenly spaced times hid the difference.
+- `kalman_filter_parallel` stays finite when a step adds no process noise. Its combine step
+  inverted the covariance of the earlier element, which is singular without process noise, so the
+  cosine and periodic kernels returned NaN from the fourth step on. The combine step now solves with
+  `I + C_i J_j` (Särkkä & García-Fernández 2021, eqs. 13 and 14).
 - The Beta response predictors `predict_beta_laplace_gp`, `predict_beta_markov_laplace_gp`,
   `predict_beta_markov_vi_gp`, `predict_beta_markov_pep_gp` and `predict_beta_markov_pl_gp` return
   the predictive mean and variance of the response. They returned the Beta variance
