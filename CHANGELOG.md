@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `StateSpaceKernel` is built from `transition_increment`, the closed form of `exp(F dt) - I`.
-  `state_transition(dt)` is now a method returning `I + transition_increment(dt)`, and the new
-  `discretize(dt)` returns the transition and the process noise of one step. The Markov GP paths
-  and the spatio-temporal GP take both from `discretize`.
+- `StateSpaceKernel` is a pytree. Its leaves are its matrices and the rates or angular frequencies
+  of its closed-form transition, so a kernel passed to a jitted function reuses the compiled
+  program for new hyperparameter values. `state_transition(dt)` is a method following bayesnewton's
+  closed forms, `discretize(dt)` returns the transition and the process noise of one step, and
+  `discretize_steps(steps)` returns them for a sequence of steps. The Markov GP paths and the
+  spatio-temporal GP discretise each time grid with one `discretize_steps` call. A kernel built from
+  `feedback`, `noise_effect`, `diffusion`, `measurement` and `stationary_cov` alone discretises
+  from its feedback matrix.
 - `tfp-nightly` is a declared runtime dependency, for `bessel_ive`. Every install already had it
   through `avitai-artifex`, and it leaves the `probabilistic` extra.
 
@@ -21,9 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `opifex.uncertainty.statespace.kernels.i0e_vector` is deprecated in favour of
   `tensorflow_probability.substrates.jax.math.bessel_ive`. The old name delegates to it and emits a
   `DeprecationWarning`.
-- Constructing `StateSpaceKernel` with `state_transition=` is deprecated in favour of
-  `transition_increment=`. The increment is then derived by subtracting the identity, which
-  cancels at small steps, and a `DeprecationWarning` is emitted.
+- Constructing `StateSpaceKernel` with `state_transition=` is deprecated; omit it and the transition
+  is computed from the feedback matrix. A kernel built with it discretises as in 0.2.5, with the
+  supplied transition and the process noise `P_inf - A P_inf A^T`, and a `DeprecationWarning` is
+  emitted.
 
 ### Fixed
 
@@ -50,13 +55,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The spatio-temporal GP returns finite predictions on time grids with long gaps. It built each
   step's process noise with the Van Loan block exponential, whose `exp(-F^T dt)` block overflows
   float32. On a grid with gaps of about 95 temporal lengthscales every prediction was NaN.
-- Markov GP process noise keeps its float32 accuracy at small steps. `P_inf - A P_inf A^T`
-  subtracts nearly equal matrices when the step is short, which gave relative errors up to 4.4e-4
-  at 1e-4 lengthscales. `StateSpaceKernel.discretize` computes
-  `-(E P_inf + P_inf E^T + E P_inf E^T)` from the closed-form increment instead. The Matern increment
-  is evaluated as `expm1(-x) I + exp(-x) dt M`, so it cancels neither at short steps nor at coarse
-  ones. For every kernel, the float32 relative error of the process noise against float64 is at
-  most 2.8e-7 for steps from 1e-4 to 1e4 lengthscales, at the same cost.
+- Markov GP process noise is accurate in float32 at short steps. `P_inf - A P_inf A^T` subtracts
+  nearly equal matrices when the step is short: in float32 the smallest process-noise components of
+  a Matern-7/2 kernel were wrong by up to 2.4e15 times their size, and on 1000 points spaced 1e-3
+  lengthscales apart the Gaussian evidence missed the exact dense GP by 3.4 nats. In float32 the
+  process noise of Matern-3/2 to Matern-7/2 and of the quasi-periodic kernel now comes from the
+  Stillfjord and Tronarp Gramian, which brings that evidence within 1.1e-4 nats. Matern-1/2 uses its
+  closed form `sigma^2 (-expm1(-2 dt / ell))`, cosine and periodic kernels add no process noise, and
+  float64 keeps `P_inf - A P_inf A^T`, which matches the dense GP to 1e-11. The float32 method is
+  chosen while tracing, so float64 fits cost what they did. Per 1000 float32 steps a Gaussian
+  Markov-Laplace fit of a Matern-7/2 kernel takes 28 ms instead of 10 ms and its gradient 90 ms
+  instead of 49 ms; Matern-5/2 fits and 25-iteration Bernoulli fits are within the timing noise.
+  At a zero step the derivative of the float32 process noise with respect to that step is zero.
 - `discretize_lti_sde` is accurate in every component and stays finite at coarse steps. It
   exponentiated Van Loan's block `[[F, L Q_c L^T], [0, -F^T]] dt` in one go, which overflows float32
   and exceeds the squaring limit of `jax.scipy.linalg.expm`: Matern SDEs came back NaN at 100
@@ -70,8 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Gradients stay finite for growing drifts, a singular positive semi-definite `Q_c` is supported, and
   steps needing more than 32 doublings return NaN. Per 1000 float32 steps under `vmap` it takes 2.3
   to 3.0 ms instead of 8.1 to 8.7 ms for a three-state SDE and 26 to 27 ms instead of 2.3 to 5.9 ms
-  for a four-state SDE; gradients take 8.4 ms instead of 43 ms and 93 ms instead of 20 ms. The
-  Markov and spatio-temporal GPs use `StateSpaceKernel.discretize` and are unaffected.
+  for a four-state SDE; gradients take 8.4 ms instead of 43 ms and 93 ms instead of 20 ms.
 - The Markov GP evidence values are the published energies. `fit_markov_vi_gp` returned the
   expected log likelihood minus a log-determinant penalty, `fit_markov_laplace_gp` the log
   likelihood at the mode minus the same penalty, and `fit_markov_pep_gp` the sum of the cavity log

@@ -192,24 +192,30 @@ def interpolate_smoothed_state(
     # precedes the first training point.
     bucket_indices = jnp.searchsorted(times_train, times_test, side="right") - 1
 
-    def predict_one(test_time: jax.Array, bucket_index: jax.Array) -> tuple[jax.Array, jax.Array]:
+    is_before_first = bucket_indices < 0
+    clipped_indices = jnp.maximum(bucket_indices, 0)
+    anchor_times = jnp.where(is_before_first, times_test, times_train[clipped_indices])
+    # One call over every test gap lets the kernel discretise them as a sequence.
+    transitions, process_noises = state_space_kernel.discretize_steps(times_test - anchor_times)
+
+    def predict_one(
+        is_first: jax.Array,
+        anchor_index: jax.Array,
+        transition_matrix: jax.Array,
+        process_noise: jax.Array,
+    ) -> tuple[jax.Array, jax.Array]:
         """Return the predictive mean and variance at one test time via SDE interpolation."""
-        is_before_first = bucket_index < 0
-        clipped_index = jnp.maximum(bucket_index, 0)
-        anchor_mean = jnp.where(
-            is_before_first, jnp.zeros(state_dim), smoothed_state_means[clipped_index]
-        )
-        anchor_cov = jnp.where(is_before_first, stationary_cov, smoothed_state_covs[clipped_index])
-        anchor_time = jnp.where(is_before_first, test_time, times_train[clipped_index])
-        delta = test_time - anchor_time
-        transition_matrix, process_noise = state_space_kernel.discretize(delta)
+        anchor_mean = jnp.where(is_first, jnp.zeros(state_dim), smoothed_state_means[anchor_index])
+        anchor_cov = jnp.where(is_first, stationary_cov, smoothed_state_covs[anchor_index])
         predicted_state_mean = transition_matrix @ anchor_mean
         predicted_state_cov = transition_matrix @ anchor_cov @ transition_matrix.T + process_noise
         latent_mean = (observation_matrix @ predicted_state_mean).squeeze(-1)
         latent_var = (observation_matrix @ predicted_state_cov @ observation_matrix.T).squeeze()
         return latent_mean, latent_var
 
-    test_means, test_variances = jax.vmap(predict_one)(times_test, bucket_indices)
+    test_means, test_variances = jax.vmap(predict_one)(
+        is_before_first, clipped_indices, transitions, process_noises
+    )
     test_variances = jnp.clip(test_variances, min=_PSEUDO_NOISE_FLOOR)
     return test_means, test_variances
 

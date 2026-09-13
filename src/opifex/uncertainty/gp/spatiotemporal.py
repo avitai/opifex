@@ -214,14 +214,12 @@ def _build_kronecker_state_space(
     )
     identity_space = jnp.eye(num_space, dtype=spatial_gram.dtype)
 
-    def per_step(delta: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Return the temporal transition and process-noise blocks for one time step."""
-        transition_time, process_noise_time = temporal_kernel.discretize(delta)
-        transition = jnp.kron(identity_space, transition_time)
-        process_noise = jnp.kron(spatial_gram, process_noise_time)
-        return transition, process_noise
-
-    transitions, process_noises = jax.vmap(per_step)(deltas)
+    # One call over the whole time grid lets the kernel discretise the gaps as a sequence.
+    transitions_time, process_noises_time = temporal_kernel.discretize_steps(deltas)
+    transitions = jax.vmap(lambda transition: jnp.kron(identity_space, transition))(
+        transitions_time
+    )
+    process_noises = jax.vmap(lambda noise: jnp.kron(spatial_gram, noise))(process_noises_time)
 
     measurement = jnp.kron(identity_space, temporal_kernel.measurement)
     initial_cov = jnp.kron(spatial_gram, temporal_kernel.stationary_cov)

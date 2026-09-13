@@ -219,6 +219,32 @@ def _masked_doublings(
     return exponential, factor
 
 
+def diffusion_factor(dispersion_matrix: jax.Array, diffusion: jax.Array | None) -> jax.Array:
+    """Return ``B = L S`` with ``S S^T = Q_c``, so that ``B B^T = L Q_c L^T``.
+
+    ``jax.numpy.linalg.cholesky`` returns NaN when the decomposition fails (``lax.linalg.cholesky``
+    docstring), which selects the symmetric square root for a singular ``Q_c``. Each branch reads a
+    safe input when it is not taken, so neither puts a NaN into the gradient of the other.
+    """
+    if diffusion is None:
+        return dispersion_matrix
+    size = diffusion.shape[0]
+    if size == 0:
+        return dispersion_matrix
+    dtype = diffusion.dtype
+    is_definite = jnp.all(jnp.isfinite(jnp.linalg.cholesky(jax.lax.stop_gradient(diffusion))))
+    cholesky = jnp.linalg.cholesky(jnp.where(is_definite, diffusion, jnp.eye(size, dtype=dtype)))
+    # Distinct eigenvalues keep the eigendecomposition's derivative finite when it is not taken.
+    spectral_input = jnp.where(
+        is_definite, jnp.diag(jnp.arange(1, size + 1, dtype=dtype)), diffusion
+    )
+    eigenvalues, eigenvectors = jnp.linalg.eigh(spectral_input)
+    is_positive = eigenvalues > 0.0
+    roots = jnp.where(is_positive, jnp.sqrt(jnp.where(is_positive, eigenvalues, 1.0)), 0.0)
+    square_root = eigenvectors * roots
+    return dispersion_matrix @ jnp.where(is_definite, cholesky, square_root)
+
+
 def exponential_and_gramian(
     drift: jax.Array, dispersion_factor: jax.Array, steps: jax.Array
 ) -> tuple[jax.Array, jax.Array]:
@@ -231,7 +257,9 @@ def exponential_and_gramian(
 
     Returns:
         ``(transitions, process_noises)``, each of shape ``(N, n, n)``. Steps needing more than
-        32 doublings are NaN.
+        32 doublings are NaN. At a zero step the process-noise part of the derivative with respect
+        to that step is zero, as in GPJax's ``Matern12SDE.discretise``, because the Gramian factor
+        scales with ``sqrt(dt)``.
     """
     dtype = jnp.result_type(drift, dispersion_factor, steps)
     drift = jnp.asarray(drift, dtype=dtype)
@@ -242,8 +270,12 @@ def exponential_and_gramian(
         """Scale one step below eta; return its initial exponential, factor and count."""
         count = jax.lax.stop_gradient(_doubling_count(drift * step))
         scale = 2.0**count
+        # The factor scales with sqrt(dt), whose derivative is infinite at a zero step; take the
+        # root of a safe input there (JAX FAQ double-where), so the step gradient stays finite.
+        has_length = step > 0.0
+        root = jnp.where(has_length, jnp.sqrt(jnp.where(has_length, step / scale, 1.0)), 0.0)
         exponential, factor = _pade_legendre_initialisation(
-            drift * (step / scale), dispersion_factor * jnp.sqrt(step / scale)
+            drift * (step / scale), dispersion_factor * root
         )
         return exponential, factor, count
 
@@ -276,4 +308,4 @@ def exponential_and_gramian(
     )
 
 
-__all__ = ["exponential_and_gramian"]
+__all__ = ["diffusion_factor", "exponential_and_gramian"]

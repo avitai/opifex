@@ -27,6 +27,7 @@ import pytest
 from scipy.linalg import expm as scipy_expm
 
 from opifex.uncertainty.statespace import discretize_lti_sde, matern52_kernel
+from tests.uncertainty.statespace._accuracy import scaled_error, transition_error
 from tests.uncertainty.statespace._process_noise_references import REFERENCES
 
 
@@ -49,13 +50,6 @@ def _dtype_for(request: pytest.FixtureRequest, precision: str) -> jnp.dtype:
         request.getfixturevalue("float64")
         return jnp.float64
     return jnp.float32
-
-
-def _scaled_error(estimate: jax.Array, reference: np.ndarray) -> float:
-    """Return ``max |Q_ij - R_ij| / sqrt(R_ii R_jj)``, the per-component relative error."""
-    scale = np.sqrt(np.diag(reference))
-    difference = np.asarray(estimate, dtype=np.float64) - reference
-    return float(np.max(np.abs(difference) / np.outer(scale, scale)))
 
 
 def test_zero_drift_recovers_identity_transition_and_qc_dt() -> None:
@@ -200,16 +194,12 @@ def test_discretisation_matches_extended_precision_references(
         )
         assert transition.dtype == dtype
         assert process_noise.dtype == dtype
-        reference_transition = np.asarray(step.transition)
-        transition_error = float(
-            np.max(np.abs(np.asarray(transition, dtype=np.float64) - reference_transition))
-            / max(1.0, float(np.max(np.abs(reference_transition))))
-        )
-        noise_error = _scaled_error(process_noise, np.asarray(step.process_noise))
-        assert transition_error <= _TRANSITION_TOLERANCE[precision], (
+        transition_error_value = transition_error(transition, step.transition)
+        noise_error = scaled_error(process_noise, step.process_noise)
+        assert transition_error_value <= _TRANSITION_TOLERANCE[precision], (
             name,
             step.scale,
-            transition_error,
+            transition_error_value,
         )
         assert noise_error <= _NOISE_TOLERANCE[precision], (name, step.scale, noise_error)
 
@@ -228,7 +218,7 @@ def test_singular_diffusion_matches_the_reference() -> None:
             dt=jnp.asarray(step.dt, dtype=jnp.float32),
             diffusion=jnp.asarray(dispersion @ dispersion.T, dtype=jnp.float32),
         )
-        noise_error = _scaled_error(process_noise, np.asarray(step.process_noise))
+        noise_error = scaled_error(process_noise, step.process_noise)
         assert noise_error <= _NOISE_TOLERANCE["float32"], (step.scale, noise_error)
 
 

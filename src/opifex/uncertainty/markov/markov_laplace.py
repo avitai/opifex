@@ -121,11 +121,11 @@ def _build_state_space_sequence(
     r"""Discretise the kernel SDE at the training time grid.
 
     Returns ``(transitions, process_noises)`` arrays of shape
-    ``(n, d, d)`` where ``d`` is the kernel's state dimension, one
-    :meth:`StateSpaceKernel.discretize` step per time gap.
+    ``(n, d, d)`` where ``d`` is the kernel's state dimension, from one
+    :meth:`StateSpaceKernel.discretize_steps` call over the time gaps.
     """
     deltas = jnp.concatenate([jnp.zeros((1,), dtype=times.dtype), jnp.diff(times)])
-    return jax.vmap(state_space_kernel.discretize)(deltas)
+    return state_space_kernel.discretize_steps(deltas)
 
 
 def fit_markov_laplace_gp(

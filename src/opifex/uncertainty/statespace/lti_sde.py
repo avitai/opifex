@@ -33,33 +33,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.statespace._gramian import exponential_and_gramian
-
-
-def _diffusion_factor(dispersion_matrix: jax.Array, diffusion: jax.Array | None) -> jax.Array:
-    """Return ``B = L S`` with ``S S^T = Q_c``, so that ``B B^T = L Q_c L^T``.
-
-    ``jax.numpy.linalg.cholesky`` returns NaN when the decomposition fails (``lax.linalg.cholesky``
-    docstring), which selects the symmetric square root for a singular ``Q_c``. Each branch reads a
-    safe input when it is not taken, so neither puts a NaN into the gradient of the other.
-    """
-    if diffusion is None:
-        return dispersion_matrix
-    size = diffusion.shape[0]
-    if size == 0:
-        return dispersion_matrix
-    dtype = diffusion.dtype
-    is_definite = jnp.all(jnp.isfinite(jnp.linalg.cholesky(jax.lax.stop_gradient(diffusion))))
-    cholesky = jnp.linalg.cholesky(jnp.where(is_definite, diffusion, jnp.eye(size, dtype=dtype)))
-    # Distinct eigenvalues keep the eigendecomposition's derivative finite when it is not taken.
-    spectral_input = jnp.where(
-        is_definite, jnp.diag(jnp.arange(1, size + 1, dtype=dtype)), diffusion
-    )
-    eigenvalues, eigenvectors = jnp.linalg.eigh(spectral_input)
-    is_positive = eigenvalues > 0.0
-    roots = jnp.where(is_positive, jnp.sqrt(jnp.where(is_positive, eigenvalues, 1.0)), 0.0)
-    square_root = eigenvectors * roots
-    return dispersion_matrix @ jnp.where(is_definite, cholesky, square_root)
+from opifex.uncertainty.statespace._gramian import diffusion_factor, exponential_and_gramian
 
 
 def discretize_lti_sde(
@@ -88,7 +62,7 @@ def discretize_lti_sde(
         ``(n, n)``.
     """
     dtype = jnp.result_type(drift_matrix, dispersion_matrix, dt)
-    factor = _diffusion_factor(
+    factor = diffusion_factor(
         jnp.asarray(dispersion_matrix, dtype=dtype),
         None if diffusion is None else jnp.asarray(diffusion, dtype=dtype),
     )

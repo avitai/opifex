@@ -24,6 +24,14 @@ covariances ``H A(tau) P_inf H^T`` match their closed forms up to the dropped ha
 the periodic harmonic weights match ``scipy.special.ive`` in value and in their derivative with
 respect to the lengthscale.
 
+Discretisation. In float32 every component of the Matern process noise matches its
+extended-precision reference (the Stillfjord-Tronarp Gramian, and the closed form for Matern-1/2),
+and the quasi-periodic process noise matches the float64 identity ``P_inf - A P_inf A^T``. In
+float64 the process noise is that identity, held to its relative Frobenius error. A kernel is a
+pytree, so new hyperparameters reuse a compiled program, and the float32 and float64 methods are
+chosen while tracing. A kernel built from its matrices alone discretises from ``F``; the deprecated
+``state_transition=`` argument keeps the 0.2.5 discretisation.
+
 Canonical reference (line-by-line port):
 * ``../bayesnewton/bayesnewton/kernels.py`` — ``Matern12`` (line 141),
   ``Matern32`` (line 200), ``Matern52`` (line 253), ``Matern72`` (line
@@ -39,6 +47,7 @@ References
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 import jax
@@ -62,6 +71,12 @@ from opifex.uncertainty.statespace import (
     StateSpaceKernel,
 )
 from opifex.uncertainty.statespace.kernels import i0e_vector
+from tests.uncertainty.statespace._accuracy import (
+    relative_frobenius_error,
+    scaled_error,
+    transition_error,
+)
+from tests.uncertainty.statespace._process_noise_references import REFERENCES
 
 
 if TYPE_CHECKING:
@@ -115,10 +130,10 @@ DISSIPATIVE_KERNEL_IDS = ["matern12", "matern32", "matern52", "matern72", "quasi
 CONSERVATIVE_KERNEL_IDS = ["cosine", "periodic"]
 # Step sizes as multiples of each kernel's own time scale, from far below it to far above it.
 _STEP_RATIOS = (1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 50.0, 300.0, 1e3, 1e4)
-# Relative residual of the exact identity Q(2h) = A(h) Q(h) A(h)^T + Q(h) in float32. Measured
-# over these kernels for step ratios 1e-4 to 50: at most 2.4e-7 for the cancellation-free
-# process noise, and 1.4e-5 to 4.6e-4 for P_inf - A P_inf A^T, whose subtraction cancels at
-# small steps.
+# Relative residual of the exact identity Q(2h) = A(h) Q(h) A(h)^T + Q(h) in float32. Measured over
+# these kernels and step ratios: at most 2.1e-7 for the Matern-1/2 closed form, 4.4e-7 to 6.2e-7 for
+# the Stillfjord-Tronarp Gramian of Matern-3/2 to 7/2, and 1.2e-6 for the quasi-periodic kernel.
+# P_inf - A P_inf A^T, whose subtraction cancels at small steps, measured 1.4e-5 to 4.6e-4.
 _DOUBLING_RESIDUAL_TOLERANCE = 5e-6
 
 
@@ -587,33 +602,105 @@ def test_quasi_periodic_kernel_covariance_matches_closed_form(lengthscale_period
 
 
 # ---------------------------------------------------------------------------
-# StateSpaceKernel dataclass — invariants.
+# Discretisation: transition and process noise.
 # ---------------------------------------------------------------------------
 
+# Matern kernels at unit variance and lengthscale, keyed by their extended-precision reference.
+_REFERENCE_KERNELS: dict[str, Callable[..., StateSpaceKernel]] = {
+    "matern12": matern12_kernel,
+    "matern32": matern32_kernel,
+    "matern52": matern52_kernel,
+    "matern72": matern72_kernel,
+}
+# Float32 process noise: worst scaled error of the Stillfjord-Tronarp Gramian over the references,
+# measured at 1.4e-5 (Matern-7/2 at lambda dt = 1e4); the Matern-1/2 closed form measured 1.2e-7.
+_FLOAT32_NOISE_TOLERANCE = 5e-5
+# Float64 process noise is P_inf - A P_inf A^T, which cancels per component at small steps and is
+# therefore held to its relative Frobenius error, measured at most 1.7e-13 (Matern-3/2).
+_FLOAT64_NOISE_TOLERANCE = 1e-12
+# Closed-form transitions; max |A - R| / max(1, max |R|).
+_TRANSITION_TOLERANCE = {"float32": 1e-4, "float64": 1e-12}
+# A vectorised closed form may round differently from the same expression at batch size one:
+# measured at most one float32 ULP of the matrix scale (1.2e-7 for Matern-5/2), eager and jitted.
+# The process noise matched bitwise, so it is compared exactly.
+_BATCH_TRANSITION_TOLERANCE = 4.0 * float(np.finfo(np.float32).eps)
+# Far beyond the decay time, float32 ``Q`` reaches ``P_inf`` exactly for the Matern-1/2 closed form
+# and up to the round-off of the Stillfjord-Tronarp doublings otherwise: measured relative Frobenius
+# errors of 1.2e-7 to 2.4e-6 for Matern-3/2 to 7/2 and 2.3e-6 to 5.1e-6 for the quasi-periodic
+# kernel, at 50 to 1e4 decay times. Float64 reaches ``P_inf`` exactly. The earlier closed-form
+# increment measured 2e-8 to 6e-8 but lost the small components of ``Q`` at short steps, which is
+# why float32 moved to the Gramian.
+_COARSE_NOISE_TOLERANCE = 1e-5
 
-# ---------------------------------------------------------------------------
-# Discretisation: transition increment and process noise.
-# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("precision", ["float32", "float64"])
+@pytest.mark.parametrize("name", list(_REFERENCE_KERNELS))
+def test_matern_discretisation_matches_extended_precision_references(
+    request: pytest.FixtureRequest, name: str, precision: str
+) -> None:
+    """Transition and process noise match the references from 1e-4 to 1e4 lengthscales."""
+    if precision == "float64":
+        request.getfixturevalue("float64")
+    kernel = _REFERENCE_KERNELS[name](variance=1.0, lengthscale=1.0)
+    for step in REFERENCES[name].steps:
+        transition, process_noise = kernel.discretize(jnp.asarray(step.dt))
+        assert str(process_noise.dtype) == precision
+        error = transition_error(transition, step.transition)
+        assert error <= _TRANSITION_TOLERANCE[precision], (name, step.scale, error)
+        if precision == "float32":
+            noise_error = scaled_error(process_noise, step.process_noise)
+            assert noise_error <= _FLOAT32_NOISE_TOLERANCE, (name, step.scale, noise_error)
+        else:
+            noise_error = relative_frobenius_error(process_noise, step.process_noise)
+            assert noise_error <= _FLOAT64_NOISE_TOLERANCE, (name, step.scale, noise_error)
+
+
+def test_quasi_periodic_float32_process_noise_matches_the_float64_identity(
+    request: pytest.FixtureRequest,
+) -> None:
+    """Every component matches ``P_inf - A P_inf A^T`` evaluated in float64.
+
+    A Matern-1/2 envelope of rotations does not cancel in that identity: the rotation leaves each
+    harmonic block of ``P_inf`` unchanged, so the float64 reference keeps its relative digits.
+    """
+    parameters = {
+        "variance": 0.9,
+        "lengthscale_periodic": 1.2,
+        "period": 0.8,
+        "lengthscale_matern": 1.6,
+        "order": 8,
+    }
+    kernel = quasi_periodic_matern12_kernel(**parameters)
+    time_scale = _time_scale(kernel)
+    ratios = (1e-4, 1e-2, 1.0, 1e2, 1e4)
+    estimates = [kernel.discretize(jnp.asarray(ratio * time_scale))[1] for ratio in ratios]
+    request.getfixturevalue("float64")
+    reference_kernel = quasi_periodic_matern12_kernel(**parameters)
+    feedback = np.asarray(reference_kernel.feedback)
+    stationary = np.asarray(reference_kernel.stationary_cov)
+    for ratio, estimate in zip(ratios, estimates, strict=True):
+        transition = scipy_expm(feedback * ratio * time_scale)
+        reference = stationary - transition @ stationary @ transition.T
+        error = scaled_error(estimate, reference)
+        assert error <= _FLOAT32_NOISE_TOLERANCE, (ratio, error)
 
 
 @pytest.mark.usefixtures("float64")
 @pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
-def test_transition_increment_matches_matrix_exponential(
+def test_state_transition_matches_matrix_exponential(
     name: str, factory: Callable[[], StateSpaceKernel]
 ) -> None:
-    """``transition_increment(dt)`` equals ``expm(F dt) - I`` at every step size.
+    """``state_transition(dt)`` equals ``expm(F dt)`` at every step size.
 
     The reference is ``scipy.linalg.expm``. ``jax.scipy.linalg.expm`` in float64 is off by 2.9e-9
     for a rotation by 10 rad, where scipy and extended precision agree to 1e-14.
     """
     kernel = factory()
-    identity = np.eye(kernel.state_dim)
     for ratio in _STEP_RATIOS:
         dt = ratio * _time_scale(kernel)
-        expected = jnp.asarray(scipy_expm(np.asarray(kernel.feedback) * dt) - identity)
-        dt = jnp.asarray(dt)
-        error = float(jnp.max(jnp.abs(kernel.transition_increment(dt) - expected)))
-        assert error <= 1e-9 * max(float(jnp.max(jnp.abs(expected))), 1e-6), (name, ratio, error)
+        expected = scipy_expm(np.asarray(kernel.feedback) * dt)
+        error = transition_error(kernel.state_transition(jnp.asarray(dt)), expected)
+        assert error <= 1e-9, (name, ratio, error)
 
 
 @pytest.mark.usefixtures("float64")
@@ -633,10 +720,26 @@ def test_discretize_matches_discretize_lti_sde_in_float64(
             dt=dt,
             diffusion=kernel.diffusion,
         )
-        transition_error = float(jnp.max(jnp.abs(transition - reference_transition)))
-        noise_error = float(jnp.max(jnp.abs(process_noise - reference_noise)))
-        assert transition_error <= 1e-10, (name, ratio, transition_error)
-        assert noise_error <= 1e-9 * noise_scale, (name, ratio, noise_error)
+        transition_difference = float(jnp.max(jnp.abs(transition - reference_transition)))
+        noise_difference = float(jnp.max(jnp.abs(process_noise - reference_noise)))
+        assert transition_difference <= 1e-10, (name, ratio, transition_difference)
+        assert noise_difference <= 1e-9 * noise_scale, (name, ratio, noise_difference)
+
+
+@pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
+def test_discretize_steps_matches_each_step(
+    name: str, factory: Callable[[], StateSpaceKernel]
+) -> None:
+    """``discretize_steps`` over a sequence equals ``discretize`` at each of its steps."""
+    kernel = factory()
+    steps = jnp.asarray([0.0, 1e-4, 1e-2, 1.0, 1e2, 1e4]) * _time_scale(kernel)
+    transitions, process_noises = kernel.discretize_steps(steps)
+    for index in range(steps.shape[0]):
+        transition, process_noise = kernel.discretize(steps[index])
+        scale = max(1.0, float(jnp.max(jnp.abs(transition))))
+        difference = float(jnp.max(jnp.abs(transitions[index] - transition)))
+        assert difference <= _BATCH_TRANSITION_TOLERANCE * scale, (name, index, difference)
+        np.testing.assert_array_equal(np.asarray(process_noises[index]), np.asarray(process_noise))
 
 
 @pytest.mark.parametrize("name", DISSIPATIVE_KERNEL_IDS)
@@ -664,11 +767,11 @@ def test_process_noise_is_positive_semidefinite(name: str) -> None:
 
 @pytest.mark.parametrize("name", DISSIPATIVE_KERNEL_IDS)
 def test_coarse_steps_reach_the_stationary_distribution(name: str) -> None:
-    """Far beyond the slowest decay time, ``A(dt)`` vanishes and ``Q(dt)`` equals ``P_inf``.
+    """Far beyond the slowest decay time, ``A(dt)`` vanishes and ``Q(dt)`` approaches ``P_inf``.
 
-    ``exp(-lambda dt)`` underflows there in float32, so both limits are exact up to rounding;
-    measured relative errors are 2e-8 to 6e-8. The decay time, not the spectral radius, sets the
-    scale: a quasi-periodic kernel rotates much faster than it decays.
+    ``exp(-lambda dt)`` underflows there in float32, so ``A`` vanishes; ``Q`` reaches ``P_inf`` up to
+    the round-off recorded in ``_COARSE_NOISE_TOLERANCE``. The decay time, not the spectral radius,
+    sets the scale: a quasi-periodic kernel rotates much faster than it decays.
     """
     kernel = _KERNEL_FACTORIES[name]()
     stationary_norm = float(jnp.linalg.norm(kernel.stationary_cov))
@@ -680,18 +783,16 @@ def test_coarse_steps_reach_the_stationary_distribution(name: str) -> None:
             float(jnp.linalg.norm(process_noise - kernel.stationary_cov)) / stationary_norm
         )
         assert largest_transition <= 1e-6, (name, ratio, largest_transition)
-        assert noise_error <= 1e-6, (name, ratio, noise_error)
+        assert noise_error <= _COARSE_NOISE_TOLERANCE, (name, ratio, noise_error)
 
 
 @pytest.mark.parametrize("name", CONSERVATIVE_KERNEL_IDS)
 def test_conservative_kernels_add_no_process_noise(name: str) -> None:
     """A rotation SDE keeps its stationary covariance, so ``Q(dt)`` vanishes at every step."""
     kernel = _KERNEL_FACTORIES[name]()
-    stationary_scale = float(jnp.max(jnp.abs(kernel.stationary_cov)))
     for ratio in _STEP_RATIOS:
         _, process_noise = kernel.discretize(jnp.asarray(ratio * _time_scale(kernel)))
-        largest = float(jnp.max(jnp.abs(process_noise)))
-        assert largest <= 1e-6 * stationary_scale, (name, ratio, largest)
+        assert bool(jnp.all(process_noise == 0.0)), (name, ratio)
 
 
 @pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
@@ -704,10 +805,94 @@ def test_discretize_transition_is_the_state_transition(
     assert bool(jnp.array_equal(kernel.discretize(dt)[0], kernel.state_transition(dt))), name
 
 
-def test_state_space_kernel_built_from_a_state_transition_is_deprecated() -> None:
-    """The ``state_transition=`` constructor argument warns and still describes the same SDE."""
+# ---------------------------------------------------------------------------
+# StateSpaceKernel — pytree, construction and deprecation.
+# ---------------------------------------------------------------------------
+
+
+def test_kernel_is_a_pytree_of_arrays() -> None:
+    """Every leaf of a kernel is an array, and unflattening rebuilds the same discretisation."""
+    kernel = matern52_kernel(variance=0.8, lengthscale=1.1)
+    leaves, treedef = jax.tree_util.tree_flatten(kernel)
+    assert leaves
+    assert all(isinstance(leaf, jax.Array) for leaf in leaves)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    dt = jnp.asarray(0.4)
+    for original, copy in zip(kernel.discretize(dt), rebuilt.discretize(dt), strict=True):
+        assert bool(jnp.array_equal(original, copy))
+
+
+def test_jitted_discretisation_compiles_once_across_hyperparameters() -> None:
+    """A kernel passed to a jitted function is data: new hyperparameters reuse the program."""
+    trace_count = 0
+
+    def discretize(kernel: StateSpaceKernel, dt: jax.Array) -> tuple[jax.Array, jax.Array]:
+        nonlocal trace_count
+        trace_count += 1
+        return kernel.discretize(dt)
+
+    jitted = jax.jit(discretize)
+    for lengthscale in (0.7, 1.9, 4.0):
+        jitted(matern52_kernel(variance=1.3, lengthscale=lengthscale), jnp.asarray(0.3))
+    assert trace_count == 1
+
+
+def test_discretisation_compiles_once_per_precision(request: pytest.FixtureRequest) -> None:
+    """The float32 and float64 methods are chosen while tracing, one compilation per dtype."""
+    traced_dtypes: list[str] = []
+
+    def discretize(kernel: StateSpaceKernel, dt: jax.Array) -> tuple[jax.Array, jax.Array]:
+        traced_dtypes.append(str(kernel.feedback.dtype))
+        return kernel.discretize(dt)
+
+    jitted = jax.jit(discretize)
+    for value in (0.1, 5.0):
+        jitted(matern72_kernel(variance=1.0, lengthscale=1.0), jnp.asarray(value))
+    request.getfixturevalue("float64")
+    for value in (0.1, 5.0):
+        jitted(matern72_kernel(variance=1.0, lengthscale=1.0), jnp.asarray(value))
+    assert traced_dtypes == ["float32", "float64"]
+
+
+@pytest.mark.parametrize("precision", ["float32", "float64"])
+def test_kernel_built_from_its_matrices_discretises_from_the_feedback_matrix(
+    request: pytest.FixtureRequest, precision: str
+) -> None:
+    """Given only ``(F, L, Q_c, H, P_inf)``, a kernel uses ``exp(F dt)`` and, in float32, the Gramian."""
+    if precision == "float64":
+        request.getfixturevalue("float64")
+    template = matern52_kernel(variance=1.0, lengthscale=1.0)
+    kernel = StateSpaceKernel(
+        feedback=template.feedback,
+        noise_effect=template.noise_effect,
+        diffusion=template.diffusion,
+        measurement=template.measurement,
+        stationary_cov=template.stationary_cov,
+    )
+    for step in REFERENCES["matern52"].steps:
+        dt = jnp.asarray(step.dt)
+        transition, process_noise = kernel.discretize(dt)
+        assert bool(jnp.array_equal(transition, kernel.state_transition(dt)))
+        error = transition_error(transition, step.transition)
+        assert error <= _TRANSITION_TOLERANCE[precision], (step.scale, error)
+        if precision == "float32":
+            noise_error = scaled_error(process_noise, step.process_noise)
+            assert noise_error <= _FLOAT32_NOISE_TOLERANCE, (step.scale, noise_error)
+        else:
+            noise_error = relative_frobenius_error(process_noise, step.process_noise)
+            assert noise_error <= _FLOAT64_NOISE_TOLERANCE, (step.scale, noise_error)
+
+
+def test_state_space_kernel_built_from_a_state_transition_keeps_the_released_discretisation() -> (
+    None
+):
+    """``state_transition=`` warns and discretises as 0.2.5 did.
+
+    The transition is the supplied callable and the process noise is ``P_inf - A P_inf A^T``;
+    rebuilding the kernel from its pytree does not warn again.
+    """
     reference = matern32_kernel(variance=1.2, lengthscale=0.9)
-    with pytest.warns(DeprecationWarning, match="transition_increment"):
+    with pytest.warns(DeprecationWarning, match="state_transition"):
         legacy = StateSpaceKernel(
             feedback=reference.feedback,
             noise_effect=reference.noise_effect,
@@ -717,35 +902,18 @@ def test_state_space_kernel_built_from_a_state_transition_is_deprecated() -> Non
             state_transition=reference.state_transition,
         )
     dt = jnp.asarray(0.3)
-    legacy_transition, legacy_noise = legacy.discretize(dt)
-    reference_transition, reference_noise = reference.discretize(dt)
-    # I + (A - I) rounds within two float32 ULPs of A.
-    assert float(jnp.max(jnp.abs(legacy_transition - reference_transition))) <= 1e-6
-    noise_scale = float(jnp.max(jnp.abs(reference.stationary_cov)))
-    assert float(jnp.max(jnp.abs(legacy_noise - reference_noise))) <= 1e-5 * noise_scale
-
-
-@pytest.mark.parametrize("supplied", ["both", "neither"])
-def test_state_space_kernel_requires_exactly_one_transition_description(supplied: str) -> None:
-    """Passing both or neither of ``transition_increment`` and ``state_transition`` raises."""
-    reference = matern12_kernel(variance=1.0, lengthscale=1.0)
-    transitions = (
-        {
-            "transition_increment": reference.transition_increment,
-            "state_transition": reference.state_transition,
-        }
-        if supplied == "both"
-        else {}
-    )
-    with pytest.raises(ValueError, match="transition_increment"):
-        StateSpaceKernel(
-            feedback=reference.feedback,
-            noise_effect=reference.noise_effect,
-            diffusion=reference.diffusion,
-            measurement=reference.measurement,
-            stationary_cov=reference.stationary_cov,
-            **transitions,
-        )
+    transition, process_noise = legacy.discretize(dt)
+    expected_transition = reference.state_transition(dt)
+    assert bool(jnp.array_equal(transition, expected_transition))
+    stationary = reference.stationary_cov
+    expected_noise = stationary - expected_transition @ stationary @ expected_transition.T
+    noise_scale = float(jnp.max(jnp.abs(stationary)))
+    assert float(jnp.max(jnp.abs(process_noise - expected_noise))) <= 1e-6 * noise_scale
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        leaves, treedef = jax.tree_util.tree_flatten(legacy)
+        rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert bool(jnp.array_equal(rebuilt.state_transition(dt), expected_transition))
 
 
 def test_state_space_kernel_is_immutable() -> None:
