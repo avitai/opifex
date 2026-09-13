@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `backend:pathfinder`, `backend:svgd` and `backend:advi` capabilities in the UQ registry
+  declare `source_package="opifex"`, as `PathfinderBackend`, `SVGDBackend` and `ADVIBackend`
+  already do. They declared `"blackjax"`, although the three backends are implemented in opifex.
 - The Markov power-EP and posterior-linearisation Student-t predictors,
   `predict_studentst_markov_pep_gp` and `predict_studentst_markov_pl_gp`, record
   `likelihood="students_t"` in their metadata, the label the dense Laplace GP and the Markov

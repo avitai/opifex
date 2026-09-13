@@ -21,7 +21,7 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 _PATHFINDER_BACKEND_CAPABILITY = UQCapability(
     native_jax_kernel=True,
     default_strategy=DefaultStrategy.VARIATIONAL,
-    source_package="blackjax",
+    source_package="opifex",
     notes=(
         "PathfinderBackend — Pathfinder variational + L-BFGS posterior "
         "sampler (Zhang et al. arXiv:2108.03782); peer to the BlackJAX MCMC "
@@ -33,7 +33,7 @@ _PATHFINDER_BACKEND_CAPABILITY = UQCapability(
 _SVGD_BACKEND_CAPABILITY = UQCapability(
     native_jax_kernel=True,
     default_strategy=DefaultStrategy.VARIATIONAL,
-    source_package="blackjax",
+    source_package="opifex",
     notes=(
         "SVGDBackend — Stein Variational Gradient Descent posterior "
         "sampler (Liu & Wang NIPS 2016, arXiv:1608.04471); peer to the Pathfinder / ADVI "
@@ -45,7 +45,7 @@ _SVGD_BACKEND_CAPABILITY = UQCapability(
 _ADVI_BACKEND_CAPABILITY = UQCapability(
     native_jax_kernel=True,
     default_strategy=DefaultStrategy.VARIATIONAL,
-    source_package="blackjax",
+    source_package="opifex",
     notes=(
         "ADVIBackend — Automatic Differentiation Variational Inference "
         "(mean-field Gaussian; Kucukelbir et al. JMLR 18(14)); "

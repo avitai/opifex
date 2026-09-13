@@ -10,7 +10,7 @@ The plan exit criteria are:
    :class:`DefaultStrategy` value.
 3. Inference-backend entries (Pathfinder / SVGD / ADVI) carry
    ``default_strategy=DefaultStrategy.VARIATIONAL`` and
-   ``source_package="blackjax"``.
+   ``source_package="opifex"``.
 4. ``ProbabilisticPINN`` declares ``native_bayesian=True``,
    ``supports_calibration=True``,
    ``default_strategy=DefaultStrategy.VARIATIONAL``, and
@@ -327,7 +327,7 @@ def test_inference_backend_capability_flags(name: str, uq_registry: UQRegistry) 
     cap = uq_registry.require(name)
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.VARIATIONAL
-    assert cap.source_package == "blackjax"
+    assert cap.source_package == "opifex"
 
 
 # ---------------------------------------------------------------------------
