@@ -160,7 +160,8 @@ def bfgs_sample(
     identity = jnp.identity(R_matrix.shape[0])
     cholesky_lower = jnp.linalg.cholesky(identity + R_matrix @ gamma @ R_matrix.T)
 
-    log_det = jnp.log(jnp.prod(alpha)) + 2.0 * jnp.log(jnp.linalg.det(cholesky_lower))
+    # Algorithm 4, step 7: log|Sigma| = log|diag(alpha)| + 2 log|L~|, as sums of logarithms.
+    log_det = jnp.sum(jnp.log(alpha)) + 2.0 * jnp.sum(jnp.log(jnp.diag(cholesky_lower)))
     mean = position + jnp.diag(alpha) @ grad_position + beta @ gamma @ beta.T @ grad_position
     standard_noise = jax.random.normal(rng_key, (num_samples, param_dim, 1))
     transformed = mean[..., None] + jnp.diag(jnp.sqrt(alpha)) @ (

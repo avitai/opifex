@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a lower bound on that information gain instead. In float32 the score loses accuracy once a
   sampled minimum lies more than a few standard deviations above the mean without observation
   noise, and is not finite at `gamma = -40`.
+- Pathfinder's `bfgs_sample` returns finite log densities in high dimensions. It evaluated
+  `log|Sigma|` as `log(prod(alpha)) + 2 log(det(L))`, so in float32 the product of 128 diagonal
+  factors of 2 overflowed and 127 factors of 0.5 underflowed, and `log_q` was `-inf` or `+inf`, which
+  also discarded those iterations from the ELBO selection. It now sums logarithms, as in Algorithm 4,
+  step 7 of Zhang et al. (2022).
 - `mumbo_acquisition` evaluates eq. 5 of Moss, Leslie & Rayson (2020) for samples of the target
   level's maximum. Its Gumbel fit to the quartiles (Wang & Jegelka 2017, §3.1) had a negative scale,
   so its samples were `2 y_0.25 - y*` and fell below the lower quartile. Its extended skew Gaussian

@@ -33,8 +33,13 @@ Algorithm invariants verified:
 
 from __future__ import annotations
 
+import math
+
 import jax
 import jax.numpy as jnp
+import numpy as np
+import pytest
+from scipy.stats import multivariate_normal, norm
 
 from opifex.uncertainty.inference_backends._pathfinder_algorithm import (
     bfgs_sample,
@@ -45,9 +50,22 @@ from opifex.uncertainty.inference_backends._pathfinder_algorithm import (
 )
 
 
+_EPS32 = float(np.finfo(np.float32).eps)
+
+# Float32 error of log q against float64, in units of eps32 times the magnitude of its terms: at most
+# 1.30 for diagonal covariances (dimensions 8 to 20000, alpha 0.01 to 50) and 2.12 for factored
+# covariances from 32 random quadratics up to 200 dimensions (condition numbers up to 20).
+_LOG_Q_ULPS = 5.0
+
+
 def _standard_normal_log_density(x: jax.Array) -> jax.Array:
     """``log N(x; 0, I)`` up to a constant."""
     return -0.5 * jnp.sum(x**2)
+
+
+def _log_q_rounding_bound(log_det: float, squared_noise: np.ndarray, dim: int) -> np.ndarray:
+    """Float32 rounding of ``-(log|Sigma| + u^T u + N log 2 pi) / 2``, in units of its terms."""
+    return _LOG_Q_ULPS * _EPS32 * (abs(log_det) + squared_noise + dim * math.log(2.0 * math.pi))
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +155,76 @@ def test_bfgs_sample_with_zero_factors_is_standard_normal() -> None:
     empirical_cov = jnp.cov(samples.T)
     assert jnp.allclose(empirical_mean, jnp.zeros(param_dim), atol=0.1)
     assert jnp.allclose(jnp.diag(empirical_cov), jnp.ones(param_dim), atol=0.15)
+
+
+@pytest.mark.parametrize("alpha_value", [0.5, 2.0])
+@pytest.mark.parametrize("dim", [127, 128, 3000])
+def test_bfgs_sample_log_density_is_the_diagonal_gaussian_in_high_dimensions(
+    dim: int, alpha_value: float
+) -> None:
+    """With ``beta = gamma = 0`` the draws are ``N(position, diag(alpha))`` and ``log q`` is theirs.
+
+    Algorithm 4, step 7 of Zhang et al. (2022) evaluates ``log|Sigma| = log|diag(alpha)| + 2 log|L~|``
+    as sums of logarithms. In float32 the product of 128 factors of 2 overflows and the product of
+    ``127`` factors of 0.5 underflows to zero, so a log of the product is not finite.
+    """
+    samples, log_q = bfgs_sample(
+        rng_key=jax.random.PRNGKey(0),
+        num_samples=4,
+        position=jnp.zeros(dim),
+        grad_position=jnp.zeros(dim),
+        alpha=jnp.full((dim,), alpha_value),
+        beta=jnp.zeros((dim, 6)),
+        gamma=jnp.zeros((6, 6)),
+    )
+    draws = np.asarray(samples, dtype=np.float64)
+    reference = norm.logpdf(draws, loc=0.0, scale=math.sqrt(alpha_value)).sum(axis=1)
+    bound = _log_q_rounding_bound(
+        dim * math.log(alpha_value), (draws**2 / alpha_value).sum(axis=1), dim
+    )
+    error = np.abs(np.asarray(log_q, dtype=np.float64) - reference)
+    assert np.all(np.isfinite(np.asarray(log_q)))
+    assert np.all(error <= bound), error / bound
+
+
+def test_bfgs_sample_log_density_is_the_factored_gaussian() -> None:
+    """``log q`` is the density of ``N(position, diag(alpha) + beta gamma beta^T)`` (formula II.2).
+
+    The gradient is zero so the mean is the position; the factors come from curvature pairs of a
+    quadratic, and the reference evaluates the full covariance in float64.
+    """
+    rng = np.random.default_rng(0)
+    dim, maxcor = 5, 3
+    basis = rng.normal(size=(dim, dim))
+    hessian = basis @ basis.T + dim * np.eye(dim)
+    position_steps = rng.normal(size=(dim, maxcor))
+    alpha = np.full(dim, 0.3)
+    beta, gamma = lbfgs_inverse_hessian_factors(
+        jnp.asarray(position_steps, dtype=jnp.float32),
+        jnp.asarray(hessian @ position_steps, dtype=jnp.float32),
+        jnp.asarray(alpha, dtype=jnp.float32),
+    )
+    position = rng.normal(size=dim)
+    samples, log_q = bfgs_sample(
+        rng_key=jax.random.PRNGKey(1),
+        num_samples=256,
+        position=jnp.asarray(position, dtype=jnp.float32),
+        grad_position=jnp.zeros(dim),
+        alpha=jnp.asarray(alpha, dtype=jnp.float32),
+        beta=beta,
+        gamma=gamma,
+    )
+    beta64 = np.asarray(beta, dtype=np.float64)
+    covariance = np.diag(alpha) + beta64 @ np.asarray(gamma, dtype=np.float64) @ beta64.T
+    covariance = 0.5 * (covariance + covariance.T)
+    draws = np.asarray(samples, dtype=np.float64)
+    distribution = multivariate_normal(mean=position, cov=covariance)  # pyright: ignore[reportArgumentType]
+    reference = distribution.logpdf(draws)
+    centred = draws - position
+    squared_noise = np.einsum("mi,ij,mj->m", centred, np.linalg.inv(covariance), centred)
+    bound = _log_q_rounding_bound(np.linalg.slogdet(covariance)[1], squared_noise, dim)
+    error = np.abs(np.asarray(log_q, dtype=np.float64) - reference)
+    assert np.all(error <= bound), error / bound
 
 
 # ---------------------------------------------------------------------------
