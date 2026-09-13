@@ -1,8 +1,7 @@
 r"""Stress head: virial via strain-displacement autodiff.
 
-The :class:`StressHead` implements the *conservative* stress strategy used by
-``../mace`` (``compute_forces_virials`` / ``get_symmetric_displacement`` in
-``mace/modules/utils.py``, after the NequIP recipe). A symmetric infinitesimal
+The :class:`StressHead` implements the *conservative* stress strategy
+(strain-displacement virial). A symmetric infinitesimal
 strain :math:`\varepsilon` is applied to positions and the cell,
 
 .. math::

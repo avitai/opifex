@@ -12,11 +12,10 @@ fine-tuning the correction ``A B`` is exactly zero and the adapter reproduces th
 base layer -- training therefore begins from the pre-trained model and only the
 tiny ``A`` / ``B`` factors are optimised.
 
-This is the JAX / Flax-NNX analogue of the ``../mace`` ``mace/modules/lora.py``
-``LoRAFCLayer`` (which adapts the scalar MLP layers of an equivariant MACE model
-with the same ``delta = A @ B`` low-rank, ``A`` random-small / ``B`` zero, and
-the e3nn ``(in, out)`` weight layout). Flax's ``nnx.Linear`` uses the same
-``kernel`` layout ``(in_features, out_features)``, so the correction is added
+The adapter applies the ``delta = A @ B`` low-rank correction (``A`` random-small,
+``B`` zero) to the scalar MLP layers of an atomistic model. Flax's
+``nnx.Linear`` uses the ``kernel`` layout ``(in_features, out_features)``, so the
+correction is added
 directly to ``kernel`` and the adapter is **equivariant-safe**: it acts per
 output channel (each output feature is corrected independently), so wrapping the
 per-irrep linear blocks of an equivariant backbone never mixes irreps.
@@ -41,15 +40,15 @@ logger = logging.getLogger(__name__)
 _DEFAULT_RANK = 4
 _DEFAULT_ALPHA = 1.0
 _LORA_A_INIT_STD = 1e-3
-"""Standard deviation of the random small ``A`` init (matches ``mace`` LoRA)."""
+"""Standard deviation of the random small ``A`` init."""
 
 
 class LoRALinear(nnx.Module):
     r"""A LoRA-adapted wrapper around a frozen ``nnx.Linear`` base layer.
 
     The forward computes ``x @ W_eff + b`` with
-    ``W_eff = W + (alpha / rank) * A @ B`` (Hu et al. 2021, arXiv:2106.09685;
-    the ``../mace`` ``mace/modules/lora.py`` ``LoRAFCLayer``). The base
+    ``W_eff = W + (alpha / rank) * A @ B`` (Hu et al. 2021, arXiv:2106.09685).
+    The base
     ``kernel`` and ``bias`` are stored as data leaves so that they travel with
     the model state but are typically excluded from the fine-tune gradient by a
     backbone-freeze filter (see
@@ -126,8 +125,7 @@ def apply_lora(
 ) -> LoRALinear:
     """Wrap an ``nnx.Linear`` in a :class:`LoRALinear` adapter.
 
-    A thin functional alias for :class:`LoRALinear` mirroring the ``../mace``
-    ``inject_lora`` entry point.
+    A thin functional alias for :class:`LoRALinear`.
 
     Args:
         base: The pre-trained ``nnx.Linear`` to adapt.

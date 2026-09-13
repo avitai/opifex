@@ -17,9 +17,6 @@ physics ``i``; their inner product over the latent dimension gives the value of
 physics field ``i`` at ``y``. Fields are then stacked along a trailing physics
 axis to give an output of shape ``(batch, n_points, num_physics_systems)``.
 
-This mirrors ``IndependentStrategy`` in DeepXDE
-(``deepxde/nn/deeponet_strategy.py``).
-
 References:
 ----------
 - L. Lu, P. Jin, G. Pang, Z. Zhang, G. E. Karniadakis. "Learning nonlinear
@@ -29,8 +26,6 @@ References:
   "A comprehensive and fair comparison of two neural operators (with practical
   extensions) based on FAIR data." Computer Methods in Applied Mechanics and
   Engineering, 393, 114778, 2022 (section 3.1.6, multi-output strategies).
-- DeepXDE reference implementation: ``deepxde/nn/deeponet_strategy.py``
-  (``IndependentStrategy``).
 """
 
 from collections.abc import Callable

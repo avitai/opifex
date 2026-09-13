@@ -4,7 +4,7 @@ The reusable :mod:`opifex.neural.atomistic.training` provides the dict-output /
 ``MolecularSystem``-input training capability that the array-based
 :class:`opifex.core.training.Trainer` cannot express. The combined energy +
 forces objective is the standard MLIP loss (Batzner et al. 2022, NequIP,
-arXiv:2101.03164; the ``../mace`` weighted-energy-forces loss), and the step
+arXiv:2101.03164; Batatia et al. 2022, MACE, arXiv:2206.07697), and the step
 mirrors the ``examples/quantum-chemistry/neural_xc_functional.py``
 ``nnx.value_and_grad`` + ``optimizer.update`` idiom.
 

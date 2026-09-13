@@ -4,8 +4,7 @@ Load-bearing physics contracts:
 
 * the head emits ``{"dipole"}`` of shape ``(3,)``;
 * the molecular dipole is built from total-charge-conserving partial charges as
-  :math:`\boldsymbol{\mu} = \sum_i q_i \mathbf{r}_i` (PaiNN, Schuett et al. 2021;
-  MACE ``compute_total_charge_dipole_permuted``, utils.py);
+  :math:`\boldsymbol{\mu} = \sum_i q_i \mathbf{r}_i` (PaiNN, Schuett et al. 2021);
 * the dipole is **rotationally equivariant** for a neutral system:
   rotating the positions by ``R`` rotates the dipole by ``R``
   (origin-independent only when ``sum(q) == 0``);

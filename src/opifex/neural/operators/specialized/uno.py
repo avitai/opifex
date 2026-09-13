@@ -1,9 +1,8 @@
 """U-shaped Neural Operator (U-NO).
 
-A faithful Flax-NNX reimplementation of the U-shaped Neural Operator of
+A Flax-NNX implementation of the U-shaped Neural Operator of
 Rahman, Ross & Azizzadenesheli, "U-NO: U-shaped Neural Operators", TMLR 2022
-(https://arxiv.org/abs/2204.11127), mirroring the reference implementation in
-``neuralop.models.uno.UNO``.
+(https://arxiv.org/abs/2204.11127).
 
 Unlike a conv U-Net, U-NO changes spatial resolution ONLY in the Fourier domain
 (via :class:`~opifex.neural.operators.fno.base.SpectralConvResize` /
@@ -42,8 +41,7 @@ class ChannelMLP(nnx.Module):
     """Pointwise (1x1) channel-mixing MLP over a channels-first spatial field.
 
     Applies ``n_layers`` 1x1 "convolutions" (pointwise linear maps over the
-    channel axis) with a GELU between hidden layers, matching
-    ``neuralop.layers.channel_mlp.ChannelMLP``.
+    channel axis) with a GELU between hidden layers.
     """
 
     def __init__(
@@ -95,10 +93,10 @@ class ChannelMLP(nnx.Module):
 class UNOBlock(nnx.Module):
     """A single U-NO Fourier block: spectral conv (+resize) + channel MLP + skip.
 
-    Mirrors ``neuralop.layers.fno_block.FNOBlocks`` for one layer: the spectral
-    convolution applies the per-layer resolution scaling, a linear skip is
-    resampled to the same output resolution and added, a channel-mixing MLP
-    refines the result, and a GELU non-linearity closes the block.
+    The spectral convolution applies the per-layer resolution scaling, a linear
+    skip is resampled to the same output resolution and added, a GELU
+    non-linearity is applied to the sum, and a channel-mixing MLP refines the
+    result.
     """
 
     def __init__(
@@ -372,8 +370,7 @@ def create_uno(
 ) -> UNeuralOperator:
     """Create a U-NO with a Darcy-style default configuration.
 
-    The default mirrors the reference ``examples/models/plot_UNO_darcy.py``: a
-    five-layer encoder/decoder with channels ``[32, 64, 64, 64, 32]``, modes
+    The default is a five-layer encoder/decoder with channels ``[32, 64, 64, 64, 32]``, modes
     ``[8, 8]`` per block, and scalings whose product is 1.0 (output resolution
     equals input resolution).
 

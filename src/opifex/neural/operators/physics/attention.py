@@ -444,8 +444,8 @@ class PhysicsCrossAttention(nnx.Module):
         channels of the attention output as components of a conserved flux
         ``F`` and the sequence axis as the spatial grid. The loss penalises the
         squared discrete divergence ``mean((∇·F)²)`` computed with second-order
-        central finite differences, matching ``neuraloperator``'s
-        ``FiniteDiff.divergence`` reference, scaled by ``conservation_weight``.
+        central finite differences with periodic wrapping, scaled by
+        ``conservation_weight``.
 
         A divergence-free (constant along the sequence) field yields ~0 loss; a
         field with non-zero divergence yields the corresponding positive value.

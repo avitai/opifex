@@ -1,9 +1,9 @@
 """Tests for the natural-gradient VMC optimizers (MinSR / SPRING).
 
 MinSR solves the natural-gradient system in the *sample* space (the NTK Gram
-matrix), avoiding the full parameter-space Fisher. SPRING adds Nesterov-style
-momentum (Goldshlager, Abrahamsen & Lin, arXiv:2401.10190). The math is ported
-from NetKet ``_src/ngd/srt.py``.
+matrix), avoiding the full parameter-space Fisher (Chen & Heyl, Nat. Phys. 20,
+1476 (2024), arXiv:2302.01941). SPRING adds Nesterov-style momentum (Goldshlager,
+Abrahamsen & Lin, arXiv:2401.10190).
 """
 
 from __future__ import annotations

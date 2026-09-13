@@ -30,7 +30,6 @@ shared :mod:`opifex.neural.atomistic.backbones._message_passing` helper),
 References:
     * Schuett et al. 2018, arXiv:1706.08566 -- the continuous-filter
       convolution, shifted-softplus activation and interaction-block residual.
-    * ``../e3nn-jax`` radius-graph / scatter primitives (reused via Q0).
 """
 
 from __future__ import annotations

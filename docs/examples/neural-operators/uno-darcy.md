@@ -289,7 +289,7 @@ Output mean/std: 0.213690 / 0.155666
 
 ### Step 5: Model Creation
 
-The `create_uno` factory builds a U-shaped Neural Operator with a reference Darcy
+The `create_uno` factory builds a U-shaped Neural Operator with a Darcy
 configuration (five Fourier blocks, channels `[32, 64, 64, 64, 32]`, modes `[8, 8]`,
 and per-block scalings whose product is 1.0). We wrap it with `GridEmbedding2D`, which
 appends normalized `(x, y)` coordinate channels to the permeability input -- the
@@ -314,7 +314,7 @@ class UNOWithGrid(nnx.Module):
             in_channels=input_channels,
             grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
         )
-        # Reference Darcy config (Rahman et al. 2022): end-to-end spatial scaling 1.0.
+        # U-NO (Rahman et al. 2022) Darcy config: end-to-end spatial scaling 1.0.
         self.uno = create_uno(
             in_channels=self.grid_embedding.out_channels,
             out_channels=output_channels,

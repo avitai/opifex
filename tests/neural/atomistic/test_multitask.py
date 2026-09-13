@@ -1,8 +1,7 @@
 r"""Tests for :class:`MultiTaskEnergyHead` -- task-conditioned energy readouts.
 
-Load-bearing contracts (the UMA ``task_name`` design, arXiv:2506.23971; the MACE
-multi-head fine-tuning per-head scale-shift, ``../mace`` ``multihead_tools.py`` /
-``ScaleShiftBlock.forward(x, head)``):
+Load-bearing contracts (the UMA ``task_name`` design, arXiv:2506.23971; multi-head
+fine-tuning, MACE-MP-0, arXiv:2401.00096, with a per-head scale-shift):
 
 * one backbone, many per-task readouts -- two tasks give *different* energies for
   the *same* input (independent MLP params and independent ``E0``/normaliser);

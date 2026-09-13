@@ -1,13 +1,14 @@
 r"""Tests for the QH9 benchmark evaluation suite.
 
-Gate the ported QH9 evaluation
+Gate the QH9 evaluation
 (:mod:`opifex.neural.quantum.hamiltonian.qh9_eval`):
 
 * **Convention-correctness gate** -- diagonalizing a *ground-truth* QH9 Fock (from
   ``QH9Stable.db``, opifex spherical ordering) against the PySCF def2-SVP overlap
   via :func:`cal_orbital_and_energies` reproduces PySCF's own converged
   B3LYP/def2-SVP orbital energies to chemical accuracy, proving the
-  ``back2pyscf`` basis reconciliation and the Löwdin transform are correct.
+  ``back2pyscf`` basis reconciliation and the orthogonalization transform are
+  correct.
 * **Metric sanity** -- identical Fock gives ε-MAE 0 and ψ-similarity 1.0; a
   perturbed Fock degrades both monotonically.
 * **Transform compatibility** -- :func:`cal_orbital_and_energies` is ``jit`` and
@@ -85,7 +86,7 @@ def test_ground_truth_fock_matches_pyscf_orbital_energies(index: int) -> None:
     """A ground-truth QH9 Fock + PySCF overlap reproduces PySCF's B3LYP energies.
 
     This is the convention gate: it proves the opifex-spherical -> PySCF-internal
-    reorder (:func:`to_pyscf_internal_ordering`) plus the Löwdin eigensolve
+    reorder (:func:`to_pyscf_internal_ordering`) plus the orthogonalized eigensolve
     (:func:`cal_orbital_and_energies`) are correct by matching PySCF's own
     converged ``mo_energy`` for the same geometry/Fock to chemical accuracy.
     """
@@ -164,7 +165,7 @@ def test_perturbed_fock_degrades_metrics_monotonically() -> None:
 # Transform compatibility (jit / vmap)
 # ---------------------------------------------------------------------------
 def test_cal_orbital_and_energies_jit_matches_eager() -> None:
-    """The jitted Löwdin eigensolve matches the eager path."""
+    """The jitted orthogonalized eigensolve matches the eager path."""
     with jax.enable_x64(True):
         overlap = _symmetric_matrix(2, 6) + 6.0 * jnp.eye(6, dtype=jnp.float64)
         fock = _symmetric_matrix(3, 6)
@@ -174,7 +175,7 @@ def test_cal_orbital_and_energies_jit_matches_eager() -> None:
 
 
 def test_cal_orbital_and_energies_vmap_batches() -> None:
-    """The Löwdin eigensolve vmaps over a batch of (overlap, Fock) pairs."""
+    """The orthogonalized eigensolve vmaps over a batch of (overlap, Fock) pairs."""
     with jax.enable_x64(True):
         overlaps = jnp.stack(
             [_symmetric_matrix(s, 5) + 6.0 * jnp.eye(5, dtype=jnp.float64) for s in (10, 11)]

@@ -3,15 +3,15 @@ r"""Tests for the K-FAC natural-gradient preconditioner for VMC.
 K-FAC (Kronecker-Factored Approximate Curvature; Martens & Grosse, ICML 2015,
 arXiv:1503.05671) approximates the Fisher / quantum geometric tensor by a
 block-diagonal Kronecker product per layer and preconditions the energy gradient
-by its inverse. This wraps the canonical ``kfac_jax`` library (the optimiser
-FermiNet uses; ``../ferminet/ferminet/train.py``), so the tests assert *interface
-conformance* and *monotone-ish* energy/loss decrease rather than exact values --
+by its inverse. This wraps the ``kfac_jax`` library (K-FAC is the optimiser used
+to train FermiNet, Pfau et al. 2020, arXiv:1909.02487), so the tests assert
+*interface conformance* and *monotone-ish* energy/loss decrease rather than exact values --
 K-FAC is stochastic and manages its own ``jit`` internally.
 
-The canonical wiring being exercised (FermiNet ``loss.py`` + ``train.py``):
+The wiring being exercised:
 
 #. ansatz dense/attention layers are tagged with :func:`register_qmc_dense`
-   (FermiNet's ``register_qmc``) so K-FAC knows their Kronecker structure;
+   so K-FAC knows their Kronecker structure;
 #. the log-amplitude output is tagged with :func:`register_log_amplitude`
    (``kfac_jax.register_normal_predictive_distribution``) so the Fisher equals
    the quantum geometric tensor;

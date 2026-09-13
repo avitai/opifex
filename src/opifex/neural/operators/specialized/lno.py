@@ -9,14 +9,13 @@ Reference:
     Cao, Q., Goswami, S., & Karniadakis, G. E. (2023).
     "LNO: Laplace Neural Operator for Solving Differential Equations."
     arXiv:2303.10528.
-    GitHub: qianyingcao/Laplace-Neural-Operator
 
-Architecture (from reference):
-    1. Lift (fc0): Linear map from input to hidden channels
-    2. Laplace Layer (PR): FFT → transfer function H(s)=res/(s-pole) →
+Architecture:
+    1. Lift: Linear map from input to hidden channels
+    2. Laplace layer: FFT → transfer function H(s)=res/(s-pole) →
        dual-path output (IFFT steady-state + exponential transient)
-    3. Local linear (w0): Conv1d skip connection
-    4. Project (fc1, fc2): MLP back to output channels
+    3. Local linear: pointwise skip connection
+    4. Project: MLP back to output channels
 
 This module reuses:
 - ``StandardMLP`` from ``opifex.neural.base`` for lifting/projection
@@ -74,8 +73,6 @@ class LaplaceLayerConfig:
 # ---------------------------------------------------------------------------
 # Laplace Layer (pole-residue decomposition)
 #
-# Reference: ``PR`` class in qianyingcao/Laplace-Neural-Operator
-#
 # Architecture:
 #   1. FFT on input -> frequency-domain poles and coefficients
 #   2. Learnable transfer function: H(s) = residue / (s - pole)
@@ -88,7 +85,7 @@ class LaplaceLayerConfig:
 class LaplaceLayer(nnx.Module):
     """Laplace-domain convolution layer via pole-residue decomposition.
 
-    Faithfully ports the ``PR`` class from the reference implementation.
+    Laplace layer of Cao, Goswami & Karniadakis 2023 (arXiv:2303.10528).
     Uses complex-valued learnable poles and residues, with a dual-path
     output: IFFT-based steady-state response and exponential-kernel
     transient response.
@@ -117,13 +114,13 @@ class LaplaceLayer(nnx.Module):
         self.compute_dtype = canonicalize_dtype(compute_dtype)
         self.param_dtype = canonicalize_dtype(param_dtype)
 
-        # Scale factor matching reference: 1 / (in * out)
+        # Scale factor: 1 / (in * out)
         scale = 1.0 / (in_channels * out_channels)
 
         # Learnable complex poles: real and imaginary parts stored separately
         # (JAX doesn't natively support complex nnx.Param gradient flow as
         #  cleanly as PyTorch, so we keep real/imag split)
-        # Shape: (in_channels, out_channels, num_poles) — matching reference
+        # Shape: (in_channels, out_channels, num_poles)
         key1, key2 = jax.random.split(rngs.params())
         self.weights_pole = nnx.Param(
             scale
@@ -180,7 +177,7 @@ class LaplaceLayer(nnx.Module):
     def __call__(self, x: jax.Array) -> jax.Array:
         """Apply Laplace layer (pole-residue operation).
 
-        Follows reference ``PR.forward()`` architecture:
+        Steps:
         1. FFT to get input poles/residues
         2. Apply transfer function H(s) = res/(s - pole)
         3. Dual-path output: IFFT (steady-state) + exp kernel (transient)
@@ -244,23 +241,23 @@ class LaplaceLayer(nnx.Module):
 
 
 # ---------------------------------------------------------------------------
-# LNO Model (matches reference LNO1d)
+# LNO Model
 # ---------------------------------------------------------------------------
 
 
 class LaplaceNeuralOperator(nnx.Module):
     """Laplace Neural Operator for non-periodic and transient signals.
 
-    Architecture matches reference ``LNO1d``:
-        Lift (fc0) -> [LaplaceLayer + Skip + Act] -> Project
+    Architecture:
+        Lift -> [LaplaceLayer + Skip + Act] -> Project
 
     Args:
         in_channels: Input channels.
         out_channels: Output channels.
-        hidden_channels: Hidden dimension (``width`` in reference).
-        num_layers: Number of Laplace layers (reference uses 1).
-        num_poles: Number of poles per layer (``modes`` in reference).
-        activation: Activation function (reference uses ``sin``).
+        hidden_channels: Hidden dimension.
+        num_layers: Number of Laplace layers.
+        num_poles: Number of poles per layer.
+        activation: Activation function.
         rngs: Flax NNX random number generators.
     """
 
@@ -286,7 +283,7 @@ class LaplaceNeuralOperator(nnx.Module):
         self.compute_dtype = canonicalize_dtype(compute_dtype)
         self.param_dtype = canonicalize_dtype(param_dtype)
 
-        # Lifting layer: in_channels → hidden_channels (fc0 in reference)
+        # Lifting layer: in_channels → hidden_channels
         self.lift = StandardMLP(
             layer_sizes=[in_channels, hidden_channels],
             activation=activation,
@@ -295,7 +292,7 @@ class LaplaceNeuralOperator(nnx.Module):
             rngs=rngs,
         )
 
-        # Stacked Laplace layers (reference uses 1 layer)
+        # Stacked Laplace layers
         layers = []
         for _ in range(num_layers):
             layer = LaplaceLayer(
@@ -309,10 +306,10 @@ class LaplaceNeuralOperator(nnx.Module):
             layers.append(layer)
         self.laplace_layers = nnx.List(layers)
 
-        # Activation (reference uses sin; we default to gelu for general use)
+        # Activation (defaults to gelu for general use)
         self.activation_fn = get_activation(activation)
 
-        # Project: hidden → 128 → out (fc1, fc2 in reference)
+        # Project: hidden → 128 → out
         self.project = StandardMLP(
             layer_sizes=[hidden_channels, hidden_channels, out_channels],
             activation=activation,
@@ -348,7 +345,7 @@ class LaplaceNeuralOperator(nnx.Module):
         # Lift: (B, C_in, N) → (B, N, C_in) → MLP → (B, N, hidden) → (B, H, N)
         h = self.lift(x.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
 
-        # Laplace layers: each applies PR + skip + activation
+        # Laplace layers: each applies the pole-residue layer + skip + activation
         for layer in self.laplace_layers:
             h = self.activation_fn(layer(h))
 
@@ -380,7 +377,7 @@ def create_lno(
         in_channels: Input channels.
         out_channels: Output channels.
         hidden_channels: Hidden dimension.
-        num_layers: Number of Laplace layers (reference uses 1).
+        num_layers: Number of Laplace layers.
         num_poles: Number of poles per layer.
         activation: Activation function name.
         rngs: Flax NNX random number generators.

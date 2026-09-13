@@ -1,14 +1,15 @@
 r"""Tests for the QHNet self-interaction refinement layer.
 
-Behaviour is specified against QHNet's ``SelfNetLayer``
-(``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py``):
+Behaviour is specified against the QHNet diagonal-pair self-interaction (Yu et al.
+2023, arXiv:2306.04922):
 
 * :class:`SelfInteractionLayer` refines a per-atom feature by a channel-wise self
   tensor product ``tp(W_l x, W_r x)`` with norm-gated nonlinearities and residual
   accumulation -- it builds the products of an atom's own features the diagonal
   Fock block needs.
 
-The off-diagonal counterpart (QHNet's ``PairNetLayer``) is the SO(2)-frame
+The off-diagonal counterpart (the QHNet non-diagonal pair interaction) is the
+SO(2)-frame
 ``SO2PairInteractionLayer``; it is tested in ``test_so2_convolution.py``.
 
 The load-bearing tests are SO(3) equivariance (the layer commutes with a shared

@@ -498,9 +498,9 @@ class TensorLyEnhancedDecomposition(nnx.Module):
         """Initialize learnable factors directly (no TensorLy decomposition).
 
         Used both as the TensorLy-unavailable fallback and as the standard
-        learnable-factor path (``use_tensorly_init=False``). CP and TT factors
-        follow the tltorch standard deviations so the reconstructed tensor has a
-        small, well-scaled magnitude.
+        learnable-factor path (``use_tensorly_init=False``). CP and TT factor
+        standard deviations are chosen so the reconstructed tensor has a small,
+        well-scaled magnitude (see :func:`._factorized.cp_factor_std`).
         """
         init_key = rngs.params()
 

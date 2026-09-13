@@ -10,8 +10,8 @@
 Opifex Neural Operators: Full Operator Learning Library
 
 This module provides the most complete collection of neural operators for
-scientific machine learning, including all major variants from the neuraloperator
-repository and advanced architectures.
+scientific machine learning, including the major published operator families
+and advanced architectures.
 
 The library includes:
 
@@ -88,7 +88,7 @@ from opifex.neural.operators.fno.spherical import (
 )
 
 # =============================================================================
-# NEW OPERATORS (From neuraloperator repository)
+# NEW OPERATORS (Additional operator families)
 # =============================================================================
 # Tensorized FNO - Parameter-efficient factorized FNO
 from opifex.neural.operators.fno.tensorized import (

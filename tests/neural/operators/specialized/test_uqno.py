@@ -1,12 +1,8 @@
 """Task 3.8: canonical conformal `UncertaintyQuantificationNeuralOperator`.
 
 Replaces the previous Bayesian-FNO surface with the three-stage
-conformal-prediction pipeline from Ma, Pitt, Azizzadenesheli,
-Anandkumar (TMLR 2024 — arXiv:2402.01960). The canonical PyTorch
-reference lives at
-``../neuraloperator/neuralop/models/uqno.py``;
-``../neuraloperator/scripts/train_uqno_darcy.py`` carries the
-calibration recipe (``get_coeff_quantile_idx``).
+conformal-prediction pipeline of Ma et al. 2024 (arXiv:2402.01960),
+including its calibration indices (``get_coeff_quantile_idx``).
 
 Operator-level tests pin: orchestrator wiring, calibration formula,
 ``predict_with_bands`` returning a :class:`PredictiveDistribution` with
@@ -88,7 +84,7 @@ def test_uqno_predict_base_only_matches_base_model() -> None:
 
 
 def test_get_coeff_quantile_idx_matches_reference_formula() -> None:
-    """Match the canonical neuraloperator/train_uqno_darcy.py implementation."""
+    """Match the closed-form domain / function quantile index formula."""
     import math
 
     alpha, delta = 0.05, 0.1

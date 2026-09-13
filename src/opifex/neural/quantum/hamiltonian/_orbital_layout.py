@@ -8,11 +8,12 @@ basis the block is 14-dimensional, laid out as the irrep
 
 .. math::  \mathrm{BLOCK\_IRREPS} = 3\!\times\!0e + 2\!\times\!1e + 1\!\times\!2e,
 
-i.e. 3 s-shells, 2 p-shells and 1 d-shell (``3 + 2*3 + 5 = 14``). The per-element
-AO mask follows QHNet's ``orbital_mask`` (Yu et al. 2023, "QHNet",
-arXiv:2306.04922; reference ``divelab/AIRS``
-``OpenDFT/QHBench/QH9/datasets.py``): hydrogen/helium keep the 2 s + 1 p slots
-``[0, 1, 3, 4, 5]`` while C/N/O/F populate all 14. A directed-edge (pair) block's
+i.e. 3 s-shells, 2 p-shells and 1 d-shell (``3 + 2*3 + 5 = 14``), the def2-SVP
+shell composition of C/N/O/F (Weigend & Ahlrichs, Phys. Chem. Chem. Phys. 7, 3297
+(2005)) used by the QH9 block form (Yu et al. 2023, "QH9", arXiv:2306.09549;
+Yu et al. 2023, "QHNet", arXiv:2306.04922). Hydrogen/helium carry the def2-SVP
+2 s + 1 p shells in slots ``[0, 1, 3, 4, 5]`` while C/N/O/F populate all 14. A
+directed-edge (pair) block's
 validity mask is the outer product of its row element's and column element's
 per-atom masks.
 
@@ -39,7 +40,7 @@ BLOCK_IRREPS: Irreps = Irreps("3x0e + 2x1e + 1x2e")
 r"""The 14-dim row/col representation of a Fock block (``3x0e + 2x1e + 1x2e``)."""
 
 _HYDROGEN_AO_INDICES: tuple[int, ...] = (0, 1, 3, 4, 5)
-"""QH9 ``idx_1s_2s_2p``: the 2 s + 1 p slots H/He populate in the 14-slot block."""
+"""The def2-SVP 2 s + 1 p slots H/He populate in the 14-slot block."""
 
 ORBITAL_MASK: dict[int, tuple[int, ...]] = {
     1: _HYDROGEN_AO_INDICES,
@@ -102,9 +103,7 @@ def block_validity_mask(
     For a single atom (``col_atomic_numbers is None``) the mask is the outer
     product of the atom's per-AO validity with itself (the diagonal Fock block).
     For a directed edge it is the outer product of the **row** element's mask and
-    the **column** element's mask -- ``mask[i, j] = row_valid[i] & col_valid[j]``
-    -- matching QHNet's per-pair ``matrix_block_mask`` (reference
-    ``OpenDFT/QHBench/QH9/datasets.py``).
+    the **column** element's mask -- ``mask[i, j] = row_valid[i] & col_valid[j]``.
 
     Args:
         row_atomic_numbers: Atomic numbers ``Z`` of the row (receiver) atoms.

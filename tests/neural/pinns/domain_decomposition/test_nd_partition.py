@@ -10,11 +10,6 @@ Reference:
     partition-of-unity window; the global solution is the windowed sum of the
     normalised local networks. The subdomain tiling and the window are tensor
     products across dimensions, so they extend naturally to N-D / 3D.
-
-    Sibling reference: ``../FBPINNs`` -- ``fbpinns/decompositions.py``
-    (``RectangularDecompositionND._get_level_params`` uses
-    ``np.meshgrid(*subdomain_xs, indexing="ij")`` to lay out subdomains across
-    arbitrary dimension counts).
 """
 
 import itertools

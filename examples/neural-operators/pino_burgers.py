@@ -34,13 +34,11 @@
 # ## The genuine PINO setup
 #
 # Following Li et al. (2021), *Physics-Informed Neural Operator for Learning
-# Partial Differential Equations*, and the reference implementation in
-# ``neuraloperator`` (``scripts/train_burgers_pino.py``), the operator maps the
+# Partial Differential Equations* (arXiv:2111.03794), the operator maps the
 # initial condition ``u(x, 0)`` — broadcast/repeated across the time axis — to
 # the **full space-time solution** ``u(t, x)``, a 2D field over ``(time, space)``.
 #
-# Training minimises three terms (cf. ``neuralop.losses.equation_losses``
-# ``BurgersEqnLoss`` + ``ICLoss``):
+# Training minimises three terms:
 #
 # - **data loss**: mean relative L2 between the predicted and the
 #   ground-truth space-time trajectory,
@@ -59,9 +57,6 @@
 # - **Physics loss** via a finite-difference Burgers residual
 # - **Multi-objective training** balancing data, IC, and equation losses
 # - **On-device data generation** with the pseudo-spectral ETDRK4 solver
-#
-# Equivalent to ``neuraloperator/scripts/train_burgers_pino.py``,
-# reimplemented using Opifex APIs.
 #
 # ## Learning Goals
 #
@@ -103,9 +98,8 @@ from opifex.physics.spectral.steppers import solve_burgers_spectral
 #
 # The model maps the IC, tiled over ``NUM_TIME`` frames, to the full space-time
 # field. ``VISCOSITY`` is used both by the solver and by the equation loss so the
-# physics is self-consistent. The loss weights follow the reference ordering
-# (data, IC, equation); fixed weights are used here for a clean, reproducible
-# result (the reference uses a Relobralo adaptive aggregator).
+# physics is self-consistent. The loss weights are ordered (data, IC, equation);
+# fixed weights are used here for a clean, reproducible result.
 
 # %%
 NUM_SPACE = 128  # spatial resolution (nx)
@@ -123,7 +117,7 @@ DOMAIN_LENGTH = 1.0  # x in [0, 1), periodic
 TIME_FINAL = 1.0  # t in [0, 1]
 SOLVER_STEPS = 250  # ETDRK4 steps used to build the trajectories
 
-# Loss weights (data, ic, equation), cf. neuralop training_loss = [equation, ic, l2].
+# Loss weights (data, ic, equation).
 DATA_WEIGHT = 1.0
 IC_WEIGHT = 5.0
 EQUATION_WEIGHT = 0.5
@@ -186,9 +180,8 @@ def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
 #
 # The residual is computed by finite differences over the predicted field of
 # shape ``(batch, nt, nx)``: a forward difference in time, central differences in
-# space with periodic wrap-around. A perfect solution has zero residual. This
-# mirrors ``neuralop.losses.equation_losses.BurgersEqnLoss`` (``method="fdm"``),
-# which takes ``MSE(u_t, -u*u_x + nu*u_xx)``.
+# space with periodic wrap-around. A perfect solution has zero residual of the
+# Burgers equation ``u_t + u*u_x - nu*u_xx = 0``.
 
 
 # %%
@@ -239,7 +232,7 @@ def pino_loss_fn(
     predicted space-time field. The data term is the relative L2 against the
     ground-truth trajectory, the IC term anchors the predicted ``t=0`` slice to
     the true initial condition, and the equation term enforces the Burgers PDE
-    residual over the whole field (cf. neuralop ``BurgersEqnLoss`` + ``ICLoss``).
+    residual over the whole field.
 
     Args:
         model: FNO backbone.

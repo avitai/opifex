@@ -155,7 +155,7 @@ wavefunction, then runs `iterations` jitted optimisation steps. Each step
 1. advances the walkers by 10 Metropolis-Hastings sweeps (one fused `lax.scan`)
    so they track the *current* `|psi_theta|^2`;
 2. evaluates the per-walker local energy with the native forward-Laplacian
-   kinetic term, with outlier-robust median-absolute-deviation clipping; then
+   kinetic term, with outlier-robust clipping around the median; then
 3. forms the FermiNet score-function energy gradient, preconditions it with the
    SPRING natural-gradient solve (Fisher inverse in sample space + Nesterov
    momentum), and updates the parameters.

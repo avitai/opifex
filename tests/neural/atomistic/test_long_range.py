@@ -1,8 +1,7 @@
 r"""Tests for the long-range electrostatics add-on (Latent Ewald Summation).
 
 Load-bearing physics contracts (Cheng 2025, "Latent Ewald Summation",
-arXiv:2408.15165; standard Ewald summation; ``../jax-md`` ``_energy``
-``electrostatics.py``):
+arXiv:2408.15165; standard Ewald summation):
 
 * **Free systems** -- the long-range energy is the bare pairwise Coulomb sum
   :math:`\tfrac12 \sum_{i\neq j} q_i q_j / r_{ij}`; the helper reproduces a

@@ -11,12 +11,11 @@ Clebsch-Gordan coupling.
 
 The equivariant coupling reuses opifex's real Clebsch-Gordan
 (:func:`opifex.geometry.algebra.wigner.clebsch_gordan_numpy`) via
-:func:`_reduce_basis_product` -- the ``...ui,...vj,ijk->...uvk`` coupling of the
-e3nn-jax ``reduce_basis_product`` reference. The symmetric subspace is then
-obtained by averaging the coupling basis over the symmetric group ``S_degree``
-and orthonormalising (Gram-Schmidt) -- the definition of the symmetric coupling
-basis, equivalent to the permutation-basis intersection of the e3nn-jax
-``reduced_symmetric_tensor_product_basis`` reference.
+:func:`_reduce_basis_product` -- the ``...ui,...vj,ijk->...uvk`` Clebsch-Gordan
+coupling of e3nn (Geiger & Smidt 2022, arXiv:2207.09453). The symmetric subspace
+is then obtained by averaging the coupling basis over the symmetric group
+``S_degree`` and orthonormalising (Gram-Schmidt) -- the definition of the
+symmetric coupling basis.
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ _Basis = tuple[Irreps, list[np.ndarray]]
 def gram_schmidt(rows: np.ndarray, *, epsilon: float = 1e-5) -> np.ndarray:
     """Orthonormalise the rows of ``rows`` (dropping near-zero residuals).
 
-    Faithful port of the e3nn-jax ``gram_schmidt`` reference: returns an
+    Classical Gram-Schmidt: returns an
     ``(n_independent, dim)`` array whose rows are an orthonormal basis of the row
     space of ``rows``, discarding rows whose residual norm falls below ``epsilon``.
     """
@@ -64,7 +63,7 @@ def _factor_basis(irreps: Irreps, factor: int, degree: int) -> _Basis:
     The ``factor``-th of ``degree`` factors gets a length-``irreps.dim`` free axis
     in slot ``factor`` (size 1 in the others), so coupling the factors with
     :func:`_reduce_basis_product` broadcasts the free axes into the full
-    ``(d,) * degree`` index grid (the e3nn-jax factor-placement convention).
+    ``(d,) * degree`` index grid.
     """
     dim = irreps.dim
     leading = (1,) * factor + (dim,) + (1,) * (degree - 1 - factor)
@@ -82,7 +81,7 @@ def _factor_basis(irreps: Irreps, factor: int, degree: int) -> _Basis:
 def _reduce_basis_product(
     basis1: _Basis, basis2: _Basis, keep_ir: frozenset[Irrep] | None = None
 ) -> _Basis:
-    """Couple two bases with Clebsch-Gordan (e3nn-jax ``reduce_basis_product``).
+    """Couple two bases with Clebsch-Gordan coefficients.
 
     Each output irrep ``ir`` accumulates ``sqrt(ir.dim) * CG`` contractions of the
     inputs (``...ui,...vj,ijk->...uvk``), with the broadcast free axes preserved;

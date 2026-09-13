@@ -1,7 +1,6 @@
 r"""Tests for the equivariant gate nonlinearity.
 
-Behaviour is specified against ``e3nn-jax``'s ``gate``
-(``../e3nn-jax/e3nn_jax/_src/gate.py``): scalar channels are activated directly,
+Behaviour is specified by the gated nonlinearity: scalar channels are activated directly,
 and each higher-``l`` multiplicity is scaled ("gated") by an activated scalar
 gate.  The gate scalars are the *rightmost* scalars of the input (one per
 non-scalar multiplicity).

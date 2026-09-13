@@ -8,7 +8,7 @@ weights -- the Atomic Cluster Expansion contraction of MACE (Batatia et al. 2022
 Drautz 2019).
 
 The runtime forward is a Horner recursion ``((w_n A + w_{n-1}) A + ... ) A`` of
-``jnp`` einsums (the e3nn-jax ``SymmetricTensorProduct`` reference), fully
+``jnp`` einsums, fully
 ``jit`` / ``grad`` / ``vmap`` compatible (so conservative forces, an energy
 gradient, differentiate through it). The ``U`` tensors are host-computed constants
 stored as static data and rebuilt as compile-time ``jnp`` constants in
@@ -73,7 +73,7 @@ class SymmetricContraction(nnx.Module):
         keep = [ir for _, ir in self.irreps_out]
 
         # Per order (high -> low): the kept output irreps, their static U tensors
-        # (normalised by num_paths, e3nn layout (d,)*order + (num_paths, ir.dim)),
+        # (normalised by num_paths, layout (d,)*order + (num_paths, ir.dim)),
         # and a (num_species, num_paths, num_channels) weight parameter each.
         self._orders = tuple(range(correlation, 0, -1))
         u_static: dict[tuple[int, int], tuple[tuple[int, ...], tuple[float, ...]]] = {}
@@ -87,7 +87,7 @@ class SymmetricContraction(nnx.Module):
             for ir in sorted(basis):
                 u = np.moveaxis(basis[ir], 0, -2)  # (d,)*order + (num_paths, ir.dim)
                 num_paths = u.shape[-2]
-                u = u / num_paths  # normalise (e3nn: fold the 1/num_paths into U)
+                u = u / num_paths  # normalise (fold the 1/num_paths into U)
                 u_static[(order, _ir_key(ir))] = (u.shape, tuple(u.reshape(-1).tolist()))
                 std = 1.0 / np.sqrt(float(num_paths))
                 weights.append(

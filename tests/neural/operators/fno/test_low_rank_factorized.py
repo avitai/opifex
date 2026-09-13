@@ -5,10 +5,11 @@ compression: the factorized parameter count must be ``<<`` the dense weight at
 low rank, the factorized contraction must equal contracting the input with the
 reconstructed full tensor, and the three decompositions must be distinct.
 
-References (cloned siblings, read before writing these tests):
-- tensorly 0.9.0 ``cp_to_tensor`` / ``tucker_to_tensor`` / ``tt_to_tensor``.
-- neuraloperator ``_contract_cp`` / ``_contract_tucker`` / ``_contract_tt``.
-- tltorch ``factorized_tensors.py`` (factor layouts) + ``init.py`` (factor init).
+References:
+- Kossaifi, Kovachki, Azizzadenesheli & Anandkumar 2023, "Multi-Grid Tensorized
+  Fourier Neural Operator for High-Resolution PDEs", arXiv:2310.00120.
+- Kolda & Bader 2009, "Tensor Decompositions and Applications", SIAM Review
+  51(3), 455-500.
 """
 
 import jax

@@ -1,9 +1,9 @@
 r"""Tests for the equivariant invariants ``norm`` / ``inner_product`` and the
 per-multiplicity scalar scaling ``apply_scalar_weights``.
 
-Behaviour is specified against ``e3nn-jax`` (``e3nn.norm`` / ``e3nn.dot``,
-``../e3nn-jax/e3nn_jax/_src/basic.py``) and the QHNet ``InnerProduct``
-(``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py``): ``norm`` returns the per-irrep
+Behaviour is specified against the e3nn invariants (Geiger & Smidt 2022,
+arXiv:2207.09453) and the QHNet inner product (Yu et al. 2023,
+arXiv:2306.04922): ``norm`` returns the per-irrep
 Euclidean norm as ``0e`` scalars, ``inner_product`` the per-multiplicity dot
 product (component-normalised by ``1 / dim``). The load-bearing tests are
 rotational invariance of both, the NaN-safe gradient of ``norm`` at zero, and

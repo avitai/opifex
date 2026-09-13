@@ -2,8 +2,8 @@ r"""Structural typing contracts for the VMC stack.
 
 These ``Protocol`` definitions decouple the training loop from concrete
 implementations so that, for example, a PsiFormer attention ansatz, a MALA
-sampler, or a K-FAC optimiser can swap in without touching the driver (the
-``../deepqmc`` ``Protocol`` style). They document the minimal surface each
+sampler, or a K-FAC optimiser can swap in without touching the driver. They
+document the minimal surface each
 component must expose; concrete classes need not subclass them.
 """
 

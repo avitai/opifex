@@ -12,7 +12,6 @@ Key Features:
 References:
     - Jagtap & Karniadakis (2020): Extended Physics-Informed Neural Networks
     - Survey Section 8.3.1: XPINNs
-    - GitHub: https://github.com/AmeyaJagtap/XPINNs
 """
 
 from __future__ import annotations

@@ -20,8 +20,9 @@ Lin, arXiv:2401.10190): a Nesterov-style accumulation of past updates plus a
 projection-regulariser ``proj_reg / N`` on the Gram matrix. With zero momentum
 and zero ``proj_reg`` it reduces exactly to :func:`minsr_update`.
 
-The math is a pure-JAX port of NetKet ``_src/ngd/srt.py`` (``_compute_srt_update``
-and ``_prepare_input`` in ``sr_srt_common.py``); these functions return the raw
+These pure-JAX functions implement the MinSR update (Chen & Heyl, *Nat. Phys.*
+20, 1476 (2024), arXiv:2302.01941) and the SPRING update (Goldshlager, Abrahamsen
+& Lin, *J. Comput. Phys.* 516, 113351 (2024), arXiv:2401.10190) and return the raw
 parameter update vector, to be applied with an external learning rate (e.g. via
 ``optax``). Adam is used as the bootstrap optimizer directly through ``optax`` and
 needs no wrapper here.
@@ -43,7 +44,7 @@ def _prepare_inputs(
     r"""Centre and ``1/sqrt(N)``-scale the Jacobian and energy signal.
 
     Returns ``(O_L, dv)`` where ``O_L`` is the centred, scaled Jacobian and
-    ``dv = 2 (E - <E>) / sqrt(N)`` (NetKet ``_prepare_input``).
+    ``dv = 2 (E - <E>) / sqrt(N)``.
     """
     n = jacobian.shape[0]
     scale = 1.0 / jnp.sqrt(n)

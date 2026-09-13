@@ -7,7 +7,7 @@ This module provides specialized neural operator implementations for advanced op
 ### 🎯 **Discrete-Continuous (DISCO) Convolutions**
 
 Convolution on arbitrary (including irregular) point sets via a continuous kernel evaluated as a
-quadrature, after Ocampo, Price & McEwen 2023 (`arXiv:2209.13603`; the `torch_harmonics` algorithm).
+quadrature, after Ocampo, Price & McEwen 2023 (`arXiv:2209.13603`).
 
 **Key Features:**
 
@@ -15,10 +15,10 @@ quadrature, after Ocampo, Price & McEwen 2023 (`arXiv:2209.13603`; the `torch_ha
   `kappa(r) = Σ_k w_k φ_k(r)` lives in physical coordinates, so the same learned kernel transfers
   across grid resolutions and applies directly to scattered (non-grid) data.
 - **build_disco_filter**: the normalised quadrature filter `psi[o, i, k]` (per-output partition of
-  unity, faithful to `torch_harmonics._normalize_convolution_filter_matrix`).
+  unity).
 - **regular_grid**: uniform grid coordinates and cell-area quadrature weights.
-- Radial basis reuses `opifex.neural.equivariant.PiecewiseLinearBasis` (the `torch_harmonics`
-  `PiecewiseLinearFilterBasis`).
+- Radial basis reuses `opifex.neural.equivariant.PiecewiseLinearBasis` (a piecewise-linear hat
+  basis).
 
 ### Advanced Specialized Operators ✅ **IMPLEMENTED**
 
@@ -120,7 +120,7 @@ from opifex.neural.operators.specialized.uqno import (
     UQNOResidualOperator,
 )
 
-# UQNO is a JAX port of the conformal three-stage operator (Ma et al. TMLR 2024,
+# UQNO implements the conformal three-stage operator (Ma et al. 2024,
 # arXiv:2402.01960): a base FNO + a residual quantile FNO + scalar conformal
 # calibration. Train base + residual separately, then calibrate. Opifex-side
 # ergonomics: explicit (base=, residual=) constructor + in-class .calibrate().

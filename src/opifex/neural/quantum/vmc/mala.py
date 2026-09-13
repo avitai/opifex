@@ -38,10 +38,6 @@ References:
     its Metropolis adjustment).
     Roberts & Rosenthal, "Optimal scaling of discrete approximations to Langevin
     diffusions", JRSS B 60(1), 1998 (the ~0.574 optimal acceptance).
-    Implementations: ``../netket`` ``netket/sampler/rules/langevin.py``
-    (``LangevinRule`` / ``_langevin_step``); ``../deepqmc``
-    ``deepqmc/sampling/electron_samplers.py`` (``LangevinSampler``);
-    ``../ferminet`` ``ferminet/mcmc.py`` (the asymmetric accept/reject pattern).
 """
 
 from __future__ import annotations
@@ -130,8 +126,7 @@ class MALASampler:
         max_drift_norm: Optional per-walker cap on the Euclidean norm of the
             drift. ``None`` (default) leaves the drift unclipped. A positive value
             rescales any walker whose flattened drift norm exceeds the cap,
-            bounding the proposal mean for numerical stability near nuclear cusps
-            (the bounded-force idea of ``deepqmc`` ``clean_force``).
+            bounding the proposal mean for numerical stability near nuclear cusps.
     """
 
     steps: int = 10

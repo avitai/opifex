@@ -402,9 +402,7 @@ def uniform_partition(
     Reference:
         Moseley, Markham, Nissen-Meyer (2023), "Finite Basis Physics-Informed
         Neural Networks", arXiv:2107.07871. The FBPINN subdomain tiling is a
-        tensor product across dimensions; see ``RectangularDecompositionND`` in
-        the reference implementation (https://github.com/benmoseley/FBPINNs),
-        which lays out subdomains via ``np.meshgrid(*subdomain_xs)``.
+        tensor product across dimensions.
 
     Args:
         bounds: Domain bounds, shape ``(dim, 2)`` with ``[min, max]`` per axis

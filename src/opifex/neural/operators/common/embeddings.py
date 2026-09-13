@@ -1,7 +1,8 @@
 """Grid Embeddings for Neural Operators - Opifex Framework.
 
-JAX/Flax NNX implementation of grid embeddings for neural operators,
-based on neuraloperator reference implementation.
+JAX/Flax NNX implementation of grid embeddings for neural operators
+(coordinate channels as in Li et al. 2021, arXiv:2010.08895; sinusoidal
+encodings after Vaswani et al. 2017, arXiv:1706.03762).
 
 This module provides:
 - GridEmbeddingND: N-dimensional positional embedding (1D/2D/3D and beyond)
@@ -38,16 +39,14 @@ class GridEmbeddingND(EmbeddingBase):
 
     Spectral convolutions are translation-equivariant, so injecting absolute
     grid coordinates is the standard way to give a neural operator position
-    awareness (Li et al., 2020).
+    awareness (Li et al. 2021, "Fourier Neural Operator for Parametric Partial
+    Differential Equations", arXiv:2010.08895).
 
-    Reference: ``neuralop.layers.embeddings.GridEmbeddingND`` from the
-    `neuraloperator <https://github.com/neuraloperator/neuraloperator>`_ library,
-    adapted to JAX/Flax NNX. The channels-last layout follows opifex's own
+    The channels-last layout follows opifex's own
     ``fno._positional.append_grid_coordinates`` convention transposed to the
-    framework's channels-last operator inputs. Unlike the PyTorch reference,
-    which uses ``linspace(start, stop, res + 1)[:-1]`` (left-closed cells), this
-    implementation includes both endpoints so the corner coordinates equal the
-    configured boundaries exactly.
+    framework's channels-last operator inputs. The coordinates include both
+    endpoints (rather than left-closed cells), so the corner coordinates equal
+    the configured boundaries exactly.
 
     Args:
         in_channels: Number of input channels.
@@ -129,7 +128,7 @@ class GridEmbedding2D(GridEmbeddingND):
 
     Expects inputs of shape ``(batch, height, width, channels)`` and appends two
     coordinate channels: one varying along the height axis, one along the width
-    axis (matching the N-D / neuraloperator ``indexing="ij"`` convention). Kept
+    axis (matching the N-D ``indexing="ij"`` convention). Kept
     as a thin alias for the 2D case used throughout the examples.
 
     Args:
@@ -152,7 +151,9 @@ class SinusoidalEmbedding(EmbeddingBase):
 
     Expects inputs of shape (batch, n_points, in_channels) or (n_points, in_channels).
 
-    Based on neuraloperator SinusoidalEmbedding but adapted for JAX/Flax NNX.
+    The transformer variant is the sinusoidal positional encoding of Vaswani et
+    al. 2017 ("Attention Is All You Need", arXiv:1706.03762), applied per input
+    coordinate.
 
     Args:
         in_channels: Number of input channels
@@ -215,8 +216,7 @@ class SinusoidalEmbedding(EmbeddingBase):
         if self.embedding_type == "nerf":
             freqs = 2.0 ** jnp.arange(0, self.num_frequencies) * jnp.pi
         elif self.embedding_type == "transformer":
-            # Reference: neuraloperator SinusoidalEmbedding.forward
-            # (neuralop/layers/embeddings.py L278): exponent = arange(L) / L * 2.
+            # Frequencies (1 / max_positions) ** (2 k / L) for k = 0, ..., L - 1.
             freqs = jnp.arange(0, self.num_frequencies) / self.num_frequencies * 2
             freqs = (1.0 / self.max_positions) ** freqs
         else:  # pragma: no cover - embedding_type validated in __init__

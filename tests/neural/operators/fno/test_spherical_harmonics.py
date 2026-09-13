@@ -1,15 +1,13 @@
 """Correctness tests for the real spherical harmonic transform (SHT).
 
 These guards pin the JAX real-SHT (``opifex.neural.operators.fno._spherical_harmonics``)
-against the orthonormalized real spherical harmonics used by NVIDIA ``torch-harmonics``
-(``torch_harmonics/sht.py``, ``legendre.py``) and the analytic definition of the
-spherical harmonics ``Y_l^m``.
+against the analytic orthonormalized real spherical harmonics ``Y_l^m`` (with the
+Condon-Shortley phase) evaluated through SciPy.
 
 References
 ----------
-- Bonev et al. 2023, "Spherical Fourier Neural Operators" (arXiv:2306.03838).
-- ``torch_harmonics/sht.py`` (``RealSHT`` / ``InverseRealSHT``).
-- ``torch_harmonics/legendre.py`` (``legpoly`` / ``_precompute_legpoly``, ``clm``).
+- Bonev et al. 2023, "Spherical Fourier Neural Operators: Learning Stable Dynamics
+  on the Sphere" (arXiv:2306.03838).
 """
 
 import math
@@ -26,10 +24,10 @@ from opifex.neural.operators.fno._spherical_harmonics import SphericalHarmonicBa
 def _real_part_sh(degree: int, order: int, theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
     """Evaluate the real part of the complex spherical harmonic ``Y_l^m`` on a grid.
 
-    Uses the ``torch-harmonics`` orthonormal convention (``legendre.py``):
-    ``Re(Y_l^m) = clm * P_l^m(cos theta) * cos(m phi)`` where ``clm`` matches
-    ``torch_harmonics.legendre.clm`` and the Condon-Shortley phase is carried by
-    the associated Legendre evaluation. This is the field whose ``RealSHT`` analysis
+    Uses the orthonormal convention
+    ``Re(Y_l^m) = clm * P_l^m(cos theta) * cos(m phi)`` with
+    ``clm = sqrt((2l + 1)/(4 pi) (l - m)!/(l + m)!)``; the Condon-Shortley phase is
+    carried by the associated Legendre evaluation. This is the field whose forward SHT
     concentrates on the ``(l, m)`` coefficient (with magnitude ``1`` for ``m == 0``
     and ``1/2`` for ``m > 0``, since the real FFT stores only non-negative orders).
 
@@ -45,7 +43,7 @@ def _real_part_sh(degree: int, order: int, theta: np.ndarray, phi: np.ndarray) -
     from scipy.special import lpmv
 
     cos_theta = np.cos(theta)
-    # clm matches torch_harmonics.legendre.clm (orthonormal SH normalization).
+    # clm: orthonormal spherical harmonic normalization.
     clm = math.sqrt((2 * degree + 1) / (4 * math.pi)) * math.sqrt(
         math.factorial(degree - order) / math.factorial(degree + order)
     )
@@ -60,7 +58,7 @@ def gauss_grid() -> tuple[int, int, np.ndarray, np.ndarray]:
     """Provide a small Gauss-Legendre latitude / equiangular longitude grid."""
     nlat, nlon = 16, 32
     cost, _ = roots_legendre(nlat)
-    # torch_harmonics flips arccos(cost) so latitudes ascend (sht.py:98).
+    # Colatitudes arccos(cost) in ascending order, as in SphericalHarmonicBasis.
     theta = np.flip(np.arccos(cost))
     phi = np.linspace(0.0, 2.0 * math.pi, nlon, endpoint=False)
     return nlat, nlon, theta, phi

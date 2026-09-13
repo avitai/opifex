@@ -4,8 +4,7 @@ Load-bearing physics contracts:
 
 * the head emits ``{"charges"}`` of shape ``(n_atoms,)``;
 * the per-atom partial charges sum to the system's total charge ``Q`` -- the
-  conservation constraint (MACE ``scatter_mean`` excess subtraction, models.py;
-  PaiNN partial charges, Schuett et al. 2021);
+  conservation constraint (PaiNN partial charges, Schuett et al. 2021);
 * the conserved sum holds for a charged system (``Q != 0``);
 * the partial charges are rotation- and translation-invariant scalars;
 * the forward pass is ``jit``/``grad``/``vmap`` clean.

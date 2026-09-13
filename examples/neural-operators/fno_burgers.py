@@ -34,8 +34,8 @@ This example demonstrates:
 - **Operator learning** mapping the initial condition to the final-time solution
 - **Trainer.fit()** for end-to-end training with validation
 
-Equivalent to `neuraloperator/examples/` Burgers examples,
-reimplemented using Opifex APIs.
+Follows the Burgers benchmark of the Fourier Neural Operator paper
+(Li et al. 2021, arXiv:2010.08895), implemented with Opifex APIs.
 
 ## Learning Goals
 
@@ -140,11 +140,9 @@ Create visualizations showing sample predictions and error analysis.
 # %%
 def main() -> dict[str, float | int]:
     """Train a 1D FNO on Burgers data and return finite scalar metrics."""
-    # Canonical FNO-paper Burgers benchmark (Li et al. 2021; ref:
-    # ../deeponet-fno/src/burgers/fourier_1d.py): map the initial condition to the
-    # solution at a single final time, fixed viscosity, with the grid coordinate
-    # appended as a second input channel (a(x), x). modes/width/lr/epochs/loss
-    # match the reference configuration.
+    # Canonical FNO-paper Burgers benchmark (Li et al. 2021, arXiv:2010.08895): map
+    # the initial condition to the solution at a single final time, fixed viscosity,
+    # with the grid coordinate appended as a second input channel (a(x), x).
     resolution = 128
     time_steps = 1
     n_train = 1000

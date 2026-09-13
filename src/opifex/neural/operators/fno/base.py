@@ -400,12 +400,12 @@ def spectral_resample(
     discretisation-invariant resize used by U-NO: a band-limited field sampled
     at any resolution maps to the same continuous function.
 
-    Mirrors the spectral branch of ``neuralop.layers.resample.resample`` (mode
-    indexing and ``norm="forward"``), adapted to JAX. ``output_size`` is a static
-    Python tuple so the function traces cleanly under ``jax.jit``.
+    Both transforms use ``norm="forward"``, so the resampled field keeps the
+    amplitude of the input. ``output_size`` is a static Python tuple so the
+    function traces cleanly under ``jax.jit``.
 
     Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2022,
-    https://arxiv.org/abs/2204.11127, and the neuraloperator library.
+    https://arxiv.org/abs/2204.11127.
 
     Args:
         x: Input of shape ``(batch, channels, *spatial)`` (channels-first).
@@ -479,8 +479,8 @@ class SpectralConvResize(nnx.Module):
     convention issue (optax issue #196).
 
     Reference: Rahman et al., "U-NO: U-shaped Neural Operators", TMLR 2022,
-    https://arxiv.org/abs/2204.11127, and
-    ``neuralop.layers.spectral_convolution.SpectralConv``.
+    https://arxiv.org/abs/2204.11127; Li et al. 2021, "Fourier Neural Operator
+    for Parametric Partial Differential Equations", arXiv:2010.08895.
     """
 
     def __init__(

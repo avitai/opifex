@@ -404,8 +404,8 @@ Results saved to: docs/assets/examples/fno_burgers
 ### Interpretation
 
 A mean relative L2 error of ~0.17% (0.0017) on the 128-point Burgers benchmark is at parity
-with the original FNO results (Li et al. 2021): the canonical deeponet-fno Burgers benchmark
-reports ~0.0016, and this run reaches ~0.0017. Because the data follows the canonical
+with the original FNO results (Li et al. 2021, arXiv:2010.08895); this run reaches ~0.0017.
+Because the data follows the canonical
 FNO-paper Burgers pipeline — Gaussian-random-field initial conditions plus a pseudo-spectral
 ETDRK4 solve at the standard viscosity ν=0.1 — the error distribution is tight (min 0.0008,
 max 0.014) with no large outlier. The AdamW optimizer with an exponential learning-rate

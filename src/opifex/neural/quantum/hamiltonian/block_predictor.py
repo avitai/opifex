@@ -1,8 +1,9 @@
 r"""Heterogeneous-batchable QHNet block Hamiltonian predictor.
 
-A faithful JAX/Flax-NNX port of the QHNet Fock predictor (Yu et al. 2023, "QHNet",
-arXiv:2306.04922; reference ``divelab/AIRS``
-``OpenDFT/QHBench/QH9/models/QHNet.py``). Given a **flat heterogeneous batch** --
+A JAX/Flax-NNX Fock-block predictor after the QHNet architecture (Yu et al. 2023,
+"QHNet", arXiv:2306.04922), with the message-passing trunk and the pair layer
+replaced by the SO(2)-frame operations of QHNetV2 (Yu et al. 2025,
+arXiv:2506.09398). Given a **flat heterogeneous batch** --
 many molecules of differing composition/size concatenated into ``(A, 3)``
 positions, ``(A,)`` atomic numbers and a ``(2, E)`` *within-molecule* directed
 edge index (already offset so an edge never crosses molecules) -- it emits, for
@@ -11,48 +12,48 @@ edge, a ``(14, 14)`` off-diagonal block (the def2-SVP second-row layout
 :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS` =
 ``3x0e + 2x1e + 1x2e``).
 
-Architecture (QHNet ``QHNet.forward``)
---------------------------------------
+Architecture
+------------
 1. **Embed** atomic numbers into the trunk's scalar channels and lift into the
    parity-correct steerable hidden layout ``Hx0e + Hx1o + Hx2e + Hx3o + Hx4e``.
 2. **Message passing**: ``num_interactions``
    :class:`~opifex.neural.quantum.hamiltonian.so2_convolution.SO2ConvolutionLayer`
-   layers (the eSCN SO(2)-frame convolution of QHNetV2, arXiv 2506.09398 -- O(L^2)
-   per edge vs the dense O(L^3) tensor product; segment/edge-based, hence
-   batch-transparent) produce per-atom equivariant features (QHNet's
-   ``ConvNetLayer`` stack).
+   layers (the eSCN SO(2)-frame convolution adopted by QHNetV2, arXiv:2506.09398 --
+   O(L^2) per edge vs the dense O(L^3) tensor product; segment/edge-based, hence
+   batch-transparent) produce per-atom equivariant features (the convolution
+   stage of QHNet).
 3. **Refinement** (the QHNet expressivity core a NequIP trunk lacks): after the
    ``start_refinement_layer``-th convolution, each subsequent layer feeds the
-   parity-relabelled (all-even, matching QHNet's ``hidden_irrep_base``) node
-   feature into a
+   parity-relabelled (all-even) node feature into a
    :class:`~opifex.neural.quantum.hamiltonian._refinement.SelfInteractionLayer`
-   (QHNet ``SelfNetLayer`` -- a channel-wise *self* tensor product building the
-   diagonal feature ``fii``) and a
+   (the QHNet diagonal-pair self-interaction -- a channel-wise *self* tensor
+   product building the diagonal feature) and a
    :class:`~opifex.neural.quantum.hamiltonian.so2_convolution.SO2PairInteractionLayer`
-   (QHNetV2's SO(2)-frame reduction of QHNet's ``PairNetLayer`` -- the two
-   endpoints rotated into the edge frame, concatenated and coupled by an in-frame
-   ``O(L^2)`` SO(2) operation over the complete edge graph, building the
-   off-diagonal feature ``fij``), accumulated residually across the stack.
+   (the QHNetV2 SO(2)-frame form of the QHNet non-diagonal pair interaction -- the
+   two endpoints rotated into the edge frame, concatenated and coupled by an
+   in-frame ``O(L^2)`` SO(2) operation over the complete edge graph, building the
+   off-diagonal feature), accumulated residually across the stack.
 4. **Bottleneck**: ``output_ii`` / ``output_ij``
-   (:class:`~opifex.neural.equivariant.EquivariantLinear`) map ``fii`` / ``fij``
-   to the even bottleneck layout ``Bx0e + ... + Bx4e``.
+   (:class:`~opifex.neural.equivariant.EquivariantLinear`) map the diagonal /
+   off-diagonal features to the even bottleneck layout ``Bx0e + ... + Bx4e``.
 5. **Block heads**: the shared
    :class:`~opifex.neural.quantum.hamiltonian._block_expansion.HamiltonianBlockExpansion`
-   (QHNet's Wigner-3j ``Expansion``) expands the bottleneck feature + a per-sample
-   invariant embedding (the atom embedding for the diagonal head, the concatenated
-   pair embedding for the off-diagonal head) into the ``(14, 14)`` block.
-6. **Symmetrise** (QHNet ``ret_diagonal = D + D^T``): the diagonal block is made
-   symmetric; the off-diagonal block law ``H[i, j] = B_ij + B_ji^T`` is realised at
-   assembly because the directed graph carries both ``(i, j)`` and ``(j, i)`` (see
-   the *Off-diagonal symmetrisation* note below).
+   (the Wigner-3j matrix expansion of QHNet) expands the bottleneck feature + a
+   per-sample invariant embedding (the atom embedding for the diagonal head, the
+   concatenated pair embedding for the off-diagonal head) into the ``(14, 14)``
+   block.
+6. **Symmetrise** (``D + D^T``): the diagonal block is made symmetric; the
+   off-diagonal block law ``H[i, j] = B_ij + B_ji^T`` is realised at assembly
+   because the directed graph carries both ``(i, j)`` and ``(j, i)`` (see the
+   *Off-diagonal symmetrisation* note below).
 
-Off-diagonal symmetrisation: QHNet symmetrises with ``ND[transpose_edge].T``,
-which requires the per-graph ``transpose_edge_index`` permutation. On a flat
+Off-diagonal symmetrisation: symmetrising each edge block against its reverse edge
+inside the forward requires a per-graph reverse-edge permutation. On a flat
 heterogeneous batch that permutation is composition-dependent. Rather than carry
 it, this core emits the **raw** per-edge block and lets the consumer symmetrise
 the *assembled* matrix (``H = H~ + H~^T``); because a complete molecular graph
 contains both directed edges, ``H~[i, j] = B_ij`` and ``H~[j, i] = B_ji`` so the
-symmetrised ``H[i, j] = B_ij + B_ji^T`` reproduces QHNet's law.
+symmetrised ``H[i, j] = B_ij + B_ji^T`` satisfies the Hermitian block law.
 :meth:`assemble_matrix` performs exactly this symmetrisation for the single
 molecule inference path.
 
@@ -104,25 +105,25 @@ _MAX_ATOMIC_NUMBER = 118
 class BlockHamiltonianConfig:
     """Hyper-parameters of a :class:`BlockHamiltonianPredictor`.
 
-    Defaults sit well below the QHNet reference (hidden multiplicity ~128, ``sh_lmax``
+    Defaults sit well below a QHNet-sized model (hidden multiplicity ~128, ``sh_lmax``
     4, 5 interactions) so the documented defaults stay test-fast; production /
     training configs should raise ``hidden_irreps`` to a uniform-multiplicity
-    ``Hx0e + Hx1o + Hx2e + Hx3o + Hx4e`` (``sh_lmax`` 4) toward the reference.
+    ``Hx0e + Hx1o + Hx2e + Hx3o + Hx4e`` (``sh_lmax`` 4).
 
     Attributes:
         hidden_irreps: Steerable layout of the per-atom hidden / message-passing
-            features (QHNet's ``hidden_irrep``). Must be **uniform multiplicity**
+            features. Must be **uniform multiplicity**
             across all degrees (the channel-wise refinement tensor products require
             it) and contain a ``0e`` scalar channel.
         sh_lmax: Maximum spherical-harmonic degree of the edge embedding.
-        num_interactions: Number of NequIP convolution layers (QHNet's
-            ``num_gnn_layers`` ``ConvNetLayer`` stack).
+        num_interactions: Number of convolution layers in the message-passing
+            trunk.
         start_refinement_layer: Convolution index after which the self / pair
-            refinement layers run (QHNet's ``start_layer``); refinement happens for
+            refinement layers run; refinement happens for
             every layer with index strictly greater than it, so there are
             ``num_interactions - 1 - start_refinement_layer`` refinement layers.
         bottleneck_multiplicity: Multiplicity of the even bottleneck feeding the
-            block heads (QHNet's ``bottle_hidden_size``).
+            block heads.
         num_radial_basis: Number of Bessel radial-basis functions.
         radial_hidden_dim: Hidden width of the radial network MLP.
         cutoff: Connection / cutoff radius ``r_c`` (Bohr). Defaults large so the
@@ -164,10 +165,10 @@ class BlockHamiltonianConfig:
 def _even_irreps(irreps: Irreps) -> Irreps:
     """Return ``irreps`` with every block's parity relabelled to even.
 
-    The refinement layers and the block heads operate in QHNet's all-even
-    ``hidden_irrep_base`` space; relabelling the trunk's odd irreps (``1o``,
+    The refinement layers and the block heads operate in an all-even irrep
+    space, as in QHNet; relabelling the trunk's odd irreps (``1o``,
     ``3o``) to even keeps the per-block dimensions and makes the head
-    SO(3)-equivariant (parity is forgotten, exactly as in the reference).
+    SO(3)-equivariant (parity is not tracked).
     """
     return Irreps(tuple((mul, Irrep(irrep.l, 1)) for mul, irrep in irreps.blocks))
 
@@ -191,8 +192,7 @@ class BlockHamiltonianPredictor(nnx.Module):
     per atom and ``(14, 14)`` off-diagonal block per directed edge. Reuses the
     NequIP convolution trunk (segment-based, hence batch-transparent), the QHNet
     self / pair interaction refinement layers and the shared
-    :class:`HamiltonianBlockExpansion` head (reference ``divelab/AIRS``
-    ``OpenDFT/QHBench/QH9/models/QHNet.py``).
+    :class:`HamiltonianBlockExpansion` head (Yu et al. 2023, arXiv:2306.04922).
 
     Args:
         config: Hyper-parameters. Defaults to :class:`BlockHamiltonianConfig`.
@@ -238,7 +238,7 @@ class BlockHamiltonianPredictor(nnx.Module):
             ]
         )
 
-        # --- QHNet refinement stack (all-even base) ---
+        # --- refinement stack (all-even base) ---
         self._even_base = _even_irreps(self.hidden_irreps)
         self._num_refinement = self.config.num_interactions - 1 - self.config.start_refinement_layer
         self.self_layers = nnx.List(
@@ -313,9 +313,9 @@ class BlockHamiltonianPredictor(nnx.Module):
 
         Returns:
             ``(diagonal_feature, off_diagonal_feature, node_embedding)`` where the
-            first is per-atom ``fii`` (even bottleneck), the second per-edge ``fij``
-            (even bottleneck) and the third the per-atom invariant embedding driving
-            the block heads.
+            first is the per-atom diagonal feature (even bottleneck), the second the
+            per-edge off-diagonal feature (even bottleneck) and the third the
+            per-atom invariant embedding driving the block heads.
         """
         n_atoms = atomic_numbers.shape[0]
         senders, receivers = edge_index[0], edge_index[1]
@@ -373,7 +373,7 @@ class BlockHamiltonianPredictor(nnx.Module):
 
         Returns:
             ``{"diagonal_blocks": (A, 14, 14), "off_diagonal_blocks": (E, 14, 14)}``;
-            the diagonal blocks are symmetrised (QHNet ``D + D^T``) and the
+            the diagonal blocks are symmetrised (``D + D^T``) and the
             off-diagonal blocks are raw (symmetrised at assembly, see module docs).
         """
         del node_batch  # Not required: edges are within-molecule (documented).
@@ -387,7 +387,7 @@ class BlockHamiltonianPredictor(nnx.Module):
         diagonal = diagonal + jnp.swapaxes(diagonal, -1, -2)
 
         # --- off-diagonal blocks (per directed edge) ---
-        # QHNet pair embedding: cat([node_attr[dst], node_attr[src]]) = [receiver, sender].
+        # Pair embedding: concatenation of the [receiver, sender] atom embeddings.
         pair_embedding = jnp.concatenate(
             [node_embedding[receivers], node_embedding[senders]], axis=-1
         )
@@ -409,7 +409,7 @@ class BlockHamiltonianPredictor(nnx.Module):
         dense matrix at the per-atom AO offsets
         (:func:`~...._orbital_layout.atom_orbital_counts`). The off-diagonal blocks
         are written at both ``(i, j)`` and ``(j, i)``; the directed graph carries
-        both edges, so the QHNet off-diagonal law
+        both edges, so the off-diagonal block law
         ``H[i, j] = B_ij + B_ji^T`` is realised by the final symmetrisation
         ``H = H~ + H~^T``.
 

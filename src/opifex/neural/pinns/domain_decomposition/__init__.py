@@ -14,8 +14,8 @@ Key Components:
 
 References:
     - Survey: arXiv:2601.10222v1 Section 8.3
-    - XPINNs: https://github.com/AmeyaJagtap/XPINNs
-    - FBPINNs: https://github.com/benmoseley/FBPINNs
+    - XPINNs: Jagtap & Karniadakis (2020), Extended Physics-Informed Neural Networks
+    - FBPINNs: Moseley, Markham & Nissen-Meyer (2023), arXiv:2107.07871
 """
 
 from opifex.neural.pinns.domain_decomposition.apinn import (

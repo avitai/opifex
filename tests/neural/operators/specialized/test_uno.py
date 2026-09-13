@@ -1,6 +1,6 @@
 """Tests for the U-shaped Neural Operator (UNO).
 
-Mirrors the reference test suite ``neuralop/models/tests/test_uno.py`` and the
+Pins the U-NO shape contract and the
 discretisation-invariance property that distinguishes a genuine neural operator
 from a conv U-Net:
 
@@ -12,7 +12,7 @@ from a conv U-Net:
 - jit / grad / vmap safety.
 
 Reference: Rahman, Ross, Azizzadenesheli, "U-NO: U-shaped Neural Operators",
-TMLR 2022, https://arxiv.org/abs/2204.11127, and the neuraloperator library.
+TMLR 2022, https://arxiv.org/abs/2204.11127.
 """
 
 import jax
@@ -176,12 +176,12 @@ class TestSpectralConvResize:
 
 
 # =========================================================================
-# UNeuralOperator: full architecture (mirrors neuralop test_uno.py)
+# UNeuralOperator: full architecture
 # =========================================================================
 
 
 def _darcy_uno(rngs: nnx.Rngs, n_layers: int = 5) -> UNeuralOperator:
-    """Reference-style 5-layer UNO config with end-to-end scaling 1.0."""
+    """Five-layer Darcy-style UNO config with end-to-end scaling 1.0."""
     return UNeuralOperator(
         in_channels=3,
         out_channels=3,
@@ -198,7 +198,7 @@ class TestUNeuralOperator:
     """The rebuilt resolution-invariant UNO."""
 
     def test_init(self, rngs: nnx.Rngs) -> None:
-        """UNO initialises with the reference-style config."""
+        """UNO initialises with the five-layer Darcy-style config."""
         model = _darcy_uno(rngs)
         assert model is not None
         assert model.end_to_end_scaling_factor == [1.0, 1.0]

@@ -61,8 +61,9 @@ class VMCConfig:
         diag_shift: Tikhonov shift for the MinSR/SPRING Gram solve.
         momentum: SPRING momentum coefficient.
         proj_reg: SPRING projection regulariser.
-        clip_local_energy: Median-absolute-deviation clipping window for the
-            local energy (FermiNet variance reduction); ``0`` disables it.
+        clip_local_energy: Clipping window for the local energy, in units of the
+            mean absolute deviation from the median (variance reduction); ``0``
+            disables it.
         kinetic_method: Laplacian method for the kinetic energy.
     """
 
@@ -96,13 +97,14 @@ class VMCResult:
 
 
 def _clip_local_energy(energies: Array, window: float) -> Array:
-    """Median-absolute-deviation clip the local energy (variance reduction).
+    """Clip the local energy to a band around its median (variance reduction).
 
     Non-finite local energies -- which arise when a walker wanders onto a
     nuclear cusp and the kinetic energy diverges -- are first replaced by the
     finite median so a single bad walker cannot poison the batch gradient
-    (the FermiNet / DeepQMC outlier-robust estimator). The remaining energies
-    are then clipped to a median-absolute-deviation window.
+    (an outlier-robust estimator). The remaining energies are then clipped to
+    ``median +/- window * d``, where ``d`` is the mean absolute deviation from
+    the median.
     """
     finite = jnp.isfinite(energies)
     safe = jnp.where(finite, energies, 0.0)

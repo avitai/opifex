@@ -5,10 +5,10 @@ domains using spherical harmonic decompositions. Ideal for global climate
 modeling, atmospheric science, and planetary-scale phenomena.
 
 The spectral transform is a genuine orthonormalized real spherical harmonic
-transform (SHT) -- a faithful JAX port of NVIDIA ``torch-harmonics`` provided by
-:mod:`opifex.neural.operators.fno._spherical_harmonics` -- replacing the earlier
-2D-FFT approximation. The spectral-conv weight multiply mirrors the SFNO spherical
-convolution of Bonev et al. 2023 (arXiv:2306.03838) and ``neuralop`` ``SphericalConv``.
+transform (SHT) provided by :mod:`opifex.neural.operators.fno._spherical_harmonics`
+-- replacing the earlier 2D-FFT approximation. The operator follows the Spherical
+Fourier Neural Operator of Bonev et al. 2023 (arXiv:2306.03838); the spectral
+convolution applies a learnable complex channel weight per ``(l, m)`` mode.
 """
 
 from collections.abc import Callable, Sequence
@@ -52,7 +52,7 @@ class SphericalHarmonicConvolution(nnx.Module):
     Operates in spherical harmonic space analogous to how standard FNO operates
     in Fourier space, but adapted for spherical geometry. The coefficient layout
     is ``(batch, channels, lmax, mmax)`` with non-negative orders ``m`` only,
-    matching the real SHT of ``torch-harmonics`` / ``neuralop`` ``SphericalConv``.
+    matching the real SHT of :class:`SphericalHarmonicBasis`.
     A learnable complex weight contracts the channel axis per spherical mode.
     """
 
@@ -106,7 +106,7 @@ class SphericalHarmonicConvolution(nnx.Module):
         x_modes = x_sht[:, :, :l_end, :m_end]
 
         # Construct the complex weight from real/imaginary parts and align to the
-        # truncated band (mirrors neuralop SphericalConv weight slicing).
+        # truncated band.
         weight_real = self.weight_real[:, :, :l_end, :m_end]
         weight_imag = self.weight_imag[:, :, :l_end, :m_end]
         weight = weight_real + 1j * weight_imag
@@ -193,8 +193,8 @@ class SphericalFourierNeuralOperator(nnx.Module):
     def _spherical_harmonic_transform(self, x: Array) -> Array:
         """Compute the forward real spherical harmonic transform.
 
-        Uses the orthonormalized real SHT (forward/analysis) ported from
-        ``torch-harmonics`` rather than a 2D-FFT approximation: a real FFT over
+        Uses the orthonormalized real SHT (forward/analysis) rather than a
+        2D-FFT approximation: a real FFT over
         longitude followed by a Gauss-Legendre latitude quadrature against the
         associated Legendre polynomials.
 

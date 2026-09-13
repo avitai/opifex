@@ -2,14 +2,11 @@ r"""Multi-task / multi-fidelity energy head keyed by ``task_name`` (the UMA desi
 
 A single shared backbone feeds many task-specific energy readouts; the active
 readout is chosen at call time by a *task label* -- the design of the Meta-FAIR
-Universal Models for Atoms (UMA; Wood et al. 2025, arXiv:2506.23971,
-``../fairchem`` ``fairchem/core/models/base.py``: a ``ModuleDict`` of output heads
-indexed by name, with the dataset/``task_name`` selecting the head and its own
-reference-energy normalisation). It is the multi-head fine-tuning recipe of MACE
-(``../mace`` ``mace/tools/multihead_tools.py`` and the per-head
-``ScaleShiftBlock.forward(x, head)`` in ``mace/modules/blocks.py``), where each
-head owns an independent affine ``scale``/``shift`` (per-dataset ``E0`` +
-normaliser).
+Universal Models for Atoms (UMA; Wood et al. 2025, arXiv:2506.23971), where the
+dataset / DFT task selects the output. It also supports the multi-head
+fine-tuning of MACE-MP-0 (Batatia et al. 2023, arXiv:2401.00096, "multi-head
+replay fine-tuning"), here with each head owning an independent affine
+``scale``/``shift`` (per-dataset ``E0`` + normaliser).
 
 :class:`MultiTaskEnergyHead` holds one
 :class:`~opifex.neural.atomistic.heads.energy.EnergyHead` per task -- each with its
@@ -169,12 +166,11 @@ class MultiTaskEnergyHead(nnx.Module):
         scale_shift: AtomicScaleShift | None = None,
         rngs: nnx.Rngs,
     ) -> MultiTaskEnergyHead:
-        """Return this head with a new per-task readout added (UMA ``add_tasks``).
+        """Return this head with a new per-task readout added.
 
-        Mirrors the fairchem ``HydraModel.add_tasks`` flow of attaching an
-        inference/fine-tune head to an existing backbone (``../fairchem``
-        ``fairchem/core/models/base.py``). Mutation is in place (NNX modules are
-        mutable); the same instance is returned for chaining.
+        Attaches an inference / fine-tune head to an existing backbone. Mutation
+        is in place (NNX modules are mutable); the same instance is returned for
+        chaining.
 
         Args:
             task_name: Label for the new task; must not already exist.

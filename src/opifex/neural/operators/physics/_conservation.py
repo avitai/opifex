@@ -22,9 +22,8 @@ A correct loss penalises the divergence of the conserved flux (the discrete
 cell balance / net boundary flux), *not* the standard deviation of a sum.
 
 The spatial divergence is computed with second-order central finite differences
-and periodic wrapping, matching the ``FiniteDiff.divergence`` reference in
-``neuraloperator`` (``neuralop/losses/differentiation.py``) and the grid
-operators in :mod:`opifex.fields.operations`.
+and periodic wrapping, consistent with the grid operators in
+:mod:`opifex.fields.operations`.
 
 All functions are pure and compatible with ``jax.jit``, ``jax.grad`` and
 ``jax.vmap``.
@@ -40,8 +39,7 @@ def central_difference(values: jax.Array, axis: int, spacing: float | jax.Array)
     """Second-order central finite difference along a periodic axis.
 
     Computes ``(f_{i+1} - f_{i-1}) / (2 * spacing)`` with periodic wrapping at
-    the boundaries via :func:`jax.numpy.roll`, matching the periodic branch of
-    ``neuraloperator``'s ``FiniteDiff``.
+    the boundaries via :func:`jax.numpy.roll`.
 
     Args:
         values: Field samples on a uniform grid.

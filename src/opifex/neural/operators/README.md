@@ -16,7 +16,7 @@ This module provides advanced neural operator implementations for learning mappi
 ### 1. Discrete-Continuous (DISCO) Convolutions
 
 Convolution on arbitrary (including irregular) point sets via a continuous kernel evaluated as a
-quadrature (Ocampo, Price & McEwen 2023, `arXiv:2209.13603`; the `torch_harmonics` algorithm). The
+quadrature (Ocampo, Price & McEwen 2023, `arXiv:2209.13603`). The
 kernel `kappa(r) = Σ_k w_k φ_k(r)` lives in physical coordinates, so the same learned kernel
 transfers across grid resolutions and applies directly to scattered data.
 

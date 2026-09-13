@@ -30,8 +30,6 @@ References:
     * Schuett et al. 2018, "SchNet -- A deep learning architecture for molecules
       and materials", J. Chem. Phys. 148, 241722 (arXiv:1706.08566) -- the
       continuous-filter message/scatter pattern.
-    * ``../e3nn-jax/e3nn_jax/_src/radius_graph.py`` and ``.../scatter.py`` -- the
-      static-shape edge index and segment-scatter aggregation reused here.
 """
 
 from __future__ import annotations

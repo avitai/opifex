@@ -43,7 +43,7 @@ B_i^(ν)[ir_out] = Σ_k  U^(ν)[…, k] · w^(ν)_k · (A_i ⊗ … ⊗ A_i)    
 `correlation = ν_max` is the maximum order; MACE's default `correlation = 3` gives up
 to 4-body messages.
 
-## Algorithm (faithful to MACE / e3nn-jax)
+## Algorithm (MACE symmetric contraction)
 
 ### U tensors (precomputed constants)
 `U^(ν)` for a given `(irreps_in, irreps_out, ν)` is an orthonormal change of basis
@@ -51,12 +51,12 @@ from the symmetric `ν`-th power of `irreps_in` onto `irreps_out`, built by recu
 coupling `ν` copies with real Clebsch-Gordan and then imposing permutation symmetry
 (Gram-Schmidt over the symmetric group). It is a **constant** — not learned — of shape
 `[irreps_out.dim] + [irreps_in.dim] * ν + [num_paths]`, where `num_paths` is the number
-of independent symmetric coupling paths. References: MACE `U_matrix_real` / `_wigner_nj`;
-e3nn-jax `reduced_symmetric_tensor_product_basis` (`reduce_basis_product` then
-`constrain_rotation_basis_by_permutation_basis`).
+of independent symmetric coupling paths. References: Batatia et al. 2022 (MACE) and
+Drautz 2019 (ACE) for the generalized Clebsch-Gordan basis; Geiger & Smidt 2022 (e3nn,
+arXiv:2207.09453) for the real Clebsch-Gordan coupling.
 
 ### Horner recursion (the runtime contraction)
-The naive `ν`-fold outer product is `O(irreps_in.dim^ν)`; both MACE and e3nn-jax avoid
+The naive `ν`-fold outer product is `O(irreps_in.dim^ν)`; MACE avoids
 it with a Horner factorization that builds order `ν` from order `ν−1` by contracting in
 one more copy of `A`:
 
@@ -68,7 +68,7 @@ for ν from ν_max-1 down to 1:
 return out                                   # == ((w_ν·A + w_{ν-1})·A + w_{ν-2})·A …
 ```
 
-e3nn-jax forward einsums (per output irrep, the cleanest reference):
+Forward einsums (per output irrep):
 `"...jki,kc,cj->c...i"` (highest), `"...ki,kc->c...i"` (weight fold),
 `"c...ji,cj->c...i"` (multiply in `A`); `U` is normalized by `U / U.shape[-2]`.
 
@@ -76,8 +76,8 @@ e3nn-jax forward einsums (per output irrep, the cleanest reference):
 One weight tensor per order `ν`, of shape `(num_elements, num_paths, num_channels)`,
 initialised `randn / num_paths`. The **element axis** makes the contraction
 chemistry-aware: a one-hot atom type selects the per-species weight slab inside the
-einsum (`"ekc,be->bc…"`). This is MACE's extension over e3nn-jax (which has no element
-axis). It reuses the species one-hot opifex already builds for the species-indexed
+einsum (`"ekc,be->bc…"`). This per-element weight axis follows MACE. It reuses the
+species one-hot opifex already builds for the species-indexed
 self-connection (`NequIPConfig.species`).
 
 ### Block wiring
@@ -104,11 +104,12 @@ Genuinely new numerical machinery (only the U-matrix builder is novel; CG alread
 exists):
 
 1. **`reduced_symmetric_tensor_product_basis(irreps_in, degree, keep_ir)`** — the U
-   builder. Port the e3nn-jax recursion: couple `ν` copies via
-   `sqrt(ir.dim) · clebsch_gordan(...)`, then `constrain_rotation_basis_by_permutation_basis`
-   for the symmetric permutation symmetry. Build order `ν` from order `ν−1`.
+   builder. It couples `ν` copies via `sqrt(ir.dim) · clebsch_gordan(...)`, then
+   averages the coupling basis over the symmetric group `S_ν` and orthonormalises it
+   with Gram-Schmidt to impose the permutation symmetry.
 2. **`SymmetricContraction` (`nnx.Module`)** — holds the `U^(ν)` as static constants
-   (mirror the `_to_nested_tuple` pattern), `(num_elements, num_paths, num_channels)`
+   (the `_to_nested_tuple` pattern of `tensor_product.py`),
+   `(num_elements, num_paths, num_channels)`
    `nnx.Param` weights per order, and the Horner-recursion forward.
 3. **`EquivariantProductBasisBlock`** — `SymmetricContraction → EquivariantLinear + sc`.
 
@@ -132,8 +133,7 @@ exists):
    the shared backbone contracts (`tests/.../backbones/_helpers.py`): energy invariance,
    force equivariance, `F = −∇E` vs finite differences, jit/grad/vmap cleanliness.
 3. **Reference parity**: check the order-2 contraction against an explicit
-   `sym(A⊗A)` + CG projection computed independently, and (optionally) against e3nn-jax
-   on a fixed small input.
+   `sym(A⊗A)` + CG projection computed independently.
 4. **Body-order sanity**: a `correlation=3` model fits a synthetic 3-body target a
    `correlation=1` model cannot.
 5. **Example**: re-run `nequip_md17` at `correlation=3` and confirm the force MAE drops
@@ -166,11 +166,11 @@ exists):
 ## References
 
 - Batatia, Kovács, Simm, Ortner, Csányi, *MACE: Higher Order Equivariant Message
-  Passing Interatomic Potentials*, NeurIPS 2022 (arXiv:2206.07697).
+  Passing Neural Networks for Fast and Accurate Force Fields*, NeurIPS 2022
+  (arXiv:2206.07697).
 - Drautz, *Atomic cluster expansion for accurate and transferable interatomic
   potentials*, Phys. Rev. B 99, 014104 (2019).
 - Batzner et al., *E(3)-equivariant graph neural networks…*, Nat. Commun. 13, 2453
   (2022) (arXiv:2101.03164) — the two-body baseline.
-- The `e3nn-jax` `reduced_symmetric_tensor_product_basis` and `SymmetricTensorProduct`
-  provide the canonical JAX reference for the U-matrix builder and the contraction
-  forward.
+- Geiger & Smidt, *e3nn: Euclidean Neural Networks*, arXiv:2207.09453 (2022) — the
+  irreps conventions and the real Clebsch-Gordan tensor product.

@@ -10,7 +10,7 @@ defining property is the QHNet block transformation law
 
 with ``D_{14}`` the real Wigner-D of ``BLOCK_IRREPS`` -- the block-wise statement
 of ``H(R x) = D(R) H(x) D(R)^T`` that makes the assembled Hamiltonian equivariant
-(reference ``divelab/AIRS`` ``OpenDFT/QHBench/QH9/models/Expanson.py``).
+(Yu et al. 2023, "QHNet", arXiv:2306.04922).
 """
 
 from __future__ import annotations

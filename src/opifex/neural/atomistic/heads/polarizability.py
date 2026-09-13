@@ -10,8 +10,7 @@ Following the standard ML decomposition of a symmetric rank-2 tensor into its
 irreducible (:math:`l = 0`) isotropic and (:math:`l = 2`) symmetric-traceless
 parts (Schuett, Unke & Gastegger 2021, "Equivariant message passing for the
 prediction of tensorial properties and molecular spectra", ICML -- the PaiNN
-polarizability readout; mirrored by ``../mace``'s polarizability readout), the
-head assembles
+polarizability readout), the head assembles
 
 .. math::
    \boldsymbol{\alpha}
@@ -34,8 +33,8 @@ Scope: like :class:`~opifex.neural.atomistic.heads.dipole.DipoleHead`, this head
 uses only the position-outer-product (charge-weighted) construction. The opifex
 backbones (PaiNN / NequIP / SchNet) currently expose only the invariant
 ``"node_features"``; building the :math:`l = 2` part directly from backbone
-equivariant vector/tensor features (as ``../mace``'s polarizability readout does
-when such features exist) is a future variant plugging into the same
+equivariant vector/tensor features (when such features exist) is a future
+variant plugging into the same
 :class:`~opifex.core.quantum.protocols.PropertyHead` protocol. Setting
 ``isotropic_only=True`` drops the anisotropic term, yielding a multiple of the
 identity (a pure :math:`l = 0` polarizability).
@@ -64,7 +63,7 @@ class PolarizabilityHead(nnx.Module):
     Reads the backbone's per-atom invariant ``"node_features"`` and assembles the
     polarizability as an isotropic (:math:`l = 0`) part plus a symmetric-traceless
     (:math:`l = 2`) part built from position outer products (Schuett et al. 2021,
-    PaiNN; ``../mace`` polarizability readout).
+    PaiNN).
 
     Args:
         feature_dim: Width of the backbone's ``"node_features"`` embedding.

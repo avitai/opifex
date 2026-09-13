@@ -2,8 +2,7 @@ r"""Tests for the def2-SVP per-element orbital layout and validity masks.
 
 The full second-row AO block is 14-dimensional, laid out as the irrep
 ``3x0e + 2x1e + 1x2e`` (3 s-shells, 2 p-shells, 1 d-shell; ``3 + 2*3 + 5 = 14``).
-QHNet (Yu et al. 2023, arXiv:2306.04922; reference
-``divelab/AIRS`` ``OpenDFT/QHBench/QH9/datasets.py`` ``orbital_mask``) predicts a
+QHNet (Yu et al. 2023, arXiv:2306.04922) predicts a
 dense ``(14, 14)`` block per atom/edge and masks out the AO slots an element does
 not populate: H/He keep ``[0, 1, 3, 4, 5]`` (2 s + 1 p), C/N/O/F keep all 14.
 """
@@ -36,7 +35,7 @@ def test_block_irreps_layout() -> None:
 
 
 def test_hydrogen_orbital_mask_indices() -> None:
-    """H keeps the 2 s + 1 p slots ``[0, 1, 3, 4, 5]`` (QH9 ``idx_1s_2s_2p``)."""
+    """H keeps the def2-SVP 2 s + 1 p slots ``[0, 1, 3, 4, 5]``."""
     assert ORBITAL_MASK[1] == (0, 1, 3, 4, 5)
 
 

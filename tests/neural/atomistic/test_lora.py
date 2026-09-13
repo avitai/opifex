@@ -4,10 +4,7 @@ r"""Tests for the equivariant-safe LoRA adapter on ``nnx.Linear`` layers.
 low-rank correction ``W_eff = W + (alpha / rank) * A @ B`` where ``A`` is a small
 random ``(in, rank)`` matrix and ``B`` is a ``(rank, out)`` matrix **initialised
 to zero**, so the adapter is the identity (reproduces the base layer exactly) at
-initialisation -- the LoRA contract of Hu et al. 2021 (LoRA, arXiv:2106.09685)
-and the ``../mace`` ``mace/modules/lora.py`` ``LoRAFCLayer`` (which uses the same
-``delta = A @ B`` low-rank, ``A`` random-small / ``B`` zero, e3nn ``(in, out)``
-weight layout).
+initialisation -- the LoRA contract of Hu et al. 2021 (LoRA, arXiv:2106.09685).
 
 Load-bearing checks:
 

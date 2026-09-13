@@ -1,7 +1,6 @@
 """Tests for the symmetric tensor-product (U-matrix) basis builder.
 
-Validates the invariants of the symmetric coupling basis against the e3nn-jax
-``reduced_symmetric_tensor_product_basis`` reference: orthonormal independent
+Validates the invariants of the symmetric coupling basis: orthonormal independent
 paths, the correct number of symmetric paths per output irrep for known small
 cases, invariance under permuting the input axes, and rotational equivariance of
 the resulting contraction.

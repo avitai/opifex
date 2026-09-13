@@ -24,16 +24,14 @@ derivatives. The spatial domain is the periodic interval $[0, 1)$.
 ### The genuine PINO setup
 
 Following Li et al. (2021), *Physics-Informed Neural Operator for Learning
-Partial Differential Equations*, and the reference implementation in
-`neuraloperator` (`scripts/train_burgers_pino.py`), the operator maps the initial
+Partial Differential Equations* (arXiv:2111.03794), the operator maps the initial
 condition $u(x, 0)$ — broadcast/repeated across the time axis — to the **full
 space-time solution** $u(t, x)$, a 2D field over $(\text{time}, \text{space})$.
 
 A 2D FNO is the backbone: the input is the tiled initial condition of shape
 `(batch, 1, nt, nx)` and the output is the predicted field `(batch, 1, nt, nx)`.
 
-Training minimises three terms (cf. `neuralop.losses.equation_losses`
-`BurgersEqnLoss` + `ICLoss`):
+Training minimises three terms:
 
 - **data loss**: mean relative L2 between the predicted and the ground-truth
   space-time trajectory,
@@ -70,8 +68,8 @@ If you are familiar with the `neuraloperator` library's PINO example:
 
 1. **On-device data generation**: trajectories are built with the pseudo-spectral
    ETDRK4 Burgers solver, vmapped over the batch — no external data files
-2. **Fixed loss weights**: a clean, reproducible alternative to the reference's
-   Relobralo aggregator; the weights follow the same (data, IC, equation) ordering
+2. **Fixed loss weights**: a clean, reproducible alternative to an adaptive
+   (Relobralo) aggregator; the weights follow the (data, IC, equation) ordering
 3. **JAX transforms**: a single `jit(vmap(...))` call generates the whole dataset
 
 ## Files
@@ -204,8 +202,7 @@ Test trajectories:  (200, 11, 128)
 
 The residual is computed by finite differences over the predicted field
 `(batch, nt, nx)`: a forward difference in time, periodic central differences in
-space. This mirrors `neuralop.losses.equation_losses.BurgersEqnLoss`
-(`method="fdm"`).
+space. A perfect solution has zero residual.
 
 ```python
 def compute_burgers_residual(u, dx, dt, nu):

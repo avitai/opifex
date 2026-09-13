@@ -3,8 +3,8 @@ r"""eSCN SO(2)-frame edge convolution for the equivariant Hamiltonian predictor.
 This module implements the *eSCN* reduction of an :math:`SO(3)` edge tensor
 product to a set of per-order :math:`SO(2)` operations (Passaro & Zitnick 2023,
 "Reducing SO(3) Convolutions to SO(2)", arXiv:2302.03655), as adopted by QHNetV2
-for scalable equivariant Hamiltonian prediction (Yu et al. 2023,
-arXiv:2306.04922). It is a drop-in replacement for the dense
+for scalable equivariant Hamiltonian prediction (Yu et al. 2025,
+arXiv:2506.09398). It is a drop-in replacement for the dense
 :class:`opifex.neural.equivariant.tensor_product.FullyConnectedTensorProduct`
 used as the ``edge_tensor_product`` of
 :class:`opifex.neural.quantum.hamiltonian.predictor.HamiltonianPredictor`:
@@ -28,19 +28,15 @@ Concretely, for each edge:
    reference axis (in opifex's real basis -- shared with
    :func:`opifex.geometry.algebra.wigner.wigner_d` and
    :func:`opifex.neural.equivariant.spherical_harmonics.spherical_harmonics` --
-   the quantisation / :math:`m = 0` axis is :math:`+y`; cf. fairchem's
-   ``init_edge_rot_euler_angles`` which uses ``beta = acos(y)``,
-   ``../fairchem/src/fairchem/core/models/uma/common/rotation.py``).
+   the quantisation / :math:`m = 0` axis is :math:`+y`).
 #. Rotate the node feature into that edge frame with the Wigner-D matrices
    :math:`D^l(R)`.
 #. Apply the per-order :math:`SO(2)` mixing. Under a rotation about :math:`y`,
    each :math:`\pm m` pair transforms as a 2D rotation by :math:`m\theta`; a
    channel/degree mixing commutes with *every* such rotation iff it acts as a
    complex-linear map :math:`(W_1 + i W_2)` on that pair (the real :math:`m = 0`
-   subspace mixes with an ordinary real linear map). This is exactly fairchem's
-   ``SO2_m_Conv`` (``../fairchem/src/fairchem/core/models/uma/nn/so2_layers.py``)
-   and the QHNet edge update (``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py``),
-   expressed here over opifex irreps.
+   subspace mixes with an ordinary real linear map). This is the SO(2)
+   convolution of eSCN (Passaro & Zitnick 2023), expressed here over opifex irreps.
 #. Rotate the result back out of the edge frame with :math:`D^l(R^{\top})`.
 
 Because the frame co-rotates with the geometry, the whole map is exactly
@@ -224,7 +220,7 @@ class SO2Linear(nnx.Module):
     order :math:`m` -- a real map for :math:`m = 0` and a complex map
     :math:`W_1 + i W_2` for the :math:`(+m, -m)` pair, which is the most general
     channel mixing that commutes with every rotation about the quantisation axis
-    (Passaro & Zitnick 2023, arXiv:2302.03655; fairchem ``SO2_m_Conv``). Both
+    (Passaro & Zitnick 2023, arXiv:2302.03655). Both
     :class:`SO2EdgeConvolution` (a single feature) and
     :class:`SO2PairInteractionLayer` (a concatenated endpoint pair) sandwich this
     map between a rotate-in and a rotate-out.
@@ -271,8 +267,7 @@ class SO2Linear(nnx.Module):
                 key, sub1 = jax.random.split(key)
                 key, sub2 = jax.random.split(key)
                 # Two real matrices form one complex weight W1 + i W2; the 1/sqrt(2)
-                # keeps the complex multiplication variance-preserving (cf. fairchem
-                # SO2_m_Conv ``fc.weight.data.mul_(1/sqrt(2))``).
+                # keeps the complex multiplication variance-preserving.
                 complex_weights.append(
                     nnx.Param(
                         scale
@@ -347,7 +342,7 @@ class SO2EdgeConvolution(nnx.Module):
     Computes an equivariant edge message from a node feature and the edge vector
     by rotating into the edge-aligned frame, mixing per order :math:`m` with the
     cheap :class:`SO2Linear` operation of eSCN (arXiv:2302.03655) / QHNetV2
-    (arXiv:2306.04922), and rotating back. The call signature mirrors the
+    (arXiv:2506.09398), and rotating back. The call signature mirrors the
     :class:`opifex.neural.equivariant.tensor_product.TensorProduct` protocol so it
     substitutes directly for
     :class:`~opifex.neural.equivariant.tensor_product.FullyConnectedTensorProduct`
@@ -485,19 +480,19 @@ class SO2ConvolutionLayer(nnx.Module):
 class SO2PairInteractionLayer(nnx.Module):
     r"""eSCN SO(2)-frame off-diagonal pair refinement (replaces the O(L^3) node(x)node CG).
 
-    QHNetV2's reduction of QHNet's ``PairNetLayer`` to SO(2) local frames (Yu et
-    al. 2025, "Efficient Prediction of SO(3)-Equivariant Hamiltonian Matrices via
-    SO(2) Local Frames", arXiv:2506.09398; reference OrbEvo
-    ``../AIRS/OpenDFT/OrbEvo/orbevo/models/orbevo/{so2_ops.py,
-    transformer_block_dm.py}``). For a directed edge ``i -> j`` the two endpoint
+    QHNetV2's reduction of the QHNet non-diagonal pair interaction to SO(2) local
+    frames (Yu et al. 2025, "Efficient Prediction of SO(3)-Equivariant Hamiltonian
+    Matrices via SO(2) Local Frames", arXiv:2506.09398). For a directed edge
+    ``i -> j`` the two endpoint
     node features are rotated into the ``i -> j`` edge frame, concatenated
     channel-wise, and coupled by an in-frame ``SO2Linear -> gate -> SO2Linear``
     (``O(L^2)`` per edge), then rotated back to the global frame and residually
     accumulated onto the running off-diagonal-block feature.
 
-    This replaces QHNet's dense channel-wise Clebsch-Gordan ``tp(x[src], x[dst])``
-    -- the dominant cost of the block predictor (the complete edge graph times an
-    ``O(L^3)`` product) -- with the cheap order-diagonal SO(2) operations, while
+    This replaces the dense channel-wise Clebsch-Gordan product of the two endpoint
+    features used in QHNet -- the dominant cost of the block predictor (the complete
+    edge graph times an ``O(L^3)`` product) -- with the cheap order-diagonal SO(2)
+    operations, while
     staying SO(3)-equivariant: the frame co-rotates with the geometry, so rotating
     every node feature **and** the edge vectors by ``R`` rotates the per-edge
     output by ``R``. The directed frame (``i -> j`` differs from ``j -> i``) gives
@@ -530,8 +525,7 @@ class SO2PairInteractionLayer(nnx.Module):
         self.irreps = Irreps(irreps)
         self._gate_irreps = _gate_input_irreps(self.irreps)
         # Channel-wise concatenation of the two rotated endpoints: the in-frame
-        # message carries 2x the multiplicity of each degree (OrbEvo
-        # ``cat((x_source, x_target), dim=channel)``).
+        # message carries 2x the multiplicity of each degree.
         self._concat_irreps = Irreps(tuple((2 * mul, irrep) for mul, irrep in self.irreps.blocks))
         lmax = max((irrep.l for _, irrep in self.irreps.blocks), default=0)
         self.max_order = min(sh_lmax, lmax)
@@ -608,7 +602,7 @@ class SO2PairInteractionLayer(nnx.Module):
         message = apply_scalar_weights(IrrepsArray(self._gate_irreps, message), radial_weights)
         coupled = self.so2_out(gate(message).array)
 
-        # Rotate back to the global frame, then the QHNet output gate + linear.
+        # Rotate back to the global frame, then the output gate + linear.
         coupled = _rotate_irreps(
             coupled, self.irreps, inverse_alpha, inverse_beta, inverse_gamma, dtype
         )

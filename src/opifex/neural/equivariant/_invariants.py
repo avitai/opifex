@@ -5,14 +5,13 @@ one per input multiplicity, and are invariant under rotation because the
 Euclidean norm and the dot product of two vectors transforming under the same
 Wigner-``D`` matrix are unchanged by an orthogonal change of basis.
 
-* :func:`norm` -- the per-irrep Euclidean norm (ported from ``e3nn-jax``
-  ``e3nn.norm``, ``../e3nn-jax/e3nn_jax/_src/basic.py``), using the NaN-safe
-  ``sqrt`` (mask the zero entries before the square root and after) so the
-  gradient is finite at a zero vector.
+* :func:`norm` -- the per-irrep Euclidean norm (e3nn, Geiger & Smidt 2022,
+  arXiv:2207.09453), using the NaN-safe ``sqrt`` (mask the zero entries before
+  the square root and after) so the gradient is finite at a zero vector.
 * :func:`inner_product` -- the per-multiplicity dot product, component-normalised
-  by ``1 / dim`` (the QHNet ``InnerProduct``,
-  ``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py``; e3nn ``"uuu"`` tensor product
-  to ``0e`` with ``1 / ir.dim`` path normalisation). The scalar gating signal of
+  by ``1 / dim`` (the inner-product invariant of QHNet, Yu et al. 2023,
+  arXiv:2306.04922; a channel-wise tensor product to ``0e`` with ``1 / ir.dim``
+  path normalisation). The scalar gating signal of
   the :class:`~opifex.neural.equivariant.NormGate` and of the pair-interaction
   refinement layers is built from these invariants.
 
@@ -51,7 +50,7 @@ def norm(x: IrrepsArray, *, squared: bool = False) -> IrrepsArray:
             value = squared_norm
         else:
             # NaN-safe sqrt: mask zeros before the root and restore them after,
-            # so d/dx sqrt(0) does not propagate a NaN (e3nn-jax ``norm``).
+            # so d/dx sqrt(0) does not propagate a NaN.
             safe = jnp.where(squared_norm == 0.0, 1.0, squared_norm)
             value = jnp.where(squared_norm == 0.0, 0.0, jnp.sqrt(safe))
         out_blocks.append((mul, Irrep(0, 1)))
@@ -64,7 +63,7 @@ def inner_product(x: IrrepsArray, y: IrrepsArray, *, normalize: bool = True) -> 
 
     ``x`` and ``y`` must share their layout. Each ``mul x (l, p)`` block yields
     ``mul`` invariant scalars ``<x_u, y_u>`` (optionally divided by ``dim = 2l+1``,
-    the e3nn ``"component"`` path normalisation used by QHNet's ``InnerProduct``).
+    the ``"component"`` normalisation of e3nn, as used by the QHNet inner product).
 
     Args:
         x: First steerable feature.

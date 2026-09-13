@@ -4,7 +4,7 @@ The predictor consumes a *flat heterogeneous batch* -- many molecules of differe
 composition concatenated into ``(A, 3)`` positions, ``(A,)`` atomic numbers and a
 ``(2, E)`` within-molecule directed edge index -- and emits a fixed ``(14, 14)``
 diagonal Fock block per atom and a ``(14, 14)`` off-diagonal block per directed
-edge (reference ``divelab/AIRS`` ``OpenDFT/QHBench/QH9/models/QHNet.py``). Because
+edge (Yu et al. 2023, "QHNet", arXiv:2306.04922). Because
 the blocks are fixed-size and the NequIP convolution scatters only over
 within-molecule edges, the same compiled forward runs over any concatenation.
 

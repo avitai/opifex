@@ -126,7 +126,7 @@ Each system is described by its nuclear geometry (`atoms`, in bohr), nuclear
 charges, spin partition `(n_up, n_down)`, exact reference energy, and a per-system
 optimisation budget. The ansatz, sampler and optimiser hyper-parameters are
 shared across all three systems and follow the FermiNet recipe for small atoms
-(reference implementation `../ferminet`):
+(Pfau et al. 2020, arXiv:1909.02487):
 
 - a small **two-layer** equivariant backbone (one-electron widths `(32, 32)`,
   two-electron widths `(16, 16)`) with **four** generalized-Slater determinants
@@ -272,7 +272,7 @@ wavefunction, then runs `iterations` jitted optimisation steps. Each step:
    `lax.scan`) so they track the *current* `|psi_theta|^2`;
 2. evaluates the per-walker local energy with the native **forward-Laplacian**
    kinetic term (the Hessian diagonal of `log|psi|` via stacked JVPs, the LapNet
-   speed-up), with outlier-robust median-absolute-deviation clipping;
+   speed-up), with outlier-robust clipping around the median;
 3. forms the FermiNet score-function energy gradient
    `2 < (E_loc - <E_loc>) grad log|psi| >`, preconditions it with the SPRING
    natural-gradient solve (Fisher inverse in sample space + Nesterov momentum),

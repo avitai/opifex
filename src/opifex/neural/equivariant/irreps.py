@@ -1,8 +1,7 @@
 r"""Irreducible-representation bookkeeping for E(3)-equivariant networks.
 
 A native, dependency-free reimplementation of the irreps data model used by
-``e3nn`` / ``e3nn-jax`` (Geiger & Smidt 2022, arXiv:2207.09453; reference:
-``../e3nn-jax/e3nn_jax/_src/irreps.py`` and ``irreps_array.py``). Building this in
+``e3nn`` / ``e3nn-jax`` (Geiger & Smidt 2022, arXiv:2207.09453). Building this in
 opifex (rather than depending on ``e3nn-jax``) keeps the equivariant core
 efficient and fully ``jax``/``flax.nnx`` transform-compatible, and lets every
 quantum-SciML family (interatomic potentials, equivariant Hamiltonian

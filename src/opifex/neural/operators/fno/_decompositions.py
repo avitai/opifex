@@ -2,9 +2,10 @@
 
 These ``nnx.Module`` weights store a spectral-convolution tensor
 ``(out_channels, in_channels, *modes)`` in factorized form whose parameter count
-is ``<<`` the dense weight at low rank. The reconstruct formulas and the
-memory-optimal factorized contractions are ported from established references and
-live in :mod:`._factorized`; this module wraps them as learnable parameters.
+is ``<<`` the dense weight at low rank (Kossaifi et al. 2023, "Multi-Grid
+Tensorized Fourier Neural Operator for High-Resolution PDEs", arXiv:2310.00120).
+The reconstruct formulas and the memory-optimal factorized contractions live in
+:mod:`._factorized`; this module wraps them as learnable parameters.
 
 It is a leaf module (it imports only :mod:`._factorized` and Flax) so that both
 :mod:`.base` and :mod:`.tensorized` can depend on it without an import cycle.
@@ -75,9 +76,9 @@ class TuckerDecomposition(nnx.Module):
     """Tucker low-rank factorization of a spectral convolution weight.
 
     Stores a complex core ``(rank_in, rank_out, rank_mode_0, ...)`` and one
-    complex factor matrix per mode. The factorized contraction is a port of
-    neuraloperator ``_contract_tucker``; the reconstruct is tensorly
-    ``tucker_to_tensor``. Internal mode order is ``(in, out, *modes)``; the public
+    complex factor matrix per mode. The input is contracted with the core and
+    factors directly (:func:`contract_tucker`); :func:`tucker_to_tensor` gives the
+    full weight. Internal mode order is ``(in, out, *modes)``; the public
     weight is ``(out_channels, in_channels, *modes)``.
     """
 
@@ -149,8 +150,8 @@ class CPDecomposition(nnx.Module):
     """CP / PARAFAC low-rank factorization of a spectral convolution weight.
 
     Stores complex CP weights ``(rank,)`` and one complex ``(dim, rank)`` factor
-    per mode. The factorized contraction is a port of neuraloperator
-    ``_contract_cp``; the reconstruct is tensorly ``cp_to_tensor``. Internal mode
+    per mode. The input is contracted with the factors directly
+    (:func:`contract_cp`); :func:`cp_to_tensor` gives the full weight. Internal mode
     order is ``(in, out, *modes)``; the public weight is
     ``(out_channels, in_channels, *modes)``.
     """
@@ -175,7 +176,7 @@ class CPDecomposition(nnx.Module):
         order = len(self._internal_dims)
         std = cp_factor_std(self.rank, order)
         keys = jax.random.split(rngs.params(), order + 1)
-        # CP weights are initialised to one (tltorch cp_init); kept as a learnable
+        # CP weights are initialised to one (see ``cp_factor_std``); kept as a learnable
         # real/imag-split parameter for symmetry with the factors.
         self.weights_real = nnx.Param(jnp.ones((self.rank,)))
         self.weights_imag = nnx.Param(jnp.zeros((self.rank,)))
@@ -217,8 +218,8 @@ class TensorTrainDecomposition(nnx.Module):
     """Tensor-Train low-rank factorization of a spectral convolution weight.
 
     Stores complex 3D cores ``[(1, in, r1), (r1, out, r2), (r2, mode_0, r3), ...]``
-    with TT-ranks capped at ``max_rank``. The factorized contraction is a port of
-    neuraloperator ``_contract_tt``; the reconstruct is tensorly ``tt_to_tensor``.
+    with TT-ranks capped at ``max_rank``. The input is contracted with the cores
+    directly (:func:`contract_tt`); :func:`tt_to_tensor` gives the full weight.
     Internal mode order is ``(in, out, *modes)``; the public weight is
     ``(out_channels, in_channels, *modes)``.
     """

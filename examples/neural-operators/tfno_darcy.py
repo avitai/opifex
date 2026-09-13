@@ -34,7 +34,7 @@
 #   operator learning on boundary-value problems
 # - **Comparison** with the dense FNO parameter count
 #
-# Equivalent to `neuraloperator` Tucker FNO examples, reimplemented with Opifex.
+# Tucker-factorized FNO after Kossaifi et al. 2023 (arXiv:2310.00120), implemented with Opifex.
 #
 # ## Learning Goals
 #

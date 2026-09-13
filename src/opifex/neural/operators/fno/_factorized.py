@@ -1,39 +1,28 @@
 """Pure-JAX low-rank tensor factorizations for spectral convolution weights.
 
 This module provides transform-safe (jit / grad / vmap compatible) building
-blocks shared by :mod:`tensorized` and :mod:`tensorly_integration`: faithful
-ports of the CP / Tucker / Tensor-Train reconstruct formulas and the
-memory-optimal factorized contractions used by tensorized FNOs. Centralising
-the decomposition math here keeps the two public modules DRY (Rule 1).
+blocks shared by :mod:`tensorized` and :mod:`tensorly_integration`: the CP /
+Tucker / Tensor-Train reconstruct formulas and the memory-optimal factorized
+contractions used by tensorized FNOs. Centralising the decomposition math here
+keeps the two public modules DRY (Rule 1).
 
-The factorized weight has the internal layout ``(in, out, *modes)`` (matching
-neuraloperator's spectral-convolution weight ordering); callers that expose the
-opifex convention ``(out, in, *modes)`` swap the first two axes at the boundary.
+The factorized weight has the internal layout ``(in, out, *modes)``; callers
+that expose the opifex convention ``(out, in, *modes)`` swap the first two axes
+at the boundary.
 
-References (cloned sibling repos, read before porting -- never invent formulas):
+Reconstruct formulas:
+- CP     : ``sum_r w_r outer_k(U_k[:, r])``, written as one einsum.
+- Tucker : the core multiplied by one factor matrix along each mode.
+- TT     : sequential reshape + matrix product over the 3D cores.
 
-Reconstruct formulas (tensorly 0.9.0):
-- CP     : ``tensorly/tensorly/cp_tensor.py:433`` ``cp_to_tensor`` -- the
-  Khatri-Rao sum, written here as the equivalent ``sum_r w_r outer(U_k[:, r])``
-  einsum (the alternate form noted in that docstring).
-- Tucker : ``tensorly/tensorly/tucker_tensor.py:50`` ``tucker_to_tensor`` =
-  ``multi_mode_dot(core, factors)`` (``tenalg/core_tenalg/n_mode_product.py:79``).
-- TT     : ``tensorly/tensorly/tt_tensor.py:61`` ``tt_to_tensor`` -- sequential
-  reshape + dot over the 3D cores.
+Factorized contractions: the input is contracted with the factors (or cores)
+in one einsum, so the full weight is never materialised.
 
-Memory-optimal factorized contractions (neuraloperator):
-- CP     : ``neuraloperator/neuralop/layers/spectral_convolution.py:55``
-  ``_contract_cp``.
-- Tucker : ``...:76`` ``_contract_tucker``.
-- TT     : ``...:106`` ``_contract_tt``.
-
-Complex factorization layout + learnable-factor init (tltorch):
-- ``tltorch/tltorch/factorized_tensors/factorized_tensors.py`` (factor shapes:
-  CP line 102, Tucker line 241, TT line 386).
-- ``tltorch/tltorch/factorized_tensors/init.py`` (``cp_init`` / ``tucker_init`` /
-  ``tt_init`` standard deviations).
-
-Paper: Kossaifi et al., "Multi-Grid Tensorized Fourier Neural Operator".
+References:
+- Kossaifi, Kovachki, Azizzadenesheli & Anandkumar 2023, "Multi-Grid Tensorized
+  Fourier Neural Operator for High-Resolution PDEs", arXiv:2310.00120.
+- Kolda & Bader 2009, "Tensor Decompositions and Applications", SIAM Review
+  51(3), 455-500 (CP and Tucker decompositions).
 """
 
 from collections.abc import Sequence
@@ -44,21 +33,18 @@ import jax.numpy as jnp
 import numpy as np
 
 
-# Lowercase-then-uppercase pool, identical to neuraloperator's ``einsum_symbols``
-# (spectral_convolution.py:18) so the ported equations are byte-faithful.
+# Lowercase-then-uppercase pool of einsum index symbols.
 EINSUM_SYMBOLS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 # --------------------------------------------------------------------------- #
-# Reconstruct formulas (tensorly 0.9.0 ports)
+# Reconstruct formulas
 # --------------------------------------------------------------------------- #
 def cp_to_tensor(weights: jax.Array, factors: Sequence[jax.Array]) -> jax.Array:
     """Reconstruct a full tensor from a CP / PARAFAC factorization.
 
-    Port of ``tensorly.cp_tensor.cp_to_tensor`` (cp_tensor.py:433), using the
-    equivalent ``sum_r weights[r] * outer_k(factors[k][:, r])`` einsum form (the
-    alternate implementation noted in that function's docstring) so the result
-    is a single transform-safe contraction.
+    Evaluates ``sum_r weights[r] * outer_k(factors[k][:, r])`` (Kolda & Bader
+    2009) as a single transform-safe einsum contraction.
 
     Args:
         weights: CP weights of shape ``(rank,)``.
@@ -78,10 +64,9 @@ def cp_to_tensor(weights: jax.Array, factors: Sequence[jax.Array]) -> jax.Array:
 def tucker_to_tensor(core: jax.Array, factors: Sequence[jax.Array]) -> jax.Array:
     """Reconstruct a full tensor from a Tucker factorization.
 
-    Port of ``tensorly.tucker_tensor.tucker_to_tensor`` (tucker_tensor.py:50),
-    which is ``multi_mode_dot(core, factors)``. Expressed here as the single
-    einsum ``core x_k factors[k]`` equivalent to the chained mode products in
-    ``tenalg/core_tenalg/n_mode_product.py:79``.
+    Evaluates the chained mode products ``core x_1 factors[0] ... x_N
+    factors[N-1]`` (Kolda & Bader 2009) as the single einsum
+    ``core x_k factors[k]``.
 
     Args:
         core: Tucker core of shape ``(rank_0, ..., rank_{N-1})``.
@@ -101,8 +86,8 @@ def tucker_to_tensor(core: jax.Array, factors: Sequence[jax.Array]) -> jax.Array
 def tt_to_tensor(cores: Sequence[jax.Array]) -> jax.Array:
     """Reconstruct a full tensor from a Tensor-Train (MPS) factorization.
 
-    Port of ``tensorly.tt_tensor.tt_to_tensor`` (tt_tensor.py:61): start from the
-    mode-0 unfolding of the first 3D core and sequentially reshape + matmul each
+    Starts from the mode-0 unfolding of the first 3D core and sequentially
+    reshapes + matmuls each
     remaining core ``(rank_prev, dim, rank_next)``.
 
     Args:
@@ -122,13 +107,12 @@ def tt_to_tensor(cores: Sequence[jax.Array]) -> jax.Array:
 
 
 # --------------------------------------------------------------------------- #
-# Factorized contractions (neuraloperator ports), x: (batch, in, *modes)
+# Factorized contractions, x: (batch, in, *modes)
 # --------------------------------------------------------------------------- #
 def contract_cp(x: jax.Array, weights: jax.Array, factors: Sequence[jax.Array]) -> jax.Array:
     """Contract input directly with CP factors (no full reconstruct).
 
-    Port of ``neuraloperator._contract_cp`` (spectral_convolution.py:55) for the
-    non-separable case. The equation is built programmatically from ``x.ndim`` so
+    Non-separable case. The equation is built programmatically from ``x.ndim`` so
     1-D / 2-D / 3-D inputs all work, with the channel axis (position 1) mapped
     from ``in`` to ``out``.
 
@@ -156,8 +140,8 @@ def contract_cp(x: jax.Array, weights: jax.Array, factors: Sequence[jax.Array]) 
 def contract_tucker(x: jax.Array, core: jax.Array, factors: Sequence[jax.Array]) -> jax.Array:
     """Contract input directly with Tucker core and factors (no full reconstruct).
 
-    Port of ``neuraloperator._contract_tucker`` (spectral_convolution.py:76) for
-    the non-separable case.
+    Non-separable case: the input, core and factor matrices are contracted in one
+    einsum.
 
     Args:
         x: Input of shape ``(batch, in_channels, *modes)``.
@@ -183,8 +167,7 @@ def contract_tucker(x: jax.Array, core: jax.Array, factors: Sequence[jax.Array])
 def contract_tt(x: jax.Array, cores: Sequence[jax.Array]) -> jax.Array:
     """Contract input directly with TT cores (no full reconstruct).
 
-    Port of ``neuraloperator._contract_tt`` (spectral_convolution.py:106) for the
-    non-separable case. The weight modes are ``(in, out, *modes)`` -- ``out`` is
+    Non-separable case. The weight modes are ``(in, out, *modes)`` -- ``out`` is
     inserted after ``in`` -- and each core contributes the index triple
     ``(rank_k, mode_sym_k, rank_{k+1})``.
 
@@ -231,7 +214,7 @@ def factorized_spectral_conv(
 ) -> jax.Array:
     """Spectral convolution over the centered low-frequency band with a factorized weight.
 
-    Mirrors the neuraloperator spectral-convolution frequency handling: take the
+    Frequency handling: take the
     real FFT, ``fftshift`` every axis except the (already one-sided) last so the
     zero frequency is centered, keep a symmetric band of ``modes_k`` coefficients
     around it (the low band from DC on the half-spectrum last axis), contract the
@@ -281,7 +264,7 @@ def tucker_ranks(tensor_shape: Sequence[int], rank: float | Sequence[int]) -> tu
     """Resolve Tucker ranks (one per mode) from a ratio or explicit sequence.
 
     A ``float`` ratio scales each mode independently (``max(1, round(rank * dim))``)
-    and is clamped to the mode dimension, matching tltorch's proportional ranks.
+    and is clamped to the mode dimension (proportional ranks).
 
     Args:
         tensor_shape: Full weight shape ``(out, in, *modes)``.
@@ -307,8 +290,7 @@ def tt_ranks(tensor_shape: Sequence[int], max_rank: int) -> tuple[int, ...]:
     """Compute clamped TT-ranks for a tensor, capped at ``max_rank``.
 
     Applies the standard TT-rank bound (the realisable rank cannot exceed the
-    product of the dimensions on either side of a split, see
-    ``tensorly.tt_tensor.validate_tt_rank``) and additionally clamps every
+    product of the dimensions on either side of a split) and additionally clamps every
     internal rank to ``max_rank``. Boundary ranks are ``1``.
 
     Args:
@@ -347,13 +329,13 @@ def tt_parameter_count(tensor_shape: Sequence[int], max_rank: int) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# Learnable-factor init standard deviations (tltorch init.py)
+# Learnable-factor init standard deviations
 # --------------------------------------------------------------------------- #
 def cp_factor_std(rank: int, order: int, std: float = 0.02) -> float:
     """CP factor std so the reconstruction has standard deviation ``std``.
 
-    Port of ``tltorch.factorized_tensors.init.cp_init``: weights are set to one
-    and each factor is drawn from ``N(0, (std / sqrt(rank)) ** (1 / order))``.
+    Weights are set to one and each factor is drawn from
+    ``N(0, (std / sqrt(rank)) ** (1 / order))``.
     """
     return float((std / np.sqrt(rank)) ** (1.0 / order))
 
@@ -361,8 +343,7 @@ def cp_factor_std(rank: int, order: int, std: float = 0.02) -> float:
 def tucker_factor_std(ranks: Sequence[int], order: int, std: float = 0.02) -> float:
     """Tucker core/factor std so the reconstruction has standard deviation ``std``.
 
-    Port of ``tltorch.factorized_tensors.init.tucker_init``: with
-    ``r = prod(sqrt(rank_k))`` the core and every factor are drawn from
+    With ``r = prod(sqrt(rank_k))`` the core and every factor are drawn from
     ``N(0, (std / r) ** (1 / (order + 1)))``.
     """
     r = float(np.prod([np.sqrt(rank) for rank in ranks]))
@@ -372,8 +353,8 @@ def tucker_factor_std(ranks: Sequence[int], order: int, std: float = 0.02) -> fl
 def tt_factor_std(ranks: Sequence[int], order: int, std: float = 0.02) -> float:
     """TT core std so the reconstruction has standard deviation ``std``.
 
-    Port of ``tltorch.factorized_tensors.init.tt_init``: with ``r = prod(rank)``
-    each core is drawn from ``N(0, (std / r) ** (1 / order))``.
+    With ``r = prod(rank)`` each core is drawn from
+    ``N(0, (std / r) ** (1 / order))``.
     """
     r = float(np.prod(ranks))
     return float((std / r) ** (1.0 / order))

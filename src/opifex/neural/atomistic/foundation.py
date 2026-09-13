@@ -9,11 +9,7 @@ possible without retraining from scratch:
    reference energies ``E0`` or element embeddings) are keyed by the source
    model's atomic numbers; this remaps them onto a *target* element set, copying
    the rows of shared elements verbatim and initialising novel elements to a
-   documented default. This is the ``../mace``
-   ``mace/tools/finetuning_utils.py`` ``load_foundations_elements`` index remap
-   (``source[indices_weights]`` with ``indices_weights = [src_z_to_index(z) for z
-   in target_zs]``); the novel-element default mirrors the ``mace/data/utils.py``
-   ``0.0`` E0 fallback for elements absent from the source.
+   documented default (``0.0`` unless configured otherwise).
 #. :func:`freeze_backbone` / :func:`trainable_filter` -- partition a model's
    parameters into the *trainable* group (the property heads and any LoRA
    adapters) and the *frozen* group (the backbone), so a fine-tune optimises only
@@ -25,7 +21,9 @@ possible without retraining from scratch:
    (it composes NNX transforms rather than relabelling the model).
 
 The companion low-rank adapter is :class:`opifex.neural.atomistic.lora.LoRALinear`
-(Hu et al. 2021, LoRA, arXiv:2106.09685; the ``../mace`` ``mace/modules/lora.py``).
+(Hu et al. 2021, LoRA, arXiv:2106.09685). Fine-tuning a pre-trained atomistic
+foundation model on application-specific data is described for MACE-MP-0 by
+Batatia et al. 2023, arXiv:2401.00096.
 
 :class:`FineTuneConfig` is a frozen dataclass holding the fine-tune knobs (LoRA
 rank / alpha, the parameter-name substrings that mark a parameter trainable, and
@@ -53,11 +51,7 @@ other parameter (the backbone) is frozen.
 """
 
 _DEFAULT_NOVEL_INIT = 0.0
-"""Default value for per-element rows of elements absent from the source model.
-
-Mirrors the ``../mace`` ``mace/data/utils.py`` ``0.0`` E0 fallback for elements
-not present in the source data.
-"""
+"""Default value for per-element rows of elements absent from the source model."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -91,11 +85,9 @@ def remap_element_table(
 ) -> Float[Array, "n_target ..."]:
     r"""Remap a source model's per-element array onto a target element set.
 
-    Implements the ``../mace`` ``mace/tools/finetuning_utils.py``
-    ``load_foundations_elements`` index remap: for every target atomic number
-    present in the source, copy that source row; for every target atomic number
-    absent from the source (a *novel* element), fill the row with ``novel_init``
-    (the ``mace/data/utils.py`` ``0.0`` E0 fallback by default).
+    For every target atomic number present in the source, copy that source row;
+    for every target atomic number absent from the source (a *novel* element),
+    fill the row with ``novel_init`` (``0.0`` by default).
 
     Args:
         source_array: Per-element array with one leading row per source element,

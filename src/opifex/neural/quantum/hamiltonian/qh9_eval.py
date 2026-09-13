@@ -1,15 +1,14 @@
 r"""QH9 benchmark evaluation: orbital-energy / coefficient / gap metrics + Fock MAE.
 
-Ports the standardized QH9 (Yu et al. 2023, "QH9", arXiv:2306.04922) evaluation of
-a predicted DFT Fock matrix into native JAX, faithful to the reference
-``divelab/AIRS`` ``OpenDFT/QHBench/QH9/test.py``:
+Native JAX evaluation of a predicted DFT Fock matrix on the QH9 benchmark metrics
+(Yu et al. 2023, "QH9", NeurIPS 2023 Datasets and Benchmarks, arXiv:2306.09549):
 
-* :func:`cal_orbital_and_energies` -- the Löwdin (symmetric) orthogonalization
-  eigensolve ``F -> (orbital_energies, orbital_coefficients)`` given the AO
-  overlap ``S`` (reference ``test.py`` lines 112-120). ``jit``/``vmap`` clean.
+* :func:`cal_orbital_and_energies` -- the canonical-orthogonalization eigensolve
+  ``F -> (orbital_energies, orbital_coefficients)`` given the AO overlap ``S``.
+  ``jit``/``vmap`` clean.
 * :func:`orbital_energy_mae`, :func:`orbital_coefficient_similarity`,
   :func:`homo_lumo_gap` -- the ε-MAE, sign-invariant per-orbital ψ-cosine
-  similarity (reference ``test.py`` lines 57-59) and HOMO/LUMO gap.
+  similarity and HOMO/LUMO gap.
 * :func:`evaluate_fock` -- a single molecule's metric dict (all + occupied ε-MAE,
   occupied ψ-similarity, HOMO-LUMO-gap MAE, Hamiltonian MAE).
 * :func:`evaluate_qh9_test_set` -- aggregate :func:`evaluate_fock` over the QH9
@@ -19,23 +18,22 @@ a predicted DFT Fock matrix into native JAX, faithful to the reference
 
 The overlap matrix and the basis convention
 -------------------------------------------
-The AO overlap ``S`` is computed host-side with PySCF (an eval-only path; opifex
-already depends on ``pyscf>=2.3.0`` and QH9's reference uses it) by building the
+The AO overlap ``S`` is computed host-side with PySCF (Sun et al., J. Chem. Phys.
+153, 024109 (2020); an eval-only path, opifex already depends on ``pyscf>=2.3.0``)
+by building the
 molecule at the QH9 geometry (positions in Bohr in opifex's
 :class:`~opifex.core.quantum.molecular_system.MolecularSystem`) and reading
 ``mol.intor('int1e_ovlp_sph')`` (:func:`overlap_matrix_def2svp`, cached per
 geometry).
 
-PySCF's spherical AO ordering (``int1e_ovlp_sph``) is the QH9 ``back2pyscf``
-convention -- it differs from opifex's stored Fock ordering (the QH9
-``pyscf_def2svp`` convention produced by
-:func:`~opifex.data.sources.qh9_source.matrix_transform_def2svp`) **only** in the
-within-``p``-shell component order (``pyscf_def2svp`` ``p = [1, 2, 0]`` vs.
-``back2pyscf`` ``p = [2, 0, 1]``). The reference ``test.py`` reconciles them by
-applying ``matrix_transform(..., convention='back2pyscf')`` to the (already
-spherical) data/predicted Fock *before* pairing it with the raw PySCF overlap
-(``test.py`` lines 149-167); :func:`to_pyscf_internal_ordering` ports exactly that
-transform, deriving its per-AO permutation from the **same** convention tables
+PySCF's spherical AO ordering (``int1e_ovlp_sph``), named ``back2pyscf`` here,
+differs from opifex's stored Fock ordering (the ``pyscf_def2svp`` convention
+produced by :func:`~opifex.data.sources.qh9_source.matrix_transform_def2svp`)
+**only** in the within-``p``-shell component order (``pyscf_def2svp``
+``p = [1, 2, 0]`` vs. ``back2pyscf`` ``p = [2, 0, 1]``).
+:func:`to_pyscf_internal_ordering` reorders the (already spherical) data/predicted
+Fock into PySCF's order *before* it is paired with the raw PySCF overlap, deriving
+its per-AO permutation from the **same** convention tables
 :func:`~opifex.data.sources.qh9_source.def2svp_decode_indices` uses (DRY), with
 only the ``p`` component map overridden to the ``back2pyscf`` order. With this
 reorder, diagonalizing a ground-truth QH9 Fock against the PySCF overlap
@@ -74,12 +72,12 @@ from opifex.neural.quantum.hamiltonian.block_predictor import (
 logger = logging.getLogger(__name__)
 
 _OVERLAP_EIGENVALUE_FLOOR: float = 1e-8
-"""Floor on overlap eigenvalues before the inverse-sqrt (reference ``test.py``)."""
+"""Floor on overlap eigenvalues before the inverse-sqrt."""
 
-# back2pyscf within-shell component order: identical to the QH9 ``pyscf_def2svp``
+# back2pyscf within-shell component order: identical to the ``pyscf_def2svp``
 # convention except the ``p`` components, which PySCF's spherical AO layout
-# (``int1e_ovlp_sph``) orders as ``[2, 0, 1]`` rather than ``[1, 2, 0]`` (reference
-# ``convention_dict['back2pyscf']``). Reusing the source's atom/shell-order and
+# (``int1e_ovlp_sph``) orders as ``[2, 0, 1]`` rather than ``[1, 2, 0]``.
+# Reusing the source's atom/shell-order and
 # sign tables keeps the permutation derivation DRY.
 _BACK2PYSCF_ORBITAL_IDX: dict[str, list[int]] = {
     "s": [0],
@@ -93,8 +91,8 @@ def _back2pyscf_indices(
 ) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
     r"""Return the opifex-spherical -> PySCF-internal AO permutation and signs.
 
-    Replays the exact reference ``matrix_transform`` index/sign construction
-    (``OpenDFT/QHBench/QH9/test.py``) with the ``back2pyscf`` convention, reusing
+    Builds the per-AO index/sign lists shell by shell with the ``back2pyscf``
+    component order, reusing
     the source's shared shell-order/sign tables and overriding only the
     within-shell component map (``_BACK2PYSCF_ORBITAL_IDX``). The returned
     ``(indices, signs)`` define the symmetric congruence applied to a spherical
@@ -135,9 +133,8 @@ def to_pyscf_internal_ordering(
 ) -> Float[Array, "n_ao n_ao"]:
     r"""Reorder an opifex-spherical Fock into PySCF's internal spherical AO order.
 
-    Ports the reference ``matrix_transform(..., convention='back2pyscf')`` applied
-    to the spherical data/predicted Fock before pairing it with the PySCF overlap
-    (``test.py`` lines 149-167). With ``(I, s)`` from :func:`_back2pyscf_indices`
+    Applied to the spherical data/predicted Fock before pairing it with the PySCF
+    overlap. With ``(I, s)`` from :func:`_back2pyscf_indices`
     this is the symmetric congruence ``F'[i, j] = F[I[i], I[j]] * s[i] * s[j]``,
     aligning ``F`` with ``mol.intor('int1e_ovlp_sph')`` so
     :func:`cal_orbital_and_energies` is in one consistent basis.
@@ -160,15 +157,14 @@ def cal_orbital_and_energies(
     overlap: Float[Array, "n_ao n_ao"],
     hamiltonian: Float[Array, "n_ao n_ao"],
 ) -> tuple[Float[Array, " n_ao"], Float[Array, "n_ao n_ao"]]:
-    r"""Solve the generalized eigenproblem ``F C = S C diag(eps)`` via Löwdin.
+    r"""Solve the generalized eigenproblem ``F C = S C diag(eps)`` (canonical orthogonalization).
 
-    Faithful JAX port of the reference ``cal_orbital_and_energies``
-    (``OpenDFT/QHBench/QH9/test.py`` lines 112-120): symmetric (Löwdin)
-    orthogonalization ``S^{-1/2} = U diag(1/sqrt(s)) U^T`` (built as
-    ``U / sqrt(s)``), transform ``Fs = (S^{-1/2})^T F S^{-1/2}``, eigendecompose
-    ``Fs -> (orbital_energies, C_orth)`` and rotate the coefficients back to the
-    AO basis ``C = S^{-1/2} C_orth``. Eigenvalues of ``S`` are floored at
-    ``1e-8`` before the inverse square root (numerical guard, as in the reference).
+    Canonical orthogonalization: with ``S = U diag(s) U^T``, the matrix
+    ``X = U diag(1/sqrt(s))`` (built as ``U / sqrt(s)``) satisfies ``X^T S X = I``;
+    transform ``Fs = X^T F X``, eigendecompose ``Fs -> (orbital_energies, C_orth)``
+    and rotate the coefficients back to the AO basis ``C = X C_orth``. Eigenvalues
+    of ``S`` are floored at ``1e-8`` before the inverse square root (numerical
+    guard).
 
     Args:
         overlap: The AO overlap matrix ``S`` (symmetric positive-definite).
@@ -239,8 +235,7 @@ def overlap_matrix_def2svp(
 def occupied_orbital_count(atomic_numbers: Int[NDArray[np.int32], " n_atoms"]) -> int:
     """Number of doubly-occupied orbitals of a closed-shell neutral molecule.
 
-    ``n_occ = sum(Z) / 2`` for these closed-shell neutral QH9 molecules (reference
-    ``test.py`` ``num_orb = int(batch.atoms.sum() / 2)``).
+    ``n_occ = sum(Z) / 2`` for these closed-shell neutral QH9 molecules.
 
     Args:
         atomic_numbers: Nuclear charges, shape ``(n_atoms,)``.
@@ -273,9 +268,8 @@ def orbital_coefficient_similarity(
 ) -> Float[Array, ""]:
     r"""Mean sign-invariant per-orbital cosine similarity of orbital coefficients.
 
-    Ports the reference ψ-similarity (``test.py`` lines 57-59):
-    ``cosine_similarity(pred, target, dim=0).abs().mean()`` -- the cosine
-    similarity is taken per orbital (over the AO axis, ``dim=0``), made
+    The QH9 ψ-similarity metric (Yu et al. 2023, arXiv:2306.09549): the cosine
+    similarity is taken per orbital (over the AO axis, axis ``0``), made
     sign-invariant via ``abs`` (orbital coefficients are defined up to a global
     sign), and averaged over orbitals.
 

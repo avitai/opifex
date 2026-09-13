@@ -24,7 +24,7 @@ and neural-operator code paths. Aggregators (`UncertaintyQuantifier`,
 `HierarchicalBayesianFramework`, `PhysicsAwareUncertaintyPropagation`) live
 in `opifex.uncertainty.priors_physics`. MCMC sampling is delivered by
 `opifex.uncertainty.inference_backends.BlackJAXBackend`, a thin adapter over
-sibling Artifex's HMC / NUTS / MALA wrappers.
+Artifex's HMC / NUTS / MALA wrappers.
 
 ## Bayesian dense layers
 

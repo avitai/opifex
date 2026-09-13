@@ -2,8 +2,7 @@ r"""Assembled atomistic model: a backbone plus named property heads.
 
 :class:`AtomisticModel` is the concrete shared-logic class behind every
 interatomic potential in opifex. It implements the convergent
-**backbone -> named heads** architecture of SchNetPack-2 / fairchem / MACE
-(``00-research-landscape.md`` "library architecture"):
+**backbone -> named heads** architecture of SchNetPack-2 / fairchem / MACE:
 
 #. build the neighbour graph with the injected
    :class:`opifex.core.quantum.protocols.NeighborList`;
@@ -18,8 +17,8 @@ injects two closures into the per-head ``embeddings`` dict: a positions-to-energ
 closure (key :data:`~opifex.neural.atomistic.heads.forces.ENERGY_FN_KEY`) and a
 symmetric-strain-to-energy closure (key
 :data:`~opifex.neural.atomistic.heads.stress.STRAIN_ENERGY_FN_KEY`), following the
-strain-displacement recipe of ``../mace`` (``mace/modules/utils.py``). Heads that
-do not need them simply ignore those keys.
+symmetric strain-displacement construction of the virial. Heads that do not need
+them simply ignore those keys.
 
 Concrete backbones (SchNet, PaiNN, NequIP, MACE) are **not** defined here -- they
 plug into this base via the ``Backbone`` protocol and the family registries in
@@ -114,9 +113,9 @@ class AtomisticModel(nnx.Module):
     ) -> Callable[[Array], Array]:
         """Build a ``strain -> energy`` closure (strain-displacement virial).
 
-        Applies a symmetrised infinitesimal strain to both positions and cell --
-        the ``../mace`` ``get_symmetric_displacement`` recipe -- so that the
-        energy's strain-gradient at zero strain is the (symmetric) virial.
+        Applies a symmetrised infinitesimal strain to both positions and cell,
+        so that the energy's strain-gradient at zero strain is the (symmetric)
+        virial.
         """
 
         def strain_energy_fn(strain: Array) -> Array:

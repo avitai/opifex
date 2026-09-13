@@ -14,28 +14,27 @@ solves exactly in the sample space. K-FAC instead trades exactness for
 :math:`O(\text{layer width}^3)` cost that is independent of the sample count,
 which is what lets FermiNet scale to millions of parameters.
 
-This module wraps the canonical ``kfac_jax`` library (the optimiser FermiNet
-uses), exposing it behind the same ``init`` / ``step`` seam as the MinSR / SPRING
-updates so it is a drop-in preconditioner choice for the VMC driver. The wiring
-follows FermiNet exactly (``../ferminet/ferminet/train.py`` and
-``../ferminet/ferminet/loss.py``):
+This module wraps the ``kfac_jax`` library, exposing it behind the same ``init`` /
+``step`` seam as the MinSR / SPRING updates so it is a drop-in preconditioner
+choice for the VMC driver. The wiring follows the K-FAC training of FermiNet
+(Pfau et al. 2020), configured for a single device:
 
-* :func:`register_qmc_dense` tags the ansatz dense / attention layers (FermiNet's
-  ``register_qmc``) so K-FAC recovers their Kronecker structure;
+* :func:`register_qmc_dense` tags the ansatz dense / attention layers so K-FAC
+  recovers their Kronecker structure;
 * :func:`register_log_amplitude` tags the network output as the mean of a normal
   predictive distribution (``kfac_jax.register_normal_predictive_distribution``),
   which makes K-FAC's Fisher equal the quantum geometric tensor;
 * :func:`make_qmc_value_and_grad` builds the ``value_and_grad`` whose gradient is
   the FermiNet score-function estimator
   :math:`2\langle(E_{\mathrm{loc}}-\bar E)\,\nabla_\theta\log|\psi|\rangle`,
-  injected through a ``custom_jvp`` exactly as FermiNet's loss does;
+  injected through a ``custom_jvp``;
 * :class:`KFACPreconditioner` wraps ``kfac_jax.Optimizer``, which manages its own
   ``jit`` internally.
 
 References:
     Martens & Grosse, ICML 2015 (arXiv:1503.05671); ``kfac_jax`` 0.0.8
     (https://github.com/google-deepmind/kfac-jax); Pfau et al., FermiNet,
-    *Phys. Rev. Research* 2, 033429 (2020) and ``../ferminet``.
+    *Phys. Rev. Research* 2, 033429 (2020), arXiv:1909.02487.
 """
 
 from __future__ import annotations
@@ -66,13 +65,12 @@ def register_qmc_dense(
     w: Array,
     b: Array | None = None,
 ) -> Array:
-    r"""Tag a dense / attention layer for K-FAC (FermiNet's ``register_qmc``).
+    r"""Tag a dense / attention layer for K-FAC.
 
     Annotates a linear map ``y = x @ w (+ b)`` so ``kfac_jax`` recovers its
     Kronecker-factored Fisher block. The output is returned unchanged -- the tag
     is a transparent identity at evaluation time and only affects curvature
-    estimation. Apply it to every weight-bearing layer of the ansatz (FermiNet
-    tags its dense streams and envelope this way).
+    estimation. Apply it to every weight-bearing layer of the ansatz.
 
     Args:
         y: The layer pre-activation ``x @ w (+ b)``.
@@ -91,10 +89,9 @@ def register_log_amplitude(log_amplitude: Float[Array, " batch"]) -> None:
 
     Registering ``log|psi|`` as the mean of a unit-variance normal predictive
     distribution makes ``kfac_jax``'s Fisher equal the quantum geometric tensor
-    of the wavefunction -- the metric of (quantum) natural gradient. This is the
-    FermiNet ``kfac_jax.register_normal_predictive_distribution(psi[:, None])``
-    call (``../ferminet/ferminet/loss.py``); it must be invoked inside the loss'
-    ``custom_jvp`` so the tag is captured by K-FAC's graph tracer.
+    of the wavefunction -- the metric of (quantum) natural gradient. It must be
+    invoked inside the loss' ``custom_jvp`` so the tag is captured by K-FAC's graph
+    tracer.
 
     Args:
         log_amplitude: Per-walker ``log|psi|`` of shape ``(batch,)``.
@@ -103,12 +100,12 @@ def register_log_amplitude(log_amplitude: Float[Array, " batch"]) -> None:
 
 
 def _clip_to_mad(values: Array, window: float) -> Array:
-    """Median-absolute-deviation clip the local energy (variance reduction).
+    """Clip the local energy to a band around its median (variance reduction).
 
-    Mirrors the FermiNet / DeepQMC outlier-robust estimator used by the rest of
-    the VMC stack: non-finite walkers are pulled to the median, then the energy
-    is clipped to a ``window`` median-absolute-deviation band. ``window <= 0``
-    disables the band but still sanitises non-finite values.
+    The outlier-robust estimator used by the rest of the VMC stack: non-finite
+    walkers are pulled to the median, then the energy is clipped to
+    ``median +/- window * d``, where ``d`` is the mean absolute deviation from the
+    median. ``window <= 0`` disables the band but still sanitises non-finite values.
     """
     finite = jnp.isfinite(values)
     safe = jnp.where(finite, values, 0.0)
@@ -130,7 +127,7 @@ def make_qmc_value_and_grad(
 
     The variational energy :math:`E=\langle E_{\mathrm{loc}}\rangle_{|\psi|^2}` is
     an expectation, so its gradient is *not* the gradient of the sampled mean.
-    Following FermiNet (``../ferminet/ferminet/loss.py``), the value is the mean
+    As in FermiNet (Pfau et al. 2020), the value is the mean
     local energy and the gradient is injected through a ``custom_jvp`` as the
     score-function estimator
 
@@ -149,8 +146,8 @@ def make_qmc_value_and_grad(
         log_abs: Batched ``(params, walkers) -> log|psi|`` of shape ``(batch,)``.
         local_energy: Batched ``(params, walkers) -> E_loc`` of shape
             ``(batch,)``.
-        clip_local_energy: Median-absolute-deviation clipping window; ``0``
-            disables it.
+        clip_local_energy: Clipping window in units of the mean absolute deviation
+            from the median; ``0`` disables it.
 
     Returns:
         A ``value_and_grad`` function returning ``((energy, aux), grads)`` where
@@ -201,9 +198,9 @@ class KFACPreconditioner:
     curvature and amortises the Kronecker-factor inversions, so the optimiser
     owns the learning-rate / momentum / damping application and its own ``jit``.
 
-    The construction mirrors FermiNet (``../ferminet/ferminet/train.py``):
-    ``value_func_has_aux=True`` (the loss returns ``(energy, aux)``),
-    ``value_func_has_rng=True`` (the loss takes an rng), single-device, no burn-in
+    The optimiser is configured with ``value_func_has_aux=True`` (the loss returns
+    ``(energy, aux)``), ``value_func_has_rng=True`` (the loss takes an rng),
+    single-device, no burn-in
     steps, and ``estimation_mode='fisher_exact'``.
 
     Args:

@@ -1,16 +1,15 @@
 r"""QHNet block expansion head: bottleneck feature + embedding -> ``(14, 14)`` block.
 
 This is the equivariant Wigner-3j / Clebsch-Gordan **expansion head** of a
-block-form Hamiltonian predictor (Yu et al. 2023, "QHNet", arXiv:2306.04922;
-reference ``divelab/AIRS`` ``OpenDFT/QHBench/QH9/models/Expanson.py`` ``Expansion``).
-It maps a steerable bottleneck feature (an
+block-form Hamiltonian predictor (the matrix expansion of Yu et al. 2023, "QHNet",
+arXiv:2306.04922). It maps a steerable bottleneck feature (an
 :class:`~opifex.neural.equivariant.IrrepsArray`) -- per node for diagonal Fock
 blocks, per directed edge for off-diagonal blocks -- to the dense ``(14, 14)``
 matrix block of :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS`
 (``3x0e + 2x1e + 1x2e``).
 
-Mechanism (QHNet ``Expansion``)
--------------------------------
+Mechanism
+---------
 For each ordered pair of output shells ``(s_i, s_j)`` of degrees ``(l_i, l_j)``
 in ``BLOCK_IRREPS`` and each input degree ``L`` with
 ``|l_i - l_j| <= L <= l_i + l_j`` carried by the feature, the ``(2 l_i + 1,
@@ -24,10 +23,10 @@ where ``C = clebsch_gordan(l_i, l_j, L)`` (reused from
 :func:`opifex.geometry.algebra.wigner.clebsch_gordan` -- *not* reimplemented), ``f^L``
 is the ``L``-chunk of the feature with multiplicity index ``w``, and ``g`` is a
 **per-sample path weight** produced by an MLP on a provided invariant embedding
-(QHNet's ``weights is not None`` path, ``einsum("bwuv, bwk -> buvk")`` followed by
-``einsum("ijk, buvk -> buivj")``; here every output shell has multiplicity one so
-``u = v = 1``). Scalar sub-blocks (``l_i = l_j = L = 0``) additionally receive a
-per-sample bias, mirroring QHNet's ``bias_weights``. The same MLP-driven head thus
+(the embedding-conditioned expansion weights of QHNet; here every output shell has
+multiplicity one). Only the s-s sub-blocks with ``l_i = l_j = L = 0`` additionally
+receive a per-sample bias; p-p and d-d sub-blocks carry no bias. The same MLP-driven
+head thus
 serves diagonal blocks (node embedding) and off-diagonal blocks (concatenated pair
 embedding) -- one module, no duplication.
 
@@ -40,7 +39,7 @@ the QHNet block law ``H(R x) = D_{14}(R) H(x) D_{14}(R)^{\top}`` that makes the
 assembled Hamiltonian equivariant.
 
 The opifex ``clebsch_gordan`` is unit-Frobenius normalized (e3nn real basis), so it
-differs from ``e3nn.o3.wigner_3j`` only by the scalar factor ``1 / sqrt(2L+1)``.
+differs from the Wigner 3j symbols only by the scalar factor ``1 / sqrt(2L+1)``.
 That constant is absorbed into the learnable per-path weight ``g`` and leaves the
 transformation law unchanged (verified numerically by the equivariance test), so
 reusing ``clebsch_gordan`` is both correct and DRY.
@@ -188,8 +187,8 @@ def _build_paths(feature_irreps: Irreps) -> tuple[tuple[_ExpansionPath, ...], in
 class HamiltonianBlockExpansion(nnx.Module):
     r"""Expand a bottleneck feature + invariant embedding into a ``(14, 14)`` block.
 
-    Implements QHNet's ``Expansion`` (reference
-    ``OpenDFT/QHBench/QH9/models/Expanson.py``) over the output shell grid of
+    Applies the QHNet matrix expansion (Yu et al. 2023, arXiv:2306.04922) over the
+    output shell grid of
     :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS`
     (``3x0e + 2x1e + 1x2e``). Per-sample path weights (and scalar-block biases) are
     produced by an MLP on a provided invariant embedding, so the *same* module
@@ -283,7 +282,7 @@ class HamiltonianBlockExpansion(nnx.Module):
         """Return one path's contribution, padded into the ``(14, 14)`` block.
 
         Contracts the per-sample-weighted ``L``-chunk with the (constant)
-        Clebsch-Gordan tensor (QHNet ``einsum("ijM, ...M -> ...ij")``) and pads the
+        Clebsch-Gordan tensor over its last index ``M`` and pads the
         ``(2 l_i + 1, 2 l_j + 1)`` sub-block to its ``(row_offset, col_offset)``
         position.
         """

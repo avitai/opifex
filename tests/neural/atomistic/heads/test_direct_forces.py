@@ -1,6 +1,6 @@
 r"""Tests for the :class:`DirectForcesHead` equivariant direct-force readout.
 
-Load-bearing physics contracts (the direct-force strategy of Orb / fairchem,
+Load-bearing physics contracts (the direct-force strategy of Orb,
 Neumann et al. 2024):
 
 * the head emits ``{"forces"}`` of shape ``(n_atoms, 3)``;

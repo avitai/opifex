@@ -302,7 +302,7 @@ class TestGridEmbeddingND:
 class TestGridEmbeddingNDCoordinates:
     """Per-axis coordinate correctness for the N-D grid embedding (1D/2D/3D).
 
-    Verifies the reference neuralop convention: appended channel ``k`` is the
+    Verifies the coordinate convention: appended channel ``k`` is the
     normalized coordinate that varies along spatial axis ``k`` (``indexing="ij"``),
     spanning the per-axis configured boundaries from corner to corner.
     """

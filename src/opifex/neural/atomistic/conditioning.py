@@ -9,21 +9,20 @@ input slots for charge and spin**: each is mapped to a feature vector of the
 backbone's scalar width and *added to every atom's invariant* (``l = 0``)
 *features*, so the global condition is broadcast identically to all atoms.
 
-This module ports the fairchem UMA ``ChgSpinEmbedding`` recipe
-(``fairchem/core/models/uma/nn/embedding.py``) and its application in
-``escn_md.py`` (``x_message[:, 0, :] += csd_mixed_emb[batch]``): two separate
-embeddings -- one for charge, one for spin -- are mixed by
-``SiLU(Linear(concat(charge_emb, spin_emb)))`` down to ``feature_dim`` and
-broadcast to ``(n_atoms, feature_dim)`` for addition onto the backbone's initial
-node features.
+This module implements the charge / spin input embedding of UMA (Wood et al.
+2025, §2.2.1 "Charge, Spin, and DFT Task Inputs"): two separate embeddings -- one
+for charge, one for spin -- are concatenated and mixed by a one-layer
+feed-forward network, ``SiLU(Linear(concat(charge_emb, spin_emb)))``, down to
+``feature_dim`` and broadcast to ``(n_atoms, feature_dim)`` for addition onto the
+backbone's ``l = 0`` node features (here, the initial node features).
 
-Two embedding strategies are provided, mirroring UMA's ``embedding_type``:
+Two embedding strategies are provided:
 
 * ``"table"`` -- a learned :class:`flax.nnx.Embed` table indexed by the integer
-  charge / multiplicity (UMA's ``rand_emb``). Bounded to a documented integer
+  charge / multiplicity. Bounded to a documented integer
   range via an index offset (charge ``[-100, 100]`` -> 201 rows, multiplicity
   ``[1, 100]`` -> 100 rows), so out-of-range inputs fail fast.
-* ``"fourier"`` -- a random-feature sinusoidal embedding (UMA's ``pos_emb``):
+* ``"fourier"`` -- a random-feature sinusoidal embedding:
   ``[sin(2 pi w c), cos(2 pi w c)]`` with fixed random frequencies ``w``. This
   handles arbitrary (even unseen) integer values without an a-priori table
   size, at the cost of a learned table's per-value flexibility.
@@ -38,11 +37,9 @@ module stays ``jit`` / ``grad`` / ``vmap`` compatible when charge / spin are
 passed as static arguments.
 
 References:
-    * Wood et al. 2025, arXiv:2506.23971 -- UMA reserves input slots for charge
-      and spin, conditioning the node embedding on the global state.
-    * fairchem ``ChgSpinEmbedding`` (``uma/nn/embedding.py``) and its use in
-      ``escn_md.py`` -- the table / Fourier embeddings, the index ranges and the
-      ``SiLU(Linear(concat(...)))`` mixing added to the ``l = 0`` channel.
+    * Wood et al. 2025, arXiv:2506.23971, §2.2.1 -- UMA embeds charge and spin,
+      concatenates the embeddings, passes them through a one-layer feed-forward
+      network and adds the result to the ``l = 0`` node embeddings.
 """
 
 from __future__ import annotations
@@ -63,19 +60,19 @@ logger = logging.getLogger(__name__)
 
 
 _CHARGE_MIN = -100
-"""Most negative total charge representable by the learned table (UMA range)."""
+"""Most negative total charge representable by the learned table."""
 
 _CHARGE_MAX = 100
-"""Most positive total charge representable by the learned table (UMA range)."""
+"""Most positive total charge representable by the learned table."""
 
 _MULTIPLICITY_MIN = 1
 """Smallest spin multiplicity ``2S + 1`` (a singlet); multiplicity is positive."""
 
 _MULTIPLICITY_MAX = 100
-"""Largest spin multiplicity representable by the learned table (UMA range)."""
+"""Largest spin multiplicity representable by the learned table."""
 
 _FOURIER_FREQUENCY_SCALE = 1.0
-"""Std of the fixed random Fourier frequencies ``w`` (UMA ``pos_emb`` ``scale``)."""
+"""Std of the fixed random Fourier frequencies ``w``."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -116,8 +113,8 @@ class _IntegerEmbedding(nnx.Module):
     """Embed a single static integer to a ``feature_dim`` vector (one channel).
 
     Wraps either a learned :class:`flax.nnx.Embed` table (``"table"``) or a
-    fixed-frequency random Fourier featuriser (``"fourier"``), mirroring UMA's
-    ``rand_emb`` / ``pos_emb``. The integer is consumed as static metadata.
+    fixed-frequency random Fourier featuriser (``"fourier"``). The integer is
+    consumed as static metadata.
 
     Args:
         num_embeddings: Table size (number of representable integers).
@@ -145,7 +142,7 @@ class _IntegerEmbedding(nnx.Module):
         if embedding_type == "table":
             self.table = nnx.Embed(num_embeddings=num_embeddings, features=feature_dim, rngs=rngs)
         elif embedding_type == "fourier":
-            # Fixed (non-learned) random frequencies, UMA pos_emb: half the width
+            # Fixed (non-learned) random frequencies: half the width
             # is sin, half cos, so draw feature_dim // 2 frequencies.
             frequencies = _FOURIER_FREQUENCY_SCALE * jax.random.normal(
                 rngs.params(), (feature_dim // 2,)
@@ -176,15 +173,14 @@ class _IntegerEmbedding(nnx.Module):
 class ChargeSpinConditioning(nnx.Module):
     r"""Inject global total charge and spin multiplicity into per-atom features.
 
-    Reproduces the UMA / OrbMol charge-spin conditioning (arXiv:2506.23971): the
+    Implements the UMA / OrbMol charge-spin conditioning (arXiv:2506.23971): the
     static integer total charge and spin multiplicity of a
     :class:`~opifex.core.quantum.molecular_system.MolecularSystem` are each
     embedded to ``feature_dim`` (learned table or random Fourier features), mixed
     by ``SiLU(Linear(concat(charge_emb, spin_emb)))`` to ``feature_dim`` and
     broadcast to ``(n_atoms, feature_dim)`` -- the identical global vector for
     every atom -- so a backbone can **add** it onto its initial invariant
-    (``l = 0``) node features (fairchem ``escn_md.py``
-    ``x_message[:, 0, :] += csd_mixed_emb[batch]``).
+    (``l = 0``) node features (Wood et al. 2025, §2.2.1).
 
     Charge and multiplicity are static structural metadata; they are read with
     ``np.asarray(...).item()`` at trace time and must be passed as static

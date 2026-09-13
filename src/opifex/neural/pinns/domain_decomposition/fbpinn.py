@@ -13,7 +13,6 @@ Key Features:
 References:
     - Moseley et al. (2023): Finite Basis Physics-Informed Neural Networks
     - Survey Section 8.3.2: FBPINNs
-    - GitHub: https://github.com/benmoseley/FBPINNs
 """
 
 from __future__ import annotations

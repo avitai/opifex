@@ -1,8 +1,7 @@
 r"""FermiNet-core generalized-Slater neural-network wavefunction.
 
-A Flax-NNX port of the Fermionic Neural Network ansatz (Pfau, Spencer, Matthews
-& Foulkes, *Phys. Rev. Research* **2**, 033429 (2020); reference implementation
-``../ferminet`` ``networks.py`` ``make_orbitals`` and ``make_fermi_net_layers``).
+A Flax-NNX implementation of the Fermionic Neural Network ansatz (Pfau, Spencer,
+Matthews & Foulkes, *Phys. Rev. Research* **2**, 033429 (2020), arXiv:1909.02487).
 
 The wavefunction is a sum of generalized Slater determinants
 
@@ -50,7 +49,7 @@ def _symmetric_features(
     """Concatenate one-electron features with spin-pooled one/two-electron means.
 
     This is the FermiNet permutation-equivariant feature construction
-    (``construct_symmetric_features``): every electron sees its own features plus
+    (Pfau et al. 2020): every electron sees its own features plus
     the mean of the one- and two-electron features over each occupied spin
     channel.
 
@@ -188,7 +187,7 @@ class FermiNet(nnx.Module):
             features = _symmetric_features(h_one, h_two, self._spin_split)
             h_one_next = jnp.tanh(single(features))
             h_two_next = jnp.tanh(double(h_two))
-            # Residual connection where shapes match (FermiNet ``residual``).
+            # Residual connection where shapes match.
             h_one = h_one_next + h_one if h_one_next.shape == h_one.shape else h_one_next
             h_two = h_two_next + h_two if h_two_next.shape == h_two.shape else h_two_next
         return h_one

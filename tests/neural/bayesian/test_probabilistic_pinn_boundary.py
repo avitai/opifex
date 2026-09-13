@@ -6,16 +6,15 @@ stub behaviour (BC applied to *all* collocation points, a hard-coded ``0.1``
 multiplier overriding the configured ``boundary_weight``, and Neumann/Robin
 BC types silently returning zero).
 
-Reference implementation
-------------------------
+Reference
+---------
 Yang, Meng & Karniadakis (2021), *"B-PINNs: Bayesian Physics-Informed
 Neural Networks for forward and inverse PDE problems with noisy data"*,
 J. Comput. Phys. 425:109913 (arXiv:2003.06097). A B-PINN places a Gaussian
 likelihood on BOTH the PDE residual AND the boundary/initial-condition data,
 evaluated at dedicated boundary points ``x_b`` (distinct from the interior
-PDE collocation points). The Dirichlet/Neumann/Robin residual form follows
-deepxde's ``DirichletBC.error`` / ``NeumannBC.error`` (``../deepxde``):
-``r_b = u_theta(x_b) - g(x_b)`` for Dirichlet. The posterior over weights
+PDE collocation points). The Dirichlet residual is
+``r_b = u_theta(x_b) - g(x_b)``. The posterior over weights
 then yields a predictive whose mean matches the BC and whose interval covers
 the BC value (low predictive std at the boundary).
 """
@@ -91,7 +90,7 @@ def test_dirichlet_residual_nonzero_and_decreases_toward_bc() -> None:
 
 
 def test_dirichlet_residual_accepts_callable_target() -> None:
-    """A callable target ``g(x)`` is honoured (deepxde pattern)."""
+    """A callable target ``g(x)`` is honoured."""
     x = jnp.array([[0.0], [1.0], [2.0]])
     y_pred = x  # u(x) = x exactly satisfies g(x) = x
     bc = {"type": "dirichlet", "value": lambda coords: coords}

@@ -39,11 +39,9 @@ class GeometryEncoder(nnx.Module):
     References:
     ----------
     Li, Z. et al. (2023). "Geometry-Informed Neural Operator for Large-Scale
-    3D PDEs." NeurIPS 2023, arXiv:2309.00583. The transformer-style sinusoidal
-    coordinate embedding mirrors the input/output GNO positional embedding in
-    ``neuraloperator/neuralop/layers/gno_block.py`` (``self.pos_embedding``,
-    L154-L160 / L239-L241) built from
-    ``neuralop/layers/embeddings.py::SinusoidalEmbedding``.
+    3D PDEs." NeurIPS 2023, arXiv:2309.00583. The coordinate embedding is the
+    transformer-style sinusoidal positional encoding of Vaswani et al. 2017
+    ("Attention Is All You Need", arXiv:1706.03762).
     """
 
     def __init__(

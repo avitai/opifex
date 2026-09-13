@@ -1,8 +1,9 @@
 """Tests for Laplace Neural Operator (LNO).
 
-TDD tests based on reference implementation from:
-    Cao, Q., Goswami, S., & Karniadakis, G. E. (2023)
-    GitHub: qianyingcao/Laplace-Neural-Operator
+TDD tests for the operator of:
+    Cao, Q., Goswami, S., & Karniadakis, G. E. (2023).
+    "LNO: Laplace Neural Operator for Solving Differential Equations."
+    arXiv:2303.10528.
 """
 
 import jax
@@ -62,7 +63,7 @@ class TestLaplaceLayerConfig:
 
 
 class TestLaplaceLayer:
-    """Tests for the core Laplace layer (PR module in reference)."""
+    """Tests for the core Laplace (pole-residue) layer."""
 
     def test_init(self, rngs):
         layer = LaplaceLayer(in_channels=4, out_channels=4, num_poles=8, rngs=rngs)
@@ -104,7 +105,7 @@ class TestLaplaceLayer:
             assert out.shape == (1, 4, n)
 
     def test_has_complex_weights(self, rngs):
-        """Reference uses complex-valued poles and residues."""
+        """The Laplace layer uses complex-valued poles and residues."""
         layer = LaplaceLayer(in_channels=4, out_channels=4, num_poles=8, rngs=rngs)
         # Must have both real and imaginary parts for poles
         assert hasattr(layer, "weights_pole")

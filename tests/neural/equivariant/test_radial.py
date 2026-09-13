@@ -1,7 +1,7 @@
 r"""Tests for radial bases and cutoff envelopes.
 
-Behaviour is specified against the MACE radial module (Batatia et al. 2022,
-arXiv:2206.07697; reference ``../mace/mace/modules/radial.py``):
+Behaviour is specified against the MACE radial basis (Batatia et al. 2022,
+arXiv:2206.07697):
 
 * :class:`BesselBasis` -- equation (7): ``sqrt(2/r_c) * sin(n pi r / r_c) / r``.
 * :class:`GaussianBasis` -- Gaussians centred on a ``[0, r_c]`` grid.
@@ -32,7 +32,7 @@ from opifex.neural.equivariant import (
 
 
 class TestPiecewiseLinearBasis:
-    """The piecewise-linear hat basis (DISCO filter basis, faithful to torch_harmonics)."""
+    """The piecewise-linear hat basis (DISCO filter basis, Ocampo, Price & McEwen 2023)."""
 
     def test_shape_and_compact_support(self) -> None:
         """Returns ``(..., num_basis)``; vanishes beyond the cutoff."""

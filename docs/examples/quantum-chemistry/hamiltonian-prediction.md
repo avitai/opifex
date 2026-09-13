@@ -245,8 +245,9 @@ No external download is required (the molecules are defined inline).
 - Yu et al. 2023, *Efficient and Equivariant Graph Networks for Predicting
   Quantum Hamiltonian* (QHNet), ICML 2023
   ([arXiv:2306.04922](https://arxiv.org/abs/2306.04922)).
-- Yu et al. 2025, *QHNetV2: A Fully Equivariant Network for Quantum Hamiltonian
-  Prediction* ([arXiv:2506.09398](https://arxiv.org/abs/2506.09398)).
+- Yu et al. 2025, *Efficient Prediction of SO(3)-Equivariant Hamiltonian Matrices
+  via SO(2) Local Frames* (QHNetV2)
+  ([arXiv:2506.09398](https://arxiv.org/abs/2506.09398)).
 - Unke et al. 2021, *SE(3)-equivariant prediction of molecular wavefunctions and
   electronic densities* (PhiSNet), NeurIPS 2021
   ([arXiv:2106.02347](https://arxiv.org/abs/2106.02347)).

@@ -11,8 +11,8 @@ invariant, the total energy is an E(3)- and permutation-invariant scalar -- the
 defining contract of an interatomic potential (Schütt et al. 2018, SchNet;
 Batzner et al. 2022, NequIP). Per-element reference energies (``E0``) and the
 output normaliser are supplied by an optional
-:class:`~opifex.neural.atomistic.scale_shift.AtomicScaleShift` (the MACE
-``ScaleShiftBlock`` affine readout); when omitted the head is the bare
+:class:`~opifex.neural.atomistic.scale_shift.AtomicScaleShift` (a per-element
+affine readout); when omitted the head is the bare
 sum-of-atomic-energies readout that the conservative force/stress heads
 differentiate.
 """

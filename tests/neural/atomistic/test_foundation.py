@@ -7,9 +7,7 @@ primitives for atomistic foundation models:
   model's per-element arrays (e.g. reference energies ``E0`` or element
   embeddings) keyed by source atomic numbers onto a target element set, copying
   the rows of shared elements and initialising novel elements to a documented
-  default (the ``../mace`` ``mace/tools/finetuning_utils.py``
-  ``load_foundations_elements`` index-remap ``source[indices_weights]`` and the
-  ``mace/data/utils.py`` novel-element ``0.0`` E0 default);
+  default (``0.0``);
 * :func:`~opifex.neural.atomistic.foundation.freeze_backbone` -- partition a
   model's parameters into the trainable (heads + LoRA) and frozen (backbone)
   groups so a fine-tune optimises only the heads, with the backbone frozen

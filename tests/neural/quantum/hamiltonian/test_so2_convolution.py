@@ -2,7 +2,7 @@ r"""Tests for the eSCN SO(2)-frame edge convolution.
 
 Validates the central guarantee of the SO(2)-frame trick (Passaro & Zitnick
 2023, "Reducing SO(3) Convolutions to SO(2)", arXiv:2302.03655; QHNetV2, Yu et
-al. 2023, arXiv:2306.04922): rotating each edge into a local frame aligned with
+al. 2025, arXiv:2506.09398): rotating each edge into a local frame aligned with
 its direction turns the SO(3) edge tensor product into a per-``m`` SO(2)
 operation, while preserving full SO(3) equivariance of the edge -> message map.
 

@@ -1,8 +1,8 @@
 r"""QHNet self-interaction refinement layer for the diagonal Fock block feature.
 
-The expressivity core a NequIP-style trunk lacks for Hamiltonian prediction (Yu
-et al. 2023, "QHNet", arXiv:2306.04922; reference ``divelab/AIRS``
-``OpenDFT/QHBench/QH9/models/QHNet.py`` ``SelfNetLayer``). The trunk produces
+The expressivity core a NequIP-style trunk lacks for Hamiltonian prediction (the
+diagonal-pair self-interaction of Yu et al. 2023, "QHNet", arXiv:2306.04922). The
+trunk produces
 per-atom equivariant features; the **Fock blocks** are rank-2 tensors that need
 *products* of those features:
 
@@ -10,19 +10,20 @@ per-atom equivariant features; the **Fock blocks** are rank-2 tensors that need
   **self** tensor product ``tp(W_l x, W_r x)`` of an atom's own feature -- the
   products ``D^{l_i} (x) D^{l_j}`` the on-site block ``H_ii`` transforms as.
 
-The off-diagonal counterpart -- QHNet's ``PairNetLayer`` -- is realised by the
+The off-diagonal counterpart -- the QHNet non-diagonal pair interaction -- is
+realised by the
 SO(2)-frame
 :class:`~opifex.neural.quantum.hamiltonian.so2_convolution.SO2PairInteractionLayer`,
-which replaces the dense ``O(L^3)`` ``tp(x[src], x[dst])`` (the dominant cost) with
+which replaces the dense ``O(L^3)`` endpoint tensor product (the dominant cost) with
 the cheap eSCN order-diagonal operations (QHNetV2, arXiv:2506.09398).
 
 It reuses the opifex equivariant primitives
 (:class:`~opifex.neural.equivariant.ChannelwiseTensorProduct` for the ``O(mul)``
 ``"uuu"`` coupling, :class:`~opifex.neural.equivariant.NormGate` nonlinearity,
 :class:`~opifex.neural.equivariant.EquivariantLinear`) and accumulates residually
-across the layer stack (QHNet's ``fii`` running sum). It operates in an
+across the layer stack as a running sum. It operates in an
 **all-even** irrep space (the trunk's parities are relabelled to even at the
-refinement boundary, matching QHNet's ``hidden_irrep_base``); it is therefore
+refinement boundary); it is therefore
 SO(3)-equivariant, which is all the matrix head requires.
 """
 
@@ -43,7 +44,7 @@ from opifex.neural.equivariant import (
 class SelfInteractionLayer(nnx.Module):
     r"""Refine a per-atom feature by a channel-wise self tensor product.
 
-    Realises QHNet's ``SelfNetLayer``: two norm-gated linear projections of the
+    Follows the QHNet diagonal-pair design: two norm-gated linear projections of the
     input are coupled by a channel-wise (``"uuu"``) tensor product, a residual is
     added, and a final norm-gated linear projection produces the refined feature,
     which is accumulated onto the running diagonal-block feature.

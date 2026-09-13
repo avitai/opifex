@@ -4,8 +4,8 @@ These tests pin the canonical geometry-embedding behaviour of the
 Geometry-Informed Neural Operator (Li et al. 2023, arXiv:2309.00583):
 
 * coordinates are lifted into a sinusoidal positional embedding whose
-  transformer-style frequencies match the reference implementation
-  (``neuraloperator/neuralop/layers/embeddings.py``);
+  frequencies follow the transformer positional encoding (Vaswani et al.
+  2017, arXiv:1706.03762);
 * the lifted coordinates are encoded into geometry features that actually
   flow through the network (distinct geometries -> distinct embeddings and
   distinct operator outputs); and

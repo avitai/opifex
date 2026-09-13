@@ -1,9 +1,8 @@
 r"""Tests for the channel-wise (e3nn ``"uuu"``) tensor product.
 
-Behaviour is specified against ``e3nn`` ``TensorProduct(connection_mode="uuu")``
-(``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py`` uses it for the self / pair
-interaction layers) and ``e3nn.elementwise_tensor_product``
-(``../e3nn-jax/e3nn_jax/_src/tensor_products.py``): inputs and output share one
+Behaviour is specified against the channel-wise tensor product of e3nn (Geiger &
+Smidt 2022, arXiv:2207.09453), which QHNet (Yu et al. 2023, arXiv:2306.04922)
+uses for its self / pair interaction layers: inputs and output share one
 uniform multiplicity ``mul``; each allowed path ``(l1, l2, l3)`` couples the two
 inputs channel-wise with the Clebsch-Gordan tensor and a per-channel weight
 (``O(mul)`` parameters, not ``O(mul^3)``). Weights may be the module's internal

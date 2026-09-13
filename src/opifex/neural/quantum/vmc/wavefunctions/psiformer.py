@@ -1,9 +1,7 @@
 r"""PsiFormer self-attention neural-network wavefunction.
 
-A Flax-NNX port of the PsiFormer ansatz (von Glehn, Spencer & Pfau, *A
-Self-Attention Ansatz for Ab-initio Quantum Chemistry*, arXiv:2211.13672;
-reference implementation ``../ferminet`` ``psiformer.py`` ``make_psiformer_layers``
-and ``make_self_attention_block``).
+A Flax-NNX implementation of the PsiFormer ansatz (von Glehn, Spencer & Pfau, *A
+Self-Attention Ansatz for Ab-initio Quantum Chemistry*, arXiv:2211.13672).
 
 The PsiFormer keeps the generalized-Slater determinant structure of FermiNet
 
@@ -18,13 +16,13 @@ construction (a permutation of the electrons permutes the per-electron outputs
 identically), which in turn makes the determinant antisymmetric under same-spin
 exchange.
 
-Architecture (one self-attention layer, following the reference)
-----------------------------------------------------------------
+Architecture (one self-attention layer)
+---------------------------------------
 #. **Input features.** Only the one-electron electron-nucleus features
    ``[r_ae, ae]`` are used (the PsiFormer drops the explicit two-electron
    stream -- pair information re-enters through attention). The integer spin
-   label of each electron (``+1`` up, ``-1`` down) is appended; the reference
-   notes this spin feature is *required* for correct permutation equivariance.
+   label of each electron (``+1`` up, ``-1`` down) is appended; this spin
+   feature is *required* for correct permutation equivariance.
 #. **Embed.** A bias-free linear map lifts the features to the attention width
    ``attn_dim = num_heads * head_dim``.
 #. **Self-attention block**, repeated ``num_layers`` times::
@@ -38,7 +36,7 @@ Architecture (one self-attention layer, following the reference)
    linear projection to ``determinants * nelectron`` orbitals, an isotropic
    exponential envelope ``sum_atom pi * exp(-sigma * r_ae)``, and the shared
    log-domain :func:`~._blocks.logdet_matmul`. The PsiFormer requires a single
-   dense ``(nelec, nelec)`` determinant (``full_det`` in the reference), so the
+   dense ``(nelec, nelec)`` determinant, so the
    orbital projection emits ``nelectron`` columns per determinant.
 
 Design notes
@@ -73,11 +71,11 @@ logger = logging.getLogger(__name__)
 
 
 class _MultiHeadSelfAttention(nnx.Module):
-    """FermiNet-style multi-head self-attention over the electron index.
+    """Multi-head self-attention over the electron index.
 
     Scaled dot-product attention with separate bias-free query/key/value
-    projections and a bias-free output projection, matching the reference
-    ``make_multi_head_attention``. Attention is computed over the electron axis,
+    projections and a bias-free output projection. Attention is computed over the
+    electron axis,
     so a permutation of the electrons permutes the outputs identically.
 
     Args:
@@ -211,8 +209,8 @@ class PsiFormer(nnx.Module):
             positive, or if no electrons are present.
 
     Notes:
-        The PsiFormer uses a single dense ``(nelec, nelec)`` determinant
-        (``full_det`` in the reference); there is no block-diagonal variant.
+        The PsiFormer uses a single dense ``(nelec, nelec)`` determinant; there
+        is no block-diagonal variant.
     """
 
     def __init__(
@@ -254,7 +252,7 @@ class PsiFormer(nnx.Module):
         active_spins = tuple(s for s in nspins if s > 0)
         self._active_spins = active_spins
         # Per-electron spin label (+1 up, -1 down): required for the PsiFormer's
-        # permutation equivariance (reference ``make_psiformer_layers``).
+        # permutation equivariance.
         self._spins = jnp.array([1.0] * nspins[0] + [-1.0] * nspins[1])
 
         # One-electron input feature width: natom * (ndim + 1) for [r_ae, ae],

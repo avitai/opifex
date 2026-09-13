@@ -182,8 +182,7 @@ class PhysicsInformedOperator(nnx.Module):
         predicted output channels as components of the conserved flux ``F`` and
         the ``n_points`` axis as the spatial grid. The loss penalises the
         squared discrete divergence ``mean((∇·F)²)`` computed with second-order
-        central finite differences, matching ``neuraloperator``'s
-        ``FiniteDiff.divergence`` reference.
+        central finite differences with periodic wrapping.
 
         A divergence-free (constant) flux yields ~0 loss; a flux with non-zero
         divergence yields the corresponding positive value.

@@ -152,7 +152,7 @@ class UNOWithGrid(nnx.Module):
             in_channels=input_channels,
             grid_boundaries=[[0.0, 1.0], [0.0, 1.0]],
         )
-        # Reference Darcy config (Rahman et al. 2022 / neuralop plot_UNO_darcy):
+        # U-NO (Rahman et al. 2022) Darcy configuration used by this example:
         # five-layer encoder/decoder, end-to-end spatial scaling product 1.0.
         self.uno = create_uno(
             in_channels=self.grid_embedding.out_channels,
@@ -358,7 +358,7 @@ def main() -> dict[str, float | int]:
 
     # --- Zero-shot super-resolution (genuine discretisation-invariance test) ---
     # The FNO/UNO spectral parametrisation is resolution-independent, so a model trained at one
-    # resolution can be evaluated at a finer one. We test this the way neuraloperator does: on a
+    # resolution can be evaluated at a finer one. The test runs on a
     # SEPARATELY generated, real high-resolution Darcy solve (independent samples, true PDE
     # solutions at the fine grid) — NOT a bilinear upsample of the coarse solution. The train-fitted
     # normalisation transfers because the permeability/pressure distributions are resolution-free.

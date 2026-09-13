@@ -164,7 +164,7 @@ class PhysicsAttention(nnx.Module):
         )[:dim_head, :slice_num]
         self.in_project_slice.kernel.value = ortho_weight
 
-        # QKV projections (no bias, per reference)
+        # QKV projections (no bias)
         self.to_q = nnx.Linear(
             dim_head,
             dim_head,

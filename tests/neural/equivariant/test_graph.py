@@ -1,9 +1,7 @@
 r"""Tests for the neighbour graph and segment-scatter utilities.
 
-``radius_graph`` follows the dense pairwise-distance + fixed-size mask concept of
-``../e3nn-jax/e3nn_jax/_src/radius_graph.py`` and ``jax_md.partition`` (the
-neighbour-list idea); the scatter helpers wrap ``jax.ops.segment_*`` as in
-``../e3nn-jax/e3nn_jax/_src/scatter.py``.
+``radius_graph`` uses a dense pairwise-distance + fixed-size mask; the scatter
+helpers wrap ``jax.ops.segment_*``.
 
 The load-bearing checks are: the correct edge set for a known geometry, scatter
 correctness against a manual reduction, and ``jit``/``vmap`` compatibility under

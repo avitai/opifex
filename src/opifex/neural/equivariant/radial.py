@@ -3,14 +3,13 @@ r"""Radial bases and cutoff envelopes for E(3)-equivariant networks.
 Interatomic-distance edge features are *invariant* scalars (they depend only on
 ``|r_i - r_j|``), so these objects return plain arrays rather than
 :class:`~opifex.neural.equivariant.IrrepsArray`; downstream they are tagged as
-``0e`` channels.  The formulae are ported from the MACE radial module (Batatia
-et al. 2022, "MACE: Higher Order Equivariant Message Passing Neural Networks for
-Fast and Accurate Force Fields", arXiv:2206.07697):
+``0e`` channels.
 
-* :class:`BesselBasis` -- ``../mace/mace/modules/radial.py:18`` (eq. 7).
-* :class:`GaussianBasis` -- ``../mace/mace/modules/radial.py:88``.
-* :func:`polynomial_cutoff` -- ``../mace/mace/modules/radial.py:113`` (eq. 8),
-  equivalent to ``e3nn_jax.poly_envelope``.
+* :class:`BesselBasis` -- the Bessel basis of MACE (Batatia et al. 2022, "MACE:
+  Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate
+  Force Fields", arXiv:2206.07697), eq. 7.
+* :class:`GaussianBasis` -- Gaussians on evenly spaced centres.
+* :func:`polynomial_cutoff` -- the polynomial envelope of MACE, eq. 8.
 
 The cosine envelope :func:`cosine_cutoff` follows Behler (J. Chem. Phys. 134,
 074106, 2011), the original ACSF cutoff function.
@@ -29,10 +28,9 @@ from jaxtyping import Array, Float  # noqa: TC002
 class BesselBasis(nnx.Module):
     r"""Bessel radial basis ``b_n(r) = sqrt(2/r_c) sin(n pi r / r_c) / r``.
 
-    Ported from MACE ``../mace/mace/modules/radial.py:18`` (eq. 7 of
-    arXiv:2206.07697).  The frequencies ``n pi / r_c`` for ``n = 1..num_basis``
-    are stored as a (non-trainable) buffer; the basis is a smooth, complete set
-    of invariant radial features.
+    MACE eq. 7 (Batatia et al. 2022, arXiv:2206.07697).  The frequencies
+    ``n pi / r_c`` for ``n = 1..num_basis`` are stored as a (non-trainable) buffer;
+    the basis is a smooth, complete set of invariant radial features.
     """
 
     def __init__(self, num_basis: int, cutoff: float, *, rngs: nnx.Rngs | None = None) -> None:
@@ -71,7 +69,7 @@ class BesselBasis(nnx.Module):
 class GaussianBasis(nnx.Module):
     r"""Gaussian radial basis ``g_n(r) = exp(-(r - mu_n)^2 / (2 sigma^2))``.
 
-    Ported from MACE ``../mace/mace/modules/radial.py:88``.  Centres ``mu_n`` are
+    Gaussian radial features.  Centres ``mu_n`` are
     evenly spaced on ``[0, r_c]`` and the width is the centre spacing
     (``sigma = r_c / (num_basis - 1)``), giving the coefficient
     ``coeff = -0.5 / sigma^2``.
@@ -114,10 +112,9 @@ class GaussianBasis(nnx.Module):
 class PiecewiseLinearBasis(nnx.Module):
     r"""Piecewise-linear (hat) radial basis on ``[0, cutoff]``.
 
-    Faithful to the isotropic basis of ``torch_harmonics``'s ``PiecewiseLinearFilterBasis``
-    (``torch-harmonics/torch_harmonics/filter_basis.py``), the canonical filter basis for
-    discrete-continuous (DISCO) convolutions (Ocampo, Price & McEwen 2023, ``arXiv:2209.13603``).
-    The ``num_basis`` hat functions have collocation spacing ``dr = 2 * cutoff / (num_basis + 1)``
+    An isotropic piecewise-linear filter basis for discrete-continuous (DISCO) convolutions
+    (Ocampo, Price & McEwen 2023, ``arXiv:2209.13603``). The layer builds ``num_basis`` hat
+    functions, which have collocation spacing ``dr = 2 * cutoff / (num_basis + 1)``
     and half-width ``dr``: ``phi_k(r) = max(0, 1 - |r - r_k| / dr)`` restricted to ``r <= cutoff``,
     with centres ``r_k = k * dr`` (odd ``num_basis``) or ``(k + 0.5) * dr`` (even). Each function is
     continuous and compactly supported, so no separate cutoff envelope is needed.
@@ -161,8 +158,7 @@ class PiecewiseLinearBasis(nnx.Module):
 def polynomial_cutoff(radius: Float[Array, ...], cutoff: float, *, p: int = 6) -> Float[Array, ...]:
     r"""Smooth polynomial cutoff envelope decaying from ``1`` to ``0`` on ``[0, r_c]``.
 
-    Ported from MACE ``../mace/mace/modules/radial.py:113`` (eq. 8 of
-    arXiv:2206.07697); equivalent to ``e3nn_jax.poly_envelope``.  The envelope
+    MACE eq. 8 (Batatia et al. 2022, arXiv:2206.07697).  The envelope
     and its first ``p`` derivatives vanish at ``r_c``::
 
         f(r) = 1 - (p+1)(p+2)/2 (r/r_c)^p

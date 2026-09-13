@@ -2,9 +2,9 @@ r"""Tests for the per-atom energy scale-shift (E0 + output normaliser).
 
 The :class:`~opifex.neural.atomistic.scale_shift.AtomicScaleShift` closes the
 deferred per-element reference-energy / output-normaliser gap documented in
-:class:`~opifex.neural.atomistic.heads.energy.EnergyHead`. It follows the MACE
-``ScaleShiftBlock`` affine map ``E_phys = scale * E_raw + n_atoms * shift``
-(Batzner et al. 2022, NequIP, arXiv:2101.03164; the ``../mace``
+:class:`~opifex.neural.atomistic.heads.energy.EnergyHead`. It follows the
+affine map ``E_phys = scale * E_raw + n_atoms * shift``
+(Batzner et al. 2022, NequIP, arXiv:2101.03164;
 Batatia et al. 2022, MACE, NeurIPS).
 
 Load-bearing checks:

@@ -8,9 +8,7 @@ the system's net charge :math:`Q`:
 .. math::
    q_i = \tilde q_i - \frac{1}{N}\left(\sum_j \tilde q_j - Q\right) .
 
-This is the per-atom excess correction used by ``../mace``
-(``AtomicDipolesMACE`` in ``mace/modules/models.py`` subtracts
-``scatter_mean(charges) - total_charge / num_atoms``) and underlies the
+This uniform per-atom excess correction underlies the
 charge-equilibration-free partial charges of PaiNN (Schuett, Unke & Gastegger
 2021, "Equivariant message passing for the prediction of tensorial properties
 and molecular spectra", ICML). Because each charge is a per-atom invariant
@@ -37,8 +35,8 @@ def conserve_total_charge(raw_charges: Array, total_charge: float | Array) -> Ar
 
     .. math:: q_i = \tilde q_i - \frac{1}{N}\Big(\sum_j \tilde q_j - Q\Big),
 
-    so that :math:`\sum_i q_i = Q` (``../mace`` ``AtomicDipolesMACE`` excess
-    subtraction; Schuett et al. 2021, PaiNN). The correction is uniform across
+    so that :math:`\sum_i q_i = Q` (Schuett et al. 2021, PaiNN). The correction is
+    uniform across
     atoms, so it preserves the relative (rotation-invariant) charge pattern.
 
     Args:

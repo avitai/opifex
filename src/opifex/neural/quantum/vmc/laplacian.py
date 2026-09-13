@@ -12,9 +12,8 @@ so the Hamiltonian needs both the Laplacian and the squared gradient of
 interchangeable ways to obtain them:
 
 #. :func:`jvp_grad_laplacian` -- a reference *oracle*: linearise ``grad`` once
-   and read the Hessian diagonal one coordinate at a time (DeepMind FermiNet's
-   ``hamiltonian.local_kinetic_energy`` ``default`` method, ``jvp``-over-
-   ``grad`` with an eye loop). Simple and obviously correct; used to gate the
+   and read the Hessian diagonal one coordinate at a time (``jvp``-over-``grad``
+   with an eye loop). Simple and obviously correct; used to gate the
    fast path in tests.
 
 #. :func:`forward_laplacian` -- a native *forward-Laplacian*: propagate the

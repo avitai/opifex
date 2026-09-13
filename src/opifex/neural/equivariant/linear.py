@@ -5,15 +5,13 @@ the multiplicities of input and output irreps that share the same ``(l, p)`` (no
 cross-``l`` mixing, no bias on non-scalars).  Within each such irrep, the map is
 an arbitrary learnable mixing matrix over multiplicities.
 
-Ported from ``e3nn-jax``'s ``FunctionalLinear``
-(``../e3nn-jax/e3nn_jax/_src/linear.py:22``).  Each path ``(i_in -> i_out)`` with
-``ir_in == ir_out`` carries a weight block of shape ``(mul_in, mul_out)`` applied
-as ``einsum("uw,...ui->...wi", w, x_chunk)`` (reference line 187).  Following the
-e3nn default config (``path_normalization`` / ``gradient_normalization`` =
-``"element"`` = ``0``), the per-path scale ``alpha = 1 / sum(mul_in)`` over all
-input blocks feeding a given output block (reference lines 72-89) is folded into
-the weight initialisation standard deviation, so the forward pass is an unscaled
-``einsum`` -- numerically identical to the reference and ``jit`` friendly.
+The equivariant linear layer of e3nn (Geiger & Smidt 2022, arXiv:2207.09453).
+Each path ``(i_in -> i_out)`` with ``ir_in == ir_out`` carries a weight block of
+shape ``(mul_in, mul_out)`` applied as ``einsum("uw,...ui->...wi", w, x_chunk)``.
+With ``"element"`` path normalisation, the per-path scale
+``alpha = 1 / sum(mul_in)`` over all input blocks feeding a given output block is
+folded into the weight initialisation standard deviation, so the forward pass is
+an unscaled, ``jit``-friendly ``einsum``.
 """
 
 from __future__ import annotations
@@ -64,7 +62,7 @@ class EquivariantLinear(nnx.Module):
         key = rngs.params()
         for out_index, (mul_out, irrep_out) in enumerate(self.irreps_out.blocks):
             matching = input_groups.get(Irrep(irrep_out), [])
-            # Path normalization (e3nn "element"): alpha = 1 / sum(matching mul_in).
+            # "element" path normalization: alpha = 1 / sum(matching mul_in).
             total_in = sum(in_muls[in_index] for in_index in matching)
             weight_std = 1.0 / math.sqrt(total_in) if total_in > 0 else 0.0
             for in_index in matching:

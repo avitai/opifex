@@ -9,12 +9,12 @@ heteroscedastic-Gaussian negative log-likelihood that opifex already
 ships at :func:`opifex.uncertainty.likelihoods.heteroscedastic_gaussian_log_likelihood`
 (Kendall & Gal 2017, arXiv:1703.04977 §3.1).
 
-Canonical reference:
+Background:
 * Magnani et al. 2024 line of work (companion to the linearised neural
   operator / LUNO of arXiv:2406.04317) treats neural operators as
   probabilistic surrogates; the heteroscedastic-Gaussian head pattern
   used here is the standard aleatoric-uncertainty recipe from
-  Kendall & Gal 2017 §3.1, ported to operator-valued outputs.
+  Kendall & Gal 2017 §3.1, applied to operator-valued outputs.
 
 References
 ----------

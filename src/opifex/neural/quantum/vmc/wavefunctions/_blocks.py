@@ -1,9 +1,8 @@
 r"""Log-domain determinant building blocks for neural wavefunctions.
 
 These are the numerically-stable primitives behind a generalized-Slater
-neural-network ansatz, ported from DeepMind's FermiNet
-(``ferminet/network_blocks.py`` -- Pfau et al., *Phys. Rev. Research* **2**,
-033429 (2020)):
+neural-network ansatz, as used by FermiNet (Pfau et al., *Phys. Rev. Research*
+**2**, 033429 (2020), arXiv:1909.02487):
 
 * :func:`slogdet` -- sign and log-magnitude of a (batched) determinant with a
   fast scalar path for ``1x1`` blocks;
@@ -29,7 +28,7 @@ def slogdet(x: Float[Array, "*batch n n"]) -> tuple[Array, Array]:
     """Return the sign and natural log-magnitude of ``det(x)``.
 
     A fast scalar path is used for ``1x1`` matrices, which are numerically
-    sensitive under :func:`jax.numpy.linalg.slogdet` (FermiNet note).
+    sensitive under :func:`jax.numpy.linalg.slogdet`.
 
     Args:
         x: A square matrix or batch of square matrices with shape

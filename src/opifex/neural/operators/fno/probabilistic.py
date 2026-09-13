@@ -16,7 +16,7 @@ heteroscedastic-Gaussian
 
 The negative log-likelihood is the canonical heteroscedastic-Gaussian
 aleatoric loss of **Kendall & Gal 2017** (NeurIPS, arXiv:1703.04977,
-§3.1) ported to operator-valued outputs. The mean head and log-variance
+§3.1) applied to operator-valued outputs. The mean head and log-variance
 head are simple pointwise ``nnx.Linear`` projections from the shared
 FNO hidden representation; the log-variance head is optionally clipped
 to ``[log_variance_floor, log_variance_ceiling]`` to keep training

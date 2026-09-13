@@ -17,7 +17,8 @@ Both strategies satisfy the same
 :class:`opifex.core.quantum.protocols.PropertyHead` protocol and emit
 ``("forces",)``; which one a model uses is a *strategy* choice, not hardcoded
 (Orb proves both matter -- Neumann et al. 2024, "Orb: A Fast, Scalable Neural
-Network Potential"; fairchem's GemNet / eSCN direct-force heads).
+Network Potential"; the GemNet / eSCN direct-force heads, e.g. Passaro & Zitnick
+2023, arXiv:2302.03655).
 
 **Equivariance / conservativeness trade-off (documented):**
 
@@ -31,7 +32,7 @@ Network Potential"; fairchem's GemNet / eSCN direct-force heads).
   than as :math:`-\partial E/\partial \mathbf{r}`, the predicted field has no
   scalar potential in general (:math:`\nabla \times \mathbf{F} \neq 0`), so
   energy is not exactly conserved in long molecular-dynamics trajectories. This
-  is the well-documented Orb / fairchem trade-off: direct forces are cheaper
+  is the well-documented Orb / eSCN trade-off: direct forces are cheaper
   (one network pass, no second-order autodiff) and often more accurate
   pointwise, at the cost of strict energy conservation. Choose
   :class:`ForcesHead` when a conserved Hamiltonian is required.

@@ -1,31 +1,23 @@
-"""JAX-native port of the conformal Uncertainty Quantification Neural Operator (UQNO).
+"""JAX-native conformal Uncertainty Quantification Neural Operator (UQNO).
 
-Mirrors the three-stage conformal pipeline from Ma, Pitt,
-Azizzadenesheli, Anandkumar (TMLR 2024 —
-`arXiv:2402.01960 <https://arxiv.org/abs/2402.01960>`_). The canonical
-PyTorch reference lives at
-``../neuraloperator/neuralop/models/uqno.py`` +
-``../neuraloperator/scripts/train_uqno_darcy.py``; the numerical core
-(``PointwiseQuantileLoss``, ``get_coeff_quantile_idx``, the scaling-factor
-derivation) is cross-checked test-by-test against that reference.
+Implements the three-stage conformal pipeline of Ma et al. 2024,
+"Calibrated Uncertainty Quantification for Operator Learning via
+Conformal Prediction"
+(`arXiv:2402.01960 <https://arxiv.org/abs/2402.01960>`_).
 
-**Differences from the canonical PyTorch implementation:**
+**Design:**
 
-* The canonical ``UQNO.__init__(base_model, residual_model=None)``
-  defaults the residual to ``deepcopy(base_model)``. Here both
-  operators are required keyword-only (``base=``, ``residual=``) so
-  the call site is explicit about which model is which.
-* The canonical performs calibration externally in the training
-  script; this port packages :meth:`calibrate` on the class for
-  ergonomics, returning a typed :class:`UQNOConformalCalibrator`.
+* Both operators are required keyword-only (``base=``, ``residual=``)
+  so the call site is explicit about which model is which.
+* :meth:`calibrate` lives on the class and returns a typed
+  :class:`UQNOConformalCalibrator`.
 * :meth:`predict_with_bands` returns a typed
   :class:`PredictiveDistribution` with a populated
-  :class:`PredictionInterval`; the canonical returns untyped tensors.
-* JAX/NNX semantics: ``jax.lax.stop_gradient`` replaces
-  ``torch.no_grad()`` + ``model.eval()`` for the base operator inside
-  the residual-stage forward pass.
+  :class:`PredictionInterval`.
+* ``jax.lax.stop_gradient`` isolates the base operator inside the
+  residual-stage forward pass.
 
-**Algorithmic core mirrored faithfully:**
+**Algorithmic core:**
 
 1. **Base solution operator** ``G_hat(a, x)`` — a standard deterministic
    :class:`opifex.neural.operators.fno.base.FourierNeuralOperator`
@@ -33,7 +25,7 @@ derivation) is cross-checked test-by-test against that reference.
 2. **Residual operator** ``E(a, x)`` — a separately-trained
    :class:`FourierNeuralOperator` (wrapped as
    :class:`UQNOResidualOperator`) producing per-grid-point quantile
-   widths via the canonical pointwise pinball loss
+   widths via the pointwise pinball loss
    :class:`opifex.uncertainty.losses.PointwiseQuantileLoss`.
 3. **Scalar conformal calibration** — on a held-out calibration set,
    :meth:`UncertaintyQuantificationNeuralOperator.calibrate` derives a
@@ -49,12 +41,6 @@ returns a :class:`PredictiveDistribution` whose
 ``G_hat(x) ± E(x) * scaling_factor``; ``epistemic`` and ``samples``
 stay ``None`` (conformal is a distribution-free calibration of the
 deterministic predictor, not a Bayesian posterior).
-
-Canonical reference (cross-checked numerically in
-``tests/neural/operators/specialized/test_uqno.py``):
-``../neuraloperator/neuralop/models/uqno.py``;
-``../neuraloperator/scripts/train_uqno_darcy.py`` for the calibration
-recipe.
 """
 
 from __future__ import annotations
@@ -159,9 +145,8 @@ def get_coeff_quantile_idx(
 ) -> tuple[int, int]:
     """Domain + function quantile indices for UQNO conformal calibration.
 
-    Direct JAX-free Python port of the canonical
-    ``get_coeff_quantile_idx`` in
-    ``../neuraloperator/scripts/train_uqno_darcy.py``. Returns the
+    JAX-free Python helper for the conformal calibration of Ma et al.
+    2024 (arXiv:2402.01960). Returns the
     ``(domain_idx, function_idx)`` pair: take the ``domain_idx``-th
     largest pointwise ratio per function, then the ``function_idx``-th
     largest of those per-function values across the calibration set.
@@ -273,8 +258,7 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
     ) -> UQNOConformalCalibrator:
         """Derive a scalar uncertainty scaling factor on a calibration set.
 
-        Mirrors ``../neuraloperator/scripts/train_uqno_darcy.py``: for
-        every calibration sample, compute per-grid ratios
+        For every calibration sample, compute per-grid ratios
         ``|y - base(x)| / (residual(x) + eps)``; take the
         ``domain_idx``-th largest ratio per function (per-batch);
         then the ``function_idx``-th largest of those across the
@@ -328,8 +312,7 @@ class UncertaintyQuantificationNeuralOperator(nnx.Module):
         """Attach ``calibrator`` to this operator and return ``self``.
 
         NNX modules support in-place mutation; ``with_*`` is the
-        fluent-attach name (matches the canonical neuraloperator
-        ``uqno_data_proc.set_scale_factor`` pattern in spirit).
+        fluent-attach name.
         """
         self.calibrator = calibrator
         return self

@@ -5,9 +5,10 @@ Orthogonal Decomposition) basis modes. The branch network learns
 coefficients for the POD expansion.
 
 Reference:
-    Lu, L., Meng, X., Mao, Z., & Karniadakis, G. E. (2022).
-    "A full and fair comparison of two neural operators."
-    GitHub: lu-group/deeponet-fno
+    Lu, L., Meng, X., Cai, S., Mao, Z., Goswami, S., Zhang, Z., & Karniadakis,
+    G. E. (2022). "A comprehensive and fair comparison of two neural operators
+    (with practical extensions) based on FAIR data." Computer Methods in Applied
+    Mechanics and Engineering 393, 114778. arXiv:2111.05512 (POD-DeepONet).
 
 This module reuses:
 - ``StandardMLP`` from ``opifex.neural.base`` for the branch network

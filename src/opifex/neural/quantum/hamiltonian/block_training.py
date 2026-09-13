@@ -4,9 +4,9 @@ Wires the per-molecule
 :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianPredictor`
 to the QH9 block-form targets produced on device by the Fock operators
 (:mod:`opifex.data.sources.qh9_fock_operators`) over a leading-axis padded batch
-from :class:`~opifex.data.sources.qh9_padded_source.QH9PaddedSource`, with QHNet's
-``criterion`` (Yu et al. 2023, "QHNet", arXiv:2306.04922; reference
-``divelab/AIRS`` ``OpenDFT/QHBench/QH9/main.py``): per-block masked squared /
+from :class:`~opifex.data.sources.qh9_padded_source.QH9PaddedSource` (QH9, Yu et al.
+2023, arXiv:2306.09549), with a per-molecule masked block loss: per-block masked
+squared /
 absolute error summed over the ``(14, 14)`` block dims, reduced per molecule,
 divided by the per-molecule valid-element count, with ``loss = MSE + MAE`` and the
 reported metric the Hamiltonian MAE in Hartree over valid (masked) elements. Both
@@ -33,7 +33,7 @@ therefore feeds the predictor the **row-swapped** edge index by default, so the
 predictor's *receiver* (block-row) atom is the target's row atom and the predicted
 block transforms as ``D^{l_row} B D^{l_col,\top}`` consistently with the target's
 ``(row, col)`` AO axes -- the orientation the assembly symmetrisation
-``H = H~ + H~^T`` needs to reproduce QHNet's off-diagonal law. The orientation
+``H = H~ + H~^T`` needs to satisfy the off-diagonal block law. The orientation
 itself is pinned by the predictor's rotational-equivariance test
 (``tests/.../test_block_predictor.py``).
 
@@ -78,12 +78,14 @@ _HARTREE_TO_MICRO_HARTREE: float = 1.0e6
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BlockTrainConfig:
-    """QHNet training hyper-parameters for the block Hamiltonian predictor.
+    """Training hyper-parameters for the block Hamiltonian predictor.
 
-    Defaults reproduce the QH9/QHNet reference setup (``OpenDFT/QHBench/QH9``):
-    AdamW with ``lr = 5e-4`` and ``betas = (0.99, 0.999)``, a polynomial
-    (``power = 1``) decay schedule with a ``1000``-step warmup over ``300000``
-    total steps to ``lr_end = 1e-7``, and global-norm gradient clipping at ``5.0``.
+    The learning-rate schedule defaults follow the QH9 benchmark setup (Yu et al.
+    2023, arXiv:2306.09549, §4): a ``1000``-step linear warmup to
+    ``lr = 5e-4`` followed by a linear (``power = 1``) decay to ``lr_end = 1e-7``.
+    The paper trains for 210,000 or 260,000 steps; the ``300000``-step default
+    horizon, the AdamW ``betas = (0.99, 0.999)`` and the global-norm gradient clip
+    at ``5.0`` are not stated in the paper.
 
     Attributes:
         learning_rate: Peak AdamW learning rate (post-warmup).
@@ -110,8 +112,7 @@ class BlockTrainConfig:
     def schedule(self) -> optax.Schedule:
         """Return the warmup + polynomial-decay learning-rate schedule.
 
-        Mirrors HuggingFace ``get_polynomial_decay_schedule_with_warmup`` used by
-        the QHNet reference: a linear warmup from ``0`` to ``learning_rate`` over
+        A linear warmup from ``0`` to ``learning_rate`` over
         ``warmup_steps``, then a polynomial decay to ``lr_end`` over the remaining
         ``total_steps - warmup_steps`` steps.
         """

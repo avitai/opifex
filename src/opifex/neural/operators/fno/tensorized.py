@@ -5,15 +5,13 @@
 The spectral convolution weight ``(out_channels, in_channels, *modes)`` is stored
 in a factorized CP / Tucker / Tensor-Train form whose parameter count is ``<<``
 the dense weight at low rank. The factorized contraction (input against the
-factors directly) and the reconstruct formulas are ports of established
-references centralised in :mod:`._factorized`:
+factors directly), the reconstruct formulas and the factor initialisation are
+centralised in :mod:`._factorized`.
 
-- Reconstruct: tensorly 0.9.0 ``cp_to_tensor`` / ``tucker_to_tensor`` /
-  ``tt_to_tensor``.
-- Contraction: neuraloperator ``_contract_cp`` / ``_contract_tucker`` /
-  ``_contract_tt``.
-- Factor layouts + init std: tltorch ``factorized_tensors.py`` / ``init.py``.
-- Paper: Kossaifi et al., "Multi-Grid Tensorized Fourier Neural Operator".
+- Paper: Kossaifi, Kovachki, Azizzadenesheli & Anandkumar 2023, "Multi-Grid
+  Tensorized Fourier Neural Operator for High-Resolution PDEs", arXiv:2310.00120.
+- CP / Tucker decompositions: Kolda & Bader 2009, "Tensor Decompositions and
+  Applications", SIAM Review 51(3), 455-500.
 
 Complex weights are stored as two real ``nnx.Param`` tensors per factor / core /
 CP-weight (``*_real`` and ``*_imag``) and recombined as ``real + 1j * imag``

@@ -41,15 +41,12 @@ invariance is the standard Ewald correctness check exercised in the tests.
 **Free (non-periodic) systems** -- the long-range energy reduces to the bare
 pairwise Coulomb sum :math:`\tfrac12\sum_{i\neq j} q_i q_j / r_{ij}`.
 
-Reference implementation
-------------------------
-The reciprocal-space structure-factor sum follows ``../jax-md``
-(``jax_md/_energy/electrostatics.py``: ``coulomb_recip_ewald``,
-``structure_factor``, ``coulomb_direct``) -- Schoenholz & Cubuk 2020, "JAX-MD".
-The standalone form here additionally carries the self-energy and net-charge
-background terms (absent from jax_md's neighbour-list path), and enumerates a
-fixed shell of real-space periodic images so the real-space sum converges for
-small cells, keeping the whole computation ``jit`` / ``grad`` / ``vmap`` clean.
+Implementation notes
+--------------------
+The standalone form here carries the real-space, reciprocal-space (structure
+factor), self-energy and net-charge background terms, and enumerates a fixed
+shell of real-space periodic images so the real-space sum converges for small
+cells, keeping the whole computation ``jit`` / ``grad`` / ``vmap`` clean.
 
 Units are Gaussian / atomic (:math:`1/4\pi\varepsilon_0 = 1`); a downstream
 caller multiplies by the appropriate Coulomb constant for its unit system.
@@ -147,8 +144,7 @@ def _ewald_real_space(
 
     Sums :math:`\tfrac12 \sum_{i,j,\mathbf n}
     q_i q_j \operatorname{erfc}(\eta r)/r` over the integer cell images in the
-    shell, excluding the :math:`i=j` self term in the home cell. Following
-    ``../jax-md`` ``coulomb_direct``.
+    shell, excluding the :math:`i=j` self term in the home cell.
     """
     offsets = _real_image_offsets(image_shell) @ cell  # (n_images, 3)
     # separations[i, j, n] = r_i - r_j + image_n
@@ -170,10 +166,7 @@ def _structure_factor(
     charges: Float[Array, " n_atoms"],
     positions: Float[Array, "n_atoms 3"],
 ) -> Complex[Array, " n_k"]:
-    r"""Charge structure factor :math:`S(\mathbf k)=\sum_i q_i e^{i\mathbf k\cdot\mathbf r_i}`.
-
-    Following ``../jax-md`` ``structure_factor``.
-    """
+    r"""Charge structure factor :math:`S(\mathbf k)=\sum_i q_i e^{i\mathbf k\cdot\mathbf r_i}`."""
     phase = jnp.einsum("kd,id->ki", reciprocal_vectors, positions)
     return jnp.sum(charges[None, :] * jnp.exp(1j * phase), axis=-1)
 
@@ -188,8 +181,7 @@ def _ewald_reciprocal_space(
     r"""Reciprocal-space part of the Ewald sum.
 
     Evaluates :math:`\frac{2\pi}{V}\sum_{\mathbf k\neq 0}
-    \frac{e^{-k^2/4\eta^2}}{k^2}\lvert S(\mathbf k)\rvert^2` following
-    ``../jax-md`` ``coulomb_recip_ewald``.
+    \frac{e^{-k^2/4\eta^2}}{k^2}\lvert S(\mathbf k)\rvert^2`.
     """
     reciprocal_vectors = _reciprocal_vectors(cell, reciprocal_cutoff)
     k_squared = jnp.sum(reciprocal_vectors**2, axis=-1)
@@ -237,8 +229,7 @@ def latent_ewald_energy(
     Gaussian / atomic (:math:`1/4\pi\varepsilon_0 = 1`).
 
     Method: Latent Ewald Summation (Cheng 2025, arXiv:2408.15165); Ewald
-    summation (Allen & Tildesley); reciprocal sum after ``../jax-md``
-    ``coulomb_recip_ewald`` / ``structure_factor``.
+    summation (Allen & Tildesley).
 
     Args:
         charges: Per-atom (latent) charges of shape ``(n_atoms,)``.

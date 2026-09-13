@@ -39,7 +39,7 @@ step is one `jit`-compiled kernel.
 
 ## The wavefunction: FermiNet generalized-Slater ansatz
 
-`FermiNet` is a Flax-NNX port of the Fermionic Neural Network (Pfau, Spencer,
+`FermiNet` is a Flax-NNX implementation of the Fermionic Neural Network (Pfau, Spencer,
 Matthews & Foulkes 2020). The wavefunction is a weighted sum of generalized
 Slater determinants
 
@@ -112,7 +112,7 @@ Nesterov-style accumulation of past updates plus a `proj_reg / N` projection
 regulariser on the Gram matrix; with zero momentum and zero `proj_reg` it reduces
 exactly to MinSR. The driver feeds these the FermiNet score-function gradient
 `grad E = 2 < (E_loc - <E_loc>) grad log|psi| >`, with the local energy as a
-stop-gradient baseline and outlier-robust median-absolute-deviation clipping. Adam
+stop-gradient baseline and outlier-robust clipping around the median. Adam
 is available as a first-order bootstrap directly through optax.
 
 ## Example

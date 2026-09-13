@@ -39,11 +39,12 @@ in fixed-size **blocks**, every primitive reused from the equivariant kit:
 2. **Refinement — the Fock-block features.** A Fock block is a rank-2 tensor that
    needs *products* of the trunk features, so after the
    `start_refinement_layer`-th convolution each further layer feeds the
-   parity-relabelled (all-even, matching QHNet's `hidden_irrep_base`) node feature
-   into a `SelfInteractionLayer` (QHNet `SelfNetLayer` — a channel-wise *self*
-   tensor product `tp(W_l x, W_r x)` building the diagonal feature `f_ii`) and a
-   `SO2PairInteractionLayer` (QHNetV2's SO(2)-frame reduction of QHNet's
-   `PairNetLayer` — the two endpoints `x[i]`, `x[j]` are rotated into the `i → j`
+   parity-relabelled (all-even, as in QHNet) node feature
+   into a `SelfInteractionLayer` (the QHNet diagonal-pair self-interaction — a
+   channel-wise *self* tensor product `tp(W_l x, W_r x)` building the diagonal
+   feature `f_ii`) and a `SO2PairInteractionLayer` (QHNetV2's SO(2)-frame reduction
+   of the QHNet non-diagonal pair interaction — the two endpoints `x[i]`, `x[j]`
+   are rotated into the `i → j`
    edge frame, concatenated and coupled by an in-frame `O(L²)` SO(2) operation over
    the complete edge graph, with per-edge weights modulated by the radial
    embedding, building the off-diagonal feature `f_ij`; this replaces the dense
@@ -65,8 +66,7 @@ in fixed-size **blocks**, every primitive reused from the equivariant kit:
    block to its element's valid AO slots (`block_validity_mask` — hydrogen keeps
    `2s + 1p`, C/N/O/F all 14), scatters it to the per-atom AO offsets
    (`atom_orbital_counts`), writes off-diagonal blocks at both `(i, j)` and
-   `(j, i)`, then `H = H~ + H~^T` makes the matrix Hermitian (QHNet's
-   `transpose_edge_index` symmetrization).
+   `(j, i)`, then `H = H~ + H~^T` makes the matrix Hermitian.
 
 Because every stage is equivariant, the assembled matrix obeys
 `H(R x) = D(R) H(x) D(R)^T` **for any weights**, so the symmetry is structural,
@@ -90,8 +90,8 @@ B[a, b] = sum_L sum_M  C^{l_i l_j L}_{a b M}  f^L_M,
 ```
 
 the contraction of the **last** index `M` of the real Clebsch-Gordan tensor
-`clebsch_gordan(l_i, l_j, L)` with the `L`-chunk `f^L` of the input feature
-(QHNet's `einsum("ijk, ...k -> ...ij")`). Because `C` is the intertwiner between
+`clebsch_gordan(l_i, l_j, L)` with the `L`-chunk `f^L` of the input feature.
+Because `C` is the intertwiner between
 `D^{l_i} ⊗ D^{l_j}` and `D^L`, and the feature transforms as `f^L → D^L f^L`, the
 block satisfies the Wigner-Eckart block law
 `B(R x) = D^{l_i}(R) B(x) D^{l_j}(R)^T` — the block-wise statement of the matrix
@@ -102,7 +102,7 @@ The public surface lives in `opifex.neural.quantum.hamiltonian`:
 | Symbol | Role |
 |--------|------|
 | `BLOCK_IRREPS` | the 14-dim row/col representation of a Fock block (`3x0e + 2x1e + 1x2e`) |
-| `SelfInteractionLayer` / `SO2PairInteractionLayer` | QHNet `SelfNetLayer` (channel-wise self tensor product → diagonal feature) and QHNetV2's SO(2)-frame `PairNetLayer` (in-frame `O(L²)` endpoint coupling → off-diagonal feature, replacing the dense `O(L³)` CG product), accumulated residually |
+| `SelfInteractionLayer` / `SO2PairInteractionLayer` | the QHNet diagonal-pair self-interaction (channel-wise self tensor product → diagonal feature) and the QHNetV2 SO(2)-frame non-diagonal pair interaction (in-frame `O(L²)` endpoint coupling → off-diagonal feature, replacing the dense `O(L³)` CG product), accumulated residually |
 | `HamiltonianBlockExpansion` | the shared block head: last-index Clebsch-Gordan contraction of a steerable feature into a `(14, 14)` block, driven by an invariant embedding |
 | `block_validity_mask` / `atom_orbital_counts` | the per-element AO mask (hydrogen `2s + 1p`, C/N/O/F all 14) and populated-AO counts assembly uses |
 | `BlockHamiltonianPredictor` | the heterogeneous-batchable predictor: per-atom diagonal + per-edge off-diagonal blocks, with `assemble_matrix` building the symmetric dense matrix |
@@ -122,7 +122,7 @@ predictor = BlockHamiltonianPredictor(
         hidden_irreps="32x0e + 32x1o + 32x2e + 32x3o + 32x4e",  # uniform mul, l up to the d-d block
         sh_lmax=4,
         num_interactions=5,
-        start_refinement_layer=2,   # QHNet: refine after the 2nd convolution
+        start_refinement_layer=2,   # refinement runs in layers with index > 2 (4th, 5th)
         bottleneck_multiplicity=32,
         cutoff=20.0,                # Bohr
     ),
@@ -150,7 +150,8 @@ batches need no per-composition recompile.
 ## Training against QH9
 
 The training target is the QH9 benchmark: converged B3LYP/def2-SVP Fock matrices
-for the QM9 molecules (Yu et al. 2023, QH9). `opifex.data.sources.qh9_blocks` /
+for the QM9 molecules (Yu et al. 2023, QH9,
+[arXiv:2306.09549](https://arxiv.org/abs/2306.09549)). `opifex.data.sources.qh9_blocks` /
 `qh9_block_stream` read the QH9-Stable SQLite database directly (no `torch`),
 apply the def2-SVP convention transform into opifex's spherical AO ordering, cut
 each Fock matrix into the per-atom / per-edge `(14, 14)` blocks the predictor
@@ -163,7 +164,7 @@ Both QH9 benchmarks are supported. QH9-Stable (one equilibrium geometry per
 molecule, `--dataset stable --split random`) and QH9-Dynamic (~100 molecular-
 dynamics geometries per molecule, `--dataset dynamic-300k`/`dynamic-100k`) share
 the predictor, loss and out-of-core padded source. The Dynamic loader
-(`opifex.data.sources.qh9_dynamic`) reproduces the two reference splits exactly:
+(`opifex.data.sources.qh9_dynamic`) implements the two QH9-Dynamic splits:
 `--split geometry` (every molecule in all splits at disjoint timesteps) and
 `--split mol` (whole molecules held out — the harder generalisation test). Because
 a Dynamic molecule's geometries share a non-unique `id`, the source keys rows by
@@ -227,8 +228,9 @@ predictor Fock in the `pyscf_def2svp` p-order must pass through
 - Yu et al. 2023, *Efficient and Equivariant Graph Networks for Predicting Quantum
   Hamiltonian* (QHNet), ICML 2023
   ([arXiv:2306.04922](https://arxiv.org/abs/2306.04922)).
-- Yu et al. 2025, *QHNetV2: A Fully Equivariant Network for Quantum Hamiltonian
-  Prediction* ([arXiv:2506.09398](https://arxiv.org/abs/2506.09398)).
+- Yu et al. 2025, *Efficient Prediction of SO(3)-Equivariant Hamiltonian Matrices
+  via SO(2) Local Frames* (QHNetV2)
+  ([arXiv:2506.09398](https://arxiv.org/abs/2506.09398)).
 - Unke et al. 2021, *SE(3)-equivariant prediction of molecular wavefunctions and
   electronic densities* (PhiSNet), NeurIPS 2021
   ([arXiv:2106.02347](https://arxiv.org/abs/2106.02347)).

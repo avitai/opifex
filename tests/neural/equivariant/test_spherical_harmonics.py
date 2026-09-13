@@ -1,8 +1,7 @@
 """Tests for real spherical harmonics ``Y_l(r)``.
 
 Behaviour is specified against the e3nn / e3nn-jax conventions (Geiger & Smidt
-2022, arXiv:2207.09453; reference
-``../e3nn-jax/e3nn_jax/_src/spherical_harmonics/``).
+2022, arXiv:2207.09453).
 
 The load-bearing check couples the spherical harmonics to the Wigner-D matrices:
 they MUST share a convention, so equivariance ``Y_l(R r) = D^l(R) Y_l(r)`` holds

@@ -2,7 +2,7 @@
 
 The :func:`logdet_matmul` primitive must reproduce a sum of weighted
 determinants exactly while staying numerically stable in the log domain
-(FermiNet ``network_blocks.logdet_matmul``).
+(as used by FermiNet, Pfau et al. 2020, arXiv:1909.02487).
 """
 
 from __future__ import annotations

@@ -1,8 +1,8 @@
 """Tests for the PsiFormer self-attention wavefunction ansatz.
 
 The PsiFormer (von Glehn, Spencer & Pfau, *A Self-Attention Ansatz for
-Ab-initio Quantum Chemistry*, arXiv:2211.13672; reference implementation
-``../ferminet`` ``psiformer.py``) replaces FermiNet's pooled equivariant
+Ab-initio Quantum Chemistry*, arXiv:2211.13672) replaces FermiNet's pooled
+equivariant
 backbone with a stack of multi-head self-attention blocks over the electrons.
 It must satisfy the same contract as :class:`FermiNet`: a single-walker
 ``(sign, log|psi|)`` evaluation that is antisymmetric under same-spin electron

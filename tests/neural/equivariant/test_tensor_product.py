@@ -1,8 +1,7 @@
 r"""Tests for the equivariant tensor product.
 
-Behaviour is specified against ``e3nn-jax``'s tensor product
-(``../e3nn-jax/e3nn_jax/_src/tensor_products.py`` and the ``uvw`` connection of
-``../e3nn-jax/e3nn_jax/_src/legacy/core_tensor_product.py``): for each path
+Behaviour is specified against the fully-connected (``uvw``) tensor product of
+e3nn (Geiger & Smidt 2022, arXiv:2207.09453): for each path
 ``(i1) x (i2) -> i3`` allowed by the selection rule and present in the target
 ``irreps_out``, contract the two input blocks with the Clebsch-Gordan tensor and
 a learnable ``(mul1, mul2, mul3)`` weight.

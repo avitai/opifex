@@ -8,17 +8,15 @@ and contracts them with the atomic positions to form the molecular dipole
 
 This is the partial-charge dipole of PaiNN (Schuett, Unke & Gastegger 2021,
 "Equivariant message passing for the prediction of tensorial properties and
-molecular spectra", ICML) and the ``l = 0`` branch of ``../mace``'s
-``compute_total_charge_dipole_permuted`` (``mace/modules/utils.py``), where
-``dipole = scatter_sum(positions * charges)``. Because each :math:`q_i` is a
+molecular spectra", ICML). Because each :math:`q_i` is a
 rotation-invariant scalar, the sum :math:`\sum_i q_i \mathbf{r}_i` transforms as a
 vector: rotating the geometry by :math:`R` rotates the dipole by :math:`R` (an
 :math:`l = 1` equivariant). For a neutral system (:math:`\sum_i q_i = 0`) the
 dipole is additionally origin independent.
 
-Scope: this head uses only the charge-weighted-positions term. ``../mace``'s
-``AtomicDipolesMACE`` adds an atomic :math:`l = 1` dipole readout when the
-backbone exposes equivariant vector features; the opifex backbones (PaiNN /
+Scope: this head uses only the charge-weighted-positions term. An atomic
+:math:`l = 1` dipole readout can be added when the backbone exposes equivariant
+vector features; the opifex backbones (PaiNN /
 NequIP / SchNet) currently expose only invariant ``"node_features"``, so the
 atomic-dipole term is omitted (it would be identically zero with no vector
 input). The construction here matches PaiNN's default ``dipole_moment`` head.

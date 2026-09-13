@@ -31,8 +31,8 @@
 # - **Antiderivative data generation** using Gaussian Random Field (GRF) basis
 # - **Zero initial condition constraint** via output transformation
 #
-# Equivalent to DeepXDE's `antiderivative_aligned.py` example,
-# reimplemented using Opifex APIs.
+# Follows the antiderivative operator example of the DeepONet paper
+# (Lu, Jin & Karniadakis 2021, arXiv:1910.03193), implemented with Opifex APIs.
 #
 # ## Learning Goals
 #

@@ -1,8 +1,9 @@
 """Discrete-continuous (DISCO) convolutions on arbitrary point sets.
 
 A DISCO convolution (Ocampo, Price & McEwen 2023, *Scalable and equivariant spherical CNNs by
-discrete-continuous (DISCO) convolutions*, ``arXiv:2209.13603``; the algorithm implemented by
-NVIDIA ``torch_harmonics`` and used in spherical neural operators for weather/climate)
+discrete-continuous (DISCO) convolutions*, ``arXiv:2209.13603``; used in neural operators by
+Liu-Schiaffini et al. 2024, *Neural Operators with Localized Integral and Differential Kernels*,
+``arXiv:2402.16845``)
 parameterises the convolution kernel as a *continuous* function and evaluates the convolution as a
 quadrature sum against the input samples:
 
@@ -10,12 +11,10 @@ quadrature sum against the input samples:
 
 where ``q_i`` is the quadrature weight (the measure each input sample represents). The kernel
 ``kappa(r) = sum_k w_k phi_k(r)`` is a sum of fixed continuous radial basis functions ``phi_k`` with
-learnable per-channel coefficients ``w_k``. The radial basis is the piecewise-linear hat basis of
-the reference (opifex's :class:`~opifex.neural.equivariant.PiecewiseLinearBasis`, faithful to
-``torch_harmonics``'s ``PiecewiseLinearFilterBasis``), and the filter is normalised per output point
-and per basis function so each basis integrates to one against the quadrature
-(``torch_harmonics``'s ``_normalize_convolution_filter_matrix``) — a partition of unity that gives
-consistent magnitude and discretisation invariance.
+learnable per-channel coefficients ``w_k``. The radial basis is a piecewise-linear hat basis
+(opifex's :class:`~opifex.neural.equivariant.PiecewiseLinearBasis`), and the filter is normalised
+per output point and per basis function so each basis integrates to one against the quadrature —
+a partition of unity that gives consistent magnitude and discretisation invariance.
 
 Because the kernel is continuous and the sum is a quadrature, the operator is
 *discretisation-aware*: it acts on arbitrary — including irregular and non-uniform — point
@@ -51,9 +50,8 @@ def build_disco_filter(
     """Build the normalised DISCO quadrature filter ``psi[o, i, k]``.
 
     For each output point ``o``, input point ``i`` and basis function ``k`` the entry is
-    ``q_i * phi_k(|x_o - x_i|)`` normalised so ``sum_i psi[o, i, k] = 1``
-    (``torch_harmonics``'s ``_normalize_convolution_filter_matrix``), making each basis a weighted
-    average over the support.
+    ``q_i * phi_k(|x_o - x_i|)`` normalised so ``sum_i psi[o, i, k] = 1``, making each basis a
+    weighted average over the support.
 
     Args:
         out_coords: Output sample positions, shape ``(num_out, 2)``.
@@ -119,7 +117,7 @@ class DiscreteContinuousConv2d(nnx.Module):
         self.out_channels = out_channels
         self.num_basis = num_basis
         self.radius = radius
-        # Reference piecewise-linear radial basis; precompute the normalised (num_out, num_in,
+        # Piecewise-linear radial basis; precompute the normalised (num_out, num_in,
         # num_basis) quadrature filter — a fixed function of the geometry, stored as a buffer.
         radial_basis = PiecewiseLinearBasis(num_basis=num_basis, cutoff=radius)
         self.filter = nnx.Variable(

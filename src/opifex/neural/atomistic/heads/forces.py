@@ -5,13 +5,12 @@ The :class:`ForcesHead` implements the *conservative* force strategy
 .. math:: \mathbf{F}_i = -\frac{\partial E}{\partial \mathbf{r}_i},
 
 computed by reverse-mode autodiff of the total energy with respect to atomic
-positions (Schütt et al. 2018, SchNet; the ``../mace`` ``compute_forces`` pattern,
-``mace/modules/utils.py``). Conservative forces are energy-consistent by
+positions (Schütt et al. 2018, SchNet). Conservative forces are energy-consistent by
 construction (they integrate to a conserved Hamiltonian in MD) -- this is the
 default strategy.
 
 A *direct* force head (an equivariant ``l = 1`` readout predicting forces
-without differentiating the energy, as in Orb / fairchem) is a future variant
+without differentiating the energy, as in Orb / eSCN) is a future variant
 that plugs in through the same :class:`opifex.core.quantum.protocols.PropertyHead`
 protocol.
 

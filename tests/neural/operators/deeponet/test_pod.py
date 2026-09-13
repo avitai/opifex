@@ -1,8 +1,9 @@
 """Tests for POD-enhanced DeepONet (PODDeepONet).
 
-TDD tests based on reference implementation from:
-    Lu et al. (2022), "A full and fair comparison of two neural operators."
-    GitHub: lu-group/deeponet-fno
+TDD tests for the POD-DeepONet of:
+    Lu et al. (2022), "A comprehensive and fair comparison of two neural
+    operators (with practical extensions) based on FAIR data." Computer Methods
+    in Applied Mechanics and Engineering 393, 114778. arXiv:2111.05512.
 """
 
 import jax

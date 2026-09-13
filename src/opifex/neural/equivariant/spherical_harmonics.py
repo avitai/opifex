@@ -1,8 +1,7 @@
 r"""Real spherical harmonics ``Y_l(r)`` for E(3)-equivariant networks.
 
-A native, dependency-free port of the recursive spherical-harmonics algorithm of
-``e3nn-jax`` (Geiger & Smidt 2022, arXiv:2207.09453; reference
-``../e3nn-jax/e3nn_jax/_src/spherical_harmonics/recursive.py``).  Higher degrees
+A native, dependency-free implementation of the recursive spherical-harmonics
+construction of e3nn (Geiger & Smidt 2022, arXiv:2207.09453).  Higher degrees
 are built from lower ones by contracting two spherical-harmonic blocks with the
 real Clebsch-Gordan tensor::
 
@@ -10,8 +9,8 @@ real Clebsch-Gordan tensor::
 
 where ``l1 = l - 2**floor(log2(l-1))`` and ``l2 = l - l1``.  The per-degree
 normalization constant ``norm(l)`` is computed numerically from the value of the
-contraction at the "north pole" index (rather than symbolically via ``sympy`` as
-in the reference), which is exact for the integer Clebsch-Gordan tables.
+contraction at the "north pole" index, which is exact for the integer
+Clebsch-Gordan tables.
 
 The output uses the same real-spherical-harmonic basis as
 :func:`opifex.geometry.algebra.wigner.wigner_d`, so equivariance
@@ -20,11 +19,9 @@ proportional to the (normalized) direction.  The implementation is
 ``jit``/``grad``/``vmap`` clean and handles batched inputs.
 
 References:
-    * ``../e3nn-jax/e3nn_jax/_src/spherical_harmonics/recursive.py`` -- the
-      recurrence, the ``l1/l2`` split, and the ``integral`` / ``component``
-      normalization constants.
-    * ``../e3nn-jax/e3nn_jax/_src/spherical_harmonics/__init__.py`` -- the
-      ``normalize`` (project onto the sphere) and ``normalization`` options.
+    * Geiger & Smidt 2022, "e3nn: Euclidean Neural Networks", arXiv:2207.09453 --
+      the real spherical-harmonic basis, the ``integral`` / ``component`` / ``norm``
+      normalizations, and projection of the input onto the sphere.
 """
 
 from __future__ import annotations
@@ -60,9 +57,8 @@ def _normalized_coupling(degree: int, normalization: str) -> np.ndarray:
 
     The scale folds in the per-degree normalization constant ``cste(l)`` and the
     numerically computed ``norm(l)`` so that the recursion produces correctly
-    normalized real spherical harmonics.  Ported from
-    ``../e3nn-jax/e3nn_jax/_src/spherical_harmonics/recursive.py`` (the ``norm``
-    is the L2 norm of the contraction evaluated at the north-pole indices).
+    normalized real spherical harmonics (the ``norm`` is the L2 norm of the
+    contraction evaluated at the north-pole indices).
 
     Args:
         degree: The target degree ``l`` (``>= 2``).
@@ -89,8 +85,6 @@ def _normalized_coupling(degree: int, normalization: str) -> np.ndarray:
 
 def _base_constants(normalization: str) -> tuple[float, float]:
     r"""Return the ``(l=0, l=1)`` prefactors for the chosen normalization.
-
-    Ported from ``../e3nn-jax/e3nn_jax/_src/spherical_harmonics/recursive.py``.
 
     Args:
         normalization: One of ``"integral"``, ``"component"``, ``"norm"``.

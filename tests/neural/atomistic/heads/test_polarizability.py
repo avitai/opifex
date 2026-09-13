@@ -7,7 +7,7 @@ Load-bearing physics contracts:
   :math:`\alpha_\mathrm{iso}\,\mathbf{I}` plus a symmetric-traceless
   (:math:`l = 2`) anisotropic part built from charge-weighted position outer
   products :math:`q_i\,(3\,\mathbf{r}_i\mathbf{r}_i^\top - |\mathbf{r}_i|^2\mathbf{I})`
-  (Schuett, Unke & Gastegger 2021, PaiNN tensorial readout; MACE polarizability);
+  (Schuett, Unke & Gastegger 2021, PaiNN tensorial readout);
 * the tensor is **rotationally equivariant**: rotating the positions by ``R``
   conjugates the polarizability, :math:`\alpha(R\mathbf{r}) = R\,\alpha(\mathbf{r})\,R^\top`;
 * an isotropic-only configuration yields a multiple of the identity;

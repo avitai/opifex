@@ -1,7 +1,7 @@
 r"""Tests for the equivariant linear layer.
 
-Behaviour is specified against ``e3nn-jax``'s ``FunctionalLinear``
-(``../e3nn-jax/e3nn_jax/_src/linear.py``): a linear map that mixes only the
+Behaviour is specified against the equivariant linear layer of e3nn (Geiger &
+Smidt 2022, arXiv:2207.09453): a linear map that mixes only the
 multiplicities of input irreps that share the *same* ``(l, p)`` with an output
 irrep -- the constraint that makes the map equivariant.
 

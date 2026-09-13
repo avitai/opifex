@@ -4,17 +4,15 @@ These utilities turn a point cloud into the ``(senders, receivers)`` edge index
 used by equivariant message-passing networks, and aggregate per-edge messages
 back onto nodes.
 
-* :func:`radius_graph` follows the dense pairwise-distance + fixed-size mask
-  approach of ``../e3nn-jax/e3nn_jax/_src/radius_graph.py`` (it uses
-  ``jnp.where(mask, size=...)`` to return a statically shaped edge list).  The
-  neighbour-list concept is that of ``../jax-md/jax_md/partition.py``; unlike
-  ``jax-md``'s cell-list partitioning, this implementation is a simple **dense
-  ``O(N^2)``** pairwise computation -- correct and ``jit``-friendly for the small
-  to medium molecules typical of interatomic-potential workloads, but not
-  intended for very large ``N``.
+* :func:`radius_graph` uses a dense pairwise-distance + fixed-size mask
+  (``jnp.where(mask, size=...)`` returns a statically shaped edge list).  Unlike
+  cell-list neighbour lists (JAX MD, Schoenholz & Cubuk 2020, arXiv:1912.04232),
+  this implementation is a simple **dense ``O(N^2)``** pairwise computation --
+  correct and ``jit``-friendly for the small to medium molecules typical of
+  interatomic-potential workloads, but not intended for very large ``N``.
 
 * :func:`scatter_sum`, :func:`scatter_mean` and :func:`scatter_max` wrap
-  ``jax.ops.segment_*`` (cf. ``../e3nn-jax/e3nn_jax/_src/scatter.py``).
+  ``jax.ops.segment_*``.
 
 Static-shape contract: ``radius_graph`` returns edge arrays of fixed length
 ``max_edges`` (padded with ``-1``), so the output shape does not depend on the

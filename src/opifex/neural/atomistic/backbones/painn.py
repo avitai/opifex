@@ -40,11 +40,10 @@ through the :class:`opifex.core.quantum.protocols.Backbone` protocol
 References:
     * Schuett, Unke & Gastegger 2021, arXiv:2102.03150 -- the message/update
       equations (eq. 7-10) and the scalar/vector channel split.
-    * Satorras et al. 2021, "E(n) Equivariant Graph Neural Networks" (ICML),
-      ``../artifex .../layers/egnn.py`` -- the E(n) "scalar-gates-vector"
-      update rule used as the equivariance reference (dense ``[B, N, N]``
-      layout there; reformulated here for the sparse ``(senders, receivers)``
-      atomistic contract, so it is an *algorithm reference*, not a wrapped block).
+    * Satorras, Hoogeboom & Welling 2021, "E(n) Equivariant Graph Neural
+      Networks" (ICML), arXiv:2102.09844 -- the E(n) "scalar-gates-vector"
+      update rule used as the equivariance reference, formulated here for the
+      sparse ``(senders, receivers)`` atomistic contract.
 """
 
 from __future__ import annotations

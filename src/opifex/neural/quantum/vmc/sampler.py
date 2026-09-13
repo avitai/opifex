@@ -2,8 +2,8 @@ r"""Metropolis-Hastings Monte Carlo samplers for neural wavefunctions.
 
 The walkers are drawn from the Born density :math:`|\psi(r)|^2`, i.e.
 :math:`\log p(r) = 2 \log|\psi(r)|`. :class:`MetropolisHastingsSampler`
-implements the FermiNet all-electron move with an *asymmetric, harmonic-mean*
-proposal (``../ferminet`` ``mcmc.py``): the per-electron proposal width scales
+implements an all-electron move with an *asymmetric, harmonic-mean*
+proposal: the per-electron proposal width scales
 with the harmonic mean of that electron's distances to the nuclei, so electrons
 near a nucleus take small steps and valence electrons take large ones. The
 accept/reject ratio includes the forward/reverse proposal densities to keep
@@ -32,7 +32,7 @@ def _harmonic_mean_width(
     """Harmonic mean of each electron's distances to the nuclei.
 
     Returns an array of shape ``(batch, nelectron, 1)`` giving the proposal-width
-    scale for each electron (FermiNet ``_harmonic_mean``).
+    scale for each electron.
     """
     displacement = walkers[:, :, None, :] - atoms[None, None, :, :]
     distance = jnp.linalg.norm(displacement, axis=-1)

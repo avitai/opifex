@@ -19,7 +19,8 @@ with the molecular Coulomb potential
 The kinetic term uses either the native forward-Laplacian or the
 ``jvp``-over-``grad`` oracle (:mod:`~opifex.neural.quantum.vmc.laplacian`). All
 functions are pure JAX -- ``jit`` / ``grad`` / ``vmap`` clean -- and follow the
-DeepMind FermiNet ``hamiltonian.py`` formulae. The potential is cusp-safe: the
+local-energy formulae of FermiNet (Pfau et al., *Phys. Rev. Research* **2**,
+033429 (2020), arXiv:1909.02487). The potential is cusp-safe: the
 electron-electron distance diagonal is masked in
 :func:`~._blocks.construct_input_features`, and same-site nuclear pairs never
 appear because only the strict upper triangle is summed.

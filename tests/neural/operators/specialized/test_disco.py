@@ -1,12 +1,10 @@
 """TDD contracts for discrete-continuous (DISCO) convolutions.
 
-The shape contract mirrors the reference ``neuraloperator`` test
-(``neuralop/layers/tests/test_disco_conv.py``): a point-cloud forward maps separate input/output
-grids. The remaining tests pin the genuine DISCO properties that a standard discrete convolution
-lacks — operation on irregular point sets, the per-output filter normalisation
-(``torch_harmonics._normalize_convolution_filter_matrix``), discretisation invariance, and
-JAX-transform compatibility. References: Ocampo et al. 2023 (``arXiv:2209.13603``);
-``torch_harmonics``; ``neuraloperator``.
+The shape contract: a point-cloud forward maps separate input/output grids. The remaining tests
+pin the genuine DISCO properties that a standard discrete convolution lacks — operation on
+irregular point sets, the per-output filter normalisation (a partition of unity),
+discretisation invariance, and JAX-transform compatibility. References: Ocampo et al. 2023
+(``arXiv:2209.13603``); Liu-Schiaffini et al. 2024 (``arXiv:2402.16845``).
 """
 
 from __future__ import annotations
@@ -24,7 +22,7 @@ from opifex.neural.operators.specialized.disco import (
 
 
 def test_disco_forward_shape_separate_in_out_grids() -> None:
-    """Point-cloud forward maps an input grid to a different-resolution output grid (reference)."""
+    """Point-cloud forward maps an input grid to a different-resolution output grid."""
     in_coords, quad = regular_grid(16)  # 256 input points
     out_coords, _ = regular_grid(12)  # 144 output points
     conv = DiscreteContinuousConv2d(
@@ -65,12 +63,12 @@ def test_disco_operates_on_irregular_point_set() -> None:
 
 
 def test_disco_filter_is_normalised_per_output_and_basis() -> None:
-    """Each (output, basis) row of the filter sums to ~1 over inputs (reference normalisation)."""
+    """Each (output, basis) row of the filter sums to ~1 over inputs (DISCO normalisation)."""
     in_coords, quad = regular_grid(20)
     basis = PiecewiseLinearBasis(num_basis=4, cutoff=0.25)
 
     # Raw (un-normalised) support per (output, basis); rows whose raw support is well above the
-    # eps floor must normalise to exactly 1 (partition of unity, per the reference).
+    # eps floor must normalise to exactly 1 (partition of unity).
     distances = jnp.linalg.norm(in_coords[:, None, :] - in_coords[None, :, :], axis=-1)
     raw_sums = jnp.sum(basis(distances) * quad[None, :, None], axis=1)  # (num_out, num_basis)
 

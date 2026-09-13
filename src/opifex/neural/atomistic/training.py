@@ -14,8 +14,8 @@ The combined objective is the standard weighted energy + forces loss
 
 .. math:: \mathcal{L} = w_E \, \operatorname{MSE}(E) + w_F \, \operatorname{MSE}(F)
 
-(Batzner et al. 2022, NequIP, arXiv:2101.03164; the ``../mace``
-``WeightedEnergyForcesLoss``). Because the forces are themselves a gradient of
+(Batzner et al. 2022, NequIP, arXiv:2101.03164; Batatia et al. 2022, MACE,
+arXiv:2206.07697). Because the forces are themselves a gradient of
 the energy, fitting forces trains the model through second-order autodiff
 (grad-of-grad), which the backbones are tested ``jit``/``grad``/``vmap``-clean
 for.
@@ -56,11 +56,7 @@ class ParamEMA:
 
     Validation and inference for machine-learning interatomic potentials are
     standardly run against an EMA of the weights rather than the noisy last-step
-    weights: NequIP exposes an ``ema_decay`` hyper-parameter and MACE wraps the
-    model in ``torch_ema.ExponentialMovingAverage`` (``mace/tools/train.py``),
-    both defaulting to ``decay = 0.99`` (NequIP configs; the MACE
-    ``--ema_decay`` argument, ``mace/tools/arg_parser.py``). The shadow weights
-    track
+    weights. The shadow weights track
 
     .. math:: \theta_{\text{ema}} \leftarrow d\,\theta_{\text{ema}}
               + (1 - d)\,\theta
@@ -125,8 +121,7 @@ class ParamEMA:
     def swap_in(self, model: AtomisticModel) -> Iterator[None]:
         """Temporarily evaluate ``model`` with the EMA params, then restore.
 
-        Mirrors MACE's ``ema.average_parameters()`` context
-        (``mace/tools/train.py``): the raw (live) parameters are saved, the EMA
+        The raw (live) parameters are saved, the EMA
         shadow is loaded for the duration of the ``with`` block, and the live
         parameters are restored on exit so subsequent training is unaffected.
 
@@ -534,9 +529,8 @@ def fit_atomistic(
     When ``ema_decay`` is set, a :class:`ParamEMA` shadow is maintained and
     updated after every training step, and **the model is left holding the EMA
     (averaged) parameters on return** -- the standard NequIP/MACE convention of
-    evaluating against smoothed weights rather than the noisy last-step weights
-    (NequIP ``ema_decay``; MACE ``ema.average_parameters()``,
-    ``mace/tools/train.py``). With ``ema_decay=None`` (the default) the model
+    evaluating against smoothed weights rather than the noisy last-step
+    weights. With ``ema_decay=None`` (the default) the model
     holds the raw last-step weights -- the original behaviour, unchanged.
 
     Args:

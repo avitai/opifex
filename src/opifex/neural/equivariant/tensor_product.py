@@ -8,17 +8,13 @@ output irreps; the contraction
 ``einsum("...ui,...vj,ijk->...uvk", x_1, x_2, C)`` (with ``C`` the
 Clebsch-Gordan tensor) is equivariant by construction.
 
-Ported from ``e3nn-jax`` (``../e3nn-jax/e3nn_jax/_src/tensor_products.py:122``
-and the ``uvw`` connection of
-``../e3nn-jax/e3nn_jax/_src/legacy/core_tensor_product.py``).  The
-*fully-connected* variant gives every path ``(i_1, i_2) -> i_3`` a learnable
-``(mul_1, mul_2, mul_3)`` weight:
-``einsum("uvw,ijk,...ui,...vj->...wk", w, C, x_1, x_2)``.  Normalisation follows
-the e3nn default config (``irrep_normalization="component"``,
-``path_normalization="element"``): the per-path scale
-``alpha = dim(ir_3) / sum_paths(mul_1 mul_2)`` (cf.
-``_normalize_instruction_path_weights``) is folded into the weight
-initialisation standard deviation, so the forward pass uses the raw
+The tensor product of e3nn (Geiger & Smidt 2022, arXiv:2207.09453).  The
+*fully-connected* (``uvw``) variant gives every path ``(i_1, i_2) -> i_3`` a
+learnable ``(mul_1, mul_2, mul_3)`` weight:
+``einsum("uvw,ijk,...ui,...vj->...wk", w, C, x_1, x_2)``.  Normalisation uses
+``"component"`` irrep normalisation and ``"element"`` path normalisation: the
+per-path scale ``alpha = dim(ir_3) / sum_paths(mul_1 mul_2)`` is folded into the
+weight initialisation standard deviation, so the forward pass uses the raw
 Clebsch-Gordan tensor.
 """
 
@@ -132,7 +128,7 @@ class FullyConnectedTensorProduct(nnx.Module):
         for i1, i2, out_index, (l1, l2, l3) in raw_paths:
             mul_out = self.irreps_out.blocks[out_index][0]
             out_dim = 2 * l3 + 1
-            # e3nn "component" irrep norm + "element" path norm folded into init std.
+            # "component" irrep norm + "element" path norm folded into init std.
             alpha = out_dim / path_norm_sum[out_index]
             weight_std = math.sqrt(alpha)
             key, subkey = jax.random.split(key)
@@ -226,13 +222,13 @@ class ChannelwiseTensorProduct(nnx.Module):
     in ``irreps_out`` couples the inputs **channel-by-channel** and carries a single
     ``(mul,)`` weight -- ``O(mul)`` parameters per path rather than the
     :class:`FullyConnectedTensorProduct`'s ``O(mul^3)``. This is the connection
-    QHNet's self / pair interaction layers use (``../AIRS/OpenDFT/QHBench/QH9/
-    models/QHNet.py``); the unweighted forward equals
-    ``e3nn.elementwise_tensor_product``.
+    used by the self / pair interaction layers of QHNet (Yu et al. 2023,
+    arXiv:2306.04922); the unweighted forward is the element-wise tensor product
+    of e3nn (Geiger & Smidt 2022, arXiv:2207.09453).
 
     The per-channel weights are the module's internal parameters by default, but a
     per-sample ``weights`` array (width :attr:`weight_numel`) can be supplied to
-    :meth:`__call__` -- the path QHNet uses to inject per-edge radial /
+    :meth:`__call__` -- the mechanism QHNet uses to inject per-edge radial /
     inner-product modulation into the pair coupling.
     """
 

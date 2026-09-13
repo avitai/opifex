@@ -1,7 +1,7 @@
 r"""Tests for the norm-gated equivariant nonlinearity ``NormGate``.
 
-Behaviour is specified against QHNet's ``NormGate``
-(``../AIRS/OpenDFT/QHBench/QH9/models/QHNet.py``): the gating signal is an MLP of
+Behaviour is specified against the norm gate of QHNet (Yu et al. 2023,
+arXiv:2306.04922): the gating signal is an MLP of
 the input scalars concatenated with the per-irrep **norms** of the non-scalar
 channels; the MLP output replaces the scalar channels and scales each non-scalar
 multiplicity. Unlike the rightmost-scalar :func:`~opifex.neural.equivariant.gate`,

@@ -2,8 +2,8 @@ r"""Internal helpers for assembling :class:`IrrepsArray` outputs from chunks.
 
 The equivariant layers (:mod:`linear`, :mod:`tensor_product`, :mod:`gate`)
 compute their output one ``(mul, Irrep)`` block at a time and then concatenate
-the blocks along the feature axis.  This mirrors ``e3nn_jax.from_chunks``
-(``../e3nn-jax/e3nn_jax/_src/irreps_array.py``) but is specialised to opifex's
+the blocks along the feature axis (the irreps-array data model of e3nn, Geiger &
+Smidt 2022, arXiv:2207.09453), specialised to opifex's
 :class:`~opifex.neural.equivariant.IrrepsArray` (which always stores a dense
 array, with ``None`` chunks materialised as zeros).
 """
