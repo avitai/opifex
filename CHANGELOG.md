@@ -93,6 +93,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   likelihood of the pseudo-observation model, and matches the exact value, or the dense Laplace
   approximation, to four decimals. The Gaussian power-EP log normaliser was also `½ log(1/power)`
   too high per observation and now includes the power-EP constant.
+- `fit_laplace_gp` runs with float64 inputs. It started the Newton iteration from a float32 latent
+  and objective, so with x64 enabled and a float64 kernel `jax.lax.scan` raised "carry input and
+  carry output must have equal types". The initial carry now takes the dtype of the kernel matrix
+  and the targets.
 
 ## [0.2.5] - 2026-09-11
 

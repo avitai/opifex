@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import pytest
 
 from opifex.uncertainty.gp import (
     fit_bernoulli_laplace_gp,
@@ -29,6 +30,7 @@ from opifex.uncertainty.gp import (
     fit_poisson_laplace_gp,
     fit_studentst_laplace_gp,
     LaplaceGPState,
+    matern32_kernel,
     predict_beta_laplace_gp,
     predict_poisson_laplace_gp,
     predict_studentst_laplace_gp,
@@ -78,6 +80,30 @@ def test_generic_fit_laplace_gp_matches_bernoulli_specialisation() -> None:
         bernoulli_state.log_marginal_likelihood,
         atol=1e-5,
     )
+
+
+@pytest.mark.usefixtures("float64")
+def test_generic_fit_laplace_gp_runs_in_float64() -> None:
+    """With x64 enabled, the Newton iteration keeps float64 throughout and reaches a finite mode.
+
+    The scan carry must take the kernel's dtype; a fixed float32 initial latent makes the carry
+    types of input and output differ as soon as the kernel matrix is float64.
+    """
+    x = jnp.linspace(-1.5, 1.5, 40, dtype=jnp.float64)[:, None]
+    y = jnp.where(jnp.sin(2.0 * x.squeeze(-1)) >= 0.0, 1.0, -1.0)
+    state = fit_laplace_gp(
+        log_likelihood_components_fn=_bernoulli_log_likelihood_components,
+        x_train=x,
+        y_train=y,
+        lengthscale=0.7,
+        output_scale=1.0,
+        num_newton_iterations=20,
+        kernel_fn=matern32_kernel,
+    )
+    assert state.f_mode.dtype == jnp.float64
+    assert bool(jnp.all(jnp.isfinite(state.f_mode)))
+    assert state.log_marginal_likelihood.dtype == jnp.float64
+    assert bool(jnp.isfinite(state.log_marginal_likelihood))
 
 
 # -----------------------------------------------------------------------------

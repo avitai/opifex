@@ -162,8 +162,10 @@ def fit_laplace_gp(
     """
     n = y_train.shape[0]
     k_train = kernel_fn(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
-    initial_f = jnp.zeros((n,), dtype=jnp.float32)
-    initial_objective = jnp.asarray(-jnp.inf, dtype=jnp.float32)
+    # The scan carry must keep the dtype the Newton step produces from the kernel and the targets.
+    dtype = jnp.result_type(k_train, y_train)
+    initial_f = jnp.zeros((n,), dtype=dtype)
+    initial_objective = jnp.asarray(-jnp.inf, dtype=dtype)
     (f_final, _), _ = jax.lax.scan(
         lambda carry, scan_dummy: _newton_step(
             carry,
