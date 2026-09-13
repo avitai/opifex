@@ -17,19 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `likelihood="students_t"` in their metadata, the label the dense Laplace GP and the Markov
   Laplace and variational predictors already use. They recorded `"studentst"`.
 - `StateSpaceKernel` is a pytree. Its leaves are its matrices and the rates or angular frequencies
-  of its closed-form transition, so a kernel passed to a jitted function reuses the compiled
-  program for new hyperparameter values. `state_transition(dt)` returns the closed-form transition
-  of the kernel's SDE, `discretize(dt)` returns the transition and the process noise of one step,
-  and
+  of its closed-form transition, so a kernel passed to a jitted function reuses the compiled program
+  for new hyperparameter values. `state_transition(dt)` returns the closed-form transition of the
+  kernel's SDE, `discretize(dt)` returns the transition and the process noise of one step, and
   `discretize_steps(steps)` returns them for a sequence of steps. The Markov GP paths and the
   spatio-temporal GP discretise each time grid with one `discretize_steps` call. A kernel built from
-  `feedback`, `noise_effect`, `diffusion`, `measurement` and `stationary_cov` alone discretises
-  from its feedback matrix.
+  `feedback`, `noise_effect`, `diffusion`, `measurement` and `stationary_cov` alone discretises from
+  its feedback matrix.
 - `mumbo_acquisition` takes an odd `num_quadrature_points`, default 5001, and raises `ValueError`
-  for an even count. Composite Simpson's rule needs an even number of intervals; the previous default
-  of 1000 weighted the last interval as a half panel. When `sqrt(1 - rho^2)` is below the Simpson
-  spacing the skew factor of eq. 5 steps and the quadrature error is first order in the spacing, so
-  the default is five times finer.
+  for an even count. Composite Simpson's rule needs an even number of intervals; the previous
+  default of 1000 weighted the last interval as a half panel. When `sqrt(1 - rho^2)` is below the
+  Simpson spacing the skew factor of eq. 5 steps and the quadrature error is first order in the
+  spacing, so the default is five times finer.
 - `HamiltonianBlockExpansion` learns a bias for every expansion path whose input degree is 0, the
   s-s, p-p and d-d shell pairs, as QHNet does (Yu et al. 2023, arXiv:2306.04922), so `num_bias` is
   14 for the `3x0e + 2x1e + 1x2e` block. Only the 9 s-s paths had a bias, so the p-p and d-d
@@ -98,17 +97,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `O(J N + J^2)` cost of Algorithm 4 of Zhang et al. (2022); the same call takes 2.9 ms.
 - Pathfinder's `bfgs_sample` returns finite log densities in high dimensions. It evaluated
   `log|Sigma|` as `log(prod(alpha)) + 2 log(det(L))`, so in float32 the product of 128 diagonal
-  factors of 2 overflowed and 127 factors of 0.5 underflowed, and `log_q` was `-inf` or `+inf`, which
-  also discarded those iterations from the ELBO selection. It now sums logarithms, as in Algorithm 4,
-  step 7 of Zhang et al. (2022).
+  factors of 2 overflowed and 127 factors of 0.5 underflowed, and `log_q` was `-inf` or `+inf`,
+  which also discarded those iterations from the ELBO selection. It now sums logarithms, as in
+  Algorithm 4, step 7 of Zhang et al. (2022).
 - `mumbo_acquisition` evaluates eq. 5 of Moss, Leslie & Rayson (2020) for samples of the target
   level's maximum. Its Gumbel fit to the quartiles (Wang & Jegelka 2017, §3.1) had a negative scale,
   so its samples were `2 y_0.25 - y*` and fell below the lower quartile. Its extended skew Gaussian
   conditioned on `g > g*` instead of `g < g*`. `gamma` used the candidate's mean and standard
   deviation instead of the target level's. The correlation left the observation noise out of the
-  candidate's variance. On a two-level example the scores were off by up to 1.5 nats. The expectation
-  in eq. 5 is integrated about the mean `-rho phi(gamma) / Phi(gamma)` of the density in Appendix A.1
-  (eq. 7 prints `+rho`); at `rho = 1` eq. 5 is MES.
+  candidate's variance. On a two-level example the scores were off by up to 1.5 nats. The
+  expectation in eq. 5 is integrated about the mean `-rho phi(gamma) / Phi(gamma)` of the density in
+  Appendix A.1 (eq. 7 prints `+rho`); at `rho = 1` eq. 5 is MES.
 - `min_value_entropy_search` scores information about the minimum. It applied the maximum-value
   form of Wang & Jegelka (2017), eq. 6, `gamma = (y* - mu) / sigma` with `Phi(gamma)`, to samples
   of the minimum, which ranks candidates in reverse: with sampled minima -3 and -2.5 and unit
@@ -177,16 +176,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exponentiated Van Loan's block `[[F, L Q_c L^T], [0, -F^T]] dt` in one go, which overflows float32
   and exceeds the squaring limit of `jax.scipy.linalg.expm`: Matern SDEs came back NaN at 100
   lengthscales, Matern-5/2 was off by 0.89 at 10, a third-order integrated Wiener process was off by
-  5.0e-4 at dt = 100, and gradients were NaN at coarse steps. It now uses the exponential-and-Gramian
-  doubling of Stillfjord and Tronarp (arXiv:2310.13462), with a
-  fixed-length doubling loop so that reverse-mode gradients work. Against extended-precision
-  references for Matern-1/2 to Matern-7/2, integrated Wiener processes of order 1 to 4 and
-  integrated Ornstein-Uhlenbeck processes, at steps from 1e-4 to 1e4, every process-noise entry
-  `Q_ij` is within `1.7e-5 sqrt(Q_ii Q_jj)` in float32 and `1.1e-13 sqrt(Q_ii Q_jj)` in float64.
-  Gradients stay finite for growing drifts, a singular positive semi-definite `Q_c` is supported, and
-  steps needing more than 32 doublings return NaN. Per 1000 float32 steps under `vmap` it takes 2.3
-  to 3.0 ms instead of 8.1 to 8.7 ms for a three-state SDE and 26 to 27 ms instead of 2.3 to 5.9 ms
-  for a four-state SDE; gradients take 8.4 ms instead of 43 ms and 93 ms instead of 20 ms.
+  5.0e-4 at dt = 100, and gradients were NaN at coarse steps. It now uses the
+  exponential-and-Gramian doubling of Stillfjord and Tronarp (arXiv:2310.13462), with a fixed-length
+  doubling loop so that reverse-mode gradients work. Against extended-precision references for
+  Matern-1/2 to Matern-7/2, integrated Wiener processes of order 1 to 4 and integrated
+  Ornstein-Uhlenbeck processes, at steps from 1e-4 to 1e4, every process-noise entry `Q_ij` is
+  within `1.7e-5 sqrt(Q_ii Q_jj)` in float32 and `1.1e-13 sqrt(Q_ii Q_jj)` in float64. Gradients
+  stay finite for growing drifts, a singular positive semi-definite `Q_c` is supported, and steps
+  needing more than 32 doublings return NaN. Per 1000 float32 steps under `vmap` it takes 2.3 to 3.0
+  ms instead of 8.1 to 8.7 ms for a three-state SDE and 26 to 27 ms instead of 2.3 to 5.9 ms for a
+  four-state SDE; gradients take 8.4 ms instead of 43 ms and 93 ms instead of 20 ms.
 - The Markov GP evidence values are the published energies. `fit_markov_vi_gp` returned the
   expected log likelihood minus a log-determinant penalty, `fit_markov_laplace_gp` the log
   likelihood at the mode minus the same penalty, and `fit_markov_pep_gp` the sum of the cavity log
