@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of 1000 weighted the last interval as a half panel. When `sqrt(1 - rho^2)` is below the Simpson
   spacing the skew factor of eq. 5 steps and the quadrature error is first order in the spacing, so
   the default is five times finer.
+- `HamiltonianBlockExpansion` learns a bias for every expansion path whose input degree is 0, the
+  s-s, p-p and d-d shell pairs, as QHNet does (Yu et al. 2023, arXiv:2306.04922), so `num_bias` is
+  14 for the `3x0e + 2x1e + 1x2e` block. Only the 9 s-s paths had a bias, so the p-p and d-d
+  on-site and off-site sub-blocks had no term independent of the feature. The readout of each block
+  head of `BlockHamiltonianPredictor` gains 5 outputs, so `load_predictor_checkpoint` raises
+  `ValueError` for a checkpoint saved before this change.
 - `tfp-nightly` is a declared runtime dependency, for `bessel_ive`. Every install already had it
   through `avitai-artifex`, and it leaves the `probabilistic` extra.
 

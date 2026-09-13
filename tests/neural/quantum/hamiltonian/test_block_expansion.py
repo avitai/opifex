@@ -61,6 +61,17 @@ def _wigner_block(rotation: jax.Array) -> jax.Array:
     return jax.scipy.linalg.block_diag(*matrices)
 
 
+def _shells() -> list[tuple[int, int]]:
+    """Return ``(offset, l)`` of every output shell of ``BLOCK_IRREPS``, in block order."""
+    shells: list[tuple[int, int]] = []
+    offset = 0
+    for mul, irrep in BLOCK_IRREPS.blocks:
+        for _ in range(mul):
+            shells.append((offset, irrep.l))
+            offset += irrep.dim
+    return shells
+
+
 def _make_module(seed: int = 0) -> HamiltonianBlockExpansion:
     """Construct a head with the shared test feature/embedding layout."""
     return HamiltonianBlockExpansion(
@@ -102,8 +113,33 @@ def test_num_path_weight_and_bias_are_positive_ints() -> None:
     assert isinstance(module.num_path_weight, int)
     assert isinstance(module.num_bias, int)
     assert module.num_path_weight > 0
-    # Bias applies only to scalar (l_out1 = l_out2 = 0) sub-blocks: 3x3 s-shells.
-    assert module.num_bias == 9
+    # QHNet biases every path whose input degree is 0: one bias per pair of output shells of equal
+    # degree, 3x3 s-s, 2x2 p-p and 1x1 d-d.
+    assert module.num_bias == 14
+
+
+def test_degree_zero_paths_bias_every_shell_pair_of_equal_degree() -> None:
+    r"""A zero feature leaves the biases alone, on the s-s, p-p and d-d sub-blocks.
+
+    QHNet (Yu et al. 2023, arXiv:2306.04922) learns a bias for each expansion path with input
+    degree 0. With a zero feature a sub-block of equal shell degrees is ``b C^{l l 0}``, a nonzero
+    multiple of the identity, and every other sub-block is zero. Each entry is one product of a
+    bias and a coupling plus exact zeros, so the comparison is exact.
+    """
+    module = _make_module()
+    _, embedding = _random_inputs(10, leading=(6,))
+    zero_feature = IrrepsArray(FEATURE_IRREPS, jnp.zeros((6, FEATURE_IRREPS.dim)))
+    block = module(zero_feature, embedding)
+    for row, l_i in _shells():
+        for col, l_j in _shells():
+            sub_block = block[:, row : row + 2 * l_i + 1, col : col + 2 * l_j + 1]
+            if l_i != l_j:
+                assert bool(jnp.all(sub_block == 0.0)), (row, col)
+                continue
+            diagonal = sub_block[:, 0, 0]
+            assert bool(jnp.all(diagonal != 0.0)), (row, col)
+            expected = diagonal[:, None, None] * jnp.eye(2 * l_i + 1)
+            assert bool(jnp.all(sub_block == expected)), (row, col)
 
 
 def test_block_transformation_law() -> None:

@@ -24,10 +24,10 @@ where ``C = clebsch_gordan(l_i, l_j, L)`` (reused from
 is the ``L``-chunk of the feature with multiplicity index ``w``, and ``g`` is a
 **per-sample path weight** produced by an MLP on a provided invariant embedding
 (the embedding-conditioned expansion weights of QHNet; here every output shell has
-multiplicity one). Only the s-s sub-blocks with ``l_i = l_j = L = 0`` additionally
-receive a per-sample bias; p-p and d-d sub-blocks carry no bias. The same MLP-driven
-head thus
-serves diagonal blocks (node embedding) and off-diagonal blocks (concatenated pair
+multiplicity one). As in QHNet, every path with input degree ``L = 0`` -- the s-s, p-p
+and d-d shell pairs, where ``l_i = l_j`` -- also receives a per-sample bias, added to the
+weighted degree-0 feature before the contraction. The same MLP-driven head thus serves
+diagonal blocks (node embedding) and off-diagonal blocks (concatenated pair
 embedding) -- one module, no duplication.
 
 Because ``clebsch_gordan(l_i, l_j, L)`` is the intertwiner between
@@ -91,7 +91,7 @@ class _ExpansionPath:
         weight_offset: Start index of this path's ``mul_L`` weights in the flat
             per-sample weight vector.
         bias_offset: Start index of this path's bias in the flat per-sample bias
-            vector, or ``-1`` if the path carries no bias (non-scalar sub-block).
+            vector, or ``-1`` if the path carries no bias (input degree ``L > 0``).
         coupling_flat: The constant ``clebsch_gordan(l_i, l_j, L)`` tensor flattened
             to a row-major tuple (rebuilt as a compile-time array in ``__call__``).
     """
@@ -162,7 +162,8 @@ def _build_paths(feature_irreps: Irreps) -> tuple[tuple[_ExpansionPath, ...], in
                 if degree not in degree_slices:
                     continue
                 start, stop, multiplicity = degree_slices[degree]
-                is_scalar = l_i == 0 and l_j == 0 and degree == 0
+                # QHNet biases every path with input degree 0: the s-s, p-p and d-d shell pairs.
+                has_bias = degree == 0
                 coupling = clebsch_gordan(l_i, l_j, degree)
                 paths.append(
                     _ExpansionPath(
@@ -174,12 +175,12 @@ def _build_paths(feature_irreps: Irreps) -> tuple[tuple[_ExpansionPath, ...], in
                         feature_slice=(start, stop),
                         multiplicity=multiplicity,
                         weight_offset=weight_offset,
-                        bias_offset=bias_offset if is_scalar else -1,
+                        bias_offset=bias_offset if has_bias else -1,
                         coupling_flat=tuple(coupling.reshape(-1).tolist()),
                     )
                 )
                 weight_offset += multiplicity
-                if is_scalar:
+                if has_bias:
                     bias_offset += 1
     return tuple(paths), weight_offset, bias_offset
 
@@ -190,7 +191,7 @@ class HamiltonianBlockExpansion(nnx.Module):
     Applies the QHNet matrix expansion (Yu et al. 2023, arXiv:2306.04922) over the
     output shell grid of
     :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS`
-    (``3x0e + 2x1e + 1x2e``). Per-sample path weights (and scalar-block biases) are
+    (``3x0e + 2x1e + 1x2e``). Per-sample path weights (and degree-0 path biases) are
     produced by an MLP on a provided invariant embedding, so the *same* module
     builds diagonal blocks (from a node embedding) and off-diagonal blocks (from a
     concatenated pair embedding). The Clebsch-Gordan contraction reuses
@@ -296,7 +297,7 @@ class HamiltonianBlockExpansion(nnx.Module):
         # Per-sample weighted sum over the multiplicity axis -> ``(..., 2L+1)``.
         feature_vector = jnp.einsum("...w,...wm->...m", path_weights, chunk)
         if path.bias_offset >= 0:
-            # Scalar (l_i = l_j = L = 0) sub-block: add the per-sample bias.
+            # Degree-0 path (l_i = l_j, L = 0): add the per-sample bias.
             bias = biases[..., path.bias_offset, None]
             feature_vector = feature_vector + bias
         coupling = jnp.asarray(path.coupling_flat, dtype=dtype).reshape(
