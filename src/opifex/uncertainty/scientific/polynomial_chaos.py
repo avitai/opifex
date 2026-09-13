@@ -70,8 +70,8 @@ import jax
 import jax.numpy as jnp
 import jax.scipy.special as jsp_special
 from flax import struct
-from numpy.polynomial.hermite_e import hermegauss
 
+from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty.types import metadata_to_dict, MetadataItems
 
 
@@ -900,20 +900,6 @@ class SparseGrid:
             )
 
 
-def _gauss_hermite_nodes_weights(order: int) -> tuple[jax.Array, jax.Array]:
-    """1-D Gauss-Hermite nodes for the standard-normal weight.
-
-    Uses ``numpy.polynomial.hermite_e.hermegauss`` (probabilists'
-    convention with weight ``exp(-x^2 / 2) / sqrt(2 pi)``) so weights
-    sum to one. ``hermegauss`` returns nodes + weights for the weight
-    ``exp(-x^2 / 2)``; we divide weights by ``sqrt(2 pi)`` to recover
-    the probability measure.
-    """
-    nodes_np, weights_np = hermegauss(order)
-    weights_np = weights_np / jnp.sqrt(2.0 * jnp.pi)
-    return jnp.asarray(nodes_np), jnp.asarray(weights_np)
-
-
 def tensor_grid_gauss_hermite(*, order: int, num_dims: int) -> SparseGrid:
     """Tensor-product Gauss-Hermite grid for the standard normal measure.
 
@@ -931,7 +917,7 @@ def tensor_grid_gauss_hermite(*, order: int, num_dims: int) -> SparseGrid:
     if num_dims <= 0:
         raise ValueError(f"num_dims must be positive; got {num_dims}.")
 
-    nodes_1d, weights_1d = _gauss_hermite_nodes_weights(order)
+    nodes_1d, weights_1d = gauss_hermite_rule(order)
     grids = jnp.meshgrid(*([nodes_1d] * num_dims), indexing="ij")
     flat_nodes = jnp.stack([g.ravel() for g in grids], axis=-1)
     weights = weights_1d
@@ -1015,7 +1001,7 @@ def smolyak_sparse_grid(*, level: int, num_dims: int, family: str = "hermite") -
         coefficient = _smolyak_coefficient(multi_index, level=level)
         if coefficient == 0.0:
             continue
-        per_axis_nw = [_gauss_hermite_nodes_weights(idx) for idx in multi_index]
+        per_axis_nw = [gauss_hermite_rule(idx) for idx in multi_index]
         per_axis_nodes = [n for n, _ in per_axis_nw]
         per_axis_weights = [w for _, w in per_axis_nw]
         for combo in product(*[range(n.shape[0]) for n in per_axis_nodes]):

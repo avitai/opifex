@@ -54,8 +54,8 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
+from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.markov._likelihood_support import (
@@ -121,23 +121,6 @@ class MarkovPEPGPState:
     power: float
 
 
-def _gauss_hermite_nodes_weights(num_points: int) -> tuple[jax.Array, jax.Array]:
-    r"""Normalised GH cubature for integrating against ``N(m, v)``.
-
-    Mirrors ``bayesnewton.cubature.gauss_hermite``: nodes scaled by
-    ``sqrt(2)`` and weights by ``1/sqrt(pi)`` so that for a function
-    ``g(f)`` and proposal ``N(m, v)`` we have
-
-        E_{N(m, v)}[g(f)] = sum_q weight_q * g(m + sqrt(v) * node_q).
-
-    Returns the static (numpy-backed) arrays cached at module load.
-    """
-    nodes_np, weights_np = np.polynomial.hermite.hermgauss(num_points)
-    nodes_np = np.sqrt(2.0) * nodes_np
-    weights_np = weights_np / np.sqrt(np.pi)
-    return jnp.asarray(nodes_np), jnp.asarray(weights_np)
-
-
 def _log_partition_per_observation(
     cavity_mean_scalar: jax.Array,
     cavity_variance_scalar: jax.Array,
@@ -184,7 +167,7 @@ def _gauss_hermite_log_partition_and_derivatives(
     don't densely cover the high-likelihood region — see
     ``bayesnewton.likelihoods.Likelihood.moment_match``).
     """
-    nodes, weights = _gauss_hermite_nodes_weights(num_quadrature_points)
+    nodes, weights = gauss_hermite_rule(num_quadrature_points)
 
     def per_obs_log_partition(m: jax.Array, v: jax.Array, y: jax.Array) -> jax.Array:
         """Return the tilted log-partition for one observation's cavity."""

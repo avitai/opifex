@@ -47,8 +47,8 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
+from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.laplace import LikelihoodComponentsFn  # noqa: TC001
@@ -91,14 +91,6 @@ class MarkovVIGPState:
     log_likelihood_components_fn: LikelihoodComponentsFn
 
 
-def _gauss_hermite_nodes_weights(
-    num_points: int,
-) -> tuple[jax.Array, jax.Array]:
-    """Static Gauss-Hermite quadrature nodes + weights (cached via numpy)."""
-    nodes_np, weights_np = np.polynomial.hermite.hermgauss(num_points)
-    return jnp.asarray(nodes_np), jnp.asarray(weights_np)
-
-
 def _expected_components(
     *,
     log_likelihood_components_fn: LikelihoodComponentsFn,
@@ -113,10 +105,10 @@ def _expected_components(
     the GH nodes and accumulates the weighted likelihood quadruple
     returned by ``log_likelihood_components_fn`` at each sample.
     """
-    nodes, weights = _gauss_hermite_nodes_weights(num_quadrature_points)
-    sqrt_two_var = jnp.sqrt(2.0 * jnp.maximum(latent_variance, _PSEUDO_NOISE_FLOOR))
+    nodes, weights = gauss_hermite_rule(num_quadrature_points)
+    latent_std = jnp.sqrt(jnp.maximum(latent_variance, _PSEUDO_NOISE_FLOOR))
     # f_samples shape (Q, n).
-    f_samples = latent_mean[None, :] + sqrt_two_var[None, :] * nodes[:, None]
+    f_samples = latent_mean[None, :] + latent_std[None, :] * nodes[:, None]
 
     def _per_sample(
         f_q: jax.Array,
@@ -126,10 +118,9 @@ def _expected_components(
         return log_lik_total, grad, w_diag
 
     log_liks, grads, w_diags = jax.vmap(_per_sample)(f_samples)
-    inv_sqrt_pi = 1.0 / jnp.sqrt(jnp.pi)
-    expected_log_lik = inv_sqrt_pi * jnp.sum(weights * log_liks)
-    expected_grad = inv_sqrt_pi * jnp.sum(weights[:, None] * grads, axis=0)
-    expected_w = inv_sqrt_pi * jnp.sum(weights[:, None] * w_diags, axis=0)
+    expected_log_lik = jnp.sum(weights * log_liks)
+    expected_grad = jnp.sum(weights[:, None] * grads, axis=0)
+    expected_w = jnp.sum(weights[:, None] * w_diags, axis=0)
     return expected_log_lik, expected_grad, expected_w
 
 

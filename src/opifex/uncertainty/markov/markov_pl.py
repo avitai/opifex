@@ -52,8 +52,8 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
+from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
@@ -97,19 +97,6 @@ class MarkovPLGPState:
     conditional_moments_fn: ConditionalMomentsFn
 
 
-def _gauss_hermite_nodes_weights(num_points: int) -> tuple[jax.Array, jax.Array]:
-    r"""Normalised GH cubature (matches ``bayesnewton.cubature.gauss_hermite``).
-
-    Returns ``(nodes, weights)`` with the convention
-
-        E_{N(m, v)}[g(f)] = sum_q weight_q * g(m + sqrt(v) * node_q).
-    """
-    nodes_np, weights_np = np.polynomial.hermite.hermgauss(num_points)
-    nodes_np = np.sqrt(2.0) * nodes_np
-    weights_np = weights_np / np.sqrt(np.pi)
-    return jnp.asarray(nodes_np), jnp.asarray(weights_np)
-
-
 def _expected_conditional_mean_scalar(
     mean_f_scalar: jax.Array,
     variance_f_scalar: jax.Array,
@@ -144,7 +131,7 @@ def _slr_linearisation(
     SLR design for that observation (response mean, residual
     variance, design slope).
     """
-    nodes, weights = _gauss_hermite_nodes_weights(num_quadrature_points)
+    nodes, weights = gauss_hermite_rule(num_quadrature_points)
 
     def per_obs_mu(m: jax.Array, v: jax.Array) -> jax.Array:
         """Return the expected conditional mean under one observation's marginal."""

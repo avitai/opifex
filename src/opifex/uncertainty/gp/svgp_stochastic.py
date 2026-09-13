@@ -47,9 +47,8 @@ For non-Gaussian ``p(y_i | f_i)`` we evaluate
 .. math::
 
     \mathbb{E}_{q}[\log p(y_i | f_i)]
-        \approx \frac{1}{\sqrt{\pi}}\,
-          \sum_{k=1}^{Q} w_k\,\log p\!\left(y_i \;\big|\;
-            m_i + \sqrt{2\,V_i}\,\xi_k\right)
+        \approx \sum_{k=1}^{Q} w_k\,\log p\!\left(y_i \;\big|\;
+            m_i + \sqrt{V_i}\,x_k\right)
 
 via Gauss-Hermite quadrature with ``Q`` static at trace time.
 
@@ -100,8 +99,8 @@ from dataclasses import dataclass, field
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
+from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
@@ -199,18 +198,6 @@ def init_stochastic_svgp_state(
     )
 
 
-def _gauss_hermite_nodes_weights(
-    num_points: int,
-) -> tuple[jax.Array, jax.Array]:
-    """Static Gauss-Hermite quadrature ``(nodes, weights)``.
-
-    For ``∫ exp(-x²) g(x) dx ≈ Σ_k weights[k] g(nodes[k])``. Build via
-    numpy at module-trace time so JIT sees concrete constants.
-    """
-    nodes, weights = np.polynomial.hermite.hermgauss(num_points)
-    return jnp.asarray(nodes), jnp.asarray(weights)
-
-
 def _factorise_kzz(
     state: StochasticSVGPState,
 ) -> jax.Array:
@@ -288,19 +275,20 @@ def _expected_log_likelihood_per_batch(
 ) -> jax.Array:
     r"""Compute ``E_{q(f_i)}[log p(y_i | f_i)]`` via Gauss-Hermite quadrature.
 
-    Per-observation expectation under ``f_i ~ N(m_i, V_i)``:
-    ``E[log p] ≈ Σ_k (w_k / √π) log p(y_i | m_i + √(2 V_i) ξ_k)``.
+    Per-observation expectation under ``f_i ~ N(m_i, V_i)``, with the standard-normal rule
+    ``(x_k, w_k)`` of :func:`opifex.uncertainty._gauss_hermite.gauss_hermite_rule`:
+    ``E[log p] ≈ Σ_k w_k log p(y_i | m_i + √V_i x_k)``.
 
     Returns a ``(b,)`` array.
     """
-    nodes, weights = _gauss_hermite_nodes_weights(num_quadrature_points)
-    sqrt_two_var = jnp.sqrt(2.0 * var_batch)
+    nodes, weights = gauss_hermite_rule(num_quadrature_points)
+    latent_std = jnp.sqrt(var_batch)
     # f_samples shape (Q, b); broadcast y_batch over Q.
-    f_samples = mean_batch[None, :] + sqrt_two_var[None, :] * nodes[:, None]
+    f_samples = mean_batch[None, :] + latent_std[None, :] * nodes[:, None]
     y_broadcast = jnp.broadcast_to(y_batch[None, :], f_samples.shape)
     log_lik = log_likelihood_fn(f_samples, y_broadcast)  # (Q, b)
     weighted = weights[:, None] * log_lik
-    return jnp.sum(weighted, axis=0) / jnp.sqrt(jnp.pi)
+    return jnp.sum(weighted, axis=0)
 
 
 def stochastic_svgp_elbo(
