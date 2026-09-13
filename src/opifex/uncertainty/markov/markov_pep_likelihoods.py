@@ -346,7 +346,7 @@ def predict_studentst_markov_pep_gp(
             total_uncertainty=response_variance,
         ),
         estimator="studentst_markov_pep_gp",
-        likelihood="studentst",
+        likelihood="students_t",
         link="identity",
         paper=_MARKOV_PEP_PAPER,
     )

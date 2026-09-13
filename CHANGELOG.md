@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Markov power-EP and posterior-linearisation Student-t predictors,
+  `predict_studentst_markov_pep_gp` and `predict_studentst_markov_pl_gp`, record
+  `likelihood="students_t"` in their metadata, the label the dense Laplace GP and the Markov
+  Laplace and variational predictors already use. They recorded `"studentst"`.
 - `StateSpaceKernel` is a pytree. Its leaves are its matrices and the rates or angular frequencies
   of its closed-form transition, so a kernel passed to a jitted function reuses the compiled
   program for new hyperparameter values. `state_transition(dt)` is a method following bayesnewton's
