@@ -315,18 +315,17 @@ def test_lbfgs_inverse_hessian_factors_match_algorithm_4() -> None:
     assert np.all(gamma_error <= gamma_bound), gamma_error.max() / gamma_bound
 
 
-# Float32 error of half the difference between draws at g and -g against Sigma g, in units of
-# eps32 times |x| + |Sigma g| + 1: at most 1.70 over 18 random quadratics up to 200 dimensions.
+# Float32 error of draws(g) - draws(0) against -Sigma g, in units of eps32 times
+# |x| + |Sigma g| + 1: at most 1.45 over 18 random quadratics up to 200 dimensions.
 _MEAN_ULPS = 4.0
 
 
-def test_bfgs_sample_moves_the_mean_by_sigma_times_the_gradient() -> None:
-    """Draws at gradients ``g`` and ``-g`` with the same noise differ by ``2 Sigma g``, one sign.
+def test_bfgs_sample_centres_the_draws_on_a_step_towards_the_mode() -> None:
+    """The mean is ``theta + Sigma grad log p(theta)``, Algorithm 4 line 8 of Zhang et al. (2022).
 
-    With ``Sigma = diag(alpha) + beta gamma beta^T`` (formula II.2 of Zhang et al., 2022) the mean
-    moves by ``Sigma g`` with a sign fixed by the gradient convention. The noise cancels between the
-    two calls, so half their difference must equal ``Sigma g`` or ``-Sigma g`` in every component
-    and draw.
+    ``grad_position`` is the gradient of ``-log p``, the objective L-BFGS minimises, so the mean is
+    ``theta - Sigma g`` with ``Sigma = diag(alpha) + beta gamma beta^T`` (formula II.2). The noise
+    is the same for gradients ``g`` and ``0``, so the draws differ by exactly ``-Sigma g``.
     """
     rng = np.random.default_rng(5)
     dim, maxcor = 50, 6
@@ -341,27 +340,64 @@ def test_bfgs_sample_moves_the_mean_by_sigma_times_the_gradient() -> None:
     )
     gradient = rng.normal(size=dim)
 
-    def draws(sign: float) -> np.ndarray:
+    def draws(objective_gradient: np.ndarray) -> np.ndarray:
         samples, _ = bfgs_sample(
             rng_key=jax.random.PRNGKey(5),
             num_samples=4,
             position=jnp.full((dim,), 1.5),
-            grad_position=jnp.asarray(sign * gradient, dtype=jnp.float32),
+            grad_position=jnp.asarray(objective_gradient, dtype=jnp.float32),
             alpha=jnp.asarray(alpha, dtype=jnp.float32),
             beta=beta,
             gamma=gamma,
         )
         return np.asarray(samples, dtype=np.float64)
 
-    draws_plus, draws_minus = draws(1.0), draws(-1.0)
+    draws_at_gradient, draws_at_zero = draws(gradient), draws(np.zeros(dim))
     beta64 = np.asarray(beta, dtype=np.float64)
     covariance = np.diag(alpha) + beta64 @ np.asarray(gamma, dtype=np.float64) @ beta64.T
-    shift = covariance @ gradient
-    half_difference = (draws_plus - draws_minus) / 2.0
-    bound = _MEAN_ULPS * _EPS32 * (np.abs(draws_plus) + np.abs(shift) + 1.0)
-    matches_plus = bool(np.all(np.abs(half_difference - shift) <= bound))
-    matches_minus = bool(np.all(np.abs(half_difference + shift) <= bound))
-    assert matches_plus or matches_minus, np.abs(half_difference).max()
+    step = -(covariance @ gradient)
+    error = np.abs((draws_at_gradient - draws_at_zero) - step)
+    bound = _MEAN_ULPS * _EPS32 * (np.abs(draws_at_gradient) + np.abs(step) + 1.0)
+    assert np.all(error <= bound), (error / bound).max()
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+def test_pathfinder_draws_move_towards_the_mode_when_lbfgs_stops_early(seed: int) -> None:
+    """After three L-BFGS steps the draws lie nearer the mode than the selected position.
+
+    For a correlated Gaussian target the local mean ``theta + Sigma grad log p(theta)`` takes a
+    quasi-Newton step towards the mode. Measured over 8 seeds with L-BFGS stopped after 2 to 8
+    steps, the draws' mean was nearer the target mean than the selected position in every run;
+    with the mean reflected to ``theta - Sigma grad log p`` it was nearer in none. For these seeds
+    the draw mean is 4.14 and 3.91 from the target mean against 5.47 and 5.27 for the position.
+    """
+    rng = np.random.default_rng(seed)
+    dim = 10
+    basis = rng.normal(size=(dim, dim))
+    covariance = basis @ basis.T / dim + 0.1 * np.eye(dim)
+    precision = jnp.asarray(np.linalg.inv(covariance), dtype=jnp.float32)
+    target_mean = rng.normal(size=dim)
+    target_mean32 = jnp.asarray(target_mean, dtype=jnp.float32)
+
+    def log_density(x: jax.Array) -> jax.Array:
+        centred = x - target_mean32
+        return -0.5 * centred @ precision @ centred
+
+    start = jnp.asarray(target_mean + 5.0 * rng.normal(size=dim), dtype=jnp.float32)
+    state = pathfinder_approximate(
+        rng_key=jax.random.PRNGKey(seed),
+        log_density_fn=log_density,
+        initial_position=start,
+        num_samples=256,
+        maxiter=3,
+        maxcor=6,
+    )
+    draws, _ = pathfinder_sample(
+        rng_key=jax.random.PRNGKey(100 + seed), state=state, num_samples=4096
+    )
+    draw_distance = np.linalg.norm(np.asarray(draws, dtype=np.float64).mean(axis=0) - target_mean)
+    position_distance = np.linalg.norm(np.asarray(state.position, dtype=np.float64) - target_mean)
+    assert draw_distance < position_distance, (draw_distance, position_distance)
 
 
 def _square_intermediates(jaxpr: object, dim: int) -> list[str]:
@@ -425,8 +461,15 @@ def test_pathfinder_primitives_do_not_materialise_dimension_squared_intermediate
 # ---------------------------------------------------------------------------
 
 
-def test_pathfinder_approximate_recovers_standard_normal_mode() -> None:
-    """L-BFGS on ``-log N(x; 0, I)`` from a perturbed start converges to the origin."""
+def test_pathfinder_approximate_draws_recover_the_standard_normal() -> None:
+    """Draws from the selected approximation of ``N(0, I)`` have mean 0 and unit scale.
+
+    Algorithm 1 of Zhang et al. (2022) returns draws from the ELBO-maximising approximation (line
+    11), not the selected L-BFGS iterate. From ``[2.5, -1.7]`` the first iterate already has
+    ``Sigma = I`` and a Gaussian centred on ``theta + Sigma grad log p(theta) = 0``, which ties the
+    converged iterate's ELBO, so the selected position need not be the mode while the draws are.
+    With 4096 draws the standard error of each mean is 0.016 and of each scale 0.011.
+    """
     initial_position = jnp.array([2.5, -1.7])
     state = pathfinder_approximate(
         rng_key=jax.random.PRNGKey(0),
@@ -436,7 +479,9 @@ def test_pathfinder_approximate_recovers_standard_normal_mode() -> None:
         maxiter=30,
         maxcor=6,
     )
-    assert jnp.allclose(state.position, jnp.zeros_like(initial_position), atol=0.1)
+    draws, _ = pathfinder_sample(rng_key=jax.random.PRNGKey(99), state=state, num_samples=4096)
+    assert jnp.allclose(jnp.mean(draws, axis=0), jnp.zeros(2), atol=0.1)
+    assert jnp.allclose(jnp.std(draws, axis=0), jnp.ones(2), atol=0.1)
     assert jnp.all(jnp.isfinite(state.alpha))
 
 

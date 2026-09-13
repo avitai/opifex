@@ -156,6 +156,11 @@ def bfgs_sample(
 ) -> tuple[jax.Array, jax.Array]:
     r"""Draw samples from a Pathfinder Gaussian (Algorithm 4).
 
+    ``grad_position`` is the gradient of ``-log p`` at ``position``, the objective L-BFGS minimises.
+    The draws are centred on ``position - Sigma grad_position``, which is
+    ``theta + Sigma grad log p(theta)`` of Algorithm 4, line 8 and eq. II.5 of Zhang et al. (2022),
+    a quasi-Newton step towards the mode, with ``Sigma = diag(alpha) + beta gamma beta^T``.
+
     Returns ``(samples, log_q)`` where ``log_q`` is the per-sample log
     density of the variational approximation.
     """
@@ -166,7 +171,8 @@ def bfgs_sample(
 
     # Algorithm 4, step 7: log|Sigma| = log|diag(alpha)| + 2 log|L~|, as sums of logarithms.
     log_det = jnp.sum(jnp.log(alpha)) + 2.0 * jnp.sum(jnp.log(jnp.diag(cholesky_lower)))
-    mean = position + alpha * grad_position + beta @ (gamma @ (beta.T @ grad_position))
+    # Algorithm 4, step 8: mu = theta + Sigma grad log p(theta), with grad_position = -grad log p.
+    mean = position - (alpha * grad_position + beta @ (gamma @ (beta.T @ grad_position)))
     standard_noise = jax.random.normal(rng_key, (num_samples, param_dim, 1))
     transformed = mean[..., None] + jnp.sqrt(alpha)[:, None] * (
         Q_matrix @ (cholesky_lower - identity) @ (Q_matrix.T @ standard_noise) + standard_noise

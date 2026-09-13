@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a lower bound on that information gain instead. In float32 the score loses accuracy once a
   sampled minimum lies more than a few standard deviations above the mean without observation
   noise, and is not finite at `gamma = -40`.
+- Pathfinder centres each local Gaussian on `theta + Sigma grad log p(theta)`, as in Algorithm 4,
+  line 8 of Zhang et al. (2022). `bfgs_sample` added `Sigma` times the gradient of `-log p` that
+  `pathfinder_approximate` passes, which reflected every mean away from the mode. At converged
+  iterations the gradient is near zero and the two agree; on a 10-dimensional Gaussian with L-BFGS
+  stopped after 3 iterations, KL(q || p) of the selected approximation falls from 28.8 to 6.57.
+  Because an iterate short of the mode can now centre its Gaussian on the mode, the ELBO may select
+  it, so `PathfinderState.position` is not necessarily the last or most converged iterate; the
+  returned draws come from the selected approximation, as in Algorithm 1.
 - Pathfinder's `lbfgs_recover_alpha`, `lbfgs_inverse_hessian_factors` and `bfgs_sample` no longer
   build `N x N` matrices. They formed `diag(alpha)` as a dense matrix, and `bfgs_sample` evaluated
   `beta @ gamma @ beta^T @ grad` from the left, so memory and time grew with the square of the
