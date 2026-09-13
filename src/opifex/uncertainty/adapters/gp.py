@@ -169,9 +169,8 @@ class KalmanJaxAdapterSpec(_GPAdapterSpecBase):
     """Deprecated metadata-only adapter for the kalman-jax package.
 
     kalman-jax's own ``README.md`` (line 1) states that bayesnewton is
-    the official successor. The generic ``expm(F * dt)`` LTI-SDE
-    discretization (``priors.py:46`` — the sole published reference for
-    the generic case) is vendored into
+    the official successor. The generic LTI-SDE discretization that
+    kalman-jax provides (``priors.py:46``) is covered by
     :func:`opifex.uncertainty.statespace.discretize_lti_sde`.
 
     Emits a :class:`DeprecationWarning` at construction pointing users
@@ -184,7 +183,7 @@ class KalmanJaxAdapterSpec(_GPAdapterSpecBase):
     family_tags: tuple[str, ...] = ("lti_sde_discretization",)
     notes: str = (
         "Deprecated — see BayesnewtonAdapterSpec. The generic "
-        "expm(F*dt) LTI-SDE discretization is vendored into "
+        "LTI-SDE discretization is covered by "
         "opifex.uncertainty.statespace.discretize_lti_sde."
     )
 

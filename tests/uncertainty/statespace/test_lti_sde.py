@@ -2,47 +2,60 @@
 
 Coverage:
 
-* zero-drift recovers the identity transition and ``Q(dt) = Q_c dt``;
-* scalar OU process matches the analytic closed form;
-* dispersion ``L`` correctly maps a low-rank Wiener process into the state;
-* default-identity diffusion matches an explicit identity matrix;
-* the joint matrix exponential is mathematically equivalent to direct
-  computation of ``A = expm(F dt)`` for the transition block;
-* the integrated process noise is symmetric positive semi-definite;
-* the operator is jit-compatible and differentiable w.r.t. ``dt`` (needed
-  for SDE hyperparameter learning);
-* the result is vmap-compatible across an array of step sizes (the typical
-  multi-step pattern in Kalman filtering).
+* closed forms: zero drift, a scalar Ornstein-Uhlenbeck process, Brownian motion and a zero step;
+* the dispersion routes low-rank noise, and an omitted diffusion means the identity;
+* the transition equals ``scipy.linalg.expm(F dt)``;
+* per-component accuracy of the transition and the process noise against extended-precision
+  references for Matern, integrated Wiener and integrated Ornstein-Uhlenbeck SDEs, at steps from
+  1e-4 to 1e4, in float32 and float64;
+* a singular positive semi-definite diffusion, an isotropic diffusion under ``jax.grad``, and an
+  empty dispersion;
+* jit, vmap and reverse-mode gradients, including coarse steps and unstable drifts, with one
+  compilation per precision;
+* steps beyond the supported number of doublings return NaN.
 
-Canonical reference (line-by-line port):
-* ``../probnum/src/probnum/randprocs/markov/continuous/_mfd.py``
-  ``matrix_fraction_decomposition`` — Van Loan (1978) Theorem 1.
-
-References
-----------
-* Van Loan, C. F. 1978 — *Computing integrals involving the matrix
-  exponential*, IEEE TAC 23(3).
-* Särkkä & Solin 2019 — *Applied Stochastic Differential Equations*
-  §6.2 eqn 6.18.
+The discretisation is the exponential-and-Gramian doubling of Stillfjord & Tronarp
+(arXiv:2310.13462), as implemented by probdiffeq.
 """
 
 from __future__ import annotations
-
-import math
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.scipy.linalg import expm
+from scipy.linalg import expm as scipy_expm
 
-from opifex.uncertainty.statespace import (
-    discretize_lti_sde,
-    matern12_kernel,
-    matern32_kernel,
-    matern52_kernel,
-    matern72_kernel,
-)
+from opifex.uncertainty.statespace import discretize_lti_sde, matern52_kernel
+from tests.uncertainty.statespace._process_noise_references import REFERENCES
+
+
+_PRECISIONS = ("float32", "float64")
+# Worst scaled process-noise error max |Q_ij - R_ij| / sqrt(R_ii R_jj) of the Stillfjord-Tronarp
+# order-9 discretisation over the references: 1.7e-5 in float32 and 1.1e-13 in float64, both for
+# Matern-7/2 at lambda dt = 1e4.
+_NOISE_TOLERANCE = {"float32": 5e-5, "float64": 1e-12}
+# Worst transition error max |A_ij - R_ij| / max(1, max |R|), measured the same way: 2.2e-6 in
+# float32 and 4.9e-14 in float64, both for Matern-7/2 at lambda dt = 1.
+_TRANSITION_TOLERANCE = {"float32": 1e-4, "float64": 1e-12}
+# The order-4 integrated Wiener process at dt = 1e-4 has Q_00 = dt^9 / (9 * 4!^2), about 1.9e-40,
+# below the smallest normal float32 number (1.2e-38); no float32 method can represent it.
+_UNREPRESENTABLE = {("iwp4", 1e-4, "float32")}
+
+
+def _dtype_for(request: pytest.FixtureRequest, precision: str) -> jnp.dtype:
+    """Enable x64 for the float64 cases and return the dtype under test."""
+    if precision == "float64":
+        request.getfixturevalue("float64")
+        return jnp.float64
+    return jnp.float32
+
+
+def _scaled_error(estimate: jax.Array, reference: np.ndarray) -> float:
+    """Return ``max |Q_ij - R_ij| / sqrt(R_ii R_jj)``, the per-component relative error."""
+    scale = np.sqrt(np.diag(reference))
+    difference = np.asarray(estimate, dtype=np.float64) - reference
+    return float(np.max(np.abs(difference) / np.outer(scale, scale)))
 
 
 def test_zero_drift_recovers_identity_transition_and_qc_dt() -> None:
@@ -86,13 +99,14 @@ def test_scalar_decay_sde_matches_closed_form() -> None:
     assert jnp.allclose(process_noise, jnp.asarray([[expected_q]]), atol=1e-6)
 
 
-def test_transition_matches_direct_expm() -> None:
-    """The block-exponential's top-left block equals ``expm(F dt)`` directly."""
-    drift = jnp.asarray([[-0.5, 1.0], [-0.2, -0.7]])
-    dispersion = jnp.eye(2)
-    dt = jnp.asarray(0.4)
-    transition, _ = discretize_lti_sde(drift_matrix=drift, dispersion_matrix=dispersion, dt=dt)
-    assert jnp.allclose(transition, expm(drift * dt), atol=1e-5)
+def test_transition_matches_scipy_expm() -> None:
+    """The transition equals ``scipy.linalg.expm(F dt)``."""
+    drift = np.asarray([[-0.5, 1.0], [-0.2, -0.7]])
+    dt = 0.4
+    transition, _ = discretize_lti_sde(
+        drift_matrix=jnp.asarray(drift), dispersion_matrix=jnp.eye(2), dt=jnp.asarray(dt)
+    )
+    assert jnp.allclose(transition, jnp.asarray(scipy_expm(drift * dt)), atol=1e-6)
 
 
 def test_default_diffusion_is_identity() -> None:
@@ -137,9 +151,8 @@ def test_process_noise_is_symmetric_positive_semidefinite() -> None:
         diffusion=diffusion,
         dt=dt,
     )
-    symmetrized = 0.5 * (process_noise + process_noise.T)
-    assert jnp.allclose(process_noise, symmetrized, atol=1e-5)
-    eigenvalues = jnp.linalg.eigvalsh(symmetrized)
+    assert jnp.array_equal(process_noise, process_noise.T)
+    eigenvalues = jnp.linalg.eigvalsh(process_noise)
     assert jnp.all(eigenvalues >= -1e-6)
 
 
@@ -164,7 +177,94 @@ def test_brownian_motion_recovers_qc_dt() -> None:
         drift_matrix=drift, dispersion_matrix=dispersion, dt=dt
     )
     assert jnp.allclose(transition, jnp.eye(n), atol=1e-7)
-    assert jnp.allclose(process_noise, jnp.eye(n) * dt, atol=1e-7)
+    assert jnp.allclose(process_noise, jnp.eye(n) * dt, atol=1e-6)
+
+
+@pytest.mark.parametrize("precision", _PRECISIONS)
+@pytest.mark.parametrize("name", sorted(REFERENCES))
+def test_discretisation_matches_extended_precision_references(
+    request: pytest.FixtureRequest, name: str, precision: str
+) -> None:
+    """Every component of ``A`` and ``Q`` matches its reference, from 1e-4 to 1e4."""
+    dtype = _dtype_for(request, precision)
+    reference = REFERENCES[name]
+    discretize = jax.jit(discretize_lti_sde)
+    for step in reference.steps:
+        if (name, step.scale, precision) in _UNREPRESENTABLE:
+            continue
+        transition, process_noise = discretize(
+            drift_matrix=jnp.asarray(reference.drift, dtype=dtype),
+            dispersion_matrix=jnp.asarray(reference.dispersion, dtype=dtype),
+            dt=jnp.asarray(step.dt, dtype=dtype),
+            diffusion=jnp.asarray(reference.diffusion, dtype=dtype),
+        )
+        assert transition.dtype == dtype
+        assert process_noise.dtype == dtype
+        reference_transition = np.asarray(step.transition)
+        transition_error = float(
+            np.max(np.abs(np.asarray(transition, dtype=np.float64) - reference_transition))
+            / max(1.0, float(np.max(np.abs(reference_transition))))
+        )
+        noise_error = _scaled_error(process_noise, np.asarray(step.process_noise))
+        assert transition_error <= _TRANSITION_TOLERANCE[precision], (
+            name,
+            step.scale,
+            transition_error,
+        )
+        assert noise_error <= _NOISE_TOLERANCE[precision], (name, step.scale, noise_error)
+
+
+def test_singular_diffusion_matches_the_reference() -> None:
+    """A rank-deficient positive semi-definite ``Q_c`` gives the same process noise as its factor.
+
+    ``L = I`` with ``Q_c = e_n e_n^T`` describes the same SDE as ``L = e_n`` with ``Q_c = 1``.
+    """
+    reference = REFERENCES["iwp2"]
+    dispersion = np.asarray(reference.dispersion)
+    for step in reference.steps:
+        _, process_noise = discretize_lti_sde(
+            drift_matrix=jnp.asarray(reference.drift, dtype=jnp.float32),
+            dispersion_matrix=jnp.eye(dispersion.shape[0]),
+            dt=jnp.asarray(step.dt, dtype=jnp.float32),
+            diffusion=jnp.asarray(dispersion @ dispersion.T, dtype=jnp.float32),
+        )
+        noise_error = _scaled_error(process_noise, np.asarray(step.process_noise))
+        assert noise_error <= _NOISE_TOLERANCE["float32"], (step.scale, noise_error)
+
+
+@pytest.mark.usefixtures("float64")
+def test_gradient_with_respect_to_an_isotropic_diffusion_is_exact() -> None:
+    """``Q`` is linear in ``Q_c``, so ``d sum(Q(s I)) / ds`` is ``sum(Q(I))``.
+
+    A repeated-eigenvalue diffusion is where an eigendecomposition-based factor loses its gradient.
+    """
+    drift = jnp.asarray([[-0.4, 0.3], [-0.2, -0.9]])
+    dt = jnp.asarray(0.7)
+
+    def total_noise(scale: jax.Array) -> jax.Array:
+        _, process_noise = discretize_lti_sde(
+            drift_matrix=drift, dispersion_matrix=jnp.eye(2), dt=dt, diffusion=scale * jnp.eye(2)
+        )
+        return jnp.sum(process_noise)
+
+    gradient = jax.grad(total_noise)(jnp.asarray(2.5))
+    expected = total_noise(jnp.asarray(1.0))
+    assert float(abs(gradient - expected)) <= 1e-12 * float(abs(expected))
+
+
+def test_empty_dispersion_gives_zero_process_noise() -> None:
+    """A conservative SDE with no Wiener process has ``Q = 0`` and a rotation for ``A``."""
+    frequency = 1.3
+    drift = np.asarray([[0.0, -frequency], [frequency, 0.0]])
+    dt = 0.9
+    transition, process_noise = discretize_lti_sde(
+        drift_matrix=jnp.asarray(drift),
+        dispersion_matrix=jnp.zeros((2, 0)),
+        dt=jnp.asarray(dt),
+        diffusion=jnp.zeros((0, 0)),
+    )
+    assert jnp.allclose(transition, jnp.asarray(scipy_expm(drift * dt)), atol=1e-6)
+    assert jnp.array_equal(process_noise, jnp.zeros((2, 2)))
 
 
 def test_discretize_lti_sde_jit_compatible_and_differentiable() -> None:
@@ -191,6 +291,27 @@ def test_discretize_lti_sde_jit_compatible_and_differentiable() -> None:
     gradient = grad_fn(dt)
     assert jnp.isfinite(value)
     assert jnp.isfinite(gradient)
+
+
+def test_one_compilation_per_precision(request: pytest.FixtureRequest) -> None:
+    """New step values reuse the compiled program; only a new dtype compiles again."""
+    traced_dtypes: list[str] = []
+
+    def discretize(dt: jax.Array) -> tuple[jax.Array, jax.Array]:
+        traced_dtypes.append(str(dt.dtype))
+        return discretize_lti_sde(
+            drift_matrix=jnp.asarray([[-0.5, 1.0], [0.0, -0.3]], dtype=dt.dtype),
+            dispersion_matrix=jnp.eye(2, dtype=dt.dtype),
+            dt=dt,
+        )
+
+    jitted = jax.jit(discretize)
+    for value in (0.1, 2.0, 500.0):
+        jitted(jnp.asarray(value, dtype=jnp.float32))
+    request.getfixturevalue("float64")
+    for value in (0.1, 2.0):
+        jitted(jnp.asarray(value, dtype=jnp.float64))
+    assert traced_dtypes == ["float32", "float64"]
 
 
 def test_discretize_lti_sde_vmap_over_dt_array() -> None:
@@ -224,105 +345,6 @@ def test_discretize_lti_sde_differentiable_through_drift() -> None:
     assert jnp.all(jnp.isfinite(grad_value))
 
 
-# ---------------------------------------------------------------------------
-# Coarse steps: the block exponential must not overflow.
-# ---------------------------------------------------------------------------
-
-# (factory, variance, lengthscale) for stationary Matern SDEs, whose closed-form discretisation
-# (``StateSpaceKernel.discretize``) is the float32 reference.
-_MATERN_SDES = {
-    "matern12": (matern12_kernel, 1.7, 0.6),
-    "matern32": (matern32_kernel, 1.2, 0.9),
-    "matern52": (matern52_kernel, 0.8, 1.1),
-    "matern72": (matern72_kernel, 1.4, 0.7),
-}
-# Steps in lengthscales, from far below to far above the correlation time.
-_COARSE_STEP_RATIOS = (1e-4, 1e-2, 1.0, 10.0, 100.0, 1e3)
-# Float32 errors of the doubled block exponential, measured over these kernels and steps: process
-# noise at most 3.6e-6 relative, transition at most 2.0e-6 of max(1, |A|). The single-step block
-# exponential is non-finite at 100 lengthscales and off by 0.89 for Matern-5/2 at 10.
-_MATERN_TOLERANCE = 5e-5
-# Measured for integrated Wiener processes of order 1 to 3 at steps 1e-3 to 100: at most 1.0e-7 for
-# the process noise and 6.1e-8 for the transition. The single-step block reaches 5.0e-4 at order 3.
-_INTEGRATED_WIENER_TOLERANCE = 1e-5
-
-
-def _integrated_wiener_process(
-    order: int, dt: float
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return ``(F, L L^T, A, Q)`` for the order-``q`` integrated Wiener process in closed form.
-
-    ``A_ij = dt^(j-i) / (j-i)!`` and ``Q_ij = dt^(2q+1-i-j) / ((2q+1-i-j) (q-i)! (q-j)!)``.
-    """
-    size = order + 1
-    drift = np.diag(np.ones(size - 1), k=1)
-    dispersion = np.zeros((size, 1))
-    dispersion[-1, 0] = 1.0
-    transition = np.zeros((size, size))
-    process_noise = np.zeros((size, size))
-    for row in range(size):
-        for column in range(size):
-            if column >= row:
-                transition[row, column] = dt ** (column - row) / math.factorial(column - row)
-            power = 2 * order + 1 - row - column
-            process_noise[row, column] = dt**power / (
-                power * math.factorial(order - row) * math.factorial(order - column)
-            )
-    return drift, dispersion @ dispersion.T, transition, process_noise
-
-
-@pytest.mark.parametrize("name", list(_MATERN_SDES))
-def test_matern_discretisation_is_accurate_from_fine_to_coarse_steps(name: str) -> None:
-    """Transition and process noise match the closed-form Matern discretisation at every step."""
-    factory, variance, lengthscale = _MATERN_SDES[name]
-    kernel = factory(variance=variance, lengthscale=lengthscale)
-    for ratio in _COARSE_STEP_RATIOS:
-        dt = jnp.asarray(ratio * lengthscale)
-        transition, process_noise = discretize_lti_sde(
-            drift_matrix=kernel.feedback,
-            dispersion_matrix=kernel.noise_effect,
-            dt=dt,
-            diffusion=kernel.diffusion,
-        )
-        reference_transition, reference_noise = kernel.discretize(dt)
-        assert bool(jnp.all(jnp.isfinite(transition))), (name, ratio)
-        assert bool(jnp.all(jnp.isfinite(process_noise))), (name, ratio)
-        transition_scale = max(1.0, float(jnp.max(jnp.abs(reference_transition))))
-        transition_error = (
-            float(jnp.max(jnp.abs(transition - reference_transition))) / transition_scale
-        )
-        noise_error = float(
-            jnp.linalg.norm(process_noise - reference_noise) / jnp.linalg.norm(reference_noise)
-        )
-        assert transition_error <= _MATERN_TOLERANCE, (name, ratio, transition_error)
-        assert noise_error <= _MATERN_TOLERANCE, (name, ratio, noise_error)
-
-
-@pytest.mark.parametrize("order", [1, 2, 3])
-def test_integrated_wiener_process_matches_its_closed_form(order: int) -> None:
-    """A non-stationary SDE, with no stationary covariance to fall back on, stays exact."""
-    for step in (1e-3, 1.0, 10.0, 100.0):
-        drift, noise, reference_transition, reference_noise = _integrated_wiener_process(
-            order, step
-        )
-        transition, process_noise = discretize_lti_sde(
-            drift_matrix=jnp.asarray(drift, dtype=jnp.float32),
-            dispersion_matrix=jnp.eye(order + 1),
-            dt=jnp.asarray(step),
-            diffusion=jnp.asarray(noise, dtype=jnp.float32),
-        )
-        transition_error = float(
-            np.abs(np.asarray(transition, np.float64) - reference_transition).max()
-            / np.abs(reference_transition).max()
-        )
-        noise_error = float(
-            np.linalg.norm(np.asarray(process_noise, np.float64) - reference_noise)
-            / np.linalg.norm(reference_noise)
-        )
-        assert transition_error <= _INTEGRATED_WIENER_TOLERANCE, (order, step, transition_error)
-        assert noise_error <= _INTEGRATED_WIENER_TOLERANCE, (order, step, noise_error)
-
-
 def test_discretisation_is_differentiable_at_coarse_steps() -> None:
     """Gradients with respect to the step and the drift stay finite far beyond the lengthscale."""
     kernel = matern52_kernel(variance=0.8, lengthscale=1.1)
@@ -344,8 +366,35 @@ def test_discretisation_is_differentiable_at_coarse_steps() -> None:
         assert bool(jnp.all(jnp.isfinite(gradient_drift))), step
 
 
+@pytest.mark.parametrize(
+    ("rate", "dt"),
+    [(1.0, 30.0), (1.0, 40.0), (100.0, 0.463)],
+    ids=["rate1-dt30", "rate1-dt40", "rate100-overflowing-discarded-doubling"],
+)
+def test_gradients_stay_finite_for_unstable_drift(rate: float, dt: float) -> None:
+    """A growing drift keeps finite values and gradients in float32.
+
+    At rate 100 and dt 0.463 the process noise still fits in float32 (``Q_22`` about 8e37), but a
+    doubling past the needed count would multiply the final factor by ``exp(46.3)`` and overflow.
+    """
+
+    def log_noise(drift_rate: jax.Array) -> jax.Array:
+        drift = jnp.asarray([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]])
+        drift = drift.at[2, 2].set(drift_rate)
+        _, process_noise = discretize_lti_sde(
+            drift_matrix=drift,
+            dispersion_matrix=jnp.asarray([[0.0], [0.0], [1.0]]),
+            dt=jnp.asarray(dt),
+        )
+        return jnp.sum(jnp.log(jnp.diag(process_noise)))
+
+    value, gradient = jax.value_and_grad(log_noise)(jnp.asarray(rate))
+    assert bool(jnp.isfinite(value)), value
+    assert bool(jnp.isfinite(gradient)), gradient
+
+
 def test_steps_beyond_the_doubling_limit_return_nan() -> None:
-    """A step needing more than the supported number of doublings is reported as NaN."""
+    """A step needing more than 32 doublings is reported as NaN."""
     kernel = matern52_kernel(variance=0.8, lengthscale=1.1)
     transition, process_noise = discretize_lti_sde(
         drift_matrix=kernel.feedback,

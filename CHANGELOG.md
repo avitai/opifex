@@ -57,17 +57,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is evaluated as `expm1(-x) I + exp(-x) dt M`, so it cancels neither at short steps nor at coarse
   ones. For every kernel, the float32 relative error of the process noise against float64 is at
   most 2.8e-7 for steps from 1e-4 to 1e4 lengthscales, at the same cost.
-- `discretize_lti_sde` stays finite and accurate at coarse steps. It exponentiated Van Loan's block
-  `[[F, L Q_c L^T], [0, -F^T]] dt` in one go, which overflows float32 and exceeds the squaring limit
-  of `jax.scipy.linalg.expm`: Matern SDEs came back NaN at 100 lengthscales, Matern-5/2 was off by
-  0.89 at 10, a third-order integrated Wiener process was off by 5.0e-4 at dt = 100, and gradients
-  were NaN at coarse steps. It now splits the step so the block's 1-norm is at most 3.5 and doubles
-  back with Van Loan's eq. (3.5), after normalising `L Q_c L^T`. In float32 the process noise is
-  within 3.6e-6 and the transition within 2.0e-6 of the closed forms from 1e-4 to 1e3 lengthscales.
-  Steps needing more than 32 doublings return NaN. The fixed doubling loop costs about the same as
-  before for a two-state SDE and makes a four-state SDE about ten times slower (33 ms instead of
-  3.5 ms per 1000 steps). The Markov and spatio-temporal GPs use `StateSpaceKernel.discretize` and
-  are unaffected.
+- `discretize_lti_sde` is accurate in every component and stays finite at coarse steps. It
+  exponentiated Van Loan's block `[[F, L Q_c L^T], [0, -F^T]] dt` in one go, which overflows float32
+  and exceeds the squaring limit of `jax.scipy.linalg.expm`: Matern SDEs came back NaN at 100
+  lengthscales, Matern-5/2 was off by 0.89 at 10, a third-order integrated Wiener process was off by
+  5.0e-4 at dt = 100, and gradients were NaN at coarse steps. It now uses the exponential-and-Gramian
+  doubling of Stillfjord and Tronarp (arXiv:2310.13462), ported from probdiffeq (MIT), with a
+  fixed-length doubling loop so that reverse-mode gradients work. Against extended-precision
+  references for Matern-1/2 to Matern-7/2, integrated Wiener processes of order 1 to 4 and
+  integrated Ornstein-Uhlenbeck processes, at steps from 1e-4 to 1e4, every process-noise entry
+  `Q_ij` is within `1.7e-5 sqrt(Q_ii Q_jj)` in float32 and `1.1e-13 sqrt(Q_ii Q_jj)` in float64.
+  Gradients stay finite for growing drifts, a singular positive semi-definite `Q_c` is supported, and
+  steps needing more than 32 doublings return NaN. Per 1000 float32 steps under `vmap` it takes 2.3
+  to 3.0 ms instead of 8.1 to 8.7 ms for a three-state SDE and 26 to 27 ms instead of 2.3 to 5.9 ms
+  for a four-state SDE; gradients take 8.4 ms instead of 43 ms and 93 ms instead of 20 ms. The
+  Markov and spatio-temporal GPs use `StateSpaceKernel.discretize` and are unaffected.
 - The Markov GP evidence values are the published energies. `fit_markov_vi_gp` returned the
   expected log likelihood minus a log-determinant penalty, `fit_markov_laplace_gp` the log
   likelihood at the mode minus the same penalty, and `fit_markov_pep_gp` the sum of the cavity log

@@ -618,10 +618,10 @@ def test_transition_increment_matches_matrix_exponential(
 
 @pytest.mark.usefixtures("float64")
 @pytest.mark.parametrize(("name", "factory"), ALL_KERNELS, ids=ALL_KERNEL_IDS)
-def test_discretize_matches_van_loan_in_float64(
+def test_discretize_matches_discretize_lti_sde_in_float64(
     name: str, factory: Callable[[], StateSpaceKernel]
 ) -> None:
-    """``discretize(dt)`` reproduces the Van Loan transition and process noise of ``(F, L, Q_c)``."""
+    """``discretize(dt)`` reproduces ``discretize_lti_sde`` of the kernel's ``(F, L, Q_c)``."""
     kernel = factory()
     noise_scale = float(jnp.max(jnp.abs(kernel.stationary_cov)))
     for ratio in (1e-3, 0.1, 1.0):

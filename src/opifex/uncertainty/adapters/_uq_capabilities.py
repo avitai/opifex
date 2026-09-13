@@ -90,7 +90,7 @@ _KALMAN_JAX_ADAPTER_CAPABILITY = UQCapability(
     notes=(
         "KalmanJaxAdapterSpec — deprecated. kalman-jax/README.md:1 "
         "states bayesnewton is the official successor; the generic "
-        "expm(F*dt) LTI-SDE discretization is vendored into "
+        "LTI-SDE discretization is covered by "
         "opifex.uncertainty.statespace.discretize_lti_sde. Constructing "
         "the spec emits a DeprecationWarning."
     ),

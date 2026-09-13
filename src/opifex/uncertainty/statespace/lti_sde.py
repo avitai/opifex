@@ -10,31 +10,20 @@ discrete-time transition over an interval :math:`\Delta t` is
 
     Q = \int_0^{\Delta t} e^{F\tau} L Q_c L^\top e^{F^\top\tau}\, d\tau.
 
-Van Loan (1978) Theorem 1 computes both quantities in one matrix
-exponential by exploiting the block structure of
+Both come from the exponential-and-Gramian doubling of Stillfjord & Tronarp (2023,
+arXiv:2310.13462) in :mod:`opifex.uncertainty.statespace._gramian`, ported from probdiffeq. It
+keeps every component of ``Q`` accurate from steps far below to far above the SDE's time scale,
+in float32 and float64, and it is differentiable in reverse mode. Steps needing more than 32
+doublings return NaN.
 
-.. math::
-
-    \Phi = \begin{bmatrix} F & L Q_c L^\top \\ 0 & -F^\top \end{bmatrix}
-    \Delta t.
-
-Exponentiating the block at a large step fails: its ``exp(-F^T dt)`` part grows
-while the process noise saturates, and ``jax.scipy.linalg.expm`` returns NaN once
-it needs more than 16 squarings. Following Van Loan (1978, section III), the step
-is split into ``dt / 2^j`` so that the block's 1-norm is at most 3.5, below the
-float32 Pade-7 bound of ``expm`` (3.9257), and the result is doubled back with his
-eq. (3.5): ``Q(2t) = Q(t) + A(t) Q(t) A(t)^T`` and ``A(2t) = A(t)^2``. ``Q`` is
-linear in ``Q_c``, so ``L Q_c L^T`` is normalised by its largest entry first; a
-large diffusion then adds no doublings.
-
-Canonical reference (line-by-line port):
-* ``../probnum/src/probnum/randprocs/markov/continuous/_mfd.py``
-  ``matrix_fraction_decomposition``.
+The Gramian needs a factor ``B`` with ``B B^T = L Q_c L^T``. A positive-definite ``Q_c`` is
+factored by Cholesky; a singular positive semi-definite ``Q_c``, which the Cholesky decomposition
+rejects, by its symmetric square root.
 
 References:
 ----------
-* Van Loan, C. F. 1978 — *Computing integrals involving the matrix
-  exponential*, IEEE TAC 23(3).
+* Stillfjord, T. & Tronarp, F. 2023 — *Computing the matrix exponential and the Cholesky factor of
+  a related finite horizon Gramian*, arXiv:2310.13462.
 * Särkkä & Solin 2019 — *Applied Stochastic Differential Equations*
   §6.2 eqn 6.18.
 """
@@ -43,18 +32,34 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.linalg import expm
+
+from opifex.uncertainty.statespace._gramian import exponential_and_gramian
 
 
-# Largest 1-norm of the step block that is exponentiated directly. It stays below the float32
-# Pade-7 bound of ``jax.scipy.linalg.expm`` (3.9257), so expm neither squares nor truncates.
-# Measured in float32 over Matern SDEs from 1e-4 to 1e3 lengthscales: process noise within 3.6e-6
-# and transition within 2.0e-6 of the closed forms, against 7.8e-6 and 3.9e-5 when the block is
-# kept below 0.5 as Van Loan (1978) chooses for double precision.
-_BLOCK_EXPONENTIAL_NORM = 3.5
-# Doublings available to one call. Steps whose block needs more return NaN, as ``expm`` does past
-# its own squaring limit; 32 doublings cover a block 1-norm of about 1.5e10.
-_MAX_DOUBLINGS = 32
+def _diffusion_factor(dispersion_matrix: jax.Array, diffusion: jax.Array | None) -> jax.Array:
+    """Return ``B = L S`` with ``S S^T = Q_c``, so that ``B B^T = L Q_c L^T``.
+
+    ``jax.numpy.linalg.cholesky`` returns NaN when the decomposition fails (``lax.linalg.cholesky``
+    docstring), which selects the symmetric square root for a singular ``Q_c``. Each branch reads a
+    safe input when it is not taken, so neither puts a NaN into the gradient of the other.
+    """
+    if diffusion is None:
+        return dispersion_matrix
+    size = diffusion.shape[0]
+    if size == 0:
+        return dispersion_matrix
+    dtype = diffusion.dtype
+    is_definite = jnp.all(jnp.isfinite(jnp.linalg.cholesky(jax.lax.stop_gradient(diffusion))))
+    cholesky = jnp.linalg.cholesky(jnp.where(is_definite, diffusion, jnp.eye(size, dtype=dtype)))
+    # Distinct eigenvalues keep the eigendecomposition's derivative finite when it is not taken.
+    spectral_input = jnp.where(
+        is_definite, jnp.diag(jnp.arange(1, size + 1, dtype=dtype)), diffusion
+    )
+    eigenvalues, eigenvectors = jnp.linalg.eigh(spectral_input)
+    is_positive = eigenvalues > 0.0
+    roots = jnp.where(is_positive, jnp.sqrt(jnp.where(is_positive, eigenvalues, 1.0)), 0.0)
+    square_root = eigenvectors * roots
+    return dispersion_matrix @ jnp.where(is_definite, cholesky, square_root)
 
 
 def discretize_lti_sde(
@@ -68,64 +73,31 @@ def discretize_lti_sde(
 
     Computes the discrete-time state transition matrix
     :math:`A = \exp(F\, \Delta t)` and the integrated process noise
-    covariance via Van Loan's matrix-fraction decomposition, evaluated on
-    ``dt / 2^j`` and doubled back (Van Loan 1978, section III, eq. 3.5) so
-    that coarse steps stay finite. A step that would need more than 32
-    doublings returns NaN.
+    covariance with the exponential-and-Gramian doubling of Stillfjord & Tronarp (2023).
+    A step that would need more than 32 doublings returns NaN.
 
     Args:
         drift_matrix: Continuous-time drift :math:`F` of shape ``(n, n)``.
         dispersion_matrix: Dispersion :math:`L` of shape ``(n, k)``.
-        dt: Time step :math:`\Delta t` (scalar).
+        dt: Time step :math:`\Delta t` (scalar, non-negative).
         diffusion: Wiener-process diffusion :math:`Q_c` of shape
-            ``(k, k)``. Defaults to the identity matrix if ``None``.
+            ``(k, k)``, positive semi-definite. Defaults to the identity matrix if ``None``.
 
     Returns:
         ``(transition, process_noise)`` of shapes ``(n, n)`` and
         ``(n, n)``.
     """
-    state_dim = drift_matrix.shape[0]
-    diffusion_array = (
-        diffusion
-        if diffusion is not None
-        else jnp.eye(dispersion_matrix.shape[1], dtype=drift_matrix.dtype)
+    dtype = jnp.result_type(drift_matrix, dispersion_matrix, dt)
+    factor = _diffusion_factor(
+        jnp.asarray(dispersion_matrix, dtype=dtype),
+        None if diffusion is None else jnp.asarray(diffusion, dtype=dtype),
     )
-    process_diffusion = dispersion_matrix @ diffusion_array @ dispersion_matrix.T
-    noise_scale = jnp.max(jnp.abs(process_diffusion), initial=0.0)
-    noise_scale = jnp.where(noise_scale > 0.0, noise_scale, 1.0)
-
-    upper_block = jnp.concatenate([drift_matrix, process_diffusion / noise_scale], axis=1)
-    lower_block = jnp.concatenate([jnp.zeros_like(drift_matrix), -drift_matrix.T], axis=1)
-    block = jnp.concatenate([upper_block, lower_block], axis=0)
-    block_norm = jnp.max(jnp.sum(jnp.abs(block), axis=0)) * jnp.abs(dt)
-    doublings = jnp.ceil(jnp.log2(jnp.maximum(block_norm / _BLOCK_EXPONENTIAL_NORM, 1.0)))
-    exponential = expm(block * (dt / 2.0**doublings))
-    transition = exponential[:state_dim, :state_dim]
-    process_noise = exponential[:state_dim, state_dim:] @ transition.T
-
-    def double(
-        carry: tuple[jax.Array, jax.Array], index: jax.Array
-    ) -> tuple[tuple[jax.Array, jax.Array], None]:
-        """Apply one doubling ``(A, Q) -> (A^2, Q + A Q A^T)`` while doublings remain."""
-        step_transition, step_noise = carry
-        is_active = index < doublings
-        doubled_transition = jnp.where(
-            is_active, step_transition @ step_transition, step_transition
-        )
-        doubled_noise = jnp.where(
-            is_active, step_noise + step_transition @ step_noise @ step_transition.T, step_noise
-        )
-        return (doubled_transition, doubled_noise), None
-
-    (transition, process_noise), _ = jax.lax.scan(
-        double, (transition, process_noise), jnp.arange(_MAX_DOUBLINGS, dtype=doublings.dtype)
+    transitions, process_noises = exponential_and_gramian(
+        jnp.asarray(drift_matrix, dtype=dtype),
+        factor,
+        jnp.reshape(jnp.asarray(dt, dtype=dtype), (1,)),
     )
-    process_noise = 0.5 * (process_noise + process_noise.T) * noise_scale
-    is_beyond_limit = doublings > _MAX_DOUBLINGS
-    return (
-        jnp.where(is_beyond_limit, jnp.nan, transition),
-        jnp.where(is_beyond_limit, jnp.nan, process_noise),
-    )
+    return transitions[0], process_noises[0]
 
 
 def state_transition_matrix(
@@ -157,7 +129,7 @@ def process_noise_covariance(
     dt: jax.Array,
     diffusion: jax.Array | None = None,
 ) -> jax.Array:
-    r"""Return only ``Q`` (Van Loan process-noise) from the LTI-SDE discretisation.
+    r"""Return only ``Q`` (the integrated process noise) from the LTI-SDE discretisation.
 
     Thin convenience wrapper around :func:`discretize_lti_sde` for the
     common case where only the process-noise covariance is needed.
