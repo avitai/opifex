@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spatio-temporal GP discretise each time grid with one `discretize_steps` call. A kernel built from
   `feedback`, `noise_effect`, `diffusion`, `measurement` and `stationary_cov` alone discretises
   from its feedback matrix.
+- `mumbo_acquisition` takes an odd `num_quadrature_points`, default 5001, and raises `ValueError`
+  for an even count. Composite Simpson's rule needs an even number of intervals; the previous default
+  of 1000 weighted the last interval as a half panel. When `sqrt(1 - rho^2)` is below the Simpson
+  spacing the skew factor of eq. 5 steps and the quadrature error is first order in the spacing, so
+  the default is five times finer.
 - `tfp-nightly` is a declared runtime dependency, for `bessel_ive`. Every install already had it
   through `avitai-artifex`, and it leaves the `probabilistic` extra.
 
@@ -47,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a lower bound on that information gain instead. In float32 the score loses accuracy once a
   sampled minimum lies more than a few standard deviations above the mean without observation
   noise, and is not finite at `gamma = -40`.
+- `mumbo_acquisition` evaluates eq. 5 of Moss, Leslie & Rayson (2020) for samples of the target
+  level's maximum. Its Gumbel fit to the quartiles (Wang & Jegelka 2017, §3.1) had a negative scale,
+  so its samples were `2 y_0.25 - y*` and fell below the lower quartile. Its extended skew Gaussian
+  conditioned on `g > g*` instead of `g < g*`. `gamma` used the candidate's mean and standard
+  deviation instead of the target level's. The correlation left the observation noise out of the
+  candidate's variance. On a two-level example the scores were off by up to 1.5 nats. The expectation
+  in eq. 5 is integrated about the mean `-rho phi(gamma) / Phi(gamma)` of the density in Appendix A.1
+  (eq. 7 prints `+rho`); at `rho = 1` eq. 5 is MES.
 - `min_value_entropy_search` scores information about the minimum. It applied the maximum-value
   form of Wang & Jegelka (2017), eq. 6, `gamma = (y* - mu) / sigma` with `Phi(gamma)`, to samples
   of the minimum, which ranks candidates in reverse: with sampled minima -3 and -2.5 and unit

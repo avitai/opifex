@@ -3,33 +3,32 @@ r"""MUMBO multi-fidelity Bayesian-optimisation acquisition (Moss+ 2020).
 Implements the Multi-task Max-value Bayesian Optimisation acquisition
 of Moss, Leslie, Rayson (2020) on top of opifex's linear
 multi-fidelity GP. Each candidate is a ``(x, fidelity_level)`` pair;
-the score is the **mutual information** between the (latent) maximum
-value at the target (highest-fidelity) level and observing the
-candidate.
+the score is the **mutual information** between the maximum value
+``g*`` of the target (highest-fidelity) level and a noisy observation
+of the candidate (eq. 4 of the paper).
 
 Algorithm
 ---------
 
-1. **Gumbel sampling on the target fidelity.** Fit a Gumbel
-   approximation to the target-level GP marginal across a random grid
-   of inputs, then draw ``num_gumbel_samples`` plausible objective
-   maxima ``y_max``.
-2. **For each candidate** ``(x_i, level_i)``:
+1. **Samples of the maximum.** Approximate ``Pr(g* < y)`` on a random
+   grid of target-level inputs by the product of the marginal CDFs, fit
+   a Gumbel to its quartiles and draw ``num_gumbel_samples`` samples
+   (Wang & Jegelka 2017, §3.1).
+2. **For each candidate** ``(x_i, level_i)``, the bivariate predictive
+   of Appendix A:
 
-   a. Predict GP posterior ``(fmean, fvar)`` at the candidate.
-   b. Predict GP posterior ``(gmean, gvar)`` at ``(x_i,
-      target_level)``.
-   c. Compute the cross-covariance ``cov = K_joint((x_i, level_i),
-      (x_i, target_level))`` from the linear-MF kernel.
-   d. Correlation ``rho = cov / (sigma_f sigma_g)``.
-   e. **Extended Skew Gaussian (ESG)** parameters of the conditional
-      distribution ``f | g > y_max`` are obtained in closed form from
-      ``(rho, fmean, fvar, gmean, gvar, y_max)`` (Moss+ 2020 §3,
-      following Owen 1956 ESG identities).
-   f. Numerical entropy of the ESG via Simpson-rule integration.
+   a. the target level's latent mean and standard deviation
+      ``(mu_g, sigma_g)`` at ``x_i``;
+   b. the candidate's latent variance ``sigma_f^2`` and its posterior
+      covariance ``Sigma`` with the target at ``x_i``;
+   c. ``gamma = (g* - mu_g) / sigma_g`` and
+      ``rho = Sigma / (sigma_g sqrt(sigma_f^2 + sigma^2))``, where
+      ``sigma^2`` is the observation-noise variance.
 
-3. **MC-average** the per-Gumbel entropies and convert to information
-   gain: ``acquisition = 0.5 log(2 pi e) - H_avg``.
+3. **Eq. 5** for each sample of ``g*``, whose expectation over the
+   extended skew Gaussian ``Z | g < g*`` is evaluated by Simpson's rule
+   over eight standard deviations about its mean, averaged over the
+   samples.
 
 Cost weighting (dividing by per-level query cost) is left to the
 caller — different BO loops apply it differently.
@@ -37,7 +36,7 @@ caller — different BO loops apply it differently.
 References:
 ----------
 * Moss, Leslie, Rayson 2020 — *MUMBO: MUlti-task Max-value Bayesian
-  Optimisation*, ECML-PKDD.
+  Optimisation*, ECML-PKDD, arXiv:2006.12093.
 * Wang, Jegelka 2017 — *Max-value Entropy Search for Efficient
   Bayesian Optimization*, ICML (single-fidelity MES baseline).
 """
@@ -65,18 +64,20 @@ def _gumbel_fit_and_sample(
     num_samples: int,
     rng_key: jax.Array,
 ) -> jax.Array:
-    r"""Fit a Gumbel approximation to the target-level GP marginal and sample.
+    r"""Fit a Gumbel approximation to the maximum of the target level and sample it.
 
-    Uses the canonical ``binary-search-on-the-CDF`` recipe from
-    Wang & Jegelka 2017:
+    Wang & Jegelka (2017), §3.1: ``Pr(y* < y)`` is approximated by
+    ``prod_i Phi((y - mu_i) / sigma_i)`` and matched by the Gumbel
+    ``exp(-exp(-(y - a) / b))`` at its quartiles, ``a - b log(-log r) = y_r`` for
+    ``r = 0.25`` and ``r = 0.75``:
 
-        cdf_F(y) = prod_i Phi((y - mu_i) / sigma_i),
-        a       = y at cdf = 0.25,
-        b       = y at cdf = 0.75 - a / log(log(4) / log(4/3)).
+        b   = (y_0.75 - y_0.25) / log(log(4) / log(4/3)),
+        a   = y_0.25 + b log(log(4)),
+        y*  = a - b log(-log(r)),  r ~ Uniform(0, 1).
 
-    Then ``y_max = a - b log(-log(uniform_sample))``.
+    The quartiles are interpolated on 200 levels spanning five standard
+    deviations beyond the grid.
     """
-    # Build search grid by spanning candidate maxima across +/- 5 sigma.
     y_low = jnp.min(grid_means - 5.0 * grid_stds)
     y_high = jnp.max(grid_means + 5.0 * grid_stds)
     levels = jnp.linspace(y_low, y_high, 200)
@@ -88,54 +89,83 @@ def _gumbel_fit_and_sample(
         return jnp.prod(jax.scipy.stats.norm.cdf(normalised))
 
     cdfs = jax.vmap(cdf_at)(levels)
-    # Interpolate quantile points 0.25 and 0.75.
     quantile_25 = jnp.interp(0.25, cdfs, levels)
     quantile_75 = jnp.interp(0.75, cdfs, levels)
-    scale = (quantile_25 - quantile_75) / jnp.log(jnp.log(4.0) / jnp.log(4.0 / 3.0))
+    scale = (quantile_75 - quantile_25) / jnp.log(jnp.log(4.0) / jnp.log(4.0 / 3.0))
     location = quantile_25 + scale * jnp.log(jnp.log(4.0))
     uniform_samples = jax.random.uniform(rng_key, (num_samples,), minval=1e-6, maxval=1.0 - 1e-6)
     return location - scale * jnp.log(-jnp.log(uniform_samples))
 
 
-def _esg_entropy(
+def _simpson_weights(num_points: int) -> jax.Array:
+    """Composite Simpson weights ``1, 4, 2, ..., 2, 4, 1`` for an odd number of points."""
+    weights = jnp.ones(num_points)
+    weights = weights.at[1:-1:2].set(4.0)
+    return weights.at[2:-1:2].set(2.0)
+
+
+def _mumbo_information_gain(
     *,
     correlation: jax.Array,
     gamma: jax.Array,
-    num_quadrature_points: int = 1000,
+    num_quadrature_points: int,
 ) -> jax.Array:
-    r"""Differential entropy of the Extended Skew Gaussian (ESG).
+    r"""Eq. 5 of Moss, Leslie & Rayson (2020) for one sample ``g*`` of the maximum.
 
-    Closed-form formula for the ESG conditional density of ``f | g >
-    threshold`` derived in Moss+ 2020 §3 (Owen 1956 identities). The
-    entropy is computed by 1D Simpson-rule integration over +/- 8
-    standard deviations of the ESG.
+    .. math::
+
+        \rho^2 \frac{\gamma \phi(\gamma)}{2 \Phi(\gamma)} - \log \Phi(\gamma)
+        + \mathbb{E}_{\theta \sim Z}\Big[
+            \log \Phi\Big(\frac{\gamma - \rho \theta}{\sqrt{1 - \rho^2}}\Big)\Big],
+
+    where ``Z = (y - mu_f) / sqrt(sigma_f^2 + sigma^2) | g < g*`` has the extended skew
+    Gaussian density ``phi(theta) Phi((gamma - rho theta) / sqrt(1 - rho^2)) / Phi(gamma)`` of
+    Appendix A.1. The expectation is evaluated by composite Simpson's rule over eight standard
+    deviations about the mean of ``Z``, as in Appendix A.1. With ``r = phi(gamma) / Phi(gamma)``,
+    conditioning on ``g < g*`` gives ``E[Z] = -rho r``; eq. 7 of the paper prints ``+rho r``, which
+    centres the range on the wrong side of zero. ``Var[Z] = 1 - rho^2 r (gamma + r)``. At
+    ``|rho| = 1`` the expectation vanishes and the score is MES (Wang & Jegelka 2017, eq. 6), as
+    §3.2 of the paper notes.
+
+    Two errors bound the float32 result. Rounding is a few float32 units in the last place of
+    ``1 + |log Phi(gamma)| + rho^2 |gamma| r / 2``, largest for ``gamma << 0`` where the expectation
+    nearly cancels ``-log Phi(gamma)``. When ``sqrt(1 - rho^2)`` is narrower than one Simpson panel
+    ``2h``, the skew factor is a step at ``theta = gamma / rho`` that the rule does not resolve, and
+    the quadrature error is first order in the node spacing ``h``: at most
+    ``phi(gamma / rho) / Phi(gamma) (4h / (3e) + C sqrt(1 - rho^2) / |rho|)`` with
+    ``C = int |Phi(u) log Phi(u)| du ~ 0.903``.
+
+    Args:
+        correlation: Correlation ``rho`` between the noisy observation and the target level.
+        gamma: ``(g* - mu_g) / sigma_g``.
+        num_quadrature_points: Odd number of Simpson points.
+
+    Returns:
+        Information gain in nats.
+
+    Raises:
+        ValueError: If ``num_quadrature_points`` is even or smaller than three.
     """
-    safe_correlation = jnp.clip(correlation, min=-1.0 + 1e-6, max=1.0 - 1e-6)
-    minus_cdf = jnp.maximum(1.0 - jax.scipy.stats.norm.cdf(gamma), _PSEUDO_NOISE_FLOOR)
-    pdf_gamma = jax.scipy.stats.norm.pdf(gamma)
-    esg_mean = safe_correlation * pdf_gamma / minus_cdf
-    esg_var = jnp.maximum(
-        1.0 + safe_correlation * esg_mean * (gamma - pdf_gamma / minus_cdf),
-        _PSEUDO_NOISE_FLOOR,
-    )
-    esg_std = jnp.sqrt(esg_var)
-    lower = esg_mean - 8.0 * esg_std
-    upper = esg_mean + 8.0 * esg_std
+    if num_quadrature_points < 3 or num_quadrature_points % 2 == 0:
+        raise ValueError(
+            f"num_quadrature_points must be odd and at least 3; got {num_quadrature_points}."
+        )
+    rho = jnp.clip(correlation, -1.0, 1.0)
+    log_cdf_gamma = jax.scipy.stats.norm.logcdf(gamma)
+    ratio = jnp.exp(jax.scipy.stats.norm.logpdf(gamma) - log_cdf_gamma)
+    mean = -rho * ratio
+    std = jnp.sqrt(jnp.maximum(1.0 - rho**2 * ratio * (gamma + ratio), _PSEUDO_NOISE_FLOOR))
+    lower = mean - 8.0 * std
+    upper = mean + 8.0 * std
     grid = jnp.linspace(lower, upper, num_quadrature_points)
-    minus_corr_sq = jnp.sqrt(jnp.maximum(1.0 - safe_correlation**2, _PSEUDO_NOISE_FLOOR))
-    density = (
-        jax.scipy.stats.norm.pdf(grid)
-        * (1.0 - jax.scipy.stats.norm.cdf((gamma - safe_correlation * grid) / minus_corr_sq))
-        / minus_cdf
-    )
-    safe_density = jnp.maximum(density, _PSEUDO_NOISE_FLOOR)
-    entropy_terms = -density * jnp.log(safe_density)
-    # Simpson-rule weights for ``num_quadrature_points`` evenly-spaced points.
+    skew = jnp.sqrt(jnp.maximum(1.0 - rho**2, _PSEUDO_NOISE_FLOOR))
+    log_skew_cdf = jax.scipy.stats.norm.logcdf((gamma - rho * grid) / skew)
+    density = jnp.exp(jax.scipy.stats.norm.logpdf(grid) + log_skew_cdf - log_cdf_gamma)
     step = (upper - lower) / (num_quadrature_points - 1)
-    weights = jnp.ones(num_quadrature_points)
-    weights = weights.at[1:-1:2].set(4.0)
-    weights = weights.at[2:-1:2].set(2.0)
-    return step * jnp.sum(weights * entropy_terms) / 3.0
+    expectation = (
+        step * jnp.sum(_simpson_weights(num_quadrature_points) * density * log_skew_cdf) / 3.0
+    )
+    return 0.5 * rho**2 * gamma * ratio - log_cdf_gamma + expectation
 
 
 def mumbo_acquisition(
@@ -147,7 +177,7 @@ def mumbo_acquisition(
     rng_key: jax.Array,
     grid_size: int = 1000,
     num_gumbel_samples: int = 10,
-    num_quadrature_points: int = 1000,
+    num_quadrature_points: int = 5001,
 ) -> jax.Array:
     r"""MUMBO multi-fidelity acquisition score per candidate.
 
@@ -161,8 +191,8 @@ def mumbo_acquisition(
             approximation to the target-level GP marginal.
         num_gumbel_samples: Number of Monte-Carlo samples drawn from
             the fitted Gumbel for the outer expectation.
-        num_quadrature_points: Number of Simpson-rule points used for
-            the ESG entropy integral.
+        num_quadrature_points: Odd number of Simpson-rule points for
+            the expectation in eq. 5.
 
     Returns:
         ``(m,)`` acquisition scores (information gain in nats).
@@ -194,19 +224,22 @@ def mumbo_acquisition(
     )
     if target_predictive.variance is None:
         raise RuntimeError("Target-level candidate predictive missing variance.")
+    target_means = target_predictive.mean
     target_vars = jnp.clip(target_predictive.variance, min=_PSEUDO_NOISE_FLOOR)
     target_stds = jnp.sqrt(target_vars)
+    noise_variance = state.noise_std**2
 
     def per_candidate_acquisition(
         candidate_x: jax.Array,
         candidate_level: jax.Array,
+        target_mean: jax.Array,
         target_std: jax.Array,
     ) -> jax.Array:
         """Compute the information-gain acquisition for one (input, fidelity) candidate."""
         candidate_augmented = jnp.concatenate(
             [candidate_x, candidate_level.reshape(1).astype(candidate_x.dtype)]
         ).reshape(1, -1)
-        # Candidate predictive variance via the kernel diagonal.
+        # Candidate latent predictive variance via the kernel diagonal.
         k_cc = linear_multi_fidelity_kernel(
             candidate_augmented,
             candidate_augmented,
@@ -223,13 +256,11 @@ def mumbo_acquisition(
             scaling_factors=state.scaling_factors,
             base_kernel_fn=state.base_kernel_fn,
         )
-        candidate_mean = (k_train_c @ state.alpha).squeeze()
         v_solve = jax.scipy.linalg.solve_triangular(state.cholesky, k_train_c.T, lower=True)
         candidate_var = jnp.maximum(
             k_cc.squeeze() - jnp.sum(v_solve**2, axis=0).squeeze(),
             _PSEUDO_NOISE_FLOOR,
         )
-        candidate_std = jnp.sqrt(candidate_var)
         # Joint cross-covariance between candidate and same-x target-level
         # posterior. Uses the closed-form posterior covariance:
         #   K_post(a, b) = K_prior(a, b) - K(a, X) (K + σ² I)^-1 K(X, b).
@@ -252,20 +283,19 @@ def mumbo_acquisition(
         )
         v_solve_target = jax.scipy.linalg.solve_triangular(state.cholesky, k_train_t.T, lower=True)
         k_ct_post = k_ct_prior.squeeze() - jnp.sum(v_solve * v_solve_target, axis=0).squeeze()
-        correlation = k_ct_post / (candidate_std * target_std)
-        gammas = (gumbel_samples - candidate_mean) / candidate_std
+        # Correlation between the noisy observation y and the target g (Appendix A.1).
+        correlation = k_ct_post / (target_std * jnp.sqrt(candidate_var + noise_variance))
+        gammas = (gumbel_samples - target_mean) / target_std
 
-        def per_gumbel_entropy(gamma: jax.Array) -> jax.Array:
-            """Return the extended-skew-Gaussian entropy for one Gumbel sample."""
-            return _esg_entropy(
+        def per_sample_gain(gamma: jax.Array) -> jax.Array:
+            """Return eq. 5 for one sample of the maximum."""
+            return _mumbo_information_gain(
                 correlation=correlation,
                 gamma=gamma,
                 num_quadrature_points=num_quadrature_points,
             )
 
-        entropies = jax.vmap(per_gumbel_entropy)(gammas)
-        mean_entropy = jnp.mean(entropies)
-        return 0.5 * jnp.log(2.0 * jnp.pi * jnp.e) - mean_entropy
+        return jnp.mean(jax.vmap(per_sample_gain)(gammas))
 
     candidate_indices = jnp.arange(num_candidates)
 
@@ -274,6 +304,7 @@ def mumbo_acquisition(
         score = per_candidate_acquisition(
             x_candidates[idx],
             candidate_levels[idx],
+            target_means[idx],
             target_stds[idx],
         )
         return _, score
