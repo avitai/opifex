@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `gibbon` computes the GIBBON acquisition of Moss et al. (2021) at batch size one, Definition 4
+  applied to samples of the minimum, and accepts `noise_variance` (default 0.0) for the correlation
+  `rho^2 = var / (var + noise_variance)` between an observation and the objective. It returned
+  `min_value_entropy_search` on the claim that the two coincide at batch size one; Definition 4 is
+  a lower bound on that information gain instead. In float32 the score loses accuracy once a
+  sampled minimum lies more than a few standard deviations above the mean without observation
+  noise, and is not finite at `gamma = -40`.
 - `min_value_entropy_search` scores information about the minimum. It applied the maximum-value
   form of Wang & Jegelka (2017), eq. 6, `gamma = (y* - mu) / sigma` with `Phi(gamma)`, to samples
   of the minimum, which ranks candidates in reverse: with sampled minima -3 and -2.5 and unit

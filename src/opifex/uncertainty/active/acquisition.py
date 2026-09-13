@@ -431,6 +431,23 @@ def acquire(
 # -----------------------------------------------------------------------------
 
 
+def _minimum_value_truncation(
+    means: jax.Array,
+    variances: jax.Array,
+    sampled_min_values: jax.Array,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    r"""Return ``(gamma, log Phi(gamma), phi(gamma) / Phi(gamma))`` for samples of the minimum.
+
+    ``gamma = (mu - y*) / sigma`` has shape ``(N, S)``. Learning that the minimum is ``y*``
+    truncates the Gaussian predictive of ``f(x)`` to ``f >= y*``, which keeps ``Phi(gamma)`` of
+    its mass. The ratio is evaluated as ``exp(log phi - log Phi)``, so no floor is needed.
+    """
+    stds = jnp.sqrt(jnp.maximum(variances, _VARIANCE_FLOOR))
+    gamma = (means[:, None] - sampled_min_values[None, :]) / stds[:, None]
+    log_cdf = jnorm.logcdf(gamma)
+    return gamma, log_cdf, jnp.exp(jnorm.logpdf(gamma) - log_cdf)
+
+
 def min_value_entropy_search(
     *,
     means: jax.Array,
@@ -451,7 +468,7 @@ def min_value_entropy_search(
         \qquad \gamma_s = \frac{\mu(x) - y^*_s}{\sigma(x)}.
 
     Each term is the entropy reduction of the Gaussian predictive truncated to ``f >= y*_s``
-    and is non-negative. ``phi / Phi`` is evaluated as ``exp(log phi - log Phi)``.
+    and is non-negative.
 
     Args:
         means: ``(N,)`` posterior means.
@@ -462,12 +479,8 @@ def min_value_entropy_search(
     Returns:
         ``(N,)`` per-candidate MES scores.
     """
-    stds = jnp.sqrt(jnp.maximum(variances, _VARIANCE_FLOOR))
-    gamma = (means[:, None] - sampled_min_values[None, :]) / stds[:, None]
-    log_cdf = jnorm.logcdf(gamma)
-    ratio = jnp.exp(jnorm.logpdf(gamma) - log_cdf)
-    contribution = 0.5 * gamma * ratio - log_cdf
-    return jnp.mean(contribution, axis=-1)
+    gamma, log_cdf, ratio = _minimum_value_truncation(means, variances, sampled_min_values)
+    return jnp.mean(0.5 * gamma * ratio - log_cdf, axis=-1)
 
 
 def gibbon(
@@ -475,17 +488,44 @@ def gibbon(
     means: jax.Array,
     variances: jax.Array,
     sampled_min_values: jax.Array,
+    noise_variance: float = 0.0,
 ) -> jax.Array:
-    r"""GIBBON acquisition (Moss+ 2021, JMLR, arXiv:2102.03324).
+    r"""Single-point GIBBON (Moss, Leslie, González & Rayson 2021, JMLR, arXiv:2102.03324).
 
-    At batch size 1, GIBBON reduces exactly to MES (Moss+ 2021 §3),
-    so this single-point form delegates to
-    :func:`min_value_entropy_search`. The batch extension belongs in
-    :mod:`opifex.uncertainty.active.batch_active`.
+    Definition 4 of the paper for one point, applied to ``-f`` for Monte Carlo samples ``y*_s``
+    of the minimum:
+
+    .. math::
+
+        \alpha(x) = -\frac{1}{2S} \sum_{s=1}^{S}
+            \log\!\big(1 - \rho^2\, r_s\, (\gamma_s + r_s)\big),
+        \qquad \gamma_s = \frac{\mu(x) - y^*_s}{\sigma(x)},
+        \quad r_s = \frac{\phi(\gamma_s)}{\Phi(\gamma_s)},
+
+    with ``rho^2 = sigma^2 / (sigma^2 + noise_variance)`` the squared correlation between a noisy
+    observation and the objective. The log-determinant term of Definition 4 is zero for one point.
+    ``1 - r_s (gamma_s + r_s)`` is the variance of the standardised predictive truncated to
+    ``f >= y*_s``, so without noise the score is a lower bound on
+    :func:`min_value_entropy_search`. Batches of more than one point are not implemented.
+
+    In float32 the argument of the logarithm cancels once a sampled minimum lies several standard
+    deviations above the mean and observation noise is small: without noise the mean-gradient is
+    off by about 1% at ``gamma = -5`` and the score is not finite at ``gamma = -40``. Evaluate
+    such candidates in float64.
+
+    Args:
+        means: ``(N,)`` posterior means.
+        variances: ``(N,)`` posterior variances of the objective.
+        sampled_min_values: ``(S,)`` Monte-Carlo samples of the global minimum value.
+        noise_variance: Observation-noise variance. Defaults to ``0.0`` (exact observations).
+
+    Returns:
+        ``(N,)`` per-candidate GIBBON scores.
     """
-    return min_value_entropy_search(
-        means=means, variances=variances, sampled_min_values=sampled_min_values
-    )
+    gamma, _, ratio = _minimum_value_truncation(means, variances, sampled_min_values)
+    safe_variances = jnp.maximum(variances, _VARIANCE_FLOOR)
+    rho_squared = (safe_variances / (safe_variances + noise_variance))[:, None]
+    return -0.5 * jnp.mean(jnp.log1p(-rho_squared * ratio * (gamma + ratio)), axis=-1)
 
 
 def integrated_variance_reduction_score(

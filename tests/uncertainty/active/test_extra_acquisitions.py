@@ -24,13 +24,17 @@ import math
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from scipy import integrate
 from scipy.stats import norm
 
 
+_EPS32 = float(np.finfo(np.float32).eps)
+
+
 # MES scores are means of O(1) float32 terms; four float32 ULPs at magnitude 1 bound their
 # rounding. Measured against the quadrature reference: 6.9e-8 on scores up to 0.875.
-_MES_TOLERANCE = 4.0 * float(np.finfo(np.float32).eps)
+_MES_TOLERANCE = 4.0 * _EPS32
 
 
 # -----------------------------------------------------------------------------
@@ -134,21 +138,138 @@ def test_mes_is_finite_and_differentiable_far_from_the_minimum() -> None:
 # -----------------------------------------------------------------------------
 
 
-def test_gibbon_reduces_to_mes_at_batch_size_one() -> None:
-    """At batch size 1, GIBBON reduces to MES (Moss+ 2021 §3)."""
-    from opifex.uncertainty.active.acquisition import (
-        gibbon,
-        min_value_entropy_search,
-    )
+_GIBBON_MEANS = np.asarray([-2.5, -1.0, 0.0, 1.0, 3.0])
+_GIBBON_VARIANCES = np.asarray([0.09, 1.0, 4.0])
+_GIBBON_MINIMA = np.asarray([-3.0, -2.2, -1.9])
 
-    means = jnp.array([0.0, 0.5, 1.0])
-    variances = jnp.array([0.1, 0.1, 0.1])
-    sampled_min_values = jnp.array([-1.0, -0.5])
-    mes_scores = min_value_entropy_search(
-        means=means, variances=variances, sampled_min_values=sampled_min_values
+
+def _gibbon_definition_4(mean: float, variance: float, noise_variance: float) -> float:
+    """Float64 GIBBON at batch size one (Moss et al. 2021, Definition 4) for samples of a minimum."""
+    gamma = (mean - _GIBBON_MINIMA) / math.sqrt(variance)
+    ratio = np.exp(norm.logpdf(gamma) - norm.logcdf(gamma))
+    rho_squared = variance / (variance + noise_variance)
+    return float(-0.5 * np.mean(np.log1p(-rho_squared * ratio * (gamma + ratio))))
+
+
+def _gibbon_float32_error_bound(mean: float, variance: float, noise_variance: float) -> float:
+    """First-order float32 rounding error of a GIBBON score, from the conditioning of Definition 4.
+
+    Rounding moves ``gamma`` by ``eps |gamma|`` and ``log phi - log Phi`` by
+    ``eps (|log phi| + |log Phi| + 1)``. Both move ``p = r (gamma + r)``, which moves each sample's
+    term by ``rho^2 dp / (2 (1 - rho^2 p))``; four ULPs cover the sums. Without noise the argument of
+    the logarithm cancels as ``gamma`` falls below zero, and the bound grows with it. Measured float32
+    errors stay below 0.66 of the bound over ``gamma`` in [-12, 40], variances from 1e-4 to 100 and
+    noise variances from 0 to 2, and below 0.13 of it on the grid used here.
+    """
+    gamma = (mean - _GIBBON_MINIMA) / math.sqrt(variance)
+    log_pdf, log_cdf = norm.logpdf(gamma), norm.logcdf(gamma)
+    ratio = np.exp(log_pdf - log_cdf)
+    rho_squared = variance / (variance + noise_variance)
+    slope = np.abs(gamma + 2.0 * ratio)
+    product_error = (
+        _EPS32
+        * ratio
+        * (slope * (np.abs(log_pdf) + np.abs(log_cdf) + 1.0) + np.abs(gamma) * (1.0 + slope**2))
     )
-    gibbon_scores = gibbon(means=means, variances=variances, sampled_min_values=sampled_min_values)
-    assert jnp.allclose(mes_scores, gibbon_scores, atol=1e-5)
+    log_argument = 1.0 - rho_squared * ratio * (gamma + ratio)
+    return float(0.5 * np.mean(rho_squared * product_error / log_argument) + 4.0 * _EPS32)
+
+
+def _gibbon_grid_bounds(noise_variance: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Means, variances and float32 error bounds over the GIBBON test grid."""
+    means, variances = (axis.ravel() for axis in np.meshgrid(_GIBBON_MEANS, _GIBBON_VARIANCES))
+    bounds = np.asarray(
+        [
+            _gibbon_float32_error_bound(m, v, noise_variance)
+            for m, v in zip(means, variances, strict=True)
+        ]
+    )
+    return means, variances, bounds
+
+
+@pytest.mark.parametrize("noise_variance", [0.0, 0.1, 2.0])
+def test_gibbon_matches_definition_4_at_batch_size_one(noise_variance: float) -> None:
+    """GIBBON's single-point score is Definition 4 with ``rho^2 = var / (var + noise)``.
+
+    The log-determinant term of Definition 4 vanishes for one point; the remaining term is applied
+    to ``-f`` for samples of the minimum, ``gamma = (mu - y*) / sigma``.
+    """
+    from opifex.uncertainty.active.acquisition import gibbon
+
+    means, variances, bounds = _gibbon_grid_bounds(noise_variance)
+    scores = gibbon(
+        means=jnp.asarray(means),
+        variances=jnp.asarray(variances),
+        sampled_min_values=jnp.asarray(_GIBBON_MINIMA),
+        noise_variance=noise_variance,
+    )
+    reference = np.asarray(
+        [_gibbon_definition_4(m, v, noise_variance) for m, v in zip(means, variances, strict=True)]
+    )
+    error = np.abs(np.asarray(scores, dtype=np.float64) - reference)
+    assert np.all(error <= bounds), float(np.max(error / bounds))
+
+
+def test_gibbon_is_a_lower_bound_on_mes_without_noise() -> None:
+    """Without noise GIBBON bounds MES from below.
+
+    GIBBON replaces the entropy of the truncated predictive by that of a Gaussian with the same
+    variance, which is at least as large, so its information gain cannot exceed MES's.
+    """
+    from opifex.uncertainty.active.acquisition import gibbon, min_value_entropy_search
+
+    means, variances, bounds = _gibbon_grid_bounds(0.0)
+    candidate_means = jnp.asarray(means)
+    candidate_variances = jnp.asarray(variances)
+    minima = jnp.asarray(_GIBBON_MINIMA)
+    gibbon_scores = np.asarray(
+        gibbon(means=candidate_means, variances=candidate_variances, sampled_min_values=minima),
+        dtype=np.float64,
+    )
+    mes_scores = np.asarray(
+        min_value_entropy_search(
+            means=candidate_means, variances=candidate_variances, sampled_min_values=minima
+        ),
+        dtype=np.float64,
+    )
+    assert np.all(gibbon_scores <= mes_scores + bounds + _MES_TOLERANCE)
+    assert np.all(gibbon_scores >= -bounds)
+
+
+def test_gibbon_observation_noise_lowers_the_score() -> None:
+    """Noisier observations say less about the minimum; very large noise says almost nothing."""
+    from opifex.uncertainty.active.acquisition import gibbon
+
+    def score(noise_variance: float) -> float:
+        return float(
+            gibbon(
+                means=jnp.asarray([-1.0]),
+                variances=jnp.asarray([1.0]),
+                sampled_min_values=jnp.asarray(_GIBBON_MINIMA),
+                noise_variance=noise_variance,
+            )[0]
+        )
+
+    assert score(0.0) > score(0.5) > score(5.0) > 0.0
+    assert score(1e6) < 1e-5
+
+
+def test_gibbon_supports_jit_vmap_and_grad() -> None:
+    """GIBBON compiles, vectorises over candidates, and differentiates in the posterior mean."""
+    from opifex.uncertainty.active.acquisition import gibbon
+
+    def single(mean: jax.Array) -> jax.Array:
+        return gibbon(
+            means=mean[None],
+            variances=jnp.asarray([0.5]),
+            sampled_min_values=jnp.asarray(_GIBBON_MINIMA),
+            noise_variance=0.1,
+        )[0]
+
+    means = jnp.linspace(-3.0, 3.0, 7)
+    batched = jax.jit(jax.vmap(single))(means)
+    assert bool(jnp.allclose(batched, jax.vmap(single)(means)))
+    assert bool(jnp.all(jnp.isfinite(jax.vmap(jax.grad(single))(means))))
 
 
 # -----------------------------------------------------------------------------
