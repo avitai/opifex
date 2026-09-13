@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a lower bound on that information gain instead. In float32 the score loses accuracy once a
   sampled minimum lies more than a few standard deviations above the mean without observation
   noise, and is not finite at `gamma = -40`.
+- Pathfinder's `lbfgs_recover_alpha`, `lbfgs_inverse_hessian_factors` and `bfgs_sample` no longer
+  build `N x N` matrices. They formed `diag(alpha)` as a dense matrix, and `bfgs_sample` evaluated
+  `beta @ gamma @ beta^T @ grad` from the left, so memory and time grew with the square of the
+  dimension: one float32 `bfgs_sample` call took 489 ms on CPU at `N = 20000`. They now scale by
+  `alpha` elementwise and apply `beta @ (gamma @ (beta^T @ grad))`, which keeps the
+  `O(J N + J^2)` cost of Algorithm 4 of Zhang et al. (2022); the same call takes 2.9 ms.
 - Pathfinder's `bfgs_sample` returns finite log densities in high dimensions. It evaluated
   `log|Sigma|` as `log(prod(alpha)) + 2 log(det(L))`, so in float32 the product of 128 diagonal
   factors of 2 overflowed and 127 factors of 0.5 underflowed, and `log_q` was `-inf` or `+inf`, which

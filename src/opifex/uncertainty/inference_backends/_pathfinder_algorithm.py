@@ -19,6 +19,10 @@ The primitives:
   state.
 * :func:`pathfinder_sample` — draws from the selected Gaussian.
 
+The diagonal factor ``alpha`` is applied elementwise and ``beta @ gamma @ beta^T`` is only ever
+applied to a vector, so no primitive forms an ``N x N`` matrix and each keeps the ``O(J N + J^2)``
+cost of Algorithm 4.
+
 References:
 ----------
 * Zhang, L., Carpenter, B., Gelman, A., Vehtari, A. 2022 —
@@ -86,9 +90,9 @@ def lbfgs_recover_alpha(
         s_step_inner: jax.Array, z_step_inner: jax.Array, alpha_inner: jax.Array
     ) -> jax.Array:
         """Update the diagonal inverse-Hessian estimate from one L-BFGS pair."""
-        a = z_step_inner.T @ jnp.diag(alpha_inner) @ z_step_inner
+        a = jnp.sum(alpha_inner * z_step_inner**2)
         b = z_step_inner.T @ s_step_inner
-        c = s_step_inner.T @ jnp.diag(1.0 / alpha_inner) @ s_step_inner
+        c = jnp.sum(s_step_inner**2 / alpha_inner)
         inv_alpha_l = (
             a / (b * alpha_inner)
             + z_step_inner**2 / b
@@ -127,9 +131,9 @@ def lbfgs_inverse_hessian_factors(
     StZ = history_S.T @ history_Z
     upper_triangular = jnp.triu(StZ) + jnp.eye(param_dim) * jnp.finfo(history_S.dtype).eps
     eta = jnp.diag(StZ)
-    beta = jnp.hstack([jnp.diag(alpha) @ history_Z, history_S])
+    beta = jnp.hstack([alpha[:, None] * history_Z, history_S])
     minus_inverse = -jnp.linalg.inv(upper_triangular)
-    alpha_z = jnp.diag(jnp.sqrt(alpha)) @ history_Z
+    alpha_z = jnp.sqrt(alpha)[:, None] * history_Z
     block_dd = minus_inverse.T @ (alpha_z.T @ alpha_z + jnp.diag(eta)) @ minus_inverse
     gamma = jnp.block(
         [
@@ -155,16 +159,16 @@ def bfgs_sample(
     Returns ``(samples, log_q)`` where ``log_q`` is the per-sample log
     density of the variational approximation.
     """
-    Q_matrix, R_matrix = jnp.linalg.qr(jnp.diag(jnp.sqrt(1.0 / alpha)) @ beta)
+    Q_matrix, R_matrix = jnp.linalg.qr(beta / jnp.sqrt(alpha)[:, None])
     param_dim = beta.shape[0]
     identity = jnp.identity(R_matrix.shape[0])
     cholesky_lower = jnp.linalg.cholesky(identity + R_matrix @ gamma @ R_matrix.T)
 
     # Algorithm 4, step 7: log|Sigma| = log|diag(alpha)| + 2 log|L~|, as sums of logarithms.
     log_det = jnp.sum(jnp.log(alpha)) + 2.0 * jnp.sum(jnp.log(jnp.diag(cholesky_lower)))
-    mean = position + jnp.diag(alpha) @ grad_position + beta @ gamma @ beta.T @ grad_position
+    mean = position + alpha * grad_position + beta @ (gamma @ (beta.T @ grad_position))
     standard_noise = jax.random.normal(rng_key, (num_samples, param_dim, 1))
-    transformed = mean[..., None] + jnp.diag(jnp.sqrt(alpha)) @ (
+    transformed = mean[..., None] + jnp.sqrt(alpha)[:, None] * (
         Q_matrix @ (cholesky_lower - identity) @ (Q_matrix.T @ standard_noise) + standard_noise
     )
     log_density = -0.5 * (

@@ -52,9 +52,9 @@ from opifex.uncertainty.inference_backends._pathfinder_algorithm import (
 
 _EPS32 = float(np.finfo(np.float32).eps)
 
-# Float32 error of log q against float64, in units of eps32 times the magnitude of its terms: at most
-# 1.30 for diagonal covariances (dimensions 8 to 20000, alpha 0.01 to 50) and 2.12 for factored
-# covariances from 32 random quadratics up to 200 dimensions (condition numbers up to 20).
+# Float32 error of log q against float64, in units of eps32 times the magnitude of its terms: at
+# most 1.30 for diagonal covariances (dimensions 8 to 20000, alpha 0.01 to 50) and 2.12 for
+# factored covariances from 32 random quadratics up to 200 dimensions (condition numbers up to 20).
 _LOG_Q_ULPS = 5.0
 
 
@@ -164,9 +164,10 @@ def test_bfgs_sample_log_density_is_the_diagonal_gaussian_in_high_dimensions(
 ) -> None:
     """With ``beta = gamma = 0`` the draws are ``N(position, diag(alpha))`` and ``log q`` is theirs.
 
-    Algorithm 4, step 7 of Zhang et al. (2022) evaluates ``log|Sigma| = log|diag(alpha)| + 2 log|L~|``
-    as sums of logarithms. In float32 the product of 128 factors of 2 overflows and the product of
-    ``127`` factors of 0.5 underflows to zero, so a log of the product is not finite.
+    Algorithm 4, step 7 of Zhang et al. (2022) evaluates
+    ``log|Sigma| = log|diag(alpha)| + 2 log|L~|`` as sums of logarithms. In float32 the product of
+    128 factors of 2 overflows and the product of 127 factors of 0.5 underflows to zero, so a log of
+    the product is not finite.
     """
     samples, log_q = bfgs_sample(
         rng_key=jax.random.PRNGKey(0),
@@ -225,6 +226,198 @@ def test_bfgs_sample_log_density_is_the_factored_gaussian() -> None:
     bound = _log_q_rounding_bound(np.linalg.slogdet(covariance)[1], squared_noise, dim)
     error = np.abs(np.asarray(log_q, dtype=np.float64) - reference)
     assert np.all(error <= bound), error / bound
+
+
+# Float32 errors against the paper's formulas in float64, measured over 20 seeds before and after
+# the rewrite: the alpha update is within 3.45 eps32 of the rounding scale of its three terms
+# (dimensions 5 to 5000); beta within 1.05 eps32 (|beta| + 1) and gamma within
+# 0.236 eps32 cond(E) (max|gamma| + 1) (dimensions 10 to 2000, cond(E) <= 3.5).
+_ALPHA_ULPS = 7.0
+_BETA_ULPS = 2.5
+_GAMMA_ULPS = 0.5
+
+
+def test_lbfgs_recover_alpha_matches_algorithm_3() -> None:
+    """The diagonal update is line 9 of Algorithm 3 of Zhang et al. (2022).
+
+    ``1 / alpha_n = a / (b alpha'_n) + z_n^2 / b - a s_n^2 / (b c alpha'^2_n)`` with
+    ``a = z^T diag(alpha') z``, ``b = z^T s`` and ``c = s^T diag(alpha')^{-1} s`` (line 7). The
+    pair comes from a diagonal quadratic, so ``s^T z > 0`` and the update fires.
+    """
+    rng = np.random.default_rng(3)
+    dim = 40
+    alpha_previous = rng.uniform(0.2, 3.0, size=dim)
+    position_step = rng.normal(size=dim)
+    gradient_step = rng.uniform(0.5, 2.0, size=dim) * position_step
+    alpha_new, mask = lbfgs_recover_alpha(
+        jnp.asarray(alpha_previous, dtype=jnp.float32),
+        jnp.asarray(position_step, dtype=jnp.float32),
+        jnp.asarray(gradient_step, dtype=jnp.float32),
+    )
+    a = np.sum(alpha_previous * gradient_step**2)
+    b = gradient_step @ position_step
+    c = np.sum(position_step**2 / alpha_previous)
+    terms = (
+        a / (b * alpha_previous),
+        gradient_step**2 / b,
+        a * position_step**2 / (b * c * alpha_previous**2),
+    )
+    inverse = terms[0] + terms[1] - terms[2]
+    reference = 1.0 / inverse
+    # Rounding of the three terms, relative to the inverse they sum to.
+    bound = _ALPHA_ULPS * _EPS32 * (terms[0] + terms[1] + terms[2]) / np.abs(inverse)
+    relative_error = np.abs(np.asarray(alpha_new, dtype=np.float64) - reference) / reference
+    assert bool(np.all(np.asarray(mask)))
+    assert np.all(relative_error <= bound), relative_error / bound
+
+
+def test_lbfgs_inverse_hessian_factors_match_algorithm_4() -> None:
+    """``beta`` and ``gamma`` are steps 3 and 4 of Algorithm 4 of Zhang et al. (2022).
+
+    ``E`` is the upper triangle of ``S^T Z`` with diagonal ``eta``,
+    ``beta = [diag(alpha) Z, S]`` and
+    ``gamma = [[0, -E^{-1}], [-E^{-T}, E^{-T} (diag(eta) + Z^T diag(alpha) Z) E^{-1}]]``.
+    """
+    rng = np.random.default_rng(4)
+    dim, maxcor = 30, 4
+    basis = rng.normal(size=(dim, dim))
+    hessian = basis @ basis.T / dim + np.eye(dim)
+    position_steps = rng.normal(size=(dim, maxcor))
+    gradient_steps = hessian @ position_steps
+    alpha = rng.uniform(0.2, 2.0, size=dim)
+    beta, gamma = lbfgs_inverse_hessian_factors(
+        jnp.asarray(position_steps, dtype=jnp.float32),
+        jnp.asarray(gradient_steps, dtype=jnp.float32),
+        jnp.asarray(alpha, dtype=jnp.float32),
+    )
+    upper = np.triu(position_steps.T @ gradient_steps)
+    inverse_upper = np.linalg.inv(upper)
+    scaled_gradients = alpha[:, None] * gradient_steps
+    beta_reference = np.hstack([scaled_gradients, position_steps])
+    gamma_reference = np.block(
+        [
+            [np.zeros((maxcor, maxcor)), -inverse_upper],
+            [
+                -inverse_upper.T,
+                inverse_upper.T
+                @ (np.diag(np.diag(upper)) + gradient_steps.T @ scaled_gradients)
+                @ inverse_upper,
+            ],
+        ]
+    )
+    beta_error = np.abs(np.asarray(beta, dtype=np.float64) - beta_reference)
+    assert np.all(beta_error <= _BETA_ULPS * _EPS32 * (np.abs(beta_reference) + 1.0)), (
+        beta_error.max()
+    )
+    condition = np.linalg.cond(upper)
+    gamma_error = np.abs(np.asarray(gamma, dtype=np.float64) - gamma_reference)
+    gamma_bound = _GAMMA_ULPS * _EPS32 * condition * (np.abs(gamma_reference).max() + 1.0)
+    assert np.all(gamma_error <= gamma_bound), gamma_error.max() / gamma_bound
+
+
+# Float32 error of half the difference between draws at g and -g against Sigma g, in units of
+# eps32 times |x| + |Sigma g| + 1: at most 1.70 over 18 random quadratics up to 200 dimensions.
+_MEAN_ULPS = 4.0
+
+
+def test_bfgs_sample_moves_the_mean_by_sigma_times_the_gradient() -> None:
+    """Draws at gradients ``g`` and ``-g`` with the same noise differ by ``2 Sigma g``, one sign.
+
+    With ``Sigma = diag(alpha) + beta gamma beta^T`` (formula II.2 of Zhang et al., 2022) the mean
+    moves by ``Sigma g`` with a sign fixed by the gradient convention. The noise cancels between the
+    two calls, so half their difference must equal ``Sigma g`` or ``-Sigma g`` in every component
+    and draw.
+    """
+    rng = np.random.default_rng(5)
+    dim, maxcor = 50, 6
+    basis = rng.normal(size=(dim, dim))
+    hessian = basis @ basis.T / dim + np.eye(dim)
+    position_steps = rng.normal(size=(dim, maxcor))
+    alpha = rng.uniform(0.1, 2.0, size=dim)
+    beta, gamma = lbfgs_inverse_hessian_factors(
+        jnp.asarray(position_steps, dtype=jnp.float32),
+        jnp.asarray(hessian @ position_steps, dtype=jnp.float32),
+        jnp.asarray(alpha, dtype=jnp.float32),
+    )
+    gradient = rng.normal(size=dim)
+
+    def draws(sign: float) -> np.ndarray:
+        samples, _ = bfgs_sample(
+            rng_key=jax.random.PRNGKey(5),
+            num_samples=4,
+            position=jnp.full((dim,), 1.5),
+            grad_position=jnp.asarray(sign * gradient, dtype=jnp.float32),
+            alpha=jnp.asarray(alpha, dtype=jnp.float32),
+            beta=beta,
+            gamma=gamma,
+        )
+        return np.asarray(samples, dtype=np.float64)
+
+    draws_plus, draws_minus = draws(1.0), draws(-1.0)
+    beta64 = np.asarray(beta, dtype=np.float64)
+    covariance = np.diag(alpha) + beta64 @ np.asarray(gamma, dtype=np.float64) @ beta64.T
+    shift = covariance @ gradient
+    half_difference = (draws_plus - draws_minus) / 2.0
+    bound = _MEAN_ULPS * _EPS32 * (np.abs(draws_plus) + np.abs(shift) + 1.0)
+    matches_plus = bool(np.all(np.abs(half_difference - shift) <= bound))
+    matches_minus = bool(np.all(np.abs(half_difference + shift) <= bound))
+    assert matches_plus or matches_minus, np.abs(half_difference).max()
+
+
+def _square_intermediates(jaxpr: object, dim: int) -> list[str]:
+    """Intermediates with two or more axes of length ``dim`` or more, in a jaxpr and sub-jaxprs."""
+    found: list[str] = []
+
+    def walk(inner: object) -> None:
+        for equation in getattr(inner, "eqns", ()):
+            for variable in equation.outvars:
+                shape = getattr(variable.aval, "shape", ())
+                if sum(1 for size in shape if size >= dim) >= 2:
+                    found.append(f"{equation.primitive}{tuple(shape)}")
+            for parameter in equation.params.values():
+                items = parameter if isinstance(parameter, (tuple, list)) else (parameter,)
+                for item in items:
+                    if hasattr(item, "jaxpr"):
+                        walk(item.jaxpr)
+                    elif hasattr(item, "eqns"):
+                        walk(item)
+
+    walk(jaxpr)
+    return found
+
+
+def test_pathfinder_primitives_do_not_materialise_dimension_squared_intermediates() -> None:
+    """The diagonal update, the factors and the sampler stay linear in the dimension.
+
+    Algorithm 4 of Zhang et al. (2022) costs ``O(J N + J^2)`` per draw. ``diag(alpha)`` as a
+    matrix, or ``beta @ gamma @ beta^T`` evaluated left to right, creates ``N x N`` intermediates.
+    """
+    dim, maxcor = 500, 6
+    alpha = jnp.full((dim,), 0.7)
+    position_steps = jnp.ones((dim, maxcor))
+    gradient_steps = jnp.ones((dim, maxcor))
+    beta, gamma = lbfgs_inverse_hessian_factors(position_steps, gradient_steps, alpha)
+    jaxprs = {
+        "lbfgs_recover_alpha": jax.make_jaxpr(lbfgs_recover_alpha)(
+            alpha, jnp.ones(dim), jnp.ones(dim)
+        ),
+        "lbfgs_inverse_hessian_factors": jax.make_jaxpr(lbfgs_inverse_hessian_factors)(
+            position_steps, gradient_steps, alpha
+        ),
+        "bfgs_sample": jax.make_jaxpr(
+            lambda key, position, gradient, diagonal, factor, core: bfgs_sample(
+                rng_key=key,
+                num_samples=4,
+                position=position,
+                grad_position=gradient,
+                alpha=diagonal,
+                beta=factor,
+                gamma=core,
+            )
+        )(jax.random.PRNGKey(0), jnp.zeros(dim), jnp.zeros(dim), alpha, beta, gamma),
+    }
+    found = {name: _square_intermediates(jaxpr, dim) for name, jaxpr in jaxprs.items()}
+    assert not any(found.values()), found
 
 
 # ---------------------------------------------------------------------------
