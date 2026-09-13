@@ -51,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `scripts/eval_qh9_blocks.py` logs `eps-MAE(occ)`, the orbital-energy MAE over the occupied
+  orbitals that QH9 reports (Yu et al. 2023, arXiv:2306.09549), beside `eps-MAE(all)`, and its
+  docstring names `orbital_energy_mae_occ` as the benchmark metric. It logged the all-orbital MAE
+  as `eps-MAE` and said every reported metric mirrors the benchmark.
+- The `kalman_update` docstring names the standard covariance update `P - K H P` that it computes,
+  as do the square-root Kalman tests; they called it the Joseph form. The state-space kernel
+  references cite Särkkä & Solin (2019) eqs. (12.34)-(12.35) and Example 12.7 in place of a
+  Table 12.2, which the book does not have.
 - `gibbon` computes the GIBBON acquisition of Moss et al. (2021) at batch size one, Definition 4
   applied to samples of the minimum, and accepts `noise_variance` (default 0.0) for the correlation
   `rho^2 = var / (var + noise_variance)` between an observation and the objective. It returned

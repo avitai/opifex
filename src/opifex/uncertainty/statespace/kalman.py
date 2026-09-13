@@ -62,7 +62,7 @@ def kalman_update(
     observation_matrix: jax.Array,
     observation_cov: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
-    """Linear-Gaussian Kalman update (innovation + Joseph-form covariance).
+    """Linear-Gaussian Kalman update with the standard covariance update ``P - K H P``.
 
     Args:
         mean: predicted mean ``m_-`` of shape ``(state_dim,)``.

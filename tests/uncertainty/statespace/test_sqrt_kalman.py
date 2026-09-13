@@ -9,7 +9,7 @@ problems and long observation chains.
 Coverage:
 
 * shape correctness for both predict and update;
-* equivalence with the dense joseph-form filter (predict and update);
+* equivalence with the dense filter (predict and update);
 * PSD preservation under ill-conditioning, where dense Kalman can lose
   positivity to roundoff;
 * zero-process-noise (degenerate, deterministic dynamics);
@@ -121,7 +121,7 @@ def test_sqrt_kalman_predict_with_identity_transition_zero_noise_is_noop() -> No
 
 
 def test_sqrt_kalman_update_matches_standard_kalman_update() -> None:
-    """Square-root update reproduces the joseph-form posterior covariance."""
+    """Square-root update reproduces the dense posterior covariance ``P - K H P``."""
     prior_mean = jnp.asarray([0.5, 1.0])
     prior_cov = jnp.asarray([[1.0, 0.2], [0.2, 0.8]])
     prior_cov_sqrt = jnp.linalg.cholesky(prior_cov)
@@ -173,7 +173,7 @@ def test_sqrt_kalman_preserves_positive_definiteness_under_ill_conditioning() ->
     By construction the reconstructed covariance ``L_post L_post^T`` is
     symmetric positive semi-definite — the QR factorisation produces an
     upper-triangular ``R`` whose ``R^T R`` is automatically PSD. The dense
-    joseph-form update can produce slightly non-PSD matrices under the
+    update ``P - K H P`` can produce slightly non-PSD matrices under the
     same roundoff conditions.
     """
     state_dim = 3
@@ -257,7 +257,7 @@ def test_sqrt_kalman_chain_remains_psd_over_long_sequence() -> None:
     """Repeated predict-update steps preserve PSD even when dense would drift.
 
     A long chain of badly-conditioned updates is the standard scenario where
-    the dense joseph form loses positivity. The square-root form guarantees
+    the dense update ``P - K H P`` loses positivity. The square-root form guarantees
     PSD by construction at every step.
     """
     state_dim = 3

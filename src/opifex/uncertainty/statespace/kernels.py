@@ -18,8 +18,9 @@ compiled program.
 
 References:
 ----------
-* Särkkä & Solin 2019 — *Applied Stochastic Differential Equations* §12.3
-  and Table 12.2.
+* Särkkä & Solin 2019 — *Applied Stochastic Differential Equations* §12.3: the
+  companion-form SDE of the half-integer Matérn covariance functions, eqs. (12.34)-(12.35),
+  and the Matérn-3/2 model of Example 12.7, eqs. (12.48)-(12.49).
 * Hartikainen & Särkkä 2010 — *Kalman filtering and smoothing solutions to
   temporal Gaussian process regression models*, MLSP.
 * Solin & Särkkä 2014 — *Explicit Link Between Periodic Covariance Functions

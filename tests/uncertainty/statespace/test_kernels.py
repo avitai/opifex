@@ -2,8 +2,8 @@
 
 State-space kernels expose the continuous-time linear SDE
 ``(F, L, Q_c, H, P_inf)`` of a temporal GP prior and the closed-form
-discrete-time state transition ``A(dt) = exp(F dt)`` per Särkkä & Solin
-2019 Table 12.2.
+discrete-time state transition ``A(dt) = exp(F dt)`` of Särkkä & Solin
+2019, eq. (6.24).
 
 Coverage targets every Matern kernel (Matern12/32/52/72) on:
 

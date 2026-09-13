@@ -9,13 +9,13 @@ checkpoint, and aggregates the QH9 benchmark metrics over the deterministic
 ``0.8/0.1/0.1`` test split (the same split the training driver held out, computed
 from the id count without decoding the full 130k-row table).
 
-The reported metrics mirror the QH9 benchmark (Yu et al. 2023,
-arXiv:2306.09549) so a run is directly comparable to the literature (QHNet
+The QH9 benchmark metrics (Yu et al. 2023, arXiv:2306.09549) are reported with one
+extra diagnostic, so a run is comparable to the literature (QHNet
 Hamiltonian-MAE ~76 µHa, QHNetV2 ~31.5 µHa on QH9-Stable):
 
 * ``hamiltonian_mae`` -- Fock-matrix MAE (reported in µHa),
-* ``orbital_energy_mae`` / ``orbital_energy_mae_occ`` -- ε-MAE over all / occupied
-  orbitals (µHa),
+* ``orbital_energy_mae_occ`` -- the QH9 ε-MAE, over the occupied orbitals (µHa),
+* ``orbital_energy_mae`` -- the same MAE over all orbitals, not a QH9 metric (µHa),
 * ``coefficient_similarity`` -- occupied-orbital ψ-cosine similarity,
 * ``homo_lumo_gap_mae`` -- HOMO-LUMO-gap MAE (µHa).
 
@@ -136,12 +136,12 @@ def evaluate(args: EvalArgs) -> dict[str, float | int]:
     )
     report = _report(metrics.as_dict())
     logger.info(
-        "QH9 test (%d mols): H-MAE %.2f µHa | eps-MAE %.2f µHa | eps-MAE(occ) %.2f µHa "
+        "QH9 test (%d mols): H-MAE %.2f µHa | eps-MAE(occ) %.2f µHa | eps-MAE(all) %.2f µHa "
         "| psi-sim %.4f | gap-MAE %.2f µHa",
         report["n_molecules"],
         report["hamiltonian_mae_micro_hartree"],
-        report["orbital_energy_mae_micro_hartree"],
         report["orbital_energy_mae_occ_micro_hartree"],
+        report["orbital_energy_mae_micro_hartree"],
         report["coefficient_similarity"],
         report["homo_lumo_gap_mae_micro_hartree"],
     )
