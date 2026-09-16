@@ -8,12 +8,12 @@ import jax
 class TestCompilationCache:
     """Test suite for JAX compilation cache configuration."""
 
-    def test_compilation_cache_enabled(self):
-        """Test that XLA compilation cache is properly configured."""
-        # Import opifex to trigger cache setup
-        import opifex  # noqa: F401 # type: ignore[import-untyped]
+    def test_setup_configures_the_compilation_cache(self):
+        """``setup_jax_optimization`` points JAX's compilation cache at an existing directory."""
+        from opifex import setup_jax_optimization
 
-        # Cache should be configured on import
+        setup_jax_optimization()
+
         cache_dir = jax.config.jax_compilation_cache_dir  # type: ignore[attr-defined]
         assert cache_dir is not None
         assert Path(cache_dir).exists()
@@ -23,7 +23,10 @@ class TestCompilationCache:
         # Import required modules
         from flax import nnx
 
+        from opifex import setup_jax_optimization
         from opifex.neural.operators import fno
+
+        setup_jax_optimization()
 
         # Create and compile a model
         rngs = nnx.Rngs(42)
@@ -51,41 +54,42 @@ class TestCompilationCache:
         assert test_file.exists()
         test_file.unlink()  # Clean up
 
-    def test_jax_configuration_applied(self):
-        """Test that JAX configuration optimizations are applied."""
+    def test_import_configures_nothing_and_setup_configures_jax(self, tmp_path):
+        """Importing opifex leaves JAX's config alone; ``setup_jax_optimization`` applies it.
+
+        A fresh interpreter, without the ``JAX_COMPILATION_CACHE_DIR`` that CI exports (JAX
+        reads it itself, which would hide an import-time setup), reports the cache directory
+        before and after the explicit call.
+        """
+        import os
         import subprocess
         import sys
 
-        # Test in a fresh subprocess to avoid test interference
+        env = {k: v for k, v in os.environ.items() if k != "JAX_COMPILATION_CACHE_DIR"}
+        env["OPIFEX_XLA_CACHE_DIR"] = str(tmp_path / "xla-cache")
         result = subprocess.run(
             [
                 sys.executable,
                 "-c",
                 "import opifex; import jax; "
-                "print('cache_dir:', jax.config.jax_compilation_cache_dir is not None); "
-                "print('cache_time:', jax.config.jax_persistent_cache_min_compile_time_secs >= 1.0); "
+                "print('imported:', jax.config.jax_compilation_cache_dir); "
+                "opifex.setup_jax_optimization(); "
+                "print('cache_dir:', jax.config.jax_compilation_cache_dir); "
+                "print('cache_time:', jax.config.jax_persistent_cache_min_compile_time_secs); "
                 "print('x64_enabled:', jax.config.jax_enable_x64)",
             ],
             check=True,
             capture_output=True,
             text=True,
+            env=env,
         )
 
         output_lines = result.stdout.strip().split("\n")
 
-        # Parse the output
-        cache_dir_ok = "cache_dir: True" in output_lines
-        cache_time_ok = "cache_time: True" in output_lines
-        x64_disabled = "x64_enabled: False" in output_lines
-
-        # Check that key optimizations are applied
-        assert cache_dir_ok, f"Compilation cache directory not set. Output: {result.stdout}"
-        assert cache_time_ok, f"Cache min compile time not set properly. Output: {result.stdout}"
-
-        # Check default precision settings - should use 32-bit by default for performance
-        assert x64_disabled, (
-            f"Expected 32-bit precision by default, but x64 is enabled. Output: {result.stdout}"
-        )
+        assert "imported: None" in output_lines, f"import configured JAX. Output: {result.stdout}"
+        assert f"cache_dir: {tmp_path / 'xla-cache'}" in output_lines, result.stdout
+        assert "cache_time: 1.0" in output_lines, result.stdout
+        assert "x64_enabled: False" in output_lines, result.stdout
 
     def test_backend_specific_optimizations(self):
         """Test backend-specific optimization configurations.
