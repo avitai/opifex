@@ -99,7 +99,7 @@ class FockSphericalDecodeOperator(OperatorModule):
         data: dict[str, Array],
         state: Any,
         metadata: dict[str, Any] | None,
-        random_params: Any = None,
+        key: Array | None = None,
         stats: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Array], Any, dict[str, Any] | None]:
         """Decode one molecule's native Fock into spherical AO ordering.
@@ -110,14 +110,14 @@ class FockSphericalDecodeOperator(OperatorModule):
                 ``decode_sign`` ``(max_ao,)``.
             state: Per-element state (passed through unchanged).
             metadata: Per-element metadata (passed through unchanged).
-            random_params: Unused (the operator is deterministic).
+            key: The record's PRNG key; unused, the operator is deterministic.
             stats: Unused (the operator is deterministic).
 
         Returns:
             ``(data | {"fock": spherical}, state, metadata)`` where ``spherical``
             is the ``(max_ao, max_ao)`` spherical-ordered Fock matrix.
         """
-        del random_params, stats
+        del key, stats
         native: Float[Array, "max_ao max_ao"] = data["native_fock"]
         perm: Int[Array, " max_ao"] = data["decode_perm"]
         sign = data["decode_sign"].astype(native.dtype)
@@ -165,7 +165,7 @@ class FockBlockCutOperator(OperatorModule):
         data: dict[str, Array],
         state: Any,
         metadata: dict[str, Any] | None,
-        random_params: Any = None,
+        key: Array | None = None,
         stats: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Array], Any, dict[str, Any] | None]:
         """Cut one molecule's spherical Fock into masked per-atom/per-edge blocks.
@@ -178,7 +178,7 @@ class FockBlockCutOperator(OperatorModule):
                 ``edge_index`` ``(2, max_edges)`` ``(receiver, sender)``.
             state: Per-element state (passed through unchanged).
             metadata: Per-element metadata (passed through unchanged).
-            random_params: Unused (the operator is deterministic).
+            key: The record's PRNG key; unused, the operator is deterministic.
             stats: Unused (the operator is deterministic).
 
         Returns:
@@ -187,7 +187,7 @@ class FockBlockCutOperator(OperatorModule):
             ``(max_atoms, 14, 14)`` (diagonal) and ``(max_edges, 14, 14)``
             (off-diagonal); masked blocks carry zero outside the valid AO slots.
         """
-        del random_params, stats
+        del key, stats
         fock = data["fock"]
         starts = data["atom_ao_start"]
         slots = data["atom_slot_indices"]

@@ -476,7 +476,6 @@ def _with_shuffle(config: QH9PaddedConfig, shuffle: bool) -> QH9PaddedConfig:
         max_edges=config.max_edges,
         seed=config.seed,
         shuffle=shuffle,
-        cacheable=config.cacheable,
     )
 
 

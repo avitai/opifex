@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires `datarax>=0.1.10`; the lock moves datarax from 0.1.9 to 0.1.10 and, through it,
+  substrax from 0.1.4 to 0.1.7. datarax's `MapOperatorConfig` no longer takes
+  `precomputed_stats` and `DataraxModuleConfig` no longer has `cacheable`: the PDEBench
+  normalisation stage passes no statistics (its constants are baked into its function), and
+  `QH9PaddedConfig`'s shuffle override copies no `cacheable`, which raised `AttributeError`
+  on the first split whose order differed from the config's. The two Fock operators name
+  the fourth `apply` argument `key`, the record's PRNG key, which they do not use.
 - The `backend:pathfinder`, `backend:svgd` and `backend:advi` capabilities in the UQ registry
   declare `source_package="opifex"`, as `PathfinderBackend`, `SVGDBackend` and `ADVIBackend`
   already do. They declared `"blackjax"`, although the three backends are implemented in opifex.

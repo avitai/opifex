@@ -1234,7 +1234,7 @@ wheels = [
 
 [[package]]
 name = "datarax"
-version = "0.1.9"
+version = "0.1.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-record" },
@@ -1252,9 +1252,9 @@ dependencies = [
     { name = "substrax" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/76/21cdb49ce799c2d96344b8c31b3a0b3da02874eb5f2bea7fead911309583/datarax-0.1.9.tar.gz", hash = "sha256:0da02b99f6753761204d41f5b2636e98303b117d7418d00c1ac75e84a06961e9", size = 240312, upload-time = "2026-09-11T04:25:38.998Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/6f/d99e77264f446eb0baf7cc54c06951f7648991fc9fb6cf660611ba87eafc/datarax-0.1.10.tar.gz", hash = "sha256:99384cd8e1de81ccc0733bb0b6d520ecea9662d3a5f3a50450477844e9d646c8", size = 231851, upload-time = "2026-09-16T20:37:20.377Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/77/078a260a44e9e5f4136045cbe77dddf3d8ed947b1c9db1525e5792acd2cb/datarax-0.1.9-py3-none-any.whl", hash = "sha256:c4ddc461dd02e7868a8f9dd3ecd72111aa1b6ca59b50dffe4172e174485b1847", size = 289055, upload-time = "2026-09-11T04:25:36.594Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/2e/62577e8b144307fb38415f6cbaa2e3b0506ce9e3de8347b0bd0af2efbf1d/datarax-0.1.10-py3-none-any.whl", hash = "sha256:4e54f3503b508df72c4adc2f7355954780b9a97e1b3da2a2f0d46e84f1726b08", size = 279936, upload-time = "2026-09-16T20:37:17.903Z" },
 ]
 
 [[package]]
@@ -4838,7 +4838,7 @@ requires-dist = [
     { name = "calibrax", specifier = ">=0.1.5" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
-    { name = "datarax", specifier = ">=0.1.9" },
+    { name = "datarax", specifier = ">=0.1.10" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
     { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
@@ -7010,7 +7010,7 @@ wheels = [
 
 [[package]]
 name = "substrax"
-version = "0.1.4"
+version = "0.1.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "flax" },
@@ -7019,9 +7019,9 @@ dependencies = [
     { name = "numpy" },
     { name = "orbax-checkpoint" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ed/d3/3bab10ca05c3d0f2a6baa06c21254699a02ff8c3a1fb788ced9c968c0f93/substrax-0.1.4.tar.gz", hash = "sha256:38bad309550eadd2a5c55f3b174b20db349ba19aacef6a8c5d79378150efd533", size = 38585, upload-time = "2026-09-09T06:08:01.312Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/2a/ec123f78e47f1d56d155b429988077c4053e4b60713ba6b81960e6903654/substrax-0.1.7.tar.gz", hash = "sha256:ab6de9d35413b3f94e2820d3ce497d482d1a8087256355600d077fb7190fd085", size = 64728, upload-time = "2026-09-15T00:53:06.559Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/53/69/3a22d6cb203720e1c06150e78517a635cf9bb7c76d2325fb5d187ddaced5/substrax-0.1.4-py3-none-any.whl", hash = "sha256:15026438a6e2423fa207dd3b4f5650b2fe37f379b11d854982ff0a4f84acf9ab", size = 45673, upload-time = "2026-09-09T06:07:59.809Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/d7/896e86cf92a64205ce4ff8b97ead6cb5c1e0c85c18d93acb6b5ef89c7d6c/substrax-0.1.7-py3-none-any.whl", hash = "sha256:d57331a55b7ebb08e2b3a8b042265c04e9965410ca4e15e38daedce7e88efe5b", size = 75159, upload-time = "2026-09-15T00:53:05.022Z" },
 ]
 
 [package.optional-dependencies]

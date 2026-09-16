@@ -337,13 +337,8 @@ class PDEBenchSource(DataSourceModule):
         def rescale(value: jax.Array, key: jax.Array) -> jax.Array:  # noqa: ARG001 - deterministic
             return (value - ch_min) / ch_scale
 
-        # ``precomputed_stats={}`` keeps the operator on the static-stats path (the normalisation
-        # constants are baked into ``rescale``); no per-batch statistics are needed.
         return MapOperator(
-            MapOperatorConfig(
-                subtree={"input": None, "target": None},
-                precomputed_stats={},
-            ),
+            MapOperatorConfig(subtree={"input": None, "target": None}),
             fn=rescale,
             rngs=rngs,
         )

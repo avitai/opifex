@@ -55,7 +55,7 @@ dependencies = [
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.5",
   "calibrax>=0.1.5",
-  "datarax>=0.1.9",
+  "datarax>=0.1.10",
   "substrax>=0.1.4",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.

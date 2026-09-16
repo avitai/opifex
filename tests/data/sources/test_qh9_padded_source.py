@@ -20,6 +20,7 @@ import pytest
 from flax import nnx
 
 from opifex.data.sources.qh9_padded_source import (
+    _with_shuffle,
     create_qh9_padded_sources,
     iterate_padded_batches,
     QH9PaddedConfig,
@@ -205,6 +206,16 @@ def test_create_sources_splits(synthetic_qh9_db: Path) -> None:
     assert len(splits.val) == len(val_idx)
     assert len(splits.test) == len(test_idx)
     assert splits.units["fock"] == "Hartree"
+
+
+def test_the_shuffle_override_keeps_every_other_setting() -> None:
+    """A split whose order differs from the config's gets a copy with only ``shuffle`` changed."""
+    config = QH9PaddedConfig(max_atoms=6, max_edges=30, seed=5, shuffle=True)
+
+    ordered = _with_shuffle(config, shuffle=False)
+
+    assert ordered.shuffle is False
+    assert (ordered.max_atoms, ordered.max_edges, ordered.seed) == (6, 30, 5)
 
 
 def test_oversized_molecule_fails_fast(tmp_path: Path) -> None:
