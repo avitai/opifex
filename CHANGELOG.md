@@ -27,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every key drawn at a sampling entry point comes through `substrax.rng.key_from`; an
   `nnx.Rngs` holding none of a call's streams raises `MissingRngStreamError`, naming the
   call, and nothing falls back to a default seed.
-- Requires `substrax>=0.1.8`, the release that carries `substrax.rng` and `substrax.optim`.
+- Requires `substrax>=0.1.9` (`substrax.rng`, `substrax.optim`, and an `OptimizerConfig`
+  that refuses an unknown optimizer or a non-positive clip at construction),
+  `datarax>=0.1.11`, `calibrax>=0.1.6` and `avitai-artifex>=0.1.8`; the lock holds each.
 - `BenchmarkRunner`, `BenchmarkEvaluator` and `ResultsManager` resolve their output
   directory through `substrax.artifacts.resolve_output_dir`: with no directory given they
   write under `benchmarks` in `$AVITAI_OUTPUT_DIR` when it is set and in a per-process
