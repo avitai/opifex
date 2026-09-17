@@ -23,7 +23,7 @@ from opifex.core.training.components import checkpoint_store
 def test_checkpoint_store_is_substrax_store() -> None:
     assert checkpoint_store.OrbaxCheckpointStore is OrbaxCheckpointStore
     assert checkpoint_store.CheckpointStore is CheckpointStore
-    assert checkpoint_store.__all__ == ["CheckpointStore", "ModelLike", "OrbaxCheckpointStore"]
+    assert checkpoint_store.__all__ == ["CheckpointStore", "OrbaxCheckpointStore"]
 
 
 def test_callbacks_compose_substrax_tracker() -> None:

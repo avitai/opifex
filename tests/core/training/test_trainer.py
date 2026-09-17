@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
+from substrax.checkpoint import CheckpointNotFoundError, OrbaxCheckpointStore
 
 from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.physics_configs import (
@@ -339,16 +340,85 @@ class TestCheckpointing:
 
         trainer = Trainer(mock_model, config)
 
-        # Save checkpoint
+        # Save checkpoint: the model item at the step, the loss in the record's metrics
         checkpoint_path = trainer.save_checkpoint(step=10, loss=0.5)
-        assert checkpoint_path is not None
-        assert Path(checkpoint_path).exists()
+        assert isinstance(checkpoint_path, Path)
+        assert checkpoint_path.exists()
 
-        # Load checkpoint
-        loaded_model, metadata = trainer.load_checkpoint(step=10)
-        assert loaded_model is not None
-        assert metadata["step"] == 10
-        assert metadata["loss"] == 0.5
+        # Load checkpoint: substrax's record, the model updated in place
+        checkpoint = trainer.load_checkpoint(step=10)
+        assert checkpoint.step == 10
+        assert set(checkpoint.items) == {"model"}
+        assert checkpoint.metadata.metrics == {"loss": 0.5}
+        assert checkpoint.metadata.producer is not None
+        assert checkpoint.metadata.producer.name == "opifex"
+
+    def test_checkpoint_records_the_epoch_and_keeps_max_to_keep(
+        self, mock_model, temp_checkpoint_dir
+    ):
+        """The trainer's epoch is the record's, and the store keeps ``max_to_keep`` steps."""
+        config = TrainingConfig(num_epochs=2, checkpoint_frequency=1)
+        config.checkpoint_config.checkpoint_dir = str(temp_checkpoint_dir)
+        config.checkpoint_config.max_to_keep = 2
+        trainer = Trainer(mock_model, config)
+
+        for step in (1, 2, 3):
+            trainer.state.epoch = step * 10
+            trainer.save_checkpoint(step=step, loss=1.0 / step)
+
+        with OrbaxCheckpointStore(temp_checkpoint_dir) as store:
+            assert store.list_steps() == [2, 3]
+            assert store.read_metadata(3).epoch == 30
+
+    def test_load_checkpoint_restores_the_weights_into_the_live_model(
+        self, mock_model, temp_checkpoint_dir
+    ):
+        config = TrainingConfig(num_epochs=2, checkpoint_frequency=1)
+        config.checkpoint_config.checkpoint_dir = str(temp_checkpoint_dir)
+        trainer = Trainer(mock_model, config)
+        saved_kernel = jnp.array(mock_model.linear1.kernel[...])
+        trainer.save_checkpoint(step=1, loss=0.5)
+        mock_model.linear1.kernel[...] = jnp.zeros_like(saved_kernel)
+
+        trainer.load_checkpoint(step=1)
+
+        assert jnp.array_equal(mock_model.linear1.kernel[...], saved_kernel)
+
+    def test_default_config_never_writes_into_the_working_directory(
+        self, mock_model, sample_data, tmp_path, monkeypatch
+    ):
+        """Without a configured directory there is no store, and ``fit`` leaves the cwd alone."""
+        monkeypatch.chdir(tmp_path)
+        trainer = Trainer(mock_model, TrainingConfig(num_epochs=1))
+        assert trainer.checkpoint_store is None
+
+        x, y = sample_data
+        trainer.fit(train_data=(x[:64], y[:64]))
+
+        assert not (tmp_path / "checkpoints").exists()
+
+    def test_fit_checkpoints_at_the_global_step(self, mock_model, sample_data, temp_checkpoint_dir):
+        """Every ``checkpoint_frequency`` epochs the global step is saved, so a second ``fit``
+        adds steps instead of rewriting the first one's."""
+        config = TrainingConfig(num_epochs=2, checkpoint_frequency=1, batch_size=32)
+        config.checkpoint_config.checkpoint_dir = str(temp_checkpoint_dir)
+        trainer = Trainer(mock_model, config)
+        x, y = sample_data
+
+        trainer.fit(train_data=(x[:64], y[:64]))
+        first_run_last_step = trainer.state.step
+        # 64 records in batches of 32 over 2 epochs: the counter saw every batch,
+        # not only the one that traced the jitted step.
+        assert first_run_last_step == 4
+        trainer.fit(train_data=(x[:64], y[:64]))
+
+        with OrbaxCheckpointStore(temp_checkpoint_dir) as store:
+            steps = store.list_steps()
+            assert len(steps) == 4
+            assert steps == sorted(set(steps))
+            assert steps[1] == first_run_last_step
+            assert steps[-1] == trainer.state.step
+            assert store.read_metadata(steps[-1]).epoch == 1
 
     def test_checkpoint_with_physics_metadata(self, mock_model, temp_checkpoint_dir):
         """Test checkpointing with physics-specific metadata."""
@@ -376,14 +446,11 @@ class TestCheckpointing:
 
         assert checkpoint_path is not None
 
-        # Load checkpoint and verify metadata
-        loaded_model, loaded_metadata = trainer.load_checkpoint(step=100)
-
-        assert loaded_model is not None
-        assert "physics_metadata" in loaded_metadata
-        loaded_physics = loaded_metadata["physics_metadata"]
+        # Load checkpoint and verify the metadata: the physics values live in the record's extra
+        loaded_physics = trainer.load_checkpoint(step=100).metadata.extra["physics_metadata"]
 
         # Verify physics metadata preservation
+        assert isinstance(loaded_physics, dict)
         assert loaded_physics["constraint_violations"] == physics_metadata["constraint_violations"]
         assert loaded_physics["physics_metrics"] == physics_metadata["physics_metrics"]
 
@@ -503,26 +570,24 @@ class TestErrorHandling:
 
     def test_checkpoint_without_directory(self, mock_model):
         """Test checkpoint operations without checkpoint directory."""
-        config = TrainingConfig(num_epochs=2)
-        # Explicitly set checkpoint_dir to None/empty
-        config.checkpoint_config.checkpoint_dir = None  # type: ignore  # noqa: PGH003
-        trainer = Trainer(mock_model, config)
+        trainer = Trainer(mock_model, TrainingConfig(num_epochs=2))
+        assert trainer.checkpoint_store is None
 
-        # Should handle missing checkpoint directory gracefully
+        # Saving without a store writes nothing; loading without one is a caller error.
         result = trainer.save_checkpoint(step=10, loss=0.5)
         assert result is None
+        with pytest.raises(ValueError, match="checkpoint store"):
+            trainer.load_checkpoint(step=10)
 
     def test_load_nonexistent_checkpoint(self, mock_model, temp_checkpoint_dir):
-        """Test loading non-existent checkpoint."""
+        """A step the directory does not hold raises the store's error, never a silent None."""
         config = TrainingConfig(num_epochs=2)
         config.checkpoint_config.checkpoint_dir = str(temp_checkpoint_dir)
 
         trainer = Trainer(mock_model, config)
 
-        # Should handle missing checkpoint gracefully
-        model, metadata = trainer.load_checkpoint(step=999)
-        assert model is None
-        assert metadata == {}
+        with pytest.raises(CheckpointNotFoundError):
+            trainer.load_checkpoint(step=999)
 
 
 class TestExtensibility:

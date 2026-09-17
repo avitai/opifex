@@ -53,12 +53,12 @@ dependencies = [
   # loads triton's 441 MB native library in every CPU test process, which segfaults
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
-  "avitai-artifex>=0.1.10",
+  "avitai-artifex>=0.1.11",
   "calibrax>=0.1.8",
-  "datarax>=0.1.12",
+  "datarax>=0.1.13",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
-  "substrax>=0.1.9",
+  "substrax>=0.1.10",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
   "tfp-nightly>=0.26.0.dev20251024"
@@ -180,7 +180,7 @@ metal = [
 ]
 mlflow = [
   # The MLflow experiment backend records through substrax's MLFlowLogger.
-  "substrax[mlflow]>=0.1.7"
+  "substrax[mlflow]>=0.1.10"
 ]
 neural-dft = [
   # Neural DFT specific dependencies for quantum chemistry

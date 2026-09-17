@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Checkpoints are substrax's format 3. `Trainer.save_checkpoint(step, loss,
+  physics_metadata=None)` saves the model's state as the `model` item with the trainer's
+  epoch, the loss as the `loss` metric, opifex as the producer and the physics values in the
+  record's extra, and returns the checkpoint's directory. `Trainer.load_checkpoint(step)`
+  restores that state into the live model and returns substrax's `Checkpoint`; a step the
+  directory does not hold raises `CheckpointNotFoundError` (it returned `(None, {})`), and a
+  trainer without a store raises `ValueError`. Checkpoints written by 0.2.7 and earlier load
+  through substrax's module-only layout; `python -m substrax.checkpoint upgrade` rewrites
+  them.
+- `CheckpointConfig.checkpoint_dir` defaults to `None`: a trainer saves nothing unless a
+  directory is named (it wrote into `./checkpoints` under the working directory, where every
+  default-configured run collided at the same steps). `fit` saves the global step every
+  `checkpoint_frequency` epochs, not the epoch index, so a second `fit` on the same trainer
+  adds checkpoints instead of rewriting the first one's. `CheckpointComponent` likewise
+  creates a directory only when its configuration names one (it made `./checkpoints` under
+  the working directory for checkpoints it keeps in memory).
+- The serving registry stores a model's weights as the `model` item of its checkpoint and
+  restores them onto the abstract state; a missing checkpoint raises the store's
+  `CheckpointNotFoundError`, not `RuntimeError`.
+- `Experiment.log_model(model, ...)` takes an `nnx.Module` or a state mapping (Flax
+  `TrainState` payloads are gone with substrax's `ModelLike`) and records the framework, the
+  physics domain and `physics_metadata` in the checkpoint record's extra values.
+- Requires `substrax>=0.1.10`, `datarax>=0.1.13` and `avitai-artifex>=0.1.11`; the lock
+  moves exactly those three.
+
+### Fixed
+
+- `Trainer.fit` advances the global step once per batch it dispatches. The counter was
+  incremented inside the jitted training step, where the Python increment ran only when the
+  step was traced, so after any number of epochs `state.step` read 1 and every epoch's
+  checkpoint carried the same step. `training_step` itself no longer moves the counter; a
+  loop of its own around it advances `trainer.state.step`.
+
+### Removed
+
+- `opifex.core.training.components.checkpoint_store.ModelLike`.
+
+### Changed
+
 - The loader factories' training split drops the epoch's ragged final batch
   (`drop_last=True`, PyTorch's rule), so every training batch holds `batch_size` records and
   `len(loaders.train)` is the batches per epoch; the validation split keeps every record, its

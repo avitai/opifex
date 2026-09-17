@@ -16,17 +16,12 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.core.training.config import CheckpointConfig, TrainingConfig
+from opifex.core.training.config import TrainingConfig
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _no_checkpoint_config() -> CheckpointConfig:
-    """Return CheckpointConfig with empty dir to skip checkpoint manager."""
-    return CheckpointConfig(checkpoint_dir="")
 
 
 def _make_deep_model(rngs: nnx.Rngs) -> nnx.Module:
@@ -136,7 +131,6 @@ class TestTrainerGradientCheckpointing:
 
         config = TrainingConfig(
             gradient_checkpointing=True,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         assert trainer.config.gradient_checkpointing is True
@@ -147,7 +141,6 @@ class TestTrainerGradientCheckpointing:
 
         config = TrainingConfig(
             gradient_checkpointing=True,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         x, y = train_data
@@ -162,7 +155,6 @@ class TestTrainerGradientCheckpointing:
 
         config = TrainingConfig(
             gradient_checkpointing=False,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         x, y = train_data
@@ -177,7 +169,6 @@ class TestTrainerGradientCheckpointing:
         config = TrainingConfig(
             gradient_checkpointing=True,
             gradient_checkpoint_policy="everything_saveable",
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         x, y = train_data
@@ -194,7 +185,6 @@ class TestTrainerGradientCheckpointing:
         model_a = nnx.Linear(in_features=4, out_features=2, rngs=nnx.Rngs(0))
         config_a = TrainingConfig(
             gradient_checkpointing=False,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer_a = Trainer(model=model_a, config=config_a)
         loss_a, _ = trainer_a.training_step(x, y)
@@ -203,7 +193,6 @@ class TestTrainerGradientCheckpointing:
         model_b = nnx.Linear(in_features=4, out_features=2, rngs=nnx.Rngs(0))
         config_b = TrainingConfig(
             gradient_checkpointing=True,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer_b = Trainer(model=model_b, config=config_b)
         loss_b, _ = trainer_b.training_step(x, y)
@@ -220,7 +209,6 @@ class TestTrainerGradientCheckpointing:
         model_a = _make_deep_model(nnx.Rngs(42))
         config_a = TrainingConfig(
             gradient_checkpointing=False,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer_a = Trainer(model=model_a, config=config_a)
         loss_a, _ = trainer_a.training_step(x, y)
@@ -228,7 +216,6 @@ class TestTrainerGradientCheckpointing:
         model_b = _make_deep_model(nnx.Rngs(42))
         config_b = TrainingConfig(
             gradient_checkpointing=True,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer_b = Trainer(model=model_b, config=config_b)
         loss_b, _ = trainer_b.training_step(x, y)
@@ -241,7 +228,6 @@ class TestTrainerGradientCheckpointing:
 
         config = TrainingConfig(
             gradient_checkpointing=True,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         x, y = train_data
@@ -264,7 +250,6 @@ class TestTrainerGradientCheckpointing:
         config = TrainingConfig(
             gradient_checkpointing=True,
             boundary_config=BoundaryConfig(enforce=True, weight=1.0),
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
 
@@ -285,7 +270,6 @@ class TestTrainerGradientCheckpointing:
         config = TrainingConfig(
             gradient_checkpointing=True,
             gradient_checkpoint_policy="nonexistent_policy",
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         x, y = train_data
@@ -309,7 +293,6 @@ class TestTrainerGradientCheckpointing:
         config = TrainingConfig(
             gradient_checkpointing=True,
             gradient_checkpoint_policy=policy,
-            checkpoint_config=_no_checkpoint_config(),
         )
         trainer = Trainer(model=simple_model, config=config)
         x, y = train_data

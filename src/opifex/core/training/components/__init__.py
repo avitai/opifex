@@ -48,16 +48,17 @@ class CheckpointComponent(TrainingComponent):
         """Initialize checkpoint component.
 
         Args:
-            config: Configuration including checkpoint_dir, save_frequency, max_to_keep
+            config: Configuration including checkpoint_dir (``None``, the default,
+                creates no directory), save_frequency, max_to_keep
         """
         super().__init__(config)
-        self.checkpoint_dir = self.config.get("checkpoint_dir", "./checkpoints")
+        self.checkpoint_dir: str | None = self.config.get("checkpoint_dir")
         self.save_frequency = self.config.get("save_frequency", 100)
         self.max_to_keep = self.config.get("max_to_keep", 5)
         self._checkpoints: list[dict[str, Any]] = []
 
     def setup(self, model: nnx.Module, training_state: Any) -> None:  # noqa: ARG002 - training-component lifecycle interface
-        """Setup checkpoint directory.
+        """Create the configured checkpoint directory, when one is configured.
 
         Args:
             model: The neural network model
@@ -66,7 +67,8 @@ class CheckpointComponent(TrainingComponent):
         Raises:
             PermissionError: If checkpoint directory cannot be created
         """
-        # Create checkpoint directory if it doesn't exist
+        if self.checkpoint_dir is None:
+            return
         try:
             Path(self.checkpoint_dir).mkdir(parents=True, exist_ok=True)
         except OSError as e:

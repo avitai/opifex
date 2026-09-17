@@ -149,7 +149,7 @@ class TestCheckpointConfig:
         """Test default checkpoint config initialization."""
         config = CheckpointConfig()
 
-        assert config.checkpoint_dir == "./checkpoints"
+        assert config.checkpoint_dir is None
         assert config.save_frequency == 50
         assert config.max_to_keep == 5
         assert config.save_best_only is False
