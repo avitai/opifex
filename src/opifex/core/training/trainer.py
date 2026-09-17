@@ -24,6 +24,7 @@ import jax
 import jax.numpy as jnp
 from calibrax.metrics.functional.regression import relative_l2_error
 from flax import nnx
+from substrax.optim import create_optimizer, current_learning_rate
 
 from opifex.core.training.components.checkpoint_store import (
     OrbaxCheckpointStore,
@@ -31,7 +32,7 @@ from opifex.core.training.components.checkpoint_store import (
 from opifex.core.training.monitoring.metrics import (
     TrainingState,
 )
-from opifex.core.training.optimizers import create_optimizer, OptimizerConfig
+from opifex.core.training.optimizers import optimizer_spec
 
 
 logger = logging.getLogger(__name__)
@@ -82,34 +83,9 @@ class Trainer(nnx.Module):
         self.config = config
         self.rngs = rngs if rngs is not None else nnx.Rngs(0)
 
-        # ✅ NEW: Create nnx.Optimizer (Flax 0.12.0+ API)
-        # Eliminates manual state management (DRY principle)
-        opt_cfg = config.optimization_config
-        optimizer_config = OptimizerConfig(
-            optimizer_type=opt_cfg.optimizer,
-            learning_rate=opt_cfg.learning_rate,
-            b1=opt_cfg.beta1,
-            b2=opt_cfg.beta2,
-            eps=opt_cfg.eps,
-            weight_decay=opt_cfg.weight_decay,
-            momentum=opt_cfg.momentum,
-            schedule_type=opt_cfg.schedule_type,
-            decay_steps=opt_cfg.decay_steps,
-            transition_steps=opt_cfg.transition_steps,
-            decay_rate=opt_cfg.decay_rate,
-            alpha=opt_cfg.alpha,
-        )
-
-        # Create Optax transformation
-        optax_optimizer = create_optimizer(optimizer_config)
-
-        # ✅ BREAKING CHANGE: Use nnx.Optimizer (automatic state management)
-        # Replaces manual opt_state tracking
-        self.optimizer = nnx.Optimizer(
-            model,
-            optax_optimizer,
-            wrt=nnx.Param,  # Only optimize parameters
-        )
+        # The optimizer is built by substrax from the one owner of its settings; the
+        # configured schedule is its learning rate, read back on device for the metrics.
+        self.optimizer = create_optimizer(model, optimizer_spec(config.optimization_config))
 
         # nnx.Optimizer manages the optax state internally — no manual opt_state to track.
         self.state = TrainingState(
@@ -355,7 +331,7 @@ class Trainer(nnx.Module):
         return {
             "loss": loss,
             "step": self.state.step,
-            "learning_rate": self.config.learning_rate,
+            "learning_rate": current_learning_rate(self.optimizer),
             "gradient_norm": grad_norm,
             **loss_components,
         }

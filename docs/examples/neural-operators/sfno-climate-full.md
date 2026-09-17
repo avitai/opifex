@@ -280,8 +280,10 @@ The `lmax=8` parameter means the SFNO retains spherical harmonic coefficients up
 Configure the `Trainer` with `ConservationConfig` to add energy and mass conservation loss terms:
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
-    num_epochs=NUM_EPOCHS, learning_rate=LEARNING_RATE,
+    num_epochs=NUM_EPOCHS, optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
     batch_size=BATCH_SIZE, verbose=True,
     conservation_config=ConservationConfig(
         laws=["energy", "mass"], energy_tolerance=1e-6, energy_monitoring=True))

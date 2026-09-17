@@ -374,9 +374,11 @@ logging. We train with the relative-L2 loss (`loss_type="relative_l2"`), the sta
 operator-learning objective. Pass training and validation data as tuples of JAX arrays.
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
     num_epochs=NUM_EPOCHS,
-    learning_rate=LEARNING_RATE,
+    optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
     batch_size=BATCH_SIZE,
     validation_frequency=5,
     verbose=True,

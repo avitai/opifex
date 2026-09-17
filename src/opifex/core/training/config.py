@@ -75,36 +75,52 @@ class LossConfig:
 
 @dataclass(slots=True, kw_only=True)
 class OptimizationConfig:
-    """Configuration for optimization.
+    """The optimizer, in the terms ``substrax.optim`` builds it.
+
+    This is the one owner of the learning rate. A configured schedule becomes the optimizer's
+    learning rate (see :func:`opifex.core.training.optimizers.optimizer_spec`).
 
     Attributes:
-        optimizer: Optimizer type ('adam', 'sgd', 'rmsprop', 'adamw')
-        learning_rate: Learning rate
-        weight_decay: Weight decay coefficient
-        momentum: Momentum coefficient (for SGD)
-        eps: Epsilon for numerical stability (for Adam)
-        beta1: Beta1 for Adam optimizer
-        beta2: Beta2 for Adam optimizer
-        schedule_type: Optional learning-rate schedule
-            ('exponential_decay', 'cosine_decay', 'warmup_cosine', ...)
-        decay_steps: Steps over which the schedule decays (cosine/linear)
-        transition_steps: Steps between exponential-decay applications
+        optimizer: Optimizer type, one substrax builds ('adam', 'adamw', 'sgd', 'rmsprop',
+            'adagrad', 'lamb', 'radam', 'nadam')
+        learning_rate: Learning rate, or the initial value of the schedule
+        weight_decay: Decoupled weight decay ('adamw' and 'lamb'; refused elsewhere)
+        momentum: Momentum coefficient, used by 'sgd' and 'rmsprop' only
+        eps: Epsilon for numerical stability
+        beta1: First-moment decay for the Adam family
+        beta2: Second-moment decay for the Adam family
+        schedule_type: Optional learning-rate schedule ('constant', 'cosine', 'exponential',
+            'linear', 'step', 'warmup_cosine')
+        decay_steps: Steps over which the schedule decays (cosine, warmup_cosine)
+        transition_steps: Steps of the exponential and linear schedules
         decay_rate: Multiplicative decay factor for exponential decay
         alpha: Final-to-initial learning-rate ratio for cosine decay
+        end_value: Final value of the linear schedule (defaults to a tenth of the rate)
+        boundaries_and_values: Boundaries and values of the step schedule
+        peak_value: Peak of the warmup-cosine schedule (defaults to the rate)
+        warmup_steps: Warmup steps of the warmup-cosine schedule
+        gradient_clip_norm: Clip gradients by global norm before the update
+        gradient_clip_value: Clip gradients elementwise before the update (not with the norm)
     """
 
-    optimizer: str = "adam"  # 'adam', 'sgd', 'rmsprop', 'adamw'
+    optimizer: str = "adam"
     learning_rate: float = 1e-3
     weight_decay: float = 0.0
-    momentum: float = 0.9  # for SGD
-    eps: float = 1e-8  # for Adam
-    beta1: float = 0.9  # for Adam
-    beta2: float = 0.999  # for Adam
-    schedule_type: str | None = None  # learning-rate schedule (see optimizers.py)
+    momentum: float = 0.9
+    eps: float = 1e-8
+    beta1: float = 0.9
+    beta2: float = 0.999
+    schedule_type: str | None = None
     decay_steps: int | None = None
     transition_steps: int | None = None
     decay_rate: float = 0.96
     alpha: float = 0.1
+    end_value: float | None = None
+    boundaries_and_values: tuple[list[int], list[float]] | None = None
+    peak_value: float | None = None
+    warmup_steps: int | None = None
+    gradient_clip_norm: float | None = None
+    gradient_clip_value: float | None = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -203,7 +219,6 @@ class TrainingConfig:
     Attributes:
         num_epochs: Number of training epochs
         batch_size: Training batch size
-        learning_rate: Learning rate (synced to optimization_config)
         validation_frequency: Validation frequency (synced to validation_config)
         checkpoint_frequency: Checkpoint frequency (synced to checkpoint_config)
         gradient_checkpointing: Whether to enable gradient checkpointing
@@ -221,7 +236,6 @@ class TrainingConfig:
 
     num_epochs: int = 100
     batch_size: int = 32
-    learning_rate: float = 1e-3
     validation_frequency: int = 10
     checkpoint_frequency: int = 50
 
@@ -261,7 +275,6 @@ class TrainingConfig:
         This ensures that the main config values are synchronized to the
         corresponding sub-configuration instances.
         """
-        self.optimization_config.learning_rate = self.learning_rate
         self.validation_config.validation_frequency = self.validation_frequency
         self.checkpoint_config.save_frequency = self.checkpoint_frequency
 

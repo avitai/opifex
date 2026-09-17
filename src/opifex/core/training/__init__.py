@@ -2,9 +2,8 @@
 
 This module provides centralized, DRY-compliant training infrastructure including:
 - Training configuration classes
-- Optimizer creation and configuration
+- The mapping from ``OptimizationConfig`` to the optimizer substrax builds
 - Learning rate schedules
-- Gradient clipping
 
 All training components follow strict TDD principles and are designed for
 high performance with JAX compatibility.
@@ -22,17 +21,7 @@ from opifex.core.training.config import (
     TrainingConfig,
     ValidationConfig,
 )
-from opifex.core.training.optimizers import (
-    create_adam,
-    create_adamw,
-    create_optimizer,
-    create_rmsprop,
-    create_schedule,
-    create_sgd,
-    OptimizerConfig,
-    with_gradient_clipping,
-    with_schedule,
-)
+from opifex.core.training.optimizers import create_schedule, optimizer_spec
 from opifex.core.training.physics_configs import (
     BoundaryConfig,
     ConservationConfig,
@@ -64,8 +53,6 @@ __all__ = [
     "MetricsTrackingConfig",
     "MultiScaleConfig",
     "OptimizationConfig",
-    # Optimizer config and functions
-    "OptimizerConfig",
     "PerformanceConfig",
     "PlateauMode",
     "QuantumTrainingConfig",
@@ -75,12 +62,6 @@ __all__ = [
     "Trainer",
     "TrainingConfig",
     "ValidationConfig",
-    "create_adam",
-    "create_adamw",
-    "create_optimizer",
-    "create_rmsprop",
     "create_schedule",
-    "create_sgd",
-    "with_gradient_clipping",
-    "with_schedule",
+    "optimizer_spec",
 ]

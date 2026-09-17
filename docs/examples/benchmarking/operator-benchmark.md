@@ -143,11 +143,11 @@ result = evaluator.evaluate_model(
 ### Training Recipe
 
 ```python
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, OptimizationConfig, TrainingConfig
 from opifex.core.training.config import LossConfig
 
 config = TrainingConfig(
-    num_epochs=100, learning_rate=1e-3, batch_size=32,
+    num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3), batch_size=32,
     loss_config=LossConfig(loss_type="relative_l2"),
 )
 trainer = Trainer(model=operator, config=config, rngs=nnx.Rngs(42))

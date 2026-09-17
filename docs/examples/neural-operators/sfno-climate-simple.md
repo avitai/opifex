@@ -244,9 +244,11 @@ The `Trainer.fit()` method handles batched training with JIT compilation, valida
 and progress logging.
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
     num_epochs=NUM_EPOCHS,
-    learning_rate=LEARNING_RATE,
+    optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
     batch_size=BATCH_SIZE,
     verbose=True,
 )

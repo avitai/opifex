@@ -56,7 +56,7 @@ from flax import nnx
 from substrax.artifacts import resolve_output_dir
 
 # Opifex framework imports
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.data.loaders import create_shallow_water_loader
 from opifex.neural.operators.fno.spherical import create_climate_sfno
 
@@ -151,7 +151,7 @@ def main() -> dict[str, float | int]:
     print("Setting up Trainer...")
     config = TrainingConfig(
         num_epochs=NUM_EPOCHS,
-        learning_rate=LEARNING_RATE,
+        optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
         batch_size=BATCH_SIZE,
         verbose=True,
     )

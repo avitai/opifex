@@ -34,7 +34,7 @@ model creation, collocation-based training, and loss evaluation.
 | `dde.geometry.Rectangle([0,0], [1,1])` | `Rectangle(center=jnp.array([0.5, 0.5]), width=1.0, height=1.0)` |
 | `dde.data.PDE(geom, pde, bc, ...)` | `create_pde_problem(geometry=, equation=, boundary_conditions=)` |
 | `dde.Model(data, net)` | `create_heat_equation_pinn(spatial_dim=2, hidden_dims=[50,50,50], rngs=)` |
-| `model.compile("adam", lr=1e-3)` | `TrainingConfig(num_epochs=100, learning_rate=1e-3)` |
+| `model.compile("adam", lr=1e-3)` | `TrainingConfig(num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3))` |
 | `model.train(epochs=10000)` | `trainer.fit(train_data=(x, y))` |
 | `dde.grad.jacobian(y, x, i=0, j=0)` | `jax.grad(u_fn, argnums=0)(x, t)` |
 
@@ -133,12 +133,12 @@ pinn = create_heat_equation_pinn(
 ### Step 3: Configure Training
 
 ```python
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.trainer import Trainer
 
 config = TrainingConfig(
     num_epochs=100,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     batch_size=256,
 )
 
@@ -216,7 +216,9 @@ The trained PINN's temperature field on the evaluation grid:
 **Solution**: Increase learning rate to 1e-2 for initial training, then reduce.
 Use at least 1000 collocation points for a 2D domain:
 ```python
-config = TrainingConfig(num_epochs=1000, learning_rate=1e-2, batch_size=512)
+from opifex.core.training import OptimizationConfig
+
+config = TrainingConfig(num_epochs=1000, optimization_config=OptimizationConfig(learning_rate=1e-2), batch_size=512)
 ```
 
 #### PINN predicts zero everywhere

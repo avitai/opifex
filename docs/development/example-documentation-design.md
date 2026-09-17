@@ -111,8 +111,8 @@ from opifex.neural.operators.common.embeddings import GridEmbedding2D
 embedding = GridEmbedding2D(in_channels=1, grid_boundaries=[[0, 1], [0, 1]])
 
 # Level 3: Add training loop with optax
-from opifex.core.training import Trainer, TrainingConfig
-config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
+from opifex.core.training import Trainer, OptimizationConfig, TrainingConfig
+config = TrainingConfig(num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3))
 trainer = Trainer(model=model, config=config)
 trainer.fit(train_data=(x_train, y_train))
 
@@ -1797,6 +1797,8 @@ print(f"FNO parameters: {param_count:,}")
 ### Training Loop Template
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 # %% [markdown]
 """
 ### Training with Optax
@@ -1807,7 +1809,7 @@ Train using Adam optimizer with learning rate scheduling.
 # %%
 config = TrainingConfig(
     num_epochs=100,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     batch_size=16,
 )
 

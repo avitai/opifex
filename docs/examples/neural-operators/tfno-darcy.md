@@ -236,9 +236,11 @@ Train with the relative-L2 loss — the standard operator-learning objective —
 Gaussian-normalized fields.
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
     num_epochs=100,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     batch_size=32,
     loss_config=LossConfig(loss_type="relative_l2"),
 )

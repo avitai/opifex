@@ -56,8 +56,8 @@ class TestFlexibleOptimizerFactory:
         """Test factory initialization with defaults."""
         factory = FlexibleOptimizerFactory()
 
-        # Test that OptimizerConfig is created with correct defaults
-        assert factory.optimizer_config.optimizer_type == "adam"
+        # The mapping is read into an OptimizationConfig with the defaults
+        assert factory.optimizer_config.optimizer == "adam"
         assert factory.optimizer_config.learning_rate == 1e-3
         assert factory.optimizer_config.weight_decay == 0.0
 
@@ -71,8 +71,8 @@ class TestFlexibleOptimizerFactory:
         }
         factory = FlexibleOptimizerFactory(config)
 
-        # Test that OptimizerConfig is created with correct custom values
-        assert factory.optimizer_config.optimizer_type == "sgd"
+        # The mapping's values reach the OptimizationConfig
+        assert factory.optimizer_config.optimizer == "sgd"
         assert factory.optimizer_config.learning_rate == 0.01
         assert factory.optimizer_config.weight_decay == 1e-4
         assert factory.optimizer_config.schedule_type is None  # use_schedule=False

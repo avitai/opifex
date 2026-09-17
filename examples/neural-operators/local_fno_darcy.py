@@ -69,7 +69,7 @@ from calibrax.metrics.functional.regression import per_sample_relative_l2
 from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
@@ -344,7 +344,7 @@ def main() -> dict[str, float | int]:
 
         config = TrainingConfig(
             num_epochs=NUM_EPOCHS,
-            learning_rate=LEARNING_RATE,
+            optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
             batch_size=BATCH_SIZE,
             validation_frequency=10,
             verbose=True,

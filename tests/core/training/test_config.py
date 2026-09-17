@@ -31,7 +31,7 @@ class TestTrainingConfig:
 
         assert config.num_epochs == 100
         assert config.batch_size == 32
-        assert config.learning_rate == 1e-3
+        assert config.optimization_config.learning_rate == 1e-3
         assert config.validation_frequency == 10
         assert config.checkpoint_frequency == 50
         assert config.progress_callback is None
@@ -42,7 +42,7 @@ class TestTrainingConfig:
         config = TrainingConfig(
             num_epochs=200,
             batch_size=64,
-            learning_rate=5e-4,
+            optimization_config=OptimizationConfig(learning_rate=5e-4),
             validation_frequency=5,
             checkpoint_frequency=25,
             verbose=False,
@@ -50,7 +50,7 @@ class TestTrainingConfig:
 
         assert config.num_epochs == 200
         assert config.batch_size == 64
-        assert config.learning_rate == 5e-4
+        assert config.optimization_config.learning_rate == 5e-4
         assert config.validation_frequency == 5
         assert config.checkpoint_frequency == 25
         assert config.verbose is False
@@ -68,7 +68,7 @@ class TestTrainingConfig:
     def test_training_config_post_init_sync(self):
         """Test that __post_init__ syncs values to sub-configs."""
         config = TrainingConfig(
-            learning_rate=5e-4,
+            optimization_config=OptimizationConfig(learning_rate=5e-4),
             validation_frequency=20,
             checkpoint_frequency=100,
         )
@@ -364,7 +364,6 @@ class TestConfigIntegration:
         config = TrainingConfig(
             num_epochs=200,
             batch_size=64,
-            learning_rate=5e-4,  # Should sync to opt_cfg
             validation_frequency=5,  # Should sync to val_cfg
             checkpoint_frequency=100,  # Should sync to ckpt_cfg
             loss_config=loss_cfg,
@@ -385,7 +384,7 @@ class TestConfigIntegration:
         assert config.checkpoint_config.max_to_keep == 10
         assert config.quantum_config.scf_max_iterations == 50  # pyright: ignore[reportOptionalMemberAccess]
 
-        # Verify synchronization (post_init should update sub-configs)
+        # The rate is the optimization config's own; the frequencies are synced by post_init
         assert config.optimization_config.learning_rate == 5e-4
         assert config.validation_config.validation_frequency == 5
         assert config.checkpoint_config.save_frequency == 100
@@ -398,8 +397,8 @@ class TestConfigIntegration:
         config.num_epochs = 500
         assert config.num_epochs == 500
 
-        config.learning_rate = 1e-4
-        assert config.learning_rate == 1e-4
+        config.optimization_config.learning_rate = 1e-4
+        assert config.optimization_config.learning_rate == 1e-4
 
 
 class TestEdgeCases:

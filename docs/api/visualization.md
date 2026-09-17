@@ -438,6 +438,7 @@ from opifex.visualization import (
     plot_field_comparison,
     create_physics_animation,
 )
+from opifex.core.training import OptimizationConfig
 
 # Setup data loader
 train_loader = create_burgers_loader(
@@ -456,7 +457,7 @@ model = FourierNeuralOperator(
     num_layers=4,
     rngs=nnx.Rngs(42),
 )
-config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
+config = TrainingConfig(num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3))
 trainer = BasicTrainer(model, config)
 trained_model, history = trainer.train(train_loader)
 

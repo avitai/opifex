@@ -679,10 +679,10 @@ key = jax.random.PRNGKey(42)
 rngs = nnx.Rngs(42)
 
 # Use deterministic training config
-from opifex.core.training import TrainingConfig
+from opifex.core.training import OptimizationConfig, TrainingConfig
 config = TrainingConfig(
     num_epochs=100,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     batch_size=32,
 )
 ```

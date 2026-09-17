@@ -70,7 +70,7 @@ from substrax.runtime import configure_entry_point_logging
 from opifex.benchmarking.analysis_engine import AnalysisEngine
 from opifex.benchmarking.evaluation_engine import BenchmarkEvaluator
 from opifex.benchmarking.results_manager import ResultsManager
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
@@ -461,7 +461,7 @@ class NeuralOperatorComparativeStudy:
 
         config = TrainingConfig(
             num_epochs=self.num_epochs,
-            learning_rate=self.learning_rate,
+            optimization_config=OptimizationConfig(learning_rate=self.learning_rate),
             batch_size=self.batch_size,
             validation_frequency=max(1, self.num_epochs // 4),
             verbose=False,

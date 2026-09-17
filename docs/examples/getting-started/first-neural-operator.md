@@ -160,11 +160,11 @@ Creating FNO model with grid embedding...
 ### Step 3: Train
 
 ```python
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, OptimizationConfig, TrainingConfig
 
 trainer = Trainer(
     model=model,
-    config=TrainingConfig(num_epochs=200, learning_rate=1e-2, batch_size=32),
+    config=TrainingConfig(num_epochs=200, optimization_config=OptimizationConfig(learning_rate=1e-2), batch_size=32),
     rngs=nnx.Rngs(42),
 )
 
@@ -284,9 +284,11 @@ X = X.transpose(0, 3, 1, 2)  # Convert to (batch, channels, height, width)
 **Solution**: Try different learning rates:
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
     num_epochs=200,
-    learning_rate=1e-3,  # Try 1e-3 or 1e-2
+    optimization_config=OptimizationConfig(learning_rate=1e-3),  # Try 1e-3 or 1e-2
     batch_size=32,
 )
 ```

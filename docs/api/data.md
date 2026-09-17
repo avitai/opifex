@@ -412,7 +412,7 @@ plt.show()
 ```python
 from flax import nnx
 
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import Trainer, OptimizationConfig, TrainingConfig
 from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.data.loaders import create_darcy_loader
 
@@ -437,7 +437,7 @@ model = FourierNeuralOperator(
 # Configure and train
 config = TrainingConfig(
     num_epochs=100,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     validation_frequency=10,
 )
 

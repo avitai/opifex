@@ -127,13 +127,13 @@ Physics-aware training procedures with advanced optimization:
 
 ```python
 from opifex.training.basic_trainer import ModularTrainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
 # Configure full training
 config = TrainingConfig(
     num_epochs=5000,
     batch_size=128,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     validation_frequency=100,
     checkpoint_frequency=500
 )
@@ -418,7 +418,7 @@ import jax.numpy as jnp
 from flax import nnx
 from opifex.neural.base import StandardMLP
 from opifex.training.basic_trainer import ModularTrainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
 # 1. Setup
 key = jax.random.PRNGKey(42)
@@ -432,7 +432,7 @@ x = jax.random.uniform(key, (1000, 2), minval=-2, maxval=2)
 y = jnp.sin(jnp.pi * x[:, 0]) * jnp.cos(jnp.pi * x[:, 1])
 
 # 4. Configure training
-config = TrainingConfig(num_epochs=1000, learning_rate=1e-3)
+config = TrainingConfig(num_epochs=1000, optimization_config=OptimizationConfig(learning_rate=1e-3))
 
 # 5. Train
 trainer = ModularTrainer(model=model, config=config, rngs=rngs)

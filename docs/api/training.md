@@ -22,7 +22,7 @@ The unified, composable trainer architecture for all training workflows.
 
 ```python
 from opifex.core.training.trainer import Trainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.physics_configs import ConservationConfig, MultiScaleConfig
 
 # Configure physics-aware training
@@ -38,7 +38,7 @@ multiscale_config = MultiScaleConfig(
 
 config = TrainingConfig(
     num_epochs=100,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     conservation_config=conservation_config,
     multiscale_config=multiscale_config,
 )
@@ -232,12 +232,12 @@ class CustomComponent(TrainingComponent):
 Training configuration with full parameter control.
 
 ```python
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
 config = TrainingConfig(
     num_epochs=1000,
     batch_size=64,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     validation_frequency=100,
     checkpoint_frequency=500,
     early_stopping=True,
@@ -382,13 +382,13 @@ import jax.numpy as jnp
 import flax.nnx as nnx
 from opifex.neural.base import StandardMLP
 from opifex.training.basic_trainer import BasicTrainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
 # Create model
 model = StandardMLP([1, 32, 32, 1], activation="tanh", rngs=nnx.Rngs(42))
 
 # Configure training
-config = TrainingConfig(num_epochs=1000, batch_size=64, learning_rate=1e-3)
+config = TrainingConfig(num_epochs=1000, batch_size=64, optimization_config=OptimizationConfig(learning_rate=1e-3))
 
 # Create trainer and train
 trainer = BasicTrainer(model, config)

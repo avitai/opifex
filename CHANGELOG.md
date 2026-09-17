@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `OptimizationConfig` is the one owner of the optimizer's settings and the trainer builds
+  its optimizer through `substrax.optim.create_optimizer` from it, with the configured
+  schedule as the optimizer's learning rate. A schedule now reaches the update: the
+  previous factory chained `scale_by_schedule` before the base optimizer, where Adam's
+  normalisation cancelled it, so a decaying schedule never decayed. `TrainingConfig` no
+  longer takes `learning_rate`; pass
+  `optimization_config=OptimizationConfig(learning_rate=...)`. The rate set there is the
+  rate applied (`TrainingConfig.__post_init__` used to overwrite it with its own default),
+  and the step metrics report the rate the last update applied. `OptimizationConfig` gains
+  the schedule fields `end_value`, `boundaries_and_values`, `peak_value` and `warmup_steps`
+  and the clip fields `gradient_clip_norm` and `gradient_clip_value`; a weight decay on an
+  optimizer without decoupled decay (`adam`, `sgd`, ...) is refused where it was silently
+  dropped, and `momentum` reaches only `sgd` and `rmsprop`.
+  `FlexibleOptimizerFactory` reads its mapping into an `OptimizationConfig` (its `grad_clip`
+  key is the global-norm clip) and `fit_atomistic` takes a `substrax.optim.OptimizerConfig`.
+- Every key drawn at a sampling entry point comes through `substrax.rng.key_from`; an
+  `nnx.Rngs` holding none of a call's streams raises `MissingRngStreamError`, naming the
+  call, and nothing falls back to a default seed.
+- Requires `substrax>=0.1.8`, the release that carries `substrax.rng` and `substrax.optim`.
 - `BenchmarkRunner`, `BenchmarkEvaluator` and `ResultsManager` resolve their output
   directory through `substrax.artifacts.resolve_output_dir`: with no directory given they
   write under `benchmarks` in `$AVITAI_OUTPUT_DIR` when it is set and in a per-process
@@ -41,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `opifex.core.training.optimizers.OptimizerConfig`, `create_optimizer`, `create_adam`,
+  `create_adamw`, `create_sgd`, `create_rmsprop`, `with_gradient_clipping` and
+  `with_schedule`, and `TrainingConfig.learning_rate`. The optimizer is described by
+  `OptimizationConfig` and built by `substrax.optim` (`optimizer_spec` maps one onto the
+  other; `create_schedule` stays, over `OptimizationConfig`).
 - The K-FAC natural-gradient preconditioner for variational Monte Carlo
   (`opifex.neural.quantum.vmc.kfac_preconditioner`) and the `kfac-jax` dependency of the
   `quantum-chemistry` extra. The module wrapped `kfac_jax`, whose published releases stop

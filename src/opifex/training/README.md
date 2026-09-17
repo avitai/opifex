@@ -7,9 +7,9 @@ it for supervised, PINN, and neural-operator training.
 
 ```python
 from opifex.core.training import Trainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
-trainer = Trainer(model, TrainingConfig(num_epochs=2000, batch_size=64, learning_rate=1e-3))
+trainer = Trainer(model, TrainingConfig(num_epochs=2000, batch_size=64, optimization_config=OptimizationConfig(learning_rate=1e-3)))
 trained_model, history = trainer.fit((x_train, y_train), val_data=(x_val, y_val))
 ```
 

@@ -66,7 +66,7 @@ from calibrax.metrics.functional.regression import per_sample_relative_l2
 from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.fno.base import FourierNeuralOperator
@@ -200,7 +200,7 @@ def main() -> dict[str, float | int]:
     print("Setting up Trainer...")
     config = TrainingConfig(
         num_epochs=NUM_EPOCHS,
-        learning_rate=LEARNING_RATE,
+        optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
         batch_size=BATCH_SIZE,
         verbose=True,
         loss_config=LossConfig(loss_type="relative_l2"),

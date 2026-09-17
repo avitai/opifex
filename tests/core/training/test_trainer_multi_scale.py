@@ -13,7 +13,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 from flax import nnx
 
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.core.training.physics_configs import (
     ChemicalAccuracyTracking,
     ConservationViolationTracking,
@@ -36,7 +36,7 @@ class TestMultiScalePhysicsLoss:
         config = TrainingConfig(
             num_epochs=2,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             multiscale_config=MultiScaleConfig(
                 scales=["molecular"],
                 weights={"molecular": 1.0},
@@ -62,7 +62,7 @@ class TestMultiScalePhysicsLoss:
         config = TrainingConfig(
             num_epochs=2,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             multiscale_config=MultiScaleConfig(
                 scales=["molecular", "atomic", "electronic"],
                 weights={"molecular": 0.5, "atomic": 0.3, "electronic": 0.2},
@@ -86,7 +86,7 @@ class TestMultiScalePhysicsLoss:
         config = TrainingConfig(
             num_epochs=2,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             multiscale_config=MultiScaleConfig(
                 scales=["molecular", "atomic"],
                 weights={"molecular": 0.6, "atomic": 0.4},
@@ -110,7 +110,7 @@ class TestMultiScalePhysicsLoss:
         config = TrainingConfig(
             num_epochs=50,  # More epochs for convergence
             batch_size=4,
-            learning_rate=1e-2,
+            optimization_config=OptimizationConfig(learning_rate=1e-2),
             multiscale_config=MultiScaleConfig(
                 scales=["molecular", "atomic"],
                 weights={"molecular": 0.7, "atomic": 0.3},
@@ -139,7 +139,7 @@ class TestAdaptiveConstraintWeighting:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=ConstraintConfig(
                 constraints=["energy_conservation", "momentum_conservation"],
                 weights={"energy_conservation": 0.5, "momentum_conservation": 0.5},
@@ -165,7 +165,7 @@ class TestAdaptiveConstraintWeighting:
         config = TrainingConfig(
             num_epochs=10,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=ConstraintConfig(
                 constraints=["energy_conservation"],
                 weights={"energy_conservation": 1.0},
@@ -191,7 +191,7 @@ class TestAdaptiveConstraintWeighting:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=ConstraintConfig(
                 constraints=["energy_conservation"],
                 weights={"energy_conservation": 1.0},
@@ -220,7 +220,7 @@ class TestPhysicsStateTracking:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             metrics_tracking_config=MetricsTrackingConfig(
                 chemical_accuracy=ChemicalAccuracyTracking(enabled=True),
             ),
@@ -243,7 +243,7 @@ class TestPhysicsStateTracking:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             metrics_tracking_config=MetricsTrackingConfig(
                 scf_convergence=SCFConvergenceTracking(enabled=True),
             ),
@@ -265,7 +265,7 @@ class TestPhysicsStateTracking:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             metrics_tracking_config=MetricsTrackingConfig(
                 conservation_violations=ConservationViolationTracking(enabled=True),
             ),
@@ -291,7 +291,7 @@ class TestCombinedPhysicsFeatures:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             multiscale_config=MultiScaleConfig(
                 scales=["molecular", "atomic"],
                 weights={"molecular": 0.6, "atomic": 0.4},
@@ -321,7 +321,7 @@ class TestCombinedPhysicsFeatures:
         config = TrainingConfig(
             num_epochs=5,
             batch_size=4,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             multiscale_config=MultiScaleConfig(
                 scales=["molecular", "atomic", "electronic"],
                 weights={"molecular": 0.5, "atomic": 0.3, "electronic": 0.2},
