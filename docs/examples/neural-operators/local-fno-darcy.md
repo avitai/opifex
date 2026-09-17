@@ -259,9 +259,11 @@ We train both operators with Opifex's `Trainer` and the relative-L2 loss — the
 standard operator-learning objective — over 120 epochs.
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
     num_epochs=120,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     batch_size=32,
     validation_frequency=10,
     verbose=True,

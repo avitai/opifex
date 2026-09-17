@@ -43,7 +43,7 @@ import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
 from opifex.core.training.trainer import Trainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
 # Create 2D FNO for PDEs
 fno_2d = FourierNeuralOperator(
@@ -83,7 +83,7 @@ val_inputs, val_outputs = generate_dummy_darcy_data(n_samples=20)
 training_config = TrainingConfig(
     num_epochs=10,  # Reduced for demonstration
     batch_size=10,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
 )
 
 trainer = Trainer(model=fno_2d, config=training_config)

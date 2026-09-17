@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.physics_configs import (
     DFTConfig,
     ElectronicStructureConfig,
@@ -62,7 +62,7 @@ class TestQuantumCapabilities:
 
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             scf_config=scf_config,
         )
         trainer = Trainer(mock_model, config)
@@ -82,7 +82,7 @@ class TestQuantumCapabilities:
 
         config = TrainingConfig(
             num_epochs=5,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             dft_config=dft_config,
         )
         trainer = Trainer(mock_model, config)
@@ -100,7 +100,7 @@ class TestQuantumCapabilities:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             electronic_structure_config=electronic_config,
         )
         trainer = Trainer(mock_model, config)
@@ -116,7 +116,7 @@ class TestQuantumCapabilities:
         electronic_config = ElectronicStructureConfig(orbital_optimization=True)
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             scf_config=scf_config,
             dft_config=dft_config,
             electronic_structure_config=electronic_config,
@@ -141,7 +141,7 @@ class TestQuantumTrainingEnhancements:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             dft_config=dft_config,
         )
         trainer = Trainer(mock_model, config)
@@ -162,7 +162,7 @@ class TestQuantumTrainingEnhancements:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             electronic_structure_config=electronic_config,
         )
         trainer = Trainer(mock_model, config)
@@ -188,7 +188,7 @@ class TestAdvancedQuantumTraining:
         scf_config = SCFConfig(max_iterations=10, tolerance=1e-4)
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             dft_config=dft_config,
             scf_config=scf_config,
         )
@@ -207,7 +207,7 @@ class TestAdvancedQuantumTraining:
         scf_config = SCFConfig(max_iterations=20)
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             dft_config=dft_config,
             scf_config=scf_config,
         )
@@ -226,7 +226,7 @@ class TestAdvancedQuantumTraining:
         scf_config = SCFConfig(tolerance=1e-6)
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             dft_config=dft_config,
             scf_config=scf_config,
         )

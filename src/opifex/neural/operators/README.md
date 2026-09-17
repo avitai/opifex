@@ -412,6 +412,7 @@ Neural operators can be combined with physics-informed training:
 ```python
 from opifex.core.physics.losses import PhysicsInformedLoss
 from opifex.core.training.trainer import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig
 
 # Create physics-informed loss
 physics_loss = PhysicsInformedLoss()
@@ -420,7 +421,7 @@ physics_loss = PhysicsInformedLoss()
 config = TrainingConfig(
     num_epochs=100,
     batch_size=32,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     physics_weight=0.1
 )
 

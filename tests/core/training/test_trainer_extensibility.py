@@ -26,7 +26,7 @@ from opifex.core.physics.conservation import (
     MultiScalePhysics,
     symmetry_violation,
 )
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.physics_configs import (
     ConservationConfig,
     LoggingConfig,
@@ -86,7 +86,7 @@ class TestComposablePhysicsConfigurations:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -118,7 +118,7 @@ class TestComposablePhysicsConfigurations:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             multiscale_config=multi_scale_config,
         )
 
@@ -164,7 +164,7 @@ class TestComposablePhysicsConfigurations:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
             multiscale_config=multi_scale_config,
         )
@@ -201,7 +201,7 @@ class TestMetricsTrackingExtensibility:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             metrics_tracking_config=metrics_config,
         )
 
@@ -230,7 +230,7 @@ class TestMetricsTrackingExtensibility:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             performance_config=performance_config,
         )
 
@@ -268,7 +268,7 @@ class TestLoggingExtensibility:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             logging_config=logging_config,
         )
 
@@ -299,7 +299,7 @@ class TestLoggingExtensibility:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             logging_config=logging_config,
         )
 
@@ -360,7 +360,7 @@ class TestMultiDomainPhysicsIntegration:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
             multiscale_config=multi_scale_config,
             metrics_tracking_config=metrics_config,
@@ -389,7 +389,7 @@ class TestMultiDomainPhysicsIntegration:
         # Instead of: trainer.compute_energy_conservation()
         # We use: ConservationViolations.energy() directly
 
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
         x, y = sample_data
 
@@ -459,7 +459,7 @@ class TestExtensibilityComparisonSummary:
 
         # 4. Compose all configs
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
             multiscale_config=multi_scale_config,
             metrics_tracking_config=metrics_config,

@@ -19,7 +19,7 @@ from opifex.core.physics.conservation import (
     particle_number_violation,
     symmetry_violation,
 )
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.physics_configs import ConservationConfig
 from opifex.core.training.trainer import Trainer
 
@@ -69,7 +69,7 @@ class TestConservationLawEnforcement:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -94,7 +94,7 @@ class TestConservationLawEnforcement:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -120,7 +120,7 @@ class TestConservationLawEnforcement:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -148,7 +148,7 @@ class TestConservationLawEnforcement:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -183,7 +183,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -205,7 +205,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -226,7 +226,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -249,7 +249,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -274,7 +274,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -299,7 +299,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -326,7 +326,7 @@ class TestConservationLawToleranceBehavior:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 
@@ -489,7 +489,7 @@ class TestAdaptiveConstraintWeighting:
         )
 
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
 

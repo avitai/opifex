@@ -314,8 +314,10 @@ Every operator reuses the *same* `Trainer` configuration: Adam at `1e-3`, the
 relative-L2 loss, and 100 epochs. Only the architecture changes between runs.
 
 ```python
+from opifex.core.training import OptimizationConfig
+
 config = TrainingConfig(
-    num_epochs=100, learning_rate=1e-3, batch_size=32,
+    num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3), batch_size=32,
     validation_frequency=10, verbose=False,
     loss_config=LossConfig(loss_type="relative_l2"),
 )

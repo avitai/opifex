@@ -55,7 +55,7 @@ import numpy as np
 from flax import nnx
 from substrax.artifacts import resolve_output_dir
 
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.data.loaders.factory import create_navier_stokes_loader
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.ufno import create_turbulence_ufno
@@ -180,7 +180,7 @@ def main() -> dict[str, float | int]:
     print("\nSetting up Trainer...")
     config = TrainingConfig(
         num_epochs=num_epochs,
-        learning_rate=learning_rate,
+        optimization_config=OptimizationConfig(learning_rate=learning_rate),
         batch_size=batch_size,
         verbose=True,
     )

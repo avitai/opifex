@@ -392,6 +392,7 @@ from opifex.platform.registry import (
 from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.training.basic_trainer import BasicTrainer
 from opifex.data.loaders import create_darcy_loader
+from opifex.core.training import OptimizationConfig
 
 # Initialize registry
 registry = RegistryService(storage_path="./models")
@@ -405,7 +406,7 @@ train_loader = create_darcy_loader(
 )
 model = FourierNeuralOperator(in_channels=1, out_channels=1, hidden_channels=64, modes=12, num_layers=4, rngs=nnx.Rngs(0))
 
-config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
+config = TrainingConfig(num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3))
 trainer = BasicTrainer(model, config)
 trained_model, history = trainer.train(train_loader)
 

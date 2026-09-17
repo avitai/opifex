@@ -45,7 +45,7 @@ from flax import nnx
 from substrax.artifacts import resolve_output_dir
 
 from opifex.core.problems import create_pde_problem
-from opifex.core.training import Trainer, TrainingConfig
+from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.geometry import Rectangle
 from opifex.neural.pinns import create_heat_equation_pinn
 
@@ -99,7 +99,11 @@ def main() -> dict[str, float | int]:
 
     trainer = Trainer(
         model=pinn,
-        config=TrainingConfig(num_epochs=100, learning_rate=1e-3, batch_size=256),
+        config=TrainingConfig(
+            num_epochs=100,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
+            batch_size=256,
+        ),
     )
     trained_pinn, metrics = trainer.fit(train_data=(collocation_pts, targets))
     final_loss = float(metrics.get("final_train_loss", float("nan")))

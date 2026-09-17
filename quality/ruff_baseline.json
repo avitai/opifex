@@ -65,9 +65,6 @@
       "ANN201": 2,
       "ANN202": 1
     },
-    "src/opifex/core/training/components/__init__.py": {
-      "ANN202": 2
-    },
     "src/opifex/core/training/optimizers.py": {
       "ANN001": 1,
       "ANN202": 1
@@ -308,7 +305,7 @@
       "ANN202": 3
     },
     "src/opifex/uncertainty/markov/markov_pl_likelihoods.py": {
-      "ANN202": 3
+      "ANN202": 2
     },
     "src/opifex/uncertainty/monitoring/reliability_report.py": {
       "D417": 1

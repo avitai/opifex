@@ -24,12 +24,18 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 from flax.training.dynamic_scale import DynamicScale
+from substrax.optim import create_transformation
+
+from opifex.core.training.components.lifecycle import TrainingComponent
+from opifex.core.training.components.recovery import ErrorRecoveryManager
+from opifex.core.training.config import OptimizationConfig
+from opifex.core.training.optimizers import optimizer_spec
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from opifex.core.training.components.lifecycle import TrainingComponent
+    import optax
 
 
 class CheckpointComponent(TrainingComponent):
@@ -250,9 +256,10 @@ class MixedPrecisionComponent(TrainingComponent):
 
 
 class FlexibleOptimizerFactory(TrainingComponent):
-    """Factory for creating and managing sophisticated optimizers.
+    """Factory turning a plain configuration mapping into the optimizer substrax builds.
 
-    Uses the centralized opifex.core.training.optimizers module.
+    The mapping is read into an :class:`~opifex.core.training.config.OptimizationConfig`,
+    the one owner of the optimizer's settings.
     """
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -262,17 +269,12 @@ class FlexibleOptimizerFactory(TrainingComponent):
             config: Configuration for optimizer creation and scheduling
         """
         super().__init__(config)
-
-        # Import here to avoid circular dependency
-        from opifex.core.training.optimizers import create_optimizer, OptimizerConfig
-
-        # Convert dict config to OptimizerConfig
-        self.optimizer_config = OptimizerConfig(
-            optimizer_type=self.config.get("optimizer_type", "adam"),
+        self.optimizer_config = OptimizationConfig(
+            optimizer=self.config.get("optimizer_type", "adam"),
             learning_rate=self.config.get("learning_rate", 1e-3),
             weight_decay=self.config.get("weight_decay", 0.0),
-            b1=self.config.get("beta1", 0.9),
-            b2=self.config.get("beta2", 0.999),
+            beta1=self.config.get("beta1", 0.9),
+            beta2=self.config.get("beta2", 0.999),
             eps=self.config.get("eps", 1e-8),
             momentum=self.config.get("momentum", 0.0),
             schedule_type=self.config.get("schedule_type")
@@ -282,12 +284,11 @@ class FlexibleOptimizerFactory(TrainingComponent):
             alpha=self.config.get("cosine_alpha", 0.1),
             transition_steps=self.config.get("decay_steps", 1000),
             decay_rate=self.config.get("decay_rate", 0.95),
-            gradient_clip=self.config.get("grad_clip"),
+            gradient_clip_norm=self.config.get("grad_clip"),
         )
-        self._create_optimizer = create_optimizer
 
-    def create_optimizer(self, model: nnx.Module):  # noqa: ARG002 - optimizer-factory interface receives model
-        """Create optimizer with optional scheduling.
+    def create_optimizer(self, model: nnx.Module) -> optax.GradientTransformation:
+        """Create the optax transformation for ``model``, with the configured schedule.
 
         Args:
             model: The neural network model
@@ -295,15 +296,7 @@ class FlexibleOptimizerFactory(TrainingComponent):
         Returns:
             Configured optimizer
         """
-        # Use centralized optimizer creation
-        return self._create_optimizer(self.optimizer_config)
-
-
-def _get_recovery_base():
-    """Lazy import to avoid circular dependency."""
-    from opifex.core.training.components.recovery import ErrorRecoveryManager
-
-    return ErrorRecoveryManager
+        return create_transformation(model, optimizer_spec(self.optimizer_config))
 
 
 class RecoveryComponent(TrainingComponent):
@@ -317,8 +310,7 @@ class RecoveryComponent(TrainingComponent):
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize recovery component by delegating to ErrorRecoveryManager."""
         super().__init__(config)
-        _cls = _get_recovery_base()
-        self._delegate = _cls(config)
+        self._delegate = ErrorRecoveryManager(config)
 
     @property
     def last_stable_state(self) -> Any:

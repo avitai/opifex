@@ -14,7 +14,7 @@ from flax import nnx
 
 pytestmark = pytest.mark.distributed
 
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.distributed.config import DistributedConfig
 
 
@@ -53,7 +53,7 @@ class TestTrainingConfigWithDistributed:
     def test_config_accepts_distributed_config(self, distributed_config: DistributedConfig) -> None:
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             distributed_config=distributed_config,
         )
         assert config.distributed_config is distributed_config
@@ -74,7 +74,7 @@ class TestTrainerDistributedInit:
 
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             distributed_config=distributed_config,
         )
         model = _SimpleModel(rngs=nnx.Rngs(0))
@@ -86,7 +86,9 @@ class TestTrainerDistributedInit:
     def test_trainer_no_manager_without_config(self) -> None:
         from opifex.core.training.trainer import Trainer
 
-        config = TrainingConfig(num_epochs=2, learning_rate=1e-3)
+        config = TrainingConfig(
+            num_epochs=2, optimization_config=OptimizationConfig(learning_rate=1e-3)
+        )
         model = _SimpleModel(rngs=nnx.Rngs(0))
         trainer = Trainer(model, config)
 
@@ -105,7 +107,7 @@ class TestTrainerDistributedFit:
 
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-2,
+            optimization_config=OptimizationConfig(learning_rate=1e-2),
             batch_size=16,
             distributed_config=distributed_config,
         )
@@ -127,7 +129,7 @@ class TestTrainerDistributedFit:
 
         config = TrainingConfig(
             num_epochs=10,
-            learning_rate=1e-2,
+            optimization_config=OptimizationConfig(learning_rate=1e-2),
             batch_size=16,
             distributed_config=distributed_config,
         )

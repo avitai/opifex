@@ -11,7 +11,7 @@ The training system is designed with modularity and extensibility in mind, featu
 ### Unified Trainer Architecture ⭐ **RECOMMENDED**
 ```python
 from opifex.core.training.trainer import Trainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.config import QuantumTrainingConfig
 from opifex.core.training.physics_configs import ConservationConfig
 from opifex.neural.base import StandardMLP
@@ -42,7 +42,7 @@ quantum_config = QuantumTrainingConfig(
 config = TrainingConfig(
     num_epochs=1000,
     batch_size=256,
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     validation_frequency=100,
     checkpoint_frequency=100,
     conservation_config=conservation_config,
@@ -95,7 +95,7 @@ The `BasicTrainer` class provides a complete training framework with physics-inf
 
 ```python
 from opifex.training.basic_trainer import BasicTrainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.neural.base import StandardMLP
 import jax.numpy as jnp
 import jax
@@ -112,7 +112,7 @@ model = StandardMLP(
 # Note: optimizer, early_stopping_patience, and weight_decay live in sub-configs
 # (optimization_config, validation_config), not at the top level of TrainingConfig
 config = TrainingConfig(
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     num_epochs=1000,
     batch_size=256,
     validation_frequency=100,
@@ -293,7 +293,7 @@ print(f"Final boundary loss: {pinn_history.boundary_losses[-1]:.6f}")
 ```python
 from opifex.neural.operators.fno import FourierNeuralOperator
 from opifex.training.basic_trainer import BasicTrainer
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
 # Create FNO model for operator learning
 rngs = nnx.Rngs(jax.random.PRNGKey(0))
@@ -351,7 +351,7 @@ input_funcs, output_funcs = generate_operator_data(n_samples=500)
 # Configure FNO training
 # Note: optimizer selection is handled via optimization_config, not a top-level string
 fno_config = TrainingConfig(
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     num_epochs=200,
     batch_size=16,  # Smaller batch size for function data
     validation_frequency=20
@@ -443,6 +443,7 @@ print(f"Final training loss: {deeponet_history.train_losses[-1]:.6f}")
 
 ```python
 import optax
+from opifex.core.training import OptimizationConfig
 
 def create_advanced_scheduler(base_lr=1e-3, total_steps=10000):
     """Create sophisticated learning rate schedule."""
@@ -474,7 +475,7 @@ def create_advanced_scheduler(base_lr=1e-3, total_steps=10000):
 # Use advanced scheduling in training
 # Note: optimizer type and weight_decay are configured via optimization_config sub-config
 advanced_config = TrainingConfig(
-    learning_rate=1e-3,
+    optimization_config=OptimizationConfig(learning_rate=1e-3),
     num_epochs=100,
     batch_size=64
 )

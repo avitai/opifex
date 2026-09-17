@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import OptimizationConfig, TrainingConfig
 from opifex.core.training.physics_configs import (
     BoundaryConfig,
     ConservationConfig,
@@ -67,7 +67,9 @@ class TestTrainerInitialization:
 
     def test_basic_initialization(self, mock_model):
         """Test basic trainer initialization."""
-        config = TrainingConfig(num_epochs=10, learning_rate=1e-3)
+        config = TrainingConfig(
+            num_epochs=10, optimization_config=OptimizationConfig(learning_rate=1e-3)
+        )
         trainer = Trainer(mock_model, config)
 
         assert trainer.model is mock_model
@@ -94,7 +96,7 @@ class TestTrainerInitialization:
 
         config = TrainingConfig(
             num_epochs=10,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             batch_size=32,
             boundary_config=boundary_config,
             constraint_config=constraint_config,
@@ -105,19 +107,19 @@ class TestTrainerInitialization:
 
         assert trainer.config.boundary_config == boundary_config
         assert trainer.config.constraint_config == constraint_config
-        assert trainer.config.learning_rate == 1e-3
+        assert trainer.config.optimization_config.learning_rate == 1e-3
         assert hasattr(trainer, "state")
 
     def test_initialization_with_different_optimizers(self, mock_model):
         """Test initialization with different optimizer types."""
         # Test Adam
-        config_adam = TrainingConfig(learning_rate=1e-3)
+        config_adam = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         config_adam.optimization_config.optimizer = "adam"
         trainer_adam = Trainer(mock_model, config_adam)
         assert trainer_adam.optimizer is not None
 
         # Test SGD
-        config_sgd = TrainingConfig(learning_rate=1e-3)
+        config_sgd = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         config_sgd.optimization_config.optimizer = "sgd"
         config_sgd.optimization_config.momentum = 0.9
         trainer_sgd = Trainer(
@@ -127,7 +129,7 @@ class TestTrainerInitialization:
         assert trainer_sgd.optimizer is not None
 
         # Test AdamW
-        config_adamw = TrainingConfig(learning_rate=1e-3)
+        config_adamw = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         config_adamw.optimization_config.optimizer = "adamw"
         config_adamw.optimization_config.weight_decay = 1e-4
         trainer_adamw = Trainer(
@@ -142,7 +144,7 @@ class TestStandardTraining:
 
     def test_training_step(self, mock_model, sample_data):
         """Test single training step."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -157,7 +159,7 @@ class TestStandardTraining:
 
     def test_validation_step(self, mock_model, sample_data):
         """Test validation step without parameter updates."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -170,7 +172,7 @@ class TestStandardTraining:
         """Test full training loop."""
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             batch_size=32,
             validation_frequency=1,
         )
@@ -198,7 +200,7 @@ class TestPhysicsLossComputation:
         """Test basic loss computation without physics constraints."""
         x, y = sample_data
 
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         loss, _ = trainer.training_step(x[:10], y[:10])
@@ -215,7 +217,7 @@ class TestPhysicsLossComputation:
 
         boundary_config = BoundaryConfig(weight=0.5, enforce=True)
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             boundary_config=boundary_config,
         )
         trainer = Trainer(mock_model, config)
@@ -238,7 +240,7 @@ class TestPhysicsLossComputation:
             constraints=["energy_conservation"],
         )
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=constraint_config,
         )
         trainer = Trainer(mock_model, config)
@@ -250,7 +252,7 @@ class TestPhysicsLossComputation:
             constraints=["energy_conservation", "momentum_conservation"],
         )
         config_multi = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=constraint_config_multi,
         )
         trainer_multi = Trainer(
@@ -269,7 +271,7 @@ class TestPhysicsInformedTraining:
         boundary_config = BoundaryConfig(weight=0.5, enforce=True)
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             boundary_config=boundary_config,
         )
         trainer = Trainer(mock_model, config)
@@ -293,7 +295,7 @@ class TestPhysicsInformedTraining:
         )
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=constraint_config,
         )
         trainer = Trainer(mock_model, config)
@@ -312,7 +314,7 @@ class TestPhysicsInformedTraining:
         )
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             conservation_config=conservation_config,
         )
         trainer = Trainer(mock_model, config)
@@ -398,7 +400,7 @@ class TestProgressTracking:
 
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             progress_callback=progress_callback,
         )
         trainer = Trainer(mock_model, config)
@@ -420,7 +422,7 @@ class TestProgressTracking:
 
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             verbose=True,
         )
         trainer = Trainer(mock_model, config)
@@ -444,7 +446,7 @@ class TestConfigurationComposition:
 
         config = TrainingConfig(
             num_epochs=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=constraint_config,
             conservation_config=conservation_config,
             boundary_config=boundary_config,
@@ -468,7 +470,7 @@ class TestOptimizers:
 
     def test_adam_optimizer(self, mock_model, sample_data):
         """Test training with Adam optimizer."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         config.optimization_config.optimizer = "adam"
 
         trainer = Trainer(mock_model, config)
@@ -479,7 +481,7 @@ class TestOptimizers:
 
     def test_sgd_optimizer(self, mock_model):
         """Test training with SGD optimizer."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         config.optimization_config.optimizer = "sgd"
         config.optimization_config.momentum = 0.9
 
@@ -488,7 +490,7 @@ class TestOptimizers:
 
     def test_adamw_optimizer(self, mock_model):
         """Test training with AdamW optimizer."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         config.optimization_config.optimizer = "adamw"
         config.optimization_config.weight_decay = 1e-4
 
@@ -528,7 +530,7 @@ class TestExtensibility:
 
     def test_custom_loss_registration(self, mock_model, sample_data):
         """Test registration of custom loss functions."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         def custom_loss(model, x, y_pred, y_true):
@@ -539,7 +541,7 @@ class TestExtensibility:
 
     def test_hook_registration(self, mock_model):
         """Test registration and execution of hooks."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         hook_called = [False]
@@ -556,7 +558,7 @@ class TestMetricsCollection:
 
     def test_training_metrics(self, mock_model, sample_data):
         """Test collection of training metrics."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -575,7 +577,7 @@ class TestMetricsCollection:
             violation_monitoring=True,
         )
         config = TrainingConfig(
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=constraint_config,
         )
         trainer = Trainer(mock_model, config)
@@ -592,7 +594,9 @@ class TestPerformance:
 
     def test_training_completes_and_returns_metrics(self, mock_model, sample_data):
         """A short fit runs to completion and returns a trained model with finite loss."""
-        config = TrainingConfig(num_epochs=2, learning_rate=1e-3)
+        config = TrainingConfig(
+            num_epochs=2, optimization_config=OptimizationConfig(learning_rate=1e-3)
+        )
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -608,7 +612,7 @@ class TestPerformance:
         config = TrainingConfig(
             num_epochs=1,
             batch_size=2,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             checkpoint_frequency=1,
         )
         config.checkpoint_config.checkpoint_dir = str(temp_checkpoint_dir)
@@ -634,7 +638,7 @@ class TestJITCompilation:
 
     def test_training_step_jit_with_jax(self, mock_model, sample_data):
         """Test that training_step can be JIT compiled with jax.jit."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -666,7 +670,7 @@ class TestJITCompilation:
         With nnx.Optimizer, training_step uses nnx.value_and_grad which
         provides implicit JIT compilation. No need for external wrapping.
         """
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -682,7 +686,7 @@ class TestJITCompilation:
 
     def test_validation_step_jit_with_jax(self, mock_model, sample_data):
         """Test that validation_step can be JIT compiled with jax.jit."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -701,7 +705,7 @@ class TestJITCompilation:
 
     def test_validation_step_jit_with_nnx(self, mock_model, sample_data):
         """Test that validation_step can be JIT compiled with nnx.jit."""
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data
@@ -725,7 +729,7 @@ class TestJITCompilation:
         ``test_trainer_optimizer.py`` via ``chex.assert_max_traces``; wall-clock speed is
         environment-dependent and not asserted here.)
         """
-        config = TrainingConfig(learning_rate=1e-3)
+        config = TrainingConfig(optimization_config=OptimizationConfig(learning_rate=1e-3))
         trainer = Trainer(mock_model, config)
 
         x, y = sample_data

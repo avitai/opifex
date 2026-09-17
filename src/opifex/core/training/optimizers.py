@@ -1,147 +1,33 @@
-"""Optimizer creation and configuration for Opifex framework.
+"""From ``OptimizationConfig`` to the optimizer substrax builds.
 
-This module provides a centralized, DRY approach to creating and configuring
-Optax optimizers with common patterns like learning rate schedules and
-gradient clipping.
-
-Following strict TDD principles - all functions are implemented to pass
-the tests defined in test_optimizers.py.
+:class:`~opifex.core.training.config.OptimizationConfig` is the one owner of the optimizer's
+settings. :func:`optimizer_spec` maps it onto :class:`substrax.optim.OptimizerConfig`, with the
+configured schedule as the optimizer's learning rate, so a decaying schedule reaches the update
+rather than being cancelled by the base optimizer's normalisation; :func:`create_schedule`
+builds that schedule. The optimizer itself comes from :func:`substrax.optim.create_optimizer`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import optax
+from substrax.optim import MOMENTUM_TYPES, OPTIMIZER_TYPES, OptimizerConfig
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class OptimizerConfig:
-    """Configuration for optimizer creation.
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-    This dataclass centralizes all optimizer configuration options,
-    eliminating the need for scattered parameter dictionaries across
-    the codebase.
-    """
-
-    # Basic optimizer settings
-    optimizer_type: str = "adam"
-    learning_rate: float = 1e-3
-
-    # Adam/AdamW specific
-    b1: float = 0.9
-    b2: float = 0.999
-    eps: float = 1e-8
-    weight_decay: float = 0.0
-
-    # SGD specific
-    momentum: float = 0.0
-
-    # RMSprop specific
-    decay: float = 0.9
-
-    # Learning rate schedule
-    schedule_type: str | None = None
-    decay_steps: int | None = None
-    alpha: float = 0.1  # For cosine decay
-    transition_steps: int | None = None
-    decay_rate: float = 0.96  # For exponential decay
-    end_value: float | None = None  # For linear decay
-    boundaries_and_values: tuple[list[int], list[float]] | None = None  # For step
-    peak_value: float | None = None  # For warmup_cosine
-    warmup_steps: int | None = None  # For warmup_cosine
-
-    # Gradient clipping
-    gradient_clip: float | None = None
-    clip_type: str = "by_global_norm"  # or "by_value"
-    max_value: float | None = None  # For clip_by_value
+    from opifex.core.training.config import OptimizationConfig
 
 
-def create_adam(
-    learning_rate: float = 1e-3,
-    b1: float = 0.9,
-    b2: float = 0.999,
-    eps: float = 1e-8,
-) -> optax.GradientTransformation:
-    """Create Adam optimizer.
-
-    Args:
-        learning_rate: Learning rate
-        b1: Exponential decay rate for the first moment estimates
-        b2: Exponential decay rate for the second moment estimates
-        eps: Small constant for numerical stability
-
-    Returns:
-        Adam optimizer
-    """
-    return optax.adam(learning_rate=learning_rate, b1=b1, b2=b2, eps=eps)
-
-
-def create_adamw(
-    learning_rate: float = 1e-3,
-    b1: float = 0.9,
-    b2: float = 0.999,
-    eps: float = 1e-8,
-    weight_decay: float = 0.0,
-) -> optax.GradientTransformation:
-    """Create AdamW optimizer with weight decay.
-
-    Args:
-        learning_rate: Learning rate
-        b1: Exponential decay rate for the first moment estimates
-        b2: Exponential decay rate for the second moment estimates
-        eps: Small constant for numerical stability
-        weight_decay: Weight decay coefficient
-
-    Returns:
-        AdamW optimizer
-    """
-    return optax.adamw(
-        learning_rate=learning_rate, b1=b1, b2=b2, eps=eps, weight_decay=weight_decay
-    )
-
-
-def create_sgd(
-    learning_rate: float = 1e-2,
-    momentum: float = 0.0,
-) -> optax.GradientTransformation:
-    """Create SGD optimizer with optional momentum.
-
-    Args:
-        learning_rate: Learning rate
-        momentum: Momentum coefficient
-
-    Returns:
-        SGD optimizer
-    """
-    return optax.sgd(learning_rate=learning_rate, momentum=momentum)
-
-
-def create_rmsprop(
-    learning_rate: float = 1e-3,
-    eps: float = 1e-8,
-    decay: float = 0.9,
-) -> optax.GradientTransformation:
-    """Create RMSprop optimizer.
-
-    Args:
-        learning_rate: Learning rate
-        eps: Small constant for numerical stability
-        decay: Decay rate for moving average
-
-    Returns:
-        RMSprop optimizer
-    """
-    return optax.rmsprop(learning_rate=learning_rate, decay=decay, eps=eps)
-
-
-def _constant_schedule(config: OptimizerConfig) -> optax.Schedule:
+def _constant_schedule(config: OptimizationConfig) -> optax.Schedule:
     """Constant learning-rate schedule."""
     return optax.constant_schedule(config.learning_rate)
 
 
-def _cosine_schedule(config: OptimizerConfig) -> optax.Schedule:
+def _cosine_schedule(config: OptimizationConfig) -> optax.Schedule:
     """Cosine-decay schedule (``decay_steps`` defaults to 1000)."""
     decay_steps = config.decay_steps if config.decay_steps is not None else 1000
     return optax.cosine_decay_schedule(
@@ -149,7 +35,7 @@ def _cosine_schedule(config: OptimizerConfig) -> optax.Schedule:
     )
 
 
-def _exponential_schedule(config: OptimizerConfig) -> optax.Schedule:
+def _exponential_schedule(config: OptimizationConfig) -> optax.Schedule:
     """Exponential-decay schedule (``transition_steps`` defaults to 1000)."""
     transition_steps = config.transition_steps if config.transition_steps is not None else 1000
     return optax.exponential_decay(
@@ -159,7 +45,7 @@ def _exponential_schedule(config: OptimizerConfig) -> optax.Schedule:
     )
 
 
-def _linear_schedule(config: OptimizerConfig) -> optax.Schedule:
+def _linear_schedule(config: OptimizationConfig) -> optax.Schedule:
     """Linear schedule to ``end_value`` (defaults to 10% of the initial value)."""
     transition_steps = config.transition_steps if config.transition_steps is not None else 1000
     end_value = config.end_value if config.end_value is not None else config.learning_rate * 0.1
@@ -170,7 +56,7 @@ def _linear_schedule(config: OptimizerConfig) -> optax.Schedule:
     )
 
 
-def _step_schedule(config: OptimizerConfig) -> optax.Schedule:
+def _step_schedule(config: OptimizationConfig) -> optax.Schedule:
     """Piecewise-constant (step) schedule with a default decaying staircase."""
     if config.boundaries_and_values is None:
         boundaries, values = (
@@ -194,7 +80,7 @@ def _step_schedule(config: OptimizerConfig) -> optax.Schedule:
     )
 
 
-def _warmup_cosine_schedule(config: OptimizerConfig) -> optax.Schedule:
+def _warmup_cosine_schedule(config: OptimizationConfig) -> optax.Schedule:
     """Linear warmup followed by cosine decay."""
     return optax.warmup_cosine_decay_schedule(
         init_value=config.learning_rate,
@@ -213,7 +99,7 @@ def _as_float32_schedule(schedule: optax.Schedule) -> optax.Schedule:
     return wrapped_schedule
 
 
-_SCHEDULE_BUILDERS = {
+_SCHEDULE_BUILDERS: dict[str, Callable[[OptimizationConfig], optax.Schedule]] = {
     "constant": _constant_schedule,
     "cosine": _cosine_schedule,
     "exponential": _exponential_schedule,
@@ -223,17 +109,16 @@ _SCHEDULE_BUILDERS = {
 }
 
 
-def create_schedule(config: OptimizerConfig) -> optax.Schedule:
-    """Create a learning-rate schedule from an optimizer configuration.
+def create_schedule(config: OptimizationConfig) -> optax.Schedule:
+    """Create a learning-rate schedule from an optimization configuration.
 
     The schedule kind and its parameters are read from ``config`` (see
-    :class:`OptimizerConfig`); ``config.learning_rate`` is the schedule's
-    initial value. The output is cast to float32 for stable optax updates
-    under x64.
+    :class:`~opifex.core.training.config.OptimizationConfig`); ``config.learning_rate`` is the
+    schedule's initial value. The output is cast to float32 for stable optax updates under x64.
 
     Args:
-        config: Optimizer configuration carrying ``schedule_type`` and the
-            associated schedule parameters.
+        config: Optimization configuration carrying ``schedule_type`` and the associated
+            schedule parameters.
 
     Returns:
         A float32 ``optax.Schedule``.
@@ -247,135 +132,40 @@ def create_schedule(config: OptimizerConfig) -> optax.Schedule:
     return _as_float32_schedule(builder(config))
 
 
-def with_gradient_clipping(
-    optimizer: optax.GradientTransformation,
-    max_norm: float | None = None,
-    clip_type: str = "by_global_norm",
-    max_value: float | None = None,
-) -> optax.GradientTransformation:
-    """Add gradient clipping to an optimizer.
+def optimizer_spec(config: OptimizationConfig) -> OptimizerConfig:
+    """Map an optimization configuration onto substrax's optimizer specification.
+
+    The configured schedule, when there is one, becomes the optimizer's learning rate.
+    ``momentum`` reaches only the optimizers that take it (``sgd``, ``rmsprop``); substrax
+    refuses a weight decay on an optimizer without decoupled decay and both clip fields at once.
 
     Args:
-        optimizer: Base optimizer
-        max_norm: Maximum gradient norm (for global norm clipping)
-        clip_type: Type of clipping ("by_global_norm" or "by_value")
-        max_value: Maximum absolute value (for value clipping)
+        config: The optimization configuration owned by the training configuration.
 
     Returns:
-        Optimizer with gradient clipping
-    """
-    if clip_type == "by_global_norm":
-        if max_norm is None:
-            max_norm = 1.0
-        return optax.chain(optax.clip_by_global_norm(max_norm), optimizer)
-
-    if clip_type == "by_value":
-        if max_value is None:
-            max_value = 1.0
-        return optax.chain(optax.clip(max_value), optimizer)
-
-    # Default to global norm clipping
-    if max_norm is None:
-        max_norm = 1.0
-    return optax.chain(optax.clip_by_global_norm(max_norm), optimizer)
-
-
-def with_schedule(
-    optimizer: optax.GradientTransformation,
-    schedule: optax.Schedule,
-) -> optax.GradientTransformation:
-    """Apply learning rate schedule to an optimizer.
-
-    Args:
-        optimizer: Base optimizer
-        schedule: Learning rate schedule
-
-    Returns:
-        Optimizer with learning rate schedule
-    """
-    return optax.chain(optax.scale_by_schedule(schedule), optimizer)
-
-
-def create_optimizer(config: OptimizerConfig) -> optax.GradientTransformation:
-    """Create optimizer from configuration.
-
-    This is the main entry point for creating optimizers. It handles:
-    1. Creating the base optimizer
-    2. Adding gradient clipping if specified
-    3. Adding learning rate schedule if specified
-
-    Args:
-        config: Optimizer configuration
-
-    Returns:
-        Configured optimizer
+        The specification :func:`substrax.optim.create_optimizer` builds.
 
     Raises:
-        ValueError: If optimizer_type is unknown
+        ValueError: If ``config.optimizer`` is not one substrax builds.
     """
-    # Create base optimizer
-    if config.optimizer_type == "adam":
-        base_optimizer = create_adam(
-            learning_rate=config.learning_rate,
-            b1=config.b1,
-            b2=config.b2,
-            eps=config.eps,
+    if config.optimizer not in OPTIMIZER_TYPES:
+        raise ValueError(
+            f"Unknown optimizer type: {config.optimizer!r}; one of {', '.join(OPTIMIZER_TYPES)}"
         )
-    elif config.optimizer_type == "adamw":
-        base_optimizer = create_adamw(
-            learning_rate=config.learning_rate,
-            b1=config.b1,
-            b2=config.b2,
-            eps=config.eps,
-            weight_decay=config.weight_decay,
-        )
-    elif config.optimizer_type == "sgd":
-        base_optimizer = create_sgd(
-            learning_rate=config.learning_rate,
-            momentum=config.momentum,
-        )
-    elif config.optimizer_type == "rmsprop":
-        base_optimizer = create_rmsprop(
-            learning_rate=config.learning_rate,
-            eps=config.eps,
-            decay=config.decay,
-        )
-    else:
-        raise ValueError(f"Unknown optimizer type: {config.optimizer_type}")
-
-    # Build transformation chain
-    transformations: list[optax.GradientTransformation] = []
-
-    # Add gradient clipping first (if specified)
-    if config.gradient_clip is not None:
-        if config.clip_type == "by_global_norm":
-            transformations.append(optax.clip_by_global_norm(config.gradient_clip))
-        elif config.clip_type == "by_value":
-            max_val = config.max_value if config.max_value is not None else config.gradient_clip
-            transformations.append(optax.clip(max_val))
-
-    # Add schedule (if specified)
-    if config.schedule_type is not None:
-        schedule = create_schedule(config)
-        transformations.append(optax.scale_by_schedule(schedule))
-
-    # Add base optimizer
-    transformations.append(base_optimizer)
-
-    # Chain all transformations
-    if len(transformations) > 1:
-        return optax.chain(*transformations)
-    return base_optimizer
+    learning_rate: float | optax.Schedule = (
+        create_schedule(config) if config.schedule_type is not None else config.learning_rate
+    )
+    return OptimizerConfig(
+        optimizer_type=config.optimizer,  # type: ignore[arg-type]
+        learning_rate=learning_rate,
+        b1=config.beta1,
+        b2=config.beta2,
+        eps=config.eps,
+        momentum=config.momentum if config.optimizer in MOMENTUM_TYPES else None,
+        weight_decay=config.weight_decay,
+        gradient_clip_norm=config.gradient_clip_norm,
+        gradient_clip_value=config.gradient_clip_value,
+    )
 
 
-__all__ = [
-    "OptimizerConfig",
-    "create_adam",
-    "create_adamw",
-    "create_optimizer",
-    "create_rmsprop",
-    "create_schedule",
-    "create_sgd",
-    "with_gradient_clipping",
-    "with_schedule",
-]
+__all__ = ["create_schedule", "optimizer_spec"]

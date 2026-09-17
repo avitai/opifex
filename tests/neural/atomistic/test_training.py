@@ -24,11 +24,10 @@ import optax
 import pytest
 from flax import nnx
 from jaxtyping import Array  # noqa: TC002
+from substrax.optim import create_optimizer, OptimizerConfig
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
-from opifex.core.training import OptimizerConfig
-from opifex.core.training.optimizers import create_optimizer
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift
@@ -280,9 +279,7 @@ class TestFitAtomistic:
 
         # Reference path: per-step host sync (the previous behaviour), same init.
         reference_model = _build_model()
-        reference_optimizer = nnx.Optimizer(
-            reference_model, create_optimizer(config), wrt=nnx.Param
-        )
+        reference_optimizer = create_optimizer(reference_model, config)
         reference_step = make_atomistic_train_step(reference_model, reference_optimizer)
         reference_history: list[float] = []
         for _ in range(num_epochs):
@@ -621,7 +618,7 @@ class TestScannedEpochCorrectness:
         batches = self._two_batches()
         config = OptimizerConfig(optimizer_type="adam", learning_rate=1e-2)
         model = _build_model()
-        optimizer = nnx.Optimizer(model, create_optimizer(config), wrt=nnx.Param)
+        optimizer = create_optimizer(model, config)
         scanned = make_scanned_epoch(model, optimizer, force_weight=1.0)
         stacked = AtomisticBatch.stack(batches)
 

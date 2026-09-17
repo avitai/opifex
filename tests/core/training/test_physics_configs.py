@@ -4,6 +4,11 @@ Following strict TDD principles - these tests are written FIRST to define
 the expected behavior of the composable physics configuration system.
 """
 
+from opifex.core.training.config import (
+    OptimizationConfig,
+    QuantumTrainingConfig,
+    TrainingConfig,
+)
 from opifex.core.training.physics_configs import (
     BoundaryConfig,
     ConservationConfig,
@@ -297,8 +302,6 @@ class TestConfigComposition:
 
     def test_trainingconfig_accepts_physics_configs(self):
         """Test that TrainingConfig can compose with physics configs."""
-        from opifex.core.training.config import TrainingConfig
-
         # Create physics configs
         constraint_config = ConstraintConfig(
             constraints=["energy_conservation"], adaptive_weighting=True
@@ -309,7 +312,7 @@ class TestConfigComposition:
         # Compose into TrainingConfig
         config = TrainingConfig(
             num_epochs=100,
-            learning_rate=1e-3,
+            optimization_config=OptimizationConfig(learning_rate=1e-3),
             constraint_config=constraint_config,
             conservation_config=conservation_config,
             boundary_config=boundary_config,
@@ -325,8 +328,6 @@ class TestConfigComposition:
 
     def test_trainingconfig_accepts_quantum_configs(self):
         """Test that TrainingConfig can compose with quantum configs."""
-        from opifex.core.training.config import QuantumTrainingConfig, TrainingConfig
-
         # Create quantum configs
         quantum_config = QuantumTrainingConfig(chemical_accuracy_target=1e-3)
         dft_config = DFTConfig(functional="pbe0")
@@ -350,10 +351,10 @@ class TestConfigComposition:
 
     def test_trainingconfig_optional_physics_configs(self):
         """Test that all physics configs are optional."""
-        from opifex.core.training.config import TrainingConfig
-
         # Create TrainingConfig without physics configs
-        config = TrainingConfig(num_epochs=100, learning_rate=1e-3)
+        config = TrainingConfig(
+            num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3)
+        )
 
         # Verify all physics configs are None
         assert config.constraint_config is None

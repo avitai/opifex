@@ -178,7 +178,7 @@ class TestTrainingConfig:
 
         assert config.num_epochs == 100
         assert config.batch_size == 32
-        assert config.learning_rate == 1e-3
+        assert config.optimization_config.learning_rate == 1e-3
         assert config.validation_frequency == 10
         assert config.checkpoint_frequency == 50
         assert config.verbose is True
@@ -196,7 +196,7 @@ class TestTrainingConfig:
         config = TrainingConfig(
             num_epochs=200,
             batch_size=64,
-            learning_rate=1e-4,
+            optimization_config=OptimizationConfig(learning_rate=1e-4),
             validation_frequency=5,
             checkpoint_frequency=25,
             verbose=False,
@@ -204,7 +204,7 @@ class TestTrainingConfig:
 
         assert config.num_epochs == 200
         assert config.batch_size == 64
-        assert config.learning_rate == 1e-4
+        assert config.optimization_config.learning_rate == 1e-4
         assert config.validation_frequency == 5
         assert config.checkpoint_frequency == 25
         assert config.verbose is False
@@ -212,7 +212,7 @@ class TestTrainingConfig:
     def test_post_init_updates_sub_configs(self):
         """Test __post_init__ updates sub-configs with main values."""
         config = TrainingConfig(
-            learning_rate=5e-4,
+            optimization_config=OptimizationConfig(learning_rate=5e-4),
             validation_frequency=15,
             checkpoint_frequency=30,
         )

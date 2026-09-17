@@ -53,7 +53,7 @@ import numpy as np
 from flax import nnx
 from substrax.artifacts import resolve_output_dir
 
-from opifex.core.training import ConservationConfig, Trainer, TrainingConfig
+from opifex.core.training import ConservationConfig, OptimizationConfig, Trainer, TrainingConfig
 from opifex.data.loaders import create_shallow_water_loader
 from opifex.neural.operators.fno.spherical import create_climate_sfno
 
@@ -146,7 +146,7 @@ def main() -> dict[str, float | int]:
     print("\nSetting up Trainer with conservation-aware loss...")
     config = TrainingConfig(
         num_epochs=num_epochs,
-        learning_rate=learning_rate,
+        optimization_config=OptimizationConfig(learning_rate=learning_rate),
         batch_size=batch_size,
         verbose=True,
         conservation_config=ConservationConfig(

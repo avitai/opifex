@@ -5,8 +5,8 @@ array batches and a single model output, so it cannot express a machine-learning
 interatomic potential: an MLIP maps a :class:`~opifex.core.quantum.\
 molecular_system.MolecularSystem` to a *dict* of outputs (``"energy"`` and the
 conservative ``"forces"`` = ``-grad(E)``) and is trained against *both*. This
-module supplies that capability, reusing the project's optimiser stack
-(:func:`opifex.core.training.optimizers.create_optimizer` + ``nnx.Optimizer``)
+module supplies that capability, reusing the shared optimiser stack
+(:func:`substrax.optim.create_optimizer` over an ``nnx.Optimizer``)
 and the ``nnx.value_and_grad`` + ``optimizer.update`` step idiom from
 ``examples/quantum-chemistry/neural_xc_functional.py``.
 
@@ -34,9 +34,9 @@ import jax
 import jax.numpy as jnp
 from flax import nnx, struct
 from jaxtyping import Array, Float  # noqa: TC002
+from substrax.optim import create_optimizer, OptimizerConfig
 
 from opifex.core.quantum.molecular_system import MolecularSystem
-from opifex.core.training.optimizers import create_optimizer, OptimizerConfig
 from opifex.neural.atomistic.base import AtomisticModel  # noqa: TC001
 
 
@@ -513,10 +513,9 @@ def fit_atomistic(
 ) -> list[float]:
     """Train an atomistic model for ``num_epochs`` over the given batches.
 
-    Builds the optimiser from ``optimizer_config`` with
-    :func:`opifex.core.training.optimizers.create_optimizer`, wraps it in an
-    ``nnx.Optimizer`` and runs the energy+forces step over every batch each epoch.
-    The model is updated in place.
+    Builds the ``nnx.Optimizer`` from ``optimizer_config`` with
+    :func:`substrax.optim.create_optimizer` and runs the energy+forces step over
+    every batch each epoch. The model is updated in place.
 
     With ``fused=True`` (the default) an epoch's steps are fused into one jitted
     :func:`jax.lax.scan` via :func:`make_scanned_epoch`, eliminating the
@@ -538,7 +537,7 @@ def fit_atomistic(
         batches: The training batches (cycled once per epoch). The fused path
             requires all batches to share one composition and batch size (see
             :meth:`AtomisticBatch.stack`).
-        optimizer_config: Optimiser configuration.
+        optimizer_config: The optimiser, in substrax's terms.
         num_epochs: Number of passes over ``batches``.
         energy_weight: Weight of the energy MSE term.
         force_weight: Weight of the forces MSE term.
@@ -551,7 +550,7 @@ def fit_atomistic(
     Returns:
         The mean training loss per epoch (length ``num_epochs``).
     """
-    optimizer = nnx.Optimizer(model, create_optimizer(optimizer_config), wrt=nnx.Param)
+    optimizer = create_optimizer(model, optimizer_config)
     if fused:
         return _fit_atomistic_fused(
             model,
