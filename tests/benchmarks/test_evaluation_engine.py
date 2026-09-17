@@ -184,15 +184,15 @@ class TestStatisticalAnalyzer:
 class TestBenchmarkEvaluator:
     """Test the main benchmark evaluator."""
 
-    def test_benchmark_evaluator_initialization(self) -> None:
+    def test_benchmark_evaluator_initialization(self, tmp_path: Path) -> None:
         """Test BenchmarkEvaluator initialization."""
         evaluator = BenchmarkEvaluator(
-            output_dir="./benchmark_results",
+            output_dir=tmp_path / "benchmark_results",
             save_detailed_results=True,
             enable_gpu_profiling=True,
         )
 
-        assert str(evaluator.output_dir) == "benchmark_results"
+        assert evaluator.output_dir == tmp_path / "benchmark_results"
         assert evaluator.save_detailed_results is True
         assert evaluator.enable_gpu_profiling is True
 

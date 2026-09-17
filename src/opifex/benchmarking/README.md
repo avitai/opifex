@@ -92,7 +92,9 @@ Database persistence and publication output through calibrax's `PublicationGener
 ```python
 from opifex.benchmarking import ResultsManager
 
-# Initialize results manager with database
+# Initialize results manager with database. Without storage_path the manager writes
+# under benchmarks/ in $AVITAI_OUTPUT_DIR, or in a per-process temporary directory
+# (substrax.artifacts.resolve_output_dir); it never defaults into the working tree.
 manager = ResultsManager(storage_path="./benchmark_results")
 
 # Store each benchmark result (raw JSON, database entry and calibrax store)
