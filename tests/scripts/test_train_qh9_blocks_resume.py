@@ -199,3 +199,38 @@ def test_evaluate_weights_by_the_real_molecules(driver: ModuleType) -> None:
 class _NoOpPredictor:
     def eval(self) -> None:
         """The driver switches the predictor to eval mode before scoring."""
+
+
+class _FakeSource:
+    """Six molecules; batches are the molecule ids, wrapped as the padded source wraps them."""
+
+    def __init__(self, n: int = 6) -> None:
+        self.n = n
+        self.epochs = 0
+
+    def __len__(self) -> int:
+        return self.n
+
+    def next_epoch(self) -> None:
+        self.epochs += 1
+
+    def read_batch(self, start: int, size: int) -> dict:
+        import jax.numpy as jnp
+
+        return {"id": jnp.asarray([(start + i) % self.n for i in range(size)])}
+
+
+def test_training_batches_drop_the_ragged_batch_and_validation_keeps_it(driver: ModuleType) -> None:
+    """Training serves floor(n / size) full batches; validation serves every molecule, masked."""
+    train = driver._PaddedBatches(_FakeSource(), 4, drop_last=True)
+    val = driver._PaddedBatches(_FakeSource(), 4, drop_last=False)
+
+    assert len(train) == 1
+    train_batches = list(train)
+    assert [b["id"].tolist() for b in train_batches] == [[0, 1, 2, 3]]
+    assert all(bool(b["valid_mask"].all()) for b in train_batches)
+
+    assert len(val) == 2
+    val_batches = list(val)
+    assert val_batches[1]["id"].tolist() == [4, 5, 0, 1]
+    assert val_batches[1]["valid_mask"].tolist() == [True, True, False, False]

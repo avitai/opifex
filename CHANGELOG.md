@@ -17,9 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The operator benchmark executor trains every configured epoch (it reset nothing between
   epochs and trained one), reports `epochs_trained`, and evaluates the records only, leaving
   the padded rows of the last batch out of its MSE, MAE and relative error.
-- `iterate_padded_batches` attaches a per-molecule `valid_mask` to each QH9 batch, false for
-  the molecules the final batch wraps, and the block-form training script weights its
-  validation MAE by the real molecule count.
+- `iterate_padded_batches(..., drop_last=False)` attaches a per-molecule `valid_mask` to each
+  QH9 batch, false for the molecules the final batch wraps, and drops that batch under
+  `drop_last=True`; the block-form training script trains with `drop_last=True`, so no
+  molecule is trained on twice in an epoch, and weights its validation MAE by the real
+  molecule count.
 - Requires `datarax>=0.1.12`; the lock moves it from 0.1.11.
 
 ### Changed

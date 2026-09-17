@@ -256,3 +256,14 @@ def test_iterate_padded_batches_marks_the_wrapped_molecules(synthetic_qh9_db: Pa
     assert sum(int(batch["valid_mask"].sum()) for batch in batches) == n
     tail = batches[-1]["valid_mask"].tolist()
     assert tail == [True] * (n - (len(batches) - 1) * size) + [False] * (len(batches) * size - n)
+
+
+def test_iterate_padded_batches_drop_last_serves_only_full_batches(synthetic_qh9_db: Path) -> None:
+    """``drop_last=True`` leaves the ragged final batch out, so no molecule is served twice."""
+    source = _source(synthetic_qh9_db)
+    n = len(source)
+    size = 4
+    batches = list(iterate_padded_batches(source, size, drop_last=True))
+
+    assert len(batches) == n // size
+    assert all(bool(batch["valid_mask"].all()) for batch in batches)

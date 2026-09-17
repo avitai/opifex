@@ -111,19 +111,24 @@ class _PaddedBatches:
 
     Wraps :func:`~opifex.data.sources.qh9_padded_source.iterate_padded_batches`
     so each epoch re-iterates the source from the start; ``len`` is the number of
-    ``batch_size``-molecule batches (the last batch wraps to a full ``batch_size``,
-    so the masked loss ignores the wrapped molecules' padded blocks).
+    ``batch_size``-molecule batches. A training view drops the ragged final batch
+    (``drop_last=True``), so no molecule is trained on twice in an epoch; a
+    validation view keeps it, wrapped to ``batch_size`` and marked in its
+    ``valid_mask``, so every molecule is scored once.
     """
 
     source: QH9PaddedSource
     batch_size: int
+    drop_last: bool = False
 
     def __iter__(self) -> Iterator[dict[str, jax.Array]]:
         """Yield consecutive fixed-size batches over the source."""
-        return iterate_padded_batches(self.source, self.batch_size)
+        return iterate_padded_batches(self.source, self.batch_size, drop_last=self.drop_last)
 
     def __len__(self) -> int:
         """Return the number of batches per epoch."""
+        if self.drop_last:
+            return len(self.source) // self.batch_size
         return (len(self.source) + self.batch_size - 1) // self.batch_size
 
 
@@ -575,7 +580,7 @@ def _run(args: TrainArgs) -> dict[str, object]:
         )
         return _metrics_record(args, n_params, best_val, prior_records)
 
-    train_batches = _PaddedBatches(splits.train, args.batch_size)
+    train_batches = _PaddedBatches(splits.train, args.batch_size, drop_last=True)
     val_batches = _PaddedBatches(splits.val, args.batch_size)
     train_config = _train_config(args, steps_per_epoch=len(train_batches))
     optimizer = nnx.Optimizer(predictor, train_config.optimizer(), wrt=nnx.Param)
