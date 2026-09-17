@@ -169,3 +169,68 @@ def test_resume_without_checkpoint_starts_fresh(
     metrics = json.loads((out_dir / "metrics.json").read_text())
     assert [record["epoch"] for record in metrics["epochs"]] == [1]
     assert "no checkpoint" in (out_dir / "train.log").read_text().lower()
+
+
+def test_evaluate_weights_by_the_real_molecules(driver: ModuleType) -> None:
+    """A wrapped molecule in the last batch does not count towards the validation MAE."""
+    import jax.numpy as jnp
+
+    batches = [
+        {"valid_mask": jnp.array([True, True, True, True])},
+        {"valid_mask": jnp.array([True, True, False, False])},
+    ]
+    maes = iter([1.0, 3.0])
+
+    class _Batches:
+        def __len__(self) -> int:
+            return len(batches)
+
+        def __iter__(self):
+            return iter(batches)
+
+    result = driver._evaluate(
+        _Batches(), predictor=_NoOpPredictor(), eval_step=lambda _p, _b: next(maes)
+    )
+
+    # (1.0 * 4 + 3.0 * 2) / 6, not (1.0 * 4 + 3.0 * 4) / 8
+    assert result == pytest.approx(10.0 / 6.0)
+
+
+class _NoOpPredictor:
+    def eval(self) -> None:
+        """The driver switches the predictor to eval mode before scoring."""
+
+
+class _FakeSource:
+    """Six molecules; batches are the molecule ids, wrapped as the padded source wraps them."""
+
+    def __init__(self, n: int = 6) -> None:
+        self.n = n
+        self.epochs = 0
+
+    def __len__(self) -> int:
+        return self.n
+
+    def next_epoch(self) -> None:
+        self.epochs += 1
+
+    def read_batch(self, start: int, size: int) -> dict:
+        import jax.numpy as jnp
+
+        return {"id": jnp.asarray([(start + i) % self.n for i in range(size)])}
+
+
+def test_training_batches_drop_the_ragged_batch_and_validation_keeps_it(driver: ModuleType) -> None:
+    """Training serves floor(n / size) full batches; validation serves every molecule, masked."""
+    train = driver._PaddedBatches(_FakeSource(), 4, drop_last=True)
+    val = driver._PaddedBatches(_FakeSource(), 4, drop_last=False)
+
+    assert len(train) == 1
+    train_batches = list(train)
+    assert [b["id"].tolist() for b in train_batches] == [[0, 1, 2, 3]]
+    assert all(bool(b["valid_mask"].all()) for b in train_batches)
+
+    assert len(val) == 2
+    val_batches = list(val)
+    assert val_batches[1]["id"].tolist() == [4, 5, 0, 1]
+    assert val_batches[1]["valid_mask"].tolist() == [True, True, False, False]

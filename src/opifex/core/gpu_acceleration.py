@@ -14,17 +14,14 @@ Designed for maximum speed and memory efficiency while maintaining safety.
 import contextlib
 import functools
 import logging
-import time
 from collections.abc import Callable
 from typing import Any
 
 import jax
 import jax.numpy as jnp
-from calibrax.profiling import detect_hardware_specs
+from calibrax.profiling import detect_hardware_specs, time_calls
 from jax import Array
 from substrax.devices import detect_devices, DeviceKind
-
-from opifex.core.timing import block_until_ready
 
 
 _logger = logging.getLogger(__name__)
@@ -445,21 +442,9 @@ class CachedProgressiveTester:
             else:
                 return False, None, f"Unknown operation: {operation_name}"
 
-            # Warmup (3 runs)
-            for _ in range(3):
-                result = operation_fn(x, y)
-                block_until_ready(result)
-
-            # Actual timing (10 runs for accuracy)
-            times = []
-            for _ in range(10):
-                start = time.perf_counter()
-                result = operation_fn(x, y)
-                block_until_ready(result)
-                times.append(time.perf_counter() - start)
-
-            avg_time = sum(times) / len(times)
-            return True, avg_time, None
+            # Three warm-up calls, then ten timed calls that each wait for their result.
+            timing = time_calls(operation_fn, x, y, warmup=3, iterations=10)
+            return True, sum(timing.samples_sec) / len(timing.samples_sec), None
 
         except Exception as e:  # noqa: BLE001 -- benchmarks arbitrary operation_fn from caller
             return False, None, str(e)

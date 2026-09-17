@@ -425,7 +425,7 @@ wheels = [
 
 [[package]]
 name = "avitai-artifex"
-version = "0.1.8"
+version = "0.1.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blackjax" },
@@ -452,9 +452,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b0/81/d43bbac2fac0d438bca2f7b0f0f9b4c13e4a7fc70376661853912b41b47b/avitai_artifex-0.1.8.tar.gz", hash = "sha256:fdfb888dcea0592b97f6c1a3602e658c818736c8e92f997238b031e35e90bebf", size = 636507, upload-time = "2026-09-17T02:05:14.727Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/fe/3797a0866f459f9ae99c88d0476995909c046f3316d2f3281ed67497f695/avitai_artifex-0.1.10.tar.gz", hash = "sha256:16148c7d58aafd62876d127c960ad1fc62a3f0fd782947671ac1f1db5a7429de", size = 635302, upload-time = "2026-09-17T14:04:31.908Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/58/c1f0c7e7401aacf9cc341e682c7a2caa37494e73648260fbe5c24d165e4b/avitai_artifex-0.1.8-py3-none-any.whl", hash = "sha256:14ecf32301f44356766d19bfd8f0c308a40f8eeb2785c12ac9f9fb3491cdb882", size = 852275, upload-time = "2026-09-17T02:05:12.497Z" },
+    { url = "https://files.pythonhosted.org/packages/71/fd/902a0a3af2027e1f27a5eaea40ddbc8a32322cb3db100c073d8c34eda1a3/avitai_artifex-0.1.10-py3-none-any.whl", hash = "sha256:49e4f4f2a1f383d739f93c2d49208594432b5257311396611dd3bd5fdbefdbe9", size = 850100, upload-time = "2026-09-17T14:04:29.433Z" },
 ]
 
 [[package]]
@@ -627,7 +627,7 @@ wheels = [
 
 [[package]]
 name = "calibrax"
-version = "0.1.6"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -640,9 +640,9 @@ dependencies = [
     { name = "substrax" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/41/0a/4a3d6c7552d6148dadfc3b68d0a7b1a40af83a8c30501a1147359aba7e15/calibrax-0.1.6.tar.gz", hash = "sha256:c62fd67463a60d3bdf61fa1fd62cacc8ab41804d10abba08371786994035ee31", size = 162284, upload-time = "2026-09-11T23:02:48.048Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/3a/e0a7d9fa5233688480a8152a5301ee5a2fd6a26a717758eab24e38b8c3c1/calibrax-0.1.8.tar.gz", hash = "sha256:53cc26d5e26404d8990795e5c7a94b6443c3173d05017a6b91a2f5c296f9221d", size = 166375, upload-time = "2026-09-17T12:19:54.787Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/cd/522770f9281ce4f6d5ead8d81b3df5d7dc14bec4603b1390fa8213df462b/calibrax-0.1.6-py3-none-any.whl", hash = "sha256:a6c303b4e8470bb3b72a71fa2e88229a89ee072cf2fb67e30f46e99f628f3ff7", size = 202451, upload-time = "2026-09-11T23:02:45.86Z" },
+    { url = "https://files.pythonhosted.org/packages/15/89/a9845ec5f4915b9ad3c1b0678672986c6d7544d4fd35b06c0eb92b7a0f04/calibrax-0.1.8-py3-none-any.whl", hash = "sha256:6d0473cbd83c7b432b63db88d726e97558e87356c462133dc0ed3c6fab35faa2", size = 206339, upload-time = "2026-09-17T12:19:52.137Z" },
 ]
 
 [[package]]
@@ -1234,7 +1234,7 @@ wheels = [
 
 [[package]]
 name = "datarax"
-version = "0.1.11"
+version = "0.1.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-record" },
@@ -1252,9 +1252,9 @@ dependencies = [
     { name = "substrax" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/fe/def6fe5e87da0e1b1d9fc47027177ad5d02577ab0265357f8aa57f82f1cb/datarax-0.1.11.tar.gz", hash = "sha256:ffe1bc9dc2cdbd7149ab5273ecb50bc610bf7ffec3446c1f331b4f4d974d658d", size = 231554, upload-time = "2026-09-17T06:01:09.155Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/d3/23c53807546ffdc811f30984d80dfb27db47d118efd22bfe011c7f15fbd6/datarax-0.1.12.tar.gz", hash = "sha256:188da663c4cf0bf7eb137a210645568cc8ffbcdddbcb269dcd9b803d796fb01f", size = 235318, upload-time = "2026-09-17T16:21:10.411Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/cd/416598319153b16737b6a60476506c51ae20e7fb6db55c9129e1b6b2119b/datarax-0.1.11-py3-none-any.whl", hash = "sha256:bcb6faa6eb7cc2c10a541b703b128a2c73ae5d2f78b8247cab7ac08f22375b61", size = 279273, upload-time = "2026-09-17T06:01:06.672Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/4d/67581cae87050927785a224eb17dd6d038b723aa1a1bdd65db012fb117bc/datarax-0.1.12-py3-none-any.whl", hash = "sha256:08f6f99c8607be4f5473f2a1de741ad83e9a5c084b22c6bc75291f77aae0c6d8", size = 282662, upload-time = "2026-09-17T16:21:08.239Z" },
 ]
 
 [[package]]
@@ -4334,7 +4334,7 @@ wheels = [
 
 [[package]]
 name = "opifex"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "." }
 dependencies = [
     { name = "avitai-artifex" },
@@ -4797,17 +4797,17 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'platform'", specifier = ">=1.13.0" },
     { name = "ase", marker = "extra == 'neural-dft'", specifier = ">=3.22.0" },
     { name = "asyncpg", marker = "extra == 'platform'", specifier = ">=0.29.0" },
-    { name = "avitai-artifex", specifier = ">=0.1.8" },
+    { name = "avitai-artifex", specifier = ">=0.1.10" },
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.5" },
     { name = "basis-set-exchange", marker = "extra == 'quantum-chemistry'", specifier = ">=0.9.0" },
     { name = "beartype", specifier = ">=0.15.0" },
     { name = "beartype", marker = "extra == 'test'", specifier = ">=0.14.1" },
     { name = "blackjax", specifier = ">=1.2.5" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.3" },
-    { name = "calibrax", specifier = ">=0.1.6" },
+    { name = "calibrax", specifier = ">=0.1.8" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
-    { name = "datarax", specifier = ">=0.1.11" },
+    { name = "datarax", specifier = ">=0.1.12" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
     { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },

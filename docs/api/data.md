@@ -299,9 +299,18 @@ data and `normalize` / `denormalize` apply and invert the z-score scaling.
 
 ## 🔧 Advanced Usage
 
+### The final batch of an epoch
+
+Every batch a pipeline serves has `batch_size` rows and a `valid_mask` leaf (`(batch_size,)`,
+bool). The training split drops the epoch's ragged final batch (`drop_last=True`, PyTorch's
+rule), so it serves `n_train // batch_size` batches of real records and `len(loaders.train)`
+is that count. The validation split keeps every record: its final batch is padded to
+`batch_size` and `valid_mask` marks the padded rows, so a metric selects the records with it.
+
 ### Materializing a Pipeline into Arrays
 
-A `Pipeline` is single-pass. To collect a whole split into arrays, drain it once and stack:
+A `Pipeline` is single-pass (`reset()` starts the next epoch). To collect a split into arrays,
+drain it once, keep the rows `valid_mask` marks, and stack:
 
 ```python
 import jax.numpy as jnp
@@ -310,12 +319,13 @@ from opifex.data.loaders import create_darcy_loader
 loaders = create_darcy_loader(n_samples=1000, resolution=64, batch_size=32, seed=42)
 
 inputs, outputs = [], []
-for batch in loaders.train:        # drain exactly once
-    inputs.append(batch["input"])
-    outputs.append(batch["output"])
+for batch in loaders.val:          # drain exactly once
+    rows = batch["valid_mask"]
+    inputs.append(batch["input"][rows])
+    outputs.append(batch["output"][rows])
 
-train_inputs = jnp.concatenate(inputs)    # (n_train, C, *spatial)
-train_outputs = jnp.concatenate(outputs)
+val_inputs = jnp.concatenate(inputs)    # (n_val, C, *spatial)
+val_outputs = jnp.concatenate(outputs)
 print(loaders.n_train, loaders.n_val, loaders.resolution)
 ```
 

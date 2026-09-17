@@ -10,8 +10,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from calibrax.core.models import Metric
+from datarax.pipeline import Pipeline
+from datarax.sources import MemorySource, MemorySourceConfig
 from flax import nnx
 
 from opifex.benchmarking.analysis_engine import AnalysisEngine, ComparisonReport
@@ -454,14 +457,23 @@ class TestBenchmarkRunner:
             operators = runner.registry.list_available_operators()
             assert "MockFNO" in operators
 
-            # Mock data loaders to avoid slow real data generation
-            mock_batch = {
-                "input": jnp.zeros((2, 1, 4, 4)),
-                "output": jnp.ones((2, 1, 4, 4)),
-            }
-            mock_loader = [mock_batch]
+            # Two tiny datarax pipelines stand in for the generated Darcy loaders: the
+            # executor's contract is a pipeline (single-pass, reset per epoch, every batch
+            # carrying ``valid_mask``), which a plain list of dicts does not honour.
+            def tiny_pipeline() -> Pipeline:
+                source = MemorySource(
+                    MemorySourceConfig(shuffle=False),
+                    data={
+                        "input": np.zeros((2, 1, 4, 4), np.float32),
+                        "output": np.ones((2, 1, 4, 4), np.float32),
+                    },
+                    rngs=nnx.Rngs(0),
+                )
+                return Pipeline(source=source, stages=[], batch_size=2, rngs=nnx.Rngs(0))
 
-            with patch.object(runner, "_get_data_loaders", return_value=(mock_loader, mock_loader)):
+            with patch.object(
+                runner, "_get_data_loaders", return_value=(tiny_pipeline(), tiny_pipeline())
+            ):
                 result = runner._run_single_benchmark("MockFNO", benchmark)
 
             assert isinstance(result, BenchmarkResult)

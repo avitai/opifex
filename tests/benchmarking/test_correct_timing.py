@@ -1,37 +1,13 @@
-"""Tests for correct benchmarking timing with block_until_ready.
+"""Tests for correct benchmarking timing.
 
-Verifies that all benchmarking code properly uses block_until_ready()
-to ensure accurate timing measurements on GPU hardware.
+Verifies that the benchmarking code waits for its results (``jax.block_until_ready``) so the
+timings measure the computation rather than the dispatch.
 """
 
 import time
 
 import jax.numpy as jnp
 import pytest
-
-
-class TestCorrectBenchmarkTiming:
-    """Test that benchmarks use block_until_ready for accurate timing."""
-
-    def test_benchmark_waits_for_computation(self):
-        """Benchmark synchronization should call block_until_ready on nested outputs."""
-        from opifex.core.timing import block_until_ready
-
-        class ReadySpy:
-            def __init__(self) -> None:
-                self.called = False
-
-            def block_until_ready(self):
-                self.called = True
-                return self
-
-        first = ReadySpy()
-        second = ReadySpy()
-        output = {"first": first, "nested": (second,)}
-
-        assert block_until_ready(output) is output
-        assert first.called
-        assert second.called
 
 
 class TestGPUAccelerationBenchmarking:

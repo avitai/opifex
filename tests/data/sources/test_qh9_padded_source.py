@@ -15,6 +15,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path  # noqa: TC003
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from flax import nnx
@@ -240,3 +241,29 @@ def test_the_host_reader_is_not_datarax_indexed_access(synthetic_qh9_db: Path) -
 
     assert type(source).get_batch_at is DataSourceModule.get_batch_at
     assert source.supports_indexed_access() is False
+
+
+def test_iterate_padded_batches_marks_the_wrapped_molecules(synthetic_qh9_db: Path) -> None:
+    """Every batch carries a per-molecule ``valid_mask``; wrapped molecules are invalid."""
+    source = _source(synthetic_qh9_db)
+    n = len(source)
+    size = 4
+    batches = list(iterate_padded_batches(source, size))
+
+    assert len(batches) == -(-n // size)
+    assert all(batch["valid_mask"].shape == (size,) for batch in batches)
+    assert all(batch["valid_mask"].dtype == jnp.bool_ for batch in batches)
+    assert sum(int(batch["valid_mask"].sum()) for batch in batches) == n
+    tail = batches[-1]["valid_mask"].tolist()
+    assert tail == [True] * (n - (len(batches) - 1) * size) + [False] * (len(batches) * size - n)
+
+
+def test_iterate_padded_batches_drop_last_serves_only_full_batches(synthetic_qh9_db: Path) -> None:
+    """``drop_last=True`` leaves the ragged final batch out, so no molecule is served twice."""
+    source = _source(synthetic_qh9_db)
+    n = len(source)
+    size = 4
+    batches = list(iterate_padded_batches(source, size, drop_last=True))
+
+    assert len(batches) == n // size
+    assert all(bool(batch["valid_mask"].all()) for batch in batches)
