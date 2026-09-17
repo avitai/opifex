@@ -11,7 +11,6 @@ from opifex.core.conditions import (
     NeumannBC,
     RobinBC,
 )
-from opifex.core.device_utils import configure_jax_precision
 from opifex.core.gpu_acceleration import (
     AsyncMemoryManager,
     CachedProgressiveTester,
@@ -56,7 +55,6 @@ __all__ = [
     "QuantumProblem",
     "RobinBC",
     "RooflineMemoryManager",
-    "configure_jax_precision",
     "create_molecular_system",
     "create_neural_dft_problem",
     "create_ode_problem",
