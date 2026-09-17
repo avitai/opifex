@@ -32,8 +32,10 @@ class PDELoaders:
     """datarax train/val pipelines plus metadata for a synthetic PDE dataset.
 
     Attributes:
-        train: datarax ``Pipeline`` over the training split (shuffled).
-        val: datarax ``Pipeline`` over the validation split (sequential).
+        train: datarax ``Pipeline`` over the training split (shuffled; the epoch's ragged
+            final batch is dropped, so every batch holds ``batch_size`` records).
+        val: datarax ``Pipeline`` over the validation split (sequential; the final batch is
+            padded to ``batch_size`` and its ``valid_mask`` marks the padded rows).
         n_train: Number of training samples.
         n_val: Number of validation samples.
         resolution: Spatial resolution of the fields.
@@ -47,7 +49,7 @@ class PDELoaders:
 
 
 def _build_pipeline(
-    data: dict[str, np.ndarray], *, batch_size: int, shuffle: bool, seed: int
+    data: dict[str, np.ndarray], *, batch_size: int, shuffle: bool, seed: int, drop_last: bool
 ) -> Pipeline:
     """Wrap a split's ``{"input", "output"}`` arrays in a datarax source + pipeline."""
     source = MemorySource(
@@ -55,7 +57,13 @@ def _build_pipeline(
         data=data,
         rngs=nnx.Rngs(shuffle=seed),
     )
-    return Pipeline(source=source, stages=[], batch_size=batch_size, rngs=nnx.Rngs(seed))
+    return Pipeline(
+        source=source,
+        stages=[],
+        batch_size=batch_size,
+        rngs=nnx.Rngs(seed),
+        drop_last=drop_last,
+    )
 
 
 def _make_loaders(
@@ -73,8 +81,12 @@ def _make_loaders(
     train = {key: value[:n_train] for key, value in data.items()}
     val = {key: value[n_train:] for key, value in data.items()}
     return PDELoaders(
-        train=_build_pipeline(train, batch_size=batch_size, shuffle=True, seed=seed),
-        val=_build_pipeline(val, batch_size=batch_size, shuffle=False, seed=seed + 1),
+        train=_build_pipeline(
+            train, batch_size=batch_size, shuffle=True, seed=seed, drop_last=True
+        ),
+        val=_build_pipeline(
+            val, batch_size=batch_size, shuffle=False, seed=seed + 1, drop_last=False
+        ),
         n_train=n_train,
         n_val=n_val,
         resolution=resolution,

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The loader factories' training split drops the epoch's ragged final batch
+  (`drop_last=True`, PyTorch's rule), so every training batch holds `batch_size` records and
+  `len(loaders.train)` is the batches per epoch; the validation split keeps every record, its
+  final batch padded and marked in `valid_mask`. Every batch a pipeline serves carries that
+  leaf.
+- The operator benchmark executor trains every configured epoch (it reset nothing between
+  epochs and trained one), reports `epochs_trained`, and evaluates the records only, leaving
+  the padded rows of the last batch out of its MSE, MAE and relative error.
+- `iterate_padded_batches` attaches a per-molecule `valid_mask` to each QH9 batch, false for
+  the molecules the final batch wraps, and the block-form training script weights its
+  validation MAE by the real molecule count.
+- Requires `datarax>=0.1.12`; the lock moves it from 0.1.11.
+
+### Changed
+
 - The progressive GPU tester times its operations through `calibrax.profiling.time_calls`
   (three warm-up calls, ten timed calls that each wait for their result), and the GST-PINN
   self-training loss averages over the reliable points through `calibrax.metrics.reduce_values`,

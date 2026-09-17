@@ -641,20 +641,23 @@ def iterate_padded_batches(source: QH9PaddedSource, size: int) -> Iterator[dict[
 
     Advances the source's epoch counter once (so a shuffled source re-permutes its
     id order each pass), then drives :meth:`QH9PaddedSource.read_batch` with a
-    Python position counter covering every molecule once (the final partial batch
-    wraps to fill ``size`` -- the wrapped molecules carry valid masks, so a
-    downstream masked loss ignores them by tracking the real count).
+    Python position counter covering every molecule once. The final partial batch
+    wraps to fill ``size``; each batch carries a per-molecule ``valid_mask``
+    (``(size,)``, bool) that is false for the wrapped molecules, so a downstream
+    loss or metric counts the real molecules only.
 
     Args:
         source: The padded source to iterate.
         size: Number of molecules per batch.
 
     Yields:
-        Padded batch dicts with a leading axis of ``size``.
+        Padded batch dicts with a leading axis of ``size`` and a ``valid_mask``.
     """
     source.next_epoch()
-    for start in range(0, len(source), size):
-        yield source.read_batch(start, size)
+    length = len(source)
+    for start in range(0, length, size):
+        batch = source.read_batch(start, size)
+        yield {**batch, "valid_mask": jnp.arange(size) < (length - start)}
 
 
 def read_padded_source_rss(

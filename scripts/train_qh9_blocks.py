@@ -367,8 +367,8 @@ def _evaluate(
 
 
 def _molecule_count(batch: dict[str, jax.Array]) -> int:
-    """Number of molecules in a per-molecule padded batch (the leading axis)."""
-    return int(np.asarray(batch["node_pad_mask"]).shape[0])
+    """Number of real molecules in a padded batch: the wrapped ones are masked out."""
+    return int(np.asarray(batch["valid_mask"]).sum())
 
 
 # ---------------------------------------------------------------------------

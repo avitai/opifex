@@ -188,7 +188,9 @@ class OperatorExecutor:
             return loss, grads
 
         losses = []
-        for _ in range(self.config.n_epochs):
+        for epoch in range(self.config.n_epochs):
+            if epoch > 0:
+                train_loader.reset()  # a datarax pipeline is exhausted after one pass
             epoch_loss = 0.0
             n_batches = 0
 
@@ -207,6 +209,7 @@ class OperatorExecutor:
         return {
             "final_train_loss": losses[-1] if losses else 0.0,
             "initial_train_loss": losses[0] if losses else 0.0,
+            "epochs_trained": len(losses),
         }
 
     def _evaluate(
@@ -236,8 +239,10 @@ class OperatorExecutor:
             pred = model(x_input)  # type: ignore[operator]  # nnx.Module is callable
             y_target = _prepare_target(y, pred)
 
-            all_preds.append(pred)
-            all_targets.append(y_target)
+            # The last batch of an epoch is padded to the batch size; keep the records.
+            rows = batch["valid_mask"]
+            all_preds.append(pred[rows])
+            all_targets.append(y_target[rows])
 
         if not all_preds:
             return {"mse": 0.0, "mae": 0.0, "relative_error": 0.0}

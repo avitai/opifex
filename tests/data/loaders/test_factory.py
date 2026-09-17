@@ -55,7 +55,8 @@ def test_batches_have_channel_first_input_output(factory, channels, spatial_ndim
     loaders = factory(n_samples=10, resolution=16, batch_size=4, seed=0)
 
     batch = _first_batch(loaders.train)
-    assert set(batch) == {"input", "output"}
+    assert set(batch) == {"input", "output", "valid_mask"}
+    assert bool(batch["valid_mask"].all())
     spatial = (16,) * spatial_ndim
     assert batch["input"].shape == (4, channels, *spatial)
     assert batch["output"].shape == (4, channels, *spatial)
@@ -93,3 +94,22 @@ def test_same_seed_reproduces_training_order() -> None:
 
     np.testing.assert_array_equal(same_a, same_b)
     assert not np.array_equal(same_a, other)
+
+
+@pytest.mark.parametrize(("factory", "channels", "spatial_ndim"), _PDE_CASES)
+def test_train_drops_the_ragged_batch_and_val_keeps_it_masked(
+    factory, channels, spatial_ndim
+) -> None:
+    """Training serves floor(n / batch) full batches; validation serves every record, masked."""
+    loaders = factory(n_samples=11, resolution=16, batch_size=4, seed=0, val_fraction=2 / 11)
+    assert (loaders.n_train, loaders.n_val) == (9, 2)
+
+    train_batches = list(loaders.train)  # 9 records: two full batches, the ragged one dropped
+    assert len(loaders.train) == 2
+    assert len(train_batches) == 2
+    assert all(bool(batch["valid_mask"].all()) for batch in train_batches)
+
+    val_batches = list(loaders.val)
+    assert len(val_batches) == 1
+    assert val_batches[0]["input"].shape[0] == 4
+    assert val_batches[0]["valid_mask"].tolist() == [True, True, False, False]
