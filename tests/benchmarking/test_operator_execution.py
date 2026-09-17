@@ -335,3 +335,63 @@ class TestBenchmarkRunnerRealExecution:
         result2 = runner._run_single_benchmark("TensorizedFourierNeuralOperator", config)
         # Results should be similar (not random each time)
         assert abs(result.metrics["mse"].value - result2.metrics["mse"].value) < 0.1
+
+
+class TestExecutorFinalBatchPolicy:
+    """Every configured epoch trains, and evaluation scores the records, not the padding."""
+
+    @staticmethod
+    def _model():
+        from opifex.neural.operators.fno.tensorized import create_tucker_fno
+
+        return create_tucker_fno(
+            in_channels=1,
+            out_channels=1,
+            hidden_channels=8,
+            modes=(4, 4),
+            rank=0.1,
+            num_layers=1,
+            rngs=nnx.Rngs(0),
+        )
+
+    def test_every_epoch_trains(self):
+        """A datarax pipeline is exhausted after one pass; the loop resets it per epoch."""
+        import optax
+
+        from opifex.benchmarking.operator_executor import ExecutionConfig, OperatorExecutor
+        from opifex.data.loaders import create_darcy_loader
+
+        loaders = create_darcy_loader(n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3)
+        model = self._model()
+        opt = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
+        executor = OperatorExecutor(ExecutionConfig(n_epochs=3, batch_size=4))
+
+        metrics = executor._train_loop(model, opt, loaders.train)
+
+        assert metrics["epochs_trained"] == 3
+
+    def test_evaluation_scores_the_records_only(self):
+        """The padded rows of the last validation batch are left out of the metrics."""
+        import jax.numpy as jnp
+        from calibrax.metrics.functional import mse
+
+        from opifex.benchmarking.operator_executor import (
+            _prepare_input,
+            _prepare_target,
+            OperatorExecutor,
+        )
+        from opifex.data.loaders import create_darcy_loader
+
+        loaders = create_darcy_loader(n_samples=10, batch_size=4, resolution=16, val_fraction=0.2)
+        model = self._model()
+        batch = next(iter(loaders.val))  # the one validation batch: two records, two padded rows
+        loaders.val.reset()
+        rows = int(batch["valid_mask"].sum())
+        assert rows == 2
+        pred = model(_prepare_input(batch["input"]))[:rows]
+        target = _prepare_target(batch["output"], pred)[:rows]
+
+        metrics = OperatorExecutor()._evaluate(model, loaders.val)
+
+        assert metrics["mse"] == pytest.approx(float(mse(pred, target)), rel=1e-5)
+        assert jnp.asarray(metrics["mse"]).shape == ()

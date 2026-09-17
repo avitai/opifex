@@ -169,3 +169,33 @@ def test_resume_without_checkpoint_starts_fresh(
     metrics = json.loads((out_dir / "metrics.json").read_text())
     assert [record["epoch"] for record in metrics["epochs"]] == [1]
     assert "no checkpoint" in (out_dir / "train.log").read_text().lower()
+
+
+def test_evaluate_weights_by_the_real_molecules(driver: ModuleType) -> None:
+    """A wrapped molecule in the last batch does not count towards the validation MAE."""
+    import jax.numpy as jnp
+
+    batches = [
+        {"valid_mask": jnp.array([True, True, True, True])},
+        {"valid_mask": jnp.array([True, True, False, False])},
+    ]
+    maes = iter([1.0, 3.0])
+
+    class _Batches:
+        def __len__(self) -> int:
+            return len(batches)
+
+        def __iter__(self):
+            return iter(batches)
+
+    result = driver._evaluate(
+        _Batches(), predictor=_NoOpPredictor(), eval_step=lambda _p, _b: next(maes)
+    )
+
+    # (1.0 * 4 + 3.0 * 2) / 6, not (1.0 * 4 + 3.0 * 4) / 8
+    assert result == pytest.approx(10.0 / 6.0)
+
+
+class _NoOpPredictor:
+    def eval(self) -> None:
+        """The driver switches the predictor to eval mode before scoring."""
