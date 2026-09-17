@@ -4,7 +4,33 @@ Centralises domain inference, metric classification, and chemical accuracy
 thresholds to eliminate duplication across sub-modules.
 """
 
+from pathlib import Path
+
 from calibrax.core import BenchmarkResult
+from substrax.artifacts import resolve_output_dir
+
+
+# ── Output location ──────────────────────────────────────────────────────
+
+BENCHMARK_OUTPUT_NAME = "benchmarks"
+"""The directory name benchmark outputs take under the resolved output location."""
+
+
+def resolve_benchmark_output_dir(explicit: str | Path | None) -> Path:
+    """Return the directory benchmark outputs go to, created.
+
+    Args:
+        explicit: A directory the caller chose, resolved against the working
+            directory when relative; ``None`` resolves through
+            ``substrax.artifacts.resolve_output_dir``, which takes
+            ``$AVITAI_OUTPUT_DIR`` when set and a per-process temporary directory
+            otherwise, never the working tree.
+
+    Returns:
+        The output directory.
+    """
+    chosen = None if explicit is None else Path(explicit)
+    return resolve_output_dir(BENCHMARK_OUTPUT_NAME, explicit=chosen).path
 
 
 # ── Metric direction classification ──────────────────────────────────────

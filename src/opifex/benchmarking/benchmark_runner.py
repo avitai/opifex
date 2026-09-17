@@ -17,7 +17,7 @@ from calibrax.core import BenchmarkResult
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-from opifex.benchmarking._shared import extract_metric_value
+from opifex.benchmarking._shared import extract_metric_value, resolve_benchmark_output_dir
 from opifex.benchmarking.analysis_engine import (
     AnalysisEngine,
     ComparisonReport,
@@ -96,7 +96,7 @@ class BenchmarkRunner:
         validator: ValidationFramework | None = None,
         analyzer: AnalysisEngine | None = None,
         results_manager: ResultsManager | None = None,
-        output_dir: str = "./benchmark_results",
+        output_dir: str | Path | None = None,
     ) -> None:
         """Initialize benchmark runner with all components.
 
@@ -106,10 +106,13 @@ class BenchmarkRunner:
             validator: Validation framework (creates default if None)
             analyzer: Analysis engine (creates default if None)
             results_manager: Results manager (creates default if None)
-            output_dir: Output directory for results
+            output_dir: Output directory for results, resolved through
+                ``substrax.artifacts``: ``None`` is ``benchmarks`` under
+                ``$AVITAI_OUTPUT_DIR`` or under the process's temporary output
+                directory, never the working tree. The default evaluator and
+                results manager write under it.
         """
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir = resolve_benchmark_output_dir(output_dir)
 
         self.registry = registry or OperatorBenchmarkRegistry()
         self.evaluator = evaluator or BenchmarkEvaluator(output_dir=str(self.output_dir))

@@ -19,6 +19,7 @@ from calibrax.metrics import calculate_all as calculate_all_metrics
 from calibrax.profiling import TimingCollector
 from calibrax.statistics import StatisticalAnalyzer
 
+from opifex.benchmarking._shared import resolve_benchmark_output_dir
 from opifex.core.timing import block_until_ready
 
 
@@ -34,18 +35,21 @@ class BenchmarkEvaluator:
 
     def __init__(
         self,
-        output_dir: str = "./benchmark_results",
+        output_dir: str | Path | None = None,
         save_detailed_results: bool = True,
         enable_gpu_profiling: bool = False,
     ) -> None:
         """Initialize benchmark evaluator.
 
         Args:
-            output_dir: Directory for saving results.
+            output_dir: Directory for saving results, resolved through
+                ``substrax.artifacts``: ``None`` is ``benchmarks`` under
+                ``$AVITAI_OUTPUT_DIR`` or under the process's temporary output
+                directory, never the working tree.
             save_detailed_results: Whether to save detailed results to files.
             enable_gpu_profiling: Whether to enable GPU profiling.
         """
-        self.output_dir = Path(output_dir)
+        self.output_dir = resolve_benchmark_output_dir(output_dir)
         self.save_detailed_results = save_detailed_results
         self.enable_gpu_profiling = enable_gpu_profiling
 

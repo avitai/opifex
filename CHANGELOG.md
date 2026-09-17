@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `BenchmarkRunner`, `BenchmarkEvaluator` and `ResultsManager` resolve their output
+  directory through `substrax.artifacts.resolve_output_dir`: with no directory given they
+  write under `benchmarks` in `$AVITAI_OUTPUT_DIR` when it is set and in a per-process
+  temporary directory otherwise, never `./benchmark_results` in the working tree; a
+  directory given is resolved against the working directory. The `output_dir` and
+  `storage_path` arguments accept a `Path` and default to `None`.
+- Requires `substrax>=0.1.7`, the release that carries `substrax.artifacts`,
+  `substrax.runtime` and `substrax.testing`; the lock already held it.
+
 ### Removed
 
 - `opifex.setup_jax_optimization`, `opifex.core.configure_jax_precision` and the

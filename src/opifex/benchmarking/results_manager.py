@@ -20,6 +20,7 @@ from calibrax.core.models import Metric, Point, Run, TrendPoint, TrendSeries
 from calibrax.exporters.publication import PublicationGenerator
 from calibrax.storage.store import Store
 
+from opifex.benchmarking._shared import resolve_benchmark_output_dir
 from opifex.benchmarking.adapters import default_metric_defs, metric_values, results_to_run
 
 
@@ -41,17 +42,19 @@ class ResultsManager:
 
     Args:
         storage_path: Directory holding the database, the raw results, the calibrax
-            store, and the ``plots`` and ``tables`` output directories.
+            store, and the ``plots`` and ``tables`` output directories. Resolved through
+            ``substrax.artifacts``: ``None`` is ``benchmarks`` under ``$AVITAI_OUTPUT_DIR``
+            or under the process's temporary output directory, never the working tree.
         database_path: The database file; ``<storage_path>/benchmark_database.json``
             by default; a file that exists and is not valid JSON is a ``ValueError``.
     """
 
     def __init__(
         self,
-        storage_path: str = "./benchmark_results",
+        storage_path: str | Path | None = None,
         database_path: str | None = None,
     ) -> None:
-        self.storage_path = Path(storage_path)
+        self.storage_path = resolve_benchmark_output_dir(storage_path)
         self.database_path = (
             self.storage_path / "benchmark_database.json"
             if database_path is None
