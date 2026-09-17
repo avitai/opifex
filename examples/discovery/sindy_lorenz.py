@@ -28,6 +28,7 @@ import numpy as np
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.discovery.sindy import EnsembleSINDy, SINDy, SINDyConfig
 from opifex.discovery.sindy.config import EnsembleSINDyConfig
@@ -73,6 +74,7 @@ from opifex.discovery.sindy.utils import finite_difference
 # %%
 def main() -> dict[str, float | int]:
     """Discover Lorenz equations with SINDy and return finite scalar metrics."""
+    output_dir = resolve_output_dir("sindy_lorenz").path
     # Config (Lorenz parameters and integration settings)
     sigma, rho, beta = 10.0, 28.0, 8.0 / 3.0
     dt = 0.001
@@ -143,8 +145,8 @@ def main() -> dict[str, float | int]:
     ax.set_title("SINDy Coefficient Magnitude (Sparsity Pattern)")
     plt.colorbar(im, ax=ax, label="|coefficient|")
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/sindy_lorenz/sparsity_pattern.png", dpi=150)
-    print("Saved: docs/assets/examples/sindy_lorenz/sparsity_pattern.png")
+    plt.savefig(output_dir / "sparsity_pattern.png", dpi=150)
+    print(f"Saved: {output_dir / 'sparsity_pattern.png'}")
     plt.close()
 
     # Visualize Lorenz trajectory (3D)
@@ -156,8 +158,8 @@ def main() -> dict[str, float | int]:
     ax3d.set_zlabel("z")
     ax3d.set_title("Lorenz Attractor Trajectory (Training Data)")
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/sindy_lorenz/lorenz_trajectory.png", dpi=150)
-    print("Saved: docs/assets/examples/sindy_lorenz/lorenz_trajectory.png")
+    plt.savefig(output_dir / "lorenz_trajectory.png", dpi=150)
+    print(f"Saved: {output_dir / 'lorenz_trajectory.png'}")
     plt.close()
 
     # Compare true vs predicted derivatives
@@ -174,8 +176,8 @@ def main() -> dict[str, float | int]:
         ax_i.set_title(label)
     plt.suptitle("True vs SINDy-Predicted Derivatives")
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/sindy_lorenz/derivative_comparison.png", dpi=150)
-    print("Saved: docs/assets/examples/sindy_lorenz/derivative_comparison.png")
+    plt.savefig(output_dir / "derivative_comparison.png", dpi=150)
+    print(f"Saved: {output_dir / 'derivative_comparison.png'}")
     plt.close()
 
     # Fit ensemble model

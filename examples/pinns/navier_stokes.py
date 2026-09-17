@@ -23,7 +23,6 @@
 # Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -32,6 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 
 # %%
@@ -373,8 +373,7 @@ def main() -> dict[str, float | int]:
     print(f"L2 relative error (p): {l2_error_p:.6e}")
     print(f"Mean PDE residual:     {mean_residual:.6e}")
 
-    output_dir = Path("docs/assets/examples/navier_stokes_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("navier_stokes_pinn").path
 
     # Plot velocity and pressure fields
     _fig, axes = plt.subplots(2, 3, figsize=(15, 10))

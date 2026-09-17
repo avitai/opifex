@@ -23,7 +23,6 @@
 # This is a fundamental inverse problem in PDE parameter identification.
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -32,6 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 
 # %%
@@ -337,8 +337,7 @@ def main() -> dict[str, float | int]:
     print(f"Mean point error:    {mean_error:.6e}")
     print(f"Mean PDE residual:   {mean_residual:.6e}")
 
-    output_dir = Path("docs/assets/examples/inverse_diffusion_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("inverse_diffusion_pinn").path
 
     _fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 

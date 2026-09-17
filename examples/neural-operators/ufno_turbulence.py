@@ -44,7 +44,6 @@ with custom energy conservation loss via `trainer.custom_losses`.
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -54,6 +53,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.data.loaders.factory import create_navier_stokes_loader
@@ -111,8 +111,7 @@ def main() -> dict[str, float | int]:
     out_channels = 2  # (u, v) velocity components
     seed = 42
 
-    output_dir = Path("docs/assets/examples/ufno_turbulence")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("ufno_turbulence").path
 
     print("=" * 70)
     print("Opifex Example: Full U-FNO for 2D Navier-Stokes Turbulence Modeling")

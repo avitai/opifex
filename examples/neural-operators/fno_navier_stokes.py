@@ -51,7 +51,6 @@
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -66,6 +65,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.data.loaders import create_navier_stokes_loader
 from opifex.neural.operators.fno.base import FourierNeuralOperator
@@ -95,8 +95,7 @@ def main() -> dict[str, float | int]:
     time_range = (0.0, 1.0)  # Time interval (operator maps IC -> final time)
     seed = 42
 
-    output_dir = Path("docs/assets/examples/fno_navier_stokes")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("fno_navier_stokes").path
 
     print("=" * 70)
     print("Opifex Example: FNO on 2D Navier-Stokes Equations")

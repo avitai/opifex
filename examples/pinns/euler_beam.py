@@ -21,7 +21,6 @@
 # **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -30,6 +29,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 
 # %%
@@ -294,8 +294,7 @@ def main() -> dict[str, float | int]:
     print(f"  w''(1) = {float(w_xx_1[0]):.6e} (should be 0)")
     print(f"  w'''(1) = {float(w_xxx_1[0]):.6e} (should be 0)")
 
-    output_dir = Path("docs/assets/examples/euler_beam_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("euler_beam_pinn").path
 
     _fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     axes[0].plot(np.array(x_eval), np.array(w_pred), "b-", label="PINN", linewidth=2)

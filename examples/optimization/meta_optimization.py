@@ -76,17 +76,16 @@ REPTILE_META_LR = 0.3  # interpolation rate towards adapted params (Reptile)
 # Few-shot evaluation: task loss after this many SGD adaptation steps (0 = zero-shot).
 ADAPT_STEP_GRID = (0, 1, 2, 5, 10, 20, 50, 100)
 
-OUTPUT_DIR = "docs/assets/examples/meta_optimization"
 
 # %%
 from dataclasses import dataclass
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.optimization.l2o.core import Task, TaskFamily
@@ -235,6 +234,7 @@ def few_shot_loss(start: PinnParams, nu: jax.Array, key: jax.Array, steps: int) 
 
 def main() -> dict[str, float | int]:
     """Meta-train MAML/Reptile PINN initialisations and benchmark few-shot adaptation."""
+    OUTPUT_DIR = resolve_output_dir("meta_optimization").path
     print("=" * 72)
     print("Opifex Example: Meta-Optimization (MAML / Reptile) for a Burgers PDE family")
     print("=" * 72)
@@ -321,7 +321,6 @@ def main() -> dict[str, float | int]:
     )
 
     # --- Visualisation ---
-    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     mpl.use("Agg")
     _fig, (ax_meta, ax_few) = plt.subplots(1, 2, figsize=(13, 5))
 

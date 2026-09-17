@@ -44,7 +44,6 @@ We use Opifex's `create_climate_sfno` factory to build the model, the
 import math
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -54,6 +53,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 # Opifex framework imports
 from opifex.core.training import Trainer, TrainingConfig
@@ -78,7 +78,6 @@ NUM_EPOCHS = 5
 LEARNING_RATE = 1e-3
 SEED = 42
 
-OUTPUT_DIR = Path("docs/assets/examples/sfno_climate_simple")
 
 # %% [markdown]
 """
@@ -94,13 +93,12 @@ example smoke tests).
 # %%
 def main() -> dict[str, float | int]:
     """Train a climate SFNO, evaluate it, save plots, and return scalar metrics."""
+    OUTPUT_DIR = resolve_output_dir("sfno_climate_simple").path
     print("=" * 70)
     print("Opifex Example: Simple Spherical FNO for Climate Modeling")
     print("=" * 70)
     print(f"JAX backend: {jax.default_backend()}")
     print(f"JAX devices: {jax.devices()}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
     print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
     print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")

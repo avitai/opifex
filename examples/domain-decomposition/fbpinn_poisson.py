@@ -33,6 +33,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.neural.pinns.domain_decomposition import (
     FBPINN,
@@ -232,6 +233,7 @@ def pde_loss(model, t):
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate the FBPINN on the damped harmonic oscillator."""
+    output_dir = resolve_output_dir("fbpinn_poisson").path
     print("=" * 70)
     print("Opifex Example: FBPINN on Damped Harmonic Oscillator")
     print("=" * 70)
@@ -415,9 +417,9 @@ def main() -> dict[str, float | int]:
     axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/fbpinn_poisson/solution.png", dpi=150, bbox_inches="tight")
+    plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
     print()
-    print("Saved: docs/assets/examples/fbpinn_poisson/solution.png")
+    print(f"Saved: {output_dir / 'solution.png'}")
     plt.close()
 
     # Analysis: Individual subdomain networks and hard BC effect
@@ -446,8 +448,8 @@ def main() -> dict[str, float | int]:
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/fbpinn_poisson/analysis.png", dpi=150, bbox_inches="tight")
-    print("Saved: docs/assets/examples/fbpinn_poisson/analysis.png")
+    plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
+    print(f"Saved: {output_dir / 'analysis.png'}")
     plt.close()
 
     # Results Summary

@@ -50,11 +50,11 @@ drop in front of any FFT-based layer.
 """
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.neural.operators.specialized.fourier_continuation import FourierContinuationExtender
@@ -137,8 +137,7 @@ def main() -> dict[str, float | int]:
     print(f"  Continuation reduces the error by {naive_err / continued_err:.0f}x.")
 
     # --- Visualisation: naive ringing vs continued vs exact ---
-    output_dir = Path("docs/assets/examples/fourier_continuation")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("fourier_continuation").path
     _fig, ax = plt.subplots(figsize=(9, 5))
     ax.plot(x, exact, "k-", linewidth=2.5, label="exact  exp(x)")
     ax.plot(x, naive, color="tab:red", linewidth=1.5, label=f"naive FFT (rel L2 {naive_err:.2f})")

@@ -47,7 +47,6 @@
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -63,6 +62,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import per_sample_relative_l2
+from substrax.artifacts import resolve_output_dir
 
 from opifex.neural.operators.deeponet import DeepONet
 
@@ -84,7 +84,6 @@ LEARNING_RATE = 1e-3
 LATENT_DIM = 64  # Shared dimension for branch/trunk outputs
 
 SEED = 42
-OUTPUT_DIR = Path("docs/assets/examples/deeponet_antiderivative")
 
 # %% [markdown]
 # ## Data Generation
@@ -203,6 +202,7 @@ def eval_model(model: DeepONet, x_branch: jax.Array, x_trunk: jax.Array) -> jax.
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate a DeepONet on the antiderivative operator."""
+    OUTPUT_DIR = resolve_output_dir("deeponet_antiderivative").path
     print("=" * 70)
     print("Opifex Example: DeepONet on Antiderivative Operator")
     print("=" * 70)
@@ -212,8 +212,6 @@ def main() -> dict[str, float | int]:
     print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
     print(f"Batch size: {BATCH_SIZE}, Epochs: {NUM_EPOCHS}")
     print(f"Learning rate: {LEARNING_RATE}, Latent dim: {LATENT_DIM}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Data generation ---
     print()

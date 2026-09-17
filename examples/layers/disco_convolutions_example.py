@@ -58,12 +58,12 @@ and the filter is normalised per output point (a partition of unity).
 """
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.neural.operators.specialized.disco import DiscreteContinuousConv2d, regular_grid
@@ -155,8 +155,7 @@ def main() -> dict[str, float | int]:
     print("  (a standard pixel convolution cannot be applied to scattered points at all)")
 
     # --- Visualisation: the learned continuous radial kernel ---
-    output_dir = Path("docs/assets/examples/disco_convolutions")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("disco_convolutions").path
     in_coords, quad = regular_grid(48)
     conv = DiscreteContinuousConv2d(
         in_channels=1,

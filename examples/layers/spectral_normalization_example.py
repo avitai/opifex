@@ -54,13 +54,13 @@ spectral-normalized network stays bounded and trains smoothly.
 
 # %%
 from itertools import pairwise
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.neural.operators.specialized.spectral_normalization import SpectralLinear
@@ -199,8 +199,7 @@ def main() -> dict[str, float | int]:
     )
 
     # --- Visualisation: loss curves ---
-    output_dir = Path("docs/assets/examples/spectral_normalization")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("spectral_normalization").path
     _fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(plain_losses, label="plain nnx.Linear", color="tab:red", linewidth=2)
     ax.plot(spectral_losses, label="SpectralLinear", color="tab:blue", linewidth=2)

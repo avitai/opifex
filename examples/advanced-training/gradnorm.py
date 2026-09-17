@@ -38,7 +38,6 @@ the common failure mode of boundary/initial conditions being poorly satisfied.
 
 # %%
 import os
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -47,6 +46,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.core.physics.gradnorm import (
@@ -154,7 +154,7 @@ def main() -> dict[str, float | int]:
     GRADNORM_ALPHA = 1.5  # Asymmetry parameter (0 = equal, higher = more balancing)
 
     # Output directory
-    OUTPUT_DIR = "docs/assets/examples/gradnorm"
+    OUTPUT_DIR = resolve_output_dir("gradnorm").path
 
     print("=" * 70)
     print("Opifex Example: GradNorm Loss Balancing for PINNs")
@@ -474,8 +474,6 @@ def main() -> dict[str, float | int]:
     # ------------------------------------------------------------------
     print()
     print("Generating visualizations...")
-
-    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     mpl.use("Agg")
 
     # Figure 1: Loss comparison

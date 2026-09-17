@@ -68,7 +68,6 @@ use the same synthetic Darcy data and recipe.
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -83,6 +82,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import per_sample_relative_l2, relative_l2_error
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
 from opifex.core.training import Trainer, TrainingConfig
@@ -204,8 +204,8 @@ relative L2 error. We run the test and training sets through the model in batche
 
 All run logic — configuration, data loading, normalization, model creation,
 training, evaluation, and visualization — lives in `main()`. It returns a small
-dict of finite scalar metrics and saves the prediction/error plots to
-`docs/assets/examples/fno_darcy/`.
+dict of finite scalar metrics and saves the prediction/error plots to the run's
+output directory (`fno_darcy` under `AVITAI_OUTPUT_DIR`, else a temporary one).
 """
 
 
@@ -237,8 +237,7 @@ def main() -> dict[str, float | int]:
     lr_transition_steps = lr_decay_epochs * steps_per_epoch
     lr_decay_rate = 0.5
 
-    output_dir = Path("docs/assets/examples/fno_darcy")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("fno_darcy").path
 
     print("=" * 70)
     print("Opifex Example: FNO on Darcy Flow")

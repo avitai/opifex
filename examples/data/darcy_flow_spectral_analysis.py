@@ -44,6 +44,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from substrax.artifacts import resolve_output_dir
 
 # Opifex Framework imports
 from opifex.data.sources import generate_darcy
@@ -498,14 +499,17 @@ def create_spectral_visualization(results: dict[str, Any], save_path: str | None
 
 
 # %%
-def main(output_dir: str = "docs/assets/examples/darcy_flow_spectral_analysis_files"):
+def main(output_dir: str | Path | None = None):
     """Main function demonstrating full Darcy flow spectral analysis."""
+    output_dir = resolve_output_dir(
+        "darcy_flow_spectral_analysis_files",
+        explicit=None if output_dir is None else Path(output_dir),
+    ).path
     print("Starting Darcy Flow Spectral Analysis Example")
     print("Using Opifex Framework with JAX/Flax NNX")
     print()
 
     # Ensure output directory exists
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Configuration (reduced for demo speed)
     config = {

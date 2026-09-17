@@ -20,7 +20,6 @@
 # fundamental to electrostatics, heat conduction, and potential flow.
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -29,6 +28,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 
 # %%
@@ -262,8 +262,7 @@ def main() -> dict[str, float | int]:
     print(f"Maximum point error: {max_error:.6e}")
     print(f"Mean point error:    {mean_error:.6e}")
 
-    output_dir = Path("docs/assets/examples/poisson_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("poisson_pinn").path
 
     _fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     im0 = axes[0].imshow(np.array(u_pred_grid), extent=[0, 1, 0, 1], origin="lower", cmap="viridis")

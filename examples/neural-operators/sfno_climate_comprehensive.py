@@ -42,7 +42,6 @@ for streaming data via datarax, and the `Trainer` with `TrainingConfig`
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -52,6 +51,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training import ConservationConfig, Trainer, TrainingConfig
 from opifex.data.loaders import create_shallow_water_loader
@@ -106,8 +106,7 @@ def main() -> dict[str, float | int]:
     out_channels = 3
     seed = 42
 
-    output_dir = Path("docs/assets/examples/sfno_climate_comprehensive")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("sfno_climate_comprehensive").path
 
     print(f"Resolution: {resolution}x{resolution}, Samples: {n_train}/{n_test}")
     print(f"Batch: {batch_size}, Epochs: {num_epochs}, lmax: {lmax}")

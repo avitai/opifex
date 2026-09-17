@@ -28,6 +28,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.neural.pinns.domain_decomposition import (
     CPINN,
@@ -204,6 +205,7 @@ def total_loss(model, collocation_points, xt_bc, u_bc, xt_ic, u_ic, config):
 # %%
 def main() -> dict[str, float | int]:
     """Train a 3-subdomain CPINN on the 1D advection-diffusion equation."""
+    output_dir = resolve_output_dir("cpinn_advection_diffusion").path
     print("=" * 70)
     print("Opifex Example: CPINN on 1D Advection-Diffusion Equation")
     print("=" * 70)
@@ -480,12 +482,12 @@ def main() -> dict[str, float | int]:
 
     plt.tight_layout()
     plt.savefig(
-        "docs/assets/examples/cpinn_advection_diffusion/solution.png",
+        output_dir / "solution.png",
         dpi=150,
         bbox_inches="tight",
     )
     print()
-    print("Saved: docs/assets/examples/cpinn_advection_diffusion/solution.png")
+    print(f"Saved: {output_dir / 'solution.png'}")
     plt.close()
 
     # Analysis: Interface flux conservation
@@ -537,11 +539,11 @@ def main() -> dict[str, float | int]:
 
     plt.tight_layout()
     plt.savefig(
-        "docs/assets/examples/cpinn_advection_diffusion/analysis.png",
+        output_dir / "analysis.png",
         dpi=150,
         bbox_inches="tight",
     )
-    print("Saved: docs/assets/examples/cpinn_advection_diffusion/analysis.png")
+    print(f"Saved: {output_dir / 'analysis.png'}")
     plt.close()
 
     # Results Summary

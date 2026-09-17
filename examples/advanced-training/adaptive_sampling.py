@@ -42,7 +42,6 @@ SIAM Rev. 63, 208.
 
 # %%
 import os
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -52,6 +51,7 @@ import numpy as np
 import optax
 from calibrax.metrics.functional.regression import relative_l2_error
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training.components.adaptive_sampling import (
     RARDConfig,
@@ -184,7 +184,7 @@ def main() -> dict[str, float | int]:
     TRAINING_STEPS = 20 if os.environ.get("OPIFEX_EXAMPLE_SMOKE") else 1000
 
     # Output directory
-    OUTPUT_DIR = "docs/assets/examples/adaptive_sampling"
+    OUTPUT_DIR = resolve_output_dir("adaptive_sampling").path
 
     print("=" * 70)
     print("Opifex Example: Residual-based Adaptive Sampling")
@@ -404,8 +404,6 @@ def main() -> dict[str, float | int]:
     # Step 7: Evaluate and visualize
     print()
     print("Generating visualizations...")
-
-    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     mpl.use("Agg")
 
     # Evaluation grid

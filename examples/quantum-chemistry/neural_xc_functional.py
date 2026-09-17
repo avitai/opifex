@@ -45,17 +45,16 @@ NUM_TEST_SAMPLES = 100
 GRID_POINTS = 32  # Points per density sample
 
 # Output directory
-OUTPUT_DIR = "docs/assets/examples/neural_xc_functional"
 
 # %%
 import time
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.neural.quantum import NeuralXCFunctional
@@ -187,6 +186,7 @@ follow the training loop inside ``main()``.
 # %%
 def main() -> dict[str, float | int]:
     """Generate data, train the neural XC functional, and return the headline metrics."""
+    OUTPUT_DIR = resolve_output_dir("neural_xc_functional").path
     print("=" * 70)
     print("Opifex Example: Training Neural XC Functional")
     print("=" * 70)
@@ -355,8 +355,6 @@ def main() -> dict[str, float | int]:
     # Step 6: Visualization.
     print()
     print("Generating visualizations...")
-
-    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
     # Figure 1: Training curves
     _fig, axes = plt.subplots(1, 2, figsize=(12, 5))

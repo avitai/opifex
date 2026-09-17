@@ -81,7 +81,6 @@ no library internals.
 
 # %%
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -95,6 +94,7 @@ import numpy as np
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.geometry.algebra.wigner import wigner_d
 from opifex.neural.quantum.hamiltonian import (
@@ -131,7 +131,6 @@ here: the equivariance is structural and holds for *any* weights.
 
 # %%
 SEED = 0
-OUTPUT_DIR = Path("docs/assets/examples/hamiltonian_prediction")
 
 CONFIG = BlockHamiltonianConfig(
     hidden_irreps="32x0e + 32x1o + 32x2e + 32x3o + 32x4e",  # uniform mul, l up to the d-d block
@@ -310,7 +309,7 @@ def random_rotation(seed: int) -> jax.Array:
 # %%
 def main() -> dict[str, float | int]:
     """Build the predictor, run the batched forward, and verify block equivariance."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR = resolve_output_dir("hamiltonian_prediction").path
 
     print("=" * 70)
     print("Opifex Example: Equivariant DFT Hamiltonian Prediction (QHNet block form)")

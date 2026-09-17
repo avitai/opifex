@@ -34,7 +34,6 @@ determines which solution modes are learned quickly vs slowly.
 """
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -43,6 +42,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.core.physics.ntk.diagnostics import (
@@ -156,7 +156,7 @@ def main() -> dict[str, float | int]:
     learning_rate = 1e-3
     training_steps = 500
     ntk_compute_frequency = 100
-    output_dir = "docs/assets/examples/ntk_analysis"
+    output_dir = resolve_output_dir("ntk_analysis").path
 
     print("=" * 70)
     print("Opifex Example: NTK Analysis for PINNs")
@@ -316,8 +316,6 @@ def main() -> dict[str, float | int]:
     # Step 6: Visualization
     print()
     print("Generating visualizations...")
-
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
     mpl.use("Agg")
 
     # Figure 1: NTK Eigenvalue Spectrum Evolution

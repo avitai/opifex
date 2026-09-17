@@ -76,7 +76,6 @@ stack and changes no library internals.
 import os
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -92,6 +91,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import mae, rmse
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
@@ -193,7 +193,6 @@ EMA_DECAY = 0.999
 # 1 kcal/mol in meV, for reporting energy/force error in physical MLIP units.
 KCAL_PER_MOL_IN_MEV_F = float(KCAL_PER_MOL_IN_MEV)
 
-OUTPUT_DIR = Path("docs/assets/examples/nequip_rmd17")
 
 # %% [markdown]
 """
@@ -261,7 +260,7 @@ afterwards, so the training trajectory itself is untouched.
 # %%
 def main() -> dict[str, float | int]:
     """Load rMD17 aspirin, train the NequIP potential, and report MLIP error."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR = resolve_output_dir("nequip_rmd17").path
     # Smoke mode (set by the example test): a tiny, few-epoch run that returns finite
     # metrics quickly. The full run (CLI / notebook) uses the constants above.
     smoke = bool(os.environ.get("OPIFEX_EXAMPLE_SMOKE"))
