@@ -636,26 +636,32 @@ def create_qh9_dynamic_padded_sources(
     )
 
 
-def iterate_padded_batches(source: QH9PaddedSource, size: int) -> Iterator[dict[str, Array]]:
+def iterate_padded_batches(
+    source: QH9PaddedSource, size: int, *, drop_last: bool = False
+) -> Iterator[dict[str, Array]]:
     """Yield consecutive ``size``-molecule padded batches over one epoch.
 
     Advances the source's epoch counter once (so a shuffled source re-permutes its
     id order each pass), then drives :meth:`QH9PaddedSource.read_batch` with a
     Python position counter covering every molecule once. The final partial batch
-    wraps to fill ``size``; each batch carries a per-molecule ``valid_mask``
-    (``(size,)``, bool) that is false for the wrapped molecules, so a downstream
-    loss or metric counts the real molecules only.
+    wraps to fill ``size``; under ``drop_last=False`` it is served with a
+    per-molecule ``valid_mask`` (``(size,)``, bool) that is false for the wrapped
+    molecules, so a downstream loss or metric counts the real molecules only;
+    under ``drop_last=True`` (a training pass) it is not served, so no molecule
+    is seen twice in an epoch.
 
     Args:
         source: The padded source to iterate.
         size: Number of molecules per batch.
+        drop_last: Whether the ragged final batch is dropped rather than wrapped and masked.
 
     Yields:
         Padded batch dicts with a leading axis of ``size`` and a ``valid_mask``.
     """
     source.next_epoch()
     length = len(source)
-    for start in range(0, length, size):
+    served = length - length % size if drop_last else length
+    for start in range(0, served, size):
         batch = source.read_batch(start, size)
         yield {**batch, "valid_mask": jnp.arange(size) < (length - start)}
 
