@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- `opifex.setup_jax_optimization`, `opifex.core.configure_jax_precision` and the
+  `opifex.core.device_utils` module, with the `OPIFEX_XLA_CACHE_DIR` variable the first read.
+  A process declares the JAX settings it starts with through `substrax.runtime`: a
+  `JaxRuntime` names the platforms, 64-bit types, matmul precision, compilation cache
+  directory and XLA flags, `apply_runtime` applies it in the running process and
+  `runtime_environment` renders it for a child. The helper applied a fixed flag set for
+  the backend it found and a `.cache/jax` directory in the working tree; a run that wants
+  those settings names them in its `JaxRuntime`.
+
 ## [0.2.6] - 2026-09-16
 
 ### Changed

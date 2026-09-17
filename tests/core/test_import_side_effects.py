@@ -96,18 +96,6 @@ def test_explicit_argument_value_one_does_not_auto_configure() -> None:
     assert _run_fresh(snippet) == "ok"
 
 
-def test_setup_jax_optimization_is_callable_and_configures() -> None:
-    """The explicit ``setup_jax_optimization`` call still configures JAX."""
-    snippet = """
-        import jax
-        import opifex
-        opifex.setup_jax_optimization()
-        assert jax.config.jax_compilation_cache_dir is not None
-        print("ok")
-    """
-    assert _run_fresh(snippet) == "ok"
-
-
 # ---------------------------------------------------------------------------
 # 2. ``opifex.neural.bayesian`` — registration is explicit, not at import.
 # ---------------------------------------------------------------------------

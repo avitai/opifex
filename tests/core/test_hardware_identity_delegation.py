@@ -7,12 +7,14 @@ accelerator class from ``substrax.devices.detect_devices``.
 
 from __future__ import annotations
 
-import jax
+import importlib.util
+
 import jax.numpy as jnp
 from calibrax.profiling import detect_hardware_specs
 from substrax.devices import detect_devices, DeviceKind
 
-from opifex.core import device_utils
+import opifex
+import opifex.core
 from opifex.core.gpu_acceleration import MixedPrecisionOptimizer, RooflineMemoryManager
 
 
@@ -43,12 +45,10 @@ def test_mixed_precision_hardware_config_reads_substrax_and_calibrax() -> None:
         assert config["alignment"] > 1
 
 
-def test_device_helpers_are_gone() -> None:
-    """The 0.2.2 wrappers over substrax's device identity were removed in 0.2.3."""
-    for name in ("get_device_info", "get_platform", "is_gpu_available"):
-        assert not hasattr(device_utils, name), name
-
-
-def test_configure_jax_precision_still_flips_x64() -> None:
-    device_utils.configure_jax_precision(enable_x64=False)
-    assert jax.config.jax_enable_x64 is False
+def test_jax_runtime_helpers_are_gone() -> None:
+    """JAX runtime settings are ``substrax.runtime``'s: opifex keeps no setup helper."""
+    assert importlib.util.find_spec("opifex.core.device_utils") is None
+    for name in ("get_device_info", "get_platform", "is_gpu_available", "configure_jax_precision"):
+        assert not hasattr(opifex.core, name), name
+        assert name not in opifex.core.__all__, name
+    assert not hasattr(opifex, "setup_jax_optimization")
