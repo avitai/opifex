@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `drop_last=True`; the block-form training script trains with `drop_last=True`, so no
   molecule is trained on twice in an epoch, and weights its validation MAE by the real
   molecule count.
-- Requires `datarax>=0.1.12`; the lock moves it from 0.1.11.
+- Requires `datarax>=0.1.13`; the lock moves it from 0.1.11.
 
 ### Changed
 
