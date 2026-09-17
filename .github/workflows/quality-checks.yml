@@ -28,7 +28,7 @@ jobs:
       run: uv venv
 
     - name: Install dependencies
-      # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax, and platform brings
+      # neural-dft + quantum-chemistry bring ase/pyscf, and platform brings
       # fastapi, sqlalchemy and prometheus-client, so pyright can resolve the
       # optional-extra imports in src/ (deployment, platform, quantum) it type-checks.
       # platform used to arrive transitively through avitai-artifex's runtime
@@ -78,7 +78,7 @@ jobs:
       run: uv venv
 
     - name: Install dependencies
-      # neural-dft + quantum-chemistry bring ase/pyscf/kfac-jax, and platform brings
+      # neural-dft + quantum-chemistry bring ase/pyscf, and platform brings
       # fastapi, sqlalchemy and prometheus-client, so pyright can resolve the
       # optional-extra imports in src/ (deployment, platform, quantum) it type-checks.
       # platform used to arrive transitively through avitai-artifex's runtime

@@ -8,6 +8,8 @@ Abrahamsen & Lin, arXiv:2401.10190).
 
 from __future__ import annotations
 
+import importlib.util
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -17,6 +19,11 @@ from opifex.neural.quantum.vmc.optimizers import (
     spring_update,
     SpringState,
 )
+
+
+def test_the_kfac_preconditioner_is_gone() -> None:
+    """The kfac-jax wrapper is removed; its restoration is tracked in avitai/opifex#31."""
+    assert importlib.util.find_spec("opifex.neural.quantum.vmc.kfac_preconditioner") is None
 
 
 def _random_jacobian_and_energies() -> tuple[jax.Array, jax.Array]:

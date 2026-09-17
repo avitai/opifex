@@ -233,14 +233,6 @@ OPTIONAL_SAMPLER_SPECS: tuple[OptionalBackendSpec, ...] = (
         install_hint="uv pip install matfree",
         method_names=("matvec_lanczos",),
     ),
-    OptionalBackendSpec(
-        name="kfac-jax",
-        family="sampler",
-        source_package="kfac_jax",
-        import_module="kfac_jax",
-        install_hint="uv pip install kfac-jax",
-        method_names=("kfac",),
-    ),
 )
 
 

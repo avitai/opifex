@@ -34,7 +34,7 @@ jobs:
         run: uv venv
 
       - name: Install dependencies
-        # Extras so integration suites exercise ase/pyscf/kfac-jax instead of skipping.
+        # Extras so integration suites exercise ase/pyscf instead of skipping.
         run: uv sync --locked --extra dev --extra test --extra neural-dft --extra quantum-chemistry
 
       - name: Ensure ripgrep is available
