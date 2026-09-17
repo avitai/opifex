@@ -5,6 +5,7 @@ operator training and evaluation.
 """
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +19,7 @@ from calibrax.metrics.functional import (
     mse as calc_mse,
     relative_error as calc_relative_error,
 )
+from datarax.pipeline import Pipeline
 from flax import nnx
 
 
@@ -78,8 +80,8 @@ class OperatorExecutor:
         self,
         operator_class: type,
         operator_config: dict[str, Any],
-        train_loader: Any,
-        test_loader: Any,
+        train_loader: Pipeline,
+        test_loader: Iterable[dict[str, jax.Array]],
         benchmark_name: str,
     ) -> BenchmarkResult:
         """Execute a training benchmark with actual operator.
@@ -87,8 +89,10 @@ class OperatorExecutor:
         Args:
             operator_class: Opifex operator class to instantiate
             operator_config: Configuration dict for operator
-            train_loader: Training data loader (from opifex.data.loaders)
-            test_loader: Test data loader
+            train_loader: Training pipeline (from opifex.data.loaders); single-pass, reset per
+                epoch, every batch carrying ``valid_mask``.
+            test_loader: Test batches, each carrying ``valid_mask`` so the padded rows of the
+                last batch are left out of the metrics.
             benchmark_name: Name of benchmark for results
 
         Returns:
@@ -157,7 +161,7 @@ class OperatorExecutor:
         self,
         model: nnx.Module,
         opt: nnx.Optimizer,
-        train_loader: Any,
+        train_loader: Pipeline,
     ) -> dict[str, float]:
         """Execute training loop and return metrics.
 
@@ -168,7 +172,7 @@ class OperatorExecutor:
         Args:
             model: Neural operator model
             opt: Flax NNX optimizer
-            train_loader: Training data loader
+            train_loader: Training pipeline, reset before every epoch after the first.
 
         Returns:
             Dictionary with training metrics (initial_train_loss, final_train_loss)
@@ -215,7 +219,7 @@ class OperatorExecutor:
     def _evaluate(
         self,
         model: nnx.Module,
-        test_loader: Any,
+        test_loader: Iterable[dict[str, jax.Array]],
     ) -> dict[str, float]:
         """Evaluate model and return metrics.
 
@@ -223,7 +227,7 @@ class OperatorExecutor:
 
         Args:
             model: Trained neural operator
-            test_loader: Test data loader
+            test_loader: Test batches, each carrying ``valid_mask``.
 
         Returns:
             Dictionary with evaluation metrics (mse, mae, relative_error)
