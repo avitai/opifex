@@ -107,11 +107,6 @@ from opifex.neural.quantum.hamiltonian import (
 )
 
 
-# float64 + tightened matmul precision so the SE(3)-equivariance residual is
-# dominated by real model error, not reduced-precision GPU matmul.
-jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_default_matmul_precision", "high")
-
 # %% [markdown]
 """
 ## Configuration
@@ -142,10 +137,10 @@ CONFIG = BlockHamiltonianConfig(
 )
 
 # Water (O, H, H) and a methane-like (C, H, H, H, H), in Bohr.
-WATER_ATOMIC_NUMBERS = jnp.array([8, 1, 1])
-WATER_POSITIONS = jnp.array([[0.0, 0.0, 0.0], [0.0, 1.43, 1.11], [0.0, -1.43, 1.11]])
-METHANE_ATOMIC_NUMBERS = jnp.array([6, 1, 1, 1, 1])
-METHANE_POSITIONS = jnp.array(
+WATER_ATOMIC_NUMBERS = np.array([8, 1, 1])
+WATER_POSITIONS = np.array([[0.0, 0.0, 0.0], [0.0, 1.43, 1.11], [0.0, -1.43, 1.11]])
+METHANE_ATOMIC_NUMBERS = np.array([6, 1, 1, 1, 1])
+METHANE_POSITIONS = np.array(
     [
         [0.0, 0.0, 0.0],
         [1.19, 1.19, 1.19],
@@ -309,6 +304,11 @@ def random_rotation(seed: int) -> jax.Array:
 # %%
 def main() -> dict[str, float | int]:
     """Build the predictor, run the batched forward, and verify block equivariance."""
+    # float64 + tightened matmul precision so the SE(3)-equivariance residual is
+    # dominated by real model error, not reduced-precision GPU matmul. Set here, not at
+    # import: the module-level geometry is numpy and takes the run's precision.
+    jax.config.update("jax_enable_x64", True)
+    jax.config.update("jax_default_matmul_precision", "high")
     OUTPUT_DIR = resolve_output_dir("hamiltonian_prediction").path
 
     print("=" * 70)

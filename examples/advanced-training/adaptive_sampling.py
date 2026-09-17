@@ -41,7 +41,6 @@ SIAM Rev. 63, 208.
 """
 
 # %%
-import os
 
 import jax
 import jax.numpy as jnp
@@ -180,8 +179,7 @@ def main() -> dict[str, float | int]:
     REFINE_FREQUENCY = 200
     N_REFINE_POINTS = 25
     LEARNING_RATE = 1e-3
-    # Smoke mode (set by the example test): a few steps that return finite metrics fast.
-    TRAINING_STEPS = 20 if os.environ.get("OPIFEX_EXAMPLE_SMOKE") else 1000
+    TRAINING_STEPS = 1000
 
     # Output directory
     OUTPUT_DIR = resolve_output_dir("adaptive_sampling").path

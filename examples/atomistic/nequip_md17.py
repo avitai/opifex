@@ -73,7 +73,6 @@ stack and changes no library internals.
 """
 
 # %%
-import os
 import time
 import warnings
 
@@ -261,12 +260,9 @@ afterwards, so the training trajectory itself is untouched.
 def main() -> dict[str, float | int]:
     """Load rMD17 aspirin, train the NequIP potential, and report MLIP error."""
     OUTPUT_DIR = resolve_output_dir("nequip_rmd17").path
-    # Smoke mode (set by the example test): a tiny, few-epoch run that returns finite
-    # metrics quickly. The full run (CLI / notebook) uses the constants above.
-    smoke = bool(os.environ.get("OPIFEX_EXAMPLE_SMOKE"))
-    n_train = 20 if smoke else N_TRAIN
-    n_val = 20 if smoke else N_VAL
-    max_epochs = 2 if smoke else MAX_EPOCHS
+    n_train = N_TRAIN
+    n_val = N_VAL
+    max_epochs = MAX_EPOCHS
 
     print("=" * 70)
     print("Opifex Example: NequIP on rMD17 (Aspirin)")

@@ -39,7 +39,6 @@ resolution scaling, and data quality metrics.
 
 # %%
 import argparse
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -453,9 +452,6 @@ def main(
     output_dir = resolve_output_dir(
         "darcy_flow_analysis_files", explicit=None if output_dir is None else Path(output_dir)
     ).path
-    # Smoke mode (set by the example test): a few small-resolution samples.
-    if os.environ.get("OPIFEX_EXAMPLE_SMOKE"):
-        n_samples, resolutions, save_plots = 4, (32,), False
 
     print("Starting full Darcy flow dataset analysis...")
     results = analyze_darcy_flow_dataset(

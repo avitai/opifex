@@ -26,6 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and resolve the same way; a directory given is resolved against the working directory.
   `AVITAI_OUTPUT_DIR="$PWD/docs/assets/examples"` regenerates the documentation figures in
   place.
+- The example tests run every example in its own interpreter through
+  `substrax.testing.run_example`, on the CPU backend with outputs under a temporary
+  directory, and read the summary `main()` returns; the in-process loader is gone. The
+  four examples that ran a reduced workload under `OPIFEX_EXAMPLE_SMOKE` (adaptive
+  sampling, GradNorm, NequIP on rMD17, the Darcy-flow analysis) run at full size in the
+  extended job, and the variable is gone. The per-example budget is the suite's
+  `--timeout`, enforced by the runner.
+- Importing an example configures nothing: the operator benchmark's logging is set up
+  inside `main()` through `substrax.runtime.configure_entry_point_logging`, and the two
+  float64 examples (Hamiltonian prediction, VMC atoms) enable 64-bit types and the `high`
+  matmul precision inside `main()`, with their module-level geometry as numpy arrays so it
+  takes the run's precision.
 
 ### Removed
 

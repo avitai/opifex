@@ -94,12 +94,6 @@ from dataclasses import dataclass
 warnings.filterwarnings("ignore")
 
 import jax
-
-
-jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_default_matmul_precision", "high")
-
-import jax.numpy as jnp
 import matplotlib as mpl
 import numpy as np
 from flax import nnx
@@ -161,8 +155,8 @@ class System:
     """
 
     name: str
-    atoms: jax.Array
-    charges: jax.Array
+    atoms: np.ndarray
+    charges: np.ndarray
     nspins: tuple[int, int]
     exact_energy: float
     iterations: int
@@ -186,8 +180,8 @@ OPTIMIZER = "spring"  # SPRING natural-gradient (MinSR + Nesterov momentum)
 SYSTEMS = (
     System(
         name="H",
-        atoms=jnp.array([[0.0, 0.0, 0.0]]),
-        charges=jnp.array([1.0]),
+        atoms=np.array([[0.0, 0.0, 0.0]]),
+        charges=np.array([1.0]),
         nspins=(1, 0),
         exact_energy=-0.5,
         iterations=400,
@@ -196,8 +190,8 @@ SYSTEMS = (
     ),
     System(
         name="He",
-        atoms=jnp.array([[0.0, 0.0, 0.0]]),
-        charges=jnp.array([2.0]),
+        atoms=np.array([[0.0, 0.0, 0.0]]),
+        charges=np.array([2.0]),
         nspins=(1, 1),
         exact_energy=-2.9037,
         iterations=800,
@@ -206,8 +200,8 @@ SYSTEMS = (
     ),
     System(
         name="H2",
-        atoms=jnp.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.4]]),
-        charges=jnp.array([1.0, 1.0]),
+        atoms=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.4]]),
+        charges=np.array([1.0, 1.0]),
         nspins=(1, 1),
         exact_energy=-1.1745,
         iterations=600,
@@ -286,6 +280,10 @@ result for the table and the convergence plot.
 # %%
 def main() -> dict[str, float | int]:
     """Optimise all systems, render diagnostics, and return per-system energy errors."""
+    # float64 + tightened matmul precision for the energies. Set here, not at import: the
+    # module-level geometry is numpy and takes the run's precision.
+    jax.config.update("jax_enable_x64", True)
+    jax.config.update("jax_default_matmul_precision", "high")
     OUTPUT_DIR = resolve_output_dir("vmc_atoms").path
 
     print("=" * 70)

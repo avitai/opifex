@@ -37,7 +37,6 @@ the common failure mode of boundary/initial conditions being poorly satisfied.
 """
 
 # %%
-import os
 
 import jax
 import jax.numpy as jnp
@@ -149,8 +148,7 @@ def main() -> dict[str, float | int]:
     N_BOUNDARY = 100
     N_INITIAL = 100
     LEARNING_RATE = 1e-3
-    # Smoke mode (set by the example test): a few steps that return finite metrics fast.
-    TRAINING_STEPS = 20 if os.environ.get("OPIFEX_EXAMPLE_SMOKE") else 1000
+    TRAINING_STEPS = 1000
     GRADNORM_ALPHA = 1.5  # Asymmetry parameter (0 = equal, higher = more balancing)
 
     # Output directory
