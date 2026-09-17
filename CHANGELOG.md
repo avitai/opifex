@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-09-17
+
 ### Changed
 
 - `OptimizationConfig` is the one owner of the optimizer's settings and the trainer builds
