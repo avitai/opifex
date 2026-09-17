@@ -26,9 +26,9 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from datarax.core.element_batch import Batch, Element
 from flax import nnx  # noqa: TC002 — eager per opifex convention
+from substrax.rng import key_from
 
 from opifex.uncertainty.types import metadata_to_dict, MetadataItems
 
@@ -111,8 +111,8 @@ def sample_joint(
     Returns a Datarax ``Batch`` where every element pairs ``theta`` with
     its observation ``x`` (and optionally a compressed summary).
 
-    The RNG resolution uses Artifex's :func:`extract_rng_key` with the
-    canonical SBI stream name ``"sbi_simulate"``.
+    The key comes through :func:`substrax.rng.key_from` with the canonical
+    SBI stream name ``"sbi_simulate"``.
 
     Args:
         simulator: Static simulator description.
@@ -129,7 +129,7 @@ def sample_joint(
     if num_simulations <= 0:
         raise ValueError(f"num_simulations must be positive; got {num_simulations}.")
 
-    sim_key = extract_rng_key(
+    sim_key = key_from(
         rngs,
         streams=_SIMULATE_STREAMS,
         context="Simulator.sample_joint",

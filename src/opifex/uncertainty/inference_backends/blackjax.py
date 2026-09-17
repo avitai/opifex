@@ -7,8 +7,8 @@ Adapts :func:`artifex.generative_models.core.sampling.blackjax_samplers.hmc_samp
 The module deliberately imports the BlackJAX samplers through Artifex — the
 direct ``blackjax`` import lives in
 ``artifex/generative_models/core/sampling/blackjax_samplers.py``.
-RNG ownership is enforced through Artifex's :func:`extract_rng_key` helper
-(named-stream order ``sample`` → ``default``).
+Keys come from an explicit owner through :func:`substrax.rng.key_from`
+(named-stream order ``posterior`` → ``sample`` → ``default``).
 
 Supported sampler methods (delegated to Artifex):
 
@@ -36,7 +36,6 @@ from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from artifex.generative_models.core.sampling.base import (
     SamplingAlgorithm,
 )
@@ -50,6 +49,7 @@ from artifex.generative_models.core.sampling.blackjax_samplers import (
     nuts_sampling,
 )
 from flax import nnx  # noqa: TC002
+from substrax.rng import key_from
 
 from opifex.uncertainty._predictive import predictive_from_parameter_samples
 from opifex.uncertainty.inference_backends.base import (
@@ -143,11 +143,9 @@ class BlackJAXBackend:
         the log density through ``fit``).
         """
         log_prob_fn = target_log_prob if target_log_prob is not None else self.target_log_prob
-        # Route the RNG through Artifex's canonical helper. The Artifex sampler
-        # function itself also calls ``extract_rng_key`` internally; calling it
-        # once here gives us a concrete key with a context label and ensures
-        # the spy in tests sees Opifex-side invocations.
-        key = extract_rng_key(
+        # Draw one concrete key here, under this backend's context label, so a
+        # missing stream is reported against the backend rather than the sampler.
+        key = key_from(
             rngs,
             streams=_POSTERIOR_STREAMS,
             context="BlackJAXBackend sampling",

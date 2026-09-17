@@ -22,9 +22,9 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 from scipy import stats as scipy_stats
+from substrax.rng import key_from
 
 from opifex.uncertainty.sbi.posterior_estimation import NeuralPosteriorEstimator  # noqa: TC001
 from opifex.uncertainty.sbi.simulators import Simulator  # noqa: TC001
@@ -139,10 +139,10 @@ def simulation_based_calibration(
         :class:`SBCResult` with rank statistics + per-dim KS statistics.
 
     """
-    sim_key = extract_rng_key(
+    sim_key = key_from(
         rngs, streams=_SIMULATE_STREAMS, context="simulation_based_calibration.simulate"
     )
-    sample_key = extract_rng_key(
+    sample_key = key_from(
         rngs, streams=_SAMPLE_STREAMS, context="simulation_based_calibration.sample"
     )
 
@@ -206,10 +206,10 @@ def expected_posterior_contraction(
     can be slightly negative under finite-sample noise (no clipping here
     — leave the raw signal for the caller).
     """
-    sim_key = extract_rng_key(
+    sim_key = key_from(
         rngs, streams=_SIMULATE_STREAMS, context="expected_posterior_contraction.simulate"
     )
-    sample_key = extract_rng_key(
+    sample_key = key_from(
         rngs, streams=_SAMPLE_STREAMS, context="expected_posterior_contraction.sample"
     )
 

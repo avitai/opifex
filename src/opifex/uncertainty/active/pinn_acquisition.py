@@ -23,8 +23,8 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
+from substrax.rng import key_from
 
 from opifex.uncertainty.active.acquisition import AcquiredBatch
 
@@ -66,7 +66,7 @@ def pinn_residual_acquisition(
     """
     if batch_size <= 0:
         raise ValueError(f"batch_size must be positive; got {batch_size!r}")
-    _ = extract_rng_key(
+    _ = key_from(
         rngs,
         streams=("active_acquire", "default"),
         context="pinn_residual_acquisition",

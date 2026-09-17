@@ -17,9 +17,9 @@ Subpackage modules:
   acquisition that ranks candidates by PDE residual magnitude and exposes
   residual + uncertainty metadata.
 
-All RNG-dependent acquisitions route through
-:func:`artifex.generative_models.core.rng.extract_rng_key` with named
-streams ``"active_acquire"``, ``"active_bald"``, ``"active_eig"``.
+All RNG-dependent acquisitions take their keys through
+:func:`substrax.rng.key_from` with named streams ``"active_acquire"``,
+``"active_bald"``, ``"active_eig"``.
 
 Container patterns (GUIDE_ALIGNMENT §5a):
 

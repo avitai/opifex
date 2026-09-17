@@ -109,8 +109,8 @@ from typing import Protocol, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
+from substrax.rng import key_from
 
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.svgp import predict_svgp, SVGPState
@@ -175,7 +175,7 @@ class _WrappedMCDropoutModel:
         # Caller-owned RNG: extract a single key and split into per-sample
         # keys. No hidden default — passing nothing raises TypeError at
         # the method boundary.
-        key = extract_rng_key(
+        key = key_from(
             rngs, streams=_MCDROPOUT_STREAMS, context="MCDropoutAdapter.predict_distribution"
         )
         sample_keys = jax.random.split(key, self._state.num_samples)

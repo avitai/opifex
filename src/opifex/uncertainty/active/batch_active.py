@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
+from substrax.rng import key_from
 
 from opifex.uncertainty.active.acquisition import (
     AcquiredBatch,
@@ -133,7 +133,7 @@ def batch_bald(
     if predictive_dist.samples is None:
         raise ValueError("batch_bald requires PredictiveDistribution.samples.")
 
-    key = extract_rng_key(
+    key = key_from(
         rngs,
         streams=("active_bald", "active_acquire", "default"),
         context="batch_bald",
@@ -235,7 +235,7 @@ def batch_mc_expected_improvement(
     """
     if num_samples <= 0:
         raise ValueError(f"num_samples must be positive; got {num_samples!r}")
-    key = extract_rng_key(
+    key = key_from(
         rngs,
         streams=("active_acquire", "default"),
         context="batch_mc_expected_improvement",
@@ -516,7 +516,7 @@ def q_expected_hypervolume_improvement(
     if candidate_mean.ndim != 2:
         raise ValueError(f"q-EHVI expects candidate_mean shape (q, M); got {candidate_mean.shape}")
 
-    key = extract_rng_key(
+    key = key_from(
         rngs,
         streams=("active_acquire", "default"),
         context="q_expected_hypervolume_improvement",

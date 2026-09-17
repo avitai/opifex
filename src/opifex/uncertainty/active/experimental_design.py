@@ -27,8 +27,8 @@ from typing import Any, Protocol
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx  # noqa: TC002
+from substrax.rng import key_from
 
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
 
@@ -97,7 +97,7 @@ def expected_information_gain(
     """
     if noise_std <= 0:
         raise ValueError(f"noise_std must be positive; got {noise_std!r}")
-    key = extract_rng_key(
+    key = key_from(
         rngs,
         streams=("active_eig", "active_acquire", "default"),
         context="expected_information_gain",
@@ -188,7 +188,7 @@ def bayesian_experimental_design_loop(
     """
     if num_rounds <= 0:
         raise ValueError(f"num_rounds must be positive; got {num_rounds!r}")
-    _ = extract_rng_key(
+    _ = key_from(
         rngs,
         streams=("active_acquire", "default"),
         context="bayesian_experimental_design_loop",

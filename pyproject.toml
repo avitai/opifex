@@ -56,9 +56,9 @@ dependencies = [
   "avitai-artifex>=0.1.5",
   "calibrax>=0.1.5",
   "datarax>=0.1.10",
-  # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.7 substrax.rng
+  # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
-  "substrax>=0.1.7",
+  "substrax>=0.1.8",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
   "tfp-nightly>=0.26.0.dev20251024"

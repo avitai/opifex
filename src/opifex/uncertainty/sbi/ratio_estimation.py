@@ -34,8 +34,8 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 import optax
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
+from substrax.rng import key_from
 
 from opifex.uncertainty.sbi._base import (
     _DEFAULT_BACKEND_NAME,
@@ -136,9 +136,7 @@ class NeuralRatioEstimator:
             backend=self.backend,
             rngs=rngs,
         )
-        train_key = extract_rng_key(
-            rngs, streams=_TRAIN_STREAMS, context="NeuralRatioEstimator.fit"
-        )
+        train_key = key_from(rngs, streams=_TRAIN_STREAMS, context="NeuralRatioEstimator.fit")
         perm_key, init_key = jax.random.split(train_key)
         # Marginal pairs: shuffle theta against x to break the joint coupling.
         perm = jax.random.permutation(perm_key, num_simulations)
@@ -193,7 +191,7 @@ class NeuralRatioEstimator:
             log_ratio = jnp.squeeze(classifier(theta_batch, x_batch), axis=0)
             return log_ratio + log_prior(theta)
 
-        sample_key = extract_rng_key(
+        sample_key = key_from(
             rngs, streams=_SAMPLE_STREAMS, context="NeuralRatioEstimator.predict_distribution"
         )
         return _mcmc_posterior_predictive(

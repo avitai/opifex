@@ -52,8 +52,8 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx  # noqa: TC002 — kept eager for consistency
+from substrax.rng import key_from
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
@@ -99,7 +99,7 @@ def rbf_random_fourier_features(
         raise ValueError(f"lengthscale must be strictly positive; got {lengthscale!r}.")
     if output_scale <= 0.0:
         raise ValueError(f"output_scale must be strictly positive; got {output_scale!r}.")
-    key = extract_rng_key(rngs, streams=_RFF_STREAMS, context="rbf_random_fourier_features")
+    key = key_from(rngs, streams=_RFF_STREAMS, context="rbf_random_fourier_features")
     num_pairs = num_features // 2
     omega = jax.random.normal(key, (num_pairs, x.shape[-1])) / lengthscale
     projection = x @ omega.T  # (n, num_pairs)
@@ -175,7 +175,7 @@ def fit_rff_gp(
     """
     if noise_std <= 0.0:
         raise ValueError(f"noise_std must be strictly positive; got {noise_std!r}.")
-    key = extract_rng_key(rngs, streams=_RFF_STREAMS, context="fit_rff_gp")
+    key = key_from(rngs, streams=_RFF_STREAMS, context="fit_rff_gp")
     num_pairs = num_features // 2
     if num_features <= 0 or num_features % 2 != 0:
         raise ValueError(f"num_features must be a positive even integer; got {num_features!r}.")

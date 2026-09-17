@@ -37,9 +37,9 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
 from jax.scipy.stats import norm as jnorm
+from substrax.rng import key_from
 from tensorflow_probability.substrates.jax.math import erfcx
 
 from opifex.uncertainty.types import metadata_to_dict, MetadataItems, PredictiveDistribution
@@ -311,7 +311,7 @@ def bald(
     """
     # Eagerly consume one key from the bald stream so downstream callers
     # never reuse a key across batch acquisitions.
-    _ = extract_rng_key(rngs, streams=("active_bald", "active_acquire", "default"), context="BALD")
+    _ = key_from(rngs, streams=("active_bald", "active_acquire", "default"), context="BALD")
 
     if predictive_dist.samples is None:
         raise ValueError("BALD requires PredictiveDistribution.samples (ensemble members).")

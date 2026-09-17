@@ -20,8 +20,8 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx  # noqa: TC002 — pyproject dep kept eager (project convention)
+from substrax.rng import key_from
 
 from opifex.uncertainty.active.acquisition import (
     acquire as _active_acquire,
@@ -72,7 +72,7 @@ def _stochastic_ensemble_from_model(
             pred = pred[:, None]
         predictions.append(pred)
     stacked = jnp.stack(predictions, axis=0)  # (num_samples, batch, output)
-    key = extract_rng_key(
+    key = key_from(
         rngs,
         streams=("active_acquire", "default", "params", "sample"),
         context="active-learning ensemble",
