@@ -442,9 +442,10 @@ class CachedProgressiveTester:
             else:
                 return False, None, f"Unknown operation: {operation_name}"
 
-            # Three warm-up calls, then ten timed calls that each wait for their result.
+            # Three warm-up calls, then ten timed calls that each wait for their result; the
+            # median is the figure, since one slow call moves a mean.
             timing = time_calls(operation_fn, x, y, warmup=3, iterations=10)
-            return True, sum(timing.samples_sec) / len(timing.samples_sec), None
+            return True, timing.median_sec, None
 
         except Exception as e:  # noqa: BLE001 -- benchmarks arbitrary operation_fn from caller
             return False, None, str(e)
