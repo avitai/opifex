@@ -181,7 +181,6 @@ src/opifex/deployment/core_serving.py
     DOC103: Method `ModelRegistry._build_abstract_template`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [model_info: dict[str, Any]].
     DOC201: Method `ModelRegistry._build_abstract_template` does not have a return section in docstring
     DOC503: Method `ModelRegistry._build_abstract_template` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['KeyError', 'TypeError', 'ValueError']. Raised exceptions in the body: ['ValueError'].
-    DOC503: Method `ModelRegistry.get_model` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['KeyError', 'RuntimeError', 'TypeError', 'ValueError']. Raised exceptions in the body: ['RuntimeError', 'ValueError'].
     DOC501: Method `ModelRegistry.get_latest_version` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `ModelRegistry.get_latest_version` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
     DOC501: Method `ModelRegistry.get_model_by_version` has raise statements, but the docstring does not have a "Raises" section

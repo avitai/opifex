@@ -186,6 +186,9 @@ class ModelRegistry:
     #: Step key under which a model's single weight checkpoint is stored.
     _CHECKPOINT_STEP = 0
 
+    #: The checkpoint item holding the model's weights (its ``nnx.state``).
+    _WEIGHTS_ITEM = "model"
+
     #: Recipe schema version, persisted so future readers can detect drift.
     _RECIPE_VERSION = "1.0"
 
@@ -287,7 +290,7 @@ class ModelRegistry:
 
         state_dir = (model_dir / self._STATE_DIRNAME).resolve()
         with OrbaxCheckpointStore(state_dir) as store:
-            store.save(model, step=self._CHECKPOINT_STEP, loss=0.0)
+            store.save(self._CHECKPOINT_STEP, {self._WEIGHTS_ITEM: state})
 
         # Persist the cross-process reconstruction recipe: the registry name of
         # the class, the abstract-init kwargs, and the structure version hash.
@@ -414,12 +417,14 @@ class ModelRegistry:
             Tuple of ``(model, metadata)`` where ``model`` is the
             reconstructed :class:`flax.nnx.Module`.
 
+        Rebuilding the recipe raises ``KeyError`` for a class name not registered
+        for serving and ``TypeError`` for a class that is not an ``nnx.Module``;
+        a missing weight checkpoint is the store's ``CheckpointNotFoundError``
+        (a ``FileNotFoundError``).
+
         Raises:
             ValueError: If ``model_id`` is not registered, or if the persisted
                 structure hash does not match the rebuilt structure.
-            KeyError: If the persisted class name is not registered for serving.
-            TypeError: If the recipe references a non-``nnx.Module`` class.
-            RuntimeError: If the weight checkpoint is missing or unreadable.
         """
         if model_id not in self._models["models"]:
             raise ValueError(f"Model ID {model_id} not found")
@@ -438,21 +443,15 @@ class ModelRegistry:
         if template is None:
             template = self._build_abstract_template(model_info)
 
-        # Restore the persisted weights into the abstract structure via the
+        # Restore the persisted weights onto the abstract state through the
         # shared checkpoint store, then merge with the graphdef to obtain the
-        # concrete registered model.
-        abstract_model = nnx.merge(template.graphdef, template.abstract_state)
-        with OrbaxCheckpointStore(Path(model_info["state_path"]), create=False) as store:
-            restored, _ = store.restore(abstract_model, step=self._CHECKPOINT_STEP)
-        if not isinstance(restored, nnx.Module):
-            # A non-module result signals a missing/unreadable checkpoint (a
-            # runtime/IO state), not a caller type error, so RuntimeError is
-            # the correct semantic despite the isinstance guard.
-            raise RuntimeError(  # noqa: TRY004
-                f"Weight checkpoint for model {model_id!r} could not be restored; "
-                "the checkpoint is missing or unreadable."
+        # concrete registered model. A missing checkpoint is the store's
+        # CheckpointNotFoundError, a FileNotFoundError.
+        with OrbaxCheckpointStore(Path(model_info["state_path"])) as store:
+            checkpoint = store.restore(
+                self._CHECKPOINT_STEP, templates={self._WEIGHTS_ITEM: template.abstract_state}
             )
-        return restored, metadata
+        return nnx.merge(template.graphdef, checkpoint.items[self._WEIGHTS_ITEM]), metadata
 
     def list_models(self) -> list[dict[str, Any]]:
         """List all registered models.

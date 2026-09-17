@@ -18,12 +18,14 @@ Following strict TDD principles - implemented to pass tests in test_trainer.py.
 from __future__ import annotations
 
 import logging
+from importlib.metadata import version
 from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 from calibrax.metrics.functional.regression import relative_l2_error
 from flax import nnx
+from substrax.checkpoint import Producer
 from substrax.optim import create_optimizer, current_learning_rate
 
 from opifex.core.training.components.checkpoint_store import (
@@ -44,6 +46,13 @@ from opifex.core.training.config import TrainingConfig  # noqa: TC001
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
+
+    from substrax.checkpoint import Checkpoint
+
+
+_PRODUCER = Producer(name="opifex", version=version("opifex"))
+MODEL_ITEM = "model"
 
 
 class Trainer(nnx.Module):
@@ -97,11 +106,11 @@ class Trainer(nnx.Module):
             rngs=self.rngs,
         )
 
-        # Initialize checkpoint store if configured
-        self.checkpoint_store = None
+        # The checkpoint store, when a directory is configured; opened lazily by substrax.
+        self.checkpoint_store: OrbaxCheckpointStore | None = None
         if config.checkpoint_config.checkpoint_dir:
             self.checkpoint_store = OrbaxCheckpointStore(
-                checkpoint_dir=config.checkpoint_config.checkpoint_dir,
+                config.checkpoint_config.checkpoint_dir,
                 max_to_keep=config.checkpoint_config.max_to_keep,
             )
 
@@ -170,6 +179,10 @@ class Trainer(nnx.Module):
     ) -> tuple[jax.Array, dict[str, Any]]:
         """Execute a single training step.
 
+        ``fit`` runs this under ``nnx.jit``, so nothing here may count on the host:
+        the global step (``state.step``) is advanced by the epoch loop, once per
+        batch it dispatches.
+
         Args:
             x: Input data
             y: Target data
@@ -193,7 +206,6 @@ class Trainer(nnx.Module):
 
         # The nnx optimizer manages parameter and optimizer state internally.
         self.optimizer.update(self.model, grads)
-        self.state.step += 1
 
         metrics = self._build_step_metrics(loss, grads, loss_components)
 
@@ -326,7 +338,12 @@ class Trainer(nnx.Module):
     def _build_step_metrics(
         self, loss: jax.Array, grads: Any, loss_components: dict[str, Any]
     ) -> dict[str, Any]:
-        """Assemble the per-step metrics dict (arrays kept for JIT compatibility)."""
+        """Assemble the per-step metrics dict (arrays kept for JIT compatibility).
+
+        ``step`` is the host counter as the call finds it: the batches ``fit`` has
+        dispatched so far. Under ``nnx.jit`` it is the trace-time value; ``fit``
+        reads only the loss from the jitted call.
+        """
         grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
         return {
             "loss": loss,
@@ -428,7 +445,9 @@ class Trainer(nnx.Module):
 
         Per-batch losses are accumulated on the accelerator and transferred to
         the host once (by the caller), so consecutive jitted steps dispatch
-        asynchronously rather than serialising on a per-batch ``float()``.
+        asynchronously rather than serialising on a per-batch ``float()``. The
+        global step advances here, on the host, once per dispatched batch: a
+        counter inside the jitted step would move only when the step is traced.
         """
         num_samples = x_train.shape[0]
         batch_size = self.config.batch_size
@@ -439,6 +458,7 @@ class Trainer(nnx.Module):
                 x_train[start : start + batch_size], y_train[start : start + batch_size]
             )
             loss, _ = train_step_jit(self, sharded["x"], sharded["y"], boundary_data)
+            self.state.step += 1
             loss_sum = loss_sum + loss
             num_batches += 1
         return loss_sum / num_batches
@@ -494,65 +514,68 @@ class Trainer(nnx.Module):
                 val_info,
             )
 
+        # The checkpoint is addressed by the global step, so a later ``fit`` on the
+        # same trainer adds steps instead of rewriting the first epochs' checkpoints.
         if self.checkpoint_store is not None and epoch % self.config.checkpoint_frequency == 0:
-            self.save_checkpoint(step=epoch, loss=avg_train_loss)
+            self.save_checkpoint(step=self.state.step, loss=avg_train_loss)
 
     def save_checkpoint(
         self,
         step: int,
         loss: float,
         physics_metadata: dict[str, Any] | None = None,
-    ) -> str | None:
-        """Save checkpoint with Orbax.
+    ) -> Path | None:
+        """Save the model's state at ``step`` through the checkpoint store.
+
+        The record carries the trainer's epoch, ``loss`` as its one metric (what
+        ``best_step("loss")`` compares), opifex as the producer and
+        ``physics_metadata`` under that key in the record's extra values.
 
         Args:
-            step: Current training step
-            loss: Current loss value
-            physics_metadata: Optional physics-specific metadata
+            step: The training step the checkpoint is addressed by.
+            loss: The step's loss, recorded as the ``loss`` metric.
+            physics_metadata: Physics values to record beside the metrics.
 
         Returns:
-            Path to saved checkpoint, or None if no checkpoint store
+            The checkpoint's directory, or ``None`` when no store is configured.
         """
         if self.checkpoint_store is None:
             return None
+        extra = None if physics_metadata is None else {"physics_metadata": physics_metadata}
+        with self.checkpoint_store as store:
+            return store.save(
+                step,
+                {MODEL_ITEM: nnx.state(self.model)},
+                epoch=self.state.epoch,
+                metrics={"loss": loss},
+                producer=_PRODUCER,
+                extra=extra,
+            )
 
-        additional_metadata = {
-            "step": step,
-            "epoch": self.state.epoch,
-        }
+    def load_checkpoint(self, step: int) -> Checkpoint:
+        """Restore the model's state from the checkpoint at ``step``.
 
-        checkpoint_path = self.checkpoint_store.save(
-            self.model,
-            step=step,
-            loss=loss,
-            physics_metadata=physics_metadata,
-            additional_metadata=additional_metadata,
-        )
-
-        return str(checkpoint_path)
-
-    def load_checkpoint(self, step: int) -> tuple[Any, dict[str, Any]]:  # Updated return type
-        """Load checkpoint from Orbax.
+        The stored ``model`` item is restored onto the live model's state and
+        merged into it in place; roots written by earlier releases (the module
+        as the one payload) are read through substrax's module-only layout. A
+        step the directory does not hold is the store's ``CheckpointNotFoundError``
+        (a ``FileNotFoundError``).
 
         Args:
-            step: Step number to load
+            step: The step to restore.
 
         Returns:
-            Tuple of (model, metadata) or (None, {}) if not found
+            substrax's checkpoint record: the step, the items and the metadata.
+
+        Raises:
+            ValueError: No checkpoint store is configured.
         """
         if self.checkpoint_store is None:
-            return None, {}
-
-        try:
-            model, metadata = self.checkpoint_store.restore(
-                target_model=self.model,
-                step=step,
-                # Return None if checkpoint doesn't exist
-                return_original_on_missing=False,
-            )
-            return model, metadata  # pyright: ignore[reportArgumentType]
-        except (OSError, ValueError, KeyError, FileNotFoundError):
-            return None, {}
+            raise ValueError("no checkpoint store is configured: set checkpoint_dir")
+        with self.checkpoint_store as store:
+            checkpoint = store.restore(step, templates={MODEL_ITEM: nnx.state(self.model)})
+        nnx.update(self.model, checkpoint.items[MODEL_ITEM])
+        return checkpoint
 
     def register_custom_loss(self, name: str, loss_fn: Callable) -> None:
         """Register a custom loss function.

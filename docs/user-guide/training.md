@@ -618,12 +618,13 @@ visualizer = TrainingVisualizer(update_frequency=5)
 
 ### Robust Checkpointing System
 
-Checkpointing is handled by the unified, Orbax-backed
-`OrbaxCheckpointStore`. It is the single source of truth for persisting and
-restoring NNX model state: array weights are written with Orbax and
-plain-Python metadata with JSON, so loading a checkpoint never executes
-arbitrary code. Checkpoints are addressed by integer `step`, and old
-checkpoints are pruned automatically according to `max_to_keep`.
+Checkpointing is handled by substrax's Orbax-backed `OrbaxCheckpointStore`,
+the store every Avitai library writes. A checkpoint is a set of named items
+(`model`, `optimizer`, `rng`, ...) written with Orbax beside a JSON record: the
+step, the epoch, the metrics, the producer and the caller's own extra values.
+Loading a checkpoint never executes arbitrary code. Checkpoints are addressed
+by integer `step`, and old checkpoints are pruned automatically according to
+`max_to_keep`.
 
 ```python
 from flax import nnx
@@ -632,31 +633,38 @@ from opifex.core.training.components.checkpoint_store import OrbaxCheckpointStor
 
 # The store is a context manager; it releases Orbax resources on exit.
 with OrbaxCheckpointStore("./checkpoints/advanced_training", max_to_keep=10) as store:
-    # Save model state plus rich metadata at a given step.
+    # Save the model's state at a step, with the loss the record's metric.
     store.save(
-        model,
-        step=epoch,
-        loss=train_loss,
-        physics_metadata={"energy_conservation": 1e-6},
-        additional_metadata={"experiment_id": "exp_001"},
+        epoch,
+        {"model": nnx.state(model)},
+        epoch=epoch,
+        metrics={"loss": train_loss},
+        extra={"physics_metadata": {"energy_conservation": 1e-6}},
     )
 
-    # Restore into a live model instance (arrays are merged in place).
-    restored_model, metadata = store.restore(model, step=epoch)
+    # Restore onto the live model's state, then merge the arrays in place.
+    checkpoint = store.restore(epoch, templates={"model": nnx.state(model)})
+    nnx.update(model, checkpoint.items["model"])
+    checkpoint.metadata.metrics["loss"]
 
     # Inspect the saved checkpoints.
     steps = store.list_steps()           # e.g. [10, 20, 30]
     latest = store.latest_step()         # most recent step
-    best = store.best_step(metric="loss")  # lowest-loss checkpoint
+    best = store.best_step("loss")       # lowest-loss checkpoint
 ```
 
-The unified `Trainer` wires this store automatically whenever
-`checkpoint_config.checkpoint_dir` is set, exposing `Trainer.save_checkpoint`
-and `Trainer.load_checkpoint` as thin wrappers over the store.
-
-`OrbaxCheckpointStore` also supports Flax `TrainState` payloads via
-`create_train_state`, `save_train_state`, and `restore_train_state` for
-workflows that need to persist optimizer state alongside model parameters.
+The unified `Trainer` builds this store whenever
+`checkpoint_config.checkpoint_dir` is set (by default it is `None` and nothing
+is saved), and `fit` saves the global step every `checkpoint_frequency` epochs,
+so a second `fit` on the same trainer adds steps. `Trainer.save_checkpoint(step,
+loss, physics_metadata=None)` saves the model's state with the trainer's epoch, the
+loss as the `loss` metric and opifex as the producer, and returns the
+checkpoint's directory. `Trainer.load_checkpoint(step)` restores that state
+into the live model and returns substrax's `Checkpoint` record; a step the
+directory does not hold raises `CheckpointNotFoundError`. Checkpoints written
+by opifex 0.2.7 and earlier (the module as the one payload) load unchanged, and
+`python -m substrax.checkpoint upgrade <old> <new>` rewrites a directory of
+them in the current format.
 
 This thorough training guide provides the complete infrastructure for advanced scientific machine learning training. The modular, component-based architecture enables researchers to build sophisticated training workflows while maintaining the flexibility needed for modern scientific applications.
 

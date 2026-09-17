@@ -9,6 +9,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
+from flax import nnx
 from substrax.checkpoint import OrbaxCheckpointStore
 from substrax.tracking import MLFlowLogger
 
@@ -17,10 +18,13 @@ from opifex.mlops.records import flatten_physics_metrics, physics_metadata_param
 
 
 if TYPE_CHECKING:
-    from substrax.checkpoint import ModelLike
+    from collections.abc import Mapping
 
     from opifex.mlops.backends.run_logger import RunLogger
     from opifex.mlops.experiment import ExperimentConfig, PhysicsMetadata, PhysicsMetrics
+
+
+MODEL_ITEM = "model"
 
 
 _TRACKING_URI_VARIABLE = "MLFLOW_TRACKING_URI"
@@ -130,35 +134,33 @@ class MLflowBackend(Experiment):
 
     async def log_model(
         self,
-        model: ModelLike,
+        model: nnx.Module | Mapping[str, Any],
         model_name: str,
         physics_metadata: PhysicsMetadata | None = None,
     ) -> None:
         """Log ``model`` as an Orbax checkpoint under ``model_name`` in the run's artifacts.
 
-        The checkpoint is substrax's: the model state under step 0 next to a JSON
-        metadata record carrying the framework, the physics domain and
-        ``physics_metadata``. ``OrbaxCheckpointStore(<artifact dir>).restore(step=0)``
-        reads it back.
+        The checkpoint is substrax's: the ``model`` item at step 0 (a module's
+        ``nnx.state``, or the mapping as given) beside a JSON record whose extra
+        values carry the framework, the physics domain and ``physics_metadata``.
+        ``OrbaxCheckpointStore(<artifact dir>).restore(0)`` reads it back.
 
         Args:
-            model: An ``nnx.Module``, a Flax ``TrainState`` or a state dictionary.
+            model: An ``nnx.Module`` or a state mapping.
             model_name: Artifact directory of the checkpoint within the run.
-            physics_metadata: Recorded in the checkpoint's metadata when given.
+            physics_metadata: Recorded in the checkpoint's extra values when given.
         """
-        additional_metadata = {
+        extra: dict[str, Any] = {
             "framework": self.config.framework.value,
             "physics_domain": self.config.physics_domain.value,
         }
+        if physics_metadata is not None:
+            extra["physics_metadata"] = asdict(physics_metadata)
+        state = nnx.state(model) if isinstance(model, nnx.Module) else model
         with tempfile.TemporaryDirectory() as staging:
             directory = Path(staging) / model_name
             with OrbaxCheckpointStore(directory, max_to_keep=1) as store:
-                store.save(
-                    model,
-                    step=0,
-                    physics_metadata=None if physics_metadata is None else asdict(physics_metadata),
-                    additional_metadata=additional_metadata,
-                )
+                store.save(0, {MODEL_ITEM: state}, extra=extra)
             self.logger.log_artifacts(directory, model_name)
         self._artifacts[model_name] = model_name
 

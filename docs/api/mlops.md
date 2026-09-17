@@ -136,15 +136,19 @@ through `log_parameters`. `get_metrics()`, `get_parameters()` and
 
 `log_model(model, model_name, physics_metadata=None)` writes an Orbax checkpoint
 with substrax's `OrbaxCheckpointStore` and logs the directory under `model_name`
-in the run's artifacts. `model` is an `nnx.Module`, a Flax `TrainState` or a state
-dictionary; the checkpoint's metadata records the framework, the physics domain
-and `physics_metadata`. Read it back with the same store:
+in the run's artifacts. `model` is an `nnx.Module` (its `nnx.state` is saved) or a
+state mapping, stored as the `model` item at step 0; the record's extra values
+carry the framework, the physics domain and `physics_metadata`. Read it back with
+the same store, onto the state of a module built the same way:
 
 ```python
+from flax import nnx
 from substrax.checkpoint import OrbaxCheckpointStore
 
-with OrbaxCheckpointStore(downloaded_artifact_dir, create=False) as store:
-    state, metadata = store.restore(step=0)
+with OrbaxCheckpointStore(downloaded_artifact_dir) as store:
+    checkpoint = store.restore(0, templates={"model": nnx.state(model)})
+nnx.update(model, checkpoint.items["model"])
+checkpoint.metadata.extra["physics_metadata"]
 ```
 
 ## Backends

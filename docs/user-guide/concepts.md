@@ -327,17 +327,17 @@ else:
 Robust model saving and loading:
 
 ```python
-from opifex.core.training.config import TrainingConfig
+from opifex.core.training.config import CheckpointConfig, TrainingConfig
 
 config = TrainingConfig(
-    checkpoint_frequency=100,
-    checkpoint_config={
-        "save_directory": "./checkpoints",
-        "max_to_keep": 5,
-        "save_best_only": True
-    }
+    checkpoint_frequency=100,  # epochs between checkpoints
+    checkpoint_config=CheckpointConfig(checkpoint_dir="./checkpoints", max_to_keep=5),
 )
 ```
+
+Without a `checkpoint_dir` the trainer saves nothing. Each checkpoint is
+substrax's format: the model's state as the `model` item at the global step,
+with the epoch and the loss in its record.
 
 ### Performance Optimization
 

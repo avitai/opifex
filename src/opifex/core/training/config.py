@@ -145,13 +145,15 @@ class CheckpointConfig:
     """Configuration for checkpointing.
 
     Attributes:
-        checkpoint_dir: Directory for saving checkpoints
+        checkpoint_dir: Directory for saving checkpoints; ``None`` (the default)
+            saves nothing, so a trainer never writes into the working directory
+            unless a directory is named.
         save_frequency: Frequency of checkpoint saves
         max_to_keep: Maximum number of checkpoints to keep
         save_best_only: Whether to save only the best checkpoint
     """
 
-    checkpoint_dir: str = "./checkpoints"
+    checkpoint_dir: str | None = None
     save_frequency: int = 50
     max_to_keep: int = 5
     save_best_only: bool = False

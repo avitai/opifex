@@ -211,14 +211,17 @@ class TestLogModel:
         (logged, artifact_path) = recorder.artifacts[-1]
         assert artifact_path == "fno"
         assert not list(logged.rglob("*.pkl"))
-        with OrbaxCheckpointStore(logged, create=False) as store:
+        with OrbaxCheckpointStore(logged) as store:
             assert store.list_steps() == [0]
-            restored, metadata = store.restore(step=0)
-        assert isinstance(restored, dict)
+            checkpoint = store.restore(0)
+        restored = checkpoint.items["model"]
         assert jnp.array_equal(restored["kernel"], state["kernel"])
-        assert metadata["physics_metadata"]["pde_type"] == "burgers"
-        assert metadata["physics_domain"] == "neural-operators"
-        assert metadata["framework"] == "jax"
+        extra = checkpoint.metadata.extra
+        physics = extra["physics_metadata"]
+        assert isinstance(physics, dict)
+        assert physics["pde_type"] == "burgers"
+        assert extra["physics_domain"] == "neural-operators"
+        assert extra["framework"] == "jax"
         assert experiment.get_artifacts()["fno"] == "fno"
 
     async def test_log_model_without_metadata_records_the_domain_only(
@@ -227,10 +230,26 @@ class TestLogModel:
         await experiment.log_model({"w": jnp.ones(2)}, "plain")
 
         (logged, _) = recorder.artifacts[-1]
-        with OrbaxCheckpointStore(logged, create=False) as store:
-            _, metadata = store.restore(step=0)
-        assert "physics_metadata" not in metadata
-        assert metadata["physics_domain"] == "neural-operators"
+        with OrbaxCheckpointStore(logged) as store:
+            extra = store.read_metadata(0).extra
+        assert "physics_metadata" not in extra
+        assert extra["physics_domain"] == "neural-operators"
+
+    async def test_log_model_takes_a_module_and_saves_its_state(
+        self, experiment: MLflowBackend, recorder: RecordingRunLogger
+    ) -> None:
+        from flax import nnx
+
+        module = nnx.Linear(2, 3, rngs=nnx.Rngs(0))
+
+        await experiment.log_model(module, "linear")
+
+        (logged, _) = recorder.artifacts[-1]
+        template = nnx.Linear(2, 3, rngs=nnx.Rngs(1))
+        with OrbaxCheckpointStore(logged) as store:
+            checkpoint = store.restore(0, templates={"model": nnx.state(template)})
+        nnx.update(template, checkpoint.items["model"])
+        assert jnp.array_equal(template.kernel[...], module.kernel[...])
 
 
 @pytest.mark.skipif(importlib.util.find_spec("mlflow") is None, reason="mlflow extra absent")

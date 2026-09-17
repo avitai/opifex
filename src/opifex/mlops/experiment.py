@@ -13,9 +13,10 @@ from typing import Any, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import datetime
 
-    from substrax.checkpoint import ModelLike
+    from flax import nnx
 
 
 class PhysicsDomain(Enum):
@@ -280,11 +281,11 @@ class Experiment(ABC):
     @abstractmethod
     async def log_model(
         self,
-        model: ModelLike,
+        model: nnx.Module | Mapping[str, Any],
         model_name: str,
         physics_metadata: PhysicsMetadata | None = None,
     ) -> None:
-        """Log a trained model with scientific metadata."""
+        """Log a trained model (a module or its state mapping) with scientific metadata."""
 
     @abstractmethod
     async def end(self, status: str = "completed") -> None:
