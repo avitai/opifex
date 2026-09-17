@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The progressive GPU tester times its operations through `calibrax.profiling.time_calls`
+  (three warm-up calls, ten timed calls that each wait for their result), and the GST-PINN
+  self-training loss averages over the reliable points through `calibrax.metrics.reduce_values`,
+  so an empty reliable set gives zero as before without a hand-written guard.
+- Requires `calibrax>=0.1.8` and `avitai-artifex>=0.1.10`; the lock moves both.
+
+### Removed
+
+- `opifex.core.timing.block_until_ready`; the benchmarking code calls `jax.block_until_ready`,
+  which already synchronises every array in a nested value and returns it.
+
 ## [0.2.7] - 2026-09-17
 
 ### Changed
