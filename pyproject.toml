@@ -53,12 +53,12 @@ dependencies = [
   # loads triton's 441 MB native library in every CPU test process, which segfaults
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
-  "avitai-artifex>=0.1.5",
-  "calibrax>=0.1.5",
-  "datarax>=0.1.10",
+  "avitai-artifex>=0.1.8",
+  "calibrax>=0.1.6",
+  "datarax>=0.1.11",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
-  "substrax>=0.1.8",
+  "substrax>=0.1.9",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
   "tfp-nightly>=0.26.0.dev20251024"
