@@ -65,6 +65,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from substrax.artifacts import resolve_output_dir
+from substrax.runtime import configure_entry_point_logging
 
 from opifex.benchmarking.analysis_engine import AnalysisEngine
 from opifex.benchmarking.evaluation_engine import BenchmarkEvaluator
@@ -81,8 +82,6 @@ from opifex.neural.operators.specialized.uno import create_uno
 
 
 # %%
-# Setup logging
-logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger(__name__)
 
 # %% [markdown]
@@ -1010,6 +1009,7 @@ on Darcy flow, so the accuracy column is meaningful for comparison.
 # %%
 def main() -> dict[str, float | int]:
     """Run the comparative study and return a finite summary of the results."""
+    configure_entry_point_logging(logging.INFO, stream=sys.stdout)
     study = NeuralOperatorComparativeStudy(
         resolution_sizes=[32, 64],
         n_train=1000,
