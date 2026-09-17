@@ -501,9 +501,10 @@ docs/development/nnx-migration.md
 .agents
 skills-lock.json
 
-# Benchmark output data and one-off scripts
+# Benchmark output data and one-off scripts, at the repository root only: an unanchored
+# `benchmarks/` also hid `tests/benchmarks/`, so a new test there never reached the hooks.
 benchmark-data/
-benchmarks/
+/benchmarks/
 docs/deployment/DEPLOYMENT_SUMMARY.md
 
 bandit-report.json
