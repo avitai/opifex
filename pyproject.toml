@@ -55,7 +55,7 @@ dependencies = [
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.10",
   "calibrax>=0.1.8",
-  "datarax>=0.1.11",
+  "datarax>=0.1.12",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
   "substrax>=0.1.9",

@@ -1234,7 +1234,7 @@ wheels = [
 
 [[package]]
 name = "datarax"
-version = "0.1.11"
+version = "0.1.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-record" },
@@ -1252,9 +1252,9 @@ dependencies = [
     { name = "substrax" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/fe/def6fe5e87da0e1b1d9fc47027177ad5d02577ab0265357f8aa57f82f1cb/datarax-0.1.11.tar.gz", hash = "sha256:ffe1bc9dc2cdbd7149ab5273ecb50bc610bf7ffec3446c1f331b4f4d974d658d", size = 231554, upload-time = "2026-09-17T06:01:09.155Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/d3/23c53807546ffdc811f30984d80dfb27db47d118efd22bfe011c7f15fbd6/datarax-0.1.12.tar.gz", hash = "sha256:188da663c4cf0bf7eb137a210645568cc8ffbcdddbcb269dcd9b803d796fb01f", size = 235318, upload-time = "2026-09-17T16:21:10.411Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/cd/416598319153b16737b6a60476506c51ae20e7fb6db55c9129e1b6b2119b/datarax-0.1.11-py3-none-any.whl", hash = "sha256:bcb6faa6eb7cc2c10a541b703b128a2c73ae5d2f78b8247cab7ac08f22375b61", size = 279273, upload-time = "2026-09-17T06:01:06.672Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/4d/67581cae87050927785a224eb17dd6d038b723aa1a1bdd65db012fb117bc/datarax-0.1.12-py3-none-any.whl", hash = "sha256:08f6f99c8607be4f5473f2a1de741ad83e9a5c084b22c6bc75291f77aae0c6d8", size = 282662, upload-time = "2026-09-17T16:21:08.239Z" },
 ]
 
 [[package]]
@@ -4807,7 +4807,7 @@ requires-dist = [
     { name = "calibrax", specifier = ">=0.1.8" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
-    { name = "datarax", specifier = ">=0.1.11" },
+    { name = "datarax", specifier = ">=0.1.12" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
     { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
