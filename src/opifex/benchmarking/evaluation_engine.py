@@ -20,7 +20,6 @@ from calibrax.profiling import TimingCollector
 from calibrax.statistics import StatisticalAnalyzer
 
 from opifex.benchmarking._shared import resolve_benchmark_output_dir
-from opifex.core.timing import block_until_ready
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +96,7 @@ class BenchmarkEvaluator:
         # Warm-up run
         try:
             result_warmup = jit_forward(model, input_data)
-            block_until_ready(result_warmup)
+            jax.block_until_ready(result_warmup)
         except Exception as e:
             raise RuntimeError(f"Model forward pass failed during warm-up: {e}") from e
 
@@ -105,7 +104,7 @@ class BenchmarkEvaluator:
         start_time = time.perf_counter()
         try:
             predictions = jit_forward(model, input_data)
-            block_until_ready(predictions)
+            jax.block_until_ready(predictions)
         except Exception as e:
             raise RuntimeError(f"Model forward pass failed during evaluation: {e}") from e
         execution_time = time.perf_counter() - start_time
@@ -213,7 +212,7 @@ class BenchmarkEvaluator:
         def _forward_iter():
             for _ in range(num_runs + 1):
                 result_iter = jit_forward(model, input_data)
-                block_until_ready(result_iter)
+                jax.block_until_ready(result_iter)
                 yield result_iter
 
         sample = collector.measure_iteration(_forward_iter(), num_batches=num_runs + 1)

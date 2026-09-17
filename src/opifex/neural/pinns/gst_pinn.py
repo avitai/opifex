@@ -19,6 +19,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from calibrax.metrics import reduce_values
 from flax import nnx
 from jaxtyping import Array
 
@@ -222,13 +223,10 @@ class GradientEnhancedPINN(nnx.Module):
         # Current predictions
         current = self(x)
 
-        # MSE only on reliable points
-        diff = (current - pseudo_labels) ** 2
-        # Mean over output dim, then masked mean over batch
-        per_point = jnp.mean(diff, axis=-1)  # (batch,)
-        # Use mask as weights; avoid division by zero
-        n_reliable = jnp.maximum(jnp.sum(mask), 1.0)
-        return jnp.sum(per_point * mask) / n_reliable
+        # MSE over the output dimension, averaged over the reliable points only; with no
+        # reliable point the loss is zero rather than 0 / 0.
+        per_point = jnp.mean((current - pseudo_labels) ** 2, axis=-1)  # (batch,)
+        return reduce_values(per_point, mask=mask, reduction="mean")
 
 
 def create_gst_pinn(
