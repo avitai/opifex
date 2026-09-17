@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '0 0 * * 1'  # Weekly on Monday
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security-audit:
     runs-on: ubuntu-latest

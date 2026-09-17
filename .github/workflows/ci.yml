@@ -7,6 +7,12 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# A newer push to the same ref cancels the run it supersedes, so two pushes in a row
+# never queue two full matrices.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
@@ -43,24 +49,24 @@ jobs:
     name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
     needs: lint
     runs-on: ${{ matrix.os }}
-    # Fast PR gate: slow/integration suites run in tests-extended.yml. The ~7.5k
-    # JAX unit tests are parallelised two ways — pytest-split shards the suite
-    # across `group` runners, and `-n auto` (xdist) fans each shard across the
-    # runner's cores. Per-shard wall time is roughly total / 6. Observed shards
-    # run ~65-105 min on the slower macOS-14 runners, so the cap is 180 min: it
-    # clears the heaviest shard with margin while still bounding hangs (well below
-    # the 6h job ceiling). pytest-split falls back to an even split by test count;
-    # committing a .test_durations file (generate with `pytest --store-durations`,
-    # ideally from a CI run) would balance by execution time and tighten this. A
-    # per-test --timeout=1800 (raised from the default 300 below) bounds
-    # individual stuck tests.
+    # Fast PR gate: slow/integration suites and the macOS lane run in
+    # tests-extended.yml. The ~7.5k JAX unit tests are parallelised two ways:
+    # pytest-split shards the suite across `group` runners, and `-n auto` (xdist)
+    # fans each shard across the runner's cores. Per-shard wall time is roughly
+    # total / 6; the cap of 180 min clears the heaviest shard with margin while
+    # still bounding hangs (well below the 6h job ceiling). pytest-split falls
+    # back to an even split by test count; committing a .test_durations file
+    # (generate with `pytest --store-durations`, ideally from a CI run) would
+    # balance by execution time and tighten this. A per-test --timeout=1800
+    # (raised from the default 300 below) bounds individual stuck tests.
     timeout-minutes: 180
     strategy:
       matrix:
-        # The macOS-14 runners queue for hours and run the same tests; they run on
-        # pushes to main only, so a branch or pull request is gated by the ubuntu
-        # shards alone and the merge to main measures both platforms.
-        os: ${{ fromJSON(github.ref == 'refs/heads/main' && '["ubuntu-latest", "macos-14"]' || '["ubuntu-latest"]') }}
+        # ubuntu alone: a push to main used to add six macOS-14 shards per Python
+        # version, which held the organisation's macOS runners for hours and queued
+        # every other repository's macOS job behind them. The macOS lane runs
+        # nightly in tests-extended.yml under a runner cap.
+        os: [ubuntu-latest]
         python-version: ["3.12", "3.13"]
         group: [1, 2, 3, 4, 5, 6]
       fail-fast: false

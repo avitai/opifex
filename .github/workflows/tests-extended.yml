@@ -2,13 +2,69 @@ name: Extended Tests
 
 # Slow, integration, e2e, performance, benchmark, distributed and gpu_required
 # suites are deselected from the fast PR gate (ci.yml) and run here on a nightly
-# schedule and on demand, so their results are isolated and easy to inspect.
+# schedule and on demand, so their results are isolated and easy to inspect. The
+# macOS unit lane runs here too: on the PR gate it held the organisation's macOS
+# runners for hours per push to main.
 on:
   schedule:
     - cron: "0 3 * * *" # nightly at 03:00 UTC
   workflow_dispatch:
 
 jobs:
+  macos-unit-tests:
+    name: Unit Tests (macos-14, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
+    runs-on: macos-14
+    # Observed shards run ~65-105 min on macOS-14; 180 min clears the heaviest
+    # with margin while bounding hangs.
+    timeout-minutes: 180
+    strategy:
+      # At most three macOS runners at a time, so the other repositories' macOS
+      # jobs get through while this lane runs.
+      max-parallel: 3
+      matrix:
+        python-version: ["3.12", "3.13"]
+        group: [1, 2, 3, 4, 5, 6]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-suffix: "test-macos-14-${{ matrix.python-version }}"
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev --extra test
+
+      - name: Ensure ripgrep is available
+        # A few migration-guard tests shell out to `rg`; macOS images lack it.
+        run: command -v rg >/dev/null 2>&1 || brew install ripgrep
+
+      - name: Write the format-2 checkpoint fixture
+        uses: ./.github/actions/format2-module-fixture
+
+      - name: Run the unit suite
+        env:
+          JAX_PLATFORMS: cpu
+          JAX_ENABLE_X64: "0"
+          JAX_COMPILATION_CACHE_DIR: ${{ github.workspace }}/.cache/jax
+        # The same selection and sharding as the PR gate; coverage is the
+        # ubuntu shards' job, so the threshold is off here.
+        run: |
+          uv run pytest tests/ -n auto \
+            --splits 6 --group ${{ matrix.group }} --splitting-algorithm least_duration \
+            -m "not slow and not integration and not e2e and not performance and not benchmark and not distributed and not gpu_required" \
+            --timeout=1800 \
+            --cov-fail-under=0
+
   extended-tests:
     name: Extended Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

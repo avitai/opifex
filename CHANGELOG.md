@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI: the unit suite's macOS lane runs nightly in the extended workflow, sharded under a cap
+  of three runners at a time, and the push and pull-request gate runs on ubuntu alone. A push
+  to main used to add twelve macOS-14 shards that held the organisation's macOS runners for
+  hours and queued every other repository's macOS job behind them. Every workflow a push
+  triggers now cancels the run a newer push supersedes.
 - Checkpoints are substrax's format 3. `Trainer.save_checkpoint(step, loss,
   physics_metadata=None)` saves the model's state as the `model` item with the trainer's
   epoch, the loss as the `loss` metric, opifex as the producer and the physics values in the
