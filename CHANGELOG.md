@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-09-16
+
 ### Changed
 
 - Requires `datarax>=0.1.10`; the lock moves datarax from 0.1.9 to 0.1.10 and, through it,
