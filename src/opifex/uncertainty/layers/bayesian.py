@@ -7,11 +7,10 @@ dense / Fourier-spectral block.
 RNG safety:
 
 * Constructor ``rngs`` initializes parameters only.
-* Stochastic sampling routes every call through
-  ``artifex.generative_models.core.rng.extract_rng_key`` — caller-owned
-  ``nnx.Rngs`` (advancing the ``"posterior"`` stream) or an explicit
-  ``jax.Array`` key. No hidden ``jax.random.PRNGKey(...)`` seeds in the
-  production path.
+* Stochastic sampling takes every key through :func:`substrax.rng.key_from`:
+  a caller-owned ``nnx.Rngs`` (advancing the ``"posterior"`` stream) or an
+  explicit ``jax.Array`` key. No hidden ``jax.random.PRNGKey(...)`` seeds in
+  the production path.
 
 KL math: delegated to
 :func:`opifex.uncertainty.kernels.bayesian.diagonal_gaussian_kl` which itself
@@ -23,8 +22,8 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
+from substrax.rng import key_from
 
 from opifex.uncertainty.kernels.bayesian import diagonal_gaussian_kl, sample_diagonal_gaussian
 
@@ -115,7 +114,7 @@ class BayesianLinear(nnx.Module):
             weight = self.weight_mean[...]
             bias = self.bias_mean[...]
         else:
-            key = extract_rng_key(
+            key = key_from(
                 rngs if rngs is not None else self.rngs,
                 streams=_POSTERIOR_STREAMS,
                 context="BayesianLinear sampling",
@@ -252,7 +251,7 @@ class BayesianSpectralConvolution(nnx.Module):
         if is_deterministic:
             weights = self._mean_weights()
         else:
-            key = extract_rng_key(
+            key = key_from(
                 rngs if rngs is not None else self.rngs,
                 streams=_POSTERIOR_STREAMS,
                 context="BayesianSpectralConvolution sampling",

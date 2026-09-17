@@ -46,8 +46,8 @@ from typing import Protocol, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
+from substrax.rng import key_from
 
 from opifex.uncertainty._predictive import ensemble_predictive
 from opifex.uncertainty.registry import DefaultStrategy, UQCapability
@@ -332,9 +332,7 @@ class _WrappedSWAGModel:
 
     def predict_distribution(self, x: jax.Array, *, rngs: nnx.Rngs) -> PredictiveDistribution:
         """Return the SWAG predictive distribution by sampling the weight posterior at ``x``."""
-        key = extract_rng_key(
-            rngs, streams=_SWAG_STREAMS, context="SWAGAdapter.predict_distribution"
-        )
+        key = key_from(rngs, streams=_SWAG_STREAMS, context="SWAGAdapter.predict_distribution")
         weight_samples = self._sample_weights(key)
 
         def _forward(_carry: None, flat_params: jax.Array) -> tuple[None, jax.Array]:

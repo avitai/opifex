@@ -24,8 +24,8 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx
+from substrax.rng import key_from
 
 from opifex.neural.bayesian.config import FidelityConfig, MultiFidelityConfig
 from opifex.uncertainty.layers.bayesian import BayesianLinear
@@ -703,7 +703,7 @@ class ProbabilisticPINN(nnx.Module):
                 metadata=(("method", "deterministic"), ("num_samples", 1)),
             )
 
-        key = extract_rng_key(
+        key = key_from(
             rngs, streams=_PINN_RNG_STREAMS, context="ProbabilisticPINN.predict_distribution"
         )
         sample_keys = jax.random.split(key, num_samples)
@@ -957,7 +957,7 @@ class ProbabilisticPINN(nnx.Module):
         # Noisy prediction; perturbation key comes from caller-owned rngs
         # (advancing the ``noise`` stream when present, falling back to
         # ``default``).
-        key = extract_rng_key(self.rngs, streams=("noise", "default"), context="robust_loss noise")
+        key = key_from(self.rngs, streams=("noise", "default"), context="robust_loss noise")
         noise = jax.random.normal(key, x.shape) * noise_scale
         x_noisy = x + noise
         noisy_pred = self(x_noisy, deterministic=True)
@@ -1087,9 +1087,7 @@ class RobustPINNOptimizer(nnx.Module):
         prediction to a Gaussian perturbation drawn from caller-owned
         ``rngs``; no hidden seed.
         """
-        key = extract_rng_key(
-            rngs, streams=("noise", "default"), context="robustness penalty noise"
-        )
+        key = key_from(rngs, streams=("noise", "default"), context="robustness penalty noise")
         noise = jax.random.normal(key, x.shape) * noise_scale
         x_noisy = x + noise
 
@@ -1156,7 +1154,7 @@ class RobustPINNOptimizer(nnx.Module):
                 pred_result.get("std", jnp.zeros(x_candidates.shape[0])),
             )
         else:
-            key = extract_rng_key(
+            key = key_from(
                 rngs,
                 streams=("active_learning", "default"),
                 context="active learning random selection",

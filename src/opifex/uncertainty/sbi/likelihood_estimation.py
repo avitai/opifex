@@ -33,11 +33,11 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 import optax
-from artifex.generative_models.core.rng import extract_rng_key
 from artifex.generative_models.models.flow.conditional import (  # noqa: TC002 — pyproject dep, kept eager
     ConditionalRealNVP,
 )
 from flax import nnx, struct
+from substrax.rng import key_from
 
 from opifex.uncertainty.sbi._base import (
     _build_conditional_flow,
@@ -122,9 +122,7 @@ class NeuralLikelihoodEstimator:
             backend=self.backend,
             rngs=rngs,
         )
-        train_key = extract_rng_key(
-            rngs, streams=_TRAIN_STREAMS, context="NeuralLikelihoodEstimator.fit"
-        )
+        train_key = key_from(rngs, streams=_TRAIN_STREAMS, context="NeuralLikelihoodEstimator.fit")
         # NLE models ``q(x | theta)`` — the flow's input is ``x`` and the
         # conditioning variable is ``theta`` (the inverse of NPE's roles).
         flow = _build_conditional_flow(
@@ -173,7 +171,7 @@ class NeuralLikelihoodEstimator:
             log_lik = jnp.squeeze(flow.log_prob(x_batch, condition=theta_batch), axis=0)
             return log_lik + log_prior(theta)
 
-        sample_key = extract_rng_key(
+        sample_key = key_from(
             rngs, streams=_SAMPLE_STREAMS, context="NeuralLikelihoodEstimator.predict_distribution"
         )
         return _mcmc_posterior_predictive(

@@ -6,8 +6,8 @@ conforms to :class:`opifex.uncertainty.inference_backends.InferenceBackendProtoc
 It must:
 
 * delegate to Artifex's sampler functions (no direct ``blackjax`` import);
-* route every RNG argument through
-  ``artifex.generative_models.core.rng.extract_rng_key``;
+* take every key from an explicit owner through ``substrax.rng.key_from``, so an
+  ``nnx.Rngs`` without a sampling stream is refused rather than seeded silently;
 * return a :class:`BackendResult` carrying the raw posterior samples and a
   populated :class:`BackendDiagnostics`;
 * convert posterior samples to a :class:`PredictiveDistribution` via
@@ -23,10 +23,8 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import pytest
-from artifex.generative_models.core.rng import (
-    extract_rng_key as artifex_extract_rng_key,
-)
 from flax import nnx
+from substrax.rng import MissingRngStreamError
 
 from opifex.uncertainty.inference_backends import (
     BackendDiagnostics,
@@ -199,26 +197,12 @@ def test_blackjax_backend_delegates_to_artifex_mala_sampling(
     assert calls == ["mala_sampling"]
 
 
-def test_blackjax_backend_routes_rng_through_extract_rng_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """RNG ownership is enforced via Artifex's canonical helper."""
-    calls: list[str] = []
-
-    def spy(
-        rng: jax.Array | nnx.Rngs | None,
-        *,
-        streams: tuple[str, ...] = ("sample", "default"),
-        context: str = "sampling",
-    ) -> jax.Array:
-        calls.append(context)
-        return artifex_extract_rng_key(rng, streams=streams, context=context)
-
-    monkeypatch.setattr("opifex.uncertainty.inference_backends.blackjax.extract_rng_key", spy)
+def test_blackjax_backend_refuses_rngs_without_a_sampling_stream() -> None:
+    """An ``nnx.Rngs`` holding none of the sampling streams is refused, naming the backend."""
     backend = _make_backend("nuts")
-    backend.fit(_gaussian_log_density, rngs=nnx.Rngs(sample=0))
-    assert calls, "extract_rng_key must be invoked at every sampling entry point"
-    assert all("BlackJAX" in c for c in calls)
+
+    with pytest.raises(MissingRngStreamError, match="BlackJAXBackend"):
+        backend.fit(_gaussian_log_density, rngs=nnx.Rngs(params=0))
 
 
 def test_blackjax_backend_predict_distribution_returns_predictive_distribution() -> None:

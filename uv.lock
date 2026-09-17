@@ -4908,7 +4908,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "sqlalchemy", marker = "extra == 'platform'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'platform'", specifier = ">=2.0.0" },
-    { name = "substrax", specifier = ">=0.1.7" },
+    { name = "substrax", specifier = ">=0.1.8" },
     { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.7" },
     { name = "tensorboard-plugin-profile", marker = "extra == 'profiling'", specifier = ">=2.20.6" },
     { name = "tensorflow", marker = "extra == 'profiling'", specifier = ">=2.20.0" },
@@ -6978,18 +6978,19 @@ wheels = [
 
 [[package]]
 name = "substrax"
-version = "0.1.7"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "flax" },
     { name = "jax" },
     { name = "jaxlib" },
     { name = "numpy" },
+    { name = "optax" },
     { name = "orbax-checkpoint" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6e/2a/ec123f78e47f1d56d155b429988077c4053e4b60713ba6b81960e6903654/substrax-0.1.7.tar.gz", hash = "sha256:ab6de9d35413b3f94e2820d3ce497d482d1a8087256355600d077fb7190fd085", size = 64728, upload-time = "2026-09-15T00:53:06.559Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/bf/4a6aabe524e639942b3b8f6534d173385837864336424c160087d624fc77/substrax-0.1.8.tar.gz", hash = "sha256:435192ec6ef3e195b92901ed0eb8a7fb92049bf176bad68fe25c5ae6aebf5a3b", size = 71604, upload-time = "2026-09-17T04:58:13.659Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/d7/896e86cf92a64205ce4ff8b97ead6cb5c1e0c85c18d93acb6b5ef89c7d6c/substrax-0.1.7-py3-none-any.whl", hash = "sha256:d57331a55b7ebb08e2b3a8b042265c04e9965410ca4e15e38daedce7e88efe5b", size = 75159, upload-time = "2026-09-15T00:53:05.022Z" },
+    { url = "https://files.pythonhosted.org/packages/44/87/e94afa4195f1628ad6131b27baa4ee2c60cb420e4ab9434fde90b8b489f5/substrax-0.1.8-py3-none-any.whl", hash = "sha256:5837d28281110bc0cffdc5a7c90e6f8d36481b91ce73873551632ce8285de445", size = 85039, upload-time = "2026-09-17T04:58:11.945Z" },
 ]
 
 [package.optional-dependencies]

@@ -8,9 +8,8 @@ RNG safety:
 * Constructor ``rngs`` initializes parameters only.
 * Stochastic sampling routes through caller-owned ``nnx.Rngs`` (advancing
   the named ``"posterior"`` stream) or an explicit ``jax.Array`` key.
-* Resolution goes through
-  ``artifex.generative_models.core.rng.extract_rng_key`` — canonical Avitai
-  helper.
+* Resolution goes through ``substrax.rng.key_from``: an ``nnx.Rngs`` without a
+  sampling stream is refused, naming the layer.
 * No hidden ``jax.random.PRNGKey(0)`` fallbacks in production paths.
 
 KL helper: ``kl_divergence()`` delegates to
@@ -23,8 +22,8 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import pytest
-from artifex.generative_models.core.rng import extract_rng_key as artifex_extract_rng_key
 from flax import nnx
+from substrax.rng import MissingRngStreamError
 
 from opifex.uncertainty.kernels.bayesian import diagonal_gaussian_kl
 from opifex.uncertainty.layers.bayesian import BayesianLinear, BayesianSpectralConvolution
@@ -102,28 +101,13 @@ def test_stored_stream_is_independent_of_caller_rngs() -> None:
     assert out.shape == (2, 3)
 
 
-def test_sampling_routes_through_artifex_extract_rng_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Both nnx.Rngs and jax.Array paths MUST go through Artifex's helper."""
-    calls: list[str] = []
-
-    def spy(
-        rng: jax.Array | nnx.Rngs | None,
-        *,
-        streams: tuple[str, ...] = ("sample", "default"),
-        context: str = "sampling",
-    ) -> jax.Array:
-        calls.append(context)
-        return artifex_extract_rng_key(rng, streams=streams, context=context)
-
-    monkeypatch.setattr("opifex.uncertainty.layers.bayesian.extract_rng_key", spy)
+def test_sampling_refuses_rngs_without_a_posterior_stream() -> None:
+    """An ``nnx.Rngs`` holding none of the sampling streams is refused, naming the layer."""
     layer = _make_layer()
     x = jnp.ones((2, 4))
-    layer(x, rngs=nnx.Rngs(posterior=0))
-    layer(x, rngs=jax.random.PRNGKey(0))
-    assert len(calls) == 2
-    assert all("BayesianLinear" in c for c in calls)
+
+    with pytest.raises(MissingRngStreamError, match="BayesianLinear"):
+        layer(x, rngs=nnx.Rngs(params=0))
 
 
 def test_kl_divergence_matches_diagonal_gaussian_kl_helper() -> None:
@@ -191,7 +175,7 @@ def test_no_fixed_prngkey_in_production_path() -> None:
             offending.append(f"line {node.lineno}: {ast.unparse(node)}")
     assert not offending, (
         "BayesianLinear production path must not call jax.random.PRNGKey(...) "
-        "directly. Use call-time rngs via extract_rng_key. "
+        "directly. Use call-time rngs via substrax.rng.key_from. "
         f"Offending call sites: {offending}"
     )
 
@@ -367,24 +351,10 @@ def test_bayesian_spectral_1d_does_not_create_negative_h_weights() -> None:
     assert not hasattr(layer, "weight_neg_h_mean")
 
 
-def test_bayesian_spectral_routes_through_extract_rng_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    def spy(
-        rng: jax.Array | nnx.Rngs | None,
-        *,
-        streams: tuple[str, ...] = ("sample", "default"),
-        context: str = "sampling",
-    ) -> jax.Array:
-        calls.append(context)
-        return artifex_extract_rng_key(rng, streams=streams, context=context)
-
-    monkeypatch.setattr("opifex.uncertainty.layers.bayesian.extract_rng_key", spy)
+def test_bayesian_spectral_refuses_rngs_without_a_posterior_stream() -> None:
+    """The spectral layer refuses an ``nnx.Rngs`` without a sampling stream, naming itself."""
     layer = _make_spectral_2d()
     x = jnp.ones((1, 2, 8, 8))
-    layer(x, rngs=nnx.Rngs(posterior=0))
-    layer(x, rngs=jax.random.PRNGKey(0))
-    assert len(calls) == 2
-    assert all("BayesianSpectralConvolution" in c for c in calls)
+
+    with pytest.raises(MissingRngStreamError, match="BayesianSpectralConvolution"):
+        layer(x, rngs=nnx.Rngs(params=0))

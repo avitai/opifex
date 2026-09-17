@@ -40,8 +40,8 @@ from typing import Protocol
 
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from flax import nnx, struct
+from substrax.rng import key_from
 
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.curvature.fisher import empirical_fisher_diagonal
@@ -156,7 +156,7 @@ class _WrappedLaplaceModel:
 
     def predict_distribution(self, x: jax.Array, *, rngs: nnx.Rngs) -> PredictiveDistribution:
         """Sample parameters from the diagonal Laplace posterior and predict."""
-        key = extract_rng_key(
+        key = key_from(
             rngs,
             streams=_LAPLACE_STREAMS,
             context="LaplaceAdapterSpec.predict_distribution",

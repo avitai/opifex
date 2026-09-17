@@ -33,11 +33,11 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 import optax
-from artifex.generative_models.core.rng import extract_rng_key
 from artifex.generative_models.models.flow.conditional import (  # noqa: TC002 — pyproject dep, kept eager
     ConditionalRealNVP,
 )
 from flax import nnx, struct
+from substrax.rng import key_from
 
 from opifex.uncertainty._predictive import sample_based_predictive
 from opifex.uncertainty.sbi._base import (
@@ -161,9 +161,7 @@ class NeuralPosteriorEstimator:
         )
 
         # Build and train the conditional flow.
-        train_key = extract_rng_key(
-            rngs, streams=_TRAIN_STREAMS, context="NeuralPosteriorEstimator.fit"
-        )
+        train_key = key_from(rngs, streams=_TRAIN_STREAMS, context="NeuralPosteriorEstimator.fit")
         flow = self._build_flow(train_key=train_key)
         losses = self._train_flow(flow=flow, theta=theta, x=x, num_steps=self.num_steps)
 
@@ -187,7 +185,7 @@ class NeuralPosteriorEstimator:
         flow = require_fitted_state(
             self._flow, surface="NeuralPosteriorEstimator.predict_distribution"
         )
-        sample_key = extract_rng_key(
+        sample_key = key_from(
             rngs, streams=_SAMPLE_STREAMS, context="NeuralPosteriorEstimator.predict_distribution"
         )
         samples = _sample_posterior(
@@ -223,12 +221,12 @@ class NeuralPosteriorEstimator:
         current_flow = require_fitted_state(
             self._flow, surface="NeuralPosteriorEstimator.refine_round"
         )
-        proposal_key = extract_rng_key(
+        proposal_key = key_from(
             rngs,
             streams=("sbi_simulate", "sample", "default"),
             context="NeuralPosteriorEstimator.refine_round",
         )
-        sim_key = extract_rng_key(
+        sim_key = key_from(
             rngs,
             streams=("sbi_simulate", "sample", "default"),
             context="NeuralPosteriorEstimator.refine_round.simulate",
@@ -243,7 +241,7 @@ class NeuralPosteriorEstimator:
         if simulator.summary_fn is not None:
             x = simulator.summary_fn(x)
 
-        train_key = extract_rng_key(
+        train_key = key_from(
             rngs,
             streams=_TRAIN_STREAMS,
             context="NeuralPosteriorEstimator.refine_round.train",

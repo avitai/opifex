@@ -61,7 +61,6 @@ from typing import cast, TYPE_CHECKING
 import blackjax
 import jax
 import jax.numpy as jnp
-from artifex.generative_models.core.rng import extract_rng_key
 from blackjax.mcmc.hmc import (
     HMCState,  # noqa: TC002 — kept eager (pyproject dep) per opifex convention
 )
@@ -71,6 +70,7 @@ from flax import (
 )
 from jax.scipy.special import gammaln
 from jax.scipy.stats import norm as _norm
+from substrax.rng import key_from
 
 from opifex.discovery.sindy.library import CandidateLibrary  # noqa: TC001
 from opifex.uncertainty.types import PredictionInterval
@@ -262,7 +262,7 @@ class BayesianSINDy:
         log_density, init_position = self.build_log_density(x, x_dot)
         feature_names = tuple(self.library.get_feature_names())
 
-        key = extract_rng_key(rngs, streams=_POSTERIOR_STREAMS, context="BayesianSINDy.fit")
+        key = key_from(rngs, streams=_POSTERIOR_STREAMS, context="BayesianSINDy.fit")
         warmup_key, sample_key = jax.random.split(key)
 
         warmup = blackjax.window_adaptation(blackjax.nuts, log_density)
