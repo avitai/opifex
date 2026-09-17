@@ -53,7 +53,6 @@ seed) is held fixed, so the gap is attributable to the positional encoding alone
 """
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -63,6 +62,7 @@ import numpy as np
 # %%
 from calibrax.metrics.functional.regression import relative_l2_error
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
 from opifex.core.training import Trainer, TrainingConfig
@@ -249,8 +249,7 @@ def main() -> dict[str, float | int]:
     )
 
     # --- Visualisation: the two grid-coordinate channels GridEmbedding2D adds ---
-    output_dir = Path("docs/assets/examples/grid_embeddings")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("grid_embeddings").path
     embedding = GridEmbedding2D(in_channels=1, grid_boundaries=[[0.0, 1.0], [0.0, 1.0]])
     sample = jnp.asarray(x_test[:1]).transpose(0, 2, 3, 1)  # (1, H, W, 1)
     embedded_sample = np.asarray(embedding(sample))[0]  # (H, W, 3)

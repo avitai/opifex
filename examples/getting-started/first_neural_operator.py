@@ -55,7 +55,6 @@ This example uses Opifex APIs:
 
 # %%
 import time
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -66,6 +65,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.data.loaders import create_darcy_loader
@@ -245,8 +245,7 @@ def main() -> dict[str, float | int]:
     NUM_LAYERS = 4
     SEED = 42
 
-    OUTPUT_DIR = Path("docs/assets/examples/first_neural_operator")
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR = resolve_output_dir("first_neural_operator").path
 
     print()
     print(f"Training resolution: {TRAIN_RESOLUTION}x{TRAIN_RESOLUTION}")

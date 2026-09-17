@@ -64,6 +64,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.benchmarking.analysis_engine import AnalysisEngine
 from opifex.benchmarking.evaluation_engine import BenchmarkEvaluator
@@ -270,7 +271,7 @@ class NeuralOperatorComparativeStudy:
 
     def __init__(
         self,
-        output_dir: str = "benchmark_results/operator_benchmark",
+        output_dir: str | Path | None = None,
         resolution_sizes: list[int] | None = None,
         n_train: int = 1000,
         n_test: int = 100,
@@ -283,7 +284,8 @@ class NeuralOperatorComparativeStudy:
         """Initialize comparative study.
 
         Args:
-            output_dir: Directory to store results.
+            output_dir: Directory to store results; ``None`` is ``operator_benchmark`` under
+                ``$AVITAI_OUTPUT_DIR`` or the process's temporary output directory.
             resolution_sizes: Grid resolutions to test.
             n_train: Number of training samples for each dataset.
             n_test: Number of test samples for each dataset.
@@ -293,8 +295,9 @@ class NeuralOperatorComparativeStudy:
             hidden_channels: Hidden width shared by all operators.
             seed: Random seed for reproducibility.
         """
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir = resolve_output_dir(
+            "operator_benchmark", explicit=None if output_dir is None else Path(output_dir)
+        ).path
 
         self.resolution_sizes = resolution_sizes or [32, 64]
         self.n_train = n_train

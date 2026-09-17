@@ -76,15 +76,14 @@ EVAL_STEPS = 100  # inner steps at meta-test time
 TARGET_FRACTION = 0.1  # speedup target = 10% of the baseline's initial loss
 
 # Output directory for figures.
-OUTPUT_DIR = "docs/assets/examples/learn_to_optimize"
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
+from substrax.artifacts import resolve_output_dir
 
 # %%
 from opifex.optimization.l2o import (
@@ -131,6 +130,7 @@ any task where a method never reaches the target.
 # %%
 def main() -> dict[str, float | int]:
     """Meta-train an L2O optimiser on MLP-training tasks and benchmark it honestly."""
+    OUTPUT_DIR = resolve_output_dir("learn_to_optimize").path
     print("=" * 72)
     print("Opifex Example: Learn-to-Optimize (meta-trained per-parameter MLP optimiser)")
     print("=" * 72)
@@ -244,7 +244,6 @@ def main() -> dict[str, float | int]:
     # Step 4: figures.
     print()
     print("Generating figures...")
-    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     steps = jnp.arange(learned_curve.shape[0])
 
     _fig, (ax_meta, ax_curve) = plt.subplots(1, 2, figsize=(13, 5))

@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `storage_path` arguments accept a `Path` and default to `None`.
 - Requires `substrax>=0.1.7`, the release that carries `substrax.artifacts`,
   `substrax.runtime` and `substrax.testing`; the lock already held it.
+- Every example resolves its output directory through `substrax.artifacts.resolve_output_dir`
+  inside `main()`, under the name of its former `docs/assets/examples/<name>` directory:
+  with `AVITAI_OUTPUT_DIR` set the figures land in `<name>` under it, otherwise in a
+  per-process temporary directory. Running an example no longer writes into the working
+  tree, and importing one no longer names a directory. The two Darcy-flow analysis
+  examples and the operator benchmark's study take `None` for their directory arguments
+  and resolve the same way; a directory given is resolved against the working directory.
+  `AVITAI_OUTPUT_DIR="$PWD/docs/assets/examples"` regenerates the documentation figures in
+  place.
 
 ### Removed
 

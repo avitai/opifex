@@ -36,6 +36,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.neural.pinns.domain_decomposition import (
     Interface,
@@ -209,6 +210,7 @@ def total_loss(model, colloc_pts, xt_bc, u_bc, xt_ic, u_ic, config):
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate an XPINN on the 1D viscous Burgers equation."""
+    output_dir = resolve_output_dir("xpinn_helmholtz").path
     print("=" * 70)
     print("Opifex Example: XPINN on 1D Viscous Burgers Equation")
     print("=" * 70)
@@ -440,9 +442,9 @@ def main() -> dict[str, float | int]:
     axes[1, 2].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/xpinn_helmholtz/solution.png", dpi=150, bbox_inches="tight")
+    plt.savefig(output_dir / "solution.png", dpi=150, bbox_inches="tight")
     print()
-    print("Saved: docs/assets/examples/xpinn_helmholtz/solution.png")
+    print(f"Saved: {output_dir / 'solution.png'}")
     plt.close()
 
     # Analysis plots
@@ -467,8 +469,8 @@ def main() -> dict[str, float | int]:
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("docs/assets/examples/xpinn_helmholtz/analysis.png", dpi=150, bbox_inches="tight")
-    print("Saved: docs/assets/examples/xpinn_helmholtz/analysis.png")
+    plt.savefig(output_dir / "analysis.png", dpi=150, bbox_inches="tight")
+    print(f"Saved: {output_dir / 'analysis.png'}")
     plt.close()
 
     # Results summary

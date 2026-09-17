@@ -22,7 +22,6 @@
 # Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -31,6 +30,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 
 # %%
@@ -305,8 +305,7 @@ def main() -> dict[str, float | int]:
     bc_error = float(jnp.mean(jnp.abs(u_bc_left)) + jnp.mean(jnp.abs(u_bc_right))) / 2
     print(f"Boundary condition error: {bc_error:.6e}")
 
-    output_dir = Path("docs/assets/examples/burgers_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("burgers_pinn").path
 
     _fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     im0 = axes[0].imshow(

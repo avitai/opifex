@@ -89,7 +89,6 @@ error-corrected 3xTF32 path -- full fp32 accuracy at tensor-core speed.
 import time
 import warnings
 from dataclasses import dataclass
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -108,6 +107,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.neural.quantum.vmc import (
     FermiNet,
@@ -216,7 +216,6 @@ SYSTEMS = (
     ),
 )
 
-OUTPUT_DIR = Path("docs/assets/examples/vmc_atoms")
 
 CHEMICAL_ACCURACY_MHA = 1.594  # 1 kcal/mol in milli-Hartree
 
@@ -287,7 +286,7 @@ result for the table and the convergence plot.
 # %%
 def main() -> dict[str, float | int]:
     """Optimise all systems, render diagnostics, and return per-system energy errors."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR = resolve_output_dir("vmc_atoms").path
 
     print("=" * 70)
     print("Opifex Example: Variational Monte Carlo (H, He, H2)")

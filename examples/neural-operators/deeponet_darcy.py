@@ -44,7 +44,6 @@ to reach a low relative L2 error on Darcy flow.
 
 # %%
 import time
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -56,6 +55,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.deeponet import DeepONet
@@ -85,8 +85,6 @@ NUM_EPOCHS = 300
 LEARNING_RATE = 1e-3
 EVAL_BATCH_SIZE = 128  # Batch the test forward pass to bound memory use
 SEED = 42
-
-ASSETS_DIR = Path("docs/assets/examples/deeponet_darcy")
 
 
 # %% [markdown]
@@ -177,13 +175,12 @@ test split, saves the figures, and returns a small dict of finite metrics.
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate a DeepONet on the Darcy flow operator."""
+    ASSETS_DIR = resolve_output_dir("deeponet_darcy").path
     print(f"JAX backend: {jax.default_backend()}")
     print(f"JAX devices: {jax.devices()}")
     print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
     print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
     print(f"Sensors: {N_SENSORS}, Latent dim: {LATENT_DIM}")
-
-    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Load Darcy flow data via datarax ---
     # `create_darcy_loader` returns a frozen `PDELoaders` with `.train`/`.val`

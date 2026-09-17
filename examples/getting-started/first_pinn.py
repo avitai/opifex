@@ -41,7 +41,6 @@ We'll achieve <0.5% L2 relative error using Opifex's built-in APIs.
 """
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -55,6 +54,7 @@ from opifex.solvers import PINNConfig, PINNSolver, poisson_residual
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 
 # %% [markdown]
@@ -248,8 +248,7 @@ def main() -> dict[str, float | int]:
     print("=" * 60)
 
     # Visualization.
-    output_dir = Path("docs/assets/examples/first_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("first_pinn").path
 
     _fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 

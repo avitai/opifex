@@ -636,23 +636,37 @@ All plots, charts, and visual outputs must be saved and embedded:
 
 **Saving visualizations:**
 
+An example resolves its output directory through `substrax.artifacts.resolve_output_dir`
+inside `main()` and never writes into the working tree by default: the directory is
+`<name>` under `$AVITAI_OUTPUT_DIR` when the variable is set, and under a per-process
+temporary directory otherwise. Regenerate the documentation figures by pointing the
+variable at the assets tree:
+
+```bash
+AVITAI_OUTPUT_DIR="$PWD/docs/assets/examples" python examples/neural-operators/fno_darcy.py
+```
+
 ```python
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
-# Create visualization
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-axes[0].imshow(input_field, cmap='viridis')
-axes[0].set_title("Input (Permeability)")
-axes[1].imshow(prediction, cmap='viridis')
-axes[1].set_title("FNO Prediction")
-axes[2].imshow(ground_truth, cmap='viridis')
-axes[2].set_title("Ground Truth")
-plt.tight_layout()
 
-# Save at 150 DPI for documentation
-plt.savefig('docs/assets/examples/fno_darcy/prediction_comparison.png',
-            dpi=150, bbox_inches='tight')
-plt.close()
+def main() -> dict[str, float]:
+    output_dir = resolve_output_dir("fno_darcy").path
+
+    # Create visualization
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    axes[0].imshow(input_field, cmap='viridis')
+    axes[0].set_title("Input (Permeability)")
+    axes[1].imshow(prediction, cmap='viridis')
+    axes[1].set_title("FNO Prediction")
+    axes[2].imshow(ground_truth, cmap='viridis')
+    axes[2].set_title("Ground Truth")
+    plt.tight_layout()
+
+    # Save at 150 DPI for documentation
+    plt.savefig(output_dir / "prediction_comparison.png", dpi=150, bbox_inches='tight')
+    plt.close()
 ```
 
 **Embedding in markdown:**

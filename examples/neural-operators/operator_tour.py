@@ -65,7 +65,6 @@ parameter count, and the training time, then visualise the trade-offs.
 # %%
 import time
 import warnings
-from pathlib import Path
 from typing import Any
 
 
@@ -80,6 +79,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
@@ -120,8 +120,6 @@ CP_RANK = 0.5
 UFNO_LEVELS = 3
 PERMEABILITY_VALUES = (3.0, 12.0)  # binary high-contrast benchmark (Li et al. 2020)
 SEED = 42
-
-OUTPUT_DIR = Path("docs/assets/examples/operator_tour")
 
 
 # %% [markdown]
@@ -268,6 +266,7 @@ predictor floor, saves the figures, and returns a small dict of finite metrics
 # %%
 def main() -> dict[str, float | int]:
     """Tour and compare the Fourier-family neural operators on Darcy flow."""
+    OUTPUT_DIR = resolve_output_dir("operator_tour").path
     print("=" * 70)
     print("Opifex Example: Neural Operator Comparison Tour on Darcy Flow")
     print("=" * 70)
@@ -276,8 +275,6 @@ def main() -> dict[str, float | int]:
     print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
     print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
     print(f"Shared FNO config: modes={MODES}, width={HIDDEN_CHANNELS}, layers={NUM_LAYERS}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Operator discovery ---
     print()

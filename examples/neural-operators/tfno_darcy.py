@@ -49,7 +49,6 @@
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -64,6 +63,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import per_sample_relative_l2
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
 from opifex.core.training import Trainer, TrainingConfig
@@ -94,8 +94,6 @@ RANK = 0.5  # Tucker compression ratio (50% of each mode dimension)
 PERMEABILITY_VALUES = (3.0, 12.0)  # binary high-contrast benchmark (Li et al. 2020)
 SEED = 42
 
-OUTPUT_DIR = Path("docs/assets/examples/tfno_darcy")
-
 
 # %% [markdown]
 # ## Run the Example
@@ -108,6 +106,7 @@ OUTPUT_DIR = Path("docs/assets/examples/tfno_darcy")
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate a Tucker-factorized TFNO on the Darcy flow problem."""
+    OUTPUT_DIR = resolve_output_dir("tfno_darcy").path
     print("=" * 70)
     print("Opifex Example: TFNO (Tucker-Factorized FNO) on Darcy Flow")
     print("=" * 70)
@@ -116,8 +115,6 @@ def main() -> dict[str, float | int]:
     print(f"Resolution: {RESOLUTION}x{RESOLUTION}")
     print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
     print(f"FNO config: modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS}, rank={RANK}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Data loading ---
     print()

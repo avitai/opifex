@@ -48,6 +48,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from substrax.artifacts import resolve_output_dir
 
 # Opifex Framework imports
 from opifex.data.sources import generate_darcy
@@ -445,10 +446,13 @@ def create_visualization(
 def main(
     n_samples: int = 100,
     resolutions: tuple[int, ...] = (64, 128),
-    output_dir: str = "docs/assets/examples/darcy_flow_analysis_files",
+    output_dir: str | Path | None = None,
     save_plots: bool = True,
 ) -> dict[str, float]:
     """Run full Darcy flow analysis and return finite summary metrics."""
+    output_dir = resolve_output_dir(
+        "darcy_flow_analysis_files", explicit=None if output_dir is None else Path(output_dir)
+    ).path
     # Smoke mode (set by the example test): a few small-resolution samples.
     if os.environ.get("OPIFEX_EXAMPLE_SMOKE"):
         n_samples, resolutions, save_plots = 4, (32,), False
@@ -463,7 +467,6 @@ def main(
     preprocessing_results: dict = {}
     save_path = None
     if save_plots:
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
         save_path = f"{output_dir}/darcy_analysis"
     create_visualization(results, preprocessing_results, save_path)
 
@@ -487,9 +490,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze Darcy flow dataset characteristics")
     parser.add_argument("--n_samples", type=int, default=100)
     parser.add_argument("--resolutions", nargs="+", type=int, default=[64, 128])
-    parser.add_argument(
-        "--output_dir", type=str, default="docs/assets/examples/darcy_flow_analysis_files"
-    )
+    parser.add_argument("--output_dir", type=Path, default=None)
     parser.add_argument("--save_plots", action="store_true", default=True)
     cli = parser.parse_args()
     main(

@@ -32,7 +32,6 @@
 # ## Imports and Setup
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -44,6 +43,7 @@ from flax import nnx
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.graph import (
@@ -70,8 +70,6 @@ SEED = 42
 HIDDEN_DIM = 64
 NUM_LAYERS = 4
 CONNECTIVITY = 8  # 8-neighbor connectivity includes diagonals
-
-OUTPUT_DIR = Path("docs/assets/examples/gno_darcy")
 
 
 # %% [markdown]
@@ -240,6 +238,7 @@ def evaluate_model(
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate a Graph Neural Operator on the Darcy flow problem."""
+    OUTPUT_DIR = resolve_output_dir("gno_darcy").path
     print("=" * 70)
     print("Opifex Example: GNO on Darcy Flow")
     print("=" * 70)
@@ -249,8 +248,6 @@ def main() -> dict[str, float | int]:
     print(f"Training samples: {N_TRAIN}, Test samples: {N_TEST}")
     print(f"GNO config: hidden_dim={HIDDEN_DIM}, layers={NUM_LAYERS}")
     print(f"Graph connectivity: {CONNECTIVITY}-neighbor")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Data loading ---
     print()

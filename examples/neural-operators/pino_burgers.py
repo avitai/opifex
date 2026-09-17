@@ -71,7 +71,6 @@
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -87,6 +86,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import per_sample_relative_l2, relative_l2_error
+from substrax.artifacts import resolve_output_dir
 
 from opifex.data.sources.pde_generation import _burgers_ic
 from opifex.neural.operators.fno.base import FourierNeuralOperator
@@ -127,8 +127,6 @@ SEED = 42
 # Grid spacings for the finite-difference equation loss.
 DX = DOMAIN_LENGTH / NUM_SPACE  # periodic, so dx = L / nx
 DT = TIME_FINAL / (NUM_TIME - 1)
-
-OUTPUT_DIR = Path("docs/assets/examples/pino_burgers")
 
 
 # %% [markdown]
@@ -262,6 +260,7 @@ def pino_loss_fn(
 # %%
 def main() -> dict[str, float | int]:
     """Train and evaluate a PINO on the 1D Burgers equation."""
+    OUTPUT_DIR = resolve_output_dir("pino_burgers").path
     print("=" * 70)
     print("Opifex Example: PINO on 1D Burgers Equation")
     print("=" * 70)
@@ -272,8 +271,6 @@ def main() -> dict[str, float | int]:
     print(f"FNO config: modes={MODES}, width={HIDDEN_WIDTH}, layers={NUM_LAYERS}")
     print(f"Loss weights: data={DATA_WEIGHT}, ic={IC_WEIGHT}, equation={EQUATION_WEIGHT}")
     print(f"Spacings: dx={DX:.5f}, dt={DT:.5f}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Data generation ---
     print()

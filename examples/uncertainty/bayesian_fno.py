@@ -74,6 +74,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.data.loaders import create_darcy_loader
 from opifex.neural.operators.fno._positional import append_grid_coordinates
@@ -132,7 +133,6 @@ def _find_repo_root() -> Path:
 
 
 _REPO_ROOT = _find_repo_root()
-OUTPUT_DIR = _REPO_ROOT / "docs" / "assets" / "examples" / "bayesian_fno"
 
 # %% [markdown]
 """
@@ -361,13 +361,12 @@ scalar metrics. Nothing heavy runs at import time.
 # %%
 def main() -> dict[str, float | int]:
     """Run the Bayesian-FNO Darcy pipeline and return summary metrics."""
+    OUTPUT_DIR = resolve_output_dir("bayesian_fno").path
     print("=" * 70)
     print("Opifex Example: Bayesian FNO on Darcy Flow")
     print("=" * 70)
     print(f"JAX backend: {jax.default_backend()}")
     print(f"JAX devices: {jax.devices()}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print()
     print("Configuration:")

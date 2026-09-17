@@ -35,7 +35,6 @@ infrastructure.
 """
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -43,6 +42,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.problems import create_pde_problem
 from opifex.core.training import Trainer, TrainingConfig
@@ -52,7 +52,6 @@ from opifex.neural.pinns import create_heat_equation_pinn
 
 mpl.use("Agg")
 
-ASSETS_DIR = Path("docs/assets/examples/heat_equation")
 
 # %% [markdown]
 """
@@ -76,8 +75,8 @@ Evaluate the trained PINN on a uniform grid and plot the temperature field.
 # %%
 def main() -> dict[str, float | int]:
     """Train a steady-state heat-equation PINN and plot the temperature field."""
+    ASSETS_DIR = resolve_output_dir("heat_equation").path
     print(f"JAX backend: {jax.default_backend()}")
-    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     geometry = Rectangle(center=jnp.array([0.5, 0.5]), width=1.0, height=1.0)
     boundary_conditions = [{"type": "dirichlet", "boundary": "all", "value": 0.0}]

@@ -23,7 +23,6 @@
 # Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
 
 # %%
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -32,6 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 from flax import nnx
+from substrax.artifacts import resolve_output_dir
 
 
 mpl.use("Agg")
@@ -326,8 +326,7 @@ def main() -> dict[str, float | int]:
     print(f"Mean PDE residual:   {mean_residual:.6e}")
     print(f"Boundary error:      {bc_error:.6e}")
 
-    output_dir = Path("docs/assets/examples/helmholtz_pinn")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("helmholtz_pinn").path
 
     _fig, axes = plt.subplots(1, 4, figsize=(18, 4))
     im0 = axes[0].imshow(

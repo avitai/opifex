@@ -57,7 +57,6 @@ This example demonstrates:
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -72,6 +71,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import per_sample_relative_l2
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
 from opifex.core.training import Trainer, TrainingConfig
@@ -207,7 +207,8 @@ memory use at higher resolutions.
 All run logic — configuration, data loading, normalization, model creation,
 training, evaluation, zero-shot super-resolution, and visualization — lives in
 `main()`. It returns a small dict of finite scalar metrics and saves the
-prediction/super-resolution plots to `docs/assets/examples/uno_darcy/`.
+prediction/super-resolution plots to the run's output directory (`uno_darcy` under
+`AVITAI_OUTPUT_DIR`, else a temporary one).
 """
 
 
@@ -229,8 +230,7 @@ def main() -> dict[str, float | int]:
     hidden_channels = 64
     seed = 42
 
-    output_dir = Path("docs/assets/examples/uno_darcy")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("uno_darcy").path
 
     print("=" * 70)
     print("Opifex Example: UNO on Darcy Flow")

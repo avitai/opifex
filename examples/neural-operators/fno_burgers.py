@@ -53,7 +53,6 @@ Follows the Burgers benchmark of the Fourier Neural Operator paper
 # %%
 import time
 import warnings
-from pathlib import Path
 
 
 warnings.filterwarnings("ignore")
@@ -68,6 +67,7 @@ from flax import nnx
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 from calibrax.metrics.functional.regression import per_sample_relative_l2
+from substrax.artifacts import resolve_output_dir
 
 from opifex.core.evaluation import predict_in_batches
 from opifex.core.normalization import GaussianNormalizer
@@ -160,8 +160,7 @@ def main() -> dict[str, float | int]:
     lr_transition_steps = 60 * steps_per_epoch
     lr_decay_rate = 0.5
 
-    output_dir = Path("docs/assets/examples/fno_burgers")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_output_dir("fno_burgers").path
 
     print("=" * 70)
     print("Opifex Example: FNO on 1D Burgers Equation")

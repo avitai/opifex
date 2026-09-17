@@ -41,9 +41,9 @@ import matplotlib as mpl
 
 
 mpl.use("Agg")
-from pathlib import Path
 
 import matplotlib.pyplot as plt
+from substrax.artifacts import resolve_output_dir
 
 from opifex.fields import (
     Box,
@@ -57,8 +57,6 @@ from opifex.fields import (
     semi_lagrangian,
 )
 
-
-OUTPUT_DIR = Path("docs/assets/examples/field_operations")
 
 # %% [markdown]
 """
@@ -121,7 +119,7 @@ removing the divergent component. Here it drives the max divergence from `~2.0` 
 # %%
 def main() -> dict[str, float | int]:
     """Run field operator demos and return finite scalar metrics."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR = resolve_output_dir("field_operations").path
 
     # 1. Creating Fields on Physical Domains
     n = 128
