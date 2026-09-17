@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The K-FAC natural-gradient preconditioner for variational Monte Carlo
+  (`opifex.neural.quantum.vmc.kfac_preconditioner`) and the `kfac-jax` dependency of the
+  `quantum-chemistry` extra. The module wrapped `kfac_jax`, whose published releases stop
+  at 0.0.8 and fail to import on JAX 0.11 (`jax.core.Effects` is gone); `VMCDriver` never
+  offered it (its optimizers are `adam`, `minsr` and `spring`), and its docstring's claim
+  that a unit-variance normal predictive tag makes kfac_jax's Fisher the quantum geometric
+  tensor is wrong (kfac_jax defaults the variance to 0.5, and the tensor is centred). The
+  optional-backend specs and the curvature capability no longer name kfac-jax. Restoring
+  a working preconditioner is tracked in avitai/opifex#31.
 - `opifex.setup_jax_optimization`, `opifex.core.configure_jax_precision` and the
   `opifex.core.device_utils` module, with the `OPIFEX_XLA_CACHE_DIR` variable the first read.
   A process declares the JAX settings it starts with through `substrax.runtime`: a

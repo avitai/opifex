@@ -12,7 +12,7 @@ from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 _CURVATURE_CAPABILITY = UQCapability(
     native_jax_kernel=True,
     default_strategy=DefaultStrategy.LAPLACE,
-    source_package="traceax+matfree+kfac-jax",
+    source_package="traceax+matfree",
     notes=(
         "Curvature primitives — Hessian-vector products (Pearlmutter "
         "Neural Computation 6(1)), generalized Gauss-Newton (GGN) "

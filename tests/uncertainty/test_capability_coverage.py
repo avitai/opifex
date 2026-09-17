@@ -311,7 +311,7 @@ def test_curvature_subpackage_capability_flags(uq_registry: UQRegistry) -> None:
     cap = uq_registry.require("subpackage:curvature")
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.LAPLACE
-    assert cap.source_package == "traceax+matfree+kfac-jax"
+    assert cap.source_package == "traceax+matfree"
 
 
 # ---------------------------------------------------------------------------

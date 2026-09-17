@@ -2476,15 +2476,6 @@ wheels = [
 ]
 
 [[package]]
-name = "immutabledict"
-version = "4.3.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1d/e6/718471048fea0366c3e3d1df3acfd914ca66d571cdffcf6d37bbcd725708/immutabledict-4.3.1.tar.gz", hash = "sha256:f844a669106cfdc73f47b1a9da003782fb17dc955a54c80972e0d93d1c63c514", size = 7806, upload-time = "2026-02-15T10:32:34.668Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/ce/f9018bf69ae91b273b6391a095e7c93fa5e1617f25b6ba81ad4b20c9df10/immutabledict-4.3.1-py3-none-any.whl", hash = "sha256:c9facdc0ff30fdb8e35bd16532026cac472a549e182c94fa201b51b25e4bf7bf", size = 5000, upload-time = "2026-02-15T10:32:33.672Z" },
-]
-
-[[package]]
 name = "import-linter"
 version = "2.11"
 source = { registry = "https://pypi.org/simple" }
@@ -2946,26 +2937,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516, upload-time = "2025-11-16T16:26:09.482Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl", hash = "sha256:be4a0b195f149690c166e850609a477c532ddbfbaed96a404d4e43f8d5e2689f", size = 39160, upload-time = "2025-11-16T16:26:08.402Z" },
-]
-
-[[package]]
-name = "kfac-jax"
-version = "0.0.8"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "absl-py" },
-    { name = "distrax" },
-    { name = "dm-tree" },
-    { name = "immutabledict" },
-    { name = "jax" },
-    { name = "jaxlib" },
-    { name = "numpy" },
-    { name = "optax" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/03/73/6c7ba1aa665afc3041a9e03d8d7cabb9cb59de1a8cb2c72ef09f5921ce54/kfac_jax-0.0.8.tar.gz", hash = "sha256:7a95d2081af2319f1314abaec5b808151923c10f5499400f49dead1f01c058cb", size = 154837, upload-time = "2026-02-25T00:40:55.336Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/f8/b61a20e4dd3e71ac9bf8b126387c1e00fd9309ec05ea80ee008bcc9c74c3/kfac_jax-0.0.8-py3-none-any.whl", hash = "sha256:0592f5bef991f27820f05b0641f0d281be8b5eadc403ceb730f685b75f431ac6", size = 167682, upload-time = "2026-02-25T00:40:53.69Z" },
 ]
 
 [[package]]
@@ -4712,7 +4683,6 @@ opifex-dev = [
     { name = "ipykernel" },
     { name = "jax", extra = ["cuda12"] },
     { name = "jupytext" },
-    { name = "kfac-jax" },
     { name = "meshio" },
     { name = "netcdf4" },
     { name = "nvidia-cublas-cu12" },
@@ -4780,7 +4750,6 @@ profiling = [
 ]
 quantum-chemistry = [
     { name = "basis-set-exchange" },
-    { name = "kfac-jax" },
     { name = "qcelemental" },
     { name = "qcengine" },
 ]
@@ -4861,7 +4830,6 @@ requires-dist = [
     { name = "jax-metal", marker = "extra == 'metal'", specifier = ">=0.1.0" },
     { name = "jaxtyping", specifier = ">=0.2.20" },
     { name = "jupytext", marker = "extra == 'dev'", specifier = ">=1.16.0" },
-    { name = "kfac-jax", marker = "extra == 'quantum-chemistry'", specifier = ">=0.0.8" },
     { name = "matplotlib", specifier = ">=3.7.0" },
     { name = "meshio", marker = "extra == 'dev'", specifier = ">=5.3.0" },
     { name = "meshio", marker = "extra == 'scientific-data'", specifier = ">=5.3.0" },

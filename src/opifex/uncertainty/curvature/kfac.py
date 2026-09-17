@@ -25,10 +25,9 @@ This module computes the factors natively with :func:`jax.vjp` / forward-mode
 differentiation through a *tapped* model — a forward pass that returns each
 layer's input activation and exposes an additive zero perturbation at every
 pre-activation. The cotangent of that perturbation is the pre-activation
-Jacobian used to build ``G``. This native route is preferred over extracting
-factors from ``kfac_jax`` because the tapped-forward contract yields the
-``A`` / ``G`` factors directly and stays differentiable under all JAX
-transforms.
+Jacobian used to build ``G``. The tapped-forward contract yields the ``A`` / ``G``
+factors directly and stays differentiable under all JAX transforms; no external
+K-FAC library is involved.
 
 The :func:`kfac_laplace_posterior` then assembles a damped, layerwise
 block-diagonal-of-Kronecker posterior precision (Ritter, Botev & Barber

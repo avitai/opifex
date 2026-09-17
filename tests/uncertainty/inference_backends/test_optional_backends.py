@@ -3,7 +3,7 @@
 The :mod:`opifex.uncertainty.inference_backends.optional` module declares
 adapter specs for every optional backend the audit lists (TFP-substrate,
 bijx, FlowJAX, Bayeux, NumPyro, GPJax, sbiax, flowMC, oryx, traceax,
-matfree, kfac-jax) plus Artifex's seven NNX-native flow families. Each
+matfree) plus Artifex's seven NNX-native flow families. Each
 spec exposes a name, family, source package, missing-dependency hint, and
 a list of supported method names.
 
@@ -95,7 +95,7 @@ def test_optional_flow_specs_instantiation_raises_import_error_when_missing() ->
 
 
 def test_optional_sampler_specs_cover_audit_listed_families() -> None:
-    """TFP, Bayeux, NumPyro, oryx, sbiax, flowMC, traceax, matfree, kfac-jax."""
+    """TFP, Bayeux, NumPyro, oryx, sbiax, flowMC, traceax, matfree."""
     names = {spec.name for spec in OPTIONAL_SAMPLER_SPECS}
     for expected in (
         "TFP-substrate",
@@ -106,9 +106,15 @@ def test_optional_sampler_specs_cover_audit_listed_families() -> None:
         "flowMC",
         "traceax",
         "matfree",
-        "kfac-jax",
     ):
         assert expected in names, f"missing optional sampler spec: {expected}"
+
+
+def test_no_spec_names_kfac_jax() -> None:
+    """kfac-jax is no dependency: no spec probes for it (its restoration is avitai/opifex#31)."""
+    for spec in (*OPTIONAL_SAMPLER_SPECS, *OPTIONAL_FLOW_SPECS, *DISTRIBUTION_SPECS):
+        assert "kfac" not in spec.name.lower(), spec.name
+        assert "kfac" not in spec.import_module.lower(), spec.name
 
 
 def test_tfp_sampler_spec_probes_installed() -> None:
