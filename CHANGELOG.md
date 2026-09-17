@@ -27,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The progressive GPU tester times its operations through `calibrax.profiling.time_calls`
-  (three warm-up calls, ten timed calls that each wait for their result), and the GST-PINN
+  (three warm-up calls, ten timed calls that each wait for their result) and reports its
+  median: the mean it reported was moved by one slow call, which a shared CI runner produces
+  at will (two consecutive means 3.01x apart on a macOS shard), and the GST-PINN
   self-training loss averages over the reliable points through `calibrax.metrics.reduce_values`,
   so an empty reliable set gives zero as before without a hand-written guard.
 - Requires `calibrax>=0.1.8` and `avitai-artifex>=0.1.10`; the lock moves both.

@@ -1,20 +1,23 @@
 """Tests for correct benchmarking timing.
 
 Verifies that the benchmarking code waits for its results (``jax.block_until_ready``) so the
-timings measure the computation rather than the dispatch.
+timings measure the computation rather than the dispatch, and reports calibrax's median,
+which one slow call does not move.
 """
 
 import time
+from typing import Any
 
 import jax.numpy as jnp
 import pytest
+from calibrax.profiling import CallTiming
 
 
 class TestGPUAccelerationBenchmarking:
     """Test gpu_acceleration.py benchmarking correctness."""
 
     def test_cached_test_operation_uses_block_until_ready(self):
-        """Test that CachedProgressiveTester uses block_until_ready."""
+        """The tester waits for every timed call, so the time is the computation's."""
         from opifex.core.gpu_acceleration import CachedProgressiveTester
 
         tester = CachedProgressiveTester()
@@ -30,15 +33,35 @@ class TestGPUAccelerationBenchmarking:
             f"Likely missing block_until_ready in warmup or timing loops."
         )
 
-        # Should be consistent across runs
-        _, exec_time2, _ = tester._actual_test_operation("safe_matmul", 512, "float32")
+    def test_cached_test_operation_reports_calibrax_median_of_blocking_calls(self, monkeypatch):
+        """The time is ``time_calls``'s median with its default, blocking, sync.
 
-        if exec_time2 is not None:
-            ratio = max(exec_time, exec_time2) / min(exec_time, exec_time2)
-            assert ratio < 3.0, (
-                f"Timing unstable: {exec_time:.6f}s vs {exec_time2:.6f}s. "
-                f"Ratio: {ratio:.2f}x. Likely missing block_until_ready."
+        A mean of the samples is moved by one slow call, which a shared CI runner
+        produces at will; the median is calibrax's reported figure for that reason.
+        """
+        from opifex.core import gpu_acceleration
+
+        seen: dict[str, Any] = {}
+
+        def spy(func, *args, **kwargs):
+            seen.update(kwargs)
+            return CallTiming(
+                samples_sec=(0.002, 0.003, 0.030),
+                median_sec=0.003,
+                percentiles_sec={50: 0.003},
+                warmup=kwargs.get("warmup", 0),
             )
+
+        monkeypatch.setattr(gpu_acceleration, "time_calls", spy)
+        tester = gpu_acceleration.CachedProgressiveTester()
+
+        success, exec_time, error = tester._actual_test_operation("safe_matmul", 64, "float32")
+
+        assert success, error
+        assert exec_time == 0.003
+        assert seen.get("sync") is None, "the default sync waits for each result"
+        assert seen["warmup"] == 3
+        assert seen["iterations"] == 10
 
     def test_benchmark_with_prefetching_uses_block_until_ready(self):
         """Test that OptimizedGPUManager benchmarking is correct."""
