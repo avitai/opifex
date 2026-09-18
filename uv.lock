@@ -627,7 +627,7 @@ wheels = [
 
 [[package]]
 name = "calibrax"
-version = "0.1.8"
+version = "0.1.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -640,9 +640,9 @@ dependencies = [
     { name = "substrax" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/3a/e0a7d9fa5233688480a8152a5301ee5a2fd6a26a717758eab24e38b8c3c1/calibrax-0.1.8.tar.gz", hash = "sha256:53cc26d5e26404d8990795e5c7a94b6443c3173d05017a6b91a2f5c296f9221d", size = 166375, upload-time = "2026-09-17T12:19:54.787Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/05/58e9663923ac9447b48ad2a5b8dfd9f219c0a2809964722c697753e005b5/calibrax-0.1.9.tar.gz", hash = "sha256:5444f708ff03353cc2a3bde09bc87764b3f64fe5485a50df01cbf66ae1796d84", size = 166377, upload-time = "2026-09-18T04:30:23.959Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/89/a9845ec5f4915b9ad3c1b0678672986c6d7544d4fd35b06c0eb92b7a0f04/calibrax-0.1.8-py3-none-any.whl", hash = "sha256:6d0473cbd83c7b432b63db88d726e97558e87356c462133dc0ed3c6fab35faa2", size = 206339, upload-time = "2026-09-17T12:19:52.137Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/d5/db8e856af5d727e0ea9d196d874452d05d813a917c34b9a086c31ef0e8bf/calibrax-0.1.9-py3-none-any.whl", hash = "sha256:a2efcd06b3653ae145149ca8a158b58035cd3f9c7058b1643d2b9fc189e74cc4", size = 206341, upload-time = "2026-09-18T04:30:21.924Z" },
 ]
 
 [[package]]
@@ -1234,7 +1234,7 @@ wheels = [
 
 [[package]]
 name = "datarax"
-version = "0.1.13"
+version = "0.1.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-record" },
@@ -1252,9 +1252,9 @@ dependencies = [
     { name = "substrax" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/82/1e/6a612d9cd1478d525ed09349eaeb84b955eed9249fbdb247d67d2dcd86bd/datarax-0.1.13.tar.gz", hash = "sha256:2920da29be19603fdc91560750fac712278606665033613512412eeb8713cc67", size = 235801, upload-time = "2026-09-17T19:50:20.603Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/2a/c4990e1d245d693e2bea8fc78b78f06f7e07dd0f73c3650ae5225010929d/datarax-0.1.14.tar.gz", hash = "sha256:e14638ff712483ff76af50e5bee24234e04220fb8bcfdfce2389c77d5f44d3c8", size = 235890, upload-time = "2026-09-18T04:31:34.806Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/90/df4e38770805ea99e08445e5e230692eb9ee407bf55e8e1fdc58f8e06076/datarax-0.1.13-py3-none-any.whl", hash = "sha256:d2be2848ab4584b920531f2a76d2e332b953f934eadf607f199ac0f7d4db73b7", size = 283105, upload-time = "2026-09-17T19:50:17.886Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/b0/4241685429475bd5edcc06aea48d071dc351f9a67bcc50dd40c4b0fba754/datarax-0.1.14-py3-none-any.whl", hash = "sha256:47f7265f3c04b6f0b7fd038cc936ea174ad55ab0d43f877570c1d4661351f0d5", size = 283108, upload-time = "2026-09-18T04:31:32.598Z" },
 ]
 
 [[package]]
@@ -4804,10 +4804,10 @@ requires-dist = [
     { name = "beartype", marker = "extra == 'test'", specifier = ">=0.14.1" },
     { name = "blackjax", specifier = ">=1.2.5" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.3" },
-    { name = "calibrax", specifier = ">=0.1.8" },
+    { name = "calibrax", specifier = ">=0.1.9" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
-    { name = "datarax", specifier = ">=0.1.13" },
+    { name = "datarax", specifier = ">=0.1.14" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
     { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
