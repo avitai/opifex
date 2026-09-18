@@ -42,7 +42,8 @@ def locked_versions(lock: Path) -> dict[str, str]:
         SystemExit: If the lock holds no version for one of them.
     """
     packages = tomllib.loads(lock.read_text(encoding="utf-8"))["package"]
-    versions = {package["name"]: package["version"] for package in packages}
+    # The project itself is an editable entry without a version when its version is dynamic.
+    versions = {package["name"]: package["version"] for package in packages if "version" in package}
     missing = [name for name in LOCKED if name not in versions]
     if missing:
         raise SystemExit(f"{lock} holds no version for {', '.join(missing)}")
