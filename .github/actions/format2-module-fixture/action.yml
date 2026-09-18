@@ -10,5 +10,5 @@ runs:
     - name: Write the format-2 module checkpoint with the release that produced it
       shell: bash
       run: |
-        uv run --no-project --with "substrax==0.1.9" --with "flax==0.12.9" \
+        uv run --no-project --with "substrax==0.1.9" --with "jax==0.11.1" --with "jaxlib==0.11.1" --with "flax==0.12.9" \
           python scripts/make_format2_module_fixture.py tests/core/training/fixtures/format2
