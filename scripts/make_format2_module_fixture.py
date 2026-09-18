@@ -7,7 +7,7 @@ now writes format 3 and reads such a root through substrax's module-only layout;
 writes one with the substrax release that produced it, so the test reads a real one. Run it
 in isolation, never from the project venv::
 
-    uv run --no-project --with "substrax==0.1.9" --with "flax==0.12.9" \
+    uv run --no-project --with "substrax==0.1.9" --with "jax==0.11.1" --with "jaxlib==0.11.1" --with "flax==0.12.9" \
         python scripts/make_format2_module_fixture.py tests/core/training/fixtures/format2
 
 The fixture is a few kilobytes: a two-input, one-hidden-layer, one-output module at step 7.
