@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires `avitai-artifex>=0.1.12`; the lock moves it from 0.1.11 and nothing else. opifex imports
+  artifex's sampling, distributions, conditional flow and rematerialisation helpers, which 0.1.12
+  leaves as they were; its changes are the trainer's checkpointing and its floors.
 - Requires `substrax>=0.1.11` (and `substrax[mlflow]>=0.1.11`); the lock moves it from 0.1.10 and
   nothing else. 0.1.11 caps jax below 0.11.2, whose renamed `jax.experimental.hijax.HiPrimitive`
   flax 0.12.9 imports at module load; a resolver given `substrax>=0.1.10` keeps jax 0.11.2 and
