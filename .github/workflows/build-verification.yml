@@ -51,8 +51,10 @@ jobs:
       - name: Test clean-environment import
         run: |
           uv venv test_venv --seed
-          VIRTUAL_ENV=test_venv uv pip install dist/*.whl
-          test_venv/bin/python -c "import opifex; print(f'opifex {opifex.__version__} imported OK')"
+          # --refresh: a fresh install reads PyPI, not the restored cache. The import reaches
+          # the numerical stack: `import opifex` alone never loads flax.nnx.
+          VIRTUAL_ENV=test_venv uv pip install --refresh dist/*.whl
+          test_venv/bin/python -c "import opifex, opifex.core.training.trainer; print(f'opifex {opifex.__version__} imported OK')"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
