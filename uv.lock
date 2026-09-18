@@ -425,7 +425,7 @@ wheels = [
 
 [[package]]
 name = "avitai-artifex"
-version = "0.1.11"
+version = "0.1.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blackjax" },
@@ -452,9 +452,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d1/dd/6e45ea3087bfa71c5d259008c222f10c54618c58b9403c00ce6a8c94e27c/avitai_artifex-0.1.11.tar.gz", hash = "sha256:83da3d0c99ba9ca105c7fd6138549caea9c104b3966e1431ab26e5fb36d99674", size = 636486, upload-time = "2026-09-17T21:02:41.146Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/d3/494e46b7b4b25999d09baa5c3fe02586d1e4a53446d889dadc99a4a11858/avitai_artifex-0.1.12.tar.gz", hash = "sha256:9c779c2382611002e2b5adce7b1d1fa6c80f817e2b1a7fd55681ae8c9f0195a9", size = 637270, upload-time = "2026-09-18T02:44:16.208Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bb/b7/b1137d873ce4d7f9bb6bb1248235dc4f1cda33c451a6215562f9402887d2/avitai_artifex-0.1.11-py3-none-any.whl", hash = "sha256:5b52881bc11ee0c683d9d31172aa7c9e07f7e0860eaaaa02ee4d2f25b942bd17", size = 851350, upload-time = "2026-09-17T21:02:38.494Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/a5/872246c36e3ce4eb5cabb4986c908f00b1815ccd8d8bd5f544f7cf68d75b/avitai_artifex-0.1.12-py3-none-any.whl", hash = "sha256:f384c0429eb42be8a20d758453cd3d067b2b5f2cdd459f8efb7383cb3804c66c", size = 852468, upload-time = "2026-09-18T02:44:13.737Z" },
 ]
 
 [[package]]
@@ -4797,7 +4797,7 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'platform'", specifier = ">=1.13.0" },
     { name = "ase", marker = "extra == 'neural-dft'", specifier = ">=3.22.0" },
     { name = "asyncpg", marker = "extra == 'platform'", specifier = ">=0.29.0" },
-    { name = "avitai-artifex", specifier = ">=0.1.11" },
+    { name = "avitai-artifex", specifier = ">=0.1.12" },
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.5" },
     { name = "basis-set-exchange", marker = "extra == 'quantum-chemistry'", specifier = ">=0.9.0" },
     { name = "beartype", specifier = ">=0.15.0" },
