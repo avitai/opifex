@@ -175,3 +175,18 @@ def test_every_package_of_the_fixture_lock_is_pinned_and_the_inputs_are_kept() -
     assert {"jax", "jaxlib", "flax", "orbax-checkpoint"} <= {
         re.split(r"[\[=]", line)[0].lower() for line in locked
     }
+
+
+SMOKE_MODULE = "opifex.core.training.trainer"
+
+
+def test_the_fresh_install_smoke_reads_pypi_and_imports_the_numerical_stack() -> None:
+    """The build-verification smoke installs the wheel fresh and imports a module that loads
+    flax.nnx: `import opifex` alone passed with a jax that broke flax's import."""
+    job = _jobs()["build-verification.yml:build"]
+    smoke = [run for run in _run_lines(job) if "dist/*.whl" in run]
+    assert len(smoke) == 1, "build-verification has no fresh-install smoke"
+    assert "uv pip install --refresh dist/*.whl" in smoke[0], "the smoke reads a restored cache"
+    assert f"import opifex, {SMOKE_MODULE}" in smoke[0], (
+        "the smoke never reaches the numerical stack"
+    )

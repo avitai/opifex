@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires `substrax>=0.1.11` (and `substrax[mlflow]>=0.1.11`); the lock moves it from 0.1.10 and
+  nothing else. 0.1.11 caps jax below 0.11.2, whose renamed `jax.experimental.hijax.HiPrimitive`
+  flax 0.12.9 imports at module load; a resolver given `substrax>=0.1.10` keeps jax 0.11.2 and
+  picks 0.1.10 instead, so a fresh install of opifex resolved the failing pair until the floor
+  moved. The build-verification smoke now installs the wheel with `--refresh` and imports
+  `opifex.core.training.trainer`, which loads the stack; `import opifex` alone never did.
 - CI: the unit suite's macOS lane runs nightly in the extended workflow, sharded under a cap
   of three runners at a time, and the push and pull-request gate runs on ubuntu alone. A push
   to main used to add twelve macOS-14 shards that held the organisation's macOS runners for

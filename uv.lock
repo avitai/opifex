@@ -4908,8 +4908,8 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "sqlalchemy", marker = "extra == 'platform'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'platform'", specifier = ">=2.0.0" },
-    { name = "substrax", specifier = ">=0.1.10" },
-    { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.10" },
+    { name = "substrax", specifier = ">=0.1.11" },
+    { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.11" },
     { name = "tensorboard-plugin-profile", marker = "extra == 'profiling'", specifier = ">=2.20.6" },
     { name = "tensorflow", marker = "extra == 'profiling'", specifier = ">=2.20.0" },
     { name = "tensorly", specifier = ">=0.9.0" },
@@ -6978,7 +6978,7 @@ wheels = [
 
 [[package]]
 name = "substrax"
-version = "0.1.10"
+version = "0.1.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "flax" },
@@ -6988,9 +6988,9 @@ dependencies = [
     { name = "optax" },
     { name = "orbax-checkpoint" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/b0/2ec3718f2b996706586e8e8b062240130b7f63422d9ded69c4802285f8f1/substrax-0.1.10.tar.gz", hash = "sha256:a56d702b7c79eca72a9f789da46bac8a2be79ca93f4ec2b90bc2da0065b6956a", size = 77962, upload-time = "2026-09-17T17:29:23.894Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/17/4c2ac4ff290506f2b5e3c4378b5e364426d664e7106056e00cba226fcdf2/substrax-0.1.11.tar.gz", hash = "sha256:6397a67e6ee1f04d09522e4ba371b31e44dcc822c73ecdeee67afa25e306f97c", size = 78255, upload-time = "2026-09-18T00:41:21.101Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ae/fb/34a5433973ff530b6a2f39fedda9348ee02683ff61500ceffa67f75c20c3/substrax-0.1.10-py3-none-any.whl", hash = "sha256:293c163320ef829c18330296de82ef354db1491f446046a64b9042563b08e5d2", size = 95322, upload-time = "2026-09-17T17:29:22.297Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/be/ddb879145823f327c59e096163a64c05bdd61d881f850b70eff5bb32f6f7/substrax-0.1.11-py3-none-any.whl", hash = "sha256:3cde3f31ccea1bac1a4d19f87e1a0e0d25f1c4ed68e066d0e20e1e419b20cbb8", size = 95332, upload-time = "2026-09-18T00:41:19.139Z" },
 ]
 
 [package.optional-dependencies]
