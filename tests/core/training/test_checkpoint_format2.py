@@ -3,8 +3,7 @@
 The fixture is generated, not committed: ``scripts/make_format2_module_fixture.py`` writes
 it with the substrax release that produced it. Run, in isolation::
 
-    uv run --no-project --with "substrax==0.1.9" --with "jax==0.11.1" --with "jaxlib==0.11.1" --with "flax==0.12.9" \\
-        python scripts/make_format2_module_fixture.py tests/core/training/fixtures/format2
+    python3 scripts/write_format2_fixture.py tests/core/training/fixtures/format2
 """
 
 from pathlib import Path
@@ -19,10 +18,7 @@ from opifex.core.training.trainer import Trainer
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "format2" / "module"
 FIXTURE_STEP = 7
-GENERATE = (
-    'uv run --no-project --with "substrax==0.1.9" --with "jax==0.11.1" --with "jaxlib==0.11.1" --with "flax==0.12.9" '
-    "python scripts/make_format2_module_fixture.py tests/core/training/fixtures/format2"
-)
+GENERATE = "python3 scripts/write_format2_fixture.py tests/core/training/fixtures/format2"
 
 if not FIXTURE_ROOT.is_dir():
     raise RuntimeError(

@@ -8,6 +8,7 @@ holds the organisation's macOS runners against the other repositories.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -128,3 +129,27 @@ def test_the_nightly_workflow_holds_the_macos_unit_lane_under_a_runner_cap() -> 
     assert runs and all("not slow" in run for run in runs), (
         "the macOS lane does not run the unit suite"
     )
+
+
+FIXTURE_SCRIPT = "scripts/write_format2_fixture.py"
+
+
+def test_the_fixture_environment_takes_its_numerical_stack_from_the_lock() -> None:
+    """The isolated fixture environment pins jax, jaxlib and flax as ``uv.lock`` holds them.
+
+    A literal version in the action or the script floats away from the lock the day the lock
+    moves, and no pin at all floats with PyPI between two jobs of one run.
+    """
+    action = yaml.safe_load(
+        (REPO_ROOT / FIXTURE_ACTION.removeprefix("./") / "action.yml").read_text(encoding="utf-8")
+    )
+    runs = [str(step.get("run", "")) for step in action["runs"]["steps"]]
+    assert any(FIXTURE_SCRIPT in run for run in runs), "the action does not run the fixture script"
+
+    script = (REPO_ROOT / FIXTURE_SCRIPT).read_text(encoding="utf-8")
+    assert 'LOCKED = ("jax", "jaxlib", "flax")' in script
+    assert "uv.lock" in script
+    for text in (script, *runs):
+        assert not re.search(r"\b(jax|jaxlib|flax)==\d", text), (
+            "a numerical-stack version is literal"
+        )
