@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-09-18
+
 ### Changed
 
 - Requires `avitai-artifex>=0.1.12`; the lock moves it from 0.1.11 and nothing else. opifex imports
