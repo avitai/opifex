@@ -131,25 +131,47 @@ def test_the_nightly_workflow_holds_the_macos_unit_lane_under_a_runner_cap() -> 
     )
 
 
-FIXTURE_SCRIPT = "scripts/write_format2_fixture.py"
+FIXTURE_INPUTS = "scripts/format2_fixture_requirements.in"
+FIXTURE_LOCK = "scripts/format2_fixture_requirements.txt"
+_PINNED = re.compile(r"^[A-Za-z0-9_.\-]+(\[[^\]]+\])?==\S+")
+_FIXTURE_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_the_fixture_environment_takes_its_numerical_stack_from_the_lock() -> None:
-    """The isolated fixture environment pins jax, jaxlib and flax as ``uv.lock`` holds them.
+def _requirement_lines(relative_path: str) -> list[str]:
+    text = (_FIXTURE_ROOT / relative_path).read_text(encoding="utf-8")
+    return [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
 
-    A literal version in the action or the script floats away from the lock the day the lock
-    moves, and no pin at all floats with PyPI between two jobs of one run.
-    """
+
+def test_the_fixture_action_runs_the_generator_under_the_committed_lock() -> None:
+    """The fixture environment is a committed lock: it neither floats between two jobs of one
+    run (jax 0.11.2 broke flax 0.12.9's import that way) nor drifts with the project's lock."""
     action = yaml.safe_load(
-        (REPO_ROOT / FIXTURE_ACTION.removeprefix("./") / "action.yml").read_text(encoding="utf-8")
+        (_FIXTURE_ROOT / ".github/actions/format2-module-fixture" / "action.yml").read_text(
+            encoding="utf-8"
+        )
     )
     runs = [str(step.get("run", "")) for step in action["runs"]["steps"]]
-    assert any(FIXTURE_SCRIPT in run for run in runs), "the action does not run the fixture script"
+    assert any(f"--with-requirements {FIXTURE_LOCK}" in run for run in runs), (
+        "the action resolves the environment"
+    )
+    assert not any(re.search(r"--with\s", run) for run in runs), (
+        "the action adds a floating package"
+    )
 
-    script = (REPO_ROOT / FIXTURE_SCRIPT).read_text(encoding="utf-8")
-    assert 'LOCKED = ("jax", "jaxlib", "flax")' in script
-    assert "uv.lock" in script
-    for text in (script, *runs):
-        assert not re.search(r"\b(jax|jaxlib|flax)==\d", text), (
-            "a numerical-stack version is literal"
-        )
+
+def test_every_package_of_the_fixture_lock_is_pinned_and_the_inputs_are_kept() -> None:
+    locked = _requirement_lines(FIXTURE_LOCK)
+    assert locked, "the fixture lock is empty"
+    for line in locked:
+        assert _PINNED.match(line), f"unpinned requirement in the fixture lock: {line}"
+    bare = {entry.split(";")[0].strip().lower() for entry in locked}
+    for line in _requirement_lines(FIXTURE_INPUTS):
+        assert _PINNED.match(line), f"an input is not an exact pin: {line}"
+        assert line.lower() in bare, line
+    assert {"jax", "jaxlib", "flax", "orbax-checkpoint"} <= {
+        re.split(r"[\[=]", line)[0].lower() for line in locked
+    }
