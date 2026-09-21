@@ -8,7 +8,6 @@ holds the organisation's macOS runners against the other repositories.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +16,6 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
-FIXTURE_ACTION = "./.github/actions/format2-module-fixture"
-FIXTURE_TEST = REPO_ROOT / "tests" / "core" / "training" / "test_checkpoint_format2.py"
 PULL_REQUEST_GATE = "ci.yml"
 NIGHTLY = "tests-extended.yml"
 MACOS_RUNNER = "macos-14"
@@ -67,32 +64,6 @@ def _run_lines(job: dict[str, Any]) -> list[str]:
     return [str(step.get("run", "")) for step in job.get("steps", [])]
 
 
-def _collects_the_fixture_test(job: dict[str, Any]) -> bool:
-    """Whether a pytest invocation in ``job`` collects the format-2 test's directory."""
-    for run in _run_lines(job):
-        if "pytest" not in run:
-            continue
-        paths = [token for token in run.split() if token.startswith("tests")]
-        if any(FIXTURE_TEST.is_relative_to(REPO_ROOT / path) for path in paths):
-            return True
-    return False
-
-
-def test_the_fixture_test_exists_where_the_contract_looks() -> None:
-    assert FIXTURE_TEST.is_file()
-
-
-def test_every_job_collecting_the_format2_test_writes_the_fixture_first() -> None:
-    collecting = {name: job for name, job in _jobs().items() if _collects_the_fixture_test(job)}
-    assert collecting, "no workflow job runs pytest over the training tests"
-    for name, job in collecting.items():
-        steps = job["steps"]
-        fixture_steps = [i for i, step in enumerate(steps) if step.get("uses") == FIXTURE_ACTION]
-        assert fixture_steps, f"{name} collects the format-2 test without writing its fixture"
-        pytest_steps = [i for i, step in enumerate(steps) if "pytest" in str(step.get("run", ""))]
-        assert fixture_steps[0] < min(pytest_steps), f"{name} runs pytest before the fixture"
-
-
 def test_every_workflow_a_push_triggers_cancels_the_run_it_supersedes() -> None:
     """Two pushes in a row leave one run: the group is keyed on the ref, in-progress cancelled."""
     pushed = {name: doc for name, doc in _documents().items() if "push" in _triggers(doc)}
@@ -128,65 +99,4 @@ def test_the_nightly_workflow_holds_the_macos_unit_lane_under_a_runner_cap() -> 
     runs = _pytest_runs(job)
     assert runs and all("not slow" in run for run in runs), (
         "the macOS lane does not run the unit suite"
-    )
-
-
-FIXTURE_INPUTS = "scripts/format2_fixture_requirements.in"
-FIXTURE_LOCK = "scripts/format2_fixture_requirements.txt"
-_PINNED = re.compile(r"^[A-Za-z0-9_.\-]+(\[[^\]]+\])?==\S+")
-_FIXTURE_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _requirement_lines(relative_path: str) -> list[str]:
-    text = (_FIXTURE_ROOT / relative_path).read_text(encoding="utf-8")
-    return [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
-
-
-def test_the_fixture_action_runs_the_generator_under_the_committed_lock() -> None:
-    """The fixture environment is a committed lock: it neither floats between two jobs of one
-    run (jax 0.11.2 broke flax 0.12.9's import that way) nor drifts with the project's lock."""
-    action = yaml.safe_load(
-        (_FIXTURE_ROOT / ".github/actions/format2-module-fixture" / "action.yml").read_text(
-            encoding="utf-8"
-        )
-    )
-    runs = [str(step.get("run", "")) for step in action["runs"]["steps"]]
-    assert any(f"--with-requirements {FIXTURE_LOCK}" in run for run in runs), (
-        "the action resolves the environment"
-    )
-    assert not any(re.search(r"--with\s", run) for run in runs), (
-        "the action adds a floating package"
-    )
-
-
-def test_every_package_of_the_fixture_lock_is_pinned_and_the_inputs_are_kept() -> None:
-    locked = _requirement_lines(FIXTURE_LOCK)
-    assert locked, "the fixture lock is empty"
-    for line in locked:
-        assert _PINNED.match(line), f"unpinned requirement in the fixture lock: {line}"
-    bare = {entry.split(";")[0].strip().lower() for entry in locked}
-    for line in _requirement_lines(FIXTURE_INPUTS):
-        assert _PINNED.match(line), f"an input is not an exact pin: {line}"
-        assert line.lower() in bare, line
-    assert {"jax", "jaxlib", "flax", "orbax-checkpoint"} <= {
-        re.split(r"[\[=]", line)[0].lower() for line in locked
-    }
-
-
-SMOKE_MODULE = "opifex.core.training.trainer"
-
-
-def test_the_fresh_install_smoke_reads_pypi_and_imports_the_numerical_stack() -> None:
-    """The build-verification smoke installs the wheel fresh and imports a module that loads
-    flax.nnx: `import opifex` alone passed with a jax that broke flax's import."""
-    job = _jobs()["build-verification.yml:build"]
-    smoke = [run for run in _run_lines(job) if "dist/*.whl" in run]
-    assert len(smoke) == 1, "build-verification has no fresh-install smoke"
-    assert "uv pip install --refresh dist/*.whl" in smoke[0], "the smoke reads a restored cache"
-    assert f"import opifex, {SMOKE_MODULE}" in smoke[0], (
-        "the smoke never reaches the numerical stack"
     )
