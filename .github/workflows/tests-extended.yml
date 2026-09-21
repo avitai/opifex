@@ -48,8 +48,6 @@ jobs:
         # A few migration-guard tests shell out to `rg`; macOS images lack it.
         run: command -v rg >/dev/null 2>&1 || brew install ripgrep
 
-      - name: Write the format-2 checkpoint fixture
-        uses: ./.github/actions/format2-module-fixture
 
       - name: Run the unit suite
         env:
@@ -101,8 +99,6 @@ jobs:
             else sudo apt-get update && sudo apt-get install -y ripgrep; fi
           }
 
-      - name: Write the format-2 checkpoint fixture
-        uses: ./.github/actions/format2-module-fixture
 
       - name: Run extended suites
         env:

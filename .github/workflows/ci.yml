@@ -98,8 +98,6 @@ jobs:
             else sudo apt-get update && sudo apt-get install -y ripgrep; fi
           }
 
-      - name: Write the format-2 checkpoint fixture
-        uses: ./.github/actions/format2-module-fixture
 
       - name: Run tests
         env:
