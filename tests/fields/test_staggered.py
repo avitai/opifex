@@ -33,7 +33,14 @@ import numpy as np
 import pytest
 
 from opifex.fields.field import Box, Extrapolation
-from opifex.fields.staggered import divergence, face_count, gradient, StaggeredGrid
+from opifex.fields.staggered import (
+    CARRIED_BOUNDARIES,
+    divergence,
+    face_count,
+    gradient,
+    require_boundary,
+    StaggeredGrid,
+)
 
 
 BOX = Box(lower=(0.0, 0.0), upper=(1.0, 1.0))
@@ -191,3 +198,48 @@ class TestTransforms:
         mapped = jax.vmap(project)(batch)
 
         assert mapped.shape == (2, *resolution)
+
+
+class TestTheBoundaryContract:
+    """One owner for which boundaries each part of the layer carries.
+
+    The parts differ -- the grid operators take all three, the projection takes two, and
+    convection and diffusion take one -- so a caller assembling a simulation from them
+    would otherwise meet the limit one operation at a time, at whichever raised first.
+    """
+
+    def test_every_operation_declares_what_it_carries(self) -> None:
+        assert set(CARRIED_BOUNDARIES) == {
+            "the grid operators",
+            "the pressure projection",
+            "convection",
+            "diffusion",
+        }
+        assert all(boundaries for boundaries in CARRIED_BOUNDARIES.values())
+
+    def test_a_carried_boundary_is_accepted(self) -> None:
+        require_boundary(Extrapolation.PERIODIC, "convection")
+
+    def test_a_refusal_names_the_whole_layer_not_just_the_caller(self) -> None:
+        with pytest.raises(ValueError, match="does not carry") as refusal:
+            require_boundary(Extrapolation.ZERO, "convection")
+
+        message = str(refusal.value)
+        assert "convection" in message
+        # The point of the single owner: one refusal teaches the whole picture.
+        for operation in CARRIED_BOUNDARIES:
+            assert operation in message
+        assert "Sanderse" in message
+
+    @pytest.mark.parametrize(
+        ("operation", "extrapolation"),
+        [
+            ("the pressure projection", Extrapolation.ZERO),
+            ("the grid operators", Extrapolation.NEUMANN),
+        ],
+    )
+    def test_the_declaration_matches_what_the_code_does(
+        self, operation: str, extrapolation: Extrapolation
+    ) -> None:
+        # A declaration that drifted from the implementation would be worse than none.
+        require_boundary(extrapolation, operation)

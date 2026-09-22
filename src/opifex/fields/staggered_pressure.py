@@ -39,7 +39,7 @@ import jax.numpy as jnp
 from jax.scipy.fft import dct, idct
 
 from opifex.fields.field import Box, Extrapolation
-from opifex.fields.staggered import divergence, gradient, StaggeredGrid
+from opifex.fields.staggered import divergence, gradient, require_boundary, StaggeredGrid
 
 
 def _axis_eigenvalues(cells: int, spacing: jax.Array, extrapolation: Extrapolation) -> jax.Array:
@@ -52,21 +52,11 @@ def _axis_eigenvalues(cells: int, spacing: jax.Array, extrapolation: Extrapolati
 
     Returns:
         One eigenvalue per mode along the axis.
-
-    Raises:
-        ValueError: If the boundary has no separable transform here.
     """
+    require_boundary(extrapolation, "the pressure projection")
     index = jnp.arange(cells)
-    if extrapolation == Extrapolation.PERIODIC:
-        angle = jnp.pi * index / cells
-    elif extrapolation == Extrapolation.ZERO:
-        angle = jnp.pi * index / (2 * cells)
-    else:
-        msg = (
-            f"No separable transform for {extrapolation.value} boundaries; "
-            "an iterative solve is needed for this geometry"
-        )
-        raise ValueError(msg)
+    periodic = extrapolation == Extrapolation.PERIODIC
+    angle = jnp.pi * index / (cells if periodic else 2 * cells)
     return -4.0 * jnp.sin(angle) ** 2 / spacing**2
 
 
