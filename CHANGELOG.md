@@ -45,6 +45,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `solve_navier_stokes_2d` solves the equations it names. Its advection was first-order
+  upwind, whose numerical viscosity of `|u| dx / 2` stood an order of magnitude above a
+  physical `nu` of 0.01 at 32 cells, so a Taylor-Green vortex decayed 8% too fast at
+  `t = 1` and 29% at `t = 5`, with the error falling only by half whenever the grid did.
+  It now integrates on a staggered layout whose convective term produces no energy and
+  whose projection is exact, and the decay error is 6.4e-05 and 3.2e-04 at those times --
+  second order, with the relative error times `n^2` flat at 0.066 per unit time across 16
+  to 128 cells. The strict xfail that held the requirement is removed.
+- `solve_navier_stokes_2d`, `solve_burgers_2d` and `Burgers2DSolver.solve` differentiate
+  in reverse mode. Each stepped adaptively to its CFL limit inside a `lax.while_loop`,
+  which traces and maps but carries no transpose rule, so `jax.grad` of anything reaching
+  them raised outright -- a correctness defect in a differentiable-physics library, and
+  one that `jit` and `vmap` tests cannot see. They take a fixed sub-step count under
+  `lax.scan` instead; `stable_substep_count` and `stable_step_count` derive that count
+  from the same Courant condition the adaptive versions enforced.
+- `_legendre_basis` and `_hermite_basis` differentiate in reverse mode, for the same
+  reason and with no behaviour change: their trip count is the requested degree, a Python
+  int, so `lax.fori_loop` was always the right construct. Values move by 5.96e-08, which
+  is float32 round-off, and still match `numpy.polynomial` to 6.3e-07.
 - The BlackJAX backend reports an effective sample size that can be believed. Its own
   estimator truncated Geyer's initial positive sequence at `min(n // 2, 64)`, which has no
   basis in the method and biases the estimate down, then clamped the result to `[1, n]`.
@@ -74,6 +93,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
   vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
   `lax.scan`, the structure `solve_burgers_2d` already uses.
+
+### Changed
+
+- `solve_navier_stokes_2d` uses the operators and the projection in `opifex.fields` instead
+  of its own copies of gradient, divergence, Laplacian and the Poisson solve. The copies
+  were bit-for-bit identical to the shared ones and compile to the same kernel, so the
+  duplication bought nothing and hid the defect above from the fix in `fields`.
+
+### Changed
+
+- `pressure_solve_lsmr(velocity, num_matvecs=500)` replaces `pressure_solve_jacobi`. The
+  composed operator is neither symmetric nor invertible under a zero-gradient boundary, where
+  a relaxation or a conjugate-gradient iterate drifts into its null space and diverges; a
+  least-squares solve takes the minimum-norm solution instead. Prefer
+  `pressure_solve_spectral` for periodic fields, which is about a hundred times faster.
+- `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
+  the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
+  its output around, where a count of adaptive steps cannot.
+
+### Fixed
+
 - `opifex.uncertainty.linalg.lsmr` is the LSMR recurrence of Fong and Saunders (2011, SIAM J.
   Sci. Comput. 33(5), 2950): a bidiagonalisation kept factorised by two Givens rotations per
   step. It projected onto the Krylov basis and then solved the normal equations there, which
