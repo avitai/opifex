@@ -37,8 +37,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from opifex.fields.field import Extrapolation
-from opifex.fields.staggered import StaggeredGrid
+from opifex.fields.staggered import require_boundary, StaggeredGrid
 
 
 def _average_forward(values: jax.Array, axis: int) -> jax.Array:
@@ -62,24 +61,16 @@ def convect(transported: StaggeredGrid, velocity: StaggeredGrid) -> StaggeredGri
         transported: The field being carried, on cell faces.
         velocity: The field carrying it, on the same faces.
 
+    A boundary this does not carry is refused by ``require_boundary``, which names what
+    every part of the layer carries: a wall needs a one-sided interpolation whose form
+    decides whether energy conservation survives it, a separate question from the
+    interior scheme.
+
     Returns:
         The convective term, on the same faces as ``transported``.
-
-    Raises:
-        ValueError: If the boundary is not periodic. A wall needs a one-sided
-            interpolation whose form decides whether energy conservation survives the
-            boundary, which is a separate question from the interior scheme.
     """
-    if (
-        transported.extrapolation != Extrapolation.PERIODIC
-        or velocity.extrapolation != Extrapolation.PERIODIC
-    ):
-        msg = (
-            "Staggered convection currently carries periodic boundaries only; a wall "
-            "needs the one-sided boundary interpolation of Sanderse, Verstappen and "
-            "Koren 2014, which is what decides whether the skew-symmetry survives it"
-        )
-        raise ValueError(msg)
+    require_boundary(transported.extrapolation, "convection")
+    require_boundary(velocity.extrapolation, "convection")
 
     spacing = transported.dx
     components = []
