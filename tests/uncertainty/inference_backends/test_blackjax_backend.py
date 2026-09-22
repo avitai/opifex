@@ -18,11 +18,13 @@ It must:
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import jax
 import jax.numpy as jnp
 import pytest
+from artifex.generative_models.core.sampling import effective_sample_size
 from flax import nnx
 from substrax.rng import MissingRngStreamError
 
@@ -86,31 +88,47 @@ def test_blackjax_backend_diagnostics_surface_post_hoc_ess() -> None:
     assert result.diagnostics.ess is not None
     # ESS is per-parameter; init_state has 3 dims, n_samples=20.
     assert result.diagnostics.ess.shape == (3,)
-    # ESS must be positive and bounded above by n_samples.
+    # A chain whose draws alternate about the mean carries more information than its
+    # length, so the estimate is NOT bounded by the draw count. The bound it does obey is
+    # `draws * log10(draws)`, the guard Vehtari et al. (2021, Bayesian Analysis 16(2),
+    # 667, section 3.2) describe and Stan and ArviZ apply. The previous assertion held
+    # only because the estimator clamped its own output to the draw count, which also hid
+    # a constant chain reading the chain length instead of zero.
+    draws = 20
     assert jnp.all(result.diagnostics.ess > 0)
-    assert jnp.all(result.diagnostics.ess <= 20)
+    assert jnp.all(result.diagnostics.ess <= draws * math.log10(draws) * (1 + 1e-6))
 
 
-def test_compute_ess_is_jit_compatible() -> None:
-    """``_compute_ess`` is a pure JAX function and must trace under ``jax.jit``."""
-    from opifex.uncertainty.inference_backends.blackjax import _compute_ess
-
+def test_the_ess_estimator_is_jit_compatible() -> None:
+    """The estimator is a pure JAX function and must trace under ``jax.jit``."""
     samples = jax.random.normal(jax.random.PRNGKey(0), (32, 3))
-    jit_ess = jax.jit(_compute_ess)
-    out = jit_ess(samples)
+
+    out = jax.jit(effective_sample_size)(samples)
+
     assert out.shape == (3,)
     assert jnp.all(out > 0)
 
 
-def test_compute_ess_is_grad_compatible() -> None:
-    """``_compute_ess`` must differentiate through samples for use in jit/grad pipelines."""
-    from opifex.uncertainty.inference_backends.blackjax import _compute_ess
-
+def test_the_ess_estimator_is_grad_compatible() -> None:
+    """It must differentiate through the samples for use in jit/grad pipelines."""
     samples = jax.random.normal(jax.random.PRNGKey(0), (32, 3))
-    grad_fn = jax.grad(lambda s: jnp.sum(_compute_ess(s)))
-    grads = grad_fn(samples)
+
+    grads = jax.grad(lambda s: jnp.sum(effective_sample_size(s)))(samples)
+
     assert grads.shape == samples.shape
     assert jnp.all(jnp.isfinite(grads))
+
+
+def test_a_chain_that_never_moves_is_worth_no_draws() -> None:
+    """The case the previous estimator could not express, because it clamped to [1, n].
+
+    BlackJAX 1.6.2 reports the guard value here -- 6602 for 2000 constant draws -- and the
+    estimator opifex used before returned the chain length. Both are fabrications: a chain
+    carrying no information is worth zero draws.
+    """
+    constant = jnp.ones((32, 3))
+
+    assert jnp.all(effective_sample_size(constant) == 0.0)
 
 
 def test_blackjax_backend_spec_advertises_supported_and_unsupported_samplers() -> None:

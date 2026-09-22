@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The BlackJAX backend reports an effective sample size that can be believed. Its own
+  estimator truncated Geyer's initial positive sequence at `min(n // 2, 64)`, which has no
+  basis in the method and biases the estimate down, then clamped the result to `[1, n]`.
+  The clamp hid both ends: a chain whose draws never move is worth no draws and read the
+  chain length instead, and a chain that alternates about its mean is legitimately worth
+  more than its length and was cut back to it. It now comes from
+  `artifex.generative_models.core.sampling.effective_sample_size`, which is the same place
+  the samplers come from.
+
+### Changed
+
+- Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
+  packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
+  pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
+
 - `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
   compact five-point Laplacian while the correction subtracted a two-point central gradient,
   so the projection left most of the divergence in place: a divergent start still measured

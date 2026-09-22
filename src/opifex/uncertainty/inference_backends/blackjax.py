@@ -34,8 +34,8 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-import jax
-import jax.numpy as jnp
+import jax  # noqa: TC002 — a first-class dependency, imported at runtime by design
+from artifex.generative_models.core.sampling import effective_sample_size
 from artifex.generative_models.core.sampling.base import (
     SamplingAlgorithm,
 )
@@ -153,7 +153,7 @@ class BlackJAXBackend:
         samples = self._dispatch(log_prob_fn, key)
         return BackendResult(
             sampler_state=samples,
-            diagnostics=BackendDiagnostics(ess=_compute_ess(samples)),
+            diagnostics=BackendDiagnostics(ess=effective_sample_size(samples)),
         )
 
     def _dispatch(
@@ -249,50 +249,6 @@ class BlackJAXBackend:
                 ("n_burnin", self.n_burnin),
             ),
         )
-
-
-def _compute_ess(samples: jax.Array) -> jax.Array:
-    """Effective sample size per parameter from a single MCMC chain.
-
-    Implements the standard autocorrelation-based estimator
-    ``ESS = N / (1 + 2 * sum_{k=1..K} rho_k)`` where ``rho_k`` is the
-    sample autocorrelation at lag ``k`` and ``K`` is the smallest lag where
-    autocorrelation crosses zero (Geyer's initial positive sequence cutoff,
-    see Geyer 1992 "Practical Markov Chain Monte Carlo").
-
-    Args:
-        samples: Posterior samples of shape ``(n_samples, ...)``. Per-element
-            ESS is computed independently along the leading sample axis.
-
-    Returns:
-        Array of ESS values with shape ``samples.shape[1:]``.
-
-    """
-    n = samples.shape[0]
-    if n < 4:
-        return jnp.full(samples.shape[1:], float(n))
-
-    centered = samples - jnp.mean(samples, axis=0, keepdims=True)
-    var = jnp.mean(centered * centered, axis=0)
-    var = jnp.where(var == 0, 1.0, var)
-
-    # Compute autocorrelations up to max_lag via direct sum. Bounded at
-    # n // 2 to limit cost on long chains.
-    max_lag = min(n // 2, 64)
-    rho_sum = jnp.zeros(samples.shape[1:], dtype=samples.dtype)
-    # Track whether each parameter has hit its first-negative-rho cutoff.
-    cutoff_hit = jnp.zeros(samples.shape[1:], dtype=jnp.bool_)
-    for lag in range(1, max_lag + 1):
-        rho_k = jnp.mean(centered[lag:] * centered[:-lag], axis=0) / var
-        # Geyer's initial positive sequence: stop adding once rho_k becomes
-        # non-positive (per parameter independently).
-        active = jnp.logical_and(~cutoff_hit, rho_k > 0)
-        rho_sum = rho_sum + jnp.where(active, rho_k, 0.0)
-        cutoff_hit = jnp.logical_or(cutoff_hit, ~active)
-
-    iat = 1.0 + 2.0 * rho_sum
-    ess = jnp.asarray(n) / iat
-    return jnp.clip(ess, 1.0, float(n))
 
 
 BLACKJAX_BACKEND_SPEC = InferenceBackendSpec(
