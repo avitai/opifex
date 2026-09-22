@@ -24,8 +24,7 @@ the tests measure. Both reference implementations of this scheme project per sta
 
 The trajectory is a ``lax.scan`` of fixed length rather than an adaptive loop, so the whole
 integration differentiates in reverse mode. An adaptive step is a ``lax.while_loop`` with a
-data-dependent trip count, which has no reverse-mode rule at all -- the defect that makes
-``opifex.physics.solvers.navier_stokes.solve_navier_stokes_2d`` non-differentiable.
+data-dependent trip count, which has no reverse-mode rule at all.
 
 References:
     * Sanderse 2013 -- *Energy-conserving Runge-Kutta methods for the incompressible
@@ -84,12 +83,12 @@ def laplacian(field: StaggeredGrid) -> StaggeredGrid:
     return StaggeredGrid(tuple(components), field.box, field.extrapolation, field.resolution)
 
 
-def tendency(velocity: StaggeredGrid, viscosity: float) -> StaggeredGrid:
+def tendency(velocity: StaggeredGrid, viscosity: float | jax.Array) -> StaggeredGrid:
     """The rate of change of the velocity, before the pressure is applied.
 
     Args:
         velocity: Velocity on cell faces, divergence free.
-        viscosity: Kinematic viscosity.
+        viscosity: Kinematic viscosity; may be traced.
 
     Returns:
         ``-div(u u) + nu * lap(u)``, on the same faces.
@@ -101,7 +100,7 @@ def tendency(velocity: StaggeredGrid, viscosity: float) -> StaggeredGrid:
     )
 
 
-def _combine(*weighted: tuple[float, StaggeredGrid]) -> StaggeredGrid:
+def _combine(*weighted: tuple[float | jax.Array, StaggeredGrid]) -> StaggeredGrid:
     """A weighted sum of fields sharing a layout."""
     (_, first), *rest = weighted
     total = jax.tree.map(lambda value: weighted[0][0] * value, first)
@@ -110,7 +109,9 @@ def _combine(*weighted: tuple[float, StaggeredGrid]) -> StaggeredGrid:
     return total
 
 
-def step(velocity: StaggeredGrid, dt: float, viscosity: float) -> StaggeredGrid:
+def step(
+    velocity: StaggeredGrid, dt: float | jax.Array, viscosity: float | jax.Array
+) -> StaggeredGrid:
     """Advance one classical fourth-order Runge-Kutta step, projecting at every stage.
 
     Args:
@@ -178,7 +179,10 @@ def stable_step_count(
 
 
 def integrate(
-    velocity: StaggeredGrid, total_time: float, num_steps: int, viscosity: float
+    velocity: StaggeredGrid,
+    total_time: float | jax.Array,
+    num_steps: int,
+    viscosity: float | jax.Array,
 ) -> StaggeredGrid:
     """Advance the velocity over ``total_time`` in ``num_steps`` equal steps.
 

@@ -906,7 +906,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/optimization/second_order/nnx_integration.py" = ["ANN001", "ANN202"]
 "src/opifex/physics/solvers/burgers.py" = ["ANN001", "ANN202"]
 "src/opifex/physics/solvers/diffusion_advection.py" = ["ANN001", "ANN202"]
-"src/opifex/physics/solvers/navier_stokes.py" = ["ANN001", "ANN202"]
 "src/opifex/physics/solvers/shallow_water.py" = ["ANN001", "ANN202"]
 "src/opifex/platform/registry/core.py" = ["ANN202"]
 "src/opifex/solvers/ude.py" = ["ANN001"]

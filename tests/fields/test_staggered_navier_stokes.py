@@ -288,11 +288,10 @@ class TestTheOperatorsApproximateWhatTheyClaim:
 class TestBoundariesNotYetCarried:
     """What the viscous operator refuses, and why refusing beats approximating.
 
-    Found by a blast-radius audit rather than by these tests, which is the lesson: every
-    test of this path used a periodic grid, so an operator that ignored the boundary
-    entirely passed all of them. On a walled grid the rolling stencil diffuses momentum
-    out through one wall and back in through the opposite one -- measured at 8 cells, a
-    spike on the first row reached the far wall at 64.0 rather than 0.
+    The rolling stencil wraps, so on a walled grid it would diffuse momentum out through
+    one wall and back in through the opposite one: measured at 8 cells, a spike on the
+    first row reaches the far wall at 64.0 where it should reach 0. A periodic grid cannot
+    show that, so the case is covered here explicitly.
     """
 
     @pytest.mark.parametrize("extrapolation", [Extrapolation.ZERO, Extrapolation.NEUMANN])

@@ -68,8 +68,14 @@ class TestIncompressibility:
     4.7e-10 for a single step from a divergent start.
     """
 
-    # Round-off of a float32 central difference at dx = 2 pi / 32.
-    _ROUNDOFF = 1e-6
+    # What is left after an exact projection is the round-off of the central difference
+    # that measures it, which divides by dx and so grows as the grid is refined. Measured
+    # max|div| over an evolved trajectory, as a multiple of eps/dx: 2.36, 2.09, 1.87, 1.81
+    # at 16, 32, 64 and 128 cells -- flat, which makes eps/dx the model and a single
+    # number the wrong shape. The limit is four times the largest of those.
+    @staticmethod
+    def _roundoff(n: int) -> float:
+        return 8.0 * float(jnp.finfo(jnp.float32).eps) / (2.0 * jnp.pi / n)
 
     @staticmethod
     def _max_divergence(u: jax.Array, v: jax.Array) -> float:
@@ -88,32 +94,39 @@ class TestIncompressibility:
         u_traj, v_traj = solve_navier_stokes_2d(u0, v0, 0.05, (0.0, 0.5), 4, 32)
 
         for step in range(1, u_traj.shape[0]):
-            assert self._max_divergence(u_traj[step], v_traj[step]) <= self._ROUNDOFF
+            assert self._max_divergence(u_traj[step], v_traj[step]) <= self._roundoff(32)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "The advection term is first-order upwind, whose numerical viscosity is "
-            "|u| dx / 2 -- 0.098 at this resolution against a physical nu of 0.01. The "
-            "vortex decays 8% faster than exp(-2 nu t) at t=1 and 29% faster at t=5, and "
-            "the error falls by 1.85x, 1.90x, 1.95x as the grid is halved from 16 to 128, "
-            "which is the first-order convergence that names the cause. Remove the marker "
-            "with the scheme."
-        ),
-    )
-    def test_the_vortex_decays_at_the_analytic_rate(self) -> None:
+    @pytest.mark.parametrize(("final_time", "resolution"), [(1.0, 32), (1.0, 64), (5.0, 32)])
+    def test_the_vortex_decays_at_the_analytic_rate(
+        self, final_time: float, resolution: int
+    ) -> None:
+        """The Taylor-Green vortex decays as ``exp(-2 nu t)``, and now it does.
+
+        The limit is not a fixed tolerance. Measured, the relative error times ``n^2`` is
+        flat -- 0.0655, 0.0656, 0.0663, 0.0658 at 16, 32, 64 and 128 cells for ``t = 1``
+        -- and scales linearly with the interval, giving ``0.066 * t / n^2``. So the
+        second order is itself the assertion, and a fixed tolerance wide enough for the
+        coarsest grid would pass a scheme a hundred times worse on the finest.
+
+        An advection term dissipating faster than the equations it solves fails this: a
+        numerical viscosity of ``|u| dx / 2`` at 32 cells stands an order of magnitude
+        above a physical ``nu`` of 0.01, which costs the vortex 8% of its decay at
+        ``t = 1`` and 29% at ``t = 5`` and converges only at first order.
+        """
         from opifex.physics.solvers.navier_stokes import (
             create_taylor_green_vortex,
             solve_navier_stokes_2d,
         )
 
-        viscosity, final_time = 0.01, 1.0
-        u0, v0 = create_taylor_green_vortex(32)
+        viscosity = 0.01
+        u0, v0 = create_taylor_green_vortex(resolution)
 
-        u_traj, _ = solve_navier_stokes_2d(u0, v0, viscosity, (0.0, final_time), 5, 32)
+        u_traj, _ = solve_navier_stokes_2d(u0, v0, viscosity, (0.0, final_time), 5, resolution)
 
         decay = float(jnp.max(jnp.abs(u_traj[-1]))) / float(jnp.max(jnp.abs(u0)))
-        assert decay == pytest.approx(jnp.exp(-2 * viscosity * final_time), rel=0.01)
+        analytic = float(jnp.exp(-2 * viscosity * final_time))
+        limit = 0.2 * final_time / resolution**2
+        assert abs(decay - analytic) / analytic <= limit
 
     def test_a_divergent_start_is_projected_within_one_step(self) -> None:
         # The Taylor-Green vortex starts divergence free, so it cannot show whether the
@@ -130,7 +143,7 @@ class TestIncompressibility:
         u_traj, v_traj = solve_navier_stokes_2d(u0, v0, 0.05, (0.0, 0.1), 1, resolution)
 
         assert before > 0.1
-        assert self._max_divergence(u_traj[-1], v_traj[-1]) <= self._ROUNDOFF
+        assert self._max_divergence(u_traj[-1], v_traj[-1]) <= self._roundoff(resolution)
 
 
 class TestNavierStokesSolver:
@@ -219,14 +232,21 @@ class TestNavierStokesSolver:
         )
 
         # The Taylor-Green vortex decays as exp(-2 nu t), so at nu=0.01 over one time unit
-        # the amplitude falls by 2%. A margin of 0.1 is wider than the whole physical
-        # change and read spurious drift as evolution; what the solution owes is that it
-        # decays, monotonically and at least as fast as the analytic rate, since a
-        # discretisation adds dissipation and never removes it.
+        # the amplitude falls by 2%. A margin of 0.1 was wider than the whole physical
+        # change and read spurious drift as evolution.
+        #
+        # The one-sided form this replaces -- decays at least as fast as the analytic rate
+        # -- was written for the upwind scheme on the reasoning that a discretisation adds
+        # dissipation and never removes it. That is false for a scheme whose convective
+        # term produces no energy: its error is dispersive and lands on either side. It
+        # now sits 6.3e-05 above the analytic amplitude, which the old assertion read as a
+        # failure. Two-sided, against the same second-order bound the decay-rate test
+        # uses.
         amplitudes = [float(jnp.max(jnp.abs(frame))) for frame in u_traj]
+        analytic = float(jnp.exp(-2 * 0.01 * 1.0))
 
         assert all(later < earlier for earlier, later in itertools.pairwise(amplitudes))
-        assert amplitudes[-1] <= float(jnp.exp(-2 * 0.01 * 1.0)) * amplitudes[0]
+        assert abs(amplitudes[-1] / amplitudes[0] - analytic) / analytic <= 0.2 / resolution**2
 
     def test_solve_with_different_viscosities(self):
         """Test that higher viscosity leads to more diffusion."""
