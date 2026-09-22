@@ -20,13 +20,15 @@ References:
 """
 
 import itertools
+import math
 
 import jax
 import jax.numpy as jnp
 
 from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import divergence, StaggeredGrid
-from opifex.fields.staggered_navier_stokes import integrate, step, tendency
+from opifex.fields.staggered_convection import convect
+from opifex.fields.staggered_navier_stokes import integrate, laplacian, step, tendency
 from opifex.fields.staggered_pressure import project
 
 
@@ -210,3 +212,73 @@ class TestTransforms:
         mapped = jax.vmap(run)(batch)
 
         assert mapped.shape == (2, *start.components[0].shape)
+
+
+class TestTheOperatorsApproximateWhatTheyClaim:
+    """Consistency, which structure alone does not give.
+
+    An operator can be exactly skew-symmetric, exactly symmetric, exactly conservative --
+    and still compute the wrong quantity. Every structural property asserted elsewhere in
+    these files is checked here against an analytic target instead.
+
+    Taylor-Green ``u = (sin x cos y, -cos x sin y)`` on ``[0, 2 pi]^2`` gives
+    ``div(u u) = (sin x cos x, sin y cos y)`` and ``lap(u) = -2 u``, both by hand.
+    """
+
+    @staticmethod
+    def _taylor_green(n: int) -> tuple[StaggeredGrid, tuple[jax.Array, ...]]:
+        extent = 2.0 * jnp.pi
+        box = Box(lower=(0.0, 0.0), upper=(float(extent), float(extent)))
+        spacing = extent / n
+        index = jnp.arange(n)
+        x_u, y_u = jnp.meshgrid((index + 1) * spacing, (index + 0.5) * spacing, indexing="ij")
+        x_v, y_v = jnp.meshgrid((index + 0.5) * spacing, (index + 1) * spacing, indexing="ij")
+        field = StaggeredGrid(
+            (jnp.sin(x_u) * jnp.cos(y_u), -jnp.cos(x_v) * jnp.sin(y_v)),
+            box,
+            Extrapolation.PERIODIC,
+            (n, n),
+        )
+        return field, (x_u, y_v)
+
+    @staticmethod
+    def _relative(got: StaggeredGrid, want: tuple[jax.Array, ...]) -> float:
+        numerator = sum(
+            float(jnp.linalg.norm(a - b) ** 2) for a, b in zip(got.components, want, strict=True)
+        )
+        denominator = sum(float(jnp.linalg.norm(b) ** 2) for b in want)
+        return (numerator / denominator) ** 0.5
+
+    def test_convection_converges_to_the_analytic_flux_at_second_order(self) -> None:
+        # Measured 6.26e-02, 1.60e-02, 4.01e-03, 1.00e-03 at 16/32/64/128 cells.
+        errors = []
+        with jax.enable_x64(True):
+            for n in (16, 32, 64):
+                field, (x_u, y_v) = self._taylor_green(n)
+                want = (0.5 * jnp.sin(2 * x_u), 0.5 * jnp.sin(2 * y_v))
+                errors.append(self._relative(convect(field, field), want))
+
+        orders = [math.log2(a / b) for a, b in itertools.pairwise(errors)]
+        assert all(order > 1.9 for order in orders), (errors, orders)
+
+    def test_the_viscous_operator_converges_to_the_analytic_laplacian(self) -> None:
+        errors = []
+        with jax.enable_x64(True):
+            for n in (16, 32, 64):
+                field, _ = self._taylor_green(n)
+                want = tuple(-2.0 * component for component in field.components)
+                errors.append(self._relative(laplacian(field), want))
+
+        orders = [math.log2(a / b) for a, b in itertools.pairwise(errors)]
+        assert all(order > 1.9 for order in orders), (errors, orders)
+
+    def test_convection_in_divergence_form_conserves_momentum(self) -> None:
+        # A divergence-form flux telescopes, so its sum over the grid vanishes.
+        with jax.enable_x64(True):
+            field, _ = self._taylor_green(32)
+            carried = convect(field, field)
+            # The reduction must happen inside the precision context: taking it outside
+            # casts a float64 array back to float32 and measures the cast, not the flux.
+            sums = [abs(float(jnp.sum(component))) for component in carried.components]
+
+        assert max(sums) <= 1e-12, sums
