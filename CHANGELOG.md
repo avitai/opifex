@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
+  compact five-point Laplacian while the correction subtracted a two-point central gradient,
+  so the projection left most of the divergence in place: a divergent start still measured
+  0.31 after a step, and an evolved Taylor-Green vortex 6.4e-03. Both are now at the
+  round-off of the difference that measures them, 4.7e-10 and 2.4e-07. Trajectories
+  generated through `opifex.data.sources.pde_generation` before this carry the old field.
 - The pressure solves project. Both inverted an operator other than the one the projection
   applies -- `pressure_solve_spectral` the continuous symbol and the Jacobi solve the compact
   three-point `laplacian`, while the correction subtracts the two-point central `gradient`,
@@ -24,6 +30,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
   vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
   `lax.scan`, the structure `solve_burgers_2d` already uses.
+
+### Changed
+
+- `solve_navier_stokes_2d` uses the operators and the projection in `opifex.fields` instead
+  of its own copies of gradient, divergence, Laplacian and the Poisson solve. The copies
+  were bit-for-bit identical to the shared ones and compile to the same kernel, so the
+  duplication bought nothing and hid the defect above from the fix in `fields`.
+
+### Known issues
+
+- `solve_navier_stokes_2d` dissipates faster than the equations it solves: the advection
+  term is first-order upwind, whose numerical viscosity is `|u| dx / 2`, an order of
+  magnitude above a physical `nu` of 0.01 at 32 cells. A Taylor-Green vortex decays 8%
+  faster than `exp(-2 nu t)` at `t = 1` and 29% faster at `t = 5`, and the error falls by
+  half whenever the grid does, which is the first-order convergence that names the cause.
+  `test_the_vortex_decays_at_the_analytic_rate` holds the requirement as a strict xfail.
 
 ### Changed
 

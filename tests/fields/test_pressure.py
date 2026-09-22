@@ -36,6 +36,14 @@ def _solenoidal(n: int) -> CenteredGrid:
     return CenteredGrid(jnp.stack([vx, vy], axis=-1), BOX, Extrapolation.PERIODIC)
 
 
+# What a float32 projection cannot go below is the round-off of the central difference
+# that measures it, eps over dx, so the residual grows with resolution: measured 3.3e-07,
+# 8.7e-07 and 4.8e-06 relative at 16, 32 and 64 cells for the spectral solve, and at most
+# 6.9e-06 for the least-squares solve across the three boundaries. The limit is four times
+# the largest of those.
+_RESIDUAL = 2e-5
+
+
 def _divergence_norm(field: CenteredGrid) -> float:
     return float(jnp.linalg.norm(divergence(field).values))
 
@@ -49,7 +57,7 @@ class TestSpectralPressureSolve:
 
         projected, _ = pressure_solve_spectral(velocity)
 
-        assert _divergence_norm(projected) <= 1e-5 * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
 
     def test_the_pressure_solves_the_operator_the_projection_applies(self) -> None:
         # Operator consistency: p solves divergence(gradient(p)) = divergence(v), not some
@@ -59,15 +67,17 @@ class TestSpectralPressureSolve:
         _, pressure = pressure_solve_spectral(velocity)
 
         residual = divergence(gradient(pressure)).values - divergence(velocity).values
-        assert float(jnp.linalg.norm(residual)) <= 1e-5 * _divergence_norm(velocity)
+        assert float(jnp.linalg.norm(residual)) <= _RESIDUAL * _divergence_norm(velocity)
 
     def test_a_divergence_free_field_is_left_alone(self) -> None:
         velocity = _solenoidal(32)
 
         projected, pressure = pressure_solve_spectral(velocity)
 
-        assert jnp.allclose(projected.values, velocity.values, atol=1e-4)
-        assert float(jnp.max(jnp.abs(pressure.values))) <= 1e-4
+        # Neither component varies along the axis it is differentiated on, so the
+        # divergence is a subtraction of identical values and is zero exactly, not nearly.
+        assert jnp.array_equal(projected.values, velocity.values)
+        assert jnp.array_equal(pressure.values, jnp.zeros_like(pressure.values))
 
     def test_it_refuses_boundaries_it_cannot_represent(self) -> None:
         with pytest.raises(ValueError, match="periodic"):
@@ -78,7 +88,7 @@ class TestSpectralPressureSolve:
 
         projected, _ = jax.jit(pressure_solve_spectral)(velocity)
 
-        assert _divergence_norm(projected) <= 1e-5 * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
 
     def test_it_maps_over_a_batch_of_fields(self) -> None:
         velocity = _velocity(16)
@@ -107,7 +117,7 @@ class TestLeastSquaresPressureSolve:
 
         projected, _ = pressure_solve_lsmr(velocity)
 
-        assert _divergence_norm(projected) <= 1e-4 * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
 
     def test_it_agrees_with_the_spectral_solve_on_a_periodic_field(self) -> None:
         velocity = _velocity(32)
@@ -115,15 +125,15 @@ class TestLeastSquaresPressureSolve:
         from_cg, _ = pressure_solve_lsmr(velocity)
         from_fft, _ = pressure_solve_spectral(velocity)
 
-        assert jnp.allclose(from_cg.values, from_fft.values, atol=1e-4)
+        assert jnp.allclose(from_cg.values, from_fft.values, atol=1e-5)
 
     def test_a_divergence_free_field_is_left_alone(self) -> None:
         velocity = _solenoidal(32)
 
         projected, pressure = pressure_solve_lsmr(velocity)
 
-        assert jnp.allclose(projected.values, velocity.values, atol=1e-4)
-        assert float(jnp.max(jnp.abs(pressure.values))) <= 1e-4
+        assert jnp.array_equal(projected.values, velocity.values)
+        assert jnp.array_equal(pressure.values, jnp.zeros_like(pressure.values))
 
     def test_more_iterations_leave_less_divergence(self) -> None:
         velocity = _velocity(32, Extrapolation.NEUMANN)
@@ -138,4 +148,4 @@ class TestLeastSquaresPressureSolve:
 
         projected, _ = jax.jit(pressure_solve_lsmr)(velocity)
 
-        assert _divergence_norm(projected) <= 1e-4 * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)

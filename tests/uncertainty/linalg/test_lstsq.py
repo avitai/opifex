@@ -163,6 +163,21 @@ class TestAgainstTheReferenceImplementation:
         scale = jnp.logspace(0.0, -jnp.log10(condition), columns, dtype=dtype)
         return left * scale, jax.random.normal(jax.random.key(1), (rows,), dtype)
 
+    def test_a_rank_deficient_system_gets_the_minimum_norm_solution(self) -> None:
+        # The property the pressure projection depends on: where the operator is singular,
+        # LSMR picks the solution of least norm rather than any least-squares solution, so
+        # the iterate never wanders into the null space.
+        from scipy.sparse.linalg import lsmr as scipy_lsmr
+
+        matrix, _ = self._system(12, 4)
+        repeated = jnp.hstack([matrix, matrix[:, :1]])
+        rhs = repeated @ jnp.asarray([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        reference = scipy_lsmr(np.asarray(repeated, dtype=np.float64), np.asarray(rhs))[0]
+        solution = lsmr(rhs=rhs, num_matvecs=200, **_matrix_free(repeated))
+
+        np.testing.assert_allclose(solution, reference, rtol=1e-4, atol=1e-5)
+
     def test_it_matches_scipy_on_a_well_conditioned_system(self) -> None:
         from scipy.sparse.linalg import lsmr as scipy_lsmr
 
