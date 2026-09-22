@@ -32,6 +32,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from flax import nnx
 
 
 def _import_risk_control():
@@ -207,15 +208,123 @@ def test_non_monotonic_loss_path_records_conservative_method_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_bootstrap_threshold_ci_reuses_calibrax_analyzer() -> None:
+def _normal_samples(n: int = 64) -> jax.Array:
+    return jnp.asarray(np.random.default_rng(0).standard_normal(size=(n,)))
+
+
+def test_bootstrap_threshold_ci_brackets_the_sample_mean() -> None:
     rc = _import_risk_control()
-    rng = np.random.default_rng(0)
-    samples = rng.standard_normal(size=(64,)).tolist()
-    lo, hi = rc.bootstrap_threshold_ci(samples=samples, confidence=0.95, seed=42)
-    assert lo <= hi
-    # Sanity check: the mean of standard normal samples must lie in the CI.
-    sample_mean = float(np.mean(samples))
-    assert lo <= sample_mean <= hi
+    samples = _normal_samples()
+
+    lo, hi = rc.bootstrap_threshold_ci(samples=samples, key=jax.random.key(0), confidence=0.95)
+
+    assert float(lo) <= float(jnp.mean(samples)) <= float(hi)
+
+
+def test_bootstrap_threshold_ci_is_calibrax_bootstrap_interval_of_the_mean() -> None:
+    from calibrax.statistics import bootstrap_interval
+
+    rc = _import_risk_control()
+    samples = _normal_samples()
+    key = jax.random.key(3)
+
+    lo, hi = rc.bootstrap_threshold_ci(
+        samples=samples, key=key, confidence=0.9, bootstrap_resamples=500
+    )
+    reference = bootstrap_interval(jnp.mean, samples, key=key, num_resamples=500, confidence=0.9)
+
+    assert float(lo) == float(reference.lower)
+    assert float(hi) == float(reference.upper)
+
+
+def test_bootstrap_threshold_ci_depends_only_on_the_key() -> None:
+    rc = _import_risk_control()
+    samples = _normal_samples()
+
+    first = rc.bootstrap_threshold_ci(samples=samples, key=jax.random.key(7))
+    again = rc.bootstrap_threshold_ci(samples=samples, key=jax.random.key(7))
+    other = rc.bootstrap_threshold_ci(samples=samples, key=jax.random.key(8))
+
+    assert [float(v) for v in first] == [float(v) for v in again]
+    assert [float(v) for v in first] != [float(v) for v in other]
+
+
+def test_bootstrap_threshold_ci_of_one_sample_is_that_sample() -> None:
+    rc = _import_risk_control()
+
+    lo, hi = rc.bootstrap_threshold_ci(samples=jnp.asarray([0.25]), key=jax.random.key(0))
+
+    assert float(lo) == float(hi) == 0.25
+
+
+def test_bootstrap_threshold_ci_traces_once_under_jit() -> None:
+    from substrax.testing import TraceCounter
+
+    rc = _import_risk_control()
+    counter = TraceCounter()
+    interval = jax.jit(
+        counter.wrap(lambda samples, key: rc.bootstrap_threshold_ci(samples=samples, key=key))
+    )
+    samples = _normal_samples()
+
+    with counter.expect(new_traces=1):
+        compiled = interval(samples, jax.random.key(1))
+    with counter.expect(new_traces=0):
+        interval(samples + 1.0, jax.random.key(2))
+
+    eager = rc.bootstrap_threshold_ci(samples=samples, key=jax.random.key(1))
+    assert [float(v) for v in compiled] == pytest.approx([float(v) for v in eager])
+
+
+def test_bootstrap_threshold_ci_vmaps_over_keys() -> None:
+    rc = _import_risk_control()
+    samples = _normal_samples()
+    keys = jax.random.split(jax.random.key(4), 3)
+
+    lo, hi = jax.vmap(lambda key: rc.bootstrap_threshold_ci(samples=samples, key=key))(keys)
+
+    assert lo.shape == hi.shape == (3,)
+    for index in range(3):
+        one_lo, one_hi = rc.bootstrap_threshold_ci(samples=samples, key=keys[index])
+        assert float(lo[index]) == pytest.approx(float(one_lo))
+        assert float(hi[index]) == pytest.approx(float(one_hi))
+
+
+def test_bootstrap_threshold_ci_advances_an_rngs_under_nnx_jit() -> None:
+    from substrax.testing import TraceCounter
+
+    rc = _import_risk_control()
+    counter = TraceCounter()
+    interval = nnx.jit(
+        counter.wrap(lambda samples, rngs: rc.bootstrap_threshold_ci(samples=samples, key=rngs))
+    )
+    samples = _normal_samples()
+    rngs = nnx.Rngs(sample=5)
+
+    with counter.expect(new_traces=1):
+        first = interval(samples, rngs)
+    with counter.expect(new_traces=0):
+        second = interval(samples, rngs)
+
+    eager_rngs = nnx.Rngs(sample=5)
+    eager_first = rc.bootstrap_threshold_ci(samples=samples, key=eager_rngs)
+    eager_second = rc.bootstrap_threshold_ci(samples=samples, key=eager_rngs)
+    assert [float(v) for v in first] == pytest.approx([float(v) for v in eager_first])
+    assert [float(v) for v in second] == pytest.approx([float(v) for v in eager_second])
+    assert [float(v) for v in first] != [float(v) for v in second]
+
+
+def test_bootstrap_threshold_ci_bounds_have_unit_gradient_mass() -> None:
+    """Each bound is a convex combination of resample means, so its gradient sums to one."""
+    rc = _import_risk_control()
+    samples = _normal_samples()
+
+    for bound in (0, 1):
+        grad = jax.grad(
+            lambda s, b=bound: rc.bootstrap_threshold_ci(samples=s, key=jax.random.key(6))[b]
+        )(samples)
+        assert bool(jnp.all(jnp.isfinite(grad)))
+        assert float(jnp.sum(grad)) == pytest.approx(1.0, abs=1e-5)
 
 
 # ---------------------------------------------------------------------------

@@ -13,9 +13,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Requires `datarax>=0.1.14` and `calibrax>=0.1.9`, the latest releases; the lock moves
-  datarax from 0.1.13 and calibrax from 0.1.8 and nothing else. Both releases raise their
-  substrax floor to 0.1.11, which opifex already requires, and change no API opifex uses.
+- Requires `calibrax[publication]>=0.1.12`, `substrax>=0.1.16`, `avitai-artifex>=0.1.13` and
+  `datarax>=0.1.15`, the latest releases; the lock moves those four and lazy-loader, nothing else.
+  calibrax 0.1.11 removed the APIs opifex 0.2.8 imported, so on a fresh install 0.2.8 lost
+  `opifex.benchmarking` and `opifex.uncertainty.conformal` at import and failed in timing and
+  hardware detection at run time; this release moves every call site onto calibrax's current API.
+- `bootstrap_threshold_ci(*, samples, key, confidence=0.95, bootstrap_resamples=1000)` takes the
+  resampling key (a `jax.Array` or an `nnx.Rngs` with a `sample` or `default` stream) and is
+  `calibrax.statistics.bootstrap_interval` of the mean; `seed` is removed. It traces under `jax.jit`
+  and `nnx.jit`, and maps under `vmap` over keys.
+- `EvaluationEngine.generate_summary_report(*, key)` takes the key its bootstrap intervals are drawn
+  from; `profile_model_performance` summarizes with `calibrax.statistics.summarize` and returns
+  floats.
+- `opifex.benchmarking` no longer re-exports `StatisticalAnalyzer`, which calibrax removed.
+- `ResultsManager` draws its comparison, scaling and convergence plots with calibrax's
+  `PlotGenerator`, from the `calibrax[publication]` extra opifex now requires.
+- Recorded benchmark metadata is read through `calibrax.core.read_metadata_entry`: a value of the
+  wrong type is refused naming its key instead of being used as given.
+- The roofline, hardware detection and the profiling harness read
+  `calibrax.profiling.resolve_hardware_spec(dtype=jnp.float32)`: the listed spec of the visible
+  devices, or an unlisted device's ceilings measured once per process. The profiling harness reports calibrax's roofline and
+  compilation results under the keys calibrax writes (execution time and cache hit rate were read
+  from keys calibrax does not write and always showed 0), and its hardware section names the spec
+  and the device count.
+- Checkpoints: under substrax 0.1.16 the store reads the one format it writes; a root written
+  through the module-only layout of earlier releases is refused with `UnsupportedCheckpointError`.
 
 ## [0.2.8] - 2026-09-18
 

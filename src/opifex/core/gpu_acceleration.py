@@ -12,6 +12,7 @@ Designed for maximum speed and memory efficiency while maintaining safety.
 """
 
 import contextlib
+import dataclasses
 import functools
 import logging
 from collections.abc import Callable
@@ -19,7 +20,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from calibrax.profiling import detect_hardware_specs, time_calls
+from calibrax.profiling import resolve_hardware_spec, time_calls
 from jax import Array
 from substrax.devices import detect_devices, DeviceKind
 
@@ -63,18 +64,22 @@ class RooflineMemoryManager:
         self.operation_cache = {}
 
     def _get_hardware_specs(self) -> dict[str, Any]:
-        """Roofline numbers from calibrax's spec table for the accelerator substrax detects.
+        """Roofline numbers for the accelerator substrax detects.
 
-        ``memory_gb`` comes from the device's own memory statistics when it reports
-        them; the platform, the peak throughput, the bandwidth and the ridge point
-        are the shared ones every Avitai library uses.
+        The peak throughput, the bandwidth and the ridge point are calibrax's figures for
+        a device it lists and a float32 measurement for any other
+        (``calibrax.profiling.resolve_hardware_spec``);
+        ``memory_gb`` comes from the device's own memory statistics when it reports them.
         """
         info = detect_devices()
-        specs = dict(detect_hardware_specs())
-        specs["platform"] = info.platform
-        specs["supports_tensorcore"] = bool(specs.get("tensor_core_shapes"))
-        specs["memory_gb"] = _device_memory_gb(info.kind)
-        return specs
+        spec = resolve_hardware_spec(dtype=jnp.float32)
+        return {
+            **dataclasses.asdict(spec),
+            "critical_intensity": spec.critical_intensity,
+            "platform": info.platform,
+            "supports_tensorcore": bool(spec.tensor_core_shapes),
+            "memory_gb": _device_memory_gb(info.kind),
+        }
 
     def estimate_operation_efficiency(self, operation_type: str, *shapes) -> dict[str, Any]:
         """Estimate operation efficiency using roofline model."""
@@ -155,11 +160,11 @@ class MixedPrecisionOptimizer:
     def _detect_hardware(self) -> dict[str, Any]:
         """Precision settings for the accelerator substrax detects.
 
-        Tensor-core shapes come from calibrax's spec table; GPUs and TPUs compute in
-        bfloat16 with their native alignment, the CPU keeps float32.
+        Tensor-core shapes come from ``calibrax.profiling.resolve_hardware_spec``; GPUs and
+        TPUs compute in bfloat16 with their native alignment, the CPU keeps float32.
         """
         kind = detect_devices().kind
-        shapes = list(detect_hardware_specs().get("tensor_core_shapes", []))
+        shapes = list(resolve_hardware_spec(dtype=jnp.float32).tensor_core_shapes)
         if kind is DeviceKind.GPU:
             return {
                 "supports_tensorcore": bool(shapes),
@@ -444,7 +449,7 @@ class CachedProgressiveTester:
 
             # Three warm-up calls, then ten timed calls that each wait for their result; the
             # median is the figure, since one slow call moves a mean.
-            timing = time_calls(operation_fn, x, y, warmup=3, iterations=10)
+            timing = time_calls(lambda: operation_fn(x, y), warmup=3, iterations=10)
             return True, timing.median_sec, None
 
         except Exception as e:  # noqa: BLE001 -- benchmarks arbitrary operation_fn from caller

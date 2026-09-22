@@ -15,7 +15,6 @@ Main Components:
 """
 
 from calibrax.core import BenchmarkResult
-from calibrax.statistics import StatisticalAnalyzer
 
 from opifex.benchmarking.adapters import default_metric_defs, results_to_run
 from opifex.benchmarking.analysis_engine import AnalysisEngine
@@ -48,7 +47,6 @@ __all__ = [
     "OperatorBenchmarkRegistry",
     "OperatorExecutor",
     "ResultsManager",
-    "StatisticalAnalyzer",
     "ValidationFramework",
     "default_metric_defs",
     "parse_args",

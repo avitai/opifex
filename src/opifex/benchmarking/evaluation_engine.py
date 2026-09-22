@@ -13,11 +13,14 @@ from pathlib import Path
 from typing import Any
 
 import jax
+import jax.numpy as jnp
 from calibrax.core import BenchmarkResult
 from calibrax.core.models import Metric
 from calibrax.metrics import calculate_all as calculate_all_metrics
 from calibrax.profiling import TimingCollector
-from calibrax.statistics import StatisticalAnalyzer
+from calibrax.statistics import bootstrap_interval, summarize
+from flax import nnx
+from substrax.rng import key_from
 
 from opifex.benchmarking._shared import resolve_benchmark_output_dir
 
@@ -59,7 +62,6 @@ class BenchmarkEvaluator:
             self.raw_results_dir.mkdir(exist_ok=True)
 
         # Initialize calibrax statistical analyzer
-        self.statistical_analyzer = StatisticalAnalyzer()
 
         # Store results
         self.results: list[BenchmarkResult] = []
@@ -121,7 +123,7 @@ class BenchmarkEvaluator:
                     logger.warning("Custom metric '%s' failed: %s", metric_name, e)
 
         # Wrap raw floats into calibrax Metric objects
-        metrics = {k: Metric(value=v) for k, v in raw_metrics.items()}
+        metrics = {k: Metric(value=float(v)) for k, v in raw_metrics.items()}
 
         result = BenchmarkResult(
             name=model_name,
@@ -218,14 +220,14 @@ class BenchmarkEvaluator:
         sample = collector.measure_iteration(_forward_iter(), num_batches=num_runs + 1)
         execution_times = list(sample.per_batch_times)
 
-        stats = self.statistical_analyzer.summarize(execution_times)
+        timing = summarize(execution_times)
 
         return {
-            "mean_execution_time": stats.mean,
-            "std_execution_time": stats.std,
-            "min_execution_time": stats.min,
-            "max_execution_time": stats.max,
-            "memory_usage": 0,
+            "mean_execution_time": float(timing.mean),
+            "std_execution_time": float(timing.std),
+            "min_execution_time": float(timing.minimum),
+            "max_execution_time": float(timing.maximum),
+            "memory_usage": 0.0,
         }
 
     def _save_result(self, result: BenchmarkResult) -> None:
@@ -271,8 +273,15 @@ class BenchmarkEvaluator:
 
         return results
 
-    def generate_summary_report(self) -> dict[str, Any]:
+    def generate_summary_report(self, *, key: jax.Array | nnx.Rngs) -> dict[str, Any]:
         """Generate complete summary report of all evaluations.
+
+        Each model's average MSE carries a percentile bootstrap interval of the mean. The
+        intervals depend only on ``key``: model ``i`` resamples with ``fold_in(key, i)``.
+
+        Args:
+            key: The key the bootstrap intervals are drawn from, or an ``nnx.Rngs`` whose
+                ``sample`` or ``default`` stream supplies it.
 
         Returns:
             Dictionary with summary statistics and analysis.
@@ -308,18 +317,20 @@ class BenchmarkEvaluator:
             "dataset_difficulty_rankings": {},
         }
 
-        for model_name, mse_values in model_performance.items():
-            stats = self.statistical_analyzer.summarize(mse_values)
+        base_key = key_from(key, streams=("sample", "default"), context="summary report bootstrap")
+        for index, (model_name, mse_values) in enumerate(model_performance.items()):
+            interval = bootstrap_interval(
+                jnp.mean, jnp.asarray(mse_values), key=jax.random.fold_in(base_key, index)
+            )
             summary["model_rankings"][model_name] = {
-                "average_mse": stats.mean,
-                "confidence_interval": [stats.ci_lower, stats.ci_upper],
+                "average_mse": float(interval.value),
+                "confidence_interval": [float(interval.lower), float(interval.upper)],
                 "num_evaluations": len(mse_values),
             }
 
         for dataset_name, mse_values in dataset_difficulty.items():
-            stats = self.statistical_analyzer.summarize(mse_values)
             summary["dataset_difficulty_rankings"][dataset_name] = {
-                "average_mse": stats.mean,
+                "average_mse": float(summarize(mse_values).mean),
                 "num_evaluations": len(mse_values),
             }
 

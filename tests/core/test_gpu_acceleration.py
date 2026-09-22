@@ -8,12 +8,13 @@ Following TDD principles: Tests define behavior, implementation follows.
 """
 
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from substrax.devices import DeviceInfo, DeviceKind
 
 # Import the new optimized classes (to be implemented)
 from opifex.core.gpu_acceleration import (
@@ -24,6 +25,37 @@ from opifex.core.gpu_acceleration import (
     OptimizedGPUManager,
     RooflineMemoryManager,
 )
+
+
+def test_roofline_reports_the_resolved_float32_spec(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The roofline is calibrax's resolved spec for float32: listed, or measured once."""
+    from calibrax.profiling import HardwareSpec
+
+    from opifex.core import gpu_acceleration
+
+    measured = HardwareSpec(
+        name="measured:cpu:float32",
+        peak_flops=1.0e12,
+        memory_bandwidth=4.0e10,
+        tensor_core_shapes=(),
+        simd_width=None,
+    )
+    dtypes: list[object] = []
+
+    def _resolve(*, dtype: object) -> HardwareSpec:
+        dtypes.append(dtype)
+        return measured
+
+    monkeypatch.setattr(gpu_acceleration, "resolve_hardware_spec", _resolve)
+
+    manager = RooflineMemoryManager()
+
+    assert dtypes == [jnp.float32]
+    assert manager.hw_specs["peak_flops"] == 1.0e12
+    assert manager.hw_specs["critical_intensity"] == pytest.approx(1.0e12 / 4.0e10)
+    assert manager.hw_specs["supports_tensorcore"] is False
 
 
 class TestRooflineMemoryManager:
@@ -401,23 +433,31 @@ class TestOptimizedGPUManager:
 class TestIntegrationScenarios:
     """Test integration scenarios and edge cases."""
 
-    def test_cpu_fallback_behavior(self):
-        """Test behavior when GPU is not available."""
-        # Force CPU-only environment
-        with patch("jax.devices") as mock_devices:
-            mock_devices.return_value = [Mock(platform="cpu")]
+    def test_cpu_fallback_behavior(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """On a CPU-only host the manager keeps float32 and multiplies on the CPU."""
+        from calibrax.profiling import HardwareSpec
 
+        from opifex.core import gpu_acceleration
+
+        cpu_only = DeviceInfo(platform="cpu", kind=DeviceKind.CPU, count=1, device_kinds=("cpu",))
+        monkeypatch.setattr(gpu_acceleration, "detect_devices", lambda: cpu_only)
+        monkeypatch.setattr(
+            gpu_acceleration,
+            "resolve_hardware_spec",
+            lambda *, dtype: HardwareSpec(
+                name="measured:cpu:float32", peak_flops=1.0e11, memory_bandwidth=2.0e10
+            ),
+        )
+
+        with jax.default_device(jax.devices("cpu")[0]):
             manager = OptimizedGPUManager()
-
-            # Should still work on CPU
             x = jnp.ones((64, 64))
             y = jnp.ones((64, 64))
-
             result = manager.optimal_matrix_multiply(x, y)
 
+        assert manager.roofline_manager.hw_specs["platform"] == "cpu"
         assert result.shape == (64, 64)
-        expected = jnp.dot(x, y)
-        np.testing.assert_allclose(result, expected, rtol=1e-3)
+        np.testing.assert_allclose(result, jnp.dot(x, y), rtol=1e-3)
 
     def test_memory_pressure_handling(self):
         """Test behavior under memory pressure."""

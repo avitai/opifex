@@ -351,7 +351,10 @@ def _compute_accuracy_metrics(
     Returns:
         Dictionary of accuracy metric name to value.
     """
-    return calculate_all_metrics(predictions, reference_data)
+    return {
+        name: float(value)
+        for name, value in calculate_all_metrics(predictions, reference_data).items()
+    }
 
 
 def _check_tolerance_violations(

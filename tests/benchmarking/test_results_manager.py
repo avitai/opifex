@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import matplotlib as mpl
 import pytest
-from calibrax.core import BenchmarkResult
+from calibrax.core import BenchmarkResult, Metadata
 from calibrax.core.models import Metric
 
 from opifex.benchmarking.results_manager import ResultsManager
@@ -34,7 +34,7 @@ def _result(
     problem_size: int | None = None,
     loss_history: list[float] | None = None,
 ) -> BenchmarkResult:
-    metadata: dict[str, object] = {"execution_time": execution_time}
+    metadata: Metadata = {"execution_time": execution_time}
     if problem_size is not None:
         metadata["problem_size"] = problem_size
     if loss_history is not None:

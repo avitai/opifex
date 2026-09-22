@@ -166,6 +166,7 @@ report = runner.generate_publication_report(
 ## Dependencies
 
 - **JAX**: Core array operations and JIT-accelerated evaluation.
-- **calibrax**: `BenchmarkResult` and `StatisticalAnalyzer` primitives.
+- **calibrax**: `BenchmarkResult`, the statistics (`summarize`, `bootstrap_interval`) and, through the
+  `publication` extra, `PlotGenerator`.
 - **Python 3.12+**: Modern Python features and type system.
 </content>

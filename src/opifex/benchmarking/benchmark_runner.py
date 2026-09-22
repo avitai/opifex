@@ -11,13 +11,16 @@ from pathlib import Path
 from typing import Any, cast, Literal
 
 import numpy as np
-from calibrax.core import BenchmarkResult
+from calibrax.core import BenchmarkResult, read_metadata_entry
 
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-from opifex.benchmarking._shared import extract_metric_value, resolve_benchmark_output_dir
+from opifex.benchmarking._shared import (
+    extract_metric_value,
+    resolve_benchmark_output_dir,
+)
 from opifex.benchmarking.analysis_engine import (
     AnalysisEngine,
     ComparisonReport,
@@ -684,7 +687,10 @@ class BenchmarkRunner:
             return summary
 
         # Calculate domain-wide statistics
-        exec_times = [r.metadata.get("execution_time", 0.0) for r in all_results]
+        exec_times = [
+            read_metadata_entry(float, r.metadata, "execution_time", default=0.0)
+            for r in all_results
+        ]
         mse_values = [
             r.metrics["mse"].value if "mse" in r.metrics else float("inf") for r in all_results
         ]
@@ -763,9 +769,11 @@ in scientific computing
 
             fastest = min(
                 all_results,
-                key=lambda r: r.metadata.get("execution_time", float("inf")),
+                key=lambda r: read_metadata_entry(
+                    float, r.metadata, "execution_time", default=float("inf")
+                ),
             )
-            exec_t = fastest.metadata.get("execution_time", 0.0)
+            exec_t = read_metadata_entry(float, fastest.metadata, "execution_time", default=0.0)
             findings.append(f"{fastest.name} was fastest (Time: {exec_t:.2f}s)")
 
         return findings
@@ -802,8 +810,14 @@ in scientific computing
                     "max": max(extract_metric_value(r, "mse") for r in all_results),
                 },
                 "execution_time": {
-                    "min": min(r.metadata.get("execution_time", 0.0) for r in all_results),
-                    "max": max(r.metadata.get("execution_time", 0.0) for r in all_results),
+                    "min": min(
+                        read_metadata_entry(float, r.metadata, "execution_time", default=0.0)
+                        for r in all_results
+                    ),
+                    "max": max(
+                        read_metadata_entry(float, r.metadata, "execution_time", default=0.0)
+                        for r in all_results
+                    ),
                 },
             },
         }

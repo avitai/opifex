@@ -9,12 +9,12 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
+from calibrax.core import read_metadata_entry
 from calibrax.core.models import Metric
 from calibrax.metrics import calculate_all
 from calibrax.metrics.functional import mae, mse, r_squared, relative_error
-from calibrax.statistics import StatisticalAnalyzer, welch_t_test
+from calibrax.statistics import welch_t_test
 from flax import nnx
 
 from opifex.benchmarking.evaluation_engine import (
@@ -25,6 +25,15 @@ from opifex.neural.operators.foundations import (
     DeepONet,
     FourierNeuralOperator,
 )
+
+
+def _mse_result(model_name: str, dataset: str, value: float) -> BenchmarkResult:
+    """A stored evaluation holding one MSE, as ``evaluate_model`` records it."""
+    return BenchmarkResult(
+        name=model_name,
+        metrics={"mse": Metric(value=value)},
+        tags={"dataset": dataset},
+    )
 
 
 class TestBenchmarkResult:
@@ -126,61 +135,6 @@ class TestCalibrationMetrics:
         assert all(jnp.ndim(v) == 0 for v in all_metrics.values())
 
 
-class TestStatisticalAnalyzer:
-    """Test statistical analysis functionality."""
-
-    def test_statistical_analyzer_initialization(self) -> None:
-        """Test StatisticalAnalyzer initialization."""
-        analyzer = StatisticalAnalyzer(
-            bootstrap_resamples=1000,
-            seed=42,
-        )
-
-        assert analyzer._bootstrap_resamples == 1000
-
-    def test_confidence_interval_calculation(self) -> None:
-        """Test confidence interval calculation via bootstrap_ci."""
-        analyzer = StatisticalAnalyzer(seed=42)
-
-        # Generate sample data
-        rng = np.random.default_rng(42)
-        data = list(rng.normal(0.5, 0.1, 100))
-
-        ci_lower, ci_upper = analyzer.bootstrap_ci(data, confidence=0.95)
-
-        # Confidence interval should bracket the mean
-        mean_val = float(np.mean(data))
-        assert ci_lower < mean_val < ci_upper
-        assert ci_upper >= ci_lower
-
-    def test_significance_testing(self) -> None:
-        """Test statistical significance testing via welch_t_test."""
-        # Generate two datasets with known difference
-        rng = np.random.default_rng(42)
-
-        data1 = list(rng.normal(0.5, 0.1, 50))
-        data2 = list(rng.normal(0.7, 0.1, 50))
-
-        _statistic, p_value = welch_t_test(data1, data2)
-        is_significant = p_value < 0.05
-
-        assert 0.0 <= p_value <= 1.0
-        assert isinstance(is_significant, bool)
-
-    def test_summarize(self) -> None:
-        """Test summarize method returns StatisticalResult."""
-        analyzer = StatisticalAnalyzer(seed=42)
-
-        data = [0.1, 0.2, 0.15, 0.18, 0.22, 0.12, 0.19, 0.21, 0.17, 0.16]
-        result = analyzer.summarize(data)
-
-        assert result.mean > 0.0
-        assert result.std > 0.0
-        assert result.min <= result.mean <= result.max
-        assert result.ci_lower <= result.ci_upper
-        assert result.n == 10
-
-
 class TestBenchmarkEvaluator:
     """Test the main benchmark evaluator."""
 
@@ -233,7 +187,7 @@ class TestBenchmarkEvaluator:
         assert result.tags.get("dataset") == "synthetic_1d"
         assert "mse" in result.metrics
         assert "mae" in result.metrics
-        assert result.metadata.get("execution_time", 0.0) > 0.0
+        assert read_metadata_entry(float, result.metadata, "execution_time", default=0.0) > 0.0
 
     def test_evaluate_model_with_deeponet(self) -> None:
         """Test model evaluation with DeepONet."""
@@ -275,7 +229,7 @@ class TestBenchmarkEvaluator:
         assert result.name == "test_deeponet"
         assert result.tags.get("dataset") == "synthetic_deeponet"
         assert "mse" in result.metrics
-        assert result.metadata.get("execution_time", 0.0) > 0.0
+        assert read_metadata_entry(float, result.metadata, "execution_time", default=0.0) > 0.0
 
     def test_batch_evaluation(self) -> None:
         """Test batch evaluation of multiple models."""
@@ -377,6 +331,53 @@ class TestBenchmarkEvaluator:
         assert "memory_usage" in profile_result
         assert profile_result["mean_execution_time"] > 0.0
         assert profile_result["std_execution_time"] >= 0.0
+        assert (
+            profile_result["min_execution_time"]
+            <= profile_result["mean_execution_time"]
+            <= profile_result["max_execution_time"]
+        )
+        assert all(isinstance(value, float) for value in profile_result.values())
+
+    def test_summary_report_ranks_each_model_with_a_bootstrap_interval(
+        self, tmp_path: Path
+    ) -> None:
+        """Each model's average MSE is the mean of its runs, bracketed by a keyed interval."""
+        evaluator = BenchmarkEvaluator(output_dir=tmp_path)
+        evaluator.results = [
+            _mse_result("small_fno", "burgers", value) for value in (0.10, 0.12, 0.14, 0.16)
+        ] + [_mse_result("large_fno", "darcy", value) for value in (0.30, 0.34)]
+
+        report = evaluator.generate_summary_report(key=jax.random.key(0))
+
+        small = report["model_rankings"]["small_fno"]
+        assert small["average_mse"] == pytest.approx(0.13)
+        assert small["num_evaluations"] == 4
+        lower, upper = small["confidence_interval"]
+        assert lower <= small["average_mse"] <= upper
+        assert report["unique_models"] == 2
+        assert report["dataset_difficulty_rankings"]["darcy"]["average_mse"] == pytest.approx(0.32)
+
+    def test_summary_report_depends_only_on_the_key(self, tmp_path: Path) -> None:
+        evaluator = BenchmarkEvaluator(output_dir=tmp_path)
+        evaluator.results = [
+            _mse_result("fno", "burgers", value) for value in (0.1, 0.2, 0.15, 0.4, 0.05, 0.3)
+        ]
+
+        first = evaluator.generate_summary_report(key=jax.random.key(1))
+        again = evaluator.generate_summary_report(key=jax.random.key(1))
+        from_rngs = evaluator.generate_summary_report(key=nnx.Rngs(sample=1))
+
+        interval = first["model_rankings"]["fno"]["confidence_interval"]
+        assert again["model_rankings"]["fno"]["confidence_interval"] == interval
+        assert all(isinstance(bound, float) for bound in interval)
+        assert from_rngs["model_rankings"]["fno"]["num_evaluations"] == 6
+
+    def test_summary_report_without_results_reports_the_absence(self, tmp_path: Path) -> None:
+        evaluator = BenchmarkEvaluator(output_dir=tmp_path)
+
+        assert evaluator.generate_summary_report(key=jax.random.key(0)) == {
+            "error": "No benchmark results available"
+        }
 
     def test_result_saving_and_loading(self) -> None:
         """Test saving and loading benchmark results."""
@@ -426,7 +427,6 @@ class TestBenchmarkIntegration:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Initialize components
             evaluator = BenchmarkEvaluator(output_dir=temp_dir)
-            analyzer = StatisticalAnalyzer(seed=42)
 
             # Create test model
             rngs = nnx.Rngs(42)
@@ -450,16 +450,19 @@ class TestBenchmarkIntegration:
 
                 result = evaluator.evaluate_model(
                     model=model,
-                    model_name=f"fno_run_{run_id}",
+                    model_name="fno",
                     input_data=input_data,
                     target_data=target_data,
                     dataset_name="multiple_runs",
                 )
                 results.append(result)
 
-            # Analyze results statistically - metrics are Metric objects
-            mse_values = [result.metrics["mse"].value for result in results]
-            ci_lower, ci_upper = analyzer.bootstrap_ci(mse_values, confidence=0.95)
+            # The evaluator's own report analyzes the five runs of the one model.
+            ranking = evaluator.generate_summary_report(key=jax.random.key(0))["model_rankings"][
+                "fno"
+            ]
+            ci_lower, ci_upper = ranking["confidence_interval"]
+            assert ranking["num_evaluations"] == 5
 
             assert len(results) == 5
             assert all(result.metrics["mse"].value > 0 for result in results)
