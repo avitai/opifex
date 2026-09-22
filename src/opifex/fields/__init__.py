@@ -10,7 +10,7 @@ Reference:
 from opifex.fields.advection import maccormack, semi_lagrangian
 from opifex.fields.field import Box, CenteredGrid, Extrapolation
 from opifex.fields.operations import curl_2d, divergence, gradient, laplacian
-from opifex.fields.pressure import pressure_solve_jacobi, pressure_solve_spectral
+from opifex.fields.pressure import pressure_solve_lsmr, pressure_solve_spectral
 
 
 __all__ = [
@@ -22,7 +22,7 @@ __all__ = [
     "gradient",
     "laplacian",
     "maccormack",
-    "pressure_solve_jacobi",
+    "pressure_solve_lsmr",
     "pressure_solve_spectral",
     "semi_lagrangian",
 ]

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The pressure solves project. Both inverted an operator other than the one the projection
+  applies -- `pressure_solve_spectral` the continuous symbol and the Jacobi solve the compact
+  three-point `laplacian`, while the correction subtracts the two-point central `gradient`,
+  whose composition with `divergence` reaches `i +/- 2`. Both now invert
+  `divergence(gradient(.))` itself, which takes the residual divergence of a 32x32 periodic
+  field from 2.3% of the incoming divergence to 8e-07.
+- `lsmr` returns NaN once the bidiagonalisation is exhausted, which a zero right-hand side
+  reaches immediately and an exactly solvable system reaches after a few steps past `rank`:
+  the recurrence divided by the lengths the rotations leave on the diagonal, and those are
+  zero there. Those divisions and `jnp.linalg.norm`'s NaN gradient at the origin are guarded,
+  so an exhausted iterate holds still and stays differentiable.
 - `Burgers2DSolver.solve` integrates on the device. It read the CFL step back to the host
   every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
   vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
@@ -16,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `pressure_solve_lsmr(velocity, num_matvecs=500)` replaces `pressure_solve_jacobi`. The
+  composed operator is neither symmetric nor invertible under a zero-gradient boundary, where
+  a relaxation or a conjugate-gradient iterate drifts into its null space and diverges; a
+  least-squares solve takes the minimum-norm solution instead. Prefer
+  `pressure_solve_spectral` for periodic fields, which is about a hundred times faster.
 - `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
   the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
   its output around, where a count of adaptive steps cannot.
