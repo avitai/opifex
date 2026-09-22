@@ -24,6 +24,7 @@ import math
 
 import jax
 import jax.numpy as jnp
+import pytest
 
 from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import divergence, StaggeredGrid
@@ -282,3 +283,31 @@ class TestTheOperatorsApproximateWhatTheyClaim:
             sums = [abs(float(jnp.sum(component))) for component in carried.components]
 
         assert max(sums) <= 1e-12, sums
+
+
+class TestBoundariesNotYetCarried:
+    """What the viscous operator refuses, and why refusing beats approximating.
+
+    Found by a blast-radius audit rather than by these tests, which is the lesson: every
+    test of this path used a periodic grid, so an operator that ignored the boundary
+    entirely passed all of them. On a walled grid the rolling stencil diffuses momentum
+    out through one wall and back in through the opposite one -- measured at 8 cells, a
+    spike on the first row reached the far wall at 64.0 rather than 0.
+    """
+
+    @pytest.mark.parametrize("extrapolation", [Extrapolation.ZERO, Extrapolation.NEUMANN])
+    def test_the_viscous_operator_refuses_a_wall(self, extrapolation: Extrapolation) -> None:
+        field = StaggeredGrid.zeros((8, 8), BOX, extrapolation)
+
+        with pytest.raises(ValueError, match="periodic"):
+            laplacian(field)
+
+    @pytest.mark.parametrize("extrapolation", [Extrapolation.ZERO, Extrapolation.NEUMANN])
+    def test_the_tendency_refuses_a_wall_too(self, extrapolation: Extrapolation) -> None:
+        # The whole path is periodic-only until the boundary interpolation lands, so the
+        # restriction has to be uniform: an operator that silently accepted a wall while
+        # its neighbours refused one would be the worst of both.
+        field = StaggeredGrid.zeros((8, 8), BOX, extrapolation)
+
+        with pytest.raises(ValueError, match="periodic"):
+            tendency(field, viscosity=0.01)
