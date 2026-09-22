@@ -14,8 +14,12 @@ support is a separate task (custom_vjp is non-trivial here).
 
 from __future__ import annotations
 
+from collections.abc import Callable  # noqa: TC003 — imported at runtime by design
+from typing import TypedDict
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from opifex.uncertainty.linalg import lsmr
 
@@ -129,3 +133,94 @@ def test_lsmr_is_jit_compatible() -> None:
     solution = jitted(jnp.asarray([1.0, 2.0, 3.0, 4.0, 5.0]))
     assert solution.shape == (3,)
     assert jnp.all(jnp.isfinite(solution))
+
+
+class _MatrixFree(TypedDict):
+    """The ``lsmr`` arguments that reach a matrix only through products."""
+
+    matvec: Callable[[jax.Array], jax.Array]
+    matvec_transpose: Callable[[jax.Array], jax.Array]
+    dim_cols: int
+
+
+def _matrix_free(matrix: jax.Array) -> _MatrixFree:
+    """``lsmr`` arguments that reach ``matrix`` only through products."""
+    return _MatrixFree(
+        matvec=lambda v: matrix @ v,
+        matvec_transpose=lambda u: matrix.T @ u,
+        dim_cols=matrix.shape[1],
+    )
+
+
+class TestAgainstTheReferenceImplementation:
+    """The solution SciPy's ``lsmr`` reports, which is Fong and Saunders' own code."""
+
+    @staticmethod
+    def _system(
+        rows: int, columns: int, *, condition: float = 1.0, dtype: jnp.dtype = jnp.float32
+    ) -> tuple[jax.Array, jax.Array]:
+        left = jax.random.normal(jax.random.key(0), (rows, columns), dtype)
+        scale = jnp.logspace(0.0, -jnp.log10(condition), columns, dtype=dtype)
+        return left * scale, jax.random.normal(jax.random.key(1), (rows,), dtype)
+
+    def test_it_matches_scipy_on_a_well_conditioned_system(self) -> None:
+        from scipy.sparse.linalg import lsmr as scipy_lsmr
+
+        matrix, rhs = self._system(30, 6)
+        reference = scipy_lsmr(np.asarray(matrix), np.asarray(rhs), atol=1e-12, btol=1e-12)[0]
+
+        solution = lsmr(rhs=rhs, num_matvecs=6, **_matrix_free(matrix))
+
+        np.testing.assert_allclose(solution, reference, rtol=1e-4, atol=1e-5)
+
+    def test_it_matches_scipy_when_damped(self) -> None:
+        from scipy.sparse.linalg import lsmr as scipy_lsmr
+
+        matrix, rhs = self._system(40, 8)
+        damping = 0.5
+        reference = scipy_lsmr(
+            np.asarray(matrix), np.asarray(rhs), damp=damping, atol=1e-12, btol=1e-12
+        )[0]
+
+        solution = lsmr(rhs=rhs, num_matvecs=8, damping=damping, **_matrix_free(matrix))
+
+        np.testing.assert_allclose(solution, reference, rtol=1e-4, atol=1e-5)
+
+    def test_an_ill_conditioned_system_converges_in_double_precision(self) -> None:
+        """Condition 1e4 needs more steps than columns, and needs float64 to keep them."""
+        from scipy.sparse.linalg import lsmr as scipy_lsmr
+
+        with jax.enable_x64(True):
+            matrix, rhs = self._system(60, 10, condition=1e4, dtype=jnp.float64)
+            # SciPy stops at min(rows, columns) steps by default, which this system
+            # outruns: it needs 22.
+            reference = scipy_lsmr(
+                np.asarray(matrix), np.asarray(rhs), atol=1e-14, btol=1e-14, maxiter=200
+            )[0]
+
+            solution = lsmr(rhs=rhs, num_matvecs=30, **_matrix_free(matrix))
+
+            np.testing.assert_allclose(solution, reference, rtol=1e-8, atol=1e-10)
+
+    def test_more_steps_than_columns_are_needed_when_the_system_is_ill_conditioned(
+        self,
+    ) -> None:
+        with jax.enable_x64(True):
+            matrix, rhs = self._system(60, 10, condition=1e4, dtype=jnp.float64)
+            arguments = _matrix_free(matrix)
+            residual = lambda x: float(jnp.linalg.norm(matrix @ x - rhs))
+
+            at_rank = residual(lsmr(rhs=rhs, num_matvecs=10, **arguments))
+            past_rank = residual(lsmr(rhs=rhs, num_matvecs=30, **arguments))
+
+        assert past_rank < at_rank
+
+    def test_it_traces_under_jit(self) -> None:
+        matrix, rhs = self._system(30, 6)
+        arguments = _matrix_free(matrix)
+
+        compiled = jax.jit(
+            lambda b: lsmr(rhs=b, num_matvecs=6, **arguments),
+        )(rhs)
+
+        np.testing.assert_allclose(compiled, lsmr(rhs=rhs, num_matvecs=6, **arguments), rtol=1e-6)

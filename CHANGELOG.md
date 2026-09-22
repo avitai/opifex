@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `opifex.uncertainty.linalg.lsmr` is the LSMR recurrence of Fong and Saunders (2011, SIAM J.
+  Sci. Comput. 33(5), 2950): a bidiagonalisation kept factorised by two Givens rotations per
+  step. It projected onto the Krylov basis and then solved the normal equations there, which
+  squares the condition number: on a well-conditioned 30x6 system it missed SciPy's solution
+  by 1.7e-3 where the recurrence misses it by 8e-8. The solutions now agree with
+  `scipy.sparse.linalg.lsmr`, the authors' own implementation, at every iteration budget.
+  Its docstring records what precision the iteration needs: a 60x10 system of condition 1e4
+  converges in 22 float64 steps, while in float32 the iterates drift away.
 - `get_activation("prelu")` returned `jnp.maximum`, which raises when called with one
   argument. PReLU learns its negative slope, so it is `flax.nnx.PReLU`, a module, and the
   name now says so instead of resolving to a broken function.
