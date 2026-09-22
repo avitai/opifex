@@ -224,3 +224,64 @@ class TestAgainstTheReferenceImplementation:
         )(rhs)
 
         np.testing.assert_allclose(compiled, lsmr(rhs=rhs, num_matvecs=6, **arguments), rtol=1e-6)
+
+
+class TestAnExhaustedKrylovSpace:
+    """Steps taken after the bidiagonalisation has nothing left to build on.
+
+    The recurrence divides by the lengths the rotations leave on the diagonal, and those
+    reach zero once the Krylov space is exhausted -- immediately for a zero right-hand side,
+    and after ``rank`` steps for any system solved exactly. The iterate is converged there,
+    so the remaining steps must add nothing rather than divide zero by zero.
+    """
+
+    @staticmethod
+    def _system(rows: int, columns: int) -> jax.Array:
+        return jax.random.normal(jax.random.key(0), (rows, columns))
+
+    def test_a_zero_right_hand_side_gives_a_zero_solution(self) -> None:
+        matrix = self._system(12, 4)
+
+        solution = lsmr(rhs=jnp.zeros(12), num_matvecs=10, **_matrix_free(matrix))
+
+        assert jnp.all(jnp.isfinite(solution))
+        np.testing.assert_array_equal(solution, jnp.zeros(4))
+
+    def test_steps_past_an_exact_solution_leave_it_where_it_is(self) -> None:
+        # Rounding leaves the last rotations a residue to work off, so the space exhausts
+        # well after `rank` and at no fixed step: across six seeds and three sizes the
+        # iterate settled anywhere between 10 and 35 steps on systems of 4 to 8 columns.
+        # Both counts below are past that range, which is what makes the comparison a
+        # statement about exhaustion rather than about where this system happened to reach
+        # it.
+        matrix = self._system(6, 6)
+        truth = jnp.arange(6, dtype=matrix.dtype)
+        arguments = _matrix_free(matrix)
+
+        exhausted = lsmr(rhs=matrix @ truth, num_matvecs=50, **arguments)
+        long_after = lsmr(rhs=matrix @ truth, num_matvecs=100, **arguments)
+
+        assert jnp.all(jnp.isfinite(long_after))
+        np.testing.assert_array_equal(long_after, exhausted)
+        np.testing.assert_allclose(long_after, truth, atol=1e-5)
+
+    def test_the_gradient_stays_finite_where_the_space_is_exhausted(self) -> None:
+        matrix = self._system(12, 4)
+        arguments = _matrix_free(matrix)
+
+        gradient = jax.grad(lambda b: jnp.sum(lsmr(rhs=b, num_matvecs=10, **arguments) ** 2))(
+            jnp.zeros(12)
+        )
+
+        assert jnp.all(jnp.isfinite(gradient))
+
+    def test_it_maps_over_right_hand_sides_including_a_degenerate_one(self) -> None:
+        matrix = self._system(12, 4)
+        arguments = _matrix_free(matrix)
+        batch = jnp.stack([jnp.zeros(12), matrix @ jnp.ones(4)])
+
+        solutions = jax.vmap(lambda b: lsmr(rhs=b, num_matvecs=10, **arguments))(batch)
+
+        assert jnp.all(jnp.isfinite(solutions))
+        np.testing.assert_array_equal(solutions[0], jnp.zeros(4))
+        np.testing.assert_allclose(solutions[1], jnp.ones(4), rtol=1e-4, atol=1e-5)

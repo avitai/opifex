@@ -47,9 +47,29 @@ def _rotate(first: jax.Array, second: jax.Array) -> _Rotation:
 
 
 def _normalise(vector: jax.Array) -> tuple[jax.Array, jax.Array]:
-    """The vector's norm and its direction; an exhausted direction stays zero."""
-    norm = jnp.linalg.norm(vector)
-    return norm, jnp.where(norm == 0, vector, vector / jnp.where(norm == 0, 1.0, norm))
+    """The vector's norm and its direction; an exhausted direction stays zero.
+
+    ``jnp.linalg.norm`` is differentiated as ``v / ||v||`` and so reports NaN for the
+    gradient at the origin, which is exactly where an exhausted bidiagonalisation lands. It
+    is given a nonzero vector there instead, and the result discarded, so the branch that is
+    not taken carries no NaN back through reverse mode.
+    """
+    exhausted = jnp.all(vector == 0)
+    norm = jnp.where(exhausted, 0.0, jnp.linalg.norm(jnp.where(exhausted, 1.0, vector)))
+    return norm, jnp.where(exhausted, vector, vector / jnp.where(exhausted, 1.0, norm))
+
+
+def _divide(numerator: jax.Array, denominator: jax.Array) -> jax.Array:
+    """``numerator / denominator``, reading zero where the denominator has run out.
+
+    The rotations leave zero on the diagonal once the Krylov space is exhausted, which a
+    zero right-hand side reaches immediately and an exactly solvable one after ``rank``
+    steps. The iterate has converged there, so the step is zero rather than ``0 / 0``. The
+    denominator is substituted inside the division as well as outside it, so the branch not
+    taken holds no division by zero for reverse-mode to differentiate.
+    """
+    exhausted = denominator == 0
+    return jnp.where(exhausted, 0.0, numerator / jnp.where(exhausted, 1.0, denominator))
 
 
 class _State(NamedTuple):
@@ -132,11 +152,11 @@ def lsmr(
         zeta = rotation_bar.cosine * current.zeta_bar
         zeta_bar = -rotation_bar.sine * current.zeta_bar
 
-        scale = theta_bar * rotation.radius / (current.rho * current.rho_bar)
+        scale = _divide(theta_bar * rotation.radius, current.rho * current.rho_bar)
         direction_bar = current.direction - scale * current.direction_bar
-        step_length = zeta / (rotation.radius * rotation_bar.radius)
+        step_length = _divide(zeta, rotation.radius * rotation_bar.radius)
         solution = current.solution + step_length * direction_bar
-        direction = right - (theta_next / rotation.radius) * current.direction
+        direction = right - _divide(theta_next, rotation.radius) * current.direction
 
         return _State(
             left=left,
