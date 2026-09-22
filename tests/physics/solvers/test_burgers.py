@@ -11,6 +11,7 @@ import pytest
 from opifex.physics.solvers.burgers import (
     Burgers2DSolver,
     solve_burgers_2d,
+    stable_substep_count,
 )
 from opifex.physics.solvers.diffusion_advection import solve_diffusion_advection_2d
 from opifex.physics.solvers.shallow_water import solve_shallow_water_2d
@@ -376,3 +377,58 @@ def test_shallow_water_validation():
     # grid_spacing <= 0
     with pytest.raises(ValueError, match="grid_spacing must be a positive number"):
         solve_shallow_water_2d(arr, arr, arr, grid_spacing=0)
+
+
+class TestReverseModeDifferentiation:
+    """Both solvers must carry reverse mode, which a ``lax.while_loop`` cannot.
+
+    The sub-steps between save times used to step adaptively to the CFL limit inside a
+    ``lax.while_loop``. That traces and maps, so `jit` and `vmap` tests passed and the
+    defect stayed hidden -- but `while_loop` has no transpose rule, so `jax.grad` of
+    anything reaching either solver raised outright. A fixed sub-step count under
+    ``lax.scan`` costs the adaptivity and buys the gradient.
+    """
+
+    @staticmethod
+    def _scalar_field(n: int) -> jax.Array:
+        axis = jnp.linspace(-1.0, 1.0, n)
+        x, y = jnp.meshgrid(axis, axis, indexing="ij")
+        return jnp.sin(jnp.pi * x) * jnp.cos(jnp.pi * y)
+
+    def test_solve_burgers_2d_differentiates_in_reverse_mode(self) -> None:
+        start = self._scalar_field(16)
+
+        gradient = jax.grad(
+            lambda u: jnp.sum(solve_burgers_2d(u, 0.05, (0.0, 0.2), 2, 16)[-1] ** 2)
+        )(start)
+
+        assert bool(jnp.all(jnp.isfinite(gradient)))
+        assert float(jnp.max(jnp.abs(gradient))) > 0.0
+
+    def test_the_solver_class_differentiates_in_reverse_mode(self) -> None:
+        n = 16
+        axis = jnp.linspace(0.0, 2.0 * jnp.pi, n, endpoint=False)
+        x, y = jnp.meshgrid(axis, axis, indexing="ij")
+        u_start, v_start = jnp.sin(x) * jnp.cos(y), -jnp.cos(x) * jnp.sin(y)
+        solver = Burgers2DSolver(viscosity=0.05, resolution=n)
+
+        gradient = jax.grad(
+            lambda u: jnp.sum(solver.solve((u, v_start), 0.2, num_saves=1)[1][-1] ** 2)
+        )(u_start)
+
+        assert bool(jnp.all(jnp.isfinite(gradient)))
+        assert float(jnp.max(jnp.abs(gradient))) > 0.0
+
+    def test_the_substep_count_follows_the_courant_limit(self) -> None:
+        # Below the limit the scheme does not degrade gracefully: measured at 32 cells
+        # with nu = 0.05 over T = 0.5, against a 4096-step reference, 32 sub-steps (0.75
+        # of the limit) gives 1.6e-02, 16 gives 2.7, and 8 gives 4.6e+06. So the count is
+        # derived rather than guessed.
+        start = self._scalar_field(32)
+
+        coarse = stable_substep_count(start, 0.05, 0.25, 2.0 / 31)
+        fine = stable_substep_count(start, 0.05, 0.25, 2.0 / 63)
+
+        assert coarse >= 1
+        # Halving the cell halves the advective limit, so the count at least doubles.
+        assert fine >= 2 * coarse
