@@ -33,6 +33,8 @@ References:
 
 from __future__ import annotations
 
+from typing import Final
+
 import jax
 import jax.numpy as jnp
 
@@ -59,6 +61,44 @@ def face_count(cells: int, extrapolation: Extrapolation) -> int:
     if extrapolation == Extrapolation.NEUMANN:
         return cells + 1
     raise ValueError(f"Unknown extrapolation: {extrapolation}")
+
+
+# Which boundaries each part of this layer carries. They differ, and a caller assembling a
+# simulation from the parts should learn the whole picture at the first refusal rather than
+# one operation at a time.
+CARRIED_BOUNDARIES: Final[dict[str, frozenset[Extrapolation]]] = {
+    "the grid operators": frozenset(
+        {Extrapolation.PERIODIC, Extrapolation.ZERO, Extrapolation.NEUMANN}
+    ),
+    "the pressure projection": frozenset({Extrapolation.PERIODIC, Extrapolation.ZERO}),
+    "convection": frozenset({Extrapolation.PERIODIC}),
+    "diffusion": frozenset({Extrapolation.PERIODIC}),
+}
+
+
+def require_boundary(extrapolation: Extrapolation, operation: str) -> None:
+    """Refuse a boundary an operation does not carry, naming what the layer does carry.
+
+    Args:
+        extrapolation: The boundary asked for.
+        operation: A key of ``CARRIED_BOUNDARIES``.
+
+    Raises:
+        ValueError: If ``operation`` does not carry ``extrapolation``.
+    """
+    if extrapolation in CARRIED_BOUNDARIES[operation]:
+        return
+    carried = "; ".join(
+        f"{name}: {'/'.join(sorted(b.value for b in boundaries))}"
+        for name, boundaries in CARRIED_BOUNDARIES.items()
+    )
+    msg = (
+        f"{operation} does not carry a {extrapolation.value} boundary on a staggered grid. "
+        f"Across this layer: {carried}. A wall needs the one-sided boundary interpolation "
+        "of Sanderse, Verstappen and Koren 2014, whose form is what decides whether the "
+        "convective term's skew-symmetry survives the boundary."
+    )
+    raise ValueError(msg)
 
 
 @jax.tree_util.register_pytree_node_class

@@ -40,8 +40,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from opifex.fields.field import Extrapolation
-from opifex.fields.staggered import StaggeredGrid
+from opifex.fields.staggered import require_boundary, StaggeredGrid
 from opifex.fields.staggered_convection import convect
 from opifex.fields.staggered_pressure import project
 
@@ -54,23 +53,16 @@ def laplacian(field: StaggeredGrid) -> StaggeredGrid:
     Args:
         field: Velocity on cell faces.
 
+    The stencil wraps, so a boundary it does not carry is refused by ``require_boundary``
+    rather than approximated: on a walled grid it would diffuse momentum out through one
+    wall and back in through the opposite one, and measured at 8 cells a spike on the
+    first row of the tangential component reaches the far wall at 64.0 where it should
+    reach zero.
+
     Returns:
         The Laplacian of each component, on the same faces.
-
-    Raises:
-        ValueError: If the boundary is not periodic. The stencil below wraps, so on a
-            walled grid it would diffuse momentum out through one wall and back in
-            through the opposite one -- measured at 8 cells, a spike on the first row of
-            the tangential component reaches the far wall at 64.0 where it should reach
-            zero. A wall needs the velocity on it inside the stencil, which is the same
-            boundary question ``convect`` defers.
     """
-    if field.extrapolation != Extrapolation.PERIODIC:
-        msg = (
-            "Staggered diffusion currently carries periodic boundaries only; the stencil "
-            "wraps, so on a walled grid it would diffuse momentum through the boundary"
-        )
-        raise ValueError(msg)
+    require_boundary(field.extrapolation, "diffusion")
 
     spacing = field.dx
     components = []
