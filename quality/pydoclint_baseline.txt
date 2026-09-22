@@ -621,8 +621,6 @@ src/opifex/optimization/production.py
 src/opifex/physics/solvers/burgers.py
     DOC501: Method `Burgers2DSolver.__init__` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `Burgers2DSolver.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
-    DOC501: Method `Burgers2DSolver.solve` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Method `Burgers2DSolver.solve` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
 --------------------
 src/opifex/physics/solvers/diffusion_advection.py
     DOC501: Function `solve_diffusion_advection_2d` has raise statements, but the docstring does not have a "Raises" section

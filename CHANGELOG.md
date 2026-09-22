@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Burgers2DSolver.solve` integrates on the device. It read the CFL step back to the host
+  every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
+  vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
+  `lax.scan`, the structure `solve_burgers_2d` already uses.
+
+### Changed
+
+- `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
+  the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
+  its output around, where a count of adaptive steps cannot.
+
+### Fixed
+
 - `opifex.uncertainty.linalg.lsmr` is the LSMR recurrence of Fong and Saunders (2011, SIAM J.
   Sci. Comput. 33(5), 2950): a bidiagonalisation kept factorised by two Givens rotations per
   step. It projected onto the Krylov basis and then solved the normal equations there, which

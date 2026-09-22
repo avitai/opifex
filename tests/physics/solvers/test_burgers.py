@@ -5,6 +5,7 @@ Following TDD principles and JAX/Flax NNX guidelines from critical_technical_gui
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from opifex.physics.solvers.burgers import (
@@ -170,35 +171,49 @@ class TestBurgers2DSolver:
         # Create simple initial condition
         u, v = solver.create_vortex_initial_condition(strength=0.1)  # Small strength
 
-        time_final = 0.01  # Short time
-        times, u_traj, v_traj = solver.solve((u, v), time_final, save_every=1)
+        times, u_traj, v_traj = solver.solve((u, v), time_final=0.01, num_saves=4)
 
-        # Check output shapes
-        n_steps = len(times)
-        assert u_traj.shape == (n_steps, 16, 16)
-        assert v_traj.shape == (n_steps, 16, 16)
-
-        # Check that all values are finite
+        assert times.shape == (5,)
+        assert u_traj.shape == (5, 16, 16)
+        assert v_traj.shape == (5, 16, 16)
         assert jnp.all(jnp.isfinite(u_traj))
         assert jnp.all(jnp.isfinite(v_traj))
-
-        # Check that initial condition is preserved
         assert jnp.allclose(u_traj[0], u, rtol=1e-10)
         assert jnp.allclose(v_traj[0], v, rtol=1e-10)
+        np.testing.assert_allclose(times, jnp.linspace(0.0, 0.01, 5), rtol=1e-6)
 
-    def test_solve_without_save_every(self):
-        """Test solve without intermediate saving."""
+    def test_solve_saves_only_the_final_state_by_default(self):
         solver = Burgers2DSolver(resolution=16, viscosity=0.1)
-
         u, v = solver.create_vortex_initial_condition(strength=0.1)
 
-        time_final = 0.005
-        times, u_traj, v_traj = solver.solve((u, v), time_final)  # No save_every
+        times, u_traj, v_traj = solver.solve((u, v), time_final=0.005)
 
-        # Should only have initial and final states
-        assert len(times) == 2
+        assert times.shape == (2,)
         assert u_traj.shape[0] == 2
         assert v_traj.shape[0] == 2
+
+    def test_solve_is_jit_and_vmap_compatible(self):
+        """The class solves on device, as the module-level function does."""
+        solver = Burgers2DSolver(resolution=16, viscosity=0.1)
+        u, v = solver.create_vortex_initial_condition(strength=0.1)
+        batch = (jnp.stack([u, 0.5 * u]), jnp.stack([v, 0.5 * v]))
+
+        batched = jax.jit(jax.vmap(lambda a, b: solver.solve((a, b), time_final=0.005)[1]))(*batch)
+
+        assert batched.shape == (2, 2, 16, 16)
+        assert jnp.all(jnp.isfinite(batched))
+
+    def test_solving_in_two_legs_matches_one(self):
+        """Integrating to t, then on to 2t, lands where integrating to 2t does."""
+        solver = Burgers2DSolver(resolution=16, viscosity=0.1)
+        u, v = solver.create_vortex_initial_condition(strength=0.1)
+
+        _, first, second = solver.solve((u, v), time_final=0.004)
+        _, again, and_again = solver.solve((first[-1], second[-1]), time_final=0.004)
+        _, straight_u, straight_v = solver.solve((u, v), time_final=0.008)
+
+        np.testing.assert_allclose(again[-1], straight_u[-1], rtol=1e-4, atol=1e-6)
+        np.testing.assert_allclose(and_again[-1], straight_v[-1], rtol=1e-4, atol=1e-6)
 
     def test_input_validation(self):
         """Test input validation in solve method."""
@@ -219,7 +234,7 @@ class TestBurgers2DSolver:
         u, v = solver.create_vortex_initial_condition(strength=0.2)
 
         time_final = 0.01
-        times, u_traj, v_traj = solver.solve((u, v), time_final, save_every=2)
+        times, u_traj, v_traj = solver.solve((u, v), time_final, num_saves=3)
 
         # Compute energy at each time step
         energies = []
