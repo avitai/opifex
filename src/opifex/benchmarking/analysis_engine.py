@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from calibrax.analysis.comparison import compare_configurations
-from calibrax.core import BenchmarkResult
+from calibrax.core import BenchmarkResult, read_metadata, read_metadata_entry
 from calibrax.core.models import Metric, Run
 from calibrax.statistics import (
     mann_whitney_u,
@@ -126,7 +126,7 @@ class AnalysisEngine:
         runs: dict[str, Run] = {}
         for label, result in results_dict.items():
             enriched_metrics = dict(result.metrics)
-            exec_time = result.metadata.get("execution_time", 0.0)
+            exec_time = read_metadata_entry(float, result.metadata, "execution_time", default=0.0)
             enriched_metrics["execution_time"] = Metric(value=exec_time)
 
             enriched_result = BenchmarkResult(
@@ -278,7 +278,7 @@ class AnalysisEngine:
         suggestions: list[str] = []
         domain_observations: list[str] = []
 
-        exec_time = result.metadata.get("execution_time", 0.0)
+        exec_time = read_metadata_entry(float, result.metadata, "execution_time", default=0.0)
         _analyze_execution_performance(exec_time, insights, bottlenecks, suggestions)
 
         metrics_float = _metrics_to_float(result)
@@ -287,7 +287,12 @@ class AnalysisEngine:
         dataset = result.tags.get("dataset", result.name)
         _analyze_domain_specific_aspects(dataset, metrics_float, domain_observations)
 
-        memory_usage = result.metadata.get("memory_usage")
+        recorded_memory = result.metadata.get("memory_usage")
+        memory_usage = (
+            None
+            if recorded_memory is None
+            else read_metadata(float, recorded_memory, "memory_usage")
+        )
         _analyze_memory_usage(memory_usage, bottlenecks, suggestions)
 
         _analyze_performance_accuracy_tradeoff(metrics_float, exec_time, insights, suggestions)
@@ -322,10 +327,10 @@ def _extract_scaling_metrics(
     scaling_metrics: dict[str, dict[int, float]] = defaultdict(dict)
 
     for size, result in performance_data.items():
-        exec_time = result.metadata.get("execution_time", 0.0)
+        exec_time = read_metadata_entry(float, result.metadata, "execution_time", default=0.0)
         scaling_metrics["execution_time"][size] = exec_time
 
-        memory = result.metadata.get("memory_usage", 0)
+        memory = read_metadata_entry(float, result.metadata, "memory_usage", default=0.0)
         scaling_metrics["memory_usage"][size] = memory
 
         for metric_name, metric in result.metrics.items():
@@ -492,7 +497,7 @@ def _calculate_confidence(result: BenchmarkResult) -> float:
     """Calculate confidence level for benchmark results."""
     confidence = 0.8
 
-    exec_time = result.metadata.get("execution_time", 0.0)
+    exec_time = read_metadata_entry(float, result.metadata, "execution_time", default=0.0)
     if 0 < exec_time < 100:
         confidence += 0.1
 
@@ -522,7 +527,7 @@ def _organize_metrics_for_comparison(
             metric_comparisons[metric_name][operator] = metric.value
             all_metrics.add(metric_name)
 
-        exec_time = result.metadata.get("execution_time", 0.0)
+        exec_time = read_metadata_entry(float, result.metadata, "execution_time", default=0.0)
         metric_comparisons["execution_time"][operator] = exec_time
     all_metrics.add("execution_time")
 

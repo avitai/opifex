@@ -16,7 +16,8 @@ import math
 from pathlib import Path
 
 import pytest
-from substrax.testing import discover_examples, run_example
+from substrax.examples import discover_examples
+from substrax.testing import run_example
 
 
 ROOT = Path(__file__).resolve().parents[2]

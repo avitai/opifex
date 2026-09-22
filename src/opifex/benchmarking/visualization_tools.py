@@ -19,7 +19,7 @@ Following Critical Technical Guidelines:
 
 from typing import Any
 
-from calibrax.core import BenchmarkResult
+from calibrax.core import BenchmarkResult, read_metadata_entry
 
 from opifex.benchmarking._shared import LOWER_IS_BETTER
 
@@ -33,7 +33,7 @@ def _dataset(r: BenchmarkResult) -> str:
 
 
 def _exec_time(r: BenchmarkResult) -> float:
-    return r.metadata.get("execution_time", 0.0)
+    return read_metadata_entry(float, r.metadata, "execution_time", default=0.0)
 
 
 def _metric_val(r: BenchmarkResult, metric: str) -> float | None:

@@ -556,10 +556,10 @@ class Trainer(nnx.Module):
         """Restore the model's state from the checkpoint at ``step``.
 
         The stored ``model`` item is restored onto the live model's state and
-        merged into it in place; roots written by earlier releases (the module
-        as the one payload) are read through substrax's module-only layout. A
-        step the directory does not hold is the store's ``CheckpointNotFoundError``
-        (a ``FileNotFoundError``).
+        merged into it in place. A root in another checkpoint format is refused
+        with substrax's ``UnsupportedCheckpointError``, and a step the directory
+        does not hold is the store's ``CheckpointNotFoundError`` (a
+        ``FileNotFoundError``).
 
         Args:
             step: The step to restore.

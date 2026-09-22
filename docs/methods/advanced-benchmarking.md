@@ -15,7 +15,7 @@ The Benchmarking System consists of 8+ specialized components that work together
 7. **BenchmarkRunner** - End-to-end workflow orchestration
 8. **Adapters** - Bridge to calibrax `Run` objects for cross-tool analysis
 
-Core types (`BenchmarkResult`, `Metric`, `Run`) and statistical analysis (`StatisticalAnalyzer`) are provided by [calibrax](https://pypi.org/project/calibrax/).
+Core types (`BenchmarkResult`, `Metric`, `Run`) and statistics (`summarize`, `bootstrap_interval`, `welch_t_test`, `mann_whitney_u`) are provided by [calibrax](https://pypi.org/project/calibrax/).
 
 ## Key Features
 

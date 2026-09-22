@@ -9,6 +9,7 @@ Following TDD: These tests are written FIRST before the implementation.
 import jax.numpy as jnp
 import optax
 import pytest
+from calibrax.core import read_metadata_entry
 from flax import nnx
 
 
@@ -240,7 +241,7 @@ class TestTrainingLoop:
         )
 
         # Verify real results
-        assert result.metadata.get("execution_time", 0.0) > 0
+        assert read_metadata_entry(float, result.metadata, "execution_time", default=0.0) > 0
         assert result.metrics["mse"].value > 0
         # After training, final loss should be <= initial (training improved or didn't diverge)
         assert (
@@ -329,7 +330,9 @@ class TestBenchmarkRunnerRealExecution:
         assert result.name == "TensorizedFourierNeuralOperator"
         assert result.tags.get("dataset") == "test_darcy"
         assert result.metrics["mse"].value > 0  # Real MSE (not random)
-        assert result.metadata.get("execution_time", 0.0) > 0  # Real timing
+        assert (
+            read_metadata_entry(float, result.metadata, "execution_time", default=0.0) > 0
+        )  # Real timing
 
         # Run again - results should be deterministic (same seed)
         result2 = runner._run_single_benchmark("TensorizedFourierNeuralOperator", config)

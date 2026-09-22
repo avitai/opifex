@@ -26,6 +26,37 @@ from opifex.core.gpu_acceleration import (
 )
 
 
+def test_roofline_reports_the_resolved_float32_spec(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The roofline is calibrax's resolved spec for float32: listed, or measured once."""
+    from calibrax.profiling import HardwareSpec
+
+    from opifex.core import gpu_acceleration
+
+    measured = HardwareSpec(
+        name="measured:cpu:float32",
+        peak_flops=1.0e12,
+        memory_bandwidth=4.0e10,
+        tensor_core_shapes=(),
+        simd_width=None,
+    )
+    dtypes: list[object] = []
+
+    def _resolve(*, dtype: object) -> HardwareSpec:
+        dtypes.append(dtype)
+        return measured
+
+    monkeypatch.setattr(gpu_acceleration, "resolve_hardware_spec", _resolve)
+
+    manager = RooflineMemoryManager()
+
+    assert dtypes == [jnp.float32]
+    assert manager.hw_specs["peak_flops"] == 1.0e12
+    assert manager.hw_specs["critical_intensity"] == pytest.approx(1.0e12 / 4.0e10)
+    assert manager.hw_specs["supports_tensorcore"] is False
+
+
 class TestRooflineMemoryManager:
     """Test roofline model-based memory management."""
 

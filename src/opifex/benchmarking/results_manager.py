@@ -2,7 +2,7 @@
 
 ``ResultsManager`` keeps a JSON database of saved results, writes each one
 through to a calibrax ``Store``, answers queries over the database, and renders
-publication plots and tables with calibrax's ``PublicationGenerator``.
+publication plots with calibrax's ``PlotGenerator`` and tables with its ``PublicationGenerator``.
 """
 
 from __future__ import annotations
@@ -15,8 +15,9 @@ from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Literal, TYPE_CHECKING
 
-from calibrax.core import BenchmarkResult
+from calibrax.core import BenchmarkResult, read_metadata
 from calibrax.core.models import Metric, Point, Run, TrendPoint, TrendSeries
+from calibrax.exporters.plots import PlotGenerator
 from calibrax.exporters.publication import PublicationGenerator
 from calibrax.storage.store import Store
 
@@ -260,10 +261,8 @@ class ResultsManager:
             if len(group) < 2:
                 continue
             run = results_to_run(group, metric_defs=default_metric_defs())
-            generator = PublicationGenerator(self.plots_path / dataset)
-            path = generator.generate_comparison_plot(run, output_format=output_format)
-            if path is not None:
-                paths.append(path)
+            generator = PlotGenerator(self.plots_path / dataset)
+            paths.append(generator.comparison_plot(run, output_format=output_format))
         return paths
 
     def _scaling_plots(self, results: list[BenchmarkResult], output_format: str) -> list[Path]:
@@ -272,18 +271,18 @@ class ResultsManager:
         for model, group in _grouped(results, lambda r: r.name).items():
             sized = sorted(
                 (r for r in group if r.metadata.get("problem_size") is not None),
-                key=lambda r: int(r.metadata["problem_size"]),
+                key=lambda r: read_metadata(int, r.metadata["problem_size"], "problem_size"),
             )
-            sizes = [int(r.metadata["problem_size"]) for r in sized]
+            sizes = [read_metadata(int, r.metadata["problem_size"], "problem_size") for r in sized]
             if len(set(sizes)) < 2:
                 continue
-            generator = PublicationGenerator(self.plots_path / model)
+            generator = PlotGenerator(self.plots_path / model)
             for metric_name, values in _shared_metrics(sized).items():
-                path = generator.generate_scaling_plot(
-                    sizes, values, metric_name=metric_name, output_format=output_format
+                paths.append(
+                    generator.scaling_plot(
+                        sizes, values, metric_name=metric_name, output_format=output_format
+                    )
                 )
-                if path is not None:
-                    paths.append(path)
         return paths
 
     def _convergence_plots(self, results: list[BenchmarkResult], output_format: str) -> list[Path]:
@@ -300,14 +299,14 @@ class ResultsManager:
                 tags=dict(result.tags),
                 points=tuple(
                     TrendPoint(run_id=f"epoch-{epoch}", timestamp=recorded, value=float(value))
-                    for epoch, value in enumerate(history, start=1)
+                    for epoch, value in enumerate(
+                        read_metadata(list[float], history, "loss_history"), start=1
+                    )
                 ),
             )
             dataset = result.tags.get("dataset", "unknown")
-            generator = PublicationGenerator(self.plots_path / result.name / dataset)
-            path = generator.generate_convergence_plot(series, output_format=output_format)
-            if path is not None:
-                paths.append(path)
+            generator = PlotGenerator(self.plots_path / result.name / dataset)
+            paths.append(generator.convergence_plot(series, output_format=output_format))
         return paths
 
     def generate_comparison_tables(

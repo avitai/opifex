@@ -6,6 +6,7 @@ with calibrax's Run-based analysis and storage APIs.
 
 from __future__ import annotations
 
+from calibrax.core import read_metadata
 from calibrax.core.models import (
     Metric,
     MetricDef,
@@ -74,7 +75,7 @@ def metric_values(result: BenchmarkResult) -> dict[str, float]:
     values = {name: float(metric.value) for name, metric in result.metrics.items()}
     execution_time = result.metadata.get("execution_time")
     if execution_time is not None and "execution_time" not in values:
-        values["execution_time"] = float(execution_time)
+        values["execution_time"] = read_metadata(float, execution_time, "execution_time")
     return values
 
 

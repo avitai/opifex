@@ -255,9 +255,9 @@ class OperatorExecutor:
         targets = jnp.concatenate(all_targets, axis=0)
 
         return {
-            "mse": calc_mse(preds, targets),
-            "mae": calc_mae(preds, targets),
-            "relative_error": calc_relative_error(preds, targets),
+            "mse": float(calc_mse(preds, targets)),
+            "mae": float(calc_mae(preds, targets)),
+            "relative_error": float(calc_relative_error(preds, targets)),
         }
 
 

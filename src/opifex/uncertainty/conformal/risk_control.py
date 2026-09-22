@@ -16,27 +16,21 @@ jax.Array transformation; the package-level helper
 metadata recording and returns a Pattern-B `RiskControllerState`
 pytree.
 
-For confidence-interval reporting on calibration statistics, we reuse
-``calibrax.statistics.analyzer.StatisticalAnalyzer.bootstrap_ci`` via the
-:func:`bootstrap_threshold_ci` helper — percentile bootstrap CI semantics
-match what we need exactly.
+For confidence-interval reporting on calibration statistics,
+:func:`bootstrap_threshold_ci` is the percentile bootstrap interval of the mean from
+``calibrax.statistics.bootstrap_interval``, resampled with the key its caller passes.
 """
 
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-from calibrax.statistics.analyzer import StatisticalAnalyzer
-from flax import struct
+from calibrax.statistics import bootstrap_interval
+from flax import nnx, struct
 
 from opifex.uncertainty.types import MetadataItems  # noqa: TC001
-
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 # ---------------------------------------------------------------------------
@@ -220,28 +214,33 @@ def select_threshold_rcps(
 
 def bootstrap_threshold_ci(
     *,
-    samples: Sequence[float],
+    samples: jax.typing.ArrayLike,
+    key: jax.Array | nnx.Rngs,
     confidence: float = 0.95,
     bootstrap_resamples: int = 1000,
-    seed: int = 42,
-) -> tuple[float, float]:
-    """Percentile bootstrap confidence interval for a sequence of samples.
+) -> tuple[jax.Array, jax.Array]:
+    """Percentile bootstrap confidence interval of the mean of ``samples``.
 
-    Thin keyword-only wrapper around
-    ``calibrax.statistics.analyzer.StatisticalAnalyzer.bootstrap_ci``.
+    The interval is ``calibrax.statistics.bootstrap_interval`` over ``jnp.mean``. It depends only on
+    ``key``, so the same samples and key give the same interval, and it traces under ``jax.jit``
+    with ``bootstrap_resamples`` fixed.
 
     Args:
-        samples: Sequence of measurement values (e.g., per-bootstrap
-            chosen thresholds, per-fold empirical losses).
-        confidence: Confidence level in ``(0, 1)``; default 0.95 for a
-            95% interval.
-        bootstrap_resamples: Number of bootstrap resamples passed to the
-            CalibraX analyzer.
-        seed: Random seed for reproducible bootstrap sampling.
+        samples: Measurement values along the first axis (e.g., per-bootstrap chosen thresholds,
+            per-fold empirical losses).
+        key: The key the resampling indices are drawn from, or an ``nnx.Rngs`` whose ``sample`` or
+            ``default`` stream supplies it.
+        confidence: Confidence level in ``(0, 1)``; default 0.95 for a 95% interval.
+        bootstrap_resamples: Number of bootstrap resamples.
 
     Returns:
-        ``(lower_bound, upper_bound)`` percentile bootstrap interval.
-
+        ``(lower_bound, upper_bound)`` of the percentile bootstrap interval.
     """
-    analyzer = StatisticalAnalyzer(bootstrap_resamples=bootstrap_resamples, seed=seed)
-    return analyzer.bootstrap_ci(samples, confidence=confidence)
+    interval = bootstrap_interval(
+        jnp.mean,
+        jnp.asarray(samples),
+        key=key,
+        num_resamples=bootstrap_resamples,
+        confidence=confidence,
+    )
+    return interval.lower, interval.upper

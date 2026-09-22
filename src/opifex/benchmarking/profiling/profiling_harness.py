@@ -14,9 +14,11 @@ from contextlib import contextmanager
 from typing import Any, cast
 
 import jax
+import jax.numpy as jnp
 from calibrax.profiling import (
     CompilationProfiler,
-    detect_hardware_specs,
+    HardwareSpec,
+    resolve_hardware_spec,
     RooflineAnalyzer,
 )
 from flax import nnx
@@ -206,15 +208,15 @@ class OpifexProfilingHarness:
 
         # Initialize calibrax profilers
         self.profilers: dict[str, Any] = {}
-        self.hardware_specs: dict[str, Any] = {}
+        self.hardware_specs: HardwareSpec | None = None
 
         if enable_hardware_profiling:
-            self.hardware_specs = detect_hardware_specs()
+            self.hardware_specs = resolve_hardware_spec(dtype=jnp.float32)
             self.profilers["hardware"] = self.hardware_specs
 
         if enable_roofline_analysis:
             self.roofline_analyzer = RooflineAnalyzer(
-                hardware_specs=self.hardware_specs or detect_hardware_specs()
+                hardware_specs=resolve_hardware_spec(dtype=jnp.float32)
             )
             self.profilers["roofline"] = self.roofline_analyzer
 
@@ -259,14 +261,15 @@ class OpifexProfilingHarness:
         """Profile a complete neural operator with full analysis."""
 
         if operation_name is None:
-            operation_name = getattr(operator, "__class__", {}).get("__name__", "neural_operator")
+            operation_name = type(operator).__name__
         results: dict[str, Any] = {"operation_name": operation_name}
 
         # Hardware-specific analysis (calibrax: static spec detection)
-        if "hardware" in self.profilers:
+        if self.hardware_specs is not None:
             results["hardware_analysis"] = {
                 "backend": jax.default_backend(),
-                "hardware_info": self.hardware_specs,
+                "device_count": jax.device_count(),
+                "hardware_info": self.hardware_specs.to_dict(),
             }
 
         # NNX modules are callable; cast for calibrax API type compatibility
@@ -361,12 +364,6 @@ class OpifexProfilingHarness:
                 self._format_compilation_analysis(results["compilation_analysis"]),
             )
 
-        if "xla_analysis" in results and "error" not in results["xla_analysis"]:
-            report.add_section(
-                "XLA Optimization Analysis",
-                self._format_xla_analysis(results["xla_analysis"]),
-            )
-
         # Generate priority recommendations
         priority_recommendations = self._extract_priority_recommendations(results)
         for rec in priority_recommendations:
@@ -392,100 +389,45 @@ class OpifexProfilingHarness:
             summary["Bottleneck"] = roofline.get("bottleneck", "Unknown")
             summary["Efficiency"] = f"{roofline.get('efficiency', 0):.2%}"
 
-        # Hardware utilization
-        if "hardware_analysis" in results and "error" not in results["hardware_analysis"]:
-            hw_analysis = results["hardware_analysis"]
-            backend = hw_analysis.get("backend", "unknown")
-
-            if backend == "tpu" and "platform_analysis" in hw_analysis:
-                mxu_analysis = hw_analysis["platform_analysis"].get("mxu_analysis", {})
-                summary["MXU Utilization"] = f"{mxu_analysis.get('mxu_utilization', 0):.2%}"
-            elif backend == "gpu" and "platform_analysis" in hw_analysis:
-                tc_analysis = hw_analysis["platform_analysis"].get("tensorcore_analysis", {})
-                summary["TensorCore Utilization"] = (
-                    f"{tc_analysis.get('tensorcore_utilization', 0):.2%}"
-                )
-
         # Compilation metrics
         if "compilation_analysis" in results and "error" not in results["compilation_analysis"]:
-            comp_analysis = results["compilation_analysis"]
-            cache_stats = comp_analysis.get("cache_statistics", {})
-            summary["Cache Hit Rate"] = f"{cache_stats.get('cache_hit_rate', 0):.2%}"
+            summary["Cache Hit Rate"] = f"{results['compilation_analysis']['cache_hit_rate']:.2%}"
 
         return summary
 
     def _format_hardware_analysis(self, hw_analysis: dict[str, Any]) -> dict[str, Any]:
         """Format hardware analysis for report."""
 
-        formatted = {
-            "Backend": hw_analysis.get("backend", "Unknown"),
-            "Device Count": len(hw_analysis.get("hardware_info", {}).get("devices", [])),
+        return {
+            "Backend": hw_analysis["backend"],
+            "Hardware": hw_analysis["hardware_info"]["name"],
+            "Device Count": hw_analysis["device_count"],
         }
 
-        platform_analysis = hw_analysis.get("platform_analysis", {})
-
-        if "mxu_analysis" in platform_analysis:
-            mxu = platform_analysis["mxu_analysis"]
-            formatted["TPU MXU Utilization"] = f"{mxu.get('mxu_utilization', 0):.2%}"
-            formatted["TPU Recommendations"] = mxu.get("recommendations", [])
-
-        if "tensorcore_analysis" in platform_analysis:
-            tc = platform_analysis["tensorcore_analysis"]
-            formatted["GPU TensorCore Utilization"] = f"{tc.get('tensorcore_utilization', 0):.2%}"
-            formatted["GPU Recommendations"] = tc.get("recommendations", [])
-
-        if "simd_analysis" in platform_analysis:
-            simd = platform_analysis["simd_analysis"]
-            formatted["CPU SIMD Alignment"] = (
-                f"{simd.get('simd_alignment', {}).get('average_simd_alignment', 0):.2%}"
-            )
-            formatted["CPU Recommendations"] = simd.get("recommendations", [])
-
-        return formatted
-
     def _format_roofline_analysis(self, roofline: dict[str, Any]) -> dict[str, Any]:
-        """Format roofline analysis for report."""
+        """Format calibrax's ``RooflineResult.to_dict()`` for the report."""
 
         return {
-            "Arithmetic Intensity": (f"{roofline.get('arithmetic_intensity', 0):.1f} FLOPs/byte"),
-            "Critical Intensity": (f"{roofline.get('critical_intensity', 0):.1f} FLOPs/byte"),
-            "Bottleneck": roofline.get("bottleneck", "Unknown"),
-            "Efficiency": f"{roofline.get('efficiency', 0):.2%}",
-            "Execution Time": f"{roofline.get('actual_time_ms', 0):.2f} ms",
-            "FLOP Utilization": f"{roofline.get('flops_utilization', 0):.2%}",
-            "Memory Bandwidth Utilization": (
-                f"{roofline.get('memory_bandwidth_utilization', 0):.2%}"
-            ),
-            "Recommendations": roofline.get("optimization_recommendations", []),
+            "Arithmetic Intensity": f"{roofline['arithmetic_intensity']:.1f} FLOPs/byte",
+            "Critical Intensity": f"{roofline['critical_intensity']:.1f} FLOPs/byte",
+            "Bottleneck": roofline["bottleneck"],
+            "Efficiency": f"{roofline['efficiency']:.2%}",
+            "Execution Time": f"{roofline['execution_time_ms']:.2f} ms",
+            "FLOP Utilization": f"{roofline['flops_utilization']:.2%}",
+            "Memory Bandwidth Utilization": f"{roofline['memory_bandwidth_utilization']:.2%}",
+            "Recommendations": roofline["recommendations"],
         }
 
     def _format_compilation_analysis(self, comp_analysis: dict[str, Any]) -> dict[str, Any]:
-        """Format compilation analysis for report."""
-
-        cache_stats = comp_analysis.get("cache_statistics", {})
-        comp_times = comp_analysis.get("compilation_times", {})
+        """Format calibrax's ``CompilationResult.to_dict()`` for the report."""
 
         return {
-            "Cache Hit Rate": f"{cache_stats.get('cache_hit_rate', 0):.2%}",
-            "Total Calls": cache_stats.get("total_calls", 0),
-            "Average Compilation Time": f"{comp_times.get('average_ms', 0):.1f} ms",
-            "Maximum Compilation Time": f"{comp_times.get('maximum_ms', 0):.1f} ms",
-            "Unique Signatures": comp_analysis.get("unique_signatures", 0),
-            "Recommendations": comp_analysis.get("recommendations", []),
-        }
-
-    def _format_xla_analysis(self, xla_analysis: dict[str, Any]) -> dict[str, Any]:
-        """Format XLA analysis for report."""
-
-        hlo_analysis = xla_analysis.get("hlo_analysis", {})
-
-        return {
-            "Optimization Score": f"{xla_analysis.get('optimization_score', 0):.2%}",
-            "Fusion Ratio": f"{hlo_analysis.get('fusion_ratio', 0):.2%}",
-            "Arithmetic Ratio": f"{hlo_analysis.get('arithmetic_ratio', 0):.2%}",
-            "Memory Operation Ratio": f"{hlo_analysis.get('memory_ratio', 0):.2%}",
-            "Total Operations": hlo_analysis.get("total_operations", 0),
-            "Recommendations": xla_analysis.get("recommendations", []),
+            "Cache Hit Rate": f"{comp_analysis['cache_hit_rate']:.2%}",
+            "Total Calls": comp_analysis["total_calls"],
+            "Average Compilation Time": f"{comp_analysis['avg_compilation_time_ms']:.1f} ms",
+            "Maximum Compilation Time": f"{comp_analysis['max_compilation_time_ms']:.1f} ms",
+            "Unique Signatures": comp_analysis["unique_signatures"],
+            "Recommendations": comp_analysis["recommendations"],
         }
 
     def _extract_priority_recommendations(self, results: dict[str, Any]) -> list[dict[str, str]]:
@@ -566,9 +508,9 @@ class OpifexProfilingHarness:
             # Roofline metrics
             if "roofline_analysis" in result:
                 roofline = result["roofline_analysis"]
-                metrics[name]["efficiency"] = roofline.get("efficiency", 0)
-                metrics[name]["arithmetic_intensity"] = roofline.get("arithmetic_intensity", 0)
-                metrics[name]["execution_time_ms"] = roofline.get("actual_time_ms", 0)
+                metrics[name]["efficiency"] = roofline["efficiency"]
+                metrics[name]["arithmetic_intensity"] = roofline["arithmetic_intensity"]
+                metrics[name]["execution_time_ms"] = roofline["execution_time_ms"]
 
         # Find best and worst performers
         if metrics:
