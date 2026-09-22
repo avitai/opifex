@@ -36,12 +36,29 @@ def _solenoidal(n: int) -> CenteredGrid:
     return CenteredGrid(jnp.stack([vx, vy], axis=-1), BOX, Extrapolation.PERIODIC)
 
 
-# What a float32 projection cannot go below is the round-off of the central difference
-# that measures it, eps over dx, so the residual grows with resolution: measured 3.3e-07,
-# 8.7e-07 and 4.8e-06 relative at 16, 32 and 64 cells for the spectral solve, and at most
-# 6.9e-06 for the least-squares solve across the three boundaries. The limit is four times
-# the largest of those.
-_RESIDUAL = 2e-5
+# A projection applies two differences, each dividing by dx, so float32 round-off in the
+# residual grows like eps * n^2 and a single number cannot bound it across resolutions.
+# Measured relative residual over eps * n^2, which is flat and so is the right model:
+#
+#     n            16       32       64      128
+#     spectral  0.0108   0.0071   0.0099   0.0071
+#     lsmr      0.0495   0.0244   0.0282   0.0397
+#
+# Each limit is five times the largest measured for that solver. A flat limit wide enough
+# for n = 128 would be eighty times the value it exists to catch at n = 16. The iterative
+# solve floors higher because it stops at a fixed iteration count rather than inverting the
+# symbol exactly.
+_EPSILON = float(jnp.finfo(jnp.float32).eps)
+
+
+def _spectral_limit(n: int) -> float:
+    """The relative residual divergence the exact symbol solve cannot go below."""
+    return 0.05 * _EPSILON * n * n
+
+
+def _iterative_limit(n: int) -> float:
+    """The relative residual divergence the fixed-budget least-squares solve reaches."""
+    return 0.25 * _EPSILON * n * n
 
 
 def _divergence_norm(field: CenteredGrid) -> float:
@@ -57,7 +74,7 @@ class TestSpectralPressureSolve:
 
         projected, _ = pressure_solve_spectral(velocity)
 
-        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _spectral_limit(n) * _divergence_norm(velocity)
 
     def test_the_pressure_solves_the_operator_the_projection_applies(self) -> None:
         # Operator consistency: p solves divergence(gradient(p)) = divergence(v), not some
@@ -67,7 +84,7 @@ class TestSpectralPressureSolve:
         _, pressure = pressure_solve_spectral(velocity)
 
         residual = divergence(gradient(pressure)).values - divergence(velocity).values
-        assert float(jnp.linalg.norm(residual)) <= _RESIDUAL * _divergence_norm(velocity)
+        assert float(jnp.linalg.norm(residual)) <= _spectral_limit(32) * _divergence_norm(velocity)
 
     def test_a_divergence_free_field_is_left_alone(self) -> None:
         velocity = _solenoidal(32)
@@ -88,7 +105,7 @@ class TestSpectralPressureSolve:
 
         projected, _ = jax.jit(pressure_solve_spectral)(velocity)
 
-        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _spectral_limit(16) * _divergence_norm(velocity)
 
     def test_it_maps_over_a_batch_of_fields(self) -> None:
         velocity = _velocity(16)
@@ -117,7 +134,7 @@ class TestLeastSquaresPressureSolve:
 
         projected, _ = pressure_solve_lsmr(velocity)
 
-        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _iterative_limit(32) * _divergence_norm(velocity)
 
     def test_it_agrees_with_the_spectral_solve_on_a_periodic_field(self) -> None:
         velocity = _velocity(32)
@@ -148,4 +165,4 @@ class TestLeastSquaresPressureSolve:
 
         projected, _ = jax.jit(pressure_solve_lsmr)(velocity)
 
-        assert _divergence_norm(projected) <= _RESIDUAL * _divergence_norm(velocity)
+        assert _divergence_norm(projected) <= _iterative_limit(16) * _divergence_norm(velocity)

@@ -143,10 +143,28 @@ def pressure_solve_lsmr(
     transpose -- nor invertible, and a conjugate-gradient iterate drifts into the null space
     and diverges. LSMR returns the minimum-norm least-squares solution in both cases.
 
-    The default budget holds the residual divergence near ``1e-05`` of the incoming
-    divergence for every boundary; a periodic field reaches that within 20 iterations, a
-    zero-gradient one needs roughly 500. Iterating far past convergence costs accuracy
-    rather than gaining it, as the bidiagonalisation loses orthogonality in float32.
+    **The budget does not scale, and the caller must set it.** A least-squares solve works
+    against the normal-equation condition number, which for this operator grows like the
+    fourth power of the grid, so the iterations needed grow like its square. Measured
+    iterations to reach the float32 round-off floor:
+
+    ================  ======  ======  ==================
+    boundary          n=16    n=32    n=64
+    ================  ======  ======  ==================
+    periodic            50      50      50
+    zero                50     200     800
+    zero-gradient      100     400     not reached by 3200
+    ================  ======  ======  ==================
+
+    The default is calibrated for 32 cells and **under-converges above it**: at 64 cells a
+    zero-gradient boundary leaves 3.0e-02 of the incoming divergence rather than the 7e-06
+    it leaves at 32. A periodic field belongs in ``pressure_solve_spectral``, which is exact
+    and about a hundred times faster at 128x128. Iterating far past convergence costs
+    accuracy rather than gaining it, as the bidiagonalisation loses orthogonality in float32.
+
+    The zero-gradient row is worse than the operator should make it: that boundary is the one
+    where the composition measures asymmetric, which traces to the boundary treatment of
+    derived fields rather than to anything about Neumann conditions.
 
     Args:
         velocity: Vector velocity field, shape ``(*resolution, ndim)``.
