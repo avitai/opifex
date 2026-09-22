@@ -64,7 +64,7 @@ Divergence reduced by 1000x, producing a nearly incompressible velocity field.
 | `semi_lagrangian(f, v, dt)` | Scalar + velocity | Scalar | Backward trace + bilinear interp |
 | `maccormack(f, v, dt)` | Scalar + velocity | Scalar | SL + error correction |
 | `pressure_solve_spectral(v)` | Vector (periodic) | Vector + pressure | FFT Poisson solver |
-| `pressure_solve_jacobi(v)` | Vector (any BC) | Vector + pressure | Iterative Jacobi |
+| `pressure_solve_lsmr(v)` | Vector (any BC) | Vector + pressure | Matrix-free least squares |
 
 ## Comparison with PhiFlow
 

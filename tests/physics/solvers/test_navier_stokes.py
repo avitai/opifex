@@ -7,8 +7,11 @@ The 2D incompressible Navier-Stokes equations:
     ∇·u = 0 (incompressibility)
 """
 
+import itertools
+
 import jax
 import jax.numpy as jnp
+import pytest
 
 
 class TestNavierStokesTransforms:
@@ -49,6 +52,85 @@ class TestNavierStokesTransforms:
         u_traj, v_traj = batched(us, vs, nus)
         assert u_traj.shape == (2, 4, 16, 16) and v_traj.shape == (2, 4, 16, 16)
         assert jnp.all(jnp.isfinite(u_traj)) and jnp.all(jnp.isfinite(v_traj))
+
+
+class TestIncompressibility:
+    """The equation the solver is named for: the evolved field stays divergence free.
+
+    The projection step exists to enforce this, and nothing else in the suite measures
+    whether it does. The divergence is read with the same central difference the solver
+    projects against, so this states the solver's own contract rather than an independent
+    discretisation's opinion of it.
+
+    What is left after an exact projection is the round-off of that central difference,
+    float32 eps over dx, which is 6e-07 at the resolution used here. The limit below is
+    just above it; the measured values are 2.4e-07 across an evolved trajectory and
+    4.7e-10 for a single step from a divergent start.
+    """
+
+    # Round-off of a float32 central difference at dx = 2 pi / 32.
+    _ROUNDOFF = 1e-6
+
+    @staticmethod
+    def _max_divergence(u: jax.Array, v: jax.Array) -> float:
+        dx = 2 * jnp.pi / u.shape[0]
+        du_dx = (jnp.roll(u, -1, axis=0) - jnp.roll(u, 1, axis=0)) / (2 * dx)
+        dv_dy = (jnp.roll(v, -1, axis=1) - jnp.roll(v, 1, axis=1)) / (2 * dx)
+        return float(jnp.max(jnp.abs(du_dx + dv_dy)))
+
+    def test_an_evolved_field_stays_divergence_free(self) -> None:
+        from opifex.physics.solvers.navier_stokes import (
+            create_taylor_green_vortex,
+            solve_navier_stokes_2d,
+        )
+
+        u0, v0 = create_taylor_green_vortex(32)
+        u_traj, v_traj = solve_navier_stokes_2d(u0, v0, 0.05, (0.0, 0.5), 4, 32)
+
+        for step in range(1, u_traj.shape[0]):
+            assert self._max_divergence(u_traj[step], v_traj[step]) <= self._ROUNDOFF
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "The advection term is first-order upwind, whose numerical viscosity is "
+            "|u| dx / 2 -- 0.098 at this resolution against a physical nu of 0.01. The "
+            "vortex decays 8% faster than exp(-2 nu t) at t=1 and 29% faster at t=5, and "
+            "the error falls by 1.85x, 1.90x, 1.95x as the grid is halved from 16 to 128, "
+            "which is the first-order convergence that names the cause. Remove the marker "
+            "with the scheme."
+        ),
+    )
+    def test_the_vortex_decays_at_the_analytic_rate(self) -> None:
+        from opifex.physics.solvers.navier_stokes import (
+            create_taylor_green_vortex,
+            solve_navier_stokes_2d,
+        )
+
+        viscosity, final_time = 0.01, 1.0
+        u0, v0 = create_taylor_green_vortex(32)
+
+        u_traj, _ = solve_navier_stokes_2d(u0, v0, viscosity, (0.0, final_time), 5, 32)
+
+        decay = float(jnp.max(jnp.abs(u_traj[-1]))) / float(jnp.max(jnp.abs(u0)))
+        assert decay == pytest.approx(jnp.exp(-2 * viscosity * final_time), rel=0.01)
+
+    def test_a_divergent_start_is_projected_within_one_step(self) -> None:
+        # The Taylor-Green vortex starts divergence free, so it cannot show whether the
+        # projection removes divergence or merely fails to introduce it.
+        from opifex.physics.solvers.navier_stokes import solve_navier_stokes_2d
+
+        resolution = 32
+        axis = jnp.linspace(0, 2 * jnp.pi, resolution, endpoint=False)
+        x, y = jnp.meshgrid(axis, axis, indexing="ij")
+        u0 = jnp.sin(x) * jnp.cos(y) + 0.3 * jnp.sin(2 * x)
+        v0 = jnp.cos(x) * jnp.sin(y)
+
+        before = self._max_divergence(u0, v0)
+        u_traj, v_traj = solve_navier_stokes_2d(u0, v0, 0.05, (0.0, 0.1), 1, resolution)
+
+        assert before > 0.1
+        assert self._max_divergence(u_traj[-1], v_traj[-1]) <= self._ROUNDOFF
 
 
 class TestNavierStokesSolver:
@@ -108,9 +190,10 @@ class TestNavierStokesSolver:
             resolution=resolution,
         )
 
-        # First time step should be initial condition
-        assert jnp.allclose(u_traj[0], u0, atol=1e-5)
-        assert jnp.allclose(v_traj[0], v0, atol=1e-5)
+        # The first frame is the initial condition itself, concatenated onto the saved
+        # states rather than computed, so it is equal rather than close.
+        assert jnp.array_equal(u_traj[0], u0)
+        assert jnp.array_equal(v_traj[0], v0)
 
     def test_solve_evolves_in_time(self):
         """Test that solution evolves over time (not static)."""
@@ -135,8 +218,15 @@ class TestNavierStokesSolver:
             resolution=resolution,
         )
 
-        # Solution should change over time
-        assert not jnp.allclose(u_traj[0], u_traj[-1], atol=0.1)
+        # The Taylor-Green vortex decays as exp(-2 nu t), so at nu=0.01 over one time unit
+        # the amplitude falls by 2%. A margin of 0.1 is wider than the whole physical
+        # change and read spurious drift as evolution; what the solution owes is that it
+        # decays, monotonically and at least as fast as the analytic rate, since a
+        # discretisation adds dissipation and never removes it.
+        amplitudes = [float(jnp.max(jnp.abs(frame))) for frame in u_traj]
+
+        assert all(later < earlier for earlier, later in itertools.pairwise(amplitudes))
+        assert amplitudes[-1] <= float(jnp.exp(-2 * 0.01 * 1.0)) * amplitudes[0]
 
     def test_solve_with_different_viscosities(self):
         """Test that higher viscosity leads to more diffusion."""
@@ -281,14 +371,19 @@ class TestNavierStokesVortexInitialConditions:
             divergence = du_dx + dv_dy
             return float(jnp.max(jnp.abs(divergence)))
 
-        # Test at resolution 64 - allow for float32 roundoff error
-        # Float32 epsilon is ~1e-7, divided by dx (~0.1) gives ~1e-6
-        div_64 = compute_max_divergence(64)
-        assert div_64 < 1e-4, f"Divergence too large at res=64: {div_64}"
+        # The floor is the cancellation itself: float32 eps over dx, which grows as the
+        # grid is refined. Measured 2.4e-06 at 64 and 6.7e-06 at 128, against a floor of
+        # 1.2e-06 and 2.4e-06 -- a factor of two to three. The limit is ten times the
+        # floor, so it follows the resolution instead of being one number wide enough for
+        # both, which at 1e-04 was forty times the value it was meant to catch.
+        def roundoff_floor(resolution: int) -> float:
+            return float(jnp.finfo(jnp.float32).eps) / (2 * jnp.pi / resolution)
 
-        # Test at resolution 128 - should also be small
+        div_64 = compute_max_divergence(64)
+        assert div_64 < 10 * roundoff_floor(64), f"Divergence too large at res=64: {div_64}"
+
         div_128 = compute_max_divergence(128)
-        assert div_128 < 1e-4, f"Divergence too large at res=128: {div_128}"
+        assert div_128 < 10 * roundoff_floor(128), f"Divergence too large at res=128: {div_128}"
 
         # Note: We cannot test O(h²) convergence with float32 because roundoff
         # error dominates. The analytical function is divergence-free, which

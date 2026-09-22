@@ -12,51 +12,22 @@ The solver uses a fractional step (projection) method:
 1. Compute tentative velocity without pressure
 2. Solve pressure Poisson equation
 3. Correct velocity to be divergence-free
+
+The differential operators and the projection are the ones in ``opifex.fields``, which owns
+their boundary handling and the consistency between the divergence the projection removes
+and the gradient it removes it with. The domain is the periodic ``[0, 2 pi]`` square.
+
+Reference:
+    Chorin 1968 -- *Numerical solution of the Navier-Stokes equations*,
+    Math. Comp. 22(104), 745.
 """
 
 import jax
 import jax.numpy as jnp
 
-
-def _laplacian(f: jax.Array, dx: float) -> jax.Array:
-    """Compute Laplacian with periodic boundaries."""
-    return (
-        jnp.roll(f, 1, axis=0)
-        + jnp.roll(f, -1, axis=0)
-        + jnp.roll(f, 1, axis=1)
-        + jnp.roll(f, -1, axis=1)
-        - 4 * f
-    ) / dx**2
-
-
-def _divergence(u: jax.Array, v: jax.Array, dx: float) -> jax.Array:
-    """Compute divergence of velocity field."""
-    du_dx = (jnp.roll(u, -1, axis=0) - jnp.roll(u, 1, axis=0)) / (2 * dx)
-    dv_dy = (jnp.roll(v, -1, axis=1) - jnp.roll(v, 1, axis=1)) / (2 * dx)
-    return du_dx + dv_dy
-
-
-def _gradient(p: jax.Array, dx: float) -> tuple[jax.Array, jax.Array]:
-    """Compute gradient of scalar field."""
-    dp_dx = (jnp.roll(p, -1, axis=0) - jnp.roll(p, 1, axis=0)) / (2 * dx)
-    dp_dy = (jnp.roll(p, -1, axis=1) - jnp.roll(p, 1, axis=1)) / (2 * dx)
-    return dp_dx, dp_dy
-
-
-def _solve_pressure_poisson(div_u: jax.Array, dx: float, n_iters: int = 50) -> jax.Array:
-    """Solve pressure Poisson equation: nabla^2 p = nabla dot u using Jacobi."""
-    p = jnp.zeros_like(div_u)
-    for _ in range(n_iters):
-        p_new = (
-            jnp.roll(p, 1, axis=0)
-            + jnp.roll(p, -1, axis=0)
-            + jnp.roll(p, 1, axis=1)
-            + jnp.roll(p, -1, axis=1)
-            - dx**2 * div_u
-        ) / 4
-        p_new = p_new - jnp.mean(p_new)
-        p = p_new
-    return p
+from opifex.fields.field import Box, CenteredGrid, Extrapolation
+from opifex.fields.operations import laplacian
+from opifex.fields.pressure import pressure_solve_spectral
 
 
 def _advection_term(f: jax.Array, u: jax.Array, v: jax.Array, dx: float) -> jax.Array:
@@ -101,7 +72,11 @@ def solve_navier_stokes_2d(
     # Grid setup
     L = 2 * jnp.pi  # Domain size
     dx = L / resolution
+    domain = Box(lower=(0.0, 0.0), upper=(float(L), float(L)))
     save_times = jnp.linspace(time_range[0], time_range[1], time_steps + 1)
+
+    def scalar(values: jax.Array) -> CenteredGrid:
+        return CenteredGrid(values, domain, Extrapolation.PERIODIC)
 
     def compute_cfl_dt(u, v):
         """Compute stable time step based on CFL condition."""
@@ -113,19 +88,17 @@ def solve_navier_stokes_2d(
     def step_forward(u, v, dt):
         """Single time step using projection method."""
         # Step 1: Compute tentative velocity (without pressure)
-        u_star = u + dt * (-_advection_term(u, u, v, dx) + nu * _laplacian(u, dx))
-        v_star = v + dt * (-_advection_term(v, u, v, dx) + nu * _laplacian(v, dx))
+        u_star = u + dt * (-_advection_term(u, u, v, dx) + nu * laplacian(scalar(u)).values)
+        v_star = v + dt * (-_advection_term(v, u, v, dx) + nu * laplacian(scalar(v)).values)
 
-        # Step 2: Solve pressure Poisson equation
-        div_u_star = _divergence(u_star, v_star, dx)
-        p = _solve_pressure_poisson(div_u_star / dt, dx)
+        # Steps 2 and 3: solve for the pressure and subtract its gradient. The projection
+        # is scale free in dt -- the pressure absorbs whatever the tentative field carries.
+        tentative = CenteredGrid(
+            jnp.stack([u_star, v_star], axis=-1), domain, Extrapolation.PERIODIC
+        )
+        projected, _ = pressure_solve_spectral(tentative)
 
-        # Step 3: Correct velocity to be divergence-free
-        dp_dx, dp_dy = _gradient(p, dx)
-        u_new = u_star - dt * dp_dx
-        v_new = v_star - dt * dp_dy
-
-        return u_new, v_new
+        return projected.values[..., 0], projected.values[..., 1]
 
     # Adaptive sub-stepping between save times via lax.while_loop + lax.scan so
     # the solver is jit/vmap-compatible (the previous float()-in-while version

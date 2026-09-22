@@ -156,20 +156,22 @@ class Burgers2DSolver:
 
         return u_x, u_y, v_x, v_y, u_xx, u_yy, v_xx, v_yy
 
-    def _adaptive_time_step(self, u: jax.Array, v: jax.Array) -> float:
-        """Compute adaptive time step based on CFL condition."""
-        # Maximum velocities
-        u_max = float(jnp.max(jnp.abs(u)))
-        v_max = float(jnp.max(jnp.abs(v)))
+    def _adaptive_time_step(self, u: jax.Array, v: jax.Array) -> jax.Array:
+        """The largest stable step for this state, as a device value.
+
+        Reading it on the host would sync every sub-step and leave the solve untraceable.
+        """
+        u_max = jnp.max(jnp.abs(u))
+        v_max = jnp.max(jnp.abs(v))
 
         # CFL condition for advection
-        dt_cfl = 0.5 * min(self.dx / (u_max + 1e-8), self.dy / (v_max + 1e-8))
+        dt_cfl = 0.5 * jnp.minimum(self.dx / (u_max + 1e-8), self.dy / (v_max + 1e-8))
 
         # Diffusion stability condition
         dt_diff = 0.25 * min(self.dx**2, self.dy**2) / self.viscosity
 
         # Use minimum of all constraints
-        return float(min(self.dt_max, dt_cfl, dt_diff))
+        return jnp.minimum(jnp.asarray(self.dt_max), jnp.minimum(dt_cfl, dt_diff))
 
     @partial(jax.jit, static_argnums=(0,))
     def _rk4_step(
@@ -204,58 +206,65 @@ class Burgers2DSolver:
         self,
         initial_condition: tuple[jax.Array, jax.Array],
         time_final: float,
-        save_every: int | None = None,
+        num_saves: int = 1,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        """
-        Solve the 2D Burgers equation from initial condition to final time.
+        """Integrate from the initial condition to ``time_final``.
+
+        The saved times are fixed, and the CFL-limited sub-steps between them run in a
+        ``lax.while_loop``, so the whole solve traces under ``jit`` and maps under ``vmap``.
 
         Args:
-            initial_condition: Tuple of (u0, v0) initial velocity fields
-            time_final: Final time to integrate to
-            save_every: Save solution every N time steps (None = only save final)
+            initial_condition: Tuple of (u0, v0) initial velocity fields.
+            time_final: Final time to integrate to.
+            num_saves: How many states after the initial one to return, equally spaced
+                in time.
 
         Returns:
-            Tuple of (time_array, u_trajectory, v_trajectory)
+            Tuple of (times, u_trajectory, v_trajectory), each of length ``num_saves + 1``.
+
+        Raises:
+            ValueError: If a field does not have the solver's resolution, or ``num_saves``
+                is not positive.
         """
         u, v = initial_condition
-
-        # Validate input shapes
         expected_shape = (self.resolution, self.resolution)
         if u.shape != expected_shape:
             raise ValueError(f"u shape {u.shape} != expected {expected_shape}")
         if v.shape != expected_shape:
             raise ValueError(f"v shape {v.shape} != expected {expected_shape}")
+        if num_saves < 1:
+            raise ValueError(f"num_saves must be positive, got {num_saves}")
 
-        time = 0.0
-        times = [time]
-        u_trajectory = [u]
-        v_trajectory = [v]
+        save_times = jnp.linspace(0.0, time_final, num_saves + 1)
 
-        step_count = 0
+        def integrate_interval(
+            state: tuple[jax.Array, jax.Array], bounds: jax.Array
+        ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
+            target = bounds[1]
 
-        while time < time_final:
-            # Adaptive time step
-            dt = self._adaptive_time_step(u, v)
+            def not_done(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
+                return carry[2] < target - 1e-12
 
-            # Don't overshoot final time
-            if time + dt > time_final:
-                dt = time_final - time
+            def sub_step(
+                carry: tuple[jax.Array, jax.Array, jax.Array],
+            ) -> tuple[jax.Array, jax.Array, jax.Array]:
+                u_current, v_current, time = carry
+                dt = jnp.minimum(self._adaptive_time_step(u_current, v_current), target - time)
+                u_next, v_next = self._rk4_step((u_current, v_current), dt)
+                return u_next, v_next, time + dt
 
-            # Take RK4 step
-            u, v = self._rk4_step((u, v), dt)
+            u_next, v_next, _ = jax.lax.while_loop(
+                not_done, sub_step, (state[0], state[1], bounds[0])
+            )
+            return (u_next, v_next), (u_next, v_next)
 
-            time += dt
-            step_count += 1
-
-            # Save trajectory if requested
-            if (save_every is not None and step_count % save_every == 0) or (
-                save_every is None and time >= time_final
-            ):
-                times.append(time)
-                u_trajectory.append(u)
-                v_trajectory.append(v)
-
-        return jnp.array(times), jnp.stack(u_trajectory), jnp.stack(v_trajectory)
+        interval_bounds = jnp.stack([save_times[:-1], save_times[1:]], axis=1)
+        _, (u_saved, v_saved) = jax.lax.scan(integrate_interval, (u, v), interval_bounds)
+        return (
+            save_times,
+            jnp.concatenate([u[None], u_saved], axis=0),
+            jnp.concatenate([v[None], v_saved], axis=0),
+        )
 
     @partial(jax.jit, static_argnums=(0,))
     def create_vortex_initial_condition(
