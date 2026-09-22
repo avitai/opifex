@@ -74,8 +74,8 @@ Opifex's field module is inspired by PhiFlow but implemented in pure JAX:
 |---------|--------|---------|
 | Backend | JAX only | JAX, PyTorch, TensorFlow |
 | Pytree | `@register_pytree_node_class` | `phiml.PhiTreeNode` |
-| Grid types | `CenteredGrid` | `Field` (unified) |
-| Staggered grids | Planned | Dual dimensions |
+| Grid types | `CenteredGrid`, `StaggeredGrid` | `Field` (unified) |
+| Staggered grids | `StaggeredGrid` (Arakawa-C / MAC) | Dual dimensions |
 | JIT support | Native | Via `phiml` backend |
 | Dependency | None (pure JAX) | `phiml` + `phi` |
 

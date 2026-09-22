@@ -135,25 +135,24 @@ Model parameters: 2,368,098
 Setting up training...
 Starting training...
 
-Epoch   1/20: Loss = 0.103224
-Epoch   5/20: Loss = 0.000439
-Epoch  10/20: Loss = 0.000070
-Epoch  15/20: Loss = 0.000060
-Epoch  20/20: Loss = 0.000053
-
-Training completed in 2.2s
+Training completed in 8.0s
 
 Running evaluation...
-Test MSE:         0.000061
-Test Relative L2: 0.031566
+Test MSE:         0.000056
+Test Relative L2: 0.029791
 
 Per-component final-time MSE:
-  u-MSE=0.000073, v-MSE=0.000048
+  u-MSE=0.000076, v-MSE=0.000036
 ```
 
-The FNO reaches a relative L2 error of about **0.032** (≈3.2%) on the held-out test set,
-with a test MSE of $6.1\times10^{-5}$ and per-component MSE of $7.3\times10^{-5}$ ($u$) and
-$4.8\times10^{-5}$ ($v$), training in roughly two seconds on a GPU.
+The FNO reaches a relative L2 error of about **0.030** (≈3.0%) on the held-out test set,
+with a test MSE of $5.6\times10^{-5}$ and per-component MSE of $7.6\times10^{-5}$ ($u$) and
+$3.6\times10^{-5}$ ($v$), training in eight seconds on CPU.
+
+The training data comes from `generate_navier_stokes`, so these figures move when the
+solver behind it does. They were recorded after that solver moved to a staggered,
+energy-conserving scheme; the previous run, against a first-order upwind solver whose
+numerical viscosity exceeded the physical viscosity tenfold, gave a relative L2 of 0.032.
 
 ## Results
 

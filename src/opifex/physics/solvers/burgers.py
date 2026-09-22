@@ -18,10 +18,9 @@ def stable_substep_count(
 ) -> int:
     """The sub-steps an interval needs to stay inside the CFL limit, with margin.
 
-    The limit is the one the adaptive stepper used to enforce: the smaller of
-    ``0.4 * dx / max|u|`` and ``0.25 * dx^2 / nu``. A fixed count cannot be chosen on the
-    device, because the speed is data and the count must be static, so it is chosen here
-    when the inputs are concrete.
+    The limit is the smaller of ``0.4 * dx / max|u|`` and ``0.25 * dx^2 / nu``. A fixed
+    count cannot be chosen on the device, because the speed is data while the count must be
+    static, so it is chosen here when the inputs are concrete.
 
     Below the limit the scheme does not degrade gracefully. Measured at 32 cells with
     ``nu = 0.05`` over ``T = 0.5``, against a 4096-step reference: 32 sub-steps (0.75 of
@@ -101,13 +100,11 @@ def solve_burgers_2d(
         # Update equation: du/dt + u*du/dx + u*du/dy = nu*(d²u/dx² + d²u/dy²)
         return u - dt_sub * (u * u_x + u * u_y) + dt_sub * viscosity * (u_xx + u_yy)
 
-    # A fixed number of equal sub-steps between save times, under `lax.scan`. This was a
-    # `lax.while_loop` stepping adaptively to the CFL limit, which has no reverse-mode
-    # rule: `jax.grad` of anything reaching this solver raised outright. The trip count is
-    # static now, so the whole solve differentiates as well as tracing and mapping. Size
-    # the count with `stable_substep_count`; below the CFL limit the scheme diverges, and
-    # it diverges loudly -- at three times the limit the error against a converged
-    # reference is 4.6e+06.
+    # Equal sub-steps between save times, under `lax.scan`. The trip count is static so
+    # that the solve differentiates in reverse mode, which a `lax.while_loop` stepping to
+    # a data-dependent CFL limit cannot: it has no transpose rule. Size the count with
+    # `stable_substep_count`; below the CFL limit the error against a converged reference
+    # reaches 4.6e+06.
     interval = (save_times[1] - save_times[0]) / substeps
 
     def integrate_interval(u: jax.Array, _bounds: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -236,10 +233,10 @@ class Burgers2DSolver:
         """Integrate from the initial condition to ``time_final``.
 
         The saved times are fixed and a fixed number of equal sub-steps runs between them
-        under ``lax.scan``, so the solve traces under ``jit``, maps under ``vmap`` **and**
-        differentiates in reverse mode. It did none of the last while the sub-steps stepped
-        adaptively to the CFL limit in a ``lax.while_loop``, which carries no transpose
-        rule. Size ``substeps`` with ``stable_substep_count``.
+        under ``lax.scan``, so the solve traces under ``jit``, maps under ``vmap`` and
+        differentiates in reverse mode -- the last of which a ``lax.while_loop`` stepping
+        to a data-dependent limit cannot, having no transpose rule. Size ``substeps`` with
+        ``stable_substep_count``.
 
         Args:
             initial_condition: Tuple of (u0, v0) initial velocity fields.
