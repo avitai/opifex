@@ -16,6 +16,41 @@ from opifex.neural.activations import (
 )
 
 
+class TestEveryRegisteredActivation:
+    """Every name the registry lists maps to a function of one array."""
+
+    @pytest.mark.parametrize("name", list_activations())
+    def test_it_applies_to_an_array(self, name: str) -> None:
+        activation = get_activation(name)
+
+        result = activation(jnp.asarray([-1.0, 0.0, 1.0]))
+
+        assert result.shape == (3,)
+        assert jnp.all(jnp.isfinite(result))
+
+    @pytest.mark.parametrize("name", list_activations())
+    def test_it_traces_and_differentiates(self, name: str) -> None:
+        activation = get_activation(name)
+        x = jnp.asarray([-0.5, 0.25, 1.5])
+
+        gradient = jax.jit(jax.grad(lambda v: jnp.sum(activation(v))))(x)
+
+        assert gradient.shape == x.shape
+        assert jnp.all(jnp.isfinite(gradient))
+
+    def test_mish_is_the_one_jax_ships(self) -> None:
+        x = jnp.linspace(-5.0, 5.0, 17)
+
+        assert jnp.array_equal(get_activation("mish")(x), jax.nn.mish(x))
+
+    def test_a_parametric_activation_is_not_a_plain_function(self) -> None:
+        """PReLU learns its negative slope, so it is `nnx.PReLU`, not a name here."""
+        assert "prelu" not in list_activations()
+
+        with pytest.raises(ValueError, match=r"nnx\.PReLU"):
+            get_activation("prelu")
+
+
 class TestActivationRegistry:
     """Test activation function registry functionality."""
 

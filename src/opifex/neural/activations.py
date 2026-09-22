@@ -13,7 +13,7 @@ MODERNIZATION APPLIED:
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Final, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -27,6 +27,10 @@ if TYPE_CHECKING:
 _CUSTOM_ACTIVATIONS: dict[str, Callable] = {}
 
 
+_PARAMETRIC_ELSEWHERE: Final = {"prelu": "flax.nnx.PReLU, whose negative slope is learned"}
+"""Activations that carry parameters, and the module that owns each."""
+
+
 def get_activation(name: str | Callable) -> Any:
     """Get activation function by name or return function if already callable.
 
@@ -37,7 +41,8 @@ def get_activation(name: str | Callable) -> Any:
         JAX activation function or callable
 
     Raises:
-        ValueError: If activation function is not found
+        ValueError: If no activation of that name is registered, or the name is one that
+            carries parameters and so lives in a module.
     """
     # If already a callable function, return it directly
     if callable(name):
@@ -55,7 +60,15 @@ def get_activation(name: str | Callable) -> Any:
     if name_lower in activation_functions:
         return activation_functions[name_lower]
 
-    raise ValueError(f"Unknown activation function: {name}")
+    if name_lower in _PARAMETRIC_ELSEWHERE:
+        raise ValueError(
+            f"{name} learns its parameters, so it is a module, not a function here: "
+            f"use {_PARAMETRIC_ELSEWHERE[name_lower]}"
+        )
+    raise ValueError(
+        f"Unknown activation function: {name}; the names are "
+        f"{', '.join(sorted(activation_functions))}"
+    )
 
 
 def _get_activation_map() -> dict[str, Any]:
@@ -74,14 +87,13 @@ def _get_activation_map() -> dict[str, Any]:
         "hard_tanh": jax.nn.hard_tanh,
         "log_sigmoid": jax.nn.log_sigmoid,
         "softplus": jax.nn.softplus,
-        "mish": mish,
+        "mish": jax.nn.mish,
         "snake": snake_activation,
         "gaussian": gaussian_activation,
         "normalized_tanh": normalized_tanh,
         "soft_exponential": soft_exponential,
         "hard_swish": jax.nn.hard_swish,
         "hard_sigmoid": jax.nn.hard_sigmoid,
-        "prelu": jnp.maximum,  # Simplified version
         "celu": jax.nn.celu,
         "selu": jax.nn.selu,
         "linear": lambda x: x,
@@ -92,41 +104,16 @@ def _get_activation_map() -> dict[str, Any]:
 
 
 def list_activations() -> list[str]:
-    """List all available activation functions.
+    """The names :func:`get_activation` accepts, registered ones included.
 
     Returns:
-        List of activation function names
+        The names, sorted.
 
     Examples:
         >>> activations = list_activations()
         >>> print(f"Available activations: {', '.join(activations)}")
     """
-    # Standard activations from jax.nn
-    standard_activations = [
-        "gelu",
-        "relu",
-        "tanh",
-        "sigmoid",
-        "silu",
-        "swish",
-        "leaky_relu",
-        "elu",
-        "softplus",
-    ]
-
-    # Custom scientific activations
-    custom_activations = [
-        "mish",
-        "snake",
-        "gaussian",
-        "normalized_tanh",
-        "soft_exponential",
-    ]
-
-    # Registered custom activations
-    registered_activations = list(_CUSTOM_ACTIVATIONS.keys())
-
-    return standard_activations + custom_activations + registered_activations
+    return sorted(_get_activation_map())
 
 
 def register_activation(name: str, func: Callable) -> None:
@@ -150,26 +137,6 @@ def register_activation(name: str, func: Callable) -> None:
         raise ValueError("Activation name cannot be empty")
 
     _CUSTOM_ACTIVATIONS[name_lower] = func
-
-
-def mish(x: jax.Array) -> jax.Array:
-    """Mish activation function: x * tanh(softplus(x)).
-
-    Mish is a self-gated activation function that has shown excellent
-    performance in deep networks. It's smooth and non-monotonic.
-
-    Mathematical definition: f(x) = x * tanh(ln(1 + exp(x)))
-
-    Args:
-        x: Input array
-
-    Returns:
-        Output array with Mish activation applied
-
-    Note:
-        This implementation uses softplus(x) = ln(1 + exp(x)) for numerical stability.
-    """
-    return x * jnp.tanh(jax.nn.softplus(x))
 
 
 def snake_activation(x: jax.Array, a: float = 1.0) -> jax.Array:
@@ -261,35 +228,3 @@ def soft_exponential(x: jax.Array, alpha: float = 0.0) -> jax.Array:
     if alpha < 0:
         return -jnp.log(1 - alpha * (x + alpha)) / alpha
     return (jnp.exp(alpha * x) - 1) / alpha + alpha
-
-
-def get_derivative_activation(name: str) -> Any:
-    """Get the derivative of an activation function.
-
-    This is useful for implementations that need explicit derivatives
-    rather than relying on automatic differentiation.
-
-    Args:
-        name: Name of the activation function
-
-    Returns:
-        Derivative function of the specified activation
-
-    Raises:
-        ValueError: If activation name is not recognized or derivative not available
-    """
-    name_lower = name.lower().strip()
-
-    if name_lower == "relu":
-        return lambda x: jnp.asarray(x > 0)
-    if name_lower == "tanh":
-        return lambda x: 1 - jnp.tanh(x) ** 2
-    if name_lower == "sigmoid":
-        return lambda x: jax.nn.sigmoid(x) * (1 - jax.nn.sigmoid(x))
-    if name_lower == "leaky_relu":
-        return lambda x: jnp.where(x > 0, 1.0, 0.01)
-
-    raise ValueError(
-        f"Derivative not implemented for activation: '{name}'. "
-        f"Consider using JAX automatic differentiation instead."
-    )

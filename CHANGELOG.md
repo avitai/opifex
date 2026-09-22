@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `get_activation("prelu")` returned `jnp.maximum`, which raises when called with one
+  argument. PReLU learns its negative slope, so it is `flax.nnx.PReLU`, a module, and the
+  name now says so instead of resolving to a broken function.
+- `list_activations()` listed fourteen names while `get_activation` accepted twenty-five,
+  hiding the broken entry; both now read the one registry.
+
+### Changed
+
+- `get_activation("mish")` is `jax.nn.mish`; the local copy computed the same values.
+- An unknown activation name is refused with the names that are registered.
+
+### Removed
+
+- `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
+  `jax.grad` differentiates any activation in the registry.
+
 ## [0.2.9] - 2026-09-21
 
 ### Security
