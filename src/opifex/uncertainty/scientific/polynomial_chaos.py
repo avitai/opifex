@@ -151,27 +151,22 @@ def _legendre_basis(degree: int, x: jax.Array) -> jax.Array:
     if degree < 0:
         raise ValueError(f"degree must be >= 0; got {degree}.")
 
-    def cond(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
-        """Continue the recurrence until the target Legendre degree is reached."""
-        n, _, _ = carry
-        return n < degree
-
-    def body(
-        carry: tuple[jax.Array, jax.Array, jax.Array],
-    ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        """Advance the Legendre three-term recurrence by one degree."""
-        n, p_prev, p_curr = carry
-        n_next = n + 1
-        p_next = ((2 * n_next - 1) * x * p_curr - (n_next - 1) * p_prev) / n_next
-        return n_next, p_curr, p_next
+    def body(order: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
+        """Advance the Legendre three-term recurrence to ``order``."""
+        previous, current = carry
+        index = order.astype(x.dtype)
+        return current, ((2 * index - 1) * x * current - (index - 1) * previous) / index
 
     if degree == 0:
         raw = jnp.ones_like(x)
     elif degree == 1:
         raw = x
     else:
-        init = (jnp.asarray(1, dtype=jnp.int32), jnp.ones_like(x), x)
-        _, _, raw = jax.lax.while_loop(cond, body, init)
+        # `degree` is a Python int, so the trip count is static and this is a `fori_loop`
+        # rather than a `while_loop`: the latter carries no reverse-mode rule, which cost
+        # the whole module its gradient even though nothing about the bound was data
+        # dependent.
+        _, raw = jax.lax.fori_loop(2, degree + 1, body, (jnp.ones_like(x), x))
     norm = jnp.sqrt((2.0 * degree + 1.0) / 2.0)
     return norm * raw
 
@@ -187,27 +182,19 @@ def _hermite_basis(degree: int, x: jax.Array) -> jax.Array:
     if degree < 0:
         raise ValueError(f"degree must be >= 0; got {degree}.")
 
-    def cond(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
-        """Continue the recurrence until the target Hermite degree is reached."""
-        n, _, _ = carry
-        return n < degree
-
-    def body(
-        carry: tuple[jax.Array, jax.Array, jax.Array],
-    ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        """Advance the Hermite three-term recurrence by one degree."""
-        n, h_prev, h_curr = carry
-        n_next = n + 1
-        h_next = x * h_curr - n * h_prev
-        return n_next, h_curr, h_next
+    def body(order: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
+        """Advance the Hermite three-term recurrence to ``order``."""
+        previous, current = carry
+        index = order.astype(x.dtype)
+        return current, x * current - (index - 1) * previous
 
     if degree == 0:
         raw = jnp.ones_like(x)
     elif degree == 1:
         raw = x
     else:
-        init = (jnp.asarray(1, dtype=jnp.int32), jnp.ones_like(x), x)
-        _, _, raw = jax.lax.while_loop(cond, body, init)
+        # Static trip count, so `fori_loop`; see `_legendre_basis` for why not `while_loop`.
+        _, raw = jax.lax.fori_loop(2, degree + 1, body, (jnp.ones_like(x), x))
     log_factorial = jsp_special.gammaln(jnp.asarray(degree + 1, dtype=jnp.float32))
     norm = jnp.exp(-0.5 * log_factorial)
     return norm * raw

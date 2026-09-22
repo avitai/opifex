@@ -16,11 +16,17 @@ Task 8.4 extends the same file with:
 
 from __future__ import annotations
 
+import math
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
+from numpy.polynomial import hermite_e, legendre
 
 from opifex.uncertainty.scientific.polynomial_chaos import (
+    _hermite_basis,
+    _legendre_basis,
     evaluate_basis,
     fit_pce_coefficients,
     pce_mean_variance,
@@ -223,3 +229,51 @@ def test_pce_ishigami_sobol_indices_match_analytic() -> None:
     assert abs(float(s[0]) - 0.3138) < 0.07, f"S1={float(s[0])}"
     assert abs(float(s[1]) - 0.4424) < 0.07, f"S2={float(s[1])}"
     assert abs(float(s[2]) - 0.0) < 0.05, f"S3={float(s[2])}"
+
+
+class TestTheRecurrencesDifferentiate:
+    """The basis must carry reverse mode, which a ``while_loop`` cannot.
+
+    Both recurrences ran under ``jax.lax.while_loop`` although their trip count is the
+    requested degree -- a Python int, and so static. ``while_loop`` has no transpose rule
+    whatever drives it, so ``jax.grad`` of anything reaching the basis failed outright,
+    which in a library whose purpose is uncertainty propagation is a correctness defect
+    rather than a limitation.
+    """
+
+    @pytest.mark.parametrize("degree", [2, 3, 5])
+    @pytest.mark.parametrize("basis", [_legendre_basis, _hermite_basis])
+    def test_the_basis_differentiates_in_reverse_mode(self, basis, degree: int) -> None:
+        nodes = jnp.linspace(-0.95, 0.95, 9)
+
+        gradient = jax.grad(lambda x: jnp.sum(basis(degree, x) ** 2))(nodes)
+
+        assert bool(jnp.all(jnp.isfinite(gradient)))
+        assert float(jnp.max(jnp.abs(gradient))) > 0.0
+
+    @pytest.mark.parametrize("degree", [0, 1, 2, 3, 4, 5, 6])
+    def test_legendre_matches_the_reference_implementation(self, degree: int) -> None:
+        # An independent control on the recurrence: numpy's own polynomial, scaled to the
+        # same orthonormalisation. Without it, a refactor could keep every structural
+        # property and quietly change the values.
+        nodes = jnp.linspace(-0.95, 0.95, 9)
+        coefficients = np.zeros(degree + 1)
+        coefficients[degree] = 1.0
+
+        expected = legendre.legval(np.asarray(nodes), coefficients) * math.sqrt(
+            (2 * degree + 1) / 2
+        )
+
+        np.testing.assert_allclose(_legendre_basis(degree, nodes), expected, atol=1e-6)
+
+    @pytest.mark.parametrize("degree", [0, 1, 2, 3, 4, 5, 6])
+    def test_hermite_matches_the_reference_implementation(self, degree: int) -> None:
+        nodes = jnp.linspace(-0.95, 0.95, 9)
+        coefficients = np.zeros(degree + 1)
+        coefficients[degree] = 1.0
+
+        expected = hermite_e.hermeval(np.asarray(nodes), coefficients) / math.sqrt(
+            math.factorial(degree)
+        )
+
+        np.testing.assert_allclose(_hermite_basis(degree, nodes), expected, atol=1e-6)
