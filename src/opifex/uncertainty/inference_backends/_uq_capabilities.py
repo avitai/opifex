@@ -15,7 +15,7 @@ Three peer posterior-sampler backends shipped under Task 6.3.9a/b/c:
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _PATHFINDER_BACKEND_CAPABILITY = UQCapability(

@@ -55,9 +55,9 @@ import jax.numpy as jnp
 from flax import nnx  # noqa: TC002 — kept eager for consistency
 from substrax.rng import key_from
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 

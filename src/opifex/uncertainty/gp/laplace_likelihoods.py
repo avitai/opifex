@@ -38,6 +38,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._gauss_hermite import ConditionalMomentsFn, predictive_moments
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
@@ -48,7 +49,6 @@ from opifex.uncertainty.gp.laplace import (
     LikelihoodComponentsFn,
     predict_laplace_latent_moments,
 )
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 

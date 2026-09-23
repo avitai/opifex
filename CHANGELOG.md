@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `UQCapability` and `DefaultStrategy` move from `opifex.uncertainty.registry` (and the
+  `opifex.uncertainty` namespace) to `opifex.core.capabilities`. They are metadata that
+  every declaring package imports, and reaching them through `opifex.uncertainty` loaded the
+  whole uncertainty stack: 1.47 s against 0.87 s for the new module, medians of three
+  fresh processes.
 - `BayesianSINDy` and `PosteriorOverTerms` move from `opifex.uncertainty.scientific` to
   `opifex.discovery.sindy.bayesian`. The regularised-horseshoe regression is a SINDy
   method -- PySINDy keeps it among its SINDy optimizers -- and from `uncertainty` it

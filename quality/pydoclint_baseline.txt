@@ -739,9 +739,6 @@ src/opifex/uncertainty/priors_physics.py
     DOC501: Method `HierarchicalBayesianFramework.sample_hierarchical_parameters` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `HierarchicalBayesianFramework.sample_hierarchical_parameters` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
 --------------------
-src/opifex/uncertainty/registry.py
-    DOC201: Method `UQCapability.with_adapter` does not have a return section in docstring
---------------------
 src/opifex/uncertainty/sbi/_base.py
     DOC502: Function `_simulate_training_data` has a "Raises" section in the docstring, but there are not "raise" statements in the body
     DOC201: Function `_build_conditional_flow` does not have a return section in docstring

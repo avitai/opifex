@@ -17,7 +17,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.registry import UQCapability
+from opifex.core.capabilities import UQCapability
 from opifex.uncertainty.scientific._likelihoods import (
     dalton_data_loglik,
     fenrir_data_loglik,

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.neural.bayesian._uq_capabilities import BAYESIAN_MODEL_CAPABILITIES
 from opifex.neural.operators._uq_capabilities import _OPERATOR_CAPABILITIES
 from opifex.solvers._uq_capabilities import SOLVER_CAPABILITIES
@@ -47,7 +48,7 @@ from opifex.uncertainty.inference_backends._uq_capabilities import (
 )
 from opifex.uncertainty.linalg._uq_capabilities import LINALG_CAPABILITIES
 from opifex.uncertainty.quadrature._uq_capabilities import QUADRATURE_CAPABILITIES
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability, UQRegistry
+from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.statespace._uq_capabilities import STATESPACE_CAPABILITIES
 
 

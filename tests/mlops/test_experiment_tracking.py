@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 import opifex.mlops
+from opifex.core.capabilities import DefaultStrategy
 from opifex.mlops import register_mlops_capabilities
 from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
 from opifex.mlops.backends.mlflow_backend import MLflowBackend
@@ -20,7 +21,7 @@ from opifex.mlops.experiment import (
     PhysicsMetadata,
 )
 from opifex.mlops.tracker import ExperimentTracker
-from opifex.uncertainty.registry import DefaultStrategy, UQRegistry
+from opifex.uncertainty.registry import UQRegistry
 
 
 if TYPE_CHECKING:

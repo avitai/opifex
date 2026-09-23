@@ -19,7 +19,7 @@ SCF, but does not own a posterior over its parameters. The honest strategy is:
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 def _quantum_adapter_baseline(notes: str) -> UQCapability:

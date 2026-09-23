@@ -29,9 +29,9 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import UQCapability
 from opifex.uncertainty.quadrature import FFBQAdapterSpec
 from opifex.uncertainty.quadrature.frank_wolfe_bq import frank_wolfe_bq
-from opifex.uncertainty.registry import UQCapability
 
 
 def _rbf_kernel(x_left: jax.Array, x_right: jax.Array, lengthscale: float = 1.0) -> jax.Array:

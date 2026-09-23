@@ -14,7 +14,7 @@ inverse-problem-capable surface, so the plan's exit criterion mandates:
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _NPE_CAPABILITY = UQCapability(

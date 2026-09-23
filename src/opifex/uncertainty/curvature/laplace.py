@@ -43,9 +43,9 @@ import jax.numpy as jnp
 from flax import nnx, struct
 from substrax.rng import key_from
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.curvature.fisher import empirical_fisher_diagonal
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
 

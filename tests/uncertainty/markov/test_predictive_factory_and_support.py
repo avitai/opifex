@@ -20,6 +20,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._predictive import (
     gaussian_process_predictive,
     replace_predictive_metadata,
@@ -30,7 +31,6 @@ from opifex.uncertainty.markov._likelihood_support import (
     interpolate_smoothed_state,
     latent_variance,
 )
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import matern32_kernel
 from opifex.uncertainty.types import PredictiveDistribution
 

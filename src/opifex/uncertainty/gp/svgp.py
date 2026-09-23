@@ -60,10 +60,10 @@ from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 

@@ -63,9 +63,9 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace.kalman import (
     kalman_filter,
     kalman_log_likelihood,

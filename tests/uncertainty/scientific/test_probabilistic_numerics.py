@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.scientific import (
     CalibrationSpec,
     CorrectionSpec,

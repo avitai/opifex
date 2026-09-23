@@ -52,12 +52,12 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._gauss_hermite import ConditionalMomentsFn, gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.markov._likelihood_support import interpolate_smoothed_state
 from opifex.uncertainty.markov.markov_laplace import _build_state_space_sequence
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace import (
     kalman_filter,
     kalman_smoother,

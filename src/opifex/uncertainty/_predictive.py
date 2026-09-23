@@ -32,8 +32,8 @@ from collections.abc import Callable  # noqa: TC003 — kept eager per opifex co
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution
 
 

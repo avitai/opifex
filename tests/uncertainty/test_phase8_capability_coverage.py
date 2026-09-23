@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
+
 # The per-subsystem ``from .._uq_capabilities import ...`` lines below
 # transitively import each Phase 8 subpackage's ``__init__``, which seeds
 # the singleton :class:`UQRegistry` via its idempotent registration loop.
@@ -35,7 +37,7 @@ from opifex.neural.bayesian._uq_capabilities import BAYESIAN_MODEL_CAPABILITIES
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.active._uq_capabilities import ACTIVE_CAPABILITIES
 from opifex.uncertainty.pac_bayes._uq_capabilities import PAC_BAYES_CAPABILITIES
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability, UQRegistry
+from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.sbi._uq_capabilities import SBI_CAPABILITIES
 from opifex.uncertainty.scientific._uq_capabilities import (
     SCIENTIFIC_FIELD_CAPABILITIES,

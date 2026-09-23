@@ -51,10 +51,10 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.likelihoods import heteroscedastic_gaussian_log_likelihood
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import PredictiveDistribution
 
 

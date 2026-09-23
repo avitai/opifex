@@ -18,12 +18,12 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.curvature import (
     DiagonalLaplacePosterior,
     LaplaceAdapterSpec,
     LaplaceState,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 
 def _make_capability(strategy: DefaultStrategy = DefaultStrategy.LAPLACE) -> UQCapability:

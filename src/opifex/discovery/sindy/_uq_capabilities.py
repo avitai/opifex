@@ -22,7 +22,7 @@ The SINDy family advertises three honest UQ strategies:
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _SINDY_CAPABILITY = (

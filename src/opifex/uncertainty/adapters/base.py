@@ -16,7 +16,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Protocol, runtime_checkable
 
-from opifex.uncertainty.registry import UQCapability  # noqa: TC001
+from opifex.core.capabilities import UQCapability  # noqa: TC001
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution  # noqa: TC001
 
 

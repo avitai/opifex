@@ -29,6 +29,8 @@ automatic differentiation, just-in-time compilation, and multi-device paralleliz
 from collections.abc import Sequence
 from typing import Any
 
+from opifex.core.capabilities import UQCapability
+
 # Operator-family UQ adapter spec re-exports (Task 3.7). Specs declare
 # adapter-mediated UQ capabilities (conformal / ensemble / dropout) without
 # claiming native Bayesian support; consumed by registry / docs / future
@@ -162,7 +164,7 @@ from opifex.uncertainty.adapters.operators import (
     FNOMCDropoutAdapterSpec,
     OperatorAdapterSpec,
 )
-from opifex.uncertainty.registry import UQCapability, UQRegistry
+from opifex.uncertainty.registry import UQRegistry
 
 
 # =============================================================================

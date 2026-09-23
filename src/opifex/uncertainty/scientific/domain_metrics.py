@@ -17,7 +17,7 @@ import jax.numpy as jnp
 from calibrax.metrics.functional.statistical import spearman_rank_correlation
 from flax import struct
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems  # noqa: TC001
 
 

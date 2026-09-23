@@ -32,13 +32,13 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters import (
     DUEAdapter,
     DUEState,
     ModelUncertaintyAdapterProtocol,
 )
 from opifex.uncertainty.gp import fit_svgp, predict_svgp, rbf_kernel, SVGPState
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import PredictiveDistribution
 
 

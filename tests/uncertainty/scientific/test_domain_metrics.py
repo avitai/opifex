@@ -26,6 +26,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy
+
 
 def _import_dm():
     from opifex.uncertainty.scientific import domain_metrics
@@ -269,8 +271,6 @@ def test_pac_bayes_bound_validity_detects_violation() -> None:
 
 def test_formerly_deferred_capabilities_are_now_supported() -> None:
     """Likelihood-free, active-learning and PAC-Bayes reliability now ship."""
-    from opifex.uncertainty.registry import DefaultStrategy
-
     dm = _import_dm()
     assert dm.LIKELIHOOD_FREE_RELIABILITY.supports_likelihood_free is True
     assert dm.LIKELIHOOD_FREE_RELIABILITY.default_strategy is DefaultStrategy.LIKELIHOOD_FREE_SBI
