@@ -137,7 +137,7 @@ def test_field_conformal_propagates_failed_exchangeability_into_metadata() -> No
 
     cal_preds = jnp.zeros((64, 8, 8))
     cal_targets = jnp.zeros((64, 8, 8))
-    failing_report = ExchangeabilityReport(p_value=jnp.asarray(0.001), passes=False)
+    failing_report = ExchangeabilityReport(p_value=jnp.asarray(0.001), passes=jnp.asarray(False))
     cp = fields.FieldSplitConformalRegressor(alpha=0.1, norm="L2", spatial_axes=(-2, -1))
     state = cp.fit(
         predictions=cal_preds, targets=cal_targets, exchangeability_report=failing_report
