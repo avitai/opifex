@@ -21,9 +21,6 @@ from ``/mnt/ssd2/Data/qh9/raw/QH9Stable.db`` and run PySCF B3LYP/def2-SVP; they
 are skipped if the database is absent.
 """
 
-from __future__ import annotations
-
-import importlib.util
 from pathlib import Path
 
 import jax
@@ -31,9 +28,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from flax import nnx
+from tests.qh9_support import first_qh9_examples, requires_pyscf_dft, requires_qh9_db
 
 from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR
-from opifex.data.sources.qh9_source import read_qh9_sqlite
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianConfig,
     BlockHamiltonianPredictor,
@@ -53,27 +50,7 @@ from opifex.neural.quantum.hamiltonian.qh9_eval import (
 )
 
 
-_QH9_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 _CHEMICAL_TOLERANCE_HARTREE = 5e-3  # ~3.6 mHa stored-Fock vs fresh-SCF residual + margin.
-
-requires_qh9_db = pytest.mark.skipif(not _QH9_DB.exists(), reason="QH9Stable.db not available")
-
-
-def _has_pyscf_dft() -> bool:
-    """Whether ``pyscf.dft`` is importable. ``find_spec`` raises (not returns
-    ``None``) for a submodule when the parent package is absent, so guard it."""
-    try:
-        return importlib.util.find_spec("pyscf.dft") is not None
-    except ModuleNotFoundError:
-        return False
-
-
-requires_pyscf_dft = pytest.mark.skipif(not _has_pyscf_dft(), reason="pyscf.dft not available")
-
-
-def _first_examples(n: int) -> list:
-    """Decode the first ``n`` QH9-Stable molecules (id-sorted)."""
-    return list(read_qh9_sqlite(_QH9_DB, limit=n))
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +70,7 @@ def test_ground_truth_fock_matches_pyscf_orbital_energies(index: int) -> None:
     from pyscf import dft, gto
 
     with jax.enable_x64(True):
-        examples = _first_examples(index + 1)
+        examples = first_qh9_examples(index + 1)
         example = examples[index]
         atomic_numbers = np.asarray(example.atomic_numbers)
         positions_bohr = np.asarray(example.system.positions, dtype=np.float64)
@@ -212,7 +189,7 @@ def test_evaluate_fock_returns_expected_keys_and_finite_values() -> None:
         "hamiltonian_mae",
     }
     with jax.enable_x64(True):
-        example = _first_examples(1)[0]
+        example = first_qh9_examples(1)[0]
         atomic_numbers = np.asarray(example.atomic_numbers)
         positions = np.asarray(example.system.positions, dtype=np.float64)
         target_fock = jnp.asarray(example.fock)
@@ -237,7 +214,7 @@ def test_evaluate_fock_returns_expected_keys_and_finite_values() -> None:
 def test_evaluate_fock_identical_fock_is_perfect() -> None:
     """Comparing a target Fock against itself gives zero ε-MAE and unit ψ-sim."""
     with jax.enable_x64(True):
-        example = _first_examples(1)[0]
+        example = first_qh9_examples(1)[0]
         atomic_numbers = np.asarray(example.atomic_numbers)
         positions = np.asarray(example.system.positions, dtype=np.float64)
         target_fock = jnp.asarray(example.fock)
@@ -279,7 +256,7 @@ class TestLatestCheckpoint:
 def test_evaluate_examples_aggregates_over_molecules() -> None:
     """:func:`evaluate_examples` returns finite, well-formed aggregate metrics."""
     with jax.enable_x64(True):
-        examples = _first_examples(3)
+        examples = first_qh9_examples(3)
         predictor = BlockHamiltonianPredictor(config=BlockHamiltonianConfig(), rngs=nnx.Rngs(0))
         metrics = evaluate_examples(predictor, examples)
 
