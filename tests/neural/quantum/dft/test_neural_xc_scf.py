@@ -69,7 +69,7 @@ def test_neural_xc_scf_converges_h2() -> None:
     with jax.enable_x64(True):
         solver = SCFSolver(_h2_system(), neural_functional=_neural_functional(), max_iterations=80)
         result = solver.solve()
-    assert result.converged
+    assert bool(result.is_converged)
     assert bool(jnp.isfinite(result.total_energy))
 
 

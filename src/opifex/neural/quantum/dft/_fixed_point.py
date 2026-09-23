@@ -87,9 +87,13 @@ class AndersonAcceleration(optx.AbstractFixedPointSolver[Array, Any, _AndersonSt
             Anderson/DIIS depth ``m``).
         mixing: Relaxation factor ``beta`` in ``y_i + beta * r_i``; ``1.0`` is
             pure Anderson extrapolation, smaller values add damping.
-        regularization: Tikhonov factor (scaled by the Gram-matrix magnitude)
-            stabilising the least-squares solve against linearly dependent
-            histories.
+        regularization: Tikhonov factor, relative to the mean squared residual
+            norm, stabilising the least-squares solve against linearly dependent
+            histories. Defaults to the square root of the working precision's
+            epsilon, which is the level at which the Gram matrix stops resolving
+            direction; a fixed constant cannot serve, since one small enough to
+            be harmless in float64 is below float32's epsilon and perturbs
+            nothing at all.
         norm: Norm used for the convergence test on the scaled residual.
     """
 
@@ -97,7 +101,7 @@ class AndersonAcceleration(optx.AbstractFixedPointSolver[Array, Any, _AndersonSt
     atol: float
     history_size: int = 6
     mixing: float = 1.0
-    regularization: float = 1.0e-10
+    regularization: float | None = None
     norm: Callable[[PyTree], Scalar] = max_norm
 
     def init(
@@ -162,25 +166,69 @@ class AndersonAcceleration(optx.AbstractFixedPointSolver[Array, Any, _AndersonSt
     def _mixing_coefficients(self, residuals: Array, filled: Array) -> Array:
         r"""Pulay-DIIS coefficients :math:`c \propto M^{-1}\mathbf 1`, masked.
 
-        Invalid (unfilled) history slots are masked out of the Gram matrix so
-        they receive zero weight; a scaled Tikhonov term keeps the solve robust
-        when stored residuals are nearly linearly dependent.
+        Invalid (unfilled) history slots are masked out of the Gram matrix so they
+        receive zero weight, leaving a block-diagonal system whose valid block decouples
+        from the padding. A Tikhonov term scaled by the *valid* residuals keeps the
+        solve robust once the stored residuals become linearly dependent, which they do
+        long before the tolerance is met: as the iteration converges the residuals
+        shrink towards the arithmetic's own noise, and a Gram matrix built from noise
+        has no resolvable directions left.
+
+        Both the scale and the factor come from the data rather than a constant. The
+        scale is the mean squared residual norm over the filled slots, read before the
+        padding is written: the padded diagonal is 1 while a converging residual's is
+        ~1e-12, so a scale taken from the full trace is set by the empty slots for as
+        long as the history is filling.
+
+        The factor must exceed the working precision's :math:`\varepsilon`. Forming
+        :math:`M = R R^\top` squares the condition number and leaves the entries
+        accurate only to :math:`\varepsilon\,\lVert R\rVert^2`, so eigenvalues below
+        that are rounding (Golub & Van Loan, *Matrix Computations*, 4th ed., sec. 5.3);
+        a factor beneath it perturbs nothing and the solve returns NaN.
+        :math:`\sqrt{\varepsilon}` clears the floor with margin, and above the floor
+        the converged energy no longer depends on the factor -- on water/LDA at default
+        precision the spread across the usable range is under two float32 ULP.
+
+        Regularising rather than dropping the unresolved directions keeps this to one
+        ``solve``: a rank-revealing eigendecomposition reaches the same energy in the
+        same number of steps, but its gradient is undefined for exactly the degenerate
+        spectra that near-rank-deficiency produces.
+
+        Args:
+            residuals: The stored residual history [Shape: (m, n)].
+            filled: How many slots hold a residual.
+
+        Returns:
+            Mixing coefficients summing to one, zero in the unfilled slots.
         """
         valid = jnp.arange(self.history_size) < filled
         gram = residuals @ residuals.T
         pair_mask = valid[:, None] & valid[None, :]
         identity = jnp.eye(self.history_size, dtype=gram.dtype)
+        occupancy = jnp.maximum(filled, 1).astype(gram.dtype)
+        scale = jnp.sum(jnp.where(valid, jnp.diagonal(gram), 0.0)) / occupancy
         # Keep valid-block entries; force invalid rows/cols to the identity so
         # the linear solve stays non-singular and their coefficients vanish.
         gram = jnp.where(pair_mask, gram, identity)
-        trace = jnp.trace(gram)
-        denom = jnp.maximum(filled, 1).astype(gram.dtype)
-        gram = gram + self.regularization * (trace / denom) * identity
+        gram = gram + self._tikhonov_factor(gram.dtype) * scale * identity
 
         rhs = valid.astype(gram.dtype)
         weights = cast("Array", jnp.linalg.solve(gram, rhs))
         weights = jnp.where(valid, weights, 0.0)
         return weights / jnp.sum(weights)
+
+    def _tikhonov_factor(self, dtype: jnp.dtype) -> float:
+        """The relative Tikhonov factor for the precision the solve runs in.
+
+        Args:
+            dtype: Working dtype of the Gram matrix.
+
+        Returns:
+            The configured factor, or the square root of the dtype's epsilon.
+        """
+        if self.regularization is not None:
+            return self.regularization
+        return float(math.sqrt(jnp.finfo(dtype).eps))
 
     def terminate(
         self,
