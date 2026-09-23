@@ -176,15 +176,16 @@ import jax
 
 from opifex.core import create_neural_dft_problem
 from opifex.core.quantum.molecular_system import create_molecular_system
+from opifex.neural.quantum.dft import SCFSolver
 
 with jax.enable_x64(True):
     molecular_system = create_molecular_system(
         [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
     )
-    problem = create_neural_dft_problem(molecular_system)  # functional_type -> LDA/PBE
+    problem = create_neural_dft_problem(molecular_system)
+    solver = SCFSolver(problem.molecular_system, functional="lda")
 
-    energy = problem.compute_energy()   # converged Kohn-Sham energy (Hartree)
-    forces = problem.compute_forces()   # analytic -dE/dR
+    energy, forces = solver.energy_and_forces()   # Kohn-Sham energy (Hartree), -dE/dR
 ```
 
 ### Meta-Optimization for Multiple Problems

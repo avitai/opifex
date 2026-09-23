@@ -82,33 +82,34 @@ gradient = jax.grad(solver.energy_from_state)(state)  # exact dE/dtheta
 
 ### Energy and forces from the problem API
 
-The `ElectronicStructureProblem` wraps the SCF behind the unified problem
-interface. Its energy and forces are the real Kohn-Sham quantities.
+The `ElectronicStructureProblem` states the molecule and the requested method; the SCF
+solver computes. As in PySCF, where a molecule is solved by `RKS(mol, xc=...)`, the solver
+is built from the problem's molecular system and a named functional.
 
 ```python
 import jax
 
 from opifex.core.problems import create_molecular_system, create_neural_dft_problem
+from opifex.neural.quantum.dft import SCFSolver
 
 with jax.enable_x64(True):
     h2 = create_molecular_system([("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))])
-    problem = create_neural_dft_problem(molecular_system=h2)  # functional_type -> LDA/PBE
+    problem = create_neural_dft_problem(molecular_system=h2)
+    solver = SCFSolver(problem.molecular_system, functional="lda")
 
-    energy = problem.compute_energy()   # ~ -1.12 Hartree (LDA/STO-3G)
-    forces = problem.compute_forces()   # analytic -dE/dR
+    energy, forces = solver.energy_and_forces()   # ~ -1.12 Hartree; analytic -dE/dR
 ```
 
 ### JAX transforms
 
-The differentiable energy is `jit` / `grad` / `vmap` compatible. Build the
-solver eagerly first (its AO basis and grid are static structural metadata) so
-the transform only traces the nuclear positions.
+The energy is a differentiable function of the nuclear positions, `jit` / `grad` / `vmap`
+compatible. Build the solver first (its AO basis and grid are static structural metadata)
+so the transform traces only the positions.
 
 ```python
 with jax.enable_x64(True):
-    _ = problem.scf_solver  # eager build before tracing
     positions = problem.molecular_system.positions
-    energy = jax.jit(problem._energy_from_positions)(positions)
+    energy = jax.jit(solver.energy_from_positions)(positions)
 ```
 
 ## Physics Constraints
