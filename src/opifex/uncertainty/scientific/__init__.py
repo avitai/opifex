@@ -23,10 +23,6 @@ from opifex.uncertainty.scientific.domain_metrics import (
     sensor_reliability_summary,
     spectral_coverage,
 )
-from opifex.uncertainty.scientific.equation_discovery import (
-    BayesianSINDy,
-    PosteriorOverTerms,
-)
 from opifex.uncertainty.scientific.fields import (
     conservation_law_residual_summary,
     FieldMetadata,
@@ -118,7 +114,6 @@ __all__ = [
     "LIKELIHOOD_FREE_RELIABILITY",
     "PAC_BAYES_RELIABILITY",
     "SCIENTIFIC_FIELD_CAPABILITIES",
-    "BayesianSINDy",
     "CalibrationSpec",
     "ChemicalAccuracyCoverage",
     "CorrectionSpec",
@@ -149,7 +144,6 @@ __all__ = [
     "PerturbedStepSolverSpec",
     "PolynomialChaosBasis",
     "PolynomialChaosConfig",
-    "PosteriorOverTerms",
     "ProbdiffeqAdapterSpec",
     "ProbfindiffAdapterSpec",
     "ProbnumAdapterSpec",

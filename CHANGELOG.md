@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `BayesianSINDy` and `PosteriorOverTerms` move from `opifex.uncertainty.scientific` to
+  `opifex.discovery.sindy.bayesian`. The regularised-horseshoe regression is a SINDy
+  method -- PySINDy keeps it among its SINDy optimizers -- and from `uncertainty` it
+  imported the discovery package above it. It is not re-exported from
+  `opifex.discovery.sindy`, so importing SINDy does not load BlackJAX.
 - `evaluate_examples`, `evaluate_qh9_test_set` and `QH9TestSetMetrics` move from
   `opifex.neural.quantum.hamiltonian` (and its `qh9_eval` module) to
   `opifex.benchmarking.qh9`. They join the predictor to the QH9 dataset, which put a
