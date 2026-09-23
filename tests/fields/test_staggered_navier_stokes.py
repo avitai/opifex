@@ -29,7 +29,8 @@ import pytest
 from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import divergence, StaggeredGrid
 from opifex.fields.staggered_convection import convect
-from opifex.fields.staggered_navier_stokes import integrate, laplacian, step, tendency
+from opifex.fields.staggered_diffusion import laplacian
+from opifex.fields.staggered_navier_stokes import integrate, step, tendency
 from opifex.fields.staggered_pressure import project
 
 
@@ -285,28 +286,32 @@ class TestTheOperatorsApproximateWhatTheyClaim:
         assert max(sums) <= 1e-12, sums
 
 
-class TestBoundariesNotYetCarried:
-    """What the viscous operator refuses, and why refusing beats approximating.
+class TestBoundaries:
+    """Every operator on this path now carries a wall, and the tendency composes them.
 
-    The rolling stencil wraps, so on a walled grid it would diffuse momentum out through
-    one wall and back in through the opposite one: measured at 8 cells, a spike on the
-    first row reaches the far wall at 64.0 where it should reach 0. A periodic grid cannot
-    show that, so the case is covered here explicitly.
+    The restriction has to be uniform in both directions: an operator that silently
+    accepted a wall while its neighbours refused one would be the worst of both, and one
+    that still refused after its neighbours had learned it would strand the capability.
     """
 
-    @pytest.mark.parametrize("extrapolation", [Extrapolation.ZERO, Extrapolation.NEUMANN])
-    def test_the_viscous_operator_refuses_a_wall(self, extrapolation: Extrapolation) -> None:
+    def test_the_tendency_runs_against_a_wall(self) -> None:
+        field = _solenoidal(8, seed=11)
+        walled = StaggeredGrid(
+            tuple(jnp.asarray(component) for component in field.components),
+            BOX,
+            field.extrapolation,
+            field.resolution,
+        )
+
+        rate = tendency(walled, viscosity=0.01)
+
+        assert all(bool(jnp.all(jnp.isfinite(part))) for part in rate.components)
+
+    @pytest.mark.parametrize("extrapolation", [Extrapolation.NEUMANN])
+    def test_a_boundary_outside_the_contract_is_still_refused(
+        self, extrapolation: Extrapolation
+    ) -> None:
         field = StaggeredGrid.zeros((8, 8), BOX, extrapolation)
 
-        with pytest.raises(ValueError, match="periodic"):
-            laplacian(field)
-
-    @pytest.mark.parametrize("extrapolation", [Extrapolation.ZERO, Extrapolation.NEUMANN])
-    def test_the_tendency_refuses_a_wall_too(self, extrapolation: Extrapolation) -> None:
-        # The whole path is periodic-only until the boundary interpolation lands, so the
-        # restriction has to be uniform: an operator that silently accepted a wall while
-        # its neighbours refused one would be the worst of both.
-        field = StaggeredGrid.zeros((8, 8), BOX, extrapolation)
-
-        with pytest.raises(ValueError, match="periodic"):
+        with pytest.raises(ValueError, match="does not carry"):
             tendency(field, viscosity=0.01)

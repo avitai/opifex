@@ -35,44 +35,13 @@ References:
       flow of fluid with free surface*, Phys. Fluids 8(12), 2182.
 """
 
-from __future__ import annotations
-
 import jax
 import jax.numpy as jnp
 
-from opifex.fields.staggered import require_boundary, StaggeredGrid
+from opifex.fields.staggered import StaggeredGrid
 from opifex.fields.staggered_convection import convect
+from opifex.fields.staggered_diffusion import laplacian
 from opifex.fields.staggered_pressure import project
-
-
-def laplacian(field: StaggeredGrid) -> StaggeredGrid:
-    """The viscous operator, component-wise on the faces each component lives on.
-
-    Symmetric and negative semi-definite, so it removes energy and never adds any.
-
-    Args:
-        field: Velocity on cell faces.
-
-    The stencil wraps, so a boundary it does not carry is refused by ``require_boundary``
-    rather than approximated: on a walled grid it would diffuse momentum out through one
-    wall and back in through the opposite one, and measured at 8 cells a spike on the
-    first row of the tangential component reaches the far wall at 64.0 where it should
-    reach zero.
-
-    Returns:
-        The Laplacian of each component, on the same faces.
-    """
-    require_boundary(field.extrapolation, "diffusion")
-
-    spacing = field.dx
-    components = []
-    for component in field.components:
-        total = jnp.zeros_like(component)
-        for axis in range(field.spatial_dim):
-            neighbours = jnp.roll(component, 1, axis=axis) + jnp.roll(component, -1, axis=axis)
-            total = total + (neighbours - 2.0 * component) / spacing[axis] ** 2
-        components.append(total)
-    return StaggeredGrid(tuple(components), field.box, field.extrapolation, field.resolution)
 
 
 def tendency(velocity: StaggeredGrid, viscosity: float | jax.Array) -> StaggeredGrid:
@@ -202,4 +171,4 @@ def integrate(
     return final
 
 
-__all__ = ["integrate", "laplacian", "stable_step_count", "step", "tendency"]
+__all__ = ["integrate", "stable_step_count", "step", "tendency"]
