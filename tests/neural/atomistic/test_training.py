@@ -28,6 +28,7 @@ from substrax.optim import create_optimizer, OptimizerConfig
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.scale_shift import AtomicScaleShift
@@ -41,7 +42,6 @@ from opifex.neural.atomistic.training import (
     make_scanned_epoch,
     ParamEMA,
 )
-from opifex.neural.equivariant import scatter_sum
 
 
 _ATOMIC_NUMBERS = jnp.asarray([8, 1, 1])
