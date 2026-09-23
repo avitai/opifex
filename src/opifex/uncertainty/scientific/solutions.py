@@ -37,6 +37,7 @@ them with no shim layer.
 
 from __future__ import annotations
 
+import functools
 from typing import Any, TYPE_CHECKING
 
 import jax
@@ -44,6 +45,7 @@ import jax.numpy as jnp
 from flax import struct
 
 from opifex.core.solver.interface import Solution
+from opifex.core.solver.status import combine_statuses, Status
 from opifex.uncertainty.types import (
     _VARIANCE_ATOL,
     _VARIANCE_RTOL,
@@ -196,8 +198,7 @@ class SolutionDistribution:
         self,
         *,
         metrics: dict[str, Any] | None = None,
-        execution_time: float = 0.0,
-        converged: bool = False,
+        status: jax.Array | None = None,
         stats: dict[str, Any] | None = None,
     ) -> Solution:
         """Return a :class:`Solution` carrying mean fields + UQ aux_data.
@@ -228,9 +229,8 @@ class SolutionDistribution:
         return Solution(
             fields=dict(self.mean),
             metrics=dict(metrics) if metrics is not None else {},
-            execution_time=execution_time,
+            status=jnp.asarray(Status.DEFAULT, dtype=jnp.int32) if status is None else status,
             auxiliary_data=auxiliary_data,
-            converged=converged,
             stats=dict(stats) if stats is not None else {},
         )
 
@@ -325,12 +325,11 @@ def aggregate_solver_solutions(
     )
     merged_metrics = dict(solutions[0].metrics)
     merged_metrics["ensemble_size"] = n
-    total_time = sum(s.execution_time for s in solutions)
-    return distribution.to_solution(
-        metrics=merged_metrics,
-        execution_time=total_time,
-        converged=all(s.converged for s in solutions),
-    )
+    # The ensemble's outcome is the first unsuccessful member's, chosen by `where` so it
+    # stays traced and batches; a Python `all()` over the flags would sync the device once
+    # per member and could not be built inside a transform.
+    status = functools.reduce(combine_statuses, (member.status for member in solutions))
+    return distribution.to_solution(metrics=merged_metrics, status=status)
 
 
 def summarize_stacked_sample_solution(
@@ -421,8 +420,4 @@ def summarize_stacked_sample_solution(
     merged_metrics["uq_method"] = "generative_sampling"
     if "log_likelihood" in merged_metrics:
         merged_metrics["mean_log_likelihood"] = merged_metrics["log_likelihood"]
-    return distribution.to_solution(
-        metrics=merged_metrics,
-        execution_time=solution.execution_time,
-        converged=solution.converged,
-    )
+    return distribution.to_solution(metrics=merged_metrics, status=solution.status)

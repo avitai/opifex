@@ -28,15 +28,15 @@ import jax.numpy as jnp
 import pytest
 
 from opifex.core.solver.interface import Solution
+from opifex.core.solver.status import Status
 from opifex.uncertainty.scientific.solutions import aggregate_solver_solutions
 
 
 def _make_solution(value: float, *, key: str = "u", converged: bool = True) -> Solution:
     return Solution(
         fields={key: jnp.full((4,), value)},
-        metrics={"loss": value},
-        execution_time=0.5,
-        converged=converged,
+        metrics={"loss": jnp.asarray(value)},
+        status=jnp.asarray(int(Status.SUCCESS if converged else Status.MAX_ITERS), jnp.int32),
     )
 
 
@@ -55,8 +55,7 @@ def test_aggregate_rejects_mismatched_field_keys() -> None:
     b = Solution(
         fields={"p": jnp.zeros((4,))},
         metrics={},
-        execution_time=0.0,
-        converged=True,
+        status=jnp.asarray(int(Status.SUCCESS), jnp.int32),
     )
     with pytest.raises(ValueError, match="same field keys"):
         aggregate_solver_solutions([a, b])
@@ -139,24 +138,24 @@ def test_aggregate_metadata_carries_ensemble_size_and_extra_entries() -> None:
     assert out.metrics["ensemble_size"] == 3
 
 
-def test_aggregate_converged_is_and_aggregation() -> None:
-    solutions = [
-        _make_solution(1.0, converged=True),
-        _make_solution(2.0, converged=False),
-    ]
-    out = aggregate_solver_solutions(solutions)
-    assert out.converged is False
+def test_aggregate_reports_the_first_unsuccessful_member() -> None:
+    """A combined outcome is successful only if every member was.
+
+    Selection keeps the failing code rather than reducing to a flag, so a caller can see
+    *why* the ensemble is not usable, and it stays traced.
+    """
+    out = aggregate_solver_solutions(
+        [_make_solution(1.0), _make_solution(2.0, converged=False), _make_solution(3.0)]
+    )
+
+    assert int(out.status) == Status.MAX_ITERS
+    assert not bool(out.is_converged)
 
 
-def test_aggregate_execution_time_is_sum_across_subsolutions() -> None:
-    solutions = [_make_solution(1.0), _make_solution(2.0), _make_solution(3.0)]
-    out = aggregate_solver_solutions(solutions)
-    assert out.execution_time == pytest.approx(1.5)  # 3 * 0.5
+def test_aggregate_is_converged_when_every_member_is() -> None:
+    out = aggregate_solver_solutions([_make_solution(1.0), _make_solution(2.0)])
 
-
-# ---------------------------------------------------------------------------
-# Immutability — source solutions must not be mutated
-# ---------------------------------------------------------------------------
+    assert bool(out.is_converged)
 
 
 def test_aggregate_does_not_mutate_input_solutions() -> None:
@@ -185,9 +184,8 @@ def _make_stacked_solution(values: list[float]) -> Solution:
     """Single Solution whose 'u' field is a (num_samples, 4) sample stack."""
     return Solution(
         fields={"u": jnp.stack([jnp.full((4,), v) for v in values], axis=0)},
-        metrics={"loss": 0.1, "log_likelihood": -1.23},
-        execution_time=2.5,
-        converged=True,
+        metrics={"loss": jnp.asarray(0.1), "log_likelihood": jnp.asarray(-1.23)},
+        status=jnp.asarray(int(Status.SUCCESS), jnp.int32),
     )
 
 
@@ -222,8 +220,7 @@ def test_summarize_stacked_passes_through_scalar_fields() -> None:
             "scalar_field": jnp.asarray(42.0),
         },
         metrics={},
-        execution_time=0.0,
-        converged=True,
+        status=jnp.asarray(int(Status.SUCCESS), jnp.int32),
     )
     out = summarize_stacked_sample_solution(raw)
     # Scalar field passes through unchanged in fields; stacked field is meaned.
@@ -247,8 +244,7 @@ def test_summarize_stacked_rejects_mismatched_sample_lengths() -> None:
             "p": jnp.stack([jnp.zeros((4,))], axis=0),  # length 1 vs 2 → mismatch
         },
         metrics={},
-        execution_time=0.0,
-        converged=True,
+        status=jnp.asarray(int(Status.SUCCESS), jnp.int32),
     )
     with pytest.raises(ValueError, match="sample-axis length"):
         summarize_stacked_sample_solution(raw)
