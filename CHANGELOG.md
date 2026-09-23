@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `opifex.core.solver` is a package exporting the solve protocol. `Problem` is the base
+  of a problem family and `Method[P]` a way of solving family `P`, both frozen pytrees;
+  `solve(problem, method)` raises `IncompatibleProblemError`, a `TypeError`, for a pairing
+  outside the method's family, which a type checker also rejects. `integrate` is the
+  shared driver for time-stepping methods: a static number of steps under `lax.scan`,
+  saved on a `Snapshots` schedule, each step rematerialised in the backward pass unless
+  asked otherwise. `Solution` moves to `opifex.core.solver.solution`.
 - `opifex.physics.spectral.solve_advection_diffusion_exact`: the exact Fourier solution
   of `u_t + v . grad u = D lap u` on a periodic domain in one to three dimensions, one
   FFT pair with no time stepping. It is `jit`, `vmap` and `grad` compatible in the
