@@ -20,7 +20,7 @@ class ShiftReport:
     """Outcome of a residual-stream shift diagnostic."""
 
     p_value: jax.Array
-    passes: bool = struct.field(pytree_node=False)
+    passes: jax.Array
     method: str = struct.field(pytree_node=False, default="ks_two_sample_residual")
     metadata: MetadataItems = struct.field(pytree_node=False, default=())
 
@@ -33,6 +33,12 @@ def residual_shift_diagnostic(
 ) -> ShiftReport:
     """Compare observed residuals to a reference distribution via two-sample KS.
 
+    The report is a pytree whose leaves are the p-value and the pass flag, and whose
+    static metadata records only what does not depend on the outcome. That keeps one
+    structure for every result, so a report may be handed to compiled code without
+    forcing a recompilation per outcome. The outcome rendered as text comes from
+    :func:`shift_status`, on the host, where strings belong.
+
     Args:
         reference_residuals: 1-D array of historic / calibration-set
             residuals.
@@ -40,23 +46,35 @@ def residual_shift_diagnostic(
         alpha: Significance level; ``passes = p_value > alpha``.
 
     Returns:
-        :class:`ShiftReport` with the p-value, pass flag, and metadata
-        recording method + sample sizes + status / assumption flags.
+        :class:`ShiftReport` with the p-value, the pass flag, and metadata recording the
+        level and the two sample sizes.
 
     """
     p_value = ks_two_sample_pvalue(
         calibration_scores=reference_residuals,
         evaluation_scores=observed_residuals,
     )
-    passes = bool(float(p_value) > alpha)
-    status = "no_shift" if passes else "shift_detected"
-    assumption_status = "exchangeable" if passes else "shift_detected"
     metadata: MetadataItems = (
-        ("method", "ks_two_sample_residual"),
         ("alpha", float(alpha)),
         ("reference_size", int(reference_residuals.shape[0])),
         ("observed_size", int(observed_residuals.shape[0])),
-        ("status", status),
-        ("assumption_status", assumption_status),
     )
-    return ShiftReport(p_value=p_value, passes=passes, metadata=metadata)
+    return ShiftReport(p_value=p_value, passes=p_value > alpha, metadata=metadata)
+
+
+def shift_status(report: ShiftReport) -> tuple[str, str]:
+    """The outcome of a shift diagnostic, rendered for a person.
+
+    Derived rather than stored: a status string held in the report's static metadata would
+    differ between a pass and a failure, giving the two outcomes different pytree
+    structures and a recompilation apiece.
+
+    Args:
+        report: A completed diagnostic.
+
+    Returns:
+        ``(status, assumption_status)``.
+    """
+    if bool(report.passes):
+        return "no_shift", "exchangeable"
+    return "shift_detected", "shift_detected"
