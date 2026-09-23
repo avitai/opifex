@@ -118,6 +118,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The console commands `opifex-check-compatibility`, `opifex-env-activate`,
+  `opifex-fresh-setup`, `opifex-gpu-test`, `opifex-gpu-utils`, `opifex-gpu-verify` and
+  `opifex-verify-examples`. Each pointed into the repository's `scripts/` directory, which
+  the wheel does not contain, so every one failed at start with `ModuleNotFoundError`; five
+  of the modules they named did not exist at all. The GPU tools remain repository scripts,
+  run from a checkout as `python scripts/<name>.py`.
 - `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
   `jax.grad` differentiates any activation in the registry.
 - `SciMLSolver`, `HybridSolver` and `ArtifexSolverAdapter` with the
@@ -131,6 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `opifex-benchmark` runs the benchmarking CLI. It pointed at `scripts.benchmark_runner`, a
+  module that does not exist and would not have been in the wheel, instead of
+  `opifex.benchmarking.cli`, which declares itself as that command.
 - `generate_diffusion` returns finite, correct labels at its shipped resolution. It
   stepped forward Euler with a fixed `dt = 0.01`, whose diffusive limit `D < dx^2 / (4 dt)`
   is 0.0061 at 64 cells -- below the whole sampled range of 0.01 to 0.1 -- so 0% of the

@@ -280,16 +280,7 @@ test = [
 ]
 
 [project.scripts]
-opifex-benchmark = "scripts.benchmark_runner:main"
-opifex-check-compatibility = "scripts.check_opifex_compatibility:main"
-# Phase 2 enhancements - workshop-inspired environment management
-opifex-env-activate = "scripts.activate_opifex:main"
-opifex-fresh-setup = "scripts.fresh_opifex_setup:main"
-# Workshop-inspired utilities for enhanced Opifex development
-opifex-gpu-test = "scripts.gpu_test_manager:main"
-opifex-gpu-utils = "scripts.gpu_utils:main"
-opifex-gpu-verify = "scripts.verify_opifex_gpu:main"
-opifex-verify-examples = "scripts.verify_opifex_examples:main"
+opifex-benchmark = "opifex.benchmarking.cli:main"
 
 # Bandit security configuration
 [tool.bandit]

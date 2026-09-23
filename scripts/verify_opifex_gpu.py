@@ -410,7 +410,7 @@ def main() -> None:
     print_recommendations(results)
 
     print("\n✅ GPU verification complete.")
-    print("   Use 'uv run opifex-gpu-test' for ongoing test management.")
+    print("   Use 'uv run python scripts/gpu_test_manager.py' for ongoing test management.")
 
 
 if __name__ == "__main__":
