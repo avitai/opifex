@@ -794,12 +794,6 @@ src/opifex/uncertainty/scientific/domain_metrics.py
     DOC201: Function `active_learning_acquisition_reliability` does not have a return section in docstring
     DOC201: Function `pac_bayes_bound_validity` does not have a return section in docstring
 --------------------
-src/opifex/uncertainty/scientific/equation_discovery.py
-    DOC304: Class `BayesianSINDy`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
-    DOC305: Class `BayesianSINDy`: Class docstring has a "Raises" section; please put it in the __init__() docstring
-    DOC501: Method `BayesianSINDy.coefficient_posterior_intervals` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Method `BayesianSINDy.coefficient_posterior_intervals` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
---------------------
 src/opifex/uncertainty/scientific/polynomial_chaos.py
     DOC101: Function `pce_summary`: Docstring contains fewer arguments than in function signature.
     DOC103: Function `pce_summary`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [coefficients: jax.Array, family: str].

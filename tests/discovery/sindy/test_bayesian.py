@@ -13,11 +13,11 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.discovery.sindy.library import CandidateLibrary
-from opifex.uncertainty.scientific.equation_discovery import (
+from opifex.discovery.sindy.bayesian import (
     BayesianSINDy,
     PosteriorOverTerms,
 )
+from opifex.discovery.sindy.library import CandidateLibrary
 from opifex.uncertainty.types import PredictionInterval
 
 
@@ -201,7 +201,7 @@ def test_fit_is_reproducible_with_same_rngs() -> None:
 
 
 def test_module_exposes_public_surface() -> None:
-    import opifex.uncertainty.scientific.equation_discovery as mod
+    import opifex.discovery.sindy.bayesian as mod
 
     assert mod.__all__ == ["BayesianSINDy", "PosteriorOverTerms"]
     assert issubclass(type(PredictionInterval), type)
