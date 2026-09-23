@@ -72,7 +72,7 @@ CARRIED_BOUNDARIES: Final[dict[str, frozenset[Extrapolation]]] = {
     ),
     "the pressure projection": frozenset({Extrapolation.PERIODIC, Extrapolation.ZERO}),
     "convection": frozenset({Extrapolation.PERIODIC, Extrapolation.ZERO}),
-    "diffusion": frozenset({Extrapolation.PERIODIC}),
+    "diffusion": frozenset({Extrapolation.PERIODIC, Extrapolation.ZERO}),
 }
 
 
@@ -94,10 +94,10 @@ def require_boundary(extrapolation: Extrapolation, operation: str) -> None:
     )
     msg = (
         f"{operation} does not carry a {extrapolation.value} boundary on a staggered grid. "
-        f"Across this layer: {carried}. What is missing differs by operation and is not a "
-        "matter of padding: the viscous stencil wraps, so a wall would diffuse momentum "
-        "out through one side and back in through the other, and a zero-gradient boundary "
-        "adds a face that the projection's transform does not diagonalise."
+        f"Across this layer: {carried}. What is missing is not a matter of padding: a "
+        "zero-gradient boundary adds a face that neither the projection's transform "
+        "diagonalises nor the one-sided viscous closure covers, so it would be an "
+        "approximation rather than the scheme."
     )
     raise ValueError(msg)
 

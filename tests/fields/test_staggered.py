@@ -42,7 +42,7 @@ from opifex.fields.staggered import (
     StaggeredGrid,
 )
 from opifex.fields.staggered_convection import convect
-from opifex.fields.staggered_navier_stokes import laplacian
+from opifex.fields.staggered_diffusion import laplacian
 from opifex.fields.staggered_pressure import project
 
 
@@ -238,8 +238,10 @@ class TestTheBoundaryContract:
         require_boundary(Extrapolation.PERIODIC, "convection")
 
     def test_a_refusal_names_the_whole_layer_not_just_the_caller(self) -> None:
+        # Every part of the layer now carries a wall, so the only boundary left outside
+        # the contract is the zero-gradient one.
         with pytest.raises(ValueError, match="does not carry") as refusal:
-            require_boundary(Extrapolation.ZERO, "diffusion")
+            require_boundary(Extrapolation.NEUMANN, "diffusion")
 
         message = str(refusal.value)
         assert "diffusion" in message
@@ -247,7 +249,7 @@ class TestTheBoundaryContract:
         for operation in CARRIED_BOUNDARIES:
             assert operation in message
         # And says what is actually missing, so the reader knows it is not padding.
-        assert "wrap" in message
+        assert "diagonalise" in message
 
     @pytest.mark.parametrize(
         ("operation", "extrapolation"),
@@ -255,6 +257,7 @@ class TestTheBoundaryContract:
             ("the pressure projection", Extrapolation.ZERO),
             ("the grid operators", Extrapolation.NEUMANN),
             ("convection", Extrapolation.ZERO),
+            ("diffusion", Extrapolation.ZERO),
         ],
     )
     def test_the_declaration_matches_what_the_code_does(
