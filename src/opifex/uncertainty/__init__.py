@@ -11,9 +11,9 @@ Core contracts:
   ``sample_diagonal_gaussian``).
 * :mod:`opifex.uncertainty.protocols` — structural UQ-aware module / variational
   / calibrator / conformalizer / estimator protocols.
-* :mod:`opifex.uncertainty.registry` — :class:`UQCapability`,
-  :class:`UQRegistry`, :class:`DefaultStrategy` (singleton registry extending
-  CalibraX ``SingletonRegistry``).
+* :mod:`opifex.uncertainty.registry` — :class:`UQRegistry` (singleton registry extending
+  CalibraX ``SingletonRegistry``) over the declarations of
+  :mod:`opifex.core.capabilities`.
 * :mod:`opifex.uncertainty.inference_backends` — backend protocol + base
   result / spec / diagnostics containers.
 * :mod:`opifex.uncertainty.adapters` — distribution / model-uncertainty adapter
@@ -128,9 +128,7 @@ from opifex.uncertainty.protocols import (
     VariationalModule,
 )
 from opifex.uncertainty.registry import (
-    DefaultStrategy,
     register_uq_capability,
-    UQCapability,
     UQRegistry,
 )
 from opifex.uncertainty.tempering import (
@@ -170,7 +168,6 @@ __all__ = [
     "DeepONetConformalAdapterSpec",
     "DeepONetDeepEnsembleAdapterSpec",
     "DeepONetMCDropoutAdapterSpec",
-    "DefaultStrategy",
     "DiffusionTemperingSchedule",
     "DistrAxAdapter",
     "DistributionAdapterProtocol",
@@ -206,7 +203,6 @@ __all__ = [
     "TemperingScheduleType",
     "TestTimeAugmentationAdapter",
     "TestTimeAugmentationState",
-    "UQCapability",
     "UQLossComponents",
     "UQRegistry",
     "UncertaintyAwareModule",

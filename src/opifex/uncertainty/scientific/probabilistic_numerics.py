@@ -76,7 +76,7 @@ from typing import Any, Literal
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 # ---------------------------------------------------------------------------

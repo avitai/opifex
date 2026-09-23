@@ -49,8 +49,8 @@ import jax.numpy as jnp
 from flax import nnx, struct
 from substrax.rng import key_from
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty._predictive import ensemble_predictive
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import MetadataItems, PredictiveDistribution  # noqa: TC001
 
 

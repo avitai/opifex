@@ -53,9 +53,9 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters.ensemble import DeepEnsembleAdapter, DeepEnsembleState
 from opifex.uncertainty.adapters.model import MCDropoutAdapter
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import (  # noqa: TC001 — eager per convention
     MetadataItems,
     PredictiveDistribution,

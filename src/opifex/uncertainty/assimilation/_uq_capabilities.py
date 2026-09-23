@@ -16,7 +16,7 @@ Plan reference: ``07-phase-registry-docs-examples.md`` lines 659-664
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 # Static digital-twin-aware state container. Frozen Pattern A dataclass;

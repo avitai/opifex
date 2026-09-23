@@ -14,12 +14,12 @@ from typing import Any, TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters import (
     DistributionAdapterProtocol,
     DistributionAdapterSpec,
     ModelUncertaintyAdapterProtocol,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import PredictiveDistribution
 
 

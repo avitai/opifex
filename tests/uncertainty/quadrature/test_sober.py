@@ -31,12 +31,12 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import UQCapability
 from opifex.uncertainty.quadrature import SOBERAdapterSpec
 from opifex.uncertainty.quadrature.sober import (
     caratheodory_recombination,
     sober_kernel_recombination,
 )
-from opifex.uncertainty.registry import UQCapability
 
 
 def _rbf_kernel(x_left: jax.Array, x_right: jax.Array, lengthscale: float = 1.0) -> jax.Array:

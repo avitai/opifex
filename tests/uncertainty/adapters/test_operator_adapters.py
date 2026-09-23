@@ -26,6 +26,7 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters import (
     DeepONetConformalAdapterSpec,
     DeepONetDeepEnsembleAdapterSpec,
@@ -36,7 +37,6 @@ from opifex.uncertainty.adapters import (
     MCDropoutState,
     OperatorAdapterSpec,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import metadata_to_dict, PredictiveDistribution
 
 

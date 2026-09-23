@@ -68,9 +68,9 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.statespace.kalman import (
     kalman_filter,
     kalman_log_likelihood,

@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.quadrature import (
     EmukitQuadratureAdapterSpec,
     FFBQAdapterSpec,
@@ -18,7 +19,6 @@ from opifex.uncertainty.quadrature import (
     VanillaBayesianQuadratureAdapterSpec,
     WSABILAdapterSpec,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 
 _CONCRETIZED_BQ_SPECS: tuple[type, ...] = (

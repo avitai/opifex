@@ -24,7 +24,7 @@ All three advertise :attr:`supports_active_learning=True` and
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _BALD_ACQUISITION_CAPABILITY = UQCapability(

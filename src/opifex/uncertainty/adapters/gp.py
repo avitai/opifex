@@ -29,7 +29,7 @@ import dataclasses
 import warnings
 from typing import Any
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)

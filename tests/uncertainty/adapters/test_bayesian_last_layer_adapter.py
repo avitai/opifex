@@ -27,12 +27,12 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters import (
     BayesianLastLayerAdapter,
     BayesianLastLayerState,
     ModelUncertaintyAdapterProtocol,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import PredictiveDistribution
 
 

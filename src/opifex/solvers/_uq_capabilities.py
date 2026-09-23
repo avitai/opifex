@@ -23,7 +23,7 @@ Two categories:
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 def _adapter_baseline_with_notes(notes: str) -> UQCapability:

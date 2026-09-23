@@ -36,7 +36,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from opifex.uncertainty.registry import UQCapability
+from opifex.core.capabilities import UQCapability
 from opifex.uncertainty.scientific._specialised import perturbed_step_solve
 from opifex.uncertainty.scientific.probabilistic_numerics import (
     PerturbedStepSolverSpec,

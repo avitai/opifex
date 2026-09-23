@@ -18,7 +18,7 @@ Plan reference: ``07-phase-registry-docs-examples.md`` lines 624-627 +
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _BUILD_RELIABILITY_REPORT_CAPABILITY = UQCapability(
