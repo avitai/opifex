@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `evaluate_examples`, `evaluate_qh9_test_set` and `QH9TestSetMetrics` move from
+  `opifex.neural.quantum.hamiltonian` (and its `qh9_eval` module) to
+  `opifex.benchmarking.qh9`. They join the predictor to the QH9 dataset, which put a
+  data-layer import inside the network package; the per-molecule metrics,
+  `predict_fock` and the checkpoint helpers stay where they were, and
+  `FOCK_METRIC_KEYS` names the keys `evaluate_fock` returns.
 - The def2-SVP AO layout moves to `opifex.core.quantum.ao_layout` (`FULL_ORBITALS`,
   `ORBITAL_MASK`, `atom_orbital_counts`, `block_validity_mask`): the QH9 data sources
   and the Hamiltonian predictor both need it, and it lived in a private module of the

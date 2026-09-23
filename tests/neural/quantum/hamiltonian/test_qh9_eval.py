@@ -37,7 +37,6 @@ from opifex.neural.quantum.hamiltonian.block_predictor import (
 )
 from opifex.neural.quantum.hamiltonian.qh9_eval import (
     cal_orbital_and_energies,
-    evaluate_examples,
     evaluate_fock,
     latest_checkpoint,
     occupied_orbital_count,
@@ -45,7 +44,6 @@ from opifex.neural.quantum.hamiltonian.qh9_eval import (
     orbital_energy_mae,
     overlap_matrix_def2svp,
     predict_fock,
-    QH9TestSetMetrics,
     to_pyscf_internal_ordering,
 )
 
@@ -246,31 +244,3 @@ class TestLatestCheckpoint:
     def test_returns_none_when_empty_or_absent(self, tmp_path: Path) -> None:
         assert latest_checkpoint(tmp_path) is None
         assert latest_checkpoint(tmp_path / "does_not_exist") is None
-
-
-# ---------------------------------------------------------------------------
-# Test-set aggregation (evaluate_examples) on real molecules
-# ---------------------------------------------------------------------------
-@requires_qh9_db
-@requires_pyscf_dft
-def test_evaluate_examples_aggregates_over_molecules() -> None:
-    """:func:`evaluate_examples` returns finite, well-formed aggregate metrics."""
-    with jax.enable_x64(True):
-        examples = first_qh9_examples(3)
-        predictor = BlockHamiltonianPredictor(config=BlockHamiltonianConfig(), rngs=nnx.Rngs(0))
-        metrics = evaluate_examples(predictor, examples)
-
-    assert isinstance(metrics, QH9TestSetMetrics)
-    assert metrics.n_molecules == 3
-    as_dict = metrics.as_dict()
-    for key in (
-        "hamiltonian_mae",
-        "orbital_energy_mae",
-        "orbital_energy_mae_occ",
-        "homo_lumo_gap_mae",
-        "coefficient_similarity",
-    ):
-        assert np.isfinite(float(as_dict[key])), f"{key} is not finite"
-    # A cosine similarity is bounded; an untrained predictor must still be in range.
-    assert -1.0 - 1e-6 <= metrics.coefficient_similarity <= 1.0 + 1e-6
-    assert metrics.hamiltonian_mae >= 0.0

@@ -11,10 +11,10 @@ Native JAX evaluation of a predicted DFT Fock matrix on the QH9 benchmark metric
   similarity and HOMO/LUMO gap.
 * :func:`evaluate_fock` -- a single molecule's metric dict (all + occupied ε-MAE,
   occupied ψ-similarity, HOMO-LUMO-gap MAE, Hamiltonian MAE).
-* :func:`evaluate_qh9_test_set` -- aggregate :func:`evaluate_fock` over the QH9
-  test split, assembling each predicted Fock via the block predictor and reusing
-  the source decode for the target Fock; optionally loads a best-val orbax
-  checkpoint of a trained predictor.
+* :func:`predict_fock`, :func:`load_predictor_checkpoint`, :func:`latest_checkpoint`
+  -- a single molecule's predicted Fock and the predictor's checkpoints. The
+  test-split evaluation that aggregates :func:`evaluate_fock` over QH9 is
+  :mod:`opifex.benchmarking.qh9`.
 
 The overlap matrix and the basis convention
 -------------------------------------------
@@ -45,8 +45,7 @@ which is the convention-correctness gate exercised by the tests.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Sequence  # noqa: TC003
-from dataclasses import dataclass
+from collections.abc import Sequence  # noqa: TC003
 from functools import lru_cache
 from pathlib import Path  # noqa: TC003
 
@@ -58,10 +57,6 @@ from jaxtyping import Array, Float, Int  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
 from opifex.core.quantum.ao_layout import ao_permutation, BACK2PYSCF
-from opifex.data.sources.qh9_source import (
-    QH9Example,
-    read_qh9_test_split,
-)
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianPredictor,  # noqa: TC001
 )
@@ -318,14 +313,14 @@ def evaluate_fock(
     }
 
 
-_METRIC_KEYS: tuple[str, ...] = (
+FOCK_METRIC_KEYS: tuple[str, ...] = (
     "orbital_energy_mae",
     "orbital_energy_mae_occ",
     "coefficient_similarity",
     "homo_lumo_gap_mae",
     "hamiltonian_mae",
 )
-"""The metric keys :func:`evaluate_fock` returns (and :func:`evaluate_qh9_test_set` aggregates)."""
+"""The metric keys :func:`evaluate_fock` returns."""
 
 
 def _complete_directed_edges(n_atoms: int) -> Int[Array, "2 n_edges"]:
@@ -437,131 +432,10 @@ def latest_checkpoint(checkpoint_dir: Path) -> Path | None:
     return candidates[-1] if candidates else None
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class QH9TestSetMetrics:
-    """Aggregated QH9 test-set metrics over the evaluated molecules.
-
-    Attributes:
-        n_molecules: Number of molecules evaluated.
-        orbital_energy_mae: Mean ε-MAE over all orbitals (Hartree).
-        orbital_energy_mae_occ: Mean ε-MAE over occupied orbitals (Hartree).
-        coefficient_similarity: Mean occupied-orbital ψ-cosine similarity.
-        homo_lumo_gap_mae: Mean HOMO-LUMO-gap MAE (Hartree).
-        hamiltonian_mae: Mean Fock-matrix MAE (Hartree).
-    """
-
-    n_molecules: int
-    orbital_energy_mae: float
-    orbital_energy_mae_occ: float
-    coefficient_similarity: float
-    homo_lumo_gap_mae: float
-    hamiltonian_mae: float
-
-    def as_dict(self) -> dict[str, float | int]:
-        """Return the metrics as a plain ``dict`` (for JSON/logging)."""
-        return {
-            "n_molecules": self.n_molecules,
-            "orbital_energy_mae": self.orbital_energy_mae,
-            "orbital_energy_mae_occ": self.orbital_energy_mae_occ,
-            "coefficient_similarity": self.coefficient_similarity,
-            "homo_lumo_gap_mae": self.homo_lumo_gap_mae,
-            "hamiltonian_mae": self.hamiltonian_mae,
-        }
-
-
-def evaluate_examples(
-    predictor: BlockHamiltonianPredictor,
-    examples: Iterable[QH9Example],
-) -> QH9TestSetMetrics:
-    """Aggregate :func:`evaluate_fock` over decoded QH9 examples.
-
-    For each example the predicted Fock is assembled from the predictor
-    (:func:`predict_fock`) and compared with the example's target Fock; the
-    per-molecule metrics are averaged (unweighted) over the molecules.
-
-    Args:
-        predictor: The block Hamiltonian predictor (trained or fresh).
-        examples: Decoded :class:`~opifex.data.sources.qh9_source.QH9Example`
-            records to evaluate.
-
-    Returns:
-        The aggregated :class:`QH9TestSetMetrics`.
-
-    Raises:
-        ValueError: If ``examples`` is empty.
-    """
-    predictor.eval()  # Inference: switch to eval mode (canonical NNX boundary).
-    totals = dict.fromkeys(_METRIC_KEYS, 0.0)
-    count = 0
-    for example in examples:
-        atomic_numbers = np.asarray(example.atomic_numbers)
-        positions = np.asarray(example.system.positions, dtype=np.float64)
-        predicted_fock = predict_fock(predictor, atomic_numbers, positions)
-        metrics = evaluate_fock(
-            predicted_fock,
-            jnp.asarray(example.fock),
-            atomic_numbers,
-            positions,
-            int(atomic_numbers.sum()),
-        )
-        for key in _METRIC_KEYS:
-            totals[key] += float(metrics[key])
-        count += 1
-
-    if count == 0:
-        raise ValueError("no examples to evaluate.")
-    return QH9TestSetMetrics(
-        n_molecules=count,
-        orbital_energy_mae=totals["orbital_energy_mae"] / count,
-        orbital_energy_mae_occ=totals["orbital_energy_mae_occ"] / count,
-        coefficient_similarity=totals["coefficient_similarity"] / count,
-        homo_lumo_gap_mae=totals["homo_lumo_gap_mae"] / count,
-        hamiltonian_mae=totals["hamiltonian_mae"] / count,
-    )
-
-
-def evaluate_qh9_test_set(
-    predictor: BlockHamiltonianPredictor,
-    db_path: Path,
-    *,
-    checkpoint_path: Path | None = None,
-    limit: int | None = None,
-) -> QH9TestSetMetrics:
-    r"""Evaluate the QH9 benchmark metrics over the QH9-Stable test split.
-
-    Reads only the deterministic ``0.8/0.1/0.1`` test-split molecules
-    (:func:`~opifex.data.sources.qh9_source.read_qh9_test_split`, which computes the
-    split from the cheap id count and decodes the test subset lazily -- no full
-    130k-molecule decode), optionally restores a best-val orbax checkpoint into
-    ``predictor`` (:func:`load_predictor_checkpoint`), then aggregates
-    :func:`evaluate_fock` over the test molecules (:func:`evaluate_examples`).
-
-    Args:
-        predictor: The block Hamiltonian predictor, built with the config matching
-            ``checkpoint_path`` when one is given.
-        db_path: Path to ``QH9Stable.db``.
-        checkpoint_path: Optional best-val checkpoint to restore before evaluating
-            (e.g. ``<run>/checkpoints/best_epoch_N``).
-        limit: Optional cap on the number of *test-split* molecules evaluated (the
-            split itself is computed over the full database for fidelity).
-
-    Returns:
-        The aggregated :class:`QH9TestSetMetrics` over the evaluated test molecules.
-    """
-    if checkpoint_path is not None:
-        predictor = load_predictor_checkpoint(predictor, checkpoint_path)
-
-    test_examples = read_qh9_test_split(db_path, limit=limit)
-    logger.info("Evaluating QH9 test set over %d molecules", len(test_examples))
-    return evaluate_examples(predictor, test_examples)
-
-
 __all__ = [
-    "QH9TestSetMetrics",
+    "FOCK_METRIC_KEYS",
     "cal_orbital_and_energies",
-    "evaluate_examples",
     "evaluate_fock",
-    "evaluate_qh9_test_set",
     "hamiltonian_mae",
     "homo_lumo_gap",
     "latest_checkpoint",
