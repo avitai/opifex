@@ -4,6 +4,7 @@ This module provides the NeuralOperatorSolver, which solves PDE problems using
 data-driven neural operators (e.g., FNO, DeepONet).
 """
 
+import jax.numpy as jnp
 from flax import nnx
 
 from opifex.core.problems import Problem
@@ -12,12 +13,19 @@ from opifex.core.solver.interface import (
     SolverConfig,
     SolverState,
 )
+from opifex.core.solver.status import Status
 from opifex.core.training.config import TrainingConfig
 from opifex.core.training.trainer import Trainer
 
 
 class NeuralOperatorSolver:
-    """Solver for data-driven Neural Operators."""
+    """Solver for data-driven Neural Operators.
+
+    Training is what this performs; prediction is not wired, so the returned solution
+    carries metrics and an outcome but no fields. A problem carrying no data trains
+    nothing and reports ``Status.DEFAULT`` rather than success, so an untrained run
+    cannot be mistaken for a converged one.
+    """
 
     def __init__(self, model: nnx.Module) -> None:
         self.model = model
@@ -54,7 +62,8 @@ class NeuralOperatorSolver:
         from opifex.core.problems import DataDrivenProblem
 
         metrics = {}
-        if isinstance(problem, DataDrivenProblem):
+        trained = isinstance(problem, DataDrivenProblem)
+        if trained:
             # Execute real training loop with data
             _, metrics = trainer.fit(
                 train_data=(problem.x_train, problem.y_train),
@@ -62,9 +71,7 @@ class NeuralOperatorSolver:
             )
 
         return Solution(
-            fields={},  # Would contain predicted fields
+            fields={},
             metrics=metrics,
-            execution_time=0.0,
-            converged=True,
-            stats=metrics,
+            status=jnp.asarray(Status.SUCCESS if trained else Status.DEFAULT, dtype=jnp.int32),
         )
