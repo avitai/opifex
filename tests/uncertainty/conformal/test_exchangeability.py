@@ -56,11 +56,12 @@ def test_exchangeability_diagnostic_fails_on_shifted_distribution() -> None:
 
 def test_exchangeability_report_is_frozen_dataclass() -> None:
     exch = _import_exchangeability()
-    report = exch.ExchangeabilityReport(p_value=jnp.asarray(0.5), passes=True)
+    report = exch.ExchangeabilityReport(p_value=jnp.asarray(0.5), passes=jnp.asarray(True))
     assert float(report.p_value) == pytest.approx(0.5)
-    assert report.passes is True
+    # An array, not a Python bool, so identity against True no longer holds.
+    assert bool(report.passes)
     with pytest.raises(dc.FrozenInstanceError):
-        report.passes = False  # type: ignore[misc]
+        report.passes = jnp.asarray(False)  # type: ignore[misc]
 
 
 def test_exchangeability_records_alpha_and_method_metadata() -> None:
