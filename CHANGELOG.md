@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `opifex.core.quantum.ao_layout.ao_permutation(atomic_numbers, convention)` and the two
+  QH9 AO conventions `PYSCF_DEF2SVP` and `BACK2PYSCF` (Yu et al. 2023), each an
+  `AoConvention` of four tables; `native_ao_count` gives a molecule's AO count on the host.
 - `opifex.core.solver` is a package exporting the solve protocol. `Problem` is the base
   of a problem family and `Method[P]` a way of solving family `P`, both frozen pytrees;
   `solve(problem, method)` raises `IncompatibleProblemError`, a `TypeError`, for a pairing
@@ -128,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `opifex.data.sources.qh9_source.def2svp_decode_indices`: use
+  `ao_permutation(atomic_numbers, PYSCF_DEF2SVP)` from `opifex.core.quantum.ao_layout`. The
+  QH9 convention tables were held twice, once in the data source and once in the QH9
+  evaluation, and the permutation built from them written out twice.
 - The console commands `opifex-check-compatibility`, `opifex-env-activate`,
   `opifex-fresh-setup`, `opifex-gpu-test`, `opifex-gpu-utils`, `opifex-gpu-verify` and
   `opifex-verify-examples`. Each pointed into the repository's `scripts/` directory, which
@@ -147,6 +154,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `atom_orbital_counts` and `block_validity_mask` gave any element above fluorine
+  fluorine's fourteen AO slots: the lookup used JAX's default gather, which promises
+  in-bounds indices and clamps the rest to the last row, and it wrapped negative numbers
+  to it too. Elements outside the basis now populate nothing, under `jit` and `vmap`.
+- The QH9 AO count no longer counts any element heavier than helium as fourteen orbitals;
+  it reads the layout and refuses an element outside it with `KeyError`, as the AO
+  permutation already did.
 - `opifex-benchmark` runs the benchmarking CLI. It pointed at `scripts.benchmark_runner`, a
   module that does not exist and would not have been in the wheel, instead of
   `opifex.benchmarking.cli`, which declares itself as that command.

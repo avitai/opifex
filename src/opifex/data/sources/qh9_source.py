@@ -72,6 +72,7 @@ import numpy as np
 from jaxtyping import Float, Int  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
+from opifex.core.quantum.ao_layout import ao_permutation, native_ao_count, PYSCF_DEF2SVP
 from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR, MolecularSystem
 
 
@@ -81,47 +82,6 @@ logger = logging.getLogger(__name__)
 _SPLIT_SEED: int = 43
 _TRAIN_RATIO: float = 0.8
 _VAL_RATIO: float = 0.1
-
-# QH9 native per-element AO block sizes: 5 for H/He (Z <= 2), 14 otherwise.
-_LIGHT_ELEMENT_AO: int = 5
-_HEAVY_ELEMENT_AO: int = 14
-_LIGHT_ELEMENT_MAX_Z: int = 2
-
-
-# ---------------------------------------------------------------------------
-# PySCF def2-SVP convention tables for the QH9 dataset (Yu et al. 2023,
-# arXiv:2306.09549). These map QH9's native per-shell AO layout into PySCF's
-# spherical AO ordering.
-#
-#   atom_to_orbitals_map: per-element shell string (s/p/d letters in order).
-#   orbital_idx_map:      within-shell component permutation per shell type.
-#   orbital_sign_map:     within-shell component sign flips per shell type.
-#   orbital_order_map:    per-element shell reordering (whole shells).
-# ---------------------------------------------------------------------------
-_DEF2SVP_ATOM_TO_ORBITALS: dict[int, str] = {
-    1: "ssp",
-    6: "sssppd",
-    7: "sssppd",
-    8: "sssppd",
-    9: "sssppd",
-}
-_DEF2SVP_ORBITAL_IDX: dict[str, list[int]] = {
-    "s": [0],
-    "p": [1, 2, 0],
-    "d": [0, 1, 2, 3, 4],
-}
-_DEF2SVP_ORBITAL_SIGN: dict[str, list[int]] = {
-    "s": [1],
-    "p": [1, 1, 1],
-    "d": [1, 1, 1, 1, 1],
-}
-_DEF2SVP_ORBITAL_ORDER: dict[int, list[int]] = {
-    1: [0, 1, 2],
-    6: [0, 1, 2, 3, 4, 5],
-    7: [0, 1, 2, 3, 4, 5],
-    8: [0, 1, 2, 3, 4, 5],
-    9: [0, 1, 2, 3, 4, 5],
-}
 
 
 @dataclass(frozen=True)
@@ -186,54 +146,6 @@ class QH9Data:
 # =============================================================================
 
 
-def def2svp_decode_indices(
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
-    r"""Return the QH9-native -> spherical def2-SVP AO permutation and signs.
-
-    Decomposes the QH9-native to PySCF def2-SVP convention transform
-    into its two per-AO ingredients: the permutation ``indices`` (whole-shell
-    reordering composed with within-shell component reordering) and the per-AO
-    sign vector ``signs``. They define the symmetric congruence
-
-    .. math::  M' = S\, M[I][:, I]\, S^\top, \qquad S = \mathrm{diag}(\text{signs}),
-
-    i.e. ``M'[i, j] = M[I[i], I[j]] * signs[i] * signs[j]``. The same arrays drive
-    both the NumPy :func:`matrix_transform_def2svp` and the device-side
-    :class:`~opifex.data.sources.qh9_fock_operators.FockSphericalDecodeOperator`,
-    so the two paths are bit-for-bit identical (DRY).
-
-    Args:
-        atomic_numbers: Nuclear charges of the molecule, shape ``(n_atoms,)``.
-
-    Returns:
-        ``(indices, signs)`` each shape ``(n_ao,)`` (``int64``).
-
-    Raises:
-        KeyError: If an atomic number is outside the QH9 element set
-            (H, C, N, O, F).
-    """
-    orbitals = ""
-    orbitals_order: list[int] = []
-    for atomic_number in atomic_numbers:
-        offset = len(orbitals_order)
-        orbitals += _DEF2SVP_ATOM_TO_ORBITALS[int(atomic_number)]
-        orbitals_order += [idx + offset for idx in _DEF2SVP_ORBITAL_ORDER[int(atomic_number)]]
-
-    transform_indices: list[NDArray[np.int64]] = []
-    transform_signs: list[NDArray[np.int64]] = []
-    for orbital in orbitals:
-        offset = sum(len(block) for block in transform_indices)
-        transform_indices.append(np.asarray(_DEF2SVP_ORBITAL_IDX[orbital], dtype=np.int64) + offset)
-        transform_signs.append(np.asarray(_DEF2SVP_ORBITAL_SIGN[orbital], dtype=np.int64))
-
-    transform_indices = [transform_indices[idx] for idx in orbitals_order]
-    transform_signs = [transform_signs[idx] for idx in orbitals_order]
-    indices = np.concatenate(transform_indices).astype(np.int64)
-    signs = np.concatenate(transform_signs).astype(np.int64)
-    return indices, signs
-
-
 def matrix_transform_def2svp(
     matrix: Float[NDArray[np.float64], "n_ao n_ao"],
     atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
@@ -242,7 +154,7 @@ def matrix_transform_def2svp(
 
     NumPy convention transform for QH9 Fock matrices (Yu et al. 2023,
     arXiv:2306.09549): it applies the per-AO permutation and sign vector
-    from :func:`def2svp_decode_indices` symmetrically to both matrix axes
+    from :func:`~opifex.core.quantum.ao_layout.ao_permutation` symmetrically to both axes
     (``M' = S M[I][:, I] S^T`` with ``S = diag(signs)``).
 
     Args:
@@ -256,7 +168,7 @@ def matrix_transform_def2svp(
         KeyError: If an atomic number is outside the QH9 element set
             (H, C, N, O, F).
     """
-    indices, signs = def2svp_decode_indices(atomic_numbers)
+    indices, signs = ao_permutation(atomic_numbers, PYSCF_DEF2SVP)
     transformed = matrix[..., indices, :][..., :, indices]
     return transformed * signs[:, None] * signs[None, :]
 
@@ -264,16 +176,6 @@ def matrix_transform_def2svp(
 # =============================================================================
 # SQLite decoding
 # =============================================================================
-
-
-def _native_ao_count(atomic_numbers: Int[NDArray[np.int32], " n_atoms"]) -> int:
-    """QH9 native total AO count: 5 per H/He, 14 per heavier atom."""
-    return int(
-        sum(
-            _LIGHT_ELEMENT_AO if int(z) <= _LIGHT_ELEMENT_MAX_Z else _HEAVY_ELEMENT_AO
-            for z in atomic_numbers
-        )
-    )
 
 
 def _decode_row(
@@ -303,7 +205,7 @@ def _decode_row(
     """
     atomic_numbers = np.frombuffer(atoms_blob, dtype=np.int32).copy()
     positions_angstrom = np.frombuffer(pos_blob, dtype=np.float64).reshape(num_nodes, 3).copy()
-    n_ao = _native_ao_count(atomic_numbers)
+    n_ao = native_ao_count(atomic_numbers)
     native_fock = np.frombuffer(ham_blob, dtype=np.float64).reshape(n_ao, n_ao).copy()
 
     fock = matrix_transform_def2svp(native_fock, atomic_numbers)
@@ -482,7 +384,6 @@ def load_qh9_data(
 __all__ = [
     "QH9Data",
     "QH9Example",
-    "def2svp_decode_indices",
     "load_qh9_data",
     "matrix_transform_def2svp",
     "qh9_random_split",
