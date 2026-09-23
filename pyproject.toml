@@ -332,19 +332,22 @@ allow-direct-references = true
 root_package = "opifex"
 
 # The package layering, highest first: a layer may import the layers below it and never one
-# above. Siblings in one layer are independent of each other. Packages not listed yet --
-# neural, data, uncertainty, optimization, geometry, distributed and the rest -- join once
-# the cycles that tie them across layers are removed.
+# above. Siblings in one layer are independent of each other. Every top-level module is
+# listed; tests/packaging/test_import_layers_contract.py fails on one that is not.
 [[tool.importlinter.contracts]]
 containers = ["opifex"]
 layers = [
+  "capabilities",
   "benchmarking | deployment | mlops | scalability | visualization",
   "platform",
   "training",
-  "solvers | discovery",
-  "physics",
+  "solvers | discovery | optimization",
+  "data",
+  "neural | physics",
   "fields",
-  "core"
+  "uncertainty",
+  "core",
+  "geometry | distributed | typing | diagnostics"
 ]
 name = "opifex is layered from applications down to the core"
 type = "layers"
