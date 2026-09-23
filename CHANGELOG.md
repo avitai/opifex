@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `opifex.capabilities.UQ_CAPABILITIES`: every uncertainty-quantification capability opifex
+  declares, collected once from each package's public table into a read-only mapping, with
+  `require_uq_capability(name)` and `assemble(*tables)`, which refuses a name declared twice.
+  `opifex.neural.operators.OPERATOR_CAPABILITIES` and `opifex.uncertainty.sbi.SBI_CAPABILITIES`
+  are now public.
 - `opifex.core.quantum.ao_layout.ao_permutation(atomic_numbers, convention)` and the two
   QH9 AO conventions `PYSCF_DEF2SVP` and `BACK2PYSCF` (Yu et al. 2023), each an
   `AoConvention` of four tables; `native_ao_count` gives a molecule's AO count on the host.
@@ -147,6 +152,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `opifex.uncertainty.registry` with `UQRegistry` and `register_uq_capability`,
+  `register_mlops_capabilities`, `register_bayesian_capabilities`, `bayesian_uq_registry`,
+  `register_l2o_capabilities` and `opifex.neural.operators.OPERATOR_CAPABILITY_REGISTRY`.
+  Eighteen packages filled the singleton at import, three more through explicit calls, and
+  nothing in the library ever read it; the test suite needed an autouse fixture snapshotting
+  and restoring it around every test to stop leaks between tests. Read
+  `opifex.capabilities.UQ_CAPABILITIES` or call `require_uq_capability(name)` instead;
+  `get_operator_capability` keeps its contract.
 - `ElectronicStructureProblem.compute_energy`, `compute_forces` and `scf_solver`, and the
   abstract `compute_energy`/`compute_forces` of `QuantumProblem`: a problem states what to
   solve and no longer solves itself. The methods duplicated `SCFSolver`, reached it through

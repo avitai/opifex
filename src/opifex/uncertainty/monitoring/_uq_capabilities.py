@@ -1,19 +1,11 @@
-"""UQ capability declarations for the monitoring / reporting surfaces (Task 7.5).
+"""UQ capability declarations for the monitoring and reporting surfaces.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.uncertainty.monitoring.__init__``.
-
-The Phase 5 monitoring layer is a builder + container surface: it
-assembles already-computed metrics into a validated
-:class:`UQReliabilityReport`. It does not compute the metrics itself —
-those come from the calibration / conformal / scoring adapters. Declared
-as ``CALIBRATION`` (the dominant downstream consumer) with
-``native_jax_kernel=True`` since the builder is pure-function and the
-inputs are ``jax.Array``.
-
-Plan reference: ``07-phase-registry-docs-examples.md`` lines 624-627 +
-659-664 (monitoring/reporting registry coverage).
+Static, module-level constants, collected into :data:`opifex.capabilities.UQ_CAPABILITIES`;
+importing this module changes no global state. The monitoring layer assembles
+already-computed metrics into a validated :class:`UQReliabilityReport` and computes none of
+them itself; they come from the calibration, conformal and scoring adapters. It is declared
+``CALIBRATION``, its dominant downstream consumer, with ``native_jax_kernel=True`` since the
+builder is a pure function over ``jax.Array`` inputs.
 """
 
 from __future__ import annotations

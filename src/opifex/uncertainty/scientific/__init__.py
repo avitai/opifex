@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.scientific._uq_capabilities import (
     SCIENTIFIC_FIELD_CAPABILITIES,
 )
@@ -97,15 +96,6 @@ from opifex.uncertainty.scientific.stochastic_galerkin import (
     fit_collocation_surrogate,
     fit_galerkin_surrogate,
 )
-
-
-# Idempotent capability registration (Rule 13 — no mutable side effects
-# beyond constants + idempotent registry seeding). The :class:`UQRegistry`
-# is a singleton; guard against double-registration on repeat imports.
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in SCIENTIFIC_FIELD_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
 
 
 __all__ = [

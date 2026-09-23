@@ -17,15 +17,6 @@ from opifex.discovery.sindy.sindy import SINDy
 from opifex.discovery.sindy.ude_distillation import distill_ude_residual
 from opifex.discovery.sindy.utils import finite_difference, smooth_data
 from opifex.discovery.sindy.weak_sindy import WeakSINDy
-from opifex.uncertainty.registry import UQRegistry
-
-
-# UQ capability registration — Task 7.5. Guarded against duplicate
-# registration on repeat imports (Rule 13).
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in SINDY_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
 
 
 __all__ = [

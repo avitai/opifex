@@ -26,28 +26,19 @@ from __future__ import annotations
 
 import pytest
 
+from opifex.capabilities import require_uq_capability, UQ_CAPABILITIES
 from opifex.core.capabilities import DefaultStrategy, UQCapability
-
-# The per-subsystem ``from .._uq_capabilities import ...`` lines below
-# transitively import each Phase 8 subpackage's ``__init__``, which seeds
-# the singleton :class:`UQRegistry` via its idempotent registration loop.
-# We therefore do NOT need explicit ``import opifex.<sub>`` side-effect
-# lines — the capability-table imports already pull the subpackage in.
 from opifex.neural.bayesian._uq_capabilities import BAYESIAN_MODEL_CAPABILITIES
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.active._uq_capabilities import ACTIVE_CAPABILITIES
 from opifex.uncertainty.pac_bayes._uq_capabilities import PAC_BAYES_CAPABILITIES
-from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.sbi._uq_capabilities import SBI_CAPABILITIES
 from opifex.uncertainty.scientific._uq_capabilities import (
     SCIENTIFIC_FIELD_CAPABILITIES,
 )
 
 
-# Aggregate Phase 8 capability tables for the autouse seeder. The
-# ``test_registry.py`` suite uses an autouse :meth:`UQRegistry.reset`
-# fixture that wipes every registration; we re-seed here so this suite
-# is order-independent (mirrors the Phase 7 coverage tests).
+# The capability tables this suite covers.
 _ALL_PHASE_8_CAPABILITIES: dict[str, UQCapability] = {
     **PAC_BAYES_CAPABILITIES,
     **SBI_CAPABILITIES,
@@ -58,41 +49,20 @@ _ALL_PHASE_8_CAPABILITIES: dict[str, UQCapability] = {
 }
 
 
-@pytest.fixture(autouse=True)
-def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
-    """Re-seed the shared singleton ``UQRegistry`` with every Phase 8 entry.
-
-    Idempotent — registers only names not already present so consecutive
-    fixture invocations are safe.
-    """
-    registry = UQRegistry()
-    for name, capability in _ALL_PHASE_8_CAPABILITIES.items():
-        if name not in registry:
-            registry.register(name, capability)
-
-
-@pytest.fixture
-def uq_registry() -> UQRegistry:
-    """Return the shared singleton ``UQRegistry`` after subpackage imports."""
-    return UQRegistry()
-
-
 # ---------------------------------------------------------------------------
 # Plan exit criterion 1: at least one surface advertises
 # ``supports_pac_bayes_certificate=True``.
 # ---------------------------------------------------------------------------
 
 
-def test_at_least_one_surface_supports_pac_bayes_certificate(
-    uq_registry: UQRegistry,
-) -> None:
+def test_at_least_one_surface_supports_pac_bayes_certificate() -> None:
     """Task 8.1 landed → the registry MUST advertise at least one
     PAC-Bayes-capable surface (the certificate driver + a model that
     owns a posterior with ``kl_divergence``)."""
     pac_bayes_capable = [
         name
-        for name in uq_registry.list_names()
-        if uq_registry.require(name).supports_pac_bayes_certificate
+        for name in UQ_CAPABILITIES
+        if require_uq_capability(name).supports_pac_bayes_certificate
     ]
     assert pac_bayes_capable, (
         "Phase 8 Task 8.5 requires ≥ 1 surface with "
@@ -100,23 +70,19 @@ def test_at_least_one_surface_supports_pac_bayes_certificate(
     )
 
 
-def test_pac_bayes_certificate_surface_uses_pac_bayes_strategy(
-    uq_registry: UQRegistry,
-) -> None:
+def test_pac_bayes_certificate_surface_uses_pac_bayes_strategy() -> None:
     """The dedicated ``pac_bayes:certificate`` entry advertises the
     plan-mandated :attr:`DefaultStrategy.PAC_BAYES` strategy."""
-    cap = uq_registry.require("pac_bayes:certificate")
+    cap = require_uq_capability("pac_bayes:certificate")
     assert cap.supports_pac_bayes_certificate is True
     assert cap.default_strategy is DefaultStrategy.PAC_BAYES
 
 
-def test_probabilistic_pinn_opts_into_pac_bayes_certificate(
-    uq_registry: UQRegistry,
-) -> None:
+def test_probabilistic_pinn_opts_into_pac_bayes_certificate() -> None:
     """``ProbabilisticPINN`` owns a mean-field variational posterior with
     a ``kl_divergence`` method (the certificate driver's only structural
     requirement) so its capability MUST advertise opt-in."""
-    cap = uq_registry.require("model:ProbabilisticPINN")
+    cap = require_uq_capability("model:ProbabilisticPINN")
     assert cap.supports_pac_bayes_certificate is True
 
 
@@ -126,15 +92,11 @@ def test_probabilistic_pinn_opts_into_pac_bayes_certificate(
 # ---------------------------------------------------------------------------
 
 
-def test_at_least_one_inverse_problem_surface_supports_likelihood_free(
-    uq_registry: UQRegistry,
-) -> None:
+def test_at_least_one_inverse_problem_surface_supports_likelihood_free() -> None:
     """Task 8.2 SBI surfaces (NPE / NLE / NRE) MUST advertise the
     likelihood-free flag."""
     likelihood_free_capable = [
-        name
-        for name in uq_registry.list_names()
-        if uq_registry.require(name).supports_likelihood_free
+        name for name in UQ_CAPABILITIES if require_uq_capability(name).supports_likelihood_free
     ]
     assert likelihood_free_capable, (
         "Phase 8 Task 8.5 requires ≥ 1 surface with "
@@ -143,12 +105,10 @@ def test_at_least_one_inverse_problem_surface_supports_likelihood_free(
 
 
 @pytest.mark.parametrize("name", ["sbi:npe", "sbi:nle", "sbi:nre"])
-def test_sbi_surface_advertises_likelihood_free_sbi_strategy(
-    name: str, uq_registry: UQRegistry
-) -> None:
+def test_sbi_surface_advertises_likelihood_free_sbi_strategy(name: str) -> None:
     """Each SBI estimator advertises the plan-mandated
     :attr:`DefaultStrategy.LIKELIHOOD_FREE_SBI` strategy."""
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.supports_likelihood_free is True
     assert cap.default_strategy is DefaultStrategy.LIKELIHOOD_FREE_SBI
 
@@ -159,16 +119,12 @@ def test_sbi_surface_advertises_likelihood_free_sbi_strategy(
 # ---------------------------------------------------------------------------
 
 
-def test_at_least_one_trainer_or_learner_supports_active_learning(
-    uq_registry: UQRegistry,
-) -> None:
+def test_at_least_one_trainer_or_learner_supports_active_learning() -> None:
     """Task 8.3 rewrote ``UncertaintyGuidedTrainer`` and
     ``ActiveUncertaintyLearner`` to invoke real uncertainty quantifiers
     + active-learning acquisitions → both MUST advertise opt-in now."""
     active_learning_capable = [
-        name
-        for name in uq_registry.list_names()
-        if uq_registry.require(name).supports_active_learning
+        name for name in UQ_CAPABILITIES if require_uq_capability(name).supports_active_learning
     ]
     assert active_learning_capable, (
         "Phase 8 Task 8.5 requires ≥ 1 surface with "
@@ -180,21 +136,17 @@ def test_at_least_one_trainer_or_learner_supports_active_learning(
     "name",
     ["trainer:UncertaintyGuidedTrainer", "trainer:ActiveUncertaintyLearner"],
 )
-def test_active_learning_trainer_uses_active_learning_strategy(
-    name: str, uq_registry: UQRegistry
-) -> None:
-    cap = uq_registry.require(name)
+def test_active_learning_trainer_uses_active_learning_strategy(name: str) -> None:
+    cap = require_uq_capability(name)
     assert cap.supports_active_learning is True
     assert cap.default_strategy is DefaultStrategy.ACTIVE_LEARNING
 
 
-def test_multi_fidelity_trainer_default_strategy_flipped(
-    uq_registry: UQRegistry,
-) -> None:
+def test_multi_fidelity_trainer_default_strategy_flipped() -> None:
     """Task 8.3 rewrote ``MultiFidelityUncertaintyTrainer`` to call both
     high/low fidelity models for real and combine their ensemble
     decompositions → the strategy must reflect the ensemble flavour."""
-    cap = uq_registry.require("trainer:MultiFidelityUncertaintyTrainer")
+    cap = require_uq_capability("trainer:MultiFidelityUncertaintyTrainer")
     assert cap.default_strategy is DefaultStrategy.ENSEMBLE
     assert cap.supports_ensemble is True
 
@@ -205,15 +157,13 @@ def test_multi_fidelity_trainer_default_strategy_flipped(
 # ---------------------------------------------------------------------------
 
 
-def test_at_least_one_scientific_surface_supports_stochastic_field_input(
-    uq_registry: UQRegistry,
-) -> None:
+def test_at_least_one_scientific_surface_supports_stochastic_field_input() -> None:
     """Task 8.4 landed → the registry MUST advertise ≥ 1 stochastic-field
     surrogate that accepts KLE/PCE-parameterized random-field inputs."""
     stochastic_field_capable = [
         name
-        for name in uq_registry.list_names()
-        if uq_registry.require(name).supports_stochastic_field_input
+        for name in UQ_CAPABILITIES
+        if require_uq_capability(name).supports_stochastic_field_input
     ]
     assert stochastic_field_capable, (
         "Phase 8 Task 8.5 requires ≥ 1 surface with "
@@ -231,9 +181,9 @@ def test_at_least_one_scientific_surface_supports_stochastic_field_input(
     ],
 )
 def test_stochastic_field_surface_default_strategy(
-    name: str, expected_strategy: DefaultStrategy, uq_registry: UQRegistry
+    name: str, expected_strategy: DefaultStrategy
 ) -> None:
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.supports_stochastic_field_input is True
     assert cap.default_strategy is expected_strategy
 
@@ -243,9 +193,7 @@ def test_stochastic_field_surface_default_strategy(
 # ---------------------------------------------------------------------------
 
 
-def test_phase_8_capability_declarations_record_source_package(
-    uq_registry: UQRegistry,
-) -> None:
+def test_phase_8_capability_declarations_record_source_package() -> None:
     """Every capability that opts into a Phase 8 strategy MUST record a
     non-empty ``source_package`` so the registry display can attribute
     the implementation honestly (Opifex-local vs. sibling-backed)."""
@@ -261,21 +209,19 @@ def test_phase_8_capability_declarations_record_source_package(
     )
     opted_in = [
         name
-        for name in uq_registry.list_names()
-        if uq_registry.require(name).default_strategy in phase_8_strategies
+        for name in UQ_CAPABILITIES
+        if require_uq_capability(name).default_strategy in phase_8_strategies
     ]
     assert opted_in, "Sanity: at least one Phase 8 opt-in surface must exist."
     for name in opted_in:
-        cap = uq_registry.require(name)
+        cap = require_uq_capability(name)
         assert cap.source_package, (
             f"Capability {name!r} opts into {cap.default_strategy.value!r} but "
             f"records empty source_package."
         )
 
 
-def test_phase_8_opt_in_flags_pair_with_provenance_metadata(
-    uq_registry: UQRegistry,
-) -> None:
+def test_phase_8_opt_in_flags_pair_with_provenance_metadata() -> None:
     """Any surface advertising one of the four Phase 8 capability flags
     MUST also record :attr:`source_package` (the sibling-reuse audit
     relies on this provenance field for the Phase 9 final coverage)."""
@@ -285,8 +231,8 @@ def test_phase_8_opt_in_flags_pair_with_provenance_metadata(
         "supports_active_learning",
         "supports_stochastic_field_input",
     )
-    for name in uq_registry.list_names():
-        cap = uq_registry.require(name)
+    for name in UQ_CAPABILITIES:
+        cap = require_uq_capability(name)
         if any(getattr(cap, attr) for attr in flag_attrs):
             assert cap.source_package, (
                 f"Capability {name!r} advertises a Phase 8 flag but records empty source_package."

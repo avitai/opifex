@@ -1,9 +1,7 @@
-"""UQ capability declarations for the solver surfaces (Task 7.2).
+"""UQ capability declarations for the solver surfaces.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.solvers.__init__`` which then registers each declaration into the
-singleton :class:`UQRegistry`.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 Two categories:
 

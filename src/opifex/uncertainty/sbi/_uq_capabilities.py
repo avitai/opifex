@@ -1,9 +1,7 @@
-"""UQ capability declarations for the SBI subpackage (Task 8.2).
+"""UQ capability declarations for the SBI subpackage.
 
-Static, module-level constants — no import-time mutable side effects.
-The :data:`SBI_CAPABILITIES` table is consumed by the SBI subpackage's
-``__init__`` to seed the singleton :class:`UQRegistry` and by capability
-introspection tests.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 Each of the three estimator surfaces (NPE / NLE / NRE) is an
 inverse-problem-capable surface, so the plan's exit criterion mandates:

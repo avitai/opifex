@@ -5,19 +5,11 @@ against a tuned classical baseline on held-out tasks. The benchmark reports
 measured point summaries (mean learning curves, per-task speedups, the median
 speedup and the fraction of tasks that reach the target loss). Neither the
 engine nor the learned optimisers produce a predictive distribution, an interval
-or a posterior, so both are declared ``UNSUPPORTED``. Registration is explicit:
-importing the package registers nothing.
+or a posterior, so both are declared ``UNSUPPORTED``. The table is collected
+by :mod:`opifex.capabilities`; importing the package registers nothing.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from opifex.core.capabilities import DefaultStrategy, UQCapability
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.registry import UQRegistry
 
 
 _L2O_ENGINE_CAPABILITY = UQCapability(
@@ -48,17 +40,4 @@ L2O_CAPABILITIES: dict[str, UQCapability] = {
 }
 
 
-def register_l2o_capabilities(registry: UQRegistry) -> None:
-    """Register the learn-to-optimize capabilities in ``registry``.
-
-    Names already present are kept, so repeated calls are safe.
-
-    Args:
-        registry: Target registry, usually the shared :class:`UQRegistry` singleton.
-    """
-    for name, capability in L2O_CAPABILITIES.items():
-        if name not in registry:
-            registry.register(name, capability)
-
-
-__all__ = ["L2O_CAPABILITIES", "register_l2o_capabilities"]
+__all__ = ["L2O_CAPABILITIES"]

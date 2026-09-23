@@ -5,7 +5,7 @@ backend records physics-informed metadata, domain metrics records and Orbax mode
 checkpoints in an MLflow run through substrax's tracking and checkpoint layers.
 """
 
-from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES, register_mlops_capabilities
+from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
 from opifex.mlops.backends import MLflowBackend
 from opifex.mlops.experiment import (
     Experiment,
@@ -36,5 +36,4 @@ __all__ = [
     "PhysicsDomain",
     "PhysicsMetadata",
     "QuantumMetrics",
-    "register_mlops_capabilities",
 ]

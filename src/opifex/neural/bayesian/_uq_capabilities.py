@@ -1,11 +1,8 @@
-"""UQ capability declarations for the Bayesian neural model family (Task 7.2).
+"""UQ capability declarations for the Bayesian neural model family.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.neural.bayesian.__init__`` so the two concrete neural surfaces
-(``ProbabilisticPINN`` and ``MultiFidelityPINN``) get a capability
-declaration that lands in the singleton :class:`UQRegistry` at first
-import.
+Static, module-level constants for ``ProbabilisticPINN`` and ``MultiFidelityPINN``,
+collected into :data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no
+global state.
 
 * ``ProbabilisticPINN`` — native Bayesian PINN (``BayesianLinear`` /
   ``BayesianSpectralConvolution`` layers + variational ELBO).

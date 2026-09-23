@@ -18,14 +18,11 @@ Public surface:
   ``LearnableSGD`` — coordinatewise meta-learned update rules.
 - :func:`~opifex.optimization.l2o.meta_train.meta_train` — PES meta-training.
 - baselines/benchmark helpers and the high-level :class:`L2OEngine` orchestrator.
-- ``L2O_CAPABILITIES`` / :func:`register_l2o_capabilities` — uncertainty-capability
-  declarations for the engine and the learned optimisers, registered explicitly.
+- ``L2O_CAPABILITIES`` — uncertainty-capability declarations for the engine and the
+  learned optimisers, collected into :data:`opifex.capabilities.UQ_CAPABILITIES`.
 """
 
-from opifex.optimization.l2o._uq_capabilities import (
-    L2O_CAPABILITIES,
-    register_l2o_capabilities,
-)
+from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES
 from opifex.optimization.l2o.baselines import (
     loss_curve,
     optimistix_minimise,
@@ -78,7 +75,6 @@ __all__ = [
     "meta_train",
     "optimistix_minimise",
     "pes_gradient_step",
-    "register_l2o_capabilities",
     "reptile_meta_train",
     "single_task_to_family",
     "speedup_at_target",

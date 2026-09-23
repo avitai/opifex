@@ -28,44 +28,14 @@ from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.neural.operators import (
     get_operator_capability,
     list_operators,
-    OPERATOR_CAPABILITY_REGISTRY,
+    OPERATOR_CAPABILITIES,
     OPERATOR_REGISTRY,
 )
-from opifex.neural.operators._uq_capabilities import _OPERATOR_CAPABILITIES
-from opifex.uncertainty.registry import UQRegistry as _UQRegistry
-
-
-@pytest.fixture(autouse=True)
-def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
-    """Re-seed the singleton ``UQRegistry`` with the Task 7.1 entries.
-
-    The registry is a process-global singleton; other suites'
-    ``_reset_registry`` autouse fixtures wipe it between tests. This
-    fixture restores the operator declarations before every test in
-    this module so the suite stays order-independent. Idempotent — only
-    registers names not already present.
-    """
-    registry = _UQRegistry()
-    for name, capability in _OPERATOR_CAPABILITIES.items():
-        if name not in registry:
-            registry.register(name, capability)
 
 
 def test_every_operator_has_exactly_one_capability_declaration() -> None:
-    for name in OPERATOR_REGISTRY:
-        assert name in OPERATOR_CAPABILITY_REGISTRY, (
-            f"Operator {name!r} missing UQCapability declaration."
-        )
-    # No orphan operator-named capabilities. The shared singleton
-    # :class:`UQRegistry` also carries Task 7.2 model/solver/subpackage
-    # declarations under namespaced keys (``model:`` / ``solver:`` /
-    # ``subpackage:`` / ``backend:`` / ``adapter:`` / ``conformal:`` /
-    # ``calibration:``); the operator-coverage invariant filters those
-    # by checking bare operator-registry names only.
-    registered_operator_names = {
-        name for name in OPERATOR_CAPABILITY_REGISTRY.list_names() if ":" not in name
-    }
-    assert registered_operator_names == set(OPERATOR_REGISTRY)
+    """Every registered operator is declared, and nothing else is."""
+    assert set(OPERATOR_CAPABILITIES) == set(OPERATOR_REGISTRY)
 
 
 def test_uqno_declares_native_bayesian_function_space_capability() -> None:

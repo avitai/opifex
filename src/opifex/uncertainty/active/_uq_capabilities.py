@@ -1,12 +1,7 @@
-"""UQ capability declarations for the active-learning subpackage (Task 8.3).
+"""UQ capability declarations for the active-learning subpackage.
 
-Static, module-level constants — no import-time mutable side effects.
-The :data:`ACTIVE_CAPABILITIES` table is consumed by the active
-subpackage's ``__init__`` to seed the singleton :class:`UQRegistry`.
-
-Plan reference: ``08-phase-pac-bayes-sbi-active-stochastic-fields.md``
-lines 755-790 — Task 8.5 flips the per-subsystem capability flag now
-that the BALD / EI / EIG / batch-acquisition kernels have landed.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 Three registered surfaces:
 

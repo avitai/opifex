@@ -31,7 +31,6 @@ References:
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.sbi._uq_capabilities import SBI_CAPABILITIES
 from opifex.uncertainty.sbi.diagnostics import (
     expected_posterior_contraction,
@@ -57,16 +56,8 @@ from opifex.uncertainty.sbi.simulators import (
 )
 
 
-# Idempotent capability registration (Rule 13 — no mutable side effects
-# beyond constants + idempotent registry seeding). The :class:`UQRegistry`
-# is a singleton; guard against double-registration on repeat imports.
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in SBI_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
-
-
 __all__ = [
+    "SBI_CAPABILITIES",
     "NLEState",
     "NPEState",
     "NREState",

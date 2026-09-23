@@ -3,8 +3,8 @@
 The plan exit criteria are:
 
 1. Every expected name (model / solver / aggregation / subpackage /
-   adapter / backend) is registered in the singleton
-   :class:`UQRegistry` with the declared flags.
+   adapter / backend) is declared in the capability catalogue
+   :data:`opifex.capabilities.UQ_CAPABILITIES` with the declared flags.
 2. Subpackage entries (linalg / quadrature / statespace / curvature)
    carry ``native_jax_kernel=True`` and the plan-mandated
    :class:`DefaultStrategy` value.
@@ -37,9 +37,10 @@ from __future__ import annotations
 
 import pytest
 
+from opifex.capabilities import require_uq_capability, UQ_CAPABILITIES
 from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.neural.bayesian._uq_capabilities import BAYESIAN_MODEL_CAPABILITIES
-from opifex.neural.operators._uq_capabilities import _OPERATOR_CAPABILITIES
+from opifex.neural.operators._uq_capabilities import OPERATOR_CAPABILITIES
 from opifex.solvers._uq_capabilities import SOLVER_CAPABILITIES
 from opifex.uncertainty.adapters._uq_capabilities import ADAPTER_CAPABILITIES
 from opifex.uncertainty.curvature._uq_capabilities import CURVATURE_CAPABILITIES
@@ -48,18 +49,12 @@ from opifex.uncertainty.inference_backends._uq_capabilities import (
 )
 from opifex.uncertainty.linalg._uq_capabilities import LINALG_CAPABILITIES
 from opifex.uncertainty.quadrature._uq_capabilities import QUADRATURE_CAPABILITIES
-from opifex.uncertainty.registry import UQRegistry
 from opifex.uncertainty.statespace._uq_capabilities import STATESPACE_CAPABILITIES
 
 
-# Other test modules (``test_registry.py`` and the capability-declarations
-# integration test) use an ``autouse`` :meth:`UQRegistry.reset` fixture to
-# isolate their own state. That fixture wipes every registration this file
-# depends on, so we re-seed the singleton here before each test rather than
-# relying on import-time side effects (Rule 13 — no mutable side effects
-# beyond constants + idempotent registration).
+# The tables this file covers; each must reach the catalogue unchanged.
 _ALL_TASK_7_X_CAPABILITIES: dict[str, UQCapability] = {
-    **_OPERATOR_CAPABILITIES,
+    **OPERATOR_CAPABILITIES,
     **BAYESIAN_MODEL_CAPABILITIES,
     **SOLVER_CAPABILITIES,
     **ADAPTER_CAPABILITIES,
@@ -69,19 +64,6 @@ _ALL_TASK_7_X_CAPABILITIES: dict[str, UQCapability] = {
     **QUADRATURE_CAPABILITIES,
     **STATESPACE_CAPABILITIES,
 }
-
-
-@pytest.fixture(autouse=True)
-def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
-    """Re-seed the singleton ``UQRegistry`` with every Task 7.1 + 7.2 entry.
-
-    Idempotent — registers only names not already present so consecutive
-    fixture invocations are safe.
-    """
-    registry = UQRegistry()
-    for name, capability in _ALL_TASK_7_X_CAPABILITIES.items():
-        if name not in registry:
-            registry.register(name, capability)
 
 
 # ---------------------------------------------------------------------------
@@ -205,15 +187,11 @@ _REGISTRY_EXPECTED: frozenset[str] = _TASK_7_1_OPERATOR_NAMES | _TASK_7_2_EXPECT
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def uq_registry() -> UQRegistry:
-    """Return the shared singleton ``UQRegistry`` after subpackage imports."""
-    return UQRegistry()
-
-
 @pytest.mark.parametrize("name", sorted(_TASK_7_2_EXPECTED))
-def test_task_7_2_capability_name_is_registered(name: str, uq_registry: UQRegistry) -> None:
-    assert name in uq_registry, f"Task 7.2 expected name {name!r} missing from UQRegistry."
+def test_task_7_2_capability_name_is_registered(name: str) -> None:
+    assert name in UQ_CAPABILITIES, (
+        f"Task 7.2 expected name {name!r} missing from the capability catalogue."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -221,16 +199,16 @@ def test_task_7_2_capability_name_is_registered(name: str, uq_registry: UQRegist
 # ---------------------------------------------------------------------------
 
 
-def test_probabilistic_pinn_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("model:ProbabilisticPINN")
+def test_probabilistic_pinn_capability_flags() -> None:
+    cap = require_uq_capability("model:ProbabilisticPINN")
     assert cap.native_bayesian is True
     assert cap.supports_calibration is True
     assert cap.default_strategy is DefaultStrategy.VARIATIONAL
     assert cap.native_nnx_module is True
 
 
-def test_multi_fidelity_pinn_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("model:MultiFidelityPINN")
+def test_multi_fidelity_pinn_capability_flags() -> None:
+    cap = require_uq_capability("model:MultiFidelityPINN")
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_nnx_module is True
     assert cap.supports_ensemble is True
@@ -238,8 +216,8 @@ def test_multi_fidelity_pinn_capability_flags(uq_registry: UQRegistry) -> None:
     assert cap.supports_calibration is True
 
 
-def test_deterministic_baseline_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("model:deterministic_baseline")
+def test_deterministic_baseline_capability_flags() -> None:
+    cap = require_uq_capability("model:deterministic_baseline")
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_nnx_module is True
     assert cap.supports_ensemble is True
@@ -254,9 +232,9 @@ def test_deterministic_baseline_capability_flags(uq_registry: UQRegistry) -> Non
         "solver:NeuralOperatorSolver",
     ],
 )
-def test_solver_entry_point_capability_flags(name: str, uq_registry: UQRegistry) -> None:
+def test_solver_entry_point_capability_flags(name: str) -> None:
     """Each solver entry point inherits the three-adapter baseline."""
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_nnx_module is True
     assert cap.supports_ensemble is True
@@ -264,13 +242,13 @@ def test_solver_entry_point_capability_flags(name: str, uq_registry: UQRegistry)
     assert cap.supports_calibration is True
 
 
-def test_additive_hybrid_is_a_jax_function_not_a_module(uq_registry: UQRegistry) -> None:
+def test_additive_hybrid_is_a_jax_function_not_a_module() -> None:
     """``additive_hybrid`` composes two solvers into a function over arrays.
 
     It owns no parameters, so it is a JAX kernel rather than an NNX module; its UQ is
     supplied through the adapters of the neural solver it combines.
     """
-    cap = uq_registry.require("solver:additive_hybrid")
+    cap = require_uq_capability("solver:additive_hybrid")
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_jax_kernel is True
     assert cap.native_nnx_module is False
@@ -286,8 +264,8 @@ def test_additive_hybrid_is_a_jax_function_not_a_module(uq_registry: UQRegistry)
         "solver:summarize_stacked_sample_solution",
     ],
 )
-def test_solver_aggregation_utility_capability_flags(name: str, uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require(name)
+def test_solver_aggregation_utility_capability_flags(name: str) -> None:
+    cap = require_uq_capability(name)
     assert cap.supports_solver_uncertainty is True
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.PROBABILISTIC_NUMERICS
@@ -299,22 +277,22 @@ def test_solver_aggregation_utility_capability_flags(name: str, uq_registry: UQR
 # ---------------------------------------------------------------------------
 
 
-def test_linalg_subpackage_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("subpackage:linalg")
+def test_linalg_subpackage_capability_flags() -> None:
+    cap = require_uq_capability("subpackage:linalg")
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.RANDOMIZED_LINALG
     assert cap.source_package == "matfree+traceax"
 
 
-def test_quadrature_subpackage_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("subpackage:quadrature")
+def test_quadrature_subpackage_capability_flags() -> None:
+    cap = require_uq_capability("subpackage:quadrature")
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.BAYESIAN_QUADRATURE
     assert cap.source_package == "emukit"
 
 
-def test_statespace_subpackage_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("subpackage:statespace")
+def test_statespace_subpackage_capability_flags() -> None:
+    cap = require_uq_capability("subpackage:statespace")
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.STATE_SPACE_FILTERING
     # Plan-mandated CAKF reference cite.
@@ -322,8 +300,8 @@ def test_statespace_subpackage_capability_flags(uq_registry: UQRegistry) -> None
     assert "arXiv:2306.07879" in cap.notes
 
 
-def test_curvature_subpackage_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("subpackage:curvature")
+def test_curvature_subpackage_capability_flags() -> None:
+    cap = require_uq_capability("subpackage:curvature")
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.LAPLACE
     assert cap.source_package == "traceax+matfree"
@@ -338,8 +316,8 @@ def test_curvature_subpackage_capability_flags(uq_registry: UQRegistry) -> None:
     "name",
     ["backend:pathfinder", "backend:svgd", "backend:advi"],
 )
-def test_inference_backend_capability_flags(name: str, uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require(name)
+def test_inference_backend_capability_flags(name: str) -> None:
+    cap = require_uq_capability(name)
     assert cap.native_jax_kernel is True
     assert cap.default_strategy is DefaultStrategy.VARIATIONAL
     assert cap.source_package == "opifex"
@@ -360,10 +338,8 @@ def test_inference_backend_capability_flags(name: str, uq_registry: UQRegistry) 
         ("adapter:KalmanJaxAdapterSpec", "kalman-jax"),
     ],
 )
-def test_gp_adapter_spec_capability_source_package(
-    name: str, expected_source_package: str, uq_registry: UQRegistry
-) -> None:
-    cap = uq_registry.require(name)
+def test_gp_adapter_spec_capability_source_package(name: str, expected_source_package: str) -> None:
+    cap = require_uq_capability(name)
     assert cap.source_package == expected_source_package
     # Plan §7.2: GP adapter specs declare UNSUPPORTED until a backend lands.
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
@@ -385,21 +361,21 @@ def test_gp_adapter_spec_capability_source_package(
         "conformal:RiskControllerState",
     ],
 )
-def test_conformal_calibrator_capability_flags(name: str, uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require(name)
+def test_conformal_calibrator_capability_flags(name: str) -> None:
+    cap = require_uq_capability(name)
     assert cap.supports_conformal is True
     assert cap.default_strategy is DefaultStrategy.CONFORMAL
 
 
-def test_temperature_scaling_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("calibration:TemperatureScaling")
+def test_temperature_scaling_capability_flags() -> None:
+    cap = require_uq_capability("calibration:TemperatureScaling")
     assert cap.supports_calibration is True
     assert cap.default_strategy is DefaultStrategy.CALIBRATION
 
 
-def test_risk_controller_uses_calibrax_source(uq_registry: UQRegistry) -> None:
+def test_risk_controller_uses_calibrax_source() -> None:
     """RiskController reuses calibrax.statistics.analyzer for the inner statistics."""
-    cap = uq_registry.require("conformal:RiskControllerState")
+    cap = require_uq_capability("conformal:RiskControllerState")
     assert cap.source_package == "calibrax"
 
 
@@ -425,7 +401,7 @@ _TASK_7_5_PREFIXES: tuple[str, ...] = (
 
 def test_task_7_2_tables_do_not_use_task_7_5_prefixes() -> None:
     """Phase 7 Task 7.2 scope excludes scientific-domain prefixes (Task 7.5)."""
-    task_7_2_names = frozenset(_ALL_TASK_7_X_CAPABILITIES) - frozenset(_OPERATOR_CAPABILITIES)
+    task_7_2_names = frozenset(_ALL_TASK_7_X_CAPABILITIES) - frozenset(OPERATOR_CAPABILITIES)
     for name in task_7_2_names:
         for forbidden in _TASK_7_5_PREFIXES:
             assert not name.startswith(forbidden), (
@@ -434,13 +410,13 @@ def test_task_7_2_tables_do_not_use_task_7_5_prefixes() -> None:
             )
 
 
-def test_task_7_1_plus_7_2_names_are_subset_of_registry(uq_registry: UQRegistry) -> None:
+def test_task_7_1_plus_7_2_names_are_subset_of_registry() -> None:
     """Every Task 7.1 + 7.2 expected name appears in the shared singleton.
 
     Open-world assertion — the registry MAY hold additional Task 7.5
     entries (validated by ``test_scientific_domain_capabilities.py``)
     but the Task 7.1 + 7.2 union must always be present.
     """
-    registered = frozenset(uq_registry.list_names())
+    registered = frozenset(list(UQ_CAPABILITIES))
     missing = _REGISTRY_EXPECTED - registered
     assert not missing, f"Missing expected capability names: {sorted(missing)!r}."

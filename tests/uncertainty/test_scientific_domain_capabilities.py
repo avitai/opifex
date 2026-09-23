@@ -4,8 +4,8 @@ Plan exit criteria (``07-phase-registry-docs-examples.md`` lines 572-680):
 
 1. Every expected scientific-domain name (equation discovery, quantum
    chemistry, L2O, training trainers, data assimilation, mlops,
-   monitoring/reporting) is registered in the singleton
-   :class:`UQRegistry`.
+   monitoring/reporting) is declared in the capability catalogue
+   :data:`opifex.capabilities.UQ_CAPABILITIES`.
 3. ``trainer:UncertaintyGuidedTrainer`` and
    ``trainer:MultiFidelityUncertaintyTrainer`` carry
    ``default_strategy=DefaultStrategy.UNSUPPORTED`` with mocked-
@@ -31,16 +31,16 @@ from __future__ import annotations
 
 import pytest
 
+from opifex.capabilities import require_uq_capability, UQ_CAPABILITIES
 from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.discovery._uq_capabilities import DISCOVERY_CAPABILITIES
 from opifex.discovery.sindy._uq_capabilities import SINDY_CAPABILITIES
-from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES, register_mlops_capabilities
+from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
-from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES, register_l2o_capabilities
+from opifex.optimization.l2o import L2O_CAPABILITIES
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.assimilation._uq_capabilities import ASSIMILATION_CAPABILITIES
 from opifex.uncertainty.monitoring._uq_capabilities import MONITORING_CAPABILITIES
-from opifex.uncertainty.registry import UQRegistry
 
 
 _ALL_TASK_7_5_CAPABILITIES: dict[str, UQCapability] = {
@@ -53,24 +53,6 @@ _ALL_TASK_7_5_CAPABILITIES: dict[str, UQCapability] = {
     **MLOPS_CAPABILITIES,
     **MONITORING_CAPABILITIES,
 }
-
-
-@pytest.fixture(autouse=True)
-def _seed_registry() -> None:  # pyright: ignore[reportUnusedFunction]
-    """Re-seed the shared singleton ``UQRegistry`` with the Task 7.5 entries.
-
-    Idempotent — registers only names not already present so consecutive
-    fixture invocations are safe. Sibling tests (notably
-    ``test_registry.py``) use an ``autouse`` :meth:`UQRegistry.reset`
-    fixture that wipes every registration; we re-seed here so this
-    suite is order-independent.
-    """
-    registry = UQRegistry()
-    register_mlops_capabilities(registry)
-    register_l2o_capabilities(registry)
-    for name, capability in _ALL_TASK_7_5_CAPABILITIES.items():
-        if name not in registry:
-            registry.register(name, capability)
 
 
 # ---------------------------------------------------------------------------
@@ -157,15 +139,11 @@ _TASK_7_5_EXPECTED: frozenset[str] = (
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def uq_registry() -> UQRegistry:
-    """Return the shared singleton ``UQRegistry`` after subpackage imports."""
-    return UQRegistry()
-
-
 @pytest.mark.parametrize("name", sorted(_TASK_7_5_EXPECTED))
-def test_task_7_5_capability_name_is_registered(name: str, uq_registry: UQRegistry) -> None:
-    assert name in uq_registry, f"Task 7.5 expected name {name!r} missing from UQRegistry."
+def test_task_7_5_capability_name_is_registered(name: str) -> None:
+    assert name in UQ_CAPABILITIES, (
+        f"Task 7.5 expected name {name!r} missing from the capability catalogue."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -173,8 +151,8 @@ def test_task_7_5_capability_name_is_registered(name: str, uq_registry: UQRegist
 # ---------------------------------------------------------------------------
 
 
-def test_symbolic_regressor_capability_flags(uq_registry: UQRegistry) -> None:
-    cap = uq_registry.require("discovery:SymbolicRegressor")
+def test_symbolic_regressor_capability_flags() -> None:
+    cap = require_uq_capability("discovery:SymbolicRegressor")
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
     assert cap.source_package == "pysr"
 
@@ -187,18 +165,18 @@ def test_symbolic_regressor_capability_flags(uq_registry: UQRegistry) -> None:
         "discovery:distill_ude_residual",
     ],
 )
-def test_sindy_family_deterministic_baseline(name: str, uq_registry: UQRegistry) -> None:
+def test_sindy_family_deterministic_baseline(name: str) -> None:
     """SINDy / WeakSINDy / UDE distillation are deterministic + adapter-mediated."""
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_jax_kernel is True
     assert cap.supports_conformal is True
     assert cap.supports_calibration is True
 
 
-def test_ensemble_sindy_native_ensemble_strategy(uq_registry: UQRegistry) -> None:
+def test_ensemble_sindy_native_ensemble_strategy() -> None:
     """EnsembleSINDy advertises native bootstrap-aggregated ensemble UQ."""
-    cap = uq_registry.require("discovery:EnsembleSINDy")
+    cap = require_uq_capability("discovery:EnsembleSINDy")
     assert cap.default_strategy is DefaultStrategy.ENSEMBLE
     assert cap.supports_ensemble is True
     assert cap.supports_calibration is True
@@ -214,11 +192,9 @@ def test_ensemble_sindy_native_ensemble_strategy(uq_registry: UQRegistry) -> Non
     "name",
     sorted(_TASK_7_5_QUANTUM_NAMES),
 )
-def test_quantum_surface_declares_three_adapter_strategies(
-    name: str, uq_registry: UQRegistry
-) -> None:
+def test_quantum_surface_declares_three_adapter_strategies(name: str) -> None:
     """Each quantum chemistry surface inherits the three-adapter baseline."""
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_nnx_module is True
     assert cap.supports_ensemble is True
@@ -232,9 +208,9 @@ def test_quantum_surface_declares_three_adapter_strategies(
 
 
 @pytest.mark.parametrize("name", sorted(_L2O_NAMES))
-def test_l2o_surface_declares_no_uncertainty_strategy(name: str, uq_registry: UQRegistry) -> None:
+def test_l2o_surface_declares_no_uncertainty_strategy(name: str) -> None:
     """Learned optimisers report measured point summaries, not predictive distributions."""
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
     assert cap.native_bayesian is False
     assert cap.native_distributional is False
@@ -251,7 +227,7 @@ def test_l2o_surface_declares_no_uncertainty_strategy(name: str, uq_registry: UQ
     "name",
     sorted(_TASK_7_5_TRAINER_NAMES),
 )
-def test_trainer_capability_records_phase_8_provenance(name: str, uq_registry: UQRegistry) -> None:
+def test_trainer_capability_records_phase_8_provenance(name: str) -> None:
     """All three trainer declarations record their Phase 8 provenance.
 
     The Phase 7 UNSUPPORTED placeholders flipped in Phase 8 Task 8.5
@@ -260,24 +236,20 @@ def test_trainer_capability_records_phase_8_provenance(name: str, uq_registry: U
     :class:`ActiveUncertaintyLearner` entry. The notes string MUST still
     mention the upgrade path so the audit can trace it.
     """
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.default_strategy is not DefaultStrategy.UNSUPPORTED
     assert "Phase 8 Task 8.3" in cap.notes
     assert cap.source_package == "opifex"
 
 
-def test_uncertainty_guided_trainer_active_learning_flag_on(
-    uq_registry: UQRegistry,
-) -> None:
+def test_uncertainty_guided_trainer_active_learning_flag_on() -> None:
     """Phase 8 Task 8.5 flipped supports_active_learning ``False → True``."""
-    cap = uq_registry.require("trainer:UncertaintyGuidedTrainer")
+    cap = require_uq_capability("trainer:UncertaintyGuidedTrainer")
     assert cap.supports_active_learning is True
     assert cap.default_strategy is DefaultStrategy.ACTIVE_LEARNING
 
 
-def test_multi_fidelity_uncertainty_trainer_strategy_is_ensemble(
-    uq_registry: UQRegistry,
-) -> None:
+def test_multi_fidelity_uncertainty_trainer_strategy_is_ensemble() -> None:
     """Phase 8 Task 8.5 flipped the strategy to ENSEMBLE.
 
     Task 8.3 rewrote the trainer to invoke both high/low fidelity
@@ -285,16 +257,14 @@ def test_multi_fidelity_uncertainty_trainer_strategy_is_ensemble(
     their ensemble decompositions with Kennedy-O'Hagan additive linear
     weighting — the strategy bucket reflects that flavour.
     """
-    cap = uq_registry.require("trainer:MultiFidelityUncertaintyTrainer")
+    cap = require_uq_capability("trainer:MultiFidelityUncertaintyTrainer")
     assert cap.default_strategy is DefaultStrategy.ENSEMBLE
     assert cap.supports_ensemble is True
 
 
-def test_active_uncertainty_learner_default_strategy(
-    uq_registry: UQRegistry,
-) -> None:
+def test_active_uncertainty_learner_default_strategy() -> None:
     """Task 8.5 added the third trainer entry — ACTIVE_LEARNING default."""
-    cap = uq_registry.require("trainer:ActiveUncertaintyLearner")
+    cap = require_uq_capability("trainer:ActiveUncertaintyLearner")
     assert cap.supports_active_learning is True
     assert cap.default_strategy is DefaultStrategy.ACTIVE_LEARNING
 
@@ -308,17 +278,15 @@ def test_active_uncertainty_learner_default_strategy(
     "name",
     sorted(_TASK_7_5_ASSIMILATION_NAMES),
 )
-def test_assimilation_capability_state_space_filtering(name: str, uq_registry: UQRegistry) -> None:
+def test_assimilation_capability_state_space_filtering(name: str) -> None:
     """Task 6.7 assimilation surfaces inherit the STATE_SPACE_FILTERING strategy."""
-    cap = uq_registry.require(name)
+    cap = require_uq_capability(name)
     assert cap.default_strategy is DefaultStrategy.STATE_SPACE_FILTERING
     assert cap.native_jax_kernel is True
     assert cap.source_package == "opifex"
 
 
-def test_assimilation_update_loops_propagate_solver_uncertainty(
-    uq_registry: UQRegistry,
-) -> None:
+def test_assimilation_update_loops_propagate_solver_uncertainty() -> None:
     """The predict / update / sequential_update loops carry solver-uncertainty.
 
     The pure ``AssimilationState`` container is metadata only and does
@@ -330,7 +298,7 @@ def test_assimilation_update_loops_propagate_solver_uncertainty(
         "assimilation:update",
         "assimilation:sequential_update",
     ):
-        cap = uq_registry.require(name)
+        cap = require_uq_capability(name)
         assert cap.supports_solver_uncertainty is True, name
 
 
@@ -339,9 +307,9 @@ def test_assimilation_update_loops_propagate_solver_uncertainty(
 # ---------------------------------------------------------------------------
 
 
-def test_mlops_experiment_tracker_unsupported(uq_registry: UQRegistry) -> None:
+def test_mlops_experiment_tracker_unsupported() -> None:
     """``opifex.mlops`` is a metric-publication surface — UNSUPPORTED placeholder."""
-    cap = uq_registry.require("mlops:ExperimentTracker")
+    cap = require_uq_capability("mlops:ExperimentTracker")
     assert cap.default_strategy is DefaultStrategy.UNSUPPORTED
     assert cap.source_package == "opifex"
     # Plan-mandated breadcrumb tying the placeholder to the underlying
@@ -354,17 +322,17 @@ def test_mlops_experiment_tracker_unsupported(uq_registry: UQRegistry) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_reliability_report_calibration_strategy(uq_registry: UQRegistry) -> None:
+def test_build_reliability_report_calibration_strategy() -> None:
     """The Phase 5 reliability-report builder is a pure-function CALIBRATION surface."""
-    cap = uq_registry.require("monitoring:build_reliability_report")
+    cap = require_uq_capability("monitoring:build_reliability_report")
     assert cap.default_strategy is DefaultStrategy.CALIBRATION
     assert cap.native_jax_kernel is True
     assert cap.supports_calibration is True
 
 
-def test_monitoring_inputs_metadata_only(uq_registry: UQRegistry) -> None:
+def test_monitoring_inputs_metadata_only() -> None:
     """``MonitoringInputs`` is a provenance container; no computation flag."""
-    cap = uq_registry.require("monitoring:MonitoringInputs")
+    cap = require_uq_capability("monitoring:MonitoringInputs")
     assert cap.default_strategy is DefaultStrategy.CALIBRATION
     assert cap.source_package == "opifex"
 
@@ -386,11 +354,9 @@ def test_monitoring_inputs_metadata_only(uq_registry: UQRegistry) -> None:
         ("monitoring:", _TASK_7_5_MONITORING_NAMES),
     ],
 )
-def test_task_7_5_prefix_membership(
-    prefix: str, expected: frozenset[str], uq_registry: UQRegistry
-) -> None:
+def test_task_7_5_prefix_membership(prefix: str, expected: frozenset[str]) -> None:
     """Every Task 7.5 prefix is populated by exactly the expected name set."""
-    observed = {name for name in uq_registry.list_names() if name.startswith(prefix)}
+    observed = {name for name in UQ_CAPABILITIES if name.startswith(prefix)}
     assert observed == expected, (
         f"Task 7.5 prefix {prefix!r} expected {sorted(expected)!r}; got {sorted(observed)!r}."
     )

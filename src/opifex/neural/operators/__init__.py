@@ -36,7 +36,7 @@ from opifex.core.capabilities import UQCapability
 # claiming native Bayesian support; consumed by registry / docs / future
 # concrete wrappers.
 from opifex.neural.operators._uq_capabilities import (
-    _OPERATOR_CAPABILITIES,
+    OPERATOR_CAPABILITIES,
     OPERATOR_CAPABILITY_CATEGORIES,
 )
 from opifex.neural.operators.deeponet.adaptive import AdaptiveDeepONet
@@ -164,7 +164,6 @@ from opifex.uncertainty.adapters.operators import (
     FNOMCDropoutAdapterSpec,
     OperatorAdapterSpec,
 )
-from opifex.uncertainty.registry import UQRegistry
 
 
 # =============================================================================
@@ -200,24 +199,26 @@ OPERATOR_REGISTRY: dict[str, type] = {
 }
 
 
-# UQ capability lookup — Task 7.1. Build the singleton registry once at
-# module import after the operator registry is fully populated. Lookup
-# is by operator-registry key (e.g. ``"FNO"``); :meth:`UQRegistry.require`
-# raises an actionable :class:`KeyError` on unknown names.
-OPERATOR_CAPABILITY_REGISTRY: UQRegistry = UQRegistry()
-for _name, _capability in _OPERATOR_CAPABILITIES.items():
-    if _name not in OPERATOR_CAPABILITY_REGISTRY:
-        OPERATOR_CAPABILITY_REGISTRY.register(_name, _capability)
-
-
 def get_operator_capability(operator_type: str) -> UQCapability:
-    """Return the :class:`UQCapability` for ``operator_type``.
+    """Return the :class:`UQCapability` declared for ``operator_type``.
+
+    Args:
+        operator_type: An operator name, such as ``"FNO"``.
+
+    Returns:
+        Its declaration from :data:`OPERATOR_CAPABILITIES`.
 
     Raises:
-        KeyError: If ``operator_type`` isn't in
-            :data:`OPERATOR_CAPABILITY_REGISTRY`.
+        KeyError: If no capability is declared for ``operator_type``; the message lists
+            the operators that have one.
     """
-    return OPERATOR_CAPABILITY_REGISTRY.require(operator_type)
+    if operator_type not in OPERATOR_CAPABILITIES:
+        msg = (
+            f"no capability is declared for operator {operator_type!r}; "
+            f"declared: {sorted(OPERATOR_CAPABILITIES)!r}"
+        )
+        raise KeyError(msg)
+    return OPERATOR_CAPABILITIES[operator_type]
 
 
 # Application-specific operator recommendations
@@ -457,6 +458,7 @@ def get_operator_info(operator_type: str) -> dict[str, Any]:
 
 __all__ = [
     "APPLICATION_RECOMMENDATIONS",
+    "OPERATOR_CAPABILITIES",
     "OPERATOR_REGISTRY",
     # Specialized components
     "AdaptiveDeepONet",

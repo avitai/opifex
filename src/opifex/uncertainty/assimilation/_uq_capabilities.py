@@ -1,17 +1,10 @@
-"""UQ capability declarations for the data-assimilation / digital-twin surfaces (Task 7.5).
+"""UQ capability declarations for the data-assimilation and digital-twin surfaces.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.uncertainty.assimilation.__init__``.
-
-Task 6.7 built ``opifex.uncertainty.assimilation`` as a thin
-orchestration layer over the Task 6.3 state-space math (CAKF/CAKS and
-square-root Kalman primitives). Capability declarations therefore set
-``default_strategy=DefaultStrategy.STATE_SPACE_FILTERING`` and
+Static, module-level constants, collected into :data:`opifex.capabilities.UQ_CAPABILITIES`;
+importing this module changes no global state. ``opifex.uncertainty.assimilation`` is a thin
+orchestration layer over the state-space primitives (CAKF/CAKS and square-root Kalman), so
+the declarations set ``default_strategy=DefaultStrategy.STATE_SPACE_FILTERING`` and
 ``native_jax_kernel=True``.
-
-Plan reference: ``07-phase-registry-docs-examples.md`` lines 659-664
-(state-space-filtering exit criterion).
 """
 
 from __future__ import annotations

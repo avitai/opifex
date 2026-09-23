@@ -25,15 +25,6 @@ from typing import Any
 from opifex.neural.quantum._uq_capabilities import QUANTUM_CAPABILITIES
 from opifex.neural.quantum.dft import Functional, SCFResult, SCFSolver, SolverMode
 from opifex.neural.quantum.neural_xc import NeuralXCFunctional
-from opifex.uncertainty.registry import UQRegistry
-
-
-# UQ capability registration — Task 7.5. Guarded against duplicate
-# registration on repeat imports (Rule 13).
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in QUANTUM_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
 
 
 # Heavy DFT names resolved lazily so integral-free subpackages (e.g. ``vmc``)

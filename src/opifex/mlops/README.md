@@ -25,7 +25,7 @@ await experiment.end()
 | `tracker` | `ExperimentTracker`: backend registry and `create_experiment` |
 | `records` | `physics_metadata_params` and `flatten_physics_metrics`, the pure shaping of records into parameters and metrics |
 | `backends` | `MLflowBackend` and the `RunLogger` protocol it records through |
-| `_uq_capabilities` | `register_mlops_capabilities`, the explicit `UQRegistry` registration |
+| `_uq_capabilities` | `MLOPS_CAPABILITIES`, collected into `opifex.capabilities.UQ_CAPABILITIES` |
 
 The MLflow SDK ships in the `mlflow` extra (`uv add "opifex[mlflow]"`); importing
 the package never imports it. The full reference is `docs/api/mlops.md`.

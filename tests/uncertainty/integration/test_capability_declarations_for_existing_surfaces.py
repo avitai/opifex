@@ -3,12 +3,8 @@
 Pins one capability declaration per pre-existing UQ-bearing class and asserts
 the declarations are internally consistent (no contradictory flag pairs).
 Acts as a smoke check that the :class:`UQCapability` schema is rich enough to
-describe every surface the canonical registry will eventually hold.
-
-These are NOT the canonical capability-coverage tests — those live in
-``tests/uncertainty/test_capability_coverage.py`` and use the binding
-``uq_registry`` singleton. Here we use a local registry instance to avoid
-polluting the singleton.
+describe every surface the capability catalogue holds. The coverage of the catalogue
+itself is tested in ``tests/uncertainty/test_capability_coverage.py``.
 """
 
 from __future__ import annotations
@@ -17,13 +13,8 @@ import dataclasses
 
 import pytest
 
+from opifex.capabilities import assemble
 from opifex.core.capabilities import DefaultStrategy, UQCapability
-from opifex.uncertainty.registry import UQRegistry
-
-
-@pytest.fixture(autouse=True)
-def _reset_registry() -> None:  # pyright: ignore[reportUnusedFunction]
-    UQRegistry.reset()
 
 
 def test_uqno_capability_declaration_is_internally_consistent() -> None:
@@ -74,32 +65,26 @@ def test_deterministic_baseline_capability_is_all_false() -> None:
             assert getattr(cap, f.name) is False, f"baseline must have {f.name}=False"
 
 
-def test_capability_declarations_round_trip_through_uq_registry() -> None:
-    """Every declaration above can be registered and looked up by name."""
-    registry = UQRegistry()
-    registry.register(
-        "uqno",
-        UQCapability(
-            native_bayesian=True,
-            native_nnx_module=True,
-            supports_function_space=True,
-            supports_ensemble=True,
-            default_strategy=DefaultStrategy.BAYESIAN,
-            source_package="opifex",
-        ),
+def test_capability_declarations_round_trip_through_the_catalogue() -> None:
+    """Declarations assembled into a catalogue are looked up by name, unchanged."""
+    uqno = UQCapability(
+        native_bayesian=True,
+        native_nnx_module=True,
+        supports_function_space=True,
+        supports_ensemble=True,
+        default_strategy=DefaultStrategy.BAYESIAN,
+        source_package="opifex",
     )
-    registry.register(
-        "mean_field_gaussian",
-        UQCapability(
-            native_bayesian=True,
-            native_nnx_module=True,
-            default_strategy=DefaultStrategy.VARIATIONAL,
-            source_package="opifex",
-        ),
+    mean_field = UQCapability(
+        native_bayesian=True,
+        native_nnx_module=True,
+        default_strategy=DefaultStrategy.VARIATIONAL,
+        source_package="opifex",
     )
-    assert registry.get("uqno").supports_function_space is True
-    assert registry.get("mean_field_gaussian").default_strategy is DefaultStrategy.VARIATIONAL
-    assert set(registry.list_names()) == {"uqno", "mean_field_gaussian"}
+    catalogue = assemble({"uqno": uqno}, {"mean_field_gaussian": mean_field})
+    assert catalogue["uqno"] is uqno
+    assert catalogue["mean_field_gaussian"].default_strategy is DefaultStrategy.VARIATIONAL
+    assert set(catalogue) == {"uqno", "mean_field_gaussian"}
 
 
 def test_capability_contradiction_native_jax_kernel_with_required_graph_adapter() -> None:
