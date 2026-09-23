@@ -133,4 +133,23 @@ def message(status: jax.Array) -> str | list[str]:
     return [_MESSAGES[int(code)] for code in codes.reshape(-1)]
 
 
-__all__ = ["Status", "is_successful", "message"]
+def combine_statuses(first: jax.Array, second: jax.Array) -> jax.Array:
+    """The outcome of two solves taken together: the first unsuccessful one.
+
+    A combined solve succeeds only if both parts did, and when one fails its code is what
+    a caller needs -- so a failing code is kept in preference to a successful one, and the
+    earlier failure wins. Selection is by ``where`` rather than a branch, so the result
+    stays traced and batches under ``vmap``, where a Python ``and`` over flags would sync
+    the device and could not be built inside a transform at all.
+
+    Args:
+        first: Status of the solve whose failure takes precedence.
+        second: Status of the other solve.
+
+    Returns:
+        The combined status.
+    """
+    return jnp.where(is_successful(first), second, first)
+
+
+__all__ = ["Status", "combine_statuses", "is_successful", "message"]
