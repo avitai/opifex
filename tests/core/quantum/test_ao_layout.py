@@ -12,12 +12,17 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from opifex.core.quantum.ao_layout import (
+    ao_permutation,
     atom_orbital_counts,
+    BACK2PYSCF,
     block_validity_mask,
     FULL_ORBITALS,
+    native_ao_count,
     ORBITAL_MASK,
+    PYSCF_DEF2SVP,
 )
 
 
@@ -104,3 +109,140 @@ def test_block_validity_mask_is_jit_safe() -> None:
     jitted = jax.jit(block_validity_mask)
     mask = jitted(jnp.asarray([1, 9]))
     assert mask.shape == (2, 14, 14)
+
+
+# The AO permutations and counts below are the published QH9 conventions (Yu et al. 2023,
+# arXiv:2306.09549), pinned as they were produced before the layout moved to one module.
+_WATER = (8, 1, 1)
+_WATER_QH9_TO_PYSCF = (
+    0,
+    1,
+    2,
+    4,
+    5,
+    3,
+    7,
+    8,
+    6,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    17,
+    18,
+    16,
+    19,
+    20,
+    22,
+    23,
+    21,
+)
+_WATER_BACK2PYSCF = (
+    0,
+    1,
+    2,
+    5,
+    3,
+    4,
+    8,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    18,
+    16,
+    17,
+    19,
+    20,
+    23,
+    21,
+    22,
+)
+_EVERY_ELEMENT = (6, 7, 8, 9, 1)
+
+
+class TestAoPermutation:
+    """One construction serves both reorderings, differing only in the component order."""
+
+    def test_qh9_to_pyscf_def2svp_on_water(self) -> None:
+        indices, signs = ao_permutation(np.asarray(_WATER), PYSCF_DEF2SVP)
+        assert tuple(indices.tolist()) == _WATER_QH9_TO_PYSCF
+        assert set(signs.tolist()) == {1}
+
+    def test_spherical_to_pyscf_internal_on_water(self) -> None:
+        indices, _ = ao_permutation(np.asarray(_WATER), BACK2PYSCF)
+        assert tuple(indices.tolist()) == _WATER_BACK2PYSCF
+
+    @pytest.mark.parametrize("components", ["PYSCF_DEF2SVP", "BACK2PYSCF"])
+    def test_every_element_gives_a_permutation(self, components: str) -> None:
+        order = {"PYSCF_DEF2SVP": PYSCF_DEF2SVP, "BACK2PYSCF": BACK2PYSCF}[components]
+        indices, signs = ao_permutation(np.asarray(_EVERY_ELEMENT), order)
+        assert sorted(indices.tolist()) == list(range(native_ao_count(np.asarray(_EVERY_ELEMENT))))
+        assert indices.dtype == np.int64
+        assert signs.shape == indices.shape
+
+    def test_the_two_orderings_are_inverse_permutations(self) -> None:
+        forward, _ = ao_permutation(np.asarray(_EVERY_ELEMENT), PYSCF_DEF2SVP)
+        back, _ = ao_permutation(np.asarray(_EVERY_ELEMENT), BACK2PYSCF)
+        np.testing.assert_array_equal(forward[back], np.arange(forward.size))
+
+    def test_an_element_outside_the_basis_is_refused(self) -> None:
+        with pytest.raises(KeyError):
+            ao_permutation(np.asarray([16]), PYSCF_DEF2SVP)
+
+
+class TestNativeAoCount:
+    """Five AOs per hydrogen, fourteen per C, N, O or F; nothing else is in the basis."""
+
+    @pytest.mark.parametrize(("atoms", "count"), [((1,), 5), (_WATER, 24), (_EVERY_ELEMENT, 61)])
+    def test_counts(self, atoms: tuple[int, ...], count: int) -> None:
+        assert native_ao_count(np.asarray(atoms)) == count
+
+    def test_it_agrees_with_the_traced_count(self) -> None:
+        atoms = np.asarray(_EVERY_ELEMENT)
+        assert native_ao_count(atoms) == int(jnp.sum(atom_orbital_counts(jnp.asarray(atoms))))
+
+    @pytest.mark.parametrize("atomic_number", [2, 16])
+    def test_an_element_outside_the_basis_is_refused(self, atomic_number: int) -> None:
+        with pytest.raises(KeyError):
+            native_ao_count(np.asarray([atomic_number]))
+
+
+class TestElementsOutsideTheBasis:
+    """An element the layout does not describe populates nothing, traced or not.
+
+    The lookup table has one row per atomic number up to fluorine. A plain gather clamps an
+    out-of-range index to the last row, so sulphur used to read fluorine's fourteen slots,
+    and a negative index wraps to it.
+    """
+
+    @pytest.mark.parametrize("atomic_number", [2, 10, 16, -1])
+    def test_no_orbitals(self, atomic_number: int) -> None:
+        assert int(atom_orbital_counts(jnp.asarray(atomic_number))) == 0
+
+    @pytest.mark.parametrize("atomic_number", [10, 16, -1])
+    def test_an_empty_block_even_beside_a_heavy_atom(self, atomic_number: int) -> None:
+        mask = block_validity_mask(jnp.asarray(atomic_number), jnp.asarray(9))
+        assert not bool(mask.any())
+
+    def test_under_jit_and_vmap(self) -> None:
+        atoms = jnp.asarray([1, 9, 10, 16, -1, 0])
+        expected = [5, 14, 0, 0, 0, 0]
+        np.testing.assert_array_equal(np.asarray(jax.jit(atom_orbital_counts)(atoms)), expected)
+        np.testing.assert_array_equal(np.asarray(jax.vmap(atom_orbital_counts)(atoms)), expected)
+
+
+def test_every_shell_string_fills_its_element_mask() -> None:
+    """The shell composition and the slot mask describe the same element."""
+    sizes = {"s": 1, "p": 3, "d": 5}
+    assert set(PYSCF_DEF2SVP.shells) == set(ORBITAL_MASK)
+    for atomic_number, shells in PYSCF_DEF2SVP.shells.items():
+        assert sum(sizes[shell] for shell in shells) == len(ORBITAL_MASK[atomic_number])

@@ -155,7 +155,6 @@ src/opifex/data/sources/qh9_padded_source.py
     DOC503: Function `create_qh9_dynamic_padded_sources` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: ['FileNotFoundError', 'ValueError']. Raised exceptions in the body: ['ValueError'].
 --------------------
 src/opifex/data/sources/qh9_source.py
-    DOC502: Function `def2svp_decode_indices` has a "Raises" section in the docstring, but there are not "raise" statements in the body
     DOC502: Function `matrix_transform_def2svp` has a "Raises" section in the docstring, but there are not "raise" statements in the body
 --------------------
 src/opifex/data/sources/rmd17_source.py

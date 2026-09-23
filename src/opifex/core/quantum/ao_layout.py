@@ -1,4 +1,3 @@
-# ruff: noqa: UP037
 r"""def2-SVP per-element orbital layout and AO validity masks (QHNet block form).
 
 A heterogeneous-batchable Hamiltonian predictor emits a *fixed* dense block per
@@ -21,11 +20,13 @@ from :data:`ORBITAL_MASK`, so :func:`block_validity_mask` and
 Python tuples).
 """
 
-from __future__ import annotations
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Bool, Int  # noqa: TC002
+from jaxtyping import Array, Bool, Int
+from numpy.typing import NDArray
 
 
 FULL_ORBITALS: int = 14
@@ -42,6 +43,134 @@ ORBITAL_MASK: dict[int, tuple[int, ...]] = {
     9: tuple(range(FULL_ORBITALS)),
 }
 """Atomic number -> valid AO indices into the 14-slot irrep-ordered block."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AoConvention:
+    """How one molecule's def2-SVP AOs are reordered, as four per-element and per-shell tables.
+
+    The structure and the two conventions below are those of the QH9 benchmark (Yu et al.
+    2023, "QH9", arXiv:2306.09549), which stores Hamiltonians in its own AO order.
+
+    Attributes:
+        shells: Atomic number -> its shells, one letter each, in the source order.
+        components: Shell letter -> the order its components take in the target.
+        signs: Shell letter -> the sign applied to each of its components.
+        shell_order: Atomic number -> the order its shells take in the target.
+    """
+
+    shells: Mapping[int, str]
+    components: Mapping[str, tuple[int, ...]]
+    signs: Mapping[str, tuple[int, ...]]
+    shell_order: Mapping[int, tuple[int, ...]]
+
+
+_DEF2SVP_SHELLS: dict[int, str] = {1: "ssp", 6: "sssppd", 7: "sssppd", 8: "sssppd", 9: "sssppd"}
+_UNSIGNED: dict[str, tuple[int, ...]] = {"s": (1,), "p": (1, 1, 1), "d": (1, 1, 1, 1, 1)}
+_SHELLS_IN_PLACE: dict[int, tuple[int, ...]] = {
+    1: (0, 1, 2),
+    6: (0, 1, 2, 3, 4, 5),
+    7: (0, 1, 2, 3, 4, 5),
+    8: (0, 1, 2, 3, 4, 5),
+    9: (0, 1, 2, 3, 4, 5),
+}
+
+PYSCF_DEF2SVP: AoConvention = AoConvention(
+    shells=_DEF2SVP_SHELLS,
+    components={"s": (0,), "p": (1, 2, 0), "d": (0, 1, 2, 3, 4)},
+    signs=_UNSIGNED,
+    shell_order=_SHELLS_IN_PLACE,
+)
+"""QH9's native AO order to PySCF's def2-SVP spherical order: the order opifex stores."""
+
+BACK2PYSCF: AoConvention = AoConvention(
+    shells=_DEF2SVP_SHELLS,
+    components={"s": (0,), "p": (2, 0, 1), "d": (0, 1, 2, 3, 4)},
+    signs=_UNSIGNED,
+    shell_order=_SHELLS_IN_PLACE,
+)
+"""The stored order to PySCF's internal spherical order, as its overlap integrals use.
+
+It inverts :data:`PYSCF_DEF2SVP` shell by shell.
+"""
+
+
+def _outside_the_layout(atomic_number: int, table: Mapping[int, object]) -> str:
+    """Describe an atomic number the layout does not cover.
+
+    Args:
+        atomic_number: The element that was asked for.
+        table: A per-element table of the layout.
+
+    Returns:
+        The message a refusal carries.
+    """
+    return (
+        f"atomic number {atomic_number} is outside the def2-SVP layout, which covers "
+        f"{sorted(table)}"
+    )
+
+
+def ao_permutation(
+    atomic_numbers: Sequence[int] | Int[NDArray[np.integer], " n_atoms"],
+    convention: AoConvention,
+) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
+    r"""Return the AO permutation and signs that reorder one molecule's def2-SVP matrix.
+
+    Shells are laid out atom by atom, each shell's components are permuted and signed, and
+    each atom's shells are then reordered, all by ``convention``. A matrix ``M`` becomes
+    ``M'[i, j] = M[I[i], I[j]] * s[i] * s[j]``.
+
+    Args:
+        atomic_numbers: Nuclear charges of the molecule, host-side.
+        convention: The reordering, such as :data:`PYSCF_DEF2SVP` or :data:`BACK2PYSCF`.
+
+    Returns:
+        ``(indices, signs)``, each of shape ``(n_ao,)`` and dtype ``int64``.
+
+    Raises:
+        KeyError: If an atomic number is outside the basis (H, C, N, O, F).
+    """
+    shells = ""
+    shell_order: list[int] = []
+    for atomic_number in atomic_numbers:
+        element = int(atomic_number)
+        if element not in convention.shells:
+            raise KeyError(_outside_the_layout(element, convention.shells))
+        first = len(shell_order)
+        shells += convention.shells[element]
+        shell_order += [first + shell for shell in convention.shell_order[element]]
+
+    shell_indices: list[NDArray[np.int64]] = []
+    shell_signs: list[NDArray[np.int64]] = []
+    offset = 0
+    for shell in shells:
+        order = np.asarray(convention.components[shell], dtype=np.int64)
+        shell_indices.append(order + offset)
+        shell_signs.append(np.asarray(convention.signs[shell], dtype=np.int64))
+        offset += order.size
+    indices = np.concatenate([shell_indices[shell] for shell in shell_order])
+    signs = np.concatenate([shell_signs[shell] for shell in shell_order])
+    return indices, signs
+
+
+def native_ao_count(atomic_numbers: Sequence[int] | Int[NDArray[np.integer], " n_atoms"]) -> int:
+    """Return a molecule's def2-SVP AO count, host-side: 5 per H, 14 per C, N, O or F.
+
+    Args:
+        atomic_numbers: Nuclear charges of the molecule.
+
+    Returns:
+        The total number of atomic orbitals.
+
+    Raises:
+        KeyError: If an atomic number is outside the basis.
+    """
+    elements = [int(atomic_number) for atomic_number in atomic_numbers]
+    for element in elements:
+        if element not in ORBITAL_MASK:
+            raise KeyError(_outside_the_layout(element, ORBITAL_MASK))
+    return sum(len(ORBITAL_MASK[element]) for element in elements)
 
 
 def _build_validity_table() -> np.ndarray:
@@ -64,14 +193,20 @@ _VALIDITY_TABLE: np.ndarray = _build_validity_table()
 def _atom_orbital_validity(atomic_numbers: Int[Array, "..."]) -> Bool[Array, "... 14"]:
     """Gather the per-atom 1-D ``(..., 14)`` AO validity mask for each atom.
 
+    An atomic number outside the table -- above fluorine, or negative -- has an all-``False``
+    mask. JAX's default gather mode promises in-bounds indices and in practice clamps a large
+    one to the last row and wraps a negative one, which handed any such element fluorine's
+    fourteen slots; the gather here fills them instead, as ``jax.numpy.ndarray.at`` documents.
+
     Args:
         atomic_numbers: Integer atomic numbers ``Z`` (any leading shape).
 
     Returns:
         Boolean mask of shape ``atomic_numbers.shape + (14,)``.
     """
+    atomic_numbers = jnp.asarray(atomic_numbers)
     table = jnp.asarray(_VALIDITY_TABLE)
-    return table[atomic_numbers]
+    return table.at[atomic_numbers].get(mode="fill", fill_value=False, wrap_negative_indices=False)
 
 
 def atom_orbital_counts(atomic_numbers: Int[Array, "..."]) -> Int[Array, "..."]:
@@ -113,8 +248,13 @@ def block_validity_mask(
 
 
 __all__ = [
+    "BACK2PYSCF",
     "FULL_ORBITALS",
     "ORBITAL_MASK",
+    "PYSCF_DEF2SVP",
+    "AoConvention",
+    "ao_permutation",
     "atom_orbital_counts",
     "block_validity_mask",
+    "native_ao_count",
 ]
