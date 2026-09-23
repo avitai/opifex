@@ -52,9 +52,9 @@ def test_solve_accepts_initial_density_and_keeps_fixed_point() -> None:
         solver = SCFSolver(_water_system())
         baseline = solver.solve()
         guided = solver.solve(initial_density=baseline.density_matrix)
-    assert guided.converged
+    assert bool(guided.is_converged)
     assert float(guided.total_energy) == pytest.approx(float(baseline.total_energy), abs=1e-8)
-    assert guided.n_iterations < baseline.n_iterations
+    assert int(guided.n_iterations) < int(baseline.n_iterations)
 
 
 def test_initial_guess_does_not_change_the_converged_energy() -> None:
@@ -68,7 +68,7 @@ def test_initial_guess_does_not_change_the_converged_energy() -> None:
         n_occupied = int(jnp.sum(system.atomic_numbers)) // 2
         seed = jnp.diag(jnp.array([2.0] * n_occupied + [0.0] * (n_ao - n_occupied)))
         guided = solver.solve(initial_density=seed)
-    assert guided.converged
+    assert bool(guided.is_converged)
     assert float(guided.total_energy) == pytest.approx(float(baseline.total_energy), abs=1e-6)
 
 

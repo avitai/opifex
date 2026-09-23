@@ -35,15 +35,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Final
 
 import jax.numpy as jnp
 import optimistix as optx
-from flax import nnx
+from flax import nnx, struct
 from jax import Array
 
 from opifex.core.quantum.backend import JaxGaussianBackend
 from opifex.core.quantum.basis import AtomicOrbitalBasis  # noqa: TC001
 from opifex.core.quantum.molecular_system import MolecularSystem
+from opifex.core.solver.status import is_successful, Status
 from opifex.neural.quantum.dft._fixed_point import AndersonAcceleration
 from opifex.neural.quantum.dft.grid import MolecularGridTemplate  # noqa: TC001
 from opifex.neural.quantum.dft.xc import (
@@ -53,6 +55,100 @@ from opifex.neural.quantum.dft.xc import (
     pbe_exchange_correlation_potential,
 )
 from opifex.neural.quantum.neural_xc import NeuralXCFunctional  # noqa: TC001
+
+
+_SOLVER_STATUS: Final[tuple[tuple[str, Status], ...]] = (
+    ("successful", Status.SUCCESS),
+    ("nonlinear_max_steps_reached", Status.MAX_ITERS),
+    ("nonlinear_divergence", Status.CONVERGENCE_FAILURE),
+    ("nonfinite", Status.NONFINITE),
+    ("nonfinite_input", Status.NONFINITE),
+    ("max_steps_reached", Status.LINEAR_SOLVE_FAILED),
+    ("singular", Status.LINEAR_SOLVE_FAILED),
+    ("breakdown", Status.LINEAR_SOLVE_FAILED),
+    ("stagnation", Status.LINEAR_SOLVE_FAILED),
+    ("conlim", Status.LINEAR_SOLVE_FAILED),
+)
+"""Every outcome the nonlinear-solve backend reports, as an opifex status code.
+
+The backend's own outcome set is layered: the nonlinear iteration adds its three
+outcomes to the seven an inner *linear* solve can report, which is why those seven all
+translate to :attr:`~opifex.core.solver.status.Status.LINEAR_SOLVE_FAILED` -- under a
+nonlinear solve they mean the step could not be taken. ``nonfinite_input`` is the one
+exception: the non-finite value the linear solve rejected came from the outer iteration,
+so it is reported as :attr:`~opifex.core.solver.status.Status.NONFINITE`.
+
+The table is the full set, and :func:`solver_status` is the only place the backend's
+outcome type is read, so nothing downstream of it handles a foreign enumeration.
+"""
+
+
+def solver_status(result: optx.RESULTS) -> Array:
+    """A backend solve outcome as the ``int32`` status code the rest of opifex uses.
+
+    The backend reports through an enumeration whose selection primitive takes a scalar
+    predicate, so it cannot carry one outcome per element of a batch; a plain integer
+    can, and it is what :mod:`opifex.core.solver.status` compares and persists. This is
+    the boundary where the conversion happens, once.
+
+    Selection is by ``jnp.where`` rather than a branch, so this runs inside a transform.
+    An outcome missing from :data:`_SOLVER_STATUS` yields
+    :attr:`~opifex.core.solver.status.Status.DEFAULT`, which is not a success.
+
+    Args:
+        result: The outcome reported by a backend solve.
+
+    Returns:
+        The matching status code, as a scalar ``int32`` array.
+    """
+    status = jnp.asarray(int(Status.DEFAULT), jnp.int32)
+    for name, code in _SOLVER_STATUS:
+        outcome = getattr(optx.RESULTS, name)
+        status = jnp.where(result == outcome, jnp.asarray(int(code), jnp.int32), status)
+    return status
+
+
+class DensitySolve(struct.PyTreeNode):
+    """A converged density together with how the solve that produced it went.
+
+    Every field is pytree data, so this is returned through ``jit`` and batched under
+    ``vmap`` with one outcome per element. It is what keeps the two forward paths --
+    Anderson self-consistency and direct minimisation -- reporting the same measured
+    quantities instead of one of them assuming its own success.
+
+    Attributes:
+        density: The converged closed-shell AO density matrix.
+        n_iterations: Steps the solver actually took, as an ``int32`` array.
+        status: Why the solve stopped; see :mod:`opifex.core.solver.status`.
+    """
+
+    density: Array
+    n_iterations: Array
+    status: Array
+
+    @classmethod
+    def from_solution(cls, solution: optx.Solution, density: Array) -> DensitySolve:
+        """Read the measured outcome off a completed backend solve.
+
+        Args:
+            solution: The solve to read the step count and outcome from.
+            density: The density derived from the solve's value; for a fixed-point
+                solve that is the value itself, for direct minimisation it is the
+                density built from the optimised coefficients.
+
+        Returns:
+            The density paired with the solve's step count and status.
+        """
+        return cls(
+            density=density,
+            n_iterations=jnp.asarray(solution.stats["num_steps"], jnp.int32),
+            status=solver_status(solution.result),
+        )
+
+    @property
+    def is_converged(self) -> Array:
+        """Whether the solve reached a successful outcome, as a boolean array."""
+        return is_successful(self.status)
 
 
 class Functional(StrEnum):
@@ -482,7 +578,7 @@ def converged_density_direct(
     tolerance: float,
     max_steps: int,
     neural_spec: NeuralXCSpec | None = None,
-) -> Array:
+) -> DensitySolve:
     r"""Converged density via direct energy minimisation over orbital coefficients.
 
     SCF-free alternative (jrystal / DWD, arXiv:2411.05033): minimise the
@@ -490,6 +586,23 @@ def converged_density_direct(
     overlap-orthonormal occupied orbitals by a QR parametrisation, with the
     closed-shell occupation ``D = 2 C_occ C_occ^T`` baked in. Optimisation uses
     L-BFGS through :func:`optimistix.minimise`.
+
+    The minimiser runs with ``throw=False``, so a budget that runs out returns the
+    best point reached rather than raising. The outcome therefore travels with the
+    density -- a caller cannot otherwise tell a converged minimum from a truncated
+    descent, and the two differ by far more than the tolerance.
+
+    Args:
+        integrals: The molecular integrals the energy is built from.
+        functional: The exchange-correlation functional.
+        n_occupied: Number of doubly-occupied orbitals (electrons // 2).
+        n_ao: Number of atomic orbitals, sizing the coefficient matrix.
+        tolerance: Relative and absolute convergence tolerance for the minimiser.
+        max_steps: Maximum number of minimisation steps.
+        neural_spec: Optional learned-XC specification for the ``NEURAL`` path.
+
+    Returns:
+        The density with the minimiser's step count and status.
     """
     reference = integrals.orthogonaliser
 
@@ -505,10 +618,11 @@ def converged_density_direct(
         energy_of_parameters, solver, initial, max_steps=max_steps, throw=False
     )
     coefficients = _cayley_orthonormal(solution.value, reference, n_occupied)
-    return 2.0 * coefficients @ coefficients.T
+    return DensitySolve.from_solution(solution, 2.0 * coefficients @ coefficients.T)
 
 
 __all__ = [
+    "DensitySolve",
     "Functional",
     "NeuralXCSpec",
     "assemble_integrals",
@@ -516,5 +630,6 @@ __all__ = [
     "converged_density_direct",
     "converged_density_implicit",
     "converged_density_unrolled",
+    "solver_status",
     "total_energy",
 ]

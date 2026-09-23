@@ -34,8 +34,8 @@ def test_scf_converges_h2() -> None:
     with jax.enable_x64(True):
         result = SCFSolver(_h2_system()).solve()
     assert isinstance(result, SCFResult)
-    assert result.converged
-    assert result.n_iterations < 100
+    assert bool(result.is_converged)
+    assert int(result.n_iterations) < 100
 
 
 def test_scf_density_is_idempotent_in_overlap_metric() -> None:

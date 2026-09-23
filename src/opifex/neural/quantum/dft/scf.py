@@ -60,16 +60,15 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
 
 import jax
-from flax import nnx  # noqa: TC002
+from flax import nnx, struct
 from jax import Array
-from optimistix import RESULTS
 
 from opifex.core.quantum.basis import AtomicOrbitalBasis
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+from opifex.core.solver.status import is_successful
 from opifex.neural.quantum.dft._energy import (
     _density_from_fock as _density_from_fock_impl,
     _Integrals,
@@ -79,6 +78,7 @@ from opifex.neural.quantum.dft._energy import (
     converged_density_direct,
     converged_density_implicit,
     converged_density_unrolled,
+    DensitySolve,
     Functional,
     NeuralXCSpec,
     scf_fixed_point,
@@ -98,25 +98,39 @@ class SolverMode(StrEnum):
     DIRECT = "direct"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SCFResult:
+class SCFResult(struct.PyTreeNode):
     """Outcome of a restricted Kohn-Sham SCF calculation.
+
+    Every field is pytree data, so a result is built inside ``jit`` and returned through
+    it, and batches under ``vmap`` with one outcome per geometry. A Python ``int`` or
+    ``bool`` here would be static metadata, part of the jit cache key, so a converged and
+    a stalled solve would compile separate programs -- and neither could be produced from
+    a traced comparison in the first place.
 
     Attributes:
         total_energy: Converged Kohn-Sham total energy (Hartree).
         orbital_energies: Molecular-orbital eigenvalues [Shape: (n_ao,)].
         density_matrix: Converged AO density matrix [Shape: (n_ao, n_ao)].
         coefficients: MO coefficients [Shape: (n_ao, n_ao)].
-        n_iterations: Number of SCF iterations performed.
-        converged: Whether the density change fell below the tolerance.
+        n_iterations: Steps the solver took, as an ``int32`` array.
+        status: Why the solve stopped; see :mod:`opifex.core.solver.status`.
     """
 
     total_energy: Array
     orbital_energies: Array
     density_matrix: Array
     coefficients: Array
-    n_iterations: int
-    converged: bool
+    n_iterations: Array
+    status: Array
+
+    @property
+    def is_converged(self) -> Array:
+        """Whether the solve reached a successful outcome.
+
+        A boolean **array**: under ``vmap`` it answers per geometry, and it cannot drive
+        a Python ``if`` inside traced code.
+        """
+        return is_successful(self.status)
 
 
 class SCFSolver:
@@ -322,7 +336,7 @@ class SCFSolver:
     def _solve_direct(self) -> SCFResult:
         """Direct-minimisation forward solve (SCF-free path)."""
         integrals = self._integrals(self._system.positions)
-        density = converged_density_direct(
+        minimisation = converged_density_direct(
             integrals,
             self._functional,
             self._n_occupied,
@@ -331,19 +345,7 @@ class SCFSolver:
             max_steps=self._max_iterations,
             neural_spec=self._neural_spec,
         )
-        fock, _, _ = build_fock(density, integrals, self._functional, self._neural_spec)
-        density, coefficients, orbital_energies = _density_from_fock_impl(
-            fock, integrals.orthogonaliser, self._n_occupied
-        )
-        energy = total_energy(density, integrals, self._functional, self._neural_spec)
-        return SCFResult(
-            total_energy=energy,
-            orbital_energies=orbital_energies,
-            density_matrix=density,
-            coefficients=coefficients,
-            n_iterations=self._max_iterations,
-            converged=True,
-        )
+        return self._result_from(minimisation, integrals)
 
     def _solve_self_consistent(self, *, initial_density: Array | None = None) -> SCFResult:
         """Anderson-accelerated self-consistent forward solve.
@@ -364,7 +366,23 @@ class SCFSolver:
             neural_spec=self._neural_spec,
             initial_density=initial_density,
         )
-        fock, _, _ = build_fock(solution.value, integrals, self._functional, self._neural_spec)
+        return self._result_from(DensitySolve.from_solution(solution, solution.value), integrals)
+
+    def _result_from(self, solve: DensitySolve, integrals: _Integrals) -> SCFResult:
+        """Rebuild the orbitals and energy from a converged density.
+
+        Shared by both forward paths so each reports the outcome its own solver
+        measured; the direct path previously had no outcome to report and asserted its
+        own success.
+
+        Args:
+            solve: The converged density with the step count and status that produced it.
+            integrals: The molecular integrals the density was solved against.
+
+        Returns:
+            The full :class:`SCFResult`.
+        """
+        fock, _, _ = build_fock(solve.density, integrals, self._functional, self._neural_spec)
         density, coefficients, orbital_energies = _density_from_fock_impl(
             fock, integrals.orthogonaliser, self._n_occupied
         )
@@ -374,8 +392,8 @@ class SCFSolver:
             orbital_energies=orbital_energies,
             density_matrix=density,
             coefficients=coefficients,
-            n_iterations=int(solution.stats["num_steps"]),
-            converged=bool(solution.result == RESULTS.successful),
+            n_iterations=solve.n_iterations,
+            status=solve.status,
         )
 
 
