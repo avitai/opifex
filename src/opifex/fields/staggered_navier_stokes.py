@@ -20,7 +20,19 @@ appears two orders later than the solution error, and classical RK4's
 convective term's skew-symmetry is a statement about a discretely divergence-free
 transporting field; a stage beginning from an unprojected one is outside the regime the
 property covers. Projecting once per step instead costs three orders of convergence, which
-the tests measure. Both reference implementations of this scheme project per stage.
+the tests measure. Sanderse and Koren 2012 analyse exactly this: projecting each stage
+velocity retains the full order of the underlying Runge-Kutta method for the velocity.
+
+**A wall velocity may vary in time at no cost, and this scheme is the reason.** The
+constraint the projection enforces is ``M u = r(t)``, whose right-hand side is the
+prescribed wall-*normal* flux; impermeability fixes that at zero, so ``r`` is identically
+zero and cannot depend on time however the wall slides. Applying the boundary condition at
+the stage time and then projecting the *state* satisfies the constraint exactly for any
+``r(t)``, where the equivalent formulation in terms of ``dr/dt`` satisfies it only when
+``dr/dt`` vanishes -- so this order is a correctness requirement, not an optimisation.
+Measured, a time-varying lid holds the divergence at 1.4e-14 over six steps. The time
+derivative of the boundary data is needed for one thing only, a pressure accurate to the
+same order as the velocity, which costs about a quarter of a step and is not computed here.
 
 The trajectory is a ``lax.scan`` of fixed length rather than an adaptive loop, so the whole
 integration differentiates in reverse mode. An adaptive step is a ``lax.while_loop`` with a
