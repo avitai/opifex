@@ -83,7 +83,7 @@ class TestTheResultIsAPytree:
     """``SCFResult`` holds arrays, so it survives the transforms the solver is built on."""
 
     def test_every_leaf_is_an_array(self) -> None:
-        result = SCFSolver(_h2_system(), max_iterations=8).solve()
+        result = SCFSolver(_h2_system(), max_iterations=8, convergence_tolerance=1e-4).solve()
         leaves = jax.tree.leaves(result)
 
         assert leaves and all(isinstance(leaf, jax.Array) for leaf in leaves)
@@ -92,7 +92,7 @@ class TestTheResultIsAPytree:
         # Checking only that the fields are arrays would not catch this: a static field
         # holding an int32 array is still an array, and `is_converged` would still
         # return one. What separates the two is whether the outcome is a *leaf*.
-        result = SCFSolver(_h2_system(), max_iterations=8).solve()
+        result = SCFSolver(_h2_system(), max_iterations=8, convergence_tolerance=1e-4).solve()
         leaves = jax.tree.leaves(result)
 
         assert any(leaf is result.status for leaf in leaves)
@@ -185,3 +185,44 @@ class TestItSurvivesATransform:
             energy_above(SCFSolver(_h2_system(), mode="direct", max_iterations=2).solve(), floor)
 
         assert traces["count"] == 1
+
+
+class TestTheToleranceIsReachableInThePrecisionThatRuns:
+    """A tolerance below the working precision's resolution is not a tolerance.
+
+    The default 1e-8 is meaningful in float64 and sits an order of magnitude under
+    float32's epsilon of 1.19e-07, where the residual cannot reach it however long the
+    iteration runs. Left unchecked the solve burns its whole budget and reports
+    MAX_ITERS, which reads as a hard problem rather than an impossible request.
+
+    SciPy sets the precedent: ``brentq`` refuses an ``rtol`` below ``4 * eps`` with
+    "rtol too small" rather than pursuing it.
+    """
+
+    def test_the_default_tolerance_is_refused_at_default_precision(self) -> None:
+        solver = SCFSolver(_h2_system())
+
+        with pytest.raises(ValueError, match="below the float32 resolution"):
+            solver.solve()
+
+    def test_the_same_tolerance_is_accepted_under_x64(self) -> None:
+        with jax.enable_x64(True):
+            result = SCFSolver(_h2_system()).solve()
+
+        assert int(result.status) == Status.SUCCESS
+
+    def test_a_reachable_tolerance_is_accepted_at_default_precision(self) -> None:
+        result = SCFSolver(_h2_system(), convergence_tolerance=1e-4).solve()
+
+        assert bool(jnp.isfinite(result.total_energy))
+        assert float(result.total_energy) == pytest.approx(-1.1212060, abs=1e-4)
+
+    def test_the_message_names_the_floor_and_what_to_do(self) -> None:
+        solver = SCFSolver(_h2_system())
+
+        with pytest.raises(ValueError, match="convergence_tolerance") as raised:
+            solver.solve()
+
+        message = str(raised.value)
+        assert "1e-08" in message
+        assert "enable_x64" in message

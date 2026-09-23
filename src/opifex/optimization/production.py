@@ -19,6 +19,7 @@ from typing import Any, cast, Protocol
 
 import jax
 import jax.numpy as jnp
+from calibrax.profiling import time_calls
 from flax import nnx
 from flax.nnx import Module
 
@@ -214,9 +215,9 @@ class AdaptiveJAXOptimizer(nnx.Module):
         def fast_forward(x):
             return model(x)  # type: ignore[operator]
 
-        # Warm up the JIT compilation
-        dummy_input = jnp.ones((1, 64))  # Typical input shape
-        _ = fast_forward(dummy_input)  # Trigger compilation
+        # Compile now rather than on the first real request, at the model's own input
+        # width: a fixed shape here raises for every model that is not that wide.
+        fast_forward(jnp.ones((1, get_model_input_features(model))))
 
         return _JitWrappedModel(model, fast_forward)
 
@@ -234,7 +235,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
     ) -> PerformanceMetrics:
         """Benchmark a single model on the given workload.
 
-        Latency is measured by timing repeated forward passes; throughput is
+        Latency is the median of ten synchronised forward passes; throughput is
         derived from that latency. Memory usage is estimated from the workload
         footprint. ``improvement_factor`` defaults to ``1.0`` (no baseline to
         compare against in a single-model benchmark) and should be supplied by
@@ -263,26 +264,23 @@ class AdaptiveJAXOptimizer(nnx.Module):
 
         test_input = jnp.ones((workload.batch_size, input_features))
 
-        # Warm up
-        for _ in range(5):
-            # Type ignore for Flax NNX module call
-            _ = model(test_input)  # type: ignore[operator]
+        # Dispatch is asynchronous, so each timed pass is synchronised before the clock
+        # is read; timing them unsynchronised measures how long it takes to *queue* the
+        # work, which is well under a millisecond whatever the model does.
+        timing = time_calls(
+            lambda: model(test_input),  # type: ignore[operator]
+            warmup=5,
+            iterations=10,
+        )
 
-        # Measure latency
-        start_time = time.time()
-        for _ in range(10):
-            # Type ignore for Flax NNX module call
-            _ = model(test_input)  # type: ignore[operator]
-        end_time = time.time()
-
-        avg_latency = (end_time - start_time) / 10 * 1000  # Convert to ms
-        throughput = 1000 / avg_latency if avg_latency > 0 else 0
+        latency = timing.median_sec * 1000  # Convert to ms
+        throughput = 1000 / latency if latency > 0 else 0
 
         # Estimate memory usage (simplified)
         memory_usage = workload.memory_footprint * 0.8  # Optimization typically reduces memory
 
         return PerformanceMetrics(
-            latency_ms=avg_latency,
+            latency_ms=latency,
             throughput_rps=throughput,
             memory_usage_gb=memory_usage,
             improvement_factor=improvement_factor,

@@ -106,7 +106,7 @@ print(result.predicted_trajectory.shape) # (15, 2)
 print(float(result.objective_value), bool(result.converged))
 ```
 
-`MPCResult` is a `NamedTuple` with fields `control_action`, `predicted_trajectory`, `objective_value`, `converged`, `iterations`, `computation_time`, `emergency_activated`, `backup_used`, and `timeout_occurred`.
+`MPCResult` is a `NamedTuple` with fields `control_action`, `predicted_trajectory`, `objective_value`, `converged`, `iterations`, `emergency_activated`, `backup_used`, and `timeout_occurred`. It carries no wall-clock field: `compute_control` is `nnx.jit`-compiled, so a clock read inside it is evaluated once at trace time and every later call would report the cost of tracing. Time a controller step from the caller with `calibrax.profiling.time_calls`, which synchronises before reading the clock.
 
 Because `compute_control` is differentiable, you can take gradients of the objective with respect to the state or the controller parameters:
 

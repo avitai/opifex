@@ -178,7 +178,7 @@ class PINNResult:
         model: Trained PINN model
         losses: List of total loss values during training
         final_loss: Final training loss
-        training_time: Total training time in seconds
+        training_time: Total training time in seconds, from a monotonic clock
         metrics: Additional metrics dictionary
     """
 
@@ -342,7 +342,7 @@ class PINNSolver:
 
         # Training loop
         losses = []
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         for i in range(config.num_iterations):
             loss = train_step(self.model, opt)
@@ -353,7 +353,7 @@ class PINNSolver:
             ):
                 print(f"  Iteration {i:4d}: loss = {loss:.6e}")  # noqa: T201
 
-        training_time = time.time() - start_time
+        training_time = time.perf_counter() - start_time
         final_loss = losses[-1]
 
         # Compute metrics
