@@ -33,7 +33,13 @@ Every `Experiment` method is a coroutine.
 
 ```python
 import asyncio
+import tempfile
 
+import jax.numpy as jnp
+import optax
+from flax import nnx
+
+from opifex.data.sources import generate_burgers
 from opifex.mlops import (
     ExperimentConfig,
     ExperimentTracker,
@@ -42,49 +48,72 @@ from opifex.mlops import (
     PhysicsDomain,
     PhysicsMetadata,
 )
+from opifex.neural.operators.fno.base import FourierNeuralOperator
+
+tracking_uri = f"file://{tempfile.mkdtemp()}"  # or your tracking server's URI
+data = generate_burgers(n_samples=16, resolution=64)
+inputs, targets = jnp.asarray(data["input"]), jnp.asarray(data["output"])
+
+model = FourierNeuralOperator(1, 1, 16, 8, 2, spatial_dims=1, rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
 
-async def main() -> None:
+@nnx.jit
+def train_step(model: FourierNeuralOperator, optimizer: nnx.Optimizer) -> jnp.ndarray:
+    def loss_fn(model: FourierNeuralOperator) -> jnp.ndarray:
+        return jnp.mean((model(inputs) - targets) ** 2)
+
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    optimizer.update(model, grads)
+    return loss
+
+
+physics = PhysicsMetadata(
+    pde_type="burgers",
+    dimensionality=1,
+    boundary_conditions=["periodic"],
+    physical_constants={"viscosity": 0.1},
+)
+
+
+async def main() -> str:
     config = ExperimentConfig(
         name="burgers_fno",
         physics_domain=PhysicsDomain.NEURAL_OPERATORS,
         framework=Framework.JAX,
-        physics_metadata=PhysicsMetadata(
-            pde_type="burgers",
-            dimensionality=1,
-            boundary_conditions=["periodic"],
-            physical_constants={"viscosity": 0.01},
-        ),
+        physics_metadata=physics,
         random_seed=0,
+        backend_config={"tracking_uri": tracking_uri},
     )
     experiment = await ExperimentTracker().create_experiment(config)
 
     run_id = await experiment.start()
-    await experiment.log_parameters({"learning_rate": 1e-3, "modes": 12})
-    for step, loss in enumerate(train()):
-        await experiment.log_metrics({"loss": loss}, step=step)
+    await experiment.log_parameters({"learning_rate": 1e-3, "modes": 8})
+    for step in range(20):
+        await experiment.log_metrics({"loss": float(train_step(model, optimizer))}, step=step)
+    relative_l2 = float(jnp.linalg.norm(model(inputs) - targets) / jnp.linalg.norm(targets))
     await experiment.log_physics_metrics(
         NeuralOperatorMetrics(
-            train_loss=0.01,
-            val_loss=0.012,
-            spectral_accuracy=0.98,
-            relative_l2_error=0.02,
-            max_absolute_error=0.1,
-            pde_residual=1e-3,
-            conservation_error=1e-4,
-            boundary_condition_error=1e-4,
+            train_loss=float(jnp.mean((model(inputs) - targets) ** 2)),
+            val_loss=0.0,
+            spectral_accuracy=0.0,
+            relative_l2_error=relative_l2,
+            max_absolute_error=float(jnp.max(jnp.abs(model(inputs) - targets))),
+            pde_residual=0.0,
+            conservation_error=0.0,
+            boundary_condition_error=0.0,
             stability_measure=1.0,
-            physical_consistency=0.99,
-            inference_time_per_sample=2e-3,
-            memory_usage_mb=512.0,
+            physical_consistency=0.0,
+            inference_time_per_sample=0.0,
+            memory_usage_mb=0.0,
         )
     )
-    await experiment.log_model(model, "fno")
+    await experiment.log_model(model, "fno", physics_metadata=physics)
     await experiment.end()
-    print(run_id, experiment.get_experiment_url())
+    return run_id
 
 
-asyncio.run(main())
+run_id = asyncio.run(main())
 ```
 
 ## Configuration
@@ -142,12 +171,16 @@ carry the framework, the physics domain and `physics_metadata`. Read it back wit
 the same store, onto the state of a module built the same way:
 
 ```python
-from flax import nnx
+import mlflow
 from substrax.checkpoint import OrbaxCheckpointStore
 
+downloaded_artifact_dir = mlflow.artifacts.download_artifacts(
+    run_id=run_id, artifact_path="fno", tracking_uri=tracking_uri
+)
+restored = FourierNeuralOperator(1, 1, 16, 8, 2, spatial_dims=1, rngs=nnx.Rngs(1))
 with OrbaxCheckpointStore(downloaded_artifact_dir) as store:
-    checkpoint = store.restore(0, templates={"model": nnx.state(model)})
-nnx.update(model, checkpoint.items["model"])
+    checkpoint = store.restore(0, templates={"model": nnx.state(restored)})
+nnx.update(restored, checkpoint.items["model"])
 checkpoint.metadata.extra["physics_metadata"]
 ```
 
@@ -179,8 +212,52 @@ Subclass `Experiment` and implement `start`, `log_metrics`,
 then register it:
 
 ```python
+from typing import Any
+
+from opifex.mlops import Experiment
+
+
+class ConsoleExperiment(Experiment):
+    """Prints what it is asked to record."""
+
+    async def start(self) -> str:
+        print(f"start {self.config.name}")
+        return self.config.name
+
+    async def log_metrics(self, metrics: dict[str, float | int], step: int | None = None) -> None:
+        print(f"step {step}: {metrics}")
+
+    async def log_physics_metrics(self, metrics: Any, step: int | None = None) -> None:
+        print(f"physics {type(metrics).__name__}")
+
+    async def log_parameters(self, params: dict[str, Any]) -> None:
+        print(f"params {params}")
+
+    async def log_artifact(self, local_path: str, artifact_path: str | None = None) -> None:
+        print(f"artifact {local_path}")
+
+    async def log_model(self, model: Any, model_name: str, physics_metadata: Any = None) -> None:
+        print(f"model {model_name}")
+
+    async def end(self, status: str = "completed") -> None:
+        print(f"end {status}")
+
+
 tracker = ExperimentTracker(default_backend="console")
 tracker.register_backend("console", ConsoleExperiment)
+
+
+async def console_run() -> None:
+    config = ExperimentConfig(
+        name="console_demo", physics_domain=PhysicsDomain.NEURAL_OPERATORS, framework=Framework.JAX
+    )
+    experiment = await tracker.create_experiment(config)
+    await experiment.start()
+    await experiment.log_metrics({"loss": 0.5}, step=0)
+    await experiment.end()
+
+
+asyncio.run(console_run())
 ```
 
 ## Capability declaration
