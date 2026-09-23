@@ -45,6 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `generate_diffusion` returns finite, correct labels at its shipped resolution. It
+  stepped forward Euler with a fixed `dt = 0.01`, whose diffusive limit `D < dx^2 / (4 dt)`
+  is 0.0061 at 64 cells -- below the whole sampled range of 0.01 to 0.1 -- so 0% of the
+  default output was finite; its test ran at 16 cells, where the limit covers the range.
+  Even at a stable step the scheme's first-order upwind advection left the labels 39-46%
+  wrong in the L2 norm. The labels are now the exact Fourier solution at a stated
+  `time_final` (default 1.0, the time the old step count implied), with the mean
+  conserved to round-off and no stability limit at any resolution. The initial
+  conditions are now periodic and sampled at `x_j = j / N` (they were sampled on
+  `linspace(0, 1, N)` while the solver assumed spacing `1 / N`): the Gaussian is wrapped
+  on the torus, the wave has an integer number of periods, and the centre, width and
+  size of a bump are drawn independently instead of from one shared uniform number.
+
 - `solve_navier_stokes_2d` solves the equations it names. Its advection was first-order
   upwind, whose numerical viscosity of `|u| dx / 2` stood an order of magnitude above a
   physical `nu` of 0.01 at 32 cells, so a Taylor-Green vortex decayed 8% too fast at
@@ -72,6 +85,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more than its length and was cut back to it. It now comes from
   `artifex.generative_models.core.sampling.effective_sample_size`, which is the same place
   the samplers come from.
+
+### Added
+
+- `opifex.physics.spectral.solve_advection_diffusion_exact`: the exact Fourier solution
+  of `u_t + v . grad u = D lap u` on a periodic domain in one to three dimensions, one
+  FFT pair with no time stepping. It is `jit`, `vmap` and `grad` compatible in the
+  diffusivity and velocity, and reproduces the closed-form single-mode solution to
+  1e-12 in float64.
+
+### Changed
+
+- Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
+  packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
+  pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
+
 - `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
   compact five-point Laplacian while the correction subtracted a two-point central gradient,
   so the projection left most of the divergence in place: a divergent start still measured

@@ -7,7 +7,8 @@ Two families live here:
   (:mod:`~opifex.physics.spectral.etdrk`), its Fourier operators and nonlinear
   terms (:mod:`~opifex.physics.spectral.semilinear`), and ready-made solvers for
   Burgers, Kuramoto-Sivashinsky and Korteweg-de Vries
-  (:mod:`~opifex.physics.spectral.steppers`).
+  (:mod:`~opifex.physics.spectral.steppers`), and the exact Fourier solution of
+  linear advection-diffusion (:mod:`~opifex.physics.spectral.linear`).
 - **Quantum spectral operators** — Fourier momentum/kinetic-energy operators
   (:mod:`~opifex.physics.spectral.quantum_spectral`).
 """
@@ -18,6 +19,7 @@ from opifex.physics.spectral.etdrk import (
     ETDRK4Coefficients,
     integrate_etdrk4,
 )
+from opifex.physics.spectral.linear import solve_advection_diffusion_exact
 from opifex.physics.spectral.quantum_spectral import (
     spectral_gradient,
     spectral_kinetic_energy,
@@ -51,6 +53,7 @@ __all__ = [
     "integrate_etdrk4",
     "laplace_operator",
     "rfft_wavenumbers",
+    "solve_advection_diffusion_exact",
     "solve_burgers_spectral",
     "solve_kdv_spectral",
     "solve_kuramoto_sivashinsky_spectral",
