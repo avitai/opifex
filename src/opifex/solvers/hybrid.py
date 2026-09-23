@@ -13,7 +13,8 @@ import jax
 import jax.numpy as jnp
 
 from opifex.core.problems import Problem
-from opifex.core.solver.interface import Solution, Solver
+from opifex.core.solver.interface import Solver
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import combine_statuses
 
 

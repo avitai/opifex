@@ -329,7 +329,7 @@ def test_uncertainty_sources_declares_six_canonical_values() -> None:
 
 
 def test_to_solution_keeps_mean_fields_and_stores_uq_in_auxiliary_data() -> None:
-    from opifex.core.solver.interface import Solution
+    from opifex.core.solver.solution import Solution
     from opifex.core.solver.status import Status
 
     sd = _two_field_distribution(with_uncertainty=True)

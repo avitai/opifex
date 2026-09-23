@@ -11,7 +11,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from opifex.core.solver.interface import Solution, SupportsSolve
+from opifex.core.solver.interface import SupportsSolve
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import Status
 
 

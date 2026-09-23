@@ -1,6 +1,6 @@
 """Host-side facts about a solve: how long it took, and what to tell a person.
 
-These are the things a :class:`~opifex.core.solver.interface.Solution` cannot hold. A
+These are the things a :class:`~opifex.core.solver.solution.Solution` cannot hold. A
 clock read from traced code is evaluated once, at trace time, and baked in as a constant,
 so the duration reported on the hundredth call is the first compilation's. Text cannot be
 produced inside a transform at all. Both are properties of *running* a solve rather than
@@ -21,7 +21,7 @@ from typing import Any
 import jax
 from calibrax.profiling import time_calls
 
-from opifex.core.solver.interface import Solution
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import message
 
 

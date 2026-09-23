@@ -8,11 +8,8 @@ import jax.numpy as jnp
 from flax import nnx
 
 from opifex.core.problems import Problem
-from opifex.core.solver.interface import (
-    Solution,
-    SolverConfig,
-    SolverState,
-)
+from opifex.core.solver.interface import SolverConfig, SolverState
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import Status
 from opifex.core.training.config import TrainingConfig
 from opifex.core.training.trainer import Trainer

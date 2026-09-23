@@ -44,7 +44,7 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
-from opifex.core.solver.interface import Solution
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import combine_statuses, Status
 from opifex.uncertainty.types import (
     _VARIANCE_ATOL,

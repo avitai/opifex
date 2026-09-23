@@ -13,8 +13,8 @@ import time
 
 import jax.numpy as jnp
 
-from opifex.core.solver.interface import Solution
 from opifex.core.solver.report import report, timed_solve
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import Status
 
 
