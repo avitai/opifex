@@ -121,26 +121,6 @@ class BayesianSINDy:
     Samples the regularized-horseshoe model of Hirsh et al. (2021) with
     BlackJAX NUTS. After :meth:`fit`, exposes posterior-mean coefficients,
     per-term inclusion probabilities, and per-coefficient credible intervals.
-
-    Args:
-        library: Candidate function library producing the SINDy design
-            matrix ``Theta`` and the human-readable feature names. Must
-            expose ``transform(x) -> Theta`` and
-            ``get_feature_names() -> list[str]`` (see
-            :class:`opifex.discovery.sindy.library.CandidateLibrary`).
-        tau0: Global-scale hyper-prior for ``tau ~ HalfCauchy(tau0)``. Lower
-            values increase sparsity.
-        slab_nu: Degrees of freedom of the Student-t slab,
-            ``c_sq ~ InverseGamma(slab_nu / 2, slab_nu / 2 * slab_s**2)``.
-        slab_s: Scale of the Student-t slab.
-        noise_lambda: Rate of the exponential prior on the derivative-noise
-            scale ``sigma ~ Exponential(noise_lambda)``.
-        num_warmup: BlackJAX window-adaptation warmup steps (discarded).
-        num_samples: Retained NUTS posterior draws.
-
-    Raises:
-        ValueError: If any hyper-parameter is non-positive, or if
-            ``num_warmup`` / ``num_samples`` are not valid sample counts.
     """
 
     def __init__(
@@ -154,7 +134,28 @@ class BayesianSINDy:
         num_warmup: int = 200,
         num_samples: int = 400,
     ) -> None:
-        """Validate hyper-parameters and store sampler configuration."""
+        """Validate hyper-parameters and store sampler configuration.
+
+        Args:
+            library: Candidate function library producing the SINDy design
+                matrix ``Theta`` and the human-readable feature names. Must
+                expose ``transform(x) -> Theta`` and
+                ``get_feature_names() -> list[str]`` (see
+                :class:`opifex.discovery.sindy.library.CandidateLibrary`).
+            tau0: Global-scale hyper-prior for ``tau ~ HalfCauchy(tau0)``. Lower
+                values increase sparsity.
+            slab_nu: Degrees of freedom of the Student-t slab,
+                ``c_sq ~ InverseGamma(slab_nu / 2, slab_nu / 2 * slab_s**2)``.
+            slab_s: Scale of the Student-t slab.
+            noise_lambda: Rate of the exponential prior on the derivative-noise
+                scale ``sigma ~ Exponential(noise_lambda)``.
+            num_warmup: BlackJAX window-adaptation warmup steps (discarded).
+            num_samples: Retained NUTS posterior draws.
+
+        Raises:
+            ValueError: If any hyper-parameter is non-positive, or if
+                ``num_warmup`` / ``num_samples`` are not valid sample counts.
+        """
         if tau0 <= 0.0:
             raise ValueError(f"tau0 must be positive; got {tau0!r}.")
         if slab_nu <= 0.0:
@@ -346,6 +347,9 @@ class BayesianSINDy:
         Returns:
             A :class:`PredictionInterval` whose ``lower`` / ``upper`` arrays
             have shape ``(n_targets, n_terms)``.
+
+        Raises:
+            ValueError: If ``level`` is not strictly between 0 and 1.
         """
         if not 0.0 < level < 1.0:
             raise ValueError(f"level must lie strictly in (0, 1); got {level!r}.")
