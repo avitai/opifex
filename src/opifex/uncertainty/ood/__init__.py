@@ -18,6 +18,7 @@ from __future__ import annotations
 from opifex.uncertainty.ood.scores import fpr95, max_softmax_probability
 from opifex.uncertainty.ood.shift_diagnostics import (
     residual_shift_diagnostic,
+    shift_status,
     ShiftReport,
 )
 
@@ -27,4 +28,5 @@ __all__ = [
     "fpr95",
     "max_softmax_probability",
     "residual_shift_diagnostic",
+    "shift_status",
 ]
