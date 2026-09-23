@@ -149,7 +149,7 @@ For complex scientific applications, the `ModularTrainer` provides a component-b
 from opifex.training.basic_trainer import ModularTrainer
 from opifex.core.training.components.recovery import ErrorRecoveryManager
 from opifex.core.training.components import FlexibleOptimizerFactory
-from opifex.core.training.monitoring.metrics import AdvancedMetricsCollector
+from opifex.core.training.monitoring.metrics import MetricsCollector
 
 # Configure advanced training components
 error_recovery = ErrorRecoveryManager(
@@ -173,7 +173,7 @@ optimizer_factory = FlexibleOptimizerFactory(
     }
 )
 
-metrics_collector = AdvancedMetricsCollector()
+metrics_collector = MetricsCollector()
 
 # Create modular trainer with custom components
 modular_trainer = ModularTrainer(
@@ -535,10 +535,10 @@ regularized_trainer = RegularizedTrainer(
 ### Advanced Metrics Collection
 
 ```python
-from opifex.core.training.monitoring.metrics import AdvancedMetricsCollector
+from opifex.core.training.monitoring.metrics import MetricsCollector
 import matplotlib.pyplot as plt
 
-class ComprehensiveMetricsCollector(AdvancedMetricsCollector):
+class ComprehensiveMetricsCollector(MetricsCollector):
     """Enhanced metrics collection with physics-aware diagnostics."""
 
     def __init__(self):
