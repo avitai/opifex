@@ -37,6 +37,7 @@ from typing import Final
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.fields.field import Box, Extrapolation
 
@@ -102,12 +103,18 @@ def require_boundary(extrapolation: Extrapolation, operation: str) -> None:
     raise ValueError(msg)
 
 
-@jax.tree_util.register_pytree_node_class
+@struct.dataclass
 class StaggeredGrid:
     """A vector field on the faces of a uniform Cartesian grid.
 
     Component ``d`` lives on the faces normal to axis ``d``, so the components have
     different shapes and are held as a tuple rather than one stacked array.
+
+    Only the components are pytree data. The box, the boundary and the resolution are
+    ``pytree_node=False``, so they ride in the treedef: they set array shapes and select
+    which transform the projection uses, which makes them cache keys rather than values.
+    A traced resolution could not size an array, and a boundary carried as data would let
+    two incompatible layouts flow into one compiled program.
 
     Attributes:
         components: One array per axis, on that axis's faces.
@@ -116,27 +123,10 @@ class StaggeredGrid:
         resolution: Number of cells along each axis.
     """
 
-    __slots__ = ("box", "components", "extrapolation", "resolution")
-
-    def __init__(
-        self,
-        components: tuple[jax.Array, ...],
-        box: Box,
-        extrapolation: Extrapolation,
-        resolution: tuple[int, ...],
-    ) -> None:
-        """Initialize a staggered grid.
-
-        Args:
-            components: One array per axis, on that axis's faces.
-            box: Physical domain bounds.
-            extrapolation: Boundary condition type.
-            resolution: Number of cells along each axis.
-        """
-        self.components = components
-        self.box = box
-        self.extrapolation = extrapolation
-        self.resolution = resolution
+    components: tuple[jax.Array, ...]
+    box: Box = struct.field(pytree_node=False)
+    extrapolation: Extrapolation = struct.field(pytree_node=False)
+    resolution: tuple[int, ...] = struct.field(pytree_node=False)
 
     @staticmethod
     def component_shapes(
@@ -181,30 +171,22 @@ class StaggeredGrid:
         """Number of spatial dimensions."""
         return len(self.resolution)
 
-    @property
-    def dx(self) -> jax.Array:
-        """Cell size in each dimension."""
-        return self.box.size / jnp.asarray(self.resolution, dtype=jnp.float32)
-
-    def tree_flatten(self) -> tuple[tuple[jax.Array, ...], tuple[object, ...]]:
-        """Flatten for JAX pytree protocol."""
-        return self.components, (self.box, self.extrapolation, self.resolution)
-
-    @classmethod
-    def tree_unflatten(
-        cls, aux_data: tuple[object, ...], children: tuple[jax.Array, ...]
-    ) -> StaggeredGrid:
-        """Unflatten from JAX pytree protocol."""
-        box, extrapolation, resolution = aux_data
-        return cls(tuple(children), box, extrapolation, resolution)  # type: ignore[arg-type]
-
     def __repr__(self) -> str:
-        """Readable summary."""
+        """Readable summary: shapes rather than the arrays themselves.
+
+        The generated dataclass repr prints every entry, which buries a shape mismatch --
+        the most common failure here -- under pages of numbers.
+        """
         shapes = ", ".join(str(component.shape) for component in self.components)
         return (
             f"StaggeredGrid(components=({shapes}), resolution={self.resolution}, "
             f"extrapolation={self.extrapolation.value})"
         )
+
+    @property
+    def dx(self) -> jax.Array:
+        """Cell size in each dimension."""
+        return self.box.size / jnp.asarray(self.resolution, dtype=jnp.float32)
 
 
 def divergence(field: StaggeredGrid) -> jax.Array:
