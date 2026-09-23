@@ -56,9 +56,10 @@ from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_backbone
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
 from opifex.neural.dtypes import default_float_dtype
-from opifex.neural.equivariant import BesselBasis, cosine_cutoff, scatter_sum
+from opifex.neural.equivariant import BesselBasis, cosine_cutoff
 
 
 _MAX_ATOMIC_NUMBER = 118

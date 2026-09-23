@@ -64,3 +64,9 @@ The `opifex.geometry` package provides tools for defining computational domains 
     options:
         show_root_heading: true
         show_source: true
+
+## Graph utilities
+
+Neighbour search over point clouds and the scatter reductions message passing uses.
+
+::: opifex.geometry.graph

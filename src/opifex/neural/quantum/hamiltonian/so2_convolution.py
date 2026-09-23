@@ -53,6 +53,7 @@ from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.geometry.algebra.wigner import _matrix_to_euler, _wigner_d_from_euler
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic.backbones._message_passing import EdgeGeometry  # noqa: TC001
 from opifex.neural.atomistic.backbones.nequip import (
     _gate_input_irreps,
@@ -65,7 +66,6 @@ from opifex.neural.equivariant import (
     gate,
     NormGate,
     rms_normalize,
-    scatter_sum,
 )
 from opifex.neural.equivariant._assembly import from_chunks
 from opifex.neural.equivariant.irreps import Irreps, IrrepsArray

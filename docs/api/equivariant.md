@@ -20,7 +20,3 @@ bases, and graph utilities.
 ## Radial bases and cutoffs
 
 ::: opifex.neural.equivariant.radial
-
-## Graph utilities
-
-::: opifex.neural.equivariant.graph

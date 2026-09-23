@@ -23,9 +23,9 @@ from jaxtyping import Array  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead, StressHead
-from opifex.neural.equivariant import scatter_sum
 
 
 class _ToyBackbone(nnx.Module):

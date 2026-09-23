@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `radius_graph`, `scatter_sum`, `scatter_mean` and `scatter_max` move from
+  `opifex.neural.equivariant` to `opifex.geometry.graph`: they operate on point clouds,
+  and `opifex.core` needs the neighbour search, which it could reach only by importing
+  the network package above it. Import them from `opifex.geometry.graph`.
 - Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
   packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
   pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.

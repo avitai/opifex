@@ -18,8 +18,8 @@ output features are E(3)- and permutation-invariant scalars -- the contract the
 :class:`opifex.neural.atomistic.heads.EnergyHead` consumes.
 
 This implementation **composes opifex's Q0 kit** rather than reimplementing
-primitives: :func:`opifex.neural.equivariant.radius_graph` /
-:func:`~opifex.neural.equivariant.scatter_sum` (graph + aggregation, via the
+primitives: :func:`opifex.geometry.graph.radius_graph` /
+:func:`~opifex.geometry.graph.scatter_sum` (graph + aggregation, via the
 shared :mod:`opifex.neural.atomistic.backbones._message_passing` helper),
 :class:`~opifex.neural.equivariant.BesselBasis` (radial basis) and
 :func:`~opifex.neural.equivariant.cosine_cutoff` (smooth cutoff). It plugs into
@@ -43,9 +43,10 @@ from jaxtyping import Array, Float  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
 from opifex.core.quantum.registry import register_backbone
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry, EdgeGeometry
 from opifex.neural.dtypes import default_float_dtype
-from opifex.neural.equivariant import BesselBasis, cosine_cutoff, scatter_sum
+from opifex.neural.equivariant import BesselBasis, cosine_cutoff
 
 
 _MAX_ATOMIC_NUMBER = 118

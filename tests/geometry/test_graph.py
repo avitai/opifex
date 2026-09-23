@@ -13,12 +13,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from opifex.neural.equivariant import (
-    radius_graph,
-    scatter_max,
-    scatter_mean,
-    scatter_sum,
-)
+from opifex.geometry.graph import radius_graph, scatter_max, scatter_mean, scatter_sum
 
 
 class TestRadiusGraph:
