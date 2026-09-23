@@ -52,22 +52,34 @@ import jax.numpy as jnp
 
 from opifex.fields.staggered import StaggeredGrid
 from opifex.fields.staggered_convection import convect
-from opifex.fields.staggered_diffusion import laplacian
+from opifex.fields.staggered_diffusion import laplacian, wall_source, WallVelocity
 from opifex.fields.staggered_pressure import project
 
 
-def tendency(velocity: StaggeredGrid, viscosity: float | jax.Array) -> StaggeredGrid:
+def tendency(
+    velocity: StaggeredGrid,
+    viscosity: float | jax.Array,
+    walls: WallVelocity | None = None,
+) -> StaggeredGrid:
     """The rate of change of the velocity, before the pressure is applied.
+
+    A moving wall enters here and nowhere else. It drives the flow through the viscous
+    term alone: the convective term cannot see a tangential wall value, because that value
+    only ever multiplies a wall-normal velocity that impermeability holds at zero.
 
     Args:
         velocity: Velocity on cell faces, divergence free.
         viscosity: Kinematic viscosity; may be traced.
+        walls: Prescribed tangential wall velocity. ``None`` means every wall is at rest,
+            which is the no-slip cavity.
 
     Returns:
         ``-div(u u) + nu * lap(u)``, on the same faces.
     """
     carried = convect(velocity, velocity)
     diffused = laplacian(velocity)
+    if walls is not None:
+        diffused = jax.tree.map(lambda a, b: a + b, diffused, wall_source(velocity, walls))
     return jax.tree.map(
         lambda advection, diffusion: -advection + viscosity * diffusion, carried, diffused
     )
@@ -83,7 +95,10 @@ def _combine(*weighted: tuple[float | jax.Array, StaggeredGrid]) -> StaggeredGri
 
 
 def step(
-    velocity: StaggeredGrid, dt: float | jax.Array, viscosity: float | jax.Array
+    velocity: StaggeredGrid,
+    dt: float | jax.Array,
+    viscosity: float | jax.Array,
+    walls: WallVelocity | None = None,
 ) -> StaggeredGrid:
     """Advance one classical fourth-order Runge-Kutta step, projecting at every stage.
 
@@ -91,20 +106,21 @@ def step(
         velocity: Velocity on cell faces, divergence free.
         dt: Time step.
         viscosity: Kinematic viscosity.
+        walls: Prescribed tangential wall velocity, or ``None`` for walls at rest.
 
     Returns:
         The velocity one step later, divergence free.
     """
-    first = tendency(velocity, viscosity)
+    first = tendency(velocity, viscosity, walls)
     stage = project(_combine((1.0, velocity), (0.5 * dt, first)))[0]
 
-    second = tendency(stage, viscosity)
+    second = tendency(stage, viscosity, walls)
     stage = project(_combine((1.0, velocity), (0.5 * dt, second)))[0]
 
-    third = tendency(stage, viscosity)
+    third = tendency(stage, viscosity, walls)
     stage = project(_combine((1.0, velocity), (dt, third)))[0]
 
-    fourth = tendency(stage, viscosity)
+    fourth = tendency(stage, viscosity, walls)
     advanced = _combine(
         (1.0, velocity),
         (dt / 6.0, first),
@@ -156,6 +172,7 @@ def integrate(
     total_time: float | jax.Array,
     num_steps: int,
     viscosity: float | jax.Array,
+    walls: WallVelocity | None = None,
 ) -> StaggeredGrid:
     """Advance the velocity over ``total_time`` in ``num_steps`` equal steps.
 
@@ -169,6 +186,9 @@ def integrate(
         total_time: The interval to integrate over.
         num_steps: Number of equal steps (static).
         viscosity: Kinematic viscosity.
+        walls: Prescribed tangential wall velocity, or ``None`` for walls at rest. It is an
+            ordinary pytree of arrays, so it crosses the scan boundary without retracing
+            and the trajectory differentiates with respect to it.
 
     Returns:
         The velocity at ``total_time``.
@@ -177,7 +197,7 @@ def integrate(
 
     @jax.checkpoint
     def advance(state: StaggeredGrid, _: None) -> tuple[StaggeredGrid, None]:
-        return step(state, dt, viscosity), None
+        return step(state, dt, viscosity, walls), None
 
     final, _ = jax.lax.scan(advance, velocity, None, length=num_steps)
     return final
