@@ -43,9 +43,7 @@ from opifex.neural.quantum.hamiltonian.block_training import (
 )
 from opifex.neural.quantum.hamiltonian.qh9_eval import (
     cal_orbital_and_energies,
-    evaluate_examples,
     evaluate_fock,
-    evaluate_qh9_test_set,
     hamiltonian_mae,
     homo_lumo_gap,
     latest_checkpoint,
@@ -55,7 +53,6 @@ from opifex.neural.quantum.hamiltonian.qh9_eval import (
     orbital_energy_mae,
     overlap_matrix_def2svp,
     predict_fock,
-    QH9TestSetMetrics,
     to_pyscf_internal_ordering,
 )
 
@@ -66,11 +63,8 @@ __all__ = [
     "BlockHamiltonianPredictor",
     "BlockTrainConfig",
     "HamiltonianBlockExpansion",
-    "QH9TestSetMetrics",
     "cal_orbital_and_energies",
-    "evaluate_examples",
     "evaluate_fock",
-    "evaluate_qh9_test_set",
     "hamiltonian_mae",
     "homo_lumo_gap",
     "latest_checkpoint",

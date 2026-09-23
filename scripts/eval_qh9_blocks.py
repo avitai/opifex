@@ -2,7 +2,7 @@
 r"""Evaluate a trained QH9 block-Hamiltonian checkpoint on the held-out test split.
 
 Thin CLI over
-:func:`opifex.neural.quantum.hamiltonian.qh9_eval.evaluate_qh9_test_set`: it builds
+:func:`opifex.benchmarking.qh9.evaluate_qh9_test_set`: it builds
 a :class:`~opifex.neural.quantum.hamiltonian.block_predictor.BlockHamiltonianPredictor`
 with the *same* config the checkpoint was trained with, restores the best-val orbax
 checkpoint, and aggregates the QH9 benchmark metrics over the deterministic
@@ -40,14 +40,12 @@ from pathlib import Path
 import jax
 from flax import nnx
 
+from opifex.benchmarking.qh9 import evaluate_qh9_test_set
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianConfig,
     BlockHamiltonianPredictor,
 )
-from opifex.neural.quantum.hamiltonian.qh9_eval import (
-    evaluate_qh9_test_set,
-    latest_checkpoint,
-)
+from opifex.neural.quantum.hamiltonian.qh9_eval import latest_checkpoint
 
 
 logger = logging.getLogger("eval_qh9_blocks")
