@@ -2,6 +2,50 @@
 
 The `opifex.core` package provides the fundamental abstractions and interfaces for the Opifex framework.
 
+## The Solve Protocol
+
+A problem states *what* to solve and a method *how*. A method names the problem family it
+solves as its generic argument, and `solve(problem, method)` refuses any other pairing.
+Both are frozen pytrees, so one compiled program serves every problem instance and only a
+new method configuration compiles again. Time-stepping methods take a static number of
+steps through `integrate`, which saves states on a `Snapshots` schedule and
+differentiates in reverse mode.
+
+```python
+import jax
+import jax.numpy as jnp
+from opifex.core.solver import Method, Problem, Solution, Status, solve
+
+
+class DecayProblem(Problem):
+    initial: jax.Array
+    rate: jax.Array
+    time_final: jax.Array
+
+
+class ExactDecay(Method[DecayProblem]):
+    def solve(self, problem: DecayProblem) -> Solution:
+        u = problem.initial * jnp.exp(-problem.rate * problem.time_final)
+        return Solution(fields={"u": u}, metrics={}, status=jnp.asarray(Status.SUCCESS, jnp.int32))
+
+
+solution = solve(DecayProblem(jnp.asarray(1.0), jnp.asarray(0.5), jnp.asarray(2.0)), ExactDecay())
+```
+
+::: opifex.core.solver.problem
+    options:
+        show_root_heading: true
+        members: [Problem, Method, solve, IncompatibleProblemError]
+
+::: opifex.core.solver.integrate
+    options:
+        show_root_heading: true
+        members: [integrate, Snapshots, FINAL_STATE]
+
+::: opifex.core.solver.solution.Solution
+    options:
+        show_root_heading: true
+
 ## Problems
 
 The `Problem` interface is defined as a Protocol, serving as the unified contract for all scientific machine learning problems.
