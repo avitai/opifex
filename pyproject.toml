@@ -340,24 +340,23 @@ allow-direct-references = true
 [tool.importlinter]
 root_package = "opifex"
 
+# The package layering, highest first: a layer may import the layers below it and never one
+# above. Siblings in one layer are independent of each other. Packages not listed yet --
+# neural, data, uncertainty, optimization, geometry, distributed and the rest -- join once
+# the cycles that tie them across layers are removed.
 [[tool.importlinter.contracts]]
-forbidden_modules = ["opifex.training"]
-name = "core does not import the top-level training package"
-source_modules = ["opifex.core"]
-type = "forbidden"
-
-[[tool.importlinter.contracts]]
-forbidden_modules = [
-  "opifex.platform",
-  "opifex.deployment",
-  "opifex.mlops",
-  "opifex.benchmarking",
-  "opifex.visualization",
-  "opifex.discovery"
+containers = ["opifex"]
+layers = [
+  "benchmarking | deployment | mlops | scalability | visualization",
+  "platform",
+  "training",
+  "solvers | discovery",
+  "physics",
+  "fields",
+  "core"
 ]
-name = "core does not import application/serving/infra layers"
-source_modules = ["opifex.core"]
-type = "forbidden"
+name = "opifex is layered from applications down to the core"
+type = "layers"
 
 [tool.interrogate]
 fail-under = 95
