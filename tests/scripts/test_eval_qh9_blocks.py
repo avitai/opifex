@@ -2,8 +2,9 @@ r"""Tests for the QH9 checkpoint-evaluation CLI ``scripts/eval_qh9_blocks.py``.
 
 These cover the script's *pure* orchestration logic -- µHa reporting, checkpoint /
 database resolution and argument parsing -- without a GPU, the QH9 database or
-PySCF. The heavy end-to-end metric computation lives in (and is tested through)
-:mod:`opifex.neural.quantum.hamiltonian.qh9_eval`.
+PySCF. The heavy end-to-end work lives in (and is tested through) the per-molecule
+metrics of :mod:`opifex.neural.quantum.hamiltonian.qh9_eval` and the test-split
+aggregation of :mod:`opifex.benchmarking.qh9`.
 """
 
 from __future__ import annotations
