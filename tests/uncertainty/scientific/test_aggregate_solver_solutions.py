@@ -27,7 +27,7 @@ import dataclasses as dc
 import jax.numpy as jnp
 import pytest
 
-from opifex.core.solver.interface import Solution
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import Status
 from opifex.uncertainty.scientific.solutions import aggregate_solver_solutions
 

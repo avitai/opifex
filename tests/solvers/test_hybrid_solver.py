@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from opifex.core.problems import create_ode_problem
-from opifex.core.solver.interface import Solution
+from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import Status
 from opifex.solvers.hybrid import additive_hybrid
 

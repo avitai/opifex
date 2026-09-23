@@ -9,7 +9,8 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from opifex.core.solver.interface import Solution, SolverConfig, SolverState
+from opifex.core.solver.interface import SolverConfig, SolverState
+from opifex.core.solver.solution import Solution
 from opifex.solvers.neural_operator import (
     NeuralOperatorSolver,  # This will fail initially
 )

@@ -84,7 +84,7 @@ _SOLVER_AGGREGATION_CAPABILITIES: dict[str, UQCapability] = {
         default_strategy=DefaultStrategy.PROBABILISTIC_NUMERICS,
         source_package="opifex",
         notes=(
-            "Stacks a sequence of opifex.core.solver.interface.Solution "
+            "Stacks a sequence of opifex.core.solver.solution.Solution "
             "objects and returns a SolutionDistribution carrying "
             "per-trajectory mean / std summaries. Pure JAX over arrays."
         ),
