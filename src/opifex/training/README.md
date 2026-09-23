@@ -6,10 +6,32 @@ constraint / conservation configs, callbacks/hooks, checkpointing, and distribut
 it for supervised, PINN, and neural-operator training.
 
 ```python
+import jax
+import jax.numpy as jnp
+from flax import nnx
+
 from opifex.core.training import Trainer
 from opifex.core.training.config import OptimizationConfig, TrainingConfig
 
-trainer = Trainer(model, TrainingConfig(num_epochs=2000, batch_size=64, optimization_config=OptimizationConfig(learning_rate=1e-3)))
+x = jnp.linspace(-1.0, 1.0, 256)[:, None]
+y = jnp.sin(3.0 * x)
+x_train, y_train, x_val, y_val = x[::2], y[::2], x[1::2], y[1::2]
+
+
+class MLP(nnx.Module):
+    def __init__(self, rngs: nnx.Rngs) -> None:
+        self.hidden = nnx.Linear(1, 32, rngs=rngs)
+        self.out = nnx.Linear(32, 1, rngs=rngs)
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        return self.out(nnx.tanh(self.hidden(x)))
+
+
+model = MLP(nnx.Rngs(0))
+config = TrainingConfig(
+    num_epochs=200, batch_size=64, optimization_config=OptimizationConfig(learning_rate=1e-2)
+)
+trainer = Trainer(model, config)
 trained_model, history = trainer.fit((x_train, y_train), val_data=(x_val, y_val))
 ```
 

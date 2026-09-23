@@ -97,8 +97,8 @@ layer = BayesianSpectralConvolution(
 
 # Input: (batch, in_channels, height, width)
 x = jnp.ones((1, 2, 32, 32))
-mean_output = layer(x, sample=False)         # (1, 3, 32, 32)
-sample = layer(x, sample=True, rngs=nnx.Rngs(posterior=0))
+mean_output = layer(x, deterministic=True)   # (1, 3, 32, 32)
+sample = layer(x, deterministic=False, rngs=nnx.Rngs(posterior=0))
 
 # KL over real + imaginary Fourier weights
 kl = layer.kl_divergence()
@@ -246,13 +246,31 @@ does not flap downstream additivity checks.
 
 ### `aggregate_solver_solutions` (solver-side Monte-Carlo / ensemble aggregation)
 
+The caller writes the replay or ensemble loop and passes the solutions. Here the diffusivity
+of an advection-diffusion problem is uncertain, log-normal about 0.05, and each replay is one
+exact solve:
+
 ```python
+import jax
+import jax.numpy as jnp
+
+from opifex.core.solver import Solution, Status
+from opifex.physics.spectral import solve_advection_diffusion_exact
 from opifex.uncertainty.scientific import aggregate_solver_solutions
 
-# Caller writes the explicit replay or ensemble loop.
-replays = [solver.solve(problem, rngs=nnx.Rngs(seed)) for seed in range(num_samples)]
+grid = jnp.arange(32) / 32
+u0 = jnp.exp(-((grid[:, None] - 0.5) ** 2 + (grid[None, :] - 0.5) ** 2) / 0.01)
+velocity = jnp.asarray([0.3, 0.0])
+diffusivities = 0.05 * jnp.exp(0.3 * jax.random.normal(jax.random.key(0), (16,)))
+
+
+def replay(diffusivity: jax.Array) -> Solution:
+    u = solve_advection_diffusion_exact(u0, diffusivity, velocity, time_final=0.5)
+    return Solution(fields={"u": u}, metrics={}, status=jnp.asarray(Status.SUCCESS, jnp.int32))
+
+
 out = aggregate_solver_solutions(
-    replays,
+    [replay(d) for d in diffusivities],
     quantiles=(0.05, 0.95),
     metadata=(("method", "monte_carlo_empirical"),),
 )
@@ -261,30 +279,29 @@ band_lower = out.auxiliary_data["uq"]["quantiles"][0.05]["u"]
 band_upper = out.auxiliary_data["uq"]["quantiles"][0.95]["u"]
 ```
 
-Stacks per-field arrays across the sequence, reports the mean in
-`Solution.fields`, and stores the full UQ payload (samples, ddof=1
-variance, optional quantile bands, metadata) under
-`auxiliary_data["uq"]`. Replaces four previous wrapper classes
-(`BayesianWrapper` / `ConformalWrapper` / `EnsembleWrapper` /
-`GenerativeWrapper`); deep ensemble, stochastic-replay, and
-empirical-interval flows all reduce to this single call.
+It stacks each field across the sequence, reports the mean in `Solution.fields`, and stores
+the UQ payload (samples, ddof=1 variance, the requested quantile bands, metadata) under
+`auxiliary_data["uq"]`. Deep ensembles, stochastic replays and empirical intervals all reduce
+to this one call.
 
-### `summarize_stacked_sample_solution` (generative-sampler aggregation)
+### `summarize_stacked_sample_solution` (stacked-sample aggregation)
+
+When one solve already returns its samples stacked along an axis -- a batched solve, or a
+generative model's draws -- summarise them in place:
 
 ```python
 from opifex.uncertainty.scientific import summarize_stacked_sample_solution
 
-# Generative base solver returns one Solution whose fields are stacked
-# (num_samples, *field_shape) arrays — typically a Diffusion or
-# Flow-Matching model from Artifex.
-raw = generative_solver.solve(problem)
+stacked = jax.vmap(
+    lambda d: solve_advection_diffusion_exact(u0, d, velocity, time_final=0.5)
+)(diffusivities)                                   # (16, 32, 32)
+raw = Solution(fields={"u": stacked}, metrics={}, status=jnp.asarray(Status.SUCCESS, jnp.int32))
 out = summarize_stacked_sample_solution(raw, quantiles=(0.05, 0.95))
 ```
 
-Aggregates along the sample axis without overwriting the underlying
-batch. Scalar fields pass through unchanged; non-scalar fields land in
-`auxiliary_data["uq"]["samples"]` and a mean lands in
-`Solution.fields[key]`. Replaces the `GenerativeWrapper` class.
+It aggregates along the sample axis without overwriting the underlying batch. Scalar fields
+pass through unchanged; non-scalar fields land in `auxiliary_data["uq"]["samples"]` and their
+mean in `Solution.fields[key]`.
 
 ## Objectives
 
@@ -498,11 +515,7 @@ from opifex.uncertainty.likelihoods import (
     LikelihoodSpec,
 )
 
-ll = gaussian_log_likelihood(
-    predictions=jnp.zeros((10,)),
-    targets=jnp.zeros((10,)),
-    scale=1.0,
-)
+ll = gaussian_log_likelihood(jnp.zeros((10,)), mean=jnp.zeros((10,)), scale=jnp.asarray(1.0))
 ```
 
 Each helper returns the per-sample log-likelihood as a `jax.Array`. The
@@ -515,13 +528,10 @@ likelihood family with the UQ registry.
 ## Priors
 
 ```python
+import jax.numpy as jnp
 from opifex.uncertainty.priors import diagonal_gaussian_log_prior, PriorSpec
 
-log_prior = diagonal_gaussian_log_prior(
-    params=jnp.zeros((4,)),
-    prior_mean=0.0,
-    prior_std=1.0,
-)
+log_prior = diagonal_gaussian_log_prior(jnp.zeros((4,)), prior_mean=0.0, prior_std=1.0)
 ```
 
 `diagonal_gaussian_log_prior` returns the sum-over-features log-prior
