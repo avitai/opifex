@@ -4,7 +4,7 @@ The full second-row AO block is 14-dimensional, laid out as the irrep
 ``3x0e + 2x1e + 1x2e`` (3 s-shells, 2 p-shells, 1 d-shell; ``3 + 2*3 + 5 = 14``).
 QHNet (Yu et al. 2023, arXiv:2306.04922) predicts a
 dense ``(14, 14)`` block per atom/edge and masks out the AO slots an element does
-not populate: H/He keep ``[0, 1, 3, 4, 5]`` (2 s + 1 p), C/N/O/F keep all 14.
+not populate: H keeps ``[0, 1, 3, 4, 5]`` (2 s + 1 p), C/N/O/F keep all 14.
 """
 
 from __future__ import annotations
@@ -13,10 +13,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from opifex.neural.equivariant import Irreps
-from opifex.neural.quantum.hamiltonian._orbital_layout import (
+from opifex.core.quantum.ao_layout import (
     atom_orbital_counts,
-    BLOCK_IRREPS,
     block_validity_mask,
     FULL_ORBITALS,
     ORBITAL_MASK,
@@ -26,12 +24,6 @@ from opifex.neural.quantum.hamiltonian._orbital_layout import (
 def test_full_orbitals_is_fourteen() -> None:
     """The def2-SVP second-row full AO count is 14."""
     assert FULL_ORBITALS == 14
-
-
-def test_block_irreps_layout() -> None:
-    """``BLOCK_IRREPS`` is ``3x0e + 2x1e + 1x2e`` with total dimension 14."""
-    assert Irreps("3x0e + 2x1e + 1x2e") == BLOCK_IRREPS
-    assert BLOCK_IRREPS.dim == FULL_ORBITALS
 
 
 def test_hydrogen_orbital_mask_indices() -> None:

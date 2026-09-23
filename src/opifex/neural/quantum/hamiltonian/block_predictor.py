@@ -9,7 +9,7 @@ positions, ``(A,)`` atomic numbers and a ``(2, E)`` *within-molecule* directed
 edge index (already offset so an edge never crosses molecules) -- it emits, for
 *every* atom, a fixed ``(14, 14)`` diagonal Fock block and, for *every* directed
 edge, a ``(14, 14)`` off-diagonal block (the def2-SVP second-row layout
-:data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS` =
+:data:`~opifex.neural.quantum.hamiltonian._block_expansion.BLOCK_IRREPS` =
 ``3x0e + 2x1e + 1x2e``).
 
 Architecture
@@ -72,6 +72,7 @@ import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array, Float, Int  # noqa: TC002
 
+from opifex.core.quantum.ao_layout import atom_orbital_counts, block_validity_mask
 from opifex.neural.atomistic.backbones._message_passing import edge_geometry
 from opifex.neural.atomistic.backbones.nequip import NequIPConfig
 from opifex.neural.equivariant import (
@@ -84,10 +85,6 @@ from opifex.neural.equivariant import (
     spherical_harmonics,
 )
 from opifex.neural.quantum.hamiltonian._block_expansion import HamiltonianBlockExpansion
-from opifex.neural.quantum.hamiltonian._orbital_layout import (
-    atom_orbital_counts,
-    block_validity_mask,
-)
 from opifex.neural.quantum.hamiltonian._refinement import SelfInteractionLayer
 from opifex.neural.quantum.hamiltonian.so2_convolution import (
     SO2ConvolutionLayer,
@@ -405,9 +402,9 @@ class BlockHamiltonianPredictor(nnx.Module):
         r"""Assemble a single molecule's dense, symmetric ``(n_ao, n_ao)`` matrix.
 
         Masks each block to its element's valid AO slots
-        (:func:`~...._orbital_layout.block_validity_mask`) and scatters it into the
+        (:func:`~opifex.core.quantum.ao_layout.block_validity_mask`) and scatters it into the
         dense matrix at the per-atom AO offsets
-        (:func:`~...._orbital_layout.atom_orbital_counts`). The off-diagonal blocks
+        (:func:`~opifex.core.quantum.ao_layout.atom_orbital_counts`). The off-diagonal blocks
         are written at both ``(i, j)`` and ``(j, i)``; the directed graph carries
         both edges, so the off-diagonal block law
         ``H[i, j] = B_ij + B_ji^T`` is realised by the final symmetrisation

@@ -73,6 +73,7 @@ from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
+from opifex.core.quantum.ao_layout import FULL_ORBITALS, ORBITAL_MASK
 from opifex.data.sources.qh9_blocks import _atom_ao_offsets, _complete_directed_edges
 from opifex.data.sources.qh9_dynamic import (
     decode_qh9_dynamic_row,
@@ -86,7 +87,6 @@ from opifex.data.sources.qh9_source import (
     qh9_random_split,
     QH9Example,
 )
-from opifex.neural.quantum.hamiltonian._orbital_layout import FULL_ORBITALS, ORBITAL_MASK
 
 
 logger = logging.getLogger(__name__)

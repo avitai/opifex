@@ -15,7 +15,7 @@ ground-truth reference and the round-trip check.
 Reuse (DRY)
 -----------
 The 14-slot per-element AO layout and validity masks come from
-:mod:`opifex.neural.quantum.hamiltonian._orbital_layout`
+:mod:`opifex.core.quantum.ao_layout`
 (:data:`~...FULL_ORBITALS`, :data:`~...ORBITAL_MASK`,
 :func:`~...block_validity_mask`). Because the per-atom AO order of the spherical
 Fock matches the 14-slot block layout (``3 s + 2 p + 1 d`` = ``BLOCK_IRREPS``),
@@ -59,11 +59,7 @@ import numpy as np
 from jaxtyping import Bool, Float, Int  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
-from opifex.neural.quantum.hamiltonian._orbital_layout import (
-    block_validity_mask,
-    FULL_ORBITALS,
-    ORBITAL_MASK,
-)
+from opifex.core.quantum.ao_layout import block_validity_mask, FULL_ORBITALS, ORBITAL_MASK
 
 
 logger = logging.getLogger(__name__)
