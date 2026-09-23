@@ -35,13 +35,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from opifex.physics.solvers.darcy import solve_darcy_flow
-from opifex.physics.solvers.diffusion_advection import _solve_diffusion_advection_2d_jit
 from opifex.physics.solvers.navier_stokes import (
     create_double_shear_layer,
     create_taylor_green_vortex,
     solve_navier_stokes_2d,
 )
 from opifex.physics.solvers.shallow_water import solve_shallow_water_2d
+from opifex.physics.spectral.linear import solve_advection_diffusion_exact
 from opifex.physics.spectral.steppers import solve_burgers_spectral
 
 
@@ -147,23 +147,54 @@ def _darcy_coeff(
     return low + (high - low) * (field - jnp.min(field)) / span
 
 
+def _wrapped_gaussian(
+    grid_x: jax.Array,
+    grid_y: jax.Array,
+    center_x: jax.Array,
+    center_y: jax.Array,
+    width: jax.Array | float,
+) -> jax.Array:
+    """Gaussian bump on the unit torus: the sum over its nearest periodic images.
+
+    This is the wrapped normal density (Mardia & Jupp 2000, *Directional
+    Statistics*, sec. 3.5.7) up to normalisation. Distances are first reduced to
+    the minimum image in ``[-1/2, 1/2)``; the images at offsets ``-1, 0, 1`` then
+    suffice for ``width <= 0.15``, since the next image lies at least 1.5 periods
+    away and contributes below ``exp(-50)``.
+    """
+    offsets = jnp.arange(-1.0, 2.0)
+
+    def wrapped_1d(grid: jax.Array, center: jax.Array) -> jax.Array:
+        minimum_image = jnp.mod(grid - center + 0.5, 1.0) - 0.5
+        distance = minimum_image[..., None] + offsets
+        return jnp.exp(-(distance**2) / (2 * width**2)).sum(axis=-1)
+
+    return wrapped_1d(grid_x, center_x) * wrapped_1d(grid_y, center_y)
+
+
 def _diffusion_ic(key: jax.Array, resolution: int) -> jax.Array:
-    """Random 2D diffusion-advection initial condition (Gaussian / square / wave)."""
-    coords = jnp.linspace(0.0, 1.0, resolution)
+    """Random periodic 2D initial condition (Gaussian / square / sine wave).
+
+    Sampled at ``x_j = j / N`` on the unit torus (right endpoint excluded), the
+    grid on which :func:`solve_advection_diffusion_exact` is exact. Every family
+    is periodic: the Gaussian is wrapped, the square lies inside the cell, and
+    the wave has an integer number of periods ``m in {1, 2, 3}`` per axis.
+    """
+    coords = jnp.arange(resolution) / resolution
     grid_x, grid_y = jnp.meshgrid(coords, coords, indexing="ij")
-    key_type, key_a, key_b = jax.random.split(key, 3)
+    key_type, key_x, key_y, key_size = jax.random.split(key, 4)
     ic_type = jax.random.randint(key_type, (), 0, 3)
 
     def gaussian() -> jax.Array:
-        cx = 0.3 + 0.4 * jax.random.uniform(key_a)
-        cy = 0.3 + 0.4 * jax.random.uniform(key_b)
-        width = 0.05 + 0.1 * jax.random.uniform(key_a)
-        return jnp.exp(-((grid_x - cx) ** 2 + (grid_y - cy) ** 2) / (2 * width**2))
+        cx = 0.3 + 0.4 * jax.random.uniform(key_x)
+        cy = 0.3 + 0.4 * jax.random.uniform(key_y)
+        width = 0.05 + 0.1 * jax.random.uniform(key_size)
+        return _wrapped_gaussian(grid_x, grid_y, cx, cy, width)
 
     def square() -> jax.Array:
-        cx = 0.3 + 0.4 * jax.random.uniform(key_a)
-        cy = 0.3 + 0.4 * jax.random.uniform(key_b)
-        size = 0.1 + 0.2 * jax.random.uniform(key_a)
+        cx = 0.3 + 0.4 * jax.random.uniform(key_x)
+        cy = 0.3 + 0.4 * jax.random.uniform(key_y)
+        size = 0.1 + 0.2 * jax.random.uniform(key_size)
         return jnp.where(
             (jnp.abs(grid_x - cx) < size / 2) & (jnp.abs(grid_y - cy) < size / 2),
             1.0,
@@ -171,9 +202,9 @@ def _diffusion_ic(key: jax.Array, resolution: int) -> jax.Array:
         )
 
     def wave() -> jax.Array:
-        fx = 2 + 4 * jax.random.uniform(key_a)
-        fy = 2 + 4 * jax.random.uniform(key_b)
-        return jnp.sin(fx * jnp.pi * grid_x) * jnp.sin(fy * jnp.pi * grid_y)
+        mx = jax.random.randint(key_x, (), 1, 4)
+        my = jax.random.randint(key_y, (), 1, 4)
+        return jnp.sin(2 * jnp.pi * mx * grid_x) * jnp.sin(2 * jnp.pi * my * grid_y)
 
     return jax.lax.switch(ic_type, [gaussian, square, wave])
 
@@ -351,15 +382,22 @@ def generate_diffusion(
     resolution: int = 64,
     diffusion_range: tuple[float, float] = (0.01, 0.1),
     advection_range: tuple[float, float] = (-1.0, 1.0),
+    time_final: float = 1.0,
     seed: int = 42,
 ) -> dict[str, np.ndarray]:
-    """Generate a 2D diffusion-advection dataset (IC -> final state).
+    """Generate a 2D diffusion-advection dataset (IC -> state at ``time_final``).
+
+    Solves ``u_t + v . grad u = D lap u`` on the periodic unit square. The labels
+    are the exact Fourier solution (:func:`solve_advection_diffusion_exact`), so
+    they carry no time-stepping error and have no stability limit at any
+    resolution.
 
     Args:
         n_samples: Number of samples to generate.
-        resolution: Spatial grid resolution.
+        resolution: Grid points per axis, at ``x_j = j / resolution``.
         diffusion_range: ``(low, high)`` uniform range for the diffusion coefficient.
         advection_range: ``(low, high)`` uniform range for each advection velocity.
+        time_final: Physical time of the output state.
         seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
 
     Returns:
@@ -367,21 +405,13 @@ def generate_diffusion(
     """
     diff_low, diff_high = diffusion_range
     adv_low, adv_high = advection_range
-    grid_spacing = 1.0 / resolution
-    dt = 0.01
-    n_steps = 100
 
     def per_sample(key: jax.Array) -> jax.Array:
-        ic_key, key_diff, key_vx, key_vy = jax.random.split(key, 4)
+        ic_key, key_diff, key_velocity = jax.random.split(key, 3)
         ic = _diffusion_ic(ic_key, resolution)
         diffusion = jax.random.uniform(key_diff, (), minval=diff_low, maxval=diff_high)
-        vx = jax.random.uniform(key_vx, (), minval=adv_low, maxval=adv_high)
-        vy = jax.random.uniform(key_vy, (), minval=adv_low, maxval=adv_high)
-        # Use the jitted core solver directly: the public wrapper does Python-level
-        # isinstance validation on concrete floats, which fails under vmap tracers.
-        final = _solve_diffusion_advection_2d_jit(
-            ic, diffusion, (vx, vy), n_steps, grid_spacing, dt
-        )
+        velocity = jax.random.uniform(key_velocity, (2,), minval=adv_low, maxval=adv_high)
+        final = solve_advection_diffusion_exact(ic, diffusion, velocity, time_final=time_final)
         return jnp.stack([ic, final])
 
     stacked = _run_vmapped(per_sample, seed, n_samples)  # (n, 2, res, res)
