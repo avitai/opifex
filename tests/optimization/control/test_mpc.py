@@ -768,3 +768,63 @@ class TestMPCPerformance:
 if __name__ == "__main__":
     # Run basic tests
     pytest.main([__file__, "-v"])
+
+
+class TestTheResultCarriesNoWallClock:
+    """A controller's duration is a fact about running it, not about its result.
+
+    ``compute_control`` is ``nnx.jit``-compiled, so a clock read inside it is evaluated
+    once at trace time and frozen into the compiled program. A ``computation_time``
+    field filled that way reported the *tracing* cost on every later call -- measured at
+    0.606 s against a real call cost of 0.0006 s, unchanged across calls -- which is
+    exactly the number a real-time controller would check its deadline against.
+    """
+
+    @staticmethod
+    def _controller() -> DifferentiableMPC:
+        return DifferentiableMPC(MPCConfig(horizon=5, control_dim=2, state_dim=4))
+
+    def test_the_result_has_no_timing_field(self) -> None:
+        assert "computation_time" not in MPCResult._fields
+
+    def test_repeated_calls_are_timed_by_the_caller_and_differ(self) -> None:
+        from calibrax.profiling import time_calls
+
+        controller = self._controller()
+        state = jnp.zeros(4)
+        reference = jnp.zeros((5, 4))
+
+        first = time_calls(
+            lambda: controller.compute_control(state, reference),  # type: ignore[reportCallIssue]
+            iterations=3,
+        ).median_sec
+        second = time_calls(
+            lambda: controller.compute_control(state, reference),  # type: ignore[reportCallIssue]
+            iterations=3,
+        ).median_sec
+
+        # The point is that these are measurements rather than one baked-in constant:
+        # two independent minima of a real computation are not bit-identical.
+        assert first > 0.0
+        assert second > 0.0
+        assert first != second
+
+    def test_the_measured_cost_excludes_tracing(self) -> None:
+        from calibrax.profiling import time_calls
+
+        controller = self._controller()
+        state = jnp.zeros(4)
+        reference = jnp.zeros((5, 4))
+
+        start = time.perf_counter()
+        jax.block_until_ready(
+            controller.compute_control(state, reference)  # type: ignore[reportCallIssue]
+        )
+        including_trace = time.perf_counter() - start
+
+        measured = time_calls(
+            lambda: controller.compute_control(state, reference),  # type: ignore[reportCallIssue]
+            iterations=3,
+        ).median_sec
+
+        assert measured < including_trace

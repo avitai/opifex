@@ -7,8 +7,10 @@ and intelligent GPU memory management.
 
 from dataclasses import fields
 
+import jax
 import jax.numpy as jnp
 import pytest
+from calibrax.profiling import time_calls
 from flax import nnx
 
 from opifex.optimization.production import (
@@ -45,6 +47,22 @@ class SimpleModel(nnx.Module):
 
     def __call__(self, x):
         return self.linear(x)
+
+
+class _DeepModel(nnx.Module):
+    """A model large enough that the cost of running it dwarfs the cost of queuing it."""
+
+    def __init__(self, features: int) -> None:
+        self.linear = nnx.Linear(features, features, rngs=nnx.Rngs(0))
+        self.layers = nnx.List(
+            [nnx.Linear(features, features, rngs=nnx.Rngs(seed)) for seed in range(1, 4)]
+        )
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        x = nnx.gelu(self.linear(x))
+        for layer in self.layers:
+            x = nnx.gelu(layer(x))
+        return x
 
 
 @pytest.fixture
@@ -271,6 +289,43 @@ class TestAdaptiveJAXOptimizer:
         assert metrics.throughput_rps == pytest.approx(1000.0 / metrics.latency_ms, rel=1e-6)
         # A single-model benchmark has no baseline, so improvement_factor is exactly 1.0.
         assert metrics.improvement_factor == 1.0
+
+    def test_the_latency_measures_execution_not_dispatch(self):
+        """The reported latency has to be of work done, not of work queued.
+
+        JAX dispatch is asynchronous, so a stopwatch around unsynchronised forward
+        passes measures the cost of enqueueing them -- and ``latency_ms`` is what
+        ``target_latency_ms`` is compared against to decide whether a model meets its
+        deployment requirement, so an unsynchronised measurement passes that gate
+        regardless of the model.
+
+        The fixture is deliberately large and compiled, because that is the only
+        arrangement in which the gap exists to be measured. Timed eagerly, an ``nnx``
+        module dispatches operation by operation and Python already serialises it:
+        swept from 0.7 ms to 22 ms per call on this backend, unsynchronised timing was
+        never more than a few percent from synchronised. Compiled, the whole forward is
+        one program the host does not wait for -- 0.55 ms against 67.8 ms at this size.
+        """
+        import time
+
+        features, batch = 2048, 1024
+        model = _DeepModel(features)
+        optimized = AdaptiveJAXOptimizer().apply_latency_optimization(model)
+        test_input = jnp.ones((batch, features))
+        jax.block_until_ready(optimized(test_input))
+
+        start = time.perf_counter()
+        for _ in range(5):
+            optimized(test_input)
+        dispatch_only_ms = (time.perf_counter() - start) / 5 * 1000
+
+        synchronised_ms = (
+            time_calls(lambda: optimized(test_input), warmup=1, iterations=5).median_sec * 1000
+        )
+
+        # The margin is the whole point: an unsynchronised measurement is a small
+        # fraction of the real cost, not a noisy version of it.
+        assert synchronised_ms > 5.0 * dispatch_only_ms
 
     def test_optimize_neural_operator(self, sample_model, sample_workload):
         """Test complete neural operator optimization."""
@@ -499,3 +554,27 @@ class TestProductionOptimizationIntegration:
             assert actual_strategy == expected_strategy, (
                 f"Expected {expected_strategy}, got {actual_strategy} for workload {workload}"
             )
+
+
+class TestLatencyOptimizationCompilesAtTheModelsOwnWidth:
+    """Pre-compilation has to use the shape the model actually takes.
+
+    ``apply_latency_optimization`` triggers compilation eagerly so the first real
+    request does not pay for it. It did so at a fixed width of 64, which raises a
+    ``dot_general`` shape error for every model that is not 64 wide -- while the module's
+    own ``get_model_input_features`` answers the question.
+    """
+
+    def test_a_model_wider_than_64_is_optimized(self) -> None:
+        model = _DeepModel(128)
+
+        optimized = AdaptiveJAXOptimizer().apply_latency_optimization(model)
+
+        assert optimized(jnp.ones((2, 128))).shape == (2, 128)
+
+    def test_a_model_narrower_than_64_is_optimized(self) -> None:
+        model = _DeepModel(16)
+
+        optimized = AdaptiveJAXOptimizer().apply_latency_optimization(model)
+
+        assert optimized(jnp.ones((2, 16))).shape == (2, 16)

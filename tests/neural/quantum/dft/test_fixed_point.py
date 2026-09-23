@@ -210,7 +210,7 @@ class TestTheMixingSolveAtDefaultPrecision:
             basis_set="sto-3g",
         )
 
-        result = SCFSolver(system).solve()
+        result = SCFSolver(system, convergence_tolerance=1e-6).solve()
 
         assert bool(jnp.isfinite(result.total_energy))
         assert float(result.total_energy) == pytest.approx(-1.1212060, abs=1e-4)

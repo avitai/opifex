@@ -20,6 +20,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from calibrax.profiling import time_calls
 from flax import nnx
 
 
@@ -254,27 +255,18 @@ def benchmark_layout_performance(
         # Convert to target layout
         x_converted = optimizer.convert_layout(x, layout)
 
-        # JIT compile the operation
+        # Time the compiled program. `time_calls` warms up, synchronises each timed
+        # call -- dispatch is asynchronous, so an unsynchronised loop measures how long
+        # it takes to *queue* the work -- and reports a median rather than a mean, which
+        # one slow call moves.
         jitted_op = jax.jit(operation)
+        timing = time_calls(
+            lambda op=jitted_op, arg=x_converted: op(arg),
+            warmup=1,
+            iterations=num_iterations,
+        )
 
-        # Warmup
-        _ = jitted_op(x_converted)
-
-        # Benchmark
-        import time
-
-        start_time = time.time()
-
-        for _ in range(num_iterations):
-            _ = jitted_op(x_converted)
-
-        # Wait for completion
-        jax.block_until_ready(_)
-
-        end_time = time.time()
-        avg_time = (end_time - start_time) / num_iterations
-
-        results[layout.value] = avg_time
+        results[layout.value] = timing.median_sec
 
     return results
 

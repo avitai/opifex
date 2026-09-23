@@ -6,19 +6,20 @@ so the duration reported on the hundredth call is the first compilation's. Text 
 produced inside a transform at all. Both are properties of *running* a solve rather than
 of its result, so they are assembled here, once, at the boundary.
 
-Timing a JAX computation needs an explicit synchronisation: dispatch is asynchronous, so
-a stopwatch around an unsynchronised call measures the time to enqueue work rather than
-to do it. :func:`timed_solve` synchronises deliberately, and takes the smallest of
-several runs, because the minimum is the estimate least polluted by whatever else the
-machine was doing.
+The measurement itself is :func:`calibrax.profiling.time_calls`, which owns benchmark
+timing across the ecosystem: it discards warm-up calls, synchronises each timed call
+before the clock stops -- dispatch is asynchronous, so an unsynchronised stopwatch
+measures the time to *enqueue* work -- and reports a median rather than a mean, which one
+slow call moves. This module adds only the solve-specific part: turning a traced status
+into a sentence.
 """
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 import jax
+from calibrax.profiling import time_calls
 
 from opifex.core.solver.interface import Solution
 from opifex.core.solver.status import message
@@ -30,7 +31,7 @@ class SolveReport:
 
     Attributes:
         solution: The traced result the solve produced.
-        execution_time: Seconds of wall clock, measured with a deliberate sync.
+        execution_time: Median seconds per run, measured with a deliberate sync.
         converged: Whether every element succeeded. A Python bool, because it is read on
             the host; inside a transform, use ``solution.is_converged``.
         reason: The human-readable outcome, one entry per batch element.
@@ -66,39 +67,34 @@ def report(solution: Solution, execution_time: float = 0.0, **extra: Any) -> Sol
     )
 
 
-def timed_solve(solve: Callable[[], Solution], repeats: int = 1, **extra: Any) -> SolveReport:
-    """Run a solve, timing it honestly, and report the outcome.
-
-    The first run is discarded: it pays for compilation, which is not what a caller timing
-    a solve wants to measure. Each timed run is synchronised before the clock is read, and
-    the smallest is kept.
+def timed_solve(
+    solve: Callable[[], Solution],
+    *,
+    warmup: int = 1,
+    iterations: int = 1,
+    **extra: Any,
+) -> SolveReport:
+    """Run a solve, time it honestly, and report the outcome.
 
     Args:
         solve: A no-argument callable performing the solve.
-        repeats: How many timed runs to take the minimum over.
+        warmup: Calls made and discarded first; these absorb compilation, a cost no
+            later caller pays.
+        iterations: Timed calls to take the median over.
         **extra: Anything else to carry into the report.
 
     Returns:
-        The host-side report, carrying the last solution and the best time.
-
-    Raises:
-        ValueError: If ``repeats`` is below one, which would leave nothing to time.
+        The host-side report, carrying the last solution and the median time.
     """
-    if repeats < 1:
-        msg = f"repeats must be at least one run, got {repeats}"
-        raise ValueError(msg)
+    produced: list[Solution] = []
 
-    solution = solve()
-    jax.block_until_ready(solution)
-
-    best = float("inf")
-    for _ in range(repeats):
-        start = time.perf_counter()
+    def run() -> Solution:
         solution = solve()
-        jax.block_until_ready(solution)
-        best = min(best, time.perf_counter() - start)
+        produced.append(solution)
+        return solution
 
-    return report(solution, execution_time=best, **extra)
+    timing = time_calls(run, warmup=warmup, iterations=iterations)
+    return report(produced[-1], execution_time=timing.median_sec, **extra)
 
 
 __all__ = ["SolveReport", "report", "timed_solve"]
