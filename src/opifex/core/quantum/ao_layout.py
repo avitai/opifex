@@ -4,14 +4,11 @@ r"""def2-SVP per-element orbital layout and AO validity masks (QHNet block form)
 A heterogeneous-batchable Hamiltonian predictor emits a *fixed* dense block per
 atom (diagonal Fock block) and per directed edge (off-diagonal block), then masks
 out the AO slots an element does not populate. For the full second-row def2-SVP
-basis the block is 14-dimensional, laid out as the irrep
-
-.. math::  \mathrm{BLOCK\_IRREPS} = 3\!\times\!0e + 2\!\times\!1e + 1\!\times\!2e,
-
-i.e. 3 s-shells, 2 p-shells and 1 d-shell (``3 + 2*3 + 5 = 14``), the def2-SVP
+basis the block is 14-dimensional: 3 s-shells, 2 p-shells and 1 d-shell
+(``3 + 2*3 + 5 = 14``, the irreps ``3x0e + 2x1e + 1x2e``), the def2-SVP
 shell composition of C/N/O/F (Weigend & Ahlrichs, Phys. Chem. Chem. Phys. 7, 3297
 (2005)) used by the QH9 block form (Yu et al. 2023, "QH9", arXiv:2306.09549;
-Yu et al. 2023, "QHNet", arXiv:2306.04922). Hydrogen/helium carry the def2-SVP
+Yu et al. 2023, "QHNet", arXiv:2306.04922). Hydrogen carries the def2-SVP
 2 s + 1 p shells in slots ``[0, 1, 3, 4, 5]`` while C/N/O/F populate all 14. A
 directed-edge (pair) block's
 validity mask is the outer product of its row element's and column element's
@@ -30,17 +27,12 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Bool, Int  # noqa: TC002
 
-from opifex.neural.equivariant import Irreps
-
 
 FULL_ORBITALS: int = 14
 """def2-SVP full second-row AO count (``3 s + 2 p + 1 d`` = ``3 + 6 + 5``)."""
 
-BLOCK_IRREPS: Irreps = Irreps("3x0e + 2x1e + 1x2e")
-r"""The 14-dim row/col representation of a Fock block (``3x0e + 2x1e + 1x2e``)."""
-
 _HYDROGEN_AO_INDICES: tuple[int, ...] = (0, 1, 3, 4, 5)
-"""The def2-SVP 2 s + 1 p slots H/He populate in the 14-slot block."""
+"""The def2-SVP 2 s + 1 p slots hydrogen populates in the 14-slot block."""
 
 ORBITAL_MASK: dict[int, tuple[int, ...]] = {
     1: _HYDROGEN_AO_INDICES,
@@ -83,7 +75,7 @@ def _atom_orbital_validity(atomic_numbers: Int[Array, "..."]) -> Bool[Array, "..
 
 
 def atom_orbital_counts(atomic_numbers: Int[Array, "..."]) -> Int[Array, "..."]:
-    """Return the number of populated AOs per atom (5 for H/He, 14 for C/N/O/F).
+    """Return the number of populated AOs per atom (5 for H, 14 for C/N/O/F).
 
     Args:
         atomic_numbers: Integer atomic numbers ``Z`` (any leading shape).
@@ -121,7 +113,6 @@ def block_validity_mask(
 
 
 __all__ = [
-    "BLOCK_IRREPS",
     "FULL_ORBITALS",
     "ORBITAL_MASK",
     "atom_orbital_counts",

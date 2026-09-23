@@ -42,7 +42,7 @@ Every per-molecule element carries, padded to a fixed shape:
 
 The block-cut operator's gather mirrors the NumPy scatter exactly: gathering slot
 ``s`` from within-atom offset ``atom_slot_indices[s]`` and masking invalid slots
-with :func:`~opifex.neural.quantum.hamiltonian._orbital_layout.block_validity_mask`
+with :func:`~opifex.core.quantum.ao_layout.block_validity_mask`
 reproduces ``cut_fock_to_blocks`` bit-for-bit (the equivalence gate).
 """
 
@@ -56,7 +56,7 @@ from datarax.core.operator import OperatorModule
 from flax import nnx  # noqa: TC002
 from jaxtyping import Array, Float, Int  # noqa: TC002
 
-from opifex.neural.quantum.hamiltonian._orbital_layout import block_validity_mask
+from opifex.core.quantum.ao_layout import block_validity_mask
 
 
 @dataclass(frozen=True)

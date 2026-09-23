@@ -31,12 +31,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from opifex.core.quantum.ao_layout import FULL_ORBITALS
 from opifex.data.sources.qh9_blocks import (
     cut_fock_to_blocks,
     reconstruct_fock_from_blocks,
 )
 from opifex.data.sources.qh9_source import read_qh9_sqlite
-from opifex.neural.quantum.hamiltonian._orbital_layout import FULL_ORBITALS
 
 
 _REAL_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
