@@ -27,7 +27,8 @@ import jax.numpy as jnp
 
 from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import StaggeredGrid
-from opifex.fields.staggered_navier_stokes import integrate
+from opifex.fields.staggered_diffusion import WallVelocity
+from opifex.fields.staggered_navier_stokes import integrate, stable_step_count
 
 
 def solve_navier_stokes_2d(
@@ -142,39 +143,55 @@ def create_taylor_green_vortex(
     return u0, v0
 
 
-def create_lid_driven_cavity_ic(
+def solve_lid_driven_cavity(
     resolution: int,
-    lid_velocity: float = 1.0,
-) -> tuple[jax.Array, jax.Array]:
-    """
-    Create lid-driven cavity initial condition.
+    nu: float | jax.Array,
+    lid_velocity: float | jax.Array = 1.0,
+    total_time: float = 1.0,
+    num_steps: int | None = None,
+) -> StaggeredGrid:
+    """Drive a walled cavity with a sliding lid and return the velocity at ``total_time``.
 
-    For lid-driven cavity, the top boundary has a specified velocity
-    while all other boundaries are no-slip. This is an approximation
-    using a smooth profile since we use periodic boundaries.
+    The cavity is a boundary-value problem, not an initial-value one: the flow is driven by
+    a lid held in motion for all time, against no-slip on the other three walls. Starting
+    from rest, the vortex is produced by the boundary condition.
+
+    The lid takes the regularised profile ``16 x^2 (1 - x)^2`` of Shen 1991, whose value and
+    slope both vanish at the corners. The classical uniform lid is discontinuous there, and
+    that singularity leaves pressure and vorticity unbounded and the observed order of
+    accuracy undefined -- measured across the literature at anywhere from 1.97 to 4.06
+    depending on which functional is read -- so the uniform lid is a benchmark geometry
+    rather than a verification one. The regularised profile is also the one used for the
+    energy-conservation test of Sanderse, Verstappen and Koren 2014, Eq. (166).
 
     Args:
-        resolution: Grid resolution
-        lid_velocity: Velocity of the lid (top boundary)
+        resolution: Cells along each axis.
+        nu: Kinematic viscosity; the Reynolds number is ``lid_velocity / nu`` on a unit box.
+        lid_velocity: Peak speed of the lid, at the middle of the wall.
+        total_time: Interval to integrate over.
+        num_steps: Number of equal steps; static, so the trajectory differentiates in
+            reverse mode. ``None`` sizes it from the explicit scheme's stability limit,
+            which is what the default should be: the viscous limit here is
+            ``0.348 dx^2 / nu``, and a step above it returns NaN rather than raising, so a
+            caller who guesses gets silence. At 32 cells and ``nu = 0.05`` that limit is
+            0.0068, and 400 steps over an interval of 4 -- an unremarkable-looking choice --
+            is three times too large.
 
     Returns:
-        Tuple of (u0, v0) initial velocity fields
+        The velocity on cell faces at ``total_time``, divergence free.
     """
-    # Start with quiescent flow
-    v0 = jnp.zeros((resolution, resolution))
-
-    # Add a smooth velocity profile near the top
-    # Using tanh to create a smooth boundary layer
-    # y-axis is the second dimension in (x, y) = (axis 0, axis 1)
-    y = jnp.linspace(0, 2 * jnp.pi, resolution, endpoint=False)
-    y_profile = 0.5 * (1 + jnp.tanh(10 * (y / (2 * jnp.pi) - 0.9)))
-
-    # Broadcast to full 2D array: (1, res) * (res, 1) = (res, res)
-    # But we want constant in x direction, varying in y
-    # So we use ones for x and y_profile for y
-    u0 = lid_velocity * jnp.ones((resolution, 1)) * y_profile[None, :]
-
-    return u0, v0
+    domain = Box(lower=(0.0, 0.0), upper=(1.0, 1.0))
+    still = StaggeredGrid.zeros((resolution, resolution), domain, Extrapolation.ZERO)
+    if num_steps is None:
+        num_steps = stable_step_count(still, total_time, float(nu))
+    along = jnp.arange(1, resolution) / resolution
+    walls = WallVelocity.zeros((resolution, resolution), Extrapolation.ZERO).set(
+        normal=0,
+        axis=1,
+        upper=True,
+        value=lid_velocity * 16.0 * along**2 * (1.0 - along) ** 2,
+    )
+    return integrate(still, total_time, num_steps, nu, walls)
 
 
 def create_double_shear_layer(
@@ -216,7 +233,7 @@ def create_double_shear_layer(
 
 __all__ = [
     "create_double_shear_layer",
-    "create_lid_driven_cavity_ic",
     "create_taylor_green_vortex",
+    "solve_lid_driven_cavity",
     "solve_navier_stokes_2d",
 ]

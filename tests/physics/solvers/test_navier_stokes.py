@@ -11,6 +11,7 @@ import itertools
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 
@@ -409,18 +410,54 @@ class TestNavierStokesVortexInitialConditions:
         # error dominates. The analytical function is divergence-free, which
         # can be verified with float64 where divergence is ~10^-15.
 
-    def test_lid_driven_cavity_import(self):
-        """Test that lid-driven cavity IC can be imported."""
-        from opifex.physics.solvers.navier_stokes import create_lid_driven_cavity_ic
 
-        assert create_lid_driven_cavity_ic is not None
+class TestLidDrivenCavity:
+    """The cavity is a boundary-value problem, so it is tested as one.
 
-    def test_lid_driven_cavity_shape(self):
-        """Test that lid-driven cavity IC has correct shape."""
-        from opifex.physics.solvers.navier_stokes import create_lid_driven_cavity_ic
+    It is driven by a wall held in motion for all time, not by an initial condition. The
+    previous approximation put a smooth profile inside a periodic box, which has no wall to
+    drag anything and so decays instead of recirculating; it also returned a peak of 0.679
+    when asked for a lid velocity of 1.0.
+    """
 
-        resolution = 64
-        u0, v0 = create_lid_driven_cavity_ic(resolution, lid_velocity=1.0)
+    def test_a_lid_at_rest_leaves_the_cavity_at_rest(self):
+        """The negative control: without it, a solver returning zeros would pass below."""
+        from opifex.physics.solvers.navier_stokes import solve_lid_driven_cavity
 
-        assert u0.shape == (resolution, resolution)
-        assert v0.shape == (resolution, resolution)
+        still = solve_lid_driven_cavity(16, nu=0.05, lid_velocity=0.0, total_time=1.0)
+
+        assert max(float(jnp.max(jnp.abs(c))) for c in still.components) == 0.0
+
+    def test_the_lid_drives_a_recirculating_vortex(self):
+        """The cavity's defining feature, and the one the old approximation could not make.
+
+        A lid-driven cavity is a boundary-value problem: the flow is produced by a wall
+        held in motion, not by an initial blob. The signature is a sign reversal up the
+        centreline -- fluid dragged along under the lid, returning beneath it. A periodic
+        box with a smooth initial profile has no wall to drag anything and simply decays.
+        """
+        from opifex.physics.solvers.navier_stokes import solve_lid_driven_cavity
+
+        cavity = solve_lid_driven_cavity(32, nu=0.05, lid_velocity=1.0, total_time=4.0)
+        centreline = np.asarray(cavity.components[0])[16]
+
+        assert float(centreline.max()) > 0.3, "fluid must be dragged along by the lid"
+        assert float(centreline.min()) < -0.05, "and must return beneath it"
+
+    def test_the_driven_cavity_stays_divergence_free(self):
+        """Incompressibility is what the projection is for, so it is asserted directly."""
+        from opifex.fields.staggered import divergence
+        from opifex.physics.solvers.navier_stokes import solve_lid_driven_cavity
+
+        cavity = solve_lid_driven_cavity(32, nu=0.05, lid_velocity=1.0, total_time=4.0)
+        speed = max(float(jnp.max(jnp.abs(c))) for c in cavity.components)
+
+        assert float(jnp.max(jnp.abs(divergence(cavity)))) < 1e-4 * speed * 32
+
+    def test_the_default_step_count_is_stable(self):
+        """A step above the viscous limit returns NaN rather than raising."""
+        from opifex.physics.solvers.navier_stokes import solve_lid_driven_cavity
+
+        cavity = solve_lid_driven_cavity(32, nu=0.05, lid_velocity=1.0, total_time=4.0)
+
+        assert all(bool(jnp.all(jnp.isfinite(c))) for c in cavity.components)

@@ -24,12 +24,13 @@ import math
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import divergence, StaggeredGrid
 from opifex.fields.staggered_convection import convect
-from opifex.fields.staggered_diffusion import laplacian
+from opifex.fields.staggered_diffusion import laplacian, wall_source, WallVelocity
 from opifex.fields.staggered_navier_stokes import integrate, step, tendency
 from opifex.fields.staggered_pressure import project
 
@@ -284,6 +285,86 @@ class TestTheOperatorsApproximateWhatTheyClaim:
             sums = [abs(float(jnp.sum(component))) for component in carried.components]
 
         assert max(sums) <= 1e-12, sums
+
+
+class TestAMovingWall:
+    """A prescribed wall velocity reaches the flow, and only through the viscous term."""
+
+    @staticmethod
+    def _lid(cells: int) -> WallVelocity:
+        along = jnp.arange(1, cells) / cells
+        return WallVelocity.zeros((cells, cells), Extrapolation.ZERO).set(
+            normal=0, axis=1, upper=True, value=16.0 * along**2 * (1.0 - along) ** 2
+        )
+
+    def test_a_wall_at_rest_leaves_a_still_cavity_still(self) -> None:
+        # The negative control. Without it, a tendency that was simply zero for every
+        # input would satisfy the test below.
+        still = StaggeredGrid.zeros((16, 16), BOX, Extrapolation.ZERO)
+
+        rate = tendency(still, viscosity=0.01, walls=None)
+
+        assert max(float(jnp.max(jnp.abs(part))) for part in rate.components) == 0.0
+
+    def test_a_moving_lid_drives_a_still_cavity(self) -> None:
+        still = StaggeredGrid.zeros((16, 16), BOX, Extrapolation.ZERO)
+
+        rate = tendency(still, viscosity=0.01, walls=self._lid(16))
+
+        assert max(float(jnp.max(jnp.abs(part))) for part in rate.components) > 0.0
+
+    def test_the_lid_enters_through_diffusion_alone(self) -> None:
+        # Convection cannot see a tangential wall value: that value only ever multiplies a
+        # wall-normal velocity, which impermeability holds at zero. So on a still cavity
+        # the whole tendency is the viscous boundary term.
+        viscosity = 0.01
+        still = StaggeredGrid.zeros((16, 16), BOX, Extrapolation.ZERO)
+        walls = self._lid(16)
+
+        rate = tendency(still, viscosity=viscosity, walls=walls)
+        expected = jax.tree.map(lambda part: viscosity * part, wall_source(still, walls))
+
+        for produced, want in zip(rate.components, expected.components, strict=True):
+            np.testing.assert_allclose(np.asarray(produced), np.asarray(want), atol=1e-5)
+
+    def test_the_driven_cavity_stays_divergence_free(self) -> None:
+        still = StaggeredGrid.zeros((16, 16), BOX, Extrapolation.ZERO)
+
+        driven = integrate(still, 0.05, 20, 0.01, self._lid(16))
+        speed = max(float(jnp.max(jnp.abs(part))) for part in driven.components)
+
+        assert speed > 0.0, "the lid must actually have driven the flow"
+        # Scaled by the differencing the divergence performs, which divides by the cell.
+        assert float(jnp.max(jnp.abs(divergence(driven)))) < 1e-5 * speed * 16
+
+    def test_the_trajectory_differentiates_with_respect_to_the_lid(self) -> None:
+        # The wall velocity is an array in the residual path, so a wall profile is an
+        # ordinary differentiable input -- which is what makes boundary control possible.
+        still = StaggeredGrid.zeros((8, 8), BOX, Extrapolation.ZERO)
+
+        def energy(walls: WallVelocity) -> jax.Array:
+            driven = integrate(still, 0.02, 4, 0.01, walls)
+            return jnp.stack([jnp.sum(part**2) for part in driven.components]).sum()
+
+        gradient = jax.grad(energy)(self._lid(8))
+        leaves = [leaf for leaf in jax.tree.leaves(gradient) if leaf is not None]
+
+        assert leaves and all(bool(jnp.all(jnp.isfinite(leaf))) for leaf in leaves)
+        assert max(float(jnp.max(jnp.abs(leaf))) for leaf in leaves) > 0.0
+
+    def test_it_traces_once_with_the_lid_crossing_the_scan(self) -> None:
+        still = StaggeredGrid.zeros((8, 8), BOX, Extrapolation.ZERO)
+        traces = {"count": 0}
+
+        def counted(walls: WallVelocity) -> StaggeredGrid:
+            traces["count"] += 1
+            return integrate(still, 0.02, 4, 0.01, walls)
+
+        compiled = jax.jit(counted)
+        for scale in (1.0, 2.0, 0.5, 2.0):
+            compiled(jax.tree.map(lambda leaf, s=scale: s * leaf, self._lid(8)))
+
+        assert traces["count"] == 1, "a wall value in static metadata would retrace per value"
 
 
 class TestBoundaries:
