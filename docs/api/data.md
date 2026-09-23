@@ -228,7 +228,8 @@ print(data["input"].shape)   # (1000, 1, 64, 64)
 
 ### generate_diffusion
 
-Diffusion-advection (2D, `C=1`).
+Diffusion-advection on the periodic unit square (2D, `C=1`). The output is the exact
+Fourier solution at `time_final`, so it has no time-stepping error or stability limit.
 
 ```python
 from opifex.data.sources import generate_diffusion
@@ -238,6 +239,7 @@ data = generate_diffusion(
     resolution=64,
     diffusion_range=(0.01, 0.1),
     advection_range=(-1.0, 1.0),
+    time_final=1.0,
     seed=42,
 )
 ```

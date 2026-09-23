@@ -10,10 +10,14 @@ all-finite values, and determinism (same seed -> identical arrays; different
 seed -> different arrays).
 """
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from opifex.data.sources.pde_generation import (
+    _diffusion_ic,
+    _wrapped_gaussian,
     generate_burgers,
     generate_darcy,
     generate_diffusion,
@@ -129,6 +133,52 @@ class TestGenerateDiffusion:
 
     def test_determinism(self) -> None:
         _assert_deterministic(generate_diffusion, self._kwargs())
+
+    def test_shipped_defaults_are_finite_and_physical(self) -> None:
+        """At the shipped resolution the labels obey the PDE's conservation laws.
+
+        Advection-diffusion on a periodic domain conserves the mean exactly and
+        strictly dissipates the L2 norm of every non-constant field when ``D > 0``.
+        """
+        dataset = generate_diffusion(n_samples=16)
+        initial = dataset["input"].astype(np.float64)
+        final = dataset["output"].astype(np.float64)
+        assert np.all(np.isfinite(final))
+
+        scale = np.abs(initial).max(axis=(1, 2, 3))
+        mean_drift = np.abs(final.mean(axis=(1, 2, 3)) - initial.mean(axis=(1, 2, 3)))
+        assert np.all(mean_drift <= 8 * np.finfo(np.float32).eps * scale)
+
+        centred_initial = initial - initial.mean(axis=(1, 2, 3), keepdims=True)
+        centred_final = final - final.mean(axis=(1, 2, 3), keepdims=True)
+        energy_initial = np.sum(centred_initial**2, axis=(1, 2, 3))
+        energy_final = np.sum(centred_final**2, axis=(1, 2, 3))
+        assert np.all(energy_final < energy_initial)
+
+    def test_zero_time_returns_the_initial_condition(self) -> None:
+        dataset = generate_diffusion(time_final=0.0, **self._kwargs())
+        np.testing.assert_allclose(
+            dataset["output"], dataset["input"], rtol=0.0, atol=8 * float(np.finfo(np.float32).eps)
+        )
+
+    def test_initial_conditions_nest_across_resolutions(self) -> None:
+        """The IC is sampled at ``x_j = j / N``, so a 2N grid contains the N grid."""
+        for seed in range(12):
+            key = jax.random.key(seed)
+            coarse = _diffusion_ic(key, 16)
+            fine = _diffusion_ic(key, 32)
+            np.testing.assert_allclose(np.asarray(fine[::2, ::2]), np.asarray(coarse), atol=1e-6)
+
+    def test_gaussian_initial_condition_is_periodic(self) -> None:
+        """The widest Gaussian nearest the boundary is still one smooth periodic field."""
+        grid = jnp.linspace(0.0, 1.0, 9)
+        grid_x, grid_y = jnp.meshgrid(grid, grid, indexing="ij")
+        bump = _wrapped_gaussian(grid_x, grid_y, jnp.asarray(0.3), jnp.asarray(0.7), 0.15)
+        shifted = _wrapped_gaussian(
+            grid_x + 1.0, grid_y - 1.0, jnp.asarray(0.3), jnp.asarray(0.7), 0.15
+        )
+        np.testing.assert_allclose(np.asarray(shifted), np.asarray(bump), atol=1e-6)
+        np.testing.assert_allclose(np.asarray(bump[0]), np.asarray(bump[-1]), atol=1e-6)
 
 
 class TestGenerateNavierStokes:
