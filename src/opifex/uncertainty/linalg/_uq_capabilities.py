@@ -1,9 +1,7 @@
-"""UQ capability declaration for the matrix-free linalg subpackage (Task 7.2).
+"""UQ capability declaration for the matrix-free linalg subpackage.
 
-Static, module-level constant — no import-time mutable side effects beyond
-the constant itself (Rule 13). Imported by
-``opifex.uncertainty.linalg.__init__`` which registers it into the
-singleton :class:`UQRegistry`.
+A static, module-level constant, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 """
 
 from __future__ import annotations

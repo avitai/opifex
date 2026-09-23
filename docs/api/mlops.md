@@ -183,11 +183,11 @@ tracker = ExperimentTracker(default_backend="console")
 tracker.register_backend("console", ConsoleExperiment)
 ```
 
-## Capability registry
+## Capability declaration
 
-`register_mlops_capabilities(registry)` records `mlops:ExperimentTracker` in a
-`UQRegistry` as `UNSUPPORTED`: the tracker publishes uncertainty metrics and
-computes none. Importing the package registers nothing.
+`MLOPS_CAPABILITIES` declares `mlops:ExperimentTracker` as `UNSUPPORTED`: the tracker
+publishes uncertainty metrics and computes none. The declaration is collected into
+`opifex.capabilities.UQ_CAPABILITIES`; importing the package registers nothing.
 
 ## See Also
 

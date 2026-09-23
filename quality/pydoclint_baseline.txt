@@ -378,12 +378,6 @@ src/opifex/neural/equivariant/symmetric_contraction.py
     DOC304: Class `SymmetricContraction`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
     DOC305: Class `SymmetricContraction`: Class docstring has a "Raises" section; please put it in the __init__() docstring
 --------------------
-src/opifex/neural/operators/__init__.py
-    DOC101: Function `get_operator_capability`: Docstring contains fewer arguments than in function signature.
-    DOC103: Function `get_operator_capability`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [operator_type: str].
-    DOC201: Function `get_operator_capability` does not have a return section in docstring
-    DOC502: Function `get_operator_capability` has a "Raises" section in the docstring, but there are not "raise" statements in the body
---------------------
 src/opifex/neural/operators/common/embeddings.py
     DOC501: Method `GridEmbeddingND.__init__` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `GridEmbeddingND.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].

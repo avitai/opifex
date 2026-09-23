@@ -1,15 +1,7 @@
-"""UQ capability declarations for stochastic-field surrogates (Task 8.4).
+"""UQ capability declarations for stochastic-field surrogates.
 
-Static, module-level constants — no import-time mutable side effects.
-The :data:`SCIENTIFIC_FIELD_CAPABILITIES` table is consumed by the
-scientific subpackage's ``__init__`` to seed the singleton
-:class:`UQRegistry`.
-
-Plan reference: ``08-phase-pac-bayes-sbi-active-stochastic-fields.md``
-lines 755-790 — Task 8.5 flips the per-subsystem capability flag now
-that the KLE / PCE / SG / SC primitives have landed in
-``polynomial_chaos.py``, ``stochastic_galerkin.py``, and
-``stochastic_fields.py``.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 Four registered surfaces:
 

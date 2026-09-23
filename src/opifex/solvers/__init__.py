@@ -14,16 +14,6 @@ from opifex.solvers.pinn import (
     PINNSolver,
     poisson_residual,
 )
-from opifex.uncertainty.registry import UQRegistry
-
-
-# The solver entry points and the solver-side UQ aggregation utilities each
-# declare their capabilities in the singleton :class:`UQRegistry`, guarded so a
-# repeated import registers nothing twice.
-_uq_registry: UQRegistry = UQRegistry()
-for _name, _capability in SOLVER_CAPABILITIES.items():
-    if _name not in _uq_registry:
-        _uq_registry.register(_name, _capability)
 
 
 __all__ = [

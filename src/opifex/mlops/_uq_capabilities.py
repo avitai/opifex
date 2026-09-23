@@ -2,19 +2,11 @@
 
 ``opifex.mlops`` is a metric-publication surface: ``ExperimentTracker`` forwards
 UQ-flavoured metrics (Brier, ECE, NLL, coverage) to a run, but computes no
-uncertainty itself, so its capability is ``UNSUPPORTED``. Registration is
-explicit: importing the package registers nothing.
+uncertainty itself, so its capability is ``UNSUPPORTED``. The table is
+collected by :mod:`opifex.capabilities`; importing the package registers nothing.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from opifex.core.capabilities import DefaultStrategy, UQCapability
-
-
-if TYPE_CHECKING:
-    from opifex.uncertainty.registry import UQRegistry
 
 
 _EXPERIMENT_TRACKER_CAPABILITY = UQCapability(
@@ -35,11 +27,4 @@ MLOPS_CAPABILITIES: dict[str, UQCapability] = {
 }
 
 
-def register_mlops_capabilities(registry: UQRegistry) -> None:
-    """Register the MLOps capabilities in ``registry``; already-registered names are kept."""
-    for name, capability in MLOPS_CAPABILITIES.items():
-        if name not in registry:
-            registry.register(name, capability)
-
-
-__all__ = ["MLOPS_CAPABILITIES", "register_mlops_capabilities"]
+__all__ = ["MLOPS_CAPABILITIES"]

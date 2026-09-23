@@ -1,12 +1,7 @@
-"""UQ capability declarations for the PAC-Bayes subpackage (Task 8.1).
+"""UQ capability declarations for the PAC-Bayes subpackage.
 
-Static, module-level constants — no import-time mutable side effects.
-The :data:`PAC_BAYES_CAPABILITIES` table is consumed by the PAC-Bayes
-subpackage's ``__init__`` to seed the singleton :class:`UQRegistry`.
-
-Plan reference: ``08-phase-pac-bayes-sbi-active-stochastic-fields.md``
-lines 755-790 — Task 8.5 flips the per-subsystem capability flag for
-the PAC-Bayes certificate driver and its bound formulas.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 Single registered surface:
 

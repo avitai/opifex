@@ -11,9 +11,6 @@ Core contracts:
   ``sample_diagonal_gaussian``).
 * :mod:`opifex.uncertainty.protocols` — structural UQ-aware module / variational
   / calibrator / conformalizer / estimator protocols.
-* :mod:`opifex.uncertainty.registry` — :class:`UQRegistry` (singleton registry extending
-  CalibraX ``SingletonRegistry``) over the declarations of
-  :mod:`opifex.core.capabilities`.
 * :mod:`opifex.uncertainty.inference_backends` — backend protocol + base
   result / spec / diagnostics containers.
 * :mod:`opifex.uncertainty.adapters` — distribution / model-uncertainty adapter
@@ -127,10 +124,6 @@ from opifex.uncertainty.protocols import (
     UncertaintyEstimator,
     VariationalModule,
 )
-from opifex.uncertainty.registry import (
-    register_uq_capability,
-    UQRegistry,
-)
 from opifex.uncertainty.tempering import (
     DiffusionTemperingSchedule,
     TemperingScheduleType,
@@ -204,7 +197,6 @@ __all__ = [
     "TestTimeAugmentationAdapter",
     "TestTimeAugmentationState",
     "UQLossComponents",
-    "UQRegistry",
     "UncertaintyAwareModule",
     "UncertaintyEstimator",
     "UnsupportedBackendError",
@@ -223,7 +215,6 @@ __all__ = [
     "mixture_log_likelihood",
     "nig_to_predictive_distribution",
     "positive_evidential_params",
-    "register_uq_capability",
     "sample_diagonal_gaussian",
     "scale_kl",
     "student_t_log_likelihood",

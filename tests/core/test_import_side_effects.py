@@ -7,7 +7,7 @@ or an opt-in setup function).
 Side effects are verified in a *fresh* subprocess interpreter so that prior
 imports during the pytest session cannot mask a regression. Each test snapshots
 the relevant global state (``os.environ`` keys, a ``jax.config`` flag, the root
-logger handlers, the singleton registry, module attributes) immediately after a
+logger handlers, module attributes) immediately after a
 bare ``import`` and asserts the import did not touch it.
 
 A companion test per module exercises the explicit-call path to prove the moved
@@ -99,54 +99,6 @@ def test_explicit_argument_value_one_does_not_auto_configure() -> None:
 # ---------------------------------------------------------------------------
 # 2. ``opifex.neural.bayesian`` — registration is explicit, not at import.
 # ---------------------------------------------------------------------------
-
-
-def test_importing_bayesian_does_not_populate_registry() -> None:
-    """Importing the package must not register the model capabilities.
-
-    The shared singleton ``UQRegistry`` must be empty of the bayesian model
-    names right after import — registration moved to an explicit function.
-    """
-    snippet = """
-        from opifex.uncertainty.registry import UQRegistry
-        UQRegistry.reset()
-        import opifex.neural.bayesian  # noqa: F401
-        registry = UQRegistry()
-        assert "model:ProbabilisticPINN" not in registry
-        assert "model:MultiFidelityPINN" not in registry
-        print("ok")
-    """
-    assert _run_fresh(snippet) == "ok"
-
-
-def test_register_bayesian_capabilities_populates_registry() -> None:
-    """The explicit registration function populates the supplied registry."""
-    snippet = """
-        from opifex.uncertainty.registry import UQRegistry
-        from opifex.neural.bayesian import register_bayesian_capabilities
-        UQRegistry.reset()
-        registry = UQRegistry()
-        register_bayesian_capabilities(registry)
-        assert "model:ProbabilisticPINN" in registry
-        assert "model:MultiFidelityPINN" in registry
-        print("ok")
-    """
-    assert _run_fresh(snippet) == "ok"
-
-
-def test_register_bayesian_capabilities_is_idempotent() -> None:
-    """Calling the registration function twice must not raise on duplicates."""
-    snippet = """
-        from opifex.uncertainty.registry import UQRegistry
-        from opifex.neural.bayesian import register_bayesian_capabilities
-        UQRegistry.reset()
-        registry = UQRegistry()
-        register_bayesian_capabilities(registry)
-        register_bayesian_capabilities(registry)  # must be a no-op, not ValueError
-        assert "model:ProbabilisticPINN" in registry
-        print("ok")
-    """
-    assert _run_fresh(snippet) == "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -243,33 +195,3 @@ def test_import_testing_infrastructure_does_not_call_basic_config() -> None:
 # ---------------------------------------------------------------------------
 # 6. ``opifex.optimization.l2o`` — registration is explicit, not at import.
 # ---------------------------------------------------------------------------
-
-
-def test_importing_l2o_does_not_populate_registry() -> None:
-    """Importing the learn-to-optimize package must not register its capabilities."""
-    snippet = """
-        from opifex.uncertainty.registry import UQRegistry
-        UQRegistry.reset()
-        import opifex.optimization.l2o  # noqa: F401
-        registry = UQRegistry()
-        assert "l2o:L2OEngine" not in registry
-        assert "l2o:LearnedOptimizer" not in registry
-        print("ok")
-    """
-    assert _run_fresh(snippet) == "ok"
-
-
-def test_register_l2o_capabilities_populates_registry_idempotently() -> None:
-    """Explicit registration populates the registry and tolerates a repeat call."""
-    snippet = """
-        from opifex.uncertainty.registry import UQRegistry
-        from opifex.optimization.l2o import register_l2o_capabilities
-        UQRegistry.reset()
-        registry = UQRegistry()
-        register_l2o_capabilities(registry)
-        register_l2o_capabilities(registry)
-        assert "l2o:L2OEngine" in registry
-        assert "l2o:LearnedOptimizer" in registry
-        print("ok")
-    """
-    assert _run_fresh(snippet) == "ok"
