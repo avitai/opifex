@@ -137,7 +137,7 @@ def test_pbe_scf_converges_h2() -> None:
     """The H2 RKS/PBE SCF converges."""
     with jax.enable_x64(True):
         result = SCFSolver(_h2_system(), functional="pbe").solve()
-    assert result.converged
+    assert bool(result.is_converged)
 
 
 @pytest.mark.slow
