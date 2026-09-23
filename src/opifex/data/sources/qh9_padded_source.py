@@ -28,7 +28,7 @@ max_atoms``)
 * ``native_fock`` ``(max_ao, max_ao)`` -- the QH9-native Fock, zero-padded.
 * ``decode_perm`` ``(max_ao,)`` / ``decode_sign`` ``(max_ao,)`` -- the
   native->spherical AO permutation and signs
-  (:func:`~opifex.data.sources.qh9_source.def2svp_decode_indices`); padding AOs
+  (:func:`~opifex.core.quantum.ao_layout.ao_permutation`); padding AOs
   point at index ``0`` with sign ``1``.
 * ``atom_ao_start`` ``(max_atoms,)`` -- per-atom spherical AO block start.
 * ``atom_slot_indices`` ``(max_atoms, 14)`` -- inverse ``ORBITAL_MASK``: the
@@ -73,7 +73,7 @@ from flax import nnx
 from jaxtyping import Array  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
-from opifex.core.quantum.ao_layout import FULL_ORBITALS, ORBITAL_MASK
+from opifex.core.quantum.ao_layout import ao_permutation, FULL_ORBITALS, ORBITAL_MASK, PYSCF_DEF2SVP
 from opifex.data.sources.qh9_blocks import _atom_ao_offsets, _complete_directed_edges
 from opifex.data.sources.qh9_dynamic import (
     decode_qh9_dynamic_row,
@@ -83,7 +83,6 @@ from opifex.data.sources.qh9_dynamic import (
 )
 from opifex.data.sources.qh9_source import (
     _decode_row,
-    def2svp_decode_indices,
     qh9_random_split,
     QH9Example,
 )
@@ -180,7 +179,7 @@ def _pad_molecule(example: QH9Example, config: QH9PaddedConfig) -> dict[str, NDA
     directed edge set
     (:func:`~opifex.data.sources.qh9_blocks._complete_directed_edges`) and the
     decode permutation/signs
-    (:func:`~opifex.data.sources.qh9_source.def2svp_decode_indices`). No Fock
+    (:func:`~opifex.core.quantum.ao_layout.ao_permutation`). No Fock
     decode or block cut happens here -- only integer prep and zero-padding.
     """
     charges = np.asarray(example.atomic_numbers).astype(np.int64)
@@ -194,7 +193,7 @@ def _pad_molecule(example: QH9Example, config: QH9PaddedConfig) -> dict[str, NDA
     max_ao = config.max_ao
     native_padded = np.zeros((max_ao, max_ao), dtype=np.float64)
     native_padded[:n_ao, :n_ao] = native
-    indices, signs = def2svp_decode_indices(charges.astype(np.int32))
+    indices, signs = ao_permutation(charges.astype(np.int32), PYSCF_DEF2SVP)
     decode_perm = np.zeros(max_ao, dtype=np.int64)
     decode_perm[:n_ao] = indices
     decode_sign = np.ones(max_ao, dtype=np.int64)

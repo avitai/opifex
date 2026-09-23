@@ -33,9 +33,9 @@ produced by :func:`~opifex.data.sources.qh9_source.matrix_transform_def2svp`)
 ``p = [1, 2, 0]`` vs. ``back2pyscf`` ``p = [2, 0, 1]``).
 :func:`to_pyscf_internal_ordering` reorders the (already spherical) data/predicted
 Fock into PySCF's order *before* it is paired with the raw PySCF overlap, deriving
-its per-AO permutation from the **same** convention tables
-:func:`~opifex.data.sources.qh9_source.def2svp_decode_indices` uses (DRY), with
-only the ``p`` component map overridden to the ``back2pyscf`` order. With this
+its per-AO permutation with :func:`~opifex.core.quantum.ao_layout.ao_permutation`
+under :data:`~opifex.core.quantum.ao_layout.BACK2PYSCF`, which differs from the stored
+convention only in the ``p`` component order. With this
 reorder, diagonalizing a ground-truth QH9 Fock against the PySCF overlap
 reproduces PySCF's own converged B3LYP/def2-SVP orbital energies to chemical
 accuracy (~3.6 mHa, the QH9-stored-Fock vs. fresh-SCF grid/convergence residual),
@@ -57,10 +57,8 @@ from flax import nnx
 from jaxtyping import Array, Float, Int  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
+from opifex.core.quantum.ao_layout import ao_permutation, BACK2PYSCF
 from opifex.data.sources.qh9_source import (
-    _DEF2SVP_ATOM_TO_ORBITALS,
-    _DEF2SVP_ORBITAL_ORDER,
-    _DEF2SVP_ORBITAL_SIGN,
     QH9Example,
     read_qh9_test_split,
 )
@@ -74,58 +72,6 @@ logger = logging.getLogger(__name__)
 _OVERLAP_EIGENVALUE_FLOOR: float = 1e-8
 """Floor on overlap eigenvalues before the inverse-sqrt."""
 
-# back2pyscf within-shell component order: identical to the ``pyscf_def2svp``
-# convention except the ``p`` components, which PySCF's spherical AO layout
-# (``int1e_ovlp_sph``) orders as ``[2, 0, 1]`` rather than ``[1, 2, 0]``.
-# Reusing the source's atom/shell-order and
-# sign tables keeps the permutation derivation DRY.
-_BACK2PYSCF_ORBITAL_IDX: dict[str, list[int]] = {
-    "s": [0],
-    "p": [2, 0, 1],
-    "d": [0, 1, 2, 3, 4],
-}
-
-
-def _back2pyscf_indices(
-    atomic_numbers: Sequence[int] | Int[NDArray[np.int32], " n_atoms"],
-) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
-    r"""Return the opifex-spherical -> PySCF-internal AO permutation and signs.
-
-    Builds the per-AO index/sign lists shell by shell with the ``back2pyscf``
-    component order, reusing
-    the source's shared shell-order/sign tables and overriding only the
-    within-shell component map (``_BACK2PYSCF_ORBITAL_IDX``). The returned
-    ``(indices, signs)`` define the symmetric congruence applied to a spherical
-    Fock matrix in :func:`to_pyscf_internal_ordering`.
-
-    Args:
-        atomic_numbers: Nuclear charges of the molecule (H, C, N, O, F only).
-
-    Returns:
-        ``(indices, signs)`` each shape ``(n_ao,)`` (``int64``).
-    """
-    orbitals = ""
-    orbitals_order: list[int] = []
-    for atomic_number in atomic_numbers:
-        offset = len(orbitals_order)
-        orbitals += _DEF2SVP_ATOM_TO_ORBITALS[int(atomic_number)]
-        orbitals_order += [idx + offset for idx in _DEF2SVP_ORBITAL_ORDER[int(atomic_number)]]
-
-    transform_indices: list[NDArray[np.int64]] = []
-    transform_signs: list[NDArray[np.int64]] = []
-    for orbital in orbitals:
-        offset = sum(len(block) for block in transform_indices)
-        transform_indices.append(
-            np.asarray(_BACK2PYSCF_ORBITAL_IDX[orbital], dtype=np.int64) + offset
-        )
-        transform_signs.append(np.asarray(_DEF2SVP_ORBITAL_SIGN[orbital], dtype=np.int64))
-
-    transform_indices = [transform_indices[idx] for idx in orbitals_order]
-    transform_signs = [transform_signs[idx] for idx in orbitals_order]
-    indices = np.concatenate(transform_indices).astype(np.int64)
-    signs = np.concatenate(transform_signs).astype(np.int64)
-    return indices, signs
-
 
 def to_pyscf_internal_ordering(
     fock: Float[Array, "n_ao n_ao"],
@@ -134,7 +80,7 @@ def to_pyscf_internal_ordering(
     r"""Reorder an opifex-spherical Fock into PySCF's internal spherical AO order.
 
     Applied to the spherical data/predicted Fock before pairing it with the PySCF
-    overlap. With ``(I, s)`` from :func:`_back2pyscf_indices`
+    overlap. With ``(I, s)`` from ``ao_permutation(atomic_numbers, BACK2PYSCF)``
     this is the symmetric congruence ``F'[i, j] = F[I[i], I[j]] * s[i] * s[j]``,
     aligning ``F`` with ``mol.intor('int1e_ovlp_sph')`` so
     :func:`cal_orbital_and_energies` is in one consistent basis.
@@ -146,7 +92,7 @@ def to_pyscf_internal_ordering(
     Returns:
         The Fock matrix in PySCF's internal spherical AO ordering.
     """
-    indices, signs = _back2pyscf_indices(atomic_numbers)
+    indices, signs = ao_permutation(atomic_numbers, BACK2PYSCF)
     index = jnp.asarray(indices)
     sign = jnp.asarray(signs, dtype=fock.dtype)
     reordered = fock[..., index, :][..., :, index]
