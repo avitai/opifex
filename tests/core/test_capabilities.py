@@ -1,34 +1,11 @@
-"""UQ capability registry tests.
-
-``calibrax.core.registry.SingletonRegistry`` is reused directly as the backing
-mechanism. ``UQRegistry`` extends it with two domain-specific policies:
-
-* Duplicate-rejection on ``register`` (CalibraX's base ``Registry.register``
-  overwrites silently — Opifex adds a guard because capability declarations
-  must be unique).
-* ``require(name)`` that adds the sorted-available-names hint to the error
-  message that CalibraX's ``get`` raises.
-
-``UQCapability`` is a frozen+slotted hashable dataclass with scalar / string /
-enum fields only; it is used as a registry value and never traced as pytree
-data.
-"""
-
-from __future__ import annotations
+"""UQ capability declarations: frozen, hashable metadata with validated flag combinations."""
 
 import dataclasses
 from enum import StrEnum
 
 import pytest
-from calibrax.core.registry import Registry, SingletonRegistry
 
 from opifex.core.capabilities import DefaultStrategy, UQCapability
-from opifex.uncertainty.registry import register_uq_capability, UQRegistry
-
-
-@pytest.fixture(autouse=True)
-def _reset_registry() -> None:  # pyright: ignore[reportUnusedFunction]
-    UQRegistry.reset()
 
 
 def test_uq_capability_is_pattern_a_frozen_slotted_dataclass() -> None:
@@ -146,68 +123,3 @@ def test_requires_graph_adapter_requires_non_empty_notes() -> None:
             source_package="opifex",
             notes="",
         )
-
-
-def test_uq_registry_extends_calibrax_singleton_registry() -> None:
-    assert issubclass(UQRegistry, SingletonRegistry)
-    assert issubclass(UQRegistry, Registry)
-
-
-def test_uq_registry_is_singleton() -> None:
-    a = UQRegistry()
-    b = UQRegistry()
-    assert a is b
-
-
-def test_uq_registry_register_and_get_round_trip() -> None:
-    registry = UQRegistry()
-    cap = UQCapability.deterministic_baseline()
-    registry.register("toy_model", cap)
-    assert "toy_model" in registry
-    assert registry.get("toy_model") is cap
-
-
-def test_uq_registry_rejects_duplicate_registration() -> None:
-    registry = UQRegistry()
-    cap = UQCapability.deterministic_baseline()
-    registry.register("duplicate_name", cap)
-    with pytest.raises(ValueError, match=r"duplicate_name"):
-        registry.register("duplicate_name", cap)
-
-
-def test_uq_registry_require_includes_available_names_in_error() -> None:
-    registry = UQRegistry()
-    registry.register("alpha", UQCapability.deterministic_baseline())
-    registry.register("beta", UQCapability.deterministic_baseline())
-    with pytest.raises(KeyError) as excinfo:
-        registry.require("missing")
-    message = str(excinfo.value)
-    assert "missing" in message
-    assert "alpha" in message
-    assert "beta" in message
-
-
-def test_register_uq_capability_decorator_registers_capability_metadata() -> None:
-    cap = UQCapability(
-        native_bayesian=True,
-        default_strategy=DefaultStrategy.BAYESIAN,
-        source_package="opifex",
-    )
-
-    @register_uq_capability("decorated_target", cap)
-    class DecoratedTarget:
-        pass
-
-    registry = UQRegistry()
-    assert registry.get("decorated_target") is cap
-    assert DecoratedTarget.__name__ == "DecoratedTarget"
-
-
-def test_register_uq_capability_decorator_returns_class_unchanged() -> None:
-    cap = UQCapability.deterministic_baseline()
-
-    @register_uq_capability("identity_target", cap)
-    class Original:
-        marker = "x"
-
-    assert Original.marker == "x"

@@ -1,9 +1,7 @@
-"""UQ capability declarations for the inference-backends subpackage (Task 7.2).
+"""UQ capability declarations for the inference-backends subpackage.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.uncertainty.inference_backends.__init__`` which then registers each
-declaration into the singleton :class:`UQRegistry`.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 Three peer posterior-sampler backends shipped under Task 6.3.9a/b/c:
 

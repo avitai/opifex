@@ -1,9 +1,7 @@
-"""UQ capability declarations for GP adapter specs + Phase 4 model adapters.
+"""UQ capability declarations for the GP adapter specs and the model adapters.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.uncertainty.adapters.__init__`` which then registers each
-declaration into the singleton :class:`UQRegistry`.
+Static, module-level constants, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 The GP entries (Task 6.3.4 spec inventory) live here rather than in a
 dedicated ``opifex.uncertainty.gp/`` subpackage because Phase 6 Task

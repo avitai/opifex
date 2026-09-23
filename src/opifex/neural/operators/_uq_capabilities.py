@@ -1,10 +1,7 @@
-"""Per-operator UQ capability declarations (Task 7.1).
+"""Per-operator UQ capability declarations.
 
-Static, module-level constants — no import-time mutable side effects
-beyond the constants themselves (Rule 13). Imported by
-``opifex.neural.operators.__init__`` after the operator registry is
-built; that module then registers each declaration into the
-sibling-backed :class:`UQRegistry` singleton.
+Static, module-level constants keyed by operator name, collected into
+:data:`opifex.capabilities.UQ_CAPABILITIES`; importing this module changes no global state.
 
 UQNO is the sole native-Bayesian operator. The other 18 entries are
 deterministic baselines with adapter strategies layered on via
@@ -50,7 +47,7 @@ _UQNO_CAPABILITY = UQCapability(
 # Keeping them as separate names lets future per-operator overrides
 # (e.g. ``supports_function_space=True`` for SFNO once function-space
 # conformal lands) attach without disturbing the others.
-_OPERATOR_CAPABILITIES: dict[str, UQCapability] = {
+OPERATOR_CAPABILITIES: dict[str, UQCapability] = {
     # Traditional operators
     "FNO": _adapter_baseline(),
     "DeepONet": _adapter_baseline(),
@@ -128,8 +125,8 @@ def _categories_from_capabilities(
 
 
 OPERATOR_CAPABILITY_CATEGORIES: dict[str, tuple[str, ...]] = _categories_from_capabilities(
-    _OPERATOR_CAPABILITIES
+    OPERATOR_CAPABILITIES
 )
 
 
-__all__ = ["OPERATOR_CAPABILITY_CATEGORIES", "_OPERATOR_CAPABILITIES"]
+__all__ = ["OPERATOR_CAPABILITIES", "OPERATOR_CAPABILITY_CATEGORIES"]

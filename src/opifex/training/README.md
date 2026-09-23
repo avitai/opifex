@@ -23,8 +23,8 @@ trained_model, history = trainer.fit((x_train, y_train), val_data=(x_val, y_val)
     (Kennedy–O'Hagan weighting).
   - **`ActiveUncertaintyLearner`** — acquire informative samples (delegates to
     `opifex.uncertainty.active.acquisition`).
-- **`_uq_capabilities.py`** — UQ capability declarations for the above, registered in the
-  `UQRegistry`.
+- **`_uq_capabilities.py`** — UQ capability declarations for the above, collected into
+  `opifex.capabilities.UQ_CAPABILITIES`.
 
 Physics-loss composition (`PhysicsInformedLoss`, `AdaptiveWeightScheduler`,
 `ConservationLawEnforcer`, PDE residual computers) lives in **`opifex.core.physics.losses`** and is

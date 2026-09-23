@@ -1,21 +1,10 @@
 """UQ capability declarations for the training surfaces.
 
-Static, module-level constants — no import-time mutable side effects beyond
-the constants themselves (Rule 13). Imported by
-``opifex.training.__init__``.
-
-Phase 7 (Task 7.5) recorded both ``UncertaintyGuidedTrainer`` and
-``MultiFidelityUncertaintyTrainer`` honestly as
-:attr:`DefaultStrategy.UNSUPPORTED` because they used a hardcoded
-``jax.random.PRNGKey(42)`` mock prediction and never called the wrapped
-model. Phase 8 Task 8.3 rewrote both trainers (and added the
-``ActiveUncertaintyLearner``) to invoke the wrapped model + uncertainty
-quantifier for real and to delegate acquisition formulas to
-:mod:`opifex.uncertainty.active.acquisition`. Phase 8 Task 8.5 flips the
-capability flags here accordingly.
-
-Plan reference: ``08-phase-pac-bayes-sbi-active-stochastic-fields.md``
-lines 755-790 (capability-flag flip after the Task 8.3 TDD steps pass).
+Static, module-level constants, collected into :data:`opifex.capabilities.UQ_CAPABILITIES`;
+importing this module changes no global state. ``UncertaintyGuidedTrainer``,
+``MultiFidelityUncertaintyTrainer`` and ``ActiveUncertaintyLearner`` call the wrapped model
+and uncertainty quantifier and take their acquisition rules from
+:mod:`opifex.uncertainty.active.acquisition`, which the flags below declare.
 """
 
 from __future__ import annotations

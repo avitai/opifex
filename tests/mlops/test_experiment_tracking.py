@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import importlib
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import pytest
 
 import opifex.mlops
+from opifex.capabilities import require_uq_capability
 from opifex.core.capabilities import DefaultStrategy
-from opifex.mlops import register_mlops_capabilities
-from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES
+from opifex.mlops import MLOPS_CAPABILITIES
 from opifex.mlops.backends.mlflow_backend import MLflowBackend
 from opifex.mlops.experiment import (
     Experiment,
@@ -21,7 +20,6 @@ from opifex.mlops.experiment import (
     PhysicsMetadata,
 )
 from opifex.mlops.tracker import ExperimentTracker
-from opifex.uncertainty.registry import UQRegistry
 
 
 if TYPE_CHECKING:
@@ -191,7 +189,6 @@ class TestPackageSurface:
             "PhysicsDomain",
             "PhysicsMetadata",
             "QuantumMetrics",
-            "register_mlops_capabilities",
         }
         assert opifex.mlops.ExperimentTracker is ExperimentTracker
         for name in (
@@ -202,21 +199,7 @@ class TestPackageSurface:
         ):
             assert not hasattr(opifex.mlops, name), name
 
-    def test_importing_the_package_does_not_register_capabilities(self) -> None:
-        UQRegistry.reset()
-        try:
-            importlib.reload(opifex.mlops)
-
-            assert "mlops:ExperimentTracker" not in UQRegistry()
-        finally:
-            register_mlops_capabilities(UQRegistry())
-
-    def test_register_mlops_capabilities_is_idempotent(self) -> None:
-        registry = UQRegistry()
-
-        register_mlops_capabilities(registry)
-        register_mlops_capabilities(registry)
-
-        capability = registry.require("mlops:ExperimentTracker")
+    def test_the_tracker_capability_is_in_the_catalogue(self) -> None:
+        capability = require_uq_capability("mlops:ExperimentTracker")
         assert capability is MLOPS_CAPABILITIES["mlops:ExperimentTracker"]
         assert capability.default_strategy is DefaultStrategy.UNSUPPORTED

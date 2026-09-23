@@ -6,8 +6,7 @@ process cannot trust a free-form import path, so the registry name is the
 cross-process contract: registering a class makes it reconstructable, and
 loading an unregistered name fails fast with an actionable error.
 
-Mirrors :mod:`opifex.core.quantum.registry` and
-:mod:`opifex.uncertainty.registry` — each reuses
+Mirrors :mod:`opifex.core.quantum.registry`, which also reuses
 ``calibrax.core.registry.SingletonRegistry`` and layers two policies on top:
 duplicate-registration rejection (registrations are canonical) and a
 :meth:`require` error that lists the available names. The ``@register_servable_model``
