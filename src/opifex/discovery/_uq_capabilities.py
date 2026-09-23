@@ -12,7 +12,7 @@ the constants themselves (Rule 13). Imported by
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 # Symbolic regression is a PySR-mediated brute-force / genetic search over

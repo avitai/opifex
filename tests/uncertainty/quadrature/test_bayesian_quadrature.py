@@ -30,6 +30,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
+from opifex.core.capabilities import UQCapability
 from opifex.uncertainty.quadrature import (
     VanillaBayesianQuadratureAdapterSpec,
     WSABILAdapterSpec,
@@ -38,7 +39,6 @@ from opifex.uncertainty.quadrature.bayesian_quadrature import (
     vanilla_bayesian_quadrature,
     wsabi_l_bayesian_quadrature,
 )
-from opifex.uncertainty.registry import UQCapability
 
 
 # ---------------------------------------------------------------------------

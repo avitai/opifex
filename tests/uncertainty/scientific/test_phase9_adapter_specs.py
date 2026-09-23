@@ -27,6 +27,8 @@ References
 
 from __future__ import annotations
 
+from opifex.core.capabilities import UQCapability
+from opifex.uncertainty.scientific._specialised import apply_diffusion
 from opifex.uncertainty.scientific.probabilistic_numerics import (
     DataUpdateCallbackSpec,
     DiagonalEK1Spec,
@@ -35,6 +37,7 @@ from opifex.uncertainty.scientific.probabilistic_numerics import (
     FixedMVDiffusionSpec,
     RosenbrockExpEKSpec,
 )
+from opifex.uncertainty.statespace.diagonal_ek1 import diagonal_ek1_step
 
 
 def test_phase9_named_probnum_specs_are_importable() -> None:
@@ -72,8 +75,6 @@ def test_rosenbrock_exp_ek_spec_advertises_rosenbrock_wanner_tag() -> None:
 
 def test_diagonal_ek1_spec_wrap_returns_diagonal_ek1_step() -> None:
     """``DiagonalEK1Spec.wrap`` returns the diagonal-EK1 single-step callable."""
-    from opifex.uncertainty.registry import UQCapability
-    from opifex.uncertainty.statespace.diagonal_ek1 import diagonal_ek1_step
 
     spec = DiagonalEK1Spec()
     capability = UQCapability()
@@ -83,8 +84,6 @@ def test_diagonal_ek1_spec_wrap_returns_diagonal_ek1_step() -> None:
 
 def test_dynamic_and_fixed_mv_diffusion_specs_share_underlying_math() -> None:
     """Both diffusion specs wrap the same ``apply_diffusion`` callable."""
-    from opifex.uncertainty.registry import UQCapability
-    from opifex.uncertainty.scientific._specialised import apply_diffusion
 
     dynamic_callable = DynamicMVDiffusionSpec().wrap(model=object(), capability=UQCapability())
     fixed_callable = FixedMVDiffusionSpec().wrap(model=object(), capability=UQCapability())

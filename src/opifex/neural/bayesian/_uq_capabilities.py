@@ -16,7 +16,7 @@ import.
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 # Native variational Bayesian PINN. Owns a Bayesian posterior over its

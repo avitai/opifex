@@ -28,6 +28,7 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters import (
     BatchEnsembleAdapter,
     BatchEnsembleState,
@@ -37,7 +38,6 @@ from opifex.uncertainty.adapters import (
     SWAGAdapter,
     SWAGState,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 from opifex.uncertainty.types import PredictiveDistribution
 
 

@@ -26,6 +26,7 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
+from opifex.core.capabilities import DefaultStrategy
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 from opifex.neural.operators.specialized.uqno import (
     UncertaintyQuantificationNeuralOperator,
@@ -35,7 +36,6 @@ from opifex.neural.operators.specialized.uqno import (
 )
 from opifex.uncertainty.adapters import FNOConformalAdapterSpec
 from opifex.uncertainty.losses import PointwiseQuantileLoss
-from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import PredictionInterval, PredictiveDistribution
 
 

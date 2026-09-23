@@ -20,7 +20,7 @@ lines 755-790 (capability-flag flip after the Task 8.3 TDD steps pass).
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _UNCERTAINTY_GUIDED_TRAINER_CAPABILITY = UQCapability(

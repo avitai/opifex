@@ -22,12 +22,8 @@ from enum import StrEnum
 import pytest
 from calibrax.core.registry import Registry, SingletonRegistry
 
-from opifex.uncertainty.registry import (
-    DefaultStrategy,
-    register_uq_capability,
-    UQCapability,
-    UQRegistry,
-)
+from opifex.core.capabilities import DefaultStrategy, UQCapability
+from opifex.uncertainty.registry import register_uq_capability, UQRegistry
 
 
 @pytest.fixture(autouse=True)

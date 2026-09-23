@@ -17,11 +17,8 @@ import dataclasses
 
 import pytest
 
-from opifex.uncertainty.registry import (
-    DefaultStrategy,
-    UQCapability,
-    UQRegistry,
-)
+from opifex.core.capabilities import DefaultStrategy, UQCapability
+from opifex.uncertainty.registry import UQRegistry
 
 
 @pytest.fixture(autouse=True)

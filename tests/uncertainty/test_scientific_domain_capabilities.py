@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.discovery._uq_capabilities import DISCOVERY_CAPABILITIES
 from opifex.discovery.sindy._uq_capabilities import SINDY_CAPABILITIES
 from opifex.mlops._uq_capabilities import MLOPS_CAPABILITIES, register_mlops_capabilities
@@ -39,7 +40,7 @@ from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES, register_
 from opifex.training._uq_capabilities import TRAINING_CAPABILITIES
 from opifex.uncertainty.assimilation._uq_capabilities import ASSIMILATION_CAPABILITIES
 from opifex.uncertainty.monitoring._uq_capabilities import MONITORING_CAPABILITIES
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability, UQRegistry
+from opifex.uncertainty.registry import UQRegistry
 
 
 _ALL_TASK_7_5_CAPABILITIES: dict[str, UQCapability] = {

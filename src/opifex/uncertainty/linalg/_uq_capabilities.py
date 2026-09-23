@@ -8,7 +8,7 @@ singleton :class:`UQRegistry`.
 
 from __future__ import annotations
 
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 
 
 _LINALG_CAPABILITY = UQCapability(

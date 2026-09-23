@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.adapters import (
     BayesnewtonAdapterSpec,
     GPJaxAdapterSpec,
@@ -24,7 +25,6 @@ from opifex.uncertainty.adapters import (
     MarkovflowAdapterSpec,
     TinygpAdapterSpec,
 )
-from opifex.uncertainty.registry import DefaultStrategy, UQCapability
 
 
 _GP_SPECS: tuple[tuple[type, DefaultStrategy], ...] = (

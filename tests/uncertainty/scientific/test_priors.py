@@ -19,6 +19,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
+from opifex.core.capabilities import DefaultStrategy, UQCapability
 from opifex.uncertainty.scientific import (
     IOUPPriorSpec,
     IWPPriorSpec,
@@ -127,8 +128,6 @@ def test_matern_spec_matches_statespace_matern32_for_q_equals_1() -> None:
 
 def test_prior_specs_wrap_returns_concrete_lti_sde_handle() -> None:
     """``wrap`` is now concrete — returns the (drift, dispersion) SDE pair."""
-    from opifex.uncertainty.registry import DefaultStrategy, UQCapability
-
     capability = UQCapability(default_strategy=DefaultStrategy.PROBABILISTIC_NUMERICS)
     spec = IWPPriorSpec(num_derivatives=1, wiener_process_dimension=1)
     drift, dispersion = spec.wrap(model=None, capability=capability)
