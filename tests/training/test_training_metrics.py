@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import optax
+import pytest
 from flax import nnx
 
 from opifex.core.training.monitoring.metrics import (
-    AdvancedMetricsCollector,
     HARTREE_TO_KCAL_MOL,
+    MetricsCollector,
     TrainingMetrics,
     TrainingState,
 )
@@ -64,19 +65,75 @@ class TestTrainingMetrics:
         assert metrics.scf_iterations[0] == 15
 
     def test_physics_losses_tracking(self):
-        """Test physics-informed loss components tracking."""
+        """Physics-informed loss components are recorded through update methods.
+
+        Every tracked series has an ``update_*`` method; reaching into the history to
+        append left two of them with no way to record a value except by mutating the
+        container the history is read from.
+        """
         metrics = TrainingMetrics()
 
-        # Test physics loss tracking
-        metrics.physics_losses.append(0.1)
-        metrics.physics_losses.append(0.05)
+        metrics.update_physics_loss(0.1)
+        metrics.update_physics_loss(0.05)
         assert len(metrics.physics_losses) == 2
         assert metrics.physics_losses[0] == 0.1
 
-        # Test boundary loss tracking
-        metrics.boundary_losses.append(0.02)
+        metrics.update_boundary_loss(0.02)
         assert len(metrics.boundary_losses) == 1
         assert metrics.boundary_losses[0] == 0.02
+
+    def test_the_best_validation_epoch_is_reported(self):
+        """Which epoch was best, not only what the best value was."""
+        metrics = TrainingMetrics()
+
+        for loss in (0.5, 0.2, 0.4):
+            metrics.update_val_loss(loss)
+
+        assert metrics.best_val_loss == 0.2
+        assert metrics.best_val_epoch == 1
+
+    def test_the_best_epoch_is_unset_before_any_validation(self):
+        metrics = TrainingMetrics()
+
+        assert metrics.best_val_loss is None
+        assert metrics.best_val_epoch is None
+
+    def test_a_reset_clears_every_series(self):
+        metrics = TrainingMetrics()
+        metrics.update_train_loss(0.5)
+        metrics.update_val_loss(0.3)
+        metrics.update_scf_convergence(True, 15)
+
+        metrics.reset()
+
+        assert len(metrics.train_losses) == 0
+        assert len(metrics.val_losses) == 0
+        assert len(metrics.scf_converged) == 0
+        assert metrics.best_val_loss is None
+
+    def test_a_recorded_value_keeps_its_full_precision(self):
+        """Recording must not round to single precision.
+
+        Routing the value through a float32 array reads 1e-3 back as
+        0.0010000000474974513 -- a learning-rate schedule logged that way no longer
+        matches the schedule that produced it.
+        """
+        metrics = TrainingMetrics()
+
+        metrics.update_learning_rate(1e-3)
+        metrics.update_constraint_violation(1e-7)
+
+        assert metrics.learning_rates[0] == 1e-3
+        assert metrics.constraint_violations[0] == 1e-7
+
+    def test_a_history_cannot_be_mutated_through_its_reader(self):
+        # The history is what the tracker holds; handing out the live container would
+        # let a caller record a value that never went through update_*.
+        metrics = TrainingMetrics()
+        metrics.update_train_loss(0.5)
+
+        with pytest.raises(AttributeError):
+            metrics.train_losses.append(0.1)  # type: ignore[attr-defined]
 
     def test_learning_rate_tracking(self):
         """Test learning rate tracking."""
@@ -306,12 +363,12 @@ class TestTrainingState:
         assert abs(summary["avg_scf_iterations"] - (15 + 100 + 8) / 3) < 1e-10
 
 
-class TestAdvancedMetricsCollector:
+class TestMetricsCollector:
     """Test advanced metrics collection."""
 
     def test_metrics_collector_creation(self):
         """Test advanced metrics collector initialization."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         assert collector.training_start_time is None
         assert collector.epoch_start_time is None
@@ -319,7 +376,7 @@ class TestAdvancedMetricsCollector:
 
     def test_timing_tracking(self):
         """Test timing tracking functionality."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         collector.start_training()
         assert collector.training_start_time is not None
@@ -329,7 +386,7 @@ class TestAdvancedMetricsCollector:
 
     def test_physics_metrics_collection(self):
         """Test physics metrics collection."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
 
         # Create dummy data
@@ -344,7 +401,7 @@ class TestAdvancedMetricsCollector:
 
     def test_physics_metrics_with_energy_prediction(self):
         """Test chemical accuracy metric for energy predictions."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
         model = StandardMLP([4, 1], rngs=nnx.Rngs(42))
 
         # Create dummy energy data
@@ -359,7 +416,7 @@ class TestAdvancedMetricsCollector:
 
     def test_training_diagnostics_collection(self):
         """Test training diagnostics collection."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
         collector.start_epoch()
 
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
@@ -383,7 +440,7 @@ class TestAdvancedMetricsCollector:
 
     def test_convergence_metrics_collection(self):
         """Test convergence metrics collection."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
         model = StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
         optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
 
@@ -408,7 +465,7 @@ class TestAdvancedMetricsCollector:
 
     def test_metrics_history_update(self):
         """Test metrics history updating."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         new_metrics = {"loss": 0.5, "accuracy": 0.8}
         collector.update_metrics_history(new_metrics)
@@ -427,7 +484,7 @@ class TestAdvancedMetricsCollector:
 
     def test_metrics_summary(self):
         """Test metrics summary generation."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         # Add some history
         for i in range(15):
@@ -452,7 +509,7 @@ class TestAdvancedMetricsCollector:
 
     def test_collect_quantum_metrics(self):
         """Test quantum metrics collection."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
         StandardMLP([4, 8, 1], rngs=nnx.Rngs(42))
 
         # Create dummy quantum data
@@ -482,7 +539,7 @@ class TestAdvancedMetricsCollector:
 
     def test_collect_quantum_metrics_disabled(self):
         """Test quantum metrics when quantum training is disabled."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         # Create dummy data
         x = jnp.ones((2, 4))
@@ -500,7 +557,7 @@ class TestAdvancedMetricsCollector:
 
     def test_collect_conservation_metrics(self):
         """Test conservation law metrics collection."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         # Create dummy data
         x = jnp.ones((2, 4))
@@ -532,7 +589,7 @@ class TestAdvancedMetricsCollector:
 
     def test_collect_conservation_metrics_empty(self):
         """Test conservation metrics with no conservation laws configured."""
-        collector = AdvancedMetricsCollector()
+        collector = MetricsCollector()
 
         # Create dummy data
         x = jnp.ones((2, 4))

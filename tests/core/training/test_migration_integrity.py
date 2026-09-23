@@ -14,7 +14,7 @@ def test_monitoring_migration():
     # Verify integrity of migrated classes; FLOP counting is calibrax's
     # (opifex.benchmarking.profiling re-exports it), not a monitoring module.
     assert hasattr(metrics, "TrainingMetrics")
-    assert hasattr(metrics, "AdvancedMetricsCollector")
+    assert hasattr(metrics, "MetricsCollector")
 
 
 def test_components_migration():
