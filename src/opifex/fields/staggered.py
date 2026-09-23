@@ -71,7 +71,7 @@ CARRIED_BOUNDARIES: Final[dict[str, frozenset[Extrapolation]]] = {
         {Extrapolation.PERIODIC, Extrapolation.ZERO, Extrapolation.NEUMANN}
     ),
     "the pressure projection": frozenset({Extrapolation.PERIODIC, Extrapolation.ZERO}),
-    "convection": frozenset({Extrapolation.PERIODIC}),
+    "convection": frozenset({Extrapolation.PERIODIC, Extrapolation.ZERO}),
     "diffusion": frozenset({Extrapolation.PERIODIC}),
 }
 
@@ -94,9 +94,10 @@ def require_boundary(extrapolation: Extrapolation, operation: str) -> None:
     )
     msg = (
         f"{operation} does not carry a {extrapolation.value} boundary on a staggered grid. "
-        f"Across this layer: {carried}. A wall needs the one-sided boundary interpolation "
-        "of Sanderse, Verstappen and Koren 2014, whose form is what decides whether the "
-        "convective term's skew-symmetry survives the boundary."
+        f"Across this layer: {carried}. What is missing differs by operation and is not a "
+        "matter of padding: the viscous stencil wraps, so a wall would diffuse momentum "
+        "out through one side and back in through the other, and a zero-gradient boundary "
+        "adds a face that the projection's transform does not diagonalise."
     )
     raise ValueError(msg)
 

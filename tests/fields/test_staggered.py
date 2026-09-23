@@ -41,9 +41,22 @@ from opifex.fields.staggered import (
     require_boundary,
     StaggeredGrid,
 )
+from opifex.fields.staggered_convection import convect
+from opifex.fields.staggered_navier_stokes import laplacian
+from opifex.fields.staggered_pressure import project
 
 
 BOX = Box(lower=(0.0, 0.0), upper=(1.0, 1.0))
+
+# Every operation the contract names, so a row of the table can be checked against the
+# operator it governs rather than against the table itself. A new row with no entry here
+# fails ``test_every_operation_is_reachable``, which is what keeps the two in step.
+OPERATIONS = {
+    "the grid operators": divergence,
+    "the pressure projection": project,
+    "convection": lambda field: convect(field, field),
+    "diffusion": laplacian,
+}
 BOUNDARIES = [Extrapolation.PERIODIC, Extrapolation.ZERO, Extrapolation.NEUMANN]
 
 
@@ -203,8 +216,8 @@ class TestTransforms:
 class TestTheBoundaryContract:
     """One owner for which boundaries each part of the layer carries.
 
-    The parts differ -- the grid operators take all three, the projection takes two, and
-    convection and diffusion take one -- so a caller assembling a simulation from them
+    The parts differ -- the grid operators take all three, the projection and convection
+    take two, and diffusion takes one -- so a caller assembling a simulation from them
     would otherwise meet the limit one operation at a time, at whichever raised first.
     """
 
@@ -217,29 +230,39 @@ class TestTheBoundaryContract:
         }
         assert all(boundaries for boundaries in CARRIED_BOUNDARIES.values())
 
+    def test_every_operation_is_reachable(self) -> None:
+        # Without this the table below silently stops covering a new row.
+        assert set(OPERATIONS) == set(CARRIED_BOUNDARIES)
+
     def test_a_carried_boundary_is_accepted(self) -> None:
         require_boundary(Extrapolation.PERIODIC, "convection")
 
     def test_a_refusal_names_the_whole_layer_not_just_the_caller(self) -> None:
         with pytest.raises(ValueError, match="does not carry") as refusal:
-            require_boundary(Extrapolation.ZERO, "convection")
+            require_boundary(Extrapolation.ZERO, "diffusion")
 
         message = str(refusal.value)
-        assert "convection" in message
+        assert "diffusion" in message
         # The point of the single owner: one refusal teaches the whole picture.
         for operation in CARRIED_BOUNDARIES:
             assert operation in message
-        assert "Sanderse" in message
+        # And says what is actually missing, so the reader knows it is not padding.
+        assert "wrap" in message
 
     @pytest.mark.parametrize(
         ("operation", "extrapolation"),
         [
             ("the pressure projection", Extrapolation.ZERO),
             ("the grid operators", Extrapolation.NEUMANN),
+            ("convection", Extrapolation.ZERO),
         ],
     )
     def test_the_declaration_matches_what_the_code_does(
         self, operation: str, extrapolation: Extrapolation
     ) -> None:
-        # A declaration that drifted from the implementation would be worse than none.
-        require_boundary(extrapolation, operation)
+        # Run the operation itself, not ``require_boundary``: asking the guard whether the
+        # table permits something only re-reads the table, and would still pass if the
+        # operator it guards had never been taught the boundary at all.
+        field = StaggeredGrid.zeros((8, 8), BOX, extrapolation)
+
+        OPERATIONS[operation](field)
