@@ -11,8 +11,6 @@ two-operator chain over a small padded batch matching the per-molecule reference
 and ``jit``/``grad``/``vmap`` cleanliness of ``apply``.
 """
 
-from __future__ import annotations
-
 import sqlite3
 from pathlib import Path
 
@@ -33,11 +31,10 @@ from opifex.data.sources.qh9_padded_source import _pad_molecule, _stack_padded, 
 from opifex.data.sources.qh9_source import (
     matrix_transform_def2svp,
     QH9Example,
-    read_qh9_sqlite,
 )
+from tests.qh9_support import first_qh9_examples, QH9_DB, requires_qh9_db
 
 
-_REAL_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 _TOL = 1e-10
 
 # Distinct compositions/sizes exercised below.
@@ -215,12 +212,11 @@ def test_apply_is_jit_grad_vmap_clean() -> None:
 # =============================================================================
 
 
+@requires_qh9_db
 def test_real_qh9_molecules_match_numpy(tmp_path: Path) -> None:
     """On several real QH9 molecules the operators match the NumPy cut to 1e-10."""
-    if not _REAL_DB.exists():
-        pytest.skip("real QH9-Stable database not present")
     with jax.enable_x64(True):
-        examples = read_qh9_sqlite(_REAL_DB, limit=8)
+        examples = first_qh9_examples(8)
         # Pick molecules of differing size/composition.
         chosen = tuple(examples[: min(6, len(examples))])
         max_atoms = max(example.n_atoms for example in chosen)
@@ -244,10 +240,9 @@ def test_real_qh9_molecules_match_numpy(tmp_path: Path) -> None:
             )
 
 
+@requires_qh9_db
 def test_real_db_schema_is_readable() -> None:
     """Sanity: the real DB opens read-only with the expected ``data`` table."""
-    if not _REAL_DB.exists():
-        pytest.skip("real QH9-Stable database not present")
-    with sqlite3.connect(f"file:{_REAL_DB}?mode=ro", uri=True) as connection:
+    with sqlite3.connect(f"file:{QH9_DB}?mode=ro", uri=True) as connection:
         cursor = connection.execute("SELECT COUNT(*) FROM data")
         assert int(cursor.fetchone()[0]) > 0

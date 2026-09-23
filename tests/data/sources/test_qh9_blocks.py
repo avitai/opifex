@@ -23,8 +23,6 @@ real ``(id, N, Z, pos, Ham)`` row schema, exactly as
   round-trip to the original Fock.
 """
 
-from __future__ import annotations
-
 import sqlite3
 from pathlib import Path
 
@@ -37,9 +35,8 @@ from opifex.data.sources.qh9_blocks import (
     reconstruct_fock_from_blocks,
 )
 from opifex.data.sources.qh9_source import read_qh9_sqlite
+from tests.qh9_support import first_qh9_examples, requires_qh9_db
 
-
-_REAL_DB = Path("/mnt/ssd2/Data/qh9/raw/QH9Stable.db")
 
 # QH9 element compositions exercised below.
 _H2O_ATOMS = np.array([8, 1, 1], dtype=np.int32)  # O + 2 H -> spherical AO 14+5+5
@@ -174,10 +171,10 @@ def test_off_diagonal_blocks_zero_outside_mask(synthetic_qh9_db: Path) -> None:
 # =============================================================================
 
 
-@pytest.mark.skipif(not _REAL_DB.exists(), reason="real QH9Stable.db not present")
+@requires_qh9_db
 def test_real_data_smoke_finite_blocks() -> None:
     """A real-data smoke (limit 8) cuts finite blocks that round-trip to the Fock."""
-    examples = read_qh9_sqlite(_REAL_DB, limit=8)
+    examples = first_qh9_examples(8)
     assert len(examples) == 8
     for example in examples:
         diag, diag_mask, off, off_mask, edge_index = cut_fock_to_blocks(
