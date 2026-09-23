@@ -134,14 +134,6 @@ src/opifex/core/training/components/recovery.py
     DOC501: Method `ErrorRecoveryManager.recover_from_instability` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `ErrorRecoveryManager.recover_from_instability` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
 --------------------
-src/opifex/core/training/monitoring/flops.py
-    DOC501: Method `FlopsCounter.count_backward_flops` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Method `FlopsCounter.count_backward_flops` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['AttributeError', 'TypeError'].
---------------------
-src/opifex/core/training/strategies/mixed_precision.py
-    DOC501: Function `align_for_tensorcore` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Function `align_for_tensorcore` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
---------------------
 src/opifex/core/training/strategies/multilevel/cascade_training.py
     DOC501: Method `CascadeTrainer.__init__` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `CascadeTrainer.__init__` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
@@ -638,14 +630,6 @@ src/opifex/platform/registry/database.py
 src/opifex/platform/registry/version.py
     DOC501: Method `VersionManager.create_branch` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `VersionManager.create_branch` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
---------------------
-src/opifex/solvers/adapters/artifex.py
-    DOC101: Method `ArtifexSolverAdapter.solve`: Docstring contains fewer arguments than in function signature.
-    DOC103: Method `ArtifexSolverAdapter.solve`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [config: SolverConfig | None, initial_state: SolverState | None, problem: Problem].
-    DOC201: Method `ArtifexSolverAdapter.solve` does not have a return section in docstring
-    DOC101: Method `ArtifexSolverAdapter.sample_batch`: Docstring contains fewer arguments than in function signature.
-    DOC103: Method `ArtifexSolverAdapter.sample_batch`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [num_samples: int, problem: Problem, rngs: nnx.Rngs].
-    DOC201: Method `ArtifexSolverAdapter.sample_batch` does not have a return section in docstring
 --------------------
 src/opifex/solvers/ude.py
     DOC107: Method `NeuralODE.vector_field`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
