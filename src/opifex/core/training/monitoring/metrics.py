@@ -210,11 +210,11 @@ class AdvancedMetricsCollector:
 
     def start_training(self) -> None:
         """Mark the start of training."""
-        self.training_start_time = time.time()
+        self.training_start_time = time.perf_counter()
 
     def start_epoch(self) -> None:
         """Mark the start of an epoch."""
-        self.epoch_start_time = time.time()
+        self.epoch_start_time = time.perf_counter()
 
     def collect_physics_metrics(
         self,
@@ -298,10 +298,10 @@ class AdvancedMetricsCollector:
 
         # Timing information
         if self.epoch_start_time is not None:
-            metrics["epoch_time"] = time.time() - self.epoch_start_time
+            metrics["epoch_time"] = time.perf_counter() - self.epoch_start_time
 
         if self.training_start_time is not None:
-            metrics["total_training_time"] = time.time() - self.training_start_time
+            metrics["total_training_time"] = time.perf_counter() - self.training_start_time
 
         return metrics
 

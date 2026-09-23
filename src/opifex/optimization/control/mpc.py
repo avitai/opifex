@@ -42,17 +42,25 @@ class MPCConfig:
 
 
 class MPCResult(NamedTuple):
-    """Result from MPC computation."""
+    """Result from MPC computation.
+
+    Every field is pytree data, so a result survives the transforms
+    :meth:`DifferentiableMPC.compute_control` is compiled and batched under. Wall-clock
+    time is deliberately absent: the method is ``nnx.jit``-compiled, so a clock read
+    inside it is evaluated once at trace time and frozen into the compiled program, and
+    every later call would report the cost of tracing rather than its own. Time a
+    controller step with :func:`calibrax.profiling.time_calls`, which synchronises
+    before reading the clock.
+    """
 
     control_action: jnp.ndarray
     predicted_trajectory: jnp.ndarray
     objective_value: float | jax.Array
-    converged: bool = True
-    iterations: int = 0
-    computation_time: float = 0.0
-    emergency_activated: bool = False
-    backup_used: bool = False
-    timeout_occurred: bool = False
+    converged: bool | jax.Array = True
+    iterations: int | jax.Array = 0
+    emergency_activated: bool | jax.Array = False
+    backup_used: bool | jax.Array = False
+    timeout_occurred: bool | jax.Array = False
 
 
 class OptimizationResult(NamedTuple):
@@ -496,8 +504,6 @@ class DifferentiableMPC(nnx.Module):
         self, current_state: jnp.ndarray, reference_trajectory: jnp.ndarray
     ) -> MPCResult:
         """Compute optimal control action."""
-        start_time = time.monotonic()
-
         # Initialize control sequence
         initial_controls = jnp.zeros((self.horizon, self.control_dim))
 
@@ -542,15 +548,12 @@ class DifferentiableMPC(nnx.Module):
         # Return only the first control action (receding horizon)
         control_action = optimal_controls[0]
 
-        computation_time = time.monotonic() - start_time
-
         return MPCResult(
             control_action=control_action,
             predicted_trajectory=predicted_trajectory[1:],  # Exclude initial state
             objective_value=mpc_objective(result.solution),
             converged=result.converged,
             iterations=result.iterations,
-            computation_time=computation_time,
             timeout_occurred=result.timeout_occurred,
         )
 

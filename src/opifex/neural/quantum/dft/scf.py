@@ -63,6 +63,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 import jax
+import jax.numpy as jnp
 from flax import nnx, struct
 from jax import Array
 
@@ -328,10 +329,44 @@ class SCFSolver:
 
         Returns:
             The :class:`SCFResult` with the converged total energy and orbitals.
+
+        Raises:
+            ValueError: If ``convergence_tolerance`` is below what the working precision
+                can resolve; see :meth:`_unreachable_tolerance`.
         """
+        unreachable = self._unreachable_tolerance()
+        if unreachable is not None:
+            raise ValueError(unreachable)
         if self._mode is SolverMode.DIRECT:
             return self._solve_direct()
         return self._solve_self_consistent(initial_density=initial_density)
+
+    def _unreachable_tolerance(self) -> str | None:
+        """Why the convergence tolerance cannot be met in the working precision, if so.
+
+        The residual of a converging SCF settles at the arithmetic's own noise, so a
+        tolerance below a few epsilon is never met however long the iteration runs: the
+        solve spends its whole budget and reports ``MAX_ITERS``, which reads as a hard
+        problem rather than an impossible request. Refusing follows ``scipy.optimize``,
+        whose bracketing solvers reject an ``rtol`` under ``4 * eps`` outright.
+
+        The check is here rather than in ``__init__`` because the working dtype is set
+        by ``jax.enable_x64`` at solve time, not at construction.
+
+        Returns:
+            The explanation to refuse the solve with, or ``None`` when the tolerance is
+            reachable.
+        """
+        dtype = jnp.zeros(()).dtype
+        floor = 4.0 * float(jnp.finfo(dtype).eps)
+        if self._convergence_tolerance >= floor:
+            return None
+        return (
+            f"convergence_tolerance={self._convergence_tolerance:g} is below the "
+            f"{dtype.name} resolution: the residual cannot reach it, so the solve would "
+            f"spend its whole budget and report MAX_ITERS. Either run under "
+            f"jax.enable_x64(True), or pass convergence_tolerance >= {floor:g}."
+        )
 
     def _solve_direct(self) -> SCFResult:
         """Direct-minimisation forward solve (SCF-free path)."""
