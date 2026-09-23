@@ -40,7 +40,7 @@ This is the pivotal abstraction layer. It defines a standard `SciMLSolver` proto
 
 - **Protocol**: `solve(problem) -> Solution`
 - **Flexibility**: You can standardize your benchmarking pipeline. Switching from a `PINNSolver` to a `NeuralOperatorSolver` or a `HybridSolver` requires changing just one line of code.
-- **Artifex Integration**: The `ArtifexSolverAdapter` brings generative models (Diffusion, Flows) into the solver ecosystem.
+- **Artifex Integration**: generative models (Diffusion, Flows) reach the solver ecosystem through the `Solver` callable, so a sampler is a solver like any other.
 
 ### Layer 5: Probabilistic Numerics & Uncertainty
 **A Major Pillar of Opifex.** We treat Uncertainty Quantification (UQ) not as an afterthought, but as a first-class citizen via the **Probabilistic Numerics** paradigm.

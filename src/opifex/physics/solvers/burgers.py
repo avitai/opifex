@@ -13,18 +13,52 @@ import jax
 import jax.numpy as jnp
 
 
+def stable_substep_count(
+    values: jax.Array, viscosity: float, interval: float, spacing: float, safety: float = 0.5
+) -> int:
+    """The sub-steps an interval needs to stay inside the CFL limit, with margin.
+
+    The limit is the smaller of ``0.4 * dx / max|u|`` and ``0.25 * dx^2 / nu``. A fixed
+    count cannot be chosen on the device, because the speed is data while the count must be
+    static, so it is chosen here when the inputs are concrete.
+
+    Below the limit the scheme does not degrade gracefully. Measured at 32 cells with
+    ``nu = 0.05`` over ``T = 0.5``, against a 4096-step reference: 32 sub-steps (0.75 of
+    the limit) gives a relative error of 1.6e-02, 16 (1.5 times the limit) gives 2.7, and
+    8 (three times) gives 4.6e+06.
+
+    Args:
+        values: The field being advanced; its largest magnitude sets the advective limit.
+        viscosity: Kinematic viscosity.
+        interval: The time between saves, which the sub-steps divide.
+        spacing: Cell size.
+        safety: Fraction of the limit to take as the step.
+
+    Returns:
+        A sub-step count, at least one.
+    """
+    speed = float(jnp.max(jnp.abs(values))) + 1e-8
+    advective = 0.4 * spacing / speed
+    diffusive = 0.25 * spacing**2 / (viscosity + 1e-8)
+    step = safety * min(advective, diffusive)
+    return max(1, int(jnp.ceil(interval / step)))
+
+
 def solve_burgers_2d(
     initial_condition: jax.Array,
     viscosity: float | jax.Array,
     time_range: tuple[float, float] = (0.0, 2.0),
     time_steps: int = 5,
     resolution: int = 64,
+    substeps: int = 32,
 ) -> jax.Array:
     """
     Solve 2D Burgers equation using finite difference scheme.
 
-    Uses forward Euler with upwind advection and central diffusion,
-    with CFL-adaptive sub-stepping for numerical stability.
+    Uses forward Euler with upwind advection and central diffusion, with a fixed number
+    of equal sub-steps between save times. The count is fixed rather than CFL-adaptive so
+    that the solve carries reverse-mode differentiation; see ``stable_substep_count`` for
+    how to size it, and note that a count below the CFL limit does not degrade gracefully.
 
     Args:
         initial_condition: Initial condition u(x, y, 0)
@@ -32,6 +66,8 @@ def solve_burgers_2d(
         time_range: (start_time, end_time)
         time_steps: Number of time steps to save
         resolution: Grid resolution
+        substeps: Equal sub-steps taken between consecutive save times (static). Size it
+            with ``stable_substep_count``; below the Courant limit the scheme diverges.
 
     Returns:
         Solution trajectory (time_steps+1, resolution, resolution) including initial
@@ -64,36 +100,21 @@ def solve_burgers_2d(
         # Update equation: du/dt + u*du/dx + u*du/dy = nu*(d²u/dx² + d²u/dy²)
         return u - dt_sub * (u * u_x + u * u_y) + dt_sub * viscosity * (u_xx + u_yy)
 
-    def compute_stable_dt(u):
-        """Compute CFL-stable time step."""
-        max_u = jnp.max(jnp.abs(u)) + 1e-8
-        dt_advection = 0.4 * dx / max_u
-        dt_diffusion = 0.25 * dx**2 / (viscosity + 1e-8)
-        return jnp.minimum(dt_advection, dt_diffusion)
+    # Equal sub-steps between save times, under `lax.scan`. The trip count is static so
+    # that the solve differentiates in reverse mode, which a `lax.while_loop` stepping to
+    # a data-dependent CFL limit cannot: it has no transpose rule. Size the count with
+    # `stable_substep_count`; below the CFL limit the error against a converged reference
+    # reaches 4.6e+06.
+    interval = (save_times[1] - save_times[0]) / substeps
 
-    # Adaptive sub-stepping between save times, expressed with lax.while_loop +
-    # lax.scan so the solver is jit/vmap-compatible. The previous version called
-    # float(dt_sub)/float(save_times[i]) inside a Python while loop, which forces
-    # a host<->device sync every sub-step and cannot be jit-compiled (breaking
-    # vmapped on-device data generation).
-    def integrate_interval(u: jax.Array, bounds: jax.Array) -> tuple[jax.Array, jax.Array]:
-        t_target = bounds[1]
+    def integrate_interval(u: jax.Array, _bounds: jax.Array) -> tuple[jax.Array, jax.Array]:
+        def sub_step(state: jax.Array, _unused: None) -> tuple[jax.Array, None]:
+            return step_forward(state, interval), None
 
-        def not_done(state: tuple[jax.Array, jax.Array]) -> jax.Array:
-            return state[1] < t_target - 1e-12
-
-        def sub_step(
-            state: tuple[jax.Array, jax.Array],
-        ) -> tuple[jax.Array, jax.Array]:
-            u_cur, t = state
-            dt_sub = jnp.minimum(compute_stable_dt(u_cur), t_target - t)
-            return step_forward(u_cur, dt_sub), t + dt_sub
-
-        u_next, _ = jax.lax.while_loop(not_done, sub_step, (u, bounds[0]))
+        u_next, _empty = jax.lax.scan(sub_step, u, None, length=substeps)
         return u_next, u_next
 
-    interval_bounds = jnp.stack([save_times[:-1], save_times[1:]], axis=1)
-    _, saved = jax.lax.scan(integrate_interval, initial_condition, interval_bounds)
+    _, saved = jax.lax.scan(integrate_interval, initial_condition, save_times[1:])
     return jnp.concatenate([initial_condition[None], saved], axis=0)
 
 
@@ -207,17 +228,22 @@ class Burgers2DSolver:
         initial_condition: tuple[jax.Array, jax.Array],
         time_final: float,
         num_saves: int = 1,
+        substeps: int = 32,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
         """Integrate from the initial condition to ``time_final``.
 
-        The saved times are fixed, and the CFL-limited sub-steps between them run in a
-        ``lax.while_loop``, so the whole solve traces under ``jit`` and maps under ``vmap``.
+        The saved times are fixed and a fixed number of equal sub-steps runs between them
+        under ``lax.scan``, so the solve traces under ``jit``, maps under ``vmap`` and
+        differentiates in reverse mode -- the last of which a ``lax.while_loop`` stepping
+        to a data-dependent limit cannot, having no transpose rule. Size ``substeps`` with
+        ``stable_substep_count``.
 
         Args:
             initial_condition: Tuple of (u0, v0) initial velocity fields.
             time_final: Final time to integrate to.
             num_saves: How many states after the initial one to return, equally spaced
                 in time.
+            substeps: Equal sub-steps taken between consecutive save times (static).
 
         Returns:
             Tuple of (times, u_trajectory, v_trajectory), each of length ``num_saves + 1``.
@@ -242,19 +268,15 @@ class Burgers2DSolver:
         ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
             target = bounds[1]
 
-            def not_done(carry: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
-                return carry[2] < target - 1e-12
+            step = (target - bounds[0]) / substeps
 
             def sub_step(
-                carry: tuple[jax.Array, jax.Array, jax.Array],
-            ) -> tuple[jax.Array, jax.Array, jax.Array]:
-                u_current, v_current, time = carry
-                dt = jnp.minimum(self._adaptive_time_step(u_current, v_current), target - time)
-                u_next, v_next = self._rk4_step((u_current, v_current), dt)
-                return u_next, v_next, time + dt
+                carry: tuple[jax.Array, jax.Array], _unused: None
+            ) -> tuple[tuple[jax.Array, jax.Array], None]:
+                return self._rk4_step(carry, step), None
 
-            u_next, v_next, _ = jax.lax.while_loop(
-                not_done, sub_step, (state[0], state[1], bounds[0])
+            (u_next, v_next), _ = jax.lax.scan(
+                sub_step, (state[0], state[1]), None, length=substeps
             )
             return (u_next, v_next), (u_next, v_next)
 

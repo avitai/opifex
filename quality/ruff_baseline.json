@@ -267,16 +267,12 @@
       "ANN202": 3
     },
     "src/opifex/physics/solvers/burgers.py": {
-      "ANN001": 5,
-      "ANN202": 3
+      "ANN001": 4,
+      "ANN202": 2
     },
     "src/opifex/physics/solvers/diffusion_advection.py": {
       "ANN001": 2,
       "ANN202": 1
-    },
-    "src/opifex/physics/solvers/navier_stokes.py": {
-      "ANN001": 5,
-      "ANN202": 2
     },
     "src/opifex/physics/solvers/shallow_water.py": {
       "ANN001": 3,

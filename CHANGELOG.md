@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `solve_navier_stokes_2d` solves the equations it names. Its advection was first-order
+  upwind, whose numerical viscosity of `|u| dx / 2` stood an order of magnitude above a
+  physical `nu` of 0.01 at 32 cells, so a Taylor-Green vortex decayed 8% too fast at
+  `t = 1` and 29% at `t = 5`, with the error falling only by half whenever the grid did.
+  It now integrates on a staggered layout whose convective term produces no energy and
+  whose projection is exact, and the decay error is 6.4e-05 and 3.2e-04 at those times --
+  second order, with the relative error times `n^2` flat at 0.066 per unit time across 16
+  to 128 cells. The strict xfail that held the requirement is removed.
+- `solve_navier_stokes_2d`, `solve_burgers_2d` and `Burgers2DSolver.solve` differentiate
+  in reverse mode. Each stepped adaptively to its CFL limit inside a `lax.while_loop`,
+  which traces and maps but carries no transpose rule, so `jax.grad` of anything reaching
+  them raised outright -- a correctness defect in a differentiable-physics library, and
+  one that `jit` and `vmap` tests cannot see. They take a fixed sub-step count under
+  `lax.scan` instead; `stable_substep_count` and `stable_step_count` derive that count
+  from the same Courant condition the adaptive versions enforced.
+- `_legendre_basis` and `_hermite_basis` differentiate in reverse mode, for the same
+  reason and with no behaviour change: their trip count is the requested degree, a Python
+  int, so `lax.fori_loop` was always the right construct. Values move by 5.96e-08, which
+  is float32 round-off, and still match `numpy.polynomial` to 6.3e-07.
 - The BlackJAX backend reports an effective sample size that can be believed. Its own
   estimator truncated Geyer's initial positive sequence at `min(n // 2, 64)`, which has no
   basis in the method and biases the estimate down, then clamped the result to `[1, n]`.
@@ -52,15 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of its own copies of gradient, divergence, Laplacian and the Poisson solve. The copies
   were bit-for-bit identical to the shared ones and compile to the same kernel, so the
   duplication bought nothing and hid the defect above from the fix in `fields`.
-
-### Known issues
-
-- `solve_navier_stokes_2d` dissipates faster than the equations it solves: the advection
-  term is first-order upwind, whose numerical viscosity is `|u| dx / 2`, an order of
-  magnitude above a physical `nu` of 0.01 at 32 cells. A Taylor-Green vortex decays 8%
-  faster than `exp(-2 nu t)` at `t = 1` and 29% faster at `t = 5`, and the error falls by
-  half whenever the grid does, which is the first-order convergence that names the cause.
-  `test_the_vortex_decays_at_the_analytic_rate` holds the requirement as a strict xfail.
 
 ### Changed
 

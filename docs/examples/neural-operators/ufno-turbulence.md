@@ -372,7 +372,7 @@ energy_conservation = float(jnp.mean(jnp.abs(pred_energy - target_energy)))
 **Terminal Output:**
 ```
 Running full evaluation...
-MSE: 0.000166 | Rel L2: 0.056688+/-0.063488
+MSE: 0.000220 | Rel L2: 0.057204+/-0.058757
 Energy Conservation: 0.003750
 ```
 
@@ -407,15 +407,15 @@ The example generates four sets of visualizations:
 ```
 ======================================================================
 Full U-FNO Navier-Stokes turbulence example completed in 11.5s
-Mean Relative L2 Error: 0.056688
+Mean Relative L2 Error: 0.057204
 Results saved to: docs/assets/examples/ufno_turbulence
 ======================================================================
 ```
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Test MSE | 0.000166 | Mean squared error on test set |
-| Test Relative L2 | 0.056688 +/- 0.063488 | Mean +/- std relative L2 error |
+| Test MSE | 0.000220 | Mean squared error on test set |
+| Test Relative L2 | 0.057204 +/- 0.058757 | Mean +/- std relative L2 error |
 | Energy Conservation | 0.003750 | Mean energy deviation (lower is better) |
 | Final Train Loss | 0.000789 | Training loss at epoch 5 |
 | Final Val Loss | 0.001596 | Validation loss at epoch 5 |

@@ -58,7 +58,7 @@ Opifex provides extensive support for modern scientific machine learning paradig
 - **EarlyStopping & ReduceLROnPlateau**: Callbacks for validation-driven stopping and learning-rate scheduling
 - **ErrorRecoveryManager**: Robust error handling with gradient stability, NaN detection, and loss explosion recovery
 - **FlexibleOptimizerFactory**: Advanced optimizer creation (Adam, AdamW, SGD) with cosine, exponential, and linear scheduling
-- **AdvancedMetricsCollector**: Physics-aware metrics with convergence tracking, chemical accuracy monitoring, and SCF diagnostics
+- **MetricsCollector**: Physics-aware metrics with convergence tracking, chemical accuracy monitoring, and SCF diagnostics
 - **TrainingComponent**: Base class for extensible training component development
 - **TrainingConfig**: Configuration management for quantum-aware training, loss configuration, and checkpointing
 - **TrainingState**: Enhanced state management with physics metrics, conservation violations, and recovery tracking

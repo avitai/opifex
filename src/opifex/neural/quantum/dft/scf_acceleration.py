@@ -87,10 +87,10 @@ def measure_scf_acceleration(
             "initial density is likely inconsistent with the solver's AO basis."
         )
     return SCFAccelerationResult(
-        baseline_iterations=baseline.n_iterations,
-        guided_iterations=guided.n_iterations,
+        baseline_iterations=int(baseline.n_iterations),
+        guided_iterations=int(guided.n_iterations),
         energy_hartree=float(guided.total_energy),
-        converged=guided.converged,
+        converged=bool(guided.is_converged),
     )
 
 

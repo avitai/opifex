@@ -129,3 +129,88 @@ def test_converges_water_lda_density() -> None:
             jnp.abs(_scf_step(converged, integrals, functional, n_occupied, None) - converged)
         )
     assert float(residual) < 1e-9
+
+
+class TestTheMixingSolveAtDefaultPrecision:
+    """The Tikhonov scale has to be measured in the arithmetic that runs.
+
+    Every test above enables x64, so the default-precision path was never exercised.
+    In float32 the residuals of a converging SCF reach the arithmetic's own noise floor
+    (~1e-7) while the tolerance is still unmet, and the Gram matrix of near-identical
+    noise vectors is numerically singular: a stabiliser too small to perturb it leaves
+    the mixing solve to return non-finite coefficients.
+    """
+
+    @staticmethod
+    def _rank_deficient_history(dtype: jnp.dtype) -> jax.Array:
+        """Six residuals differing only at the last representable digit."""
+        base = jnp.linspace(0.1, 0.9, 16).astype(dtype)
+        noise = jnp.finfo(dtype).eps * jnp.arange(1, 7, dtype=dtype)[:, None]
+        return (base[None, :] * (1.0 + noise)).astype(dtype)
+
+    @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+    def test_coefficients_stay_finite_on_a_rank_deficient_history(self, dtype: jnp.dtype) -> None:
+        with jax.enable_x64(True):
+            solver = AndersonAcceleration(rtol=1e-8, atol=1e-8, history_size=6)
+            residuals = self._rank_deficient_history(dtype)
+
+            coefficients = solver._mixing_coefficients(residuals, jnp.array(6))
+
+        assert bool(jnp.all(jnp.isfinite(coefficients)))
+        assert float(jnp.sum(coefficients)) == pytest.approx(1.0, abs=1e-5)
+
+    def test_the_scale_comes_from_the_residuals_not_the_empty_slots(self) -> None:
+        # Unfilled slots are masked into the Gram as the identity, whose entries are 1
+        # while a converging residual's are ~1e-12. A scale taken from the padded trace
+        # therefore regularises by many times the data while the history fills.
+        #
+        # The two residuals are orthogonal with very different norms, so the exact
+        # coefficients are c ~ (1/a, 1/b) normalised -- far from equal. A stabiliser
+        # much larger than both drives them to (0.5, 0.5) instead, which is what a
+        # padded scale produces and what equal-magnitude residuals would hide.
+        with jax.enable_x64(True):
+            solver = AndersonAcceleration(rtol=1e-8, atol=1e-8, history_size=6)
+            residuals = jnp.zeros((6, 4), jnp.float64)
+            residuals = residuals.at[0, 0].set(1e-6).at[1, 1].set(1e-7)
+
+            coefficients = solver._mixing_coefficients(residuals, jnp.array(2))
+
+        # a = 1e-12, b = 1e-14: c = (1/a, 1/b) / (1/a + 1/b) = (1/101, 100/101).
+        assert float(coefficients[0]) == pytest.approx(1.0 / 101.0, rel=1e-3)
+        assert float(coefficients[1]) == pytest.approx(100.0 / 101.0, rel=1e-3)
+        assert float(jnp.sum(coefficients[2:])) == pytest.approx(0.0, abs=1e-12)
+
+    def test_an_oscillatory_map_converges_without_x64(self) -> None:
+        # x = sqrt(2) cos(x), whose root is 0.8900586117066737 to float64 precision
+        # (Brent, residual 4e-16). At default precision the old fixed stabiliser left
+        # this solve returning NaN after nine steps.
+        def stiff(x: jax.Array, _: None) -> jax.Array:
+            return jnp.sqrt(2.0) * jnp.cos(x)
+
+        solver = AndersonAcceleration(rtol=1e-5, atol=1e-6, history_size=5)
+
+        solution = optx.fixed_point(
+            stiff, solver, jnp.array(0.0, jnp.float32), max_steps=128, throw=False
+        )
+        residual = float(jnp.abs(stiff(solution.value, None) - solution.value))
+
+        assert float(solution.value) == pytest.approx(0.8900586117066737, abs=1e-5)
+        assert residual < 1e-5
+
+    def test_the_scf_density_converges_without_x64(self) -> None:
+        # The default-precision H2 solve: the Fock build itself is accurate to seven
+        # digits in float32, so a non-finite energy can only come from the mixing.
+        from opifex.core.quantum.molecular_system import MolecularSystem
+        from opifex.neural.quantum.dft.scf import SCFSolver
+
+        bohr_per_angstrom = 1.0 / 0.52917721067
+        system = MolecularSystem(
+            atomic_numbers=jnp.array([1, 1]),
+            positions=jnp.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.74 * bohr_per_angstrom]]),
+            basis_set="sto-3g",
+        )
+
+        result = SCFSolver(system, convergence_tolerance=1e-6).solve()
+
+        assert bool(jnp.isfinite(result.total_energy))
+        assert float(result.total_energy) == pytest.approx(-1.1212060, abs=1e-4)

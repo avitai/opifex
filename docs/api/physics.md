@@ -42,7 +42,7 @@ The physics module offers:
         show_root_heading: true
         show_source: false
 
-::: opifex.physics.solvers.navier_stokes.create_lid_driven_cavity_ic
+::: opifex.physics.solvers.navier_stokes.solve_lid_driven_cavity
     options:
         show_root_heading: true
         show_source: false

@@ -330,14 +330,15 @@ def test_uncertainty_sources_declares_six_canonical_values() -> None:
 
 def test_to_solution_keeps_mean_fields_and_stores_uq_in_auxiliary_data() -> None:
     from opifex.core.solver.interface import Solution
+    from opifex.core.solver.status import Status
 
     sd = _two_field_distribution(with_uncertainty=True)
-    solution = sd.to_solution(execution_time=1.23, converged=True)
+    solution = sd.to_solution(status=jnp.asarray(int(Status.SUCCESS), jnp.int32))
     assert isinstance(solution, Solution)
     assert set(solution.fields) == {"u", "p"}
     assert jnp.allclose(solution.fields["u"], sd.mean["u"])
-    assert solution.converged is True
-    assert solution.execution_time == 1.23
+    # An array, so it answers per element under vmap rather than as one flag.
+    assert bool(solution.is_converged)
     # UQ payload is recoverable from auxiliary_data — no backref needed.
     uq = solution.auxiliary_data["uq"]
     assert uq["epistemic"] is not None
