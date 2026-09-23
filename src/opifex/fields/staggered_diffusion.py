@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.fields.field import Extrapolation
 from opifex.fields.staggered import require_boundary, StaggeredGrid
@@ -77,7 +78,7 @@ def _shift(values: jax.Array, axis: int, offset: int, ghost: jax.Array) -> jax.A
     return jnp.concatenate(pieces, axis=axis)
 
 
-@jax.tree_util.register_pytree_node_class
+@struct.dataclass
 class WallVelocity:
     """The prescribed tangential velocity on every solid wall.
 
@@ -86,8 +87,9 @@ class WallVelocity:
     It is ``None`` where ``axis == normal``, because that wall carries the component's own
     normal velocity, which no-penetration fixes at zero.
 
-    The arrays are pytree leaves, so a wall profile traces, batches and differentiates
-    like any other array.
+    The arrays are pytree data, so a wall profile traces, batches and differentiates like
+    any other array; the resolution and boundary are ``pytree_node=False`` because they
+    set shapes and so belong in the cache key.
 
     Attributes:
         values: One array per (component, perpendicular axis), or ``None``.
@@ -95,24 +97,9 @@ class WallVelocity:
         extrapolation: The boundary this was built for.
     """
 
-    __slots__ = ("extrapolation", "resolution", "values")
-
-    def __init__(
-        self,
-        values: tuple[tuple[jax.Array | None, ...], ...],
-        resolution: tuple[int, ...],
-        extrapolation: Extrapolation,
-    ) -> None:
-        """Store the wall arrays and the layout they belong to.
-
-        Args:
-            values: One array per (component, perpendicular axis), or ``None``.
-            resolution: Number of cells along each axis.
-            extrapolation: The boundary this was built for.
-        """
-        self.values = values
-        self.resolution = resolution
-        self.extrapolation = extrapolation
+    values: tuple[tuple[jax.Array | None, ...], ...]
+    resolution: tuple[int, ...] = struct.field(pytree_node=False)
+    extrapolation: Extrapolation = struct.field(pytree_node=False)
 
     @classmethod
     def _build(
@@ -199,35 +186,6 @@ class WallVelocity:
             for n, row in enumerate(self.values)
         )
         return WallVelocity(values, self.resolution, self.extrapolation)
-
-    def tree_flatten(
-        self,
-    ) -> tuple[tuple[jax.Array | None, ...], tuple[tuple[int, ...], Extrapolation]]:
-        """Split into the wall arrays and the static layout."""
-        flat = tuple(entry for row in self.values for entry in row)
-        return flat, (self.resolution, self.extrapolation)
-
-    @classmethod
-    def tree_unflatten(
-        cls,
-        aux: tuple[tuple[int, ...], Extrapolation],
-        flat: tuple[jax.Array | None, ...],
-    ) -> WallVelocity:
-        """Rebuild from the wall arrays and the static layout.
-
-        Args:
-            aux: The dimension, resolution and boundary.
-            flat: The wall arrays in row-major order.
-
-        Returns:
-            The reconstructed wall velocity.
-        """
-        resolution, extrapolation = aux
-        ndim = len(resolution)
-        values = tuple(
-            tuple(flat[normal * ndim + axis] for axis in range(ndim)) for normal in range(ndim)
-        )
-        return cls(values, resolution, extrapolation)
 
 
 def laplacian(field: StaggeredGrid) -> StaggeredGrid:
