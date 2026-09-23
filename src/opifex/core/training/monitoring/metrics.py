@@ -12,8 +12,10 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from calibrax.metrics import MetricTracker
+from calibrax.metrics.functional.regression import mae, max_error, mse
 from flax import nnx
-from jaxtyping import Array, Float  # noqa: TC002
+from jaxtyping import Array, ArrayLike, Float  # noqa: TC002
 
 from opifex.core.physics.losses import PhysicsResidualReporter
 
@@ -22,52 +24,185 @@ from opifex.core.physics.losses import PhysicsResidualReporter
 HARTREE_TO_KCAL_MOL = 627.50960803  # Conversion factor from Hartree to kcal/mol
 
 
+def _recorded(value: ArrayLike, target: ArrayLike = 0.0) -> float:
+    """Return an already-computed scalar unchanged.
+
+    :class:`calibrax.metrics.MetricTracker` computes its metric from a prediction and a
+    target pair. A training loop has already reduced its losses to scalars by the time it
+    records them, so this is the metric that records one.
+
+    Converting to a Python float rather than an array is deliberate: a float32 array
+    would round every recorded value to single precision, so a learning rate of ``1e-3``
+    would read back as ``0.0010000000474974513``.
+
+    Args:
+        value: The scalar to record.
+        target: Unused; the tracker passes a target to every metric.
+
+    Returns:
+        ``value`` as a Python float.
+    """
+    del target
+    return float(value)  # pyright: ignore[reportArgumentType]
+
+
 class TrainingMetrics:
-    """Training metrics tracking."""
+    """Training metrics tracking.
+
+    Each series is a :class:`calibrax.metrics.MetricTracker`, which owns metric history
+    and best-value detection for the ecosystem; this class adds the series a scientific
+    training loop needs and the vocabulary to record them. Histories are read-only
+    tuples, so a value enters one only through its ``update_`` method.
+
+    SCF convergence is kept as a plain log rather than a tracker: a tracker records
+    floats, and a converged flag and an iteration count are not metrics to minimise.
+    """
+
+    _FLOAT_SERIES = (
+        "train_losses",
+        "val_losses",
+        "learning_rates",
+        "physics_losses",
+        "boundary_losses",
+        "chemical_accuracies",
+        "constraint_violations",
+    )
 
     def __init__(self) -> None:
-        """Initialize metrics tracking."""
-        self.train_losses: list[float] = []
-        self.val_losses: list[float] = []
-        self.best_val_loss: float | None = None
-        self.learning_rates: list[float] = []
+        """Start every series empty."""
+        self._series = {name: MetricTracker(_recorded) for name in self._FLOAT_SERIES}
+        self._scf_converged: list[bool] = []
+        self._scf_iterations: list[int] = []
 
-        # Physics-informed loss metrics
-        self.physics_losses: list[float] = []
-        self.boundary_losses: list[float] = []
+    @property
+    def train_losses(self) -> tuple[float, ...]:
+        """Training loss per recorded step."""
+        return self._series["train_losses"].history
 
-        # Quantum-specific metrics
-        self.chemical_accuracies: list[float] = []
-        self.scf_converged: list[bool] = []
-        self.scf_iterations: list[int] = []
-        self.constraint_violations: list[float] = []
+    @property
+    def val_losses(self) -> tuple[float, ...]:
+        """Validation loss per recorded evaluation."""
+        return self._series["val_losses"].history
+
+    @property
+    def learning_rates(self) -> tuple[float, ...]:
+        """Learning rate per recorded step."""
+        return self._series["learning_rates"].history
+
+    @property
+    def physics_losses(self) -> tuple[float, ...]:
+        """Physics-residual loss per recorded step."""
+        return self._series["physics_losses"].history
+
+    @property
+    def boundary_losses(self) -> tuple[float, ...]:
+        """Boundary-condition loss per recorded step."""
+        return self._series["boundary_losses"].history
+
+    @property
+    def chemical_accuracies(self) -> tuple[float, ...]:
+        """Chemical accuracy (kcal/mol) per recorded evaluation."""
+        return self._series["chemical_accuracies"].history
+
+    @property
+    def constraint_violations(self) -> tuple[float, ...]:
+        """Constraint violation magnitude per recorded step."""
+        return self._series["constraint_violations"].history
+
+    @property
+    def scf_converged(self) -> tuple[bool, ...]:
+        """Whether each recorded SCF solve converged."""
+        return tuple(self._scf_converged)
+
+    @property
+    def scf_iterations(self) -> tuple[int, ...]:
+        """Iterations each recorded SCF solve took."""
+        return tuple(self._scf_iterations)
+
+    @property
+    def best_val_loss(self) -> float | None:
+        """Lowest validation loss recorded, or ``None`` before the first."""
+        tracker = self._series["val_losses"]
+        return tracker.best() if tracker.history else None
+
+    @property
+    def best_val_epoch(self) -> int | None:
+        """Index of the evaluation that produced :attr:`best_val_loss`."""
+        tracker = self._series["val_losses"]
+        return tracker.best_epoch if tracker.history else None
 
     def update_train_loss(self, loss: float) -> None:
-        """Update training loss."""
-        self.train_losses.append(loss)
+        """Record a training loss.
+
+        Args:
+            loss: The loss value.
+        """
+        self._series["train_losses"].increment(loss, 0.0)
 
     def update_val_loss(self, loss: float) -> None:
-        """Update validation loss."""
-        self.val_losses.append(loss)
-        if self.best_val_loss is None or loss < self.best_val_loss:
-            self.best_val_loss = loss
+        """Record a validation loss.
 
-    def update_learning_rate(self, lr: float) -> None:
-        """Update learning rate."""
-        self.learning_rates.append(lr)
+        Args:
+            loss: The loss value.
+        """
+        self._series["val_losses"].increment(loss, 0.0)
+
+    def update_learning_rate(self, learning_rate: float) -> None:
+        """Record a learning rate.
+
+        Args:
+            learning_rate: The current learning rate.
+        """
+        self._series["learning_rates"].increment(learning_rate, 0.0)
+
+    def update_physics_loss(self, loss: float) -> None:
+        """Record a physics-residual loss.
+
+        Args:
+            loss: The loss value.
+        """
+        self._series["physics_losses"].increment(loss, 0.0)
+
+    def update_boundary_loss(self, loss: float) -> None:
+        """Record a boundary-condition loss.
+
+        Args:
+            loss: The loss value.
+        """
+        self._series["boundary_losses"].increment(loss, 0.0)
 
     def update_chemical_accuracy(self, accuracy: float) -> None:
-        """Update chemical accuracy (kcal/mol)."""
-        self.chemical_accuracies.append(accuracy)
+        """Record a chemical accuracy in kcal/mol.
 
-    def update_scf_convergence(self, converged: bool, iterations: int) -> None:
-        """Update SCF convergence status."""
-        self.scf_converged.append(converged)
-        self.scf_iterations.append(iterations)
+        Args:
+            accuracy: The mean absolute energy error in kcal/mol.
+        """
+        self._series["chemical_accuracies"].increment(accuracy, 0.0)
 
     def update_constraint_violation(self, violation: float) -> None:
-        """Update constraint violation."""
-        self.constraint_violations.append(violation)
+        """Record a constraint-violation magnitude.
+
+        Args:
+            violation: The violation magnitude.
+        """
+        self._series["constraint_violations"].increment(violation, 0.0)
+
+    def update_scf_convergence(self, converged: bool, iterations: int) -> None:
+        """Record the outcome of an SCF solve.
+
+        Args:
+            converged: Whether the solve reached its tolerance.
+            iterations: Iterations the solve took.
+        """
+        self._scf_converged.append(converged)
+        self._scf_iterations.append(iterations)
+
+    def reset(self) -> None:
+        """Clear every recorded series."""
+        for tracker in self._series.values():
+            tracker.reset()
+        self._scf_converged.clear()
+        self._scf_iterations.clear()
 
 
 @dataclass(kw_only=True)
@@ -199,14 +334,30 @@ class TrainingState:
         return summary
 
 
-class AdvancedMetricsCollector:
-    """Advanced metrics collection for scientific computing training."""
+class MetricsCollector:
+    """Collects the metrics a scientific training loop reports.
+
+    Computes prediction accuracy, physics residuals, gradient and parameter norms,
+    chemical accuracy, conservation violations and quantum diagnostics from a model and
+    a batch, and keeps a history of whatever is recorded.
+
+    Regression figures come from :mod:`calibrax.metrics.functional.regression` and the
+    history from :class:`calibrax.metrics.MetricTracker`, which own those across the
+    ecosystem. What stays here is what calibrax has no equivalent for: the nnx gradient
+    and parameter norms, the Hartree-to-kcal/mol accuracy, and the physics and
+    conservation diagnostics.
+    """
 
     def __init__(self) -> None:
-        """Initialize the advanced metrics collector."""
+        """Start with no timing marks and no recorded history."""
         self.training_start_time: float | None = None
         self.epoch_start_time: float | None = None
-        self.metrics_history: dict[str, list[float]] = {}
+        self._history: dict[str, MetricTracker] = {}
+
+    @property
+    def metrics_history(self) -> dict[str, tuple[float, ...]]:
+        """Every recorded series, keyed by metric name."""
+        return {name: tracker.history for name, tracker in self._history.items()}
 
     def start_training(self) -> None:
         """Mark the start of training."""
@@ -236,14 +387,13 @@ class AdvancedMetricsCollector:
         """
         metrics = {}
 
-        # Basic prediction accuracy. Train/eval mode is set by the caller.
+        # Basic prediction accuracy. Train/eval mode is set by the caller. The three
+        # regression figures come from calibrax, which owns metrics for the ecosystem;
+        # recomputing them here would be a second definition to keep in step.
         y_pred = model(x)  # pyright: ignore[reportCallIssue]
-        mse_loss = jnp.mean((y_pred - y_true) ** 2)
-        mae_loss = jnp.mean(jnp.abs(y_pred - y_true))
-
-        metrics["mse_loss"] = float(mse_loss)
-        metrics["mae_loss"] = float(mae_loss)
-        metrics["max_error"] = float(jnp.max(jnp.abs(y_pred - y_true)))
+        metrics["mse_loss"] = float(mse(y_pred, y_true))
+        metrics["mae_loss"] = float(mae(y_pred, y_true))
+        metrics["max_error"] = float(max_error(y_pred, y_true))
 
         # Physics residual diagnostics when the loss reports them. Uses the
         # PhysicsResidualReporter protocol with its real
@@ -354,9 +504,8 @@ class AdvancedMetricsCollector:
             new_metrics: Dictionary of new metric values
         """
         for metric_name, value in new_metrics.items():
-            if metric_name not in self.metrics_history:
-                self.metrics_history[metric_name] = []
-            self.metrics_history[metric_name].append(value)
+            tracker = self._history.setdefault(metric_name, MetricTracker(_recorded))
+            tracker.increment(value, 0.0)
 
     def get_metrics_summary(self, window_size: int = 10) -> dict[str, dict[str, float]]:
         """Get a summary of metrics over a recent window.
@@ -369,11 +518,12 @@ class AdvancedMetricsCollector:
         """
         summary = {}
 
-        for metric_name, values in self.metrics_history.items():
+        for metric_name, tracker in self._history.items():
+            values = tracker.history
             if not values:
                 continue
 
-            recent_values = values[-window_size:]
+            recent_values = list(values[-window_size:])
             summary[metric_name] = {
                 "current": recent_values[-1],
                 "mean": sum(recent_values) / len(recent_values),

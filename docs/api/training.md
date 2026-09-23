@@ -187,9 +187,9 @@ optimizer_factory = FlexibleOptimizerFactory(
 Physics-aware metrics collection with convergence tracking.
 
 ```python
-from opifex.core.training.monitoring.metrics import AdvancedMetricsCollector
+from opifex.core.training.monitoring.metrics import MetricsCollector
 
-collector = AdvancedMetricsCollector()
+collector = MetricsCollector()
 collector.start_training()
 metrics = collector.collect_physics_metrics(model, x, y_true)
 ```
@@ -408,7 +408,7 @@ error_recovery = ErrorRecoveryManager(config={"max_retries": 5, "gradient_clip_t
 optimizer_factory = FlexibleOptimizerFactory(config={"optimizer_type": "adamw", "schedule_type": "cosine"})
 
 # Create modular trainer
-# Note: AdvancedMetricsCollector is automatically created by ModularTrainer
+# Note: MetricsCollector is automatically created by ModularTrainer
 trainer = ModularTrainer(
     model=model,
     config=config,
