@@ -24,7 +24,7 @@ forces * Hartree / Bohr, stress * Hartree / Bohr^3).
 
 The graph is built by the *model's* injected neighbour list
 (:class:`~opifex.core.quantum.protocols.RadiusNeighborList`, which delegates to
-:func:`opifex.neural.equivariant.radius_graph`) inside the jitted forward -- the
+:func:`opifex.geometry.graph.radius_graph`) inside the jitted forward -- the
 calculator never hand-rolls a neighbour list. The whole model evaluation runs
 through a single ``jax.jit``-compiled function (built once at construction via the
 Flax NNX ``split``/``merge`` pattern), so repeated MD steps with the same atom

@@ -6,11 +6,11 @@ Every interatomic-potential backbone in opifex -- :class:`SchNet`
 (:mod:`opifex.neural.atomistic.backbones.nequip`) -- shares the same
 edge-construction and aggregation skeleton: given the padded
 ``(senders, receivers)`` edge index produced by
-:func:`opifex.neural.equivariant.radius_graph`, compute per-edge geometry
+:func:`opifex.geometry.graph.radius_graph`, compute per-edge geometry
 (displacement vectors, lengths, unit directions), embed the lengths in an
 invariant radial basis with a smooth cutoff envelope, and scatter per-edge
 messages back onto receiver atoms with
-:func:`opifex.neural.equivariant.scatter_sum`.
+:func:`opifex.geometry.graph.scatter_sum`.
 
 This module factors that skeleton once so the three backbones differ only in
 their *message function* (SchNet: continuous-filter convolution; PaiNN:
@@ -73,7 +73,7 @@ def edge_geometry(positions: Float[Array, "n_atoms 3"], graph: tuple[Array, Arra
     Args:
         positions: Atomic coordinates of shape ``(n_atoms, 3)``.
         graph: The ``(senders, receivers)`` padded edge index from
-            :func:`opifex.neural.equivariant.radius_graph` (``-1`` padding).
+            :func:`opifex.geometry.graph.radius_graph` (``-1`` padding).
 
     Returns:
         An :class:`EdgeGeometry` with clamped indices, displacement vectors,

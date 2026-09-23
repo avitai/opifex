@@ -35,9 +35,9 @@ from flax import nnx
 
 from opifex.core.quantum.protocols import RadiusNeighborList
 from opifex.deployment.ase_calculator import OpifexCalculator
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead, StressHead
-from opifex.neural.equivariant import scatter_sum
 
 
 if TYPE_CHECKING:

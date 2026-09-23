@@ -25,6 +25,7 @@ from jaxtyping import Array  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.quantum.protocols import RadiusNeighborList
+from opifex.geometry.graph import scatter_sum
 from opifex.neural.atomistic import AtomisticModel
 from opifex.neural.atomistic.heads import EnergyHead, ForcesHead
 from opifex.neural.atomistic.scale_shift import (
@@ -32,7 +33,6 @@ from opifex.neural.atomistic.scale_shift import (
     fit_atomic_scale_shift,
     fit_atomic_scale_shift_from_forces,
 )
-from opifex.neural.equivariant import scatter_sum
 
 
 def _node_features(n_atoms: int = 3, feature_dim: int = 8) -> dict[str, Array]:

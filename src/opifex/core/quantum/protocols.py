@@ -12,7 +12,7 @@ The seams:
 * :class:`NeighborList` -- turns a :class:`MolecularSystem` into the
   ``(senders, receivers)`` edge index within a cutoff. The default
   :class:`RadiusNeighborList` adapter delegates to
-  :func:`opifex.neural.equivariant.radius_graph`.
+  :func:`opifex.geometry.graph.radius_graph`.
 * :class:`Backbone` -- computes per-atom (and optionally per-edge) embeddings.
 * :class:`PropertyHead` -- maps embeddings to one or more named properties.
 * :class:`AtomisticModel` -- the assembled ``system -> dict[str, Array]`` model
@@ -31,7 +31,7 @@ from typing import Protocol, runtime_checkable
 from jaxtyping import Array  # noqa: TC002
 
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
-from opifex.neural.equivariant import radius_graph
+from opifex.geometry.graph import radius_graph
 
 
 @runtime_checkable
@@ -124,7 +124,7 @@ class RadiusNeighborList:
     """Default :class:`NeighborList` adapter delegating to ``radius_graph``.
 
     A thin boundary adapter over
-    :func:`opifex.neural.equivariant.radius_graph`: it reuses the dense
+    :func:`opifex.geometry.graph.radius_graph`: it reuses the dense
     pairwise-distance edge builder rather than duplicating the cutoff logic
     (DRY). Periodic minimum-image neighbour search is a future variant that will
     accept a :class:`Space`.

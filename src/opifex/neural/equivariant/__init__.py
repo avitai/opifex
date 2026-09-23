@@ -16,12 +16,6 @@ from opifex.neural.equivariant.cartesian import (
     to_irreps_array,
 )
 from opifex.neural.equivariant.gate import Gate, gate, NormGate
-from opifex.neural.equivariant.graph import (
-    radius_graph,
-    scatter_max,
-    scatter_mean,
-    scatter_sum,
-)
 from opifex.neural.equivariant.irreps import Irrep, Irreps, IrrepsArray
 from opifex.neural.equivariant.linear import EquivariantLinear
 from opifex.neural.equivariant.radial import (
@@ -64,11 +58,7 @@ __all__ = [
     "inner_product",
     "norm",
     "polynomial_cutoff",
-    "radius_graph",
     "rms_normalize",
-    "scatter_max",
-    "scatter_mean",
-    "scatter_sum",
     "spherical_harmonics",
     "to_irreps_array",
 ]
