@@ -114,6 +114,39 @@ def test_implicit_diff_matches_unrolled_gradient_h2() -> None:
     )
 
 
+def test_energy_maps_over_bond_lengths_with_vmap() -> None:
+    """``energy_from_positions`` batches over geometries, one energy per geometry.
+
+    The geometries stretch the bond rather than translate the molecule: a rigid
+    translation leaves the energy unchanged, so a batch of translations could not tell
+    a correct map from one that repeats a single energy.
+    """
+    with jax.enable_x64(True):
+        system = _h2_system()
+        solver = SCFSolver(system)
+        bonds = jnp.asarray([0.70, 0.74, 0.80]) * _BOHR_PER_ANGSTROM
+        batch = jnp.zeros((3, 2, 3)).at[:, 1, 2].set(bonds)
+        batched = jax.vmap(solver.energy_from_positions)(batch)
+        one_by_one = jnp.stack([solver.energy_from_positions(geometry) for geometry in batch])
+    np.testing.assert_allclose(np.asarray(batched), np.asarray(one_by_one), rtol=0.0, atol=1e-8)
+    assert len(set(np.round(np.asarray(batched), 6).tolist())) == 3
+
+
+@pytest.mark.slow
+def test_the_net_force_on_an_isolated_molecule_vanishes() -> None:
+    """The analytic forces on water sum to zero.
+
+    The energy of an isolated molecule is invariant under translation, so its gradient has
+    no net component. Water makes the check meaningful: its three forces are unequal and
+    not collinear, where H2's two cancel by symmetry alone.
+    """
+    with jax.enable_x64(True):
+        forces = SCFSolver(_h2o_system()).compute_forces()
+    assert forces.shape == (3, 3)
+    assert float(jnp.max(jnp.abs(forces))) > 1e-3  # a non-trivial force field
+    np.testing.assert_allclose(np.asarray(jnp.sum(forces, axis=0)), 0.0, atol=1e-8)
+
+
 def test_energy_and_forces_is_jittable() -> None:
     """``energy_from_positions`` and its gradient compile under ``jax.jit``."""
     with jax.enable_x64(True):

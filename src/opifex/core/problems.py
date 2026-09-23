@@ -3,15 +3,14 @@ Unified Problem Definition Framework for Opifex
 
 This module provides a unified interface for defining all types of scientific
 machine learning problems, including PDEs, ODEs, optimization problems, and
-quantum mechanical calculations. The electronic-structure problem is backed by
-the real Kohn-Sham DFT solver (:mod:`opifex.neural.quantum.dft`) alongside
-traditional PINNs and Neural Operators.
+quantum mechanical calculations. A problem states what to solve; the electronic-structure
+problem is solved by :class:`opifex.neural.quantum.dft.SCFSolver`, as a PySCF molecule is
+by its ``RKS`` method.
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import Any, Protocol, TYPE_CHECKING
+from collections.abc import Callable
+from typing import Any, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -20,15 +19,6 @@ from jax import Array
 from opifex.core.quantum import MolecularSystem
 from opifex.core.quantum.molecular_system import create_molecular_system
 from opifex.geometry.base import Geometry
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    # Imported lazily here to avoid a circular import: opifex.neural.quantum.dft
-    # imports scf_acceleration, which transitively imports opifex.core. These names
-    # are used only in annotations; runtime uses do a local import inside methods.
-    from opifex.neural.quantum.dft import Functional, SCFSolver
 
 
 class Problem(Protocol):
@@ -267,7 +257,7 @@ class DataDrivenProblem(ABC):  # noqa: B024
         return self.x_train.shape[0] == self.y_train.shape[0]
 
 
-class QuantumProblem(ABC):
+class QuantumProblem:
     """
     Base class for quantum mechanical problems.
 
@@ -320,14 +310,6 @@ class QuantumProblem(ABC):
         if self.molecular_system.n_electrons <= 0:
             return False
         return not self.convergence_threshold <= 0
-
-    @abstractmethod
-    def compute_energy(self, density: Array | None = None) -> float | Array:
-        """Compute total energy."""
-
-    @abstractmethod
-    def compute_forces(self, density: Array | None = None) -> Array:
-        """Compute forces on nuclei."""
 
 
 class ElectronicStructureProblem(QuantumProblem):
@@ -398,102 +380,6 @@ class ElectronicStructureProblem(QuantumProblem):
             return False
 
         return not (self.grid_level < 1 or self.grid_level > 5)
-
-    @property
-    def scf_solver(self) -> SCFSolver:
-        """The restricted Kohn-Sham SCF solver backing this problem.
-
-        Built lazily (and cached) from the problem's :class:`MolecularSystem`
-        and the requested functional, then reused for the energy and the
-        analytic forces so both come from one self-consistent solve.
-        """
-        from opifex.neural.quantum.dft import SCFSolver
-
-        solver = getattr(self, "_scf_solver", None)
-        if solver is None:
-            solver = SCFSolver(self.molecular_system, functional=self._scf_functional)
-            self._scf_solver = solver
-        return solver
-
-    @property
-    def _scf_functional(self) -> Functional:
-        """Map ``functional_type`` onto a concrete real DFT functional.
-
-        The PBE GGA backs the ``pbe_*`` request strings; every other request
-        falls back to the LDA (Slater + VWN5) functional. The learned-XC path
-        (:class:`~opifex.neural.quantum.neural_xc.NeuralXCFunctional`) is not
-        auto-selected here -- it is wired through
-        :class:`~opifex.neural.quantum.dft.SCFSolver` directly with a trained
-        module.
-        """
-        from opifex.neural.quantum.dft import Functional
-
-        if self.functional_type.startswith("pbe"):
-            return Functional.PBE
-        return Functional.LDA
-
-    def compute_energy(self, density: Array | None = None) -> float | Array:
-        """Compute the converged Kohn-Sham total energy of the system.
-
-        Delegates to :meth:`_energy_from_positions` -- the same differentiable
-        routine that :meth:`compute_forces` differentiates -- so the energy and
-        the forces are mutually consistent (``F = -dE/dR``) and the public
-        quantum API is ``jit`` / ``grad`` / ``vmap`` compatible. A concrete
-        Python ``float`` is returned in eager execution; under JAX transforms
-        the traced array is returned instead (calling ``float()`` on a tracer
-        raises a ``TypeError`` subclass, which selects the array branch).
-
-        Args:
-            density: Ignored. The restricted Kohn-Sham SCF solves for the
-                self-consistent density itself; the argument is retained only
-                for interface parity with :class:`QuantumProblem`.
-
-        Returns:
-            Total Kohn-Sham energy in Hartree.
-        """
-        energy = self._energy_from_positions(self.molecular_system.positions, density)
-        try:
-            return float(energy)
-        except (TypeError, ValueError):
-            # Under jit/grad/vmap ``energy`` is a tracer; return it for AD.
-            return energy
-
-    def _energy_from_positions(self, positions: Array, density: Array | None = None) -> Array:
-        """Converged Kohn-Sham total energy as a function of nuclear positions.
-
-        A pure, differentiable function of ``positions``: the integrals, grid
-        and exchange-correlation matrix are rebuilt at ``positions`` and the
-        self-consistent density is found as an implicit fixed point, so the
-        result is ``jit`` / ``grad`` / ``vmap`` compatible and the forces in
-        :meth:`compute_forces` are the exact analytic gradient
-        (:class:`~opifex.neural.quantum.dft.SCFSolver`).
-
-        Args:
-            positions: Nuclear positions in Bohr [Shape: (n_atoms, 3)].
-            density: Ignored (the SCF solves for the density); see
-                :meth:`compute_energy`.
-
-        Returns:
-            The scalar converged total energy (Hartree).
-        """
-        del density  # The SCF solves for the self-consistent density.
-        return self.scf_solver.energy_from_positions(positions)
-
-    def compute_forces(self, density: Array | None = None) -> Array:
-        r"""Analytic nuclear forces :math:`F = -\partial E/\partial R`.
-
-        The exact implicit-differentiation forces of the converged Kohn-Sham
-        energy (:meth:`~opifex.neural.quantum.dft.SCFSolver.compute_forces`).
-
-        Args:
-            density: Ignored (the SCF solves for the density); see
-                :meth:`compute_energy`.
-
-        Returns:
-            Forces on nuclei in Hartree/Bohr [Shape: (n_atoms, 3)].
-        """
-        del density  # The SCF solves for the self-consistent density.
-        return self.scf_solver.compute_forces(self.molecular_system.positions)
 
     def setup_neural_functional(self) -> dict[str, Any]:
         """Setup neural exchange-correlation functional."""
@@ -581,11 +467,10 @@ def create_neural_dft_problem(
 ) -> ElectronicStructureProblem:
     """Create an electronic-structure (Kohn-Sham DFT) problem instance.
 
-    The returned :class:`ElectronicStructureProblem` computes its energy and
-    analytic forces through the real restricted Kohn-Sham SCF solver
-    (:class:`~opifex.neural.quantum.dft.SCFSolver`); ``functional_type``
-    selects the exchange-correlation functional (``pbe_*`` requests use the PBE
-    GGA, all others use the LDA).
+    The problem records the molecular system and the requested functional. Its energy
+    and analytic forces come from the restricted Kohn-Sham solver
+    :class:`~opifex.neural.quantum.dft.SCFSolver`, built from
+    ``problem.molecular_system`` and the functional the caller names.
     """
     return ElectronicStructureProblem(
         molecular_system=molecular_system, functional_type=functional_type, **kwargs

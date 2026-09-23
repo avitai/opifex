@@ -142,6 +142,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `ElectronicStructureProblem.compute_energy`, `compute_forces` and `scf_solver`, and the
+  abstract `compute_energy`/`compute_forces` of `QuantumProblem`: a problem states what to
+  solve and no longer solves itself. The methods duplicated `SCFSolver`, reached it through
+  a `TYPE_CHECKING` block and function-level imports that hid an import of the network
+  package from `opifex.core`, and silently computed with LDA whenever the requested
+  functional was not a PBE variant, `neural_xc` included. As a PySCF molecule is solved by
+  `RKS(mol, xc=...)`, use
+  `SCFSolver(problem.molecular_system, functional=...).energy_and_forces()`, naming the
+  functional. `QuantumProblem` is no longer abstract.
 - `opifex.data.sources.qh9_source.def2svp_decode_indices`: use
   `ao_permutation(atomic_numbers, PYSCF_DEF2SVP)` from `opifex.core.quantum.ao_layout`. The
   QH9 convention tables were held twice, once in the data source and once in the QH9

@@ -4,7 +4,6 @@ This test suite focuses on improving coverage for the MolecularSystem class
 and related utilities to reach the Version 2 target of 75% coverage.
 """
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -678,14 +677,7 @@ class TestQuantumProblem:
 
         hydrogen = create_molecular_system([("H", (0.0, 0.0, 0.0))])
 
-        class HydrogenProblem(QuantumProblem):
-            def compute_energy(self, density=None):
-                return -0.5  # Exact H atom energy in Hartree
-
-            def compute_forces(self, density=None):
-                return jnp.zeros((1, 3))  # No forces on single atom
-
-        problem = HydrogenProblem(hydrogen)
+        problem = QuantumProblem(hydrogen)
 
         assert problem.validate()
         assert problem.molecular_system.n_atoms == 1
@@ -704,14 +696,7 @@ class TestQuantumProblem:
             ]
         )
 
-        class WaterProblem(QuantumProblem):
-            def compute_energy(self, density=None):
-                return -76.0  # Approximate water energy
-
-            def compute_forces(self, density=None):
-                return jnp.zeros((3, 3))
-
-        problem = WaterProblem(water)
+        problem = QuantumProblem(water)
 
         assert problem.validate()
         assert problem.molecular_system.n_atoms == 3
@@ -841,38 +826,6 @@ class TestElectronicStructureProblem:
         )
         assert not problem.validate()
 
-    @pytest.mark.slow
-    def test_real_dft_energy_and_forces_h2(self):
-        """Real Kohn-Sham energy and analytic forces for H2.
-
-        The :class:`ElectronicStructureProblem` runs the real restricted
-        Kohn-Sham SCF (LDA/STO-3G); H2 is the closed-shell system the integral
-        backend supports. The LDA/STO-3G total energy is about -1.12 Hartree
-        (validated against PySCF in the dedicated DFT suite), and the analytic
-        forces satisfy momentum conservation (sum to zero).
-        """
-        from opifex.core.problems import create_neural_dft_problem
-
-        with jax.enable_x64(True):
-            problem = create_neural_dft_problem(
-                molecular_system=create_molecular_system(
-                    [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
-                )
-            )
-            energy = problem.compute_energy()
-            forces = problem.compute_forces()
-
-            assert isinstance(energy, float | jnp.floating)
-            assert jnp.isfinite(energy)
-            assert energy < 0.0  # bound state
-            assert -1.5 < energy < -0.5  # H2 LDA/STO-3G ball-park
-
-            assert forces.shape == (2, 3)  # two atoms, 3D forces
-            assert jnp.all(jnp.isfinite(forces))
-            # Sum of forces is zero (momentum conservation / Newton's third law).
-            total_force = jnp.sum(forces, axis=0)
-            assert jnp.allclose(total_force, 0.0, atol=1e-6)
-
 
 class TestConvenienceFunctions:
     """Test convenience functions for problem creation."""
@@ -936,14 +889,7 @@ class TestProblemsEnhancement:
             multiplicity=1,
         )
 
-        class TestQuantumProblem(QuantumProblem):
-            def compute_energy(self, density=None):
-                return 0.0
-
-            def compute_forces(self, density=None):
-                return jnp.zeros((0, 3))
-
-        problem = TestQuantumProblem(
+        problem = QuantumProblem(
             molecular_system=invalid_system,
         )
         assert not problem.validate()
@@ -956,14 +902,14 @@ class TestProblemsEnhancement:
             multiplicity=1,
         )
 
-        problem = TestQuantumProblem(
+        problem = QuantumProblem(
             molecular_system=valid_system,
             convergence_threshold=0.0,  # Invalid threshold
         )
         assert not problem.validate()
 
         # Test with negative convergence threshold
-        problem = TestQuantumProblem(
+        problem = QuantumProblem(
             molecular_system=valid_system,
             convergence_threshold=-1e-6,  # Invalid threshold
         )
