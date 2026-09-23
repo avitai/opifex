@@ -20,10 +20,13 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from opifex.core.quantum.ao_layout import FULL_ORBITALS
 from opifex.geometry.algebra.wigner import wigner_d
 from opifex.neural.equivariant import Irreps, IrrepsArray
-from opifex.neural.quantum.hamiltonian._block_expansion import HamiltonianBlockExpansion
-from opifex.neural.quantum.hamiltonian._orbital_layout import BLOCK_IRREPS, FULL_ORBITALS
+from opifex.neural.quantum.hamiltonian._block_expansion import (
+    BLOCK_IRREPS,
+    HamiltonianBlockExpansion,
+)
 
 
 # A bottleneck feature carrying every degree reachable by the block (l up to 4 =
@@ -232,3 +235,9 @@ def test_block_finite_for_various_batch_shapes(leading: tuple[int, ...]) -> None
     feature, embedding = _random_inputs(9, leading=leading)
     block = module(feature, embedding)
     assert jnp.all(jnp.isfinite(block))
+
+
+def test_block_irreps_layout() -> None:
+    """``BLOCK_IRREPS`` is ``3x0e + 2x1e + 1x2e`` with total dimension 14."""
+    assert Irreps("3x0e + 2x1e + 1x2e") == BLOCK_IRREPS
+    assert BLOCK_IRREPS.dim == FULL_ORBITALS

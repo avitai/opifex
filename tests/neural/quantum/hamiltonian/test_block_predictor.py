@@ -29,13 +29,9 @@ import optax
 import pytest
 from flax import nnx
 
+from opifex.core.quantum.ao_layout import atom_orbital_counts, block_validity_mask, FULL_ORBITALS
 from opifex.geometry.algebra.wigner import wigner_d
-from opifex.neural.quantum.hamiltonian._orbital_layout import (
-    atom_orbital_counts,
-    BLOCK_IRREPS,
-    block_validity_mask,
-    FULL_ORBITALS,
-)
+from opifex.neural.quantum.hamiltonian._block_expansion import BLOCK_IRREPS
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianConfig,
     BlockHamiltonianPredictor,

@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The def2-SVP AO layout moves to `opifex.core.quantum.ao_layout` (`FULL_ORBITALS`,
+  `ORBITAL_MASK`, `atom_orbital_counts`, `block_validity_mask`): the QH9 data sources
+  and the Hamiltonian predictor both need it, and it lived in a private module of the
+  network package that the data sources imported across the layering. The four names
+  are no longer re-exported from `opifex.neural.quantum.hamiltonian`, which keeps
+  `BLOCK_IRREPS`, the irreps of a Fock block.
 - `radius_graph`, `scatter_sum`, `scatter_mean` and `scatter_max` move from
   `opifex.neural.equivariant` to `opifex.geometry.graph`: they operate on point clouds,
   and `opifex.core` needs the neighbour search, which it could reach only by importing

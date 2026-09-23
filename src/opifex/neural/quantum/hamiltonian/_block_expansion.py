@@ -5,7 +5,7 @@ block-form Hamiltonian predictor (the matrix expansion of Yu et al. 2023, "QHNet
 arXiv:2306.04922). It maps a steerable bottleneck feature (an
 :class:`~opifex.neural.equivariant.IrrepsArray`) -- per node for diagonal Fock
 blocks, per directed edge for off-diagonal blocks -- to the dense ``(14, 14)``
-matrix block of :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS`
+matrix block of :data:`BLOCK_IRREPS`
 (``3x0e + 2x1e + 1x2e``).
 
 Mechanism
@@ -60,12 +60,15 @@ import jax.numpy as jnp
 from flax import nnx
 from jaxtyping import Array, Float  # noqa: TC002
 
+from opifex.core.quantum.ao_layout import FULL_ORBITALS
 from opifex.geometry.algebra.wigner import clebsch_gordan
 from opifex.neural.equivariant import Irreps, IrrepsArray
-from opifex.neural.quantum.hamiltonian._orbital_layout import BLOCK_IRREPS, FULL_ORBITALS
 
 
 logger = logging.getLogger(__name__)
+
+BLOCK_IRREPS: Irreps = Irreps("3x0e + 2x1e + 1x2e")
+r"""The 14-dim row/col representation of a Fock block (``3x0e + 2x1e + 1x2e``)."""
 
 _DEFAULT_FEATURE_IRREPS = "8x0e + 8x1e + 8x2e + 8x3e + 8x4e"
 
@@ -190,7 +193,7 @@ class HamiltonianBlockExpansion(nnx.Module):
 
     Applies the QHNet matrix expansion (Yu et al. 2023, arXiv:2306.04922) over the
     output shell grid of
-    :data:`~opifex.neural.quantum.hamiltonian._orbital_layout.BLOCK_IRREPS`
+    :data:`BLOCK_IRREPS`
     (``3x0e + 2x1e + 1x2e``). Per-sample path weights (and degree-0 path biases) are
     produced by an MLP on a provided invariant embedding, so the *same* module
     builds diagonal blocks (from a node embedding) and off-diagonal blocks (from a

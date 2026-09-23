@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 from flax import nnx
 
+from opifex.core.quantum.ao_layout import FULL_ORBITALS
 from opifex.data.sources.qh9_padded_source import (
     _with_shuffle,
     create_qh9_padded_sources,
@@ -28,7 +29,6 @@ from opifex.data.sources.qh9_padded_source import (
     QH9PaddedSource,
 )
 from opifex.data.sources.qh9_source import qh9_random_split, read_qh9_sqlite
-from opifex.neural.quantum.hamiltonian._orbital_layout import FULL_ORBITALS
 
 
 _H2O_ATOMS = np.array([8, 1, 1], dtype=np.int32)

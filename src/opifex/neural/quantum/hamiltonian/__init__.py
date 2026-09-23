@@ -18,23 +18,17 @@ The public surface:
   heterogeneous-batchable per-atom / per-edge block predictor; its
   :meth:`~...block_predictor.BlockHamiltonianPredictor.assemble_matrix` scatters
   the blocks into a single molecule's symmetric dense Fock matrix.
-* The orbital-layout primitives (:data:`BLOCK_IRREPS`, :data:`FULL_ORBITALS`,
-  :data:`ORBITAL_MASK`, :func:`atom_orbital_counts`, :func:`block_validity_mask`)
-  fixing the def2-SVP AO slots each block occupies.
+* :data:`BLOCK_IRREPS`, the irreps of a 14-slot Fock block. The def2-SVP slots each
+  element occupies are :mod:`opifex.core.quantum.ao_layout`, shared with the QH9 data
+  sources.
 * The GPU-fused block training surface (:class:`BlockTrainConfig`,
   :func:`per_molecule_block_loss`, :func:`make_fused_block_train_step` /
   :func:`make_fused_block_eval_step`) used by ``scripts/train_qh9_blocks.py``.
 """
 
 from opifex.neural.quantum.hamiltonian._block_expansion import (
-    HamiltonianBlockExpansion,
-)
-from opifex.neural.quantum.hamiltonian._orbital_layout import (
-    atom_orbital_counts,
     BLOCK_IRREPS,
-    block_validity_mask,
-    FULL_ORBITALS,
-    ORBITAL_MASK,
+    HamiltonianBlockExpansion,
 )
 from opifex.neural.quantum.hamiltonian.block_predictor import (
     BlockHamiltonianConfig,
@@ -68,15 +62,11 @@ from opifex.neural.quantum.hamiltonian.qh9_eval import (
 
 __all__ = [
     "BLOCK_IRREPS",
-    "FULL_ORBITALS",
-    "ORBITAL_MASK",
     "BlockHamiltonianConfig",
     "BlockHamiltonianPredictor",
     "BlockTrainConfig",
     "HamiltonianBlockExpansion",
     "QH9TestSetMetrics",
-    "atom_orbital_counts",
-    "block_validity_mask",
     "cal_orbital_and_energies",
     "evaluate_examples",
     "evaluate_fock",
