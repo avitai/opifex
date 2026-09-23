@@ -127,7 +127,7 @@ _TASK_7_2_MODEL_NAMES: frozenset[str] = frozenset(
 _TASK_7_2_SOLVER_NAMES: frozenset[str] = frozenset(
     {
         "solver:PINNSolver",
-        "solver:HybridSolver",
+        "solver:additive_hybrid",
         "solver:NeuralOperatorSolver",
         "solver:aggregate_solver_solutions",
         "solver:summarize_stacked_sample_solution",
@@ -250,7 +250,6 @@ def test_deterministic_baseline_capability_flags(uq_registry: UQRegistry) -> Non
     "name",
     [
         "solver:PINNSolver",
-        "solver:HybridSolver",
         "solver:NeuralOperatorSolver",
     ],
 )
@@ -259,6 +258,21 @@ def test_solver_entry_point_capability_flags(name: str, uq_registry: UQRegistry)
     cap = uq_registry.require(name)
     assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
     assert cap.native_nnx_module is True
+    assert cap.supports_ensemble is True
+    assert cap.supports_conformal is True
+    assert cap.supports_calibration is True
+
+
+def test_additive_hybrid_is_a_jax_function_not_a_module(uq_registry: UQRegistry) -> None:
+    """``additive_hybrid`` composes two solvers into a function over arrays.
+
+    It owns no parameters, so it is a JAX kernel rather than an NNX module; its UQ is
+    supplied through the adapters of the neural solver it combines.
+    """
+    cap = uq_registry.require("solver:additive_hybrid")
+    assert cap.default_strategy is DefaultStrategy.DETERMINISTIC
+    assert cap.native_jax_kernel is True
+    assert cap.native_nnx_module is False
     assert cap.supports_ensemble is True
     assert cap.supports_conformal is True
     assert cap.supports_calibration is True

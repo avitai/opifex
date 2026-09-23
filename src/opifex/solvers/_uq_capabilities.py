@@ -8,9 +8,10 @@ singleton :class:`UQRegistry`.
 Two categories:
 
 * **Model-family entries** — the standard deterministic neural model
-  family (``PINNSolver`` / ``HybridSolver`` / ``NeuralOperatorSolver``)
-  declared as a single ``deterministic_baseline()`` with the three
-  adapter strategies composed via :meth:`UQCapability.with_adapter`.
+  family (``PINNSolver`` / ``NeuralOperatorSolver``) declared as a single
+  ``deterministic_baseline()`` with the three adapter strategies composed
+  via :meth:`UQCapability.with_adapter`, plus ``additive_hybrid``, which
+  combines a classical and a neural solver as a function over arrays.
 * **Solver-side aggregation utilities** — capability declarations for
   ``opifex.uncertainty.scientific.solutions.aggregate_solver_solutions``
   and ``summarize_stacked_sample_solution``. Per Phase 6 Task 6.2 the
@@ -44,19 +45,26 @@ def _adapter_baseline_with_notes(notes: str) -> UQCapability:
 # trainers; UQ is layered on through the canonical adapter strategies.
 _SOLVER_MODEL_CAPABILITIES: dict[str, UQCapability] = {
     "model:deterministic_baseline": _adapter_baseline_with_notes(
-        "Standard deterministic neural model family. The three solver "
-        "entry points (PINNSolver / HybridSolver / NeuralOperatorSolver) "
+        "Standard deterministic neural model family. The solver entry "
+        "points (PINNSolver / NeuralOperatorSolver) "
         "train a point-prediction NNX module; uncertainty is supplied "
         "by the ensemble / conformal / calibration adapter strategies."
     ),
     "solver:PINNSolver": _adapter_baseline_with_notes(
         "PINNSolver trains a deterministic PINN against a physics residual; UQ is adapter-mediated."
     ),
-    "solver:HybridSolver": _adapter_baseline_with_notes(
-        "HybridSolver couples a deterministic neural surrogate to a "
-        "classical numerical solver; UQ is adapter-mediated on the "
-        "neural component."
-    ),
+    "solver:additive_hybrid": UQCapability(
+        default_strategy=DefaultStrategy.DETERMINISTIC,
+        native_jax_kernel=True,
+        notes=(
+            "additive_hybrid adds a neural solver's fields to a classical "
+            "solver's as a function over arrays, owning no parameters; UQ is "
+            "adapter-mediated on the neural component."
+        ),
+    )
+    .with_adapter("ensemble")
+    .with_adapter("conformal")
+    .with_adapter("calibration"),
     "solver:NeuralOperatorSolver": _adapter_baseline_with_notes(
         "NeuralOperatorSolver wraps a deterministic neural operator; "
         "UQ is adapter-mediated (or supplied by UQNO when used as the "

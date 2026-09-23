@@ -10,7 +10,7 @@ The framework is organized into 6 strictly hierarchical layers. Each layer build
 |-------|------|-------------|----------------|
 | **6** | **Orchestration** | Production & Deployment | MLOps, Model Registry, Serving |
 | **5** | **Uncertainty** | UQ & Reliability | `aggregate_solver_solutions`, `summarize_stacked_sample_solution`, `SolutionDistribution`, `opifex.uncertainty.conformal` |
-| **4** | **Unified Solvers** | **The Core Abstraction** | `SciMLSolver` Protocol, `PINNSolver`, `NeuralOperatorSolver` |
+| **4** | **Solvers** | **The Core Abstraction** | `Solver` callable, `Solution` pytree, `PINNSolver`, `NeuralOperatorSolver` |
 | **3** | **Primitives** | Neural Architectures | `FourierNeuralOperator`, `DeepONet`, `MultiScalePINN` |
 | **2** | **Problem Definition** | Physics & Geometry | `PDEProblem`, `Geometry` Protocol, `Constraint` |
 | **1** | **Foundations** | Computation Engine | JAX, Flax NNX, Optax, Diffrax |
@@ -35,12 +35,12 @@ This layer provides optimized implementations of state-of-the-art architectures.
 - **Physics-Informed models**: Specialized MLPs (Modified MLP, SIREN) and Fourier Feature embeddings designed to resolve high-frequency physics.
 - **Quantum Architectures**: Symmetry-enforcing networks for quantum chemistry and DFT constraints.
 
-### Layer 4: Unified Solvers (The Heart of Opifex)
-This is the pivotal abstraction layer. It defines a standard `SciMLSolver` protocol that all solvers must adhere to, enabling **interchangeability**.
+### Layer 4: Solvers
+A solver is a callable from a problem to a `Solution` (`opifex.core.solver.interface.Solver`).
 
-- **Protocol**: `solve(problem) -> Solution`
-- **Flexibility**: You can standardize your benchmarking pipeline. Switching from a `PINNSolver` to a `NeuralOperatorSolver` or a `HybridSolver` requires changing just one line of code.
-- **Artifex Integration**: generative models (Diffusion, Flows) reach the solver ecosystem through the `Solver` callable, so a sampler is a solver like any other.
+- **Solution**: a pytree of arrays -- fields, scalar metrics, counters, and an `int32` `status` code -- so it can be built inside `jit` and returned through `jit`, `vmap` and `grad`. Under `vmap` the status carries one outcome per batch element; `is_successful` reads it. Wall-clock timing stays with the caller (`opifex.core.solver.report`).
+- **Composition**: `additive_hybrid(classical, neural)` returns a solver that adds the neural fields to the classical ones and reports their discrepancy.
+- **Entry points**: `NeuralOperatorSolver.solve` returns a `Solution` but takes a state and configuration beyond the problem, and `PINNSolver.solve` takes a geometry and residual functions and returns a `PINNResult`, so neither is interchangeable with a `Solver`.
 
 ### Layer 5: Probabilistic Numerics & Uncertainty
 **A Major Pillar of Opifex.** We treat Uncertainty Quantification (UQ) not as an afterthought, but as a first-class citizen via the **Probabilistic Numerics** paradigm.
@@ -50,7 +50,7 @@ This is the pivotal abstraction layer. It defines a standard `SciMLSolver` proto
 - **Bayesian Inference**: BlackJAX HMC / NUTS / MALA via `opifex.uncertainty.inference_backends.blackjax.BlackJAXBackend` (thin adapter over Artifex's BlackJAX wrappers).
 - **Conformal Prediction**: `opifex.uncertainty.conformal` exposes `SplitConformalRegressor`, `ConformalizedQuantileRegressor`, CV+ / jackknife+, EnbPI / ACI, and field-space conformal calibrators — all with explicit `fit / predict / with_state` cycles and exchangeability diagnostics.
 
-This layer transforms any deterministic `SciMLSolver` into a Probabilistic Solver by composing the canonical `PredictiveDistribution` contract with these aggregation utilities.
+This layer transforms any deterministic solver into a probabilistic one by composing the canonical `PredictiveDistribution` contract with these aggregation utilities.
 
 ### Layer 6: Production Ecosystem
 The top layer handles the lifecycle of models, including versioning, serving, and monitoring, bridging the gap between research and production value.
@@ -62,7 +62,7 @@ The top layer handles the lifecycle of models, including versioning, serving, an
 The architecture of Opifex is guided by five core philosophies:
 
 ### 1. Protocol-First Design
-Every major component (`SciMLSolver`, `Geometry`, `TrainingComponent`) is defined by a Protocol. This allows users to inject custom implementations without carrying the weight of a base class hierarchy. If it quacks like a Solver, it is a Solver.
+Extension points are structural rather than inherited. A `Geometry` is a Protocol, and a solver is any callable from a problem to a `Solution`, checked against that signature by the type checker. Users inject custom implementations without carrying the weight of a base class hierarchy.
 
 ### 2. Composition Over Inheritance
 We favor composing behavior over deep inheritance trees. A `PINNSolver` is not a monolith; it is composed of a `PhysicsLoss`, a `Trainer`, and a `RARDRefiner` (adaptive sampler). This makes it easy to swap out the optimizer or the sampling strategy without rewriting the solver.

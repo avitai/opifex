@@ -9,8 +9,6 @@ device mid-solve, once per shared field, and would make the combined solver impo
 jit, map or differentiate -- which is the whole reason for combining two solvers that can.
 """
 
-from collections.abc import Callable
-
 import jax
 import jax.numpy as jnp
 
@@ -87,8 +85,4 @@ def additive_hybrid(classical: Solver, neural: Solver) -> Solver:
     return solve
 
 
-HybridSolver: Callable[[Solver, Solver], Solver] = additive_hybrid
-"""Alias for :func:`additive_hybrid`, naming the combination rather than the rule."""
-
-
-__all__ = ["HybridSolver", "additive_hybrid", "relative_field_discrepancy"]
+__all__ = ["additive_hybrid", "relative_field_discrepancy"]

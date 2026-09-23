@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `opifex.physics.spectral.solve_advection_diffusion_exact`: the exact Fourier solution
+  of `u_t + v . grad u = D lap u` on a periodic domain in one to three dimensions, one
+  FFT pair with no time stepping. It is `jit`, `vmap` and `grad` compatible in the
+  diffusivity and velocity, and reproduces the closed-form single-mode solution to
+  1e-12 in float64.
+- A staggered (MAC) layer in `opifex.fields`, differentiable in reverse mode throughout:
+  `staggered.StaggeredGrid` with `divergence`, `gradient` and `face_count`, whose
+  divergence is exactly minus the adjoint of the gradient under periodic,
+  prescribed-velocity and zero-gradient boundaries; `staggered_pressure.project`, a direct
+  DFT or DCT-II projection with residual divergence flat at about 3e-07 from 8 to 128
+  cells; `staggered_convection.convect`, the energy-conserving divergence form with the
+  wall treatment of Sanderse, Verstappen and Koren (2014); `staggered_diffusion.laplacian`
+  with `WallVelocity` and `wall_source` for prescribed tangential wall velocities; and
+  `staggered_navier_stokes.tendency`, `step`, `integrate` and `stable_step_count`, RK4 with
+  a projection at every stage. `CARRIED_BOUNDARIES` and `require_boundary` state which
+  boundaries each operation carries.
+- `solve_lid_driven_cavity(resolution, nu, lid_velocity, total_time, num_steps)`: a walled
+  cavity driven by the regularised lid of Shen (1991), whose step count defaults to the
+  scheme's stability limit.
+- `opifex.physics.flow_problem.IncompressibleFlowProblem`, which bundles an incompressible
+  flow and checks that its grid and wall velocities agree.
+- `opifex.core.solver.status` (`Status`, `is_successful`, `message`, `combine_statuses`) and
+  `opifex.core.solver.report` (`SolveReport`, `report`, `timed_solve`).
+- `shift_status(report)` renders a `ShiftReport` for a reader.
+- `TrainingMetrics` gains `best_val_epoch`, `reset`, `update_physics_loss` and
+  `update_boundary_loss`.
+
+### Changed
+
+- Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
+  packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
+  pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
+- `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
+  compact five-point Laplacian while the correction subtracted a two-point central gradient,
+  so the projection left most of the divergence in place: a divergent start still measured
+  0.31 after a step, and an evolved Taylor-Green vortex 6.4e-03. Both are now at the
+  round-off of the difference that measures them, 4.7e-10 and 2.4e-07. Trajectories
+  generated through `opifex.data.sources.pde_generation` before this carry the old field.
+- The pressure solves project. Both inverted an operator other than the one the projection
+  applies -- `pressure_solve_spectral` the continuous symbol and the Jacobi solve the compact
+  three-point `laplacian`, while the correction subtracts the two-point central `gradient`,
+  whose composition with `divergence` reaches `i +/- 2`. Both now invert
+  `divergence(gradient(.))` itself, which takes the residual divergence of a 32x32 periodic
+  field from 2.3% of the incoming divergence to 8e-07.
+- `lsmr` returns NaN once the bidiagonalisation is exhausted, which a zero right-hand side
+  reaches immediately and an exactly solvable system reaches after a few steps past `rank`:
+  the recurrence divided by the lengths the rotations leave on the diagonal, and those are
+  zero there. Those divisions and `jnp.linalg.norm`'s NaN gradient at the origin are guarded,
+  so an exhausted iterate holds still and stays differentiable.
+- `Burgers2DSolver.solve` integrates on the device. It read the CFL step back to the host
+  every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
+  vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
+  `lax.scan`, the structure `solve_burgers_2d` already uses.
+- `solve_navier_stokes_2d` uses the operators and the projection in `opifex.fields` instead
+  of its own copies of gradient, divergence, Laplacian and the Poisson solve. The copies
+  were bit-for-bit identical to the shared ones and compile to the same kernel, so the
+  duplication bought nothing and hid the defect above from the fix in `fields`.
+- `pressure_solve_lsmr(velocity, num_matvecs=500)` replaces `pressure_solve_jacobi`. The
+  composed operator is neither symmetric nor invertible under a zero-gradient boundary, where
+  a relaxation or a conjugate-gradient iterate drifts into its null space and diverges; a
+  least-squares solve takes the minimum-norm solution instead. Prefer
+  `pressure_solve_spectral` for periodic fields, which is about a hundred times faster.
+- `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
+  the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
+  its output around, where a count of adaptive steps cannot.
+- `get_activation("mish")` is `jax.nn.mish`; the local copy computed the same values.
+- An unknown activation name is refused with the names that are registered.
+- `Solution` is a `flax.struct.PyTreeNode` of arrays, so it can be built inside `jit` and
+  returned through `jit`, `vmap` and `grad`. An `int32` `status` replaces `converged`, and
+  `is_converged` returns a boolean array with one answer per batch element; a Python
+  bool could not be produced from a traced comparison, and as static metadata it
+  compiled one program per outcome. `execution_time` is removed: a clock read inside
+  `jit` is evaluated once at trace time, so it reported the first compilation's duration
+  on every later call. Time a solve with `timed_solve` instead.
+- A solver is `Solver = Callable[[Problem], Solution]`, which the type checker verifies
+  against the signature. It replaces the `SciMLSolver` protocol, which `isinstance`
+  accepted for any object with a `solve` attribute. `SupportsSolve` remains for solvers
+  held as objects.
+- `additive_hybrid(classical, neural)` replaces the `HybridSolver` class. The combined
+  solver runs under `jit`, `vmap` and `grad`, since it no longer calls `float()` on device
+  arrays, and it keeps the first unsuccessful status of its two parts. Its capability is
+  registered as `solver:additive_hybrid`, a JAX function rather than an NNX module.
+- `NeuralOperatorSolver` given a problem with no data reports `Status.DEFAULT`; it
+  reported success unconditionally. Ensemble aggregation combines member statuses where
+  it took `all()` of flags, and no longer sums the members' execution times.
+- `SCFResult.status` replaces `converged`, and `n_iterations` is an array, so a result can
+  be built inside a transform. The direct-minimisation path reports the minimiser's own
+  outcome. It returned `converged=True` with the iteration budget as its step count, even
+  when stopped 0.033 Ha above the fixed point. `SCFSolver` refuses a convergence tolerance below
+  `4 * eps` of the working precision. The float32 default of 1e-8 could never be reached,
+  so the solve spent its whole budget and reported `MAX_ITERS`.
+- `ShiftReport.passes` is a `jax.Array` leaf, and the status strings come from
+  `shift_status` instead of static metadata, so passing and failing reports are one pytree
+  structure that compiles once and batches under `vmap`.
+- `AdvancedMetricsCollector` is renamed `MetricsCollector`. `TrainingMetrics` series are
+  read-only tuples recorded through their `update_*` methods, the regression figures and
+  best-value tracking come from `calibrax.metrics`, and `update_learning_rate` takes
+  `learning_rate`.
+- `solve_navier_stokes_2d` and `solve_burgers_2d` take a `substeps` count.
+
+### Removed
+
+- `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
+  `jax.grad` differentiates any activation in the registry.
+- `SciMLSolver`, `HybridSolver` and `ArtifexSolverAdapter` with the
+  `opifex.solvers.adapters` package; every adapter method raised `NotImplementedError`.
+- `create_lid_driven_cavity_ic`, which imposed a smooth profile as an initial condition in
+  a periodic box. With no wall to drive it the flow decays instead of recirculating, and
+  it peaked at 0.679 when asked for a lid velocity of 1.0. Use `solve_lid_driven_cavity`.
+- `MPCResult.computation_time`. It was read inside an `nnx.jit`-compiled method, so it
+  held the tracing cost: 0.606 s against a real call of 0.0006 s, on every call. Time
+  the step with `calibrax.profiling.time_calls`.
+
 ### Fixed
 
 - `generate_diffusion` returns finite, correct labels at its shipped resolution. It
@@ -21,7 +136,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `linspace(0, 1, N)` while the solver assumed spacing `1 / N`): the Gaussian is wrapped
   on the torus, the wave has an integer number of periods, and the centre, width and
   size of a bump are drawn independently instead of from one shared uniform number.
-
 - `solve_navier_stokes_2d` solves the equations it names. Its advection was first-order
   upwind, whose numerical viscosity of `|u| dx / 2` stood an order of magnitude above a
   physical `nu` of 0.01 at 32 cells, so a Taylor-Green vortex decayed 8% too fast at
@@ -49,63 +163,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more than its length and was cut back to it. It now comes from
   `artifex.generative_models.core.sampling.effective_sample_size`, which is the same place
   the samplers come from.
-
-### Added
-
-- `opifex.physics.spectral.solve_advection_diffusion_exact`: the exact Fourier solution
-  of `u_t + v . grad u = D lap u` on a periodic domain in one to three dimensions, one
-  FFT pair with no time stepping. It is `jit`, `vmap` and `grad` compatible in the
-  diffusivity and velocity, and reproduces the closed-form single-mode solution to
-  1e-12 in float64.
-
-### Changed
-
-- Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
-  packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
-  pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
-
-- `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
-  compact five-point Laplacian while the correction subtracted a two-point central gradient,
-  so the projection left most of the divergence in place: a divergent start still measured
-  0.31 after a step, and an evolved Taylor-Green vortex 6.4e-03. Both are now at the
-  round-off of the difference that measures them, 4.7e-10 and 2.4e-07. Trajectories
-  generated through `opifex.data.sources.pde_generation` before this carry the old field.
-- The pressure solves project. Both inverted an operator other than the one the projection
-  applies -- `pressure_solve_spectral` the continuous symbol and the Jacobi solve the compact
-  three-point `laplacian`, while the correction subtracts the two-point central `gradient`,
-  whose composition with `divergence` reaches `i +/- 2`. Both now invert
-  `divergence(gradient(.))` itself, which takes the residual divergence of a 32x32 periodic
-  field from 2.3% of the incoming divergence to 8e-07.
-- `lsmr` returns NaN once the bidiagonalisation is exhausted, which a zero right-hand side
-  reaches immediately and an exactly solvable system reaches after a few steps past `rank`:
-  the recurrence divided by the lengths the rotations leave on the diagonal, and those are
-  zero there. Those divisions and `jnp.linalg.norm`'s NaN gradient at the origin are guarded,
-  so an exhausted iterate holds still and stays differentiable.
-- `Burgers2DSolver.solve` integrates on the device. It read the CFL step back to the host
-  every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
-  vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
-  `lax.scan`, the structure `solve_burgers_2d` already uses.
-
-### Changed
-
-- `solve_navier_stokes_2d` uses the operators and the projection in `opifex.fields` instead
-  of its own copies of gradient, divergence, Laplacian and the Poisson solve. The copies
-  were bit-for-bit identical to the shared ones and compile to the same kernel, so the
-  duplication bought nothing and hid the defect above from the fix in `fields`.
-
-### Changed
-
-- `pressure_solve_lsmr(velocity, num_matvecs=500)` replaces `pressure_solve_jacobi`. The
-  composed operator is neither symmetric nor invertible under a zero-gradient boundary, where
-  a relaxation or a conjugate-gradient iterate drifts into its null space and diverges; a
-  least-squares solve takes the minimum-norm solution instead. Prefer
-  `pressure_solve_spectral` for periodic fields, which is about a hundred times faster.
-- `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
-  the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
-  its output around, where a count of adaptive steps cannot.
-
-### Fixed
-
 - `opifex.uncertainty.linalg.lsmr` is the LSMR recurrence of Fong and Saunders (2011, SIAM J.
   Sci. Comput. 33(5), 2950): a bidiagonalisation kept factorised by two Givens rotations per
   step. It projected onto the Krylov basis and then solved the normal equations there, which
@@ -119,16 +176,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name now says so instead of resolving to a broken function.
 - `list_activations()` listed fourteen names while `get_activation` accepted twenty-five,
   hiding the broken entry; both now read the one registry.
-
-### Changed
-
-- `get_activation("mish")` is `jax.nn.mish`; the local copy computed the same values.
-- An unknown activation name is refused with the names that are registered.
-
-### Removed
-
-- `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
-  `jax.grad` differentiates any activation in the registry.
+- `ks_two_sample_pvalue` returned zero for identical samples, so the exchangeability check
+  reported a shift for data compared against itself. The alternating series needs terms
+  up to `k > 4.29 / lambda`, so a hundred terms were not enough below about 0.007. It now
+  splits at the median between that series and the theta form (van Mulbregt 2018,
+  sec. 4.1), and matches `scipy.special.kolmogorov` to 1.14e-07 over `[0, 5]`.
+- The Anderson mixer's Tikhonov stabiliser in the SCF solver works at both ends of a
+  solve. While the history filled, its scale came from identity padding and averaged the
+  Pulay coefficients to 0.4988 where the answer is 0.0099. Once the history filled, its
+  fixed 1e-10 factor sat below float32 epsilon, and the H2 density returned NaN. The scale
+  is now the mean squared residual over filled slots and the factor is the square root of
+  the working precision's epsilon.
+- `opifex.optimization.production` measured forward-pass latency without synchronising,
+  timing the dispatch rather than the work: 0.55 ms against a true 67.8 ms on a compiled
+  2048-wide model, the figure compared with `target_latency_ms`. It measures through
+  `calibrax.profiling.time_calls`. `apply_latency_optimization` compiled every model at a
+  hardcoded width of 64 and now reads the model's input width.
 
 ## [0.2.9] - 2026-09-21
 

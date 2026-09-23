@@ -21,7 +21,7 @@ This directory contains the Opifex framework implementation organized into modul
 
 - **`optimization/`**: Learn-to-optimize engine, meta-optimization (MAML/Reptile), second-order methods, control systems, and production optimization
 - **`discovery/`**: Equation discovery framework -- SINDy, ensemble SINDy, weak SINDy, and UDE distillation
-- **`solvers/`**: Unified solver interfaces -- `PINNSolver`, `NeuralOperatorSolver`, `HybridSolver`, and the Artifex adapter. Ensemble / Monte-Carlo aggregation lives in `opifex.uncertainty.scientific.solutions` (`aggregate_solver_solutions`, `summarize_stacked_sample_solution`).
+- **`solvers/`**: Solver entry points -- `PINNSolver`, `NeuralOperatorSolver`, and `additive_hybrid`, which adds a neural solver's correction to a classical one. Ensemble / Monte-Carlo aggregation lives in `opifex.uncertainty.scientific.solutions` (`aggregate_solver_solutions`, `summarize_stacked_sample_solution`).
 
 ### Infrastructure
 

@@ -66,7 +66,6 @@ class TestNeuralOperatorSolver:
         # Data usually comes from the problem description OR generic loader.
         # But PDEProblem usually defines *physics*.
         # For data-driven, often 'problem' contains the dataset or 'solve' accepts it?
-        # SciMLSolver protocol is: solve(problem: Problem, initial_state, config).
 
         # Approach: The SolverConfig can hold the dataloader/data?
         # Or proper design: We define a 'DataDrivenProblem' or 'InverseProblem'?
