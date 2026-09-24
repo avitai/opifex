@@ -20,8 +20,7 @@ accurately at a finer one without any fine-tuning.
 
 You will build a UNO model using Opifex's `create_uno` factory, apply the standard
 operator-learning recipe (grid positional embedding, Gaussian normalization, and the
-relative-L2 loss), load Darcy flow training data with the datarax-based
-`create_darcy_loader`, train with the `Trainer` / `TrainingConfig` API, evaluate
+relative-L2 loss), generate Darcy flow training data with `generate_darcy`, train with the `Trainer` / `TrainingConfig` API, evaluate
 predictions on the test set, and then demonstrate zero-shot super-resolution by running
 inference at 2x the training resolution.
 
@@ -29,7 +28,7 @@ inference at 2x the training resolution.
 
 1. **Create** a UNO model with the `create_uno` factory function
 2. **Apply** the operator-learning recipe: `GridEmbedding2D`, Gaussian normalization, relative-L2 loss
-3. **Load** Darcy flow data using `create_darcy_loader` (datarax `PDELoaders`)
+3. **Generate** Darcy flow data using `generate_darcy`
 4. **Train** with Opifex's `Trainer.fit()` API and `TrainingConfig`
 5. **Evaluate** predictions using MSE and relative L2 error
 6. **Demonstrate** zero-shot super-resolution at higher resolutions than training
@@ -42,7 +41,7 @@ compares:
 | NeuralOperator (PyTorch) | Opifex (JAX) |
 |--------------------------|--------------|
 | `UNO(in_channels, out_channels, hidden_channels, uno_out_channels, uno_n_modes, uno_scalings, ...)` | `create_uno(in_channels=, out_channels=, hidden_channels=, uno_out_channels=, uno_n_modes=, uno_scalings=, rngs=)` |
-| `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=)` (datarax `PDELoaders`) |
+| `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=)` (datarax `PDELoaders`); this example trains from arrays (`generate_darcy`) |
 | `trainer = Trainer(model, ...)` then `trainer.train(...)` | `Trainer(model=, config=, rngs=)` then `trainer.fit(train_data, val_data)` |
 | `model.eval(); with torch.no_grad(): ...` | `trained_model(x, deterministic=True)` |
 | Manual `torch.meshgrid` for grid embeddings | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
@@ -53,7 +52,7 @@ compares:
 1. **Factory function**: Opifex provides `create_uno` for streamlined model construction instead of direct class instantiation
 2. **Explicit PRNG**: Opifex uses JAX's explicit `rngs=nnx.Rngs(42)` instead of global random state
 3. **XLA compilation**: Automatic JIT compilation during `Trainer.fit()` for significant speedups
-4. **datarax data loading**: Efficient, reproducible batching via datarax `PDELoaders` (a frozen `.train` / `.val` pair) instead of PyTorch DataLoader
+4. **datarax data loading**: `create_darcy_loader` gives reproducible batching via datarax `PDELoaders` (a frozen `.train` / `.val` pair) instead of PyTorch DataLoader; `Trainer.fit()` batches arrays itself, so this example generates them with `generate_darcy`
 
 ## Files
 
@@ -163,7 +162,7 @@ from opifex.core.evaluation import predict_in_batches
 from calibrax.metrics.functional.regression import per_sample_relative_l2
 from opifex.core.training import Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
-from opifex.data.loaders import create_darcy_loader
+from opifex.data.sources import generate_darcy
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.specialized import create_uno
 
@@ -217,39 +216,26 @@ Batch size: 32, Epochs: 120
 UNO config: hidden=64, 5-layer Fourier U (Rahman et al. 2022)
 ```
 
-### Step 3: Data Loading with datarax
+### Step 3: Data Generation
 
-Opifex provides `create_darcy_loader` which generates Darcy flow equation data
-(permeability-to-pressure mapping) and returns a frozen `PDELoaders` bundle with
-`.train` and `.val` datarax pipelines. The split between train and validation is
-controlled by `val_fraction`. datarax yields channels-first batches
-(`{"input": (b, 1, H, W), "output": (b, 1, H, W)}`), so since UNO works
-channels-last we move the channel axis to the end once, at the data boundary.
+Opifex provides `generate_darcy`, which generates Darcy flow equation data
+(permeability-to-pressure mapping) as channels-first arrays
+(`{"input": (n, 1, H, W), "output": (n, 1, H, W)}`); sample `i` of a call is drawn from
+`seed + i`. We generate the training and test samples in one call and split them. Since
+UNO works channels-last, we move the channel axis to the end once, at the data boundary.
 
 ```python
-n_samples = N_TRAIN + N_TEST
-loaders = create_darcy_loader(
-    n_samples=n_samples,
-    batch_size=BATCH_SIZE,
-    resolution=RESOLUTION,
-    val_fraction=N_TEST / n_samples,
-    seed=SEED,
-)
-
-
-# datarax yields channels-first {"input": (b, 1, H, W), "output": (b, 1, H, W)};
+# generate_darcy returns channels-first {"input": (n, 1, H, W), "output": (n, 1, H, W)};
 # UNO (and its grid embedding, eval, and visualization) work channels-last, so
 # we move the channel axis to the end once here, at the data boundary.
-def _collect(pipeline):
-    inputs, outputs = [], []
-    for batch in pipeline:
-        inputs.append(np.moveaxis(np.asarray(batch["input"]), 1, -1))
-        outputs.append(np.moveaxis(np.asarray(batch["output"]), 1, -1))
-    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+def _generate(n_samples, grid, first_seed):
+    data = generate_darcy(n_samples=n_samples, resolution=grid, seed=first_seed)
+    return np.moveaxis(data["input"], 1, -1), np.moveaxis(data["output"], 1, -1)
 
 
-X_train, Y_train = _collect(loaders.train)
-X_test, Y_test = _collect(loaders.val)
+X_all, Y_all = _generate(N_TRAIN + N_TEST, RESOLUTION, SEED)
+X_train, Y_train = X_all[:N_TRAIN], Y_all[:N_TRAIN]
+X_test, Y_test = X_all[N_TRAIN:], Y_all[N_TRAIN:]
 
 print(f"Training data: X={X_train.shape}, Y={Y_train.shape}")
 print(f"Test data:     X={X_test.shape}, Y={Y_test.shape}")
@@ -464,15 +450,9 @@ model, and compare against the real high-resolution solutions.
 target_resolution = RESOLUTION * 2
 print(f"Testing zero-shot super-resolution: {RESOLUTION} -> {target_resolution}")
 
-# Generate a real high-resolution Darcy test set (true solves, independent samples).
-sr_loaders = create_darcy_loader(
-    n_samples=N_TEST,
-    batch_size=BATCH_SIZE,
-    resolution=target_resolution,
-    val_fraction=1.0,
-    seed=SEED + 1,
-)
-x_high, y_high = _collect(sr_loaders.val)
+# Generate a real high-resolution Darcy test set (true solves). Its seeds follow every
+# training and test seed, so no sample repeats one already seen.
+x_high, y_high = _generate(N_TEST, target_resolution, SEED + N_TRAIN + N_TEST)
 x_high_n = jnp.array((x_high - x_mean) / x_std)  # train-fitted normalization
 y_high_jnp = jnp.array(y_high)
 
@@ -590,6 +570,7 @@ comparing against an interpolated reference.
 - [`create_uno`](../../api/neural.md) - UNO factory function
 - [`Trainer`](../../api/training.md) - Training orchestration with JIT compilation
 - [`TrainingConfig`](../../api/training.md) - Training hyperparameter configuration
+- [`generate_darcy`](../../api/data.md) - Darcy flow data generation
 - [`create_darcy_loader`](../../api/data.md) - datarax-based Darcy flow data loader
 
 ## Troubleshooting

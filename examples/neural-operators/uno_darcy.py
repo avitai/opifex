@@ -36,14 +36,14 @@ This example demonstrates:
 - **GridEmbedding2D** positional encoding fed as extra input channels
 - **Gaussian normalization** of inputs and outputs
 - **relative-L2 loss** via `LossConfig`, the standard operator-learning objective
-- **datarax DataLoader** for efficient streaming data
+- **generate_darcy** for on-demand Darcy flow data
 - **Trainer.fit()** for end-to-end training with validation
 - **Zero-shot super-resolution** inference at higher resolutions
 
 ## Learning Goals
 
 1. Create a UNO with `create_uno` factory
-2. Load Darcy flow data with `create_darcy_loader` (datarax-based)
+2. Generate Darcy flow data with `generate_darcy`
 3. Apply grid embedding, normalization, and the relative-L2 loss
 4. Train with Opifex's `Trainer.fit()` API
 5. Evaluate predictions and demonstrate zero-shot super-resolution
@@ -76,7 +76,7 @@ from substrax.artifacts import resolve_output_dir
 from opifex.core.evaluation import predict_in_batches
 from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
 from opifex.core.training.config import LossConfig
-from opifex.data.loaders import create_darcy_loader
+from opifex.data.sources import generate_darcy
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.specialized import create_uno
 
@@ -92,11 +92,12 @@ spectral weights to converge.
 
 # %% [markdown]
 """
-## Data Loading with datarax
+## Data Generation
 
-Opifex provides `create_darcy_loader` which generates Darcy flow equation data
-(permeability-to-pressure mapping) and wraps it in a datarax DataLoader
-for efficient streaming and batching.
+Opifex provides `generate_darcy`, which generates Darcy flow equation data
+(permeability-to-pressure mapping) as channels-first arrays; sample `i` of a call
+is drawn from `seed + i`. (`create_darcy_loader` wraps it in datarax train/val
+pipelines for batched streaming.)
 """
 
 # %% [markdown]
@@ -242,30 +243,20 @@ def main() -> dict[str, float | int]:
     print(f"Batch size: {batch_size}, Epochs: {num_epochs}")
     print(f"UNO config: hidden={hidden_channels}, 5-layer Fourier U (Rahman et al. 2022)")
 
-    # --- Data loading via datarax ---
+    # --- Data generation ---
     print()
-    print("Loading Darcy flow data via datarax...")
-    n_samples = n_train + n_test
-    loaders = create_darcy_loader(
-        n_samples=n_samples,
-        batch_size=batch_size,
-        resolution=resolution,
-        val_fraction=n_test / n_samples,
-        seed=seed,
-    )
+    print("Generating Darcy flow data...")
 
-    # datarax yields channels-first {"input": (b, 1, H, W), "output": (b, 1, H, W)};
+    # generate_darcy returns channels-first {"input": (n, 1, H, W), "output": (n, 1, H, W)};
     # UNO (and its grid embedding, eval, and visualization) work channels-last, so
     # we move the channel axis to the end once here, at the data boundary.
-    def _collect(pipeline) -> tuple[np.ndarray, np.ndarray]:
-        inputs, outputs = [], []
-        for batch in pipeline:
-            inputs.append(np.moveaxis(np.asarray(batch["input"]), 1, -1))
-            outputs.append(np.moveaxis(np.asarray(batch["output"]), 1, -1))
-        return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+    def _generate(n_samples: int, grid: int, first_seed: int) -> tuple[np.ndarray, np.ndarray]:
+        data = generate_darcy(n_samples=n_samples, resolution=grid, seed=first_seed)
+        return np.moveaxis(data["input"], 1, -1), np.moveaxis(data["output"], 1, -1)
 
-    x_train, y_train = _collect(loaders.train)
-    x_test, y_test = _collect(loaders.val)
+    x_all, y_all = _generate(n_train + n_test, resolution, seed)
+    x_train, y_train = x_all[:n_train], y_all[:n_train]
+    x_test, y_test = x_all[n_train:], y_all[n_train:]
 
     print(f"Training data: X={x_train.shape}, Y={y_train.shape}")
     print(f"Test data:     X={x_test.shape}, Y={y_test.shape}")
@@ -366,14 +357,8 @@ def main() -> dict[str, float | int]:
     target_resolution = resolution * 2
     print(f"Testing zero-shot super-resolution: {resolution} -> {target_resolution}")
     print(f"Generating a real {target_resolution}x{target_resolution} Darcy test set...")
-    sr_loaders = create_darcy_loader(
-        n_samples=n_test,
-        batch_size=batch_size,
-        resolution=target_resolution,
-        val_fraction=1.0,  # all samples in the eval split
-        seed=seed + 1,
-    )
-    x_high, y_high = _collect(sr_loaders.val)
+    # Seeds after every training and test seed, so no sample repeats one already seen.
+    x_high, y_high = _generate(n_test, target_resolution, seed + n_train + n_test)
     x_high_n = jnp.array((x_high - x_mean) / x_std)
     y_high_jnp = jnp.array(y_high)
 

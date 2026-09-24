@@ -13,7 +13,7 @@
 Train a Fourier Neural Operator (FNO) on Darcy flow using Opifex APIs.
 This example demonstrates:
 
-- **create_darcy_loader**: datarax-backed PDE data generation
+- **generate_darcy**: on-demand Darcy flow data generation
 - **FourierNeuralOperator**: Spectral convolution for operator learning
 - **GridEmbedding2D**: Positional encoding for resolution invariance
 - **Trainer.fit()**: Streamlined training workflow
@@ -22,7 +22,7 @@ This example demonstrates:
 
 ## What You'll Learn
 
-1. **Load** Darcy flow data with `create_darcy_loader()`
+1. **Generate** Darcy flow data with `generate_darcy()`
 2. **Create** an FNO model with `FourierNeuralOperator` and `GridEmbedding2D`
 3. **Train** with `Trainer.fit()` for 200 epochs
 4. **Evaluate** zero-shot super-resolution capabilities
@@ -48,52 +48,34 @@ jupyter lab examples/getting-started/first_neural_operator.ipynb
 
 ## Implementation
 
-### Step 1: Load Data
+### Step 1: Generate Data
 
 Generate Darcy flow data at multiple resolutions for training and testing.
-Each call to `create_darcy_loader()` builds a datarax pipeline at its own
-resolution and returns a frozen `PDELoaders` with `.train` and `.val` splits.
-A small `_drain()` helper iterates both splits and concatenates them into a
-single contiguous block of channels-first `(N, 1, H, W)` arrays.
+Each call to `generate_darcy()` draws its own samples at its own resolution and
+returns channels-first `(N, 1, H, W)` input/output arrays. (`create_darcy_loader()`
+wraps the same generator in datarax train/val pipelines for batched training.)
 
 ```python
 import numpy as np
 
-from opifex.data.loaders import create_darcy_loader
+from opifex.data.sources import generate_darcy
 
 
-# Each split is a separate datarax generation at its own resolution. The
-# train/val pipelines are both drained for a single contiguous block of
-# channels-first ``(N, 1, H, W)`` samples.
-def _drain(loaders) -> tuple[np.ndarray, np.ndarray]:
-    inputs, outputs = [], []
-    for pipeline in (loaders.train, loaders.val):
-        for batch in pipeline:
-            inputs.append(np.asarray(batch["input"]))
-            outputs.append(np.asarray(batch["output"]))
-    return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+# Each split is a separate generation at its own resolution, as channels-first
+# ``(N, 1, H, W)`` arrays.
+def _generate(n_samples: int, resolution: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=seed)
+    return data["input"], data["output"]
 
 
 # Training data at low resolution.
-X_train, Y_train = _drain(
-    create_darcy_loader(
-        n_samples=1000, batch_size=32, resolution=32, seed=42
-    )
-)
+X_train, Y_train = _generate(1000, 32, 42)
 
 # Test data at the SAME resolution.
-X_test_32, Y_test_32 = _drain(
-    create_darcy_loader(
-        n_samples=100, batch_size=100, resolution=32, seed=42 + 1000
-    )
-)
+X_test_32, Y_test_32 = _generate(100, 32, 42 + 1000)
 
 # Test data at a HIGHER resolution - for zero-shot super-resolution!
-X_test_64, Y_test_64 = _drain(
-    create_darcy_loader(
-        n_samples=100, batch_size=100, resolution=64, seed=42 + 2000
-    )
-)
+X_test_64, Y_test_64 = _generate(100, 64, 42 + 2000)
 ```
 
 **Terminal Output:**
@@ -257,7 +239,7 @@ advanced FNO examples.
 
 - [`FourierNeuralOperator`](../../api/neural.md) - FNO model class
 - [`GridEmbedding2D`](../../api/neural.md) - Positional encoding layer
-- [`create_darcy_loader`](../../api/data.md) - Darcy flow data loader
+- [`generate_darcy`](../../api/data.md) - Darcy flow data generation
 - [`Trainer`](../../api/training.md) - Training orchestration
 
 ## Troubleshooting

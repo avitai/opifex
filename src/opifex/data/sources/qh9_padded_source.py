@@ -416,7 +416,7 @@ class QH9PaddedSource(DataSourceModule):
         epoch's order, pads each into the fixed-shape element and stacks them into
         a leading batch axis. Resident memory is one batch's Focks. ``start`` is a
         concrete Python position: the reader runs on the host and cannot be traced,
-        so the source does not implement datarax's traceable ``get_batch_at``. The
+        so the source does not implement datarax's traceable ``get_records``. The
         wrap-around (``% length``) fills the final partial batch; the per-epoch
         shuffle is seeded by ``config.seed`` and advanced via :meth:`next_epoch`.
 

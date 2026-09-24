@@ -29,7 +29,7 @@ providing HDF5-formatted simulation trajectories across 1D/2D/3D PDEs
 
 Opifex's `PDEBenchSource` is a **datarax `DataSourceModule`**: it reads the HDF5 file at init,
 performs the PDE-specific input/target time-window pairing (the one step datarax has no operator
-for), and then exposes the standard datarax contract (`get_batch_at` / `element_spec`) so it is
+for), and then exposes the standard datarax contract (`get_records` / `element_spec`) so it is
 driven by a datarax **`Pipeline`**. Normalisation is a datarax **`MapOperator`** stage, not baked
 into the arrays. `create_pdebench_loader` assembles the source + normalize stage into a Pipeline.
 
@@ -38,7 +38,7 @@ into the arrays. `create_pdebench_loader` assembles the source + normalize stage
 1. **Create** a synthetic HDF5 file matching the PDEBench format
 2. **Build** a datarax `Pipeline` over the dataset with `create_pdebench_loader`
 3. **Batch** data for training via the pipeline's `.step()` (JAX-traceable)
-4. **Inspect** the source's element contract (`element_spec`, `get_batch_at`) and coordinate grids
+4. **Inspect** the source's element contract (`element_spec`, `get_records`) and coordinate grids
 5. **Normalize** with a composable `MapOperator` stage (train/test via the `split` config)
 """
 
@@ -115,7 +115,7 @@ def create_synthetic_pdebench_hdf5(
 
 `PDEBenchSource` reads the file at `__init__`, splits train/test, and creates the input/target
 time-window pairs. It then satisfies the datarax `DataSourceModule` contract — `element_spec()`
-declares per-element shapes and `get_batch_at(start, size, key)` is a stateless, JAX-traceable
+declares per-element shapes and `get_records(indices)` is a stateless, JAX-traceable
 fetch — so a `Pipeline` can drive it. Coordinate grids are domain metadata on `source.coordinates`.
 """
 
@@ -141,7 +141,7 @@ def build_source(hdf5_path: Path) -> PDEBenchSource:
 
 The loader assembles the source and (because `normalize=True`) a per-channel min-max
 `MapOperator` stage into a `Pipeline`. `pipeline.step()` fetches one batch through the source's
-`get_batch_at` and runs the normalize stage — the whole call is JAX-traceable, so it composes with
+`get_records` and runs the normalize stage — the whole call is JAX-traceable, so it composes with
 `pipeline.scan(...)` for a GPU-fused training epoch.
 """
 
@@ -220,7 +220,7 @@ def main() -> dict[str, float | int]:
 | Aspect | How it is built |
 |--------|-----------------|
 | Source | `PDEBenchSource` (datarax `DataSourceModule`): HDF5 read + split + window pairing |
-| Contract | `element_spec()` + stateless, traceable `get_batch_at(start, size, key)` |
+| Contract | `element_spec()` + stateless, traceable `get_records(indices)` |
 | Normalization | datarax `MapOperator` stage (per-channel min-max), not baked into arrays |
 | Batching | datarax `Pipeline.step()` / `.scan()` |
 | Splits | Train/test via the `split` config |

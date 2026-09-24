@@ -14,7 +14,7 @@ simulation trajectories across 1D/2D/3D PDEs (Burgers, Navier-Stokes, Darcy Flow
 advection, etc.). Opifex's `PDEBenchSource` is a **datarax `DataSourceModule`**: it reads the HDF5
 file at init, performs the PDE-specific input/target time-window pairing (the one step datarax has
 no operator for), and then exposes the standard datarax contract (`element_spec` /
-stateless, JAX-traceable `get_batch_at`) so it is driven by a datarax **`Pipeline`**. Normalisation
+stateless, JAX-traceable `get_records`) so it is driven by a datarax **`Pipeline`**. Normalisation
 is a composable datarax **`MapOperator`** stage, not baked into the stored arrays.
 `create_pdebench_loader` assembles the source and (optional) normalize stage into a `Pipeline`.
 
@@ -22,7 +22,7 @@ is a composable datarax **`MapOperator`** stage, not baked into the stored array
 
 1. **Create** synthetic HDF5 data matching the PDEBench format
 2. **Build** a datarax `Pipeline` over the dataset with `create_pdebench_loader`
-3. **Inspect** the source's datarax contract (`element_spec`, `get_batch_at`) and coordinate grids
+3. **Inspect** the source's datarax contract (`element_spec`, `get_records`) and coordinate grids
 4. **Batch** data via the pipeline's JAX-traceable `.step()` / `.scan()`
 5. **Normalize** with a `MapOperator` stage and **split** into train/test sets
 
@@ -68,7 +68,7 @@ t10–t14 → t15–t19 (window 10)
 graph LR
     A["HDF5 File"] -->|h5py| B["PDEBenchSource.__init__"]
     B -->|split| C["Train / Test"]
-    C -->|window pairing| D["Source (get_batch_at / element_spec)"]
+    C -->|window pairing| D["Source (get_records / element_spec)"]
     D -->|datarax Pipeline| E["MapOperator normalize stage"]
     E -->|".step() / .scan()"| F["Training Loop"]
 ```
@@ -103,7 +103,7 @@ losses = loader.scan(train_step, length=steps_per_epoch, modules=(model, optimiz
 ```
 
 The source itself is still inspectable directly — `loader.source.element_spec()`,
-`loader.source.get_batch_at(start, size)`, and `loader.source.coordinates`.
+`loader.source.get_records(indices)`, and `loader.source.coordinates`.
 
 ## Expected Output
 

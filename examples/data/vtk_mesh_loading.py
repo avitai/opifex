@@ -34,13 +34,13 @@ boolean mask**, giving uniform arrays that JIT-compile and batch cleanly.
 Opifex's `VTKMeshSource` is a datarax `DataSourceModule` that does exactly this at load: it reads
 `.vtu`/`.vtp` files with `meshio`, converts cell connectivity to a COO `edge_index`, pads
 `node_positions` / `node_features` to `max_nodes` (+ `node_mask`) and `edge_index` to `max_edges`
-(+ `edge_mask`), and exposes the datarax contract (`element_spec`, stateless `get_batch_at`) so a
+(+ `edge_mask`), and exposes the datarax contract (`element_spec`, stateless `get_records`) so a
 `Pipeline` can drive batched, JIT-traceable iteration. `create_vtk_mesh_loader` assembles it.
 
 ## What You'll Learn
 
 1. Load irregular meshes with `VTKMeshSource` (ragged → padded + masked)
-2. Read the source's datarax contract: `element_spec` and `get_batch_at`
+2. Read the source's datarax contract: `element_spec` and `get_records`
 3. Batch variable-size meshes through a datarax `Pipeline` and use the masks
 """
 
@@ -190,7 +190,7 @@ def main() -> dict[str, float | int]:
 | Aspect | How it is built |
 |--------|-----------------|
 | Source | `VTKMeshSource` (datarax `DataSourceModule`): meshio read + COO edges + pad-to-max + masks |
-| Contract | `element_spec()` + stateless, traceable `get_batch_at(start, size, key)` |
+| Contract | `element_spec()` + stateless, traceable `get_records(indices)` |
 | Ragged handling | per-axis pad to dataset max; `node_mask`/`edge_mask` flag real vs padded entries |
 | Batching | datarax `Pipeline.step()` / `.scan()` |
 

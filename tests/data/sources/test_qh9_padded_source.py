@@ -229,9 +229,9 @@ def test_oversized_molecule_fails_fast(tmp_path: Path) -> None:
 
 
 def test_the_host_reader_is_not_datarax_indexed_access(synthetic_qh9_db: Path) -> None:
-    """``read_batch`` needs a concrete position, so the source leaves ``get_batch_at`` alone.
+    """``read_batch`` needs a concrete position, so the source leaves ``get_records`` alone.
 
-    datarax treats a source that implements ``get_batch_at`` as JAX-traceable
+    datarax treats a source that implements ``get_records`` as JAX-traceable
     indexed access and drives it inside a compiled step, which this host reader
     cannot serve.
     """
@@ -239,7 +239,7 @@ def test_the_host_reader_is_not_datarax_indexed_access(synthetic_qh9_db: Path) -
 
     source = _source(synthetic_qh9_db)
 
-    assert type(source).get_batch_at is DataSourceModule.get_batch_at
+    assert type(source).get_records is DataSourceModule.get_records
     assert source.supports_indexed_access() is False
 
 

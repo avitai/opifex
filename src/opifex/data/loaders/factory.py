@@ -34,8 +34,8 @@ class PDELoaders:
     Attributes:
         train: datarax ``Pipeline`` over the training split (shuffled; the epoch's ragged
             final batch is dropped, so every batch holds ``batch_size`` records).
-        val: datarax ``Pipeline`` over the validation split (sequential; the final batch is
-            padded to ``batch_size`` and its ``valid_mask`` marks the padded rows).
+        val: datarax ``Pipeline`` over the validation split (sequential; one pass serves
+            every record once, so its final batch may hold fewer than ``batch_size``).
         n_train: Number of training samples.
         n_val: Number of validation samples.
         resolution: Spatial resolution of the fields.

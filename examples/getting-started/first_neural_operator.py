@@ -48,7 +48,7 @@ We'll achieve:
 using the relative-L2 objective and Gaussian normalization.
 
 This example uses Opifex APIs:
-- `create_darcy_loader` for data generation
+- `generate_darcy` for data generation
 - `FourierNeuralOperator` for the model
 - `Trainer.fit()` for training
 """
@@ -68,7 +68,7 @@ import matplotlib.pyplot as plt
 from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
-from opifex.data.loaders import create_darcy_loader
+from opifex.data.sources import generate_darcy
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 
@@ -95,9 +95,10 @@ NeuralOperator, DeepXDE, and PhysicsNeMo.
 """
 ## Data Loading with Opifex
 
-Opifex provides `create_darcy_loader()` which generates Darcy flow solutions
-on-demand using a spectral solver. The loader uses Google Grain for efficient
-streaming and batching.
+Opifex provides `generate_darcy()`, which draws permeability fields and solves the
+Darcy equation for each one (a sparse direct solve), returning channels-first
+`(N, 1, H, W)` input/output arrays. For batched training pipelines,
+`create_darcy_loader()` wraps the same generator in datarax train/val pipelines.
 """
 
 # %% [markdown]
@@ -150,13 +151,13 @@ Compare predictions at both resolutions to see the super-resolution in action.
 
 In this example, we demonstrated:
 
-1. **Loaded** Darcy flow data with `create_darcy_loader()`
+1. **Generated** Darcy flow data with `generate_darcy()`
 2. **Created** an FNO with `FourierNeuralOperator` and `GridEmbedding2D`
 3. **Trained** at 32x32 resolution with `Trainer.fit()`
 4. **Evaluated** on unseen test samples
 
 **Key Opifex features used:**
-- `create_darcy_loader()` - On-demand PDE data generation
+- `generate_darcy()` - On-demand PDE data generation
 - `FourierNeuralOperator` - Spectral-domain operator learning
 - `GridEmbedding2D` - Positional encoding for resolution invariance
 - `Trainer.fit()` - Standard training loop with JIT compilation
@@ -258,23 +259,14 @@ def main() -> dict[str, float | int]:
     print()
     print("Loading Darcy flow data...")
 
-    # Each split is a separate datarax generation at its own resolution. The
-    # train/val pipelines are both drained for a single contiguous block of
-    # channels-first ``(N, 1, H, W)`` samples.
-    def _drain(loaders) -> tuple[np.ndarray, np.ndarray]:
-        inputs, outputs = [], []
-        for pipeline in (loaders.train, loaders.val):
-            for batch in pipeline:
-                inputs.append(np.asarray(batch["input"]))
-                outputs.append(np.asarray(batch["output"]))
-        return np.concatenate(inputs, axis=0), np.concatenate(outputs, axis=0)
+    # Each split is a separate generation at its own resolution, as channels-first
+    # ``(N, 1, H, W)`` arrays.
+    def _generate(n_samples: int, resolution: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+        data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=seed)
+        return data["input"], data["output"]
 
     # Training data at low resolution.
-    X_train, Y_train = _drain(
-        create_darcy_loader(
-            n_samples=N_TRAIN, batch_size=BATCH_SIZE, resolution=TRAIN_RESOLUTION, seed=SEED
-        )
-    )
+    X_train, Y_train = _generate(N_TRAIN, TRAIN_RESOLUTION, SEED)
 
     # Normalize data for better training (compute stats from training data)
     X_mean, X_std = X_train.mean(), X_train.std()
@@ -283,20 +275,12 @@ def main() -> dict[str, float | int]:
     Y_train = (Y_train - Y_mean) / Y_std
 
     # Test data at the SAME resolution.
-    X_test_32, Y_test_32 = _drain(
-        create_darcy_loader(
-            n_samples=N_TEST, batch_size=N_TEST, resolution=TEST_RESOLUTION_1, seed=SEED + 1000
-        )
-    )
+    X_test_32, Y_test_32 = _generate(N_TEST, TEST_RESOLUTION_1, SEED + 1000)
     X_test_32 = (X_test_32 - X_mean) / X_std
     Y_test_32 = (Y_test_32 - Y_mean) / Y_std
 
     # Test data at a HIGHER resolution - for zero-shot super-resolution!
-    X_test_64, Y_test_64 = _drain(
-        create_darcy_loader(
-            n_samples=N_TEST, batch_size=N_TEST, resolution=TEST_RESOLUTION_2, seed=SEED + 2000
-        )
-    )
+    X_test_64, Y_test_64 = _generate(N_TEST, TEST_RESOLUTION_2, SEED + 2000)
     X_test_64 = (X_test_64 - X_mean) / X_std
     Y_test_64 = (Y_test_64 - Y_mean) / Y_std
 
