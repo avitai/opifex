@@ -44,7 +44,6 @@ dependencies = [
   "beartype>=0.15.0",
   "orbax-checkpoint>=0.11.13",
   # checkpointing
-  "typing_extensions>=4.5.0",
   "pyyaml>=6.0.2",
   "tqdm>=4.67.1",
   # PyPI distribution for Avitai Artifex; imports remain under ``artifex``.
@@ -827,7 +826,6 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-extra-standard-library = ["typing_extensions"]
 known-first-party = ["opifex"]
 known-third-party = ["jax", "flax", "numpy", "scipy"]
 lines-after-imports = 2
