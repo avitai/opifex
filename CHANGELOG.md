@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-09-25
+
 ### Fixed
 
 - The BlackJAX backend reports an effective sample size that can be believed. Its own
@@ -17,6 +19,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more than its length and was cut back to it. It now comes from
   `artifex.generative_models.core.sampling.effective_sample_size`, which is the same place
   the samplers come from.
+- `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
+  compact five-point Laplacian while the correction subtracted a two-point central gradient,
+  so the projection left most of the divergence in place: a divergent start still measured
+  0.31 after a step, and an evolved Taylor-Green vortex 6.4e-03. Both are now at the
+  round-off of the difference that measures them, 4.7e-10 and 2.4e-07. Trajectories
+  generated through `opifex.data.sources.pde_generation` before this carry the old field.
+- The pressure solves project. Both inverted an operator other than the one the projection
+  applies -- `pressure_solve_spectral` the continuous symbol and the Jacobi solve the compact
+  three-point `laplacian`, while the correction subtracts the two-point central `gradient`,
+  whose composition with `divergence` reaches `i +/- 2`. Both now invert
+  `divergence(gradient(.))` itself, which takes the residual divergence of a 32x32 periodic
+  field from 2.3% of the incoming divergence to 8e-07.
+- `lsmr` returns NaN once the bidiagonalisation is exhausted, which a zero right-hand side
+  reaches immediately and an exactly solvable system reaches after a few steps past `rank`:
+  the recurrence divided by the lengths the rotations leave on the diagonal, and those are
+  zero there. Those divisions and `jnp.linalg.norm`'s NaN gradient at the origin are guarded,
+  so an exhausted iterate holds still and stays differentiable.
+- `Burgers2DSolver.solve` integrates on the device. It read the CFL step back to the host
+  every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
+  vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
+  `lax.scan`, the structure `solve_burgers_2d` already uses.
+- `opifex.uncertainty.linalg.lsmr` is the LSMR recurrence of Fong and Saunders (2011, SIAM J.
+  Sci. Comput. 33(5), 2950): a bidiagonalisation kept factorised by two Givens rotations per
+  step. It projected onto the Krylov basis and then solved the normal equations there, which
+  squares the condition number: on a well-conditioned 30x6 system it missed SciPy's solution
+  by 1.7e-3 where the recurrence misses it by 8e-8. The solutions now agree with
+  `scipy.sparse.linalg.lsmr`, the authors' own implementation, at every iteration budget.
+  Its docstring records what precision the iteration needs: a 60x10 system of condition 1e4
+  converges in 22 float64 steps, while in float32 the iterates drift away.
+- `get_activation("prelu")` returned `jnp.maximum`, which raises when called with one
+  argument. PReLU learns its negative slope, so it is `flax.nnx.PReLU`, a module, and the
+  name now says so instead of resolving to a broken function.
+- `list_activations()` listed fourteen names while `get_activation` accepted twenty-five,
+  hiding the broken entry; both now read the one registry.
 
 ### Changed
 
@@ -46,38 +82,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   datarax 0.1.16 refuses the last two setups, and all three pages' recorded outputs come
   from the old data.
-- Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
-  packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
-  pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
-
-- `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
-  compact five-point Laplacian while the correction subtracted a two-point central gradient,
-  so the projection left most of the divergence in place: a divergent start still measured
-  0.31 after a step, and an evolved Taylor-Green vortex 6.4e-03. Both are now at the
-  round-off of the difference that measures them, 4.7e-10 and 2.4e-07. Trajectories
-  generated through `opifex.data.sources.pde_generation` before this carry the old field.
-- The pressure solves project. Both inverted an operator other than the one the projection
-  applies -- `pressure_solve_spectral` the continuous symbol and the Jacobi solve the compact
-  three-point `laplacian`, while the correction subtracts the two-point central `gradient`,
-  whose composition with `divergence` reaches `i +/- 2`. Both now invert
-  `divergence(gradient(.))` itself, which takes the residual divergence of a 32x32 periodic
-  field from 2.3% of the incoming divergence to 8e-07.
-- `lsmr` returns NaN once the bidiagonalisation is exhausted, which a zero right-hand side
-  reaches immediately and an exactly solvable system reaches after a few steps past `rank`:
-  the recurrence divided by the lengths the rotations leave on the diagonal, and those are
-  zero there. Those divisions and `jnp.linalg.norm`'s NaN gradient at the origin are guarded,
-  so an exhausted iterate holds still and stays differentiable.
-- `Burgers2DSolver.solve` integrates on the device. It read the CFL step back to the host
-  every sub-step and grew its trajectory in a Python list, so it could be neither jitted nor
-  vmapped; it now sub-steps under `lax.while_loop` between fixed save times gathered by
-  `lax.scan`, the structure `solve_burgers_2d` already uses.
-
-### Changed
-
+- Requires `avitai-artifex>=0.1.15` and `calibrax>=0.1.14`.
+  - artifex 0.1.14 supplies the effective sample size above, and 0.1.15 runs on datarax 0.1.16
+    (its `Trainer` evaluates unpadded batches). The artifex relock also dropped ten packages
+    that reached the closure only through the BlackJAX 1.3 chain artifex no longer pulls --
+    `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and added none.
+  - calibrax 0.1.13 ranks tied values by their average rank in `spearman_rank_correlation`,
+    which `active_learning_acquisition_reliability` reports, and takes roofline memory traffic
+    from XLA's bytes accessed, which the profiling harness's roofline analysis reads.
+- `typing_extensions` is no longer a declared dependency; nothing in opifex imported it.
 - `solve_navier_stokes_2d` uses the operators and the projection in `opifex.fields` instead
   of its own copies of gradient, divergence, Laplacian and the Poisson solve. The copies
   were bit-for-bit identical to the shared ones and compile to the same kernel, so the
   duplication bought nothing and hid the defect above from the fix in `fields`.
+- `pressure_solve_lsmr(velocity, num_matvecs=500)` replaces `pressure_solve_jacobi`. The
+  composed operator is neither symmetric nor invertible under a zero-gradient boundary, where
+  a relaxation or a conjugate-gradient iterate drifts into its null space and diverges; a
+  least-squares solve takes the minimum-norm solution instead. Prefer
+  `pressure_solve_spectral` for periodic fields, which is about a hundred times faster.
+- `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
+  the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
+  its output around, where a count of adaptive steps cannot.
+- `get_activation("mish")` is `jax.nn.mish`; the local copy computed the same values.
+- An unknown activation name is refused with the names that are registered.
+
+### Removed
+
+- `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
+  `jax.grad` differentiates any activation in the registry.
 
 ### Known issues
 
@@ -87,43 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   faster than `exp(-2 nu t)` at `t = 1` and 29% faster at `t = 5`, and the error falls by
   half whenever the grid does, which is the first-order convergence that names the cause.
   `test_the_vortex_decays_at_the_analytic_rate` holds the requirement as a strict xfail.
-
-### Changed
-
-- `pressure_solve_lsmr(velocity, num_matvecs=500)` replaces `pressure_solve_jacobi`. The
-  composed operator is neither symmetric nor invertible under a zero-gradient boundary, where
-  a relaxation or a conjugate-gradient iterate drifts into its null space and diverges; a
-  least-squares solve takes the minimum-norm solution instead. Prefer
-  `pressure_solve_spectral` for periodic fields, which is about a hundred times faster.
-- `Burgers2DSolver.solve(initial_condition, time_final, num_saves=1)` replaces `save_every`:
-  the saved times are `num_saves + 1` equally spaced values, which a traced solve can shape
-  its output around, where a count of adaptive steps cannot.
-
-### Fixed
-
-- `opifex.uncertainty.linalg.lsmr` is the LSMR recurrence of Fong and Saunders (2011, SIAM J.
-  Sci. Comput. 33(5), 2950): a bidiagonalisation kept factorised by two Givens rotations per
-  step. It projected onto the Krylov basis and then solved the normal equations there, which
-  squares the condition number: on a well-conditioned 30x6 system it missed SciPy's solution
-  by 1.7e-3 where the recurrence misses it by 8e-8. The solutions now agree with
-  `scipy.sparse.linalg.lsmr`, the authors' own implementation, at every iteration budget.
-  Its docstring records what precision the iteration needs: a 60x10 system of condition 1e4
-  converges in 22 float64 steps, while in float32 the iterates drift away.
-- `get_activation("prelu")` returned `jnp.maximum`, which raises when called with one
-  argument. PReLU learns its negative slope, so it is `flax.nnx.PReLU`, a module, and the
-  name now says so instead of resolving to a broken function.
-- `list_activations()` listed fourteen names while `get_activation` accepted twenty-five,
-  hiding the broken entry; both now read the one registry.
-
-### Changed
-
-- `get_activation("mish")` is `jax.nn.mish`; the local copy computed the same values.
-- An unknown activation name is refused with the names that are registered.
-
-### Removed
-
-- `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
-  `jax.grad` differentiates any activation in the registry.
 
 ## [0.2.9] - 2026-09-21
 
