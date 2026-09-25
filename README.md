@@ -14,7 +14,7 @@
 
 <!-- CI/CD Status Badges -->
 [![CI](https://github.com/avitai/opifex/actions/workflows/ci.yml/badge.svg)](https://github.com/avitai/opifex/actions/workflows/ci.yml)
-[![Documentation](https://github.com/avitai/opifex/actions/workflows/docs.yml/badge.svg)](https://github.com/avitai/opifex/actions/workflows/docs.yml)
+[![Documentation](https://readthedocs.org/projects/opifex/badge/?version=latest)](https://opifex.readthedocs.io/en/latest/)
 [![Security](https://github.com/avitai/opifex/actions/workflows/security.yml/badge.svg)](https://github.com/avitai/opifex/actions/workflows/security.yml)
 [![codecov](https://codecov.io/gh/avitai/opifex/branch/main/graph/badge.svg)](https://codecov.io/gh/avitai/opifex)
 

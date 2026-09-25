@@ -1,7 +1,17 @@
-name: Deploy Documentation
+name: Documentation
+
+# Read the Docs builds and hosts the documentation (.readthedocs.yaml). This workflow only checks
+# that the site builds, so a change that breaks it fails before it reaches Read the Docs.
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  pull_request:
     branches:
       - main
     paths:
@@ -15,16 +25,14 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
@@ -42,68 +50,3 @@ jobs:
 
       - name: Build documentation
         run: uv run mkdocs build --clean
-
-      - name: Prepare deployment directory
-        run: |
-          # Create deployment structure
-          mkdir -p deploy/sciml
-          mkdir -p deploy/workshop
-
-          # Move built site into sciml subdirectory
-          mv site/* deploy/sciml/
-
-          # Create CNAME file at root for custom domain
-          echo "docs.avitai.bio" > deploy/CNAME
-
-          # Create index.html at root as landing page for all projects
-          cat > deploy/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="utf-8">
-              <title>Avitai Documentation</title>
-              <style>
-                  body {
-                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                      max-width: 800px;
-                      margin: 100px auto;
-                      padding: 20px;
-                      text-align: center;
-                  }
-                  h1 { color: #333; }
-                  ul { list-style: none; padding: 0; }
-                  li { margin: 10px 0; }
-                  a {
-                      color: #0066cc;
-                      text-decoration: none;
-                      font-size: 18px;
-                      padding: 10px 20px;
-                      display: inline-block;
-                      border: 1px solid #0066cc;
-                      border-radius: 5px;
-                      transition: all 0.3s;
-                  }
-                  a:hover {
-                      background: #0066cc;
-                      color: white;
-                  }
-              </style>
-          </head>
-          <body>
-              <h1>Avitai Documentation</h1>
-              <p>Available documentation:</p>
-              <ul>
-                  <li><a href="./workshop/">Workshop - Generative Models Library</a></li>
-                  <li><a href="./sciml/">SciML - Scientific Machine Learning Framework</a></li>
-              </ul>
-          </body>
-          </html>
-          EOF
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./deploy
-          force_orphan: true
-          cname: docs.avitai.bio
