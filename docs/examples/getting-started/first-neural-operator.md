@@ -24,7 +24,7 @@ This example demonstrates:
 
 1. **Generate** Darcy flow data with `generate_darcy()`
 2. **Create** an FNO model with `FourierNeuralOperator` and `GridEmbedding2D`
-3. **Train** with `Trainer.fit()` for 200 epochs
+3. **Train** with `Trainer.fit()` for 500 epochs by the FNO paper's recipe
 4. **Evaluate** zero-shot super-resolution capabilities
 
 ## Files
@@ -90,10 +90,10 @@ Training resolution: 32x32
 Test resolutions: 32x32, 64x64 (zero-shot)
 
 Loading Darcy flow data...
-  Training data (32x32): X=(1024, 1, 32, 32), Y=(1024, 1, 32, 32)
-  Test data (32x32): X=(200, 1, 32, 32), Y=(200, 1, 32, 32)
-  Test data (64x64): X=(200, 1, 64, 64), Y=(200, 1, 64, 64) <- UNSEEN resolution!
-  Normalization: Y_mean=0.2145, Y_std=0.1557
+  Training data (32x32): X=(1000, 1, 32, 32), Y=(1000, 1, 32, 32)
+  Test data (32x32): X=(100, 1, 32, 32), Y=(100, 1, 32, 32)
+  Test data (64x64): X=(100, 1, 64, 64), Y=(100, 1, 64, 64) <- UNSEEN resolution!
+  Normalization: Y_mean=0.2141, Y_std=0.1557
 ```
 
 ### Step 2: Create FNO with Grid Embedding
@@ -141,12 +141,33 @@ Creating FNO model with grid embedding...
 
 ### Step 3: Train
 
+The training recipe is the FNO paper's Darcy recipe (Li et al. 2021): batch 20, learning rate
+1e-3 halved every 100 epochs for 500 epochs, weight decay 1e-4, and the relative L2 loss. The
+paper's Adam applies weight decay as an L2 penalty, which opifex does not build; AdamW decays
+the weights directly, as the neuraloperator library's Darcy recipe does.
+
 ```python
 from opifex.core.training import Trainer, OptimizationConfig, TrainingConfig
+from opifex.core.training.config import LossConfig
+
+steps_per_epoch = 1000 // 20  # optax schedules count optimizer steps
+boundaries = [k * 100 * steps_per_epoch for k in range(1, 5)]
+rates = [1e-3 * 0.5**k for k in range(5)]
 
 trainer = Trainer(
     model=model,
-    config=TrainingConfig(num_epochs=200, optimization_config=OptimizationConfig(learning_rate=1e-2), batch_size=32),
+    config=TrainingConfig(
+        num_epochs=500,
+        optimization_config=OptimizationConfig(
+            optimizer="adamw",
+            learning_rate=1e-3,
+            weight_decay=1e-4,
+            schedule_type="step",
+            boundaries_and_values=(boundaries, rates),
+        ),
+        loss_config=LossConfig(loss_type="relative_l2"),
+        batch_size=20,
+    ),
     rngs=nnx.Rngs(42),
 )
 
@@ -162,7 +183,7 @@ trained_model, metrics = trainer.fit(
 Training on 32x32 resolution...
 --------------------------------------------------
 --------------------------------------------------
-Training completed in 19.3s
+Training completed in 214.7s
 ```
 
 ### Step 4: Zero-Shot Super-Resolution Test
@@ -183,8 +204,8 @@ rel_l2_64 = compute_relative_l2(predictions_64, Y_test_64)
 ======================================================================
 ZERO-SHOT SUPER-RESOLUTION TEST
 ======================================================================
-  Test at 32x32 (training resolution): 14.57% relative L2
-  Test at 64x64 (ZERO-SHOT, 2x): 11.62% relative L2
+  Test at 32x32 (training resolution): 1.42% relative L2
+  Test at 64x64 (ZERO-SHOT, 2x): 6.43% relative L2
 
 NOTE: The 64x64 test uses different samples, so high error is expected.
 True zero-shot super-resolution requires testing the same physics at
@@ -200,8 +221,8 @@ Compare predictions at both resolutions:
 
 The visualization shows:
 
-- **Row 1 (32x32)**: Training resolution with 14.6% error - model captures the pressure field
-- **Row 2 (64x64)**: Zero-shot test at 2x resolution on different samples (~12% error)
+- **Row 1 (32x32)**: Training resolution with 1.4% error - model captures the pressure field
+- **Row 2 (64x64)**: Zero-shot test at 2x resolution on different samples (6.4% error)
 
 The FNO Prediction column uses the same color scale as Ground Truth for fair comparison.
 
@@ -210,10 +231,10 @@ The FNO Prediction column uses the same color scale as Ground Truth for fair com
 | Metric                | Value      |
 |-----------------------|------------|
 | Parameters            | 2,368,001  |
-| Training Time         | 19.3s      |
-| Epochs                | 200        |
-| Test Error (32x32)    | 14.57%     |
-| Test Error (64x64)    | 11.62%     |
+| Training Time         | 214.7s (one L4 GPU) |
+| Epochs                | 500        |
+| Test Error (32x32)    | 1.42%      |
+| Test Error (64x64)    | 6.43%      |
 
 **Note**: The 64x64 test uses different physics samples than training. For true
 zero-shot super-resolution (same sample at different resolutions), see the
@@ -223,7 +244,7 @@ advanced FNO examples.
 
 ### Experiments to Try
 
-1. **More epochs**: Train for 50-100 epochs for better accuracy
+1. **Finer training grid**: Train at 64x64 and test zero-shot at 128x128
 2. **Larger model**: Increase `hidden_channels=64` or `modes=16`
 3. **H1 loss**: Add gradient loss for sharper predictions (see advanced examples)
 
