@@ -1,6 +1,6 @@
 site_name: Opifex - Unified Scientific Machine Learning Framework
 site_description: JAX-native platform for scientific machine learning, neural operators, physics-informed neural networks, and neural density functional theory
-site_url: https://docs.avitai.bio/opifex
+site_url: https://opifex.readthedocs.io/en/latest/
 repo_url: https://github.com/avitai/opifex
 repo_name: avitai/opifex
 edit_uri: edit/main/docs/
