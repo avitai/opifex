@@ -68,6 +68,7 @@ import matplotlib.pyplot as plt
 from substrax.artifacts import resolve_output_dir
 
 from opifex.core.training import OptimizationConfig, Trainer, TrainingConfig
+from opifex.core.training.config import LossConfig
 from opifex.data.sources import generate_darcy
 from opifex.neural.operators.common.embeddings import GridEmbedding2D
 from opifex.neural.operators.fno.base import FourierNeuralOperator
@@ -236,11 +237,19 @@ def main() -> dict[str, float | int]:
     TEST_RESOLUTION_1 = 32  # Same as training
     TEST_RESOLUTION_2 = 64  # 2x higher - zero-shot!
 
-    N_TRAIN = 1000  # More training data for better generalization
+    # The training recipe is the FNO paper's Darcy recipe (Li et al. 2021; its code, as used by
+    # Lu et al. 2022 for the smooth Darcy benchmark): 1000 samples, batch 20, learning rate 1e-3
+    # halved every 100 epochs for 500 epochs, weight decay 1e-4, relative L2 loss, 12 modes,
+    # width 32, 4 Fourier layers. One deviation: the paper's Adam applies weight decay as an L2
+    # penalty, which opifex does not build; AdamW decays the weights directly, as the
+    # neuraloperator library's Darcy recipe does.
+    N_TRAIN = 1000
     N_TEST = 100
-    BATCH_SIZE = 32
-    NUM_EPOCHS = 200  # Epochs for training
-    LEARNING_RATE = 1e-2  # Higher LR for faster convergence
+    BATCH_SIZE = 20
+    NUM_EPOCHS = 500
+    LEARNING_RATE = 1e-3
+    DECAY_EVERY_EPOCHS = 100  # the learning rate halves every 100 epochs
+    WEIGHT_DECAY = 1e-4
     MODES = 12  # Fourier modes (should be less than resolution/2)
     HIDDEN_CHANNELS = 32
     NUM_LAYERS = 4
@@ -325,9 +334,21 @@ def main() -> dict[str, float | int]:
     print(f"Training on {TRAIN_RESOLUTION}x{TRAIN_RESOLUTION} resolution...")
     print("-" * 50)
 
+    # optax schedules count optimizer steps: one step per batch.
+    steps_per_epoch = N_TRAIN // BATCH_SIZE
+    n_decays = NUM_EPOCHS // DECAY_EVERY_EPOCHS - 1
+    boundaries = [k * DECAY_EVERY_EPOCHS * steps_per_epoch for k in range(1, n_decays + 1)]
+    rates = [LEARNING_RATE * 0.5**k for k in range(n_decays + 1)]
     config = TrainingConfig(
         num_epochs=NUM_EPOCHS,
-        optimization_config=OptimizationConfig(learning_rate=LEARNING_RATE),
+        optimization_config=OptimizationConfig(
+            optimizer="adamw",
+            learning_rate=LEARNING_RATE,
+            weight_decay=WEIGHT_DECAY,
+            schedule_type="step",
+            boundaries_and_values=(boundaries, rates),
+        ),
+        loss_config=LossConfig(loss_type="relative_l2"),
         batch_size=BATCH_SIZE,
         verbose=True,
     )
