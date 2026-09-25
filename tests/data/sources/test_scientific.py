@@ -25,30 +25,63 @@ from opifex.data.sources.scientific import create_pdebench_loader
 h5py = pytest.importorskip("h5py")
 
 
-def _pipeline_batch(loader: Pipeline) -> dict[str, Any]:
-    """Fetch one batch from a datarax pipeline.
-
-    ``Pipeline.step`` is decorated with ``@nnx.jit``, which pyright misreads as an unbound method
-    (``reportCallIssue``); the call is correct at runtime, so the suppression is localised here.
-    """
-    return loader.step()  # pyright: ignore[reportCallIssue]
-
-
 def _assert_epoch_matches_step(make_loader: Callable[[], Pipeline]) -> None:
-    """``for batch in loader`` serves one epoch, batch for batch what ``step()`` returns.
+    """``for batch in loader`` serves one epoch: the records successive ``step()`` calls serve.
 
-    datarax iterates a source that implements ``get_batch_at`` inside a compiled session. The
-    epoch holds ``ceil(len(source) / batch_size)`` batches, the last one wrapping around.
+    datarax iterates a source that implements ``get_records`` inside a compiled session. The
+    epoch holds ``ceil(len(source) / batch_size)`` batches and every record once, so its last
+    batch is short; ``step()`` never runs out and completes that batch from the next epoch.
     """
     batches = list(make_loader())
     reference = make_loader()
+    records = len(reference.source)
+    steps = [reference.step() for _ in range(len(batches))]
 
-    assert len(batches) == math.ceil(len(reference.source) / reference.batch_size)
-    for batch in batches:
-        expected = _pipeline_batch(reference)
-        assert batch.keys() == expected.keys()
-        for name, value in batch.items():
-            np.testing.assert_array_equal(np.asarray(value), np.asarray(expected[name]))
+    assert len(batches) == math.ceil(records / reference.batch_size)
+    assert sum(len(batch[next(iter(batch))]) for batch in batches) == records
+    for name in batches[0]:
+        epoch = np.concatenate([np.asarray(batch[name]) for batch in batches])
+        stepped = np.concatenate([np.asarray(batch[name]) for batch in steps])[:records]
+        np.testing.assert_array_equal(epoch, stepped)
+
+
+def _assert_shuffle_is_a_keyed_bijection(source: Any) -> None:
+    """``record_indices_at`` orders an epoch by a permutation of the records drawn from ``key``.
+
+    Each index costs O(1): the traced program holds no ``sort``, which a stored or per-batch
+    ``jax.random.permutation`` needs (positive control below).
+    """
+    records = len(source)
+    key = jax.random.key(1)
+    order = np.asarray(source.record_indices_at(0, records, key))
+
+    assert sorted(order.tolist()) == list(range(records))
+    assert order.tolist() != list(range(records))
+    np.testing.assert_array_equal(order, np.asarray(source.record_indices_at(0, records, key)))
+    assert (
+        order.tolist()
+        != np.asarray(source.record_indices_at(0, records, jax.random.key(2))).tolist()
+    )
+
+    def primitives(fn: Callable[..., Any], *args: Any) -> set[str]:
+        """Every primitive in ``fn``'s program, nested programs (pjit, loops, cond) included."""
+        found: set[str] = set()
+        pending = [jax.make_jaxpr(fn)(*args).jaxpr]
+        while pending:
+            program = pending.pop()
+            for equation in program.eqns:
+                found.add(equation.primitive.name)
+                for value in equation.params.values():
+                    for item in value if isinstance(value, (list, tuple)) else (value,):
+                        inner = getattr(item, "jaxpr", item)
+                        if hasattr(inner, "eqns"):
+                            pending.append(inner)
+        return found
+
+    assert "sort" in primitives(lambda k: jax.random.permutation(k, records), key)
+    assert "sort" not in primitives(
+        lambda start, k: source.record_indices_at(start, 2, k), jnp.int32(0), key
+    )
 
 
 # =============================================================================
@@ -470,7 +503,7 @@ class TestPDEBenchNormalization:
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
         )
         loader = create_pdebench_loader(config, batch_size=4)
-        batch = _pipeline_batch(loader)
+        batch = loader.step()
         for field in ("input", "target"):
             values = np.array(batch[field])
             assert np.isfinite(values).all()
@@ -574,31 +607,23 @@ class TestPDEBenchRandomAccess:
 
 
 class TestPDEBenchBatch:
-    """Datarax contract: stateless get_batch_at + element_spec (Pipeline-drivable)."""
+    """Datarax contract: stateless get_records + element_spec (Pipeline-drivable)."""
 
-    def test_get_batch_at_shape(self, pdebench_hdf5_file: Path) -> None:
-        """get_batch_at returns size records with batched input/target arrays."""
+    def test_get_records_returns_the_records_at_the_indices(self, pdebench_hdf5_file: Path) -> None:
+        """get_records gathers exactly the records named, in the order named."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        batch = source.get_batch_at(0, 4)
-        assert batch["input"].shape[0] == 4
-        assert batch["target"].shape[0] == 4
+        indices = jnp.array([3, 0, 5], dtype=jnp.int32)
+        batch = source.get_records(indices)
         assert isinstance(batch["input"], jax.Array)
+        for row, index in enumerate(indices.tolist()):
+            np.testing.assert_array_equal(np.asarray(batch["input"][row]), source[index]["input"])
+            np.testing.assert_array_equal(np.asarray(batch["target"][row]), source[index]["target"])
 
-    def test_get_batch_at_is_stateless(self, pdebench_hdf5_file: Path) -> None:
-        """Repeated calls at the same start return the same records (no internal counter)."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
-
-        config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
-        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        b1 = source.get_batch_at(2, 3)
-        b2 = source.get_batch_at(2, 3)
-        np.testing.assert_array_equal(np.array(b1["input"]), np.array(b2["input"]))
-
-    def test_get_batch_at_traceable_under_jit(self, pdebench_hdf5_file: Path) -> None:
-        """get_batch_at accepts a traced start (composes with nnx.scan / jit)."""
+    def test_get_records_traceable_under_jit(self, pdebench_hdf5_file: Path) -> None:
+        """get_records accepts traced indices (composes with nnx.scan / jit)."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
@@ -606,11 +631,19 @@ class TestPDEBenchBatch:
         graphdef, state = nnx.split(source)
 
         @jax.jit
-        def fetch(state: nnx.State, start: jax.Array) -> jax.Array:
-            return nnx.merge(graphdef, state).get_batch_at(start, 2)["input"]
+        def fetch(state: nnx.State, indices: jax.Array) -> jax.Array:
+            return nnx.merge(graphdef, state).get_records(indices)["input"]
 
-        out = fetch(state, jnp.asarray(1))
+        out = fetch(state, jnp.array([1, 2], dtype=jnp.int32))
         assert out.shape[0] == 2
+
+    def test_shuffle_is_a_keyed_bijection(self, pdebench_hdf5_file: Path) -> None:
+        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+
+        config = PDEBenchConfig(
+            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", shuffle=True
+        )
+        _assert_shuffle_is_a_keyed_bijection(PDEBenchSource(config, rngs=nnx.Rngs(0)))
 
     def test_element_spec(self, pdebench_hdf5_file: Path) -> None:
         """element_spec describes one element's input/target shapes and dtypes."""
@@ -720,7 +753,7 @@ class TestPDEBenchLoader:
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         loader = create_pdebench_loader(config, batch_size=4)
         assert isinstance(loader, Pipeline)
-        batch = _pipeline_batch(loader)
+        batch = loader.step()
         assert batch["input"].shape[0] == 4
         assert batch["target"].shape[0] == 4
 
@@ -730,8 +763,8 @@ class TestPDEBenchLoader:
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         loader = create_pdebench_loader(config, batch_size=4)
-        b0 = _pipeline_batch(loader)
-        b1 = _pipeline_batch(loader)
+        b0 = loader.step()
+        b1 = loader.step()
         assert b0["input"].shape == b1["input"].shape
 
     def test_iterating_the_loader_matches_step(self, pdebench_hdf5_file: Path) -> None:
@@ -743,18 +776,23 @@ class TestPDEBenchLoader:
         )
         _assert_epoch_matches_step(lambda: create_pdebench_loader(config, batch_size=4))
 
-    def test_loader_shuffle_uses_key(self, pdebench_hdf5_file: Path) -> None:
-        """With shuffle=True the source draws shuffled indices from the pipeline key."""
+    def test_a_shuffled_loader_serves_each_record_once_per_epoch(
+        self, pdebench_hdf5_file: Path
+    ) -> None:
+        """A shuffled epoch holds every record once, in an order other than the stored one."""
         from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
 
+        # Unnormalized, so the served rows are the stored records themselves.
         config = PDEBenchConfig(
-            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", shuffle=True
+            file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", shuffle=True, normalize=False
         )
-        source = PDEBenchSource(config, rngs=nnx.Rngs(0))
-        sequential = np.array(source.get_batch_at(0, 8)["input"])
-        shuffled = np.array(source.get_batch_at(0, 8, key=jax.random.key(1))["input"])
-        # Shuffled selection differs from the contiguous slice (with high probability).
-        assert not np.array_equal(sequential, shuffled)
+        stored = PDEBenchSource(config, rngs=nnx.Rngs(0)).inputs
+        served = np.concatenate(
+            [np.asarray(batch["input"]) for batch in create_pdebench_loader(config, batch_size=4)]
+        )
+        rows = [row.tobytes() for row in np.asarray(stored)]
+        assert sorted(row.tobytes() for row in served) == sorted(rows)
+        assert [row.tobytes() for row in served] != rows
 
 
 # =============================================================================
@@ -982,17 +1020,26 @@ class TestVTKMeshSource:
         assert element["node_mask"].shape == (50,)
         assert float(element["node_mask"].sum()) == 50.0
 
-    def test_element_spec_and_get_batch_at(self, vtu_directory: Path) -> None:
-        """element_spec declares padded shapes; get_batch_at returns a stacked, batched dict."""
+    def test_element_spec_and_get_records(self, vtu_directory: Path) -> None:
+        """element_spec declares padded shapes; get_records stacks the meshes it names."""
         from opifex.data.sources.scientific import VTKMeshConfig, VTKMeshSource
 
         config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
         source = VTKMeshSource(config, rngs=nnx.Rngs(0))
         spec = source.element_spec()
         assert spec["node_positions"].shape == (50, 3)
-        batch = source.get_batch_at(0, 2)
+        batch = source.get_records(jnp.array([2, 0], dtype=jnp.int32))
         assert batch["node_positions"].shape == (2, 50, 3)
         assert batch["edge_index"].shape[1] == 2  # (batch, 2, max_edges)
+        np.testing.assert_array_equal(
+            np.asarray(batch["node_positions"][0]), np.asarray(source[2]["node_positions"])
+        )
+
+    def test_shuffle_is_a_keyed_bijection(self, vtu_directory: Path) -> None:
+        from opifex.data.sources.scientific import VTKMeshConfig, VTKMeshSource
+
+        config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",), shuffle=True)
+        _assert_shuffle_is_a_keyed_bijection(VTKMeshSource(config, rngs=nnx.Rngs(0)))
 
     def test_varying_size_meshes_are_padded_with_masks(self, tmp_path: Path) -> None:
         """Ragged meshes pad to the dataset max; node_mask records each mesh's real node count."""
@@ -1021,7 +1068,7 @@ class TestVTKMeshSource:
         config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
         loader = create_vtk_mesh_loader(config, batch_size=2)
         assert isinstance(loader, Pipeline)
-        batch = _pipeline_batch(loader)
+        batch = loader.step()
         assert batch["node_positions"].shape[0] == 2
 
     def test_iterating_the_loader_matches_step(self, vtu_directory: Path) -> None:

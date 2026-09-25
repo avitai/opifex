@@ -29,6 +29,7 @@ from datarax.core.config import MapOperatorConfig, StructuralConfig
 from datarax.core.data_source import DataSourceModule
 from datarax.operators.map_operator import MapOperator
 from datarax.pipeline import Pipeline
+from datarax.sources import resolve_wrapped_indices
 from flax import nnx
 
 
@@ -68,7 +69,7 @@ class PDEBenchConfig(StructuralConfig):
         output_steps: Number of output time steps to predict (default: 1)
         normalize: Whether to attach a per-channel min-max normalisation operator
             (a datarax ``MapOperator``) in :func:`create_pdebench_loader` (default: True)
-        shuffle: Whether ``get_batch_at`` shuffles via the supplied key (default: False)
+        shuffle: Whether ``record_indices_at`` shuffles by the supplied key (default: False)
         dtype: JAX dtype for arrays (default: jnp.float32)
         field_keys: Tuple of HDF5 dataset keys for multi-field datasets (optional).
             If provided, these keys are stacked along the last axis.
@@ -115,7 +116,7 @@ class PDEBenchSource(DataSourceModule):
     Reads the HDF5 file at ``__init__``, splits train/test, and performs the PDE-specific
     input/target time-window pairing (the one piece datarax has no operator for). After that it is
     a standard datarax :class:`~datarax.core.data_source.DataSourceModule`: it implements the
-    stateless :meth:`get_batch_at` / :meth:`element_spec` contract so it can be driven by a datarax
+    stateless :meth:`get_records` / :meth:`element_spec` contract so it can be driven by a datarax
     :class:`~datarax.pipeline.Pipeline`. Each element is a dict with:
         - "input": jax.Array of shape (input_steps, *spatial, channels)
         - "target": jax.Array of shape (output_steps, *spatial, channels)
@@ -354,27 +355,28 @@ class PDEBenchSource(DataSourceModule):
             "target": jax.ShapeDtypeStruct(self.targets.shape[1:], self.targets.dtype),
         }
 
-    def get_batch_at(
+    def record_indices_at(
         self,
         start: int | jax.Array,
         size: int,
         key: jax.Array | None = None,
-    ) -> dict[str, jax.Array]:
-        """Stateless indexed batch access for ``Pipeline`` iteration (mirrors ``MemorySource``).
+    ) -> jax.Array:
+        """The index of each record at positions ``start .. start + size`` (datarax contract).
 
-        Returns ``size`` records from logical position ``start`` (wrapping at the end). When the
-        source is configured with ``shuffle=True`` and a ``key`` is supplied, indices are drawn
-        from a per-call permutation of ``key`` (deterministic for a given ``(start, size, key)``).
-        Internal state is never mutated, so the call is JAX-traceable under ``nnx.scan``.
+        In stored order, or with ``shuffle=True`` and a ``key`` the keyed bijection datarax
+        shuffles by: O(1) per record and no stored permutation, so a batch costs O(size).
         """
-        n = len(self)
-        start_arr = jnp.asarray(start, dtype=jnp.int32)
-        indices = (start_arr + jnp.arange(size, dtype=jnp.int32)) % jnp.int32(n)
-        if self._shuffle and key is not None:
-            indices = jax.random.permutation(key, n)[indices]
+        return resolve_wrapped_indices(start, size, len(self), self._shuffle, key)
+
+    def get_records(self, indices: jax.Array) -> dict[str, jax.Array]:
+        """The ``{"input", "target"}`` records at ``indices`` (datarax contract).
+
+        Stateless and JAX-traceable, so ``Pipeline`` iterates it in a compiled session and
+        ``step()`` / ``scan`` drive it.
+        """
         return {
-            "input": jnp.take(self.inputs, indices, axis=0, mode="wrap"),
-            "target": jnp.take(self.targets, indices, axis=0, mode="wrap"),
+            "input": jnp.take(self.inputs, indices, axis=0),
+            "target": jnp.take(self.targets, indices, axis=0),
         }
 
     def __getitem__(self, index: int) -> dict[str, jax.Array]:  # type: ignore[override]
@@ -401,7 +403,7 @@ def create_pdebench_loader(
     """Build a datarax ``Pipeline`` over a :class:`PDEBenchSource` (canonical loader pattern).
 
     Mirrors the sibling loaders (``rmd17``/``qh9``): the source supplies the windowed
-    ``{"input", "target"}`` records via its ``get_batch_at`` contract and the pipeline drives
+    ``{"input", "target"}`` records via its ``get_records`` contract and the pipeline drives
     batched iteration. When ``config.normalize`` is set, the per-channel min-max
     :class:`~datarax.operators.map_operator.MapOperator` from
     :meth:`PDEBenchSource.normalize_operator` is attached as the single transform stage.
@@ -441,7 +443,7 @@ class VTKMeshConfig(StructuralConfig):
         node_features: Tuple of point data array names
         cell_features: Tuple of cell data array names
         include_connectivity: Whether to build edge lists (default: True)
-        shuffle: Whether ``get_batch_at`` shuffles via the supplied key (default: False)
+        shuffle: Whether ``record_indices_at`` shuffles by the supplied key (default: False)
     """
 
     directory: Path | None = None
@@ -487,7 +489,7 @@ class VTKMeshSource(DataSourceModule):
 
     Meshes are ragged (per-file node/edge counts differ), so at load each ragged axis is padded to
     the dataset maximum and a boolean mask is carried, giving uniform arrays that satisfy the
-    datarax static-shape contract (``get_batch_at`` / ``element_spec``) and JIT. Each element is a
+    datarax static-shape contract (``get_records`` / ``element_spec``) and JIT. Each element is a
     dict with (``max_nodes``/``max_edges``/``max_cells`` are the dataset maxima):
         - "node_positions": jax.Array of shape (max_nodes, 3)
         - "node_mask": jax.Array of shape (max_nodes,) — 1.0 for real nodes, 0.0 for padding
@@ -563,7 +565,7 @@ class VTKMeshSource(DataSourceModule):
 
         # Meshes are ragged (per-file node/edge counts differ). Pad each ragged axis to the
         # dataset maximum and carry boolean masks, so the records stack into uniform arrays that
-        # satisfy the datarax static-shape contract (get_batch_at / element_spec) and JIT.
+        # satisfy the datarax static-shape contract (get_records / element_spec) and JIT.
         self._fields = nnx.data(self._pad_and_stack(mesh_list))
         self._shuffle = config.shuffle
 
@@ -671,27 +673,27 @@ class VTKMeshSource(DataSourceModule):
             for key, value in self._fields.items()
         }
 
-    def get_batch_at(
+    def record_indices_at(
         self,
         start: int | jax.Array,
         size: int,
         key: jax.Array | None = None,
-    ) -> dict[str, jax.Array]:
-        """Stateless indexed batch of padded meshes (datarax contract, mirrors ``MemorySource``).
+    ) -> jax.Array:
+        """The index of each mesh at positions ``start .. start + size`` (datarax contract).
 
-        Returns ``size`` meshes from logical position ``start`` (wrapping). With ``shuffle=True``
-        and a ``key`` the indices come from a per-call permutation of ``key``. Stateless and
-        JAX-traceable, so it composes with ``Pipeline`` / ``nnx.scan``.
+        In stored order, or with ``shuffle=True`` and a ``key`` the keyed bijection datarax
+        shuffles by: O(1) per mesh and no stored permutation, so a batch costs O(size).
         """
-        n = len(self)
-        indices = (jnp.asarray(start, dtype=jnp.int32) + jnp.arange(size, dtype=jnp.int32)) % (
-            jnp.int32(n)
-        )
-        if self._shuffle and key is not None:
-            indices = jax.random.permutation(key, n)[indices]
+        return resolve_wrapped_indices(start, size, len(self), self._shuffle, key)
+
+    def get_records(self, indices: jax.Array) -> dict[str, jax.Array]:
+        """The padded meshes (fields and masks) at ``indices`` (datarax contract).
+
+        Stateless and JAX-traceable, so ``Pipeline`` iterates it in a compiled session and
+        ``step()`` / ``scan`` drive it.
+        """
         return {
-            key_name: jnp.take(value, indices, axis=0, mode="wrap")
-            for key_name, value in self._fields.items()
+            key_name: jnp.take(value, indices, axis=0) for key_name, value in self._fields.items()
         }
 
     def __getitem__(self, index: int) -> dict[str, jax.Array]:  # type: ignore[override]
@@ -717,7 +719,7 @@ def create_vtk_mesh_loader(
 ) -> Pipeline:
     """Build a datarax ``Pipeline`` over a :class:`VTKMeshSource` (canonical loader pattern).
 
-    The source supplies padded, masked mesh records via its ``get_batch_at`` contract and the
+    The source supplies padded, masked mesh records via its ``get_records`` contract and the
     pipeline drives batched iteration; no transform stages are attached by default. Iterate it
     (``for batch in loader``), or drive it with ``.step()`` or ``.scan()``.
 

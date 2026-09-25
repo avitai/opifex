@@ -458,8 +458,8 @@ class TestBenchmarkRunner:
             assert "MockFNO" in operators
 
             # Two tiny datarax pipelines stand in for the generated Darcy loaders: the
-            # executor's contract is a pipeline (single-pass, reset per epoch, every batch
-            # carrying ``valid_mask``), which a plain list of dicts does not honour.
+            # executor's contract is a pipeline (single-pass, reset per epoch), which a plain
+            # list of dicts does not honour.
             def tiny_pipeline() -> Pipeline:
                 source = MemorySource(
                     MemorySourceConfig(shuffle=False),

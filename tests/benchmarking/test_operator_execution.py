@@ -341,7 +341,7 @@ class TestBenchmarkRunnerRealExecution:
 
 
 class TestExecutorFinalBatchPolicy:
-    """Every configured epoch trains, and evaluation scores the records, not the padding."""
+    """Every configured epoch trains, and evaluation scores each validation record once."""
 
     @staticmethod
     def _model():
@@ -373,8 +373,8 @@ class TestExecutorFinalBatchPolicy:
 
         assert metrics["epochs_trained"] == 3
 
-    def test_evaluation_scores_the_records_only(self):
-        """The padded rows of the last validation batch are left out of the metrics."""
+    def test_evaluation_scores_each_record_once(self):
+        """The last validation batch holds only the records left, and all of them are scored."""
         import jax.numpy as jnp
         from calibrax.metrics.functional import mse
 
@@ -387,12 +387,11 @@ class TestExecutorFinalBatchPolicy:
 
         loaders = create_darcy_loader(n_samples=10, batch_size=4, resolution=16, val_fraction=0.2)
         model = self._model()
-        batch = next(iter(loaders.val))  # the one validation batch: two records, two padded rows
+        batch = next(iter(loaders.val))  # the one validation batch: the two records, no more
         loaders.val.reset()
-        rows = int(batch["valid_mask"].sum())
-        assert rows == 2
-        pred = model(_prepare_input(batch["input"]))[:rows]
-        target = _prepare_target(batch["output"], pred)[:rows]
+        assert batch["input"].shape[0] == 2
+        pred = model(_prepare_input(batch["input"]))
+        target = _prepare_target(batch["output"], pred)
 
         metrics = OperatorExecutor()._evaluate(model, loaders.val)
 

@@ -90,9 +90,8 @@ class OperatorExecutor:
             operator_class: Opifex operator class to instantiate
             operator_config: Configuration dict for operator
             train_loader: Training pipeline (from opifex.data.loaders); single-pass, reset per
-                epoch, every batch carrying ``valid_mask``.
-            test_loader: Test batches, each carrying ``valid_mask`` so the padded rows of the
-                last batch are left out of the metrics.
+                epoch.
+            test_loader: Test batches; every row is a record, and the last batch may be short.
             benchmark_name: Name of benchmark for results
 
         Returns:
@@ -227,7 +226,7 @@ class OperatorExecutor:
 
         Args:
             model: Trained neural operator
-            test_loader: Test batches, each carrying ``valid_mask``.
+            test_loader: Test batches; every row is a record.
 
         Returns:
             Dictionary with evaluation metrics (mse, mae, relative_error)
@@ -243,10 +242,8 @@ class OperatorExecutor:
             pred = model(x_input)  # type: ignore[operator]  # nnx.Module is callable
             y_target = _prepare_target(y, pred)
 
-            # The last batch of an epoch is padded to the batch size; keep the records.
-            rows = batch["valid_mask"]
-            all_preds.append(pred[rows])
-            all_targets.append(y_target[rows])
+            all_preds.append(pred)
+            all_targets.append(y_target)
 
         if not all_preds:
             return {"mse": 0.0, "mae": 0.0, "relative_error": 0.0}

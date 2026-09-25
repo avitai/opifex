@@ -20,6 +20,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires `datarax>=0.1.16`; the relock moves datarax from 0.1.15 and nothing else.
+  - No batch is padded any more. A loader's validation split serves every record once, and
+    its final batch holds the records left instead of wrapped-around repeats. The benchmark
+    executor therefore scores every row it is given, and `valid_mask` is gone from batches
+    and docs.
+  - A training split smaller than `batch_size` is refused when the loaders are built. It
+    used to yield no batches.
+  - `PDEBenchSource` and `VTKMeshSource` implement `get_records(indices)`. Their shuffle is
+    datarax's keyed bijection (`resolve_wrapped_indices`), O(1) per record. It replaces a
+    `jax.random.permutation` of the whole dataset drawn on every batch, and per-record
+    randomness is now keyed on the record rather than its position.
+- Three examples that drained loader pipelines into arrays now generate the arrays with
+  `generate_darcy`, and so train and test on the samples they ask for. They had been
+  training and testing on repeated and missing samples:
+  - `getting-started/first_neural_operator` trained on 1024 rows for 1000 samples (the
+    validation split's padded final batch was appended), and its recorded test sets held 200
+    rows for 100 samples.
+  - `uncertainty/bayesian_fno` asked for its whole generation in one batch. It trained on
+    the 200 validation samples wrapped around to 1000 rows, with 20 and 20 distinct samples
+    in its 100-row calibration and test splits.
+  - `neural-operators/uno_darcy` tested on 128 rows for 100 samples. Its "independent"
+    super-resolution set, drawn from `seed + 1`, repeated training samples 1-100; it now
+    starts after the last training and test seed.
+
+  datarax 0.1.16 refuses the last two setups, and all three pages' recorded outputs come
+  from the old data.
 - Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
   packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
   pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.

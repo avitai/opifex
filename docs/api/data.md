@@ -301,16 +301,17 @@ data and `normalize` / `denormalize` apply and invert the z-score scaling.
 
 ### The final batch of an epoch
 
-Every batch a pipeline serves has `batch_size` rows and a `valid_mask` leaf (`(batch_size,)`,
-bool). The training split drops the epoch's ragged final batch (`drop_last=True`, PyTorch's
-rule), so it serves `n_train // batch_size` batches of real records and `len(loaders.train)`
-is that count. The validation split keeps every record: its final batch is padded to
-`batch_size` and `valid_mask` marks the padded rows, so a metric selects the records with it.
+Every row of every batch is a record; no batch is padded. The training split drops the
+epoch's ragged final batch (`drop_last=True`, PyTorch's rule), so it serves
+`n_train // batch_size` batches of `batch_size` records, and `len(loaders.train)` is that count.
+The validation split serves every record once: its final batch holds the records left, which
+may be fewer than `batch_size`. A training split smaller than `batch_size` holds no full batch,
+and datarax refuses it rather than serve nothing.
 
 ### Materializing a Pipeline into Arrays
 
 A `Pipeline` is single-pass (`reset()` starts the next epoch). To collect a split into arrays,
-drain it once, keep the rows `valid_mask` marks, and stack:
+drain it once and stack:
 
 ```python
 import jax.numpy as jnp
@@ -320,9 +321,8 @@ loaders = create_darcy_loader(n_samples=1000, resolution=64, batch_size=32, seed
 
 inputs, outputs = [], []
 for batch in loaders.val:          # drain exactly once
-    rows = batch["valid_mask"]
-    inputs.append(batch["input"][rows])
-    outputs.append(batch["output"][rows])
+    inputs.append(batch["input"])
+    outputs.append(batch["output"])
 
 val_inputs = jnp.concatenate(inputs)    # (n_val, C, *spatial)
 val_outputs = jnp.concatenate(outputs)

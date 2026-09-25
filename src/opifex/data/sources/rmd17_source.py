@@ -415,9 +415,9 @@ def _build_pipeline(
 ) -> Pipeline:
     """Wrap a subset of the parsed arrays in a datarax MemorySource + Pipeline.
 
-    The datarax ``Pipeline`` drives iteration via the source's
-    ``get_batch_at(position, batch_size, key)`` contract; shuffling is a
-    property of the ``MemorySource`` (per-epoch permutation seeded by the
+    The datarax ``Pipeline`` names each batch's records with the source's
+    ``record_indices_at`` and gathers them with ``get_records``; shuffling is a
+    property of the ``MemorySource`` (a keyed bijection per epoch, drawn from the
     pipeline's ``nnx.Rngs``). No transform stages are attached — the records
     are emitted as ``{"positions", "energy", "forces"}`` batches.
 

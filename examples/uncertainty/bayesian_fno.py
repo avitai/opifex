@@ -76,7 +76,7 @@ import optax
 from flax import nnx
 from substrax.artifacts import resolve_output_dir
 
-from opifex.data.loaders import create_darcy_loader
+from opifex.data.sources import generate_darcy
 from opifex.neural.operators.fno._positional import append_grid_coordinates
 from opifex.neural.operators.fno.probabilistic import (
     probabilistic_fno_negative_log_likelihood,
@@ -138,35 +138,17 @@ _REPO_ROOT = _find_repo_root()
 """
 ## Load Darcy Flow Data
 
-`create_darcy_loader` generates the smooth Darcy permeability-to-pressure
-dataset. We collect three disjoint splits: train (fits the models),
-calibration (fits the variance scale), and test (reports the metrics).
+`generate_darcy` generates the smooth Darcy permeability-to-pressure
+dataset. We generate three disjoint splits, each from its own seed: train (fits
+the models), calibration (fits the variance scale), and test (reports the metrics).
 """
 
 
 # %%
 def _collect_split(n_samples: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
-    """Materialize one Darcy split as channels-first ``(batch, 1, H, W)`` arrays.
-
-    The datarax loader splits a generation into train/val pipelines; we want a
-    single contiguous split, so both pipelines are drained and concatenated.
-    Batches are already channels-first ``(batch, 1, H, W)``.
-    """
-    loaders = create_darcy_loader(
-        n_samples=n_samples,
-        batch_size=n_samples,
-        resolution=RESOLUTION,
-        seed=seed,
-    )
-    inputs, outputs = [], []
-    for pipeline in (loaders.train, loaders.val):
-        for batch in pipeline:
-            inputs.append(np.asarray(batch["input"]))
-            outputs.append(np.asarray(batch["output"]))
-    return (
-        np.concatenate(inputs, axis=0)[:n_samples],
-        np.concatenate(outputs, axis=0)[:n_samples],
-    )
+    """Generate ``n_samples`` distinct Darcy samples as channels-first ``(n, 1, H, W)`` arrays."""
+    data = generate_darcy(n_samples=n_samples, resolution=RESOLUTION, seed=seed)
+    return data["input"], data["output"]
 
 
 # %% [markdown]
