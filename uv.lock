@@ -352,7 +352,7 @@ wheels = [
 
 [[package]]
 name = "avitai-artifex"
-version = "0.1.14"
+version = "0.1.15"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blackjax" },
@@ -379,9 +379,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/cd/1023a93cfa94edefa15d48441dcf2ec66550154cdb6e3e7486bc7b2d007b/avitai_artifex-0.1.14.tar.gz", hash = "sha256:54d8bbc1d06f2fea855de0a3d3a70ef42cc316e3674337c7a9602c3bd72ca3af", size = 638420, upload-time = "2026-09-22T20:55:46.319Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d1/17/cb14fa0a8ab3c20a39755c1a0667cebeecd5e0dfde9007b7a4e684869c24/avitai_artifex-0.1.15.tar.gz", hash = "sha256:09032e34f32dacac84458f11dfb369aea0cc8cacbe5002ae0be788e6b55ce555", size = 638952, upload-time = "2026-09-25T17:21:32.641Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a5/8f/775c3848b52ee4d8cd7503dfbb692fe41fd05292849310d9968c5094de19/avitai_artifex-0.1.14-py3-none-any.whl", hash = "sha256:d38cceb8a8bb422103ab4e2d33c87f66a2262a4183aaea0af1a1783cdced3b30", size = 853921, upload-time = "2026-09-22T20:55:43.465Z" },
+    { url = "https://files.pythonhosted.org/packages/22/9b/d9409aa178a526508ea5f483731c3bae62aa9a50af58f2a60b15378f533e/avitai_artifex-0.1.15-py3-none-any.whl", hash = "sha256:c6ee8dd13a2ab04b16b8678905ca7c6ec12443a3b2e02ec59e85af56cd534710", size = 854418, upload-time = "2026-09-25T17:21:29.886Z" },
 ]
 
 [[package]]
@@ -554,7 +554,7 @@ wheels = [
 
 [[package]]
 name = "calibrax"
-version = "0.1.12"
+version = "0.1.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -568,11 +568,10 @@ dependencies = [
     { name = "pydantic" },
     { name = "scipy" },
     { name = "substrax" },
-    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c1/86/1d91457e16a81a18560898c7459027050739eef52d713fe0141091351060/calibrax-0.1.12.tar.gz", hash = "sha256:72173fce0d5b0b3e4a0700caee3bb4f44cb47762d6c24902d10217d555352479", size = 184516, upload-time = "2026-09-22T05:01:06.408Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/b9/c98bf82a68e7eed52b4c9a33cc4a17e6a3d5c136cafd4167b7ef458b16eb/calibrax-0.1.14.tar.gz", hash = "sha256:5445a00569cbe86083c582f2219ddac37ac5f55f711e2b9c4ed4ce4518d84757", size = 185115, upload-time = "2026-09-25T03:32:01.586Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/92/5d/66966f8271b32906f03dd07906d90e01e0f7f0246374caa06a420c8b1380/calibrax-0.1.12-py3-none-any.whl", hash = "sha256:5fe03238b172d300c2e7169291553a97337c1c7acb50b8ee701340024a9d2c0f", size = 230740, upload-time = "2026-09-22T05:01:03.657Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/67/fcd980252ccd474ba2f95925ee91c3aab7e44ec6f66e2041cc7dc3b3ca60/calibrax-0.1.14-py3-none-any.whl", hash = "sha256:7d5d4027f1302ff28ef24924f6cd21cbc5a38dd4cb7ba14a70c1a6d6149fe35a", size = 231430, upload-time = "2026-09-25T03:31:59.34Z" },
 ]
 
 [package.optional-dependencies]
@@ -4777,14 +4776,14 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'platform'", specifier = ">=1.13.0" },
     { name = "ase", marker = "extra == 'neural-dft'", specifier = ">=3.22.0" },
     { name = "asyncpg", marker = "extra == 'platform'", specifier = ">=0.29.0" },
-    { name = "avitai-artifex", specifier = ">=0.1.14" },
+    { name = "avitai-artifex", specifier = ">=0.1.15" },
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.5" },
     { name = "basis-set-exchange", marker = "extra == 'quantum-chemistry'", specifier = ">=0.9.0" },
     { name = "beartype", specifier = ">=0.15.0" },
     { name = "beartype", marker = "extra == 'test'", specifier = ">=0.14.1" },
     { name = "blackjax", specifier = ">=1.2.5" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.3" },
-    { name = "calibrax", extras = ["publication"], specifier = ">=0.1.12" },
+    { name = "calibrax", extras = ["publication"], specifier = ">=0.1.14" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
     { name = "datarax", specifier = ">=0.1.16" },
