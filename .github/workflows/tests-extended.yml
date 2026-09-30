@@ -32,6 +32,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
           cache-suffix: "test-macos-14-${{ matrix.python-version }}"
 
@@ -78,6 +79,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
           cache-suffix: "extended-${{ matrix.python-version }}"
 
