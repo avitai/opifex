@@ -22,6 +22,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v10.2.0
       with:
+        prune-cache: true
         enable-cache: true
 
     - name: Set up Python

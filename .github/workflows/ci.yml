@@ -24,6 +24,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
           cache-suffix: "lint"
 
@@ -77,6 +78,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
           cache-suffix: "test-${{ matrix.os }}-${{ matrix.python-version }}"
 
@@ -144,6 +146,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
           cache-suffix: "coverage"
 
@@ -187,6 +190,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
           cache-suffix: "build"
 
