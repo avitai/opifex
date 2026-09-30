@@ -3,14 +3,18 @@
 Every job that collects the suite writes the generated fixture first; every workflow a push
 triggers cancels the run it supersedes; the pull-request gate runs on ubuntu alone, and the
 macOS unit lane lives in the nightly workflow under a runner cap, so one opifex push never
-holds the organisation's macOS runners against the other repositories.
+holds the organisation's macOS runners against the other repositories. A merge whose pull request
+already passed over the same tree does not repeat the test and quality jobs: they consult
+substrax's already-tested action, pinned by commit, which compares only on a push.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 
@@ -21,6 +25,13 @@ PULL_REQUEST_GATE = "ci.yml"
 NIGHTLY = "tests-extended.yml"
 MACOS_RUNNER = "macos-14"
 MACOS_RUNNER_CAP = 3
+GATE_JOB = "already_tested"
+GATE_CONDITION = f"needs.{GATE_JOB}.outputs.skip != 'true'"
+GATE_ACTION = re.compile(r"^avitai/substrax/\.github/actions/already-tested@[0-9a-f]{40}$")
+GATED_WORKFLOWS = ("ci.yml", "quality-checks.yml")
+# A report job runs after its producer whatever that producer's result; it still stands down
+# with the rest when the merge repeats the pull request.
+GATED_CONDITIONS = (GATE_CONDITION, f"always() && {GATE_CONDITION}")
 
 
 def _documents() -> dict[str, dict[str, Any]]:
@@ -125,3 +136,60 @@ def test_every_uv_cache_is_pruned_before_it_is_saved() -> None:
 
     assert checked, "no setup-uv step found; the contract is reading the wrong files"
     assert unpruned == [], f"setup-uv steps saving an unpruned cache: {unpruned}"
+
+
+def _workflow_jobs(name: str) -> dict[str, dict[str, Any]]:
+    return yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))["jobs"]
+
+
+def _compare_step(name: str) -> dict[str, Any]:
+    steps = _workflow_jobs(name)[GATE_JOB]["steps"]
+    return next(step for step in steps if step.get("id") == "compare")
+
+
+@pytest.mark.parametrize("name", GATED_WORKFLOWS)
+def test_the_gate_compares_only_on_a_push(name: str) -> None:
+    """A manual run re-measures on purpose; only a merge repeats a pull request."""
+    gate = _workflow_jobs(name)[GATE_JOB]
+    steps = [step for step in gate["steps"] if "already-tested" in str(step.get("uses", ""))]
+
+    assert [step.get("if") for step in steps] == ["github.event_name == 'push'"]
+    assert steps[0]["id"] in gate["outputs"]["skip"]
+
+
+@pytest.mark.parametrize("name", GATED_WORKFLOWS)
+def test_the_gate_is_the_shared_action_pinned_to_a_commit(name: str) -> None:
+    """The compare is substrax's already-tested action, pinned by a full commit SHA.
+
+    The action finds the pull request a push merged (squash or rebase) and skips only when that
+    pull request tested this tree and every one of its checks succeeded; its rules are tested in
+    substrax. A full commit SHA pins exactly the code that runs.
+    """
+    compare = _compare_step(name)
+
+    assert GATE_ACTION.match(compare.get("uses", "")), compare.get("uses")
+    assert "run" not in compare, "the gate runs the shared action, not an inline script"
+
+
+@pytest.mark.parametrize("name", GATED_WORKFLOWS)
+def test_every_job_that_repeats_the_pull_request_consults_the_gate(name: str) -> None:
+    jobs = _workflow_jobs(name)
+    ungated = sorted(
+        job_id
+        for job_id, job in jobs.items()
+        if job_id != GATE_JOB
+        and (job.get("if") not in GATED_CONDITIONS or GATE_JOB not in job.get("needs", []))
+    )
+
+    assert ungated == [], f"{name}: these repeat the pull request without the gate: {ungated}"
+
+
+@pytest.mark.parametrize("name", GATED_WORKFLOWS)
+def test_an_unanswered_gate_leaves_the_work_running(name: str) -> None:
+    """An empty output (no compare, or a lookup that failed) reads as "test it"."""
+    for job_id, job in _workflow_jobs(name).items():
+        if job_id == GATE_JOB:
+            continue
+        text = yaml.safe_dump(job)
+        assert "outputs.skip == " not in text, f"{job_id} tests the gate for equality"
+        assert "outputs.skip != 'false'" not in text, f"{job_id} runs only on an explicit false"

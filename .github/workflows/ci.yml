@@ -14,9 +14,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  already_tested:
+    name: Tree already tested
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.compare.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A merge repeats the pull request; a schedule or a manual run re-measures on purpose. When
+      # this step does not run the output is empty, which every consumer reads as "test it". The
+      # compare lives in substrax: skip only when this tree is the pull request's and every check
+      # of it succeeded.
+      - name: Compare this tree with the pull request that produced it
+        id: compare
+        if: github.event_name == 'push'
+        uses: avitai/substrax/.github/actions/already-tested@ec43d80bbae0040375f746cd1bb07dddb0a0b169
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: [already_tested]
+    if: needs.already_tested.outputs.skip != 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +67,8 @@ jobs:
 
   test:
     name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
-    needs: lint
+    needs: [lint, already_tested]
+    if: needs.already_tested.outputs.skip != 'true'
     runs-on: ${{ matrix.os }}
     # Fast PR gate: slow/integration suites and the macOS lane run in
     # tests-extended.yml. The ~7.5k JAX unit tests are parallelised two ways:
@@ -133,7 +153,8 @@ jobs:
 
   coverage:
     name: Coverage Report
-    needs: test
+    needs: [test, already_tested]
+    if: needs.already_tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -181,7 +202,8 @@ jobs:
 
   build:
     name: Build Package
-    needs: lint
+    needs: [lint, already_tested]
+    if: needs.already_tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
 
     steps:
