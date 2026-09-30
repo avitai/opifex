@@ -11,8 +11,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  already_tested:
+    name: Tree already tested
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.compare.outputs.skip }}
+    steps:
+    - uses: actions/checkout@v4
+
+    # A merge repeats the pull request; a schedule or a manual run re-measures on purpose. When
+    # this step does not run the output is empty, which every consumer reads as "test it". The
+    # compare lives in substrax: skip only when this tree is the pull request's and every check
+    # of it succeeded.
+    - name: Compare this tree with the pull request that produced it
+      id: compare
+      if: github.event_name == 'push'
+      uses: avitai/substrax/.github/actions/already-tested@ec43d80bbae0040375f746cd1bb07dddb0a0b169
+
   quality-checks:
     runs-on: ubuntu-latest
+    needs: [already_tested]
+    if: needs.already_tested.outputs.skip != 'true'
     strategy:
       matrix:
         python-version: ["3.12", "3.13"]
@@ -65,8 +84,8 @@ jobs:
 
   type-safety-report:
     runs-on: ubuntu-latest
-    needs: quality-checks
-    if: always()
+    needs: [quality-checks, already_tested]
+    if: always() && needs.already_tested.outputs.skip != 'true'
 
     steps:
     - uses: actions/checkout@v4
