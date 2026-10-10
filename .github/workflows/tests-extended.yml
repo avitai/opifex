@@ -60,6 +60,7 @@ jobs:
         run: |
           uv run pytest tests/ -n auto \
             --splits 6 --group ${{ matrix.group }} --splitting-algorithm least_duration \
+            --randomly-seed=${{ github.run_id }} \
             -m "not slow and not integration and not e2e and not performance and not benchmark and not distributed and not gpu_required" \
             --timeout=1800 \
             --cov-fail-under=0
