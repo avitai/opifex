@@ -193,3 +193,44 @@ def test_an_unanswered_gate_leaves_the_work_running(name: str) -> None:
         text = yaml.safe_dump(job)
         assert "outputs.skip == " not in text, f"{job_id} tests the gate for equality"
         assert "outputs.skip != 'false'" not in text, f"{job_id} runs only on an explicit false"
+
+
+SPLITS = re.compile(r"--splits[= ](\d+)")
+SHARED_SEED = "--randomly-seed=${{ github.run_id }}"
+
+
+def _sharded_runs() -> list[tuple[str, dict[str, Any], str, int]]:
+    """Every pytest run that takes one group of a pytest-split collection: job, run, shards."""
+    return [
+        (name, job, run, int(splits.group(1)))
+        for name, job in _jobs().items()
+        for run in _pytest_runs(job)
+        if (splits := SPLITS.search(run))
+    ]
+
+
+def test_the_workflows_shard_the_suite() -> None:
+    """The control: the sharded runs below are found, in both workflows that shard."""
+    assert sorted({name.split(":")[0] for name, _, _, _ in _sharded_runs()}) == [
+        PULL_REQUEST_GATE,
+        NIGHTLY,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "job", "run", "splits"),
+    _sharded_runs(),
+    ids=[name for name, _, _, _ in _sharded_runs()],
+)
+def test_every_shard_of_a_run_takes_its_group_of_one_collection_in_one_order(
+    name: str, job: dict[str, Any], run: str, splits: int
+) -> None:
+    """Each test runs in exactly one shard: one group per shard, one order for every shard.
+
+    pytest-split sorts the collection by test name, and tests with the same name keep the order
+    pytest-randomly gave them, so shards that each pick their own seed can each run one of them
+    and leave another unrun. Every shard of a run takes the run's id as its seed.
+    """
+    assert job["strategy"]["matrix"]["group"] == list(range(1, splits + 1)), name
+    assert "--group ${{ matrix.group }}" in run, name
+    assert SHARED_SEED in run, name
