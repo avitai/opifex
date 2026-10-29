@@ -17,6 +17,13 @@ jobs:
   already_tested:
     name: Tree already tested
     runs-on: ubuntu-latest
+    # The action reads the merged pull request and its checks; a private repository's token
+    # reads them only with these, and naming them keeps a public one working if it turns private.
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      statuses: read
     outputs:
       skip: ${{ steps.compare.outputs.skip }}
     steps:
@@ -29,7 +36,7 @@ jobs:
       - name: Compare this tree with the pull request that produced it
         id: compare
         if: github.event_name == 'push'
-        uses: avitai/substrax/.github/actions/already-tested@ec43d80bbae0040375f746cd1bb07dddb0a0b169
+        uses: avitai/substrax/.github/actions/already-tested@a61235ad7f851081efca508285b660a9d7f921ea
 
   lint:
     name: Lint
