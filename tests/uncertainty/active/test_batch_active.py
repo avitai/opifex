@@ -271,6 +271,23 @@ class TestGeneralMHypervolume:
         assert float(general) == pytest.approx(float(exact), abs=1e-6)
         assert float(general) == pytest.approx(6.25, abs=1e-6)
 
+    def test_a_dominated_point_adds_no_volume_in_2d(self) -> None:
+        """A redundant front point must not change the 2-D hypervolume.
+
+        The public entry point documents that the front "need not be screened of
+        dominated points" and that such points "contribute no extra volume", so
+        passing one must leave the result at the non-dominated value.
+        """
+        front = jnp.array([[1.0, 3.0], [2.0, 2.0], [3.0, 1.0]])
+        with_redundant = jnp.array([[1.0, 3.0], [2.0, 2.0], [3.0, 1.0], [3.0, 3.0]])
+        reference = jnp.array([4.0, 4.0])
+        assert float(_pareto_volume_2d(front, reference)) == pytest.approx(6.0, abs=1e-6)
+        assert float(_pareto_volume_2d(with_redundant, reference)) == pytest.approx(6.0, abs=1e-6)
+        # The general path is the independent oracle: it already handles this input.
+        assert float(_dominated_hypervolume_grid(with_redundant, reference)) == pytest.approx(
+            6.0, abs=1e-6
+        )
+
     def test_public_dominated_hypervolume_routes_2d_to_staircase(self) -> None:
         """The public entry point matches the exact 2-D result."""
         front = jnp.array([[1.0, 3.0], [2.0, 2.0], [3.0, 1.0]])
