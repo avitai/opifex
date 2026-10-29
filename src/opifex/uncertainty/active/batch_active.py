@@ -256,17 +256,22 @@ def _pareto_volume_2d(points: jax.Array, reference_point: jax.Array) -> jax.Arra
     """Exact 2-D Pareto dominated hypervolume (minimisation).
 
     Sort by objective 0 ascending and accumulate the staircase boxes
-    bounded by the reference point. For a non-dominated front this is
-    the exact dominated hypervolume; for an arbitrary front it is an
-    upper bound.
+    bounded by the reference point, taking each box's height from the
+    running best objective 1. Exact for any front, screened of dominated
+    points or not.
     """
     sorted_pts = points[jnp.argsort(points[:, 0])]
-    # Boxes between consecutive sorted points along objective 0; the
-    # height of the box that starts at ``sorted_pts[i]`` equals
-    # ``reference[1] - sorted_pts[i, 1]``.
+    # Boxes between consecutive sorted points along objective 0. The height of the
+    # box starting at ``sorted_pts[i]`` is set by the best objective-1 value swept
+    # at or before ``i``, not by that point's own value: a dominated point carries
+    # a worse objective 1 than a point already swept, and taking its own value
+    # would lower the staircase and under-count. On a screened front objective 1
+    # already decreases with objective 0, so the running minimum is the identity
+    # there and this agrees with the previous formula.
     xs = jnp.concatenate([sorted_pts[:, 0], reference_point[0:1]])
     widths = jnp.diff(xs)
-    heights = jnp.maximum(reference_point[1] - sorted_pts[:, 1], 0.0)
+    best_so_far = jax.lax.cummin(sorted_pts[:, 1])
+    heights = jnp.maximum(reference_point[1] - best_so_far, 0.0)
     return jnp.sum(jnp.maximum(widths, 0.0) * heights)
 
 
