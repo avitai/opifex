@@ -80,6 +80,7 @@ from opifex.uncertainty.conformal.scores import (
     absolute_residual_score,
     conformal_quantile,
     cqr_score,
+    minimum_calibration_size,
 )
 from opifex.uncertainty.conformal.time_series import (
     aci_metadata,
@@ -127,6 +128,7 @@ __all__ = [
     "jackknife_plus_intervals",
     "ks_two_sample_pvalue",
     "lac_score",
+    "minimum_calibration_size",
     "raps_score",
     "rcps_threshold_kernel",
     "select_threshold_rcps",

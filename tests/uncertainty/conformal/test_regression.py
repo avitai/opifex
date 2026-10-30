@@ -22,6 +22,7 @@ Tests pin:
 from __future__ import annotations
 
 import dataclasses as dc
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -250,3 +251,123 @@ def test_public_conformal_surface_includes_regression_components() -> None:
     }
     missing = expected - set(dir(conformal))
     assert not missing, f"missing public conformal symbols: {sorted(missing)}"
+
+
+# ---------------------------------------------------------------------------
+# Unattainable finite-sample rank
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("alpha", [0.5, 0.2, 0.1, 0.05, 0.01])
+def test_minimum_calibration_size_is_the_smallest_attainable_n(alpha: float) -> None:
+    """``ceil((n + 1)(1 - alpha)) <= n`` first holds at ``minimum_calibration_size``."""
+    conformal = _import_conformal()
+    required = conformal.minimum_calibration_size(alpha=alpha)
+    assert np.ceil((required + 1) * (1.0 - alpha)) <= required
+    assert np.ceil(required * (1.0 - alpha)) > required - 1
+
+
+@pytest.mark.parametrize("alpha", [0.2, 0.1, 0.05])
+def test_conformal_quantile_is_infinite_below_the_minimum_size(alpha: float) -> None:
+    """No threshold drawn from too few scores attains ``1 - alpha``, so it is ``+inf``.
+
+    Returning ``max(scores)`` here would be finite, indistinguishable from a valid
+    threshold, and short of the requested level by construction.
+    """
+    conformal = _import_conformal()
+    required = conformal.minimum_calibration_size(alpha=alpha)
+    scores = jnp.arange(1.0, float(required) + 1.0)
+
+    for n in range(1, required):
+        out = conformal.conformal_quantile(scores=scores[:n], alpha=alpha)
+        assert bool(jnp.isinf(out)) and float(out) > 0.0, (alpha, n)
+
+    at_minimum = conformal.conformal_quantile(scores=scores[:required], alpha=alpha)
+    assert bool(jnp.isfinite(at_minimum)), (alpha, required)
+    assert float(at_minimum) == pytest.approx(float(scores[:required].max()), abs=1e-6)
+
+
+def test_conformal_quantile_coverage_holds_at_every_calibration_size() -> None:
+    """Marginal coverage must reach ``1 - alpha`` for every ``n``, small ones included.
+
+    The clamped rank gave exactly ``n / (n + 1)`` here — 0.667 at ``n=2`` against a
+    requested 0.9 — which this asserts is gone. Coverage is marginal over the
+    calibration draw, so each trial draws a fresh calibration set and a fresh test
+    point; a single fixed calibration set would measure noise.
+    """
+    conformal = _import_conformal()
+    alpha = 0.1
+    trials = 20_000
+    key = jax.random.key(11)
+    quantile_of = jax.jit(jax.vmap(lambda s: conformal.conformal_quantile(scores=s, alpha=alpha)))
+
+    for n in (2, 4, 8, 9, 19):
+        key, k_cal, k_test = jax.random.split(key, 3)
+        cal = jnp.abs(jax.random.normal(k_cal, (trials, n)))
+        test = jnp.abs(jax.random.normal(k_test, (trials,)))
+        covered = float(jnp.mean(test <= quantile_of(cal)))
+        standard_error = (max(covered * (1.0 - covered), 1e-12) / trials) ** 0.5
+        assert covered + 4.0 * standard_error >= 1.0 - alpha, (n, covered)
+
+
+def test_conformal_quantile_is_jit_and_vmap_compatible_in_both_branches() -> None:
+    """``n`` and ``alpha`` are static, so the ``+inf`` branch traces like the other."""
+    conformal = _import_conformal()
+    for n, expect_finite in ((4, False), (19, True)):
+        scores = jnp.arange(1.0, float(n) + 1.0)
+        jitted = jax.jit(lambda s: conformal.conformal_quantile(scores=s, alpha=0.1))
+        assert bool(jnp.isfinite(jitted(scores))) is expect_finite, n
+        batched = jax.vmap(lambda s: conformal.conformal_quantile(scores=s, alpha=0.1))
+        out = batched(jnp.stack([scores, scores + 1.0]))
+        assert out.shape == (2,)
+        assert bool(jnp.all(jnp.isfinite(out))) is expect_finite, n
+
+
+def test_grouped_split_conformal_warns_and_names_underfilled_groups() -> None:
+    """A group below the minimum size is named, recorded, and given an ``+inf`` width.
+
+    The calibration set here holds 203 points, which looks ample until ``fit``
+    partitions it: the three-point group cannot attain ``alpha=0.1`` on its own.
+    """
+    regression = _import_regression_module()
+    conformal = _import_conformal()
+    alpha = 0.1
+    n_big, n_small = 200, 3
+    rng = np.random.default_rng(7)
+    targets = jnp.asarray(rng.standard_normal(n_big + n_small))
+    groups = jnp.asarray(np.concatenate([np.zeros(n_big), np.ones(n_small)]).astype(np.int32))
+    predictions = jnp.zeros_like(targets)
+
+    cp = regression.GroupedSplitConformalRegressor(alpha=alpha)
+    with pytest.warns(UserWarning, match=r"1 of 2 groups hold fewer: 1 \(n=3\)"):
+        state = cp.fit(predictions=predictions, targets=targets, groups=groups)
+
+    metadata = dict(state.metadata)
+    assert metadata["min_group_size"] == conformal.minimum_calibration_size(alpha=alpha)
+    assert metadata["underfilled_groups"] == ((1, 3),)
+    assert bool(jnp.isfinite(state.quantiles[0]))
+    assert bool(jnp.isinf(state.quantiles[1]))
+
+    interval = cp.with_state(state).predict(
+        predictions=jnp.zeros(2), groups=jnp.asarray([0, 1], dtype=jnp.int32)
+    )
+    widths = interval.upper - interval.lower
+    assert bool(jnp.isfinite(widths[0]))
+    assert bool(jnp.isinf(widths[1]))
+
+
+def test_grouped_split_conformal_is_silent_when_every_group_is_large_enough() -> None:
+    """The positive control: no warning and no ``+inf`` when the partition is adequate."""
+    regression = _import_regression_module()
+    rng = np.random.default_rng(8)
+    n_per_group = 64
+    targets = jnp.asarray(rng.standard_normal(2 * n_per_group))
+    groups = jnp.asarray(
+        np.concatenate([np.zeros(n_per_group), np.ones(n_per_group)]).astype(np.int32)
+    )
+    cp = regression.GroupedSplitConformalRegressor(alpha=0.1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        state = cp.fit(predictions=jnp.zeros_like(targets), targets=targets, groups=groups)
+    assert dict(state.metadata)["underfilled_groups"] == ()
+    assert bool(jnp.all(jnp.isfinite(state.quantiles)))
