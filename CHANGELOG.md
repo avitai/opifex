@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `conformal_quantile` no longer reports a threshold for a calibration set too small to
+  carry one. The finite-sample rank `ceil((n + 1)(1 - alpha)) / n` is a rank of `n` scores
+  only while `ceil((n + 1)(1 - alpha)) <= n`; below that no threshold drawn from them
+  attains `1 - alpha` and the conformal quantile is `+inf`. The rank was instead clamped to
+  1.0, which returns the largest score: finite, indistinguishable from a valid threshold,
+  and short of the requested level by construction. Measured marginal coverage was exactly
+  `n / (n + 1)` -- 0.673 at `n = 2`, 0.796 at `n = 4` and 0.886 at `n = 8` against a
+  requested 0.900, over 20,000 draws each. It is now `+inf`, so the interval is unbounded
+  and the shortfall is visible. MAPIE returns `signed * np.inf` on the same condition and
+  crepes emits maximum-size intervals; `n` and `alpha` are static, so the branch resolves at
+  trace time and jit and vmap are unaffected.
+- `GroupedSplitConformalRegressor.fit` warns when a group cannot carry the requested level.
+  The guarantee is per group, so each group needs its own minimum however large the whole
+  calibration set is, and partitioning is exactly what makes small groups ordinary: a
+  203-point calibration set split 200/3 produced 0.747 coverage for the three-point group
+  while `predict` reported `coverage=0.9` for both. The undersized groups are now named in a
+  `UserWarning` and recorded in `metadata['underfilled_groups']`, as crepes does for its
+  Mondrian bins.
+
+### Added
+
+- `minimum_calibration_size(alpha=...)` -- the smallest calibration size whose
+  `1 - alpha` conformal quantile exists, `ceil(1 / alpha) - 1`. Exported from
+  `opifex.uncertainty.conformal` so callers can check before fitting.
+
 ## [0.2.10] - 2026-09-25
 
 ### Fixed

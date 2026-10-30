@@ -11,7 +11,10 @@ fitted state:
   ``predict`` produces ``[lo - q, hi + q]``.
 * :class:`GroupedSplitConformalRegressor` — per-group split conformal.
   ``fit`` returns :class:`GroupedSplitConformalState` with one quantile per
-  group ID.
+  group ID. Each group must hold
+  :func:`~opifex.uncertainty.conformal.scores.minimum_calibration_size`
+  scores on its own; ``fit`` warns and records the groups that do not, whose
+  quantile is ``+inf``.
 
 All ``predict`` methods return :class:`opifex.uncertainty.types.PredictionInterval`
 so downstream consumers (`PredictiveDistribution.interval`, coverage
@@ -21,6 +24,7 @@ metrics, plotting) operate on a single typed surface.
 from __future__ import annotations
 
 import dataclasses as dc
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -30,6 +34,7 @@ from opifex.uncertainty.conformal.scores import (
     absolute_residual_score,
     conformal_quantile,
     cqr_score,
+    minimum_calibration_size,
 )
 from opifex.uncertainty.types import (
     MetadataItems,
@@ -191,22 +196,49 @@ class GroupedSplitConformalRegressor:
         targets: jax.Array,
         groups: jax.Array,
     ) -> GroupedSplitConformalState:
-        """Fit a per-group conformal threshold from calibration data."""
+        """Fit a per-group conformal threshold from calibration data.
+
+        The ``1 - alpha`` guarantee is per group, so each group needs
+        :func:`~opifex.uncertainty.conformal.scores.minimum_calibration_size`
+        scores of its own however large the whole calibration set is. Groups
+        below it get a ``+inf`` quantile — an interval of unbounded width,
+        which is the honest statement that this group's level is unattainable —
+        and are named in a :class:`UserWarning` and in
+        ``metadata['underfilled_groups']``.
+        """
         scores = absolute_residual_score(predictions=predictions, targets=targets)
         unique_groups = jnp.unique(groups)
+        required = minimum_calibration_size(alpha=self.alpha)
         quantiles_list = []
+        underfilled: list[tuple[int, int]] = []
         for gid in unique_groups.tolist():
             mask = groups == gid
             group_scores = scores[mask]
+            if group_scores.shape[0] < required:
+                underfilled.append((int(gid), int(group_scores.shape[0])))
             quantile_value = conformal_quantile(scores=group_scores, alpha=self.alpha)
             quantiles_list.append(quantile_value)
         quantiles = jnp.stack(quantiles_list)
+        if underfilled:
+            shown = ", ".join(f"{gid} (n={size})" for gid, size in underfilled[:10])
+            if len(underfilled) > 10:
+                shown += f", ... and {len(underfilled) - 10} more"
+            warnings.warn(
+                f"alpha={self.alpha} needs at least {required} calibration scores per "
+                f"group; {len(underfilled)} of {int(unique_groups.shape[0])} groups hold "
+                f"fewer: {shown}. Their quantile is +inf (unbounded interval). Merge "
+                f"groups, raise alpha, or calibrate more points in them.",
+                UserWarning,
+                stacklevel=2,
+            )
         metadata: MetadataItems = (
             ("method", "grouped_split_conformal"),
             ("score_type", "absolute_residual"),
             ("alpha", float(self.alpha)),
             ("calibration_size", int(predictions.shape[0])),
             ("num_groups", int(unique_groups.shape[0])),
+            ("min_group_size", required),
+            ("underfilled_groups", tuple(underfilled)),
         )
         return GroupedSplitConformalState(
             quantiles=quantiles,
