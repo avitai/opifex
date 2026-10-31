@@ -17,10 +17,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # The macOS-14 runners queue for hours and run the same steps; they run on
+        # The macOS runners queue for hours and run the same steps; they run on
         # pushes to main only, so a branch or pull request is gated by the ubuntu
         # jobs alone and the merge to main measures both platforms.
-        os: ${{ fromJSON(github.ref == 'refs/heads/main' && '["ubuntu-latest", "macos-14"]' || '["ubuntu-latest"]') }}
+        os: ${{ fromJSON(github.ref == 'refs/heads/main' && '["ubuntu-latest", "macos-15"]' || '["ubuntu-latest"]') }}
         python-version: ["3.12", "3.13"]
       fail-fast: false
 

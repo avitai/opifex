@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The macOS jobs run on `macos-15`: the package build that pushes to `main` add, and the
+  nightly macOS unit lane in `tests-extended.yml`, whose dependency cache is keyed by the new
+  runner. GitHub retires the `macos-14` image on 2026-11-02 (actions/runner-images#13518), and
+  its scheduled brownouts already cancel jobs that ask for it.
+
 ### Fixed
 
 - `conformal_quantile` no longer reports a threshold for a calibration set too small to
