@@ -23,7 +23,7 @@ WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 ACTIONS = REPO_ROOT / ".github" / "actions"
 PULL_REQUEST_GATE = "ci.yml"
 NIGHTLY = "tests-extended.yml"
-MACOS_RUNNER = "macos-14"
+MACOS_RUNNER = "macos-15"
 MACOS_RUNNER_CAP = 3
 GATE_JOB = "already_tested"
 GATE_CONDITION = f"needs.{GATE_JOB}.outputs.skip != 'true'"

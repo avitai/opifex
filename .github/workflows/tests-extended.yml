@@ -12,8 +12,8 @@ on:
 
 jobs:
   macos-unit-tests:
-    name: Unit Tests (macos-14, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
-    runs-on: macos-14
+    name: Unit Tests (macos-15, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
+    runs-on: macos-15
     # Observed shards run ~65-105 min on macOS-14; 180 min clears the heaviest
     # with margin while bounding hangs.
     timeout-minutes: 180
@@ -34,7 +34,7 @@ jobs:
         with:
           prune-cache: true
           enable-cache: true
-          cache-suffix: "test-macos-14-${{ matrix.python-version }}"
+          cache-suffix: "test-macos-15-${{ matrix.python-version }}"
 
       - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
