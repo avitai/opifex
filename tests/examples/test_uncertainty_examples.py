@@ -37,9 +37,7 @@ def _summary(
         timeout=budget,
         call_main=True,
     )
-    assert run.result.check().returncode == 0
-    assert isinstance(run.summary, dict)
-    return run.summary
+    return run.result.check().report_as(dict[str, float | int])
 
 
 @pytest.mark.timeout(0)
