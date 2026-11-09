@@ -14,8 +14,8 @@ All kernels follow the common signature
 
 .. code-block:: python
 
-    kernel(x1: jax.Array, x2: jax.Array, *, lengthscale: float,
-           output_scale: float) -> jax.Array
+    kernel(x1: jax.Array, x2: jax.Array, *, lengthscale: PositiveScalar,
+           output_scale: PositiveScalar) -> jax.Array
 
 returning a ``(n, m)`` Gram matrix for inputs ``(n, d)`` and
 ``(m, d)``. The ``kernel_fn`` parameter on
@@ -39,6 +39,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager for consisten
 import jax
 import jax.numpy as jnp
 
+from opifex.uncertainty.gp._validation import nonpositive_message, PositiveScalar
 from opifex.uncertainty.gp.exact import rbf_kernel
 
 
@@ -49,20 +50,26 @@ def _pairwise_distances(x1: jax.Array, x2: jax.Array) -> jax.Array:
     return jnp.sqrt(jnp.clip(sq_distance, min=0.0))
 
 
-def _require_positive_kernel_hparams(*, lengthscale: float, output_scale: float) -> None:
-    """Validate that lengthscale and output scale are strictly positive."""
-    if lengthscale <= 0.0:
-        raise ValueError(f"lengthscale must be strictly positive; got {lengthscale!r}.")
-    if output_scale <= 0.0:
-        raise ValueError(f"output_scale must be strictly positive; got {output_scale!r}.")
+def _require_positive_kernel_hparams(
+    *, lengthscale: PositiveScalar, output_scale: PositiveScalar
+) -> None:
+    """Validate that lengthscale and output scale are strictly positive.
+
+    Traced values are left to the caller, so a kernel stays differentiable with respect to
+    its own hyperparameters under ``jax.jit``. See :mod:`opifex.uncertainty.gp._validation`.
+    """
+    if message := nonpositive_message("lengthscale", lengthscale):
+        raise ValueError(message)
+    if message := nonpositive_message("output_scale", output_scale):
+        raise ValueError(message)
 
 
 def matern12_kernel(
     x1: jax.Array,
     x2: jax.Array,
     *,
-    lengthscale: float,
-    output_scale: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
 ) -> jax.Array:
     r"""Matern-1/2 (exponential / Ornstein-Uhlenbeck) kernel.
 
@@ -80,8 +87,8 @@ def matern32_kernel(
     x1: jax.Array,
     x2: jax.Array,
     *,
-    lengthscale: float,
-    output_scale: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
 ) -> jax.Array:
     r"""Matern-3/2 kernel.
 
@@ -101,8 +108,8 @@ def matern52_kernel(
     x1: jax.Array,
     x2: jax.Array,
     *,
-    lengthscale: float,
-    output_scale: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
 ) -> jax.Array:
     r"""Matern-5/2 kernel.
 
@@ -163,8 +170,8 @@ def multi_output_icm_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the intrinsic-coregionalisation-model (ICM) covariance."""
         features1, task1 = x1[:, :-1], x1[:, -1].astype(jnp.int32)
@@ -228,8 +235,8 @@ def multi_output_lcm_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the linear-coregionalisation-model (LCM) covariance."""
         features1, task1 = x1[:, :-1], x1[:, -1].astype(jnp.int32)
@@ -297,8 +304,8 @@ def damped_oscillator_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the damped-harmonic-oscillator (SHO) covariance."""
         omega = 1.0 / lengthscale
@@ -358,8 +365,8 @@ def celerite_complex_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the celerite complex-exponential covariance."""
         _require_positive_kernel_hparams(lengthscale=lengthscale, output_scale=output_scale)
@@ -409,8 +416,8 @@ def kernel_sum(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the sum of the component kernel covariances."""
         total = kernel_fns[0](x1, x2, lengthscale=lengthscale, output_scale=output_scale)
@@ -482,8 +489,8 @@ def graph_diffusion_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the graph-diffusion covariance between node indices."""
         indices1 = jnp.squeeze(x1, axis=-1) if x1.ndim == 2 else x1
@@ -536,8 +543,8 @@ def additive_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the additive covariance summed over per-dimension kernels."""
         if x1.shape[-1] != len(component_kernel_fns):
@@ -591,8 +598,8 @@ def deep_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the deep-kernel covariance on neural-network-warped inputs."""
         return base_kernel_fn(
@@ -654,8 +661,8 @@ def constrained_rbf_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the RBF covariance with a positivity-constrained output."""
         base = rbf_kernel(x1, x2, lengthscale=lengthscale, output_scale=output_scale)
@@ -786,8 +793,8 @@ def orthogonal_additive_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the orthogonal-additive-kernel (OAK) covariance."""
         if x1.shape[-1] != num_dimensions:
@@ -934,8 +941,8 @@ def carma_kernel(
         x1: jax.Array,
         x2: jax.Array,
         *,
-        lengthscale: float,
-        output_scale: float,
+        lengthscale: PositiveScalar,
+        output_scale: PositiveScalar,
     ) -> jax.Array:
         """Evaluate the CARMA-process covariance between time inputs."""
         _require_positive_kernel_hparams(lengthscale=lengthscale, output_scale=output_scale)
