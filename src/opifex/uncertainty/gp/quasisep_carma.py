@@ -82,6 +82,7 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
@@ -103,7 +104,7 @@ stay well-conditioned.
 """
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class QuasisepCarmaGPState:
     """Fitted state for the scalable CARMA Gaussian process.
 

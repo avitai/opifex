@@ -84,10 +84,10 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
@@ -109,7 +109,7 @@ Gauss-Hermite-quadrature samples of ``f``.
 """
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class StochasticSVGPState:
     """Whitened-parametrisation stochastic SVGP state.
 
@@ -132,8 +132,10 @@ class StochasticSVGPState:
     whitened_root_cov: jax.Array
     lengthscale: float
     output_scale: float
-    kernel_fn: Callable[..., jax.Array] = field(default=rbf_kernel)
-    log_likelihood_fn: LogLikelihoodFn = field(default=lambda f, y: -((y - f) ** 2))
+    kernel_fn: Callable[..., jax.Array] = struct.field(pytree_node=False, default=rbf_kernel)
+    log_likelihood_fn: LogLikelihoodFn = struct.field(
+        pytree_node=False, default=lambda f, y: -((y - f) ** 2)
+    )
     jitter: float = 1e-6
 
 

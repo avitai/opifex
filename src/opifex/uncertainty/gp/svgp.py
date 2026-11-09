@@ -55,10 +55,11 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable  # noqa: TC003 — kept eager for consistency
-from dataclasses import dataclass, field
+from dataclasses import field
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
@@ -104,7 +105,7 @@ def _kernel_diagonal(
     )(x)
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class SVGPState:
     """Fitted state for the Titsias-collapsed sparse-variational GP.
 
@@ -141,13 +142,13 @@ class SVGPState:
     output_scale: float
     noise_std: float
     jitter: float
-    kernel_fn: Callable[..., jax.Array] = field(default=rbf_kernel)
+    kernel_fn: Callable[..., jax.Array] = struct.field(pytree_node=False, default=rbf_kernel)
     cached_y_squared_norm: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
     cached_a_y_inside_norm: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
     cached_trace_aat: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
     cached_kxx_diag_sum: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
     cached_log_det_b: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
-    cached_n: int = 0
+    cached_n: int = struct.field(pytree_node=False, default=0)
 
 
 def fit_svgp(

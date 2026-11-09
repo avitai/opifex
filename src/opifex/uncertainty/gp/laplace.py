@@ -43,10 +43,10 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty.gp.exact import rbf_kernel
 
@@ -65,7 +65,7 @@ is responsible for clipping ``W`` to be non-negative so the
 """
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class LaplaceGPState:
     """Laplace-approximated GP posterior state, likelihood-agnostic.
 
@@ -96,7 +96,7 @@ class LaplaceGPState:
     log_marginal_likelihood: jax.Array
     lengthscale: float
     output_scale: float
-    kernel_fn: Callable[..., jax.Array] = field(default=rbf_kernel)
+    kernel_fn: Callable[..., jax.Array] = struct.field(pytree_node=False, default=rbf_kernel)
 
 
 def _newton_step(
