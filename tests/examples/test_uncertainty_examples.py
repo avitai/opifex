@@ -37,6 +37,8 @@ def _summary(
         timeout=budget,
         call_main=True,
     )
+    # Every assertion below compares these numerically, so the contract is numbers, and
+    # substrax's own ``report_as`` validates that shape rather than this file asserting it.
     return run.result.check().report_as(dict[str, float | int])
 
 

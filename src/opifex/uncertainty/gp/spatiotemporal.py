@@ -58,10 +58,9 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty.adapters.base import compose_method_metadata
 from opifex.uncertainty.gp.exact import rbf_kernel
@@ -142,7 +141,7 @@ def _state_space_temporal_gram(times: jax.Array, temporal_kernel: StateSpaceKern
     return jax.vmap(jax.vmap(covariance_at_lag))(lags)
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class SpatioTemporalGPState:
     r"""Fitted state of a conjugate spatio-temporal variational GP.
 
@@ -162,7 +161,7 @@ class SpatioTemporalGPState:
     smoothed_covs: jax.Array
     measurement: jax.Array
     noise_std: jax.Array
-    num_space: int
+    num_space: int = struct.field(pytree_node=False)
 
 
 def _require_positive(name: str, value: jax.Array | float) -> None:

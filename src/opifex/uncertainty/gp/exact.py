@@ -38,10 +38,10 @@ References:
 from __future__ import annotations
 
 from collections.abc import Callable  # noqa: TC003 — kept eager for consistency
-from dataclasses import dataclass, field
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
@@ -89,7 +89,7 @@ def rbf_kernel(
     return (output_scale**2) * jnp.exp(-0.5 * sq_distance / (lengthscale**2))
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class ExactGPState:
     """Fitted state for an exact conjugate-Gaussian GP.
 
@@ -115,7 +115,7 @@ class ExactGPState:
     lengthscale: PositiveScalar
     output_scale: PositiveScalar
     noise_std: PositiveScalar
-    kernel_fn: Callable[..., jax.Array] = field(default=rbf_kernel)
+    kernel_fn: Callable[..., jax.Array] = struct.field(pytree_node=False, default=rbf_kernel)
 
 
 def fit_exact_gp(

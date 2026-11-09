@@ -48,11 +48,12 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import jax
 import jax.numpy as jnp
-from flax import nnx  # noqa: TC002 — kept eager for consistency
+from flax import (
+    nnx,
+    struct,
+)
 from substrax.rng import key_from
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
@@ -110,7 +111,7 @@ def rbf_random_fourier_features(
     )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class RFFGPState:
     """Fitted state for an RFF-approximate conjugate GP.
 

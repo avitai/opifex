@@ -64,10 +64,9 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import jax
 import jax.numpy as jnp
+from flax import struct
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
@@ -88,7 +87,7 @@ enough that the filter / smoother stay well-conditioned in float32.
 """
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@struct.dataclass(slots=True, kw_only=True)
 class QuasisepGPState:
     """Fitted state for the scalable SHO Gaussian process.
 
