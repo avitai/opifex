@@ -10,9 +10,19 @@ flattening, and an array marked as metadata is baked into the treedef, so the va
 at trace time and every change silently recompiles instead of flowing through. Both are
 asserted per class below.
 
-**The NNX half is not incidental.** This package is built on ``flax.nnx``, whose transforms
-consume standard JAX pytrees, so a container that works under ``jax.jit`` should work under
-``nnx.jit`` --- but "should" is the word that earns a test.
+**Which compatibility is required here, and which is interop.** ``opifex.uncertainty.gp`` is
+JAX code: it defines no ``nnx.Module``, and its only contact with NNX is ``rff.py`` accepting
+an ``nnx.Rngs`` for key material. So ``jit``, ``grad`` and ``vmap`` are the *requirement* and
+are tested as such. NNX transforms are tested as *interop*: no NNX module consumes a GP state
+today, but 82 files under ``neural`` are NNX-based and these containers are plain pytrees, so
+the boundary is one a caller will cross. The distinction is kept because a test that claims a
+requirement it does not have is as misleading as a missing one.
+
+**Registration is what makes that boundary legal, not a convenience.** Flax's own
+``docs_nnx/guides/jax_and_nnx_transforms.rst`` states the condition: NNX and JAX transforms
+mix "so long as the JAX-transformed function in your code is pure and has valid argument
+types that are recognized by JAX". An unregistered container is not such a type --- which is
+why, before this change, ``jax.jit`` and ``nnx.jit`` rejected a fitted state alike.
 """
 
 from __future__ import annotations
@@ -185,6 +195,39 @@ class TestTheStateCrossesTransformBoundaries:
 
         assert mean.shape == (6,)
 
+    def test_vmap_over_fits_produces_one_batched_state(self) -> None:
+        """Fitting a batch of targets at once, which is how a curve over seeds is built.
+
+        An unregistered container cannot be a ``vmap`` output at all, and a misclassified
+        array field would be batched into the treedef rather than the leaves.
+        """
+        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        targets = jnp.stack([jnp.sin(3.0 * x[:, 0]), jnp.cos(3.0 * x[:, 0])])
+
+        states = jax.vmap(
+            lambda y: fit_exact_gp(
+                x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1
+            )
+        )(targets)
+
+        assert isinstance(states, ExactGPState)
+        assert states.alpha.shape == (2, 6)
+
+    def test_vmap_predicts_from_a_batch_of_states(self) -> None:
+        """The other half: a batched state consumed by a vmapped prediction."""
+        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        targets = jnp.stack([jnp.sin(3.0 * x[:, 0]), jnp.cos(3.0 * x[:, 0])])
+        states = jax.vmap(
+            lambda y: fit_exact_gp(
+                x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1
+            )
+        )(targets)
+
+        means = jax.vmap(lambda s: predict_exact_gp(state=s, x_test=x).mean)(states)
+
+        assert means.shape == (2, 6)
+        assert jnp.all(jnp.isfinite(means))
+
     def test_gradients_flow_through_the_state(self) -> None:
         """Every data field is differentiable; the metadata field is not a leaf."""
         state, x = self._fitted()
@@ -196,11 +239,13 @@ class TestTheStateCrossesTransformBoundaries:
 
 
 class TestTheStateWorksUnderNnxTransforms:
-    """This package is built on ``flax.nnx``, so its containers must survive its transforms.
+    """Interop, not a requirement of this module, and the difference is deliberate.
 
-    NNX consumes standard JAX pytrees, so these should pass once the class is registered.
-    "Should" is why they are here: a container that silently became a graph node, or whose
-    float hyperparameters were inferred static, would fail exactly here and nowhere else.
+    This module defines no ``nnx.Module``; its required compatibility is with JAX's own
+    transforms, above. NNX consumes standard JAX pytrees, so these pass once the class is
+    registered --- and they are worth asserting because a container that silently became a
+    graph node, or whose float hyperparameters were inferred static, would fail exactly here
+    and nowhere else.
     """
 
     @staticmethod
