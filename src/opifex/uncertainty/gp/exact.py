@@ -45,6 +45,7 @@ import jax.numpy as jnp
 
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
+from opifex.uncertainty.gp._validation import nonpositive_message, PositiveScalar
 from opifex.uncertainty.registry import DefaultStrategy
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
@@ -57,8 +58,8 @@ def rbf_kernel(
     x1: jax.Array,
     x2: jax.Array,
     *,
-    lengthscale: float,
-    output_scale: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
 ) -> jax.Array:
     r"""Squared-exponential (RBF) kernel.
 
@@ -79,10 +80,10 @@ def rbf_kernel(
     Raises:
         ValueError: If ``lengthscale`` or ``output_scale`` is non-positive.
     """
-    if lengthscale <= 0.0:
-        raise ValueError(f"lengthscale must be strictly positive; got {lengthscale!r}.")
-    if output_scale <= 0.0:
-        raise ValueError(f"output_scale must be strictly positive; got {output_scale!r}.")
+    if message := nonpositive_message("lengthscale", lengthscale):
+        raise ValueError(message)
+    if message := nonpositive_message("output_scale", output_scale):
+        raise ValueError(message)
     diff = x1[:, None, :] - x2[None, :, :]
     sq_distance = jnp.sum(diff**2, axis=-1)
     return (output_scale**2) * jnp.exp(-0.5 * sq_distance / (lengthscale**2))
@@ -111,9 +112,9 @@ class ExactGPState:
     y_train: jax.Array
     cholesky: jax.Array
     alpha: jax.Array
-    lengthscale: float
-    output_scale: float
-    noise_std: float
+    lengthscale: PositiveScalar
+    output_scale: PositiveScalar
+    noise_std: PositiveScalar
     kernel_fn: Callable[..., jax.Array] = field(default=rbf_kernel)
 
 
@@ -121,9 +122,9 @@ def fit_exact_gp(
     *,
     x_train: jax.Array,
     y_train: jax.Array,
-    lengthscale: float,
-    output_scale: float,
-    noise_std: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
+    noise_std: PositiveScalar,
     kernel_fn: Callable[..., jax.Array] = rbf_kernel,
 ) -> ExactGPState:
     r"""Fit an exact conjugate-Gaussian GP (RW06 Algorithm 2.1 prelude).
@@ -149,8 +150,8 @@ def fit_exact_gp(
     Raises:
         ValueError: If ``noise_std`` is non-positive.
     """
-    if noise_std <= 0.0:
-        raise ValueError(f"noise_std must be strictly positive; got {noise_std!r}.")
+    if message := nonpositive_message("noise_std", noise_std):
+        raise ValueError(message)
     k_train = kernel_fn(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
     n = k_train.shape[0]
     gram = k_train + (noise_std**2) * jnp.eye(n)
@@ -227,8 +228,8 @@ def fit_heteroscedastic_exact_gp(
     *,
     x_train: jax.Array,
     y_train: jax.Array,
-    lengthscale: float,
-    output_scale: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
     noise_std: jax.Array,
     kernel_fn: Callable[..., jax.Array] = rbf_kernel,
 ) -> ExactGPState:

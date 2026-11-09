@@ -16,6 +16,7 @@ References:
 
 from __future__ import annotations
 
+from opifex.uncertainty.gp._validation import PositiveScalar
 from opifex.uncertainty.gp.exact import (
     exact_gp_loocv_log_predictive,
     ExactGPState,
@@ -100,6 +101,7 @@ from opifex.uncertainty.gp.svgp_stochastic import (
 __all__ = [
     "ExactGPState",
     "LaplaceGPState",
+    "PositiveScalar",
     "QuasisepCarmaGPState",
     "QuasisepGPState",
     "RFFGPState",
