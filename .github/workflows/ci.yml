@@ -73,7 +73,7 @@ jobs:
         run: uv run ruff format --check
 
   test:
-    name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
+    name: Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/12)
     needs: [lint, already_tested]
     if: needs.already_tested.outputs.skip != 'true'
     runs-on: ${{ matrix.os }}
@@ -83,7 +83,15 @@ jobs:
     # fans each shard across the runner's cores. pytest-randomly orders the
     # collection before pytest-split assigns it, so every shard takes the run's id
     # as its seed: one order, each test in exactly one shard. Per-shard wall time
-    # is roughly total / 6; the cap of 180 min clears the heaviest shard with margin while
+    # is roughly total / 12. Twelve rather than six: measured on run 42874850076, the twelve
+    # jobs spent 296 min of compute and the critical path was the slowest single shard at
+    # 30.7 min, against a 25.6 min mean, so the work divides almost linearly and the fixed
+    # cost does not -- checkout through `uv sync` took 24 s. Halving the tests per shard puts
+    # the gate near 15 min. Twenty-four unit jobs sit well inside the Team plan's 60
+    # concurrent, and the twelve previous jobs all started within one second of each other,
+    # so nothing was queueing at six. Past about sixteen shards the per-job setup and each
+    # xdist worker's JAX import start to dominate what is left. The cap of 180 min clears the
+    # heaviest shard with margin while
     # still bounding hangs (well below the 6h job ceiling). pytest-split falls
     # back to an even split by test count; committing a .test_durations file
     # (generate with `pytest --store-durations`, ideally from a CI run) would
@@ -98,7 +106,7 @@ jobs:
         # nightly in tests-extended.yml under a runner cap.
         os: [ubuntu-latest]
         python-version: ["3.12", "3.13"]
-        group: [1, 2, 3, 4, 5, 6]
+        group: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
       fail-fast: false
 
     steps:
@@ -145,7 +153,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/covdata"
           uv run pytest tests/ -n auto \
-            --splits 6 --group ${{ matrix.group }} --splitting-algorithm least_duration \
+            --splits 12 --group ${{ matrix.group }} --splitting-algorithm least_duration \
             --randomly-seed=${{ github.run_id }} \
             -m "not slow and not integration and not e2e and not performance and not benchmark and not distributed and not gpu_required" \
             --timeout=1800 \
@@ -196,7 +204,7 @@ jobs:
 
       - name: Combine coverage and enforce the 80% gate
         # Union of all shards == the full suite, so the aggregate threshold is
-        # the real quality gate (each shard alone covers only ~1/6).
+        # the real quality gate (each shard alone covers only ~1/12).
         run: |
           uv run coverage combine covdata
           uv run coverage xml
