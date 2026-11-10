@@ -257,20 +257,48 @@ def _pareto_volume_2d(points: jax.Array, reference_point: jax.Array) -> jax.Arra
 
     Sort by objective 0 ascending and accumulate the staircase boxes
     bounded by the reference point, taking each box's height from the
-    running best objective 1. Exact for any front, screened of dominated
-    points or not.
+    running best objective 1 and each coordinate capped at the reference
+    point. Exact for any front: points the front already dominates, and
+    points lying outside the reference box, both contribute nothing.
     """
     sorted_pts = points[jnp.argsort(points[:, 0])]
-    # Boxes between consecutive sorted points along objective 0. The height of the
-    # box starting at ``sorted_pts[i]`` is set by the best objective-1 value swept
-    # at or before ``i``, not by that point's own value: a dominated point carries
-    # a worse objective 1 than a point already swept, and taking its own value
-    # would lower the staircase and under-count. On a screened front objective 1
-    # already decreases with objective 0, so the running minimum is the identity
-    # there and this agrees with the previous formula.
-    xs = jnp.concatenate([sorted_pts[:, 0], reference_point[0:1]])
+    # Cap every coordinate at the reference point, so a point outside the reference box
+    # contributes nothing. Without the cap a point past the reference widens the box
+    # *before* it -- ``xs`` ends ``[.., 6.0, 4.0]`` for a reference at 4, so the
+    # preceding width is measured out to 6.0 while only the final negative width is
+    # clamped away, which is why ``jnp.maximum(widths, 0.0)`` cannot catch it.
+    #
+    # BoTorch draws the line one layer up, and the difference is deliberate.
+    # ``compute_dominated_hypercell_bounds_2d`` neither caps nor filters -- it assumes a
+    # screened front, and its non-dominated sibling states "All points must be better
+    # than the reference point" as a precondition -- while the filter
+    # ``better_than_ref = (Y > ref_point).all(dim=-1)`` sits in the public layer
+    # (``Hypervolume.compute``, ``_pad_batch_pareto_frontier``). Here the filter cannot
+    # live in a traced function at all, since dropping rows is a data-dependent shape;
+    # capping is its equivalent for this staircase, because a capped point sits at the
+    # reference and so spans no width. It goes in the primitive rather than in
+    # ``dominated_hypervolume`` because the general path's primitive
+    # (``_grid_cell_bounds``) already caps internally: making the pair of primitives
+    # agree is what stops the next defect hiding in the gap between them, which is
+    # exactly where this one and the running-minimum one below both hid.
+    #
+    # The height of the box starting at ``sorted_pts[i]`` is set by the best
+    # objective-1 value swept at or before ``i``, not by that point's own value:
+    # a dominated point carries a worse objective 1 than a point already swept,
+    # and taking its own value would lower the staircase and under-count. On a
+    # screened front objective 1 already decreases with objective 0, so the
+    # running minimum is the identity there.
+    #
+    # Both clamps below are redundant once the coordinates are capped -- ``xs`` is
+    # non-decreasing and ``best_so_far`` never exceeds the reference -- and are
+    # kept as the floor this traced kernel has no other way to enforce. The cap runs
+    # over both columns for parity with the general path rather than from necessity:
+    # objective 1 alone needs no cap, because the height clamp already floors it, and
+    # a mutation capping only objective 0 leaves the whole suite green.
+    capped = jnp.minimum(sorted_pts, reference_point[None, :])
+    xs = jnp.concatenate([capped[:, 0], reference_point[0:1]])
     widths = jnp.diff(xs)
-    best_so_far = jax.lax.cummin(sorted_pts[:, 1])
+    best_so_far = jax.lax.cummin(capped[:, 1])
     heights = jnp.maximum(reference_point[1] - best_so_far, 0.0)
     return jnp.sum(jnp.maximum(widths, 0.0) * heights)
 
@@ -307,6 +335,16 @@ def _grid_cell_bounds(
     repeated coordinates collapse to zero width and drop out naturally,
     which keeps the cell count static (``P`` or ``P + 1`` per axis) and
     the whole routine ``jit``-safe.
+
+    Note: the three clips to ``reference_point`` below — on ``sorted_coords``,
+    on ``lower_edges`` and on ``upper_edges`` — are a **mutually redundant
+    set, and any one of them alone is sufficient**. A cell whose lower edge
+    starts past the reference ends at the reference, so its width is
+    non-positive and ``jnp.maximum(upper - lower, 0.0)`` in the callers
+    zeroes it. Measured: removing any one, or the two on the lower edges
+    together, leaves the suite green; removing all three fails six tests.
+    Kept as they are rather than reduced to one, because they cost two
+    elementwise minima and this function is not otherwise being changed.
     """
     sorted_coords = jnp.minimum(jnp.sort(front, axis=0), reference_point[None, :])
     if anti_ideal is not None:
@@ -354,12 +392,17 @@ def dominated_hypervolume(front: jax.Array, reference_point: jax.Array) -> jax.A
     arXiv:2006.05078). The ``M = 2`` case is routed to the exact
     staircase :func:`_pareto_volume_2d` (the fast special-case path);
     higher ``M`` generalises that staircase to a hyper-rectangle grid and
-    is unit-tested to agree with it at ``M = 2``. Dominated (redundant)
-    front points contribute no extra volume.
+    is unit-tested to agree with it at ``M = 2`` over randomised fronts.
+    Dominated (redundant) front points contribute no extra volume, and
+    neither does a point that is worse than the reference on *any* one
+    objective: nothing can be both dominated by it and below ``r``. Both
+    paths reach that by capping the front's coordinates at
+    ``reference_point``, which is the traceable form of BoTorch's
+    ``better_than_ref = (pareto_Y <= ref).all(-1)`` row filter.
 
     Args:
-        front: Shape ``(P, M)`` Pareto front (need not be screened of
-            dominated points).
+        front: Shape ``(P, M)`` Pareto front. Need neither be screened of
+            dominated points nor lie inside the reference box.
         reference_point: Shape ``(M,)`` upper bound of the hypervolume.
 
     Returns:
