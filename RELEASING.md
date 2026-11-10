@@ -32,21 +32,43 @@ also runs the PyPI upload path.
    ```
 
 5. Commit the version and changelog updates.
-6. Create and push an annotated tag from the exact release commit.
+6. Open a pull request for the version and changelog commit, and merge it. The
+   `main-protection` ruleset carries a `pull_request` rule with no bypass actors, so
+   `main` cannot be pushed to directly; `rebase` is the only permitted merge method,
+   which gives the commit a new sha.
+
+7. Create and push an annotated tag from the release commit **as it landed on `main`**.
+   Read the sha after the merge rather than before it: a rebase merge renumbers the
+   commit, so a tag cut from the pre-merge sha points at a commit that is not on `main`.
 
    ```bash
-   target_sha=$(git rev-parse HEAD)
-   git tag -a vX.Y.Z -m "opifex X.Y.Z"
-   git push origin main vX.Y.Z
+   git fetch origin main
+   target_sha=$(git rev-parse origin/main)
+   git tag -a vX.Y.Z -m "opifex X.Y.Z" "$target_sha"
+   git push origin vX.Y.Z
    ```
 
-7. In GitHub Actions, manually run `Publish to PyPI` with:
+   Only the tag is pushed. The ruleset's condition is `~DEFAULT_BRANCH`, and a tag is
+   not a branch ref, so pushing it is unaffected.
+
+8. In GitHub Actions, manually run `Publish to PyPI` **from the `vX.Y.Z` tag**, with:
 
    - `target=github-release`
    - `version_tag=vX.Y.Z`
 
+   ```bash
+   gh workflow run publish.yml --ref vX.Y.Z -f target=github-release -f version_tag=vX.Y.Z
+   ```
+
+   Run it from the tag, not from `main`. The `build` job checks out the ref the workflow
+   was dispatched on without naming one, so the version in the artifact is whatever
+   `pyproject.toml` says *at that ref* — the tag pins it, a branch does not.
+
    The workflow verifies that the tag exists, creates the GitHub Release with
-   generated release notes, then publishes to PyPI.
+   generated release notes, then publishes to PyPI. `target=github-release` does all
+   three in one run, and the PyPI upload has no `skip-existing`, so a version that has
+   already been published cannot be re-run. Check <https://pypi.org/project/opifex/>
+   before dispatching.
 
 ## Manual Release Recovery
 

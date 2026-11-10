@@ -50,4 +50,7 @@ jobs:
         run: uv sync --locked --extra docs
 
       - name: Build documentation
-        run: uv run mkdocs build --clean
+        # --strict matches RELEASING.md's release check. Without it this gate was the
+        # weaker of the two, and a nav entry pointing at a file that never existed sat
+        # from the initial commit until a release surfaced it.
+        run: uv run mkdocs build --strict --clean
