@@ -54,7 +54,11 @@ dependencies = [
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.15",
   "calibrax[publication]>=0.1.17",
-  "datarax>=0.1.16",
+  # 0.1.17 moves the checkpoint-state protocol to substrax's ``Checkpointable`` and removes
+  # ``datarax.typing.Checkpointable``. Nothing here imports that name — the two mentions in
+  # ``uncertainty/sbi/simulators.py`` are prose in a docstring — so the floor is raised to
+  # keep the sibling set at one release front rather than because the tree needs 0.1.17.
+  "datarax>=0.1.17",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
   "substrax>=0.1.25",
