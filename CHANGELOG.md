@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-11-10
+
 ### Added
 
 - `opifex.capabilities.UQ_CAPABILITIES`: every uncertainty-quantification capability opifex
@@ -50,6 +52,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `shift_status(report)` renders a `ShiftReport` for a reader.
 - `TrainingMetrics` gains `best_val_epoch`, `reset`, `update_physics_loss` and
   `update_boundary_loss`.
+- `minimum_calibration_size(alpha=...)` -- the smallest calibration size whose
+  `1 - alpha` conformal quantile exists, `ceil(1 / alpha) - 1`. Exported from
+  `opifex.uncertainty.conformal` so callers can check before fitting.
+- `PredictionInterval` and `PredictionSet` are re-exported from
+  `opifex.uncertainty.conformal`. They are defined in `opifex.uncertainty.types` with the
+  rest of the predictive value objects and are what every conformal calibrator returns;
+  both facts were documented and correct, and together left the return type unimportable
+  from the module that returns it, so annotating a function that wraps a calibrator failed
+  on the natural import.
+- `GroupedSplitConformalState` records the calibrated group ids as
+  `metadata['calibrated_groups']`, which travels on every `PredictionInterval` `predict`
+  returns. `num_groups` alone could not distinguish a sample whose group was absent from
+  one that was calibrated.
 
 ### Changed
 
@@ -79,15 +94,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `opifex.neural.equivariant` to `opifex.geometry.graph`: they operate on point clouds,
   and `opifex.core` needs the neighbour search, which it could reach only by importing
   the network package above it. Import them from `opifex.geometry.graph`.
-- Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
+- Requires `avitai-artifex>=0.1.15`, for the estimator above. The relock also drops ten
   packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
   pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
-### Changed
-
 - The macOS jobs run on `macos-15`: the package build that pushes to `main` add, and the
   nightly macOS unit lane in `tests-extended.yml`, whose dependency cache is keyed by the new
   runner. GitHub retires the `macos-14` image on 2026-11-02 (actions/runner-images#13518), and
   its scheduled brownouts already cancel jobs that ask for it.
+- calibrax `0.1.17`, substrax `0.1.25` and datarax `0.1.17` are the floors, the three being
+  the current releases of the sibling set. calibrax 0.1.17 ends `ResourceMonitor`'s window
+  with a reading, so a block shorter than one sampling interval still reports its peak and
+  growth; substrax 0.1.25 is what calibrax 0.1.17 requires, and its 0.1.24 types an
+  example's summary as `JsonValue`; datarax 0.1.17 moves the checkpoint-state protocol to
+  substrax's `Checkpointable`, a name this package does not import.
+- The unit suite is sharded twelve ways rather than six. The gate's wall clock is one
+  shard's wall clock, and measured on run 42874850076 the twelve jobs spent 296 min of
+  compute while the critical path was the slowest single shard at 30.7 min against a
+  25.6 min mean -- so the work divides almost linearly where the fixed cost, 24 s of
+  checkout and `uv sync` per job, does not. Measured after: 16.2 min, for 6% more compute.
+  pytest-split still reports no durations file, so the split is by test count and the
+  1.20 max-to-mean ratio is unchanged; a `.test_durations` file is the complement to this.
+- GP states are registered as pytrees, so `jax.tree` operations see their arrays as leaves
+  rather than one opaque node, and the DUE adapter's state flattens with them.
 
 ### Fixed
 
@@ -109,12 +137,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while `predict` reported `coverage=0.9` for both. The undersized groups are now named in a
   `UserWarning` and recorded in `metadata['underfilled_groups']`, as crepes does for its
   Mondrian bins.
-
-### Added
-
-- `minimum_calibration_size(alpha=...)` -- the smallest calibration size whose
-  `1 - alpha` conformal quantile exists, `ceil(1 / alpha) - 1`. Exported from
-  `opifex.uncertainty.conformal` so callers can check before fitting.
+- `dominated_hypervolume` is exact in two objectives for any front. The staircase took each
+  box's height from that point's own objective 1, so a dominated point left a zero-width
+  slot where the tall box belonged and contributed a short box of its own:
+  `[[1,3],[2,2],[3,1],[3,3]]` under reference `[4,4]` returned 4.0 against a true 6.0. It
+  also measured each width out to the raw coordinate, so a point past the reference widened
+  the box *before* it, only the final negative width being clamped away:
+  `[[1,3],[6,2],[3,1]]` returned 11.0 against a true 5.0. The height now comes from the
+  running minimum and every coordinate is capped at the reference point -- the line the
+  general grid path already applied, and the traceable form of BoTorch's `better_than_ref`
+  row filter. Over 2,000 randomised two-objective fronts on a dyadic grid, where every
+  partial sum of both paths is exactly representable in float32, the two paths now agree
+  bit-exactly on all of them; before, they disagreed on 920.
+- `GroupedSplitConformalRegressor.predict` gives an unbounded interval, not a zero-width
+  one, for a group absent at `fit` time. The per-group gather is a one-hot match, so an
+  absent group's row is all-`False` and its sum was `0.0` -- indistinguishable from a
+  legitimately tiny quantile, and reported at `coverage = 1 - alpha`, so a point prediction
+  was presented as a 90% interval. Such a row is now `+inf`, the same statement
+  `conformal_quantile` makes for a calibration set too small to carry the level. The
+  condition is per sample and data-dependent, so unlike that function's static branch it
+  cannot resolve at trace time; `jnp.where` keeps the gather jit- and vmap-compatible.
+  MAPIE 0.9's `MondrianCP` refused an unseen group eagerly, which a traced function cannot
+  do, and crepes returns the same zero-width interval (`henrikbostrom/crepes#54`, open).
+- GP hyperparameters are traceable, so `exact_gp_loocv_log_predictive` can be
+  differentiated with respect to the quantities it exists to select. `fit_exact_gp` raised
+  `TracerBoolConversionError` under `jax.jit` on its `if noise_std <= 0.0` guard, so the
+  leave-one-out objective of Rasmussen & Williams 2006 §5.4.2 could not be used for the
+  model selection that section is about.
+- `examples/data/darcy_flow_spectral_analysis.py`'s `main()` returns finite scalar metrics
+  rather than the analysis dict. That dict carries the `(50,)` spectra the plots need, and
+  the example harness encodes a return with `json.dumps`, converting only 0-d arrays, so it
+  refused `spectral_data`; the example's test had failed in every scheduled Extended Tests
+  run since 2026-11-03. The analysis function is unchanged and still returns its arrays.
 
 ## [0.2.10] - 2026-09-25
 
