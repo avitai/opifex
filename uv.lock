@@ -1009,7 +1009,7 @@ wheels = [
 
 [[package]]
 name = "datarax"
-version = "0.1.16"
+version = "0.1.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-record" },
@@ -1027,9 +1027,9 @@ dependencies = [
     { name = "substrax" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f0/89/7aaf4eae6e69eb959594df2f609e64e1d24c764bc0e6fda924f6a0f1c16c/datarax-0.1.16.tar.gz", hash = "sha256:da553aa73eada8c79fff71038cf2b1e18ec34310f7759727235e346f4e19f630", size = 240772, upload-time = "2026-09-24T22:55:50.741Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/10/38/cf090fa5d39c85e6fbe9072a47a5811a02ec8a6f1b479ef12793db03e576/datarax-0.1.17.tar.gz", hash = "sha256:5332f18e2060b6d998ce3008dc44ab5ab0f960b5c7761f9dd4d3c7ba6d5fef57", size = 241033, upload-time = "2026-09-26T01:58:46.642Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/be/fd1287e4b2099499370a4cf05e04806379d2b8a90ccb1797514799f5b493/datarax-0.1.16-py3-none-any.whl", hash = "sha256:8632537e6b0b13a5dd14eccd1c3939dceea68ee3993d2eb4c7c4b1f5db2e24f3", size = 288303, upload-time = "2026-09-24T22:55:48.513Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/2e/d87ce35e0d429f4b2c0dcc8c7130d3d7a7a42bed9bab3b2fc8bc3ec00c69/datarax-0.1.17-py3-none-any.whl", hash = "sha256:ee4b2654b0e883c06a76b9715829b9801a6fcf5d2f8944b66c690b7ccabdc4af", size = 288532, upload-time = "2026-09-26T01:58:44.364Z" },
 ]
 
 [[package]]
@@ -4291,7 +4291,7 @@ requires-dist = [
     { name = "calibrax", extras = ["publication"], specifier = ">=0.1.17" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
-    { name = "datarax", specifier = ">=0.1.16" },
+    { name = "datarax", specifier = ">=0.1.17" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
     { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
