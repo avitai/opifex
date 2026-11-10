@@ -7,41 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- The macOS jobs run on `macos-15`: the package build that pushes to `main` add, and the
-  nightly macOS unit lane in `tests-extended.yml`, whose dependency cache is keyed by the new
-  runner. GitHub retires the `macos-14` image on 2026-11-02 (actions/runner-images#13518), and
-  its scheduled brownouts already cancel jobs that ask for it.
-
-### Fixed
-
-- `conformal_quantile` no longer reports a threshold for a calibration set too small to
-  carry one. The finite-sample rank `ceil((n + 1)(1 - alpha)) / n` is a rank of `n` scores
-  only while `ceil((n + 1)(1 - alpha)) <= n`; below that no threshold drawn from them
-  attains `1 - alpha` and the conformal quantile is `+inf`. The rank was instead clamped to
-  1.0, which returns the largest score: finite, indistinguishable from a valid threshold,
-  and short of the requested level by construction. Measured marginal coverage was exactly
-  `n / (n + 1)` -- 0.673 at `n = 2`, 0.796 at `n = 4` and 0.886 at `n = 8` against a
-  requested 0.900, over 20,000 draws each. It is now `+inf`, so the interval is unbounded
-  and the shortfall is visible. MAPIE returns `signed * np.inf` on the same condition and
-  crepes emits maximum-size intervals; `n` and `alpha` are static, so the branch resolves at
-  trace time and jit and vmap are unaffected.
-- `GroupedSplitConformalRegressor.fit` warns when a group cannot carry the requested level.
-  The guarantee is per group, so each group needs its own minimum however large the whole
-  calibration set is, and partitioning is exactly what makes small groups ordinary: a
-  203-point calibration set split 200/3 produced 0.747 coverage for the three-point group
-  while `predict` reported `coverage=0.9` for both. The undersized groups are now named in a
-  `UserWarning` and recorded in `metadata['underfilled_groups']`, as crepes does for its
-  Mondrian bins.
-
-### Added
-
-- `minimum_calibration_size(alpha=...)` -- the smallest calibration size whose
-  `1 - alpha` conformal quantile exists, `ceil(1 / alpha) - 1`. Exported from
-  `opifex.uncertainty.conformal` so callers can check before fitting.
-
-## [0.2.10] - 2026-09-25
 ### Added
 
 - `opifex.capabilities.UQ_CAPABILITIES`: every uncertainty-quantification capability opifex
@@ -117,6 +82,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Requires `avitai-artifex>=0.1.14`, for the estimator above. The relock also drops ten
   packages that reached the closure only through the BlackJAX 1.3 chain artifex no longer
   pulls -- `jaxopt`, `python-fasthtml`, `fastcore`, `apsw` and the rest -- and adds none.
+### Changed
+
+- The macOS jobs run on `macos-15`: the package build that pushes to `main` add, and the
+  nightly macOS unit lane in `tests-extended.yml`, whose dependency cache is keyed by the new
+  runner. GitHub retires the `macos-14` image on 2026-11-02 (actions/runner-images#13518), and
+  its scheduled brownouts already cancel jobs that ask for it.
+
+### Fixed
+
+- `conformal_quantile` no longer reports a threshold for a calibration set too small to
+  carry one. The finite-sample rank `ceil((n + 1)(1 - alpha)) / n` is a rank of `n` scores
+  only while `ceil((n + 1)(1 - alpha)) <= n`; below that no threshold drawn from them
+  attains `1 - alpha` and the conformal quantile is `+inf`. The rank was instead clamped to
+  1.0, which returns the largest score: finite, indistinguishable from a valid threshold,
+  and short of the requested level by construction. Measured marginal coverage was exactly
+  `n / (n + 1)` -- 0.673 at `n = 2`, 0.796 at `n = 4` and 0.886 at `n = 8` against a
+  requested 0.900, over 20,000 draws each. It is now `+inf`, so the interval is unbounded
+  and the shortfall is visible. MAPIE returns `signed * np.inf` on the same condition and
+  crepes emits maximum-size intervals; `n` and `alpha` are static, so the branch resolves at
+  trace time and jit and vmap are unaffected.
+- `GroupedSplitConformalRegressor.fit` warns when a group cannot carry the requested level.
+  The guarantee is per group, so each group needs its own minimum however large the whole
+  calibration set is, and partitioning is exactly what makes small groups ordinary: a
+  203-point calibration set split 200/3 produced 0.747 coverage for the three-point group
+  while `predict` reported `coverage=0.9` for both. The undersized groups are now named in a
+  `UserWarning` and recorded in `metadata['underfilled_groups']`, as crepes does for its
+  Mondrian bins.
+
+### Added
+
+- `minimum_calibration_size(alpha=...)` -- the smallest calibration size whose
+  `1 - alpha` conformal quantile exists, `ceil(1 / alpha) - 1`. Exported from
+  `opifex.uncertainty.conformal` so callers can check before fitting.
+
+## [0.2.10] - 2026-09-25
+
+### Fixed
+
+- The BlackJAX backend reports an effective sample size that can be believed. Its own
+  estimator truncated Geyer's initial positive sequence at `min(n // 2, 64)`, which has no
+  basis in the method and biases the estimate down, then clamped the result to `[1, n]`.
+  The clamp hid both ends: a chain whose draws never move is worth no draws and read the
+  chain length instead, and a chain that alternates about its mean is legitimately worth
+  more than its length and was cut back to it. It now comes from
+  `artifex.generative_models.core.sampling.effective_sample_size`, which is the same place
+  the samplers come from.
 - `solve_navier_stokes_2d` returns a divergence-free field. Its Jacobi solve inverted the
   compact five-point Laplacian while the correction subtracted a two-point central gradient,
   so the projection left most of the divergence in place: a divergent start still measured
@@ -289,6 +300,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name now says so instead of resolving to a broken function.
 - `list_activations()` listed fourteen names while `get_activation` accepted twenty-five,
   hiding the broken entry; both now read the one registry.
+- `ks_two_sample_pvalue` returned zero for identical samples, so the exchangeability check
+  reported a shift for data compared against itself. The alternating series needs terms
+  up to `k > 4.29 / lambda`, so a hundred terms were not enough below about 0.007. It now
+  splits at the median between that series and the theta form (van Mulbregt 2018,
+  sec. 4.1), and matches `scipy.special.kolmogorov` to 1.14e-07 over `[0, 5]`.
+- The Anderson mixer's Tikhonov stabiliser in the SCF solver works at both ends of a
+  solve. While the history filled, its scale came from identity padding and averaged the
+  Pulay coefficients to 0.4988 where the answer is 0.0099. Once the history filled, its
+  fixed 1e-10 factor sat below float32 epsilon, and the H2 density returned NaN. The scale
+  is now the mean squared residual over filled slots and the factor is the square root of
+  the working precision's epsilon.
+- `opifex.optimization.production` measured forward-pass latency without synchronising,
+  timing the dispatch rather than the work: 0.55 ms against a true 67.8 ms on a compiled
+  2048-wide model, the figure compared with `target_latency_ms`. It measures through
+  `calibrax.profiling.time_calls`. `apply_latency_optimization` compiled every model at a
+  hardcoded width of 64 and now reads the model's input width.
 
 ### Changed
 
@@ -346,22 +373,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `get_derivative_activation`, which had no caller and returned a boolean array for ReLU;
   `jax.grad` differentiates any activation in the registry.
-- `ks_two_sample_pvalue` returned zero for identical samples, so the exchangeability check
-  reported a shift for data compared against itself. The alternating series needs terms
-  up to `k > 4.29 / lambda`, so a hundred terms were not enough below about 0.007. It now
-  splits at the median between that series and the theta form (van Mulbregt 2018,
-  sec. 4.1), and matches `scipy.special.kolmogorov` to 1.14e-07 over `[0, 5]`.
-- The Anderson mixer's Tikhonov stabiliser in the SCF solver works at both ends of a
-  solve. While the history filled, its scale came from identity padding and averaged the
-  Pulay coefficients to 0.4988 where the answer is 0.0099. Once the history filled, its
-  fixed 1e-10 factor sat below float32 epsilon, and the H2 density returned NaN. The scale
-  is now the mean squared residual over filled slots and the factor is the square root of
-  the working precision's epsilon.
-- `opifex.optimization.production` measured forward-pass latency without synchronising,
-  timing the dispatch rather than the work: 0.55 ms against a true 67.8 ms on a compiled
-  2048-wide model, the figure compared with `target_latency_ms`. It measures through
-  `calibrax.profiling.time_calls`. `apply_latency_optimization` compiled every model at a
-  hardcoded width of 64 and now reads the model's input width.
 
 ### Known issues
 
