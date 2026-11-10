@@ -29,6 +29,13 @@
 * Exchangeability diagnostic (`exchangeability`):
   :class:`ExchangeabilityReport`, :func:`check_exchangeability`,
   :func:`ks_two_sample_pvalue`.
+
+The calibrators return :class:`opifex.uncertainty.types.PredictionInterval` (regression,
+fields, time series, cross-conformal) and
+:class:`opifex.uncertainty.types.PredictionSet` (classification). Both are defined in
+``opifex.uncertainty.types`` with the rest of the predictive value objects and re-exported
+here, so a caller annotating a function that wraps a calibrator can import the return type
+from the module that returns it.
 """
 
 from __future__ import annotations
@@ -90,6 +97,7 @@ from opifex.uncertainty.conformal.time_series import (
     enbpi_update,
     EnbPIState,
 )
+from opifex.uncertainty.types import PredictionInterval, PredictionSet
 
 
 __all__ = [
@@ -105,6 +113,8 @@ __all__ = [
     "GroupedSplitConformalState",
     "LACConformalClassifier",
     "LACConformalState",
+    "PredictionInterval",
+    "PredictionSet",
     "RiskControlConfig",
     "RiskControllerState",
     "SplitConformalRegressor",
