@@ -182,12 +182,22 @@ def test_due_state_pytree_carries_svgp_state_and_keeps_feature_fn_static() -> No
 
     ``DUEState`` is a ``flax.struct.dataclass`` pytree: ``svgp_state`` is a
     pytree-node field (NOT static) and ``feature_fn`` is ``pytree_node=False``.
-    The nested :class:`opifex.uncertainty.gp.SVGPState` is itself a plain
-    ``@dataclass`` (the deliberate ``opifex.uncertainty.gp`` convention shared
-    by ``ExactGPState`` / ``RFFGPState`` / ``QuasisepGPState`` /
-    ``StochasticSVGPState``), so it travels as a single opaque pytree leaf —
-    its own arrays are not independently registered leaves. The contract
-    asserted here is therefore the meaningful one: the fitted ``svgp_state``
+
+    **Updated: the nested GP state is now a pytree too, and this test used to
+    assert the opposite.** It read that :class:`opifex.uncertainty.gp.SVGPState`
+    is "a plain ``@dataclass`` (the deliberate ``opifex.uncertainty.gp``
+    convention)" travelling "as a single opaque pytree leaf". That convention
+    was deliberate and is now superseded, because its unstated cost is that a
+    fitted state cannot cross a transform boundary at all: returning one from a
+    jitted function raised ``TypeError``, since an opaque dataclass is not a
+    "valid argument type recognized by JAX" in the sense flax's own
+    ``jax_and_nnx_transforms`` guide requires for mixing NNX and JAX code.
+
+    This file's own header already described the new behaviour — "a pytree whose
+    ``svgp_state`` arrays travel through" — so the two halves disagreed. They
+    now agree, and the arrays are genuinely the leaves.
+
+    What is asserted is unchanged in substance: the fitted ``svgp_state``
     survives the ``DUEState`` flatten/unflatten round-trip with every GP array
     intact, and ``feature_fn`` is excluded from the leaves (it is static).
     """
@@ -199,8 +209,17 @@ def test_due_state_pytree_carries_svgp_state_and_keeps_feature_fn_static() -> No
     # feature_fn is static — it must NOT appear among the pytree leaves.
     assert all(leaf is not _feature_fn for leaf in leaves)
     assert all(not callable(leaf) for leaf in leaves)
-    # svgp_state IS a (non-static) pytree node: it appears among the leaves.
-    assert any(isinstance(leaf, SVGPState) for leaf in leaves)
+    # svgp_state IS a (non-static) pytree node, and is itself registered, so the
+    # GP's own fields are the leaves rather than the state object. The leaves are
+    # arrays and the float hyperparameters -- both are valid leaves, and neither
+    # is the state itself, which is what an opaque container would have given.
+    assert not any(isinstance(leaf, SVGPState) for leaf in leaves)
+    assert any(
+        isinstance(leaf, jax.Array)
+        and leaf.shape == svgp_state.x_inducing.shape
+        and bool(jnp.array_equal(leaf, svgp_state.x_inducing))
+        for leaf in leaves
+    )
 
     # Identity tree_map is a flatten -> unflatten round-trip: the fitted GP
     # state must carry through unchanged and feature_fn stays the same object.
