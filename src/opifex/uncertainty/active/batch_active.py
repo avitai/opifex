@@ -271,9 +271,11 @@ def _pareto_volume_2d(points: jax.Array, reference_point: jax.Array) -> jax.Arra
     # BoTorch draws the line one layer up, and the difference is deliberate.
     # ``compute_dominated_hypercell_bounds_2d`` neither caps nor filters -- it assumes a
     # screened front, and its non-dominated sibling states "All points must be better
-    # than the reference point" as a precondition -- while the filter
-    # ``better_than_ref = (Y > ref_point).all(dim=-1)`` sits in the public layer
-    # (``Hypervolume.compute``, ``_pad_batch_pareto_frontier``). Here the filter cannot
+    # than the reference point" as a precondition -- while a ``better_than_ref`` filter
+    # sits in the public layer: ``(Y > ref_point).all(dim=-1)`` in
+    # ``_pad_batch_pareto_frontier`` and ``FastPartitioning.update``, and the same test
+    # as ``(pareto_Y <= self._ref_point).all(dim=-1)`` in ``Hypervolume.compute``, which
+    # negates the front first because it maximises. Here the filter cannot
     # live in a traced function at all, since dropping rows is a data-dependent shape;
     # capping is its equivalent for this staircase, because a capped point sits at the
     # reference and so spans no width. It goes in the primitive rather than in
